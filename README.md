@@ -10,12 +10,11 @@ you can build both `PikaCmd`, `GAZLCmd` and the Impala compiler using:
 
 ```sh
 # from the repository root
-CPP_MODEL=native ./tools/BuildImpala.sh
+./tools/BuildImpala.sh
 ```
 
-The default build script uses macOS specific compiler flags which may not work on
-Linux. Setting `CPP_MODEL=native` avoids these cross compilation flags. The
-script also runs `ImpalaDemo.impala` once the build completes.
+This builds using the native model and runs `ImpalaDemo.impala` once the build
+completes.
 
 ## Running the demo
 
