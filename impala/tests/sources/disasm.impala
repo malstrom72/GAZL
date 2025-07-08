@@ -1,0 +1,142 @@
+/*
+	Prawn OS Command Prompt.
+	
+	(C)1973-1977 Shrimperative Computing LTD.
+*/
+
+const int DEBUG
+const int FILE_BUFFER_SIZE = 8192
+const int TERMINAL_COLUMNS = 80
+const int TERMINAL_ROWS = 25
+const int TERMINAL_TAB_SIZE = 4
+
+extern native output
+extern native input
+extern native inputEOF
+extern native launch
+extern native loadText // loadText(pointer fileName, int offset, int maxCount, pointer destination) -> int : returns count loaded or -1 on error
+extern native sleep
+
+/* -------------------------------------- Defined in fileList.impala ------------------------------------------------ */
+
+const int FILE_TYPE_COUNT
+const int FILE_TYPE_EXE
+const int FILE_TYPE_SYS
+const int FILE_TYPE_TXT
+const int FILE_TYPE_BIN
+
+extern array FILE_TYPE_STRINGS
+
+const int FILE_FIELD_NAME // pointer
+const int FILE_FIELD_TYPE // int
+const int FILE_FIELD_SIZE // int
+const int FILE_FIELD_DATE // pointer
+const int FILE_FIELD_COUNT
+
+extern int fileCount
+extern array FILES
+
+extern function strcmp // strcmp(pointer s0, pointer s1) -> int
+extern function findFile // findFile(pointer s0) -> int
+extern function lower // lower(pointer s)
+extern function initFilesIfNecessary // initFilesIfNecessary()
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+const int FALSE = 0
+const int TRUE = 1
+
+function strlen(pointer s)
+returns int l
+locals	pointer a
+{
+	a = s;
+	while ((int)*a != 0) a = a + 1;
+	l = a - s;
+}
+
+function strcat(pointer d, pointer s)
+returns pointer r
+locals	pointer a, pointer b
+{
+	r = a = d;
+	while ((int)*a != 0) a = a + 1;
+	b = s;
+	while ((*a = (int)*b) != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function outputLine(pointer s)
+{
+	output(s);
+	output("\n");
+}
+
+global array fileBuffer[FILE_BUFFER_SIZE + 1]
+
+function main()
+locals	array s[256], int type, int offset, int readCount, int file, pointer p, pointer b, pointer e, int row, int col,
+		int c, int i, array yn[64]
+{
+	initFilesIfNecessary();
+	outputLine("GAZL disassembler v2.1.");
+	output("Disassemble file: ");
+	input(255, s);
+	if ((int)s[0] != 0) {
+		lower(s);
+		if ((file = (int)findFile(s)) < 0) outputLine("File not found");
+		else {
+			if ((type = (int)global FILES[file * FILE_FIELD_COUNT + FILE_FIELD_TYPE]) != FILE_TYPE_EXE
+					&& type != FILE_TYPE_SYS && type != FILE_TYPE_BIN) {
+				outputLine("File is not GAZL format");
+			} else if ((int)strcmp(s, "permut8") == 0) {
+				outputLine("Protected file");
+			} else {
+				p = ".zl";
+				if (type == FILE_TYPE_BIN) p = ".gazl";
+				strcat(s, p);
+				offset = 0;
+				row = 0;
+				col = 0;
+				do {
+					readCount = (int)loadText(s, offset, FILE_BUFFER_SIZE, global fileBuffer);
+					if (readCount < 0) {
+						outputLine("Read error");
+						goto stopIt;
+					} else {
+						p = global fileBuffer;
+						b = p;
+						e = p + readCount;
+						while (p < e) {
+							c = (int)*p;
+							p = p + 1;
+							i = 1;
+							if (c == 9) i = TERMINAL_TAB_SIZE - col % TERMINAL_TAB_SIZE;
+							if (c == 10 || (col = col + i) >= TERMINAL_COLUMNS) {
+								if ((row = row + 1) >= TERMINAL_ROWS) {
+									c = (int)*p;
+									*p = 0;
+									output(b);
+									(int)*p = c;
+									b = p;
+									output("More (y)? ");
+									input(63, yn);
+									if ((int)yn[0] == 'n' || (int)yn[0] == 'N') goto stopIt;
+									row = 1;
+								}
+								col = 0;
+							}
+						}
+						*e = 0;
+						output(b);						
+						offset = offset + readCount;
+					}
+				} while (readCount > 0)
+				outputLine("");
+			}
+		}
+	}
+stopIt: ;
+}

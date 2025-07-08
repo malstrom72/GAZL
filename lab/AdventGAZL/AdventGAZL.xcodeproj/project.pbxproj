@@ -1,0 +1,351 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 42;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		F765203F14AA790100836DE5 /* AdventGAZL.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F765203E14AA790100836DE5 /* AdventGAZL.cpp */; };
+		F7974F781158035B0021254B /* GAZL.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F7974F761158035B0021254B /* GAZL.cpp */; };
+		F7974F791158035B0021254B /* GAZL.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = F7974F771158035B0021254B /* GAZL.h */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXBuildRule section */
+		F72C41E310F0303D0084B6E6 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.gcc.4_0;
+			fileType = sourcecode.c;
+			isEditable = 1;
+			outputFiles = (
+			);
+		};
+/* End PBXBuildRule section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8DD76F690486A84900D96B5E /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 8;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+				F7974F791158035B0021254B /* GAZL.h in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		F75AD7F0110D224400A2F3B1 /* AdventGAZL */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = AdventGAZL; sourceTree = BUILT_PRODUCTS_DIR; };
+		F765203E14AA790100836DE5 /* AdventGAZL.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AdventGAZL.cpp; sourceTree = "<group>"; };
+		F7974F761158035B0021254B /* GAZL.cpp */ = {isa = PBXFileReference; fileEncoding = 5; lastKnownFileType = sourcecode.cpp.cpp; path = GAZL.cpp; sourceTree = "<group>"; };
+		F7974F771158035B0021254B /* GAZL.h */ = {isa = PBXFileReference; fileEncoding = 5; lastKnownFileType = sourcecode.c.h; path = GAZL.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8DD76F660486A84900D96B5E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		08FB7794FE84155DC02AAC07 /* SillyVM */ = {
+			isa = PBXGroup;
+			children = (
+				F765203E14AA790100836DE5 /* AdventGAZL.cpp */,
+				F7974F751158035B0021254B /* src */,
+				F75AD7F0110D224400A2F3B1 /* AdventGAZL */,
+			);
+			name = SillyVM;
+			sourceTree = "<group>";
+		};
+		F7974F751158035B0021254B /* src */ = {
+			isa = PBXGroup;
+			children = (
+				F7974F761158035B0021254B /* GAZL.cpp */,
+				F7974F771158035B0021254B /* GAZL.h */,
+			);
+			name = src;
+			path = ../../src;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8DD76F620486A84900D96B5E /* AdventGAZL */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1DEB923108733DC60010E9CD /* Build configuration list for PBXNativeTarget "AdventGAZL" */;
+			buildPhases = (
+				8DD76F640486A84900D96B5E /* Sources */,
+				8DD76F660486A84900D96B5E /* Frameworks */,
+				8DD76F690486A84900D96B5E /* CopyFiles */,
+			);
+			buildRules = (
+				F72C41E310F0303D0084B6E6 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = AdventGAZL;
+			productInstallPath = "$(HOME)/bin";
+			productName = SillyVM;
+			productReference = F75AD7F0110D224400A2F3B1 /* AdventGAZL */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		08FB7793FE84155DC02AAC07 /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = 1DEB923508733DC60010E9CD /* Build configuration list for PBXProject "AdventGAZL" */;
+			compatibilityVersion = "Xcode 2.4";
+			developmentRegion = English;
+			hasScannedForEncodings = 1;
+			knownRegions = (
+				English,
+				Japanese,
+				French,
+				German,
+			);
+			mainGroup = 08FB7794FE84155DC02AAC07 /* SillyVM */;
+			productRefGroup = 08FB7794FE84155DC02AAC07 /* SillyVM */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				8DD76F620486A84900D96B5E /* AdventGAZL */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8DD76F640486A84900D96B5E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F7974F781158035B0021254B /* GAZL.cpp in Sources */,
+				F765203F14AA790100836DE5 /* AdventGAZL.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1DEB923208733DC60010E9CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INSTALL_PATH = "$(HOME)/bin";
+				PRODUCT_NAME = AdventGAZL;
+				SYMROOT = build/Mac/GCC;
+			};
+			name = Debug;
+		};
+		1DEB923308733DC60010E9CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INSTALL_PATH = "$(HOME)/bin";
+				PRODUCT_NAME = AdventGAZL;
+				SYMROOT = build/Mac/GCC;
+			};
+			name = Release;
+		};
+		1DEB923608733DC60010E9CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_DEBUGGING_SYMBOLS = full;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_MODEL_TUNING = G5;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = ../../;
+				ICC_ANALIZE_INCLUDES = 0;
+				ICC_CG_INITNAN = 0;
+				ICC_DATA_ADDRCOMMON = "$(Default_ICC_DATA_ADDRCOMMON_value_$(GCC_NO_COMMON_BLOCKS))";
+				ICC_DATA_ARG_ALIAS = 1;
+				ICC_DATA_BSSINIT = 0;
+				ICC_DATA_CONST_CONSTRAINT = 0;
+				ICC_DATA_NO_ALIAS = 0;
+				ICC_DATA_SHORTENUM = "$(GCC_SHORT_ENUMS)";
+				ICC_DATA_STRCTALN = default;
+				ICC_DATA_SYMVIS = "$(Default_ICC_DATA_SYMVIS_value_$(GCC_SYMBOLS_PRIVATE_EXTERN))";
+				ICC_DATA_UNSIGNEDBIT = 0;
+				ICC_DATA_UNSIGNEDCHAR = "$(Default_ICC_DATA_UNSIGNEDCHAR_value_$(GCC_CHAR_IS_UNSIGNED_CHAR))";
+				ICC_DEBUG = "$(GCC_GENERATE_DEBUGGING_SYMBOLS)";
+				ICC_DEFINES = "$(GCC_PREPROCESSOR_DEFINITIONS)";
+				ICC_DIAGNOSTICS_FILE = "$(TEMP_DIR)/$(PRODUCT_NAME).diag";
+				ICC_DIAG_AUTO_PARA = none;
+				ICC_DIAG_EFFECTIVE_CPP = "$(GCC_WARN_EFFECTIVE_CPLUSPLUS_VIOLATIONS)";
+				ICC_DIAG_ERRORLIMIT = "";
+				ICC_DIAG_NON_VIRTUAL_DESTRUCTOR = "$(GCC_WARN_NON_VIRTUAL_DESTRUCTOR)";
+				ICC_DIAG_OMP_REPORT = none;
+				ICC_DIAG_USAGE_MSG = 0;
+				ICC_DIAG_VEC_REPORT = none;
+				ICC_DIAG_WARN_AS_ERROR = "$(GCC_TREAT_WARNINGS_AS_ERRORS)";
+				ICC_DISABLE_DIAG = "";
+				ICC_EMIT_DIAGNOSTICS_TO_FILE = 0;
+				ICC_ENABLE_PASCAL_STRINGS = "$(GCC_ENABLE_PASCAL_STRINGS)";
+				ICC_FP_CHKSTK = 0;
+				ICC_FP_CONSISTANCY = 0;
+				ICC_FP_DENORMAL_TO_ZERO = 0;
+				ICC_FP_EXCEPT = 0;
+				ICC_FP_LIMITRANGE = 0;
+				ICC_FP_MODEL = default;
+				ICC_FP_ROUND = 0;
+				ICC_FP_SPECULATION = default;
+				ICC_IGNORE_STD_INCLUDEDIR = 0;
+				ICC_LANG_ANSI = "$(GCC_C_LANGUAGE_STANDARD)";
+				ICC_LANG_ANSI_OPT = 0;
+				ICC_LANG_MULTIBYTE = 1;
+				ICC_LANG_OPENMP = disable;
+				ICC_LANG_RESTRICT = 0;
+				ICC_LOGO = 0;
+				ICC_OPTLEVEL = "$(Default_ICC_OPTLEVEL_value_$(ICC_DEBUG))";
+				ICC_OPT_AUTOPARALLEL_THRESHOLD = "";
+				ICC_OPT_INLINE = default;
+				ICC_OPT_INLINE_INTRINSIC = 0;
+				ICC_OPT_IPO_FOR_SINGLE_FILE_COMPILATION = NO;
+				ICC_OPT_LOOP_UNROLL = "";
+				ICC_OPT_PARALLEL = 0;
+				ICC_OPT_PREFETCH_INSERTION = 1;
+				ICC_OPT_PROVIDE_FRAME_PTR = "$(Default_ICC_OPT_PROVIDE_FRAME_PTR_value_$(ICC_DEBUG))";
+				ICC_OPT_REQUIRE_ARCH_IA32 = none;
+				ICC_OPT_USE_ARCH_IA32 = none;
+				ICC_OP_ASMFILE = 0;
+				ICC_OTHER_CFLAGS = "$(OTHER_CFLAGS)";
+				ICC_OTHER_CPLUSPLUSFLAGS = "$(ICC_OTHER_CFLAGS) $(OTHER_CPLUSPLUSFLAGS)";
+				ICC_PRECOMPILE_PREFIX_HEADER = "$(GCC_PRECOMPILE_PREFIX_HEADER)";
+				ICC_PREDEFINE_GCC = default;
+				ICC_PREFIX_HEADER = "$(GCC_PREFIX_HEADER)";
+				ICC_RT_CHECK_UNINIT = 0;
+				ICC_RT_LIBRARY = default;
+				ICC_RT_TRACEBACK = 0;
+				ICC_STATIC_VERIFIER = default;
+				ICC_UNDEFINES = "";
+				ICC_UNDEFINE_ALL = 0;
+				ICC_WARNLEVEL = warnings;
+				PREBINDING = NO;
+				SYMROOT = build/Mac;
+				ZERO_LINK = YES;
+			};
+			name = Debug;
+		};
+		1DEB923708733DC60010E9CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				GCC_AUTO_VECTORIZATION = YES;
+				GCC_DYNAMIC_NO_PIC = YES;
+				GCC_ENABLE_CPP_RTTI = NO;
+				GCC_ENABLE_SSE3_EXTENSIONS = YES;
+				GCC_FAST_MATH = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_MODEL_TUNING = G5;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = NDEBUG;
+				GCC_STRICT_ALIASING = YES;
+				GCC_THREADSAFE_STATICS = NO;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = ../../;
+				ICC_ANALIZE_INCLUDES = 0;
+				ICC_CG_INITNAN = 0;
+				ICC_DATA_ADDRCOMMON = "$(Default_ICC_DATA_ADDRCOMMON_value_$(GCC_NO_COMMON_BLOCKS))";
+				ICC_DATA_ARG_ALIAS = NO;
+				ICC_DATA_BSSINIT = 0;
+				ICC_DATA_CONST_CONSTRAINT = 0;
+				ICC_DATA_NO_ALIAS = YES;
+				ICC_DATA_SHORTENUM = "$(GCC_SHORT_ENUMS)";
+				ICC_DATA_STRCTALN = default;
+				ICC_DATA_SYMVIS = "$(Default_ICC_DATA_SYMVIS_value_$(GCC_SYMBOLS_PRIVATE_EXTERN))";
+				ICC_DATA_UNSIGNEDBIT = 0;
+				ICC_DATA_UNSIGNEDCHAR = "$(Default_ICC_DATA_UNSIGNEDCHAR_value_$(GCC_CHAR_IS_UNSIGNED_CHAR))";
+				ICC_DEBUG = "$(GCC_GENERATE_DEBUGGING_SYMBOLS)";
+				ICC_DEFINES = "$(GCC_PREPROCESSOR_DEFINITIONS)";
+				ICC_DIAGNOSTICS_FILE = "$(TEMP_DIR)/$(PRODUCT_NAME).diag";
+				ICC_DIAG_AUTO_PARA = none;
+				ICC_DIAG_EFFECTIVE_CPP = "$(GCC_WARN_EFFECTIVE_CPLUSPLUS_VIOLATIONS)";
+				ICC_DIAG_ERRORLIMIT = "";
+				ICC_DIAG_NON_VIRTUAL_DESTRUCTOR = YES;
+				ICC_DIAG_OMP_REPORT = none;
+				ICC_DIAG_USAGE_MSG = 0;
+				ICC_DIAG_VEC_REPORT = none;
+				ICC_DIAG_WARN_AS_ERROR = "$(GCC_TREAT_WARNINGS_AS_ERRORS)";
+				ICC_DISABLE_DIAG = "";
+				ICC_EMIT_DIAGNOSTICS_TO_FILE = 0;
+				ICC_ENABLE_PASCAL_STRINGS = "$(GCC_ENABLE_PASCAL_STRINGS)";
+				ICC_FP_CHKSTK = 0;
+				ICC_FP_CONSISTANCY = 0;
+				ICC_FP_DENORMAL_TO_ZERO = 0;
+				ICC_FP_EXCEPT = 0;
+				ICC_FP_LIMITRANGE = 0;
+				ICC_FP_MODEL = default;
+				ICC_FP_ROUND = 0;
+				ICC_FP_SPECULATION = default;
+				ICC_IGNORE_STD_INCLUDEDIR = 0;
+				ICC_LANG_ANSI = "$(GCC_C_LANGUAGE_STANDARD)";
+				ICC_LANG_ANSI_OPT = 0;
+				ICC_LANG_MULTIBYTE = 1;
+				ICC_LANG_OPENMP = disable;
+				ICC_LANG_RESTRICT = 0;
+				ICC_LOGO = 0;
+				ICC_OPTLEVEL = speedHLO;
+				ICC_OPT_AUTOPARALLEL_THRESHOLD = "";
+				ICC_OPT_INLINE = any;
+				ICC_OPT_INLINE_INTRINSIC = 0;
+				ICC_OPT_IPO_FOR_SINGLE_FILE_COMPILATION = YES;
+				ICC_OPT_LOOP_UNROLL = "";
+				ICC_OPT_PARALLEL = 0;
+				ICC_OPT_PREFETCH_INSERTION = 1;
+				ICC_OPT_PROVIDE_FRAME_PTR = "$(Default_ICC_OPT_PROVIDE_FRAME_PTR_value_$(ICC_DEBUG))";
+				ICC_OPT_REQUIRE_ARCH_IA32 = archP;
+				ICC_OPT_USE_ARCH_IA32 = archP;
+				ICC_OP_ASMFILE = 0;
+				ICC_PRECOMPILE_PREFIX_HEADER = "$(GCC_PRECOMPILE_PREFIX_HEADER)";
+				ICC_PREDEFINE_GCC = default;
+				ICC_PREFIX_HEADER = "$(GCC_PREFIX_HEADER)";
+				ICC_RT_CHECK_UNINIT = 0;
+				ICC_RT_LIBRARY = static;
+				ICC_RT_TRACEBACK = 0;
+				ICC_STATIC_VERIFIER = default;
+				ICC_UNDEFINES = "";
+				ICC_UNDEFINE_ALL = 0;
+				ICC_WARNLEVEL = warnings;
+				OTHER_CFLAGS = "-falign-loops=16";
+				PREBINDING = NO;
+				STRIP_INSTALLED_PRODUCT = YES;
+				SYMROOT = build/Mac;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1DEB923108733DC60010E9CD /* Build configuration list for PBXNativeTarget "AdventGAZL" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1DEB923208733DC60010E9CD /* Debug */,
+				1DEB923308733DC60010E9CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1DEB923508733DC60010E9CD /* Build configuration list for PBXProject "AdventGAZL" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1DEB923608733DC60010E9CD /* Debug */,
+				1DEB923708733DC60010E9CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 08FB7793FE84155DC02AAC07 /* Project object */;
+}

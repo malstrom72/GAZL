@@ -1,0 +1,795 @@
+extern native trace;		// trace(string* message)
+extern native sendMidi;		// int success = sendMidi(int destination, int offset, int status, int byte1, int byte2)
+extern native getParams;	// getParams(int paramNumber, int paramCount, float* paramValues)
+extern native setParams;	// setParams(int paramNumber, int paramCount, float* paramValues)
+extern native sqrt;
+extern native pow;
+extern native atan2;
+extern native fmod;
+extern native sin;
+extern native cos;
+extern native tan;
+extern native abort;
+
+/* ------ Strings and tracing ------ */
+
+const float EPSILON_FLOAT = 1.0e-45
+const float SMALL_FLOAT = 1.0e-5
+const float LARGE_FLOAT = 1.0e+10
+const float HUGE_FLOAT = 1.0e+38
+
+function strlen(pointer s)
+returns int l
+locals	pointer a
+{
+	a = s;
+	while ((int)*a != 0) a = a + 1;
+	l = a - s;
+}
+
+function strcpy(pointer d, pointer s)
+returns pointer r
+locals	pointer a, pointer b
+{
+	r = a = d;
+	b = s;
+	while ((*a = (int)*b) != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function strcat(pointer d, pointer s)
+returns pointer r
+locals	pointer a, pointer b
+{
+	r = a = d;
+	while ((int)*a != 0) a = a + 1;
+	b = s;
+	while ((*a = (int)*b) != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function strcmp(pointer s0, pointer s1)
+returns int d
+locals pointer a, pointer b, int c
+{
+	a = s0;
+	b = s1;
+	while ((d = (c = (int) *a) - (int) *b) == 0 && c != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function strncmp(pointer s0, pointer s1, int n)
+returns	int d
+locals	pointer a
+		, pointer b
+		, int i
+		, int c
+{
+	d = 0;
+	if (n > 0) {
+		a = s0;
+		b = s1;
+		for (i = 1 to n) {
+			if ((d = (c = (int)*a) - (int)*b) != 0 || c == 0) goto done;
+			a = a + 1;
+			b = b + 1;
+		}
+	done: ;
+	}
+}
+
+function stpcpy(pointer d, pointer s)
+returns pointer a
+locals	pointer b
+{
+	a = d;
+	b = s;
+	while ((*a = (int)*b) != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+/*
+	`buffer` needs to be at least `GAZL_WORD_SIZE + 2` in size (incl. terminating zero). Output will be right-aligned in
+	this buffer and returned pointer is the first character, so the length of the output is
+	`buffer + (GAZL_WORD_SIZE + 1) - returned pointer`. `minLength` is usually 1 (or `i == 0` will return an empty
+	string), increasing it will add leading zeroes.
+*/
+const int GAZL_WORD_SIZE
+function intToString(int i, int radix, int minLength, pointer buffer)
+returns	pointer p
+locals	pointer e, int x
+{
+	assert(2 <= radix && radix <= 16);
+	assert(0 <= minLength && minLength <= GAZL_WORD_SIZE);
+	
+	*(p = buffer + GAZL_WORD_SIZE + 1) = 0;
+	e = p - minLength;
+	x = i;
+	while (p > e || x != 0) {
+		assert(p >= buffer + 2);
+		*(p = p - 1) = ("fedcba9876543210123456789abcdef")[15 + x % radix];	// Mirrored hex string to handle negative x.
+		x = x / radix;
+	}
+	if (i < 0) *(p = p - 1) = '-';
+}
+
+function stringToFloat(pointer b, pointer v)
+returns	pointer p
+locals	float f
+		, float e
+		, int n
+		, int i
+		, int c
+		, pointer q
+{
+	p = b;
+	f = 0.0;
+	while ((c = (int) *p) >= '0' && c <= '9') {
+		f = f * 10.0 + itof(c - '0');
+		p = p + 1;
+	}
+	if ((int) *p == '.') {
+		p = p + 1;
+		e = 0.1;
+		while ((c = (int) *p) >= '0' && c <= '9') {
+			f = f + e * itof(c - '0');
+			e = e * 0.1;
+			p = p + 1;
+		}
+	}
+	if ((c = (int) *p) == 'e' || c == 'E') {
+		q = p + 1;
+		e = 10.0;
+		if ((c = (int) *q) == '+') q = q + 1;
+		else if (c == '-') { e = 0.1; q = q + 1; }
+		n = 0;
+		while ((c = (int) *q) >= '0' && c <= '9') {
+			n = n * 10 + (c - '0');
+			q = q + 1;
+			p = q;
+		}
+		if (n > 50) n = 50;
+		for (i = 0 to n) f = f * e;
+	}
+	*v = f;
+}
+
+// buffer should hold at least 32 elements
+function floatToString(float f, int precision, pointer buffer)
+returns	pointer p
+locals float x, float y, int e, float g, pointer dp, pointer pp, pointer ep, int i
+{
+	assert(1 <= precision && precision <= 24);
+
+	y = abs(f);
+	if (y <= EPSILON_FLOAT) p = "0";
+	else if (y >= HUGE_FLOAT) p = "HUGE";
+	else {
+		e = 0;
+		ep = buffer + 3 + precision;
+		
+		loop {
+			pp = buffer + 3;
+			x = y;
+			
+			// Normalize values > 10 and move period position.
+			
+			while (x >= 10.0 && pp < ep) {
+				pp = pp + 1;
+				x = x * 0.1;
+			}
+						
+			if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break;
+			
+			// Exponential treatment of very small or large values.
+
+			g = y;
+			while (y < 1.0) {
+				e = e - 1;
+				y = y * 10.0;
+			}
+			while (y >= 10.0) {
+				e = e + 1;
+				y = y * 0.1;
+			}
+		}
+	break:
+		
+		// For values < 1, spit out leading 0's and increase precision.
+
+		dp = buffer + 2;
+		while (x < 1.0 && dp < buffer + 32) {
+			*dp = '0';
+			dp = dp + 1;
+			if (dp == pp) {	// Hop over period position (set to 9 to avoid when eliminating 9's).
+				*dp = '9';
+				dp = dp + 1;
+			}
+			ep = ep + 1;
+			x = x * 10.0;
+		}
+		
+		// Exhaust all remaining digits of mantissa into buffer.
+		
+		while (dp < ep) {
+			i = ftoi(x);
+			*dp = i + '0';
+			dp = dp + 1;
+			if (dp == pp) {	// Hop over period position (set to 9 to avoid when eliminating 9's).
+				*dp = '9';
+				dp = dp + 1;
+			}
+			x = (x - itof(i)) * 10.0;
+		}
+		
+		// If remainder is >= 5, increment trailing 9's...
+		
+		p = buffer + 2;
+		if (x >= 5.0) {
+			while ((int) dp[-1] == '9') *(dp = dp - 1) = '0';
+			
+			// If we are at spare position, set to '1' and include, otherwise, increment last non-9.
+			
+			if (dp == p) *(p = p - 1) = '1';
+			else dp[-1] = (int) dp[-1] + 1;
+			
+			// Did we incremented a 0? Cut precision (afterwards, a bit Q&D).
+			
+			if ((int) dp[-1] == '1') ep = ep - 1;
+		}
+		
+		*pp = '.';
+		
+		// Trim trailing zeroes (and possibly '.').
+		
+		if (ep > pp) while ((int) ep[-1] == '0') ep = ep - 1;
+		if (ep - 1 == pp) ep = ep - 1;
+		
+		// Add any exponent and negative sign.
+		
+		if (e != 0) {
+			*ep = 'e';
+			i = '+';
+			if (e < 0) i = '-';
+			*(ep = ep + 1) = i;
+			i = abs(e);
+			if (i >= 100) *(ep = ep + 1) = '0' + ((i / 100) % 10);
+			if (i >= 10) *(ep = ep + 1) = '0' + ((i / 10) % 10);
+			*(ep = ep + 1) = '0' + (i % 10);
+			ep = ep + 1;
+		}
+		*ep = 0;
+
+		if (f < 0.0) *(p = p - 1) = '-';
+	}
+}
+
+function traceInts(pointer text, int n, pointer ints)
+locals	array buffer[GAZL_WORD_SIZE + 2]
+		, array line[1024]
+		, int i
+		, pointer p
+{
+	p = &line[0];
+	if (text != null) p = (pointer) stpcpy(p, text);
+	*p = 0;
+	for (i = 0 to n) {
+		if (i != 0) { *p = ','; p = p + 1; }
+		p = (pointer) stpcpy(p, intToString(ints[i], 10, 1, buffer));
+	}
+	trace(line);
+}
+
+function traceInt(pointer text, int i)
+locals	array ints[1]
+{
+	ints[0] = i;
+	traceInts(text, 1, ints);
+}
+
+function error(pointer s)
+{
+	trace(s);
+	abort();
+}
+
+const float PI = 3.14159265359;
+const int FALSE = 0;
+const int TRUE = 1;
+const int BRANCH_COUNT = 12;
+const int MIDI_DESTINATION_LOCAL = 1;
+const int MIDI_DESTINATION_HOST = 2;
+const int param_rotation;
+const int param_branch1;
+const int param_bulbMode;
+const int STANDARD_BULB_MODE = 0;
+const int VELOCITY_BULB_MODE = 1;
+const int RANGES_BULB_MODE = 2;
+const int LAYERS_BULB_MODE = 3;
+
+const int INTERNAL_TRIGGERS = TRUE;
+const int MENU_MODE = TRUE;
+const int MENU_COUNT = 4;
+
+const int LEFT_BUTTON_MIDI_NOTE = 46;
+const int RIGHT_BUTTON_MIDI_NOTE = 44;
+const int LEFT_KNOB_CC = 70;
+const int RIGHT_KNOB_CC = 71;
+
+const int LOOP_RESOLUTION = 192;    // per beat
+const int MAX_LOOP_BEATS = 16;     // in beats
+const int MAX_LOOP_LENGTH = (MAX_LOOP_BEATS * LOOP_RESOLUTION);
+const int ONE_SIXTEENTH = (LOOP_RESOLUTION / 4);
+
+const float STOP_RECORDING_THRESHOLD_SECS = 0.3;
+const int MAX_INPUT_EVENTS = 256;
+const int INPUT_EVENT_ROTATION = 0;
+const int INPUT_EVENT_DISTANCE = 1;
+const int INPUT_EVENT_TRIGGER = 2;	// not used if INTERNAL_TRIGGERS == TRUE
+const int INPUT_EVENT_COUNT = 3;
+
+const int SCALES_COUNT = 10;
+
+readonly array SCALES[12 * SCALES_COUNT] = {
+   -15,  -12,  -10,   -8,   -5,   -3,    0,    2,    4,    7,    9,   12, // major_pentatonic
+   -14,  -12,   -9,   -7,   -5,   -2,    0,    3,    5,    7,   10,   12, // minor_pentatonic
+//   -15, -12, -10,  -9,  -5,  -3,   0,   2,   3,   7,   9,  12,  // Kumoi (Japanese pentatonic)
+   -14, -12, -11,  -7,  -6,  -2,   0,   1,   5,   6,  10,  12,   // Iwato (Japanese pentatonic)
+   -12,  -10,   -8,   -6,   -4,   -2,    0,    2,    4,    6,    8,   10, // whole_tone
+   -10,   -8,   -7,   -5,   -3,   -1,    0,    2,    4,    5,    7,    9, // major / ionian
+   -10,   -9,   -7,   -5,   -4,   -2,    0,    2,    3,    5,    7,    8, // minor / aeolian
+   -12,   -9,   -7,   -6,   -5,   -2,    0,    3,    5,    6,    7,   10, // blues
+//   -10,   -9,   -7,   -5,   -4,   -1,    0,    2,    3,    5,    7,    8, // harmonic_minor
+//   -10,   -9,   -7,   -5,   -3,   -1,    0,    2,    3,    5,    7,    9, // melodic_minor
+//   -10,   -9,   -7,   -5,   -3,   -2,    0,    2,    3,    5,    7,    9, // dorian
+//   -11,   -9,   -7,   -5,   -4,   -2,    0,    1,    3,    5,    7,    8, // phrygian
+//   -10,   -8,   -6,   -5,   -3,   -1,    0,    2,    4,    6,    7,    9, // lydian
+//   -10,   -8,   -7,   -5,   -3,   -2,    0,    2,    4,    5,    7,    9, // mixolydian
+//   -11,   -9,   -7,   -6,   -4,   -2,    0,    1,    3,    5,    6,    8,  // locrian
+//   -10,  -9,  -6,  -5,  -4,  -1,   0,   2,   3,   6,   7,   8,  // Hungarian Gypsy (double harmonic minor)
+//   -11,  -8,  -7,  -6,  -4,  -1,   0,   1,   4,   5,   6,   8,  // Persian
+   -11,  -8,  -7,  -5,  -4,  -1,   0,   1,   4,   5,   7,   8  // Oriental (double harmonic major)
+//   -11,  -8,  -6,  -5,  -2,  -1,   0,   1,   4,   6,   7,  10,  // Enigmatic
+//   -12, -10,  -8,  -6,  -3,  -2,   0,   2,   4,   6,   9,  10,  // Prometheus
+//    -8,  -7,  -5,  -4,  -3,  -1,   0,   2,   4,   5,   7,   8,  // Bebop Major
+//    -8,  -7,  -5,  -3,  -2,  -1,   0,   2,   4,   5,   7,   9,  // Bebop Dominant
+//    -9,  -8,  -6,  -5,  -3,  -2,   0,   1,   3,   4,   6,   7,  // Half-Whole Diminished
+//    -9,  -7,  -6,  -4,  -3,  -1,   0,   2,   3,   5,   6,   8,  // Whole-Half Diminished
+    -6,   -5,   -4,   -3,   -2,   -1,    0,    1,    2,    3,    4,    5,	// semitones
+     0,   12,   24,    0,  -24,  -12,    0,   12,   24,    0,  -24,  -12 // octaves
+};
+
+readonly array SCALE_NAMES[SCALES_COUNT] = {
+	"major_pentatonic",
+	"minor_pentatonic",
+//	"Kumoi (Japanese pentatonic)",
+	"Iwato (Japanese pentatonic)",
+	"whole_tone",
+	"major",
+	"minor",
+	"blues",
+//	"harmonic_minor",
+//	"melodic_minor",
+//	"dorian",
+//	"phrygian",
+//	"lydian",
+//	"mixolydian",
+//	"locrian",
+//	"Hungarian Gypsy (double harmonic minor)",
+//	"Persian",
+	"Oriental (double harmonic major)",
+//	"Enigmatic",
+//	"Prometheus",
+//	"Bebop Major",
+//	"Bebop Dominant",
+//	"Half-Whole Diminished",
+//	"Whole-Half Diminished",
+	"semitones",
+	"octaves"
+};
+
+readonly array KEY_RING_VELOCITIES[12] = { 127, 10, 21, 32, 42, 53, 64, 74, 85, 95, 106, 116 };
+
+const int LOOP_LENGTH_CHOICE_COUNT = 6;
+readonly array LOOP_LENGTH_CHOICES[LOOP_LENGTH_CHOICE_COUNT] = { 1, 2, 4, 8, 12, 16 };
+
+readonly pointer JAVASCRIPT_EDITOR = "Jamknobs.spscript/Jamknobs_showEditor.js";
+
+global float swingAmount = 0.0;
+global float currentAngle = 0.0;
+global float currentLength = 0.0;
+global int currentSector = 0;
+global int lastTrigSector = -1;
+global float timeSinceLastCC = 10000.0;
+global int isRecording = FALSE;
+global int recordStart = 0;
+global int playLoopStart = 0;
+global int requestedPlayLoopStart = 0;
+global int playLoopLength = 1;
+global int requestedPlayLoopLength = MAX_LOOP_LENGTH;
+global int recLoopLength = LOOP_RESOLUTION;
+global int lastStep = -1;
+global int recStep = -1;
+global int lastLoopIndex = MAX_LOOP_LENGTH;
+global int currentScale = 0;
+global int currentTranspose = 0;
+global int wasRunning = FALSE;
+global int currentStep = 0;	// for display
+global array loopData[MAX_LOOP_LENGTH * 2]; // pairs of angle and length
+
+global int currentMenu = 0;
+
+temporary int heldMidiNote = 0;
+temporary int inputEventCount = 0;
+temporary array inputEvents[MAX_INPUT_EVENTS * 3]; // { offset, type, value }
+
+function scale(float x, float inFrom, float inTo, float outFrom, float outTo)
+returns float y
+{
+    y = outFrom + (outTo - outFrom) * (x - inFrom) / (inTo - inFrom);
+}
+
+function round(float x)
+returns float y
+{
+    y = floor(x + 0.5);
+}
+
+function sectorToBranch(int sectorIndex)
+returns int branch
+locals float rotation
+{
+    getParams(param_rotation, 1, &rotation);
+    branch = (sectorIndex + BRANCH_COUNT - ftoi((float) round(rotation * itof(BRANCH_COUNT)))) % BRANCH_COUNT;
+}
+
+function releaseHeldMidiNote(int offset) {
+    if (global heldMidiNote != 0) {
+        sendMidi(MIDI_DESTINATION_LOCAL, offset, 0x80, global heldMidiNote, 0);
+        global heldMidiNote = 0;
+    }
+}
+
+function noteDown(int sector, int offset)
+locals int bulbMode, float bulbModeFloat, int note, int velocity
+{
+    getParams(param_bulbMode, 1, &bulbModeFloat);
+    bulbMode = ftoi((float) round(bulbModeFloat * 3.0));
+    switch (bulbMode == 0 to 4) {
+        case STANDARD_BULB_MODE: { note = 60 + sector; velocity = 127; }
+        case VELOCITY_BULB_MODE: {
+            note = 60 + (int) global SCALES[global currentScale * 12 + sector] + global currentTranspose;
+            velocity = (int) global KEY_RING_VELOCITIES[sector];
+        }
+        case RANGES_BULB_MODE: { note = 24 + sector * 6; velocity = 127; }
+        case LAYERS_BULB_MODE: { note = 60; velocity = 127; }
+    }
+    releaseHeldMidiNote(offset);
+    sendMidi(MIDI_DESTINATION_LOCAL, offset, 0x90, note, velocity);
+    global heldMidiNote = note;
+}
+
+function reset(float sampleRate, int seed)
+locals array buf[256]
+{
+	trace("reset");
+	trace(floatToString(sampleRate, 5, buf));
+	traceInt("seed: ", seed);
+}
+
+function addEvent(int offset, int type, float value)
+locals int n, int i
+{
+    if ((n = global inputEventCount) < MAX_INPUT_EVENTS) {
+        global inputEvents[(i = n * 3)] = offset;
+        global inputEvents[i + 1] = type;
+        global inputEvents[i + 2] = value;
+        global inputEventCount = n + 1;
+    }
+}
+
+function rotate(int offset, int value)
+locals float angle
+{
+	angle = itof(value) * (30.0 * 11.0 / 127.0);
+	addEvent(offset, INPUT_EVENT_ROTATION, angle);
+}
+
+function grow(int offset, int value)
+locals float length
+{
+	length = itof(value) / 127.0;
+	addEvent(offset, INPUT_EVENT_DISTANCE, length);
+}
+
+function changeTempo(int offset, int value)
+locals float tempo, int intTempo
+{
+	tempo = 60.0 + 120.0 * itof(value) / 127.0;
+	intTempo = ftoi(floor(tempo * 32.0 + 0.5));
+	assert(0 <= intTempo && intTempo < 16384);
+	sendMidi(MIDI_DESTINATION_HOST, 0, 0xBF, 118, intTempo & 0x7F);
+	sendMidi(MIDI_DESTINATION_HOST, 0, 0xBF, 119, (intTempo >> 7) & 0x7F);	
+}
+
+function changeSwing(int offset, int value)
+{
+	sendMidi(MIDI_DESTINATION_HOST, offset, 0xB0, 73, value);
+	global swingAmount = itof(value) / 127.0;
+}
+
+function changeScale(int offset, int value)
+{
+	global currentScale = (value * (SCALES_COUNT - 1) + 63) / 127;
+}
+
+function transpose(int offset, int value)
+{
+	global currentTranspose = (value * 12 + 63) / 127 - 6;
+}
+
+function changeLoopStart(int offset, int value)
+locals int loopStart, int loopLength, int newLength, int recLength
+{
+	loopStart = global playLoopStart;
+	loopLength = global playLoopLength;
+	recLength = global recLoopLength;
+	newLength = global requestedPlayLoopLength;
+	global requestedPlayLoopStart = loopStart = ((value * (((recLength - loopLength) / loopLength)) + 63) / 127) * loopLength;
+	if (loopStart + newLength > recLength) {
+		newLength = recLength - loopStart;
+		if (newLength < loopLength) {
+			newLength = loopLength;
+		}
+		if (loopStart + newLength > recLength) {
+			loopStart = recLength - newLength;
+		}
+	}
+	traceInt("loop from: ", loopStart);
+	traceInt("loop length: ", newLength);
+	global playLoopStart = loopStart;
+	global playLoopLength = newLength;
+}
+
+function changeLoopLength(int offset, int value)
+locals int loopStart, int loopLength, int recLength, int choiceCount
+{
+	loopStart = global requestedPlayLoopStart;
+	loopLength = global playLoopLength;
+	recLength = global recLoopLength;
+	choiceCount = LOOP_LENGTH_CHOICE_COUNT;
+	while (choiceCount > 1 && recLength < (int) global LOOP_LENGTH_CHOICES[choiceCount - 1]) {
+		--choiceCount;
+	}
+	global requestedPlayLoopLength = loopLength = (int) global LOOP_LENGTH_CHOICES[(value * (LOOP_LENGTH_CHOICE_COUNT - 1) + 63) / 127] * LOOP_RESOLUTION;
+	if (loopStart + loopLength > recLength) {
+		loopStart = recLength - loopLength;
+		if (loopStart < 0) {
+			loopStart = 0;
+		}
+		if (loopStart + loopLength > recLength) {
+			loopLength = recLength - loopStart;
+		}
+	}
+	traceInt("loop from: ", loopStart);
+	traceInt("loop length: ", loopLength);
+	global playLoopStart = loopStart;
+	global playLoopLength = loopLength;
+}
+
+readonly array CONTROL_FUNCTIONS[8] = { rotate, grow, changeTempo, changeSwing, changeScale, transpose, changeLoopStart, changeLoopLength };
+
+function processMidi(int offset, int status, int data1, int data2)
+returns int keepEvent
+locals int cmd, int knobNumber
+{
+    keepEvent = 1;
+    cmd = status & 0xF0;
+    if (cmd == 0x90 && data2 != 0) {
+    	if (INTERNAL_TRIGGERS == FALSE) {
+        	addEvent(offset, INPUT_EVENT_TRIGGER, 0.0);
+        }
+        if (MENU_MODE == TRUE) {
+			if (data1 == RIGHT_BUTTON_MIDI_NOTE) {
+				global currentMenu = (global currentMenu + 1) % MENU_COUNT;
+			}
+        }
+        keepEvent = 0;
+    } else if (cmd == 0x80 || (cmd == 0x90 && data2 == 0)) {
+        keepEvent = 0;
+    } else if (cmd == 0xB0) {
+    	if (MENU_MODE == FALSE) {
+	    	if (data1 >= 70 && data1 < 78) {
+	    		((funcptr) global CONTROL_FUNCTIONS[data1 - 70])(offset, data2);
+	    		keepEvent = 0;
+	    	}
+	    } else {
+	    	knobNumber = -1;
+	    	if (data1 == LEFT_KNOB_CC) {
+	    		knobNumber = 0;
+	    	} else if (data1 == RIGHT_KNOB_CC) {
+	    		knobNumber = 1;
+	    	}
+	    	if (knobNumber != -1) {
+	    		((funcptr) global CONTROL_FUNCTIONS[global currentMenu * 2 + knobNumber])(offset, data2);
+	    		keepEvent = 0;
+	    	}
+	    }
+    }
+}
+
+function floorMod(int x, int y)
+returns int z
+{
+    z = ((x % y) + y) % y;
+}
+
+function fract(float x)
+returns float y
+{
+	y = x - floor(x);
+}
+
+function tick(int frameCount, float sampleRate, float tempo, int isRunning, int ppqPosInteger, float ppqPosFraction)
+locals float ppqPerSample, int samplesPerPPQ, int inputEventIndex, pointer inputEventPointer
+		, int frameIndex, float currentPPQFraction, int eventOffset, int eventType, float eventValue
+		, int currentStep, int branch, int loopIndex, int newLoopLength, int i, float angle, int sector
+		, int gotTrigger, int last16, int this16, int gotNote
+		, float swingAmount, float swingPoint, float pos2, float stiffPosFract, float swingDelay
+		, int gotStep
+{
+	ppqPerSample = tempo / (sampleRate * 60.0);
+	samplesPerPPQ = ftoi(1.0 / ppqPerSample);
+	inputEventIndex = 0;
+	swingPoint = 0.25 + global swingAmount * 0.125;
+	if (global wasRunning != isRunning) {
+		global wasRunning = isRunning;
+		releaseHeldMidiNote();
+	}
+	for (frameIndex = 0 to frameCount) {
+		assert(isRunning == TRUE);
+		gotTrigger = FALSE;
+		gotNote = FALSE;
+		while (inputEventIndex < global inputEventCount && frameIndex >= (eventOffset = (int) global inputEvents[inputEventIndex * 3 + 0])) {
+			eventType = (int) global inputEvents[inputEventIndex * 3 + 1];
+			eventValue = (float) global inputEvents[inputEventIndex * 3 + 2];
+			inputEventIndex = inputEventIndex + 1;
+			switch (eventType == 0 to INPUT_EVENT_COUNT) {
+				case INPUT_EVENT_ROTATION: {
+					if (global currentAngle != eventValue) {
+						global currentAngle = eventValue;
+						global currentSector = ftoi((float) round(global currentAngle / 30.0)) % 12;
+						global timeSinceLastCC = 0.0;
+						if (isRunning == FALSE && global lastTrigSector != global currentSector) {
+							global lastTrigSector = global currentSector;
+							noteDown(global currentSector, eventOffset);
+						}
+					}
+				}
+				case INPUT_EVENT_DISTANCE: {
+					if (global currentLength != eventValue) {
+						global currentLength = eventValue;
+						global timeSinceLastCC = 0.0;
+					}
+				}
+				case INPUT_EVENT_TRIGGER: {
+					gotTrigger = TRUE;
+				}
+				default: assert(FALSE == TRUE);
+			}
+			branch = (int) sectorToBranch(global currentSector);
+			setParams(param_branch1 + branch, 1, &global currentLength);
+		}
+
+		if (isRunning == TRUE) {
+			stiffPosFract = ppqPosFraction + ppqPerSample * itof(frameIndex);
+			pos2 = (float) fract(stiffPosFract * 2.0) * 0.5;
+			if (pos2 < swingPoint) {
+				swingDelay = pos2 - (pos2 / (swingPoint * 4.0));
+			} else {
+				swingDelay = pos2 - (0.25 + (pos2 - swingPoint) / (2.0 - swingPoint * 4.0));
+			}
+			currentPPQFraction = stiffPosFract - swingDelay;
+
+			currentStep = ppqPosInteger * LOOP_RESOLUTION + ftoi(currentPPQFraction * itof(LOOP_RESOLUTION));
+			gotStep = FALSE;
+			// should be greater to currentStep, to not retrigger when changing swing, or more than 1/16 early
+			if (currentStep > global lastStep || currentStep <= global lastStep - ONE_SIXTEENTH) {
+				gotStep = TRUE;
+				last16 = global lastStep / ONE_SIXTEENTH;
+				this16 = currentStep / ONE_SIXTEENTH;
+				if (INTERNAL_TRIGGERS == TRUE && last16 != this16) {
+					gotTrigger = TRUE;
+				}
+				global lastStep = currentStep;
+			}
+			if (gotStep == TRUE || gotTrigger == TRUE || global timeSinceLastCC == 0.0) {
+				if (global isRecording == FALSE && global timeSinceLastCC == 0.0) {
+					global isRecording = TRUE;
+					global recordStart = currentStep;
+					global recLoopLength = 4 * LOOP_RESOLUTION;
+					global recStep = -1;
+					global lastStep = currentStep - 1;
+					global lastTrigSector = -1;
+					trace("started recording");
+				}
+
+				if (gotStep == TRUE) {
+					global recStep = global recStep + 1;
+				}
+				if (global isRecording == TRUE && global timeSinceLastCC >= STOP_RECORDING_THRESHOLD_SECS
+						&& global recStep >= global recLoopLength) {
+					global isRecording = FALSE;
+					global playLoopStart = 0;
+					global playLoopLength = global recLoopLength;
+					global lastLoopIndex = MAX_LOOP_LENGTH;
+					traceInt("stopped rec at ", global recStep);
+				}
+
+				if (global isRecording == FALSE) {
+					loopIndex = (int)floorMod((currentStep - global recordStart), global playLoopLength) + global playLoopStart;
+					if (loopIndex < global lastLoopIndex) {
+						global lastTrigSector = -1;
+					}
+					global lastLoopIndex = loopIndex;
+					global currentAngle = angle = (float) global loopData[loopIndex * 2 + 0];
+					global currentLength = (float) global loopData[loopIndex * 2 + 1];
+					global currentSector = sector = ftoi((float) round(angle / 30.0)) % 12;
+					branch = (int) sectorToBranch(sector);
+					setParams(param_branch1 + branch, 1, &global currentLength);
+				}
+
+				if (gotTrigger == TRUE && global lastTrigSector != global currentSector) {
+					global lastTrigSector = global currentSector;
+					noteDown(global currentSector, frameIndex);
+					gotNote = TRUE;
+				}
+
+				if (global isRecording == TRUE) {
+					if (gotNote == TRUE) {
+						newLoopLength = global recStep / (4 * LOOP_RESOLUTION);
+						if (newLoopLength < 0) {
+							newLoopLength = 0;
+						}
+						newLoopLength = (newLoopLength + 1) * (4 * LOOP_RESOLUTION);
+						if (newLoopLength > MAX_LOOP_LENGTH) {
+							newLoopLength = MAX_LOOP_LENGTH;
+							trace("hit length limit");
+						}
+						if (newLoopLength > global recLoopLength) {
+							global recLoopLength = newLoopLength;
+							traceInt("new len: ", newLoopLength);
+						}
+					}
+
+					loopIndex = (int) floorMod(global recStep, MAX_LOOP_LENGTH);
+					global loopData[loopIndex * 2 + 0] = global currentAngle;
+					global loopData[loopIndex * 2 + 1] = global currentLength;
+				}
+				global currentStep = loopIndex;
+			}
+		}
+		global timeSinceLastCC = global timeSinceLastCC + (1.0 / sampleRate);
+	}
+	global inputEventCount = 0;
+}
+
+function run() {
+	trace("starting Jamknobs GAZL");
+	sendMidi(MIDI_DESTINATION_HOST, 0, 0xBF, 117, 127);
+}
+
+function unload() {
+	trace("unloading Jamknobs GAZL");
+	releaseHeldMidiNote(0);
+	sendMidi(MIDI_DESTINATION_HOST, 0, 0xBF, 117, 0);
+}
+

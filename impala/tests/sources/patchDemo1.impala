@@ -1,0 +1,95 @@
+extern native sin;
+extern native cos;
+extern native tan;
+extern native asin;
+extern native acos;
+extern native atan;
+extern native exp;
+extern native log;
+extern native pow;
+extern native sqrt;
+extern native fillArray;
+extern native multiplyArray;
+extern native multiplyArrays;
+extern native addArray;
+extern native addArrays;
+extern native updateParameters;
+extern native getFrame;
+extern native putFrame;
+
+const int PRAWN_FIRMWARE_PATCH_FORMAT = 1;
+
+const int OPERATOR_1_NOP;
+const int OPERATOR_1_AND;
+const int OPERATOR_1_MUL;
+const int OPERATOR_1_OSC;
+const int OPERATOR_1_RND;
+const int OPERATOR_2_NOP;
+const int OPERATOR_2_OR;
+const int OPERATOR_2_XOR;
+const int OPERATOR_2_MSK;
+const int OPERATOR_2_SUB;
+
+const int CLOCK_FREQUENCY_PARAM_INDEX;	// CLOCK_FREQUENCY is an integer Hz
+const int OPERATOR_1_PARAM_INDEX;		// Operator 1 is an integer 0 to 4 (see definitions above).
+const int OPERAND_1_HIGH_PARAM_INDEX;	// Operand 1 high is an integer 0 to 255
+const int OPERAND_1_LOW_PARAM_INDEX;	// Operand 1 low is an integer 0 to 255
+const int OPERATOR_2_PARAM_INDEX;		// Operator 2 is an integer 0 to 4 (see definitions above).
+const int OPERAND_2_HIGH_PARAM_INDEX;	// Operator 2 is an integer 0 to 4 (see definitions above).
+const int OPERAND_2_LOW_PARAM_INDEX;	// Operand 2 high is an integer 0 to 255
+const int PARAM_COUNT;					// Param count can be changed in the future if more parameters are published to GAZL.
+
+const float PI = 3.14159265358979323846;
+
+const int FALSE = 0;
+const int TRUE = 1;
+
+function main()
+locals float r, float k, float g0, float fpi, float rq
+		, float dxL, float d0L, float d1L, float d2L, float d3L, float gL
+		, float dxR, float d0R, float d1R, float d2R, float d3R, float gR
+		, float dxzL, float d0zL, float d1zL, float d2zL, float d3zL
+		, float dxzR, float d0zR, float d1zR, float d2zR, float d3zR
+		, float left, float right
+		, array params[PARAM_COUNT]
+{
+	dxzL = d0zL = d1zL = d2zL = d3zL = 0.0;
+	dxzR = d0zR = d1zR = d2zR = d3zR = 0.0;
+
+	loop {
+		if ((int)updateParameters(params) != FALSE) {	// updateParameters() will fill the params array and return 1 if any parameters have changed since last putFrame() (regardless of the actual array content!). updateParameters() may block on first call (before first putFrame()).
+			rq = itof((int)params[OPERAND_1_HIGH_PARAM_INDEX]) * (1.0 / 255.0 * 2.0);
+			fpi = itof((int)params[OPERAND_1_LOW_PARAM_INDEX]) * (1.0 / 256.0 * 0.5 * PI);
+			r = (4.0 - rq) / (1.0 + rq);
+			k = ((float) sin(fpi)) / ((float) cos(fpi) + (float) sin(fpi));		// or : k = 1.0 / (1.0 + 1.0 / tan(f * pi)), not sure which one is more prone to rounding errors as the divisors in both variants can get near 0 and infinity. 
+			g0 = r / (1.0 + r * k * k * k * k);
+			r = (1.0 + r);
+		}
+
+		getFrame(&left, &right);						// getFrame() will return the current left and right input samples. getFrame() may block on first call (before first putFrame()).
+
+		dxL = 0.5 * (dxzL + left * r);
+		d0L = d0zL + k * (dxL - d0zL);
+		d1L = d1zL + k * (d0L - d1zL);
+		d2L = d2zL + k * (d1L - d2zL);
+		d3L = d3zL + k * (d2L - d3zL);
+		gL = g0 * (d3L + d3L - d3zL); dxzL = dxL + dxL - dxzL - gL;
+		gL = gL * k; d0zL = d0L + d0L - d0zL - gL;
+		gL = gL * k; d1zL = d1L + d1L - d1zL - gL;
+		gL = gL * k; d2zL = d2L + d2L - d2zL - gL;
+		gL = gL * k; d3zL = d3L + d3L - d3zL - gL;
+
+		dxR = 0.5 * (dxzR + right * r);
+		d0R = d0zR + k * (dxR - d0zR);
+		d1R = d1zR + k * (d0R - d1zR);
+		d2R = d2zR + k * (d1R - d2zR);
+		d3R = d3zR + k * (d2R - d3zR);
+		gR = g0 * (d3R + d3R - d3zR); dxzR = dxR + dxR - dxzR - gR;
+		gR = gR * k; d0zR = d0R + d0R - d0zR - gR;
+		gR = gR * k; d1zR = d1R + d1R - d1zR - gR;
+		gR = gR * k; d2zR = d2R + d2R - d2zR - gR;
+		gR = gR * k; d3zR = d3R + d3R - d3zR - gR;
+
+		putFrame(d3zL, d3zR);							// putFrame() pushes the left and right output samples (and blocks processing until next available input sample). After this call, updateParameters() and getFrame() may return new values.
+	}
+}

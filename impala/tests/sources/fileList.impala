@@ -1,0 +1,130 @@
+/*
+	Prawn OS Command Prompt.
+	
+	(C)1973-1977 Shrimperative Computing LTD.
+*/
+
+extern native findFirmwarePatch	// findFirmwarePatch(int index, int nameMaxLength, int name[31 + 1], int* size, int modDate[8 + 1]) -> int : returns 1 if found, returns 0 if no more patches available (which also means next call will refresh the list).
+
+const int FILE_TYPE_COUNT = 4
+const int FILE_TYPE_EXE = 0
+const int FILE_TYPE_SYS = 1
+const int FILE_TYPE_TXT = 2
+const int FILE_TYPE_BIN = 3
+readonly array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] = {
+	"exe", "sys", "txt", "bin"
+}
+
+const int FILE_FIELD_NAME = 0
+const int FILE_FIELD_TYPE = 1
+const int FILE_FIELD_SIZE = 2
+const int FILE_FIELD_DATE = 3
+const int FILE_FIELD_COUNT = 4
+
+const int MAX_FILE_COUNT = 100
+const int MAX_FILE_NAME_LENGTH = 31
+const int BUILT_IN_FILE_COUNT = 14
+global int fileCount = BUILT_IN_FILE_COUNT
+
+global array FILES[MAX_FILE_COUNT * FILE_FIELD_COUNT] = {
+	  "about"	, FILE_TYPE_TXT	, 2		, "11/13/84"
+	, "advent"	, FILE_TYPE_EXE	, 91	, " 2/21/78"
+	, "bluprint", FILE_TYPE_TXT	, 2 	, " 6/ 5/79"
+	, "calc"	, FILE_TYPE_EXE	, 7		, "11/25/77"
+	, "chess"	, FILE_TYPE_EXE	, 16	, " 3/ 6/84"
+	, "disasm"	, FILE_TYPE_EXE	, 4		, "11/25/77"
+	, "fredrik"	, FILE_TYPE_TXT	, 5		, " 7/14/84"
+	, "life"	, FILE_TYPE_EXE	, 5		, " 3/12/79"
+	, "magnus"	, FILE_TYPE_TXT	, 5		, " 6/22/84"
+	, "patch"	, FILE_TYPE_EXE	, 3  	, " 2/18/84"
+	, "permut8"	, FILE_TYPE_SYS	, 82	, " 3/ 1/83"
+	, "prawnos"	, FILE_TYPE_SYS	, 58	, "10/11/84"
+	, "readme"	, FILE_TYPE_TXT	, 2		, "12/14/79"
+	, "version"	, FILE_TYPE_TXT	, 1		, "11/13/84"
+};
+global array FILE_NAMES[MAX_FILE_COUNT * (MAX_FILE_NAME_LENGTH + 1)];
+global array FILE_DATES[MAX_FILE_COUNT * 9];
+
+global int filesAreInited = 0;
+
+function strcmp(pointer s0, pointer s1)
+returns int d
+locals pointer a, pointer b, int c
+{
+	a = s0;
+	b = s1;
+	while ((d = (c = (int)*a) - (int)*b) == 0 && c != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function sortFiles()
+locals int i, int j, int minJ, pointer minS, pointer s, array temp[FILE_FIELD_COUNT], pointer p0, pointer p1
+{
+	for (i = 0 to global fileCount - 1) {
+		minJ = i;
+		minS = (pointer) global FILES[i * FILE_FIELD_COUNT];
+		for (j = i + 1 to global fileCount) {
+			if ((int) strcmp((s = (pointer) global FILES[j * FILE_FIELD_COUNT + FILE_FIELD_NAME]), minS) < 0) {
+				minJ = j;
+				minS = s;
+			}
+		}
+		copy (FILE_FIELD_COUNT from (p0 = &global FILES[minJ * FILE_FIELD_COUNT]) to temp);
+		copy (FILE_FIELD_COUNT from (p1 = &global FILES[i * FILE_FIELD_COUNT]) to p0);
+		copy (FILE_FIELD_COUNT from temp to p1);
+	}
+}
+
+function initFilesIfNecessary()
+locals int index, int size, pointer filePointer, pointer namePointer, pointer datePointer
+{
+	if (global filesAreInited == 0) {
+		assert(global fileCount == BUILT_IN_FILE_COUNT);
+		index = 0;
+		filePointer = &global FILES[BUILT_IN_FILE_COUNT * FILE_FIELD_COUNT];
+		namePointer = global FILE_NAMES;
+		datePointer = global FILE_DATES;
+		while ((int) findFirmwarePatch(index, 31, namePointer, &size, datePointer) == 1) {
+			if (index < MAX_FILE_COUNT) {
+				filePointer[FILE_FIELD_NAME] = namePointer;
+				filePointer[FILE_FIELD_TYPE] = FILE_TYPE_BIN;
+				filePointer[FILE_FIELD_SIZE] = (size + 1023) / 1024;
+				filePointer[FILE_FIELD_DATE] = datePointer;
+				index = index + 1;
+				filePointer = filePointer + FILE_FIELD_COUNT;
+				namePointer = namePointer + (MAX_FILE_NAME_LENGTH + 1);
+				datePointer = datePointer + 9;
+				assert(filePointer < &global FILES[MAX_FILE_COUNT * FILE_FIELD_COUNT]);
+				assert(namePointer < &global FILE_NAMES[MAX_FILE_COUNT * (MAX_FILE_NAME_LENGTH + 1)]);
+				assert(datePointer < &global FILE_DATES[MAX_FILE_COUNT * 9]);
+			}
+		}
+		global fileCount = BUILT_IN_FILE_COUNT + index;
+
+		sortFiles();
+
+		global filesAreInited = 1;
+	}
+}
+
+function findFile(pointer s0)
+returns int file
+{
+	initFilesIfNecessary();
+	for (file = 0 to global fileCount)
+		if ((int)strcmp(s0, global FILES[file * FILE_FIELD_COUNT + FILE_FIELD_NAME]) == 0) goto found;
+	file = -1;
+found: ;
+}
+
+function lower(pointer s)
+locals pointer p, int c
+{
+	p = s;
+	while ((c = (int)*p) != 0) {
+		if (c >= 'A' && c <= 'Z') *p = c + ('a' - 'A');
+		p = p + 1;
+	}
+}

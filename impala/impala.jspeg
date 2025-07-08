@@ -1,0 +1,2071 @@
+## ————————————————————————————————
+##  Impala-JSPEG ES3 support (v3)
+## ————————————————————————————————
+
+{
+    /**
+     * map(target, k1, v1, k2, v2, …)
+     *   assigns target[k1]=v1, etc.
+     */
+    function map(target /*, k1, v1, … */) {
+        for (var i = 1; i + 1 < arguments.length; i += 2) {
+            target[ arguments[i] ] = arguments[i+1];
+        }
+        return target;
+    }
+
+    /**
+     * Deep-clone an object or array (only handles plain objects & arrays)
+     */
+    function clone(o) {
+        // primitives, functions, null
+        if (typeof o !== 'object' || o === null) {
+            return o;
+        }
+        // array vs object
+        var r = (o instanceof Array) ? [] : {};
+        for (var k in o) {
+            // only own props (in ES3 all enumerable are “own” unless on prototype)
+            var v = o[k];
+            r[k] = (typeof v === 'object' && v !== null ? clone(v) : v);
+        }
+        return r;
+    }
+
+
+    /** template baker: "Hello {name}" → eval expressions in {…} */
+    function bake(str) {
+        // same pattern as /\{([^}]+)\}/g  but expressed as a string because poor jspeg parsing
+        var re = new RegExp("\\{([^}]+)\\}", "g");
+        return str.replace(re, function (_, expr) {
+            return eval(expr);
+        });
+    }
+
+    /** simple assertion */
+    function assert(cond, msg) {
+        if (!cond) throw new Error("Assertion failed" + (msg ? ": " + msg : ""));
+    }
+
+    /** turn arguments into a real Array (optional from-index) */
+    function args(src, from) {
+        var start = (arguments.length > 1 ? from : 0);
+        var a = [];
+        for (var i = start; i < src.length; i++) {
+            a.push(src[i]);
+        }
+        return a;
+    }
+
+    /** string utilities */
+    function replace(str, sub, by) {
+        return str.split(sub).join(by);
+    }
+    function find(str, chars) {
+        for (var i = 0; i < str.length; i++) {
+            if (chars.indexOf(str[i]) >= 0) return i;
+        }
+        return -1;
+    }
+    function span(str, chars) {
+        var i = 0;
+        while (i < str.length && chars.indexOf(str[i]) >= 0) i++;
+        return i;
+    }
+    function rspan(str, chars) {
+        var i = str.length;
+        while (i > 0 && chars.indexOf(str[i-1]) >= 0) i--;
+        return i;
+    }
+    function char(code) {
+        return String.fromCharCode(code);
+    }
+    function ordinal(ch) {
+        return (ch + "").charCodeAt(0);
+    }
+
+    /** queue ops on plain Arrays */
+    function resetQueue(q) {
+        q.length = 0;
+    }
+    function queueSize(q) {
+        return q.length;
+    }
+    function pushBack(q, v) {
+        q.push(v);
+    }
+    function popBack(q) {
+        if (q.length === 0) throw new Error("Queue underrun");
+        return q.pop();
+    }
+    function pushFront(q, v) {
+        q.unshift(v);
+    }
+    function popFront(q) {
+        if (q.length === 0) throw new Error("Queue underrun");
+        return q.shift();
+    }
+
+    /** math/random helpers */
+    function random() {
+        return Math.random();
+    }
+    function floor(x) {
+        return Math.floor(x);
+    }
+    function time() {
+        return (new Date()).getTime();
+    }
+
+
+    /* ————————————————————————————————
+     *  Impala-JSPEG  ▸  core tables / helpers  (ES3)
+     *  arrays now rely on .length / .push
+     * ———————————————————————————————— */
+
+    /* 1  constants & simple flags */
+    var $$parser.IMPALA_VERSION = '1.0';
+    var $$parser.dry            = false;
+
+    /* 2  make sure the buckets exist */
+    var $$parser.META_TO_GAZL   = {};
+    var $$parser.SUPPORTED_OPS  = {};
+    var $$parser.CASTS_TO_TYPES = {};
+    var $$parser.ZEROES = {};
+    var $$parser.TYPE_SUFFIXES  = {};
+    var $$parser.VERBOSE_TYPES  = {};
+    var $$parser.metacode = [];
+    var $$parser.strings = { s:[], a:[] };
+    var $$parser.labelCounter = 0;
+    var $$parser.stock = { '%': [], '<': [] };
+    var $$parser.counters = { '%': 0,  '<': 0  };
+    var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
+    var $$parser.noForward = false;
+
+    /* 3  bulk-fill the lookup tables */
+    map($$parser.META_TO_GAZL,
+        '=',   'MOV?', ':=',  'MOV?',
+        '=itof','iTOf', '=ftoi','fTOi', '=abs','ABS?', '=floor','FLOf',
+        '=[]','PEEK',  '[]=','POKE',   '=[]$','GETL',  '[]$=','SETL',
+        '=*','PEEK', ':=*','PEEK', '*=','POKE', '=&','ADRL', 'copy','COPY',
+        '-->','GOTO', '-->#','SWCH',  '...','FOR?',  '()','CALL', '--^','RETU',
+        '|','IOR?', '&','AND?', '^','XOR?', '<<','SHL?', '>>>','SHRu', '>>','SHR?',
+        '+','ADD?', '-','SUB?', '*','MUL?', '/','DIV?', '%','MOD?', 'd','DIFp',
+        '<=','LEQ?', '<','LSS?', '>=','GEQ?', '>','GRT?', '!=','NEQ?', '==','EQU?',
+        '!<=','GRT?','!<','GEQ?','!>=','LSS?','!>','LEQ?','!!=','EQU?','!==','NEQ?'
+    );
+
+    map($$parser.SUPPORTED_OPS,
+        '=*p','?', '=&f','p', '=&F','p', '=&i','p', '=&p','p', '=&?','p',
+        '=-i','i', '=-f','f', '=~i','i',
+        '=floatf','f', '=float?','f', '=funcptrF','F', '=funcptr?','F',
+        '=inti','i', '=int?','i', '=pointerp','p', '=pointer?','p',
+        '=absi','i', '=absf','f', '=itofi','f', '=ftoif','i', '=floorf','f',
+        '|ii','i', '&ii','i', '^ii','i', '<<ii','i', '>>>ii','i', '>>ii','i',
+        '+ii','i', '-ii','i', '*ii','i', '/ii','i', '%ii','i',
+        '+ff','f', '-ff','f', '*ff','f', '/ff','f',
+        '+pi','p', '-pi','p', '-pp','i',
+        '=[]pi','?',
+        '<=ii','i', '<ii','i', '>=ii','i', '>ii','i', '!=ii','i', '==ii','i',
+        '<=ff','f', '<ff','f', '>=ff','f', '>ff','f', '!=ff','f', '==ff','f',
+        '<=pp','p', '<pp','p', '>=pp','p', '>pp','p', '!=pp','p', '==pp','p',
+        '<=FF','F', '<FF','F', '>=FF','F', '>FF','F', '!=FF','F', '==FF','F'
+    );
+
+    map($$parser.CASTS_TO_TYPES, 'float','f','funcptr','F','int','i','pointer','p');
+    map($$parser.ZEROES,         'f','#0.0','i','#0','p','&NULL','F','&NULL');
+    map($$parser.TYPE_SUFFIXES,  'void','', 'i','i','f','f','p','p','F','p','U','',
+                                 'N','',   'A','A','?','E');
+    map($$parser.VERBOSE_TYPES,  'i','int','f','float','p','pointer','F','funcptr',
+                                 'U','function','N','native','A','array','?','untyped');
+
+    /* 4  label & metacode helpers */
+    $$parser.newLabel = function () {
+        return '@.' + ($$parser.labelCounter++);
+    };
+
+    /* push a deep-cloned record into metacode */
+    $$parser.emitMeta = function (rec) {
+        $$parser.metacode.push(clone(rec));
+    };
+
+    /* allocate new (empty) meta record, fill via makeMeta, then push */
+    $$parser.emit = function (op, type, op0, op1, op2) {
+        var slot = {};                // fresh object
+        $$parser.makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
+        $$parser.metacode.push(slot);
+    };
+
+    /* 5  portable replacement for ppeg.fail */
+    $$parser.fail = function (error, source, offset) {
+        function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
+        throw bake(error) + ' : ' +
+              oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +
+              oneLine(source.substr(offset, 40));
+    };
+
+
+
+    /* ---------------------------------------------------------
+     *  Short-circuit / branch processing
+     * --------------------------------------------------------- */
+    $$parser.processBranches = function () {
+        var target      = { false: null, true: null }; // last FALSE / TRUE dest labels
+        var targetCond  = null;                        // current branch condition (true / false)
+        var currentGoto = null;                        // last unconditional goto
+        var aliases     = {};                          // label alias map
+
+        /* walk metacode bottom-to-top */
+        for (var i = $$parser.metacode.length - 1; i >= 0; --i) {
+            var inst = $$parser.metacode[i];
+
+            switch (inst.operator) {
+
+                /* ———  branch on TRUE / FALSE  ——— */
+                case '?->': {           /* created by AND/OR, e.g.   F->FALSE L1: */
+                    targetCond         = inst.type; // boolean
+                    var lbl            = inst.operand[0];
+                    target[targetCond] = (lbl in aliases ? aliases[lbl] : lbl);
+                    inst.operator      = null;      // remove
+                    break;
+                }
+
+                case '<-?': {          /* unique FALSE/TRUE label, e.g.   FALSE L1: */
+                    var lbl = inst.operand[0],
+                        t   = inst.type;            // false / true
+                    inst.type = null;               // will no longer be needed
+
+                    if (target[t] != null) {        // label already chosen – make alias
+                        aliases[lbl] = target[t];
+                        inst.operator = (lbl[2] !== 'a' ? null : '<--'); // keep assert labels
+                    } else {
+                        target[t]    = lbl;
+                        inst.operator = '<--';      // we retain the label
+                    }
+                    break;
+                }
+
+                /* ———  invert ( NOT )  ——— */
+                case '!':
+                    var tmp    = target.false;
+                    target.false = target.true;
+                    target.true  = tmp;
+                    targetCond   = !targetCond;
+                    inst.operator = null;
+                    break;
+
+                /* comment – ignore */
+                case ';':
+                    break;
+
+                /* ———  unconditional GOTO  ——— */
+                case '-->': {
+                    var lbl   = inst.operand[0];
+                    var final = (lbl in aliases ? aliases[lbl] : lbl);
+                    target.false = target.true = currentGoto = inst.operand[0] = final;
+                    break;
+                }
+
+                /* record label after an optimised goto */
+                case '<--':
+                    if (currentGoto != null) {
+                        aliases[inst.operand[0]] = currentGoto;
+                    }
+                    break;
+
+                /* ———  comparison ops  ——— */
+                case '<=': case '<': case '>=': case '>': case '!=': case '==': {
+                    /* if we are targeting FALSE, invert comparison */
+                    if (targetCond === false) inst.operator = '!' + inst.operator;
+
+                    /* move operands left and patch jump target */
+                    inst.operand[0] = inst.operand[1];
+                    inst.operand[1] = inst.operand[2];
+                    inst.operand[2] = target[targetCond];
+
+                    /* reset all branch state */
+                    target.false = target.true = currentGoto = null;
+                    break;
+                }
+
+                /* ———  anything else breaks the chain  ——— */
+                default:
+                    target.false = target.true = currentGoto = null;
+            }
+        }
+    };
+
+    /* ---------------------------------------------------------
+     *  Pool / stock handling for transients    (‘%’, ‘<…>’)
+     * --------------------------------------------------------- */
+
+    /* assure no duplicates exist in a stock bucket */
+    $$parser.validateStock = function (cls) {
+        var seen = {};
+        var stk  = $$parser.stock[cls];
+        for (var i = 0; i < stk.length; ++i) {
+            var tok = stk[i];
+            assert(!seen[tok], "duplicate token in stock: " + tok);
+            seen[tok] = true;
+        }
+        return true;
+    };
+
+    /* borrow one token from a stock bucket (or create a new one) */
+    $$parser.borrow = function (cls) {
+        assert($$parser.validateStock(cls));
+
+        var stk = $$parser.stock[cls];
+        if (stk.length) {
+            return stk.pop();                      // reuse
+        }
+
+        /* otherwise mint a fresh id */
+        if (cls === '%') {
+            return '%' + ($$parser.counters['%']++);
+        }
+        if (cls === '<') {
+            var idx = $$parser.counters['<']++;
+            return '<' + String.fromCharCode('A'.charCodeAt(0) + idx) + '>';
+        }
+        throw new Error("unknown stock class " + cls);
+    };
+
+    /* smart borrow for CALL args – first free id in last consecutive run */
+    $$parser.borrowForCall = function () {
+        /* same safety check the original did */
+        assert($$parser.validateStock('%'));
+
+        var stk = $$parser.stock['%'];
+
+        /* empty ⇒ mint a brand-new one */
+        if (stk.length === 0) {
+            return '%' + ($$parser.counters['%']++);
+        }
+
+        /* sort in-place on the numeric suffix, ascending           */
+        stk.sort(function (a, b) {
+            return parseInt(a.substr(1), 10) - parseInt(b.substr(1), 10);
+        });
+
+        /* walk backwards through the (now sorted) array,
+           finding the *first* id in the last consecutive run       */
+        var i = stk.length - 1,
+            n = parseInt(stk[i].substr(1), 10);
+
+        while (i >= 0 && stk[i] === '%' + n) {
+            --i;
+            --n;
+        }
+        ++i;               /* point at first element of the run  */
+        ++n;               /* numeric id of the chosen transient */
+
+        var chosen = '%' + n;
+        stk.splice(i, 1);  /* remove from the pool                */
+
+        /* duplicate-check, like the original assert(validate…)    */
+        assert($$parser.validateStock('%'));
+        return chosen;
+    };
+
+    /* put a token back into its stock bucket */
+    $$parser.returnBack = function (op) {
+        var c = op[0];
+
+        /* ordinary transients / compile-time vars */
+        if (c === '%' || c === '<') {
+            var stk = $$parser.stock[c];
+            if (stk.indexOf(op) === -1) stk.push(op);   // avoid dupes
+        }
+        /* special case “…:<” suffix ---------------------------------
+           original test:  op{len-4 : 2} == ':<'
+           -> two chars beginning 4 from the end                       */
+        else if (op.length >= 4 && op.substr(op.length - 4, 2) === ':<') {
+            // recurse with everything from (len-3) to end
+            $$parser.returnBack(op.substr(op.length - 3));
+        }
+    };
+
+    /* --------------------------------------------------------- *
+     *  Debug helpers & meta-record construction / destruction   *
+     * --------------------------------------------------------- */
+
+    /* pretty-print one meta-instruction (only when it has op) */
+    $$parser.debugPrintMeta = function (m) {
+        if (m && m.operator != null) {
+            console.log(
+                bake('{'+m.operator+'}({'+m.type+'}) {'
+                     + m.operands[0] + '} {' + m.operands[1]
+                     + '} {' + m.operands[2] + '}')
+            );
+        }
+    };
+
+    /* overwrite the fields of an existing meta object */
+    $$parser.makeMeta = function (rec, op, type, op0, op1, op2) {
+        rec.operator  = op;
+        rec.type      = type;
+        rec.operands  = [ op0, op1, op2 ];
+    };
+
+    /* release all three operands contained in a meta-record */
+    $$parser.releaseMeta = function (meta) {
+        for (var i = 2; i >= 0; --i) {
+            $$parser.returnBack(meta.operands[i]);
+        }
+    };
+
+    /* --------------------------------------------------------- *
+     *  R-value helpers                                          *
+     * --------------------------------------------------------- */
+
+    /**
+     * Convert an expression into an r-value, allocating a transient
+     * when needed.  `classes` defaults to '#<&^$%'.
+     */
+    $$parser.makeRValue = function (expr, classes) {
+        classes = classes || '#<&^$%';
+
+        var op   = expr.operator;
+        var op1  = expr.operands[1];
+        var op2  = expr.operands[2];
+
+        /* already a simple l-value we can reuse? */
+        if ((op === '=' || op === ':=') &&
+            span(op1[0], classes) === 1) {
+            return op1;
+        }
+
+        /* otherwise evaluate into a transient */
+        $$parser.returnBack(op2);
+        $$parser.returnBack(op1);
+
+        var cls = '%';              /* default stock   */
+        var t   = op1[0] + op2[0];
+
+        if (span(t, '#<') === t.length && span('<', classes) === 1) {
+            expr.operator = '<> ' + op;     /* compile-time op */
+            cls = '<';
+        }
+
+        var tmp = $$parser.borrow(cls);
+        expr.operands[0] = tmp;
+
+        $$parser.emitMeta(expr);
+        return tmp;
+    };
+
+    /**
+     * Ensure an expression’s value ends up in the given
+     * transient “%<number>”.
+     */
+    $$parser.makeArgValue = function (expr, number) {
+        var op   = expr.operator;
+        var tgt  = '%' + number;
+        var op1  = expr.operands[1];
+        var op2  = expr.operands[2];
+
+        /* already fine? */
+        if ((op === '=' || op === ':=') && op1 === tgt) {
+            return;
+        }
+
+        $$parser.returnBack(op2);
+        $$parser.returnBack(op1);
+
+        /* remove %<number> from the free list if present */
+        if ($$parser.counters['%'] === number) {
+            ++$$parser.counters['%'];
+        } else {
+            assert($$parser.counters['%'] > number);
+            var stk = $$parser.stock['%'];
+            for (var idx = stk.length - 1;
+                 idx >= 0 && stk[idx] !== tgt;
+                 --idx) {}
+            assert(idx >= 0, "transient " + tgt + " must exist in stock");
+            stk.splice(idx, 1);
+        }
+
+        expr.operands[0] = tgt;
+        $$parser.emitMeta(expr);
+    };
+
+    /* --------------------------------------------------------- *
+     *  Typed error helper                                       *
+     * --------------------------------------------------------- */
+
+    $$parser.typeError = function (desc, source, offset, type1, type2) {
+        type1 = $$parser.VERBOSE_TYPES[type1];
+        if (type2 !== undefined) {
+            type2 = $$parser.VERBOSE_TYPES[type2];
+        }
+        $$parser.fail(bake(desc), source, offset);
+    };
+
+    /* --------------------------------------------------------- *
+     *  Binary operations ( + – * / [] etc. )                    *
+     * --------------------------------------------------------- */
+    $$parser.binaryOp = function (operator, leftx, rightx,
+                                  sourceCode, sourceOffset) {
+
+        /* validate operand-type combination */
+        var sig = operator + leftx.type + rightx.type;
+        var tp  = $$parser.SUPPORTED_OPS[sig];
+        if (tp === undefined) {
+            $$parser.typeError(
+                'Invalid types ({$type1} and {$type2})',
+                sourceCode, sourceOffset,
+                leftx.type, rightx.type
+            );
+        }
+
+        /* special treatment for indexed “=[]” form */
+        if (operator === '=[]') {
+            var op1 = leftx.operands[1];     /* base pointer/address */
+
+            if (leftx.operator === ':=' && op1[0] === '&') {
+
+                var op2 = $$parser.makeRValue(rightx);
+
+                if (op2[0] === '#') {
+                    $$parser.makeMeta(
+                        leftx, '=*', tp, null,
+                        op1 + ':' + op2.substr(1), null
+                    );
+                } else if (op2[0] === '<') {
+                    $$parser.makeMeta(leftx, '=*', tp, null,
+                                      op1 + ':' + op2, null);
+                } else {
+                    $$parser.makeMeta(leftx, '=[]', tp, null, op1, op2);
+                }
+
+            } else if (leftx.operator === '=&') {
+                assert(op1[0] === '$', "=& expects local '$'");
+
+                var op2b = $$parser.makeRValue(rightx);
+
+                if (op2b[0] === '#') {
+                    $$parser.makeMeta(leftx, '=', tp, null,
+                                      op1 + ':' + op2b.substr(1), null);
+                } else if (op2b[0] === '<') {
+                    $$parser.makeMeta(leftx, '=', tp, null,
+                                      op1 + ':' + op2b, null);
+                } else {
+                    $$parser.makeMeta(leftx, '=[]$', tp, null, op1, op2b);
+                }
+
+            } else {
+                /* general indexed read */
+                $$parser.makeMeta(leftx, operator, tp, null,
+                                  $$parser.makeRValue(leftx),
+                                  $$parser.makeRValue(rightx));
+            }
+
+        } else {
+
+            /* pointer‐difference special-case “d” */
+            if (operator === '-' && rightx.type === 'p') {
+                operator = 'd';
+            }
+
+            $$parser.makeMeta(
+                leftx, operator, tp, null,
+                $$parser.makeRValue(leftx),
+                $$parser.makeRValue(rightx)
+            );
+        }
+    };
+
+
+    /* --------------------------------------------------------- *
+     *  Multiplication / division with special int-to-float case *
+     * --------------------------------------------------------- */
+    $$parser.mulDivOp = function (operator, leftx, rightx,
+                                  sourceCode, sourceOffset) {
+
+        var sig = operator + leftx.type + rightx.type;
+        var tp  = $$parser.SUPPORTED_OPS[sig];
+        if (tp === undefined) {
+            $$parser.typeError('Invalid types ({$type1} and {$type2})',
+                               sourceCode, sourceOffset,
+                               leftx.type, rightx.type);
+        }
+
+        /* detect (itof X) * 1.0 → itof */
+        if (operator === '*' && leftx.operator === '=itof'
+            && leftx.operands[2] === '#1.0') {
+
+            var t  = rightx.operands[1][0] +
+                     rightx.operands[2][0];
+            var ok = (span(t, '#<') === t.length);
+
+            if (ok) {
+                $$parser.makeMeta(
+                    leftx, '=itof', 'f', null,
+                    leftx.operands[1],
+                    $$parser.makeRValue(rightx)
+                );
+                return;
+            }
+        }
+
+        /* mirror case: right side is itof */
+        if (operator === '*' && rightx.operator === '=itof'
+            && rightx.operands[2] === '#1.0') {
+
+            var t2 = leftx.operands[1][0] +
+                     leftx.operands[2][0];
+            var ok2 = (span(t2, '#<') === t2.length);
+
+            if (ok2) {
+                $$parser.makeMeta(
+                    leftx, '=itof', 'f', null,
+                    rightx.operands[1],
+                    $$parser.makeRValue(leftx)
+                );
+                return;
+            }
+        }
+
+        /* default multiply / divide / mod path */
+        $$parser.makeMeta(
+            leftx, operator, tp, null,
+            $$parser.makeRValue(leftx),
+            $$parser.makeRValue(rightx)
+        );
+    };
+
+
+    /* --------------------------------------------------------- *
+     *  Assignment helper                                        *
+     * --------------------------------------------------------- */
+    $$parser.assign = function (x, leftx, rightx,
+                                sourceCode, sourceOffset) {
+
+        var lop   = leftx.operator;
+        var keep  = 2;          /* operand index to keep for r-value */
+
+        if (leftx.type !== '?' && leftx.type !== rightx.type) {
+            $$parser.typeError(
+                'Incompatible types for assignment ({$type1} = {$type2})',
+                sourceCode, sourceOffset,
+                leftx.type, rightx.type
+            );
+        }
+
+        /* fast path: constant expression on RHS */
+        var constPair  = rightx.operands[1][0] +
+                         rightx.operands[2][0];
+        var rhsConst   = (span(constPair, '#<') === constPair.length);
+
+        if (lop === '=' && rhsConst) {
+
+            $$parser.makeMeta(
+                x, ':=', rightx.type,
+                leftx.operands[1],
+                $$parser.makeRValue(rightx),
+                null
+            );
+            keep = 1;
+
+        } else if (lop === '=') {
+
+            $$parser.makeMeta(
+                x, rightx.operator, rightx.type,
+                leftx.operands[1],
+                rightx.operands[1],
+                rightx.operands[2]
+            );
+            keep = ((x.operator === '=' || x.operator === ':=') ? 1 : 0);
+
+        } else if (lop === '=*') {
+
+            $$parser.makeMeta(
+                x, '*=', rightx.type,
+                leftx.operands[1],
+                $$parser.makeRValue(rightx),
+                null
+            );
+            keep = 1;
+
+        } else if (lop === '=[]') {
+
+            $$parser.makeMeta(
+                x, '[]=', rightx.type,
+                leftx.operands[1],
+                leftx.operands[2],
+                $$parser.makeRValue(rightx)
+            );
+
+        } else if (lop === '=[]$') {
+
+            $$parser.makeMeta(
+                x, '[]$=', rightx.type,
+                leftx.operands[1],
+                leftx.operands[2],
+                $$parser.makeRValue(rightx)
+            );
+
+        } else {
+            $$parser.fail("Invalid lvalue", sourceCode, sourceOffset);
+        }
+
+        /* push the instruction just built */
+        $$parser.emitMeta(x);
+
+        /* release all temporaries except the one we keep */
+        for (var i = 2; i >= 0; --i) {
+            if (i !== keep) {
+                $$parser.returnBack(x.operands[i]);
+            }
+        }
+
+        /* finally generate r-value of assignment */
+        $$parser.makeMeta(
+            x, '=', x.type,
+            null,
+            x.operands[keep],
+            null
+        );
+    };
+
+    /* -----------------------------------------------------------
+     *  Unary helpers  (dereference, reference, -, ~, abs/floor,
+     *                  int↔float conversions)
+     * -------------------------------------------------------- */
+
+    /* *expr  or  [] dereference handling */
+    $$parser.dereference = function (operator, expr, sourceCode, sourceOffset) {
+        if (expr.operator === '+') {
+            /*  &a + i   →   PEEK (&a , i)  */
+            expr.operator = '=[]';
+        } else if (expr.operator === '-' && expr.operands[2] &&
+                   expr.operands[2][0] === '#') {
+            /*  &a - #n  where n is const → adjust to negative literal */
+            expr.operator = '=[]';
+            var num = parseFloat(expr.operands[2].substr(1));   // strip leading '#'
+            expr.operands[2] = '#'+(-num);
+        } else {
+            /* generic “*expr” */
+            $$parser.makeMeta(
+                expr, operator, '?',
+                undefined,
+                $$parser.makeRValue(expr),
+                undefined
+            );
+        }
+    };
+
+    /* & (address-of) operator handling */
+    $$parser.reference = function (operator, expr, sourceCode, sourceOffset) {
+
+        if (expr.operator === '=') {                 // variable
+            assert(expr.operands[2] === undefined,
+                   "expr.operands[2] must be void for '=' lvalue");
+            expr.operator  = '=&';
+            expr.operands[2] = '*0';
+
+        } else if (expr.operator === '=*' || expr.operator === ':=*') {
+            assert(expr.operands[2] === undefined,
+                   "expr.operands[2] must be void for '=*' lvalue");
+            expr.operator = ':=';                    // treat as plain r-value
+
+        } else if (expr.operator === '=[]') {        // array element
+            expr.operator = '+';                     // &a[i]  →  &a + i
+
+        } else if (expr.operator === '=[]$') {       // local array element
+            expr.operator = '=&';
+            var index = expr.operands[2];            // save index before clobber
+            expr.operands[2] = '*0';
+            $$parser.makeMeta(
+                expr, '+', 'p',
+                undefined,
+                $$parser.makeRValue(expr),           // &base
+                index                                // + offset
+            );
+
+        } else {
+            $$parser.fail("Invalid lvalue", sourceCode, sourceOffset);
+        }
+    };
+
+    /* unary minus (integer/float) */
+    $$parser.minus = function (operator, expr/*, src, off*/) {
+        $$parser.makeMeta(
+            expr, '-', undefined,
+            undefined,
+            $$parser.ZEROES[ expr.type ],            // 0  of same type
+            $$parser.makeRValue(expr)
+        );
+    };
+
+    /* bit-wise NOT / logical NOT  (~expr) */
+    $$parser.not = function (operator, expr) {
+        $$parser.makeMeta(
+            expr, '^', undefined,
+            undefined,
+            $$parser.makeRValue(expr),
+            '#-1'                                    // XOR with –1
+        );
+    };
+
+    /* ABS or FLOOR (unary) – operator is already '=abs' or '=floor' */
+    $$parser.absFloor = function (operator, expr) {
+        $$parser.makeMeta(
+            expr, operator, undefined,
+            undefined,
+            $$parser.makeRValue(expr),
+            undefined
+        );
+    };
+
+    /* int → float */
+    $$parser.intToFloatConvert = function (operator, expr) {
+        $$parser.makeMeta(
+            expr, '=itof', undefined,
+            undefined,
+            $$parser.makeRValue(expr),
+            '#1.0'
+        );
+    };
+
+    /* float → int, with constant-fold special-case */
+    $$parser.floatToIntConvert = function (operator, expr) {
+
+        var op1 = expr.operands[1],
+            op2 = expr.operands[2];
+
+        /* expr is  (const|<tmp>) * #1.0  pattern */
+        if (expr.operator === '*' && op2 && span(op2[0], '#<') === 1) {
+            $$parser.makeMeta(expr, '=ftoi', undefined, undefined, op1, op2);
+
+        } else if (expr.operator === '*' && op1 && span(op1[0], '#<') === 1) {
+            $$parser.makeMeta(expr, '=ftoi', undefined, undefined, op2, op1);
+
+        } else {    // generic cast
+            $$parser.makeMeta(
+                expr, '=ftoi', undefined,
+                undefined,
+                $$parser.makeRValue(expr),
+                '#1.0'
+            );
+        }
+    };
+
+    /* -----------------------------------------------------------
+     *  UNARY_OPS dispatch table
+     * -------------------------------------------------------- */
+
+    $$parser.UNARY_OPS = {};          /* will hold “=xxx” → handler */
+
+    /* no-op casts */
+    function noop() {}
+
+    /* register the handlers */
+    map($$parser.UNARY_OPS,
+        '=float',     noop,
+        '=funcptr',   noop,
+        '=int',       noop,
+        '=pointer',   noop,
+
+        '=*',         $$parser.dereference,
+        '=&',         $$parser.reference,
+        '=-',         $$parser.minus,
+        '=~',         $$parser.not,
+        '=abs',       $$parser.absFloor,
+        '=itof',      $$parser.intToFloatConvert,
+        '=ftoi',      $$parser.floatToIntConvert,
+        '=floor',     $$parser.absFloor
+    );
+
+    /* -----------------------------------------------------------
+     *  Generic unary operator
+     * -------------------------------------------------------- */
+    $$parser.unaryOp = function (operator, expr, sourceCode, sourceOffset) {
+
+        var key = '=' + operator;                     // e.g. "=abs"
+
+        /* check type support */
+        var sig  = key + expr.type;                   // e.g. "=absf"
+        var rTyp = $$parser.SUPPORTED_OPS[ sig ];
+        if (rTyp == null) {
+            $$parser.typeError('Invalid type ({$type1})',
+                               sourceCode, sourceOffset, expr.type);
+        }
+
+        /* dispatch actual work */
+        var fn = $$parser.UNARY_OPS[ key ];
+        if (fn) {
+            fn(key, expr, sourceCode, sourceOffset);
+        }
+
+        /* update resulting type */
+        expr.type = rTyp;
+    };
+
+    /* -----------------------------------------------------------
+     *  Symbol declaration helper
+     * -------------------------------------------------------- */
+
+    function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset) {
+        /* emit data / flush pending code */
+        if (kind !== undefined) {
+            $$parser.flushMetaCode('');
+
+            if (typeof output === 'function') {       // ‘output’ assumed global
+                var line = '';
+                if (scope === 'locals') line += (typeof TAB !== 'undefined' ? TAB : '\t');
+                if (name != null)       line += name + ':';
+                line += '\t' +
+                        replace(kind, '?', $$parser.TYPE_SUFFIXES[type] || '');
+                if (value !== undefined) line += ' ' + value;
+
+                output( line );
+            }
+        }
+
+        /* give any temporary back to the pool */
+        $$parser.returnBack(value);
+
+        /* register in symbol table */
+        if (name !== undefined) {
+            var table = $$parser.symbols[scope];
+            var prev  = table && table[name];
+
+            if (prev) {
+                if (kind !== undefined && prev.kind !== undefined) {
+                    $$parser.fail('Identifier already declared: ' + name,
+                                  sourceCode, sourceOffset);
+                }
+                if (type !== prev.type) {
+                    $$parser.typeError('Type mismatch with previous declaration of ' +
+                                       name + ' (was {$type1})',
+                                       sourceCode, sourceOffset, prev.type);
+                }
+                /* inherit old flags */
+                kind     = (kind     !== undefined ? kind     : prev.kind);
+                readonly = (readonly || prev.readonly);
+            }
+
+            /* store / update */
+            if (!table) $$parser.symbols[scope] = table = {};
+            table[name] = { type:type, readonly:!!readonly, kind:kind };
+        }
+    };
+
+    /* -----------------------------------------------------------
+     *  Flush all queued meta-code into final text output
+     * -------------------------------------------------------- */
+    $$parser.flushMetaCode = function (prefix) {
+
+        prefix = prefix || '';
+        var TABstr = (typeof TAB !== 'undefined') ? TAB : '\t';
+
+        var nextLabel   = TABstr;   // pending label prefix
+        var nextComment = '';       // pending trailing comment
+
+        for (var i = 0; i < $$parser.metacode.length; ++i) {
+
+            var rec   = $$parser.metacode[i];
+            var op    = rec.operator;
+
+            if (op == null) {
+                /* empty / removed meta – skip */
+                continue;
+            }
+
+            /* -------------------------------------------------- */
+            /* handle a stand-alone label (“<--”)                 */
+            /* -------------------------------------------------- */
+            if (op === '<--') {
+                assert(rec.operands[0][0] === '@',
+                       "label must start with '@'");
+                if (nextLabel !== TABstr) {
+                    output(prefix + nextLabel + 'NOOP');
+                }
+                nextLabel = rec.operands[0].substr(1) + ':' + TABstr;
+                continue;
+            }
+
+            /* -------------------------------------------------- */
+            /* comment pseudo-op (“; …”)                          */
+            /* -------------------------------------------------- */
+            if (op === ';') {
+                nextComment = '\t; ' +
+                             replace(rec.operands[0], '\t', ' ');
+                continue;
+            }
+
+            /* -------------------------------------------------- */
+            /* compile-time op (string starts with '<> ')         */
+            /* -------------------------------------------------- */
+            if (op.substr(0, 3) === '<> ') {
+
+                if (nextLabel !== TABstr) {
+                    output(prefix + nextLabel + 'NOOP');
+                }
+                nextLabel = TABstr;
+
+                var gop = $$parser.META_TO_GAZL[ op.substr(3) ];
+                gop      = replace(gop, '?',
+                                   $$parser.TYPE_SUFFIXES[ rec.type ]);
+
+                output(prefix + '\t! ' + gop + ' ' +
+                       rec.operands[0] + ' '   +
+                       rec.operands[1] + ' '   +
+                       rec.operands[2] + nextComment);
+
+                nextComment = '';
+                continue;
+            }
+
+            /* -------------------------------------------------- */
+            /* normal run-time instruction                        */
+            /* -------------------------------------------------- */
+            var gInstr = $$parser.META_TO_GAZL[ op ];
+            gInstr     = replace(gInstr, '?',
+                                 $$parser.TYPE_SUFFIXES[ rec.type ]);
+
+            output(prefix + nextLabel + gInstr + ' ' +
+                   rec.operands[0] + ' ' +
+                   rec.operands[1] + ' ' +
+                   rec.operands[2] + nextComment);
+
+            nextLabel   = TABstr;
+            nextComment = '';
+        }
+
+        /* reset queue */
+        $$parser.metacode.length = 0;
+    };
+
+    /* -----------------------------------------------------------
+     *  Identifier lookup helper
+     * -------------------------------------------------------- */
+    $$parser.lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
+
+        var sym = $$parser.symbols;
+        var p   = null;
+
+        /* local  ------------------------------------------------*/
+        if (!isGlobal && (p = sym.locals['$' + name])) {
+
+            if (p.type === 'A') {
+                $$parser.makeMeta(x, '=&', 'p', undefined,
+                                  '$' + name, '*0');
+            } else {
+                $$parser.makeMeta(x,
+                                  (p.readonly ? ':=' : '='),
+                                  p.type,
+                                  undefined,
+                                  '$' + name,
+                                  undefined);
+            }
+            return;
+        }
+
+        /* global -----------------------------------------------*/
+        if (isGlobal && (p = sym.globals[name])) {
+
+            if (p.type === 'A') {
+                $$parser.makeMeta(x, ':=', 'p', undefined,
+                                  '&' + name, undefined);
+            } else {
+                $$parser.makeMeta(x,
+                                  (p.readonly ? ':=*' : '=*'),
+                                  p.type,
+                                  undefined,
+                                  '&' + name,
+                                  undefined);
+            }
+            return;
+        }
+
+        /* function ---------------------------------------------*/
+        if ((p = sym.functions[name])) {
+            if (p.type === 'N') {
+                $$parser.makeMeta(x, ':=', 'N', undefined,
+                                  '^' + name, undefined);
+            } else {
+                assert(p.type === 'U', 'function entry must be U');
+                $$parser.makeMeta(x, ':=', 'F', undefined,
+                                  '&' + name, undefined);
+            }
+            return;
+        }
+
+        /* constant / #define -----------------------------------*/
+        if ((p = sym.defines[name])) {
+            $$parser.makeMeta(x, ':=', p.type, undefined,
+                              '#' + name, undefined);
+            return;
+        }
+
+        /* not found --------------------------------------------*/
+        $$parser.fail('Undeclared identifier: ' + name,
+                      sourceCode, sourceOffset);
+    };
+
+    /* -----------------------------------------------------------
+     *  Ensure expression resolves to a compile-time constant
+     * -------------------------------------------------------- */
+    $$parser.makeConstant = function (x, wantType,
+                                      sourceCode, sourceOffset) {
+
+        var r = $$parser.makeRValue(x, '#<&');
+
+        if (x.type !== wantType ||
+            span(r[0], '#<&') !== 1) {
+
+            $$parser.fail(
+                bake('Expected constant ' +
+                     $$parser.VERBOSE_TYPES[ wantType ]),
+                sourceCode, sourceOffset);
+        }
+        return r;
+    };
+
+    /* -----------------------------------------------------------
+     *  Constant subtraction helper
+     * -------------------------------------------------------- */
+    $$parser.subConstInt = function (opL, opR) {
+
+        assert(span(opR[0], '#<') === 1,
+               "rhs must be const");
+
+        /* trivial cases */
+        if (opR === '#0') return opL;
+
+        if (opL[0] === '#' && opR[0] === '#' &&
+            span(opL.substr(1), '0123456789') === opL.length - 1 &&
+            span(opR.substr(1), '0123456789') === opR.length - 1) {
+
+            return '#' + ( parseInt(opL.substr(1), 10) -
+                           parseInt(opR.substr(1), 10) );
+        }
+
+        /* need run-time temp */
+        $$parser.returnBack(opL);
+
+        var tmp;
+        if (span(opL[0], '#<') === 1) {
+            $$parser.emit('<> -', 'i',
+                          tmp = $$parser.borrow('<'),
+                          opL, opR);
+        } else {
+            $$parser.emit('-', 'i',
+                          tmp = $$parser.borrow('%'),
+                          opL, opR);
+        }
+        return tmp;
+    };
+
+    /* drop leading “#” helper */
+    $$parser.dropHash = function (s) {
+        return (s[0] === '#') ? s.substr(1) : s;
+    };
+
+    /* printable ASCII table (33–126) */
+    $$parser.printable = '';
+    for (var i = 33; i < 127; ++i) {
+        $$parser.printable += char(i);
+    }
+
+    /* -----------------------------------------------------------
+     *  Dump a string constant into assembly
+     * -------------------------------------------------------- */
+    $$parser.dumpString = function (label, str) {
+
+        var len = str.length;
+        $$parser.declare('CNST', 'globals', label, '?',
+                         true, '*' + len, '', 0);
+
+        var offset = 0;
+        while (offset < len) {
+
+            /* raw bytes before printable chunk */
+            var non = find(str.substr(offset), $$parser.printable);
+            if (non > 0) {
+                var d = '';
+                for (var k = 0; k < non; ++k) {
+                    d += ' #' + ordinal(str[offset + k]);
+                }
+                $$parser.declare('DATi', undefined, undefined, 'i',
+                                 true, d.substr(1), '', 0);
+                offset += non;
+            }
+
+            /* printable (plus spaces) */
+            var spanLen = span(str.substr(offset),
+                               $$parser.printable + ' ');
+            spanLen = rspan(str.substr(offset, spanLen), ' ') + 1;
+            if (spanLen > 0) {
+                $$parser.declare('DATs', undefined, undefined, 'i',
+                                 true, str.substr(offset, spanLen), '', 0);
+                offset += spanLen;
+            }
+        }
+    };
+
+    /* -----------------------------------------------------------
+     *  Manage / share string literals
+     * -------------------------------------------------------- */
+    $$parser.makeString = function (prefix, x, s,
+                                    sourceCode, sourceOffset) {
+
+        s += char(0);       // NUL-terminate
+
+        var tbl = $$parser.strings[prefix];
+        if (!tbl) {
+            tbl = $$parser.strings[prefix] = [];
+            tbl.rlookup = {};
+        }
+
+        var entry = tbl.rlookup[s];
+        if (entry == null) {
+
+            /* generate unique label */
+            var name = '.' + prefix + '_' +
+                       (s.replace(/[0-9a-zA-Z]/g, '')
+                          .substr(0, 6)) +
+                       ( ($$parser.randomId + tbl.length)
+                         .toString(16) );
+
+            if ($$parser.noForward) {
+                $$parser.dumpString(name, s);
+            } else {
+                tbl.push({ name:name, data:s });
+            }
+
+            /* add all suffixes to rlookup */
+            for (var k = 0; k < s.length; ++k) {
+                tbl.rlookup[ s.substr(k) ] =
+                    name + (k ? ':' + k : '');
+            }
+            entry = name;            // full string label
+        }
+
+        $$parser.makeMeta(x, ':=', 'p',
+                          undefined, '&' + entry, undefined);
+    };
+
+    /* -----------------------------------------------------------
+     *  Tiny utilities still missing from the toolbox
+     * -------------------------------------------------------- */
+
+    /* wipe an Array or plain Object in-place */
+    function prune(o) {
+        if (!o) return;
+        if (o instanceof Array) {
+            o.length = 0;
+        } else {
+            for (var k in o) {
+                delete o[k];
+            }
+        }
+    }
+
+    /* simple “foreach” — fn(element, index) */
+    function iterate(arr, fn) {
+        for (var i = 0; i < arr.length; ++i) {
+            fn(arr[i], i);
+        }
+    }
+
+    /* -----------------------------------------------------------
+     *  Compiler start / end hooks
+     * -------------------------------------------------------- */
+
+    $$parser.start = function () {
+
+        /* random-id seeding */
+        if (typeof impalaRandomId !== 'undefined') {
+            $$parser.randomId = impalaRandomId;
+        } else {
+            for (var i = 0; i < 1000; ++i) {
+                $$parser.randomId =
+                    floor(random() * 0xFFFFFFFF) ^ time();
+            }
+        }
+
+        /* banner */
+        var LF = '\n';
+        output('; Compiled with Impala version ' +
+               $$parser.IMPALA_VERSION + LF);
+    };
+
+    $$parser.end = function () {
+
+        /* dump deferred string literals */
+        iterate($$parser.strings.s, function (rec) {
+            $$parser.dumpString(rec.name, rec.data);
+        });
+
+        /* dump assert strings only if present */
+        if ($$parser.strings.a.length > 0) {
+
+            output('\t! EQUi #DEBUG #0 @.noAssertStrings');
+
+            iterate($$parser.strings.a, function (rec) {
+                $$parser.dumpString(rec.name, rec.data);
+            });
+
+            output('.noAssertStrings:\t!');
+        }
+    };
+}
+
+#################
+#    Grammar    #
+#################
+
+root        <-  _                                                     { $$parser.start(); }
+                (FuncDecl / ExternDecl / ConstDecl
+                / GlobalDecl / ';'_)* !.                              { $$parser.end(); }
+
+# ------------------------------------------------------------------
+#  function declaration                                         
+# ------------------------------------------------------------------
+FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
+                                                                         assert($$parser.validateStock('%'));
+                                                                         assert($$parser.validateStock('<'));
+
+                                                                         output('');
+                                                                         output(';-----------------------------------------------------------------------------');
+
+                                                                         /* declare the function symbol */
+                                                                         $$parser.declare(
+                                                                             'FUNC',           // kind
+                                                                             'functions',      // scope
+                                                                             $id,              // name
+                                                                             'U',              // type
+                                                                             true,             // read-only
+                                                                             undefined,        // no init
+                                                                             $$s, $$i
+                                                                         );
+                                                                     }
+                inp:ArgsDecl ')'_ 
+                (
+                    RETURNS _ out:VarDecl                             {
+                                                                         $$parser.declare(
+                                                                             'OUT?', 'locals',
+                                                                             '$' + $out.name,
+                                                                             $out.type,
+                                                                             false,
+                                                                             ($out.size !== undefined ? '*' + $out.size : undefined),
+                                                                             $$s, $$i
+                                                                         );
+                                                                     }
+                  /
+                                                                     {
+                                                                         /* implicit 1-word return */
+                                                                         $$parser.declare(
+                                                                             'PARA', 'locals',
+                                                                             undefined, '?',
+                                                                             false, '*1',
+                                                                             $$s, $$i
+                                                                         );
+                                                                     }
+                )                                                     {
+                                                                         /* declare input parameters */
+                                                                         iterate($inp, function (p) {
+                                                                             $$parser.declare(
+                                                                                 'INP?', 'locals',
+                                                                                 '$' + p.name,
+                                                                                 p.type,
+                                                                                 true,
+                                                                                 (p.size !== undefined ? '*' + p.size : undefined),
+                                                                                 $$s, $$i
+                                                                             );
+                                                                         });
+                                                                     }
+                (
+                    LOCALS _ loc:LocalsDecl                           {
+                                                                         iterate($loc, function (v) {
+                                                                             $$parser.declare(
+                                                                                 'LOC?', 'locals',
+                                                                                 '$' + v.name,
+                                                                                 v.type,
+                                                                                 false,
+                                                                                 (v.size !== undefined ? '*' + v.size : undefined),
+                                                                                 $$s, $$i
+                                                                             );
+                                                                         });
+                                                                     }
+                )?                                                    { output(';-----------------------------------------------------------------------------'); }
+                Block                                                 {
+                                                                         /* wrap-up body */
+                                                                         $$parser.processBranches();
+                                                                         $$parser.emit('--^', undefined, undefined, undefined, undefined);
+                                                                         $$parser.flushMetaCode('\t');
+
+                                                                         prune($$parser.symbols.locals);
+                                                                         $$parser.labelCounter = 0;
+
+                                                                         output('');
+                                                                     }
+
+ExternDecl  <-  EXTERN _                                              { $$.scope = 'globals'; }
+                (
+                    (   FUNCTION                                      { $$.type  = 'U';  $$.scope = 'functions'; }
+                    /   NATIVE                                        { $$.type  = 'N';  $$.scope = 'functions'; }
+                    /   ARRAY                                         { $$.type  = 'A'; }
+                    ) _ id:Identifier                                 { $$.name  = $id; }
+                /   VarDecl
+                )                                                     {
+                                                                         $$parser.declare(
+                                                                             undefined,                 // no section for extern
+                                                                             $$.scope,
+                                                                             $$.name,
+                                                                             $$.type,
+                                                                             false,                     // not readonly
+                                                                             '?',
+                                                                             $$s, $$i
+                                                                         );
+                                                                     }
+
+ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
+                                                                         $t  = $$parser.CASTS_TO_TYPES[$type];
+                                                                         $nf = $$parser.noForward;
+                                                                         $$parser.noForward = true;
+                                                                     }
+                 id:Identifier
+                 (   '=' _ x:Expr                                     {
+                                                                             $$parser.declare(
+                                                                                 '! DEF?', 'defines',
+                                                                                 $id, $t, true,
+                                                                                 $$parser.makeConstant(x, $t, $$s, $$i),
+                                                                                 $$s, $$i
+                                                                             );
+                                                                         }
+                 /                                                     {
+                                                                             $$parser.declare(
+                                                                                 undefined, 'defines',
+                                                                                 $id, $t, true,
+                                                                                 undefined,
+                                                                                 $$s, $$i
+                                                                             );
+                                                                         }
+                 )                                                     { $$parser.noForward = $nf; }
+
+GlobalDecl  <-  (   GLOBAL                                            { $section = 'GLOB'; }
+                 /  READONLY                                          { $section = 'CNST'; }
+                 /  TEMPORARY                                         { $section = 'TEMP'; }
+                 ) _
+                 (
+                     # primitive variable --------------------------------
+                     v:VarDecl                                        {
+                                                                             $$parser.declare(
+                                                                                 $section, 'globals',
+                                                                                 undefined,
+                                                                                 $v.type,
+                                                                                 ($section === 'CNST'),
+                                                                                 '*1',
+                                                                                 $$s, $$i
+                                                                             );
+                                                                             $init = $$parser.ZEROES[$v.type];
+                                                                         }
+                         ( '=' _ x:Expr                               { $init = $$parser.makeConstant($x, $v.type, $$s, $$i); } )?
+                                                                       {
+                                                                             $$parser.declare(
+                                                                                 'DAT?', 'globals',
+                                                                                 $v.name,
+                                                                                 $v.type,
+                                                                                 ($section === 'CNST'),
+                                                                                 $init,
+                                                                                 $$s, $$i
+                                                                             );
+                                                                         }
+
+                   / # array ----------------------------------------------
+                     a:ArrayDecl                                      {
+                                                                             $$parser.declare(
+                                                                                 $section, 'globals',
+                                                                                 $a.name,
+                                                                                 'A',
+                                                                                 ($section === 'CNST'),
+                                                                                 '*' + a.size,
+                                                                                 $$s, $$i
+                                                                             );
+                                                                         }
+                         ( '=' _ d:InitList )?
+                 )
+
+# ------------------------------------------------------------------
+#  Initialiser list for arrays                                  
+# ------------------------------------------------------------------
+InitList    <-  '{' _                                                 { $d = ' '; }
+                 ( x:Expr                                             {
+                                                                             $d += $$parser.makeConstant(x, x.type, $$s, $$i);
+                                                                         }
+                   ( ',' _ x:Expr                                     {
+                                                                             $c = $$parser.makeConstant(x, x.type, $$s, $$i);
+
+                                                                             /* decide if we need to flush DATA */
+                                                                             if (  $c[0] === '<'
+                                                                               || $d[1] === '<'
+                                                                               || ($d + ' ' + $c).length >= 55) {
+
+                                                                                 $$parser.declare(
+                                                                                     'DATA', 'globals',
+                                                                                     undefined, x.type,
+                                                                                     true, $d.substr(1),
+                                                                                     $$s, $$i
+                                                                                 );
+                                                                                 $d = '';
+                                                                             }
+                                                                             $d += ' ' + $c;
+                                                                         }
+                   )* )?
+               '}' _                                                  {
+                                                                         if ($d.substr(1) !== '') {
+                                                                             $$parser.declare(
+                                                                                 'DATA', 'globals',
+                                                                                 undefined, x.type,
+                                                                                 true, $d.substr(1),
+                                                                                 $$s, $$i
+                                                                             );
+                                                                         }
+                                                                     }
+
+# ------------------------------------------------------------------
+#  Parameter & local-variable helper lists                      
+# ------------------------------------------------------------------
+ArgsDecl    <-                                                        { $$.n = 0; }
+                 ( v:VarDecl                                          {
+                                                                             var idx = $$.n;
+                                                                             $$[idx] = clone(v);
+                                                                             $$.n    = idx + 1;
+                                                                         }
+                   ( ',' _ v:VarDecl                                  {
+                                                                             var idx = $$.n;
+                                                                             $$[idx] = clone(v);
+                                                                             $$.n    = idx + 1;
+                                                                         }
+                   )*
+                 )?
+
+LocalsDecl  <-                                                        { $$.n = 0; }
+                 ( v:(VarDecl / ArrayDecl)                            {
+                                                                             var idx = $$.n;
+                                                                             $$[idx] = clone(v);
+                                                                             $$.n    = idx + 1;
+                                                                         }
+                   ( ',' _ v:(VarDecl / ArrayDecl)                    {
+                                                                             var idx = $$.n;
+                                                                             $$[idx] = clone(v);
+                                                                             $$.n    = idx + 1;
+                                                                         }
+                   )*
+                 )?
+
+# ------------------------------------------------------------------
+#  Simple variable & array declarators                          
+# ------------------------------------------------------------------
+VarDecl     <-  type:BASE_TYPE _ id:Identifier                        {
+                                                                         $$.type = $$parser.CASTS_TO_TYPES[$type];
+                                                                         $$.name = $id;
+                                                                         $$.size = undefined;
+                                                                     }
+
+ArrayDecl   <-  ARRAY _ id:Identifier
+                '[' _ x:Expr ']' _                                    {
+                                                                         $size = $$parser.makeConstant(x, 'i', $$s, $$i);
+                                                                         map($$, 'type','A', 'name',id, 'size', $$parser.dropHash($size));
+                                                                         $$parser.returnBack($size);
+                                                                     }
+
+# ------------------------------------------------------------------
+#  Statement rule dispatch                                      
+# ------------------------------------------------------------------
+Statement   <-                                                        {
+                                                                         var cut = find($$s.substr($$i), "{;\r\n");
+                                                                         var txt = (cut >= 0 ? $$s.substr($$i, cut) : '');
+                                                                         $$parser.emitMeta({ operator:';', type:undefined,
+                                                                                            operands:[ txt, undefined, undefined ] });
+                                                                     }
+                (
+                    label:Identifier ':' _                            {
+                                                                             $$parser.emitMeta({ operator:'<--', type:undefined,
+                                                                                                operands:[ '@' + label, undefined, undefined ] });
+                                                                         }
+                )*
+                (   ';' _
+                /   Assert
+                /   Block
+                /   Copy
+                /   DoWhile
+                /   Loop
+                /   For
+                /   Goto
+                /   If
+                /   Switch
+                /   While
+                /   Expr ';' _                                        { $$parser.releaseMeta($$); }
+                )
+
+Expr        <-  Bitwise ('='_ r:Expr               { if (!$$parser.dry)
+                                                       $$parser.assign($$, $$, $r, $$s, $$i); }
+                )?
+
+Bitwise     <-  AddSub (op:BITWISE_OP _ r:AddSub   { if (!$$parser.dry)
+                                                       $$parser.binaryOp($op, $$, $r, $$s, $$i); }
+                )*
+
+AddSub      <-  MulDiv (op:ADDSUB_OP _ r:MulDiv    { if (!$$parser.dry)
+                                                       $$parser.binaryOp($op, $$, $r, $$s, $$i); }
+                )*
+
+MulDiv      <-  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
+                                                       $$parser.mulDivOp($op, $$, $r, $$s, $$i); }
+                )*
+
+PrePost     <-  (op:PREFIX_OP _                    
+                / '('_ op:BASE_TYPE _ ')'_) PrePost { if (!$$parser.dry)
+                                                       $$parser.unaryOp($op, $$, $$s, $$i); }
+                / Value (FuncCall / Subscript)*
+
+Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry)
+                                                       $$parser.binaryOp('=[]', $$, $s, $$s, $$i); }
+
+FuncCall    <-  '('_                               { if (!$$parser.dry) {
+                                                       $$.count = 0;
+                                                       $$.base  = $$parser.borrowForCall();
+                                                    } }
+                (Argument (','_ Argument)*)? ')'_  { if (!$$parser.dry) {
+                                                       if (span($$.type, 'FN') !== 1)
+                                                           $$parser.typeError(
+                                                               'Invalid type for function call ({$type1})',
+                                                               $$s, $$i, $$.type
+                                                           );
+
+                                                       var func = $$parser.makeRValue($$, '&^$%');
+                                                       $$parser.emit('()', '?',
+                                                                     func,
+                                                                     '%' + $$.base,
+                                                                     '*' + ($$.count + 1));
+                                                       $$parser.returnBack(func);
+
+                                                       while ($$.count-- > 0)
+                                                           $$parser.returnBack('%' + ($$.base + $$.count + 1));
+
+                                                       $$parser.makeMeta($$, ':=', '?',
+                                                                         undefined,
+                                                                         '%' + $$.base,
+                                                                         undefined);
+                                                    } }
+
+Argument    <-  a:Expr                             { if (!$$parser.dry) {
+                                                       ++$$.count;
+                                                       $$parser.makeArgValue($a, $$.base + $$.count);
+                                                    } }
+
+Group       <-  '('_ Expr ')'_
+
+
+BoolGroup   <-  '('_                                { $label = undefined; }
+                And ('||'_                          { 
+                                                        if ($label === undefined) { 
+                                                            $label = $$parser.newLabel('t'); 
+                                                        }
+                                                        $$parser.emit('?->', true, $label, undefined, undefined); 
+                                                    }
+                And)* ')'_                          { 
+                                                        if ($label !== undefined) { 
+                                                            $$parser.emit('<-?', true, $label, undefined, undefined); 
+                                                        } 
+                                                    }
+
+
+And         <-                                      { $label = undefined; }
+                Comp ('&&'_                         { 
+                                                        if ($label === undefined) { 
+                                                            $label = $$parser.newLabel('f'); 
+                                                        }
+                                                        $$parser.emit('?->', false, $label, undefined, undefined); 
+                                                    }
+                Comp)*                              { 
+                                                        if ($label !== undefined) { 
+                                                            $$parser.emit('<-?', false, $label, undefined, undefined); 
+                                                        } 
+                                                    }
+
+
+Comp        <-  '!'_ Comp                           { 
+                                                        $$parser.emit('!', undefined, undefined, undefined, undefined); 
+                                                    }
+                /                                   { $$parser.dry = true; }
+                    !Group                          { $$parser.dry = false; }
+                    BoolGroup
+                /                                   { $$parser.dry = false; }
+                    Expr op:COMP_OP _ r:Expr        { 
+                                                        $$parser.binaryOp($op, $$, $r, $$s, $$i);
+                                                        $$parser.emitMeta($$);
+                                                        $$parser.releaseMeta($$);
+                                                    }
+
+
+Assert      <-  ASSERT _                            { 
+                                                        $okLabel = $$parser.newLabel('a');
+                                                        $$parser.emit('<> ==', 'i', '#DEBUG', '#0', $okLabel); 
+                                                    }
+                str:BoolGroup ';'_                  {
+                                                        $$parser.emit('?->', true, $okLabel, undefined, undefined);
+
+                                                        var r = $$parser.borrowForCall();
+
+                                                        /* store the assert-string constant */
+                                                        $$parser.makeString('a', $$, str, $$s, $$i);
+
+                                                        /* argument goes into %<r+1> */
+                                                        $$parser.makeArgValue($$, r + 1);
+
+                                                        /* call the failure handler */
+                                                        $$parser.emit('()', '?', '^assertFail',
+                                                                      '%' + r, '*1');
+
+                                                        /* tidy temporaries */
+                                                        $$parser.returnBack('%' + (r + 1));
+                                                        $$parser.returnBack('%' +  r);
+
+                                                        /* continue after OK-label */
+                                                        $$parser.emit('<-?', true, $okLabel, undefined, undefined);
+                                                    }
+
+
+Block       <-  '{'_ Statement* '}'_
+
+
+Goto        <-  GOTO _ label:Identifier ';'_        { 
+                                                        $$parser.emit('-->', undefined, '@' + label, undefined, undefined); 
+                                                    }
+
+
+# TODO : if full jump-optimisation is implemented we could always
+#        fold the “empty else” block here.
+If          <-  IF _ BoolGroup                      { 
+                                                        $dontLabel = $$parser.newLabel('f');
+                                                        $$parser.emit('?->', false, $dontLabel, undefined, undefined); 
+                                                    }
+                Statement (ELSE _                   { 
+                                                        $doneLabel = $$parser.newLabel('e');
+                                                        $$parser.emit('-->', undefined, $doneLabel, undefined, undefined);
+                                                        $$parser.emit('<-?',  false, $dontLabel, undefined, undefined); 
+                                                    }
+                Statement                           { 
+                                                        $$parser.emit('<--', undefined, $doneLabel, undefined, undefined); 
+                                                    }
+                /                                   { 
+                                                        $$parser.emit('<-?', false, $dontLabel, undefined, undefined); 
+                                                    }
+                )
+
+
+DoWhile     <-  DO _                                { 
+                                                        $loopLabel = $$parser.newLabel('l');
+                                                        $$parser.emit('<-?', false, $loopLabel, undefined, undefined); 
+                                                    }
+                Statement
+                WHILE _ BoolGroup                   { 
+                                                        $$parser.emit('?->', true, $loopLabel, undefined, undefined); 
+                                                    }
+
+
+Loop        <-  LOOP _                              { 
+                                                        $loopLabel = $$parser.newLabel('l');
+                                                        $$parser.emit('<--', undefined, $loopLabel, undefined, undefined); 
+                                                    }
+                Statement                           { 
+                                                        $$parser.emit('-->', undefined, $loopLabel, undefined, undefined); 
+                                                    }
+
+# ---------------------------------------------------------------------------
+#   FOR … TO … loop
+# ---------------------------------------------------------------------------
+For         <-  FOR _ '('_ var:Variable             {
+                                                        /* loop-variable must be local, modifiable int / pointer */
+                                                        if ($var.operator !== '=' || span($var.type, "ip") === 0) {
+                                                            $$parser.fail(
+                                                                'For variable must be a local modifiable int or pointer variable',
+                                                                $$s, $$i
+                                                            );
+                                                        }
+                                                        $gotInit = false;            /* flag to detect an explicit start value */
+                                                    }
+                ('='_ init:Expr                     {                             
+                                                        $$parser.assign($init, $var, $$, $$s, $$i);
+                                                        $gotInit = true;
+                                                    }
+                )? TO _ toExpr:Expr ')'_            {
+                                                        if ($toExpr.type !== $var.type) {
+                                                            $$parser.typeError(
+                                                                'Incompatible types ({$type1} and {$type2})',
+                                                                $$s, $$i, $var.type, $toExpr.type
+                                                            );
+                                                        }
+
+                                                        /* constant upper bound */
+                                                        $to = $$parser.makeRValue($toExpr);
+
+                                                        /* initial comparison  (var < to)                         */
+                                                        $$parser.emit(
+                                                            '<',
+                                                            $toExpr.type,
+                                                            undefined,
+                                                            $gotInit ? $init.operands[1]     /* start value from “var = expr” */
+                                                                     : $var.operands[1],     /* or the original variable */
+                                                            $to
+                                                        );
+
+                                                        if ($gotInit) {
+                                                            $$parser.releaseMeta($init);
+                                                        }
+
+                                                        /* branch-out   and  loop label */
+                                                        $noLoopLabel = $$parser.newLabel('e');
+                                                        $$parser.emit('?->', false, $noLoopLabel, undefined, undefined);
+
+                                                        $loopLabel   = $$parser.newLabel('l');
+                                                        $$parser.emit('<--', undefined, $loopLabel, undefined, undefined);
+                                                    }
+                body:Statement                      {
+                                                        /* increment + jump back */
+                                                        $$parser.emit(
+                                                            '...',
+                                                            $var.type,
+                                                            $var.operands[1],        /* address of loop variable */
+                                                            $to,
+                                                            $loopLabel
+                                                        );
+                                                        $$parser.emit('<-?', false, $noLoopLabel, undefined, undefined);
+
+                                                        $$parser.returnBack($to);
+                                                        $$parser.releaseMeta($var);
+                                                    }
+
+# ---------------------------------------------------------------------------
+#   COPY (len) FROM src TO dst
+# ---------------------------------------------------------------------------
+Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
+                                                    {
+                                                        $length = $$parser.makeConstant($l, 'i', $$s, $$i);
+
+                                                        if ($f.type + $t.type !== 'pp') {
+                                                            $$parser.typeError(
+                                                                'Invalid types ({$type1} and {$type2})',
+                                                                $$s, $$i, $f.type, $t.type
+                                                            );
+                                                        }
+
+                                                        $$parser.makeMeta(
+                                                            $l,
+                                                            'copy',
+                                                            '?',
+                                                            $$parser.makeRValue($t, '&$%'),
+                                                            $$parser.makeRValue($f, '&$%'),
+                                                            '*' + $$parser.dropHash($length)
+                                                        );
+
+                                                        $$parser.emitMeta($l);
+                                                        $$parser.releaseMeta($l);
+                                                    }
+
+# ---------------------------------------------------------------------------
+#   SWITCH (expr == from TO to) { … }
+# ---------------------------------------------------------------------------
+Switch      <-  SWITCH _ '('_ $$:Expr
+                '=='_ f:Expr TO _ t:Expr    {
+                                                        /* the switch expression must be an int */
+                                                        if ($$.type !== 'i') {
+                                                            $$parser.fail('Switch expression needs to be int', $$s, $$i);
+                                                        }
+
+                                                        /* lower bound (compile-time constant) */
+                                                        $$.from  = $$parser.makeConstant($f, 'i', $$s, $$i);
+
+                                                        /*    size = to - from   */
+                                                        $size    = $$parser.subConstInt(
+                                                                       $$parser.makeConstant($t, 'i', $$s, $$i),
+                                                                       $$.from
+                                                                   );
+
+                                                        /*   switcher = (expr − from)   */
+                                                        $switcher = $$parser.subConstInt(
+                                                                         $$parser.makeRValue($$, '$%'),
+                                                                         $$.from
+                                                                     );
+
+                                                        $$.switchLabel = $$parser.newLabel('s');
+                                                        $switchExit    = $$parser.newLabel('e');
+
+                                                        $$parser.emit(
+                                                            '-->#',
+                                                            $$.type,
+                                                            $switcher,
+                                                            '*' + $$parser.dropHash($size),
+                                                            $$.switchLabel
+                                                        );
+
+                                                        $$parser.returnBack($switcher);
+                                                        $$parser.returnBack($size);
+
+                                                        $progress = undefined;       /* track case / default presence */
+                                                    }
+                ')'_ '{'_
+                (
+                    ( CASE _                        {
+                                                            /* multiple CASE groups → fall-through handled here */
+                                                            if ($progress !== undefined) {
+                                                                $$parser.emit('-->', undefined, $switchExit, undefined, undefined);
+                                                            } else {
+                                                                $progress = 'gotCases';
+                                                            }
+
+                                                            /* dump the literal “case …” comment */
+                                                            var pos  = find($$s.substr($$i), ":\r\n");
+                                                            $$parser.emit(
+                                                                ';', undefined,
+                                                                'case ' + $$s.substr($$i, pos),
+                                                                undefined, undefined
+                                                            );
+                                                        }
+                      CaseExpr
+                      (','_ CaseExpr)*
+                    / DEFAULT _                     {
+                                                            if ($progress === 'gotDefault') {
+                                                                $$parser.fail('Default case already defined');
+                                                            } else if ($progress !== undefined) {
+                                                                $$parser.emit('-->', undefined, $switchExit, undefined, undefined);
+                                                            }
+
+                                                            $$parser.emit(';',    undefined, 'default',       undefined, undefined);
+                                                            $$parser.emit('<--',  undefined, $$.switchLabel,  undefined, undefined);
+                                                            $progress = 'gotDefault';
+                                                        }
+                    ) ':'_ stmt:Statement
+                )*
+                '}'_                                {
+                                                        /* no explicit “default” → hook it up now                        */
+                                                        if ($progress !== 'gotDefault') {
+                                                            $$parser.emit('<--', undefined, $$.switchLabel, undefined, undefined);
+                                                        }
+                                                        $$parser.emit('<--', undefined, $switchExit, undefined, undefined);
+
+                                                        $$parser.returnBack($$.from);
+                                                    }
+
+# ---------------------------------------------------------------------------
+#   single “case …” inside a switch
+# ---------------------------------------------------------------------------
+CaseExpr    <-  Expr                                {
+                                                        /* offset = constant(expr) – switch.from                         */
+                                                        $n = $$parser.subConstInt(
+                                                                $$parser.makeConstant($$, 'i', $$s, $$i),
+                                                                $$.from
+                                                            );
+
+                                                        /* create label for this case                                     */
+                                                        $$parser.emit(
+                                                            '<--',
+                                                            undefined,
+                                                            $$.switchLabel + '#' + $$parser.dropHash($n),
+                                                            undefined, undefined
+                                                        );
+
+                                                        $$parser.returnBack($n);
+                                                    }
+
+# ---------------------------------------------------------------------------
+#   WHILE  condition  statement
+# ---------------------------------------------------------------------------
+While       <-  WHILE _                             {
+                                                        $loopLabel = $$parser.newLabel('l');
+                                                        $$parser.emit('<--', undefined, $loopLabel, undefined, undefined);
+                                                    }
+                BoolGroup                           {
+                                                        $exitLabel = $$parser.newLabel('e');
+                                                        $$parser.emit('?->', false, $exitLabel, undefined, undefined);
+                                                    }
+                Statement                           {
+                                                        $$parser.emit('-->', undefined, $loopLabel, undefined, undefined);
+                                                        $$parser.emit('<-?', false, $exitLabel, undefined, undefined);
+                                                    }
+
+# ---------------------------------------------------------------------------
+#   atomic values
+# ---------------------------------------------------------------------------
+Value       <-  Group
+                / f:FloatLiteral                    { if (!$$parser.dry) {
+                                                        $$parser.makeMeta($$, ':=', 'f', undefined, '#' + $f, undefined);
+                                                      } }
+                / i:IntegerLiteral                  { if (!$$parser.dry) {
+                                                        $$parser.makeMeta($$, ':=', 'i', undefined, '#' + $i, undefined);
+                                                      } }
+                / s:StringLiteral                   { if (!$$parser.dry) {
+                                                        $$parser.makeString('s', $$, evaluate($s), $$s, $$i);
+                                                      } }
+                / NULL _                            { if (!$$parser.dry) {
+                                                        $$parser.makeMeta($$, ':=', 'p', undefined, '&NULL', undefined);
+                                                      } }
+                / NULLFUNC _                        { if (!$$parser.dry) {
+                                                        $$parser.makeMeta($$, ':=', 'F', undefined, '&NULL', undefined);
+                                                      } }
+                / Variable
+
+# ---------------------------------------------------------------------------
+#   identifiers, optionally prefixed with “global”
+# ---------------------------------------------------------------------------
+Variable    <-                                      { $global = false; }
+                (GLOBAL _                           { $global = true; }
+                )?
+                id:Identifier                       { if (!$$parser.dry) {
+                                                        $$parser.lookup($$, $id, $global, $$s, $$i);
+                                                      } }
+
+
+########################
+#    Lexical Syntax    #
+########################
+
+Identifier      <-  !KEYWORD $$=([A-Za-z_$] SYMBOL_CHAR*) _
+FloatLiteral    <-  $$=([-+]? DIGIT+ "." DIGIT+ (("E" / "e") ([-+]? DIGIT+))?) _
+IntegerLiteral  <-  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
+StringLiteral   <-  $$=( '"' ( !["\\\0-\37] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
+
+KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXTERN / FLOAT / FLOOR / FOR / FROM
+                / FTOI / FUNCPTR / FUNCTION / GLOBAL / GOTO / IF / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
+                / POINTER / READONLY / RETURNS / SWITCH / TEMPORARY / TO / WHILE
+
+ABS         <-  'abs' !SYMBOL_CHAR          ARRAY       <-  'array' !SYMBOL_CHAR
+ASSERT      <-  'assert' !SYMBOL_CHAR       CASE        <-  'case' !SYMBOL_CHAR
+CONST       <-  'const' !SYMBOL_CHAR        COPY        <-  'copy' !SYMBOL_CHAR
+DEFAULT     <-  'default' !SYMBOL_CHAR
+DO          <-  'do' !SYMBOL_CHAR           ELSE        <-  'else' !SYMBOL_CHAR
+EXTERN      <-  'extern' !SYMBOL_CHAR       FLOAT       <-  'float' !SYMBOL_CHAR
+FLOOR       <-  'floor' !SYMBOL_CHAR        FOR         <-  'for' !SYMBOL_CHAR
+FROM        <-  'from' !SYMBOL_CHAR
+FTOI        <-  'ftoi' !SYMBOL_CHAR         FUNCPTR     <-  'funcptr' !SYMBOL_CHAR
+FUNCTION    <-  'function' !SYMBOL_CHAR     GLOBAL      <-  'global' !SYMBOL_CHAR
+GOTO        <-  'goto' !SYMBOL_CHAR         IF          <-  'if' !SYMBOL_CHAR
+INT         <-  'int' !SYMBOL_CHAR          ITOF        <-  'itof' !SYMBOL_CHAR
+LOCALS      <-  'locals' !SYMBOL_CHAR       LOOP        <-  'loop' !SYMBOL_CHAR
+NATIVE      <-  'native' !SYMBOL_CHAR       NULL        <-  'null' !SYMBOL_CHAR
+NULLFUNC    <-  'nullfunc' !SYMBOL_CHAR
+POINTER     <-  'pointer' !SYMBOL_CHAR      READONLY    <-  'readonly' !SYMBOL_CHAR
+RETURNS     <-  'returns' !SYMBOL_CHAR      SWITCH      <-  'switch' !SYMBOL_CHAR
+TEMPORARY   <-  'temporary' !SYMBOL_CHAR    TO          <-  'to' !SYMBOL_CHAR
+WHILE       <-  'while' !SYMBOL_CHAR
+
+BITWISE_OP  <-  '|' !'|' / '&' !'&' / '^' / '<<' / '>>>' / '>>'
+ADDSUB_OP   <-  '+' / '-'
+MULDIV_OP   <-  '*' / '/' !'/' / '%'
+COMP_OP     <-  '<=' / '<' / '>=' / '>' / '!=' / '=='
+BASE_TYPE   <-  INT / FLOAT / FUNCPTR / POINTER
+BUILT_IN    <-  'abs' / 'floor' / 'itof' / 'ftoi'
+PREFIX_OP   <-  '-' !("'" / DIGIT) / '~' / '&' / '*' / BUILT_IN !SYMBOL_CHAR
+SYMBOL_CHAR <-  [A-Za-z_$0-9]
+HEX         <-  [0-9A-Fa-f]
+DIGIT       <-  [0-9]
+ASCII       <-  ![\0-\37] .
+_           <-  ([ \t\r\n]+ / COMMENT)*
+COMMENT     <-  '/*' (!'*/' .)* '*/' / "//" (![\r\n] .)*

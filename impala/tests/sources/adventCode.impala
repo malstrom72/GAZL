@@ -1,0 +1,3082 @@
+/*
+return\((.*?)\); -> { goValue = \1; goto return; }
+([A-Z]+?\[[^]]*?\] +[=!<>][= ]) -> (int)\1
+
+([^( ]+?\([^() ]*?\) \!\= FALSE)
+([^( ]+?\([^() ]*?\) \=\= FALSE)
+*/
+
+extern native output;
+extern native abort;
+extern native exit;
+extern native input;
+extern native inputEOF;
+extern native clock;
+
+const int FALSE = 0;
+const int TRUE = 1;
+
+const int GOTO2 = 0;
+const int GOTO8 = 1;
+const int GOTO2000 = 2;
+const int GOTO2009 = 3;
+const int GOTO2010 = 4;
+const int GOTO2011 = 5;
+const int GOTO2012 = 6;
+const int GOTO2600 = 7;
+const int GOTO2607 = 8;
+const int GOTO2630 = 9;
+const int GOTO2800 = 10;
+const int GOTO8000 = 11;
+const int GOTO18999 = 12;
+const int GOTO19000 = 13;
+
+const int CLSMAX = 12;
+const int HNTSIZ = 20;
+const int LINSIZ = 12500;
+const int LOCSIZ = 185;
+const int MESH = 123456789;
+const int RTXSIZ = 277;
+const int TRVSIZ = 885;
+const int VRBSIZ = 35;
+const int VRSION = 25;
+const int TRNSIZ = 5;
+const int MAXTRS = 79;
+const int TABSIZ = 330;
+const int CHLOC=114;
+const int CHLOC2=142;
+const int CONDS = (1 << 11);
+const int DALTLC = 18;
+
+global array ABB[186];
+global array ATLOC[186];
+global array DLOC[7];
+global array FIXED[101];
+global array LINK[201];
+global array PARMS[26];
+global array PLACE[101];
+
+global array INLINE[101];
+global array MAP1[129];
+global array MAP2[129];
+
+global array DSEEN[7];
+global array HINTED[21];
+global array HINTLC[21];
+global array ODLOC[7];
+global array TK[21];
+global array PROP[101];
+
+global int BLKLIN = TRUE;
+global int HOLDNG = 0;
+global int ABBNUM = 5;
+global int TRNDEX = 1;
+global int TRNLUZ = 0;
+global int TURNS = 0;
+global int CLOSNG = FALSE;
+global int BONUS = 0;
+global int NOVICE = FALSE;
+global int CLSHNT = FALSE;
+global int CLOSED = FALSE;
+global int NUMDIE = 0;
+global int SAVED = 0;
+global int WZDARK = FALSE;
+global int LMWARN = FALSE;
+global int FOOBAR = 0;
+global int CLOCK1 = 30;
+global int CLOCK2 = 50;
+global int DETAIL = 0;
+global int DKILL = 0;
+global int IGO = 0;
+global int KNFLOC = 0;
+global int IWEST = 0;
+global int PANIC = FALSE;
+
+global int gK;
+global int gOBJ;
+global int gLOC;
+
+global int DFLAG;
+global int LNLENG;
+global int LNPOSN;
+global int VERB;
+global int ZZWORD;
+global int SCORE;
+global int MAXDIE;
+global int MXSCOR;
+global int TALLY;
+global int THRESH;
+global int NEWLOC;
+global int LIMIT;
+global int OLDLC2;
+global int OLDLOC;
+global int DTOTAL;
+global int SPK;
+global int WD1;
+global int WD1X;
+global int WD2;
+global int WD2X;
+
+const int LINUSE = 12482;
+const int TRVS = 879;
+const int CLSSES = 10;
+const int TRNVLS = 4;
+const int TABNDX = 326;
+const int HNTMAX = 10;
+
+extern array PTEXT;
+extern array RTEXT;
+extern array CTEXT;
+extern array STEXT;
+extern array LTEXT;
+extern array KEY;
+extern array LOCSND;
+extern array LINES;
+extern array CVAL;
+extern array TTEXT;
+extern array TRNVAL;
+extern array TRAVEL;
+extern array KTAB;
+extern array PLAC;
+extern array FIXD;
+extern array ACTSPK;
+extern array HINTS;
+
+global array ATAB[331] = {
+	0, 576501649, 407342340, 358494005, 627590956, 342272582, 375946497, 376088268, 325880787, 527121725, 305669668, 575365029, 575505951, 641674312, 596419488, 529790769,
+	529934163, 363045041, 475613907, 312209991, 411491935, 396392300, 597622959, 378351009, 308704320, 329021655, 328380474, 429010181, 429136990, 429159769, 599025551, 515258257,
+	513873295, 342554001, 544028495, 616502824, 480891024, 326335042, 298679023, 395774559, 647593600, 632867709, 632875876, 626204297, 294054431, 298605009, 341424708, 348259602,
+	348404224, 345910464, 548433732, 534948114, 332902245, 602024358, 349232676, 480946593, 582807262, 413104193, 452051492, 312757240, 536458640, 296795894, 363530884, 360672721,
+	666861696, 662955153, 518776854, 512253145, 602968354, 596432553, 516625444, 600658433, 605524032, 521785057, 349492471, 419410185, 667546256, 319840904, 714948036, 335316093,
+	487269696, 372279172, 621807382, 350890389, 386412396, 588673545, 604788580, 604903137, 605051740, 692598308, 351918387, 371220148, 555397602, 603970280, 334712388, 339290350,
+	319209439, 556120288, 541039836, 335459701, 605810726, 588453829, 503628708, 538631310, 471488896, 471637281, 487468772, 487623576, 408291231, 336900153, 592365892, 592516721,
+	610761373, 322868593, 358135620, 558027922, 657794591, 609927896, 390739139, 623604528, 341423104, 546383568, 506639240, 444451384, 611531311, 159529711, 361996564, 362148977,
+	477414671, 477568288, 394120452, 591950642, 327338790, 458029353, 676295424, 438311873, 544447552, 511072890, 562274562, 325712102, 562581806, 615164228, 612171869, 394509837,
+	679904153, 314853937, 363752727, 562942615, 411037663, 362151137, 364369725, 345126584, 633172438, 633327383, 328027684, 512806004, 666547931, 412477864, 512157207, 664401060,
+	327989391, 344913888, 516516164, 350468772, 548280400, 651966057, 345709954, 331944335, 598716956, 316532089, 498355136, 519432585, 534860240, 617277689, 417700804, 536851008,
+	366066137, 617927296, 330799236, 466242639, 351524397, 349831015, 335122532, 637979646, 383605120, 383761345, 534441252, 638628728, 667926096, 519166425, 619673618, 571413600,
+	386437131, 570866980, 574502235, 569349871, 607280528, 569737980, 623074675, 352669145, 607899904, 468605857, 536919354, 321068069, 419840110, 620290251, 385827303, 625530192,
+	352343843, 637687409, 487877700, 352832651, 626348006, 353138920, 421471716, 642358945, 625403728, 375012481, 606633967, 408847977, 373152987, 376436569, 623061124, 356525743,
+	625438016, 662062509, 528240154, 660781798, 560776336, 543960444, 510499044, 358929936, 509267678, 561002017, 396138300, 559296265, 692432848, 627236552, 631364949, 357337905,
+	578443083, 642881201, 693372804, 614900217, 647780895, 429007497, 581056179, 362327092, 398412761, 412978650, 649621668, 330764342, 495785488, 412043447, 445814788, 633405734,
+	631404992, 582106385, 394046340, 378492856, 382012837, 617815593, 648194949, 650200001, 601566144, 414056417, 699137011, 466063777, 413469328, 414713401, 348512802, 380476297,
+	465028318, 349070224, 632090067, 414634681, 415850256, 417590217, 417798372, 419530337, 351787024, 616949249, 583633153, 352273150, 635017006, 636495531, 700666692, 384198576,
+	639170447, 583772576, 634275780, 618704368, 618872859, 419572585, 519595571, 750480229, 418162240, 419379873, 421121892, 421332105, 423066128, 654661134, 637339931, 573227790,
+	334898880, 335068734, 638733391, 456196950, 590584813, 453952393, 1218704996, 557486113, 659168768, 659339422, 388722596, 409587145, 524906000, 540281369, 426091588, 644153937,
+	474943296, 475114733, 645429828, 709109173, 741757328, 557397993, 0, 0, 0, 0, 0
+};
+global array COND[186] = {
+	0, 5, 1, 5, 5, 1, 131089, 5, 1050625, 1, 1, 0, 0, 4096, 0, 1048576,
+	0, 0, 0, 8192, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 16400, 16400, 16400, 16400, 16392, 16392,
+	16392, 16400, 16400, 16400, 16400, 16400, 16392, 16400, 16392, 16, 8, 0, 0, 0, 0, 0,
+	1048576, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	16400, 16384, 16392, 16, 16, 8, 16392, 16400, 0, 0, 0, 0, 0, 0, 0, 4,
+	0, 0, 0, 32768, 32769, 32768, 0, 0, 0, 0, 0, 16, 65552, 1048576, 0, 0,
+	16, 4, 0, 1, 1, 0, 0, 0, 0, 0, 8, 8, 8, 8, 1048585, 8,
+	8, 8, 8, 16, 16, 16, 16, 16, 16, 16, 16, 16, 0, 0, 0, 524288,
+	0, 262161, 262161, 262161, 262161, 262161, 262161, 262161, 262161, 262161, 262161, 262161, 262161, 262161, 262161, 262161,
+	262161, 262161, 262161, 262161, 262161, 262161, 262161, 1, 4, 4, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+global array OBJSND[101] = {
+	0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 0, 0, 1, 2,
+	0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 4,
+	0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0
+};
+global array OBJTXT[101] = {
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+	1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+	1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0
+};
+const int AXE = 28;
+const int BATTER = 39;
+const int BEAR = 35;
+const int BIRD = 8;
+const int BLOOD = 44;
+const int BOTTLE = 20;
+const int CAGE = 4;
+const int CAVITY = 43;
+const int CHASM = 32;
+const int CLAM = 14;
+const int DOOR = 9;
+const int DRAGON = 31;
+const int DWARF = 17;
+const int FISSUR = 12;
+const int FOOD = 19;
+const int GRATE = 3;
+const int KEYS = 1;
+const int KNIFE = 18;
+const int LAMP = 2;
+const int MAGZIN = 16;
+const int MESSAG = 36;
+const int MIRROR = 23;
+const int OGRE = 41;
+const int OIL = 22;
+const int OYSTER = 15;
+const int PILLOW = 10;
+const int PLANT = 24;
+const int PLANT2 = 25;
+const int RESER = 45;
+const int ROD = 5;
+const int ROD2 = 6;
+const int gSIGN = 49;
+const int SNAKE = 11;
+const int STEPS = 7;
+const int TROLL = 33;
+const int TROLL2 = 34;
+const int URN = 42;
+const int VEND = 38;
+const int VOLCAN = 37;
+const int WATER = 21;
+const int AMBER = 67;
+const int CHAIN = 64;
+const int CHEST = 55;
+const int COINS = 54;
+const int EGGS = 56;
+const int EMRALD = 59;
+const int JADE = 66;
+const int NUGGET = 50;
+const int PEARL = 61;
+const int PYRAM = 60;
+const int RUBY = 65;
+const int RUG = 62;
+const int SAPPH = 68;
+const int TRIDNT = 57;
+const int VASE = 58;
+const int BACK = 8;
+const int CAVE = 67;
+const int DPRSSN = 63;
+const int ENTER = 3;
+const int ENTRNC = 64;
+const int LOOK = 57;
+const int NUL = 21;
+const int STREAM = 14;
+const int FIND = 19;
+const int INVENT = 20;
+const int LOCK = 6;
+const int SAY = 3;
+const int THROW = 17;
+
+extern function score;
+
+function fBUG(int NUM)
+locals array numString[3]
+{
+	/*  THE FOLLOWING CONDITIONS ARE CURRENTLY CONSIDERED FATAL BUGS.  NUMBERS < 20
+	 *  ARE DETECTED WHILE READING THE DATABASE; THE OTHERS OCCUR AT "RUN TIME".
+	 *	0	MESSAGE LINE > 70 CHARACTERS
+	 *	1	NULL LINE IN MESSAGE
+	 *	2	TOO MANY WORDS OF MESSAGES
+	 *	3	TOO MANY TRAVEL OPTIONS
+	 *	4	TOO MANY VOCABULARY WORDS
+	 *	5	REQUIRED VOCABULARY WORD NOT FOUND
+	 *	6	TOO MANY RTEXT MESSAGES
+	 *	7	TOO MANY HINTS
+	 *	8	LOCATION HAS COND BIT BEING SET TWICE
+	 *	9	INVALID SECTION NUMBER IN DATABASE
+	 *	10	TOO MANY LOCATIONS
+	 *	11	TOO MANY CLASS OR TURN MESSAGES
+	 *	20	SPECIAL TRAVEL (500>L>300) EXCEEDS GOTO LIST
+	 *	21	RAN OFF END OF VOCABULARY TABLE
+	 *	22	VOCABULARY TYPE (N/1000) NOT BETWEEN 0 AND 3
+	 *	23	INTRANSITIVE ACTION VERB EXCEEDS GOTO LIST
+	 *	24	TRANSITIVE ACTION VERB EXCEEDS GOTO LIST
+	 *	25	CONDITIONAL TRAVEL ENTRY WITH NO ALTERNATIVE
+	 *	26	LOCATION HAS NO TRAVEL ENTRIES
+	 *	27	HINT NUMBER EXCEEDS GOTO LIST
+	 *	28	INVALID MONTH RETURNED BY DATE FUNCTION
+	 *	29	TOO MANY PARAMETERS GIVEN TO SETPRM */
+
+	output("Fatal error ");
+	numString[0] = '0' + NUM / 10;
+	numString[1] = '0' + NUM % 10;
+	numString[2] = 0;
+	output(numString);
+	output(".  See source code for interpretation.\n");
+	abort();
+}
+
+global int fRAN_R = 0;
+
+function fRAN(int RANGE)
+returns int RAN
+locals int D, int T
+{
+	/*  SINCE THE RAN FUNCTION IN LIB40 SEEMS TO BE A REAL LOSE, WE'LL USE ONE OF
+	 *  OUR OWN.  IT'S BEEN RUN THROUGH MANY OF THE TESTS IN KNUTH VOL. 2 AND
+	 *  SEEMS TO BE QUITE RELIABLE.  RAN RETURNS A VALUE UNIFORMLY SELECTED
+	 *  BETWEEN 0 AND RANGE-1. */
+
+	D=1;
+	if(!(global fRAN_R != 0 && RANGE >= 0)) {
+	// SEED!
+	// fDATIME(&D,&T);
+//D=91172;
+//T=53423;
+//		global fRAN_R=((T+5)%1048576);
+//		D=1000+((D)%1000);
+		D=1999;
+		T=(int)clock() & 0x7FFFFFFF;
+	}
+	for (T=1 to D+1) global fRAN_R=((global fRAN_R*1093+221587)%1048576);
+	RAN=(RANGE*global fRAN_R)/1048576;
+}
+
+/*  LINE-PARSING ROUTINES (GETNUM, GETTXT, MAKEWD, PUTTXT, SHFTXT, TYPE0)
+		*/
+
+/*  THE ROUTINES ON THIS PAGE HANDLE ALL THE STUFF THAT WOULD NORMALLY BE
+ *  TAKEN CARE OF BY FORMAT STATEMENTS.  WE DO IT THIS WAY INSTEAD SO THAT
+ *  WE CAN HANDLE TEXTUAL DATA IN A MACHINE INDEPENDENT FASHION.  ALL THE
+ *  MACHINE DEPENDENT I/O STUFF IS ON THE FOLLOWING PAGE.  SEE THAT PAGE
+ *  FOR A DESCRIPTION OF MAPCOM'S INLINE ARRAY. */
+
+/*  MACHINE DEPENDENT ROUTINES (MAPLIN, TYPE, MPINIT, SAVEIO) */
+
+
+/*  REPORT ON AMOUNT OF ARRAYS ACTUALLY USED, TO PERMIT REDUCTIONS. */
+
+readonly array fMPINIT_RUNS[7 * 2] = {32,34, 39,46, 65,90, 97,122, 37,37, 48,57, 0,126};
+
+function fMPINIT()
+locals int FIRST, int I, int J, int LAST, int VAL
+{
+	for (I=1 to 129) {
+		global MAP1[I]= -1;
+	} /* end loop */
+	VAL=0;
+	for (I=0 to 7) {
+		FIRST=(int)global fMPINIT_RUNS[I * 2 + 0];
+		LAST=(int)global fMPINIT_RUNS[I * 2 + 1];
+		for (J=FIRST+1 to LAST+2) {
+			if(!((int)global MAP1[J] >= 0)) {
+				global MAP1[J]=VAL;
+				VAL=VAL+1;
+			}
+		} /* end loop */
+	/*etc*/ ;
+	} /* end loop */
+	global MAP1[128]=global MAP1[10];
+/*  FOR THIS VERSION, TAB (9) MAPS TO SPACE (32), SO DEL (127) USES TAB'S VALUE */
+	global MAP1[10]=global MAP1[33];
+	global MAP1[11]=global MAP1[33];
+
+	for (I=0 to 127) {
+		VAL=(int)global MAP1[I+1]+1;
+		global MAP2[VAL]=I*('B'-'A');
+		if(I >= 64)global MAP2[VAL]=(I-64)*('B'-'A')+'@';
+	} /* end loop */
+}
+
+function fMAPLIN(int FIL)
+locals int I, int VAL
+{
+	/*  READ A LINE OF INPUT, EITHER FROM A FILE (IF FIL=.TRUE.) OR FROM THE
+	 *  KEYBOARD, TRANSLATE THE CHARS TO INTEGERS IN THE RANGE 0-126 AND STORE
+	 *  THEM IN THE COMMON ARRAY "INLINE".  INTEGER VALUES ARE AS FOLLOWS:
+	 *     0   = SPACE [ASCII CODE 40 OCTAL, 32 DECIMAL]
+	 *    1-2  = !" [ASCII 41-42 OCTAL, 33-34 DECIMAL]
+	 *    3-10 = '()*+,-. [ASCII 47-56 OCTAL, 39-46 DECIMAL]
+	 *   11-36 = UPPER-CASE LETTERS
+	 *   37-62 = LOWER-CASE LETTERS
+	 *    63   = PERCENT (%) [ASCII 45 OCTAL, 37 DECIMAL]
+	 *   64-73 = DIGITS, 0 THROUGH 9
+	 *  REMAINING CHARACTERS CAN BE TRANSLATED ANY WAY THAT IS CONVENIENT;
+	 *  THE "TYPE" ROUTINE BELOW IS USED TO MAP THEM BACK TO CHARACTERS WHEN
+	 *  NECESSARY.  THE ABOVE MAPPINGS ARE REQUIRED SO THAT CERTAIN SPECIAL
+	 *  CHARACTERS ARE KNOWN TO FIT IN 6 BITS AND/OR CAN BE EASILY SPOTTED.
+	 *  ARRAY ELEMENTS BEYOND THE END OF THE LINE SHOULD BE FILLED WITH 0,
+	 *  AND LNLENG SHOULD BE SET TO THE INDEX OF THE LAST CHARACTER.
+	 *
+	 *  IF THE DATA FILE USES A CHARACTER OTHER THAN SPACE (E.G., TAB) TO
+	 *  SEPARATE NUMBERS, THAT CHARACTER SHOULD ALSO TRANSLATE TO 0.
+	 *
+	 *  THIS PROCEDURE MAY USE THE MAP1,MAP2 ARRAYS TO MAINTAIN STATIC DATA FOR
+	 *  THE MAPPING.  MAP2(1) IS SET TO 0 WHEN THE PROGRAM STARTS
+	 *  AND IS NOT CHANGED THEREAFTER UNLESS THE ROUTINES ON THIS PAGE CHOOSE
+	 *  TO DO SO.
+	 *
+	 *  NOTE THAT MAPLIN IS EXPECTED TO OPEN THE FILE THE FIRST TIME IT IS
+	 *  ASKED TO READ A LINE FROM IT.  THAT IS, THERE IS NO OTHER PLACE WHERE
+	 *  THE DATA FILE IS OPENED. */
+
+	if((int)global MAP2[1] == 0)fMPINIT();
+
+	do {
+		if(FIL==FALSE) {
+			input(99, global INLINE+1);
+			if ((int)inputEOF() != FALSE) score(1);
+		} else {
+			fBUG(-1);
+		}
+
+		global LNLENG=0;
+		for (I=1 to 100+1) {
+			if ((int)global INLINE[I] == 0) goto break1;
+			VAL=(int)global INLINE[I]+1;
+			global INLINE[I]=global MAP1[VAL];
+			if((int)global INLINE[I] != 0)global LNLENG=I;
+		} /* end loop */
+	break1:
+		global LNPOSN=1;
+	} while (FIL != FALSE && global LNLENG == 0);
+
+	/*  ABOVE IS TO GET AROUND AN F40 COMPILER BUG WHEREIN IT READS A BLANK
+	 *  LINE WHENEVER A CRLF IS BROKEN ACROSS A RECORD BOUNDARY. */
+}
+
+global int fGETTXT_SPLITTING = -1;
+
+function fGETTXT(int SKIP,int ONEWRD,int UPPER,int HASH)
+returns int GETTXT
+locals int CHAR, int I
+{
+	/*  TAKE CHARACTERS FROM AN INPUT LINE AND PACK THEM INTO 30-BIT WORDS.
+	 *  SKIP SAYS TO SKIP LEADING BLANKS.  ONEWRD SAYS STOP IF WE COME TO A
+	 *  BLANK.  UPPER SAYS TO MAP ALL LETTERS TO UPPERCASE.  HASH MAY BE USED
+	 *  AS A PARAMETER FOR ENCRYPTING THE TEXT IF DESIRED; HOWEVER, A HASH OF 0
+	 *  SHOULD RESULT IN UNMODIFIED BYTES BEING PACKED.  IF WE REACH THE
+	 *  END OF THE LINE, THE WORD IS FILLED UP WITH BLANKS (WHICH ENCODE AS 0'S).
+	 *  IF WE'RE ALREADY AT END OF LINE WHEN GETTXT IS CALLED, WE RETURN -1. */
+
+	if(global LNPOSN != global fGETTXT_SPLITTING)global fGETTXT_SPLITTING = -1;
+	GETTXT= -1;
+L10:
+	if(global LNPOSN > global LNLENG) goto return;
+	if(!((SKIP==FALSE) || (int)global INLINE[global LNPOSN] != 0)) {
+		global LNPOSN=global LNPOSN+1;
+		goto L10;
+	}
+
+	GETTXT=0;
+	for (I=1 to 5+1) {
+		GETTXT=GETTXT*64;
+		if(global LNPOSN > global LNLENG || (ONEWRD != FALSE && (int)global INLINE[global LNPOSN] == 0)) goto L15;
+		CHAR=(int)global INLINE[global LNPOSN];
+		if(!(CHAR >= 63)) {
+			global fGETTXT_SPLITTING = -1;
+			if(UPPER != FALSE && CHAR >= 37)CHAR=CHAR-26;
+			GETTXT=GETTXT+CHAR;
+		} else {
+			if(!(global fGETTXT_SPLITTING == global LNPOSN)) {
+				GETTXT=GETTXT+63;
+				global fGETTXT_SPLITTING = global LNPOSN;
+				goto L15;
+			}
+			GETTXT=GETTXT+CHAR-63;
+			global fGETTXT_SPLITTING = -1;
+		}
+		global LNPOSN=global LNPOSN+1;
+	L15: ;
+	} /* end loop */
+
+	if(HASH != FALSE)GETTXT=GETTXT+((HASH*13579+5432)%97531)*12345+HASH;
+return: ;
+}
+
+function fMAKEWD(int LETTRS)
+returns int MAKEWD
+locals int I, int L 
+{
+	/*  COMBINE FIVE UPPERCASE LETTERS (REPRESENTED BY PAIRS OF DECIMAL DIGITS
+	 *  IN LETTRS) TO FORM A 30-BIT VALUE MATCHING THE ONE THAT GETTXT WOULD
+	 *  RETURN GIVEN THOSE CHARACTERS PLUS TRAILING BLANKS AND HASH=0.  CAUTION:
+	 *  LETTRS WILL OVERFLOW 31 BITS IF 5-LETTER WORD STARTS WITH V-Z.  AS A
+	 *  KLUDGEY WORKAROUND, YOU CAN INCREMENT A LETTER BY 5 BY ADDING 50 TO
+	 *  THE NEXT PAIR OF DIGITS. */
+
+	MAKEWD=0;
+	I=1;
+	L=LETTRS;
+	do {
+		MAKEWD=MAKEWD+I*(((L)%50)+10);
+		I=I*64;
+		if(((L)%100) > 50)MAKEWD=MAKEWD+I*5;
+		L=L/100;
+	} while (L != 0);
+	I=64*64*64*64*64/I;
+	MAKEWD=MAKEWD*I;
+}
+
+function fSHFTXT(int FROM,int DELTA)
+locals int I, int II, int JJ
+{
+/*  MOVE INLINE(N) TO INLINE(N+DELTA) FOR N=FROM,LNLENG.  DELTA CAN BE
+ *  NEGATIVE.  LNLENG IS UPDATED; LNPOSN IS NOT CHANGED. */
+
+	if(!(global LNLENG < FROM || DELTA == 0)) {
+		for (I=FROM to global LNLENG+1) {
+			II=I;
+			if(DELTA > 0)II=FROM+global LNLENG-I;
+			JJ=II+DELTA;
+			global INLINE[JJ]=global INLINE[II];
+		} /* end loop */
+	}
+	global LNLENG=global LNLENG+DELTA;
+}
+
+
+function fPUTTXT(int WORD,pointer sTATE,int CASE,int HASH)
+locals int ALPH1, int ALPH2, int BYTE, int DIV, int I, int W
+{
+	/*  UNPACK THE 30-BIT VALUE IN WORD TO OBTAIN UP TO 5 INTEGER-ENCODED CHARS,
+	 *  AND STORE THEM IN INLINE STARTING AT LNPOSN.  IF LNLENG>=LNPOSN, SHIFT
+	 *  EXISTING CHARACTERS TO THE RIGHT TO MAKE ROOM.  HASH MUST BE THE SAME
+	 *  AS IT WAS WHEN GETTXT CREATED THE 30-BIT WORD.  STATE WILL BE ZERO WHEN
+	 *  PUTTXT IS CALLED WITH THE FIRST OF A SEQUENCE OF WORDS, BUT IS THEREAFTER
+	 *  UNCHANGED BY THE CALLER, SO PUTTXT CAN USE IT TO MAINTAIN STATE ACROSS
+	 *  CALLS.  LNPOSN AND LNLENG ARE INCREMENTED BY THE NUMBER OF CHARS STORED.
+	 *  IF CASE=1, ALL LETTERS ARE MADE UPPERCASE; IF -1, LOWERCASE; IF 0, AS IS.
+	 *  ANY OTHER VALUE FOR CASE IS THE SAME AS 0 BUT ALSO CAUSES TRAILING BLANKS
+	 *  TO BE INCLUDED (IN ANTICIPATION OF SUBSEQUENT ADDITIONAL TEXT). */
+
+	ALPH1=13*CASE+24;
+	ALPH2=26*abs(CASE)+ALPH1;
+	if(abs(CASE) > 1)ALPH1=ALPH2;
+/*  ALPH1&2 DEFINE RANGE OF WRONG-CASE CHARS, 11-36 OR 37-62 OR EMPTY. */
+	DIV=64*64*64*64;
+	W=WORD;
+	if(HASH!=0)W=W-((HASH*13579+5432)%97531)*12345-HASH;
+	for (I=1 to 5+1) {
+		if(W <= 0 && (int)(*sTATE) == 0 && abs(CASE) <= 1) goto return;
+		BYTE=W/DIV;
+		if(!((int)(*sTATE) != 0 || BYTE != 63)) {
+			(int)(*sTATE)=63;
+		} else {
+			fSHFTXT(global LNPOSN,1);
+			(*sTATE)=(int)(*sTATE)+BYTE;
+			if((int)(*sTATE) < ALPH2 && (int)(*sTATE) >= ALPH1)(*sTATE)=(int)(*sTATE)-26*CASE;
+			global INLINE[global LNPOSN]=(*sTATE);
+			global LNPOSN=global LNPOSN+1;
+			(int)(*sTATE)=0;
+		}
+		W=(W-BYTE*DIV)*64;
+	} /* end loop */
+return: ;
+}
+
+/*  I/O ROUTINES (SPEAK, PSPEAK, RSPEAK, SETPRM, GETIN, YES) */
+
+function fTYPE()
+locals int I, int VAL
+{
+	/*  TYPE THE FIRST "LNLENG" CHARACTERS STORED IN INLINE, MAPPING THEM
+	 *  FROM INTEGERS TO TEXT PER THE RULES DESCRIBED ABOVE.  INLINE(I),
+	 *  I=1,LNLENG MAY BE CHANGED BY THIS ROUTINE. */
+
+	if(!(global LNLENG != 0)) {
+		output("\n");
+		goto return;
+	}
+	if((int)global MAP2[1] == 0)fMPINIT();
+	for (I=1 to global LNLENG+1) {
+		VAL=(int)global INLINE[I];
+		global INLINE[I]=global MAP2[VAL+1];
+	} /* end loop */
+	global INLINE[global LNLENG+1]=0;
+	output(global INLINE+1); output("\n");
+return: ;
+}
+
+function fTYPE0()
+locals int TEMP
+{
+	/*  TYPE A BLANK LINE.  THIS PROCEDURE IS PROVIDED AS A CONVENIENCE FOR CALLERS
+	 *  WHO OTHERWISE HAVE NO USE FOR MAPCOM. */
+
+	TEMP=global LNLENG;
+	global LNLENG=0;
+	fTYPE();
+	global LNLENG=TEMP;
+}
+
+function fSPEAK(int N)
+locals int BLANK, int CASE, int I, int K, int L, int NEG, int NPARMS, int PARM, int PRMTYP, int STATE
+{
+
+	/*  PRINT THE MESSAGE WHICH STARTS AT LINES(N).  PRECEDE IT WITH A BLANK LINE
+	 *  UNLESS BLKLIN IS FALSE. */
+
+	if(N == 0) goto return;
+	BLANK=global BLKLIN;
+	K=N;
+	NPARMS=1;
+L10:
+	L=abs((int)global LINES[K])-1;
+	K=K+1;
+	global LNLENG=0;
+	global LNPOSN=1;
+	STATE=0;
+	for (I=K to L+1) {
+		fPUTTXT(global LINES[I],&STATE,2,I);
+	} /* end loop */
+	global LNPOSN=0;
+L30:
+	global LNPOSN=global LNPOSN+1;
+L32:
+	if(global LNPOSN > global LNLENG) goto L40;
+	if((int)global INLINE[global LNPOSN] != 63) goto L30;
+	PRMTYP=(int)global INLINE[global LNPOSN+1];
+	
+	/*  63 IS A "%"; THE NEXT CHARACTER DETERMINE THE TYPE OF PARAMETER:  1 (!) =
+	 *  SUPPRESS MESSAGE COMPLETELY, 29 (S) = NULL IF PARM=1, ELSE 'S' (OPTIONAL
+	 *  PLURAL ENDING), 33 (W) = WORD (TWO 30-BIT VALUES) WITH TRAILING SPACES
+	 *  SUPPRESSED, 22 (L) OR 31 (U) = WORD BUT MAP TO LOWER/UPPER CASE, 13 (C) =
+	 *  WORD IN LOWER CASE WITH FIRST LETTER CAPITALISED, 30 (T) = TEXT ENDING
+	 *  WITH A WORD OF -1, 65-73 (1-9) = NUMBER USING THAT MANY CHARACTERS,
+	 *  12 (B) = VARIABLE NUMBER OF BLANKS. */
+	 
+	if(PRMTYP == 1) goto return;
+	if(PRMTYP == 29) goto L320;
+	if(PRMTYP == 30) goto L340;
+	if(PRMTYP == 12) goto L360;
+	if(PRMTYP == 33 || PRMTYP == 22 || PRMTYP == 31 || PRMTYP == 13) goto
+		L380;
+	PRMTYP=PRMTYP-64;
+	if(PRMTYP < 1 || PRMTYP > 9) goto L30;
+	fSHFTXT(global LNPOSN+2,PRMTYP-2);
+	global LNPOSN=global LNPOSN+PRMTYP;
+	PARM=abs((int)global PARMS[NPARMS]);
+	NEG=0;
+	if((int)global PARMS[NPARMS] < 0)NEG=9;
+	for (I=1 to PRMTYP+1) {
+		global LNPOSN=global LNPOSN-1;
+		global INLINE[global LNPOSN]=((PARM)%10)+64;
+		if(I == 1 || PARM != 0) goto L390;
+		global INLINE[global LNPOSN]=NEG;
+		NEG=0;
+	L390:
+		PARM=PARM/10;
+	} /* end loop */
+	global LNPOSN=global LNPOSN+PRMTYP;
+L395:
+	NPARMS=NPARMS+1;
+	goto L32;
+
+L320:
+	fSHFTXT(global LNPOSN+2,-1);
+	global INLINE[global LNPOSN]=55;
+	if((int)global PARMS[NPARMS] == 1)fSHFTXT(global LNPOSN+1,-1);
+	goto L395;
+
+L340:
+	fSHFTXT(global LNPOSN+2,-2);
+	STATE=0;
+	CASE=2;
+L345:
+	if((int)global PARMS[NPARMS] < 0) goto L395;
+	if((int)global PARMS[NPARMS+1] < 0)CASE=0;
+	fPUTTXT(global PARMS[NPARMS],&STATE,CASE,0);
+	NPARMS=NPARMS+1;
+	goto L345;
+
+L360:
+	PRMTYP=(int)global PARMS[NPARMS];
+	fSHFTXT(global LNPOSN+2,PRMTYP-2);
+	if(PRMTYP == 0) goto L395;
+	for (I=1 to PRMTYP+1) {
+		global INLINE[global LNPOSN]=0;
+		global LNPOSN=global LNPOSN+1;
+	} /* end loop */
+	goto L395;
+
+L380:
+	fSHFTXT(global LNPOSN+2,-2);
+	STATE=0;
+	CASE= -1;
+	if(PRMTYP == 31)CASE=1;
+	if(PRMTYP == 33)CASE=0;
+	I=global LNPOSN;
+	fPUTTXT(global PARMS[NPARMS],&STATE,CASE,0);
+	fPUTTXT(global PARMS[NPARMS+1],&STATE,CASE,0);
+	if(PRMTYP == 13 && (int)global INLINE[I] >= 37 && (int)global INLINE[I] <= 62)global INLINE[I]=(int)global INLINE[I]-26;
+	NPARMS=NPARMS+2;
+	goto L32;
+
+L40:
+	if(BLANK != FALSE)fTYPE0();
+	BLANK=FALSE;
+	fTYPE();
+	K=L+1;
+	if((int)global LINES[K] >= 0) goto L10;
+	
+return: ;
+}
+
+function fPSPEAK(int MSG, int SKIP)
+locals int I, int M
+{
+	/*  FIND THE SKIP+1ST MESSAGE FROM MSG AND PRINT IT.  MSG SHOULD BE THE INDEX OF
+	 *  THE INVENTORY MESSAGE FOR OBJECT.  (INVEN+N+1 MESSAGE IS PROP=N MESSAGE). */
+	M=(int)global PTEXT[MSG];
+	if(!(SKIP < 0)) {
+		for (I=0 to SKIP+1) {
+			do {
+				M=abs((int)global LINES[M]);
+			} while ((int)global LINES[M] >= 0);
+		} /* end loop */
+	}
+	fSPEAK(M);
+}
+
+function fRSPEAK(int I) {
+	/*  PRINT THE I-TH "RANDOM" MESSAGE (SECTION 6 OF DATABASE). */
+
+	if(I != 0)fSPEAK(global RTEXT[I]);
+}
+
+function fSETPRM(int FIRST,int P1,int P2) {
+	/*  STORES PARAMETERS INTO THE PRMCOM PARMS ARRAY FOR USE BY SPEAK.  P1 AND P2
+	 *  ARE STORED INTO PARMS(FIRST) AND PARMS(FIRST+1). */
+ 
+	if(FIRST >= 25)fBUG(29);
+	global PARMS[FIRST]=P1;
+	global PARMS[FIRST + 1]=P2;
+}
+
+
+
+function fGETIN(pointer wORD1,pointer wORD1X,pointer wORD2,pointer wORD2X)
+locals int JUNK
+{
+
+	/*  GET A COMMAND FROM THE ADVENTURER.  SNARF OUT THE FIRST WORD, PAD IT WITH
+	 *  BLANKS, AND RETURN IT IN WORD1.  CHARS 6 THRU 10 ARE RETURNED IN WORD1X, IN
+	 *  CASE WE NEED TO PRINT OUT THE WHOLE WORD IN AN ERROR MESSAGE.  ANY NUMBER OF
+	 *  BLANKS MAY FOLLOW THE WORD.  IF A SECOND WORD APPEARS, IT IS RETURNED IN
+	 *  WORD2 (CHARS 6 THRU 10 IN WORD2X), ELSE WORD2 IS -1. */
+
+L10:
+	do {
+		if(global BLKLIN != FALSE)fTYPE0();
+		fMAPLIN(FALSE);
+		(*wORD1)=fGETTXT(TRUE,TRUE,TRUE,0);
+	} while (global BLKLIN != FALSE && (int)(*wORD1) < 0);
+	(*wORD1X)=fGETTXT(FALSE,TRUE,TRUE,0);
+	do {
+		JUNK=(int)fGETTXT(FALSE,TRUE,TRUE,0);
+	} while (JUNK > 0);
+	(*wORD2)=fGETTXT(TRUE,TRUE,TRUE,0);
+	(*wORD2X)=fGETTXT(FALSE,TRUE,TRUE,0);
+	do {
+		JUNK=(int)fGETTXT(FALSE,TRUE,TRUE,0);
+	} while (JUNK > 0);
+	if((int)fGETTXT(TRUE,TRUE,TRUE,0) <= 0)goto return;
+	fRSPEAK(53);
+	goto L10;
+return: ;
+}
+
+function fYES(int X,int Y,int Z)
+returns int YES
+locals int REPLY, int JUNK1, int JUNK2, int JUNK3
+{
+	/*  PRINT MESSAGE X, WAIT FOR YES/NO ANSWER.  IF YES, PRINT Y AND RETURN TRUE;
+	 *  IF NO, PRINT Z AND RETURN FALSE. */
+
+L1:
+	fRSPEAK(X);
+	fGETIN(&REPLY,&JUNK1,&JUNK2,&JUNK3);
+	if(REPLY == (int)fMAKEWD(250519) || REPLY == (int)fMAKEWD(25)) {
+		YES=TRUE;
+		fRSPEAK(Y);
+		goto return;
+	}
+	if(REPLY == (int)fMAKEWD(1415) || REPLY == (int)fMAKEWD(14)) {
+		YES=FALSE;
+		fRSPEAK(Z);
+		goto return;
+	}
+	fRSPEAK(185);
+	goto L1;
+return: ;
+}
+
+/*
+ * SCORING AND WRAP-UP
+ */
+
+function score(int MODE)
+locals int I, int K
+{
+	/* MODE <0 if scoring, >0 if quitting, =0 if died or won */
+
+	/*  THE PRESENT SCORING ALGORITHM IS AS FOLLOWS:
+	 *     OBJECTIVE:          POINTS:        PRESENT TOTAL POSSIBLE:
+	 *  GETTING WELL INTO CAVE   25                    25
+	 *  EACH TREASURE < CHEST    12                    60
+	 *  TREASURE CHEST ITSELF    14                    14
+	 *  EACH TREASURE > CHEST    16                   224
+	 *  SURVIVING             (MAX-NUM)*10             30
+	 *  NOT QUITTING              4                     4
+	 *  REACHING "CLOSNG"        25                    25
+	 *  "CLOSED": QUIT/KILLED    10
+	 *            KLUTZED        25
+	 *            WRONG WAY      30
+	 *            SUCCESS        45                    45
+	 *  CAME TO WITT'S END        1                     1
+	 *  ROUND OUT THE TOTAL       2                     2
+	 *                                       TOTAL:   430
+	 *  POINTS CAN ALSO BE DEDUCTED FOR USING HINTS OR TOO MANY TURNS, OR FOR
+	 *  SAVING INTERMEDIATE POSITIONS. */
+
+	global SCORE=0;
+	global MXSCOR=0;
+
+	/*  FIRST TALLY UP THE TREASURES.  MUST BE IN BUILDING AND NOT BROKEN.
+	 *  GIVE THE POOR GUY 2 POINTS JUST FOR FINDING EACH TREASURE. */
+
+	for (I=50 to MAXTRS+1) {
+		if((int)global PTEXT[I] != 0) {
+			K=12;
+			if(I == CHEST)K=14;
+			if(I > CHEST)K=16;
+			if((int)global PROP[I] >= 0)global SCORE=global SCORE+2;
+			if((int)global PLACE[I] == 3 && (int)global PROP[I] == 0)global SCORE=global SCORE+K-2;
+			global MXSCOR=global MXSCOR+K;
+		}
+	} /* end loop */
+
+/*  NOW LOOK AT HOW HE FINISHED AND HOW FAR HE GOT.  MAXDIE AND NUMDIE TELL US
+ *  HOW WELL HE SURVIVED.  DFLAG WILL
+ *  TELL US IF HE EVER GOT SUITABLY DEEP INTO THE CAVE.  CLOSNG STILL INDICATES
+ *  WHETHER HE REACHED THE ENDGAME.  AND IF HE GOT AS FAR AS "CAVE CLOSED"
+ *  (INDICATED BY "CLOSED"), THEN BONUS IS ZERO FOR MUNDANE EXITS OR 133, 134,
+ *  135 IF HE BLEW IT (SO TO SPEAK). */
+
+	global SCORE=global SCORE+(global MAXDIE-global NUMDIE)*10;
+	global MXSCOR=global MXSCOR+global MAXDIE*10;
+	if(MODE == 0)global SCORE=global SCORE+4;
+	global MXSCOR=global MXSCOR+4;
+	if(global DFLAG != 0)global SCORE=global SCORE+25;
+	global MXSCOR=global MXSCOR+25;
+	if(global CLOSNG != FALSE)global SCORE=global SCORE+25;
+	global MXSCOR=global MXSCOR+25;
+	if(global CLOSED != FALSE) {
+		if(global BONUS == 0)global SCORE=global SCORE+10;
+		if(global BONUS == 135)global SCORE=global SCORE+25;
+		if(global BONUS == 134)global SCORE=global SCORE+30;
+		if(global BONUS == 133)global SCORE=global SCORE+45;
+	}
+	global MXSCOR=global MXSCOR+45;
+
+/*  DID HE COME TO WITT'S END AS HE SHOULD? */
+
+	if((int)global PLACE[MAGZIN] == 108)global SCORE=global SCORE+1;
+	global MXSCOR=global MXSCOR+1;
+
+/*  ROUND IT OFF. */
+
+	global SCORE=global SCORE+2;
+	global MXSCOR=global MXSCOR+2;
+
+/*  DEDUCT FOR HINTS/TURNS/SAVES.  HINTS < 4 ARE SPECIAL; SEE DATABASE DESC. */
+
+	for (I=1 to HNTMAX+1) {
+		if((int)global HINTED[I] != 0)global SCORE=global SCORE-(int)global HINTS[I * 5 + 2];
+	} /* end loop */
+	if(global NOVICE != FALSE)global SCORE=global SCORE-5;
+	if(global CLSHNT != FALSE)global SCORE=global SCORE-10;
+	global SCORE=global SCORE-global TRNLUZ-global SAVED;
+
+/*  RETURN TO global SCORE COMMAND IF THAT'S WHERE WE CAME FROM. */
+
+	if(MODE < 0) goto return;
+
+/*  THAT SHOULD BE GOOD ENOUGH.  LET'S TELL HIM ALL ABOUT IT. */
+
+	if(global SCORE+global TRNLUZ+1 >= global MXSCOR && global TRNLUZ != 0)fRSPEAK(242);
+	if(global SCORE+global SAVED+1 >= global MXSCOR && global SAVED != 0)fRSPEAK(143);
+	fSETPRM(1,global SCORE,global MXSCOR);
+	fSETPRM(3,global TURNS,global TURNS);
+	fRSPEAK(262);
+	for (I=1 to CLSSES+1) {
+		if((int)global CVAL[I] >= global SCORE) {
+			fSPEAK(global CTEXT[I]);
+			global SPK=264;
+			if(I < CLSSES) {
+				I=(int)global CVAL[I]+1-global SCORE;
+				fSETPRM(1,I,I);
+				global SPK=263;
+			}
+			fRSPEAK(global SPK);
+			exit(0);
+		}
+	} /* end loop */
+	global SPK=265;
+	fRSPEAK(global SPK);
+	exit(0);
+
+return: ;
+}
+
+/*  DATA STRUC. ROUTINES (VOCAB, DSTROY, JUGGLE, MOVE, PUT, CARRY, DROP, ATDWRF) */
+
+function fVOCAB(int ID,int INIT)
+returns int VOCAB
+locals int HASH, int I
+{
+	/*  LOOK UP ID IN THE VOCABULARY (ATAB) AND RETURN ITS "DEFINITION" (KTAB), OR
+	 *  -1 IF NOT FOUND.  IF INIT IS POSITIVE, THIS IS AN INITIALISATION CALL SETTING
+	 *  UP A KEYWORD VARIABLE, AND NOT FINDING IT CONSTITUTES A BUG.  IT ALSO MEANS
+	 *  THAT ONLY KTAB VALUES WHICH TAKEN OVER 1000 EQUAL INIT MAY BE CONSIDERED.
+	 *  (THUS "STEPS", WHICH IS A MOTION VERB AS WELL AS AN OBJECT, MAY BE LOCATED
+	 *  AS AN OBJECT.)  AND IT ALSO MEANS THE KTAB VALUE IS TAKEN MOD 1000. */
+
+	HASH=10000;
+	for (I=1 to TABSIZ+1) {
+		if((int)global KTAB[I] == -1) {
+			VOCAB= -1;
+			if(INIT < 0) goto return;
+			fBUG(5);
+		}
+		HASH=HASH+7;
+		if(!(INIT >= 0 && (int)global KTAB[I]/1000 != INIT)) {
+			if((int)global ATAB[I] == ID+HASH*HASH) {
+				VOCAB=(int)global KTAB[I];
+				if(INIT >= 0)VOCAB=((VOCAB)%1000);
+				goto return;
+			}
+		}
+	} /* end loop */
+	fBUG(21);
+return: ;
+}
+
+function fCARRY(int OBJECT,int WHERE)
+locals int TEMP
+{
+	/*  START TOTING AN OBJECT, REMOVING IT FROM THE LIST OF THINGS AT ITS FORMER
+	 *  LOCATION.  INCR HOLDNG UNLESS IT WAS ALREADY BEING TOTED.  IF OBJECT>100
+	 *  (MOVING "FIXED" SECOND LOC), DON'T CHANGE PLACE OR HOLDNG. */
+
+	if(OBJECT <= 100) {
+		if((int)global PLACE[OBJECT] == -1) goto return;
+		global PLACE[OBJECT]= -1;
+		global HOLDNG=global HOLDNG+1;
+	}
+	if((int)global ATLOC[WHERE] == OBJECT) {
+		global ATLOC[WHERE]=global LINK[OBJECT];
+		goto return;
+	}
+	TEMP=(int)global ATLOC[WHERE];
+	while ((int)global LINK[TEMP] != OBJECT) {
+		TEMP=(int)global LINK[TEMP];
+	}
+	global LINK[TEMP]=global LINK[OBJECT];
+return: ;
+}
+
+function fDROP(int OBJECT,int WHERE) {
+	/*  PLACE AN OBJECT AT A GIVEN LOC, PREFIXING IT ONTO THE ATLOC LIST.  DECR
+	 *  HOLDNG IF THE OBJECT WAS BEING TOTED. */
+
+	if(OBJECT <= 100) {
+		if((int)global PLACE[OBJECT] == -1)global HOLDNG=global HOLDNG-1;
+		global PLACE[OBJECT]=WHERE;
+	} else {
+		global FIXED[OBJECT-100]=WHERE;
+	}
+	if(WHERE > 0) {
+		global LINK[OBJECT]=global ATLOC[WHERE];
+		global ATLOC[WHERE]=OBJECT;
+	}
+}
+
+function fMOVE(int OBJECT,int WHERE)
+locals int FROM
+{
+	/*  PLACE ANY OBJECT ANYWHERE BY PICKING IT UP AND DROPPING IT.  MAY ALREADY BE
+	 *  TOTING, IN WHICH CASE THE CARRY IS A NO-OP.  MUSTN'T PICK UP OBJECTS WHICH
+	 *  ARE NOT AT ANY LOC, SINCE CARRY WANTS TO REMOVE OBJECTS FROM ATLOC CHAINS. */
+
+	if(OBJECT <= 100) {
+		FROM=(int)global PLACE[OBJECT];
+	} else {
+		FROM=(int)global FIXED[OBJECT-100];
+	}
+	if(FROM > 0 && FROM <= 300)fCARRY(OBJECT,FROM);
+	fDROP(OBJECT,WHERE);
+}
+
+function fDSTROY(int OBJECT) {
+	/*  PERMANENTLY ELIMINATE "OBJECT" BY MOVING TO A NON-EXISTENT LOCATION. */
+
+	fMOVE(OBJECT,0);
+}
+
+function fJUGGLE(int OBJECT)
+locals int I, int J
+{
+	/*  JUGGLE AN OBJECT BY PICKING IT UP AND PUTTING IT DOWN AGAIN, THE PURPOSE
+	 *  BEING TO GET THE OBJECT TO THE FRONT OF THE CHAIN OF THINGS AT ITS LOC. */
+	 
+	I=(int)global PLACE[OBJECT];
+	J=(int)global FIXED[OBJECT];
+	fMOVE(OBJECT,I);
+	fMOVE(OBJECT+100,J);
+}
+
+function fPUT(int OBJECT,int WHERE,int PVAL)
+returns int PUT
+{
+	/*  PUT IS THE SAME AS MOVE, EXCEPT IT RETURNS A VALUE USED TO SET UP THE
+	 *  NEGATED PROP VALUES FOR THE REPOSITORY OBJECTS. */
+
+	fMOVE(OBJECT,WHERE);
+	PUT=(-1)-PVAL;
+}
+
+function fATDWRF(int WHERE)
+returns int ATDWRF
+locals int I
+{
+	/*  RETURN THE INDEX OF FIRST DWARF AT THE GIVEN LOCATION, ZERO IF NO DWARF IS
+	 *  THERE (OR IF DWARVES NOT ACTIVE YET), -1 IF ALL DWARVES ARE DEAD.  IGNORE
+	 *  THE PIRATE (6TH DWARF). */
+
+	ATDWRF=0;
+	if(global DFLAG < 2) goto return;
+	ATDWRF= -1;
+	for (I=1 to 5+1) {
+		if((int)global DLOC[I] == WHERE) {
+			ATDWRF=I;
+			goto return;
+		}
+		if((int)global DLOC[I] != 0)ATDWRF=0;
+	} /* end loop */
+return: ;
+}
+
+function fRNDVOC(int CHAR,int FORCE)
+returns int RNDVOC
+locals int DIV, int I, int J
+{
+	/*  SEARCHES THE VOCABULARY FOR A WORD WHOSE SECOND CHARACTER IS CHAR, AND
+	 *  CHANGES THAT WORD SUCH THAT EACH OF THE OTHER FOUR CHARACTERS IS A
+	 *  RANDOM LETTER.  IF FORCE IS NON-ZERO, IT IS USED AS THE NEW WORD.
+	 *  RETURNS THE NEW WORD. */
+
+	RNDVOC=FORCE;
+	if(RNDVOC == 0) {
+		for (I=1 to 5+1) {
+			J=11+(int)fRAN(26);
+			if(I == 2)J=CHAR;
+			RNDVOC=RNDVOC*64+J;
+		} /* end loop */
+	}
+	J=10000;
+	DIV=64*64*64;
+	for (I=1 to TABSIZ+1) {
+		J=J+7;
+		if(((((int)global ATAB[I]-J*J)/DIV)%64) == CHAR) {
+			(int)global ATAB[I]=RNDVOC+J*J;
+			goto return;
+		}
+	} /* end loop */
+	fBUG(5);
+return: ;
+}
+
+/*  FINISH CONSTRUCTING INTERNAL DATA FORMAT */
+
+/*  HAVING READ IN THE DATABASE, CERTAIN THINGS ARE NOW CONSTRUCTED.  PROPS ARE
+ *  SET TO ZERO.  WE FINISH SETTING UP COND BY CHECKING FOR FORCED-MOTION TRAVEL
+ *  ENTRIES.  THE PLAC AND FIXD ARRAYS ARE USED TO SET UP ATLOC(N) AS THE FIRST
+ *  OBJECT AT LOCATION N, AND LINK(OBJ) AS THE NEXT OBJECT AT THE SAME LOCATION
+ *  AS OBJ.  (OBJ>100 INDICATES THAT FIXED(OBJ-100)=LOC; LINK(OBJ) IS STILL THE
+ *  CORRECT LINK TO USE.)  ABB IS ZEROED; IT CONTROLS WHETHER THE ABBREVIATED
+ *  DESCRIPTION IS PRINTED.  COUNTS MOD 5 UNLESS "LOOK" IS USED. */
+
+function initialise()
+locals int I, int K
+{
+	for (I=1 to 100+1) {
+		global PLACE[I]=0;
+		global PROP[I]=0;
+		global LINK[I]=0;
+		global LINK[I + 100]=0;
+	} /* end loop */
+
+	for (I=1 to LOCSIZ+1) {
+		global ABB[I]=0;
+		if(!((int)global LTEXT[I] == 0 || (int)global KEY[I] == 0)) {
+			K=(int)global KEY[I];
+			if(((abs((int)global TRAVEL[K]))%1000) == 1)global COND[I]=2;
+		}
+		global ATLOC[I]=0;
+	} /* end loop */
+
+	/*  SET UP THE ATLOC AND LINK ARRAYS AS DESCRIBED ABOVE.  WE'LL USE THE DROP
+	 *  SUBROUTINE, WHICH PREFACES NEW OBJECTS ON THE LISTS.  SINCE WE WANT THINGS
+	 *  IN THE OTHER ORDER, WE'LL RUN THE LOOP BACKWARDS.  IF THE OBJECT IS IN TWO
+	 *  LOCS, WE DROP IT TWICE.  THIS ALSO SETS UP "PLACE" AND "FIXED" AS COPIES OF
+	 *  "PLAC" AND "FIXD".  ALSO, SINCE TWO-PLACED OBJECTS ARE TYPICALLY BEST
+	 *  DESCRIBED LAST, WE'LL DROP THEM FIRST. */
+
+	for (I=1 to 100+1) {
+		K=101-I;
+		if(!((int)global FIXD[K] <= 0)) {
+			fDROP(K+100,global FIXD[K]);
+			fDROP(K,global PLAC[K]);
+		}
+	} /* end loop */
+
+	for (I=1 to 100+1) {
+		K=101-I;
+		global FIXED[K]=global FIXD[K];
+		if((int)global PLAC[K] != 0 && (int)global FIXD[K] <= 0)fDROP(K,global PLAC[K]);
+	} /* end loop */
+
+	/*  TREASURES, AS NOTED EARLIER, ARE OBJECTS 50 THROUGH MAXTRS (CURRENTLY 79).
+	 *  THEIR PROPS ARE INITIALLY -1, AND ARE SET TO 0 THE FIRST TIME THEY ARE
+	 *  DESCRIBED.  TALLY KEEPS TRACK OF HOW MANY ARE NOT YET FOUND, SO WE KNOW
+	 *  WHEN TO CLOSE THE CAVE. */
+
+//	MAXTRS=79;
+	global TALLY=0;
+	for (I=50 to MAXTRS+1) {
+		if((int)global PTEXT[I] != 0)global PROP[I]= -1;
+		global TALLY=global TALLY-(int)global PROP[I];
+	} /* end loop */
+
+/*  CLEAR THE HINT STUFF.  HINTLC(I) IS HOW LONG HE'S BEEN AT LOC WITH COND BIT
+ *  I.  HINTED(I) IS TRUE IFF HINT I HAS BEEN USED. */
+
+	for (I=1 to HNTMAX+1) {
+		global HINTED[I]=FALSE;
+		global HINTLC[I]=0;
+	} /* end loop */
+	
+	/*  INITIALISE THE DWARVES.  DLOC IS LOC OF DWARVES, HARD-WIRED IN.  ODLOC IS
+	 *  PRIOR LOC OF EACH DWARF, INITIALLY GARBAGE.  DALTLC IS ALTERNATE INITIAL LOC
+	 *  FOR DWARF, IN CASE ONE OF THEM STARTS OUT ON TOP OF THE ADVENTURER.  (NO 2
+	 *  OF THE 5 INITIAL LOCS ARE ADJACENT.)  DSEEN IS TRUE IF DWARF HAS SEEN HIM.
+	 *  DFLAG CONTROLS THE LEVEL OF ACTIVATION OF ALL THIS:
+	 *	0	NO DWARF STUFF YET (WAIT UNTIL REACHES HALL OF MISTS)
+	 *	1	REACHED HALL OF MISTS, BUT HASN'T MET FIRST DWARF
+	 *	2	MET FIRST DWARF, OTHERS START MOVING, NO KNIVES THROWN YET
+	 *	3	A KNIFE HAS BEEN THROWN (FIRST SET ALWAYS MISSES)
+	 *	3+	DWARVES ARE MAD (INCREASES THEIR ACCURACY)
+	 *  SIXTH DWARF IS SPECIAL (THE PIRATE).  HE ALWAYS STARTS AT HIS CHEST'S
+	 *  EVENTUAL LOCATION INSIDE THE MAZE.  THIS LOC IS SAVED IN CHLOC FOR REF.
+	 *  THE DEAD END IN THE OTHER MAZE HAS ITS LOC STORED IN CHLOC2. */
+
+//	CHLOC=114;
+//	CHLOC2=140;
+	for (I=1 to 6+1) {
+		global DSEEN[I]=FALSE;
+	} /* end loop */
+	global DFLAG=0;
+	global DLOC[1]=19;
+	global DLOC[2]=27;
+	global DLOC[3]=33;
+	global DLOC[4]=44;
+	global DLOC[5]=64;
+	global DLOC[6]=CHLOC;
+
+	/*  OTHER RANDOM FLAGS AND COUNTERS, AS FOLLOWS:
+	 *	ABBNUM	HOW OFTEN WE SHOULD PRINT NON-ABBREVIATED DESCRIPTIONS
+	 *	BONUS	USED TO DETERMINE AMOUNT OF BONUS IF HE REACHES CLOSING
+	 *	CLOCK1	NUMBER OF TURNS FROM FINDING LAST TREASURE TILL CLOSING
+	 *	CLOCK2	NUMBER OF TURNS FROM FIRST WARNING TILL BLINDING FLASH
+	 *	CONDS	MIN VALUE FOR COND(LOC) IF LOC HAS ANY HINTS
+	 *	DETAIL	HOW OFTEN WE'VE SAID "NOT ALLOWED TO GIVE MORE DETAIL"
+	 *	DKILL	NUMBER OF DWARVES KILLED (UNUSED IN SCORING, NEEDED FOR MSG)
+	 *	FOOBAR	CURRENT PROGRESS IN SAYING "FEE FIE FOE FOO".
+	 *	HOLDNG	NUMBER OF OBJECTS BEING CARRIED
+	 *	IGO	HOW MANY TIMES HE'S SAID "GO XXX" INSTEAD OF "XXX"
+	 *	IWEST	HOW MANY TIMES HE'S SAID "WEST" INSTEAD OF "W"
+	 *	KNFLOC	0 IF NO KNIFE HERE, LOC IF KNIFE HERE, -1 AFTER CAVEAT
+	 *	LIMIT	LIFETIME OF LAMP (NOT SET HERE)
+	 *	MAXDIE	NUMBER OF REINCARNATION MESSAGES AVAILABLE (UP TO 5)
+	 *	NUMDIE	NUMBER OF TIMES KILLED SO FAR
+	 *	THRESH	NEXT #TURNS THRESHHOLD (-1 IF NONE)
+	 *	TRNDEX	INDEX IN TRNVAL OF NEXT THRESHHOLD (SECTION 14 OF DATABASE)
+	 *	TRNLUZ	# POINTS LOST SO FAR DUE TO NUMBER OF TURNS USED
+	 *	TURNS	TALLIES HOW MANY COMMANDS HE'S GIVEN (IGNORES YES/NO)
+	 *	LOGICALS WERE EXPLAINED EARLIER */
+
+	global THRESH= -1;
+	if(TRNVLS > 0)global THRESH=(((int)global TRNVAL[1])%100000)+1;
+	for (I=0 to 4+1) {
+		if((int)global RTEXT[2*I+81] != 0)global MAXDIE=I+1;
+	} /* end loop */
+}
+
+/* @@@ */
+
+function TOTING(int OBJ) returns int r { r = FALSE; if ((int)global PLACE[OBJ] == -1) r = TRUE; }
+function AT(int OBJ, int LOC) returns int r { r = FALSE; if ((int)global PLACE[OBJ] == LOC || (int)global FIXED[OBJ] == LOC) r = TRUE; }
+function HERE(int OBJ, int LOC) returns int r { r = FALSE; if (((int)AT(OBJ, LOC) | (int)TOTING(OBJ)) != FALSE) r = TRUE; }
+function LIQ2(int PBOTL) returns int r { r = ((1-(PBOTL))*WATER+((PBOTL)/2)*(WATER+OIL)); }
+function LIQ() returns int r { if ((int)global PROP[BOTTLE]<0) r = -1-(int)global PROP[BOTTLE]; else r = (int)global PROP[BOTTLE]; r = (int)LIQ2(r); }
+function LIQLOC(int LOC) returns int r { r = (int)LIQ2(((((int)global COND[LOC]/2*2)%8)-5)*(((int)global COND[LOC]/4)%2)+1); }
+function CNDBIT(int L, int N) returns int r { r = FALSE; if (((int)global COND[L] & (1 << N)) != 0) r = TRUE; }
+function DARK(int LOC) returns int r { r = FALSE; if (((int)CNDBIT(LOC,0) == FALSE) && ((int)global PROP[LAMP] == 0 || (int)HERE(LAMP, LOC) == FALSE)) r = TRUE; }
+function GSTONE(int OBJ) returns int r { r = FALSE; if ((OBJ) == EMRALD || (OBJ) == RUBY || (OBJ) == AMBER || (OBJ) == SAPPH) r = TRUE; }
+function FOREST(int LOC) returns int r { r = FALSE; if ((LOC) >= 145 && (LOC) <= 166) r = TRUE; }
+
+/*  THE FOLLOWING TWO FUNCTIONS WERE ADDED TO FIX A BUG (CLOCK1 DECREMENTED
+ *  WHILE IN FOREST).  THEY SHOULD PROBABLY BE REPLACED BY USING ANOTHER
+ *  "COND" BIT.  FOR NOW, HOWEVER, A QUICK FIX...  OUTSID(LOC) IS TRUE IF
+ *  LOC IS OUTSIDE, INDEEP(LOC) IS TRUE IF LOC IS "DEEP" IN THE CAVE (HALL
+ *  OF MISTS OR DEEPER).  NOTE SPECIAL KLUDGES FOR "FOOF" LOCS. */
+
+function OUTSID(int LOC) returns int r { r = FALSE; if ((LOC) <= 8 || (int)FOREST(LOC) != FALSE || (LOC) == (int)global PLAC[SAPPH] || (LOC) == 180 || (LOC) == 182) r = TRUE; }
+function INDEEP(int LOC) returns int r { r = FALSE; if ((LOC) >= 15 && (int)OUTSID(LOC) == FALSE && (LOC) != 179) r = TRUE; }
+
+/*  DISCARD OBJECT.  "THROW" ALSO COMES HERE FOR MOST OBJECTS.  SPECIAL CASES FOR
+ *  BIRD (MIGHT ATTACK SNAKE OR DRAGON) AND CAGE (MIGHT CONTAIN BIRD) AND VASE.
+ *  DROP COINS AT VENDING MACHINE FOR EXTRA BATTERIES. */
+
+function discard(int just_do_it)
+returns int goValue
+locals int lK, int lLOC, int lOBJ
+{
+	lLOC = global gLOC;
+	lOBJ = global gOBJ;
+	if(just_do_it == FALSE) {
+		if((int)TOTING(ROD2) != FALSE && lOBJ == ROD && (int)TOTING(ROD) == FALSE) { lOBJ=ROD2; global gOBJ = lOBJ; }
+		if((int)TOTING(lOBJ) == FALSE) { goValue = GOTO2011; goto return; }
+		else if(!(lOBJ != BIRD || (int)HERE(SNAKE, lLOC) == FALSE)) {
+			fRSPEAK(30);
+			if(global CLOSED != FALSE) { goValue = GOTO19000; goto return; }
+			fDSTROY(SNAKE);
+		/*  SET PROP FOR USE BY TRAVEL OPTIONS */
+			global PROP[SNAKE]=1;
+		} else if(!(!((int)GSTONE(lOBJ) != FALSE && (int)AT(CAVITY, lLOC) != FALSE && (int)global PROP[CAVITY] != 0))) {
+			fRSPEAK(218);
+			global PROP[lOBJ]=1;
+			global PROP[CAVITY]=0;
+			if(!((int)HERE(RUG, lLOC) == FALSE || !((lOBJ == EMRALD && (int)global PROP[RUG] != 2) || (lOBJ == RUBY && (int)global PROP[RUG] == 2)))) {
+				global SPK=219;
+				if((int)TOTING(RUG) != FALSE)global SPK=220;
+				if(lOBJ == RUBY)global SPK=221;
+				fRSPEAK(global SPK);
+				if(!(global SPK == 220)) {
+					lK=2-(int)global PROP[RUG];
+					global PROP[RUG]=lK;
+					if(lK == 2) lK=(int)global PLAC[SAPPH];
+					fMOVE(RUG+100,lK);
+				}
+			}
+		} else if(!(lOBJ != COINS || (int)HERE(VEND, lLOC) == FALSE)) {
+			fDSTROY(COINS);
+			fDROP(BATTER,lLOC);
+			fPSPEAK(BATTER,0);
+			{ goValue = GOTO2012; goto return; }
+		} else if(!(lOBJ != BIRD || (int)AT(DRAGON, lLOC) == FALSE || (int)global PROP[DRAGON] != 0)) {
+			fRSPEAK(154);
+			fDSTROY(BIRD);
+			global PROP[BIRD]=0;
+			{ goValue = GOTO2012; goto return; }
+		} else if(!(lOBJ != BEAR || (int)AT(TROLL, lLOC) == FALSE)) {
+			fRSPEAK(163);
+			fMOVE(TROLL,0);
+			fMOVE(TROLL+100,0);
+			fMOVE(TROLL2,global PLAC[TROLL]);
+			fMOVE(TROLL2+100,global FIXD[TROLL]);
+			fJUGGLE(CHASM);
+			global PROP[TROLL]=2;
+		} else if(!(lOBJ == VASE && lLOC != (int)global PLAC[PILLOW])) {
+			fRSPEAK(54);
+		} else {
+			global PROP[VASE]=2;
+			if((int)AT(PILLOW, lLOC) != FALSE)global PROP[VASE]=0;
+			fPSPEAK(VASE,(int)global PROP[VASE]+1);
+			if((int)global PROP[VASE] != 0)global FIXED[VASE]= -1;
+		}
+	}
+
+	lK=(int)LIQ(); global gK = lK;
+	if(lK == lOBJ) { lOBJ=BOTTLE; global gOBJ = BOTTLE; }
+	if(lOBJ == BOTTLE && lK != 0)global PLACE[lK]=0;
+	if(lOBJ == CAGE && (int)global PROP[BIRD] == 1)fDROP(BIRD,lLOC);
+	fDROP(lOBJ,lLOC);
+	if(lOBJ != BIRD) { goValue = GOTO2012; goto return; }
+	global PROP[BIRD]=0;
+	if((int)FOREST(lLOC) != FALSE)global PROP[BIRD]=2;
+	{ goValue = GOTO2012; goto return; }
+return: ;
+}
+
+/*  FILL.  BOTTLE OR URN MUST BE EMPTY, AND LIQUID AVAILABLE.  (VASE IS NASTY.) */
+
+function fill(int OBJ)
+returns int goValue
+locals int lK, int lLOC
+{
+	lLOC = global gLOC;
+	if(OBJ != VASE) {
+		if(OBJ == URN) {
+			global SPK=213;
+			if((int)global PROP[URN] != 0) { goValue = GOTO2011; goto return; }
+			global SPK=144;
+			lK=(int)LIQ(); global gK = lK;
+			if(lK == 0 || (int)HERE(BOTTLE, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+			global PLACE[lK]=0;
+			global PROP[BOTTLE]=1;
+			if(lK == OIL)global PROP[URN]=1;
+			global SPK=211+(int)global PROP[URN];
+			{ goValue = GOTO2011; goto return; }
+		}
+		if(OBJ != 0 && OBJ != BOTTLE) { goValue = GOTO2011; goto return; }
+		if(OBJ == 0 && (int)HERE(BOTTLE, lLOC) == FALSE) { goValue = GOTO8000; goto return; }
+		global SPK=107;
+		if((int)LIQLOC(lLOC) == 0)global SPK=106;
+		if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] != 0)global SPK=214;
+		if((int)LIQ() != 0)global SPK=105;
+		if(global SPK != 107) { goValue = GOTO2011; goto return; }
+		global PROP[BOTTLE]=(((int)global COND[lLOC])%4)/2*2;
+		lK=(int)LIQ(); global gK = lK;
+		if((int)TOTING(BOTTLE) != FALSE)global PLACE[lK]= -1;
+		if(lK == OIL)global SPK=108;
+		{ goValue = GOTO2011; goto return; }
+	} else {
+		global SPK=29;
+		if((int)LIQLOC(lLOC) == 0)global SPK=144;
+		if((int)LIQLOC(lLOC) == 0 || (int)TOTING(VASE) == FALSE) { goValue = GOTO2011; goto return; }
+		fRSPEAK(145);
+		global PROP[VASE]=2;
+		global FIXED[VASE]= -1;
+		{ goValue = (int)discard(TRUE); goto return; }
+	}
+return: ;
+}
+
+/*  CARRY AN OBJECT.  SPECIAL CASES FOR BIRD AND CAGE (IF BIRD IN CAGE, CAN'T
+ *  TAKE ONE WITHOUT THE OTHER).  LIQUIDS ALSO SPECIAL, SINCE THEY DEPEND ON
+ *  STATUS OF BOTTLE.  ALSO VARIOUS SIDE EFFECTS, ETC. */
+
+function carry()
+returns int goValue
+locals int lK, int lLOC, int lOBJ
+{
+	lK = global gK;
+	lOBJ = global gOBJ;
+	lLOC = global gLOC;
+	if((int)TOTING(lOBJ) != FALSE) { goValue = GOTO2011; goto return; }
+	global SPK=25;
+	if(lOBJ == PLANT && (int)global PROP[PLANT] <= 0)global SPK=115;
+	if(lOBJ == BEAR && (int)global PROP[BEAR] == 1)global SPK=169;
+	if(lOBJ == CHAIN && (int)global PROP[BEAR] != 0)global SPK=170;
+	if(lOBJ == URN)global SPK=215;
+	if(lOBJ == CAVITY)global SPK=217;
+	if(lOBJ == BLOOD)global SPK=239;
+	if(lOBJ == RUG && (int)global PROP[RUG] == 2)global SPK=222;
+	if(lOBJ == gSIGN)global SPK=196;
+	if(lOBJ == MESSAG) {
+		global SPK=190;
+		fDSTROY(MESSAG);
+	}
+	if((int)global FIXED[lOBJ] != 0) { goValue = GOTO2011; goto return; }
+	if(!(lOBJ != WATER && lOBJ != OIL)) {
+		lK=lOBJ; global gK = lOBJ;
+		lOBJ=BOTTLE; global gOBJ = BOTTLE;
+		if(!((int)HERE(BOTTLE, lLOC) != FALSE && (int)LIQ() == lK)) {
+			if((int)TOTING(BOTTLE) != FALSE && (int)global PROP[BOTTLE] == 1) { goValue = (int)fill(lOBJ); goto return; }
+			if((int)global PROP[BOTTLE] != 1)global SPK=105;
+			if((int)TOTING(BOTTLE) == FALSE)global SPK=104;
+			{ goValue = GOTO2011; goto return; }
+		}
+	}
+	global SPK=92;
+	if(global HOLDNG >= 7) { goValue = GOTO2011; goto return; }
+	if(!(lOBJ != BIRD || (int)global PROP[BIRD] == 1 || -1-(int)global PROP[BIRD] == 1)) {
+		if((int)global PROP[BIRD] == 2) {
+			global SPK=238;
+			fDSTROY(BIRD);
+			{ goValue = GOTO2011; goto return; }
+		}
+		if((int)TOTING(CAGE) == FALSE)global SPK=27;
+		if((int)TOTING(ROD) != FALSE)global SPK=26;
+		if(global SPK/2 == 13) { goValue = GOTO2011; goto return; }
+		global PROP[BIRD]=1;
+	}
+	if((lOBJ == BIRD || lOBJ == CAGE) && ((int)global PROP[BIRD] == 1 || -1-(int)global PROP[BIRD] == 1))fCARRY(BIRD+CAGE-lOBJ,lLOC);
+	fCARRY(lOBJ,lLOC);
+	lK=(int)LIQ(); global gK = lK;
+	if(lOBJ == BOTTLE && lK != 0)global PLACE[lK]= -1;
+	if((int)GSTONE(lOBJ) == FALSE || (int)global PROP[lOBJ] == 0) { goValue = GOTO2009; goto return; }
+	global PROP[lOBJ]=0;
+	global PROP[CAVITY]=1;
+	{ goValue = GOTO2009; goto return; }
+return: ;
+}
+
+/*  ATTACK.  ASSUME TARGET IF UNAMBIGUOUS.  "THROW" ALSO LINKS HERE.  ATTACKABLE
+ *  OBJECTS FALL INTO TWO CATEGORIES: ENEMIES (SNAKE, DWARF, ETC.)  AND OTHERS
+ *  (BIRD, CLAM, MACHINE).  AMBIGUOUS IF 2 ENEMIES, OR NO ENEMIES BUT 2 OTHERS. */
+
+function attack()
+returns int goValue
+locals int I, int lK, int lLOC, int lOBJ
+{
+	lLOC = global gLOC;
+	lOBJ = global gOBJ;
+	I=(int)fATDWRF(lLOC);
+	if(lOBJ == 0) {
+		if(I > 0) { lOBJ = DWARF; global gOBJ = DWARF; }
+		if((int)HERE(SNAKE, lLOC) != FALSE) { lOBJ=lOBJ*100+SNAKE; global gOBJ = lOBJ; }
+		if((int)AT(DRAGON, lLOC) != FALSE && (int)global PROP[DRAGON] == 0) { lOBJ=lOBJ*100+DRAGON; global gOBJ = lOBJ; }
+		if((int)AT(TROLL, lLOC) != FALSE) { lOBJ=lOBJ*100+TROLL; global gOBJ = lOBJ; }
+		if((int)AT(OGRE, lLOC) != FALSE) { lOBJ=lOBJ*100+OGRE; global gOBJ = lOBJ; }
+		if((int)HERE(BEAR, lLOC) != FALSE && (int)global PROP[BEAR] == 0) { lOBJ=lOBJ*100+BEAR; global gOBJ = lOBJ; }
+		if(lOBJ > 100) { goValue = GOTO8000; goto return; }
+		if(lOBJ == 0) {
+		/*  CAN'T ATTACK BIRD OR MACHINE BY THROWING AXE. */
+			if((int)HERE(BIRD, lLOC) != FALSE && global VERB != THROW) { lOBJ=BIRD; global gOBJ = lOBJ; }
+			if((int)HERE(VEND, lLOC) != FALSE && global VERB != THROW) { lOBJ=lOBJ*100+VEND; global gOBJ = lOBJ; }
+		/*  CLAM AND OYSTER BOTH TREATED AS CLAM FOR INTRANSITIVE CASE; NO HARM DONE. */
+			if((int)HERE(CLAM, lLOC) != FALSE || (int)HERE(OYSTER, lLOC) != FALSE) { lOBJ=100*lOBJ+CLAM; global gOBJ = lOBJ; }
+			if(lOBJ > 100) { goValue = GOTO8000; goto return; }
+		}
+	}
+	if(lOBJ == BIRD) {
+		global SPK=137;
+		if(global CLOSED != FALSE) { goValue = GOTO2011; goto return; }
+		fDSTROY(BIRD);
+		global PROP[BIRD]=0;
+		global SPK=45;
+	}
+	if(lOBJ == VEND) {
+		fPSPEAK(VEND,(int)global PROP[VEND]+2);
+		global PROP[VEND]=3-(int)global PROP[VEND];
+		 { goValue = GOTO2012; goto return; }
+	}
+	if(lOBJ == 0)global SPK=44;
+	if(lOBJ == CLAM || lOBJ == OYSTER)global SPK=150;
+	if(lOBJ == SNAKE)global SPK=46;
+	if(lOBJ == DWARF)global SPK=49;
+	if(lOBJ == DWARF && global CLOSED != FALSE) { goValue = GOTO19000; goto return; }
+	if(lOBJ == DRAGON)global SPK=167;
+	if(lOBJ == TROLL)global SPK=157;
+	if(lOBJ == OGRE)global SPK=203;
+	if(!(lOBJ == OGRE && I > 0)) {
+		if(lOBJ == BEAR)global SPK=165+((int)global PROP[BEAR]+1)/2;
+		if(lOBJ != DRAGON || (int)global PROP[DRAGON] != 0) { goValue = GOTO2011; goto return; }
+	/*  FUN STUFF FOR DRAGON.  IF HE INSISTS ON ATTACKING IT, WIN!  SET PROP TO DEAD,
+	 *  MOVE DRAGON TO CENTRAL LOC (STILL FIXED), MOVE RUG THERE (NOT FIXED), AND
+	 *  MOVE HIM THERE, TOO.  THEN DO A NULL MOTION TO GET NEW DESCRIPTION. */
+		fRSPEAK(49);
+		global VERB=0;
+		lOBJ=0; global gOBJ=0;
+		fGETIN(&global WD1,&global WD1X,&global WD2,&global WD2X);
+		if(global WD1 != (int)fMAKEWD(25) && global WD1 != (int)fMAKEWD(250519)) { goValue = GOTO2607; goto return; }
+		fPSPEAK(DRAGON,3);
+		global PROP[DRAGON]=1;
+		global PROP[RUG]=0;
+		lK=((int)global PLAC[DRAGON]+(int)global FIXD[DRAGON])/2;
+		fMOVE(DRAGON+100,-1);
+		fMOVE(RUG+100,0);
+		fMOVE(DRAGON,lK);
+		fMOVE(RUG,lK);
+		fDROP(BLOOD,lK);
+		for (lOBJ=1 to 100+1) {
+			if((int)global PLACE[lOBJ] == (int)global PLAC[DRAGON] || (int)global PLACE[lOBJ] == (int)global FIXD[DRAGON])fMOVE(lOBJ,lK);
+		}
+		global gOBJ = lOBJ;
+		global gLOC=lK;
+		global gK = NUL;
+		{ goValue = GOTO8; goto return; }
+	}
+	
+	fRSPEAK(global SPK);
+	fRSPEAK(6);
+	fDSTROY(OGRE);
+	lK=0;
+	for (I=1 to 5+1) {
+		if((int)global DLOC[I] != lLOC) goto continue1;
+		lK=lK+1;
+		global DLOC[I]=61;
+		global DSEEN[I]=FALSE;
+	continue1: ;
+	} /* end loop */
+	global gK = lK;
+	global SPK=global SPK+1+1/lK;;
+	{ goValue = GOTO2011; goto return; }
+return: ;
+}
+
+
+/*  FEED.  IF BIRD, NO SEED.  SNAKE, DRAGON, TROLL: QUIP.  IF DWARF, MAKE HIM
+ *  MAD.  BEAR, SPECIAL. */
+
+function feed(int OBJ)
+returns int goValue
+locals int lLOC
+{
+	lLOC = global gLOC;
+	if(OBJ == BIRD) {
+		global SPK=100;
+		{ goValue = GOTO2011; goto return; }
+	}
+
+	if(!(OBJ != SNAKE && OBJ != DRAGON && OBJ != TROLL)) {
+		global SPK=102;
+		if(OBJ == DRAGON && (int)global PROP[DRAGON] != 0)global SPK=110;
+		if(OBJ == TROLL)global SPK=182;
+		if(OBJ != SNAKE || global CLOSED != FALSE || (int)HERE(BIRD, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+		global SPK=101;
+		fDSTROY(BIRD);
+		global PROP[BIRD]=0;
+		{ goValue = GOTO2011; goto return; }
+	}
+
+	if(OBJ == DWARF) {
+		if((int)HERE(FOOD, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+		global DFLAG=global DFLAG+2;
+		global SPK=103;
+		{ goValue = GOTO2011; goto return; }
+	}
+
+	if(OBJ == BEAR) {
+		if((int)global PROP[BEAR] == 0)global SPK=102;
+		if((int)global PROP[BEAR] == 3)global SPK=110;
+		if((int)HERE(FOOD, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+		fDSTROY(FOOD);
+		global PROP[BEAR]=1;
+		global FIXED[AXE]=0;
+		global PROP[AXE]=0;
+		global SPK=168;
+		{ goValue = GOTO2011; goto return; }
+	}
+
+	if(OBJ == OGRE) {
+		if((int)HERE(FOOD, lLOC) != FALSE)global SPK=202;
+		{ goValue = GOTO2011; goto return; }
+	}
+	
+	global SPK=14;
+	{ goValue = GOTO2011; goto return; }
+return: ;
+}
+
+
+/*  THROW.  SAME AS DISCARD UNLESS AXE.  THEN SAME AS ATTACK EXCEPT IGNORE BIRD,
+ *  AND IF DWARF IS PRESENT THEN ONE MIGHT BE KILLED.  (ONLY WAY TO DO SO!)
+ *  AXE ALSO SPECIAL FOR DRAGON, BEAR, AND TROLL.  TREASURES SPECIAL FOR TROLL. */
+
+function doThrow()
+returns int goValue
+locals int I, int lLOC, int lOBJ
+{
+	lLOC = global gLOC;
+	lOBJ = global gOBJ;
+	if((int)TOTING(ROD2) != FALSE && lOBJ == ROD && (int)TOTING(ROD) == FALSE) { lOBJ=ROD2; global gOBJ = ROD2; }
+	if((int)TOTING(lOBJ) == FALSE) { goValue = GOTO2011; goto return; }
+	if(lOBJ >= 50 && lOBJ <= MAXTRS && (int)AT(TROLL, lLOC) != FALSE) {
+	/*  SNARF A TREASURE FOR THE TROLL. */
+		global SPK=159;
+		fDROP(lOBJ,0);
+		fMOVE(TROLL,0);
+		fMOVE(TROLL+100,0);
+		fDROP(TROLL2,global PLAC[TROLL]);
+		fDROP(TROLL2+100,(int)global FIXD[TROLL]);
+		fJUGGLE(CHASM);
+		{ goValue = GOTO2011; goto return; }
+	}
+	if(lOBJ == FOOD && (int)HERE(BEAR, lLOC) != FALSE) {
+		/*  BUT THROWING FOOD IS ANOTHER STORY. */
+		lOBJ=BEAR; global gOBJ = BEAR;
+		{ goValue = (int)feed(lOBJ); goto return; }
+	}
+	if(lOBJ != AXE) { goValue = (int)discard(FALSE); goto return; }
+	I=(int)fATDWRF(lLOC);
+	if(I <= 0) {
+		global SPK=152;
+		if((int)AT(DRAGON, lLOC) != FALSE && (int)global PROP[DRAGON] == 0) goto L9175;
+		global SPK=158;
+		if((int)AT(TROLL, lLOC) != FALSE) goto L9175;
+		global SPK=203;
+		if((int)AT(OGRE, lLOC) != FALSE) goto L9175;
+		if((int)HERE(BEAR, lLOC) != FALSE && (int)global PROP[BEAR] == 0) {
+			/*  THIS'LL TEACH HIM TO THROW THE AXE AT THE BEAR! */
+			global SPK=164;
+			fDROP(AXE,lLOC);
+			global FIXED[AXE]= -1;
+			global PROP[AXE]=1;
+			fJUGGLE(BEAR);
+			{ goValue = GOTO2011; goto return; }
+		}
+		lOBJ=0; global gOBJ = 0;
+		{ goValue = (int)attack(); goto return; }
+	}
+	global SPK=48;
+	if((int)fRAN(7) >= global DFLAG) {
+		global DSEEN[I]=FALSE;
+		global DLOC[I]=0;
+		global SPK=47;
+		global DKILL=global DKILL+1;
+		if(global DKILL == 1)global SPK=149;
+	}
+L9175:
+	fRSPEAK(global SPK);
+	fDROP(AXE,lLOC);
+	global gK = NUL;
+	{ goValue = GOTO8; goto return; }
+return: ;
+}
+
+
+/* This stuff was broken off as part of an effort to get the main program
+ * to compile without running out of memory.  We're called with a number
+ * that says what label the caller wanted to "goto", and we return a
+ * similar label number for the caller to "goto".
+ */
+
+/*  ANALYSE A VERB.  REMEMBER WHAT IT WAS, GO BACK FOR OBJECT IF SECOND WORD
+ *  UNLESS VERB IS "SAY", WHICH SNARFS ARBITRARY SECOND WORD. */
+
+function action(int STARTAT)
+returns int goValue
+locals int I, int lK, int lLOC, int lOBJ
+{
+	lLOC = global gLOC;
+	lK = global gK;
+	lOBJ = global gOBJ;
+	
+	switch(STARTAT == 0 to 3) {
+	   case 0: {
+			global VERB=lK;
+			global SPK=(int)global ACTSPK[global VERB];
+			if(global WD2 > 0 && global VERB != SAY) { goValue = GOTO2800; goto return; }
+			if(global VERB == SAY) { lOBJ=global WD2; global gOBJ = lOBJ; }
+			if(lOBJ > 0) goto L4090;
+
+			/*  ANALYSE AN INTRANSITIVE VERB (IE, NO OBJECT GIVEN YET). */
+			/*	     TAKE DROP  SAY OPEN NOTH LOCK   ON  OFF WAVE CALM
+			 *	     WALK KILL POUR  EAT DRNK  RUB TOSS QUIT FIND INVN
+			 *	     FEED FILL BLST SCOR  FOO  BRF READ BREK WAKE SUSP
+			 *	     RESU FLY  LSTN ZZZZ */
+
+			switch (global VERB-1 == 0 to 34) {
+				case 0: {
+					/*  CARRY, NO OBJECT GIVEN YET.  OK IF ONLY ONE OBJECT PRESENT. */
+
+					if((int)global ATLOC[lLOC] == 0 || (int)global LINK[(int)global ATLOC[lLOC]] != 0 || (int)fATDWRF(lLOC) > 0) { goValue = GOTO8000; goto return; }
+					lOBJ=(int)global ATLOC[lLOC]; global gOBJ = lOBJ;
+
+					/*  TRANSITIVE CARRY/DROP ARE IN SEPARATE FILE. */
+
+					{ goValue = (int)carry(); goto return; }
+				}
+				case 1, 8, 9, 2, 15, 16, 18, 20, 27, 28: { goValue = GOTO8000; goto return; }
+				case 3, 5: {
+					/*  LOCK, UNLOCK, NO OBJECT GIVEN.  ASSUME VARIOUS THINGS IF PRESENT. */
+
+					global SPK=28;
+					if((int)HERE(CLAM, lLOC) != FALSE) { lOBJ=CLAM; global gOBJ = CLAM; }
+					if((int)HERE(OYSTER, lLOC) != FALSE) { lOBJ=OYSTER; global gOBJ = OYSTER; }
+					if((int)AT(DOOR, lLOC) != FALSE) { lOBJ=DOOR; global gOBJ = DOOR; }
+					if((int)AT(GRATE, lLOC) != FALSE) { lOBJ=GRATE; global gOBJ = GRATE; }
+					if(lOBJ != 0 && (int)HERE(CHAIN, lLOC) != FALSE) { goValue = GOTO8000; goto return; }
+					if((int)HERE(CHAIN, lLOC) != FALSE) { lOBJ=CHAIN; global gOBJ = CHAIN; }
+					if(lOBJ == 0) { goValue = GOTO2011; goto return; }
+
+					/*  LOCK, UNLOCK OBJECT.  SPECIAL STUFF FOR OPENING CLAM/OYSTER AND FOR CHAIN. */
+
+				L9040:
+					if(!(lOBJ == CLAM || lOBJ == OYSTER)) {
+						if(lOBJ == DOOR)global SPK=111;
+						if(lOBJ == DOOR && (int)global PROP[DOOR] == 1)global SPK=54;
+						if(lOBJ == CAGE)global SPK=32;
+						if(lOBJ == KEYS)global SPK=55;
+						if(lOBJ == GRATE || lOBJ == CHAIN)global SPK=31;
+						if(global SPK != 31 || (int)HERE(KEYS, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+						if(lOBJ == CHAIN) {
+							if(global VERB == LOCK) {
+								global SPK=172;
+								if((int)global PROP[CHAIN] != 0)global SPK=34;
+								if(lLOC != (int)global PLAC[CHAIN])global SPK=173;
+								
+								if(global SPK != 172) { goValue = GOTO2011; goto return; }
+								global PROP[CHAIN]=2;
+								if((int)TOTING(CHAIN) != FALSE)fDROP(CHAIN,lLOC);
+								global FIXED[CHAIN]= -1;
+								{ goValue = GOTO2011; goto return; }
+							}
+							global SPK=171;
+							if((int)global PROP[BEAR] == 0)global SPK=41;
+							if((int)global PROP[CHAIN] == 0)global SPK=37;
+							
+							if(global SPK != 171) { goValue = GOTO2011; goto return; }
+							global PROP[CHAIN]=0;
+							global FIXED[CHAIN]=0;
+							if((int)global PROP[BEAR] != 3)global PROP[BEAR]=2;
+							global FIXED[BEAR]=2-(int)global PROP[BEAR];
+							{ goValue = GOTO2011; goto return; }
+						}
+						if(global CLOSNG != FALSE) {
+							lK=130; global gK = 130;
+							if(global PANIC == FALSE)global CLOCK2=15;
+							global PANIC=TRUE;
+							{ goValue = GOTO2010; goto return; }
+						}
+						lK=34+(int)global PROP[GRATE]; global gK = lK;
+						global PROP[GRATE]=1;
+						if(global VERB == LOCK)global PROP[GRATE]=0;
+						lK=lK+2*(int)global PROP[GRATE]; global gK = lK;
+						{ goValue = GOTO2010; goto return; }
+					}
+					
+					/*  CLAM/OYSTER. */
+					lK=0; global gK = 0;
+					if(lOBJ == OYSTER) { lK=1; global gK = 1; }
+					global SPK=124+lK;
+					if((int)TOTING(lOBJ) != FALSE)global SPK=120+lK;
+					if((int)TOTING(TRIDNT) == FALSE)global SPK=122+lK;
+					if(global VERB == LOCK)global SPK=61;
+					
+					if(global SPK != 124) { goValue = GOTO2011; goto return; }
+					fDSTROY(CLAM);
+					fDROP(OYSTER,lLOC);
+					fDROP(PEARL,105);
+					{ goValue = GOTO2011; goto return; }
+				}
+				
+				case 4: { goValue = GOTO2009; goto return; }
+				case 6: {
+					/*  LIGHT.  APPLICABLE ONLY TO LAMP AND URN. */
+
+					if((int)HERE(LAMP, lLOC) != FALSE && (int)global PROP[LAMP] == 0 && global LIMIT >= 0) { lOBJ=LAMP; global gOBJ = lOBJ; }
+					if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 1) { lOBJ=lOBJ*100+URN; global gOBJ = lOBJ; }
+					if(lOBJ == 0 || lOBJ > 100) { goValue = GOTO8000; goto return; }
+
+				L9070:
+					if(lOBJ != URN) {
+						if(lOBJ != LAMP) { goValue = GOTO2011; goto return; }
+						global SPK=184;
+						if(global LIMIT < 0) { goValue = GOTO2011; goto return; }
+						global PROP[LAMP]=1;
+						fRSPEAK(39);
+						if(global WZDARK != FALSE) { goValue = GOTO2000; goto return; }
+						{ goValue = GOTO2012; goto return; }
+					}
+					global SPK=38;
+					if((int)global PROP[URN] == 0) { goValue = GOTO2011; goto return; }
+					global SPK=209;
+					global PROP[URN]=2;
+					{ goValue = GOTO2011; goto return; }
+				}
+				
+				case 7: {
+					/*  EXTINGUISH.  LAMP, URN, DRAGON/VOLCANO (NICE TRY). */
+
+					if((int)HERE(LAMP, lLOC) != FALSE && (int)global PROP[LAMP] == 1) { lOBJ=LAMP; global gOBJ = lOBJ; }
+					if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 2) { lOBJ=lOBJ*100+URN; global gOBJ = lOBJ; }
+					if(lOBJ == 0 || lOBJ > 100) { goValue = GOTO8000; goto return; }
+
+				L9080:
+					if(lOBJ != URN) {
+						if(lOBJ == LAMP) {
+							global PROP[LAMP]=0;
+							fRSPEAK(40);
+							if((int)DARK(lLOC) != FALSE)fRSPEAK(16);
+							{ goValue = GOTO2012; goto return; }
+						}
+						if(lOBJ == DRAGON || lOBJ == VOLCAN)global SPK=146;
+						{ goValue = GOTO2011; goto return; }
+					}
+					global PROP[URN]=(int)global PROP[URN]/2;
+					global SPK=210;
+					{ goValue = GOTO2011; goto return; }
+				}
+				
+				case 10: { goValue = GOTO2011; goto return; }
+				case 11: { goValue = (int)attack(); goto return; }
+				case 12: {
+					/*  POUR.  IF NO OBJECT, OR OBJECT IS BOTTLE, ASSUME CONTENTS OF BOTTLE.
+					 *  SPECIAL TESTS FOR POURING WATER OR OIL ON PLANT OR RUSTY DOOR. */
+
+				L9130:
+					if(lOBJ == BOTTLE || lOBJ == 0)lOBJ=(int)LIQ();
+					global gOBJ = lOBJ;
+					if(lOBJ == 0) { goValue = GOTO8000; goto return; }
+					if((int)TOTING(lOBJ) == FALSE) { goValue = GOTO2011; goto return; }
+					global SPK=78;
+					if(lOBJ != OIL && lOBJ != WATER) { goValue = GOTO2011; goto return; }
+					if(!((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 0)) {
+						global PROP[BOTTLE]=1;
+						global PLACE[lOBJ]=0;
+						global SPK=77;
+						if(!((int)AT(PLANT, lLOC) != FALSE || (int)AT(DOOR, lLOC) != FALSE)) { goValue = GOTO2011; goto return; }
+
+						if(!((int)AT(DOOR, lLOC) != FALSE)) {
+							global SPK=112;
+							if(lOBJ != WATER) { goValue = GOTO2011; goto return; }
+							fPSPEAK(PLANT,(int)global PROP[PLANT]+3);
+							global PROP[PLANT]=(((int)global PROP[PLANT]+1)%3);
+							global PROP[PLANT2]=global PROP[PLANT];
+							lK=NUL; global gK = NUL;
+							{ goValue = GOTO8; goto return; }
+						}
+
+						global PROP[DOOR]=0;
+						if(lOBJ == OIL)global PROP[DOOR]=1;
+						global SPK=113+(int)global PROP[DOOR];
+						{ goValue = GOTO2011; goto return; }
+					}
+
+					lOBJ=URN; global gOBJ = URN;
+					{ goValue = (int)fill(lOBJ); goto return; }
+				}
+				
+				case 13: {
+					/*  EAT.  INTRANSITIVE: ASSUME FOOD IF PRESENT, ELSE ASK WHAT. */
+
+					if((int)HERE(FOOD, lLOC) == FALSE) { goValue = GOTO8000; goto return; }
+					fDSTROY(FOOD);
+					global SPK=72;
+					{ goValue = GOTO2011; goto return; }
+				}
+				case 14: {
+					/*  DRINK.  IF NO OBJECT, ASSUME WATER AND LOOK FOR IT HERE.  IF WATER IS IN
+					 *  THE BOTTLE, DRINK THAT, ELSE MUST BE AT A WATER lLOC, SO DRINK STREAM. */
+
+				L9150:
+					if(lOBJ == 0 && (int)LIQLOC(lLOC) != WATER && ((int)LIQ() != WATER || (int)HERE(BOTTLE, lLOC) == FALSE))
+						{ goValue = GOTO8000; goto return; }
+					if(lOBJ != BLOOD) {
+						if(lOBJ != 0 && lOBJ != WATER)global SPK=110;
+						if(global SPK == 110 || (int)LIQ() != WATER || (int)HERE(BOTTLE, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+						global PROP[BOTTLE]=1;
+						global PLACE[WATER]=0;
+						global SPK=74;
+						{ goValue = GOTO2011; goto return; }
+					}
+
+					fDSTROY(BLOOD);
+					global PROP[DRAGON]=2;
+					global OBJSND[BIRD]=(int)global OBJSND[BIRD]+3;
+					global SPK=240;
+					{ goValue = GOTO2011; goto return; }
+				}
+				case 17: {
+					/*  QUIT.  INTRANSITIVE ONLY.  VERIFY INTENT AND EXIT IF THAT'S WHAT HE WANTS. */
+
+					if((int)fYES(22,54,54) != FALSE) score(1);
+					{ goValue = GOTO2012; goto return; }
+				}
+				case 19: {
+					/*  INVENTORY.  IF OBJECT, TREAT SAME AS FIND.  ELSE REPORT ON CURRENT BURDEN. */
+
+					global SPK=98;
+					for (I=1 to 100+1) {
+						if(!(I == BEAR || (int)TOTING(I) == FALSE)) {
+							if(global SPK == 98)fRSPEAK(99);
+							global BLKLIN=FALSE;
+							fPSPEAK(I,-1);
+							global BLKLIN=TRUE;
+							global SPK=0;
+						}
+					} /* end loop */
+					if((int)TOTING(BEAR) != FALSE)global SPK=141;
+					{ goValue = GOTO2011; goto return; }
+				}
+				case 21: { goValue = (int)fill(lOBJ); goto return; }
+				case 22: {
+					/*  BLAST.  NO EFFECT UNLESS YOU'VE GOT DYNAMITE, WHICH IS A NEAT TRICK! */
+				
+				L9230:
+					if((int)global PROP[ROD2] < 0 || global CLOSED == FALSE) { goValue = GOTO2011; goto return; }
+					global BONUS=133;
+					if(lLOC == 115)global BONUS=134;
+					if((int)HERE(ROD2, lLOC) != FALSE)global BONUS=135;
+					fRSPEAK(global BONUS);
+					score(0);
+				}
+				case 23: {
+					/*  SCORE.  CALL SCORING ROUTINE BUT TELL IT TO RETURN. */
+					
+					score(-1);
+					fSETPRM(1,global SCORE,global MXSCOR);
+					fSETPRM(3,global TURNS,global TURNS);
+					fRSPEAK(259);
+					{ goValue = GOTO2012; goto return; }
+				}
+				case 24: {
+					/*  FEE FIE FOE FOO (AND FUM).  ADVANCE TO NEXT STATE IF GIVEN IN PROPER ORDER.
+					 *  LOOK UP WD1 IN SECTION 3 OF VOCAB TO DETERMINE WHICH WORD WE'VE GOT.  LAST
+					 *  WORD ZIPS THE EGGS BACK TO THE GIANT ROOM (UNLESS ALREADY THERE). */
+
+					lK=(int)fVOCAB(global WD1,3); global gK = lK;
+					global SPK=42;
+					if(global FOOBAR != 1-lK) {
+						if(global FOOBAR != 0)global SPK=151;
+						{ goValue = GOTO2011; goto return; }
+					}
+					global FOOBAR=lK;
+					if(lK != 4) { goValue = GOTO2009; goto return; }
+					global FOOBAR=0;
+					if((int)global PLACE[EGGS] == (int)global PLAC[EGGS] || ((int)TOTING(EGGS) != FALSE && lLOC == (int)global PLAC[EGGS])) { goValue = GOTO2011; goto return; }
+				/*  BRING BACK TROLL IF WE STEAL THE EGGS BACK FROM HIM BEFORE CROSSING. */
+					if((int)global PLACE[EGGS] == 0 && (int)global PLACE[TROLL] == 0 && (int)global PROP[TROLL] == 0)global PROP[TROLL]=1;
+					lK=2; global gK = 2;
+					if((int)HERE(EGGS, lLOC) != FALSE) { lK=1; global gK = 2; }
+					if(lLOC == (int)global PLAC[EGGS]) { lK=0; global gK = 0; }
+					fMOVE(EGGS,global PLAC[EGGS]);
+					fPSPEAK(EGGS,lK);
+					{ goValue = GOTO2012; goto return; }
+				}
+				case 25: {
+					/*  BRIEF.  INTRANSITIVE ONLY.  SUPPRESS LONG DESCRIPTIONS AFTER FIRST TIME. */
+
+					global ABBNUM=10000;
+					global DETAIL=3;
+					global SPK=156;
+					{ goValue = GOTO2011; goto return; }
+				}
+				case 26: {
+					/*  READ.  PRINT STUFF BASED ON OBJTXT.  OYSTER (?) IS SPECIAL CASE. */
+
+					for (I=1 to 100+1) {
+						if((int)HERE(I, lLOC) != FALSE && (int)global OBJTXT[I] != 0 && (int)global PROP[I] >= 0) { lOBJ=lOBJ*100+I; global gOBJ = lOBJ; }
+					} /* end loop */
+					if(lOBJ > 100 || lOBJ == 0 || (int)DARK(lLOC) != FALSE) { goValue = GOTO8000; goto return; }
+
+				L9270:
+					if((int)DARK(lLOC) != FALSE) goto L5190;
+					if((int)global OBJTXT[lOBJ] == 0 || (int)global PROP[lOBJ] < 0) { goValue = GOTO2011; goto return; }
+					if(!(lOBJ == OYSTER && global CLSHNT == FALSE)) {
+						fPSPEAK(lOBJ,(int)global OBJTXT[lOBJ]+(int)global PROP[lOBJ]);
+						{ goValue = GOTO2012; goto return; }
+					}
+
+					global CLSHNT=(int)fYES(192,193,54);
+					{ goValue = GOTO2012; goto return; }
+				}
+				case 29, 30: {
+					output("Sorry. File operationrs are disabled.\n");
+					global gK = NUL;
+					{ goValue = GOTO8; goto return; }
+				}
+				case 31: {
+					/*  FLY.  SNIDE REMARKS UNLESS HOVERING RUG IS HERE. */
+
+					if((int)global PROP[RUG] != 2)global SPK=224;
+					if((int)HERE(RUG, lLOC) == FALSE)global SPK=225;
+					if(global SPK/2 == 112) { goValue = GOTO2011; goto return; }
+					lOBJ=RUG; global gOBJ = RUG;
+
+				L9320:
+					if(lOBJ != RUG) { goValue = GOTO2011; goto return; }
+					global SPK=223;
+					if((int)global PROP[RUG] != 2) { goValue = GOTO2011; goto return; }
+					global OLDLC2=global OLDLOC;
+					global OLDLOC=lLOC;
+					global NEWLOC=(int)global PLACE[RUG]+(int)global FIXED[RUG]-lLOC;
+					global SPK=226;
+					if((int)global PROP[SAPPH] >= 0)global SPK=227;
+					fRSPEAK(global SPK);
+					{ goValue = GOTO2; goto return; }
+				}
+				case 32: {
+					/*  LISTEN.  INTRANSITIVE ONLY.  PRINT STUFF BASED ON OBJSND/LOCSND. */
+
+					global SPK=228;
+					lK=(int)global LOCSND[lLOC]; global gK = lK;
+					if(lK != 0) {
+						fRSPEAK(abs(lK));
+						if(lK < 0) { goValue = GOTO2012; goto return; }
+						global SPK=0;
+					}
+
+					fSETPRM(1,global ZZWORD-MESH*2,0);
+					for (I=1 to 100+1) {
+						if (!((int)HERE(I, lLOC) == FALSE || (int)global OBJSND[I] == 0 || (int)global PROP[I] < 0)) {
+							fPSPEAK(I,(int)global OBJSND[I]+(int)global PROP[I]);
+							global SPK=0;
+							if(I == BIRD && (int)global OBJSND[I]+(int)global PROP[I] == 8)fDSTROY(BIRD);
+						}
+					} /* end loop */
+					{ goValue = GOTO2011; goto return; }
+				}
+				
+				case 33: {
+					/*  Z'ZZZ (WORD GETS RECOMPUTED AT STARTUP; DIFFERENT EACH GAME). */
+
+				L8340:
+					if((int)AT(RESER, lLOC) == FALSE && lLOC != (int)global FIXED[RESER]-1) { goValue = GOTO2011; goto return; }
+					fPSPEAK(RESER,(int)global PROP[RESER]+1);
+					global PROP[RESER]=1-(int)global PROP[RESER];
+					if((int)AT(RESER, lLOC) != FALSE) { goValue = GOTO2012; goto return; }
+					global OLDLC2=lLOC;
+					global NEWLOC=0;
+					fRSPEAK(241);
+					{ goValue = GOTO2; goto return; }
+				}
+			}
+			fBUG(23);
+	   }
+	   
+	   case 1: {
+		/*  ANALYSE A TRANSITIVE VERB. */
+		L4090:
+		/*	     TAKE DROP  SAY OPEN NOTH LOCK   ON  OFF WAVE CALM
+		 *	     WALK KILL POUR  EAT DRNK  RUB TOSS QUIT FIND INVN
+		 *	     FEED FILL BLST SCOR  FOO  BRF READ BREK WAKE SUSP
+		 *	     RESU FLY  LSTN ZZZZ */
+			switch (global VERB-1 == 0 to 34) {
+				case 0: { goValue = (int)carry(); goto return; }
+				case 1: { goValue = (int)discard(FALSE); goto return; }
+				case 2: {
+					/*  SAY.  ECHO WD2 (OR WD1 IF NO WD2 (SAY WHAT?, ETC.).)  MAGIC WORDS OVERRIDE. */
+
+					fSETPRM(1,global WD2,global WD2X);
+					if(global WD2 <= 0)fSETPRM(1,global WD1,global WD1X);
+					if(global WD2 > 0)global WD1=global WD2;
+					I=(int)fVOCAB(global WD1,-1);
+					if(!(I == 62 || I == 65 || I == 71 || I == 2025 || I == 2034)) {
+						fRSPEAK(258);
+						{ goValue = GOTO2012; goto return; }
+					}
+
+					global WD2=0;
+					lOBJ=0; global gOBJ = 0;
+					{ goValue = GOTO2630; goto return; }
+				}
+				
+				case 3, 5: goto L9040;
+				case 4: { goValue = GOTO2009; goto return; }
+				case 6: goto L9070;
+				case 7: goto L9080;
+				case 8: {
+					/*  WAVE.  NO EFFECT UNLESS WAVING ROD AT FISSURE OR AT BIRD. */
+	
+					if(((int)TOTING(lOBJ) == FALSE) && (lOBJ != ROD || (int)TOTING(ROD2) == FALSE))global SPK=29;
+					if(lOBJ != ROD || (int)TOTING(lOBJ) == FALSE || ((int)HERE(BIRD, lLOC) == FALSE && (global CLOSNG != FALSE || (int)AT(FISSUR, lLOC) == FALSE))) { goValue = GOTO2011; goto return; }
+					if((int)HERE(BIRD, lLOC) != FALSE)global SPK=206+(((int)global PROP[BIRD])%2);
+					if(!(global SPK == 206 && lLOC == (int)global PLACE[STEPS] && (int)global PROP[JADE] < 0)) {
+						if(global CLOSED != FALSE) { goValue = GOTO18999; goto return; }
+						if(global CLOSNG != FALSE || (int)AT(FISSUR, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+						if((int)HERE(BIRD, lLOC) != FALSE)fRSPEAK(global SPK);
+						global PROP[FISSUR]=1-(int)global PROP[FISSUR];
+						fPSPEAK(FISSUR,2-(int)global PROP[FISSUR]);
+						{ goValue = GOTO2012; goto return; }
+					}
+					
+					fDROP(JADE,lLOC);
+					global PROP[JADE]=0;
+					global TALLY=global TALLY-1;
+					global SPK=208;
+					{ goValue = GOTO2011; goto return; }	
+				}
+				
+				case 9, 10, 17, 23, 24, 25, 29, 30, 32: { goValue = GOTO2011; goto return; }
+				case 11: { goValue = (int)attack(); goto return; }
+				case 12: goto L9130;
+				case 13: {
+					/* EAT TRANSITIVE: FOOD OK, SOME THINGS LOSE APPETITE, REST ARE RIDICULOUS. */
+					
+					if(lOBJ == FOOD) {
+						fDSTROY(FOOD);
+						global SPK=72;
+						{ goValue = GOTO2011; goto return; }
+					}
+					if(lOBJ == BIRD || lOBJ == SNAKE || lOBJ == CLAM || lOBJ == OYSTER || lOBJ ==
+						DWARF || lOBJ == DRAGON || lOBJ == TROLL || lOBJ == BEAR || lOBJ ==
+						OGRE) global SPK=71;
+					{ goValue = GOTO2011; goto return; }
+				}
+				
+				case 14: goto L9150;
+				case 15: {
+					/*  RUB.  YIELDS VARIOUS SNIDE REMARKS EXCEPT FOR LIT URN. */
+
+					if(lOBJ != LAMP)global SPK=76;
+					if(lOBJ != URN || (int)global PROP[URN] != 2) { goValue = GOTO2011; goto return; }
+					fDSTROY(URN);
+					fDROP(AMBER,lLOC);
+					global PROP[AMBER]=1;
+					global TALLY=global TALLY-1;
+					fDROP(CAVITY,lLOC);
+					global SPK=216;
+					{ goValue = GOTO2011; goto return; }
+				}
+				
+				case 16: { goValue = (int)doThrow(); goto return; }
+				case 18, 19: {
+					/*  FIND.  MIGHT BE CARRYING IT, OR IT MIGHT BE HERE.  ELSE GIVE CAVEAT. */
+
+					if((int)AT(lOBJ, lLOC) != FALSE || ((int)LIQ() == lOBJ && (int)AT(BOTTLE, lLOC) != FALSE) || lK == (int)LIQLOC(lLOC) || (lOBJ ==
+						DWARF && (int)fATDWRF(lLOC) > 0))global SPK=94;
+					if(global CLOSED != FALSE)global SPK=138;
+					if((int)TOTING(lOBJ) != FALSE)global SPK=24;
+					{ goValue = GOTO2011; goto return; }
+				}
+				case 20: { goValue = (int)feed(lOBJ); goto return; }
+				case 21: { goValue = (int)fill(lOBJ); goto return; }
+				case 22: goto L9230;
+				case 26: goto L9270;
+				case 27: {
+					/*  BREAK.  ONLY WORKS FOR MIRROR IN REPOSITORY AND, OF COURSE, THE VASE. */
+
+					if(lOBJ == MIRROR)global SPK=148;
+					if(!(lOBJ == VASE && (int)global PROP[VASE] == 0)) {
+						if(lOBJ != MIRROR || global CLOSED == FALSE) { goValue = GOTO2011; goto return; }
+						global SPK=197;
+						{ goValue = GOTO18999; goto return; }
+					}
+
+					global SPK=198;
+					if((int)TOTING(VASE) != FALSE)fDROP(VASE,lLOC);
+					global PROP[VASE]=2;
+					global FIXED[VASE]= -1;
+					{ goValue = GOTO2011; goto return; }
+				}
+				case 28: {
+					/*  WAKE.  ONLY USE IS TO DISTURB THE DWARVES. */
+
+					if(lOBJ != DWARF || global CLOSED == FALSE) { goValue = GOTO2011; goto return; }
+					global SPK=199;
+					{ goValue = GOTO18999; goto return; }
+				}
+				case 31: goto L9320;
+				case 33: goto L8340;
+			}
+			fBUG(24);
+	   }
+	   
+	   case 2: {
+		/*  ANALYSE AN OBJECT WORD.  SEE IF THE THING IS HERE, WHETHER WE'VE GOT A VERB
+		 *  YET, AND SO ON.  OBJECT MUST BE HERE UNLESS VERB IS "FIND" OR "INVENT(ORY)"
+		 *  (AND NO NEW VERB YET TO BE ANALYSED).  WATER AND OIL ARE ALSO FUNNY, SINCE
+		 *  THEY ARE NEVER ACTUALLY DROPPED AT ANY LOCATION, BUT MIGHT BE HERE INSIDE
+		 *  THE BOTTLE OR URN OR AS A FEATURE OF THE LOCATION. */
+
+			lOBJ=lK; global gOBJ = lK;
+			if((int)HERE(lK, lLOC) != FALSE) {
+			L5010:
+				if(global WD2 > 0) { goValue = GOTO2800; goto return; }
+				if(global VERB != 0) goto L4090;
+				fSETPRM(1,global WD1,global WD1X);
+				fRSPEAK(255);
+				{ goValue = GOTO2600; goto return; }
+			}
+			
+			if(lK == GRATE) {
+				if(lLOC == 1 || lLOC == 4 || lLOC == 7) { lK=DPRSSN; global gK = lK; }
+				if(lLOC > 9 && lLOC < 15) { lK=ENTRNC; global gK = lK; }
+				if(lK != GRATE) { goValue = GOTO8; goto return; }
+			}
+			if(lK == DWARF && (int)fATDWRF(lLOC) > 0) goto L5010;
+			if(((int)LIQ() == lK && (int)HERE(BOTTLE, lLOC) != FALSE) || lK == (int)LIQLOC(lLOC)) goto L5010;
+			if(!(lOBJ != OIL || (int)HERE(URN, lLOC) == FALSE || (int)global PROP[URN] == 0)) {
+				lOBJ=URN; global gOBJ = URN;
+				 goto L5010;
+			}
+			if(!(lOBJ != PLANT || (int)AT(PLANT2, lLOC) == FALSE || (int)global PROP[PLANT2] == 0)) {
+				lOBJ=PLANT2; global gOBJ = PLANT2;
+				 goto L5010;
+			}
+			if(!(lOBJ != KNIFE || global KNFLOC != lLOC)) {
+				global KNFLOC= -1;
+				global SPK=116;
+				{ goValue = GOTO2011; goto return; }
+			}
+			if(lOBJ != ROD || (int)HERE(ROD2, lLOC) == FALSE) goto L5190;
+			lOBJ=ROD2; global gOBJ = ROD2;
+			goto L5010;
+		L5190:
+			if((global VERB == FIND || global VERB == INVENT) && global WD2 <= 0) goto L5010;
+			fSETPRM(1,global WD1,global WD1X);
+			fRSPEAK(256);
+			{ goValue = GOTO2012; goto return; }
+	   }
+	}
+	fBUG(99);
+	goValue = GOTO8000;
+return: ;
+}
+
+/*
+ * MAIN PROGRAM
+ */
+
+function main()
+locals int gotoChoice, int I, int J, int lK, int K2, int KK, int KQ, int LL, int V1, int V2, int lOBJ, int lLOC
+		, int HINT, int OLDOBJ, int STICK, int ATTACK
+{
+	lK=0;
+	lOBJ=0;
+	OLDOBJ = 0;
+	STICK = 0;
+	ATTACK = 0;
+
+	/*  ADVENTURE (REV 2: 20 TREASURES) */
+
+	/*  HISTORY: ORIGINAL IDEA & 5-TREASURE VERSION (ADVENTURES) BY WILLIE CROWTHER
+	 *           15-TREASURE VERSION (ADVENTURE) BY DON WOODS, APRIL-JUNE 1977
+	 *           20-TREASURE VERSION (REV 2) BY DON WOODS, AUGUST 1978
+	 *		ERRATA FIXED: 78/12/25 */
+
+
+	/* LOGICAL VARIABLES:
+	 *
+	 *  CLOSED SAYS WHETHER WE'RE ALL THE WAY CLOSED
+	 *  CLOSNG SAYS WHETHER IT'S CLOSING TIME YET
+	 *  CLSHNT SAYS WHETHER HE'S READ THE CLUE IN THE ENDGAME
+	 *  LMWARN SAYS WHETHER HE'S BEEN WARNED ABOUT LAMP GOING DIM
+	 *  NOVICE SAYS WHETHER HE ASKED FOR INSTRUCTIONS AT START-UP
+	 *  PANIC SAYS WHETHER HE'S FOUND OUT HE'S TRAPPED IN THE CAVE
+	 *  WZDARK SAYS WHETHER THE LOC HE'S LEAVING WAS DARK */
+
+	/*  READ THE DATABASE IF WE HAVE NOT YET DONE SO */
+
+	global MAP2[1] = 0;
+	initialise();
+
+	/*  START-UP, DWARF STUFF */
+
+	I=(int)fRAN(-1);
+	global ZZWORD=(int)fRNDVOC(3,0)+MESH*2;
+	global NOVICE=(int)fYES(65,1,0);
+	global NEWLOC=1;
+	lLOC=1;
+	global LIMIT=330;
+	if(global NOVICE != FALSE)global LIMIT=1000;
+
+	/*  CAN'T LEAVE CAVE ONCE IT'S CLOSING (EXCEPT BY MAIN OFFICE). */
+
+L2:
+	if(!((int)OUTSID(global NEWLOC) == FALSE || global NEWLOC == 0 || global CLOSNG == FALSE)) {
+		fRSPEAK(130);
+		global NEWLOC=lLOC;
+		if(global PANIC == FALSE)global CLOCK2=15;
+		global PANIC=TRUE;
+	}
+
+	/*  SEE IF A DWARF HAS SEEN HIM AND HAS COME FROM WHERE HE WANTS TO GO.  IF SO,
+	 *  THE DWARF'S BLOCKING HIS WAY.  IF COMING FROM PLACE FORBIDDEN TO PIRATE
+	 *  (DWARVES ROOTED IN PLACE) LET HIM GET OUT (AND ATTACKED). */
+
+	if(!(global NEWLOC == lLOC || ((int)global COND[lLOC] == 2) || (int)CNDBIT(lLOC,3) != FALSE)) {
+		for (I=1 to 5+1) {
+			if(!((int)global ODLOC[I] != global NEWLOC || (int)global DSEEN[I] == FALSE)) {
+				global NEWLOC=lLOC;
+				fRSPEAK(2);
+				goto break1;
+			}
+		} /* end loop */
+	break1: ;
+	}
+
+	lLOC=global NEWLOC;
+
+	/*  DWARF STUFF.  SEE EARLIER COMMENTS FOR DESCRIPTION OF VARIABLES.  REMEMBER
+	 *  SIXTH DWARF IS PIRATE AND IS THUS VERY DIFFERENT EXCEPT FOR MOTION RULES. */
+
+	/*  FIRST OFF, DON'T LET THE DWARVES FOLLOW HIM INTO A PIT OR A WALL.  ACTIVATE
+	 *  THE WHOLE MESS THE FIRST TIME HE GETS AS FAR AS THE HALL OF MISTS (LOC 15).
+	 *  IF NEWLOC IS FORBIDDEN TO PIRATE (IN PARTICULAR, IF IT'S BEYOND THE TROLL
+	 *  BRIDGE), BYPASS DWARF STUFF.  THAT WAY PIRATE CAN'T STEAL RETURN TOLL, AND
+	 *  DWARVES CAN'T MEET THE BEAR.  ALSO MEANS DWARVES WON'T FOLLOW HIM INTO DEAD
+	 *  END IN MAZE, BUT C'EST LA VIE.  THEY'LL WAIT FOR HIM OUTSIDE THE DEAD END. */
+
+	if(lLOC == 0 || ((int)global COND[lLOC] == 2) || (int)CNDBIT(global NEWLOC,3) != FALSE) goto L2000;
+	if(global DFLAG == 0) {
+		if((int)INDEEP(lLOC) != FALSE)global DFLAG=1;
+		goto L2000;
+	}
+
+	/*  WHEN WE ENCOUNTER THE FIRST DWARF, WE KILL 0, 1, OR 2 OF THE 5 DWARVES.  IF
+	 *  ANY OF THE SURVIVORS IS AT LOC, REPLACE HIM WITH THE ALTERNATE. */
+
+	if(global DFLAG == 1) {
+		if((int)INDEEP(lLOC) == FALSE || (((int)fRAN(100) < (95)) && ((int)CNDBIT(lLOC,4) == FALSE || ((int)fRAN(100) < (85))))) goto L2000;
+		global DFLAG=2;
+		for (I=1 to 2+1) {
+			J=1+(int)fRAN(5);
+			if(((int)fRAN(100) < (50)))global DLOC[J]=0;
+		} /* end loop */
+		for (I=1 to 5+1) {
+			if((int)global DLOC[I] == lLOC)global DLOC[I]=DALTLC;
+			global ODLOC[I]=global DLOC[I];
+		} /* end loop */
+		fRSPEAK(3);
+		fDROP(AXE,lLOC);
+		goto L2000;
+	}
+
+	/*  THINGS ARE IN FULL SWING.  MOVE EACH DWARF AT RANDOM, EXCEPT IF HE'S SEEN US
+	 *  HE STICKS WITH US.  DWARVES STAY DEEP INSIDE.  IF WANDERING AT RANDOM,
+	 *  THEY DON'T BACK UP UNLESS THERE'S NO ALTERNATIVE.  IF THEY DON'T HAVE TO
+	 *  MOVE, THEY ATTACK.  AND, OF COURSE, DEAD DWARVES DON'T DO MUCH OF ANYTHING. */
+
+	global DTOTAL=0;
+	ATTACK=0;
+	STICK=0;
+	for (I=1 to 6+1) {
+		if((int)global DLOC[I] != 0) {
+			/*  FILL TK ARRAY WITH ALL THE PLACES THIS DWARF MIGHT GO. */
+			J=1;
+			KK=(int)global DLOC[I];
+			KK=(int)global KEY[KK];
+			if(KK != 0) {
+				do {
+					global NEWLOC=((abs((int)global TRAVEL[KK])/1000)%1000);
+					
+					if(!(global NEWLOC > 300 || (int)INDEEP(global NEWLOC) == FALSE
+							|| global NEWLOC == (int)global ODLOC[I] || (J > 1 && global NEWLOC == (int)global TK[J-1])
+							|| J >= 20 || global NEWLOC == (int)global DLOC[I] || ((int)global COND[global NEWLOC] == 2)
+							|| (I == 6 && (int)CNDBIT(global NEWLOC,3) != FALSE) || abs((int)global TRAVEL[KK])/1000000 == 100)) {
+						global TK[J]=global NEWLOC;
+						J=J+1;
+					}
+					KK=KK+1;
+				} while ((int)global TRAVEL[KK-1] >= 0);
+			}
+			global TK[J]=(int)global ODLOC[I];
+			if(J >= 2)J=J-1;
+			J=1+(int)fRAN(J);
+			global ODLOC[I]=global DLOC[I];
+			global DLOC[I]=global TK[J];
+			if (((int)global DSEEN[I] != FALSE && (int)INDEEP(lLOC) != FALSE) || ((int)global DLOC[I] == lLOC || (int)global ODLOC[I] == lLOC)) {
+				global DSEEN[I]=TRUE;
+				global DLOC[I]=lLOC;
+				if(I != 6) {
+					/*  THIS THREATENING LITTLE DWARF IS IN THE ROOM WITH HIM! */
+
+					global DTOTAL=global DTOTAL+1;
+					if((int)global ODLOC[I] == (int)global DLOC[I]) {
+						ATTACK=ATTACK+1;
+						if(global KNFLOC >= 0)global KNFLOC=lLOC;
+						if((int)fRAN(1000) < 95*(global DFLAG-2))STICK=STICK+1;
+					}
+				} else if (!(lLOC == CHLOC || (int)global PROP[CHEST] >= 0)) {
+					/*  THE PIRATE'S SPOTTED HIM.  HE LEAVES HIM ALONE ONCE WE'VE FOUND CHEST.  lK
+					 *  COUNTS IF A TREASURE IS HERE.  IF NOT, AND TALLY=1 FOR AN UNSEEN CHEST, LET
+					 *  THE PIRATE BE SPOTTED.  NOTE THAT PLACE(CHEST)=0 MIGHT MEAN THAT HE'S
+					 *  THROWN IT TO THE TROLL, BUT IN THAT CASE HE'S SEEN THE CHEST (PROP=0). */
+
+					lK=0;
+					for (J=50 to MAXTRS+1) {
+						/*  PIRATE WON'T TAKE PYRAMID FROM PLOVER ROOM OR DARK ROOM (TOO EASY!). */
+						if(!(J == PYRAM && (lLOC == (int)global PLAC[PYRAM] || lLOC == (int)global PLAC[EMRALD]))) {
+							if((int)TOTING(J) != FALSE) {
+								if((int)global PLACE[CHEST] == 0) {
+									/*  INSTALL CHEST ONLY ONCE, TO INSURE IT IS THE LAST TREASURE IN THE LIST. */
+									fMOVE(CHEST,CHLOC);
+									fMOVE(MESSAG,CHLOC2);
+								}
+								fRSPEAK(128);
+								for (J=50 to MAXTRS+1) {
+									if(!(J == PYRAM && (lLOC == (int)global PLAC[PYRAM] || lLOC == (int)global PLAC[EMRALD]))) {
+										if((int)AT(J, lLOC) != FALSE && (int)global FIXED[J] == 0)fCARRY(J,lLOC);
+										if((int)TOTING(J) != FALSE)fDROP(J,CHLOC);
+									}
+								}
+								global DLOC[6]=CHLOC;
+								global ODLOC[6]=CHLOC;
+								global DSEEN[6]=FALSE;
+								goto L6030;
+							}
+						}
+						if((int)HERE(J, lLOC) != FALSE)lK=1;
+					} /* end loop */
+					if(global TALLY == 1 && lK == 0 && (int)global PLACE[CHEST] == 0 && ((int)AT(LAMP, lLOC) != FALSE || (int)TOTING(LAMP) != FALSE) && (int)global PROP[LAMP] == 1) {
+						fRSPEAK(186);
+						fMOVE(CHEST,CHLOC);
+						fMOVE(MESSAG,CHLOC2);
+						global DLOC[6]=CHLOC;
+						global ODLOC[6]=CHLOC;
+						global DSEEN[6]=FALSE;
+					} else {
+						if((int)global ODLOC[6] != (int)global DLOC[6] && ((int)fRAN(100) < (20)))fRSPEAK(127);
+					}
+				}
+			} else {
+				global DSEEN[I]=FALSE;
+			}
+		}
+	L6030: ;
+	} /* end loop */
+
+	/*  NOW WE KNOW WHAT'S HAPPENING.  LET'S TELL THE POOR SUCKER ABOUT IT.
+	 *  NOTE THAT VARIOUS OF THE "KNIFE" MESSAGES MUST HAVE SPECIFIC RELATIVE
+	 *  POSITIONS IN THE RSPEAK DATABASE. */
+
+	if(global DTOTAL != 0) {
+		fSETPRM(1,global DTOTAL,0);
+		fRSPEAK(4+1/global DTOTAL);
+		if(ATTACK != 0) {
+			if(global DFLAG == 2)global DFLAG=3;
+			fSETPRM(1,ATTACK,0);
+			lK=6;
+			if(ATTACK > 1)lK=250;
+			fRSPEAK(lK);
+			fSETPRM(1,STICK,0);
+			fRSPEAK(lK+1+2/(1+STICK));
+			if(STICK != 0) {
+				global OLDLC2=lLOC;
+				goto L99;
+			}
+		}
+	}
+
+
+	/*  DESCRIBE THE CURRENT LOCATION AND (MAYBE) GET NEXT COMMAND. */
+
+	/*  PRINT TEXT FOR CURRENT LOC. */
+
+L2000:
+	if(lLOC == 0) goto L99;
+	KK=(int)global STEXT[lLOC];
+	if((((int)global ABB[lLOC])%global ABBNUM) == 0 || KK == 0)KK=(int)global LTEXT[lLOC];
+	if(!(((int)global COND[lLOC] == 2) || (int)DARK(lLOC) == FALSE)) {
+		if(global WZDARK != FALSE && ((int)fRAN(100) < (35))) goto L90;
+		KK=(int)global RTEXT[16];
+	}
+
+	if((int)TOTING(BEAR) != FALSE)fRSPEAK(141);
+	fSPEAK(KK);
+	lK=1;
+	if(((int)global COND[lLOC] == 2)) goto L8;
+	if(lLOC == 33 && ((int)fRAN(100) < (25)) && global CLOSNG == FALSE)fRSPEAK(7);
+
+	/*  PRINT OUT DESCRIPTIONS OF OBJECTS AT THIS LOCATION.  IF NOT CLOSING AND
+	 *  PROPERTY VALUE IS NEGATIVE, TALLY OFF ANOTHER TREASURE.  RUG IS SPECIAL
+	 *  CASE; ONCE SEEN, ITS PROP IS 1 (DRAGON ON IT) TILL DRAGON IS KILLED.
+	 *  SIMILARLY FOR CHAIN; PROP IS INITIALLY 1 (LOCKED TO BEAR).  THESE HACKS
+	 *  ARE BECAUSE PROP=0 IS NEEDED TO GET FULL SCORE. */
+
+	if((int)DARK(lLOC) != FALSE) goto L2012;
+	global ABB[lLOC]=(int)global ABB[lLOC]+1;
+	I=(int)global ATLOC[lLOC];
+L2004:
+	if(I == 0) goto L2012;
+	lOBJ=I;
+	if(lOBJ > 100)lOBJ=lOBJ-100;
+	if(!(lOBJ == STEPS && (int)TOTING(NUGGET) != FALSE)) {
+		if(global CLOSED == FALSE || (int)global PROP[lOBJ] >= 0) {
+			if(global CLOSED == FALSE && (int)global PROP[lOBJ] < 0) {
+				global PROP[lOBJ]=0;
+				if(lOBJ == RUG || lOBJ == CHAIN)global PROP[lOBJ]=1;
+				global TALLY=global TALLY-1;
+				/*  NOTE: THERE USED TO BE A TEST HERE TO SEE WHETHER THE PLAYER HAD BLOWN IT
+				 *  SO BADLY THAT HE COULD NEVER EVER SEE THE REMAINING TREASURES, AND IF SO
+				 *  THE LAMP WAS ZAPPED TO 35 TURNS.  BUT THE TESTS WERE TOO SIMPLE-MINDED;
+				 *  THINGS LIKE KILLING THE BIRD BEFORE THE SNAKE WAS GONE (CAN NEVER SEE
+				 *  JEWELRY), AND DOING IT "RIGHT" WAS HOPELESS.  E.G., COULD CROSS TROLL
+				 *  BRIDGE SEVERAL TIMES, USING UP ALL AVAILABLE TREASURES, BREAKING VASE,
+				 *  USING COINS TO BUY BATTERIES, ETC., AND EVENTUALLY NEVER BE ABLE TO GET
+				 *  ACROSS AGAIN.  IF BOTTLE WERE LEFT ON FAR SIDE, COULD THEN NEVER GET EGGS
+				 *  OR TRIDENT, AND THE EFFECTS PROPAGATE.  SO THE WHOLE THING WAS FLUSHED.
+				 *  ANYONE WHO MAKES SUCH A GROSS BLUNDER ISN'T LIKELY TO FIND EVERYTHING
+				 *  ELSE ANYWAY (SO GOES THE RATIONALISATION). */
+			}
+			KK=(int)global PROP[lOBJ];
+			if(lOBJ == STEPS && lLOC == (int)global FIXED[STEPS])KK=1;
+			fPSPEAK(lOBJ,KK);
+		}
+	}
+
+	I=(int)global LINK[I];
+	goto L2004;
+
+L2009:
+	lK=54;
+L2010:
+	global SPK=lK;
+L2011:
+	fRSPEAK(global SPK);
+
+L2012:
+	global VERB=0;
+	OLDOBJ=lOBJ;
+	lOBJ=0;
+
+/*  CHECK IF THIS LOC IS ELIGIBLE FOR ANY HINTS.  IF BEEN HERE LONG ENOUGH,
+ *  BRANCH TO HELP SECTION (ON LATER PAGE).  HINTS ALL COME BACK HERE EVENTUALLY
+ *  TO FINISH THE LOOP.  IGNORE "HINTS" < 4 (SPECIAL STUFF, SEE DATABASE NOTES).
+		*/
+
+L2600:
+	if((int)global COND[lLOC] >= CONDS) {
+		for (HINT=1 to HNTMAX+1) {
+			if((int)global HINTED[HINT] == FALSE) {
+				if((int)CNDBIT(lLOC,HINT+10) == FALSE)global HINTLC[HINT]= -1;
+				global HINTLC[HINT]=(int)global HINTLC[HINT]+1;
+				if((int)global HINTLC[HINT] >= (int)global HINTS[HINT * 5 + 1]) {
+
+					/*  HINTS */
+
+					/*  COME HERE IF HE'S BEEN LONG ENOUGH AT REQUIRED LOC(S) FOR SOME UNUSED HINT.
+					 *  HINT NUMBER IS IN VARIABLE "HINT".  BRANCH TO QUICK TEST FOR ADDITIONAL
+					 *  CONDITIONS, THEN COME BACK TO DO NEAT STUFF.  GOTO 40010 IF CONDITIONS ARE
+					 *  MET AND WE WANT TO OFFER THE HINT.  GOTO 40020 TO CLEAR HINTLC BACK TO ZERO,
+					 *  40030 TO TAKE NO ACTION YET. */
+
+					/*		CAVE  BIRD  SNAKE MAZE  DARK  WITT  URN   WOODS OGRE
+					 *		JADE */
+
+					switch (HINT == 1 to 11) {
+						case 1: {
+							if(!((int)global PROP[GRATE] == 0 && !((int)AT(KEYS, lLOC) != FALSE || (int)TOTING(KEYS) != FALSE))) goto L40020;
+						}
+
+						case 2: {
+							if(!((int)global PLACE[BIRD] == lLOC && (int)TOTING(ROD) != FALSE && OLDOBJ == BIRD)) goto L2602;
+						}
+
+						case 3: {
+							if(!((int)HERE(SNAKE, lLOC) != FALSE && (int)HERE(BIRD, lLOC) == FALSE)) goto L40020;
+						}
+						
+						case 4: {
+							if(!((int)global ATLOC[lLOC] == 0 && (int)global ATLOC[global OLDLOC] == 0 && (int)global ATLOC[global OLDLC2] == 0 && global HOLDNG > 1)) goto L40020;
+						}
+						
+						case 5: {
+							if(!((int)global PROP[EMRALD] != -1 && (int)global PROP[PYRAM] == -1)) goto L40020;
+						}
+						
+						case 6: {
+						}
+
+						case 7: {
+							if(global DFLAG != 0) goto L40020;
+						}
+
+						case 8: {
+							if(!((int)global ATLOC[lLOC] == 0 && (int)global ATLOC[global OLDLOC] == 0 && (int)global ATLOC[global OLDLC2] == 0)) goto L2602;
+						}
+
+						case 9: {
+							I=(int)fATDWRF(lLOC);
+							if(I < 0) goto L40020;
+							if(!((int)HERE(OGRE, lLOC) != FALSE && I == 0)) goto L2602;
+						}
+
+						case 10: {
+							if(!(global TALLY == 1 && (int)global PROP[JADE] < 0)) goto L40020;
+						}
+						
+						default: fBUG(27);
+					}
+
+					if((int)fYES(global HINTS[HINT * 5 + 3],0,54) != FALSE) {
+						fSETPRM(1,global HINTS[HINT * 5 + 2],global HINTS[HINT * 5 + 2]);
+						fRSPEAK(261);
+						global HINTED[HINT]=(int)fYES(175,global HINTS[HINT * 5 + 4],54);
+						if((int)global HINTED[HINT] != FALSE && global LIMIT > 30)global LIMIT=global LIMIT+30*(int)global HINTS[HINT * 5 + 2];
+					}
+				L40020:
+					global HINTLC[HINT]=0;
+				}
+			}
+		L2602:
+			;
+		} /* end loop */
+	}
+
+	/*  KICK THE RANDOM NUMBER GENERATOR JUST TO ADD VARIETY TO THE CHASE.  ALSO,
+	 *  IF CLOSING TIME, CHECK FOR ANY OBJECTS BEING TOTED WITH PROP < 0 AND SET
+	 *  THE PROP TO -1-PROP.  THIS WAY OBJECTS WON'T BE DESCRIBED UNTIL THEY'VE
+	 *  BEEN PICKED UP AND PUT DOWN SEPARATE FROM THEIR RESPECTIVE PILES.  DON'T
+	 *  TICK CLOCK1 UNLESS WELL INTO CAVE (AND NOT AT Y2). */
+
+	if(global CLOSED != FALSE) {
+		if((int)global PROP[OYSTER] < 0 && (int)TOTING(OYSTER) != FALSE)fPSPEAK(OYSTER,1);
+		for (I=1 to 100+1) {
+			if((int)TOTING(I) != FALSE && (int)global PROP[I] < 0)global PROP[I]= -1-(int)global PROP[I];
+		} /* end loop */
+	}
+
+	global WZDARK=(int)DARK(lLOC);
+	if(global KNFLOC > 0 && global KNFLOC != lLOC)global KNFLOC=0;
+	I=(int)fRAN(1);
+	fGETIN(&global WD1,&global WD1X,&global WD2,&global WD2X);
+
+	/*  EVERY INPUT, CHECK "FOOBAR" FLAG.  IF ZERO, NOTHING'S GOING ON.  IF POS,
+	 *  MAKE NEG.  IF NEG, HE SKIPPED A WORD, SO MAKE IT ZERO. */
+
+L2607:
+	if (global FOOBAR>0) global FOOBAR=-global FOOBAR;
+	else global FOOBAR=0;
+	global TURNS=global TURNS+1;
+	if(global TURNS == global THRESH) {
+		fSPEAK(global TTEXT[global TRNDEX]);
+		global TRNLUZ=global TRNLUZ+(int)global TRNVAL[global TRNDEX]/100000;
+		global TRNDEX=global TRNDEX+1;
+		global THRESH= -1;
+		if(global TRNDEX <= TRNVLS)global THRESH=(((int)global TRNVAL[global TRNDEX])%100000)+1;
+	}
+
+	if(global VERB == SAY && global WD2 > 0)global VERB=0;
+	if(global VERB == SAY) {
+		I=1;
+		goto Laction;
+	}
+	if(global TALLY == 0 && (int)INDEEP(lLOC) != FALSE && lLOC != 33) {
+		global CLOCK1=global CLOCK1-1;
+	}
+	if(global CLOCK1 == 0) {
+		/*  CAVE CLOSING AND SCORING */
+
+
+		/*  THESE SECTIONS HANDLE THE CLOSING OF THE CAVE.  THE CAVE CLOSES "CLOCK1"
+		 *  TURNS AFTER THE LAST TREASURE HAS BEEN LOCATED (INCLUDING THE PIRATE'S
+		 *  CHEST, WHICH MAY OF COURSE NEVER SHOW UP).  NOTE THAT THE TREASURES NEED NOT
+		 *  HAVE BEEN TAKEN YET, JUST LOCATED.  HENCE CLOCK1 MUST BE LARGE ENOUGH TO GET
+		 *  OUT OF THE CAVE (IT ONLY TICKS WHILE INSIDE THE CAVE).  WHEN IT HITS ZERO,
+		 *  WE BRANCH TO 10000 TO START CLOSING THE CAVE, AND THEN SIT BACK AND WAIT FOR
+		 *  HIM TO TRY TO GET OUT.  IF HE DOESN'T WITHIN CLOCK2 TURNS, WE CLOSE THE
+		 *  CAVE; IF HE DOES TRY, WE ASSUME HE PANICS, AND GIVE HIM A FEW ADDITIONAL
+		 *  TURNS TO GET FRANTIC BEFORE WE CLOSE.  WHEN CLOCK2 HITS ZERO, WE BRANCH TO
+		 *  11000 TO TRANSPORT HIM INTO THE FINAL PUZZLE.  NOTE THAT THE PUZZLE DEPENDS
+		 *  UPON ALL SORTS OF RANDOM THINGS.  FOR INSTANCE, THERE MUST BE NO WATER OR
+		 *  OIL, SINCE THERE ARE BEANSTALKS WHICH WE DON'T WANT TO BE ABLE TO WATER,
+		 *  SINCE THE CODE CAN'T HANDLE IT.  ALSO, WE CAN HAVE NO KEYS, SINCE THERE IS A
+		 *  GRATE (HAVING MOVED THE FIXED OBJECT!) THERE SEPARATING HIM FROM ALL THE
+		 *  TREASURES.  MOST OF THESE PROBLEMS ARISE FROM THE USE OF NEGATIVE PROP
+		 *  NUMBERS TO SUPPRESS THE OBJECT DESCRIPTIONS UNTIL HE'S ACTUALLY MOVED THE
+		 *  OBJECTS. */
+
+		/*  WHEN THE FIRST WARNING COMES, WE LOCK THE GRATE, DESTROY THE BRIDGE, KILL
+		 *  ALL THE DWARVES (AND THE PIRATE), REMOVE THE TROLL AND BEAR (UNLESS DEAD),
+		 *  AND SET "CLOSNG" TO TRUE.  LEAVE THE DRAGON; TOO MUCH TROUBLE TO MOVE IT.
+		 *  FROM NOW UNTIL CLOCK2 RUNS OUT, HE CANNOT UNLOCK THE GRATE, MOVE TO ANY
+		 *  LOCATION OUTSIDE THE CAVE, OR CREATE THE BRIDGE.  NOR CAN HE BE
+		 *  RESURRECTED IF HE DIES.  NOTE THAT THE SNAKE IS ALREADY GONE, SINCE HE GOT
+		 *  TO THE TREASURE ACCESSIBLE ONLY VIA THE HALL OF THE MT. KING.  ALSO, HE'S
+		 *  BEEN IN GIANT ROOM (TO GET EGGS), SO WE CAN REFER TO IT.  ALSO ALSO, HE'S
+		 *  GOTTEN THE PEARL, SO WE KNOW THE BIVALVE IS AN OYSTER.  *AND*, THE DWARVES
+		 *  MUST HAVE BEEN ACTIVATED, SINCE WE'VE FOUND CHEST. */
+
+		global PROP[GRATE]=0;
+		global PROP[FISSUR]=0;
+		for (I=1 to 6+1) {
+			global DSEEN[I]=FALSE;
+			global DLOC[I]=0;
+		} /* end loop */
+		fMOVE(TROLL,0);
+		fMOVE(TROLL+100,0);
+		fMOVE(TROLL2,global PLAC[TROLL]);
+		fMOVE(TROLL2+100,global FIXD[TROLL]);
+		fJUGGLE(CHASM);
+		if((int)global PROP[BEAR] != 3)fDSTROY(BEAR);
+		global PROP[CHAIN]=0;
+		global FIXED[CHAIN]=0;
+		global PROP[AXE]=0;
+		global FIXED[AXE]=0;
+		fRSPEAK(129);
+		global CLOCK1= -1;
+		global CLOSNG=TRUE;
+	} else {
+		if(global CLOCK1 < 0)global CLOCK2=global CLOCK2-1;
+		if(global CLOCK2 == 0) {
+			/*  ONCE HE'S PANICKED, AND CLOCK2 HAS RUN OUT, WE COME HERE TO SET UP THE
+			 *  STORAGE ROOM.  THE ROOM HAS TWO LOCS, HARDWIRED AS 115 (NE) AND 116 (SW).
+			 *  AT THE NE END, WE PLACE EMPTY BOTTLES, A NURSERY OF PLANTS, A BED OF
+			 *  OYSTERS, A PILE OF LAMPS, RODS WITH STARS, SLEEPING DWARVES, AND HIM.  AT
+			 *  THE SW END WE PLACE GRATE OVER TREASURES, SNAKE PIT, COVEY OF CAGED BIRDS,
+			 *  MORE RODS, AND PILLOWS.  A MIRROR STRETCHES ACROSS ONE WALL.  MANY OF THE
+			 *  OBJECTS COME FROM KNOWN LOCATIONS AND/OR STATES (E.G. THE SNAKE IS KNOWN TO
+			 *  HAVE BEEN DESTROYED AND NEEDN'T BE CARRIED AWAY FROM ITS OLD "PLACE"),
+			 *  MAKING THE VARIOUS OBJECTS BE HANDLED DIFFERENTLY.  WE ALSO DROP ALL OTHER
+			 *  OBJECTS HE MIGHT BE CARRYING (LEST HE HAVE SOME WHICH COULD CAUSE TROUBLE,
+			 *  SUCH AS THE KEYS).  WE DESCRIBE THE FLASH OF LIGHT AND TRUNDLE BACK. */
+
+			global PROP[BOTTLE]=(int)fPUT(BOTTLE,115,1);
+			global PROP[PLANT]=(int)fPUT(PLANT,115,0);
+			global PROP[OYSTER]=(int)fPUT(OYSTER,115,0);
+			global OBJTXT[OYSTER]=3;
+			global PROP[LAMP]=(int)fPUT(LAMP,115,0);
+			global PROP[ROD]=(int)fPUT(ROD,115,0);
+			global PROP[DWARF]=(int)fPUT(DWARF,115,0);
+			lLOC=115;
+			global OLDLOC=115;
+			global NEWLOC=115;
+
+		/*  LEAVE THE GRATE WITH NORMAL (NON-NEGATIVE) PROPERTY.  REUSE SIGN. */
+
+			I=(int)fPUT(GRATE,116,0);
+			I=(int)fPUT(gSIGN,116,0);
+			global OBJTXT[gSIGN]=(int)global OBJTXT[gSIGN]+1;
+			global PROP[SNAKE]=(int)fPUT(SNAKE,116,1);
+			global PROP[BIRD]=(int)fPUT(BIRD,116,1);
+			global PROP[CAGE]=(int)fPUT(CAGE,116,0);
+			global PROP[ROD2]=(int)fPUT(ROD2,116,0);
+			global PROP[PILLOW]=(int)fPUT(PILLOW,116,0);
+
+			global PROP[MIRROR]=(int)fPUT(MIRROR,115,0);
+			global FIXED[MIRROR]=116;
+
+			for (I=1 to 100+1) {
+				if((int)TOTING(I) != FALSE)fDSTROY(I);
+			} /* end loop */
+
+			fRSPEAK(132);
+			global CLOSED=TRUE;
+			goto L2;
+		}
+		if((int)global PROP[LAMP] == 1)global LIMIT=global LIMIT-1;
+		if(global LIMIT <= 30 && (int)HERE(BATTER, lLOC) != FALSE && (int)global PROP[BATTER] == 0 && (int)HERE(LAMP, lLOC) != FALSE) {
+			/*  ANOTHER WAY WE CAN FORCE AN END TO THINGS IS BY HAVING THE LAMP GIVE OUT.
+			 *  WHEN IT GETS CLOSE, WE COME HERE TO WARN HIM.  WE GO TO 12000 IF THE LAMP
+			 *  AND FRESH BATTERIES ARE HERE, IN WHICH CASE WE REPLACE THE BATTERIES AND
+			 *  CONTINUE.  12200 IS FOR OTHER CASES OF LAMP DYING.  12400 IS WHEN IT GOES
+			 *  OUT.  EVEN THEN, HE CAN EXPLORE OUTSIDE FOR A WHILE IF DESIRED. */
+
+			fRSPEAK(188);
+			global PROP[BATTER]=1;
+			if((int)TOTING(BATTER) != FALSE)fDROP(BATTER,lLOC);
+			global LIMIT=global LIMIT+2500;
+			global LMWARN=FALSE;
+		} else  if(global LIMIT == 0) {
+			global LIMIT= -1;
+			global PROP[LAMP]=0;
+			if((int)HERE(LAMP, lLOC) != FALSE)fRSPEAK(184);
+		} else if(global LIMIT <= 30) {
+			if(!(global LMWARN != FALSE || (int)HERE(LAMP, lLOC) == FALSE)) {
+				global LMWARN=TRUE;
+				global SPK=187;
+				if((int)global PLACE[BATTER] == 0)global SPK=183;
+				if((int)global PROP[BATTER] == 1)global SPK=189;
+				fRSPEAK(global SPK);
+			}
+		}
+	}
+
+	lK=43;
+	if((int)LIQLOC(lLOC) == WATER)lK=70;
+	V1=(int)fVOCAB(global WD1,-1);
+	V2=(int)fVOCAB(global WD2,-1);
+	if(V1 == ENTER && (V2 == STREAM || V2 == 1000+WATER)) goto L2010;
+	if(V1 == ENTER && global WD2 > 0) goto L2800;
+	if(!((V1 != 1000+WATER && V1 != 1000+OIL) || (V2 != 1000+PLANT && V2 != 1000+DOOR))) {
+		if((int)AT(V2-1000, lLOC) != FALSE)global WD2=(int)fMAKEWD(16152118);
+	}
+	if(V1 == 1000+CAGE && V2 == 1000+BIRD && (int)HERE(CAGE, lLOC) != FALSE && (int)HERE(BIRD, lLOC) != FALSE)global WD1=(int)fMAKEWD(301200308);
+L2620:
+	if(global WD1 == (int)fMAKEWD(23051920)) {
+		global IWEST=global IWEST+1;
+		if(global IWEST == 10)fRSPEAK(17);
+	}
+	if(!(global WD1 != (int)fMAKEWD( 715) || global WD2 == 0)) {
+		global IGO=global IGO+1;
+		if(global IGO == 10)fRSPEAK(276);
+	}
+L2630:
+	I=(int)fVOCAB(global WD1,-1);
+	if(I == -1) {
+		/*  GEE, I DON'T UNDERSTAND. */
+
+		fSETPRM(1,global WD1,global WD1X);
+		fRSPEAK(254);
+		goto L2600;
+	}
+	lK=((I)%1000);
+	KQ=I/1000+1;
+	switch (KQ-1 == 0 to 4) {
+		case 0: goto L8;
+		case 1: { I=2; goto Laction; }
+		case 2: { I=0; goto Laction; }
+		case 3: goto L2010;
+	}
+	fBUG(22);
+
+/*  GET SECOND WORD FOR ANALYSIS. */
+
+L2800:
+	global WD1=global WD2;
+	global WD1X=global WD2X;
+	global WD2=0;
+	goto L2620;
+
+/* VERB AND OBJECT ANALYSIS MOVED TO SEPARATE MODULE. */
+	
+Laction:
+	global gK = lK;
+	global gOBJ = lOBJ;
+	global gLOC = lLOC;
+	{
+		gotoChoice = (int)action(I);
+		lK = global gK;
+		lOBJ = global gOBJ;
+		lLOC = global gLOC;
+		switch (gotoChoice == GOTO2 to GOTO19000 + 1) {
+		   case GOTO2: goto L2;
+		   case GOTO8: goto L8;
+		   case GOTO2000: goto L2000;
+		   case GOTO2009: goto L2009;
+		   case GOTO2010: goto L2010;
+		   case GOTO2011: goto L2011;
+		   case GOTO2012: goto L2012;
+		   case GOTO2600: goto L2600;
+		   case GOTO2607: goto L2607;
+		   case GOTO2630: goto L2630;
+		   case GOTO2800: goto L2800;
+		   
+		   case GOTO8000: {
+				/*  RANDOM INTRANSITIVE VERBS COME HERE.  CLEAR lOBJ JUST IN CASE (SEE "ATTACK"). */
+				fSETPRM(1,global WD1,global WD1X);
+				fRSPEAK(257);
+				lOBJ=0;
+				goto L2600;
+		   }
+		   
+		   case GOTO18999: {
+				/*  OH DEAR, HE'S DISTURBED THE DWARVES. */
+				
+				fRSPEAK(global SPK);
+				fRSPEAK(136);
+				score(0);
+		   }
+		   
+		   case GOTO19000: {
+				fRSPEAK(136);
+				score(0);
+		   }
+		   default: fBUG(-1);
+		}
+	}
+	fBUG(99);
+
+/*  FIGURE OUT THE NEW LOCATION
+ *
+ *  GIVEN THE CURRENT LOCATION IN "LOC", AND A MOTION VERB NUMBER IN "lK", PUT
+ *  THE NEW LOCATION IN "NEWLOC".  THE CURRENT LOC IS SAVED IN "OLDLOC" IN CASE
+ *  HE WANTS TO RETREAT.  THE CURRENT OLDLOC IS SAVED IN OLDLC2, IN CASE HE
+ *  DIES.  (IF HE DOES, NEWLOC WILL BE LIMBO, AND OLDLOC WILL BE WHAT KILLED
+ *  HIM, SO WE NEED OLDLC2, WHICH IS THE LAST PLACE HE WAS SAFE.) */
+
+L8:
+	KK=(int)global KEY[lLOC];
+	global NEWLOC=lLOC;
+	if(KK == 0)fBUG(26);
+	if(lK == NUL) goto L2;
+	
+	if(lK == BACK) {
+		/*  HANDLE "GO BACK".  LOOK FOR VERB WHICH GOES FROM LOC TO OLDLOC, OR TO OLDLC2
+		 *  IF OLDLOC HAS FORCED-MOTION.  K2 SAVES ENTRY -> FORCED LOC -> PREVIOUS LOC. */
+
+		lK=global OLDLOC;
+		if(((int)global COND[lK] == 2))lK=global OLDLC2;
+		global OLDLC2=global OLDLOC;
+		global OLDLOC=lLOC;
+		K2=0;
+		if(lK == lLOC)K2=91;
+		if((int)CNDBIT(lLOC,4) != FALSE)K2=274;
+		if(K2 == 0) {
+		L21:
+			LL=(((abs((int)global TRAVEL[KK])/1000))%1000);
+			if(LL == lK) {
+			L25:
+				lK=((abs((int)global TRAVEL[KK]))%1000);
+				KK=(int)global KEY[lLOC];
+				goto L9;
+			}
+			if(LL <= 300) {
+				J=(int)global KEY[LL];
+				if(((int)global COND[LL] == 2) && (((abs((int)global TRAVEL[J])/1000))%1000) == lK)K2=KK;
+			}
+			if((int)global TRAVEL[KK] < 0) {
+				KK=K2;
+				if(KK != 0) goto L25;
+				fRSPEAK(140);
+				goto L2;
+			}
+			KK=KK+1;
+			goto L21;
+		}
+		fRSPEAK(K2);
+		goto L2;
+	}
+	
+	if(lK == LOOK) {
+		/*  LOOK.  CAN'T GIVE MORE DETAIL.  PRETEND IT WASN'T DARK (THOUGH IT MAY "NOW"
+		 *  BE DARK) SO HE WON'T FALL INTO A PIT WHILE STARING INTO THE GLOOM. */
+		if(global DETAIL < 3)fRSPEAK(15);
+		global DETAIL=global DETAIL+1;
+		global WZDARK=FALSE;
+		global ABB[lLOC]=0;
+		goto L2;
+	}
+	
+	if(lK == CAVE) {
+		/*  CAVE.  DIFFERENT MESSAGES DEPENDING ON WHETHER ABOVE GROUND. */
+		lK=58;
+		if((int)OUTSID(lLOC) != FALSE && lLOC != 8)lK=57;
+		fRSPEAK(lK);
+		goto L2;
+	}
+	
+	global OLDLC2=global OLDLOC;
+	global OLDLOC=lLOC;
+
+L9:
+	LL=abs((int)global TRAVEL[KK]);
+	if(!(((LL)%1000) == 1 || ((LL)%1000) == lK)) {
+		if((int)global TRAVEL[KK] < 0) {
+			/*  NON-APPLICABLE MOTION.  VARIOUS MESSAGES DEPENDING ON WORD GIVEN. */
+
+			global SPK=12;
+			if(lK >= 43 && lK <= 50)global SPK=52;
+			if(lK == 29 || lK == 30)global SPK=52;
+			if(lK == 7 || lK == 36 || lK == 37)global SPK=10;
+			if(lK == 11 || lK == 19)global SPK=11;
+			if(global VERB == FIND || global VERB == INVENT)global SPK=59;
+			if(lK == 62 || lK == 65)global SPK=42;
+			if(lK == 17)global SPK=80;
+			fRSPEAK(global SPK);
+			goto L2;
+		}
+		KK=KK+1;
+		goto L9;
+	}
+	LL=LL/1000;
+L11:
+	global NEWLOC=LL/1000;
+	lK=((global NEWLOC)%100);
+	if(global NEWLOC > 300) {
+		if((int)global PROP[lK] != global NEWLOC/100-3) goto L16;
+	L12:
+		do {
+			if((int)global TRAVEL[KK] < 0)fBUG(25);
+			KK=KK+1;
+			global NEWLOC=abs((int)global TRAVEL[KK])/1000;
+		} while (global NEWLOC == LL);
+		LL=global NEWLOC;
+		goto L11;
+	}
+	
+	if(global NEWLOC > 100) {
+		if((int)TOTING(lK) != FALSE || (global NEWLOC > 200 && (int)AT(lK, lLOC) != FALSE)) goto L16;
+		goto L12;
+	}
+
+	if(global NEWLOC != 0 && !((int)fRAN(100) < (global NEWLOC))) goto L12;
+L16:
+	global NEWLOC=((LL)%1000);
+	if(global NEWLOC <= 300) goto L2;
+	if(global NEWLOC > 500) {
+		fRSPEAK(global NEWLOC-500);
+		global NEWLOC=lLOC;
+		goto L2;
+	}
+
+/*  SPECIAL MOTIONS COME HERE.  LABELLING CONVENTION: STATEMENT NUMBERS NNNXX
+ *  (XX=00-99) ARE USED FOR SPECIAL CASE NUMBER NNN (NNN=301-500). */
+
+	global NEWLOC=global NEWLOC-300;
+	switch (global NEWLOC == 1 to 4) {
+		case 1: {
+			/*  TRAVEL 301.  PLOVER-ALCOVE PASSAGE.  CAN CARRY ONLY EMERALD.  NOTE: TRAVEL
+			 *  TABLE MUST INCLUDE "USELESS" ENTRIES GOING THROUGH PASSAGE, WHICH CAN NEVER
+			 *  BE USED FOR ACTUAL MOTION, BUT CAN BE SPOTTED BY "GO BACK". */
+
+			global NEWLOC=99+100-lLOC;
+			if(global HOLDNG == 0 || (global HOLDNG == 1 && (int)TOTING(EMRALD) != FALSE)) goto L2;
+			global NEWLOC=lLOC;
+			fRSPEAK(117);
+			goto L2;
+		}
+		
+		case 2: {
+			/*  TRAVEL 302.  PLOVER TRANSPORT.  DROP THE EMERALD (ONLY USE SPECIAL TRAVEL IF
+			 *  TOTING IT), SO HE'S FORCED TO USE THE PLOVER-PASSAGE TO GET IT OUT.  HAVING
+			 *  DROPPED IT, GO BACK AND PRETEND HE WASN'T CARRYING IT AFTER ALL. */
+			 
+			fDROP(EMRALD,lLOC);
+			goto L12;
+		}
+		
+		case 3: {
+			/*  TRAVEL 303.  TROLL BRIDGE.  MUST BE DONE ONLY AS SPECIAL MOTION SO THAT
+			 *  DWARVES WON'T WANDER ACROSS AND ENCOUNTER THE BEAR.  (THEY WON'T FOLLOW THE
+			 *  PLAYER THERE BECAUSE THAT REGION IS FORBIDDEN TO THE PIRATE.)  IF
+			 *  PROP(TROLL)=1, HE'S CROSSED SINCE PAYING, SO STEP OUT AND BLOCK HIM.
+			 *  (STANDARD TRAVEL ENTRIES CHECK FOR PROP(TROLL)=0.)  SPECIAL STUFF FOR BEAR. */
+
+			if((int)global PROP[TROLL] != 1) {
+				global NEWLOC=(int)global PLAC[TROLL]+(int)global FIXD[TROLL]-lLOC;
+				if((int)global PROP[TROLL] == 0)global PROP[TROLL]=1;
+				if((int)TOTING(BEAR) == FALSE) goto L2;
+				fRSPEAK(162);
+				global PROP[CHASM]=1;
+				global PROP[TROLL]=2;
+				fDROP(BEAR,global NEWLOC);
+				global FIXED[BEAR]= -1;
+				global PROP[BEAR]=3;
+				global OLDLC2=global NEWLOC;
+				goto L99;
+			}
+			
+			fPSPEAK(TROLL,1);
+			global PROP[TROLL]=0;
+			fMOVE(TROLL2,0);
+			fMOVE(TROLL2+100,0);
+			fMOVE(TROLL,global PLAC[TROLL]);
+			fMOVE(TROLL+100,global FIXD[TROLL]);
+			fJUGGLE(CHASM);
+			global NEWLOC=lLOC;
+			goto L2;
+		}
+	}
+	fBUG(20);
+	
+/*  END OF SPECIALS. */
+
+/*  "YOU'RE DEAD, JIM."
+ *
+ *  IF THE CURRENT LOC IS ZERO, IT MEANS THE CLOWN GOT HIMSELF KILLED.  WE'LL
+ *  ALLOW THIS MAXDIE TIMES.  MAXDIE IS AUTOMATICALLY SET BASED ON THE NUMBER OF
+ *  SNIDE MESSAGES AVAILABLE.  EACH DEATH RESULTS IN A MESSAGE (81, 83, ETC.)
+ *  WHICH OFFERS REINCARNATION; IF ACCEPTED, THIS RESULTS IN MESSAGE 82, 84,
+ *  ETC.  THE LAST TIME, IF HE WANTS ANOTHER CHANCE, HE GETS A SNIDE REMARK AS
+ *  WE EXIT.  WHEN REINCARNATED, ALL OBJECTS BEING CARRIED GET DROPPED AT OLDLC2
+ *  (PRESUMABLY THE LAST PLACE PRIOR TO BEING KILLED) WITHOUT CHANGE OF PROPS.
+ *  THE LOOP RUNS BACKWARDS TO ASSURE THAT THE BIRD IS DROPPED BEFORE THE CAGE.
+ *  (THIS KLUGE COULD BE CHANGED ONCE WE'RE SURE ALL REFERENCES TO BIRD AND CAGE
+ *  ARE DONE BY KEYWORDS.)  THE LAMP IS A SPECIAL CASE (IT WOULDN'T DO TO LEAVE
+ *  IT IN THE CAVE).  IT IS TURNED OFF AND LEFT OUTSIDE THE BUILDING (ONLY IF HE
+ *  WAS CARRYING IT, OF COURSE).  HE HIMSELF IS LEFT INSIDE THE BUILDING (AND
+ *  HEAVEN HELP HIM IF HE TRIES TO XYZZY BACK INTO THE CAVE WITHOUT THE LAMP!).
+ *  OLDLOC IS ZAPPED SO HE CAN'T JUST "RETREAT". */
+
+/*  THE EASIEST WAY TO GET KILLED IS TO FALL INTO A PIT IN PITCH DARKNESS. */
+
+L90:
+	fRSPEAK(23);
+	global OLDLC2=lLOC;
+
+/*  OKAY, HE'S DEAD.  LET'S GET ON WITH IT. */
+
+L99:
+	if(global CLOSNG != FALSE) {
+		/*  HE DIED DURING CLOSING TIME.  NO RESURRECTION.  TALLY UP A DEATH AND EXIT. */
+		fRSPEAK(131);
+		global NUMDIE=global NUMDIE+1;
+		score(0);
+	}
+	global NUMDIE=global NUMDIE+1;
+	if((int)fYES(79+global NUMDIE*2,80+global NUMDIE*2,54) == FALSE) score(0);
+	if(global NUMDIE == global MAXDIE) score(0);
+	global PLACE[WATER]=0;
+	global PLACE[OIL]=0;
+	if((int)TOTING(LAMP) != FALSE)global PROP[LAMP]=0;
+	for (J=1 to 100+1) {
+		I=101-J;
+		if((int)TOTING(I) != FALSE) {
+			lK=global OLDLC2;
+			if(I == LAMP)lK=1;
+			fDROP(I,lK);
+		}
+	} /* end loop */
+	lLOC=3;
+	global OLDLOC=lLOC;
+	goto L2000;
+}

@@ -1,0 +1,25 @@
+const int PRAWN_FIRMWARE_PATCH_FORMAT = 1	// Must be set to 1 for a valid Permute8 firmware patch
+
+global array panelTextRows[8] = {
+	"", "", "", "",
+	"", "", "", ""
+}
+
+global array config[80]		// When patching via the console you can enter an optional configuration string after the firmware name. It is placed here and can be used from `init()`. (Optional.)
+global array positions[2]
+
+function init()
+locals int i, pointer p
+{
+	for (i = 0 to 8) {
+		p = "";
+		if ((int) global config[i] == '1') p = "AAA |BBBBBBBBBBBBBBBBBBBBBB| [CCCCCCCCCCCCCCCCCCCCCC|";
+		global panelTextRows[i] = p;
+	}
+}
+
+function operate1()
+returns int r
+{
+	r = 0;
+}

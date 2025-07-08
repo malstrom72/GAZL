@@ -1,0 +1,57 @@
+loop {
+	pp = buffer + 3;
+	x = y;
+	
+	// Normalize values > 10 and move period position.
+	
+	while (x >= 10.0 && pp < ep) {
+		pp = pp + 1;
+		x = x * 0.1;
+	}
+				
+	if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break;
+	
+	// Exponential treatment of very small or large values.
+
+	g = y;
+	while (y < 1.0) {
+		e = e - 1;
+		y = y * 10.0;
+	}
+	while (y >= 10.0) {
+		e = e + 1;
+		y = y * 0.1;
+	}
+}
+break:
+
+---------------
+
+do {
+	pp = buffer + 3;
+	x = y;
+	
+	// Normalize values > 10 and move period position.
+	
+	while (x >= 10.0 && pp < ep) {
+		pp = pp + 1;
+		x = x * 0.1;
+	}
+				
+} until (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) else {
+	
+	// Exponential treatment of very small or large values.
+
+	g = y;
+	while (y < 1.0) {
+		e = e - 1;
+		y = y * 10.0;
+	}
+	while (y >= 10.0) {
+		e = e + 1;
+		y = y * 0.1;
+	}
+}
+
+---------------
+

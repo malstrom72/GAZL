@@ -1,0 +1,367 @@
+/*
+	Conway's Game of Life for Prawn OS.
+	
+	(C)1978 Shrimperative Computing LTD.
+*/
+
+const int DEBUG
+
+extern native output;
+extern native abort;
+extern native input;
+extern native inputEOF;
+extern native launch;
+
+const int FALSE = 0;
+const int TRUE = 1;
+
+const int MAX_DIM_X = 76;
+const int MAX_DIM_Y = 23;
+const int MAX_GENERATIONS = 1000;
+
+global int xorShiftRandomSeedX = 123456789;
+global int xorShiftRandomSeedY = 362436069;
+function xorShiftRandom()
+returns	int y
+locals	int x
+		, int t
+{
+	x = global xorShiftRandomSeedX;
+	y = global xorShiftRandomSeedY;
+	t = x ^ (x << 10);
+	x = y;
+	y = y ^ (y >>> 13) ^ t ^ (t >>> 10);
+	global xorShiftRandomSeedX = x;
+	global xorShiftRandomSeedY = y;
+}
+
+function eatWhite(pointer p)
+returns	pointer q
+{
+	q = p;
+	while ((int)*q == ' ') q = q + 1;
+}
+
+function outputLine(pointer s)
+{
+	output(s);
+	output("\n");
+}
+
+function strcmp(pointer s0, pointer s1)
+returns int d
+locals	pointer a
+		, pointer b
+		, int c
+{
+	a = s0;
+	b = s1;
+	while ((d = (c = (int)*a) - (int)*b) == 0 && c != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function strncmp(pointer s0, pointer s1, int n)
+returns	int d
+locals	pointer a
+		, pointer b
+		, int i
+		, int c
+{
+	d = 0;
+	if (n > 0) {
+		a = s0;
+		b = s1;
+		for (i = 1 to n) {
+			if ((d = (c = (int)*a) - (int)*b) != 0 || c == 0) goto done;
+			a = a + 1;
+			b = b + 1;
+		}
+	done: ;
+	}
+}
+
+// Buffer needs to be at least GAZL_WORD_SIZE + 2 in size (incl. terminating zero).
+// Output will be right-aligned in this buffer and returned pointer is the first character, so the length of the output
+// is buffer + (GAZL_WORD_SIZE + 1) - returned pointer.
+// minLength is usually 1 (or i == 0 will return an empty string), increasing it will add leading zeroes.
+const int GAZL_WORD_SIZE
+function intToString(int i, int radix, int minLength, pointer buffer)
+returns	pointer p
+locals	pointer e, int x
+{
+	assert(2 <= radix && radix <= 16);
+	assert(0 <= minLength && minLength <= GAZL_WORD_SIZE);
+	
+	*(p = buffer + GAZL_WORD_SIZE + 1) = 0;
+	e = p - minLength;
+	x = i;
+	while (p > e || x != 0) {
+		assert(p >= buffer + 2);
+		*(p = p - 1) = ("fedcba9876543210123456789abcdef")[15 + x % radix];													// Mirrored hex string to handle negative x.
+		x = x / radix;
+	}
+	if (i < 0) *(p = p - 1) = '-';
+}
+
+function outputInt(int i)
+locals	array buffer[GAZL_WORD_SIZE + 2]
+{
+	output(intToString(i, 10, 1, buffer));
+}
+
+function parseInt(pointer s, int defaultValue)
+returns	int i
+locals	pointer p
+		, int sign
+		, int c
+{
+	i = 0;
+	sign = 1;
+	
+	p = (pointer)eatWhite(s);
+	
+	if ((c = (int)*p) == '+') p = p + 1;
+	else if (c == '-') {
+		sign = -1;
+		p = p + 1;
+	}
+	while ((c = (int)*p) >= '0' && c <= '9') {
+		i = i * 10 + (c - '0');
+		p = p + 1;
+	}
+
+	p = (pointer)eatWhite(p);
+
+	if ((int)*p != 0) i = defaultValue;
+	else i = i * sign;
+}
+
+function parseXY(pointer s, pointer x, pointer y)
+locals	pointer xp
+		, pointer yp
+		, int c
+{
+	(int)*x = -10000;
+	(int)*y = -10000;
+	yp = s;
+	while ((c = (int)*yp) != ' ' && c != ',' && c != 0) yp = yp + 1;
+	if (c != 0) {
+		*yp = 0;
+		yp = yp + 1;
+		*x = parseInt(s, -1);
+		*y = parseInt(yp, -1);
+	}
+}
+
+function help()
+{
+	outputLine("");
+	outputLine("Commands are:");
+	outputLine("    <x>,<y> (toggle cell)");
+	outputLine("    <n> (run <n> generations)");
+	outputLine("    enter (draw grid)");
+	outputLine("    'clear'");
+	outputLine("    'rand %' (% is likelihood of setting a cell from 0 to 100 %)");
+ 	outputLine("    'quit'");
+	outputLine("");
+}
+
+function run(int dimX, int dimY, pointer cells, int generations)
+locals	int genCounter
+		, int x_1
+		, int x
+		, int x1
+		, int y_1
+		, int y
+		, int y1
+		, int n
+		, int c
+		, int i
+		, int size
+		, array cells2[MAX_DIM_X * MAX_DIM_Y]
+		, pointer p1
+		, pointer p2
+		, pointer t
+{
+	p1 = cells;
+	p2 = cells2;
+	size = dimY * dimX;
+	for (genCounter = 0 to generations) {
+		y = size - dimX;
+		while (y >= 0) {
+			y_1 = (((y - dimX) + size) % size);
+			y1 = ((y + dimX) % size);
+			for (x = 0 to dimX) {
+				x_1 = ((x - 1) + dimX) % dimX;
+				x1 = (x + 1) % dimX;
+				n = (int)p1[y_1 + x_1];
+				n = n + (int)p1[y_1 + x];
+				n = n + (int)p1[y_1 + x1];
+				n = n + (int)p1[y + x_1];
+				n = n + (int)p1[y + x1];
+				n = n + (int)p1[y1 + x_1];
+				n = n + (int)p1[y1 + x];
+				n = n + (int)p1[y1 + x1];
+				c = 0;
+				if (n == 3 || (n == 2 && (int)p1[y + x] == 1)) c = 1;
+				p2[y + x] = c;
+			}
+			y = y - dimX;
+		}
+		t = p1;
+		p1 = p2;
+		p2 = t;
+	}
+	if (p1 != cells) {
+		for (i = 0 to size) cells[i] = cells2[i];
+	}
+}
+
+function outputCellsAlive(int dimX, int dimY, pointer cells)
+returns	int n
+locals	int i
+{
+	n = 0;
+	for (i = 0 to dimX * dimY) if ((int)cells[i] != 0) n = n + 1;
+	output("("); outputInt(n); outputLine(" cells alive)");
+}
+
+function randomize(int dimX, int dimY, pointer cells, int percentage)
+locals	int i
+{
+	for (i = 0 to dimX * dimY) {
+		if (((int)xorShiftRandom() & 0x7FFFFFFF) % 100 <= percentage) cells[i] = 1;
+	}
+}
+
+function main()
+locals	int dimX
+		, int dimY
+		, array s[256]
+		, int quit
+		, int i
+		, int j
+		, int x
+		, int y
+		, int n
+		, array cells[MAX_DIM_X * MAX_DIM_Y]
+		, int c
+		, int firstTime
+		, int redraw
+{
+	output("Enter dimensions (X,Y): ");
+	input(255, s);
+	parseXY(s, &dimX, &dimY);
+	if (dimX <= 0 || dimY <= 0) outputLine("Invalid dimensions. Bye!");
+	else if (dimX > MAX_DIM_X || dimY > MAX_DIM_Y) {
+		output("Too large. Max dimensions are ");
+		outputInt(MAX_DIM_X);
+		output(",");
+		outputInt(MAX_DIM_Y);
+		outputLine(".");
+	} else {
+		for (i = 0 to (dimX * dimY)) cells[i] = 0;
+		
+		firstTime = TRUE;
+		quit = FALSE;
+		do {
+			s[0] = 12;
+			s[1] = 0;
+			output(s);
+			
+			for (i = 0 to 3) s[i] = ' ';
+			for (i = 0 to dimX) {
+				s[i + 3] = ' ';
+				if (i >= 10) s[i + 3] = '0' + i / 10;
+			}
+			s[dimX + 3] = 0;
+			outputLine(s);
+
+			for (i = 0 to dimX) s[i + 3] = '0' + i % 10;
+			outputLine(s);
+
+			for (i = 0 to dimY) {
+				if (i >= 10) s[0] = '0' + i / 10;
+				s[1] = '0' + i % 10;
+				for (j = 0 to dimX) {
+					c = '.';
+					if ((int)cells[i * dimX + j] != 0) c = 'X';
+					s[j + 3] = c;
+				}
+				s[j + 3] = 0;
+				outputLine(s);
+			}
+			
+			if (firstTime != FALSE) {
+				help();
+				firstTime = FALSE;
+			}
+			
+			redraw = FALSE;
+			do {
+				output("life> ");
+				input(255, s);
+				if ((int)strcmp(s, "quit") == 0) {
+					quit = TRUE;
+				} else if ((int)s[0] == 0) {
+					redraw = TRUE;
+				} else if ((int)strcmp(s, "clear") == 0) {
+					for (i = 0 to dimX * dimY) cells[i] = 0;
+					outputLine("Cleared all cells.");
+				} else if ((int)strncmp(s, "rand ", 5) == 0) {
+					i = (int)parseInt(&s[5], -10000);
+					if (i < 0 || i > 100) help();
+					else {
+						randomize(dimX, dimY, cells, i);
+						output("Randomized with ");
+						outputInt(i);
+						output(" %. ");
+						outputCellsAlive(dimX, dimY, cells);
+					}
+				} else {
+					i = (int)parseInt(s, -10000);
+					if (i >= 0) {
+						if (i <= MAX_GENERATIONS) {
+							run(dimX, dimY, cells, i);
+							output("Ran ");
+							outputInt(i);
+							output(" generations. ");
+							outputCellsAlive(dimX, dimY, cells);
+						} else {
+							output("Max generations is ");
+							outputInt(MAX_GENERATIONS);
+							outputLine(".");
+						}
+					} else {
+						parseXY(s, &x, &y);
+						if (x >= 0 && y >= 0) {
+							if (x < dimX && y < dimY) {
+								i = y * dimX + x;
+								c = (int)cells[i] ^ 1;
+								cells[i] = c;
+								if (c != 0) output("Set ");
+								else output("Reset ");
+								output("cell ");
+								outputInt(x);
+								output(",");
+								outputInt(y);
+								output(". ");
+								outputCellsAlive(dimX, dimY, cells);
+							} else {
+								outputLine("Invalid coordinates.");
+							}
+						} else {
+							help();
+						}
+					}
+				}
+			} while (redraw == FALSE && quit == FALSE);
+		} while (quit == FALSE);
+		
+		outputLine("");
+		outputLine("Bye bye!");
+		outputLine("");
+	}
+}

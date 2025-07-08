@@ -1,0 +1,298 @@
+/*
+	Impala 1.0
+
+	Impala is an imperative C-like language that compiles to the GAZL assembler syntax for the GAZL virtual machine.
+
+	GAZL is an efficient low-level virtual machine and assembler for real-time applications. GAZL has static typing and
+	all primitive types (int, floats and pointers) have the same word size (standard configuration is 32-bit). GAZL is
+	100% interpreting but still very fast (it measures between 10% and 25% of fully optimized x86 machine-code). The
+	persistent code format is in assembly language, allowing for compile-time decisions and optimizations when loading
+	the code and transforming it to an efficient run-time representation.
+
+	Because of the close one to one correlation between Impala statements and GAZL assembler instructions one can regard
+	Impala as a high-level assembler. GAZL is very efficient without requiring advanced optimization techniques, thus
+	Impala implements very little optimization. Also, GAZL supports compile-time constants, calculations and conditions
+	and where applicable, Impala hands such compile-time constructs over to GAZL. E.g. the size of an array can be a
+	constant that is set just before executing the code.
+	
+	The Impala compiler is implemented using the PikaScript PEG parser. The compiler is slow and should be considered a
+	prototype implementation.
+
+	Impala is released under the "New Simplified BSD License". http://www.opensource.org/licenses/bsd-license.php
+	
+	Copyright (c) 2010-2012, NuEdge Development / Magnus Lidstroem
+	All rights reserved.
+
+	Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+	following conditions are met:
+
+	Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+	disclaimer. 
+	
+	Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following
+	disclaimer in the documentation and/or other materials provided with the distribution. 
+	
+	Neither the name of the NuEdge Development nor the names of its contributors may be used to endorse or promote
+	products derived from this software without specific prior written permission.
+	
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+	INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+	SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+	WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+const int DEBUG = 1
+
+/******************
+ *    Comments    *
+ ******************/
+
+// Comments are written like in C++ etc, i.e. // for end-of-line comment and /* */ for block comments.
+// As usual comments can be placed anywhere where white space is accepted.
+
+/**********************
+ *    Declarations    *
+ **********************/
+
+global int uninited								// One declaration per statement in the global scope. Semicolon is
+												// optional. Global variables must always be addressed with the prefix
+												// 'global'. One reason for this requirement is to remind you that
+												// accessing globals is often costly compared to locals. (Operations
+												// on global variables require separate PEEK and POKE instructions to
+												// read and write them to memory before and after).
+
+global int inited = 23;							// Init value is optional. When present it has to be a deterministic
+												// compile-time constant. (The default value is 0 or null for pointers.)
+
+global float aFloat;							// The four primitive types are `int`, `float`, `pointer` and `funcptr`.
+
+global pointer aPointer = &global aFloat;		// A `pointer` in Impala is generic and untyped. You can address ints,
+												// floats or other pointers (with the same pointer variable if you wish).
+
+global funcptr aFuncPointer;					// To address functions however you need to use the separate `funcptr`
+												// type. In the same untyped spirit as the standard pointer, `funcptr`
+												// provides no type checking on argument and return types. You can not
+												// perform addition or subtraction operations on function pointers.
+
+global array defaultArray[100];					// The array is the only composite data type supported. It is declared
+												// with the generic 'array' type. Arrays are also untyped and can contain
+												// any kind of data. Only one-dimensional arrays are supported. By
+												// default global arrays will be filled with #0.
+												
+global array initedArray[10] = {				// You can provide a list with initial values like this. Any combination
+	1, 2.0, &global defaultArray[0], 4			// of types are allowed. You do not need to initialize all elements.
+};
+
+temporary int forgetMe;							// A `temporary` is a global variable (or array) that has a flag which
+												// hints the "host application" that this data does not need to be
+												// stored / restored if the host implements saving / loading of the
+												// machine state.
+
+const int SOME_COUNT = 4;						// A constant int, float or pointer is treated like a compile-time
+												// read-only (it turns into a DEF directive in GAZL). This means that
+												// you can use constant ints for array sizes etc.
+
+const int GAZL_WORD_SIZE;						// You may declare a constant without a value if it will be defined
+												// later by the GAZL run-time.
+
+readonly array SOME_CONSTS[SOME_COUNT] = {		// `readonly` declares a run-time read-only variable or array.
+	100, 200, 300, 400							// Modifying a `readonly` will trigger a run-time error.
+};
+
+extern int defineMeLaterPlease;					// `extern` can be used to declare a variable, array or function before
+												// it is defined (or if it is defined in another source file).
+												
+extern array futureArray;						// `extern array` declaration should not include array size.
+
+extern function thisFunctionInAnotherSource;	// In version 1.0 of Impala there is no type-checking of function
+												// arguments and returns so this construct is sufficient for declaring
+												// a function in advance.
+
+extern native abort;							// Native functions (registered by the "host application") need to be
+												// declared like this before used.
+
+const pointer WELCOME = "Welcome to Impala!\n"	// Strings are pointers, so string constants can be declared like this.
+
+/**********************
+ *    Literals        *
+ **********************/
+
+readonly array VARIOUS_LITERALS[15] = {
+	123,										// int
+	-393,										// int
+	+494,										// int
+	0xAA55,										// int
+	-0x1F2E3C4D,								// int
+	'A',										// int (ascii value of 'A', i.e. 65)
+	-'',										// int (0)
+	'ROFL',										// int (big-endian 4-char int)
+	34.0,										// float (digits are required before and after .)
+	-123.0e10,									// float
+	256.11E-10,									// float
+	"string1",									// pointer to zero-terminated string, each character is an int
+	"all escapes: \\\"\b\f\n\r\t\u5A7E",		// - " -
+	null,										// null pointer
+	nullfunc									// null function pointer
+};
+
+/*******************
+ *    Functions    *
+ *******************/
+
+function abortOnZero(int v)						// This function doesn't return anything and has no local variables.
+{
+	if (v == 0) abort();
+}
+
+function fetchSomeConst(int index)				// This function returns an int.
+returns int fetched								// Notice that version 1.0 of Impala only supports single return values.
+												// GAZL supports multiple "OUT" variables per function and the intention
+												// is to eventually support this in Impala too.
+{
+	fetched = (int) global SOME_CONSTS[index];	// `fetched` is the return variable so we simply set it to whatever we
+												// want to return. Notice that we must cast the untyped SOME_CONSTS
+												// array element before assigning. Casts in Impala never performs type
+												// conversion (e.g. from int to float), it just informs the compiler how
+												// to interpret untyped data. (For int<->float conversion, use itof()
+												// and ftoi().)
+}
+
+function findSmallest(int n, pointer vector)
+returns int j
+locals int i									// This function has a single local variable.
+{
+	j = 0;
+	for (i = 1 to n)							// This `for` statement iterates i from 1 up until n (exclusively).
+		if ((int) vector[i] < (int) vector[j])
+			j = i;
+}
+
+const int TEST_SIZE = 50;						// consts, externs etc need to be declared outside functions
+extern function myrand;
+extern native printInt;
+extern native printLF;
+
+function test()
+locals int i, array mydata[TEST_SIZE]			// We have two locals. They need to be declared by the same statement
+												// with comma separating them. No semicolon at the end!
+{
+	for (i = 0 to TEST_SIZE)
+		mydata[i] = myrand();
+	for (i = 0 to TEST_SIZE) {
+		printInt(mydata[i]);
+		printLF();
+	}
+	printInt(findSmallest(TEST_SIZE, mydata));	// Take good care double checking that function calls supply the
+												// correct number of arguments and that they are of the expected types.
+												// THERE IS NO TYPE-CHECKING OF FUNCTION ARGUMENTS AND RETURN VALUES
+												// IN IMPALA VERSION 1!!! Sorry... :)
+}
+
+/*********************
+ *    Expressions    *
+ *********************/
+
+extern native printFloat;
+
+function showoff()
+locals int a, int b, int c, int d, int e, int ok
+, pointer p, array arr[100]
+, float f
+{
+	a = 1;										// FIX : NO, NOT ANY MORE : Assignment is a statement in Impala (unlike in C where you can
+	b = 12345;									// make assignments within any expression). This prevents faulty
+	c = 123;									// statements like `if (x = 1) {}` from compiling.
+	d = 1234;
+	e = 12;
+												
+	a = a + 1;									// `=` is the only assignment operator available (there are no `+=`,
+												// `-=` operators etc).
+	
+												// Otherwise, Impala supports most of the operators that you are
+												// accustomed to.
+
+	a = a | 250 & 120 ^ 60 << 3 >> 1;			// Bitwise infix operators all have the same precedence (unlike the
+												// obscure precedence rules in C).
+
+	a = ~a >>> 10;								// Since there is no unsigned data type we use `>>>` to perform
+												// unsigned right-shifts (like in Java etc).
+	
+	a = a + b * c % d / e;						// The arithmetic operators follow standard precedence rules.
+	
+	if (a == 4194354) ok = 1;					// Boolean expressions can only be used in control-flow statements like
+	else ok = 0;								// `if`, `while` etc. There is no boolean data type in Impala and there
+												// is no implicit conversion from boolean results to 0 and 1 as in C.
+												// (Thus: `ok = (a == 4194354)` would be invalid.)
+	
+	printInt(ok);
+	printLF();
+
+a = b = 'xyz';
+a = b = 345 * 123;
+a = b = c + d;
+// c = arr[d * 31] = global futureArray[b * 101] = a = b = &global SOME_CONSTS[2] - &global SOME_CONSTS[0];
+// a = b = (int) arr[a*b] = *p = a;
+for (a = 1+5 to 10*23) ;
+for (a = global forgetMe to 10*23) ;
+for (p = global SOME_CONSTS to &global SOME_CONSTS[0]) { printInt(p); printLF(); }
+a = global forgetMe;
+f = 23.3;
+a = ftoi(f * (2.3 * 8.9));						// ftoi(f * 2.3 * 8.9) becomes less optimal gazl
+a = ftoi(2.3 * f);
+a = ftoi(2.3 * 8.9);
+f = itof(a) * (1.0 / itof(100));				// itof(a) * 1.0 / itof(100) becomes less optimal gazl
+f = (1.0 / itof(100)) * itof(a);				// itof(a) * 1.0 / itof(100) becomes less optimal gazl
+f = itof(a) / 100.0;
+printInt(a);printLF();
+printFloat(f);printLF();
+
+global initedArray[2] = &global futureArray[4];
+if (1 == 1) {
+	assert((pointer)global initedArray[2] == &global futureArray[4]);
+} else {
+	assert(0 == 1);
+}
+
+global aFuncPointer = showoff;
+if (global aFuncPointer == nullfunc) global aFuncPointer();
+
+/*
+copy   (  3    from    &global initedArray[1]   to   &global futureArray[0]   )   ;
+copy   (  3    from    &global initedArray[ e * 0 + 1 ]   to   &global futureArray[0]   )   ;
+copy   (  3    from    &global initedArray[ e * 0 + 1 ]   to   p   )   ;
+copy   (  3    from    (p = &global initedArray[ e * 0 + 1 ])   to   p   )   ;
+copy   (  3    from    (p = &global initedArray[ e * 0 + 1 ])   to   p+e   )   ;
+copy   (  3    from       &global initedArray[ 1 ]   to   p+e   )   ;
+copy   (  3    from       &global initedArray[ 1 ]   to   arr   )   ;
+*/
+}
+
+global int defineMeLaterPlease;
+global array futureArray[10];
+
+global int myrand_seed = 2463534242;
+function myrand()
+returns int y
+{
+	y = global myrand_seed;
+	y = y ^ (y << 13);
+	y = y ^ (y >>> 17);
+	y = y ^ (y << 5);
+	global myrand_seed = y;
+}
+
+const int anInt = 4;
+
+extern native print;
+function main()
+locals float myFloat
+{
+	print(WELCOME);
+	myFloat = 1000.0;
+	printInt(ftoi(myFloat * (1.0 / itof(1 << anInt)))); printLF();
+	showoff();
+	print("Bye!\n");
+}

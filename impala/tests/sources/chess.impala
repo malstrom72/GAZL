@@ -1,0 +1,1449 @@
+/*
+	Priyome Chess Computer by Magnus Lidström.
+	
+	Priyome is a complete chess computer in single plain C source code file. It was written to be easily ported to
+	other even more primitive languages. E.g. it uses only integers and does not require structures. The AI is
+	implemented using standard chess computer techniques such as alpha beta pruning search with iterative deepening,
+	quiescence optimization (only checking for captures beyond a specific depth) and a memory efficient solution for
+	transposition table lookup. (See comment in source code below.)
+
+	It was not designed to be the best chess computer in the world, but still put up a strong fight against any human
+	player. The primary objective is a clean and portable source code.
+
+	It is important to compile this code with NDEBUG defined for release builds. Due to the massive invariance testing,
+	the code is extremely slow otherwise.
+
+	Priyome is released under the "New Simplified BSD License". http://www.opensource.org/licenses/bsd-license.php
+
+	Copyright (c) 2013-2014, NuEdge Development / Magnus Lidstroem
+	All rights reserved.
+
+	Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+	following conditions are met:
+
+	Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+	disclaimer. 
+	
+	Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following
+	disclaimer in the documentation and/or other materials provided with the distribution. 
+	
+	Neither the name of the NuEdge Development nor the names of its contributors may be used to endorse or promote
+	products derived from this software without specific prior written permission.
+	
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+	INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+	SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+	WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+extern native output
+extern native input
+extern native clock
+
+const int FALSE = 0
+const int TRUE = 1
+const int DEBUG
+
+const int STRIDE = (8 + 2)
+const int BOARD_SIZE = (8 + 4) * STRIDE
+const int RANK_1 = STRIDE * 2
+const int RANK_2 = STRIDE * 3
+const int RANK_3 = STRIDE * 4
+const int RANK_4 = STRIDE * 5
+const int RANK_5 = STRIDE * 6
+const int RANK_6 = STRIDE * 7
+const int RANK_7 = STRIDE * 8
+const int RANK_8 = STRIDE * 9
+
+const int OFFBOARD = -1
+const int EMPTY = 0
+const int PAWN = 1
+const int ROOK = 2
+const int KNIGHT = 3
+const int BISHOP = 4
+const int QUEEN = 5
+const int KING = 6
+const int BLACK = 8
+const int WHITE = 16		/* We use two bits for color. 00 = empty, 01 = black, 10 = white, 11 = off-board. This allows fast bit-tricks for tracing possible moves. E.g. (... & color) == 0 to check if a square is empty or contains an opponent piece. */
+const int PIECE_MASK = 7
+const int COLOR_MASK = BLACK | WHITE
+const int COLOR_SWITCH_XOR = BLACK ^ WHITE
+const int MOVED_MASK = 32	/* The moved bit helps us determine if a king can castle or not and also if a pawn is allowed to move two squares. */
+const int PIECE_AND_MOVED_MASK = PIECE_MASK | MOVED_MASK
+const int MAX_PIECE_AND_MOVED_VALUE = 64
+
+const int MIN_DEPTH = 4
+const int MAX_DEPTH = 16
+const int QUIESCENCE_DEPTH = 8
+const int TO_SHIFT = 8
+const int SCORE_SHIFT = 16
+const int MOVE_MASK = 0x0000FFFF
+const int FROM_MASK = 0x000000FF
+const int TO_MASK = 0x0000FF00
+const int SCORE_MASK = ~MOVE_MASK
+const int CHECKMATE = 0xFFFF
+const int STALEMATE = 0xFFFE
+const int IN_CHECK = 0xFFFD
+const int VALID_MOVE = 0xFFFC
+const int INVALID_MOVE = -1
+const int MAX_SCORE = 10000
+const int MIN_SCORE = -MAX_SCORE
+const int PAWN_VALUE = 100
+const int QUEEN_VALUE = 9 * PAWN_VALUE
+const int PROMOTION_SCORE = QUEEN_VALUE - PAWN_VALUE
+const int CAPTURE_KING_MIN_SCORE = MAX_SCORE - MAX_DEPTH
+const int RANDOM_AMOUNT = PAWN_VALUE / 10
+const int PAWN_ADVANCE_SCORE = PAWN_VALUE / 10
+const int CASTLING_SCORE = PAWN_VALUE / 2
+const int CASTLING_MASK = 0x80 /* Used for xCapture */
+const int HISTORY_SIZE = 256
+
+readonly array DIRS[8] = { STRIDE, STRIDE + 1, 1, -STRIDE + 1, -STRIDE, -STRIDE - 1, -1, STRIDE - 1 };
+readonly array KNIGHT_MOVES[8] = { STRIDE * 2 + 1, 2 + STRIDE, 2 - STRIDE, -STRIDE * 2 + 1, -STRIDE * 2 - 1, -STRIDE - 2, STRIDE - 2, STRIDE * 2 - 1 };
+readonly array PIECE_VALUES[7] = { 0, PAWN_VALUE, 5 * PAWN_VALUE, 3 * PAWN_VALUE, 3 * PAWN_VALUE, QUEEN_VALUE, MAX_SCORE };
+readonly array RANK_VALUES[8 + 4]= { 0, 0, 0, 30, 50, 60, 60, 50, 30, 0, 0, 0 }; /* Simple score structure used for all pieces but pawns. */
+
+const int MAX_TARGET_SQUARES = 32 /* Max target squares for a single piece. */
+const int MAX_MOVES = 256 /* Max psuedo-legal moves from any given position. 256 should be enough for any normal game. Prove me wrong. */
+const int MAX_CAPTURES = 32 /* Max pseudo-legal captures from any given position. 32 should be enough for any normal game. Prove me wrong. */
+
+/* Notice the flipped effect because we have the lowest rank first in the array. */
+readonly array INIT_BOARD[BOARD_SIZE] = {
+	OFFBOARD,	OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,
+	OFFBOARD,	OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,
+	OFFBOARD,	ROOK | WHITE,	KNIGHT | WHITE,	BISHOP | WHITE,	QUEEN | WHITE,	KING | WHITE,	BISHOP | WHITE,	KNIGHT | WHITE,	ROOK | WHITE,	OFFBOARD,
+	OFFBOARD,	PAWN | WHITE,	PAWN | WHITE,	PAWN | WHITE,	PAWN | WHITE,	PAWN | WHITE,	PAWN | WHITE,	PAWN | WHITE,	PAWN | WHITE,	OFFBOARD,
+	OFFBOARD,	EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			OFFBOARD,
+	OFFBOARD,	EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			OFFBOARD,
+	OFFBOARD,	EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			OFFBOARD,
+	OFFBOARD,	EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			EMPTY,			OFFBOARD,
+	OFFBOARD,	PAWN | BLACK,	PAWN | BLACK,	PAWN | BLACK,	PAWN | BLACK,	PAWN | BLACK,	PAWN | BLACK,	PAWN | BLACK,	PAWN | BLACK,	OFFBOARD,
+	OFFBOARD,	ROOK | BLACK,	KNIGHT | BLACK,	BISHOP | BLACK,	QUEEN | BLACK,	KING | BLACK,	BISHOP | BLACK,	KNIGHT | BLACK,	ROOK | BLACK,	OFFBOARD,
+	OFFBOARD,	OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,
+	OFFBOARD,	OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD,		OFFBOARD
+};
+
+const pointer PIECE_CHARS = " PRNBQK  prnbqk ";
+readonly array PIECE_NAMES[8] = { "", "pawn", "rook", "knight", "bishop", "queen", "king" };
+
+global array board[BOARD_SIZE];
+global array nextPiece[BOARD_SIZE];
+global array prevPiece[BOARD_SIZE];
+global int xCapture;
+global int turnColor;
+global int boardHash;
+
+/*
+	Unlike most transposition table implementations our hash table is used only for improving move ordering based on
+	the outcome of previous searches. This greatly reduces processing time due to alpha beta pruning. It is sufficient
+	with a fairly small table (minimum is 64k entries). A bigger table (say 1M entries) gives marginally better results
+	with deeper searches. The hash table contains 32-bit ints where the higher 16 bits are the highest 16 bits of the
+	hash key (used to minimize collisions) and the lower 16 bits define the last chosen move for this particular position.
+
+	Hashes for positions are incrementally updated with a Zobrist mechanism using a table with random values for each
+	piece (incl colors and moved bits) and square + xCapture and turnColor values. We bit-and all hash operations with ~0
+	to emphasize the "wrapping" of additions and subtractions.
+
+	The advantage of this solution compared to a standard transposition table with exact search results are simplicity
+	(no structs needed), reliablitiy (collisions are harmless) and memory footprint.
+*/
+
+const int HASH_TABLE_SIZE = 64 * 1024
+const int HASH_MASK = ~0
+
+global array pieceKeys[BOARD_SIZE * 64];
+global array xCaptureKeys[256];
+global array colorKeys[WHITE + 1];
+global array hashTable[HASH_TABLE_SIZE];
+global int evalCounter = 0;
+global array history[HISTORY_SIZE * 4]; /* Four elements per half-move: 16-bit move, piece, captured and xCapture (see doMove() for more info). */
+global int historyCount = 0;
+global int minEvals = 10000;
+
+global int randPX = 123456789;
+global int randPY = 362436069;
+
+function nextRandom()
+returns	int y
+locals	int x, int t
+{
+	/* Marsaglia's Xorshift PRNG algorithm. */
+	
+	x = global randPX;
+	y = global randPY;
+	t = x ^ (x << 10);
+	x = y;
+	y = y ^ (y >>> 13) ^ t ^ (t >>> 10);
+	global randPX = x;
+	global randPY = y;
+}
+
+function initGlobals()
+locals	int i
+{
+	/*
+		The xor-shift random algorithm makes it necessary to use addition and subtraction for the incremental Zobrist
+		hashing instead of xor.
+	*/
+	
+	for (i = 0 to 64 * BOARD_SIZE) {
+		global pieceKeys[i] = nextRandom();
+	}
+	for (i = 0 to 256) {
+		global xCaptureKeys[i] = nextRandom();
+	}
+	global colorKeys[WHITE] = nextRandom();
+	global colorKeys[BLACK] = nextRandom();
+}
+
+function isOnBoard(int square)
+returns	int b
+{
+	b = FALSE;
+	if (square >= 0 && square < BOARD_SIZE && (int) global INIT_BOARD[square] != OFFBOARD) {
+		b = TRUE;
+	}
+}
+
+function isValidColor(int color)
+returns int b
+{
+	b = FALSE;
+	if (color == WHITE || color == BLACK) {
+		b = TRUE;
+	}
+}
+
+function isValidMove(int move)
+returns int b
+{
+	b = FALSE;
+	if ((move & MOVE_MASK) == move && (int) isOnBoard(move & FROM_MASK) != FALSE && (int) isOnBoard((move & TO_MASK) >> TO_SHIFT) != FALSE) {
+		b = TRUE;
+	}
+}
+
+function isValidPiece(int piece)
+returns int b
+{
+	b = FALSE;
+	if (1 <= piece && piece < 64 && (piece & PIECE_MASK) >= 1 && (piece & PIECE_MASK) <= 6
+			&& (int) isValidColor(piece & COLOR_MASK) != FALSE) {
+		b = TRUE;
+	}
+}
+
+function moveFrom(int move)
+returns int f
+{
+	assert((int) isValidMove(move) != FALSE);
+	f = (move & FROM_MASK);
+}
+
+function moveTo(int move)
+returns int t
+{
+	assert((int) isValidMove(move) != FALSE);
+	t = (move >> TO_SHIFT);
+}
+
+function makeMove(int fromCol, int fromRow, int toCol, int toRow)
+returns int m
+{
+	m = ((fromRow + 2) * STRIDE + fromCol + 1) | (((toRow + 2) * STRIDE + toCol + 1) << TO_SHIFT);
+}
+
+function switchColor(int color)
+returns	int c
+{
+	c = (color ^ COLOR_SWITCH_XOR);
+}
+
+function checkInvariant()
+returns int b
+locals	int color, int h, int i, int frm, int p
+		, array counts[(BLACK | WHITE) + 1], array countsAgain[(BLACK | WHITE) + 1]
+{
+	assert((int) isValidColor(global turnColor) != FALSE);
+
+	if (global xCapture != 0) {
+		assert(0 <= global xCapture && global xCapture < 256);
+		assert((int) isOnBoard(global xCapture & ~128) != FALSE);
+		
+		if (((global xCapture & CASTLING_MASK) != 0)) {
+			assert(((int) global board[global xCapture & ~CASTLING_MASK] & PIECE_AND_MOVED_MASK) == (ROOK | MOVED_MASK));
+			assert(((int) global board[(global xCapture & ~CASTLING_MASK) - 1] & PIECE_AND_MOVED_MASK) == (KING | MOVED_MASK)
+					|| ((int) global board[(global xCapture & ~CASTLING_MASK) + 1] & PIECE_AND_MOVED_MASK) == (KING | MOVED_MASK));
+		} else {
+			assert((global xCapture >= RANK_3 && global xCapture < RANK_4) || (global xCapture >= RANK_6 && global xCapture < RANK_7));
+			assert((int) global board[global xCapture + STRIDE] == (WHITE | PAWN | MOVED_MASK)
+					|| (int) global board[global xCapture - STRIDE] == (BLACK | PAWN | MOVED_MASK));
+		}
+	}
+	
+	color = BLACK;
+	do {
+		frm = (int) global nextPiece[color];
+		counts[color] = 0;
+		while (frm != color) {
+			p = (int) global board[frm];
+			assert((p & COLOR_MASK) == color);
+			assert((int) isValidPiece(p) != FALSE);
+			frm = (int) global nextPiece[frm];
+			counts[color] = (int) counts[color] + 1;
+		}
+		color = (int) switchColor(color);
+	} while (color != BLACK);
+	
+	h = 0;
+	countsAgain[BLACK] = countsAgain[WHITE] = 0;
+	for (i = 0 to BOARD_SIZE) {
+		p = (int) global board[i];
+		assert((int) global INIT_BOARD[i] != OFFBOARD || p == OFFBOARD);
+		if (p > EMPTY) {
+			assert((int) isValidPiece(p) != FALSE);
+			assert(0 <= p && p < 64);
+			h = (h + (int) global pieceKeys[i * 64 + p]) & HASH_MASK;
+		}
+		countsAgain[p & COLOR_MASK] = (int) countsAgain[p & COLOR_MASK] + 1;
+	}
+	
+	assert((int) countsAgain[BLACK] == (int) counts[BLACK]);
+	assert((int) countsAgain[WHITE] == (int) counts[WHITE]);
+	assert(h == global boardHash);
+	
+	b = TRUE;
+}
+
+function putPiece(int square, int piece)
+locals	int c, int n
+{
+	assert((int) isOnBoard(square) != FALSE);
+	assert((int) isValidPiece(piece) != FALSE);
+	
+	assert((int) global board[square] == EMPTY);
+	(int) global board[square] = piece;
+	c = piece & COLOR_MASK;
+	n = (int) global nextPiece[c];
+	global nextPiece[square] = n;
+	global prevPiece[square] = c;
+	global prevPiece[n] = square;
+	global nextPiece[c] = square;
+	global boardHash = (global boardHash + (int) global pieceKeys[square * 64 + piece]) & HASH_MASK;
+}
+
+function liftPiece(int square)
+locals	int piece, int n, int p
+{
+	assert((int) isOnBoard(square) != FALSE);
+	
+	piece = (int) global board[square];
+	assert(piece > EMPTY);
+	global boardHash = (global boardHash - (int) global pieceKeys[square * 64 + piece]) & HASH_MASK;
+	(int) global board[square] = EMPTY;
+	n = (int) global nextPiece[square];
+	p = (int) global prevPiece[square];
+	global nextPiece[p] = n;
+	global prevPiece[n] = p;
+}
+
+function movePiece(int frm, int t, int newPiece)
+locals	int oldPiece, int n, int p
+{
+	assert((int) isOnBoard(frm) != FALSE);
+	assert((int) isOnBoard(t) != FALSE);
+	assert((int) isValidPiece(newPiece) != FALSE);
+	assert(frm != t);	
+	assert((int) global board[t] == EMPTY);
+	
+	(int) global board[t] = newPiece;
+	oldPiece = (int) global board[frm];
+	assert((int) isValidPiece(oldPiece) != FALSE);
+	global boardHash = (global boardHash + (int) global pieceKeys[t * 64 + newPiece] - (int) global pieceKeys[frm * 64 + oldPiece]) & HASH_MASK;
+	(int) global board[frm] = EMPTY;
+	n = (int) global nextPiece[frm];
+	p = (int) global prevPiece[frm];
+	global prevPiece[t] = p;
+	global nextPiece[t] = n;
+	global nextPiece[p] = t;
+	global prevPiece[n] = t;
+}
+
+function restart()
+locals	int i
+{
+	global nextPiece[WHITE] = (int) global prevPiece[WHITE] = WHITE;
+	global nextPiece[BLACK] = (int) global prevPiece[BLACK] = BLACK;
+	global boardHash = 0;
+	for (i = 0 to BOARD_SIZE) {
+		(int) global board[i] = EMPTY;
+		if ((int) global INIT_BOARD[i] == OFFBOARD) {
+			(int) global board[i] = OFFBOARD;
+		} else if ((int) global INIT_BOARD[i] > EMPTY) {
+			putPiece(i, (int) global INIT_BOARD[i]);
+		}
+	}
+	for (i = 0 to HASH_TABLE_SIZE) {
+		global hashTable[i] = 0;
+	}
+	global turnColor = WHITE;
+	global xCapture = 0;
+	global historyCount = 0;
+	assert((int) checkInvariant() != FALSE);
+}
+
+function squareCapturesCastlingKing(int square)
+returns	int b
+{
+
+	/*
+		On the ply immediately following castling, xCapture will contain the rook's square (+ CASTLING_MASK) and any move
+		to this square or the horizontally adjacent squares are interpreted as capturing the king in order to prevent
+		illegal castling.
+	*/
+	
+	b = FALSE;
+	if ((square | CASTLING_MASK) >= global xCapture - 1 && (square | CASTLING_MASK) <= global xCapture + 1) {
+		b = TRUE;
+	}
+}
+
+function squareCapturesKing(int square)
+returns	int b
+{
+	assert((int) isOnBoard(square) != FALSE);
+
+	b = FALSE;
+	if (((int) global board[square] & PIECE_MASK) == KING || (int) squareCapturesCastlingKing(square) != FALSE) {
+		b = TRUE;
+	}
+}
+
+/*
+	doMove() could have returned all required data for undoMove() but in order to avoid language dependent constructs
+	for returning multiple ints (such as structs and pointers), you setup the necessary undo data before calling doMove()
+	instead. Like this:
+
+	int oldPiece = board[from];
+	int captured = board[to];
+	int oldXCapture = xCapture;
+
+	Then use the same arguments for undoMove()
+
+	doMove returns the differential score for this move, including a small random amount to avoid repetition.
+*/
+
+function doMove(int frm, int t, int oldPiece, int captured, int oldXCapture)
+returns	int score
+locals	int newPiece
+{
+	assert((int) isOnBoard(frm) != FALSE);
+	assert((int) isOnBoard(t) != FALSE);
+	assert((int) isValidPiece(oldPiece) != FALSE);
+	assert(captured == EMPTY || (int) isValidPiece(captured) != FALSE);
+	assert(frm != t);
+
+	assert((int) checkInvariant() != FALSE);
+	
+	newPiece = oldPiece;
+	score = ((int) nextRandom() & 7) - 4;	
+	global xCapture = 0;
+
+	switch (oldPiece == 0 to MAX_PIECE_AND_MOVED_VALUE) {
+		case KING | WHITE: {
+			switch (t == RANK_1 + 3 to RANK_1 + 7 + 1) {
+				case RANK_1 + 3: {
+					
+					/* White castling queenside */
+
+					movePiece(RANK_1 + 1, RANK_1 + 4, ROOK | WHITE | MOVED_MASK);
+					global xCapture = (RANK_1 + 4) | CASTLING_MASK;
+					score = score + CASTLING_SCORE;
+				}
+				
+				case RANK_1 + 7: {
+
+					/* White castling kingside */
+
+					movePiece(RANK_1 + 8, RANK_1 + 6, ROOK | WHITE | MOVED_MASK);
+					global xCapture = (RANK_1 + 6) | CASTLING_MASK;
+					score = score + CASTLING_SCORE;
+				}
+				
+				default: {
+					score = score + (int) global RANK_VALUES[t / STRIDE] - (int) global RANK_VALUES[frm / STRIDE];
+				}
+			}
+		}
+		
+		case KING | BLACK: {
+						
+			switch (t == RANK_8 + 3 to RANK_8 + 7 + 1) {
+				case RANK_8 + 3: {
+
+					/* Black castling queenside */
+
+					movePiece(RANK_8 + 1, RANK_8 + 4, ROOK | BLACK | MOVED_MASK);
+					global xCapture = (RANK_8 + 4) | CASTLING_MASK;
+					score = score + CASTLING_SCORE;
+				}
+				
+				case RANK_8 + 7: {
+
+					/* Black castling kingside */
+
+					movePiece(RANK_8 + 8, RANK_8 + 6, ROOK | BLACK | MOVED_MASK);
+					global xCapture = (RANK_8 + 6) | CASTLING_MASK;
+					score = score + CASTLING_SCORE;
+				}
+				
+				default: {
+					score = score + (int) global RANK_VALUES[t / STRIDE] - (int) global RANK_VALUES[frm / STRIDE];
+				}
+			}			
+		}
+		
+		case PAWN | WHITE | MOVED_MASK: {
+			if (t == oldXCapture) {
+				
+				/* En passant capture black pawn */
+				
+				assert((int) global board[t - STRIDE] == (PAWN | BLACK | MOVED_MASK));
+				liftPiece(t - STRIDE);
+				score = score + PAWN_ADVANCE_SCORE + PAWN_VALUE;
+				
+			} else if (t >= RANK_8) {
+				
+				/* Promotion (always to white queen) */
+				
+				newPiece = QUEEN | WHITE | MOVED_MASK;
+				score = score + PROMOTION_SCORE;
+				
+			} else {
+				score = score + PAWN_ADVANCE_SCORE;
+			}
+		}
+		
+		case PAWN | BLACK | MOVED_MASK: {
+			if (t == oldXCapture) {
+			
+				/* En passant capture white pawn */
+			
+				assert((int) global board[t + STRIDE] == (PAWN | WHITE | MOVED_MASK));
+				liftPiece(t + STRIDE);
+				score = score + PAWN_ADVANCE_SCORE + PAWN_VALUE;
+			} else if (t < RANK_2) {
+			
+				/* Promotion (always to black queen) */
+				
+				newPiece = QUEEN | BLACK | MOVED_MASK;
+				score = score + PROMOTION_SCORE;
+				
+			} else {
+				score = score + PAWN_ADVANCE_SCORE;
+			}
+		}
+		
+		case PAWN | WHITE: {
+			if (t >= RANK_4) {
+				
+				/* Register en passant capture square (white) */
+				
+				global xCapture = t - STRIDE;	
+				score = score + PAWN_ADVANCE_SCORE;
+			}
+			score = score + PAWN_ADVANCE_SCORE;
+		}
+		
+		case PAWN | BLACK: {
+			if (t < RANK_6) {
+				
+				/* Register en passant capture square (black) */
+				
+				global xCapture = t + STRIDE;
+				score = score + PAWN_ADVANCE_SCORE;
+			}
+			score = score + PAWN_ADVANCE_SCORE;
+		}
+
+		default: {
+			score = score + (int) global RANK_VALUES[t / STRIDE] - (int) global RANK_VALUES[frm / STRIDE];
+		}
+	}
+	
+	if (captured > EMPTY) {
+		liftPiece(t);
+	}
+	movePiece(frm, t, newPiece | MOVED_MASK);
+	
+	/*
+		Capturing gives a score based on piece type and rank. Without including rank, the computer would value moves
+		that end in definite captures just for the score from the move itself.
+	*/
+	
+	switch ((captured & (PIECE_MASK | COLOR_MASK)) == 0 to MAX_PIECE_AND_MOVED_VALUE) {
+		case EMPTY: ;
+		
+		case PAWN | WHITE: {
+			score = score + PAWN_VALUE + (t / STRIDE - 3) * PAWN_ADVANCE_SCORE;
+		}
+		
+		case PAWN | BLACK: {
+			score = score + PAWN_VALUE + (8 - t / STRIDE) * PAWN_ADVANCE_SCORE;
+		}
+		
+		default: {
+			score = score + (int) global PIECE_VALUES[captured & PIECE_MASK] + (int) global RANK_VALUES[t / STRIDE];
+		}
+	}
+	
+	global turnColor = (int) switchColor(global turnColor);
+	
+	assert((int) checkInvariant() != FALSE);
+}
+
+/* See doMove() for parameters. */
+
+function undoMove(int frm, int t, int oldPiece, int captured, int oldXCapture)
+{
+	assert((int) isOnBoard(frm) != FALSE);
+	assert((int) isOnBoard(t) != FALSE);
+	assert((int) isValidPiece(oldPiece) != FALSE);
+	assert(captured == EMPTY || (int) isValidPiece(captured) != FALSE);
+	assert(frm != t);
+
+	assert((int) checkInvariant() != FALSE);
+
+	global xCapture = oldXCapture;
+	putPiece(frm, oldPiece);
+	liftPiece(t);
+	if (captured > EMPTY) {
+		putPiece(t, captured);
+	}
+	
+	switch (oldPiece == 0 to MAX_PIECE_AND_MOVED_VALUE) {
+		case KING | WHITE: {
+			switch (t == RANK_1 + 3 to RANK_1 + 7 + 1) {
+				case RANK_1 + 3: {
+					
+					/* Undo white castling queenside */
+
+					movePiece(RANK_1 + 4, RANK_1 + 1, ROOK | WHITE);
+				}
+				
+				case RANK_1 + 7: {
+
+					/* Undo white castling kingside */
+
+					movePiece(RANK_1 + 6, RANK_1 + 8, ROOK | WHITE);
+				}
+			}
+		}
+		
+		case KING | BLACK: {
+			switch (t == RANK_8 + 3 to RANK_8 + 7 + 1) {
+				case RANK_8 + 3: {
+				
+					/* Undo black castling queenside */
+
+					movePiece(RANK_8 + 4, RANK_8 + 1, ROOK | BLACK);
+				}
+				
+				case RANK_8 + 7: {
+
+					/* Undo black castling kingside */
+
+					movePiece(RANK_8 + 6, RANK_8 + 8, ROOK | BLACK);
+				}
+			}
+		}
+		
+		case PAWN | WHITE | MOVED_MASK: {
+			if (t == oldXCapture) {
+			
+				/* Undo en passant capture (white) */
+				
+				putPiece(t - STRIDE, PAWN | BLACK | MOVED_MASK);
+			}
+		}
+		
+		case PAWN | BLACK | MOVED_MASK: {
+			if (t == oldXCapture) {
+			
+				/* Undo en passant capture (black) */
+
+				putPiece(t + STRIDE, PAWN | WHITE | MOVED_MASK);
+			}
+		}
+	}
+
+	global turnColor = (int) switchColor(global turnColor);
+
+	assert((int) checkInvariant() != FALSE);
+}
+
+function traceRBQ(int color, int frm, int toCount, pointer tos, int start, int step)
+returns	int newToCount
+locals	int cx, int d, int toInc, int t
+{
+	assert((int) isOnBoard(frm) != FALSE);
+
+	/* Notice how we don't check squareCapturesCastlingKing() because we will stop tracing at first / last rank anyhow. */
+
+	newToCount = toCount;
+	cx = (int) switchColor(color);
+	d = start;
+	while (d < 8) {
+		toInc = (int) global DIRS[d];
+		t = frm + toInc;
+		while ((int) global board[t] == EMPTY) {
+			tos[newToCount] = t;
+			newToCount = newToCount + 1;
+			t = t + toInc;
+		}
+		if (((int) global board[t] & COLOR_MASK) == cx) {
+			tos[newToCount] = t;
+			newToCount = newToCount + 1;
+		}
+		d = d + step;
+	}
+}
+
+function listMoves(int color, int frm, pointer tos)
+returns	int toCount
+locals	int t, int piece, int cx, int s, int d
+{
+	assert((int) isOnBoard(frm) != FALSE);
+
+	toCount = 0;
+	piece = (int) global board[frm];
+	switch ((piece & PIECE_MASK) == 0 to MAX_PIECE_AND_MOVED_VALUE) {
+		case PAWN: {
+			s = STRIDE;
+			if (color == BLACK) s = -STRIDE;
+			t = frm + s;
+			if ((int) global board[t] == EMPTY) {
+				tos[toCount] = t;
+				toCount = toCount + 1;
+				if ((piece & MOVED_MASK) == 0 && (int) global board[t + s] == EMPTY) {
+					tos[toCount] = t + s;
+					toCount = toCount + 1;
+				}
+			}
+			cx = (int) switchColor(color);
+			t = t - 1;
+			if (((int) global board[t] & COLOR_MASK) == cx || global xCapture == t || (int) squareCapturesCastlingKing(t) != FALSE) {
+				tos[toCount] = t;
+				toCount = toCount + 1;
+			}
+			t = t + 2;
+			if (((int) global board[t] & COLOR_MASK) == cx || global xCapture == t || (int) squareCapturesCastlingKing(t) != FALSE) {
+				tos[toCount] = t;
+				toCount = toCount + 1;
+			}
+		}
+		
+		case ROOK: toCount = (int) traceRBQ(color, frm, toCount, tos, 0, 2);
+		case BISHOP: toCount = (int) traceRBQ(color, frm, toCount, tos, 1, 2);
+		case QUEEN: toCount = (int) traceRBQ(color, frm, toCount, tos, 0, 1);
+		
+		case KING: {
+
+			/* Notice how we don't check squareCapturesCastlingKing() because we will stop tracing at first / last rank anyhow. */
+
+			for (d = 0 to 8) {
+				t = frm + (int) global DIRS[d];
+				if (((int) global board[t] & color) == 0) {
+					tos[toCount] = t;
+					toCount = toCount + 1;
+				}
+			}
+			if ((piece & MOVED_MASK) == 0) {
+				
+				/* Castling */
+				
+				t = RANK_1;
+				if (color == BLACK) t = RANK_8;
+				if (((int) global board[t + 2] | (int) global board[t + 3] | (int) global board[t + 4]) == EMPTY
+						&& ((int) global board[t + 1] & PIECE_AND_MOVED_MASK) == ROOK) {
+					tos[toCount] = t + 3;
+					toCount = toCount + 1;
+				}
+				if (((int) global board[t + 7] | (int) global board[t + 6]) == EMPTY
+						&& ((int) global board[t + 8] & PIECE_AND_MOVED_MASK) == ROOK) {
+					tos[toCount] = t + 7;
+					toCount = toCount + 1;
+				}
+			}
+		}
+		
+		case KNIGHT: {
+
+			/* Notice how we don't check squareCapturesCastlingKing() because we will stop tracing at first / last rank anyhow. */
+
+			for (d = 0 to 8) {
+				t = frm + (int) global KNIGHT_MOVES[d];
+				if (((int) global board[t] & color) == 0) {
+					tos[toCount] = t;
+					toCount = toCount + 1;
+				}
+			}
+		}
+		
+		default: assert(0 != 0);
+	}
+	
+	assert(toCount <= MAX_TARGET_SQUARES);
+}
+
+function canCaptureKing(int color)
+returns	int b
+locals	array tos[MAX_TARGET_SQUARES], int frm, int toCount, int i
+{
+	assert((int) isValidColor(color) != FALSE);
+	b = FALSE;
+	frm = (int) global nextPiece[color];
+	while (frm != color) {
+		toCount = (int) listMoves(color, frm, tos);
+		for (i = 0 to toCount) {
+			if ((int) squareCapturesKing(tos[i]) != FALSE) {
+				b = TRUE;
+				goto returnNow;
+			}
+		}
+		frm = (int) global nextPiece[frm];
+	}
+returnNow: ;
+}
+
+extern function search;
+
+function findBestMove(int lowestScore, int alpha, int beta, int depth, int score, int movesCount, pointer moves)
+returns int bestMove
+locals	int bestScore, int move, int frm, int t, int oldPiece, int captured, int oldXCapture, int moveScore, int s, int i, int capturesOnly
+		, int myAlpha
+{
+	myAlpha = alpha;
+	bestScore = lowestScore;
+	bestMove = 0;
+	i = 0;
+	while (i < movesCount && myAlpha < beta) {
+		move = (int) moves[i];
+		frm = (int) moveFrom(move);
+		t = (int) moveTo(move);
+		oldPiece = (int) global board[frm];
+		captured = (int) global board[t];
+		oldXCapture = global xCapture;
+		moveScore = (int) doMove(frm, t, oldPiece, captured, oldXCapture);
+		
+		s = score + moveScore;
+		if (depth > 0) {
+			capturesOnly = FALSE;
+			if (depth < QUIESCENCE_DEPTH) {
+				capturesOnly = TRUE;
+			}
+			s = -((int) search(-beta, -myAlpha, depth - 1, -s, capturesOnly) >> SCORE_SHIFT);
+		}
+		if (bestScore < s) {
+			bestScore = s;
+			bestMove = move;
+			if (myAlpha < bestScore) {
+				myAlpha = bestScore;
+			}
+		}
+		
+		undoMove(frm, t, oldPiece, captured, oldXCapture);
+		i = i + 1;
+	}
+	bestMove = bestMove | (bestScore << SCORE_SHIFT);
+}
+
+function searchCaptures(int alpha, int beta, int depth, int score, int firstMove)
+returns int bestMove
+locals	int capturesCount, int frm, array moves[MAX_MOVES], array tos[MAX_TARGET_SQUARES], int myAlpha, int toCount, int i, int t, int move
+{
+	assert(0 <= depth);
+	assert(firstMove == 0 || (int) isValidMove(firstMove) != FALSE);
+		
+	myAlpha = alpha;
+	if (myAlpha < score) {
+		myAlpha = score;
+	}
+	
+	if (myAlpha >= beta) {
+		bestMove = (score << SCORE_SHIFT);
+	} else {
+		capturesCount = 0;
+		frm = (int) global nextPiece[global turnColor];
+		while (frm != global turnColor) {
+			toCount = (int) listMoves(global turnColor, frm, tos);
+			for (i = 0 to toCount) {
+				t = (int) tos[i];
+				move = frm | (t << TO_SHIFT);
+
+				if ((int) squareCapturesKing(t) != FALSE) {
+					bestMove = ((CAPTURE_KING_MIN_SCORE + depth) << SCORE_SHIFT) | move;
+					goto returnNow;
+				}
+				
+				if ((int) global board[t] > EMPTY || global xCapture == t) {
+					assert(capturesCount < MAX_MOVES);
+					if (move == firstMove) {
+						moves[capturesCount] = moves[0];
+						capturesCount = capturesCount + 1;
+						moves[0] = move;
+					} else {
+						moves[capturesCount] = move;
+						capturesCount = capturesCount + 1;
+					}
+				}
+			}
+			frm = (int) global nextPiece[frm];
+		}
+		
+		bestMove = (int) findBestMove(score, myAlpha, beta, depth, score, capturesCount, moves);
+	}
+returnNow: ;
+}
+
+function searchAll(int alpha, int beta, int depth, int score, int firstMove)
+returns	int bestMove
+locals	array moves[MAX_MOVES], array tos[MAX_TARGET_SQUARES], int movesCount, int capturesCount, int frm, int toCount, int i
+		, int t, int move
+{
+	assert(0 <= depth);
+	assert(firstMove == 0 || (int) isValidMove(firstMove) != FALSE);
+
+	if (alpha >= beta) {
+	
+		/* Return dummy minimum value if alpha beta window has closed. */
+		
+		bestMove = (MIN_SCORE - 1) << SCORE_SHIFT;
+	} else {
+
+		/*
+			Moves that capture will be placed before others in the array, and "firstMove" will be moved to the first element.
+			This improves alpha beta pruning without sacrificing too much time on sorting.
+		*/
+
+		movesCount = 0;
+		capturesCount = 0;
+		frm = (int) global nextPiece[global turnColor];
+		while (frm != global turnColor) {
+			toCount = (int) listMoves(global turnColor, frm, tos);
+			for (i = 0 to toCount) {
+				t = (int) tos[i];
+				move = frm | (t << TO_SHIFT);
+
+				if ((int) squareCapturesKing(t) != FALSE) {
+					
+					/*
+						We add depth to the score to make sure we reward early check-mates (higher depth = closer in time).
+						This is very important due to the "horizon" effect.
+					*/
+					
+					bestMove = ((CAPTURE_KING_MIN_SCORE + depth) << SCORE_SHIFT) | move;
+					goto returnNow;
+				}
+				
+				assert(movesCount < MAX_MOVES);
+				if (move == firstMove) {
+					moves[movesCount] = moves[capturesCount];
+					movesCount = movesCount + 1;
+					assert(capturesCount < MAX_MOVES);
+					moves[capturesCount] = moves[0];
+					capturesCount = capturesCount + 1;
+					moves[0] = move;
+				} else if ((int) global board[t] > EMPTY || global xCapture == t) {
+					moves[movesCount] = moves[capturesCount];
+					movesCount = movesCount + 1;
+					assert(capturesCount < MAX_MOVES);
+					moves[capturesCount] = move;
+					capturesCount = capturesCount + 1;
+				} else {
+					moves[movesCount] = move;
+					movesCount = movesCount + 1;
+				}
+			}
+			frm = (int) global nextPiece[frm];
+		}
+		
+		bestMove = (int) findBestMove((MIN_SCORE - 1), alpha, beta, depth, score, movesCount, moves);
+	}
+returnNow: ;
+}
+
+function search(int alpha, int beta, int depth, int score, int capturesOnly)
+returns int result
+locals	int h, int hashIndex, int entry, int firstMove, int best, int bestMove, int s, int myBeta
+{
+	assert(0 <= depth);
+	assert((int) checkInvariant() != FALSE);
+
+	myBeta = beta;
+
+	if (myBeta > CAPTURE_KING_MIN_SCORE + depth) {
+		
+		/*
+			Adjust beta if necessary to force search to end early on all checkmates (since a checkmate score changes
+			depending on depth).
+		*/
+		
+		myBeta = CAPTURE_KING_MIN_SCORE + depth;
+	}
+	
+	/*
+		Locate hash entry for this position using the low bits of the key and if the high bits match, begin the search
+		with the previously registered best move for this position. This will speed up the process considerably due to
+		alpha beta pruning.
+	*/
+
+	h = (global boardHash + (int) global xCaptureKeys[global xCapture] + (int) global colorKeys[global turnColor]) & HASH_MASK;
+	hashIndex = (h & (HASH_TABLE_SIZE - 1));
+	h = (h & ~MOVE_MASK);
+	entry = (int) global hashTable[hashIndex];
+	firstMove = 0;
+	if ((entry & ~MOVE_MASK) == h) {
+		firstMove = entry & MOVE_MASK;
+	}
+	
+	if (capturesOnly != FALSE) {
+		best = (int) searchCaptures(alpha, myBeta, depth, score, firstMove);
+		result = best;
+		
+		/* We can't tell if we have a checkmate just be looking at captures. Doesn't matter. We'll see them soon. */
+		
+	} else {
+		best = (int) searchAll(alpha, myBeta, depth, score, firstMove);
+		result = best;
+		
+		s = result >> SCORE_SHIFT;
+		if (s == CAPTURE_KING_MIN_SCORE + depth) {
+			
+			/* Direct hit, can't go on with this. */
+			
+			result = (result & SCORE_MASK) | IN_CHECK;
+
+		} else if (s == -(CAPTURE_KING_MIN_SCORE + depth - 1)) {
+			
+			/*
+				Hit on next depth = checkmate or stalemate. To determine which, we need to make a null move and play the
+				opponent to see if he can take the king. No winner with stalemate so in this case we "zero" the score.
+			*/
+			
+			if ((int) canCaptureKing((int) switchColor(global turnColor)) != FALSE) {
+				result = (result & SCORE_MASK) | CHECKMATE;
+			} else {
+				result = (score << SCORE_SHIFT) | STALEMATE;
+			}
+		}
+	}
+
+	bestMove = (best & MOVE_MASK);
+	if (bestMove != 0) {
+		assert((int) isValidMove(bestMove) != FALSE);
+		global hashTable[hashIndex] = h | bestMove;
+	}
+	
+	global evalCounter = global evalCounter + 1;
+	if (global evalCounter < 0) {
+		global evalCounter = global evalCounter - 1; /* Prevent wrapping with extreme high evaluation counts. */
+	}
+}
+
+/*
+	Can return: VALID_MOVE, CHECKMATE, STALEMATE, IN_CHECK or INVALID_MOVE.
+*/
+function executeMove(int move)
+returns	int status
+locals	array tos[MAX_TARGET_SQUARES], int frm, int t, int oldPiece, int captured, int oldXCapture, int toCount, int i
+{
+	assert((int) isValidMove(move) != FALSE);
+	
+	frm = (int) global nextPiece[global turnColor];
+	while (frm != global turnColor) {
+		assert((int) global board[frm] > EMPTY && ((int) global board[frm] & COLOR_MASK) == global turnColor);
+		toCount = (int) listMoves(global turnColor, frm, tos);
+		assert(toCount <= MAX_TARGET_SQUARES);
+		for (i = 0 to toCount) {
+			t = (int) tos[i];
+			if (move == (frm | (t << TO_SHIFT))) {
+				oldPiece = (int) global board[frm];
+				captured = (int) global board[t];
+				oldXCapture = global xCapture;
+				doMove(frm, t, oldPiece, captured, oldXCapture);	
+				
+				switch (((int) search(MIN_SCORE, MAX_SCORE, 1, 0, FALSE) & MOVE_MASK) == IN_CHECK to (CHECKMATE + 1)) {
+					default: { status = VALID_MOVE; goto returnNow; }
+					case CHECKMATE: { status = CHECKMATE; goto returnNow; }
+					case STALEMATE: { status = STALEMATE; goto returnNow; }
+					case IN_CHECK: {
+						undoMove(frm, t, oldPiece, captured, oldXCapture);
+						status = IN_CHECK;
+						 goto returnNow;
+					}
+				}
+			}
+		}
+		frm = (int) global nextPiece[frm];
+	}
+		
+	status = INVALID_MOVE;
+returnNow: ;
+}
+
+/*
+	Can return: 16-bit move code or CHECKMATE or STALEMATE.
+*/
+function getComputerMove()
+returns int move
+locals	int d, int m, int printedThinking
+{
+	printedThinking = FALSE;
+	m = 0;
+	global evalCounter = 0;
+	d = MIN_DEPTH;
+	while (d <= MAX_DEPTH && global evalCounter < global minEvals) {
+		if (global evalCounter > 10000) {
+			if (printedThinking == FALSE) {
+				output("Thinking...");
+				printedThinking = TRUE;
+			}
+			output(".");
+		}
+		m = (int) search(MIN_SCORE, MAX_SCORE, d, 0, FALSE);
+		d = d + 1;
+	}
+	if (printedThinking != FALSE) {
+		output("\n");
+	}
+	assert((m & MOVE_MASK) == CHECKMATE || (m & MOVE_MASK) == STALEMATE || (int) isValidMove(m & MOVE_MASK) != FALSE);
+	move = (m & MOVE_MASK);
+}
+
+const int REDISPLAY_BOARD = -1
+const int LET_COMPUTER_PLAY = -2
+const int TAKE_BACK = -3
+const int NEW_GAME = -4
+const int QUIT = -5
+const int SYNTAX_ERROR = -6
+const int MATE = -7
+const int SET_MAXIMUM_LEVEL = -97
+const int SET_MINIMUM_LEVEL = -101
+
+function strcmp(pointer s0, pointer s1)
+returns int d
+locals pointer a, pointer b, int c
+{
+	a = s0;
+	b = s1;
+	while ((d = (c = (int)*a) - (int)*b) == 0 && c != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function strncmp(pointer s0, pointer s1, int n)
+returns	int d
+locals	pointer a
+		, pointer b
+		, int i
+		, int c
+{
+	d = 0;
+	if (n > 0) {
+		a = s0;
+		b = s1;
+		for (i = 1 to n) {
+			if ((d = (c = (int)*a) - (int)*b) != 0 || c == 0) goto done;
+			a = a + 1;
+			b = b + 1;
+		}
+	done: ;
+	}
+}
+
+function toupper(int c)
+returns	int u
+{
+	u = c;
+	if (u >= 'a' && u <= 'z') {
+		u = u - ('a' - 'A');
+	}
+}
+
+function getUserMove()
+returns int result
+locals	int level, array s[256], int l, int fromCol, int fromRow, int i, int toCol, int toRow
+{
+	do {
+		result = SYNTAX_ERROR;
+		output(">");
+		l = (int) input(1023, s);
+		if (l > 0 && (int) s[l - 1] == '\n') {
+			s[l - 1] = 0;
+		}
+		if ((int) s[0] == 0) {
+			result = REDISPLAY_BOARD;
+		} else if ((int) strcmp(s, "go") == 0) {
+			result = LET_COMPUTER_PLAY;
+		} else if ((int) strcmp(s, "back") == 0) {
+			result = TAKE_BACK;
+		} else if ((int) strcmp(s, "new") == 0) {
+			result = NEW_GAME;
+		} else if ((int) strncmp(s, "level ", 6) == 0 && l == 7 && (level = (int) s[6] - '0') >= 1 && level <= 5) {
+			result = SET_MINIMUM_LEVEL + level - 1;
+		} else if ((int) strcmp(s, "quit") == 0) {
+			result = QUIT;
+		} else {
+			fromCol = ((int) toupper(s[0]) - 'A');
+			fromRow = ((int) s[1] - '1');
+			i = 2;
+			if ((int) s[2] == '-') i = 3;
+			toCol = ((int) toupper(s[i]) - 'A');
+			toRow = ((int) s[i + 1] - '1');
+			if (fromCol >= 0 && fromCol < 8 && fromRow >= 0 && fromRow < 8
+					&& toCol >= 0 && toCol < 8 && toRow >= 0 && toRow < 8) {
+				result = (int) makeMove(fromCol, fromRow, toCol, toRow);
+			} else {
+				output("Enter moves like 'd2d4' or:\n'level 1-5' to set computer level (default is 3).\n'go' to switch color and let the computer play.\n'back' to take back a step.\n'new' to start a new game.\n'quit' to exit.\n");
+			}
+		}
+	} while (result == SYNTAX_ERROR);
+}
+
+function printBoard(int frm, int t)
+locals	int y, int lastI, array buffer[2], int i, int c, int x
+{
+	buffer[1] = 0;
+	lastI = -1;
+	output("    A B C D E F G H\n");
+	output("  +-----------------+\n");
+	for (y = 0 to 8) {
+		buffer[0] = '8' - y;
+		output(buffer);
+		output(" |");
+		for (x = 0 to 8) {
+			i = (9 - y) * STRIDE + (x + 1);
+			c = ' ';
+			if (i == frm || i == t) c = '(';
+			if (lastI == frm || lastI == t) {
+				if (c == '(') c = ' ';
+				else c = ')';
+			}
+			buffer[0] = c;
+			output(buffer);
+			c = (int) global PIECE_CHARS[(int) global board[i] & (PIECE_MASK | BLACK)];
+			if (c == ' ' && ((x ^ y) & 1) == 1) c = '.';
+			buffer[0] = c;
+			output(buffer);
+			lastI = i;
+		}
+		c = ' ';
+		if (lastI == frm || lastI == t) c = ')';
+		buffer[0] = c;
+		output(buffer);
+		output("| ");
+		buffer[0] = '8' - y;
+		output(buffer);
+		output("\n");
+		lastI = -1;
+	}
+	output("  +-----------------+\n");
+	output("    A B C D E F G H\n\n");
+}
+
+function registerMove(int move, int piece, int captured, int xCapture)
+locals	int i, int j
+{
+	if (global historyCount >= HISTORY_SIZE) {
+		global historyCount = global historyCount - 1;
+		for (j = 0 to global historyCount * 4) {
+			global history[j] = global history[j + 4];
+		}
+	}
+	i = global historyCount * 4;
+	global history[i + 0] = move;
+	global history[i + 1] = piece;
+	global history[i + 2] = captured;
+	global history[i + 3] = xCapture;
+	global historyCount = global historyCount + 1;
+}
+
+function takeBackMove()
+returns int move
+locals	int i, int frm, int t
+{
+	if (global historyCount > 0) {
+		global historyCount = global historyCount - 1;
+		i = global historyCount * 4;
+		move = (int) global history[i + 0];
+		frm = (int) moveFrom(move);
+		t = (int) moveTo(move);
+		undoMove(frm, t, (int) global history[i + 1], (int) global history[i + 2], (int) global history[i + 3]);
+	} else {
+		move = 0;
+	}
+}
+
+function setLevel(int level)
+locals	int i
+{
+	global minEvals = 100;
+	for (i = 0 to level) global minEvals = global minEvals * 5;
+}
+
+function main()
+locals	int lastFrom, int lastTo, int lastPiece, int isComputersTurn, int lastMove, int moveResult, pointer action
+		, array buffer[256], int lastCaptured, int lastXCapture, pointer p, int level, int i
+{
+	initGlobals();
+
+	output("        ,....,\n      ,::::::<\n     ,::/^\\\"``.\n    ,::/, `   e`.\n   ,::; |        '.\n   ,::|  \\___,-.  c)\n   ;::|     \\   '-'\n   ;::|      \\\n   ;::|   _.=`\\\n   `;:|.=` _.=`\\\n     '|_.=`   __\\\n     `\\_..==`` /\n      .'.___.-'.\n     /          \\\n    ('--......--')\n    /'--......--'\\\n    `\"--......--\"`\n\n");
+	output("PRIYOME CHESS COMPUTER\n\n         V1.0\n\n(C) Magnus Lidstroem\n\nPress enter to continue");
+	input(1, buffer);
+	for (i = 0 to 30) output("\n");
+
+	global randPX = global randPX ^ (int) clock();
+
+	restart();
+	setLevel(2);
+
+	printBoard(0, 0);
+	{
+		isComputersTurn = FALSE;
+		lastFrom = 0;
+		lastTo = 0;
+		lastMove = 0;
+		moveResult = 0;
+		do {
+			if (lastMove >= 0) {
+				p = "Black's turn.\n";
+				if (global turnColor == WHITE) p = "White's turn.\n";
+				output(p);
+			}
+
+			action = "Last move:";
+			if (isComputersTurn == FALSE) {
+				lastMove = (int) getUserMove();
+				switch (lastMove == NEW_GAME to REDISPLAY_BOARD + 1) {
+					case REDISPLAY_BOARD: {
+						printBoard(lastFrom, lastTo);
+					}
+
+					case LET_COMPUTER_PLAY: {
+						isComputersTurn = TRUE;
+					}
+				
+					case TAKE_BACK: {					
+						lastMove = (int) takeBackMove();
+						if (lastMove > 0) {
+							lastFrom = (int) moveFrom(lastMove);
+							lastTo = (int) moveTo(lastMove);
+							lastMove = 0;
+							action = "Took back move:";
+						} else {
+							output("No move to take back.\n");
+							lastMove = -1;
+						}
+					}
+				
+					case NEW_GAME: {
+						restart();
+						lastMove = 0;
+						lastFrom = 0;
+						lastTo = 0;
+					}
+				
+					default: {
+						if (lastMove >= SET_MINIMUM_LEVEL && lastMove <= SET_MAXIMUM_LEVEL) {
+							level = lastMove - SET_MINIMUM_LEVEL;
+							setLevel(level);
+							output("Set computer level to ");
+							buffer[0] = level + 1 + '0';
+							buffer[1] = 0;
+							output(buffer);
+							output(".\n");
+							lastMove = -1;
+						}
+					}
+				}
+			}
+			if (isComputersTurn != FALSE) {
+				lastMove = (int) getComputerMove();
+			}
+			moveResult = 0;
+			if (lastMove == CHECKMATE || lastMove == STALEMATE) {
+				moveResult = lastMove;
+				isComputersTurn = FALSE;
+				lastMove = -1;
+			}
+		
+			if (lastMove > 0) {
+				lastFrom = (int) moveFrom(lastMove);
+				lastTo = (int) moveTo(lastMove);
+				lastPiece = (int) global board[lastFrom];
+				lastCaptured = (int) global board[lastTo];
+				lastXCapture = global xCapture;
+
+				moveResult = (int) executeMove(lastMove);
+				switch (moveResult == VALID_MOVE to CHECKMATE + 1) {
+					case VALID_MOVE, CHECKMATE, STALEMATE: {
+						registerMove(lastMove, lastPiece, lastCaptured, lastXCapture);
+						if (moveResult == VALID_MOVE) {
+							isComputersTurn = TRUE - isComputersTurn;
+						} else {
+							isComputersTurn = FALSE;
+						}
+					}
+				
+					case IN_CHECK: {
+						output("King in check.\n");
+						lastMove = -1;
+					}
+				
+					default: {
+						if (moveResult == INVALID_MOVE) {
+							output("Invalid move.\n");
+							lastMove = -1;
+						}
+					}
+				}
+			}
+		
+			if (lastMove >= 0) {
+				output("\n");
+				printBoard(lastFrom, lastTo);
+				if (lastFrom != 0 && lastTo != 0) {
+					output(action);
+					output(" ");
+					output(global PIECE_NAMES[lastPiece & PIECE_MASK]);
+					output(" ");
+					buffer[0] = ('A' + (lastFrom % STRIDE - 1));
+					buffer[1] = ('1' + (lastFrom / STRIDE - 2));
+					buffer[2] = 0;
+					output(buffer);
+					output(" to ");
+					buffer[0] = ('A' + (lastTo % STRIDE - 1));
+					buffer[1] = ('1' + (lastTo / STRIDE - 2));
+					output(buffer);
+					output(".\n\n");
+				}
+			}
+		
+			if (moveResult == CHECKMATE) {
+				p = "Checkmate! White wins.\n";
+				if (global turnColor == WHITE) p = "Checkmate! Black wins.\n";
+				output(p);
+				lastMove = MATE;
+			} else if (moveResult == STALEMATE) {
+				output("Stalemate!\n");
+				lastMove = MATE;
+			}
+	
+		} while (lastMove != QUIT);
+	}
+}

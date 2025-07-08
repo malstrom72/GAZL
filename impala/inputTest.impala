@@ -1,0 +1,12 @@
+extern native print;
+extern native printLF;
+extern native input;
+extern native printInt;
+
+function main()
+locals array buffer[1024]
+{
+	print("HEJ"); printLF();
+	printInt((int) input(10, buffer)); printLF();
+	print(buffer); printLF();
+}

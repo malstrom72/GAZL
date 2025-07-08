@@ -1,0 +1,5 @@
+Font: Trebuchet MS 12 pt
+Arrow size: 4
+Dimensions horizontal: 4
+Dimensions vertical: 14
+Dimensions gap: 2

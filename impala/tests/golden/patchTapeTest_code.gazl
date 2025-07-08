@@ -1,0 +1,38 @@
+; Compiled with Impala version 1.0
+
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1
+panelTextRows:	GLOB *8
+	DATA &.s_4d2 &.s_4d2 &.s_4d2 &.s_4d2 &.s_4d2 &.s_4d2
+	DATA &.s_4d2 &.s_4d2
+config:	GLOB *80
+positions:	GLOB *2
+
+;-----------------------------------------------------------------------------
+init:	FUNC
+		PARA *1
+	$i:	LOCi
+	$p:	LOCp
+;-----------------------------------------------------------------------------
+		MOVi $i #0 	; for (i = 0 to 8) 
+		GEQi #0 #8 @.e0
+	.l1:	MOVp $p &.s_4d2 	; p = ""
+		PEEK %0 &config $i	; if ((int) global config[i] == '1') p = "AAA |BBBBBBBBBBBBBBBBBBBBBB| [CCCCCCCCCCCCCCCCCCCCCC|"
+		NEQi %0 #'1' @.f2
+		MOVp $p &.s_AAABBB4d3 	; p = "AAA |BBBBBBBBBBBBBBBBBBBBBB| [CCCCCCCCCCCCCCCCCCCCCC|"
+	.f2:	POKE &panelTextRows $i $p	; global panelTextRows[i] = p
+		FORi $i #8 @.l1	; }
+	.e0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+operate1:	FUNC
+	$r:	OUTi
+;-----------------------------------------------------------------------------
+		MOVi $r #0 	; r = 0
+		RETU   	; }
+
+.s_4d2:	CNST *1
+	DATi #0
+.s_AAABBB4d3:	CNST *54
+	DATs AAA |BBBBBBBBBBBBBBBBBBBBBB| [CCCCCCCCCCCCCCCCCCCCCC|
+	DATi #0

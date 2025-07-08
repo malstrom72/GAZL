@@ -1,0 +1,133 @@
+ascii_char = ( anything ) .
+
+comment = ( anything ) .
+
+digit = ( "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ) .
+
+uppercase_alpha = ( "A" | "B" | "C" | "D" | "E" | "F" | "G"
+                  | "H" | "I" | "J" | "K" | "L" | "M" | "N"
+                  | "O" | "P" | "Q" | "R" | "S" | "T" | "U"
+                  | "V" | "W" | "X" | "Y" | "Z" ) .
+
+lowercase_alpha = ( "a" | "b" | "c" | "d" | "e" | "f" | "g"
+                  | "h" | "i" | "j" | "k" | "l" | "m" | "n"
+                  | "o" | "p" | "q" | "r" | "s" | "t" | "u"
+                  | "v" | "w" | "x" | "y" | "z" ) .
+                  
+spc = ( " "
+      | "\t" ) .
+
+eol = ( [ "\r" ] "\n"
+        | "\0" ).
+
+hex_digit = ( digit | "A" | "B" | "C" | "D" | "E" | "F" | "a" | "b" | "c" | "d" | "e" | "f" ) .
+
+alpha = ( lowercase_alpha
+        | uppercase_alpha ) .
+
+integer = ( [ "+"
+            | "-" ] ( "0x" hex_digit {hex_digit}
+                    | "'" {ascii_char} "'"
+                    | '"' {ascii_char} '"'
+                    | digit {digit}) ) .
+
+float = ( [ "+"
+          | "-" ] digit {digit} "." digit {digit} [ ( "E"
+                                                    | "e") integer ] ) .
+
+identifier = ( alpha | "$" | "." | "_" ) { alpha | "$" | "." | "_" | digit } .
+
+compile_time_var = ( alpha | "$" | "." | "_" | digit ) .
+
+pre_def_const = ( identifier ) .
+
+function = ( identifier ) .
+
+pos_integer = ( integer ) .
+
+global = ( identifier ) .
+
+local = ( identifier ) .
+
+branch = ( identifier ) .
+
+branch_target = ( identifer ) .
+
+native_function = ( identifier ) .
+
+param_number = ( pos_integer ) .
+
+mnemonic = ( alpha alpha alpha alpha ) .
+
+label = identifier [ "#" ( integer
+                         | pre_def_const
+                         | "<" compile_time_var ">" ) ] .
+
+skip_label = identifier .
+
+operand = ( ( local
+            | "&" global ) [ ":" ( pos_integer
+                                 | pre_def_const
+                                 | "<" compile_time_var ">" ) ]
+          | "&" ( "NULL"
+				| function )
+		  | "^" native_function
+          | "%" ( param_number
+                | pre_def_const
+                | "<" compile_time_var ">" )
+          | "#" ( integer
+                | float
+                | pre_def_const )
+          | [ "#" ] "<" (compile_time_var) ">"
+          | "@" branch_target ) .
+
+data = ( "DAT" ( ( "i"
+                 | "f" ) spc { spc } ( "#" ( integer
+                                           | float
+                                           | pre_def_const )
+                                     | [ "#" ] "<" compile_time_var ">" )
+               | "p" spc { spc } "&" ( "NULL"
+									 | function
+									 | global [ ":" ( pos_integer
+													| pre_def_const
+													| "<" compile_time_var ">" ) ] ) ) ) .
+
+declaration = ( "FUNC"
+              | ( "INP"
+                | "OUT"
+                | "LOC" ) ( "i"
+                          | "f"
+                          | "p" )
+              | ( "CNST"
+                | "GLOB"
+                | "LOCA"
+                | "PARA"
+				| "TEMP" ) spc { spc } "*" ( pos_integer
+										   | pre_def_const
+										   | "<" compile_time_var ">" ) ) .
+                
+instruction = mnemonic [spc {spc} operand [ spc {spc} operand [ spc {spc} operand ] ] ] .
+
+compile_time = ( instruction
+               | "DEF" ( "i"
+                       | "f" ) spc { spc } ( "#" ( integer
+                                                 | float
+                                                 | pre_def_const )
+                                           | [ "#" ] "<" compile_time_var ">" ) ) .
+
+line = ( {spc} ( [ label ":" spc { spc } ] ( ( data
+                                             | declaration
+                                             | instruction ) { spc } [ ";" comment ]
+                                           | "DATs" spc { spc } ascii_char { ascii_char } { spc }
+										   | "DATA" spc { spc } ( "#" ( integer
+																	  | float
+																	  | pre_def_const
+																	  )
+					                                            | [ "#" ] "<" compile_time_var ">"
+																| "&" ( "NULL"
+																	  | function
+																	  | global [ ":" ( pos_integer
+																					 | pre_def_const
+																					 | "<" compile_time_var ">" ) ] ) ) )
+               | "!" { spc } [ skip_label ":" spc { spc } ] [ compile_time ] { spc } [ ";" comment ]
+               | [ ";" comment ] ) eol ) .

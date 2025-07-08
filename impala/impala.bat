@@ -1,0 +1,1 @@
+PikaCmd impala.pika %*

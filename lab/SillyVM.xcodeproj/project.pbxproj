@@ -1,0 +1,291 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 42;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		F7BB4A9A10F97632004B6079 /* SillyVM.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F7BB4A9910F97632004B6079 /* SillyVM.cpp */; };
+		F7BB4A9B10F97632004B6079 /* SillyVM.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F7BB4A9910F97632004B6079 /* SillyVM.cpp */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXBuildRule section */
+		F72C41E310F0303D0084B6E6 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.gcc.4_0;
+			fileType = sourcecode.c;
+			isEditable = 1;
+			outputFiles = (
+			);
+		};
+		F735C47610F175DF00B6A261 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.intel.compilers.icc.10_1_0;
+			fileType = sourcecode.c;
+			isEditable = 1;
+			outputFiles = (
+			);
+		};
+/* End PBXBuildRule section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8DD76F690486A84900D96B5E /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 8;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		F735C47510F175DF00B6A261 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 8;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		F735C47A10F175DF00B6A261 /* SillyVM */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = SillyVM; sourceTree = BUILT_PRODUCTS_DIR; };
+		F7B40DC510F1783F00BBF2C7 /* SillyVM */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = SillyVM; sourceTree = BUILT_PRODUCTS_DIR; };
+		F7BB4A9910F97632004B6079 /* SillyVM.cpp */ = {isa = PBXFileReference; fileEncoding = 5; lastKnownFileType = sourcecode.cpp.cpp; path = SillyVM.cpp; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8DD76F660486A84900D96B5E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F735C47410F175DF00B6A261 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		08FB7794FE84155DC02AAC07 /* SillyVM */ = {
+			isa = PBXGroup;
+			children = (
+				F7BB4A9910F97632004B6079 /* SillyVM.cpp */,
+				F735C47A10F175DF00B6A261 /* SillyVM */,
+				F7B40DC510F1783F00BBF2C7 /* SillyVM */,
+			);
+			name = SillyVM;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8DD76F620486A84900D96B5E /* SillyVM */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1DEB923108733DC60010E9CD /* Build configuration list for PBXNativeTarget "SillyVM" */;
+			buildPhases = (
+				8DD76F640486A84900D96B5E /* Sources */,
+				8DD76F660486A84900D96B5E /* Frameworks */,
+				8DD76F690486A84900D96B5E /* CopyFiles */,
+			);
+			buildRules = (
+				F72C41E310F0303D0084B6E6 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = SillyVM;
+			productInstallPath = "$(HOME)/bin";
+			productName = SillyVM;
+			productReference = F7B40DC510F1783F00BBF2C7 /* SillyVM */;
+			productType = "com.apple.product-type.tool";
+		};
+		F735C47110F175DF00B6A261 /* SillyVM ICC */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F735C47710F175DF00B6A261 /* Build configuration list for PBXNativeTarget "SillyVM ICC" */;
+			buildPhases = (
+				F735C47210F175DF00B6A261 /* Sources */,
+				F735C47410F175DF00B6A261 /* Frameworks */,
+				F735C47510F175DF00B6A261 /* CopyFiles */,
+			);
+			buildRules = (
+				F735C47610F175DF00B6A261 /* PBXBuildRule */,
+			);
+			dependencies = (
+			);
+			name = "SillyVM ICC";
+			productInstallPath = "$(HOME)/bin";
+			productName = SillyVM;
+			productReference = F735C47A10F175DF00B6A261 /* SillyVM */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		08FB7793FE84155DC02AAC07 /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = 1DEB923508733DC60010E9CD /* Build configuration list for PBXProject "SillyVM" */;
+			hasScannedForEncodings = 1;
+			mainGroup = 08FB7794FE84155DC02AAC07 /* SillyVM */;
+			productRefGroup = 08FB7794FE84155DC02AAC07 /* SillyVM */;
+			projectDirPath = "";
+			targets = (
+				8DD76F620486A84900D96B5E /* SillyVM */,
+				F735C47110F175DF00B6A261 /* SillyVM ICC */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8DD76F640486A84900D96B5E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F7BB4A9A10F97632004B6079 /* SillyVM.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F735C47210F175DF00B6A261 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F7BB4A9B10F97632004B6079 /* SillyVM.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1DEB923208733DC60010E9CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_FIX_AND_CONTINUE = YES;
+				GCC_MODEL_TUNING = G5;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				INSTALL_PATH = "$(HOME)/bin";
+				PRODUCT_NAME = SillyVM;
+				ZERO_LINK = YES;
+			};
+			name = Debug;
+		};
+		1DEB923308733DC60010E9CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INSTALL_PATH = "$(HOME)/bin";
+			};
+			name = Release;
+		};
+		1DEB923608733DC60010E9CD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				ICC_DEBUG = NO;
+				ICC_OPT_INLINE = none;
+				PREBINDING = NO;
+				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
+			};
+			name = Debug;
+		};
+		1DEB923708733DC60010E9CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+				GCC_AUTO_VECTORIZATION = YES;
+				GCC_DYNAMIC_NO_PIC = YES;
+				GCC_ENABLE_CPP_RTTI = NO;
+				GCC_ENABLE_SSE3_EXTENSIONS = YES;
+				GCC_FAST_MATH = YES;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_MODEL_TUNING = G5;
+				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREPROCESSOR_DEFINITIONS = NDEBUG;
+				GCC_STRICT_ALIASING = YES;
+				GCC_THREADSAFE_STATICS = NO;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				ICC_DATA_ARG_ALIAS = NO;
+				ICC_DATA_CONST_CONSTRAINT = YES;
+				ICC_DATA_NO_ALIAS = YES;
+				ICC_DEBUG = YES;
+				ICC_OPTLEVEL = speed;
+				ICC_OPT_INLINE = any;
+				ICC_OPT_IPO_FOR_SINGLE_FILE_COMPILATION = NO;
+				ICC_OPT_PREFETCH_INSERTION = NO;
+				ICC_OPT_REQUIRE_ARCH_IA32 = archP;
+				ICC_OPT_USE_ARCH_IA32 = archP;
+				PREBINDING = NO;
+				PRODUCT_NAME = SillyVM;
+				STANDARD_C_PLUS_PLUS_LIBRARY_TYPE = static;
+				STRIP_INSTALLED_PRODUCT = NO;
+			};
+			name = Release;
+		};
+		F735C47810F175DF00B6A261 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COPY_PHASE_STRIP = NO;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_FIX_AND_CONTINUE = YES;
+				GCC_MODEL_TUNING = G5;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				INSTALL_PATH = "$(HOME)/bin";
+				PRODUCT_NAME = SillyVM;
+				SYMROOT = build/ICC;
+				ZERO_LINK = YES;
+			};
+			name = Debug;
+		};
+		F735C47910F175DF00B6A261 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ICC_OPT_PREFETCH_INSERTION = YES;
+				INSTALL_PATH = "$(HOME)/bin";
+				SYMROOT = build/ICC;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1DEB923108733DC60010E9CD /* Build configuration list for PBXNativeTarget "SillyVM" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1DEB923208733DC60010E9CD /* Debug */,
+				1DEB923308733DC60010E9CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1DEB923508733DC60010E9CD /* Build configuration list for PBXProject "SillyVM" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1DEB923608733DC60010E9CD /* Debug */,
+				1DEB923708733DC60010E9CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F735C47710F175DF00B6A261 /* Build configuration list for PBXNativeTarget "SillyVM ICC" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F735C47810F175DF00B6A261 /* Debug */,
+				F735C47910F175DF00B6A261 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 08FB7793FE84155DC02AAC07 /* Project object */;
+}

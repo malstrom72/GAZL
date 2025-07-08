@@ -1,0 +1,225 @@
+/*
+	Permut8 Firmware Patch Utility.
+	
+	(C)1979 Shrimperative Computing LTD.
+*/
+
+extern native output
+extern native input
+extern native inputEOF
+extern native sleep
+extern native findFirmwarePatch		// findFirmwarePatch(int index, int nameMaxLength, int name[31 + 1], int* size, int modDate[8 + 1]) -> int : returns 1 if found, returns 0 if no more patches available (which also means next call will refresh the list).
+extern native patchFirmware			// patchFirmware(const int* name, int errorStringMaxLength, int* errorString) -> int : returns 0 if ok, returns -1 on error, name == null -> restore factory
+extern native readGUIVariable	// readGUIVariable(pointer keyString, int maxValueChars, pointer valueString)
+extern native writeGUIVariable	// writeGUIVariable(pointer keyString, pointer valueString)
+
+const int FALSE = 0
+const int TRUE = 1
+
+const int MAX_PATCHES = 64
+const int MAX_PATCH_NAME_LENGTH = 31
+const int FILE_MEMORY_SIZE = 8000
+
+global array lastPatch[256]
+global array lastConfig[256]
+global int patchCount = -1
+global array patchNames[MAX_PATCHES * (MAX_PATCH_NAME_LENGTH + 1)]
+global int displayedPatchingInfo = FALSE
+
+global array fileMemory[FILE_MEMORY_SIZE]
+
+function strcpy(pointer d, pointer s)
+returns pointer r
+locals	pointer a, pointer b
+{
+	r = a = d;
+	b = s;
+	while ((*a = (int)*b) != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function strcmp(pointer s0, pointer s1)
+returns int d
+locals pointer a, pointer b, int c
+{
+	a = s0;
+	b = s1;
+	while ((d = (c = (int)*a) - (int)*b) == 0 && c != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function stricmp(pointer s0, pointer s1)
+returns int d
+locals pointer a, pointer b, int ac, int bc
+{
+	a = s0;
+	b = s1;
+	loop {
+		ac = (int)*a;
+		bc = (int)*b;
+		if (ac >= 'A' && ac <= 'Z') ac = ac + ('a' - 'A');
+		if (bc >= 'A' && bc <= 'Z') bc = bc + ('a' - 'A');
+		d = ac - bc;
+		if (d != 0 || ac == 0) goto return;
+		a = a + 1;
+		b = b + 1;
+	}
+return: ;
+}
+
+function upper(pointer s)
+locals pointer p, int c
+{
+	p = s;
+	while ((c = (int)*p) != 0) {
+		if (c >= 'a' && c <= 'z') *p = c + ('A' - 'a');
+		p = p + 1;
+	}
+}
+
+function outputLF(pointer s)
+{
+	output("\n");
+}
+
+function outputLine(pointer s)
+{
+	output(s);
+	outputLF();
+}
+
+function help()
+{
+	outputLF();
+	outputLine("Type \"list\" to list available firmware patches.");
+	outputLine("Enter patch name to begin firmware patching.");
+	outputLine("Press enter only to retry last patching.");
+	outputLine("Type \"restore\" to restore factory firmware.");
+	outputLine("Type \"quit\" to quit.");
+	outputLF();
+}
+
+function refreshPatchList()
+locals pointer p, array dummy[MAX_PATCH_NAME_LENGTH + 1], int index, int size, array modDate[8 + 1]
+{
+	index = -1;
+	do {
+		index = index + 1;
+		if (index < MAX_PATCHES) p = &global patchNames[index * (MAX_PATCH_NAME_LENGTH + 1)];
+		else p = dummy;
+	} while ((int)findFirmwarePatch(index, MAX_PATCH_NAME_LENGTH, p, &size, modDate) != FALSE);
+	if (index > MAX_PATCHES) index = MAX_PATCHES;
+	global patchCount = index;
+}
+
+function list()
+locals int i
+{
+	refreshPatchList();
+	output("Available firmwares: ");
+	for (i = 0 to global patchCount) {
+		output(&global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)]);
+		output(" ");
+	}
+	outputLF();
+	outputLF();
+}
+
+function restore()
+locals array error[256]
+{
+	outputLine("Restoring factory firmware. Do not power off...");
+
+	if ((int)patchFirmware(null, null, 255, error) != 0) {
+		sleep(500);
+		outputLine("Patching failed.");
+		outputLine(error);
+	} else {
+		sleep(500);
+		outputLine("Restore successful.");
+		writeGUIVariable("about.displayedCRC", "0");
+	}
+	outputLF();
+}
+
+function patch(pointer name, pointer config)
+locals array buffer1[256], array buffer2[256], int i, pointer p
+{
+	if (global patchCount < 0) refreshPatchList();
+	
+	for (i = 0 to global patchCount) {
+		p = &global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)];
+		if ((int)stricmp(name, p) == 0) {
+			outputLine("Patching firmware. Do not power off...");
+			if ((int)patchFirmware(p, config, 255, buffer1) != 0) {
+				sleep(500);
+				output("Patching failed: ");
+				outputLine(buffer1);
+				outputLF();
+			} else {
+				sleep(500);
+				outputLine("Patching successful.");
+				outputLF();
+				readGUIVariable("firmware.aboutCRC", 255, buffer1);
+				readGUIVariable("about.displayedCRC", 255, buffer2);
+				if ((int) strcmp(buffer1, buffer2) != 0) {
+					writeGUIVariable("about.displayedCRC", buffer1);
+					readGUIVariable("firmware.about", FILE_MEMORY_SIZE - 1, global fileMemory);
+					if ((int) global fileMemory[0] != 0) {
+						output(global fileMemory);
+						outputLF();
+					}
+				}
+				if (global displayedPatchingInfo == FALSE) {
+					global displayedPatchingInfo = TRUE;
+					outputLine("If you save the Permut8 Program Bank this firmware code will be included.");
+					outputLine("If you modify the .gazl file, the firmware will auto-update until GUI is closed.");
+				}
+			}
+			strcpy(global lastPatch, p);
+			strcpy(global lastConfig, config);
+			goto found;
+		}
+	}
+	
+	outputLine("Firmware not found.");
+	list();
+
+found: ;
+}
+
+function repatch()
+{
+	if ((int)global lastPatch[0] == 0) help();
+	else patch(global lastPatch, global lastConfig);
+}
+
+function main()
+locals array s[256], pointer p, int c
+{
+	output("\nPermut8 firmware patch utility v1.0.\n\n");
+	
+	loop {
+		output("patch> ");
+		input(255, s);
+		if ((int)stricmp(s, "QUIT") == 0) goto quit;
+		else if ((int)stricmp(s, "LIST") == 0) list();
+		else if ((int)stricmp(s, "RESTORE") == 0) restore();
+		else if ((int)s[0] == 0) repatch();
+		else if ((int)stricmp(s, "HELP") == 0) help();
+		else {
+			p = s;
+			while ((c = (int)*p) != 0 && c != ' ') p = p + 1;
+			while ((int)*p == ' ') {
+				*p = 0;
+				p = p + 1;
+			}
+			patch(s, p);
+		}
+	}
+quit: ;
+}

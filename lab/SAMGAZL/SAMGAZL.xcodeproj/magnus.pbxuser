@@ -1,0 +1,175 @@
+// !$*UTF8*$!
+{
+	08FB7793FE84155DC02AAC07 /* Project object */ = {
+		activeArchitecturePreference = i386;
+		activeBuildConfigurationName = Release;
+		activeExecutable = F70C28ED14D17288000F4A9C /* SAMGAZL */;
+		activeTarget = 8DD76F620486A84900D96B5E /* SAMGAZL */;
+		addToTargets = (
+			8DD76F620486A84900D96B5E /* SAMGAZL */,
+		);
+		codeSenseManager = F70C28F214D172A8000F4A9C /* Code sense */;
+		executables = (
+			F70C28ED14D17288000F4A9C /* SAMGAZL */,
+		);
+		perUserDictionary = {
+			PBXConfiguration.PBXFileTableDataSource3.PBXExecutablesDataSource = {
+				PBXFileTableDataSourceColumnSortingDirectionKey = "-1";
+				PBXFileTableDataSourceColumnSortingKey = PBXExecutablesDataSource_NameID;
+				PBXFileTableDataSourceColumnWidthsKey = (
+					22,
+					300,
+					717,
+				);
+				PBXFileTableDataSourceColumnsKey = (
+					PBXExecutablesDataSource_ActiveFlagID,
+					PBXExecutablesDataSource_NameID,
+					PBXExecutablesDataSource_CommentsID,
+				);
+			};
+			PBXConfiguration.PBXFileTableDataSource3.PBXFileTableDataSource = {
+				PBXFileTableDataSourceColumnSortingDirectionKey = "-1";
+				PBXFileTableDataSourceColumnSortingKey = PBXFileDataSource_Filename_ColumnID;
+				PBXFileTableDataSourceColumnWidthsKey = (
+					20,
+					829,
+					20,
+					48,
+					43,
+					43,
+					20,
+				);
+				PBXFileTableDataSourceColumnsKey = (
+					PBXFileDataSource_FiletypeID,
+					PBXFileDataSource_Filename_ColumnID,
+					PBXFileDataSource_Built_ColumnID,
+					PBXFileDataSource_ObjectSize_ColumnID,
+					PBXFileDataSource_Errors_ColumnID,
+					PBXFileDataSource_Warnings_ColumnID,
+					PBXFileDataSource_Target_ColumnID,
+				);
+			};
+			PBXPerProjectTemplateStateSaveDate = 349387470;
+			PBXWorkspaceStateSaveDate = 349387470;
+		};
+		perUserProjectItems = {
+			F7387E2E14D371D000E9423B /* PBXTextBookmark */ = F7387E2E14D371D000E9423B /* PBXTextBookmark */;
+			F7387E2F14D371D000E9423B /* PBXTextBookmark */ = F7387E2F14D371D000E9423B /* PBXTextBookmark */;
+		};
+		sourceControlManager = F70C28F114D172A8000F4A9C /* Source Control */;
+		userBuildSettings = {
+		};
+	};
+	08FB7796FE84155DC02AAC07 /* main.cpp */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {1104, 2847}}";
+			sepNavSelRange = "{6588, 0}";
+			sepNavVisRange = "{5803, 833}";
+			sepNavWindowFrame = "{{48, 0}, {1006, 778}}";
+		};
+	};
+	8DD76F620486A84900D96B5E /* SAMGAZL */ = {
+		activeExec = 0;
+		executables = (
+			F70C28ED14D17288000F4A9C /* SAMGAZL */,
+		);
+	};
+	F70C28ED14D17288000F4A9C /* SAMGAZL */ = {
+		isa = PBXExecutable;
+		activeArgIndices = (
+			YES,
+		);
+		argumentStrings = (
+			"\"%G\" comp8.pcm ",
+		);
+		autoAttachOnCrash = 1;
+		breakpointsEnabled = 1;
+		configStateDict = {
+			"PBXLSLaunchAction-0" = {
+				PBXLSLaunchAction = 0;
+				PBXLSLaunchStartAction = 1;
+				PBXLSLaunchStdioStyle = 2;
+				PBXLSLaunchStyle = 0;
+				class = PBXLSRunLaunchConfig;
+				commandLineArgs = (
+				);
+				displayName = "Executable Runner";
+				environment = {
+				};
+				identifier = com.apple.Xcode.launch.runConfig;
+				remoteHostInfo = "";
+				startActionInfo = "";
+			};
+		};
+		customDataFormattersEnabled = 1;
+		dataTipCustomDataFormattersEnabled = 1;
+		dataTipShowTypeColumn = 1;
+		dataTipSortType = 0;
+		debuggerPlugin = GDBDebugging;
+		disassemblyDisplayState = 0;
+		dylibVariantSuffix = "";
+		enableDebugStr = 1;
+		environmentEntries = (
+		);
+		executableSystemSymbolLevel = 0;
+		executableUserSymbolLevel = 0;
+		libgmallocEnabled = 0;
+		name = SAMGAZL;
+		savedGlobals = {
+		};
+		showTypeColumn = 0;
+		sourceDirectories = (
+		);
+		startupPath = /Users/magnus/projects/lab/SAM;
+		variableFormatDictionary = {
+		};
+	};
+	F70C28F114D172A8000F4A9C /* Source Control */ = {
+		isa = PBXSourceControlManager;
+		fallbackIsa = XCSourceControlManager;
+		isSCMEnabled = 0;
+		scmConfiguration = {
+			repositoryNamesForRoots = {
+				"" = "";
+			};
+		};
+	};
+	F70C28F214D172A8000F4A9C /* Code sense */ = {
+		isa = PBXCodeSenseManager;
+		indexTemplatePath = "";
+	};
+	F70C290B14D17BF8000F4A9C /* GAZL.cpp */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {1804, 23218}}";
+			sepNavSelRange = "{67928, 16}";
+			sepNavVisRange = "{67417, 999}";
+		};
+	};
+	F70C290C14D17BF8000F4A9C /* GAZL.h */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {2028, 4212}}";
+			sepNavSelRange = "{6130, 12}";
+			sepNavVisRange = "{5395, 1540}";
+		};
+	};
+	F7387E2E14D371D000E9423B /* PBXTextBookmark */ = {
+		isa = PBXTextBookmark;
+		fRef = 08FB7796FE84155DC02AAC07 /* main.cpp */;
+		name = "main.cpp: 210";
+		rLen = 0;
+		rLoc = 6588;
+		rType = 0;
+		vrLen = 900;
+		vrLoc = 5724;
+	};
+	F7387E2F14D371D000E9423B /* PBXTextBookmark */ = {
+		isa = PBXTextBookmark;
+		fRef = 08FB7796FE84155DC02AAC07 /* main.cpp */;
+		name = "main.cpp: 210";
+		rLen = 0;
+		rLoc = 6588;
+		rType = 0;
+		vrLen = 833;
+		vrLoc = 5803;
+	};
+}

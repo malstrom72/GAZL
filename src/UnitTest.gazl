@@ -1,0 +1,1995 @@
+;===============================================================================
+; GAZL Unit Test
+; (C) 2010-2012 NuEdge Development
+;===============================================================================
+
+;===============================================================================
+; Check version
+;===============================================================================
+
+            ! IFDF #GAZL_VERSION @gotVersion
+            ! FAIL GAZL_VERSION not defined!
+gotVersion: ! EQUi #GAZL_VERSION #1 @versionOK
+            ! FAIL This code is for version 1 of GAZL only.
+versionOK:  !
+
+            ! IFDF #GAZL_WORD_SIZE @gotBits
+            ! FAIL GAZL_WORD_SIZE not defined!
+gotBits:    ! EQUi #GAZL_WORD_SIZE #32 @bitsOK
+            ! FAIL This code is for 32-bits word size only.
+bitsOK:     !
+
+
+;-------------------------------------------------------------------------------
+FALSE:                  ! DEFi #0
+TRUE:                   ! DEFi #1
+;-------------------------------------------------------------------------------
+
+
+;-------------------------------------------------------------------------------
+GOOD:                   ! DEFi #0
+BAD:                    ! DEFi #-1
+;-------------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------------
+CR:                     ! DEFi #13
+LF:                     ! DEFi #10
+;-------------------------------------------------------------------------------
+
+
+;-------------------------------------------------------------------------------
+consts:                 CNST *15
+;-------------------------------------------------------------------------------
+    consts.float:       DATf #-5678.9
+    consts.int:         DATi #1234
+    consts.pointer:     DATp &consts:1
+    consts.string:      DATs hello
+                        DATi #CR  #LF #0
+    consts.done:        DATs done
+
+;-------------------------------------------------------------------------------
+consts.mixed:           CNST *3
+;-------------------------------------------------------------------------------
+                        DATA #1 #2.0 &consts.int
+
+;-------------------------------------------------------------------------------
+gArray:                 TEMP *777
+;-------------------------------------------------------------------------------
+                        DATi #1
+                        DATi #2
+                        DATi #3
+
+;-------------------------------------------------------------------------------
+global.warming:         GLOB *2
+;-------------------------------------------------------------------------------
+                        DATi #1
+    global.pointer:     DATp &NULL
+
+;-------------------------------------------------------------------------------
+test:                   FUNC
+;-------------------------------------------------------------------------------
+    f0:                 LOCf
+    f1:                 LOCf
+    f2:                 LOCf
+    f3:                 LOCf
+    i0:                 LOCi
+    i1:                 LOCi
+    i2:                 LOCi
+    i3:                 LOCi
+    p0:                 LOCp
+    p1:                 LOCp
+    p2:                 LOCp
+    p3:                 LOCp
+    lArray:             LOCA *777
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+;
+; Test that global / const data is initialized correctly.
+;
+ PEEK       f0		       &consts.float
+ PEEK       i0              &consts.int
+ PEEK       p0              &consts.pointer
+ NEQf       f0              #-5678.9        @fail
+ NEQi       i0              #1234           @fail
+ NEQp       p0              &consts:1       @fail
+ ! MOVi     <A>             #'h'
+ ! ADDi     <A>             <A>             #'e'
+ ! ADDi     <A>             <A>             #'l'
+ ! ADDi     <A>             <A>             #'l'
+ ! ADDi     <A>             <A>             #'o'
+ ! ADDi     <A>             <A>             #CR
+ ! ADDi     <A>             <A>             #LF
+ ! ADDi     <A>             <A>             #0
+ ! ADDi     <A>             <A>             #'d'
+ ! ADDi     <A>             <A>             #'o'
+ ! ADDi     <A>             <A>             #'n'
+ ! ADDi     <A>             <A>             #'e'
+ MOVi       i0              #0
+ MOVp       p0              &consts.string
+checksumLoop: NOOP
+ PEEK       i1              p0
+ ADDi       i0              i0              i1
+ FORp       p0              &consts.done:4  @checksumLoop
+ NEQi       i0              #<A>            @fail
+ PEEK       i0              &consts.mixed:0
+ PEEK       f0              &consts.mixed:1
+ PEEK       p0              &consts.mixed:2
+ NEQi       i0              #1              @fail
+ NEQf       f0              #2.0            @fail
+ NEQp       p0              &consts.int     @fail
+ ADRL       p0              lArray          *3
+ COPY       p0              &gArray         *3
+ NEQi       lArray:0        #1              @fail
+ NEQi       lArray:1        #2              @fail
+ NEQi       lArray:2        #3              @fail
+ MOVp       p0              &gArray:3
+checkZeroLoop: NOOP
+ PEEK       i0              p0
+ NEQi       i0              #0              @fail
+ FORp       p0              &gArray:777     @checkZeroLoop
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+; (d)        destination operand
+; %temp      local "transient" variable   (e.g. %0, %1)
+; int        local int variable           (e.g. myInt, localArray:3, %0)
+; float      local float variable         (e.g. myFloat, localArray:3, %0)
+; ptr        local pointer variable       (e.g. myPointer, localArray:3, %0)
+; var        local variable (any type)    (e.g. myVar, localArray:3, %0)
+; #int       constant int                 (e.g. #0, #1, #DEFINED_INT, <A>, <B>)
+; #float     constant float               (e.g. #0.0, #1.0, #DEFINED_FLOAT, <A>, <B>)
+; &address   constant pointer             (e.g. &global, &globalArray:3, &myFunction, <A>, <B>)
+; #const     any constant (incl address)  (e.g. #-1, #3.3, #DEFINED_INT, &global, &globalArray:3, &myFunction, <A>, <B>)
+; &function  GAZL function address        (e.g. &myFunction)
+; ^native    native function              (e.g. ^print)
+; @label     branch label                 (e.g. @jumphere, @choice.1)
+; *size      constant integer size        (e.g. *1, *<A>)
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;ABSf      float(d)        #float
+;          float(d)        float
+;
+; Absolute of float
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ ABSf      f0              #-123.4
+ ABSf      f1              f0
+ NEQf      f1              #123.4          @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;ABSi      int(d)          #int
+;          int(d)          int
+;
+; Absolute of int
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ ABSi      i0              #-123
+ ABSi      i1              i0
+ NEQi      i1              #123            @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;ADDf      float(d)        #float          #float
+;          float(d)        #float          float
+;          float(d)        float           #float
+;          float(d)        float           float
+;
+; Add floats
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ ADDf      f0              #123.4          #234.5
+ ADDf      f1              #-345.6         f0
+ ADDf      f2              f1              #456.7
+ ADDf      f3              f2              f1
+ NEQf      f3              #481.3          @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;ADDi      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int
+;
+; Add ints
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ ADDi      i0              #123            #234
+ ADDi      i1              #-345           i0
+ ADDi      i2              i1              #456
+ ADDi      i3              i2              i1
+ NEQi      i3              #480            @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;ADDp      ptr(d)          &address        #int
+;          ptr(d)          &address        int
+;          ptr(d)          ptr             #int
+;          ptr(d)          ptr             int
+;
+; Add to pointer
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ ADDp      p0              &consts:5       #5
+ ADDp      p1              &consts         i3
+ ADDp      p2              p0              #-10
+ ADDp      p3              p2              i3
+ NEQp      p3              p1              @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;ADRL      ptr(d)          var             *size
+;
+; Load effective address of local `var` into `ptr(d)`
+;
+; `*size` should hint how many words is expected to be accessed from `ptr(d)`, i.e. typically one for a single variable
+; or the array size for arrays. It may be used to optimize stack frame sizes, for bounds checking etc. It is always
+; legal to specify a size of zero if you do not know.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ ADRL      p0              lArray          *100
+ ADRL      p1              lArray:33       *0
+ ADDp      p0              p0              #33
+ NEQp      p0              p1              @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;ANDi      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int
+;
+; Bitwise AND ints
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ ANDi      i0              #0xABCD1234     #0xBCDE2345
+ ANDi      i1              #0x89ABCDEF     i0
+ ANDi      i2              i0              #0xFEDCBA98
+ ANDi      i3              i1              i2
+ NEQi      i3              #0x88880000     @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;CALL      &function
+;          &function       %temp           *size
+;          ^native
+;          ^native         %temp           *size
+;          ptr
+;          ptr             %temp           *size
+;
+; Function call.
+;
+; %temp should specify the "transient" variable for the first parameter (e.g. %0, %1, %2 etc).
+; *size is the number of parameters (counting both input and output parameters).
+;
+; In GAZL 1.0 there is no compile-time check on the types and number of parameters passed to a function. The size
+; operand is merely a hint that might be used to optimize stack frame sizes or for bounds checking etc.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVp      p0              &StopCar
+ MOVp      p1              &EarthCheck
+
+ CALL      &StartCar
+ CALL      &EarthCheck     %0              *1
+ NEQi      %0              #BAD            @fail
+
+ MOVf      %11             #-139413.6582
+ MOVf      %12             #38423.4e+3
+ CALL      ^testMul        %10             *3
+
+ SUBf      %10             %10             #-5.3567467544819e+12
+ ABSf      %10             %10
+ GRTf      %10             #1.0e6          @fail
+
+ CALL      ^testCallback
+
+ CALL      p0
+ CALL      p1              %0              *1
+ NEQi      %0              #GOOD           @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;CNST      *size
+;
+; Declare a constant data section / array
+;
+; `*size` defines the size of the section (in number of words). Define the data with DAT directives. You may not define
+; more data items than `*size`, but you may define fewer (remaining items will be zeroed). Data in a constant section is
+; placed in a write-protected segment of the run-time memory. See consts declarations in top of this file for examples.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;DATf      #float
+;DATi      #int
+;DATp      &address
+;DATA      #const #const #const #const ...
+;DATs      any string here
+;
+; DAT instructions are used to initialize globals and constant arrays. See consts declarations in top of this file for
+; examples. Tests on global / const initializers can be found first in the unit-test function.
+;
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;COPY      &address(w)     &address(r)     *size
+;          &address(w)     ptr             *size
+;          ptr             &address(r)     *size
+;          ptr             ptr             *size
+;
+; Copies memory. Behaviour is undefined if target and source overlaps. This instruction can be used to accelerate
+; memory access since global and constant data must otherwise be accessed with individual PEEK and POKE instructions.
+; With COPY you can copy a range of global / constant data to a local array which can then be used directly with
+; arbitrary instructions. (Just remember that you need to use ADRL to obtain the address to the local array.)
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ POKE      &gArray:25      #1234
+ POKE      &gArray:26      #5678
+ POKE      &gArray:27      #9012
+ POKE      &gArray:28      #3456
+ POKE      &gArray:29      #987654321
+ COPY      &gArray:21      &gArray:25      *4
+ PEEK      %0              &gArray:21
+ PEEK      %1              &gArray:22
+ PEEK      %2              &gArray:23
+ PEEK      %3              &gArray:24
+ NEQi      %0              #1234           @fail
+ NEQi      %1              #5678           @fail
+ NEQi      %2              #9012           @fail
+ NEQi      %3              #3456           @fail
+ PEEK      %0              &gArray:25
+ NEQi      %0              #1234           @fail
+ MOVi      lArray:4        #1234
+ MOVi      lArray:5        #5678
+ MOVi      lArray:6        #9012
+ MOVi      lArray:7        #3456
+ POKE      &gArray:27      #987654321
+ ADRL      %0              lArray:4        *4
+ COPY      &gArray:23      %0              *4
+ PEEK      %0              &gArray:23
+ PEEK      %1              &gArray:24
+ PEEK      %2              &gArray:25
+ PEEK      %3              &gArray:26
+ NEQi      %0              #1234           @fail
+ NEQi      %1              #5678           @fail
+ NEQi      %2              #9012           @fail
+ NEQi      %3              #3456           @fail
+ PEEK      %0              &gArray:27
+ NEQi      %0              #987654321      @fail
+ ADRL      %0              lArray:1        *4
+ COPY      %0              &gArray:23      *4
+ NEQi      lArray:1        #1234           @fail
+ NEQi      lArray:2        #5678           @fail
+ NEQi      lArray:3        #9012           @fail
+ NEQi      lArray:4        #3456           @fail
+ NEQi      lArray:5        #5678           @fail
+ MOVi      lArray:19       #191919
+ ADRL      %0              lArray:15       *4
+ ADRL      %1              lArray:1        *4
+ COPY      %0              %1              *4
+ NEQi      lArray:15       #1234           @fail
+ NEQi      lArray:16       #5678           @fail
+ NEQi      lArray:17       #9012           @fail
+ NEQi      lArray:18       #3456           @fail
+ NEQi      lArray:19       #191919         @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;DIFp      int(d)          &address        &address
+;          int(d)          &address        ptr
+;          int(d)          ptr             &address
+;          int(d)          ptr             ptr
+;
+; Difference of two pointers
+;
+; You cannot use SUBp to subtract a pointer from another. SUBp is only used for negatively offsetting a pointer.
+;
+; Notice that for the first variant with two constant addresses, both addresses need to be declared before the
+; instruction. (The other variants accepts forward declarations.)
+;
+; The motivation behind this exception is that the difference of two constant addresses becomes another constant,
+; and this may be utilized for local optimizations etc.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVp      p0              &consts:1
+ DIFp      i0              &consts:10      &consts:5
+ DIFp      i1              &consts:8       p0
+ DIFp      i2              p0              &consts:2
+ ADRL      p1              lArray:10       *0
+ ADRL      p2              lArray:33       *1
+ DIFp      i3              p2              p1
+ NEQi      i0              #5              @fail
+ NEQi      i1              #7              @fail
+ NEQi      i2              #-1             @fail
+ NEQi      i3              #23             @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;DIVf      float(d)        #float          #float
+;          float(d)        #float          float
+;          float(d)        float           #float
+;          float(d)        float           float
+;
+; Divide floats
+;
+; Division by 0 is considered illegal and should generate a run-time error (or compile-time error if 0 is a constant).
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ DIVf      f0              #123.4          #234.5
+ DIVf      f1              #-345.6         f0
+ DIVf      f2              f1              #456.7
+ DIVf      f3              f1              f2
+ SUBf      f3              f3              #456.7
+ ABSf      f3              f3
+ GRTf      f3              #1.0e-6         @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;DIVi      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int
+;
+; Divide ints
+;
+; Note: this test assumes truncation towards zero (also for negative numbers) although this is not guaranteed by all
+; C/C++ compilers. In case this test fails (for example `i3` turns out #760) the C/C++ compiler that built the VM uses
+; an unusual truncation mode and that would be a bad thing that would have to be fixed in an upgrade of GAZL.
+;
+; Division by 0 is considered illegal and should generate a run-time error (or compile-time error if 0 is a constant).
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ DIVi      i0              #123456         #234
+ DIVi      i1              #-987654321     i0
+ DIVi      i2              i1              #761
+ DIVi      i3              i1              i2
+ NEQi      i3              #761            @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;EQUf      #float          #float          @label
+;          #float          float           @label
+;          float           #float          @label
+;          float           float           @label
+;
+; Branch on equal floats
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVf      f0              #-456.7
+ SUBf      f1              #0.0            f0
+ MOVf      f2              f0
+ EQUf      #120.3          #120.4          @fail
+ EQUf      #120.3          #120.3          @okEQUf1
+ GOTO      @fail
+okEQUf1: NOOP
+ EQUf      #456.7          f0              @fail
+ EQUf      #-456.7         f0              @okEQUf2
+ GOTO      @fail
+okEQUf2: NOOP
+ EQUf      f0              #456.7          @fail
+ EQUf      f0              #-456.7         @okEQUf3
+ GOTO      @fail
+okEQUf3: NOOP
+ EQUf      f0              f1              @fail
+ EQUf      f0              f2              @okEQUf4
+ GOTO      @fail
+okEQUf4: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;EQUi      #int            #int            @label
+;          #int            int             @label
+;          int             #int            @label
+;          int             int             @label
+;
+; Branch on equal ints
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVi      i0              #-456
+ SUBi      i1              #0              i0
+ MOVi      i2              i0
+ EQUi      #120            #-120           @fail
+ EQUi      #120            #120            @okEQUi5
+ GOTO      @fail
+okEQUi5: NOOP
+ EQUi      #456            i0              @fail
+ EQUi      #-456           i0              @okEQUi6
+ GOTO      @fail
+okEQUi6: NOOP
+ EQUi      i0              #456            @fail
+ EQUi      i0              #-456           @okEQUi7
+ GOTO      @fail
+okEQUi7: NOOP
+ EQUi      i0              i1              @fail
+ EQUi      i0              i2              @okEQUi8
+ GOTO      @fail
+okEQUi8: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;EQUp      &address        &address        @label
+;          &address        ptr             @label
+;          ptr             &address        @label
+;          ptr             ptr             @label
+;
+; Branch on equal pointers
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ ADRL      p0              lArray:33       *1
+ MOVp      p1              &consts
+ EQUp      &consts         &consts.int     @fail
+ EQUp      &consts         &consts         @okEQUp9
+ GOTO      @fail
+okEQUp9: NOOP
+ EQUp      &consts         p0              @fail
+ EQUp      &consts         p1              @okEQUp10
+ GOTO      @fail
+okEQUp10: NOOP
+ EQUp      p0              &consts         @fail
+ EQUp      p1              &consts         @okEQUp11
+ GOTO      @fail
+okEQUp11: NOOP
+ EQUp      p0              p1              @fail
+ EQUp      p1              p1              @okEQUp12
+ GOTO      @fail
+okEQUp12: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;FLOf      float(d)        #float
+;          float(d)        float
+;
+; Floor of float. Notice that there is no ceil instruction, but ceil is equivalent to -floor(-x).
+;
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVf      f1              #12.3
+ FLOf      f0              #-123.4
+ FLOf      f2              f1
+ NEQf      f0              #-124.0         @fail
+ NEQf      f2              #12.0           @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;FORi      int(d)          #int            @label
+;          int(d)          int             @label
+;
+; Increment `int(d)` and branch to `@label` if it is less than `#int` / `int`
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVi      i0              #0
+ MOVi      i1              #1234
+looptest1: NOOP
+ ADDi      i1              i1              #2345
+ FORi      i0              #777            @looptest1
+ NEQi      i0              #777            @fail
+ NEQi      i1              #1823299        @fail
+ MOVi      i2              #333
+looptest2: NOOP
+ ADDi      i1              i1              #2345
+ FORi      i2              i0              @looptest2
+ NEQi      i2              i0              @fail
+ NEQi      i1              #2864479        @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;FORp      ptr(d)          &address        @label
+;          ptr(d)          ptr             @label
+;
+; Increment `ptr(d)` and branch to `@label` if it is less than `&address` / `ptr`
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVp      p0              &gArray
+ MOVi      i1              #1234
+looptest3: NOOP
+ ADDi      i1              i1              #2345
+ FORp      p0              &gArray:777     @looptest3
+ NEQp      p0              &gArray:777     @fail
+ NEQi      i1              #1823299        @fail
+ ADRL      p1              lArray:333      *444
+ ADRL      p2              lArray:777      *0
+looptest4: NOOP
+ ADDi      i1              i1              #2345
+ FORp      p1              p2              @looptest4
+ NEQp      p1              p2              @fail
+ NEQi      i1              #2864479        @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;FUNC
+;
+; Declares the beginning of a new function. Any previous function must have ended with either RETU or GOTO.
+;
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;GEQf      #float          #float          @label
+;          #float          float           @label
+;          float           #float          @label
+;          float           float           @label
+;
+; Branch on greater or equal float
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVf      f0              #-456.7
+ SUBf      f1              #0.0            f0
+ MOVf      f2              f0
+ GEQf      #120.3          #120.4          @fail
+ GEQf      #120.4          #120.3          @okGEQf13
+ GOTO      @fail
+okGEQf13: NOOP
+ GEQf      #120.3          #120.3          @okGEQf14
+ GOTO      @fail
+okGEQf14: NOOP
+ GEQf      #456.7          f0              @okGEQf15
+ GOTO      @fail
+okGEQf15: NOOP
+ GEQf      #-456.7         f0              @okGEQf16
+ GOTO      @fail
+okGEQf16: NOOP
+ GEQf      #-457.0         f0              @fail
+ GEQf      f0              #456.7          @fail
+ GEQf      f0              #-456.7         @okGEQf17
+ GOTO      @fail
+okGEQf17: NOOP
+ GEQf      f0              #-457.0         @okGEQf18
+ GOTO      @fail
+okGEQf18: NOOP
+ GEQf      f0              f1              @fail
+ GEQf      f0              f2              @okGEQf19
+ GOTO      @fail
+okGEQf19: NOOP
+ GEQf      f1              f0              @okGEQf20
+ GOTO      @fail
+okGEQf20: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;GEQi      #int            #int            @label
+;          #int            int             @label
+;          int             #int            @label
+;          int             int             @label
+;
+; Branch on greater or equal int
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVi      i0              #-456
+ SUBi      i1              #0              i0
+ MOVi      i2              i0
+ GEQi      #120            #121            @fail
+ GEQi      #121            #120            @okGEQi21
+ GOTO      @fail
+okGEQi21: NOOP
+ GEQi      #120            #120            @okGEQi22
+ GOTO      @fail
+okGEQi22: NOOP
+ GEQi      #456            i0              @okGEQi23
+ GOTO      @fail
+okGEQi23: NOOP
+ GEQi      #-456           i0              @okGEQi24
+ GOTO      @fail
+okGEQi24: NOOP
+ GEQi      #-457           i0              @fail
+ GEQi      i0              #456            @fail
+ GEQi      i0              #-456           @okGEQi25
+ GOTO      @fail
+okGEQi25: NOOP
+ GEQi      i0              #-457           @okGEQi26
+ GOTO      @fail
+okGEQi26: NOOP
+ GEQi      i0              i1              @fail
+ GEQi      i0              i2              @okGEQi27
+ GOTO      @fail
+okGEQi27: NOOP
+ GEQi      i1              i0              @okGEQi28
+ GOTO      @fail
+okGEQi28: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;GEQp      &address        &address        @label
+;          &address        ptr             @label
+;          ptr             &address        @label
+;          ptr             ptr             @label
+;
+; Branch on greater or equal pointer
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVp      p1              &gArray:1
+ SUBp      p0              p1              #1
+ ADDp      p2              p1              #1
+ GEQp      &gArray:0       &gArray:1       @fail
+ GEQp      &gArray:1       &gArray:0       @okGEQp29
+ GOTO      @fail
+okGEQp29: NOOP
+ GEQp      &gArray:0       &gArray:0       @okGEQp30
+ GOTO      @fail
+okGEQp30: NOOP
+ GEQp      &gArray:2       p1              @okGEQp31
+ GOTO      @fail
+okGEQp31: NOOP
+ GEQp      &gArray:1       p1              @okGEQp32
+ GOTO      @fail
+okGEQp32: NOOP
+ GEQp      &gArray:0       p1              @fail
+ GEQp      p1              &gArray:2       @fail
+ GEQp      p1              &gArray:1       @okGEQp33
+ GOTO      @fail
+okGEQp33: NOOP
+ GEQp      p1              &gArray:0       @okGEQp34
+ GOTO      @fail
+okGEQp34: NOOP
+ GEQp      p1              p2              @fail
+ GEQp      p1              p1              @okGEQp35
+ GOTO      @fail
+okGEQp35: NOOP
+ GEQp      p1              p0              @okGEQp36
+ GOTO      @fail
+okGEQp36: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;GETL      var(d)          var             int
+;
+; Get local variable `var` (any type) with offset `int`
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVi      lArray:234      #345
+ MOVi      i1              #230
+ GETL      i0              lArray:4        i1
+ NEQi      i0              #345            @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;GLOB      *size
+;
+; Declare a global (writable) data section / array
+;
+; `*size` defines the size of the section (in number of words). You may optionally want to define the initial data with
+; DAT directives. Remaining data will be zeroed. See global declarations in top of this file for examples.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;GOTO      @label
+;
+; Unconditionally branch to `@label`
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ GOTO      @ok38
+ CALL      ^assertFail
+ RETU
+ok38: NOOP
+ GOTO      @goForwards
+goBackwards: NOOP
+ GOTO      @ok39
+goForwards: NOOP
+ GOTO      @goBackwards
+ok39: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;GRTf      #float          #float          @label
+;          #float          float           @label
+;          float           #float          @label
+;          float           float           @label
+;
+; Branch on greater float
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVf      f0              #-456.7
+ SUBf      f1              #0.0            f0
+ MOVf      f2              f0
+ GRTf      #120.3          #120.4          @fail
+ GRTf      #120.4          #120.3          @okGRTf40
+ GOTO      @fail
+okGRTf40: NOOP
+ GRTf      #120.3          #120.3          @fail
+ GRTf      #456.7          f0              @okGRTf41
+ GOTO      @fail
+okGRTf41: NOOP
+ GRTf      #-456.7         f0              @fail
+ GRTf      #-457.0         f0              @fail
+ GRTf      f0              #456.7          @fail
+ GRTf      f0              #-456.7         @fail
+ GRTf      f0              #-457.0         @okGRTf42
+ GOTO      @fail
+okGRTf42: NOOP
+ GRTf      f0              f1              @fail
+ GRTf      f0              f2              @fail
+ GRTf      f1              f0              @okGRTf43
+ GOTO      @fail
+okGRTf43: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;GRTi      #int            #int            @label
+;          #int            int             @label
+;          int             #int            @label
+;          int             int             @label
+;
+; Branch on greater int
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVi      i0              #-456
+ SUBi      i1              #0              i0
+ MOVi      i2              i0
+ GRTi      #120            #121            @fail
+ GRTi      #121            #120            @okGRTi44
+ GOTO      @fail
+okGRTi44: NOOP
+ GRTi      #120            #120            @fail
+ GRTi      #456            i0              @okGRTi45
+ GOTO      @fail
+okGRTi45: NOOP
+ GRTi      #-456           i0              @fail
+ GRTi      #-457           i0              @fail
+ GRTi      i0              #456            @fail
+ GRTi      i0              #-456           @fail
+ GRTi      i0              #-457           @okGRTi46
+ GOTO      @fail
+okGRTi46: NOOP
+ GRTi      i0              i1              @fail
+ GRTi      i0              i2              @fail
+ GRTi      i1              i0              @okGRTi47
+ GOTO      @fail
+okGRTi47: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;GRTp      &address        &address        @label
+;          &address        ptr             @label
+;          ptr             &address        @label
+;          ptr             ptr             @label
+;
+; Branch on greater pointer
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVp      p1              &gArray:1
+ SUBp      p0              p1              #1
+ ADDp      p2              p1              #1
+ GRTp      &gArray:0       &gArray:1       @fail
+ GRTp      &gArray:1       &gArray:0       @okGRTp48
+ GOTO      @fail
+okGRTp48: NOOP
+ GRTp      &gArray:0       &gArray:0       @fail
+ GRTp      &gArray:2       p1              @okGRTp49
+ GOTO      @fail
+okGRTp49: NOOP
+ GRTp      &gArray:1       p1              @fail
+ GRTp      &gArray:0       p1              @fail
+ GRTp      p1              &gArray:2       @fail
+ GRTp      p1              &gArray:1       @fail
+ GRTp      p1              &gArray:0       @okGRTp50
+ GOTO      @fail
+okGRTp50: NOOP
+ GRTp      p1              p2              @fail
+ GRTp      p1              p1              @fail
+ GRTp      p1              p0              @okGRTp51
+ GOTO      @fail
+okGRTp51: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;INPf
+;INPi
+;INPp
+;
+; Declare a local (read-only) input parameter (float, int or pointer). INP declarations must appear after a FUNC
+; declaration but before any real instruction.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;IORi      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int
+;
+; Bitwise (inclusive) OR ints
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ IORi      i0              #0x5432EDCB     #0x4321DCBA
+ IORi      i1              #0x76543210     i0
+ IORi      i2              i0              #0x01234567
+ IORi      i3              i1              i2
+ NEQi      i3              #0x7777FFFF     @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;LEQf      #float          #float          @label
+;          #float          float           @label
+;          float           #float          @label
+;          float           float           @label
+;
+; Branch on less or equal float
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVf      f0              #-456.7
+ SUBf      f1              #0.0            f0
+ MOVf      f2              f0
+ LEQf      #120.4          #120.3          @fail
+ LEQf      #120.3          #120.4          @okLEQf52
+ GOTO      @fail
+okLEQf52: NOOP
+ LEQf      #120.3          #120.3          @okLEQf53
+ GOTO      @fail
+okLEQf53: NOOP
+ LEQf      #456.7          f0              @fail
+ LEQf      #-456.7         f0              @okLEQf56
+ GOTO      @fail
+okLEQf56: NOOP
+ LEQf      #-457.0         f0              @okLEQf57
+ GOTO      @fail
+okLEQf57: NOOP
+ LEQf      f0              #456.7          @okLEQf54
+ GOTO      @fail
+okLEQf54: NOOP
+ LEQf      f0              #-456.7         @okLEQf55
+ GOTO      @fail
+okLEQf55: NOOP
+ LEQf      f0              #-457.0         @fail
+ LEQf      f1              f0              @fail
+ LEQf      f2              f0              @okLEQf58
+ GOTO      @fail
+okLEQf58: NOOP
+ LEQf      f0              f1              @okLEQf59
+ GOTO      @fail
+okLEQf59: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;LEQi      #int            #int            @label
+;          #int            int             @label
+;          int             #int            @label
+;          int             int             @label
+;
+; Branch on less or equal int
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVi      i0              #-456
+ SUBi      i1              #0              i0
+ MOVi      i2              i0
+ LEQi      #121            #120            @fail
+ LEQi      #120            #121            @okLEQi60
+ GOTO      @fail
+okLEQi60: NOOP
+ LEQi      #120            #120            @okLEQi61
+ GOTO      @fail
+okLEQi61: NOOP
+ LEQi      #456            i0              @fail
+ LEQi      #-456           i0              @okLEQi64
+ GOTO      @fail
+okLEQi64: NOOP
+ LEQi      #-457           i0              @okLEQi65
+ GOTO      @fail
+okLEQi65: NOOP
+ LEQi      i0              #456            @okLEQi62
+ GOTO      @fail
+okLEQi62: NOOP
+ LEQi      i0              #-456           @okLEQi63
+ GOTO      @fail
+okLEQi63: NOOP
+ LEQi      i0              #-457           @fail
+ LEQi      i1              i0              @fail
+ LEQi      i2              i0              @okLEQi66
+ GOTO      @fail
+okLEQi66: NOOP
+ LEQi      i0              i1              @okLEQi67
+ GOTO      @fail
+okLEQi67: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;LEQp      &address        &address        @label
+;          &address        ptr             @label
+;          ptr             &address        @label
+;          ptr             ptr             @label
+;
+; Branch on less or equal pointer
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVp      p1              &gArray:1
+ SUBp      p0              p1              #1
+ ADDp      p2              p1              #1
+ LEQp      &gArray:1       &gArray:0       @fail
+ LEQp      &gArray:0       &gArray:1       @okLEQp68
+ GOTO      @fail
+okLEQp68: NOOP
+ LEQp      &gArray:0       &gArray:0       @okLEQp69
+ GOTO      @fail
+okLEQp69: NOOP
+ LEQp      &gArray:2       p1              @fail
+ LEQp      &gArray:1       p1              @okLEQp72
+ GOTO      @fail
+okLEQp72: NOOP
+ LEQp      &gArray:0       p1              @okLEQp73
+ GOTO      @fail
+okLEQp73: NOOP
+ LEQp      p1              &gArray:2       @okLEQp70
+ GOTO      @fail
+okLEQp70: NOOP
+ LEQp      p1              &gArray:1       @okLEQp71
+ GOTO      @fail
+okLEQp71: NOOP
+ LEQp      p1              &gArray:0       @fail
+ LEQp      p2              p1              @fail
+ LEQp      p1              p1              @okLEQp74
+ GOTO      @fail
+okLEQp74: NOOP
+ LEQp      p0              p1              @okLEQp75
+ GOTO      @fail
+okLEQp75: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;LOCA      *size
+;
+; Declare a local data section / array (any type)
+;
+; `*size` defines the size of the section (in number of words). LOCA declarations must appear after a FUNC declaration
+; but before any real instruction. You would not normally place LOCA before INP, OUT and PARA declarations either.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;LOCf
+;LOCi
+;LOCp
+;
+; Declare a local variable (float, int or pointer). LOC declarations must appear after a FUNC declaration
+; but before any real instruction. You would not normally place LOC before INP, OUT and PARA declarations either.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;LSSf      #float          #float          @label
+;          #float          float           @label
+;          float           #float          @label
+;          float           float           @label
+;
+; Branch on less float
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVf      f0              #-456.7
+ SUBf      f1              #0.0            f0
+ MOVf      f2              f0
+ LSSf      #120.4          #120.3          @fail
+ LSSf      #120.3          #120.4          @okLSSf40
+ GOTO      @fail
+okLSSf40: NOOP
+ LSSf      #120.3          #120.3          @fail
+ LSSf      #456.7          f0              @fail
+ LSSf      #-456.7         f0              @fail
+ LSSf      #-457.0         f0              @okLSSf42
+ GOTO      @fail
+okLSSf42: NOOP
+ LSSf      f0              #456.7          @okLSSf41
+ GOTO      @fail
+okLSSf41: NOOP
+ LSSf      f0              #-456.7         @fail
+ LSSf      f0              #-457.0         @fail
+ LSSf      f1              f0              @fail
+ LSSf      f2              f0              @fail
+ LSSf      f0              f1              @okLSSf43
+ GOTO      @fail
+okLSSf43: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;LSSi      #int            #int            @label
+;          #int            int             @label
+;          int             #int            @label
+;          int             int             @label
+;
+; Branch on less int
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVi      i0              #-456
+ SUBi      i1              #0              i0
+ MOVi      i2              i0
+ LSSi      #121            #120            @fail
+ LSSi      #120            #121            @okLSSi44
+ GOTO      @fail
+okLSSi44: NOOP
+ LSSi      #120            #120            @fail
+ LSSi      #456            i0              @fail
+ LSSi      #-456           i0              @fail
+ LSSi      #-457           i0              @okLSSi46
+ GOTO      @fail
+okLSSi46: NOOP
+ LSSi      i0              #456            @okLSSi45
+ GOTO      @fail
+okLSSi45: NOOP
+ LSSi      i0              #-456           @fail
+ LSSi      i0              #-457           @fail
+ LSSi      i1              i0              @fail
+ LSSi      i2              i0              @fail
+ LSSi      i0              i1              @okLSSi47
+ GOTO      @fail
+okLSSi47: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;LSSp      &address        &address        @label
+;          &address        ptr             @label
+;          ptr             &address        @label
+;          ptr             ptr             @label
+;
+; Branch on less pointer
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVp      p1              &gArray:1
+ SUBp      p0              p1              #1
+ ADDp      p2              p1              #1
+ LSSp      &gArray:1       &gArray:0       @fail
+ LSSp      &gArray:0       &gArray:1       @okLSSp48
+ GOTO      @fail
+okLSSp48: NOOP
+ LSSp      &gArray:0       &gArray:0       @fail
+ LSSp      &gArray:2       p1              @fail
+ LSSp      &gArray:1       p1              @fail
+ LSSp      &gArray:0       p1              @okLSSp50
+ GOTO      @fail
+okLSSp50: NOOP
+ LSSp      p1              &gArray:2       @okLSSp49
+ GOTO      @fail
+okLSSp49: NOOP
+ LSSp      p1              &gArray:1       @fail
+ LSSp      p1              &gArray:0       @fail
+ LSSp      p2              p1              @fail
+ LSSp      p1              p1              @fail
+ LSSp      p0              p1              @okLSSp51
+ GOTO      @fail
+okLSSp51: NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;MODi      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int
+;
+; Modulus two ints
+;
+; Note: this test assumes truncation towards zero (also for negative numbers) although this is not guaranteed by all
+; C/C++ compilers. In case this test fails the C/C++ compiler that built the VM uses an unusual truncation mode and
+; that would be a bad thing that would have to be fixed in an upgrade of GAZL.
+;
+; Modulus by 0 is considered illegal and should generate a run-time error (or compile-time error if 0 is a constant).
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MODi      i0              #123456         #234
+ MODi      i1              #-987654321     i0
+ MODi      i2              i1              #-29
+ MODi      i3              i1              i2
+ NEQi      i3              #-7             @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;MOVE      var(d)          var
+;MOVf      float(d)        #float
+;          float(d)        float
+;MOVi      int(d)          #int
+;          int(d)          int
+;MOVp      ptr(d)          &address
+;          ptr(d)          ptr
+;
+; Move to local variable
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVf      f0              #1234.5678e9
+ MOVf      f1              f0
+ NEQf      f1              #1234.5678e9    @fail
+ MOVi      i0              #12345678
+ MOVi      i1              i0
+ NEQi      i1              #12345678       @fail
+ MOVp      p0              &gArray:1
+ MOVp      p1              p0
+ NEQp      p1              &gArray:1       @fail
+ MOVE      i0              f0
+ MOVE      i1              p0
+ MOVE      f1              i0
+ MOVE      p1              i1
+ NEQf      f0              f1              @fail
+ NEQp      p0              p1              @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;MULf      float(d)        #float          #float
+;          float(d)        #float          float
+;          float(d)        float           #float
+;          float(d)        float           float
+;
+; Multiply two floats
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MULf      f0              #123.4          #234.5
+ MULf      f1              #-345.6         f0
+ MULf      f2              f1              #456.7
+ MULf      f3              f1              f2
+ SUBf      f3              f3              #4.5676676101883e+16
+ ABSf      f3              f3
+ GRTf      f3              #1.0e+6         @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;MULi      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int
+;
+; Multiply two ints
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MULi      i0              #123            #23
+ MULi      i1              #-34            i0
+ MULi      i2              i1              #4
+ MULi      i3              i0              i2
+ NEQi      i3              #-1088440776    @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;NEQf      #float          #float          @label
+;          #float          float           @label
+;          float           #float          @label
+;          float           float           @label
+;
+; Branch on unequal floats
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVf      f0              #-456.7
+ SUBf      f1              #0.0            f0
+ MOVf      f2              f0
+ NEQf      #120.3          #120.4          @okNEQf1
+ GOTO      @fail
+okNEQf1: NOOP
+ NEQf      #120.3          #120.3          @fail
+ NEQf      #456.7          f0              @okNEQf2
+ GOTO      @fail
+okNEQf2: NOOP
+ NEQf      #-456.7         f0              @fail
+ NEQf      f0              #456.7          @okNEQf3
+ GOTO      @fail
+okNEQf3: NOOP
+ NEQf      f0              #-456.7         @fail
+ NEQf      f0              f1              @okNEQf4
+ GOTO      @fail
+okNEQf4: NOOP
+ NEQf      f0              f2              @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;NEQi      #int            #int            @label
+;          #int            int             @label
+;          int             #int            @label
+;          int             int             @label
+;
+; Branch on unequal ints
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVi      i0              #-456
+ SUBi      i1              #0              i0
+ MOVi      i2              i0
+ NEQi      #120            #-120           @okNEQi5
+ GOTO      @fail
+okNEQi5: NOOP
+ NEQi      #120            #120            @fail
+ NEQi      #456            i0              @okNEQi6
+ GOTO      @fail
+okNEQi6: NOOP
+ NEQi      #-456           i0              @fail
+ NEQi      i0              #456            @okNEQi7
+ GOTO      @fail
+okNEQi7: NOOP
+ NEQi      i0              #-456           @fail
+ NEQi      i0              i1              @okNEQi8
+ GOTO      @fail
+okNEQi8: NOOP
+ NEQi      i0              i2              @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;NEQp      &address        &address        @label
+;          &address        ptr             @label
+;          ptr             &address        @label
+;          ptr             ptr             @label
+;
+; Branch on unequal pointers
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ ADRL      p0              lArray:33       *1
+ MOVp      p1              &consts
+ NEQp      &consts         &consts.int     @okNEQp9
+ GOTO      @fail
+okNEQp9: NOOP
+ NEQp      &consts         &consts         @fail
+ NEQp      &consts         p0              @okNEQp10
+ GOTO      @fail
+okNEQp10: NOOP
+ NEQp      &consts         p1              @fail
+ NEQp      p0              &consts         @okNEQp11
+ GOTO      @fail
+okNEQp11: NOOP
+ NEQp      p1              &consts         @fail
+ NEQp      p0              p1              @okNEQp12
+ GOTO      @fail
+okNEQp12: NOOP
+ NEQp      p1              p1              @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;NOOP
+;
+; No operation
+;
+; The NOOP instruction does nothing and will not consume any CPU cycles (it is effectively removed during assembly).
+; It can be used to define a branching label without associating it with a specific instruction (since every line in
+; GAZL needs an opcode).
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ NOOP
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;OUTf
+;OUTi
+;OUTp
+;
+; Declare a local output parameter (float, int or pointer). OUT declarations must appear after a FUNC declaration but
+; before any real instruction.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;PARA      *size
+;
+; Declare a local parameter section / array (any type, input or output)
+;
+; `*size` defines the size of the section (in number of words). PARA declarations must appear after a FUNC declaration
+; but before any real instruction. You would also normally place PARA before LOC declarations.
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;PEEK      var(d)          &address(r)
+;          var(d)          &address(r)     int
+;          var(d)          ptr
+;          var(d)          ptr             #int
+;          var(d)          ptr             int
+;
+;  Read a value from random access memory with an optional integer offset.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ PEEK      i0              &consts.mixed
+ NEQi      i0              #1              @fail
+ PEEK      f0              &consts.mixed:1
+ NEQf      f0              #2.0            @fail
+ MOVi      i1              #2
+ PEEK      p0              &consts.mixed   i1
+ NEQp      p0              &consts.int     @fail
+ MOVp      p1              &consts.mixed
+ PEEK      i0              p1
+ NEQi      i0              #1              @fail
+ PEEK      f0              p1              #1
+ NEQf      f0              #2.0            @fail
+ PEEK      p0              p1              i1
+ NEQp      p0              &consts.int     @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;POKE      &address(w)     #const
+;          &address(w)     var
+;          &address(w)     int             #const
+;          &address(w)     int             var
+;          ptr             #const
+;          ptr             #int            #const
+;          ptr             #int            var
+;          ptr             var
+;          ptr             int             #const
+;          ptr             int             var
+;
+; Write a value to random access memory with an optional integer offset.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ POKE      &gArray:111     #111
+ MOVi      i0              #112
+ POKE      &gArray:112     i0
+ MOVi      i1              #1
+ POKE      &gArray:112     i1              #113
+ ADDi      i0              i0              #2
+ POKE      &gArray:113     i1              i0
+ MOVp      p0              &gArray:115
+ POKE      p0              #115
+ POKE      p0              #1              #116
+ ADDi      i0              i0              #3
+ POKE      p0              #2              i0
+ ADDp      p0              p0              #3
+ ADDi      i0              i0              #1
+ POKE      p0              i0
+ POKE      p0              i1              #119
+ ADDi      i0              i0              #2
+ ADDp      p0              p0              #1
+ POKE      p0              i1              i0
+ MOVi      i1              #111
+ MOVp      p0              &gArray:111
+pokeloop: NOOP
+ PEEK      i0              p0
+ NEQi      i0              i1              @fail
+ ADDi      i1              i1              #1
+ FORp      p0              &gArray:121     @pokeloop
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;RETU
+;
+; Returns from function call.
+;
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;SETL      var(d)          int             #const
+;          var(d)          int             var
+;
+; Set local variable `var` (any type) with offset `int`
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVi      i1              #230
+ SETL      lArray:4        i1              #3939
+ NEQi      lArray:234      #3939           @fail
+ SETL      lArray:4        i1              i1
+ NEQi      lArray:234      #230            @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;SHLi      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int
+;
+; Shift bits left
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ SHLi      i0              #0x55           #3
+ SHLi      i0              i0              #1
+ SHLi      i1              #1              #2
+ SHLi      i0              i0              i1
+ NEQi      i0              #0x5500         @fail
+ SHLi      i0              #11             i1
+ NEQi      i0              #176            @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;SHRi      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int;
+;
+; Shift bits right (arithmetic, i.e. replicate most significant bit and keep sign)
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ SHRi      i0              #-0x5500        #3
+ SHRi      i0              i0              #1
+ SHRi      i1              #0x10           #2
+ SHRi      i0              i0              i1
+ NEQi      i0              #-0x55          @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;SHRu      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int
+;
+; Shift bits right (logical, i.e. shift in zeroes and lose sign)
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ SHRu      i0              #0xFFFF55FF     #3
+ SHRu      i0              i0              #1
+ SHRu      i1              #0x10           #2
+ SHRu      i0              i0              i1
+ NEQi      i0              #0x00FFFF55    @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;SUBf      float(d)        #float          #float
+;          float(d)        #float          float
+;          float(d)        float           #float
+;          float(d)        float           float
+;
+; Subtract floats
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ SUBf      f0              #123.4          #234.5
+ SUBf      f1              #-345.6         f0
+ SUBf      f2              f1              #456.7
+ SUBf      f3              f2              f1
+ NEQf      f3              #-456.7         @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;SUBi      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int
+;
+; Subtract ints
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ SUBi      i0              #123            #234
+ SUBi      i1              #-345           i0
+ SUBi      i2              i1              #456
+ SUBi      i3              i2              i1
+ NEQi      i3              #-456           @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;SUBp      ptr(d)          &address        #int
+;          ptr(d)          &address        int
+;          ptr(d)          ptr             #int
+;          ptr(d)          ptr             int
+;
+; Subtract from pointer
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ SUBp      p0              &consts:15      #5
+ SUBp      p1              &consts         i3
+ SUBp      p2              p0              #10
+ SUBp      p3              p2              i3
+ NEQp      p3              p1              @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;SWCH      int             *size           @label
+;
+; Switch (multi-way branch)
+;
+; The switch instruction creates an internal switch table of a chosen size (`*size`) for quick multi-way branching on
+; `int`.
+;
+; Case labels can be defined for integer values between 0 and `*size` - 1. Case labels should be formed by appending
+; integer constants to `@label` with either a period `.` or `#` in between. Use `#` to allow any constant literal or
+; compile-time variable. E.g. `@myLabel#'B'` and `@myLabel#<A>` are valid case labels.
+;
+; If `int` is out of range (< 0 or >= `*size`) or a case label is not defined, the default case label (`@label`) is
+; used. This label is the only one that must be declared.
+;
+; The greater the `*size` the more memory will be required for the jump table, so avoid huge switch ranges.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ MOVi      i1              #'A'
+ MOVi      i2              #0
+
+ MOVi      i0              #-1
+ SWCH      i0              *1              @swchA
+ GOTO      @fail
+swchA.0:   GOTO @fail
+swchA:     NOOP
+ MOVi      i0              #1
+ SWCH      i0              *1              @swchB
+ GOTO      @fail
+swchB.0:   GOTO @fail
+ ! MOVi    <X>             #1
+swchB#<X>: GOTO @doSwchC
+swchB:     NOOP
+ MOVi      i1              #'B'
+ SWCH      i0              *2              @swchB
+
+doSwchC:   NOOP
+ SWCH      i1              *256            @swchC
+swchC#'C': MULi i2 i2 #3
+           GOTO @swchCNext
+swchC#'Y': MULi i2 i2 #10
+swchC#'X': NOOP
+swchC:     ADDi i2 i2 #1
+swchCNext: NOOP
+ FORi      i1              #'Z'            @doSwchC
+ NEQi      i2              #241            @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;TEMP      *size
+;
+; Like `GLOB` but hints that this section contains temporary data that can be ignored in case the GAZL host supports
+; memory serialization.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;XORi      int(d)          #int            #int
+;          int(d)          #int            int
+;          int(d)          int             #int
+;          int(d)          int             int
+;
+; Bitwise XOR ints
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ XORi      i0              #0x5432EDCB     #0x4321DCBA
+ XORi      i1              #0x76543210     i0
+ XORi      i2              i0              #0x01234567
+ XORi      i3              i1              i2
+ NEQi      i3              #0x77777777     @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;fTOi      int(d)          #float          #float
+;          int(d)          float           #float
+;
+; Convert float to int
+;
+; The float is first scaled with the third operand before it is converted to int.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ fTOi      i0              #1.235          #1000.0
+ NEQi      i0              #1235           @fail
+ MOVf      f0              #100.0
+ fTOi      i0              f0              #1.0
+ NEQi      i0              #100            @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;iTOf      float(d)        #int            #float
+;          float(d)        int             #float
+;
+; Convert int to float
+;
+; The float is scaled with the third operand after it has been converted from int.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ iTOf      f0              #1234            #0.001
+ LSSf      f0              #1.233999        @fail
+ GRTf      f0              #1.240001        @fail
+ MOVi      i0              #100
+ iTOf      f0              i0               #1.0
+ NEQf      f0              #100.0           @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+; Compile-time instructions.
+;
+; ! ABSf    <?>             #float
+; ! ABSi    <?>             #int
+; ! ADDf    <?>             #float          #float
+; ! ADDi    <?>             #int            #int
+; ! ADDp    <?>             &address        #int
+; ! DEFf    #float
+; ! DEFi    #int
+; ! DEFp    &address
+; ! DIFp    <?>             &address        &address
+; ! DIVf    <?>             #float          #float
+; ! DIVi    <?>             #int            #int
+; ! EQUi    #int            #int            @label
+; ! EQUp    &address        &address        @label
+; ! GEQi    #int            #int            @label
+; ! GEQp    &address        &address        @label
+; ! GOTO    @label
+; ! GRTi    #int            #int            @label
+; ! GRTp    &address        &address        @label
+; ! IFDF    &address        @label
+;           #const          @label
+;           ^native         @label
+; ! IFND    &address        @label
+;           #const          @label
+;           ^native         @label
+; ! IORi    <?>             #int            #int
+; ! LEQi    #int            #int            @label
+; ! LEQp    &address        &address        @label
+; ! LSSi    #int            #int            @label
+; ! LSSp    &address        &address        @label
+; ! MODi    <?>             #int            #int
+; ! MOVf    <?>             #float
+; ! MOVi    <?>             #int
+; ! MULf    <?>             #float          #float
+; ! MULi    <?>             #int            #int
+; ! NEQi    #int            #int            @label
+; ! NEQp    &address        &address        @label
+; ! SHLi    <?>             #int            #int
+; ! SHRi    <?>             #int            #int
+; ! SHRu    <?>             #int            #int
+; ! SUBf    <?>             #float          #float
+; ! SUBi    <?>             #int            #int
+; ! SUBp    <?>             &address        #int
+; ! XORi    <?>             #int            #int
+; ! fTOi    <?>             #float          #float
+; ! iTOf    <?>             #int            #float
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+DEFINED_INT: ! DEFi        #-12345
+ ! MOVi    <Z>             #246810
+ ! ABSi    <A>             #DEFINED_INT
+ ! ADDi    <A>             #54321           #<A>
+ ! SUBi    <A>             #<A>             #<Z>
+ ! fTOi    <B>             #50.0            #2.0
+ ! MULi    <A>             #<A>             #<B>
+ ! DIVi    <A>             #<A>             #10
+ ! MODi    <A>             #<A>             #1000000
+ NEQi      #<A>            #-801440         @fail
+ ! XORi    <A>             #<A>             #0x191919
+ ! ANDi    <A>             #<A>             #0x0F0F0FAA
+ ! IORi    <A>             #<A>             #0x55010100
+ NEQi      #<A>            #0x5f0b0d28      @fail
+ ! MOVi    <C>             #3
+ ! SHLi    <A>             #<A>             #<C>
+ ! SHRi    <A>             #<A>             #8
+ ! SHRu    <A>             #<A>             #4
+ NEQi      #<A>            #0xfff8586       @fail
+ ! NEQi    #<A>            #0xfff8586       @compileTimeFail
+ ! EQUi    #<A>            #0xfff8585       @compileTimeFail
+ ! EQUi    #<A>            #0xfff8585       @compileTimeFail
+ ! LSSi    #<A>            #0xfff8586       @compileTimeFail
+ ! GRTi    #<A>            #0xfff8586       @compileTimeFail
+ ! LSSi    #<A>            #0xfff8585       @compileTimeFail
+ ! GRTi    #<A>            #0xfff8587       @compileTimeFail
+ ! LEQi    #<A>            #0xfff8585       @compileTimeFail
+ ! GEQi    #<A>            #0xfff8587       @compileTimeFail
+ ! EQUi    #<A>            #0xfff8586       @ctOK1
+ ! GOTO    @compileTimeFail
+ctOK1: !
+ ! NEQi    #<A>            #0xfff8585       @ctOK2
+ ! GOTO    @compileTimeFail
+ctOK2: !
+ ! NEQi    #<A>            #0xfff8587       @ctOK3
+ ! GOTO    @compileTimeFail
+ctOK3: !
+ ! LSSi    #<A>            #0xfff8587       @ctOK4
+ ! GOTO    @compileTimeFail
+ctOK4: !
+ ! GRTi    #<A>            #0xfff8585       @ctOK5
+ ! GOTO    @compileTimeFail
+ctOK5: !
+ ! LEQi    #<A>            #0xfff8586       @ctOK6
+ ! GOTO    @compileTimeFail
+ctOK6: !
+ ! LEQi    #<A>            #0xfff8587       @ctOK7
+ ! GOTO    @compileTimeFail
+ctOK7: !
+ ! GEQi    #<A>            #0xfff8586       @ctOK8
+ ! GOTO    @compileTimeFail
+ctOK8: !
+ ! GEQi    #<A>            #0xfff8585       @ctOK9
+ ! GOTO    @compileTimeFail
+ctOK9: !
+ ! GOTO    @ctOK10
+ ! GOTO    @compileTimeFail
+ctOK10: !
+
+DEFINED_FLOAT: ! DEFf      #-1.2345
+ ! MOVf    <Z>             #2.0
+ ! ABSf    <A>             #DEFINED_FLOAT
+ ! ADDf    <A>             #1.0             #<A>
+ ! SUBf    <A>             #<A>             #<Z>
+ ! iTOf    <B>             #50              #2.0
+ ! MULf    <A>             #<A>             #<B>
+ ! DIVf    <A>             #<A>             #10.0
+ LSSf      #<A>            #2.344999        @fail
+ GRTf      #<A>            #2.345001        @fail
+
+ ! DIFp    <D>             &consts:5        &consts:2
+ ! NEQi    #<D>            #3               @compileTimeFail
+
+ ! IFDF    &consts.mixed   @ctOK11
+ ! GOTO    @compileTimeFail
+ctOK11: !
+ ! IFDF    #DEFINED_FLOAT  @ctOK12
+ ! GOTO    @compileTimeFail
+ctOK12: !
+ ! IFDF    ^assertFail     @ctOK13
+ ! GOTO    @compileTimeFail
+ctOK13: !
+ ! IFND    &consts.mixed   @compileTimeFail
+ ! IFND    #DEFINED_FLOAT  @compileTimeFail
+ ! IFND    ^assertFail     @compileTimeFail
+
+ ! IFDF    &shouldnotexist @compileTimeFail
+ ! IFDF    #shouldnotexist @compileTimeFail
+ ! IFDF    ^shouldnotexist @compileTimeFail
+ ! IFND    &shouldnotexist @ctOK14
+ ! GOTO    @compileTimeFail
+ctOK14: !
+ ! IFND    #shouldnotexist @ctOK15
+ ! GOTO    @compileTimeFail
+ctOK15: !
+ ! IFND    ^shouldnotexist @ctOK16
+ ! GOTO    @compileTimeFail
+ctOK16: !
+
+DEFINED_POINTER: ! DEFp    &gArray:3
+ ! MOVi    <Z>             #105
+ ! ADDp    <P>             &DEFINED_POINTER	#113
+ ! SUBp    <P>             <P>              #<Z>
+ ! DIFp    <A>             <P>              &gArray:3
+ ! NEQi    #<A>            #8               @compileTimeFail
+;
+; FIX DROP:
+;
+; NEQp      #<P>            &gArray:11       @fail
+; ! NEQp    #<P>            &gArray:11       @compileTimeFail
+; ! EQUp    #<P>            &gArray:10       @compileTimeFail
+; ! EQUp    #<P>            &gArray:12       @compileTimeFail
+; ! LSSp    #<P>            &gArray:11       @compileTimeFail
+; ! GRTp    #<P>            &gArray:11       @compileTimeFail
+; ! LSSp    #<P>            &gArray:10       @compileTimeFail
+; ! GRTp    #<P>            &gArray:12       @compileTimeFail
+; ! LEQp    #<P>            &gArray:10       @compileTimeFail
+; ! GEQp    #<P>            &gArray:12       @compileTimeFail
+; ! EQUp    #<P>            &gArray:11       @ctOK17
+; ! GOTO    @compileTimeFail
+;ctOK17: !
+; ! NEQp    #<P>            &gArray:10       @ctOK18
+; ! GOTO    @compileTimeFail
+;ctOK18: !
+; ! NEQp    #<P>            &gArray:12       @ctOK19
+; ! GOTO    @compileTimeFail
+;ctOK19: !
+; ! LSSp    #<P>            &gArray:12       @ctOK20
+; ! GOTO    @compileTimeFail
+;ctOK20: !
+; ! GRTp    #<P>            &gArray:10       @ctOK21
+; ! GOTO    @compileTimeFail
+;ctOK21: !
+; ! LEQp    #<P>            &gArray:11       @ctOK22
+; ! GOTO    @compileTimeFail
+;ctOK22: !
+; ! LEQp    #<P>            &gArray:12       @ctOK23
+; ! GOTO    @compileTimeFail
+;ctOK23: !
+; ! GEQp    #<P>            &gArray:11       @ctOK24
+; ! GOTO    @compileTimeFail
+;ctOK24: !
+; ! GEQp    #<P>            &gArray:10       @ctOK25
+; ! GOTO    @compileTimeFail
+;ctOK25: !
+;
+
+    done:               POKE &global.pointer &consts.done
+                        RETU
+    fail:               CALL ^assertFail
+                        RETU
+
+                        ! GOTO @skipCompileTimeFail
+compileTimeFail:        ! FAIL Compile-time check failed
+skipCompileTimeFail:    !
+
+;-------------------------------------------------------------------------------
+StopCar:                FUNC
+;
+; Function with no input and output.
+;-------------------------------------------------------------------------------
+                        MOVp %0 &global.warming
+                        MOVi %1 #FALSE
+                        CALL &WriteGlobal %0 *2
+                        RETU
+
+;-------------------------------------------------------------------------------
+StartCar:               FUNC
+;
+; Another function with no input and output.
+;-------------------------------------------------------------------------------
+                        MOVp %0 &global.warming
+                        MOVi %1 #TRUE
+                        CALL &WriteGlobal %0 *2
+                        RETU
+
+;-------------------------------------------------------------------------------
+EarthCheck:             FUNC
+    howAreWe:           OUTi
+;
+; This one has an output integer and a local.
+;-------------------------------------------------------------------------------
+    areWeWarm:          LOCi
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                        PEEK areWeWarm &global.warming
+                        EQUi areWeWarm #TRUE @yesWarm
+    noCold:             MOVi howAreWe #GOOD
+                        RETU
+    yesWarm:            MOVi howAreWe #BAD
+                        RETU
+
+;-------------------------------------------------------------------------------
+WriteGlobal:            FUNC
+    where:              INPp
+    toWhat:             PARA *1
+;
+; A terribly uninteresting function. The only interesting thing about it is that
+; it takes a generic value of any type ("toWhat") defined with PARA.
+;-------------------------------------------------------------------------------
+                        POKE where toWhat
+                        RETU
+
+;-------------------------------------------------------------------------------
+ReadGlobal:             FUNC
+    isWhat:             PARA *1
+    where:              INPp
+;
+; Another terribly uninteresting function, except perhaps that it uses the PARA
+; for output.
+;-------------------------------------------------------------------------------
+                        PEEK isWhat where
+                        RETU
+
+;-------------------------------------------------------------------------------
+CallBack:               FUNC
+    expect:             INPp
+    changeTo:           INPp
+;
+; We expect this one to get called from the host when we call its 'testCallback'
+;
+;-------------------------------------------------------------------------------
+    pointerContents:    LOCp
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                        PEEK pointerContents &global.pointer
+                        NEQp expect pointerContents @fail
+                        POKE &global.pointer changeTo
+                        RETU
+    fail:               CALL ^assertFail
+                        RETU

@@ -1,0 +1,358 @@
+/*
+	Impala source for a Permute8 demonstration firmware patch.
+*/
+
+/* ------ Firmware API ------ */
+
+const int PRAWN_FIRMWARE_PATCH_FORMAT = 1	// Must be set to 1 for a valid Permute8 firmware patch
+const int DEBUG								// If non-zero, asserts are enabled and will call abort() if they fail
+
+/*
+	These text lines will be used in exchange of the standard Permute8 screenprint. They all follow a fixed character
+	position format. First 3 characters is the instruction mnemonic, then a space, then 3 characters per switch for the
+	first group, space again, and then the same for the second group. The pointers do not need to point to constant
+	data, but after the call to init() they shouldn't change.
+*/
+readonly array PANEL_TEXT_ROWS[8] = {
+	"ABC 888777666555444333222111 888777666555444333222111",
+	"ABC 888777666555444333222111 888777666555444333222111",
+	"RM                                                   ",
+	"AM  ÐÐÐÐÐÐÐÐÐ RATE ÐÐÐÐÐÐÐÐÐ _______ NADA YET _______",
+	" not used",
+	"   too lloooooooooooooooooooooooooooooooooooooooooooooooooong",
+	"7",
+	"                     I LOVE PRAWNS                               8"
+}
+
+extern native abort							// `abort()` : Kills the "firmware" and restores normal operation.
+extern native trace							// `trace(pointer)` : Traces a null-terminated string to standard output (Mac) or DebugView (Windows).
+extern native yield
+
+const int OPERATOR_1_NOP					// Externally defined constants for `params[OPERATOR_1_PARAM_INDEX]`
+const int OPERATOR_1_AND
+const int OPERATOR_1_MUL
+const int OPERATOR_1_OSC
+const int OPERATOR_1_RND
+const int OPERATOR_2_NOP					// Externally defined constants for `params[OPERATOR_2_PARAM_INDEX]`
+const int OPERATOR_2_OR
+const int OPERATOR_2_XOR
+const int OPERATOR_2_MSK
+const int OPERATOR_2_SUB
+
+const int CLOCK_FREQUENCY_PARAM_INDEX		// Clock frequency / sample rate rounded to an integer Hz.
+const int SYNC_PARAM_INDEX					// Sync switch (0 = off, 1 = on).
+const int OPERATOR_1_PARAM_INDEX			// Operator 1 is an integer 0 to 4 (see definitions above).
+const int OPERAND_1_PARAM_INDEX				// Operand 1 is an integer 0 to 65535
+const int OPERATOR_2_PARAM_INDEX			// Operator 2 is an integer 0 to 4 (see definitions above).
+const int OPERAND_2_PARAM_INDEX				// Operand 2 high is an integer 0 to 65535
+const int PARAM_COUNT						// Param count can be changed in the future if more parameters are published to GAZL.
+
+global int left								// Left input to process, replace with left output.
+global int right							// Right input to process, replace with right output.
+global int clock							// `clock` increments between every `process()` and has a cycle of 16-bit size (from 0 to 65536). If tempo sync is enabled, `clock` will be the absolute position within the chosen time division. (Optional.)
+global array params[PARAM_COUNT]			// `params` (all ints) are updated by Permute8 whenever any exposed parameters is updated. If there is a defined `update()` function it is called on this occasion. (Optional.)
+global int instance							// A session unique number for the plug-in. Always valid and won't change after init. You can use this to initialize random seeds. (Optional.)
+
+/* ------ Utilities ------ */
+
+const float LOG2 = 0.69314718055994530942
+const float LOG2R = 1.44269504088896340736
+const float LOG10R = 0.43429448190325182765
+const float E = 2.71828182845904523536
+const float HALF_PI = 1.57079632679489661923
+const float PI = 3.14159265358979323846
+const float TWICE_PI = PI * 2.0
+const float COS_EPSILON = 1.0e-6
+const float SQRT_2 = 1.41421356237309504880
+
+const float EPSILON_FLOAT = 1.0e-45
+const float SMALL_FLOAT = 1.0e-5
+const float LARGE_FLOAT = 1.0e+10
+const float HUGE_FLOAT = 1.0e+38
+
+function error(pointer s)
+{
+	trace(s);
+	abort();
+}
+
+function trunc(float x)
+returns	float y
+{
+	if (x < 0.0) y = -floor(-x);
+	else y = floor(x);
+}
+
+function fmod(float x, float y)
+returns	float z
+{
+	if (y == 0.0) error("Division by zero");
+	else z = x - (float) trunc(x / y) * y;
+}
+
+/*
+	Derived from:
+	
+				 oo
+				=====      n
+				\      (-1)   2 n
+		cos x =  >    ------ x
+				/     (2 n)!
+				=====
+				n = 0
+*/
+function cos(float x)
+returns	float y
+locals	float a, float n, float m, float t
+{
+	m = (float) fmod(x, TWICE_PI);
+	m = -m * m;
+	a = n = y = 1.0;
+	do {
+		t = y;
+		a = a * m / (n * n + n);
+		y = y + a;
+		n = n + 2.0;
+	} while (y != t);
+	if (abs(y) < COS_EPSILON) y = 0.0;
+}
+
+
+function sin(float x)
+returns float y
+{
+	y = (float) cos(x - HALF_PI);
+}
+
+// Buffer needs to be at least GAZL_WORD_SIZE + 2 in size (incl. terminating zero).
+// Output will be right-aligned in this buffer and returned pointer is the first character, so the length of the output
+// is buffer + GAZL_WORD_SIZE + 1 - returned pointer.
+// minLength is usually 1 (or i == 0 will return an empty string), increasing it will add leading zeroes.
+const int GAZL_WORD_SIZE
+function intToString(int i, int radix, int minLength, pointer buffer)
+returns	pointer p
+locals	pointer e, int x
+{
+	assert(2 <= radix && radix <= 16);
+	assert(0 <= minLength && minLength <= GAZL_WORD_SIZE);
+	
+	*(p = buffer + GAZL_WORD_SIZE + 1) = 0;
+	e = p - minLength;
+	x = i;
+	while (p > e || x != 0) {
+		assert(p >= buffer + 2);
+		*(p = p - 1) = ("fedcba9876543210123456789abcdef")[15 + x % radix];													// Mirrored hex string to handle negative x.
+		x = x / radix;
+	}
+	if (i < 0) *(p = p - 1) = '-';
+}
+
+// buffer should hold at least 32 elements
+function floatToString(float f, int precision, pointer buffer)
+returns	pointer p
+locals float x, float y, int e, float g, pointer dp, pointer pp, pointer ep, int i
+{
+	assert(1 <= precision && precision <= 24);
+
+	y = abs(f);
+	if (y <= EPSILON_FLOAT) p = "0";
+	else if (y >= HUGE_FLOAT) p = "HUGE";
+	else {
+		e = 0;
+		ep = buffer + 3 + precision;
+		
+		loop {
+			pp = buffer + 3;
+			x = y;
+			
+			// Normalize values > 10 and move period position.
+			
+			while (x >= 10.0 && pp < ep) {
+				pp = pp + 1;
+				x = x * 0.1;
+			}
+						
+			if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break;
+			
+			// Exponential treatment of very small or large values.
+
+			g = y;
+			while (y < 1.0) {
+				e = e - 1;
+				y = y * 10.0;
+			}
+			while (y >= 10.0) {
+				e = e + 1;
+				y = y * 0.1;
+			}
+		}
+	break:
+		
+		// For values < 1, spit out leading 0's and increase precision.
+
+		dp = buffer + 2;
+		while (x < 1.0 && dp < buffer + 32) {
+			*dp = '0';
+			dp = dp + 1;
+			if (dp == pp) {	// Hop over period position (set to 9 to avoid when eliminating 9's).
+				*dp = '9';
+				dp = dp + 1;
+			}
+			ep = ep + 1;
+			x = x * 10.0;
+		}
+		
+		// Exhaust all remaining digits of mantissa into buffer.
+		
+		while (dp < ep) {
+			i = ftoi(x);
+			*dp = i + '0';
+			dp = dp + 1;
+			if (dp == pp) {	// Hop over period position (set to 9 to avoid when eliminating 9's).
+				*dp = '9';
+				dp = dp + 1;
+			}
+			x = (x - itof(i)) * 10.0;
+		}
+		
+		// If remainder is >= 5, increment trailing 9's...
+		
+		p = buffer + 2;
+		if (x >= 5.0) {
+			while ((int)dp[-1] == '9') *(dp = dp - 1) = '0';
+			
+			// If we are at spare position, set to '1' and include, otherwise, increment last non-9.
+			
+			if (dp == p) *(p = p - 1) = '1';
+			else dp[-1] = (int)dp[-1] + 1;
+			
+			// Did we incremented a 0? Cut precision (afterwards, a bit Q&D).
+			
+			if ((int)dp[-1] == '1') ep = ep - 1;
+		}
+		
+		*pp = '.';
+		
+		// Trim trailing zeroes (and possibly '.').
+		
+		if (ep > pp) while ((int)ep[-1] == '0') ep = ep - 1;
+		if (ep - 1 == pp) ep = ep - 1;
+		
+		// Add any exponent and negative sign.
+		
+		if (e != 0) {
+			*ep = 'e';
+			i = '+';
+			if (e < 0) i = '-';
+			*(ep = ep + 1) = i;
+			i = abs(e);
+			if (i >= 100) *(ep = ep + 1) = '0' + ((i / 100) % 10);
+			if (i >= 10) *(ep = ep + 1) = '0' + ((i / 10) % 10);
+			*(ep = ep + 1) = '0' + (i % 10);
+			ep = ep + 1;
+		}
+		*ep = 0;
+
+		if (f < 0.0) *(p = p - 1) = '-';
+	}
+}
+
+function traceInt(int i)
+locals	array buffer[GAZL_WORD_SIZE + 2]
+{
+	trace(intToString(i, 10, 1, buffer));
+}
+
+function traceFloat(float f)
+locals array buffer[32]
+{
+	trace(floatToString(f, 6, buffer));
+}
+
+/* ------ Firmware globals ------ */
+
+const int BUFFER_SIZE = 256
+global float lpx
+global float lpy
+global float rpx
+global float rpy
+global float lrx
+global float lry
+global float rrx
+global float rry
+global int bufferIndex = BUFFER_SIZE
+global array lbuffer[4096] // floats
+global array rbuffer[4096] // floats
+
+/* ------ Firmware functions ------ */
+
+/*
+	`init()` is called once right after the GAZL is assembled. (Optional.)
+*/
+function init()
+{
+	trace("init");
+}
+
+/*
+	`reset()` is called whenever the user flips the "RESET" switch and when the host requests a plug-in reset. Will also
+	be called after init(). (Optional.)
+*/
+function reset()
+locals float a, float lr, float rr, float p0, float t, int i
+{
+	trace("reset");
+	a = 1024.0;
+	lr = TWICE_PI * 440.0 / 44100.0;
+	rr = TWICE_PI * 380.0 / 44100.0;
+	p0 = 0.0;
+	global lpx = (float) cos(p0) * a;
+	global lpy = (float) sin(p0) * a;
+	t = SQRT_2 * (float) sin(lr * 0.5);
+	global lrx = t * t;
+	global lry = (float) sin(lr);
+	global rpx = (float) cos(p0) * a;
+	global rpy = (float) sin(p0) * a;
+	t = SQRT_2 * (float) sin(rr * 0.5);
+	global rrx = t * t;
+	global rry = (float) sin(rr);
+	global bufferIndex = BUFFER_SIZE;
+}
+
+/*
+	`update()` is called whenever one or more of `params` are updated (usually not more frequent than every 136 or 137
+	sample). (Optional.)
+*/
+function update()
+locals array buf[34]
+{
+	trace("update");
+	trace(intToString(global params[OPERAND_2_PARAM_INDEX], 16, 1, buf));
+}
+
+/*
+	`process()` is the main processing function. Process left and right sample in `left` and `right` globals and return.
+	Because of the single-sample feedback loop in Permute8, this API is designed to process one sample frame at a time,
+	otherwise some cpu could have been saved by processing a batch of frames. Globals are slow in GAZL so if you use a
+	lot of global data, use the "copy" feature in Impala to efficiently load it into (fast) local data. E.g.
+	`copy (PARAM_COUNT from params to localParams)`. Performance gain is also possible by implementing your own batch
+	processing with buffering, but that will of course introduce additional (uncompensated) latency.
+*/
+function process()
+locals	float nx, float lpx, float lpy, float rpx, float rpy, float lrx, float lry, float rrx, float rry, int i, int idx
+{
+	copy (8 from &global lpx to &lpx);
+
+		nx = lpx - lpx * lrx - lpy * lry;
+		lpy = lpx * lry + lpy - lpy * lrx;
+		lpx = nx;
+
+		nx = rpx - rpx * rrx - rpy * rry;
+		rpy = rpx * rry + rpy - rpy * rrx;
+		rpx = nx;
+		
+		global left = ftoi(lpx);
+		global right = ftoi(rpx);
+
+	copy (4 from &lpx to &global lpx);
+}

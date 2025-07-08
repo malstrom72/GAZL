@@ -1,0 +1,204 @@
+;-------------------------------------------------------------------------------
+minElementWithMin: FUNC
+        $mini:  OUTf
+        $count: INPi
+        $elems: INPp
+        $i:     LOCi
+        $f:     LOCf
+;-------------------------------------------------------------------------------
+                MOVf $mini #1000000000000.0     ; mini = 1000000000000.0
+
+                MOVi $i #0      ; for (i = 0 to count) 
+                GEQi #0 $count @.e0
+
+        .l1:    PEEK $f $elems $i       ; f = (float)elems[i]
+
+;                MINf $mini $f $mini
+
+        .f2:    FORi $i $count @.l1     ; }
+
+        .e0:    RETU    ; }
+
+;-------------------------------------------------------------------------------
+minElementWithoutMin:     FUNC
+        $mini:  OUTf
+        $count: INPi
+        $elems: INPp
+        $i:     LOCi
+        $f:     LOCf
+;-------------------------------------------------------------------------------
+                MOVf $mini #1000000000000.0     ; mini = 1000000000000.0
+
+                MOVi $i #0      ; for (i = 0 to count) 
+                GEQi #0 $count @.e0
+
+        .l1:    PEEK $f $elems $i       ; f = (float)elems[i]
+
+                GEQf $f $mini @.f2      ; if (f < mini) 
+
+                MOVf $mini $f   ; mini = f
+
+        .f2:    FORi $i $count @.l1     ; }
+
+        .e0:    RETU    ; }
+        
+;-------------------------------------------------------------------------------
+fmodInstructionTest: FUNC
+        $mini:  OUTf
+        $count: INPi
+        $elems: INPp
+        $i:     LOCi
+        $f:     LOCf
+        $lf:	LOCf
+;-------------------------------------------------------------------------------
+				MOVf $lf #10.0
+                MOVi $i #0      ; for (i = 0 to count) 
+                GEQi #0 $count @.e0
+        .l1:    PEEK $f $elems $i       ; f = (float)elems[i]
+;                MODf %0 $f $lf
+                MOVf $lf $f
+        .f2:    FORi $i $count @.l1     ; }
+        .e0:    RETU    ; }
+
+;-------------------------------------------------------------------------------
+fmodFunctionTest: FUNC
+        $mini:  OUTf
+        $count: INPi
+        $elems: INPp
+        $i:     LOCi
+        $f:     LOCf
+        $lf:	LOCf
+;-------------------------------------------------------------------------------
+				MOVf $lf #10.0
+                MOVi $i #0      ; for (i = 0 to count) 
+                GEQi #0 $count @.e0
+        .l1:    PEEK %1 $elems $i       ; f = (float)elems[i]
+				MOVf %2 $lf
+                CALL ^fmod
+                MOVf $lf $f
+        .f2:    FORi $i $count @.l1     ; }
+        .e0:    RETU    ; }
+
+;-------------------------------------------------------------------------------
+absInstructionTest: FUNC
+        $mini:  OUTf
+        $count: INPi
+        $elems: INPp
+        $i:     LOCi
+        $f:     LOCf
+;-------------------------------------------------------------------------------
+                MOVi $i #0      ; for (i = 0 to count) 
+                GEQi #0 $count @.e0
+        .l1:    PEEK $f $elems $i       ; f = (float)elems[i]
+                ABSf $f $f
+        .f2:    FORi $i $count @.l1     ; }
+        .e0:    RETU    ; }
+
+;-------------------------------------------------------------------------------
+absFunctionTest: FUNC
+        $mini:  OUTf
+        $count: INPi
+        $elems: INPp
+        $i:     LOCi
+        $f:     LOCf
+;-------------------------------------------------------------------------------
+                MOVi $i #0      ; for (i = 0 to count) 
+                GEQi #0 $count @.e0
+        .l1:    PEEK %1 $elems $i       ; f = (float)elems[i]
+                CALL ^fabs
+        .f2:    FORi $i $count @.l1     ; }
+        .e0:    RETU    ; }
+
+;-------------------------------------------------------------------------------
+absCodeTest: FUNC
+        $mini:  OUTf
+        $count: INPi
+        $elems: INPp
+        $i:     LOCi
+        $f:     LOCf
+;-------------------------------------------------------------------------------
+                MOVi $i #0      ; for (i = 0 to count) 
+                GEQi #0 $count @.e0
+        .l1:    PEEK $f $elems $i       ; f = (float)elems[i]
+				GEQf $f #0.0 @pos
+				SUBf $f #1.0 $f
+        pos:    NOOP
+        .f2:    FORi $i $count @.l1     ; }
+        .e0:    RETU    ; }
+
+;-------------------------------------------------------------------------------
+FillRnd.seed:			GLOB *1
+;-------------------------------------------------------------------------------
+						DATi #0x92d68ca2
+;-------------------------------------------------------------------------------
+FillRnd:				FUNC
+	count:				INPi ; %0
+	pointer:			INPp ; %1 : float array
+;-------------------------------------------------------------------------------
+	rnd:				LOCi
+	tmp:				LOCi
+	rndF:				LOCf
+	endPointer:			LOCp
+	p:					LOCp
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+						PEEK rnd &FillRnd.seed
+						
+						MOVp p pointer
+						ADDp endPointer p count
+						EQUp p endPointer @done
+	loop:				SHLi tmp rnd #+13
+						XORi rnd rnd tmp
+						SHRu tmp rnd #17
+						XORi rnd rnd tmp
+						SHLi tmp rnd #5
+						XORi rnd rnd tmp
+						! iTOf <X> #0x40000000 #2.0
+						! DIVf <X> #1.0 <X>
+						iTOf rndF rnd <X>
+						POKE p #0 rndF
+						FORp p endPointer @loop
+
+	done:				POKE &FillRnd.seed rnd
+						RETU
+
+;-------------------------------------------------------------------------------
+main:					FUNC
+	out:				OUTi
+;-------------------------------------------------------------------------------
+	i:					LOCi
+	myArray:			LOCA *20000
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+						MOVi %0 #20000
+						ADRL %1 myArray *20000
+						CALL &FillRnd
+
+! IFND #DO_FUNCTION_TEST @NONO
+						MOVi i #0
+	loop1:				MOVi %1 #2000
+						ADRL %2 myArray *20000
+						CALL &absFunctionTest
+						FORi i #20000 @loop1
+NONO: !
+
+! IFND #DO_INSTRUCTION_TEST @NONO
+						MOVi i #0
+	loop2:				MOVi %1 #2000
+						ADRL %2 myArray *20000
+						CALL &absInstructionTest
+						FORi i #20000 @loop2
+NONO: !
+
+! IFND #DO_CODE_TEST @NONO
+						MOVi i #0
+	loop3:				MOVi %1 #2000
+						ADRL %2 myArray *20000
+						CALL &absCodeTest
+						FORi i #20000 @loop3
+NONO: !
+
+						MOVf %1 %0
+						CALL ^printFloat
+						CALL ^printLF
+
+						RETU
+						

@@ -1,0 +1,382 @@
+/*
+	Impala source for a Permut8 "Mozaik" firmware patch.
+	
+	(C)2013 NuEdge Development.
+*/
+
+/* ------ Firmware API ------ */
+
+const int PRAWN_FIRMWARE_PATCH_FORMAT = 2	// Should be 2 for a valid Permut8 version 1.1 firmware patch
+const int FALSE = 0
+const int TRUE = 1
+
+readonly array panelTextRows[8] = {
+	" ",
+	" ",
+	"    ________________________ _________CRUSH__________",
+	"    |      BLOCK RATE      | |   BITS   ||   RATE   |",
+	" ",
+	" ",
+	"    ________________________ ________________________",
+	"    |      BLOCK SIZE      | |     PITCH SHIFT      |"
+}
+
+extern native abort								// `abort()` : Kills the "firmware" and restores normal operation.
+extern native trace								// `trace(pointer string)` : Traces a null-terminated string to Prawn console and standard output (Mac) or DebugView (Windows).
+extern native yield								// `yield()` : As a more effective alternative to returning from the `process()` function you may call `yield()`. It will return processing to the Permut8 audio engine and when the next sample needs to be processed, `yield()` will return back to your GAZL code.
+extern native write								// `write(int offset, int frameCount, pointer values)` : Writes a variable number of 12-bit sample frames to the delay-line memory. Reading and writing is automatically wrapped to delay-line size. Values are written and read in interleaved stereo format.
+extern native read								// `read(int offset, int frameCount, pointer values)` : Reads a variable number of 12-bit sample frames from the delay-line memory. Reading and writing is automatically wrapped to delay-line size. Values are written and read in interleaved stereo format.
+
+const int DEBUG									// Defined by host. If non-zero, asserts and tracing are enabled. In Permut8 asserts and traces are enabled when loading the firmware from the console and disabled when the firmware is loaded with a .p8bank file.
+
+const int SWITCHES_SYNC_MASK					// Externally defined bit masks for `global params[SWITCHES_PARAM_INDEX]` (e.g. `((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_SYNC_MASK) != 0` to test if sync switch is on)
+const int SWITCHES_TRIPLET_MASK
+const int SWITCHES_DOTTED_MASK
+const int SWITCHES_WRITE_PROTECT_MASK
+const int SWITCHES_REVERSE_MASK
+
+const int CLOCK_FREQ_PARAM_INDEX				// Clock frequency / sample rate rounded to an integer Hz.
+const int SWITCHES_PARAM_INDEX					// Bit mask, see constants above.
+const int OPERATOR_1_PARAM_INDEX				// Operator 1 is an integer 0 to 4 (see definitions above).
+const int OPERAND_1_HIGH_PARAM_INDEX			// Operand 1 high is an integer 0 to 255
+const int OPERAND_1_LOW_PARAM_INDEX				// Operand 1 low is an integer 0 to 255
+const int OPERATOR_2_PARAM_INDEX				// Operator 2 is an integer 0 to 4 (see definitions above).
+const int OPERAND_2_HIGH_PARAM_INDEX			// Operand 2 high is an integer 0 to 255
+const int OPERAND_2_LOW_PARAM_INDEX				// Operand 2 low is an integer 0 to 255
+const int PARAM_COUNT							// Param count can be changed in the future if more parameters are published to GAZL.
+
+global int clock								// `clock` increments between every `process()` (or decrements in reverse mode) and has a cycle size of 16-bit (from 0 to 65536). If tempo sync is enabled, `clock` will be the absolute position within the chosen time division. (Optional.)
+global array params[PARAM_COUNT]				// `params` (all ints) are updated by Permut8 whenever any exposed parameter is updated. If there is a defined `update()` function it is called on this occasion. (Optional.)
+global array displayLEDs[4]						// Four 8-bit masks for the visualizer LEDs under the operand switches. Order: operand 1 high & low, operand 2 high & low.
+readonly int clockFreqLimit = 132300			// Defines maximum clock frequency limit. Permut8 normally runs as fast as up to 352.8 kHz but often you want a speed limit for custom firwmares since GAZL is much more CPU intensive than native DSP code. Permut8 only reads this global once after calling `init()`. (Optional and 0 means no limit.)
+global array signal[2]							// For "full patches" only: left and right 12-bit samples to be processed (from -2047 to 2047). Replace with output.
+readonly int updateMask =						// A bit-mask that can be defined to filter out certain parameters from triggering update(). E.g. use ~(1 << CLOCK_FREQ_PARAM_INDEX) to prevent calls to update() when clock frequency changes.
+	(1 << SWITCHES_PARAM_INDEX) | (1 << OPERAND_1_HIGH_PARAM_INDEX) | (1 << OPERAND_1_LOW_PARAM_INDEX) | (1 << OPERAND_2_HIGH_PARAM_INDEX) | (1 << OPERAND_2_LOW_PARAM_INDEX)
+
+/* ------ Standard Tables ------ */
+
+/* ------ Utilities ------ */
+
+/*
+	// DEBUG STUFF
+
+	function stpcpy(pointer d, pointer s)
+	returns pointer a
+	locals	pointer b
+	{
+		a = d;
+		b = s;
+		while ((*a = (int)*b) != 0) {
+			a = a + 1;
+			b = b + 1;
+		}
+	}
+
+	const int GAZL_WORD_SIZE
+	function intToString(int i, int radix, int minLen, pointer buffer)
+	returns	pointer p
+	locals	pointer e, int x
+	{
+		assert(2 <= radix && radix <= 16);
+		assert(0 <= minLen && minLen <= GAZL_WORD_SIZE);
+		
+		*(p = buffer + GAZL_WORD_SIZE + 1) = 0;
+		e = p - minLen;
+		x = i;
+		while (p > e || x != 0) {
+			assert(p >= buffer + 2);
+			*(p = p - 1) = ("fedcba9876543210123456789abcdef")[15 + x % radix];	// Mirrored hex string to handle negative x.
+			x = x / radix;
+		}
+		if (i < 0) *(p = p - 1) = '-';
+	}
+
+	function traceInts(pointer text, int n, pointer ints)
+	locals	array buffer[GAZL_WORD_SIZE + 2]
+			, array line[1024]
+			, int i
+			, pointer p
+	{
+		p = &line[0];
+		if (text != null) p = (pointer) stpcpy(p, text);
+		*p = 0;
+		for (i = 0 to n) {
+			if (i != 0) { *p = ','; p = p + 1; }
+			p = (pointer) stpcpy(p, intToString(ints[i], 10, 1, buffer));
+		}
+		trace(line);
+	}
+
+	function traceInt(pointer text, int i)
+	locals	array ints[1]
+	{
+		ints[0] = i;
+		traceInts(text, 1, ints);
+	}
+*/
+
+
+const float LOG2 = 0.69314718055994530942
+
+function error(pointer s)
+{
+	trace(s);
+	abort();
+}
+
+function exp(float x)
+returns	float y
+locals	float a
+		, float n
+		, float m
+		, float t
+{
+	m = abs(x);
+	a = 1.0;
+	n = 1.0;
+	y = 1.0;
+	do {
+		t = y;
+		a = a * m / n;
+		y = y + a;
+		n = n + 1.0;
+	} while (y != t);
+	if (x < 0.0) y = 1.0 / y;
+}
+
+function log(float x)
+returns float y
+locals	float a
+		, float b
+		, float m
+		, float n
+		, float t
+{
+	if (x <= 0.0 || x >= 1.0e38) error("Domain error");
+	else {
+		b = 0.0;
+		m = x;
+		while (m < 0.5) { m = m * 2.0; b = b - LOG2; }
+		while (m > 1.5) { m = m * 0.5; b = b + LOG2; }
+		m = 1.0 - m;
+		a = -1.0;
+		n = 1.0;
+		y = 0.0;
+		do {
+			t = y;
+			a = a * m;
+			y = y + a / n;
+			n = n + 1.0;
+		} while (y != t);
+		y = y + b;
+	}
+}
+
+function pow(float x, float y)
+returns float z
+locals	float a
+{
+	z = 0.0;
+	a = x;
+	if (a < 0.0 && y == floor(y)) a = -a;
+	if (a > 0.0) z = (float) exp((float) log(a) * y);
+	else if (a < 0.0 || y <= 0.0) error("Domain error");
+	if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z;
+}
+
+function logScale(float x, float outFrom, float outTo)
+returns float y
+{
+	y = outFrom * (float) pow(outTo / outFrom, x);
+}
+
+function decayConstant(float time, float reach)
+returns float factor
+{
+	factor = (float) exp(-1.0 / time * (float) log(1.0 / reach));
+}
+
+/* ------ Firmware constants ------ */
+
+const float HP_EPSILON = 1.0e-011;
+const float HP_K = 0.0056828256022101;				// 40Hz at 44.1kHz
+
+/* ------ Firmware globals ------ */
+
+global int wantsReset = FALSE;
+global int breakLoop = FALSE;
+global array readRates[256];	// exponential read rates table (ints, 16 bit fraction)
+global array blockLens[256]; // exponential block lengths table (ints)
+global array minCycles[256];	// exponential min cycle lengths (ints)
+global array thresDKs[256];		// threshold decay constants (floats)
+
+/* ------ Firmware functions ------ */
+
+/*
+	`init()` is called once right after the GAZL is assembled. (Optional.)
+*/
+function init()
+locals	int i, float x, int minCycle
+{
+	global wantsReset = TRUE;
+	global breakLoop = TRUE;
+
+	for (i = 0 to 256) {
+		x = itof(i) * (1.0 / 256.0);
+		global readRates[i] = ftoi((float) logScale(x, 32768.0, 131072.0) + 0.5);
+		global blockLens[i] = ftoi((float) logScale(x, 128.0, 32768.0) + 0.5);
+		minCycle = ftoi((float) logScale(x, 10.0, 2000.0) + 0.5);
+		global minCycles[i] = minCycle;
+		global thresDKs[i] = (float) decayConstant(itof(minCycle), 0.6666666);
+	}
+	global blockLens[0] = 0;
+}
+
+/*
+	`update()` is called whenever one or more of `params` are updated (usually not more frequent than every 136 or 137
+	sample). It is also called once initially (before reset()). (Optional.)
+*/
+function update()
+{
+	global breakLoop = TRUE;
+}
+
+function process()
+locals	float inL, float inR, float yL, float yR, array y2[2]
+		, int clock, int wcLenL, int wcLenR, int blockCounter, int newRCL, int newRCR
+		, float hdL, float hdR, float lastYL, float lastYR, int cycleParam
+		, int minCycle, int maxCycle, int blockLen, int readRate, int rateCrushMask, int bitCrushMask
+		, int wcStartL, int ccStartL, int ccLenL, int rcStartL, int rcLenL, int playPosL								// wc = write cycle (recording), cc = captured cycle (will play next), rc = read cycle (playing now)
+		, int wcStartR, int ccStartR, int ccLenR, int rcStartR, int rcLenR, int playPosR
+		, float thresPosL, float thresNegL, float thresPosR, float thresNegR, float thresDK
+		, int stageL, int stageR																						// stage 0 = wait for +peak, stage 1 = wait for -peak, stage 2 = wait for zero-crossing
+		, int writeProtect, int sync, int reverseMask
+{
+	loop {
+
+		if ((int)global wantsReset != FALSE) {
+			wcStartL = ccStartL = ccLenL = rcStartL = rcLenL = playPosL = 0;
+			wcStartR = ccStartR = ccLenR = rcStartR = rcLenR = playPosR = 0;
+			thresPosL = thresNegL = thresPosR = thresNegR = lastYL = lastYR = 0.0;
+			stageL = stageR = 0;
+			blockCounter = 0;
+			newRCL = newRCR = FALSE;
+			global wantsReset = FALSE;
+		}
+		
+		cycleParam = (int) global params[OPERAND_2_HIGH_PARAM_INDEX];
+		minCycle = (int) global minCycles[cycleParam];
+		maxCycle = minCycle * 4;
+		thresDK = (float) global thresDKs[cycleParam];
+		blockLen = (int) global blockLens[(int) global params[OPERAND_1_HIGH_PARAM_INDEX]];
+		readRate = (int) global readRates[(int) global params[OPERAND_2_LOW_PARAM_INDEX]];
+		rateCrushMask = ~((int) global params[OPERAND_1_LOW_PARAM_INDEX] & 0xF);
+		bitCrushMask = ~((int) global params[OPERAND_1_LOW_PARAM_INDEX] & 0xF0);
+		writeProtect = ((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_WRITE_PROTECT_MASK);
+		reverseMask = 0;
+		if (((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_REVERSE_MASK) != 0) reverseMask = 0xFFFF;
+		sync = ((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_SYNC_MASK);
+		
+		global breakLoop = FALSE;
+
+		while ((int)global breakLoop == FALSE) {
+			// Input
+			
+			clock = global clock ^ reverseMask;
+			if (clock == 0 && sync != FALSE) blockCounter = 0;
+			
+			inL = itof((int) global signal[0]) * (1.0 / 2048.0);
+			if (abs(inL - hdL) < HP_EPSILON) hdL = inL;
+			else hdL = hdL + (inL - hdL) * HP_K;
+			yL = inL - hdL;
+			
+			inR = itof((int) global signal[1]) * (1.0 / 2048.0);
+			if (abs(inR - hdR) < HP_EPSILON) hdR = inR;
+			else hdR = hdR + (inR - hdR) * HP_K;
+			yR = inR - hdR;
+			
+			y2[0] = ftoi(yL * 2048.0);
+			y2[1] = ftoi(yR * 2048.0);
+			write(clock, 1, y2);
+			
+			// Capture
+
+			thresPosL = thresPosL * thresDK;
+			thresNegL = thresNegL * thresDK;
+			thresPosR = thresPosR * thresDK;
+			thresNegR = thresNegR * thresDK;
+			
+			if (yL >= thresPosL) {
+				thresPosL = yL;
+				if (stageL == 0) stageL = 1;
+			}
+			if (yL <= thresNegL) {
+				thresNegL = yL;
+				if (stageL == 1) stageL = 2;
+			}
+			
+			wcLenL = (clock - wcStartL) & 0xFFFF;
+			if (wcLenL >= maxCycle) stageL = 2;
+			if (lastYL <= 0.0 && yL >= 0.0 && stageL == 2 && wcLenL >= minCycle) {
+				stageL = 0;
+				ccStartL = wcStartL;
+				ccLenL = wcLenL;
+				wcStartL = clock;
+			}
+			if (yR >= thresPosR) {
+				thresPosR = yR;
+				if (stageR == 0) stageR = 1;
+			}
+			if (yR <= thresNegR) {
+				thresNegR = yR;
+				if (stageR == 1) stageR = 2;
+			}
+			wcLenR = (clock - wcStartR) & 0xFFFF;
+			if (wcLenR >= maxCycle) stageR = 2;
+			if (lastYR <= 0.0 && yR >= 0.0 && stageR == 2 && wcLenR >= minCycle) {
+				stageR = 0;
+				ccStartR = wcStartR;
+				ccLenR = wcLenR;
+				wcStartR = clock;
+			}
+			lastYL = yL;
+			lastYR = yR;
+		
+			if (blockCounter <= 0) {
+				blockCounter = blockLen;
+				newRCL = TRUE;
+				newRCR = TRUE;
+			}
+			blockCounter = blockCounter - 1;
+			
+			// Output
+
+			read(rcStartL + ((playPosL >> 16) & rateCrushMask ^ reverseMask), 1, y2);
+			global signal[0] = (int) y2[0] & bitCrushMask;
+			read(rcStartR + ((playPosR >> 16) & rateCrushMask ^ reverseMask), 1, y2);
+			global signal[1] = (int) y2[1] & bitCrushMask;
+			
+			playPosL = playPosL + readRate;
+			if (playPosL >= rcLenL) {
+				if (newRCL != FALSE && writeProtect == 0) {
+					rcStartL = ccStartL + (rcLenL & reverseMask);
+					rcLenL = ccLenL << 16;
+					newRCL = FALSE;
+				}
+				playPosL = 0;
+			}
+			
+			playPosR = playPosR + readRate;
+			if (playPosR >= rcLenR) {
+				if (newRCR != FALSE && writeProtect == 0) {
+					rcStartR = ccStartR + (rcLenR & reverseMask);
+					rcLenR = ccLenR << 16;
+					newRCR = FALSE;
+				}
+				playPosR = 0;
+			}
+
+			yield();
+		}
+	}
+}

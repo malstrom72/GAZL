@@ -1,0 +1,353 @@
+ABSf      float(d)        #float          
+          float(d)        float           
+
+ABSi      int(d)          #int            
+          int(d)          int             
+
+ADDf      float(d)        #float          #float
+          float(d)        #float          float
+          float(d)        float           #float
+          float(d)        float           float
+
+ADDi      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+ADDp      ptr(d)          &address        #int
+          ptr(d)          &address        int
+          ptr(d)          ptr             #int
+          ptr(d)          ptr             int
+
+ADRL      ptr(d)          var             *size
+
+ANDi      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+CALL      &function                       
+          &function       %temp           *size
+          ^native                         
+          ^native         %temp           *size
+          ptr                             
+          ptr             %temp           *size
+
+CNST      *size                           
+
+DATf      #float                          
+
+DATi      #int                            
+
+DATp      &address                        
+
+DATs                                      
+
+DIFp      int(d)          &address        &address
+          int(d)          &address        ptr
+          int(d)          ptr             &address
+          int(d)          ptr             ptr
+
+DIVf      float(d)        #float          #float
+          float(d)        #float          float
+          float(d)        float           #float
+          float(d)        float           float
+
+DIVi      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+EQUf      #float          #float          @label
+          #float          float           @label
+          float           #float          @label
+          float           float           @label
+
+EQUi      #int            #int            @label
+          #int            int             @label
+          int             #int            @label
+          int             int             @label
+
+EQUp      &address        &address        @label
+          &address        ptr             @label
+          ptr             &address        @label
+          ptr             ptr             @label
+
+FORi      int(d)          #int            @label
+          int(d)          int             @label
+
+FORp      ptr(d)          &address        @label
+          ptr(d)          ptr             @label
+
+FUNC                                      
+
+GEQf      #float          #float          @label
+          #float          float           @label
+          float           #float          @label
+          float           float           @label
+
+GEQi      #int            #int            @label
+          #int            int             @label
+          int             #int            @label
+          int             int             @label
+
+GEQp      &address        &address        @label
+          &address        ptr             @label
+          ptr             &address        @label
+          ptr             ptr             @label
+
+GETL      var(d)          var             int
+
+GLOB      *size                           
+
+GOTO      @label                          
+
+GRTf      #float          #float          @label
+          #float          float           @label
+          float           #float          @label
+          float           float           @label
+
+GRTi      #int            #int            @label
+          #int            int             @label
+          int             #int            @label
+          int             int             @label
+
+GRTp      &address        &address        @label
+          &address        ptr             @label
+          ptr             &address        @label
+          ptr             ptr             @label
+
+INPf                                      
+
+INPi                                      
+
+INPp                                      
+
+IORi      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+LEQf      #float          #float          @label
+          #float          float           @label
+          float           #float          @label
+          float           float           @label
+
+LEQi      #int            #int            @label
+          #int            int             @label
+          int             #int            @label
+          int             int             @label
+
+LEQp      &address        &address        @label
+          &address        ptr             @label
+          ptr             &address        @label
+          ptr             ptr             @label
+
+LOCA      *size                           
+
+LOCf                                      
+
+LOCi                                      
+
+LOCp                                      
+
+LSSf      #float          #float          @label
+          #float          float           @label
+          float           #float          @label
+          float           float           @label
+
+LSSi      #int            #int            @label
+          #int            int             @label
+          int             #int            @label
+          int             int             @label
+
+LSSp      &address        &address        @label
+          &address        ptr             @label
+          ptr             &address        @label
+          ptr             ptr             @label
+
+MODi      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+MOVE      var(d)          var             
+
+MOVf      float(d)        #float          
+          float(d)        float           
+
+MOVi      int(d)          #int            
+          int(d)          int             
+
+MOVp      ptr(d)          &address        
+          ptr(d)          ptr             
+
+MULf      float(d)        #float          #float
+          float(d)        #float          float
+          float(d)        float           #float
+          float(d)        float           float
+
+MULi      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+NEQf      #float          #float          @label
+          #float          float           @label
+          float           #float          @label
+          float           float           @label
+
+NEQi      #int            #int            @label
+          #int            int             @label
+          int             #int            @label
+          int             int             @label
+
+NEQp      &address        &address        @label
+          &address        ptr             @label
+          ptr             &address        @label
+          ptr             ptr             @label
+
+NOOP                                      
+
+OUTf                                      
+
+OUTi                                      
+
+OUTp                                      
+
+PARA      *size                           
+
+PEEK      var(d)          &address(r)     
+          var(d)          &address(r)     int
+          var(d)          ptr             
+          var(d)          ptr             #int
+          var(d)          ptr             int
+
+POKE      &address(w)     #const          
+          &address(w)     var             
+          &address(w)     int             #const
+          &address(w)     int             var
+          ptr             #const          
+          ptr             #int            #const
+          ptr             #int            var
+          ptr             var             
+          ptr             int             #const
+          ptr             int             var
+
+RETU                                      
+
+SETL      var(d)          int             #const
+          var(d)          int             var
+
+SHLi      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+SHRi      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+SHRu      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+SUBf      float(d)        #float          #float
+          float(d)        #float          float
+          float(d)        float           #float
+          float(d)        float           float
+
+SUBi      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+SUBp      ptr(d)          &address        #int
+          ptr(d)          &address        int
+          ptr(d)          ptr             #int
+          ptr(d)          ptr             int
+
+SWCH      int             *size           @label
+
+TEMP      *size                           
+
+XORi      int(d)          #int            #int
+          int(d)          #int            int
+          int(d)          int             #int
+          int(d)          int             int
+
+fTOi      int(d)          #float          #float
+          int(d)          float           #float
+
+iTOf      float(d)        #int            #float
+          float(d)        int             #float
+
+! ABSf    <?>             #float          
+
+! ABSi    <?>             #int            
+
+! ADDf    <?>             #float          #float
+
+! ADDi    <?>             #int            #int
+
+! DEFf    #float                          
+
+! DEFi    #int                            
+
+! DIFp    <?>             &address        &address
+
+! DIVf    <?>             #float          #float
+
+! DIVi    <?>             #int            #int
+
+! EQUi    #int            #int            @label
+
+! GEQi    #int            #int            @label
+
+! GOTO    @label                          
+
+! GRTi    #int            #int            @label
+
+! IFDF    &address        @label
+          #const          @label
+          ^native         @label
+
+! IFND    &address        @label
+          #const          @label
+          ^native         @label
+          
+! IORi    <?>             #int            #int
+
+! LEQi    #int            #int            @label
+
+! LSSi    #int            #int            @label
+
+! MODi    <?>             #int            #int
+
+! MOVf    <?>             #float          
+
+! MOVi    <?>             #int            
+
+! MULf    <?>             #float          #float
+
+! MULi    <?>             #int            #int
+
+! NEQi    #int            #int            @label
+
+! SHLi    <?>             #int            #int
+
+! SHRi    <?>             #int            #int
+
+! SHRu    <?>             #int            #int
+
+! SUBf    <?>             #float          #float
+
+! SUBi    <?>             #int            #int
+
+! XORi    <?>             #int            #int
+
+! fTOi    <?>             #float          #float
+
+! iTOf    <?>             #int            #float

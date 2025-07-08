@@ -1,0 +1,227 @@
+/*
+	Impala source for a Permute8 demonstration firmware patch.
+	
+	Impala is a high-level assembler for the GAZL virtual machine. Syntax is similar to C. Language constructs map
+	nearly 1 to 1 with GAZL instructions.
+*/
+
+/* ------ Firmware API ------ */
+
+const int PRAWN_FIRMWARE_PATCH_FORMAT = 1	// Must be set to 1 for a valid Permute8 firmware patch
+const int FALSE = 0
+const int TRUE = 1
+
+/*
+	These text lines will be used in exchange of the standard Permute8 screenprint. They all follow a fixed character
+	position format. First 3 characters is the instruction mnemonic, then a space, then 3 characters per switch for the
+	first group, space again, and then the same for the second group. The pointers do not need to point to constant
+	data, but after the call to init() they shouldn't change.
+	
+	Special character – can be used for displaying a continuous line.
+*/
+readonly array panelTextRows[8] = {
+	"   silly ring-modulator firmware demo by M Lidstrom",
+	"",
+	"",
+	"    ______ ROOM SIZE _______ _______ PRE-DELAY ______",
+	"",
+	"",
+	"",
+	"    _______ FEEDBACK _______ ________ DAMPING _______"
+}
+
+extern native abort							// `abort()` : Kills the "firmware" and restores normal operation.
+extern native trace							// `trace(pointer string)` : Traces a null-terminated string to Prawn console and standard output (Mac) or DebugView (Windows).
+extern native yield							// `yield()` : As a more effective alternative to returning from the `process()` function you may call `yield()`. It will return processing to the Permut8 audio engine and when the next sample needs to be processed, `yield()` will return back to your GAZL code.
+extern native read							// `int read(int offset, int channel)` : Reads a 12-bit integer from the delay-line memory from a given channel (0 or 1) at a given offset (wrapped to 0 -> 65535).
+extern native write							// `write(int offset, int channel, int value)` : Writes a 12-bit integer (clipped if necessary) to the delay-line memory to a given channel (0 or 1) at a given offset (wrapped to 0 -> 65535).
+
+const int DEBUG								// Defined by host. If non-zero, asserts and tracing are enabled.
+
+const int OPERATOR_1_NOP					// Externally defined constants for `global params[OPERATOR_1_PARAM_INDEX]`
+const int OPERATOR_1_AND
+const int OPERATOR_1_MUL
+const int OPERATOR_1_OSC
+const int OPERATOR_1_RND
+
+const int OPERATOR_2_NOP					// Externally defined constants for `global params[OPERATOR_2_PARAM_INDEX]`
+const int OPERATOR_2_OR
+const int OPERATOR_2_XOR
+const int OPERATOR_2_MSK
+const int OPERATOR_2_SUB
+
+const int SWITCHES_SYNC_MASK				// Externally defined bit masks for `global params[SWITCHES_PARAM_INDEX]` (e.g. `(global params[SWITCHES_PARAM_INDEX] & SWITCHES_SYNC_MASK) != 0` to test if sync switch is on)
+const int SWITCHES_TRIPLET_MASK
+const int SWITCHES_DOTTED_MASK
+const int SWITCHES_WRITE_PROTECT_MASK
+const int SWITCHES_REVERSE_MASK
+
+const int CLOCK_FREQUENCY_PARAM_INDEX		// Clock frequency / sample rate rounded to an integer Hz.
+const int SWITCHES_PARAM_INDEX				// Bit mask, see constants above.
+const int OPERATOR_1_PARAM_INDEX			// Operator 1 is an integer 0 to 4 (see definitions above).
+const int OPERAND_1_HIGH_PARAM_INDEX		// Operand 1 high is an integer 0 to 255
+const int OPERAND_1_LOW_PARAM_INDEX			// Operand 1 low is an integer 0 to 255
+const int OPERATOR_2_PARAM_INDEX			// Operator 2 is an integer 0 to 4 (see definitions above).
+const int OPERAND_2_HIGH_PARAM_INDEX		// Operand 2 high is an integer 0 to 255
+const int OPERAND_2_LOW_PARAM_INDEX			// Operand 2 low is an integer 0 to 255
+const int PARAM_COUNT						// Param count can be changed in the future if more parameters are published to GAZL.
+
+global int left								// 12-bit samples to be processed (from -2047 to 2047). Replace with output.
+global int right
+global int clock							// `clock` increments between every `process()` (or decrements in reverse mode) and has a cycle size of 16-bit (from 0 to 65536). If tempo sync is enabled, `clock` will be the absolute position within the chosen time division. (Optional.)
+global array params[PARAM_COUNT]			// `params` (all ints) are updated by Permute8 whenever any exposed parameter is updated. If there is a defined `update()` function it is called on this occasion. (Optional.)
+global array displayLEDs[4]					// Four 8-bit masks for the visualizer LEDs under the operand switches. Order: operand 1 high & low, operand 2 high & low.
+global int instance							// A session unique number for the plug-in. Always valid and won't change after init. You can use this to initialize random seeds. (Optional.)
+
+/* ------ Standard Tables ------ */
+
+/* ------ Utilities ------ */
+
+/* ------ Firmware globals ------ */
+
+/* ------ Firmware functions ------ */
+
+const int AND = 32767
+const int TAPS_COUNT = 10
+const int ALLPASS_COUNT = 5
+
+const int T0 = 0
+const int T3 = 1
+const int T5 = 2
+const int T7 = 3
+const int T11 = 4
+const int T13 = 5
+const int TFB = 6
+const int TL1 = 7
+const int TL2 = 8
+const int TR = 9
+
+readonly array ALLPASS_PAIRS_A[ALLPASS_COUNT] = { T0, T0, T3, T3, T5 }
+readonly array ALLPASS_PAIRS_B[ALLPASS_COUNT] = { T3, T13, T5, T11, T7 }
+
+global int roomSize = 11579
+global int preDelay = 0
+global float feedback = 0.5
+global float damping = 1.0
+
+global array taps[TAPS_COUNT]
+
+/*
+	`init()` is called once right after the GAZL is assembled. (Optional.)
+*/
+function init()
+{
+}
+
+/*
+	`reset()` is called whenever the user flips the "RESET" switch and when the host requests a plug-in reset. Will also
+	be called once after init() and the first call to update(). (Optional.)
+*/
+function reset()
+{
+}
+
+/*
+	`update()` is called whenever one or more of `params` are updated (usually not more frequent than every 136 or 137
+	sample). It is also called once initially (before reset()). (Optional.)
+*/
+function update()
+locals	array taps[TAPS_COUNT], int size, int predelay
+{
+	size = (int) global params[OPERAND_1_HIGH_PARAM_INDEX];
+	predelay = (int) global params[OPERAND_1_LOW_PARAM_INDEX];
+
+	size = size * size;
+	predelay = predelay * predelay;
+
+	global feedback = itof((int) global params[OPERAND_2_HIGH_PARAM_INDEX]) * (1.0 / 255.0);
+	global damping = 1.0 - itof((int) global params[OPERAND_2_LOW_PARAM_INDEX]) * (1.0 / 256.0);
+
+	taps[T0] = 0;
+	taps[T3] = (size + 1) / 3;
+	taps[T5] = (int) taps[T3] + (size + 2) / 5;
+	taps[T7] = (int) taps[T5] + (size + 3) / 7;
+	taps[T11] = (int) taps[T3] + (size + 5) / 11;
+	taps[T13] = (size + 6) / 13;
+	taps[TFB] = size;
+	taps[TL1] = (int) taps[T7] + predelay;
+	taps[TL2] = (int) taps[TL1] + 2311;
+	taps[TR] = (int) taps[TL1] + 1057;
+
+	copy (TAPS_COUNT from taps to global taps);
+}
+
+/*
+	`process()` is the main processing function. Process left and right sample in `left` and `right` globals and return.
+	Because of the single-sample feedback loop in Permute8, this API is designed to process one sample frame at a time,
+	otherwise some cpu could have been saved by processing a batch of frames.
+	
+	As a more effective alternative to returning from the `process()` function you may call `yield()`. It will return
+	processing to the Permut8 audio engine and when the next sample needs to be processed, `yield()` will return back to
+	your GAZL code.
+	
+	Performance gain is also possible by implementing your own batch processing with buffering, but that will of course
+	introduce additional (uncompensated) latency.
+	
+	Globals are slow in GAZL so if you use a lot of global data, use the "copy" feature in Impala to efficiently load it
+	into (fast) local data. E.g. `copy (PARAM_COUNT from global params to params)`.
+*/
+function process()
+locals	int spinner,
+		float in,
+		float dI,
+		array t[TAPS_COUNT],
+		array o[TAPS_COUNT],
+		array taps[TAPS_COUNT],
+		int index,
+		int i,
+		int tA,
+		int tB
+{
+	loop {
+		copy (TAPS_COUNT from global taps to taps);
+
+		in = itof(global left + global right) * 0.5;
+		spinner = global clock;
+
+		{
+			for (i = 0 to TAPS_COUNT) {
+				index = spinner - (int) taps[i];
+				t[i] = itof((int) read(index, 0));
+				o[i] = index;
+			}
+
+			dI = dI + (in + (float) t[TFB] * global feedback - dI) * global damping;
+			(float) t[T0] = dI;
+
+			for (i = 0 to ALLPASS_COUNT) {
+				tA = (int) global ALLPASS_PAIRS_A[i];
+				tB = (int) global ALLPASS_PAIRS_B[i];
+				(float) t[tA]  = (float) t[tA]  + (float) t[tB]  * 0.5;
+				(float) t[tB]  = (float) t[tB]  - (float) t[tA]  * 0.5;
+			}
+	/*
+			(float) t[T0]  = (float) t[T0]  + (float) t[T3]  * 0.5;
+			(float) t[T3]  = (float) t[T3]  - (float) t[T0]  * 0.5;
+			(float) t[T0]  = (float) t[T0]  + (float) t[T13] * 0.5;
+			(float) t[T13] = (float) t[T13] - (float) t[T0]  * 0.5;
+			(float) t[T3]  = (float) t[T3]  + (float) t[T5]  * 0.5;
+			(float) t[T5]  = (float) t[T5]  - (float) t[T3]  * 0.5;
+			(float) t[T3]  = (float) t[T3]  + (float) t[T11] * 0.5;
+			(float) t[T11] = (float) t[T11] - (float) t[T3]  * 0.5;
+			(float) t[T5]  = (float) t[T5]  + (float) t[T7]  * 0.5;
+			(float) t[T7]  = (float) t[T7]  - (float) t[T5]  * 0.5;
+	*/
+
+			for (i = T0 to T13 + 1) write((int) o[i], 0, ftoi((float) t[i]));
+		}
+
+		global left = ftoi(((float) t[TL1] - (float) t[TL2]) * 0.75);
+		global right = ftoi((float) t[TR]);
+
+//		if (((int)(global params[SWITCHES_PARAM_INDEX]) & SWITCHES_REVERSE_MASK) == 0) spinner = spinner + 1;
+//		else spinner = spinner - 1;
+//		spinner = (spinner + 1) & AND;
+		yield();
+	}
+}

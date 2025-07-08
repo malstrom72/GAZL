@@ -1,0 +1,57 @@
+ABS test
+########
+
+Windows
+=======
+
+MSVC
+----
+
+function:     0.859 secs
+instruction:  0.734 secs (0.562 for integer abs)
+code:         1.078 secs
+
+ICC (profile guided optimized with unittest)
+--------------------------------------------
+
+function:     1.281 secs
+instruction:  0.671 secs
+code:         1.218 secs
+
+ICC (profile guided optimized with all perftest)
+------------------------------------------------
+
+function:     1.156 secs
+instruction:  0.515 secs
+code:         1.031 secs
+
+ICC (non-profile optimization)
+------------------------------
+
+function:     0.781 secs
+instruction:  0.531 secs (0.515 for integer abs)
+code:         1.031 secs
+
+Mac
+===
+
+PPC GCC
+-------
+
+function:     2.99 secs
+instruction:  2.47 secs
+code:         3.36 secs
+
+x86 GCC
+-------
+
+function:     0.79 secs
+instruction:  0.48 secs
+code:         0.88 secs
+
+x86 ICC
+-------
+
+function:     0.82 secs
+instruction:  0.56 secs
+code:         0.88 secs

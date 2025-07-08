@@ -1,0 +1,39 @@
+#! /usr/local/bin/PikaCmd
+
+include('systools.pika');
+include('stdlib.pika');
+// include('debug.pika');
+
+makegold = (coalesce(@$1) === 'makegold');
+sourcesDir = bake('tests{DIR_SLASH}sources{DIR_SLASH}');
+
+errCount = 0;
+totalFiles = 0;
+dir(sourcesDir # "*.impala", >{
+	goldFilename = bake('tests{DIR_SLASH}golden{DIR_SLASH}{basenameOfPath($0) # ".gazl"}');
+	print("Compiling " # $0);
+	result = pipe(bake('pika impala.pika compile {sourcesDir}{$0} - 1234'), false, @err, @rc);
+	if (rc === 2) throw("user aborted")
+	else if (rc !== 0) {
+		print("<<< Error compiling >>>");
+		print(result);
+		++errCount;
+	} else if (makegold) {
+		save(goldFilename, result);
+		print("Updated " # goldFilename);
+	} else {
+		expected = load(goldFilename);
+		if (result !== expected) {
+			print("<<< Output differs! >>>");
+			print(result);
+			try(>makeDir(bake('tests{DIR_SLASH}erroneous{DIR_SLASH}')));
+			save(bake('tests{DIR_SLASH}erroneous{DIR_SLASH}{basenameOfPath($0) # ".gazl"}'), result);
+			++errCount;
+		} else {
+			print("OK");
+		}
+	};
+	++totalFiles;
+});
+print("");
+print("Total errors: " # errCount # " / " # totalFiles);

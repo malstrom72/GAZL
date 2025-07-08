@@ -1,0 +1,676 @@
+/*
+	Calculator for Prawn OS.
+	
+	(C)1978 Shrimperative Computing LTD.
+*/
+
+const int DEBUG;
+
+extern native output;
+extern native input;
+extern native abort;
+
+const int FALSE = 0;
+const int TRUE = 1;
+
+const int PARENTHESIS_PRECEDENCE = 0;
+const int BITWISE_PRECEDENCE = 1;
+const int ADD_SUB_PRECEDENCE = 2;
+const int MUL_DIV_PRECEDENCE = 3;
+const int PREFIX_PRECEDENCE = 4;
+const int POW_PRECEDENCE = 5;
+const float LOG2 = 0.69314718055994530942;
+const float LOG2R = 1.44269504088896340736;
+const float LOG10R = 0.43429448190325182765;
+const float E = 2.71828182845904523536;
+const float HALF_PI = 1.57079632679489661923;
+const float PI = 3.14159265358979323846;
+const float TWICE_PI = PI * 2.0;
+const float COS_EPSILON = 1.0e-6;
+
+global pointer lastError;
+
+global array memoryUsed['z' - 'a' + 1];
+global array memory['z' - 'a' + 1];
+global float lastResult = 0.0;
+
+function strcmp(pointer s0, pointer s1)
+returns int d
+locals pointer a, pointer b, int c
+{
+	a = s0;
+	b = s1;
+	while ((d = (c = (int) *a) - (int) *b) == 0 && c != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function error(pointer s)
+{
+	if (global lastError == null) global lastError = s;
+}
+
+/*
+	Derived from:
+	
+			  oo
+			 =====  n
+		 x   \     x
+		e  =  >    --
+			 /     n!
+			 =====
+			 n = 0
+	
+	... which is the same as:
+		
+		1   x   x x   x x x
+		- + - + --- + ----- + ...
+		1   1   1*2   1*2*3
+	
+	... which is the same as:
+	
+		1   x   x x   x x x
+		- + - + - - + - - - + ...
+		1   1   1 2   1 2 3
+		
+	Negative x yields huge floating point precision problems so we negate x before and do 1.0 / y afterwards instead.
+*/
+function exp(float x)
+returns	float y
+locals	float a
+		, float n
+		, float m
+		, float t
+{
+	m = abs(x);
+	a = 1.0;
+	n = 1.0;
+	y = 1.0;
+	do {
+		t = y;
+		a = a * m / n;
+		y = y + a;
+		n = n + 1.0;
+	} while (y != t);
+	if (x < 0.0) y = 1.0 / y;
+}
+
+/*
+	Derived from:
+	
+					  oo
+					 =====            n
+					 \         n + 1 x
+		log(1 + x) =  >    (-1)      --
+					 /                n
+					 =====
+					 n = 1
+
+	Taylor for log is only reliable between -0.5 and 0.5, so we scale beforehand.
+*/
+function log(float x)
+returns float y
+locals	float a
+		, float b
+		, float m
+		, float n
+		, float t
+{
+	if (x <= 0.0 || x >= 1.0e38) error("Domain error");
+	else {
+		b = 0.0;
+		m = x;
+		while (m < 0.5) { m = m * 2.0; b = b - LOG2; }
+		while (m > 1.5) { m = m * 0.5; b = b + LOG2; }
+		m = 1.0 - m;
+		a = -1.0;
+		n = 1.0;
+		y = 0.0;
+		do {
+			t = y;
+			a = a * m;
+			y = y + a / n;
+			n = n + 1.0;
+		} while (y != t);
+		y = y + b;
+	}
+}
+
+function log2(float x)
+returns float y
+{
+	y = (float) log(x) * LOG2R;
+}
+
+function log10(float x)
+returns float y
+{
+	y = (float) log(x) * LOG10R;
+}
+
+function trunc(float x)
+returns float y
+{
+	if (x < 0.0) y = -floor(-x);
+	else y = floor(x);
+}
+
+function fmod(float x, float y)
+returns float z
+{
+	if (y == 0.0) error("Division by zero");
+	else z = x - (float) trunc(x / y) * y;
+}
+
+/*
+	Derived from:
+	
+				 oo
+				=====      n
+				\      (-1)   2 n
+		cos x =  >    ------ x
+				/     (2 n)!
+				=====
+				n = 0
+*/
+function cos(float x)
+returns	float y
+locals	float a
+		, float n
+		, float m
+		, float t
+{
+	m = (float) fmod(x, TWICE_PI);
+	m = -m * m;
+	a = 1.0;
+	n = 1.0;
+	y = 1.0;
+	do {
+		t = y;
+		a = a * m / (n * n + n);
+		y = y + a;
+		n = n + 2.0;
+	} while (y != t);
+	if (abs(y) < COS_EPSILON) y = 0.0;
+}
+
+function sin(float x)
+returns float y
+{
+	y = (float) cos(x - HALF_PI);
+}
+
+function tan(float x)
+returns float y
+locals	float c
+{
+	y = 0.0;
+	c = (float) cos(x);
+	if (c == 0.0) error("Domain error");
+	else y = (float) sin(x) / c;
+}
+
+function pow(float x, float y)
+returns float z
+locals	float a
+{
+	z = 0.0;
+	a = x;
+	if (a < 0.0 && y == floor(y)) a = -a;
+	if (a > 0.0) z = (float) exp((float) log(a) * y);
+	else if (a < 0.0 || y <= 0.0) error("Domain error");
+	if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z;
+}
+
+function floorFunc(float x)
+returns float y
+{
+	y = floor(x);
+}
+
+function ceilFunc(float x)
+returns float y
+{
+	y = -floor(-x);
+}
+
+function sqrt(float x)
+returns float y
+{
+	y = (float) pow(x, 0.5);
+}
+
+const int FUNCTION_COUNT = 10;
+readonly array FUNCTIONS[FUNCTION_COUNT * 2] = { 
+	"ceil", ceilFunc
+	, "exp", exp
+	, "floor", floorFunc
+	, "log", log
+	, "log2", log2
+	, "log10", log10
+	, "sqrt", sqrt
+	, "cos", cos
+	, "sin", sin
+	, "tan", tan
+};
+
+function isalpha(int c)
+returns int b
+{
+	b = FALSE;
+	if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) b = TRUE;
+}
+
+function lower(int c)
+returns int l
+{
+	l = c;
+	if (c >= 'A' && c <= 'Z') l = l + ('a' - 'A');
+}
+
+function eatWhite(pointer b)
+returns	pointer p
+{
+	p = b;
+	while ((int) *p == ' ') p = p + 1;
+}
+
+const float EPSILON_FLOAT = 1.0e-45
+const float SMALL_FLOAT = 1.0e-5
+const float LARGE_FLOAT = 1.0e+10
+const float HUGE_FLOAT = 1.0e+38
+
+function hexToFloat(pointer b, pointer v)
+returns pointer p
+locals	int i
+		, int c
+		, int d
+{
+	p = b;
+	i = 0;
+	while (((c = (int) *p) >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		if (c <= '9') d = (c - '0');
+		else d = ((c & ~0x20) - ('A' - 10));
+		i = (i << 4) | d;
+		p = p + 1;
+	}
+	*v = itof(i);
+}
+
+function intToHex(int i, pointer buffer)
+returns pointer p
+locals	int x
+{
+	x = i;
+	p = buffer + 8;
+	*p = 0;
+	do {
+		*(p = p - 1) = ("FEDCBA9876543210123456789ABCDEF")[15 + (x & 0xF)];
+		x = x >>> 4;
+	} while (x != 0);
+}
+
+function stringToFloat(pointer b, pointer v)
+returns	pointer p
+locals	float f
+		, float e
+		, int n
+		, int i
+		, int c
+		, pointer q
+{
+	p = b;
+	f = 0.0;
+	while ((c = (int) *p) >= '0' && c <= '9') {
+		f = f * 10.0 + itof(c - '0');
+		p = p + 1;
+	}
+	if ((int) *p == '.') {
+		p = p + 1;
+		e = 0.1;
+		while ((c = (int) *p) >= '0' && c <= '9') {
+			f = f + e * itof(c - '0');
+			e = e * 0.1;
+			p = p + 1;
+		}
+	}
+	if ((c = (int) *p) == 'e' || c == 'E') {
+		q = p + 1;
+		e = 10.0;
+		if ((c = (int) *q) == '+') q = q + 1;
+		else if (c == '-') { e = 0.1; q = q + 1; }
+		n = 0;
+		while ((c = (int) *q) >= '0' && c <= '9') {
+			n = n * 10 + (c - '0');
+			q = q + 1;
+			p = q;
+		}
+		if (n > 50) n = 50;
+		for (i = 0 to n) f = f * e;
+	}
+	*v = f;
+}
+
+// buffer should hold at least 32 elements
+function floatToString(float f, int precision, pointer buffer)
+returns	pointer p
+locals float x, float y, int e, float g, pointer dp, pointer pp, pointer ep, int i
+{
+	assert(1 <= precision && precision <= 24);
+
+	y = abs(f);
+	if (y <= EPSILON_FLOAT) p = "0";
+	else if (y >= HUGE_FLOAT) p = "HUGE";
+	else {
+		e = 0;
+		ep = buffer + 3 + precision;
+		
+		loop {
+			pp = buffer + 3;
+			x = y;
+			
+			// Normalize values > 10 and move period position.
+			
+			while (x >= 10.0 && pp < ep) {
+				pp = pp + 1;
+				x = x * 0.1;
+			}
+						
+			if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break;
+			
+			// Exponential treatment of very small or large values.
+
+			g = y;
+			while (y < 1.0) {
+				e = e - 1;
+				y = y * 10.0;
+			}
+			while (y >= 10.0) {
+				e = e + 1;
+				y = y * 0.1;
+			}
+		}
+	break:
+		
+		// For values < 1, spit out leading 0's and increase precision.
+
+		dp = buffer + 2;
+		while (x < 1.0 && dp < buffer + 32) {
+			*dp = '0';
+			dp = dp + 1;
+			if (dp == pp) {	// Hop over period position (set to 9 to avoid when eliminating 9's).
+				*dp = '9';
+				dp = dp + 1;
+			}
+			ep = ep + 1;
+			x = x * 10.0;
+		}
+		
+		// Exhaust all remaining digits of mantissa into buffer.
+		
+		while (dp < ep) {
+			i = ftoi(x);
+			*dp = i + '0';
+			dp = dp + 1;
+			if (dp == pp) {	// Hop over period position (set to 9 to avoid when eliminating 9's).
+				*dp = '9';
+				dp = dp + 1;
+			}
+			x = (x - itof(i)) * 10.0;
+		}
+		
+		// If remainder is >= 5, increment trailing 9's...
+		
+		p = buffer + 2;
+		if (x >= 5.0) {
+			while ((int) dp[-1] == '9') *(dp = dp - 1) = '0';
+			
+			// If we are at spare position, set to '1' and include, otherwise, increment last non-9.
+			
+			if (dp == p) *(p = p - 1) = '1';
+			else dp[-1] = (int) dp[-1] + 1;
+		}
+		
+		*pp = '.';
+		
+		// Trim trailing zeroes (and possibly '.').
+		
+		if (ep > pp) while ((int) ep[-1] == '0') ep = ep - 1;
+		if (ep - 1 == pp) ep = ep - 1;
+		
+		// Add any exponent and negative sign.
+		
+		if (e != 0) {
+			*ep = 'e';
+			i = '+';
+			if (e < 0) i = '-';
+			*(ep = ep + 1) = i;
+			i = abs(e);
+			if (i >= 100) *(ep = ep + 1) = '0' + ((i / 100) % 10);
+			if (i >= 10) *(ep = ep + 1) = '0' + ((i / 10) % 10);
+			*(ep = ep + 1) = '0' + (i % 10);
+			ep = ep + 1;
+		}
+		*ep = 0;
+
+		if (f < 0.0) *(p = p - 1) = '-';
+	}
+}
+
+function evaluate(pointer b, pointer v, int precedence)
+returns pointer p
+locals	float f
+		, pointer q
+		, pointer s
+		, int c
+		, int i
+{
+	p = (pointer) eatWhite(b);
+
+    switch ((int) *p == 0 to 128) {
+        case 0: error("Unexpected end of line");
+        case '-': {
+			p = (pointer) evaluate(p + 1, v, PREFIX_PRECEDENCE);
+			*v = -(float) *v;
+		}
+		case '_': {
+			*v = global lastResult;
+			p = p + 1;
+		}
+        case '(': {
+			p = (pointer) evaluate(p + 1, v, PARENTHESIS_PRECEDENCE);
+			if ((int) *p != ')') error("Expected ')'");
+			p = p + 1;
+		}
+		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9': {
+			if ((int) *p == '0' && (int) lower(p[1]) == 'x') q = (pointer) hexToFloat(p + 2, v);
+			else q = (pointer) stringToFloat(p, v);
+			if (p == q) error("Invalid number");
+			p = q;
+		}
+		case 'e', 'E': {
+			if ((int) isalpha(p[1]) != FALSE) goto symbol;
+			p = p + 1;
+			*v = E;
+		}
+		case 'p', 'P': {
+			if ((int) lower(p[1]) != 'i' || (int) isalpha(p[2]) != FALSE) goto symbol;
+			p = p + 2;
+			*v = PI;
+		}
+        default: {
+			symbol:
+				for (i = 0 to FUNCTION_COUNT) {
+					q = p;
+					s = (pointer) global FUNCTIONS[i * 2 + 0];
+					while ((c = (int) *s) != 0 && (int) lower(*q) == c) {
+						s = s + 1;
+						q = q + 1;
+					}
+					if ((int) *s == 0) {
+						q = (pointer) eatWhite(q);
+						if ((int) *q == '(') {
+							p = (pointer) evaluate(q + 1, v, PARENTHESIS_PRECEDENCE);
+							if ((int) *p != ')') error("Expected ')'");
+							p = p + 1;
+							(float) *v = (float) ((funcptr)global FUNCTIONS[i * 2 + 1])((float) *v);
+							goto wasFunction;
+						}
+					}
+				}
+				c = (int) lower(*p);
+				if ((int) isalpha(c) == FALSE || (int) isalpha(p[1]) == TRUE) error("Syntax error");
+				else if ((int) global memoryUsed[c - 'a'] == 0) error("Undefined variable");
+				else {
+					p = p + 1;
+					*v = (float) global memory[c - 'a'];
+				}
+			wasFunction: ;
+		}
+    }
+	
+	repeat: {
+		p = (pointer) eatWhite(p);
+
+		switch ((int) *p == '%' to ('|' + 1)) {
+			case '|': {
+				if (precedence < BITWISE_PRECEDENCE) {
+					p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE);
+					*v = itof(ftoi((float) *v) | ftoi(f));
+					goto repeat;
+				}
+			}
+			case '&': {
+				if (precedence < BITWISE_PRECEDENCE) {
+					p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE);
+					*v = itof(ftoi((float) *v) & ftoi(f));
+					goto repeat;
+				}
+			}
+			case '^': {
+				if (precedence < BITWISE_PRECEDENCE) {
+					p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE);
+					*v = itof(ftoi((float) *v) ^ ftoi(f));
+					goto repeat;
+				}
+			}
+			case '<': {
+				if ((int) p[1] == '<' && precedence < BITWISE_PRECEDENCE) {
+					p = (pointer) evaluate(p + 2, &f, BITWISE_PRECEDENCE);
+					*v = itof(ftoi((float) *v) << ftoi(f));
+					goto repeat;
+				}
+			}
+			case '>': {
+				if ((int) p[1] == '>' && precedence < BITWISE_PRECEDENCE) {
+					p = (pointer) evaluate(p + 2, &f, BITWISE_PRECEDENCE);
+					*v = itof(ftoi((float) *v) >>> ftoi(f));
+					goto repeat;
+				}
+			}
+			case '+': {
+				if (precedence < ADD_SUB_PRECEDENCE) {
+					p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE);
+					*v = (float) *v + f;
+					goto repeat;
+				}
+			}
+			case '-': {
+				if (precedence < ADD_SUB_PRECEDENCE) {
+					p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE);
+					*v = (float) *v - f;
+					goto repeat;
+				}
+			}
+			case '*': {
+				if ((int) p[1] == '*') {
+					if (precedence <= POW_PRECEDENCE) {
+						p = (pointer) evaluate(p + 2, &f, POW_PRECEDENCE);
+						*v = pow((float) *v, f);
+						goto repeat;
+					}
+				} else {
+					if (precedence < MUL_DIV_PRECEDENCE) {
+						p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE);
+						*v = (float) *v * f;
+						goto repeat;
+					}
+				}
+			}
+			case '/': {
+				if (precedence < MUL_DIV_PRECEDENCE) {
+					p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE);
+					if (f == 0.0) error("Division by zero");
+					else *v = (float) *v / f;
+					goto repeat;
+				}
+			}
+			case '%': {
+				if (precedence < MUL_DIV_PRECEDENCE) {
+					p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE);
+					*v = fmod(*v, f);
+					goto repeat;
+				}
+			}
+		}
+	}
+}
+
+function main()
+locals	array s[256]
+		, pointer p
+		, pointer q
+		, float f
+		, int c
+		, int assignTo
+		, array buffer[32]
+		, int i
+{
+	loop {
+		output("calc> ");
+		input(255, s);
+		
+		p = (pointer) eatWhite(s);
+		if ((int) *p == 0 || (int) strcmp(p, "quit") == 0) goto quit;
+		
+		assignTo = -1;
+		c = (int) lower(*p);
+		if ((int) isalpha(c) != FALSE && c != 'e') {
+			q = (pointer) eatWhite(p + 1);
+			if ((int) *q == '=') {
+				p = (pointer) eatWhite(q + 1);
+				assignTo = c - 'a';
+			}
+		}
+				
+		global lastError = null;
+		p = (pointer) evaluate(p, &f, 0);
+		p = (pointer) eatWhite(p);
+		if ((int) *p != 0) error("Syntax error");
+		
+		if ((p = global lastError) != null) output(p);
+		else {
+			global lastResult = f;
+			if (assignTo >= 0) {
+				s[0] = 'a' + assignTo;
+				s[1] = 0;
+				output(s);
+			}
+			output(" = ");
+			output(floatToString(f, 6, buffer));
+			if (itof(i = ftoi(f)) == f) {
+				output("\n = 0x");
+				output(intToHex(i, buffer));
+			}
+			if (assignTo >= 0) {
+				global memory[assignTo] = f;
+				global memoryUsed[assignTo] = 1;
+			}
+		}
+		output("\n");
+	}
+
+	quit: ;
+}
+

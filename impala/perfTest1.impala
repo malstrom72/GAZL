@@ -1,0 +1,33 @@
+extern native printInt;
+extern native printLF;
+extern native print;
+
+global int seed = 2463534242;
+
+function myrand()
+returns int y
+{
+	y = global seed;
+	y = y ^ (y << 13);
+	y = y ^ (y >>> 17);
+	y = y ^ (y << 5);
+	global seed = y;
+}
+
+global array a[20000];
+
+function main()
+locals int i, int j, int minj
+{
+	for (i = 0 to 20000) global a[i] = (int) myrand();
+	for (i = 0 to 2000) {
+		minj = 0;
+		for (j = 1 to 20000) {
+			if ((int) global a[j] < (int) global a[minj]) minj = j;
+		}
+	}
+	printInt(minj);
+	print(": ");
+	printInt(global a[minj]);
+	printLF();
+}

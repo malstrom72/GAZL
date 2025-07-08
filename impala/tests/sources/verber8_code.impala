@@ -1,0 +1,245 @@
+/*
+	Impala source for a Permut8 demonstration firmware patch.
+	
+	Impala is a high-level assembler for the GAZL virtual machine. Syntax is similar to C. Language constructs map
+	nearly 1 to 1 with GAZL instructions.
+*/
+
+/* ------ Firmware API ------ */
+
+const int PRAWN_FIRMWARE_PATCH_FORMAT = 2	// Should be 2 for a valid Permut8 version 1.1 firmware patch
+const int FALSE = 0
+const int TRUE = 1
+
+/*
+	These text lines will be used in exchange of the standard Permut8 screenprint. They all follow a fixed character
+	position format. First 3 characters is the instruction mnemonic, then a space, then 3 characters per switch for the
+	first group, space again, and then the same for the second group. The pointers do not need to point to constant
+	data, but after the call to `init()` they shouldn't change.
+*/
+readonly array panelTextRows[8] = {
+	" ",
+	" ",
+	" ",
+	"    |----- ROOM SIZE ------| |----- PRE-DELAY ------|",
+	" ",
+	" ",
+	" ",
+	"    |------ FEEDBACK ------| |------ DAMPING -------|"
+}
+
+extern native abort							// `abort()` : Kills the "firmware" and restores normal operation.
+extern native trace							// `trace(pointer string)` : Traces a null-terminated string to Prawn console and standard output (Mac) or DebugView (Windows).
+extern native yield							// `yield()` : As a more effective alternative to returning from the `process()` function you may call `yield()`. It will return processing to the Permut8 audio engine and when the next sample needs to be processed, `yield()` will return back to your GAZL code.
+extern native write							// `write(int offset, int frameCount, pointer values)` : Writes a variable number of 12-bit sample frames to the delay-line memory. Reading and writing is automatically wrapped to delay-line size. Values are written and read in interleaved stereo format.
+extern native read							// `read(int offset, int frameCount, pointer values)` : Reads a variable number of 12-bit sample frames from the delay-line memory. Reading and writing is automatically wrapped to delay-line size. Values are written and read in interleaved stereo format.
+
+const int DEBUG								// Defined by host. If non-zero, asserts and tracing are enabled.
+
+const int OPERATOR_1_NOP					// Externally defined constants for `global params[OPERATOR_1_PARAM_INDEX]`
+const int OPERATOR_1_AND
+const int OPERATOR_1_MUL
+const int OPERATOR_1_OSC
+const int OPERATOR_1_RND
+
+const int OPERATOR_2_NOP					// Externally defined constants for `global params[OPERATOR_2_PARAM_INDEX]`
+const int OPERATOR_2_OR
+const int OPERATOR_2_XOR
+const int OPERATOR_2_MSK
+const int OPERATOR_2_SUB
+
+const int SWITCHES_SYNC_MASK				// Externally defined bit masks for `global params[SWITCHES_PARAM_INDEX]` (e.g. `((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_SYNC_MASK) != 0` to test if sync switch is on)
+const int SWITCHES_TRIPLET_MASK
+const int SWITCHES_DOTTED_MASK
+const int SWITCHES_WRITE_PROTECT_MASK
+const int SWITCHES_REVERSE_MASK
+
+const int CLOCK_FREQ_PARAM_INDEX			// Clock frequency / sample rate rounded to an integer Hz.
+const int SWITCHES_PARAM_INDEX				// Bit mask, see constants above.
+const int OPERATOR_1_PARAM_INDEX			// Operator 1 is an integer 0 to 4 (see definitions above).
+const int OPERAND_1_HIGH_PARAM_INDEX		// Operand 1 high is an integer 0 to 255
+const int OPERAND_1_LOW_PARAM_INDEX			// Operand 1 low is an integer 0 to 255
+const int OPERATOR_2_PARAM_INDEX			// Operator 2 is an integer 0 to 4 (see definitions above).
+const int OPERAND_2_HIGH_PARAM_INDEX		// Operand 2 high is an integer 0 to 255
+const int OPERAND_2_LOW_PARAM_INDEX			// Operand 2 low is an integer 0 to 255
+const int PARAM_COUNT						// Param count can be changed in the future if more parameters are published to GAZL.
+
+global int clock							// `clock` increments between every `process()` (or decrements in reverse mode) and has a cycle size of 16-bit (from 0 to 65536). If tempo sync is enabled, `clock` will be the absolute position within the chosen time division. (Optional.)
+global array signal[2]						// Left and right 12-bit samples to be processed (from -2047 to 2047). Replace with output.
+global array params[PARAM_COUNT]			// `params` (all ints) are updated by Permut8 whenever any exposed parameter is updated. If there is a defined `update()` function it is called on this occasion. (Optional.)
+global array displayLEDs[4]					// Four 8-bit masks for the visualizer LEDs under the operand switches. Order: operand 1 high & low, operand 2 high & low.
+global int instance							// A session unique number for the plug-in. Always valid and won't change after init. You can use this to initialize random seeds. (Optional.)
+readonly int clockFreqLimit = 88200			// Defines maximum clock frequency limit. Permut8 normally runs as fast as up to 352.8 kHz but often you want a speed limit for custom firwmares since GAZL is much more CPU intensive than native DSP code. Permut8 only reads this global once after calling `init()`. (Optional and 0 means no limit.)
+readonly int updateMask =						// A bit-mask that can be defined to filter out certain parameters from triggering update(). E.g. use ~(1 << CLOCK_FREQ_PARAM_INDEX) to prevent calls to update() when clock frequency changes.
+	(1 << OPERAND_1_HIGH_PARAM_INDEX) | (1 << OPERAND_1_LOW_PARAM_INDEX) | (1 << OPERAND_2_HIGH_PARAM_INDEX) | (1 << OPERAND_2_LOW_PARAM_INDEX)
+
+/* ------ Standard Tables ------ */
+
+/* ------ Utilities ------ */
+
+/* ------ Firmware constants ------ */
+
+const int TAPS_COUNT = 10
+const int BATCH_SIZE = 32
+const int BATCH_SIZE_2 = BATCH_SIZE * 2
+
+const int T0 = 0
+const int T3 = 1
+const int T5 = 2
+const int T7 = 3
+const int T11 = 4
+const int T13 = 5
+const int TFB = 6
+const int TL1 = 7
+const int TL2 = 8
+const int TR = 9
+
+/* ------ Firmware globals ------ */
+
+global int feedback
+global int damping
+
+global array taps[TAPS_COUNT]
+
+/* ------ Firmware functions ------ */
+
+function displayBarValue()
+returns int y
+locals int x
+{
+	y = ~(0x7F >> (x >> (8 - 3)));
+}
+
+/*
+	`update()` is called whenever one or more of `params` are updated (usually not more frequent than every 136 or 137
+	sample). It is also called once initially (before reset()). (Optional.)
+*/
+function update()
+locals	array params[PARAM_COUNT], array taps[TAPS_COUNT], int size, int predelay, int damping
+{
+	copy (PARAM_COUNT from global params to params);
+	
+	size = (int) params[OPERAND_1_HIGH_PARAM_INDEX];
+	size = size * size + BATCH_SIZE * 13;
+	predelay = (int) params[OPERAND_1_LOW_PARAM_INDEX] << 7;
+
+	global feedback = (int) params[OPERAND_2_HIGH_PARAM_INDEX];
+	damping = 256 - (int) params[OPERAND_2_LOW_PARAM_INDEX];
+	global damping = (damping * damping + 255) >> 8;
+	
+	global displayLEDs[0] = (int) displayBarValue((int) params[OPERAND_1_HIGH_PARAM_INDEX]);
+	global displayLEDs[1] = (int) displayBarValue((int) params[OPERAND_1_LOW_PARAM_INDEX]);
+	global displayLEDs[2] = (int) displayBarValue((int) params[OPERAND_2_HIGH_PARAM_INDEX]);
+	global displayLEDs[3] = (int) displayBarValue((int) params[OPERAND_2_LOW_PARAM_INDEX]);
+
+	taps[T0] = 0;
+	taps[T3] = (size + 1) / 3;
+	taps[T5] = (int) taps[T3] + (size + 2) / 5;
+	taps[T7] = (int) taps[T5] + (size + 3) / 7;
+	taps[T11] = (int) taps[T3] + (size + 5) / 11;
+	taps[T13] = (size + 6) / 13;
+	taps[TFB] = size;
+	taps[TL1] = (int) taps[T7] + predelay;
+	taps[TL2] = (int) taps[TL1] + 2311;
+	taps[TR] = (int) taps[TL1] + 1057;
+
+	copy (TAPS_COUNT from taps to global taps);
+}
+
+/*
+	`process()` is the main processing function. Process left and right sample in `left` and `right` globals and return.
+	Because of the single-sample feedback loop in Permut8, this API is designed to process one sample frame at a time,
+	otherwise some cpu could have been saved by processing a batch of frames.
+	
+	As a more effective alternative to returning from the `process()` function you may call `yield()`. It will return
+	processing to the Permut8 audio engine and when the next sample needs to be processed, `yield()` will return back to
+	your GAZL code.
+	
+	Performance gain is also possible by implementing your own batch processing with buffering, but that will of course
+	introduce additional (uncompensated) latency.
+	
+	Globals are slow in GAZL so if you use a lot of global data, use the "copy" feature in Impala to efficiently load it
+	into (fast) local data. E.g. `copy (PARAM_COUNT from global params to params)`.
+*/
+function process()
+locals	int offset, int i,
+		int in,
+		int fb, int lp,
+		int dI, int l,
+		int bi, int bd,
+		int t0, int t3, int t5, int t7, int t11, int t13, int tfb, int tl1, int tl2, int tr,
+		pointer p, pointer b,
+		array taps[TAPS_COUNT],
+		array buffers[BATCH_SIZE_2 * TAPS_COUNT]
+{
+	loop {
+		copy (TAPS_COUNT from global taps to taps);
+
+		lp = global damping;
+		fb = global feedback;
+
+		if (((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_REVERSE_MASK) == 0) {
+			offset = global clock;
+			b = buffers;
+			bd = 2;
+		} else {
+			offset = global clock - BATCH_SIZE;
+			b = &buffers[BATCH_SIZE_2 - 2];
+			bd = -2;
+		}
+
+		p = &buffers[T3 * BATCH_SIZE_2];
+		for (i = T3 to TR + 1) {
+			read(offset - (int) taps[i], BATCH_SIZE, p);
+			p = p + BATCH_SIZE_2;
+		}
+		
+		for (bi = 0 to BATCH_SIZE) {
+			t3 = (int) b[T3 * BATCH_SIZE_2];
+			t5 = (int) b[T5 * BATCH_SIZE_2];
+			t7 = (int) b[T7 * BATCH_SIZE_2];
+			t11 = (int) b[T11 * BATCH_SIZE_2];
+			t13 = (int) b[T13 * BATCH_SIZE_2];
+			tfb = (int) b[TFB * BATCH_SIZE_2];
+			tl1 = (int) b[TL1 * BATCH_SIZE_2];
+			tl2 = (int) b[TL2 * BATCH_SIZE_2];
+			tr = (int) b[TR * BATCH_SIZE_2];
+			
+			in = ((int) global signal[0] + (int) global signal[1]) >> 1;
+			dI = dI + ((in + (tfb * fb >> 8) - dI) * lp >> 8);
+			t0 = dI;
+			
+			t0  = t0  + (t3  >> 1);
+			t3  = t3  - (t0  >> 1);
+			t0  = t0  + (t13 >> 1);
+			t13 = t13 - (t0  >> 1);
+			t3  = t3  + (t5  >> 1);
+			t5  = t5  - (t3  >> 1);
+			t3  = t3  + (t11 >> 1);
+			t11 = t11 - (t3  >> 1);
+			t5  = t5  + (t7  >> 1);
+			t7  = t7  - (t5  >> 1);
+
+			l = tl1 - tl2;
+			global signal[0] = l - (l >> 2) - (l >> 4);
+			global signal[1] = (int) tr;
+
+			yield();
+			
+			b[T0 * BATCH_SIZE_2] = t0;
+			b[T3 * BATCH_SIZE_2] = t3;
+			b[T5 * BATCH_SIZE_2] = t5;
+			b[T7 * BATCH_SIZE_2] = t7;
+			b[T11 * BATCH_SIZE_2] = t11;
+			b[T13 * BATCH_SIZE_2] = t13;
+
+			b = b + bd;
+		}
+
+		p = &buffers[T0 * BATCH_SIZE_2];
+		for (i = T0 to T13 + 1) {
+			write(offset - (int) taps[i], BATCH_SIZE, p);
+			p = p + BATCH_SIZE_2;
+		}
+	}
+}
