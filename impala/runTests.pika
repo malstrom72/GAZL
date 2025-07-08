@@ -1,4 +1,4 @@
-#! /usr/local/bin/PikaCmd
+#! /usr/bin/env PikaCmd
 
 include('systools.pika');
 include('stdlib.pika');
@@ -12,7 +12,7 @@ totalFiles = 0;
 dir(sourcesDir # "*.impala", >{
 	goldFilename = bake('tests{DIR_SLASH}golden{DIR_SLASH}{basenameOfPath($0) # ".gazl"}');
 	print("Compiling " # $0);
-	result = pipe(bake('pika impala.pika compile {sourcesDir}{$0} - 1234'), false, @err, @rc);
+        result = pipe(bake('{::run.root}PikaCmd impala.pika compile {sourcesDir}{$0} - 1234'), false, @err, @rc);
 	if (rc === 2) throw("user aborted")
 	else if (rc !== 0) {
 		print("<<< Error compiling >>>");
