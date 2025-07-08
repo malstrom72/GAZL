@@ -2,6 +2,7 @@
 
 GAZL is a lightweight, typed virtual machine with a readable assembly language. The
 `impala` directory contains a small C-like compiler that targets GAZL.
+See [docs/Overview.md](docs/Overview.md) for an overview of GAZL.
 
 ## Building
 
