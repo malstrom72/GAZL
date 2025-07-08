@@ -30,6 +30,5 @@ cp -f PikaCmd/PikaCmd ../impala/ >/dev/null
 cp -f PikaCmd/systools.pika ../impala/ >/dev/null
 cd ../impala/
 ./PikaCmd impala.pika rebuild
-chmod +x ../impala/impala >/dev/null 2>&1
-./impala run ImpalaDemo.impala
+./PikaCmd impala.pika run ImpalaDemo.impala
 exit 0

@@ -10,7 +10,7 @@ if [ "$1" == "debug" ] || [ "$1" == "beta" ] || [ "$1" == "release" ]; then
 	shift
 fi
 
-if [ "$1" == "x64" ] || [ "$1" == "x86" ] || [ "$1" == "arm64" ]; then
+if [ "$1" == "x64" ] || [ "$1" == "x86" ] || [ "$1" == "arm64" ] || [ "$1" == "native" ] || [ "$1" == "host" ]; then
 	CPP_MODEL="$1"
 	shift
 fi
@@ -27,14 +27,16 @@ else
 fi
 
 if [ "$CPP_MODEL" == "x64" ]; then
-	CPP_OPTIONS="-m64 -target x86_64-apple-macos $CPP_OPTIONS"
+        CPP_OPTIONS="-m64 -target x86_64-apple-macos $CPP_OPTIONS"
 elif [ "$CPP_MODEL" == "x86" ]; then
-	CPP_OPTIONS="-m32 -target x86_64-apple-macos $CPP_OPTIONS"
+        CPP_OPTIONS="-m32 -target x86_64-apple-macos $CPP_OPTIONS"
 elif [ "$CPP_MODEL" == "arm64" ]; then
-	CPP_OPTIONS="-m64 -target arm64-apple-macos $CPP_OPTIONS"
+        CPP_OPTIONS="-m64 -target arm64-apple-macos $CPP_OPTIONS"
+elif [ "$CPP_MODEL" == "native" ] || [ "$CPP_MODEL" == "host" ]; then
+        CPP_OPTIONS="$CPP_OPTIONS"
 else
-	echo Unrecognized CPP_MODEL "$CPP_MODEL"
-	exit 1
+        echo Unrecognized CPP_MODEL "$CPP_MODEL"
+        exit 1
 fi
 
 CPP_OPTIONS="-fvisibility=hidden -fvisibility-inlines-hidden -Wno-trigraphs -Wreturn-type -Wunused-variable $CPP_OPTIONS"
