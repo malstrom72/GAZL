@@ -40,3 +40,7 @@ When set up correctly the suite reports `Total errors: 0 / 53`.
 
 The tests compile each file in `tests/sources` and compare the output with the
 reference files in `tests/golden`.
+
+## AI-Assisted Content
+
+This project occasionally uses AI (such as OpenAI Codex) to help with writing documentation, generating code comments, producing test code, and automating repetitive edits. All of the underlying source code has been hand-written and refined over many years.
