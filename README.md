@@ -7,10 +7,11 @@ See [docs/Overview.md](docs/Overview.md) for an overview of GAZL.
 ## Building
 
 Cross platform build scripts are provided at the repository root. They call the
-`BuildPikaCmd` scripts to produce a release build of `PikaCmd`, compile
-`GAZLCmd` in beta and release modes with the binaries stored in `output/` and
-execute the Impala test suite. The unit tests from `UnitTest.gazl` run through
-the beta build automatically.
+`BuildPikaCmd` helpers which leave the `PikaCmd` binary in `tools/PikaCmd/`.
+`GAZLCmd` is compiled in beta and release modes with the binaries stored under
+`output/`. The unit tests from `UnitTest.gazl` run through the beta build and
+the Impala test suite is executed using the release build without copying the
+executables around.
 
 - On Unix or macOS run `./build.sh`.
 - On Windows run `build.cmd`.
@@ -22,7 +23,7 @@ manually with:
 
 ```sh
 cd impala
-./PikaCmd impala.pika run ImpalaDemo.impala
+../tools/PikaCmd/PikaCmd impala.pika run ImpalaDemo.impala
 ```
 
 ## Running the test suite
@@ -31,7 +32,7 @@ Run the Impala test suite using `PikaCmd`:
 
 ```sh
 cd impala
-./PikaCmd runTests.pika
+../tools/PikaCmd/PikaCmd runTests.pika
 ```
 
 When set up correctly the suite reports `Total errors: 0 / 53`.
