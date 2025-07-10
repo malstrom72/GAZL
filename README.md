@@ -6,16 +6,13 @@ See [docs/Overview.md](docs/Overview.md) for an overview of GAZL.
 
 ## Building
 
-The project is built using the helper scripts in `tools/`. On a UNIX like system
-you can build both `PikaCmd`, `GAZLCmd` and the Impala compiler using:
+Cross platform build scripts are provided at the repository root. They build the
+release version of `PikaCmd`, compile `GAZLCmd` in beta and release modes
+(running the built-in unit tests through the beta build) and execute the Impala
+test suite.
 
-```sh
-# from the repository root
-./tools/BuildImpala.sh
-```
-
-This builds using the native model and runs `ImpalaDemo.impala` once the build
-completes.
+- On Unix or macOS run `./build.sh`.
+- On Windows run `build.cmd`.
 
 ## Running the demo
 
@@ -40,6 +37,9 @@ When set up correctly the suite reports `Total errors: 0 / 53`.
 
 The tests compile each file in `tests/sources` and compare the output with the
 reference files in `tests/golden`.
+
+Running `./build.sh` or `build.cmd` also performs this step automatically after
+building the tools.
 
 ## AI-Assisted Content
 
