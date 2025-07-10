@@ -16,8 +16,11 @@ SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 	IF ERRORLEVEL 1 EXIT /B 1
 
 	REM Build GAZLCmd release
-	CALL tools\BuildCpp.cmd release x64 output\GAZLCmd.exe -I. GAZLCmd\GAZLCmd.cpp src\GAZL.cpp
-	IF ERRORLEVEL 1 EXIT /B 1
+CALL tools\BuildCpp.cmd release x64 output\GAZLCmd.exe -I. GAZLCmd\GAZLCmd.cpp src\GAZL.cpp
+IF ERRORLEVEL 1 EXIT /B 1
+
+REM Copy release binary to the Impala folder
+COPY /Y output\GAZLCmd.exe impala\GAZLCmd.exe >NUL
 
 	REM Run Impala tests
 	PUSHD impala

@@ -84,8 +84,7 @@ else if ($1 == 'compile') {
 	compile(source);
 	save(bake('{TEMP_DIR}temp.gazl'), collected);
 	print('');
-pk = bake('{::run.root}../output/GAZLCmd');
-error = try(>system(bake('{pk} {TEMP_DIR}temp.gazl main')));
+	error = try(>system(bake('{::run.root}GAZLCmd {TEMP_DIR}temp.gazl main')));
 	print('');
 	if (error != void) {
 		print(error);
