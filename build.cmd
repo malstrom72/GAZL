@@ -16,16 +16,19 @@ PUSHD tools
 CALL buildGAZLCmd.bat release
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
+COPY /Y output\GAZLCmd.exe impala\GAZLCmd.exe >NUL
 
-REM Build Impala and run demo
+REM Build Impala
 PUSHD tools
 CALL BuildImpala.bat
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
-REM Run Impala tests
-PUSHD output
-PikaCmd runTests.pika
+REM Run demo and tests from impala directory
+PUSHD impala
+..\tools\PikaCmd\PikaCmd impala.pika run ImpalaDemo.impala
+IF ERRORLEVEL 1 EXIT /B 1
+..\tools\PikaCmd\PikaCmd runTests.pika
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 

@@ -9,19 +9,9 @@ outdir=../output
 mkdir -p "$outdir"
 
 # Copy required source files
-cp ../impala/impala.ppeg ../impala/impala.pika ../impala/initPPEG.pika "$outdir"
-cp ../impala/runTests.pika ../impala/systools.pika "$outdir"
-cp ../impala/ImpalaDemo.impala "$outdir"
-rsync -a --delete ../impala/tests "$outdir"/
-
-# Copy tools
-cp PikaCmd/PikaCmd "$outdir"/
-cp PikaCmd/systools.pika "$outdir"/
+cp ../impala/impala.ppeg ../impala/impala.pika ../impala/initPPEG.pika ../impala/systools.pika "$outdir"
 
 # Build impala compiler
-(cd "$outdir" && ./PikaCmd impala.pika rebuild)
-
-# Run demo
-(cd "$outdir" && ./PikaCmd impala.pika run ImpalaDemo.impala)
+(cd "$outdir" && ../tools/PikaCmd/PikaCmd impala.pika rebuild)
 
 

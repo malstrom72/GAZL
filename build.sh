@@ -9,10 +9,12 @@ mkdir -p output
 
 # Build GAZLCmd release
 (cd tools && ./buildGAZLCmd.sh release)
+cp output/GAZLCmd impala/GAZLCmd 2>/dev/null || cp output/GAZLCmd.exe impala/GAZLCmd.exe
 
-# Build Impala and run demo
+# Build Impala
 (cd tools && ./BuildImpala.sh)
 
-# Run Impala tests
-(cd output && ./PikaCmd runTests.pika)
+# Run demo and tests from impala directory
+(cd impala && ../tools/PikaCmd/PikaCmd impala.pika run ImpalaDemo.impala)
+(cd impala && ../tools/PikaCmd/PikaCmd runTests.pika)
 
