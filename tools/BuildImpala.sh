@@ -1,34 +1,24 @@
 #!/bin/bash
+set -e
+cd "${0%/*}"
 
-cd ${0%/*}
+# Build PikaCmd
+(cd PikaCmd && ./BuildPikaCmd.sh)
 
-cd PikaCmd
-chmod +x BuildPikaCmd.sh >/dev/null 2>&1
-./BuildPikaCmd.sh
-if [ $? -ne 0 ]; then
-	exit 1
-fi
-cd ..
+mkdir -p ../output/impala
 
-if [ -e ./GAZLCmd ]; then
-	chmod +x ./GAZLCmd >/dev/null 2>&1
-else
-	chmod +x ./UpdateUnitTest.sh >/dev/null 2>&1
-	./UpdateUnitTest.sh
-	if [ $? -ne 0 ]; then
-		exit 1
-	fi
-	chmod +x ./BuildCpp.sh >/dev/null 2>&1
-	./BuildCpp.sh ./GAZLCmd ../GAZLCmd/GAZLCmd.cpp ../src/GAZL.cpp
-	if [ $? -ne 0 ]; then
-		exit 1
-	fi
-fi
+# Copy source scripts
+rsync -a --delete ../impala/ ../output/impala/
 
-cp -f ./GAZLCmd ../impala/ >/dev/null
-cp -f PikaCmd/PikaCmd ../impala/ >/dev/null
-cp -f PikaCmd/systools.pika ../impala/ >/dev/null
-cd ../impala/
-./PikaCmd impala.pika rebuild
-./PikaCmd impala.pika run ImpalaDemo.impala
-exit 0
+# Copy tools
+cp PikaCmd/PikaCmd ../output/impala/
+cp PikaCmd/systools.pika ../output/impala/
+cp ../output/GAZLCmd ../output/impala/GAZLCmd
+
+# Build impala compiler
+(cd ../output/impala && ./PikaCmd impala.pika rebuild)
+
+# Run demo
+(cd ../output/impala && ./PikaCmd impala.pika run ImpalaDemo.impala)
+
+

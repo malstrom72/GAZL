@@ -1,23 +1,26 @@
 @ECHO OFF
 SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
+CD /D %~dp0
 
-CD PikaCmd
+PUSHD PikaCmd
 CALL BuildPikaCmd
 IF ERRORLEVEL 1 EXIT /B 1
-CD ..
+POPD
 
-IF NOT EXIST GAZLCmd.exe (
-	CALL UpdateUnitTest
-	IF ERRORLEVEL 1 EXIT /B 1
+IF NOT EXIST ..\output\impala MKDIR ..\output\impala
 
-	CALL BuildCpp GAZLCmd.exe ..\GAZLCmd\GAZLCmd.cpp ..\src\GAZL.cpp
-	IF ERRORLEVEL 1 EXIT /B 1
-)
+xcopy ..\impala ..\output\impala /E /Y >NUL
 
-COPY /Y GAZLCmd.exe ..\impala\ >NUL
-COPY /Y PikaCmd\PikaCmd.exe ..\impala\ >NUL
-COPY /Y PikaCmd\systools.pika ..\impala\ >NUL
-CD ..\impala\
+COPY /Y PikaCmd\PikaCmd.exe ..\output\impala\ >NUL
+COPY /Y PikaCmd\systools.pika ..\output\impala\ >NUL
+COPY /Y ..\output\GAZLCmd.exe ..\output\impala\GAZLCmd.exe >NUL
+
+PUSHD ..\output\impala
 PikaCmd impala.pika rebuild
-impala run ImpalaDemo.impala
+IF ERRORLEVEL 1 EXIT /B 1
+PikaCmd impala.pika run ImpalaDemo.impala
+IF ERRORLEVEL 1 EXIT /B 1
+POPD
 EXIT /B 0
+
+

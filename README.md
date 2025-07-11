@@ -6,13 +6,14 @@ See [docs/Overview.md](docs/Overview.md) for an overview of GAZL.
 
 ## Building
 
-Cross platform build scripts are provided at the repository root. They first
-compile `GAZLCmd` in beta mode and run the unit tests from `UnitTest.gazl`.
-Next they delegate to `tools/BuildImpala.sh` or `.bat` which builds `PikaCmd`
-and the release version of `GAZLCmd`, rebuilds the Impala compiler and runs the
-demo. The release executable is copied to `impala/` and also stored under
-`output/` for convenience. The Impala test suite is run after the tools are
-built.
+Cross platform build scripts are provided at the repository root. They use
+`GAZLCmd/buildGAZLCmd.sh` or `.bat` to compile a beta build of `GAZLCmd` for the
+unit tests and then produce the release binary. `tools/BuildImpala.sh` or `.bat`
+copies all Impala sources to `output/impala`, rebuilds the compiler from the
+`impala.ppeg` grammar and runs the demo using the freshly built tools. The
+release executables for `GAZLCmd` and `PikaCmd` end up in `output/` alongside
+the Impala files. The Impala test suite is executed automatically at the end of
+the build.
 
 - On Unix or macOS run `./build.sh`.
 - On Windows run `build.cmd`.
@@ -23,8 +24,8 @@ The build script runs this demo once automatically. You can run it again
 manually with:
 
 ```sh
-cd impala
-../tools/PikaCmd/PikaCmd impala.pika run ImpalaDemo.impala
+cd output/impala
+./PikaCmd impala.pika run ImpalaDemo.impala
 ```
 
 ## Running the test suite
@@ -32,8 +33,8 @@ cd impala
 Run the Impala test suite using `PikaCmd`:
 
 ```sh
-cd impala
-../tools/PikaCmd/PikaCmd runTests.pika
+cd output/impala
+./PikaCmd runTests.pika
 ```
 
 When set up correctly the suite reports `Total errors: 0 / 53`.

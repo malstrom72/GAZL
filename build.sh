@@ -4,16 +4,15 @@ set -e
 mkdir -p output
 
 # Build and test GAZLCmd beta
-./tools/BuildCpp.sh beta native output/GAZLCmdBeta -I. GAZLCmd/GAZLCmd.cpp src/GAZL.cpp
+(cd GAZLCmd && ./buildGAZLCmd.sh beta)
 ./output/GAZLCmdBeta
 
-# Build Impala (release tools and demo)
+# Build GAZLCmd release
+(cd GAZLCmd && ./buildGAZLCmd.sh release)
+
+# Build Impala and run demo
 (cd tools && ./BuildImpala.sh)
 
-# Copy release binary to output directory
-cp tools/GAZLCmd output/GAZLCmd
-
 # Run Impala tests
-(cd impala && ./PikaCmd runTests.pika)
-
+(cd output/impala && ./PikaCmd runTests.pika)
 
