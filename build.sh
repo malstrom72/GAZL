@@ -3,20 +3,17 @@ set -e
 
 mkdir -p output
 
-	# Build PikaCmd (release native)
-	(cd tools/PikaCmd && ./BuildPikaCmd.sh)
+# Build and test GAZLCmd beta
+./tools/BuildCpp.sh beta native output/GAZLCmdBeta -I. GAZLCmd/GAZLCmd.cpp src/GAZL.cpp
+./output/GAZLCmdBeta
 
-	# Build and test GAZLCmd beta
-	./tools/BuildCpp.sh beta native output/GAZLCmdBeta -I. GAZLCmd/GAZLCmd.cpp src/GAZL.cpp
-	./output/GAZLCmdBeta
+# Build Impala (release tools and demo)
+(cd tools && ./BuildImpala.sh)
 
-	# Build GAZLCmd release
-./tools/BuildCpp.sh release native output/GAZLCmd -I. GAZLCmd/GAZLCmd.cpp src/GAZL.cpp
+# Copy release binary to output directory
+cp tools/GAZLCmd output/GAZLCmd
 
-# Copy release binary to the Impala folder
-cp output/GAZLCmd impala/GAZLCmd
-
-	# Run Impala tests
-	(cd impala && ../tools/PikaCmd/PikaCmd runTests.pika)
+# Run Impala tests
+(cd impala && ./PikaCmd runTests.pika)
 
 
