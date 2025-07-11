@@ -24,11 +24,11 @@ CALL BuildImpala.bat
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
-REM Run demo and tests from impala directory
-PUSHD impala
-..\output\PikaCmd impala.pika run ImpalaDemo.impala
+REM Run demo and tests from the output directory
+PUSHD output
+PikaCmd impala.pika run ImpalaDemo.impala
 IF ERRORLEVEL 1 EXIT /B 1
-..\output\PikaCmd runTests.pika
+PikaCmd runTests.pika
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 

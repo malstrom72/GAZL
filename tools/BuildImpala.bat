@@ -12,15 +12,18 @@ COPY /Y PikaCmd\PikaCmd* ..\output\ >NUL
 SET outdir=..\output
 IF NOT EXIST %outdir% MKDIR %outdir%
 
-COPY /Y ..\impala\impala.ppeg %outdir%\ >NUL
-COPY /Y ..\impala\impala.pika %outdir%\ >NUL
-COPY /Y ..\impala\initPPEG.pika %outdir%\ >NUL
-COPY /Y ..\impala\systools.pika %outdir%\ >NUL
-
-PUSHD %outdir%
-PikaCmd impala.pika rebuild
+PUSHD ..\impala
+..\output\PikaCmd impala.pika rebuild
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
+
+COPY /Y ..\impala\impala.pika %outdir%\ >NUL
+COPY /Y ..\impala\impalaCompiler.pika %outdir%\ >NUL
+COPY /Y ..\impala\initPPEG.pika %outdir%\ >NUL
+COPY /Y ..\impala\systools.pika %outdir%\ >NUL
+COPY /Y ..\impala\ImpalaDemo.impala %outdir%\ >NUL
+COPY /Y ..\impala\runTests.pika %outdir%\ >NUL
+XCOPY /E /I /Y ..\impala\tests %outdir%\tests >NUL
 EXIT /B 0
 
 
