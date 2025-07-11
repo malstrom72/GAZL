@@ -13,6 +13,6 @@ IF "%mode%"=="beta" (
 ) ELSE (
     SET out=..\output\GAZLCmd.exe
 )
-CALL BuildCpp.cmd %mode% x64 %out% -I.. ..\GAZLCmd\GAZLCmd.cpp ..\src\GAZL.cpp
+CALL BuildCpp.cmd %mode% x64 %out% -I.. GAZLCmd.cpp ..\src\GAZL.cpp
 IF EXIST %out% ATTRIB +x %out% >NUL 2>&1
 

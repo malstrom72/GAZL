@@ -13,6 +13,6 @@ else
     out="../output/GAZLCmd"
 fi
 
-./BuildCpp.sh "$mode" native "$out" -I.. ../GAZLCmd/GAZLCmd.cpp ../src/GAZL.cpp
+./BuildCpp.sh "$mode" native "$out" -I.. GAZLCmd.cpp ../src/GAZL.cpp
 chmod +x "$out" 2>/dev/null || true
 
