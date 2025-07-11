@@ -14,7 +14,7 @@ cp output/GAZLCmd impala/GAZLCmd 2>/dev/null || cp output/GAZLCmd.exe impala/GAZ
 # Build Impala
 (cd tools && ./BuildImpala.sh)
 
-# Run demo and tests from the output directory
-(cd output && ./PikaCmd impala.pika run ImpalaDemo.impala)
-(cd output && ./PikaCmd runTests.pika)
+# Run demo and tests from the impala directory
+(cd impala && ../tools/PikaCmd/PikaCmd impala.pika run ImpalaDemo.impala)
+(cd impala && ../tools/PikaCmd/PikaCmd runTests.pika)
 
