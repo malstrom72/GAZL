@@ -1,5 +1,19 @@
 # Repository Guidelines
 
+## Repository layout
+The project uses a consistent folder structure. Build output is written to `output/` and no source files live there. Useful locations:
+
+- `tools/` – scripts for building and maintaining the code and documentation.
+- `projects/` – Xcode and Visual Studio project files.
+- `docs/` – documentation.
+- `src/` – C++ source code for the library. The library is distributed as source rather than prebuilt binaries.
+- `tests/` – regression tests.
+- `examples/` – small sample programs.
+- `benchmarks/` – JavaScript performance tests.
+- `output/` – contains only build artifacts (and any runtime dependencies), no source files.
+
+Root-level `build.sh` and `build.cmd` (mirrored implementations) should build and test both the beta and release targets.
+
 ## Formatting rules
 
 - Tabs (width 4) for indentation.
