@@ -1,34 +1,30 @@
 #!/bin/bash
+set -e
+cd "${0%/*}"
 
-cd ${0%/*}
+# Build PikaCmd
+(cd PikaCmd && ./BuildPikaCmd.sh)
 
-cd PikaCmd
-chmod +x BuildPikaCmd.sh >/dev/null 2>&1
-./BuildPikaCmd.sh
-if [ $? -ne 0 ]; then
-	exit 1
+# Copy PikaCmd to output so Impala can run from there
+if [ -f PikaCmd/PikaCmd ]; then
+	cp PikaCmd/PikaCmd ../output/PikaCmd
+elif [ -f PikaCmd/PikaCmd.exe ]; then
+	cp PikaCmd/PikaCmd.exe ../output/PikaCmd.exe
 fi
-cd ..
 
-if [ -e ./GAZLCmd ]; then
-	chmod +x ./GAZLCmd >/dev/null 2>&1
+outdir=../output
+mkdir -p "$outdir"
+
+# Rebuild impala compiler using the local PikaCmd
+if [ -f ../output/PikaCmd ]; then
+	pkcmd=../output/PikaCmd
 else
-	chmod +x ./UpdateUnitTest.sh >/dev/null 2>&1
-	./UpdateUnitTest.sh
-	if [ $? -ne 0 ]; then
-		exit 1
-	fi
-	chmod +x ./BuildCpp.sh >/dev/null 2>&1
-	./BuildCpp.sh ./GAZLCmd ../GAZLCmd/GAZLCmd.cpp ../src/GAZL.cpp
-	if [ $? -ne 0 ]; then
-		exit 1
-	fi
+	pkcmd=../output/PikaCmd.exe
 fi
+(cd ../impala && "$pkcmd" impala.pika rebuild)
 
-cp -f ./GAZLCmd ../impala/ >/dev/null
-cp -f PikaCmd/PikaCmd ../impala/ >/dev/null
-cp -f PikaCmd/systools.pika ../impala/ >/dev/null
-cd ../impala/
-./PikaCmd impala.pika rebuild
-./PikaCmd impala.pika run ImpalaDemo.impala
-exit 0
+# Copy the compiler sources needed to run Impala
+	cp ../impala/impala.pika ../impala/impalaCompiler.pika \
+    ../impala/initPPEG.pika ../impala/systools.pika "$outdir"
+
+
