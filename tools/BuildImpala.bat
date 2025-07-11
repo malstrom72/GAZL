@@ -6,13 +6,16 @@ PUSHD PikaCmd
 CALL BuildPikaCmd
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
+IF EXIST PikaCmd\PikaCmd (COPY /Y PikaCmd\PikaCmd ..\output\PikaCmd >NUL)
+IF EXIST PikaCmd\PikaCmd.exe (COPY /Y PikaCmd\PikaCmd.exe ..\output\PikaCmd.exe >NUL)
 IF NOT EXIST ..\output MKDIR ..\output
 
 SET outdir=..\output
 IF NOT EXIST %outdir% MKDIR %outdir%
 
 PUSHD ..\impala
-..\tools\PikaCmd\PikaCmd impala.pika rebuild
+IF EXIST ..\output\PikaCmd (SET pkcmd=..\output\PikaCmd) ELSE (SET pkcmd=..\output\PikaCmd.exe)
+%pkcmd% impala.pika rebuild
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 

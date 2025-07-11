@@ -12,7 +12,9 @@ totalFiles = 0;
 dir(sourcesDir # "*.impala", >{
 	goldFilename = bake('tests{DIR_SLASH}golden{DIR_SLASH}{basenameOfPath($0) # ".gazl"}');
 	print("Compiling " # $0);
-        pkCmd = bake('{::run.root}../tools/PikaCmd/PikaCmd');
+       pkCmd = bake('{::run.root}../output/PikaCmd');
+       if (!exists(pkCmd)) pkCmd = bake('{::run.root}../output/PikaCmd.exe');
+       if (!exists(pkCmd)) pkCmd = bake('{::run.root}../tools/PikaCmd/PikaCmd');
         result = pipe(bake('{pkCmd} impala.pika compile {sourcesDir}{$0} - 1234'), false, @err, @rc);
 	if (rc === 2) throw("user aborted")
 	else if (rc !== 0) {
