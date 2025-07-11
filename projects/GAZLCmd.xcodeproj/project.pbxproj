@@ -37,7 +37,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		F7390AD723D68CEF006B7129 /* GAZLCmd.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = GAZLCmd.cpp; sourceTree = "<group>"; };
+               F7390AD723D68CEF006B7129 /* GAZLCmd.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ../tools/GAZLCmd.cpp; sourceTree = "<group>"; };
 		F7390AD923D68D04006B7129 /* GAZLCmd */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = GAZLCmd; sourceTree = BUILT_PRODUCTS_DIR; };
 		F7974F761158035B0021254B /* GAZL.cpp */ = {isa = PBXFileReference; fileEncoding = 5; lastKnownFileType = sourcecode.cpp.cpp; path = GAZL.cpp; sourceTree = "<group>"; };
 		F7974F771158035B0021254B /* GAZL.h */ = {isa = PBXFileReference; fileEncoding = 5; lastKnownFileType = sourcecode.c.h; path = GAZL.h; sourceTree = "<group>"; };
