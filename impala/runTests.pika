@@ -2,7 +2,7 @@
 
 include('systools.pika');
 include('stdlib.pika');
-// include('debug.pika');
+include('debug.pika');
 
 makegold = (coalesce(@$1) === 'makegold');
 sourcesDir = bake('tests{DIR_SLASH}sources{DIR_SLASH}');
@@ -12,14 +12,17 @@ totalFiles = 0;
 dir(sourcesDir # "*.impala", >{
 	goldFilename = bake('tests{DIR_SLASH}golden{DIR_SLASH}{basenameOfPath($0) # ".gazl"}');
 	print("Compiling " # $0);
-       pkCmd = bake('{::run.root}../output/PikaCmd');
-       if (!exists(pkCmd)) pkCmd = bake('{::run.root}../output/PikaCmd.exe');
-       if (!exists(pkCmd)) pkCmd = bake('{::run.root}../tools/PikaCmd/PikaCmd');
-        result = pipe(bake('{pkCmd} impala.pika compile {sourcesDir}{$0} - 1234'), false, @err, @rc);
+	// Find pikaCmd
+	pikaExe = (if (PLATFORM === 'WINDOWS') 'PikaCmd.exe' else 'PikaCmd');
+	pikaCmd = bake('{::run.root}..{DIR_SLASH}output{DIR_SLASH}{pikaExe}');
+	cmdLine = bake('{pikaCmd} impala.pika compile {sourcesDir}{$0} - 1234');
+	print(cmdLine);
+	result = pipe(cmdLine, false, @err, @rc);
 	if (rc === 2) throw("user aborted")
 	else if (rc !== 0) {
 		print("<<< Error compiling >>>");
 		print(result);
+		print(err);
 		++errCount;
 	} else if (makegold) {
 		save(goldFilename, result);
