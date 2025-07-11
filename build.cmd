@@ -4,7 +4,7 @@ SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 IF NOT EXIST output MKDIR output
 
 REM Build and test GAZLCmd beta
-PUSHD GAZLCmd
+PUSHD tools
 CALL buildGAZLCmd.bat beta
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
@@ -12,7 +12,7 @@ output\GAZLCmdBeta.exe
 IF ERRORLEVEL 1 EXIT /B 1
 
 REM Build GAZLCmd release
-PUSHD GAZLCmd
+PUSHD tools
 CALL buildGAZLCmd.bat release
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
@@ -24,7 +24,7 @@ IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
 REM Run Impala tests
-PUSHD output\impala
+PUSHD output
 PikaCmd runTests.pika
 IF ERRORLEVEL 1 EXIT /B 1
 POPD

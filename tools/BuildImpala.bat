@@ -7,15 +7,21 @@ CALL BuildPikaCmd
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
-IF NOT EXIST ..\output\impala MKDIR ..\output\impala
+SET outdir=..\output
+IF NOT EXIST %outdir% MKDIR %outdir%
 
-xcopy ..\impala ..\output\impala /E /Y >NUL
+COPY /Y ..\impala\impala.ppeg %outdir%\ >NUL
+COPY /Y ..\impala\impala.pika %outdir%\ >NUL
+COPY /Y ..\impala\initPPEG.pika %outdir%\ >NUL
+COPY /Y ..\impala\runTests.pika %outdir%\ >NUL
+COPY /Y ..\impala\systools.pika %outdir%\ >NUL
+COPY /Y ..\impala\ImpalaDemo.impala %outdir%\ >NUL
+xcopy ..\impala\tests %outdir%\tests /E /Y >NUL
 
-COPY /Y PikaCmd\PikaCmd.exe ..\output\impala\ >NUL
-COPY /Y PikaCmd\systools.pika ..\output\impala\ >NUL
-COPY /Y ..\output\GAZLCmd.exe ..\output\impala\GAZLCmd.exe >NUL
+COPY /Y PikaCmd\PikaCmd.exe %outdir%\ >NUL
+COPY /Y PikaCmd\systools.pika %outdir%\ >NUL
 
-PUSHD ..\output\impala
+PUSHD %outdir%
 PikaCmd impala.pika rebuild
 IF ERRORLEVEL 1 EXIT /B 1
 PikaCmd impala.pika run ImpalaDemo.impala

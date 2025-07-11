@@ -5,20 +5,23 @@ cd "${0%/*}"
 # Build PikaCmd
 (cd PikaCmd && ./BuildPikaCmd.sh)
 
-mkdir -p ../output/impala
+outdir=../output
+mkdir -p "$outdir"
 
-# Copy source scripts
-rsync -a --delete ../impala/ ../output/impala/
+# Copy required source files
+cp ../impala/impala.ppeg ../impala/impala.pika ../impala/initPPEG.pika "$outdir"
+cp ../impala/runTests.pika ../impala/systools.pika "$outdir"
+cp ../impala/ImpalaDemo.impala "$outdir"
+rsync -a --delete ../impala/tests "$outdir"/
 
 # Copy tools
-cp PikaCmd/PikaCmd ../output/impala/
-cp PikaCmd/systools.pika ../output/impala/
-cp ../output/GAZLCmd ../output/impala/GAZLCmd
+cp PikaCmd/PikaCmd "$outdir"/
+cp PikaCmd/systools.pika "$outdir"/
 
 # Build impala compiler
-(cd ../output/impala && ./PikaCmd impala.pika rebuild)
+(cd "$outdir" && ./PikaCmd impala.pika rebuild)
 
 # Run demo
-(cd ../output/impala && ./PikaCmd impala.pika run ImpalaDemo.impala)
+(cd "$outdir" && ./PikaCmd impala.pika run ImpalaDemo.impala)
 
 

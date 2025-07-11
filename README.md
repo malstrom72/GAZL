@@ -7,13 +7,13 @@ See [docs/Overview.md](docs/Overview.md) for an overview of GAZL.
 ## Building
 
 Cross platform build scripts are provided at the repository root. They use
-`GAZLCmd/buildGAZLCmd.sh` or `.bat` to compile a beta build of `GAZLCmd` for the
+`tools/buildGAZLCmd.sh` or `.bat` to compile a beta build of `GAZLCmd` for the
 unit tests and then produce the release binary. `tools/BuildImpala.sh` or `.bat`
-copies all Impala sources to `output/impala`, rebuilds the compiler from the
-`impala.ppeg` grammar and runs the demo using the freshly built tools. The
-release executables for `GAZLCmd` and `PikaCmd` end up in `output/` alongside
-the Impala files. The Impala test suite is executed automatically at the end of
-the build.
+copies the files required to run Impala into the `output/` directory, rebuilds
+the compiler from the `impala.ppeg` grammar and runs the demo using the freshly
+built tools. The release executables for `GAZLCmd` and `PikaCmd` end up in
+`output/` alongside the Impala scripts. The Impala test suite is executed
+automatically at the end of the build.
 
 - On Unix or macOS run `./build.sh`.
 - On Windows run `build.cmd`.
@@ -24,7 +24,7 @@ The build script runs this demo once automatically. You can run it again
 manually with:
 
 ```sh
-cd output/impala
+cd output
 ./PikaCmd impala.pika run ImpalaDemo.impala
 ```
 
@@ -33,7 +33,7 @@ cd output/impala
 Run the Impala test suite using `PikaCmd`:
 
 ```sh
-cd output/impala
+cd output
 ./PikaCmd runTests.pika
 ```
 
