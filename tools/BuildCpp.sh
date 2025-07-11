@@ -53,13 +53,25 @@ if [ $# -lt 2 ]; then
 	exit 1
 fi
 
-echo "Compiling $1 $CPP_TARGET $CPP_MODEL using $CPP_COMPILER"
-echo "$CPP_OPTIONS -o $@"
+output="$1"
+shift
 
-if ! $CPP_COMPILER -pipe $CPP_OPTIONS -o "$@" 2>&1; then
-	echo "Compilation of $1 failed"
+args=()
+for arg in "$@"; do
+	if [[ "$arg" == *.c ]]; then
+		args+=(-x c "$arg" -x none)
+	else
+		args+=("$arg")
+	fi
+done
+
+echo "Compiling $output $CPP_TARGET $CPP_MODEL using $CPP_COMPILER"
+echo "$CPP_OPTIONS -o $output ${args[*]}"
+
+if ! $CPP_COMPILER -pipe $CPP_OPTIONS -o "$output" "${args[@]}" 2>&1; then
+	echo "Compilation of $output failed"
 	exit 1
 else
-	echo "Compiled $1 successfully"
+	echo "Compiled $output successfully"
 	exit 0
 fi
