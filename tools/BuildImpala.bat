@@ -6,6 +6,8 @@ PUSHD PikaCmd
 CALL BuildPikaCmd
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
+IF NOT EXIST ..\output MKDIR ..\output
+COPY /Y PikaCmd\PikaCmd* ..\output\ >NUL
 
 SET outdir=..\output
 IF NOT EXIST %outdir% MKDIR %outdir%
@@ -16,7 +18,7 @@ COPY /Y ..\impala\initPPEG.pika %outdir%\ >NUL
 COPY /Y ..\impala\systools.pika %outdir%\ >NUL
 
 PUSHD %outdir%
-..\tools\PikaCmd\PikaCmd impala.pika rebuild
+PikaCmd impala.pika rebuild
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 EXIT /B 0

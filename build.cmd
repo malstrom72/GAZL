@@ -26,9 +26,9 @@ POPD
 
 REM Run demo and tests from impala directory
 PUSHD impala
-..\tools\PikaCmd\PikaCmd impala.pika run ImpalaDemo.impala
+..\output\PikaCmd impala.pika run ImpalaDemo.impala
 IF ERRORLEVEL 1 EXIT /B 1
-..\tools\PikaCmd\PikaCmd runTests.pika
+..\output\PikaCmd runTests.pika
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
