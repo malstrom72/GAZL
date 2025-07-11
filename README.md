@@ -10,11 +10,13 @@ Cross platform build scripts are provided at the repository root. They use
 `tools/buildGAZLCmd.sh` or `.bat` to compile a beta build of `GAZLCmd` for the
 unit tests and then produce the release binary. `tools/BuildImpala.sh` or `.bat`
 builds `PikaCmd`, copies the binary to `output/` and rebuilds the Impala
-compiler in place. The minimal compiler sources and the `PikaCmd` executable are
-copied to `output/` so Impala can run from that folder. The release `GAZLCmd`
-binary is also copied to the `impala/` folder for convenience. After building
-the compiler the demo and test suite are run using the `PikaCmd` found in the
-`output` directory.
+compiler in place. Only the files required to run the compiler
+(`impala.pika`, `impalaCompiler.pika`, `initPPEG.pika` and `systools.pika`)
+are copied next to the `PikaCmd` binary so Impala can be executed directly from
+the `output/` directory. The release `GAZLCmd` binary is also copied to the
+`impala/` folder for convenience. After building the compiler the unit tests are
+run and finally the demo is executed from the `output` directory to verify the
+minimal setup.
 
 - On Unix or macOS run `./build.sh`.
 - On Windows run `build.cmd`.
@@ -25,13 +27,13 @@ The build script runs this demo once automatically. You can run it again
 manually with:
 
 ```sh
-cd impala
-../output/PikaCmd impala.pika run ImpalaDemo.impala
+cd output
+./PikaCmd impala.pika run ../impala/ImpalaDemo.impala
 ```
 
 ## Running the test suite
 
-Run the Impala test suite using `PikaCmd`:
+Run the Impala test suite using the `PikaCmd` binary in `output/`:
 
 ```sh
 cd impala
@@ -43,8 +45,9 @@ When set up correctly the suite reports `Total errors: 0 / 53`.
 The tests compile each file in `tests/sources` and compare the output with the
 reference files in `tests/golden`.
 
-Running `./build.sh` or `build.cmd` also performs this step automatically after
-building the tools.
+Running `./build.sh` or `build.cmd` performs this step automatically after
+building the tools and finally runs the demo from the `output` folder to verify
+that the copied files are sufficient.
 
 ## AI-Assisted Content
 
