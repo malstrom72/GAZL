@@ -36,10 +36,10 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 
 You can manually rerun the demo after building:
 
-'''
+```
 cd output
 ./PikaCmd impala.pika run ../impala/ImpalaDemo.impala
-'''
+```
 
 This compiles and runs a small Impala program using the staged compiler.
 
@@ -47,16 +47,16 @@ This compiles and runs a small Impala program using the staged compiler.
 
 Run the full Impala test suite using the staged `PikaCmd` binary:
 
-'''
+```
 cd impala
 ../output/PikaCmd runTests.pika
-'''
+```
 
 When set up correctly, the suite reports:
 
-'''
+```
 Total errors: 0 / 53
-'''
+```
 
 The tests compile each file in `tests/sources` and compare the results with golden outputs in `tests/golden`.
 
