@@ -85,14 +85,14 @@ namespace GAZL {
 typedef char Char;
 typedef int Int;
 typedef unsigned int UInt;
-typedef unsigned int Pointer;																							///< Pointer must be unsigned and the same size as Int
+typedef unsigned int Pointer;																							// Pointer must be unsigned and the same size as Int
 typedef float Float;
-typedef Int Status;																										///< Run-time status code
+typedef Int Status;																										// Run-time status code
 
 const int VERSION = 1;
 const int WORD_SIZE = 32;
-const Pointer MEMORY_OFFSET = 0x12345678;																				///< All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
-const Pointer IP_OFFSET = 0x56789ABC;																					///< All instruction / function pointers in GAZL are offsetted by this amount (thus the address of the first instruction is not zero). This makes it easier to detect invalid function calls (such as performing a function call on a null-pointer).
+const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
+const Pointer IP_OFFSET = 0x56789ABC;																					// All instruction / function pointers in GAZL are offsetted by this amount (thus the address of the first instruction is not zero). This makes it easier to detect invalid function calls (such as performing a function call on a null-pointer).
 const Pointer NULL_POINTER = 0;
 
 union Value {
@@ -145,6 +145,12 @@ enum AssemblerError {
 };
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
+/**
+Exception thrown by the assembler.
+
+Contains the error code and an optional detail string
+referencing the offending source.
+**/
 
 class Exception : public std::exception {
 	public:		Exception(AssemblerError error);
@@ -161,6 +167,12 @@ inline Exception::Exception(AssemblerError error, const Char* b, const Char* e) 
 inline Exception::Exception(AssemblerError error, const std::string& detail) : error(error), detail(detail) { assert(0 <= error && error < ASSEMBLER_ERROR_COUNT); }
 inline Exception::~Exception() throw() { }																				// (GCC requires explicit destructor with one that has throw().)
 
+/**
+Symbol table shared between assembler and processor.
+
+Stores function and global definitions, constants and
+manages forward references during assembly.
+**/
 class Symbols {
 	friend class Assembler;
 	protected:	struct Symbol {
@@ -186,8 +198,8 @@ class Symbols {
 	public:		typedef SymbolMap::const_iterator Iterator;
 				
 	public:		void registerNative(const Char* name, Int index);
-	public:		Pointer findFunction(const Char* name);																	///< Returns NULL_POINTER if not found.
-	public:		Pointer findGlobal(const Char* name, UInt& size);														///< Returns NULL_POINTER if not found (in which case, \p size is left untouched).
+	public:		Pointer findFunction(const Char* name);																	/// Returns `NULL_POINTER` if not found.
+	public:		Pointer findGlobal(const Char* name, UInt& size);														/// Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
 	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value);
 	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps) const;
@@ -207,12 +219,18 @@ class Symbols {
 };
 
 struct Operator;
+/**
+Parses GAZL source code and emits executable data.
+
+Maintains symbol tables and compile-time variables while
+converting assembly text to a binary representation.
+**/
 class Assembler {
 	friend class Symbols;
-	public:		Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxMemorySize, Value* memoryBase, Symbols& globals);
-	public:		void newUnit(const Char* unitName);
-	public:		const Char* feed(const Char* line);	// TODO : should we have some higher-level feeder that takes all of a string an throws exception with line number?
-	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize);
+	public:		Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxMemorySize, Value* memoryBase, Symbols& globals); // Create an assembler for the provided buffers.
+	public:		void newUnit(const Char* unitName); // Begin assembling a new source unit.
+	public:		const Char* feed(const Char* line); // Assemble a single line and return pointer to the next.
+	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize); // Finish assembly and report memory usage.
 	
 	protected:	struct CompileTimeVar {
 					int types;
@@ -265,7 +283,7 @@ struct CallStackEntry {
 
 // Feel free to define your own run-time status codes above 0.
 enum {
-	OK = 0						// If returned from run() this means the virtual process has returned normally to the native caller.
+	OK = 0						// If returned from `run()` this means the virtual process has returned normally to the native caller.
 	, TIME_OUT = -1				// The clock cycle limit has been reached.
 	, BAD_PEEK = -2				// Trying to PEEK an address outside of memory (or GETL outside stack).
 	, BAD_POKE = -3				// Trying to POKE an address outside of memory (or SETL outside stack).
@@ -321,20 +339,26 @@ enum {
 */
 
 // Processor is copyable.
+/**
+Executes compiled bytecode using an internal stack-based VM.
+
+The processor owns memory and call stacks and provides
+helper functions for interacting with native code.
+**/
 class Processor {
-	public:		Processor();
+	public:		Processor(); // Default-initialized processor.
 	public:		Processor(UInt codeSize, const Instruction* code, UInt memorySize, Value* memory, UInt globalsSize
 						, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
 						, void* userData = 0);	// higher level routine, data stack is full space between globals and constants
 	public:		Processor(UInt codeSize, const Instruction* code, UInt memorySize, Value* memory, UInt rwMemorySize
 						, UInt dataStackOffset, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack
 						, NativeFunc const* natives, void* userData = 0);	// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack
-	public:		void resetTimeOut(Int clockCycles); ///< It is allowed to use resetTimeOut(0) from a native call to make the processor return immediately before executing it's next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
-	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; // If returning null pointer you should normally return ACCESS_VIOLATION
-	public:		Value* accessMemory(Pointer pointer, UInt count) const; // If returning null pointer you should normally return ACCESS_VIOLATION
-	public:		Value* accessParams(UInt count) const; // If returning null pointer you should normally return DATA_STACK_OVERFLOW
+	public:		void resetTimeOut(Int clockCycles); // It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing it's next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
+	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; // If returning null pointer you should normally return `ACCESS_VIOLATION`
+	public:		Value* accessMemory(Pointer pointer, UInt count) const; // If returning null pointer you should normally return `ACCESS_VIOLATION`
+	public:		Value* accessParams(UInt count) const; // If returning null pointer you should normally return `DATA_STACK_OVERFLOW`
 	// FIX : stack alloc function
-	public:		Status enterCall(Pointer functionPointer); ///< After enterCall, call run() (and on time out, repeatedly call run() until it returns OK). It is ok to call enterCall() at any time, current instruction pointer and stack is pushed and popped as expected which makes enterCall() double as a mean to issue interrupts.
+	public:		Status enterCall(Pointer functionPointer); // After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
 	public:		Status run();
 	public:		void* getUserData() const;
 	
