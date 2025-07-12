@@ -4,12 +4,13 @@ GAZL is a lightweight, typed virtual machine with a simple, readable assembly la
 
 ## Features
 
-- Typed stack-based **virtual machine** with a compact, readable assembly format  
-- **Impala**, a small C-like compiler implemented in [PikaScript](https://pikascript.com), targeting GAZL  
-- Easily extendable syntax, semantics, and runtime behavior  
-- Includes **unit tests**, compiler self-checks, and a working language demo  
-- Written in **standard C++**, with minimal dependencies  
-- **Cross-platform scripts** for building, testing, and demo execution
+- Lightweight typed **stack machine** with no registers and a uniform word size
+- **Human-readable assembly** stored as plain text with compile-time macros and immediate assembly
+- **Sandboxed** runtime supporting cooperative multitasking and full state suspension/resume
+- **Impala** C-like compiler in PikaScript demonstrates higher-level language support
+- Single header/source **C++** implementation with minimal dependencies
+- Includes extensive **unit tests**, self-checks and a working language demo
+- **Cross-platform** scripts for building, testing and running
 
 ## Prerequisites
 
