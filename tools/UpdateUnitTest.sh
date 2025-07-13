@@ -2,15 +2,15 @@
 
 cd ${0%/*}
 
-cd PikaCmd
+cd ../externals/PikaCmd
 chmod +x BuildPikaCmd.sh >/dev/null
 ./BuildPikaCmd.sh
 if [ $? -ne 0 ]; then
 	exit 1
 fi
-cd ..
+cd - >/dev/null
 
-PikaCmd/PikaCmd UpdateUnitTest.pika
+../externals/PikaCmd/PikaCmd UpdateUnitTest.pika
 if [ $? -ne 0 ]; then
 	echo Failed updating unit test
 	exit 1

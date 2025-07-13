@@ -2,12 +2,12 @@
 SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 CD /D %~dp0
 
-PUSHD PikaCmd
+PUSHD ..\externals\PikaCmd
 CALL BuildPikaCmd
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
-IF EXIST PikaCmd\PikaCmd (COPY /Y PikaCmd\PikaCmd ..\output\PikaCmd >NUL)
-IF EXIST PikaCmd\PikaCmd.exe (COPY /Y PikaCmd\PikaCmd.exe ..\output\PikaCmd.exe >NUL)
+IF EXIST ..\externals\PikaCmd\PikaCmd (COPY /Y ..\externals\PikaCmd\PikaCmd ..\output\PikaCmd >NUL)
+IF EXIST ..\externals\PikaCmd\PikaCmd.exe (COPY /Y ..\externals\PikaCmd\PikaCmd.exe ..\output\PikaCmd.exe >NUL)
 IF NOT EXIST ..\output MKDIR ..\output
 
 SET outdir=..\output

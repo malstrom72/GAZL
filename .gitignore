@@ -1,4 +1,4 @@
 .DS_Store
 /output
 impala/GAZLCmd
-tools/PikaCmd/PikaCmd
+externals/PikaCmd/PikaCmd

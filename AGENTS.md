@@ -24,7 +24,7 @@ The project uses a consistent folder structure. Build output is written to `outp
 Root-level `build.sh` and `build.cmd` (mirrored implementations) should build and test both the beta and release targets.
 
 ## PikaCmd directory
-The `tools/PikaCmd` folder is a separate project copied into this repository.
+The `externals/PikaCmd` folder is a separate project copied into this repository.
 Ignore it when applying formatting or running tests.
 
 ## Formatting rules
@@ -47,14 +47,37 @@ Ignore it when applying formatting or running tests.
 - Inside comment text, wrap any variable, parameter, class or function names in back-ticks, e.g. `blah` is the temporary buffer.
 
 ## Script portability
-All user-facing `.sh` and `.bat` files must work when launched from any directory.  
+All user-facing `.sh` and `.cmd` files must work when launched from any directory.
 They should start by changing to their own folder (or the repository root) so that
 relative paths resolve correctly.
 
-```bash
+`.sh` scripts must be runnable without requiring `chmod +x`; always invoke them with  
+`bash path/to/script.sh` (do **not** rely on the system-default `sh`).  
+Each script must start with a portable she-bang:
+
+```
+#!/usr/bin/env bash
+set -e -o pipefail -u
+```
+
+Every `.sh` script must have a corresponding `.cmd` implementation with identical behavior. Use `.cmd` files rather than `.bat`.
+
+```
 # example for a shell script
 cd "$(dirname "$0")"/..
+```
 
-REM example for a batch script
+REM example for a .cmd script  
+```
 CD /D "%~dp0\.."
+```
+
+For robust error handling, `.sh` scripts should begin as shown above, and `.cmd`
+scripts normally use a simple error check:
+
+```
+CALL buildAndTest.cmd %target% || GOTO error
+EXIT /b 0
+:error
+EXIT /b %ERRORLEVEL%
 ```
