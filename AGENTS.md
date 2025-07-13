@@ -1,5 +1,13 @@
 # Repository Guidelines
 
+To run the test suite use the helper script with up to three minutes allowed for execution:
+
+```bash
+timeout 180 ./build.sh
+```
+
+Always execute this command before committing changes to verify that the build and regression tests succeed.
+
 ## Repository layout
 The project uses a consistent folder structure. Build output is written to `output/` and no source files live there. Useful locations:
 
@@ -14,6 +22,10 @@ The project uses a consistent folder structure. Build output is written to `outp
 
 Root-level `build.sh` and `build.cmd` (mirrored implementations) should build and test both the beta and release targets.
 
+## PikaCmd directory
+The `tools/PikaCmd` folder is a separate project copied into this repository.
+Ignore it when applying formatting or running tests.
+
 ## Formatting rules
 
 - Tabs (width 4) for indentation.
@@ -22,7 +34,7 @@ Root-level `build.sh` and `build.cmd` (mirrored implementations) should build an
 - Line continuations should start with the operator and be indented two tabs from the original line.
 - `#if`/`#endif` blocks should appear one tab *left* of the current indentation level.
 
-### Script portability
+## Script portability
 All user-facing `.sh` and `.bat` files must work when launched from any directory.  
 They should start by changing to their own folder (or the repository root) so that
 relative paths resolve correctly.
