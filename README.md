@@ -27,11 +27,11 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 
 ## Helper Scripts
 
-- `build.sh` / `build.cmd` – build all tools and run the full test + demo sequence  
-- `tools/buildGAZLCmd.sh` / `.bat` – build just `GAZLCmd` (VM executable)  
-- `tools/BuildImpala.sh` / `.bat` – build `PikaCmd` and stage the compiler into `output/`  
-- `tools/runTests.sh` / `.bat` – run all unit tests  
-- `tools/runDemo.sh` / `.bat` – execute the Impala demo program  
+- `build.sh` / `build.cmd` – build all tools and run the full test + demo sequence
+- `tools/buildGAZLCmd.sh` / `.bat` – build just `GAZLCmd` (VM executable)
+- `tools/BuildImpala.sh` / `.bat` – build `PikaCmd` and stage the compiler into `output/`
+- Run the test suite manually: `cd impala && ../output/PikaCmd runTests.pika`
+- Re-run the demo manually: `cd output && ./PikaCmd impala.pika run ../impala/ImpalaDemo.impala`
 
 ## Running the Demo
 
