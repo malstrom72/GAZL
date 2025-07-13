@@ -7,7 +7,7 @@ IF "%~1"=="" (
     SET mode=%1
 )
 IF NOT EXIST ..\output MKDIR ..\output
-CALL UpdateUnitTest.bat
+CALL UpdateUnitTest.cmd
 IF "%mode%"=="beta" (
     SET out=..\output\GAZLCmdBeta.exe
 ) ELSE (
@@ -15,4 +15,3 @@ IF "%mode%"=="beta" (
 )
 CALL BuildCpp.cmd %mode% x64 %out% -I.. GAZLCmd.cpp ..\src\GAZL.cpp
 IF EXIST %out% ATTRIB +x %out% >NUL 2>&1
-

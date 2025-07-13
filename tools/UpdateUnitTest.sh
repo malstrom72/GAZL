@@ -1,10 +1,10 @@
-#!/bin/bash
-
-cd ${0%/*}
+#!/usr/bin/env bash
+set -e -o pipefail -u
+cd "$(dirname "$0")"
 
 cd ../externals/PikaCmd
-chmod +x BuildPikaCmd.sh >/dev/null
-./BuildPikaCmd.sh
+chmod +x BuildCpp.sh
+bash BuildPikaCmd.sh
 if [ $? -ne 0 ]; then
 	exit 1
 fi

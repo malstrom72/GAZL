@@ -6,7 +6,7 @@ IF NOT EXIST output MKDIR output
 
 REM Build and test GAZLCmd beta
 PUSHD tools
-CALL buildGAZLCmd.bat beta
+CALL buildGAZLCmd.cmd beta
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 output\GAZLCmdBeta.exe
@@ -14,14 +14,14 @@ IF ERRORLEVEL 1 EXIT /B 1
 
 REM Build GAZLCmd release
 PUSHD tools
-CALL buildGAZLCmd.bat release
+CALL buildGAZLCmd.cmd release
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 COPY /Y output\GAZLCmd.exe impala\GAZLCmd.exe >NUL
 
 REM Build Impala
 PUSHD tools
-CALL BuildImpala.bat
+CALL BuildImpala.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 

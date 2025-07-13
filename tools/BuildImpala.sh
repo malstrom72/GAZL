@@ -1,9 +1,10 @@
-#!/bin/bash
-set -e
-cd "${0%/*}"
+#!/usr/bin/env bash
+set -e -o pipefail -u
+cd "$(dirname "$0")"
 
 # Build PikaCmd
-(cd ../externals/PikaCmd && ./BuildPikaCmd.sh)
+# Ensure sub script is executable since it's invoked directly
+(cd ../externals/PikaCmd && chmod +x BuildCpp.sh && bash BuildPikaCmd.sh)
 
 # Copy PikaCmd to output so Impala can run from there
 if [ -f ../externals/PikaCmd/PikaCmd ]; then

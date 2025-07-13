@@ -21,15 +21,15 @@ You will need a standard C++ compiler.
 
 ## Build & Test
 
-Run `./build.sh` (or `build.cmd` on Windows) from the root. This builds the GAZLCmd and PikaCmd binaries, runs the Impala compiler tests, and executes the demo program from the `output/` folder.
+Run `bash build.sh` (or `build.cmd` on Windows) from the root. This builds the GAZLCmd and PikaCmd binaries, runs the Impala compiler tests, and executes the demo program from the `output/` folder.
 
 Both the **beta** and **release** targets are compiled with optimizations enabled. The **beta** build additionally has assertions turned on.
 
 ## Helper Scripts
 
 - `build.sh` / `build.cmd` – build all tools and run the full test + demo sequence
-- `tools/buildGAZLCmd.sh` / `.bat` – build just `GAZLCmd` (VM executable)
-- `tools/BuildImpala.sh` / `.bat` – build `PikaCmd` and stage the compiler into `output/`
+- `tools/buildGAZLCmd.sh` / `.cmd` – build just `GAZLCmd` (VM executable)
+- `tools/BuildImpala.sh` / `.cmd` – build `PikaCmd` and stage the compiler into `output/`
 - Run the test suite manually: `cd impala && ../output/PikaCmd runTests.pika`
 - Re-run the demo manually: `cd output && ./PikaCmd impala.pika run ../impala/ImpalaDemo.impala`
 
