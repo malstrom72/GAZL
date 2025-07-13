@@ -33,6 +33,17 @@ Ignore it when applying formatting or running tests.
 - Maximum line width is 120 characters. End-of-line comments may start at column 120.
 - Line continuations should start with the operator and be indented two tabs from the original line.
 - `#if`/`#endif` blocks should appear one tab *left* of the current indentation level.
+- Class comment – put a plain C-style block comment immediately above each class, *not* Doxygen.  
+	```
+	/**
+		One-sentence summary of what the class does.
+		Extra details if truly needed.
+	**/
+	```
+	* The two asterisks open/close the block; everything inside is indented with one tab.  
+- Small method comment – use a single end-of-line comment:  
+	void blahblah(int blah);	/// brief description of `blahblah`
+- Inside comment text, wrap any variable, parameter, class or function names in back-ticks, e.g. `blah` is the temporary buffer.
 
 ## Script portability
 All user-facing `.sh` and `.bat` files must work when launched from any directory.  
