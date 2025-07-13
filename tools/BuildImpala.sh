@@ -27,4 +27,7 @@ fi
 	cp ../impala/impala.pika ../impala/impalaCompiler.pika \
     ../impala/initPPEG.pika ../impala/systools.pika "$outdir"
 
+# Copy helper script
+cp ../impala/impala.cmd "$outdir"/ 2>/dev/null || true
+
 

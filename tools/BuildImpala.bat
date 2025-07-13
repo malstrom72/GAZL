@@ -23,6 +23,7 @@ COPY /Y ..\impala\impala.pika %outdir%\ >NUL
 COPY /Y ..\impala\impalaCompiler.pika %outdir%\ >NUL
 COPY /Y ..\impala\initPPEG.pika %outdir%\ >NUL
 COPY /Y ..\impala\systools.pika %outdir%\ >NUL
+COPY /Y ..\impala\impala.cmd %outdir%\ >NUL
 EXIT /B 0
 
 
