@@ -14,6 +14,7 @@ The project uses a consistent folder structure. Build output is written to `outp
 - `tools/` – scripts for building and maintaining the code and documentation.
 - `projects/` – Xcode and Visual Studio project files.
 - `docs/` – documentation.
+- `externals/` - projects and source code from other repositories (only touch this content when explicitly asked to).
 - `src/` – C++ source code for the library. The library is distributed as source rather than prebuilt binaries.
 - `tests/` – regression tests.
 - `examples/` – small sample programs.
