@@ -3,13 +3,13 @@ set -e
 cd "${0%/*}"
 
 # Build PikaCmd
-(cd PikaCmd && ./BuildPikaCmd.sh)
+(cd ../externals/PikaCmd && ./BuildPikaCmd.sh)
 
 # Copy PikaCmd to output so Impala can run from there
-if [ -f PikaCmd/PikaCmd ]; then
-	cp PikaCmd/PikaCmd ../output/PikaCmd
-elif [ -f PikaCmd/PikaCmd.exe ]; then
-	cp PikaCmd/PikaCmd.exe ../output/PikaCmd.exe
+if [ -f ../externals/PikaCmd/PikaCmd ]; then
+        cp ../externals/PikaCmd/PikaCmd ../output/PikaCmd
+elif [ -f ../externals/PikaCmd/PikaCmd.exe ]; then
+        cp ../externals/PikaCmd/PikaCmd.exe ../output/PikaCmd.exe
 fi
 
 outdir=../output
