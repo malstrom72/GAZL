@@ -63,7 +63,8 @@ The tests compile each file in `tests/sources` and compare the results with gold
 
 ## Documentation
 
-- [Overview](docs/Overview.md) – general architecture and goals  
+- [Overview](docs/Overview.md) – general architecture and goals
+- [Instruction Set](docs/InstructionSet.md) – extracted opcode descriptions
 
 More technical notes are embedded in the Impala source files.
 
