@@ -23,9 +23,10 @@ The project uses a consistent folder structure. Build output is written to `outp
 
 Root-level `build.sh` and `build.cmd` (mirrored implementations) should build and test both the beta and release targets.
 
-## PikaCmd directory
-The `externals/PikaCmd` folder is a separate project copied into this repository.
-Ignore it when applying formatting or running tests.
+### PikaCmd directory
+The `externals/PikaCmd` folder is a separate project copied into this repository. Ignore it when applying formatting or running tests.
+
+BuildCpp.sh and BuildCpp.cmd are copied from another repository. Only make changes to them if there is no other solution.
 
 ## Formatting rules
 
