@@ -202,9 +202,9 @@ locals int a, int b, int c, int d, int e, int ok
 , pointer p, array arr[100]
 , float f
 {
-	a = 1;										// FIX : NO, NOT ANY MORE : Assignment is a statement in Impala (unlike in C where you can
-	b = 12345;									// make assignments within any expression). This prevents faulty
-	c = 123;									// statements like `if (x = 1) {}` from compiling.
+	a = 1;                                      
+	b = 12345;
+	c = 123;
 	d = 1234;
 	e = 12;
 												
@@ -230,44 +230,46 @@ locals int a, int b, int c, int d, int e, int ok
 	printInt(ok);
 	printLF();
 
-a = b = 'xyz';
-a = b = 345 * 123;
-a = b = c + d;
-// c = arr[d * 31] = global futureArray[b * 101] = a = b = &global SOME_CONSTS[2] - &global SOME_CONSTS[0];
-// a = b = (int) arr[a*b] = *p = a;
-for (a = 1+5 to 10*23) ;
-for (a = global forgetMe to 10*23) ;
-for (p = global SOME_CONSTS to &global SOME_CONSTS[0]) { printInt(p); printLF(); }
-a = global forgetMe;
-f = 23.3;
-a = ftoi(f * (2.3 * 8.9));						// ftoi(f * 2.3 * 8.9) becomes less optimal gazl
-a = ftoi(2.3 * f);
-a = ftoi(2.3 * 8.9);
-f = itof(a) * (1.0 / itof(100));				// itof(a) * 1.0 / itof(100) becomes less optimal gazl
-f = (1.0 / itof(100)) * itof(a);				// itof(a) * 1.0 / itof(100) becomes less optimal gazl
-f = itof(a) / 100.0;
-printInt(a);printLF();
-printFloat(f);printLF();
+	a = b = 'xyz';
+	a = b = 345 * 123;
+	a = b = c + d;
+	// c = arr[d * 31] = global futureArray[b * 101] = a = b = &global SOME_CONSTS[2] - &global SOME_CONSTS[0];
+	// a = b = (int) arr[a*b] = *p = a;
+	for (a = 1+5 to 10*23) ;
+	for (a = global forgetMe to 10*23) ;
+	for (p = global SOME_CONSTS to &global SOME_CONSTS[0]) { printInt(p); printLF(); }
+	a = global forgetMe;
+	f = 23.3;
+	a = ftoi(f * (2.3 * 8.9));						// ftoi(f * 2.3 * 8.9) becomes less optimal gazl
+	a = ftoi(2.3 * f);
+	a = ftoi(2.3 * 8.9);
+	f = itof(a) * (1.0 / itof(100));				// itof(a) * 1.0 / itof(100) becomes less optimal gazl
+	f = (1.0 / itof(100)) * itof(a);				// itof(a) * 1.0 / itof(100) becomes less optimal gazl
+	f = itof(a) / 100.0;
+	printInt(a);
+	printLF();
+	printFloat(f);
+	printLF();
 
-global initedArray[2] = &global futureArray[4];
-if (1 == 1) {
-	assert((pointer)global initedArray[2] == &global futureArray[4]);
-} else {
-	assert(0 == 1);
-}
+	global initedArray[2] = &global futureArray[4];
+	if (1 == 1) {
+		assert((pointer)global initedArray[2] == &global futureArray[4]);
+	} else {
+		assert(0 == 1);
+	}
 
-global aFuncPointer = showoff;
-if (global aFuncPointer == nullfunc) global aFuncPointer();
+	global aFuncPointer = showoff;
+	if (global aFuncPointer == nullfunc) global aFuncPointer();
 
-/*
-copy   (  3    from    &global initedArray[1]   to   &global futureArray[0]   )   ;
-copy   (  3    from    &global initedArray[ e * 0 + 1 ]   to   &global futureArray[0]   )   ;
-copy   (  3    from    &global initedArray[ e * 0 + 1 ]   to   p   )   ;
-copy   (  3    from    (p = &global initedArray[ e * 0 + 1 ])   to   p   )   ;
-copy   (  3    from    (p = &global initedArray[ e * 0 + 1 ])   to   p+e   )   ;
-copy   (  3    from       &global initedArray[ 1 ]   to   p+e   )   ;
-copy   (  3    from       &global initedArray[ 1 ]   to   arr   )   ;
-*/
+	/*
+	copy   (  3    from    &global initedArray[1]   to   &global futureArray[0]   )   ;
+	copy   (  3    from    &global initedArray[ e * 0 + 1 ]   to   &global futureArray[0]   )   ;
+	copy   (  3    from    &global initedArray[ e * 0 + 1 ]   to   p   )   ;
+	copy   (  3    from    (p = &global initedArray[ e * 0 + 1 ])   to   p   )   ;
+	copy   (  3    from    (p = &global initedArray[ e * 0 + 1 ])   to   p+e   )   ;
+	copy   (  3    from       &global initedArray[ 1 ]   to   p+e   )   ;
+	copy   (  3    from       &global initedArray[ 1 ]   to   arr   )   ;
+	*/
 }
 
 global int defineMeLaterPlease;

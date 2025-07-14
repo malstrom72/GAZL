@@ -130,7 +130,7 @@ assert(i != 0);
 
 ### Expressions
 
-Assignments are statements and cannot appear inside other expressions. Only the plain `=` operator exists. Bitwise operators share the same precedence and `>>>` performs an unsigned right shift. Relational expressions yield a boolean result that can only control `if`, `while` and similar statements.
+Assignments are expressions; the `=` operator yields the assigned value so assignments may appear inside other expressions. Bitwise operators share the same precedence and `>>>` performs an unsigned right shift. Relational expressions yield a boolean result that can only control `if`, `while` and similar statements.
 
 
 ## The Impala tools
