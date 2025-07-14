@@ -25,46 +25,38 @@ Run `bash build.sh` (or `build.cmd` on Windows) from the root. This builds the G
 
 Both the **beta** and **release** targets are compiled with optimizations enabled. The **beta** build additionally has assertions turned on.
 
+## Architecture
+
+- `src/` – C++ VM implementation
+- `impala/` – Impala compiler and demo sources
+- `tools/` – build/maintenance scripts
+- `externals/` – third-party code such as `PikaCmd`
+
+### Getting Started
+
+1. Build everything from the repository root:
+   ```
+   bash build.sh
+   ```
+2. Run the demo from the `output/` directory:
+   ```
+   cd output
+   ./PikaCmd impala.pika run ../impala/ImpalaDemo.impala
+   ```
+3. See the [Using from C++](docs/Overview.md#using-from-c) notes in `docs/Overview.md` for integrating the VM in your own projects.
+
 ## Helper Scripts
 
 - `build.sh` / `build.cmd` – build all tools and run the full test + demo sequence
 - `tools/buildGAZLCmd.sh` / `.cmd` – build just `GAZLCmd` (VM executable)
 - `tools/BuildImpala.sh` / `.cmd` – build `PikaCmd` and stage the compiler into `output/`
-- Run the test suite manually: `cd impala && ../output/PikaCmd runTests.pika`
-- Re-run the demo manually: `cd output && ./PikaCmd impala.pika run ../impala/ImpalaDemo.impala`
-
-## Running the Demo
-
-You can manually rerun the demo after building:
-
-```
-cd output
-./PikaCmd impala.pika run ../impala/ImpalaDemo.impala
-```
-
-This compiles and runs a small Impala program using the staged compiler.
-
-## Running the Test Suite
-
-Run the full Impala test suite using the staged `PikaCmd` binary:
-
-```
-cd impala
-../output/PikaCmd runTests.pika
-```
-
-When set up correctly, the suite reports:
-
-```
-Total errors: 0 / 53
-```
-
-The tests compile each file in `tests/sources` and compare the results with golden outputs in `tests/golden`.
 
 ## Documentation
 
 - [Overview](docs/Overview.md) – general architecture and goals
 - [Impala Quick Start](docs/Impala.md) – basics of the language and toolchain
+- [Instruction Set](docs/InstructionSet.md) – extracted opcode descriptions
+- [Usage Example](docs/UsageExample.md) – compile and run a simple program
 
 More technical notes are embedded in the Impala source files.
 
