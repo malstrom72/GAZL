@@ -54,6 +54,7 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 ## Documentation
 
 - [Overview](docs/Overview.md) – general architecture and goals
+- [Instruction Set](docs/InstructionSet.md) – extracted opcode descriptions
 - [Usage Example](docs/UsageExample.md) – compile and run a simple program
 
 More technical notes are embedded in the Impala source files.

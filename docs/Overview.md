@@ -149,3 +149,4 @@ A complete list of compile‑time opcodes is found in [`src/UnitTest.gazl`](../s
 ## Further Reference
 
 The file `src/UnitTest.gazl` acts as a living specification of the instruction set. It contains comments for nearly every operation and illustrates how globals, constants and memory operations work. Consult it when implementing new code or interfacing with the VM.
+For a condensed view, see the [Instruction Set](InstructionSet.md) reference which extracts these comment blocks into a single document.
