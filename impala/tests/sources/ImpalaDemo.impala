@@ -202,9 +202,9 @@ locals int a, int b, int c, int d, int e, int ok
 , pointer p, array arr[100]
 , float f
 {
-	a = 1;										// FIX : NO, NOT ANY MORE : Assignment is a statement in Impala (unlike in C where you can
-	b = 12345;									// make assignments within any expression). This prevents faulty
-	c = 123;									// statements like `if (x = 1) {}` from compiling.
+	a = 1;                                                             // Assignments are expressions
+	b = 12345;                                                         // so chaining like `a = b = 0` works
+	c = 123;                                                           // assignments may appear in expressions
 	d = 1234;
 	e = 12;
 												
