@@ -2,6 +2,8 @@
 
 Impala is a small, imperative language that compiles to the GAZL virtual machine.
 This guide highlights the syntax and toolchain using the demo program as a reference.
+For a thorough walkthrough of the language see the extensive comments in
+`impala/ImpalaDemo.impala` which demonstrate most features in context.
 
 ## Syntax basics
 
@@ -42,6 +44,41 @@ compile-time values:
 const int SOME_COUNT = 4
 readonly array SOME_CONSTS[SOME_COUNT] = { 100, 200, 300, 400 }
 ```
+
+### Additional declarations
+
+Use `temporary` to mark globals that a host application does not need to
+serialize when saving VM state:
+
+```impala
+temporary int forgetMe
+```
+
+The `readonly` keyword may precede individual variables or arrays. Any attempt
+to modify them causes a runtime error.
+
+```impala
+readonly int IMMUTABLE = 42
+```
+
+`extern` introduces symbols defined elsewhere. Native functions supplied by the
+host are declared with `extern native`:
+
+```impala
+extern int defineMeLaterPlease
+extern array futureArray
+extern function thisFunctionInAnotherSource
+extern native abort
+```
+
+Some constants, such as `GAZL_WORD_SIZE`, are defined by the VM at load time and
+can be declared without a value:
+
+```impala
+const int GAZL_WORD_SIZE
+```
+
+Function pointers use the `funcptr` type and can be tested against `nullfunc`.
 
 ### Arrays
 
