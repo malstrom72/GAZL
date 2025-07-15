@@ -15,8 +15,8 @@ text = load(_docsFile);
 tokenize(text, >{
         line = trim($0);
         if (length(line) >= 3 && line{0} == '#' && line{1} == '#') {
-                name = trim(line{2:});
-                name = name{:span(name, ' \t')};
+               name = trim(line{2:});
+               name = name{:find(name, ' \t')};
                 if (name != '') set(@docs, name);
         }
 });
@@ -28,8 +28,13 @@ tokenize(text, >{
         if (line{0} == ';') {
                 s = trim(line{1:});
                 if (s{0} == '!') s = trim(s{1:});
-                name = s{:span(s, ' \t')};
-                if (name != '' && name === upper(name)) set(@source, name);
+               name = s{:find(s, ' \t')};
+               if (length(name) == 4
+                       && name{0} >= 'A' && name{0} <= 'Z'
+                       && name{1} >= 'A' && name{1} <= 'Z'
+                       && name{2} >= 'A' && name{2} <= 'Z'
+                       && ((name{3} >= 'A' && name{3} <= 'Z') || (name{3} >= 'a' && name{3} <= 'z')))
+                       set(@source, name);
         }
 });
 
