@@ -2,6 +2,10 @@
 
 GAZL is a lightweight, typed virtual machine with a simple, readable assembly language. It includes a small C-like compiler called **Impala**, located in the `impala/` directory, which targets the GAZL VM.
 
+> **Disclaimer**
+> While the GAZL VM is largely complete for its design goals, the Impala compiler is merely a minimum viable implementation.
+> It has been used extensively in Permut8 firmwares and other projects, but it lacks many modern language features.
+
 ## Features
 
 - Lightweight typed **stack machine** with no registers and a uniform word size
