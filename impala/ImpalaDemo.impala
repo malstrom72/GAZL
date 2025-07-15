@@ -200,7 +200,7 @@ extern native print;
 
 function showoffMessage()
 {
-       print("Called via function pointer!\n");
+    print("Called via function pointer!\n");
 }
 
 function showoff()
@@ -257,37 +257,36 @@ locals int a, int b, int c, int d, int e, int ok
 	printFloat(f);
 	printLF();
 
-       global initedArray[2] = &global futureArray[4];
-       assert((pointer)global initedArray[2] == &global futureArray[4]);
+	global initedArray[2] = &global futureArray[4];
+	assert((pointer)global initedArray[2] == &global futureArray[4]);
 
-       // Demonstrate while and do..while loops
-       while (a < 5) {
-               a = a + 1;
-       }
-       do {
-               a = a - 1;
-       } while (a > 3);
+	// Demonstrate while and do..while loops
+	while (a < 5) {
+		a = a + 1;
+	}
+	do {
+		a = a - 1;
+	} while (a > 3);
 
-       // Unconditional loop with a goto label
-       loop {
-               a = a + 1;
-               if (a == 5) goto done;
-       }
+	// Unconditional loop with a goto label
+	loop {
+			a = a + 1;
+			if (a == 5) goto done;
+	}
 done:
 
-       // Switch statement example. Values outside the range invoke the default case.
-       a = 7;                                                             // Triggers the default case
-       switch (a == 4 to 6) {
-               case 4: print("four\n");
-               case 5: print("five\n");
-               default: print("other\n");
-       }
+	// Switch statement example
+	switch (a == 4 to 6) {
+		case 4: print("four\n");
+		case 5: print("five\n");
+		default: print("other\n");
+	}
 
-       copy(3 from &global initedArray[1] to arr);
-       assert((int) arr[2] == (int) global initedArray[3]);
+	copy(3 from &global initedArray[1] to arr);
+	assert((int) arr[2] == (int) global initedArray[3]);
 
-       global aFuncPointer = showoffMessage;
-       if (global aFuncPointer != nullfunc) global aFuncPointer();
+	global aFuncPointer = showoffMessage;
+	if (global aFuncPointer != nullfunc) global aFuncPointer();
 }
 
 global int defineMeLaterPlease;
