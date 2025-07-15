@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  windows-msvc:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: ilammy/msvc-dev-cmd@v1        # sets up cl.exe for VS 2022 x64
+    - name: Build & test
+      run: .\build.cmd                    # your script handles everything
+
+  macos-clang:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build & test
+      run: |
+        chmod +x ./build.sh               # ensure it is executable
+        ./build.sh
