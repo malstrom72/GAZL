@@ -23,3 +23,12 @@ jobs:
       run: |
         chmod +x ./build.sh               # ensure it is executable
         ./build.sh
+        
+  linux-gcc:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build & test
+      run: |
+        chmod +x ./build.sh
+        ./build.sh
