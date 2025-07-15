@@ -74,10 +74,45 @@ with DAT directives. You may not define more data items than `*size`, but you ma
 zeroed). Data in a constant section is placed in a write-protected segment of the run-time memory. See consts
 declarations in top of this file for examples.
 
+## DATA
+- `#const #const #const ...`
+
+Define several constant values of mixed types in one statement.
+
 ## DATf
 - `#float`
 
+Float constant data item
 
+## DATi
+- `#int`
+
+Integer constant data item
+
+## DATp
+- `&address`
+
+Pointer constant data item
+
+## DATs
+- `string`
+
+String constant data item
+
+## DEFf
+- `#float`
+
+Define a compile‑time constant float
+
+## DEFi
+- `#int`
+
+Define a compile‑time constant integer
+
+## DEFp
+- `&address`
+
+Define a compile‑time constant pointer
 ## COPY
 - `&address(w)     &address(r)     *size`
 - `&address(w)     ptr             *size`
@@ -230,9 +265,31 @@ Branch on greater int
 
 Branch on greater pointer
 
+## IFDF
+- `&address        @label`
+- `#const          @label`
+- `^native         @label`
+
+Branch to `@label` if the compile-time symbol or address is defined
+
+## IFND
+- `&address        @label`
+- `#const          @label`
+- `^native         @label`
+
+Branch to `@label` if the compile-time symbol or address is not defined
+
 ## INPf
 
+Declare a local read-only float parameter
 
+## INPi
+
+Declare a local read-only int parameter
+
+## INPp
+
+Declare a local read-only pointer parameter
 ## IORi
 - `int(d)          #int            #int`
 - `int(d)          #int            int`
@@ -273,7 +330,15 @@ declarations must appear after a FUNC declaration but before any real instructio
 before INP, OUT and PARA declarations either.
 
 ## LOCf
+Declare a local float variable
 
+## LOCi
+
+Declare a local int variable
+
+## LOCp
+
+Declare a local pointer variable
 
 ## LSSf
 - `#float          #float          @label`
@@ -312,7 +377,25 @@ considered illegal and should generate a run-time error (or compile-time error i
 
 ## MOVE
 - `var(d)          var`
+Move any variable to another variable
 
+## MOVf
+- `float(d)        #float`
+- `float(d)        float`
+
+Move a float value
+
+## MOVi
+- `int(d)          #int`
+- `int(d)          int`
+
+Move an int value
+
+## MOVp
+- `ptr(d)          &address`
+- `ptr(d)          ptr`
+
+Move a pointer value
 
 ## MULf
 - `float(d)        #float          #float`
@@ -356,12 +439,21 @@ Branch on unequal pointers
 
 ## NOOP
 
-No operation The NOOP instruction does nothing and will not consume any CPU cycles (it is effectively removed during
-assembly). It can be used to define a branching label without associating it with a specific instruction (since every
-line in
+No operation. The NOOP instruction does nothing and will not consume any CPU cycles (it is effectively removed during
+assembly). It can be used to define a branching label without associating it with a specific instruction since every
+line in GAZL needs an opcode.
 
 ## OUTf
 
+Declare a local float output parameter
+
+## OUTi
+
+Declare a local int output parameter
+
+## OUTp
+
+Declare a local pointer output parameter
 
 ## PARA
 - `*size`
@@ -369,6 +461,15 @@ line in
 Declare a local parameter section / array (any type, input or output) `*size` defines the size of the section (in number
 of words). PARA declarations must appear after a FUNC declaration but before any real instruction. You would also
 normally place PARA before LOC declarations.
+
+## PEEK
+- `var(d)          &address(r)`
+- `var(d)          &address(r)     int`
+- `var(d)          ptr`
+- `var(d)          ptr             #int`
+- `var(d)          ptr             int`
+
+Read a value from memory with an optional integer offset
 
 ## POKE
 - `&address(w)     #const`

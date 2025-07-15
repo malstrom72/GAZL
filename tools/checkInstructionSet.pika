@@ -31,11 +31,11 @@ tokenize(text, >{
 	if (line{0} == ';') {
 		s = trim(line{1:});
 		if (s{0} == '!') s = trim(s{1:});
-		name = s{:find(s, ' \t')};
-		if (wildmatch(name, '[A-Z][A-Z][A-Z][A-Za-z]')) {
-			set(@source, name);
-		}
-	}
+                name = s{:find(s, ' \t')};
+                if (wildmatch(name, '[A-Z][A-Z][A-Z][A-Za-z]') && name != 'GAZL') {
+                        set(@source, name);
+                }
+        }
 });
 
 missing = '';
