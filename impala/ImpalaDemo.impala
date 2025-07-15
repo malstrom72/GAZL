@@ -275,7 +275,8 @@ locals int a, int b, int c, int d, int e, int ok
        }
 done:
 
-       // Switch statement example
+       // Switch statement example. Values outside the range invoke the default case.
+       a = 7;                                                             // Triggers the default case
        switch (a == 4 to 6) {
                case 4: print("four\n");
                case 5: print("five\n");

@@ -109,7 +109,8 @@ The `for` statement increments by one and stops before the upper bound. Other lo
 for (i = 0 to TEST_SIZE)
         mydata[i] = myrand()
 ```
-The `switch` statement tests a value within a range. If the expression is outside the given bounds the whole statement is skipped. Cases do not fall through, so no `break` is needed:
+The `switch` statement tests a value within a range. If the expression is outside the given bounds the
+**default** case is executed. Cases do not fall through, so no `break` is needed:
 
 ```impala
 switch (i == 0 to 10) {
