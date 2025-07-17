@@ -1,5 +1,5 @@
 /**
-	\file GAZL.h
+       GAZL.h
 	
 	GAZL is an efficient low-level virtual machine and assembler for real-time applications. GAZL has static typing and
 	all primitive types (int, floats and pointers) have the same word size (standard configuration is 32-bit). GAZL is
@@ -30,12 +30,6 @@
 		- No need for a compact persistent code format.
 		- Data types of different sizes and precisions are not necessary.
 		- No need to support high-level language concepts like dynamic memory management, exceptions etc
-	
-	\version
-	
-	Version 1.0
-	
-	\page Copyright
 
 	GAZL is released under the BSD 2-Clause License.
 
