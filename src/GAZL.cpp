@@ -269,31 +269,31 @@ enum Opcode {
 const int FIRST_COMPILE_TIME_OPCODE = MOVE_CC_;
 
 // FIX : sort in some meaningful order?
-const int TRANSIENT			= 0x00001;					///< FIX : name ?
-const int VAR_INT_R			= 0x00002 | TRANSIENT;		///< Readable int variable.
-const int VAR_INT_W			= 0x00004 | TRANSIENT;		///< Writable int variable.
-const int VAR_FLOAT_R		= 0x00008 | TRANSIENT;		///< Readable float variable.
-const int VAR_FLOAT_W		= 0x00010 | TRANSIENT;		///< Writable float variable.
-const int VAR_PTR_R			= 0x00020 | TRANSIENT;		///< Readable pointer variable.
-const int VAR_PTR_W			= 0x00040 | TRANSIENT;		///< Writable pointer variable.
+const int TRANSIENT			= 0x00001;					// FIX : name ?
+const int VAR_INT_R			= 0x00002 | TRANSIENT;		// Readable int variable.
+const int VAR_INT_W			= 0x00004 | TRANSIENT;		// Writable int variable.
+const int VAR_FLOAT_R		= 0x00008 | TRANSIENT;		// Readable float variable.
+const int VAR_FLOAT_W		= 0x00010 | TRANSIENT;		// Writable float variable.
+const int VAR_PTR_R			= 0x00020 | TRANSIENT;		// Readable pointer variable.
+const int VAR_PTR_W			= 0x00040 | TRANSIENT;		// Writable pointer variable.
 const int ANY_VAR_R			= VAR_INT_R | VAR_FLOAT_R | VAR_PTR_R;
 const int ANY_VAR_W			= VAR_INT_W | VAR_FLOAT_W | VAR_PTR_W;
 const int ANY_VAR			= ANY_VAR_R | ANY_VAR_W;
-const int CONST_INT_P		= 0x00080;					///< Constant positive (or zero) integer.
-const int CONST_INT_N		= 0x00100;					///< Constant negative integer.
+const int CONST_INT_P		= 0x00080;					// Constant positive (or zero) integer.
+const int CONST_INT_N		= 0x00100;					// Constant negative integer.
 const int CONST_INT			= CONST_INT_P | CONST_INT_N;
-const int CONST_FLOAT		= 0x00200;					///< Constant float.
-const int ADDRESS_R			= 0x00400;					///< Address to readable data.
-const int ADDRESS_W			= 0x00800;					///< Address to writable data.
+const int CONST_FLOAT		= 0x00200;					// Constant float.
+const int ADDRESS_R			= 0x00400;					// Address to readable data.
+const int ADDRESS_W			= 0x00800;					// Address to writable data.
 const int ADDRESS			= ADDRESS_R | ADDRESS_W;
-const int TEMPORARY			= 0x01000;					///< Declared as TEMP (which hints that memory need not be serialized)
-const int NULL_PTR			= 0x02000;					///< Null pointer (the only pointer constant).
+const int TEMPORARY			= 0x01000;					// Declared as TEMP (which hints that memory need not be serialized)
+const int NULL_PTR			= 0x02000;					// Null pointer (the only pointer constant).
 const int FUNC				= 0x04000;
-const int BRANCH			= 0x08000;					///< Constant positive (or zero) integer.
+const int BRANCH			= 0x08000;					// Constant positive (or zero) integer.
 const int NATIVE			= 0x10000;
 const int COMPILE_TIME		= 0x20000;
 const int FORWARD			= 0x40000;
-const int UNCHECKED_ADDRESS	= 0x80000;					///< Do *not* verify that the offset is < size of the symbol. (Some instructions shouldn't do this, like ADDp for example.)
+const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* verify that the offset is < size of the symbol. (Some instructions shouldn't do this, like ADDp for example.)
 const int FWD_ADDRESS_W		= ADDRESS_W | FORWARD;
 const int FWD_ADDRESS_R		= ADDRESS_R | FORWARD;
 const int FWD_BRANCH		= BRANCH | FORWARD;
@@ -308,12 +308,12 @@ const int ANY_VAR_FREE_R	= ANY_VAR_R | UNCHECKED_ADDRESS;
 const int ANY_VAR_FREE		= ANY_VAR | UNCHECKED_ADDRESS;
 const int KONST				= CONST_INT | CONST_FLOAT | ANY_FWD_FREE; // FIX : called KONST because windows defines a CONST macro, which messes up CONST if you force include windows.h
 
-const int SWAP_0_AND_1		= 0x01; ///< Used for commutative operations where operand 0 and operand 1 can be swapped in order to minimize the effective instruction set when operands have different addressing modes.
-const int SWAP_1_AND_2		= 0x02; ///< Used for commutative operations where operand 1 and operand 2 can be swapped in order to minimize the effective instruction set when operands have different addressing modes.
-const int YIELDS_CONST		= 0x04; ///< Result of instruction is a constant (e.g. all source operands are constants).
-const int YIELDS_GOTO		= 0x08; ///< Instruction can be resolved to either a GOTO or a NOOP (e.g. comparison of two constants).
-const int LOCAL_BOUNDS		= 0x10;	///< Operand 1 is a variable (local or transient), operand 2 is a size. Make sure frame bounds >= &variable + size.
-const int CHECK_DIV_BY_0	= 0x20; ///< Operand 1 is a constant used in a division or modulo operation, must check for division by zero. Can only be used if operand 2 is either a CONST_FLOAT or CONST_INT
+const int SWAP_0_AND_1		= 0x01; // Used for commutative operations where operand 0 and operand 1 can be swapped in order to minimize the effective instruction set when operands have different addressing modes.
+const int SWAP_1_AND_2		= 0x02; // Used for commutative operations where operand 1 and operand 2 can be swapped in order to minimize the effective instruction set when operands have different addressing modes.
+const int YIELDS_CONST		= 0x04; // Result of instruction is a constant (e.g. all source operands are constants).
+const int YIELDS_GOTO		= 0x08; // Instruction can be resolved to either a GOTO or a NOOP (e.g. comparison of two constants).
+const int LOCAL_BOUNDS		= 0x10;	// Operand 1 is a variable (local or transient), operand 2 is a size. Make sure frame bounds >= &variable + size.
+const int CHECK_DIV_BY_0	= 0x20; // Operand 1 is a constant used in a division or modulo operation, must check for division by zero. Can only be used if operand 2 is either a CONST_FLOAT or CONST_INT
 
 struct Operator {
 	char key[10];
