@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F7390AD823D68CEF006B7129 /* GAZLCmd.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F7390AD723D68CEF006B7129 /* GAZLCmd.cpp */; };
+		F7390AD823D68CEF006B7129 /* ../tools/GAZLCmd.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F7390AD723D68CEF006B7129 /* ../tools/GAZLCmd.cpp */; };
 		F7974F781158035B0021254B /* GAZL.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F7974F761158035B0021254B /* GAZL.cpp */; };
 		F7974F791158035B0021254B /* GAZL.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = F7974F771158035B0021254B /* GAZL.h */; };
 /* End PBXBuildFile section */
@@ -17,6 +17,8 @@
 			isa = PBXBuildRule;
 			compilerSpec = com.apple.compilers.gcc.4_0;
 			fileType = sourcecode.c;
+			inputFiles = (
+			);
 			isEditable = 1;
 			outputFiles = (
 			);
@@ -37,8 +39,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-               F7390AD723D68CEF006B7129 /* GAZLCmd.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ../tools/GAZLCmd.cpp; sourceTree = "<group>"; };
-		F7390AD923D68D04006B7129 /* GAZLCmd */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = GAZLCmd; sourceTree = BUILT_PRODUCTS_DIR; };
+		F7390AD723D68CEF006B7129 /* ../tools/GAZLCmd.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ../tools/GAZLCmd.cpp; sourceTree = "<group>"; };
+		F7390AD923D68D04006B7129 /* GAZLCmd */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; name = GAZLCmd; path = /Users/magnus/git/GAZL/projects/build/Mac/Debug/GAZLCmd; sourceTree = "<absolute>"; };
 		F7974F761158035B0021254B /* GAZL.cpp */ = {isa = PBXFileReference; fileEncoding = 5; lastKnownFileType = sourcecode.cpp.cpp; path = GAZL.cpp; sourceTree = "<group>"; };
 		F7974F771158035B0021254B /* GAZL.h */ = {isa = PBXFileReference; fileEncoding = 5; lastKnownFileType = sourcecode.c.h; path = GAZL.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -57,9 +59,8 @@
 		08FB7794FE84155DC02AAC07 /* SillyVM */ = {
 			isa = PBXGroup;
 			children = (
-				F7390AD723D68CEF006B7129 /* GAZLCmd.cpp */,
+				F7390AD723D68CEF006B7129 /* ../tools/GAZLCmd.cpp */,
 				F7974F751158035B0021254B /* src */,
-				F7390AD923D68D04006B7129 /* GAZLCmd */,
 			);
 			name = SillyVM;
 			sourceTree = "<group>";
@@ -128,7 +129,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F7390AD823D68CEF006B7129 /* GAZLCmd.cpp in Sources */,
+				F7390AD823D68CEF006B7129 /* ../tools/GAZLCmd.cpp in Sources */,
 				F7974F781158035B0021254B /* GAZL.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
