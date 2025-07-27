@@ -1,0 +1,2 @@
+#!/bin/bash
+if [[ -e $(which rlwrap) && -t 0 ]]; then rlwrap -A ${0%/*}/PikaCmd "$@"; else ${0%/*}/PikaCmd "$@"; fi

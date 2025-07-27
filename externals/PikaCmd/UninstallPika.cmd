@@ -8,7 +8,7 @@ IF "%~1"=="" (
 	ECHO.
 	ECHO To run as administrator and uninstall from C:\WINDOWS, type:
 	ECHO.
-	ECHO runas.exe /savecred /user:administrator "cmd /c cd %CD%&&UninstallPika.bat C:\WINDOWS"
+	ECHO runas.exe /savecred /user:administrator "cmd /c cd %CD%&&UninstallPika.cmd C:\WINDOWS"
 	EXIT /B 1
 )
 DEL %1\Pika.cmd

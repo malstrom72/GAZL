@@ -1,6 +1,6 @@
-#!/bin/sh
-
-set -e -u
+#!/usr/bin/env bash
+set -e -o pipefail -u
+cd "$(dirname "$0")"
 
 chmod +x ./pika
 if [ ! -d /usr/local ]; then

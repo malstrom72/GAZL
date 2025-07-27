@@ -1,9 +1,11 @@
-#!/bin/sh
+#!/usr/bin/env bash
+set -e -o pipefail -u
+cd "$(dirname "$0")"
 
 if [ -e ./PikaCmd ]; then
-	chmod +x ./PikaCmd >/dev/null 2>&1
+        :
 else
-	./BuildCpp.sh ./PikaCmd -DPLATFORM_STRING=UNIX PikaCmdAmalgam.cpp
+        bash ./BuildCpp.sh ./PikaCmd -DPLATFORM_STRING=UNIX PikaCmdAmalgam.cpp
 	if [ $? -ne 0 ]; then
 		exit 1
 	fi

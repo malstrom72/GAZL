@@ -8,7 +8,7 @@ IF "%~1"=="" (
 	ECHO.
 	ECHO To run as administrator and install into C:\WINDOWS, type:
 	ECHO.
-	ECHO runas.exe /savecred /user:administrator "cmd /c cd %CD%&&InstallPika.bat C:\WINDOWS"
+	ECHO runas.exe /savecred /user:administrator "cmd /c cd %CD%&&InstallPika.cmd C:\WINDOWS"
 	EXIT /B 1
 )
 COPY Pika.cmd %1\ || GOTO error
