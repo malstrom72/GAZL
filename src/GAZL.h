@@ -188,16 +188,16 @@ class Symbols {
 	public:		typedef SymbolMap::const_iterator Iterator;
 				
 	public:		void registerNative(const Char* name, Int index);
-	public:		Pointer findFunction(const Char* name);																	/// Returns `NULL_POINTER` if not found.
-	public:		Pointer findGlobal(const Char* name, UInt& size);														/// Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
+	public:		Pointer findFunction(const Char* name) const;															/// Returns `NULL_POINTER` if not found.
+	public:		Pointer findGlobal(const Char* name, UInt& size) const;													/// Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
-	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value);
+	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;	// FIX : why * isFloat here, when we use & at other places
 	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps) const;
 	public:		bool findNextGlobal(Iterator& iterator, bool includeTemps) const;
 	public:		const char* getGlobalInfo(const Iterator& iterator, bool& isTemp, Pointer& address, UInt& size) const;
 
 	// TODO : all these below could take std::string&, would be more consistent
-	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size);	
+	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) const;
 	protected:	void define(const std::string& name, int types, Value value, UInt size = 1);
 	protected:	void link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset = 0); // FIX : name?
 	protected:	void registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize, Value* storage, Int offset = 0);
@@ -336,7 +336,7 @@ The processor owns memory and call stacks and provides
 helper functions for interacting with native code.
 **/
 class Processor {
-	public:		Processor(); // Default-initialized processor.
+	public:		Processor(); // Default-initialized processor. It's illegal to call any methods on a default constructed processor.
 	public:		Processor(UInt codeSize, const Instruction* code, UInt memorySize, Value* memory, UInt globalsSize
 						, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
 						, void* userData = 0);	// higher level routine, data stack is full space between globals and constants
@@ -351,6 +351,7 @@ class Processor {
 	public:		Status enterCall(Pointer functionPointer); // After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
 	public:		Status run();
 	public:		void* getUserData() const;
+	public:		int getClockCyclesLeft() const;
 	
 	protected:	UInt codeSize;
 	protected:	const Instruction* codeBase;
@@ -370,6 +371,7 @@ class Processor {
 };
 
 inline void Processor::resetTimeOut(Int clockCycles) { clockCyclesLeft = clockCycles; }
+inline int Processor::getClockCyclesLeft() const { return clockCyclesLeft; }
 
 inline const Value* Processor::accessConstMemory(Pointer pointer, UInt count) const {
 	assert(memoryBase != 0);

@@ -907,6 +907,10 @@ const char* Exception::what() const throw() {
 }
 
 void Symbols::define(const std::string& name, int types, Value value, UInt size) {
+	const Char* nameBegin = name.data();
+	const Char* nameEnd = nameBegin + name.size();
+	if (!isValidIdentifier(nameBegin, nameEnd)) throw Exception(INVALID_IDENTIFIER, name);
+	
 	if ((types & CONST_INT_P) != 0 && value.i < 0) types &= ~CONST_INT_P;
 	if ((types & CONST_INT_N) != 0 && value.i >= 0) types &= ~CONST_INT_N;
 	SymbolMap::iterator it = symbols.find(name);
@@ -934,7 +938,7 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	}
 }
 
-bool Symbols::lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) {
+bool Symbols::lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) const {
 	assert(isValidIdentifier(nameBegin, nameEnd));
 	SymbolMap::const_iterator symbolIt = symbols.find(std::string(nameBegin, nameEnd));
 	if (symbolIt == symbols.end() || (symbolIt->second.types & acceptedTypes) == 0) return false;
@@ -985,18 +989,24 @@ void Symbols::registerNative(const Char* name, Int index) {
 	define(name, NATIVE, v, 1);
 }
 
-Pointer Symbols::findGlobal(const Char* name, UInt& size) {
+Pointer Symbols::findGlobal(const Char* name, UInt& size) const {
 	int types;
 	Value value;
-	if (!lookup(name, name + strlen(name), ADDRESS, types, value, size)) return NULL_POINTER;
+	const Char* nameBegin = name;
+	const Char* nameEnd = name + strlen(name);
+	if (!isValidIdentifier(nameBegin, nameEnd)) return NULL_POINTER;
+	if (!lookup(nameBegin, nameEnd, ADDRESS, types, value, size)) return NULL_POINTER;
 	return value.p;
 }
 
-Pointer Symbols::findFunction(const Char* name) {
+Pointer Symbols::findFunction(const Char* name) const {
 	int types;
 	Value value;
 	UInt size;
-	if (!lookup(name, name + strlen(name), FUNC, types, value, size)) return NULL_POINTER;
+	const Char* nameBegin = name;
+	const Char* nameEnd = name + strlen(name);
+	if (!isValidIdentifier(nameBegin, nameEnd)) return NULL_POINTER;
+	if (!lookup(nameBegin, nameEnd, FUNC, types, value, size)) return NULL_POINTER;
 	return value.p;
 }
 
@@ -1004,7 +1014,7 @@ void Symbols::defineConstant(const Char* name, bool asFloat, const Value& value)
 	define(name, asFloat ? CONST_FLOAT : CONST_INT, value);
 }
 
-bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) {
+bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) const {
 	int types;
 	UInt size;
 	if (!lookup(name, name + strlen(name), KONST, types, *value, size)) return false;
