@@ -27,6 +27,7 @@
 #include <fstream>
 #include <cmath>
 #include <cstdlib>
+#include <stdint.h>
 #include <string>
 #include "../src/GAZL.h"
 
