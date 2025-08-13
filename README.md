@@ -54,6 +54,28 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 - `build.sh` / `build.cmd` – build all tools and run the full test + demo sequence
 - `tools/buildGAZLCmd.sh` / `.cmd` – build just `GAZLCmd` (VM executable)
 - `tools/BuildImpala.sh` / `.cmd` – build `PikaCmd` and stage the compiler into `output/`
+- `tools/build_gazl_fuzz.sh` / `.cmd` – build libFuzzer harness for `GAZLCmd`
+
+## Building the fuzz target
+
+The `tools/build_gazl_fuzz.sh` script compiles `tools/GAZLCmd.cpp` using clang and libFuzzer:
+
+```bash
+bash tools/build_gazl_fuzz.sh
+```
+
+The resulting binary is placed in `output/GAZLFuzz` and can be run with a directory containing seed inputs:
+
+```bash
+./output/GAZLFuzz corpus/
+```
+
+On macOS the default clang from Xcode does not ship the libFuzzer runtime.
+Install the `llvm` package via Homebrew and invoke the script with that compiler:
+
+```bash
+CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/build_gazl_fuzz.sh
+```
 
 ## Documentation
 
