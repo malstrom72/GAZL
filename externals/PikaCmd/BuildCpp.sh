@@ -24,14 +24,25 @@ case "$CPP_TARGET" in
 	*) echo "Unrecognized CPP_TARGET: $CPP_TARGET"; exit 1 ;;
 esac
 
-# Setting compilation options based on the model
+# Setting compilation options based on the model and platform
+unameOut="$(uname -s)"
+macFlags() {
+	case "$1" in
+		x64) echo "-m64 -arch x86_64 -target x86_64-apple-macos" ;;
+		x86) echo "-m32 -arch i386 -target i386-apple-macos" ;;
+		arm64) echo "-m64 -arch arm64 -target arm64-apple-macos" ;;
+		fat) echo "-m64 -arch x86_64 -arch arm64" ;;
+	esac
+}
 case "$CPP_MODEL" in
-    x64) CPP_OPTIONS="-m64 -arch x86_64 -target x86_64-apple-macos $CPP_OPTIONS" ;;
-    x86) CPP_OPTIONS="-m32 -arch i386 -target i386-apple-macos $CPP_OPTIONS" ;;
-    arm64) CPP_OPTIONS="-m64 -arch arm64 -target arm64-apple-macos $CPP_OPTIONS" ;;
-    native) ;; # No additional flags needed for native compilation
-    fat) CPP_OPTIONS="-m64 -arch x86_64 -arch arm64 $CPP_OPTIONS" ;;
-    *) echo "Unrecognized CPP_MODEL: $CPP_MODEL"; exit 1 ;;
+	x64|x86|arm64|fat)
+		if [[ "$unameOut" == "Darwin" ]]; then
+			CPP_OPTIONS="$(macFlags "$CPP_MODEL") $CPP_OPTIONS"
+		else
+			[[ "$CPP_MODEL" == "x86" ]] && CPP_OPTIONS="-m32 $CPP_OPTIONS" || CPP_OPTIONS="-m64 $CPP_OPTIONS"
+		fi ;;
+	native) ;; # No flags
+	*) echo "Unrecognized CPP_MODEL: $CPP_MODEL"; exit 1 ;;
 esac
 
 CPP_OPTIONS="-fvisibility=hidden -fvisibility-inlines-hidden -Wno-trigraphs -Wreturn-type -Wunused-variable $CPP_OPTIONS"
@@ -42,13 +53,25 @@ if [ $# -lt 2 ]; then
 	exit 1
 fi
 
-echo "Compiling $1 $CPP_TARGET $CPP_MODEL using $CPP_COMPILER"
-echo "$CPP_OPTIONS -o $@"
+output="$1"
+shift
 
-if ! $CPP_COMPILER -pipe $CPP_OPTIONS -o "$@" 2>&1; then
-	echo "Compilation of $1 failed"
+args=()
+for arg in "$@"; do
+	if [[ "$arg" == *.c ]]; then
+		args+=(-x c "$arg" -x none)
+	else
+		args+=("$arg")
+	fi
+done
+
+echo "Compiling $output $CPP_TARGET $CPP_MODEL using $CPP_COMPILER"
+echo "$CPP_OPTIONS -o $output ${args[*]}"
+
+if ! $CPP_COMPILER -pipe $CPP_OPTIONS -o "$output" "${args[@]}" 2>&1; then
+	echo "Compilation of $output failed"
 	exit 1
 else
-	echo "Compiled $1 successfully"
+	echo "Compiled $output successfully"
 	exit 0
 fi
