@@ -5,7 +5,7 @@
 	
 	\version
 	
-	Version 0.95
+	Version 0.97
 	
 	\page Copyright
 	
@@ -57,10 +57,10 @@ namespace Pika {
 
 #if (PIKA_UNICODE)
 	#define STR(s) L##s
-	#define PIKA_SCRIPT_VERSION L"0.95"
+	#define PIKA_SCRIPT_VERSION L"0.97"
 #else
 	#define STR(x) x
-	#define PIKA_SCRIPT_VERSION "0.95"
+	#define PIKA_SCRIPT_VERSION "0.97"
 #endif
 
 typedef unsigned char uchar;
@@ -597,7 +597,7 @@ typedef Script<StdConfig> StdScript;
 	                                                                           
 	\version
 	
-	Version 0.95
+	Version 0.97
 	
 	\page Copyright
 	
@@ -661,6 +661,8 @@ template<typename T> inline T maxi(T a, T b) { return (a < b) ? b : a; }
 
 inline ushort ushortChar(char c) { return uchar(c); }
 inline ushort ushortChar(wchar_t c) { return ushort(c); }
+inline ulong ulongChar(char c) { return static_cast<uchar>(c); }
+inline ulong ulongChar(wchar_t c) { return static_cast<ulong>(c); }
 template<class C> std::basic_ostream<C>& xcout();
 template<class C> std::basic_istream<C>& xcin();
 template<> inline std::basic_ostream<char>& xcout() { return std::cout; }
@@ -796,10 +798,11 @@ template<class S> S unescape(typename S::const_iterator& p, const typename S::co
 		if (*p == '\\' && e - p > 1) {
 			d += S(b, p);
 			const CHAR* f = std::find(ESCAPE_CHARS, ESCAPE_CHARS + ESCAPE_CODE_COUNT, *++p);
-			long l;
+			ulong l;
 			if (f != ESCAPE_CHARS + ESCAPE_CODE_COUNT) { ++p; l = ESCAPE_CODES[f - ESCAPE_CHARS]; }
 			else if (*p == 'x') { b = ++p; l = hexToLong<S>(p, (e - p > 2 ? p + 2 : e)); }
 			else if (*p == 'u') { b = ++p; l = hexToLong<S>(p, (e - p > 4 ? p + 4 : e)); }
+			else if (*p == 'U') { b = ++p; l = hexToLong<S>(p, (e - p > 8 ? p + 8 : e)); }
 			else { b = p; l = stringToLong<S>(p, e); }
 			if (p == b) throw Exception<S>(STR("Invalid escape character"));
 			b = p;
@@ -828,7 +831,8 @@ template<class S> S escape(const S& s) {
 		const CHAR* f = std::find(ESCAPE_CODES, ESCAPE_CODES + ESCAPE_CODE_COUNT, *b);
 		if (f != ESCAPE_CODES + ESCAPE_CODE_COUNT) (d += '\\') += ESCAPE_CHARS[f - ESCAPE_CODES];
 		else if (uchar(*b) == ushortChar(*b)) (d += STR("\\x")) += intToString<S>(uchar(*b), 16, 2);
-		else (d += STR("\\u")) += intToString<S>(ushortChar(*b), 16, 4);
+		else if (ushortChar(*b) == ulongChar(*b)) (d += STR("\\u")) += intToString<S>(ushortChar(*b), 16, 4);
+		else (d += STR("\\U")) += intToString<S>(ulongChar(*b), 16, 8);
 		l = ++b;
 	}
 	return (d += '\"');
@@ -1686,7 +1690,7 @@ TMPL Script<CFG>::Variables::~Variables() { }
 
 	\version
 	
-	Version 0.95
+	Version 0.97
 	
 	\page Copyright
 	
@@ -2080,7 +2084,7 @@ bool unitTest();
 	
 	\version
 
-	Version 0.95
+	Version 0.97
 		
 	\page Copyright
 
@@ -2180,7 +2184,7 @@ template<class Super, unsigned int CACHE_SIZE = 11> class QuickVars : public Sup
 	
 	\version
 	
-	Version 0.95
+	Version 0.97
 	
 	\page Copyright
 	
@@ -2243,7 +2247,7 @@ template struct Script<StdConfig>;
 
 	\version
 	
-	Version 0.95
+	Version 0.97
 	
 	\page Copyright
 	
@@ -2335,7 +2339,7 @@ REGISTER_UNIT_TEST(QStrings::unitTest)
 #endif
 const char* BUILT_IN_DEBUG =
 	"/*\n"
-	"\tdebug.pika v0.95\n"
+	"\tdebug.pika v0.97\n"
 	"\n"
 	"\tPikaScript is released under the \"New Simplified BSD License\". http://www.opensource.org/licenses/bsd-license.php\n"
 	"\t\n"
@@ -2598,7 +2602,7 @@ const char* BUILT_IN_DEBUG =
 
 const char* BUILT_IN_HELP =
 	"/*\n"
-	"\thelp.pika v0.95\n"
+	"\thelp.pika v0.97\n"
 	"\n"
 	"\tPikaScript is released under the \"New Simplified BSD License\". http://www.opensource.org/licenses/bsd-license.php\n"
 	"\t\n"
@@ -2749,7 +2753,7 @@ const char* BUILT_IN_HELP =
 	"describe('#objects', 'newLocal',\t\t\"@object = newLocal(>constructor, [<arguments>, ...])\",\t\t\t\t\t\"Allocates and constructs on local heap.\", \"\", 'construct, gc, new');\n"
 	"describe('#objects', 'this',\t\t\t\"@object = this()\",\t\t\t\t\t\t\t\t\t\t\t\t\t\t\"Object called.\", \"\", 'method');\n"
 	"\n"
-	"describe('#strings', 'char',\t\t\"'character' = char(+code)\",\t\t\t\t\t\t\"Returns the character represented by +code as a string. +code is either an ASCII or Unicode value (depending on how PikaScript is configured). If +code is not a valid character code the exception 'Illegal character code: {code}' will be thrown.\\n\\nInverse: ordinal('character').\", \"char(65) === 'A'\\nchar(ordinal('\xe5')) === '\xe5'\", 'ordinal');\n"
+	"describe('#strings', 'char',\t\t\"'character' = char(+code)\",\t\t\t\t\t\t\"Returns the character represented by +code as a string. +code is either an ASCII or Unicode value (depending on how PikaScript is configured). If +code is not a valid character code the exception 'Illegal character code: {code}' will be thrown.\\n\\nInverse: ordinal('character').\", \"char(65) === 'A'\\nchar(ordinal('\xc3\xa5')) === '\xc3\xa5'\", 'ordinal');\n"
 	"describe('#strings', 'chop',\t\t\"'chopped' = chop('string', +count)\",\t\t\t\t\"Removes the last +count number of characters from 'string'. This function is equivalent to 'string'{:length('string') - +count}. If +count is zero or negative, the entire 'string' is returned. If +count is greater than the length of 'string', the empty string is returned. (There is no function for removing characters from the beginning of the string because you can easily use 'string'{+count:}.)\", \"chop('abcdefgh', 3) === 'abcde'\\nchop('abcdefgh', 42) === ''\", 'length, right, trim');\n"
 	"describe('#strings', 'bake',\t\t\"'concrete' = bake('abstract', ['escape' = \\\"{\\\"], ['return' = \\\"}\\\"])\",\t\"Processes the 'abstract' string by interpreting any text bracketed by 'escape' and 'return' as PikaScript expressions and injecting the results from evaluating those expressions. The default brackets are '{' and '}'. The code is evaluated in the caller's frame. Thus you can inject local variables like this: '{myvar}'.\", \"bake('The result of 3+7 is {3+7}') === 'The result of 3+7 is 10'\\nbake('Welcome back {username}. It has been {days} days since your last visit.')\", 'evaluate');\n"
 	"describe('#strings', 'escape',\t\t\"'escaped' = escape('raw')\",\t\t\t\t\t\t\"Depending on the contents of the source string 'raw' it is encoded either in single (') or double (\\\") quotes. If the string contains only printable ASCII chars (ASCII values between 32 and 126 inclusively) and no apostrophes ('), it is enclosed in single quotes with no further processing. Otherwise it is enclosed in double quotes (\\\") and any unprintable ASCII character, backslash (\\\\) or quotation mark (\\\") is encoded using C-style escape sequences (e.g. \\\"line1\\\\nline2\\\").\\n\\nYou can use unescape() to decode an escaped string.\", \"escape(\\\"trivial\\\") === \\\"'trivial'\\\"\\nescape(\\\"it's got an apostrophe\\\") === '\\\"it''s got an apostrophe\\\"'\\nescape(unescape('\\\"first line\\\\n\\\\xe2\\\\x00tail\\\"')) === '\\\"first line\\\\n\\\\xe2\\\\x00tail\\\"'\", 'unescape');\n"
@@ -2808,7 +2812,7 @@ const char* BUILT_IN_INTERACTIVE =
 	"#! /usr/local/bin/PikaCmd\n"
 	"\n"
 	"/*\n"
-	"\tinteractive.pika v0.95\n"
+	"\tinteractive.pika v0.97\n"
 	"\n"
 	"\tPikaScript is released under the \"New Simplified BSD License\". http://www.opensource.org/licenses/bsd-license.php\n"
 	"\t\n"
@@ -2928,7 +2932,7 @@ const char* BUILT_IN_INTERACTIVE =
 
 const char* BUILT_IN_STDLIB =
 	"/*\n"
-	"\tstdlib.pika v0.95\n"
+	"\tstdlib.pika v0.97\n"
 	"\n"
 	"\tPikaScript is released under the \"New Simplified BSD License\". http://www.opensource.org/licenses/bsd-license.php\n"
 	"\t\n"
@@ -3231,7 +3235,7 @@ const char* BUILT_IN_STDLIB =
 
 	\version
 
-	Version 0.95
+	Version 0.97
 	
 	\page Copyright
 
@@ -3272,6 +3276,7 @@ const char* BUILT_IN_STDLIB =
 #include <ctime>
 #include <iostream>
 #include <fstream>
+#include <cstdint>
 #if !defined(PikaScript_h)
 #include "../../src/PikaScript.h"
 #endif
