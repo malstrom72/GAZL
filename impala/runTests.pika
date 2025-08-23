@@ -5,12 +5,13 @@ include('stdlib.pika');
 include('debug.pika');
 
 makegold = (coalesce(@$1) === 'makegold');
-sourcesDir = bake('tests{DIR_SLASH}sources{DIR_SLASH}');
+testsDir = bake('..{DIR_SLASH}tests{DIR_SLASH}impala{DIR_SLASH}');
+sourcesDir = bake('{testsDir}sources{DIR_SLASH}');
 
 errCount = 0;
 totalFiles = 0;
 dir(sourcesDir # "*.impala", >{
-	goldFilename = bake('tests{DIR_SLASH}golden{DIR_SLASH}{basenameOfPath($0) # ".gazl"}');
+	goldFilename = bake('{testsDir}golden{DIR_SLASH}{basenameOfPath($0) # ".gazl"}');
 	print("Compiling " # $0);
 	// Find pikaCmd
 	pikaExe = (if (PLATFORM === 'WINDOWS') 'PikaCmd.exe' else 'PikaCmd');
@@ -32,8 +33,8 @@ dir(sourcesDir # "*.impala", >{
 		if (result !== expected) {
 			print("<<< Output differs! >>>");
 			print(result);
-			try(>makeDir(bake('tests{DIR_SLASH}erroneous{DIR_SLASH}')));
-			save(bake('tests{DIR_SLASH}erroneous{DIR_SLASH}{basenameOfPath($0) # ".gazl"}'), result);
+			try(>makeDir(bake('{testsDir}erroneous{DIR_SLASH}')));
+			save(bake('{testsDir}erroneous{DIR_SLASH}{basenameOfPath($0) # ".gazl"}'), result);
 			++errCount;
 		} else {
 			print("OK");
