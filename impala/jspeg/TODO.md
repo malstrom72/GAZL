@@ -6,7 +6,9 @@ See [PPEG.md](PPEG.md) for background on the original PikaScript-based implement
 
 ## Tasks
 - [ ] Consolidate the PikaScript `.ppeg` grammar into `jspeg.jspeg` and drop the PPEG-based version once parity is reached.
-	- [ ] Diff `jspeg.ppeg` and `jspeg.jspeg` to catalog missing constructs.
+        - [x] Diff `jspeg.ppeg` and `jspeg.jspeg` to catalog missing constructs.
+                - Confirmed both grammars share rule structure; remaining gaps center on action/tag semantics and runtime helpers rather than missing PEG forms.
+                - Documented that character class expansion and local-variable synthesis still mirror the slower PPEG behavior and require dedicated optimization work.
 	- [ ] Port capture and tag semantics so both grammars produce equivalent JavaScript.
 	- [x] Regenerate `jspegCompiler.js` from `jspeg.jspeg` and keep it under test.
 	- [ ] Add regression tests compiling both grammars and comparing parser behavior.
@@ -17,9 +19,10 @@ See [PPEG.md](PPEG.md) for background on the original PikaScript-based implement
 	- [ ] Precompute character classes and avoid per-parse `indexOf` calls.
 	- [ ] Generate local variables at compile time rather than creating anonymous functions during parsing.
 - [ ] Modernize generated compilers (`impalaCompiler.js`, `jspegCompiler.js`) and regenerate them from the current grammar sources.
-	- [ ] Convert compiler outputs to ES modules or modern syntax while retaining Node compatibility.
-	- [ ] Provide a Node script that rebuilds the compilers from `jspeg.jspeg` (self-hosting step).
-	- [ ] Verify regenerated compilers pass `jspegCompilerTests.js` and any new tests.
+        - [ ] Convert compiler outputs to ES modules or modern syntax while retaining Node compatibility.
+        - [x] Provide a Node script that rebuilds the compilers from `jspeg.jspeg` (self-hosting step).
+                - Added `updateJSPEG.js`, which regenerates both compilers or verifies they are current via `node updateJSPEG.js --check`.
+        - [ ] Verify regenerated compilers pass `jspegCompilerTests.js` and any new tests.
 - [x] Ensure `jspegCompilerTests.js` runs from the repository root.
 - [x] Expand JSPEG test coverage with an arithmetic grammar test.
 - [ ] Clean up legacy PPEG scripts (`ppeg.pika`, `initPPEG.pika`, `updatePPEG.pika`) and document the full JavaScript-based regeneration process.
