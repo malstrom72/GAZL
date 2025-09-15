@@ -9,15 +9,17 @@ See [PPEG.md](PPEG.md) for background on the original PikaScript-based implement
         - [x] Diff `jspeg.ppeg` and `jspeg.jspeg` to catalog missing constructs.
                 - Confirmed both grammars share rule structure; remaining gaps center on action/tag semantics and runtime helpers rather than missing PEG forms.
                 - Documented that character class expansion and local-variable synthesis still mirror the slower PPEG behavior and require dedicated optimization work.
-	- [ ] Port capture and tag semantics so both grammars produce equivalent JavaScript.
+        - [ ] Port capture and tag semantics so both grammars produce equivalent JavaScript.
+                - [x] Added `tagCaptureTest.jspeg` regression grammar to verify JSPEG handles nested tags, captures, and action-based aggregation.
 	- [x] Regenerate `jspegCompiler.js` from `jspeg.jspeg` and keep it under test.
 	- [ ] Add regression tests compiling both grammars and comparing parser behavior.
 	- [ ] Remove `jspeg.ppeg` and update build scripts once parity is verified.
 - [ ] Implement missing action and variable support in the JSPEG grammar; optimize character class handling and local variable generation.
-	- [ ] Translate `{}` action blocks into inline JavaScript, rewriting `$$` helpers and `$name` references.
-	- [ ] Support `name:expr` tagging and `name=expr` captures with proper scope handling.
-	- [ ] Precompute character classes and avoid per-parse `indexOf` calls.
-	- [ ] Generate local variables at compile time rather than creating anonymous functions during parsing.
+        - [ ] Translate `{}` action blocks into inline JavaScript, rewriting `$$` helpers and `$name` references.
+        - [ ] Support `name:expr` tagging and `name=expr` captures with proper scope handling.
+        - [ ] Precompute character classes and avoid per-parse `indexOf` calls.
+                - [ ] Fix escape handling so `[ \t\r\n]`-style classes compile without needing to expand to manual alternations.
+        - [ ] Generate local variables at compile time rather than creating anonymous functions during parsing.
 - [ ] Modernize generated compilers (`impalaCompiler.js`, `jspegCompiler.js`) and regenerate them from the current grammar sources.
         - [ ] Convert compiler outputs to ES modules or modern syntax while retaining Node compatibility.
         - [x] Provide a Node script that rebuilds the compilers from `jspeg.jspeg` (self-hosting step).

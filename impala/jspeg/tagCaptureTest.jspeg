@@ -1,0 +1,7 @@
+# Regression grammar exercising tag and capture semantics
+root        <-  _ { $$ = {}; } pair (_ ',' _ pair)* _ !.
+
+pair        <-  key:Identifier _ '=' _ value:Number { $$[$key] = $value }
+Identifier  <-  name=[a-zA-Z]+ { $$ = $name }
+Number      <-  digits=[0-9]+ { $$ = +$digits }
+_           <-  (' ' / '\t' / '\r' / '\n')*

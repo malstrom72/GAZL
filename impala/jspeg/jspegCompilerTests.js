@@ -31,8 +31,26 @@ const [, testGenerated] = compileJSPEG(testGrammar);
 eval('jspegTestParser=' + testGenerated);
 const [ok, value, idx] = jspegTestParser('1+2*3');
 if (!ok || value !== 7 || idx !== '1+2*3'.length) {
-	console.error('jspegTest.jspeg failed to parse expression correctly');
-	process.exit(1);
+        console.error('jspegTest.jspeg failed to parse expression correctly');
+        process.exit(1);
 }
 
 console.log('jspegTest.jspeg arithmetic parser works');
+
+const tagCaptureGrammar = fs.readFileSync(path.join(dir, 'tagCaptureTest.jspeg'), 'utf8');
+const [, tagCaptureGenerated] = compileJSPEG(tagCaptureGrammar);
+eval('tagCaptureParser=' + tagCaptureGenerated);
+const recordInput = 'foo=1,\nbar=23, qux=7';
+const [mapOk, mapValue, mapIdx] = tagCaptureParser(recordInput);
+if (!mapOk || mapIdx !== recordInput.length || mapValue.foo !== 1 || mapValue.bar !== 23 || mapValue.qux !== 7) {
+	console.error('tagCaptureTest.jspeg failed to build key/value map correctly');
+	process.exit(1);
+}
+
+const [badOk] = tagCaptureParser('foo=oops');
+if (badOk) {
+	console.error('tagCaptureTest.jspeg accepted invalid input');
+	process.exit(1);
+}
+
+console.log('tagCaptureTest.jspeg tag and capture parser works');
