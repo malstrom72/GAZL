@@ -1,4 +1,4 @@
-impalaCompiler=(function(_s) {
+var impalaCompiler = (function(_s) {
 {
     /**
      * map(target, k1, v1, k2, v2, …)
@@ -382,6 +382,10 @@ impalaCompiler=(function(_s) {
             returnBack(op.substr(op.length - 3));
         }
     };
+
+    /* Align with the original PPEG helper while avoiding the reserved
+       `return` identifier in generated JavaScript. */
+    $$parser["return"] = returnBack;
 
     /* --------------------------------------------------------- *
      *  Debug helpers & meta-record construction / destruction   *
@@ -1275,6 +1279,39 @@ impalaCompiler=(function(_s) {
 
     start = function () {
 
+        /* reset per-compilation state */
+        if (!stock) stock = { '%': [], '<': [] };
+        if (!counters) counters = { '%': 0, '<': 0 };
+        if (!metacode) metacode = [];
+        if (!symbols) symbols = {};
+        if (!strings) strings = { s: [], a: [] };
+
+        /* clear transient pools and counters */
+        var poolPercent = stock['%'] || (stock['%'] = []);
+        var poolAngle   = stock['<'] || (stock['<'] = []);
+        resetQueue(poolPercent);
+        resetQueue(poolAngle);
+        counters['%'] = 0;
+        counters['<'] = 0;
+
+        /* wipe accumulated meta-instructions */
+        metacode.length = 0;
+        labelCounter    = 0;
+
+        /* reset symbol tables */
+        symbols.locals   = {};
+        symbols.globals  = {};
+        symbols.functions = {};
+        symbols.defines  = {};
+
+        /* reset deferred string tables */
+        strings.s = [];
+        strings.s.rlookup = {};
+        strings.a = [];
+        strings.a.rlookup = {};
+
+        noForward = false;
+
         /* random-id seeding */
         if (typeof impalaRandomId !== 'undefined') {
             randomId = impalaRandomId;
@@ -1408,4 +1445,9 @@ function _($){return (function(){var _b=_i;return ((function(){while((function()
 function COMMENT($){return (function(){var _b=_i;return (_s.substr(_i,2)==="/*")&&(_i+=2,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_x=(_s.substr(_i,2)==="*/")&&(_i+=2,true);_i=_l;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s.substr(_i,2)==="*/")&&(_i+=2,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s.substr(_i,2)==="//")&&(_i+=2,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_x=(!!_s[_i]&&"\r\n".indexOf(_s[_i])>=0)&&(++_i,true);_i=_l;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 var _i=0,_im=0,_o={_:void 0},_b=root(_o);
 return [_b,_o._,(_b?_i:_im)];
-})
+});
+if (typeof module !== 'undefined' && module.exports) {
+	module.exports = impalaCompiler;
+	module.exports.impalaCompiler = impalaCompiler;
+	module.exports.default = impalaCompiler;
+}

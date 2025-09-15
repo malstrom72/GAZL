@@ -386,6 +386,10 @@
         }
     };
 
+    /* Align with the original PPEG helper while avoiding the reserved
+       `return` identifier in generated JavaScript. */
+    $$parser["return"] = $$parser.returnBack;
+
     /* --------------------------------------------------------- *
      *  Debug helpers & meta-record construction / destruction   *
      * --------------------------------------------------------- */
@@ -1277,6 +1281,39 @@
      * -------------------------------------------------------- */
 
     $$parser.start = function () {
+
+        /* reset per-compilation state */
+        if (!$$parser.stock) $$parser.stock = { '%': [], '<': [] };
+        if (!$$parser.counters) $$parser.counters = { '%': 0, '<': 0 };
+        if (!$$parser.metacode) $$parser.metacode = [];
+        if (!$$parser.symbols) $$parser.symbols = {};
+        if (!$$parser.strings) $$parser.strings = { s: [], a: [] };
+
+        /* clear transient pools and counters */
+        var poolPercent = $$parser.stock['%'] || ($$parser.stock['%'] = []);
+        var poolAngle   = $$parser.stock['<'] || ($$parser.stock['<'] = []);
+        resetQueue(poolPercent);
+        resetQueue(poolAngle);
+        $$parser.counters['%'] = 0;
+        $$parser.counters['<'] = 0;
+
+        /* wipe accumulated meta-instructions */
+        $$parser.metacode.length = 0;
+        $$parser.labelCounter    = 0;
+
+        /* reset symbol tables */
+        $$parser.symbols.locals   = {};
+        $$parser.symbols.globals  = {};
+        $$parser.symbols.functions = {};
+        $$parser.symbols.defines  = {};
+
+        /* reset deferred string tables */
+        $$parser.strings.s = [];
+        $$parser.strings.s.rlookup = {};
+        $$parser.strings.a = [];
+        $$parser.strings.a.rlookup = {};
+
+        $$parser.noForward = false;
 
         /* random-id seeding */
         if (typeof impalaRandomId !== 'undefined') {
