@@ -1,0 +1,12 @@
+include('systools.pika');
+include('stdlib.pika');
+include('initPPEG.pika');
+
+PPEG = function {
+        this = this();
+        [this].source = $0;
+        [this].parse = function { vargs(@source, , @dd, @rule); defaults(@dd, @o, @rule, 'root'); ppeg.parse(@[this()].grammar, source, dd, rule) };
+        [this].trace = function { vargs(@source, , @dd, @rule); defaults(@dd, @o, @rule, 'root'); ppeg.trace(g = @[this()].grammar); ppeg.parse(g, source, dd, rule); trace() };
+        [this].clone = function { construct($0, PPEG, [this()].source) };
+        ppeg.compile(@[this].grammar, [this].source)
+};
