@@ -5,6 +5,15 @@ const dir = __dirname;
 const jspeg = fs.readFileSync(path.join(dir, 'jspegCompiler.js'), 'utf8');
 eval(jspeg);
 
+const jspegGrammar = fs.readFileSync(path.join(dir, 'jspeg.jspeg'), 'utf8');
+const [, compilerGenerated] = compileJSPEG(jspegGrammar);
+if (('compileJSPEG=' + compilerGenerated).trim() !== jspeg.trim()) {
+	console.error('jspegCompiler.js is out of date with jspeg.jspeg');
+	process.exit(1);
+}
+
+console.log('jspegCompiler.js matches jspeg.jspeg output');
+
 const grammar = fs.readFileSync(path.join(dir, 'impala.jspeg'), 'utf8');
 const [, generated] = compileJSPEG(grammar);
 const existing = fs.readFileSync(path.join(dir, 'impalaCompiler.js'), 'utf8');

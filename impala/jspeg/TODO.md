@@ -8,6 +8,7 @@ See [PPEG.md](PPEG.md) for background on the original PikaScript-based implement
 - [ ] Consolidate the PikaScript `.ppeg` grammar into `jspeg.jspeg` and drop the PPEG-based version once parity is reached.
 	- [ ] Diff `jspeg.ppeg` and `jspeg.jspeg` to catalog missing constructs.
 	- [ ] Port capture and tag semantics so both grammars produce equivalent JavaScript.
+	- [x] Regenerate `jspegCompiler.js` from `jspeg.jspeg` and keep it under test.
 	- [ ] Add regression tests compiling both grammars and comparing parser behavior.
 	- [ ] Remove `jspeg.ppeg` and update build scripts once parity is verified.
 - [ ] Implement missing action and variable support in the JSPEG grammar; optimize character class handling and local variable generation.
