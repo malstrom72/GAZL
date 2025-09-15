@@ -1,0 +1,43 @@
+root			<-	_ OptExpr (';'_ OptExpr / !EOF FAIL)*
+OptExpr			<-	Assignment?
+ReqExpr			<-	Assignment / FAIL
+Assignment		<-	LogicalOr (('<<' / '>>' / [-+*/\\%#&^|])? '='_ Assignment)?
+LogicalOr		<-	LogicalAnd ('||'_ { print('|| {') } LogicalAnd { print('} ||') })*
+LogicalAnd		<-	BitOr ('&&'_ { print('&& {') } BitOr { print('} &&') })*
+BitOr			<-	BitXOr ('|' !'|' _ BitXOr { print('|') })*
+BitXOr			<-	BitAnd ('^'_ BitAnd { print('^') })*
+BitAnd			<-	Equality ('&' !'&' _ Equality { print('&') })*
+Equality		<-	Compare (o=('===' / '==' / '!==' / '!=') _ Compare { print(o) })*
+Compare			<-	Concat (o=('<=' / '<' !'<' / '>=' / '>' !'>') _ Concat { print(o) })*
+Concat			<-	Shift ('#' _ Shift { print('#') })*
+Shift			<-	AddSub (o=('<<' / '>>') _ AddSub { print(o) })*
+AddSub			<-	MulDiv (o=('+' !'+' / '-' !'-') _ MulDiv { print(o) })*
+MulDiv			<-	Prefix (o=('*' / '/' !'/' / '\\' / '%') _ Prefix { print(o) })*
+Prefix			<-	(('++' / '--' / [-!~@+]) _ Prefix) / Postfix
+Postfix			<-	Value (('++' / '--') _ / Member / Subscript / Substring / Call)*
+Value			<-	Indirection / Compound / For / Group / If / Literal / Identifier
+Compound		<-	'{'_ OptExpr (';'_ OptExpr / !'}' FAIL)* '}'_
+Indirection		<-	'['_ ReqExpr ']'_
+Member			<-	'.'_ SYMBOL_CHAR* _
+Group			<-	'('_ OptExpr ')'_
+Subscript		<-	'['_ ReqExpr ']'_
+Substring		<-	'{'_ OptExpr (':'_ OptExpr)? '}'_
+Call			<-	'('_ OptExpr (','_ OptExpr)* ')'_
+Native			<-	'<' (!'>' .)* '>' _
+For				<-	'for'_ '('_ OptExpr ';'_ OptExpr ';'_ OptExpr ')'_ OptExpr
+If				<-	'if'_ '('_ ReqExpr ')'_ ReqExpr ('else'_ ReqExpr)?
+Lambda			<-	'>'_ ReqExpr
+Function		<-	'function'_ Compound
+Literal			<-	l=(('false' / 'true' / 'void' / '+infinity' / '-infinity') _ / Number / String / Native / Lambda / Function) { print(l) }
+Number			<-	[-+]? ( '0x' HEX+ / ('0' / [1-9] DIGIT*) ('.' DIGIT+)? ([eE][-+]? DIGIT+)? ) _
+String			<-	DQString / SQString
+DQString		<-	'"' ( '\\' [\\"'abfnrtv] / '\\x' HEX HEX? / '\\u' HEX HEX? HEX? HEX? / '\\' [-+]? DIGIT+ / !'\\' !'"' . )* '"' _
+SQString		<-	"'" ( ("''" / !"'" .) )* "'" _
+Identifier		<-	i=(([a-zA-Z_$] / '::' / ('^'_)) SYMBOL_CHAR* _) { print(i) }
+COMMENT			<-	('/*' (!'*/' .)* '*/') / ("//" (!EOL .)* (EOL / EOF))
+EOL				<-	"\r" / "\n"
+EOF				<-	!.
+SYMBOL_CHAR		<-	[a-zA-Z_$0-9.]
+HEX				<-	[0-9a-fA-F]
+DIGIT			<-	[0-9]
+_				<-	([ \t\r\n] / COMMENT)*

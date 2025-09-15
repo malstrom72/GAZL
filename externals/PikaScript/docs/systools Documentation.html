@@ -1,0 +1,256 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+  <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+          <meta http-equiv="Content-Style-Type" content="text/css">
+                <title>systools Documentation</title>
+                <style type="text/css">
+                  table, th, td { border: 1px solid black; padding: 5px; border-collapse:collapse; }
+                  th { text-align: left }
+                  img { border: 0 none }
+                html {background:#faf8f3;}body {min-width:650px;max-width:960px;_width:650px;color:#000;margin:0;font-family:'Cambria',Georgia,'Times New Roman',Times,serif;height:100%;overflow:visible;padding:36px;}table {line-height:18px;margin-bottom:17px;border:1px solid #ccc;border-collapse:collapse;border-bottom-color:#aaa;border-radius:2px;box-shadow:0px 1px 0 #ddd;-moz-border-radius:2px;-moz-box-shadow:0px 1px 0 #ddd;-webkit-box-shadow:0px 1px 0 #ddd;}tr { background:#fff;vertical-align:top;}th,tr:nth-child(even) { background:#eee;}td {border:1px dotted #ccc;padding:2px 18px 4px 9px;font-size:0.9em;}th {background:#ddd;border:1px solid #bbb;color:#000;font-weight:normal;padding:4px 18px 4px 9px;text-align:left;font-size:0.85em;}tr:nth-child(1) th {background:-webkit-gradient(linear, 0% 0%, 0% 100%, from(#ccc), to(#bbb));background:-moz-linear-gradient(top, #ccc, #bbb);border:1px solid #aaa;border-bottom-color:#999;border-top-color:#bbb;box-shadow:0px 1px 1px #ccc;-moz-box-shadow:0px 1px 1px #ccc;-webkit-box-shadow:0px 1px 1px #ccc;color:#333;padding:8px 18px 8px 9px;text-shadow:0 1px #ddd;}tt {color:#5d5d5d;padding-right:4px;padding-left:4px;}pre {border:1px solid #d0d0d0;overflow:auto;color:#5f5f5f;padding:0.4em;}ul {list-style-type:disc;padding-left:14px;list-style-position:inside;}h1,h2,h3,h4,h5,h6 {font-weight:bold;margin-bottom:18px;}h1,h2 { line-height:36px; }h3,h4 { line-height:18px; }h1 { font-size:2.0em; }h2 { font-size:1.5em; }h3 { font-size:1.3em; }h4 { font-size:1.2em; }h5 { font-size:1.1em; }h6 { font-size:1.0em; }a { text-decoration:none; }a[href]:hover { text-decoration:underline; }a sup{ font-size:0.7em; }
+                </style>
+          </head>
+          <body>
+<h1><a name="systools">systools</a></h1>
+<h2><a name="What_is_systools?">What is systools?</a></h2>
+<p>systools.pika is a compact portable helper library distributed with PikaCmd. It bundles cross-platform file utilities together with an improved <tt>include()</tt> that tracks where scripts are running from. By loading this script alongside <tt>stdlib.pika</tt> you gain a toolbox for manipulating files, running <a href="#shell">shell</a> commands and resolving paths.</p>
+<h3><a name="Loading_the_helper">Loading the helper</a></h3>
+<p>Include <tt>systools.pika</tt> near the start of a script after <tt>stdlib.pika</tt>:</p>
+<pre>include('stdlib.pika');<br>include('systools.pika');<br></pre>
+<p>This makes the functions and constants described below available.</p>
+<h2><a name="Functions">Functions</a></h2>
+
+<ul>
+<li><a href="#include">include</a><br></li>
+<li><a href="#run">run</a><br></li>
+<li><a href="#appendDirSlash">appendDirSlash</a><br></li>
+<li><a href="#removeDirSlash">removeDirSlash</a><br></li>
+<li><a href="#dirOfPath">dirOfPath</a><br></li>
+<li><a href="#basenameOfPath">basenameOfPath</a><br></li>
+<li><a href="#filenameOfPath">filenameOfPath</a><br></li>
+<li><a href="#extensionOfPath">extensionOfPath</a><br></li>
+<li><a href="#splitPath">splitPath</a><br></li>
+<li><a href="#shell">shell</a><br></li>
+<li><a href="#pipe">pipe</a><br></li>
+<li><a href="#eraseFile">eraseFile</a><br></li>
+<li><a href="#moveFile">moveFile</a><br></li>
+<li><a href="#copyFile">copyFile</a><br></li>
+<li><a href="#makeDir">makeDir</a><br></li>
+<li><a href="#removeDir">removeDir</a><br></li>
+<li><a href="#renameFile">renameFile</a><br></li>
+<li><a href="#concatFiles">concatFiles</a><br></li>
+<li><a href="#fromNativePath">fromNativePath</a><br></li>
+<li><a href="#toNativePath">toNativePath</a><br></li>
+<li><a href="#quotePath">quotePath</a><br></li>
+<li><a href="#quoteWildcardPath">quoteWildcardPath</a><br></li>
+<li><a href="#currentDir">currentDir</a><br></li>
+<li><a href="#dir">dir</a><br></li>
+<li><a href="#fileSize">fileSize</a><br></li>
+<li><a href="#pathExists">pathExists</a><br></li>
+<li><a href="#isFileNewer">isFileNewer</a><br></li>
+<li><a href="#sleep">sleep</a><br></li>
+<li><a href="#randomFilename">randomFilename</a><br></li>
+<li><a href="#makeTempDir">makeTempDir</a><br></li>
+<li><a href="#wipeTempDir">wipeTempDir</a></li>
+</ul>
+<h2><a name="include">include</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>include('filename')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Improved 'include' that looks for include files in a list of search paths. Use <tt>include.addSearchPath()</tt> or the environment variable PIKAINCLUDE to define search paths. Include files will also be searched in the same directory as the currently executing script. The global <tt>::run.root</tt> contains this directory path.</p>
+<h2><a name="run">run</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>run('filename')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Loads and immediately executes the file. Before running, <tt>run.root</tt> is set to the directory of the script so that subsequent includes resolve paths relative to that location.</p>
+<h2><a name="appendDirSlash">appendDirSlash</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'pathSlash' = appendDirSlash('path')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Appends '/' to <tt>path</tt> if its last character is not already '/', '\\' or ':'.</p>
+<h2><a name="removeDirSlash">removeDirSlash</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'path' = removeDirSlash('pathSlash')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Removes the last character from <tt>pathSlash</tt> if it is '/', '\\' or ':'. Use this to climb a path upwards:</p>
+<pre>parent = dirOfPath(removeDirSlash('/abc/def/ghi'))<br></pre>
+<h2><a name="dirOfPath">dirOfPath</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'dir' = dirOfPath('path')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Extracts the directory of <tt>path</tt> including any trailing slash.</p>
+<h2><a name="basenameOfPath">basenameOfPath</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'name' = basenameOfPath('path')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Extracts the base name (file name without extension) of <tt>path</tt>.</p>
+<h2><a name="filenameOfPath">filenameOfPath</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'name' = filenameOfPath('path')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Extracts the file name including extension from <tt>path</tt>.</p>
+<h2><a name="extensionOfPath">extensionOfPath</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'.ext' = extensionOfPath('path')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Extracts the extension of <tt>path</tt>, including the leading '.'. Returns <tt>void</tt> if there is no extension.</p>
+<h2><a name="splitPath">splitPath</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>splitPath('path', @dir, @name, @extension)<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Splits a full path into directory, base name and extension and writes the values to the referenced variables.</p>
+<h2><a name="shell">shell</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>+rc = shell('command', [throwOnError = true])<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Executes a shell command and optionally throws an exception if the command exits with a non-zero return code.</p>
+<h2><a name="pipe">pipe</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'output' = pipe('command', [throwOnError = true], [@err], [@rc])<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Executes a <a href="#shell">shell</a> command, captures its output and returns it. An exception is thrown when the command exits with a non-zero return code. Optional <tt>@err</tt> and <tt>@rc</tt> receive stderr output and return code.</p>
+<h2><a name="eraseFile">eraseFile</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>eraseFile('path', [throwOnError = true])<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Erases file(s). <tt>path</tt> may contain wildcard characters.</p>
+<h2><a name="moveFile">moveFile</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>moveFile('fromPath', 'toPath', [throwOnError = true])<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Moves or renames file(s). <tt>fromPath</tt> can contain wildcard characters. <tt>toPath</tt> may or may not contain a file name.</p>
+<h2><a name="copyFile">copyFile</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>copyFile('fromPath', 'toPath', [throwOnError = true])<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Copies file(s). <tt>fromPath</tt> can contain wildcard characters. <tt>toPath</tt> may or may not contain a file name.</p>
+<h2><a name="makeDir">makeDir</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>makeDir('path', [throwOnError = true])<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Creates a directory. Throws if the directory already exists when <tt>throwOnError</tt> is true. Intermediate directories must exist.</p>
+<h2><a name="removeDir">removeDir</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>removeDir('path', [throwOnError = true])<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Removes a directory. Throws if the directory is not empty or does not exist when <tt>throwOnError</tt> is true.</p>
+<h2><a name="renameFile">renameFile</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>renameFile('path', 'newName', [throwOnError = true])<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Renames a file. <tt>newName</tt> should not contain a directory.</p>
+<h2><a name="concatFiles">concatFiles</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>concatFiles(['sources', ...], 'toPath')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Concatenates all source files and writes the result to <tt>toPath</tt>. <tt>sources</tt> may contain wildcards and <tt>toPath</tt> must not be one of them.</p>
+<h2><a name="fromNativePath">fromNativePath</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'path' = fromNativePath('nativePath')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Converts a path in native representation (using platform separators) to a normalized representation.</p>
+<h2><a name="toNativePath">toNativePath</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'nativePath' = toNativePath('path')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Converts a path in platform-normalized representation (always using forward slashes) to the native representation.</p>
+<h2><a name="quotePath">quotePath</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'quotedPath' = quotePath('path')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Like <tt>toNativePath()</tt> but also quotes the path or escapes special characters so that spaces and wildcards are treated as literals.</p>
+<h2><a name="quoteWildcardPath">quoteWildcardPath</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'quotedPath' = quoteWildcardPath('path')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Similar to <tt>quotePath()</tt> but leaves wildcard characters unescaped.</p>
+<h2><a name="currentDir">currentDir</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'dir' = currentDir()<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Returns the current working directory. There is no function to change it.</p>
+<h2><a name="dir">dir</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>dir('files'|'dir/', &gt;action, ['order' = void], [?descending = false])<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Lists files matching <tt>filesOrDir</tt> (which may contain wildcards) or all files in a directory and calls <tt>&gt;action</tt> for each file. <tt>order</tt> can be <tt>void</tt>, <tt>name</tt>, <tt>time</tt> or <tt>size</tt>. <tt>&gt;action</tt> receives the file name (without the parent directory). When a name ends with '/', it represents a subdirectory.</p>
+<h2><a name="fileSize">fileSize</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>+bytes = fileSize('path')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Returns file size in bytes.</p>
+<h2><a name="pathExists">pathExists</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>?found = pathExists('path')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Returns true if <tt>path</tt> exists. <tt>path</tt> may contain wildcard characters.</p>
+<h2><a name="isFileNewer">isFileNewer</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>?newer = isFileNewer('comparePath', 'toPath')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Returns true if <tt>comparePath</tt> is newer than <tt>toPath</tt> or if <tt>comparePath</tt> exists and <tt>toPath</tt> does not.</p>
+<h2><a name="sleep">sleep</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>sleep(+secs)<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Pauses execution for the given number of seconds. Timing accuracy may vary.</p>
+<h2><a name="randomFilename">randomFilename</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'filename' = randomFilename()<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Returns a pseudo-random file name of eight hexadecimal characters. There is no guarantee that such a file does not already exist.</p>
+<h2><a name="makeTempDir">makeTempDir</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>'dir' = makeTempDir()<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Creates a directory with a guaranteed unique pseudo-random name under <tt>TEMP_DIR</tt>.</p>
+<h2><a name="wipeTempDir">wipeTempDir</a></h2>
+<h3><a name="Syntax">Syntax</a></h3>
+<pre>wipeTempDir('dir')<br></pre>
+<h3><a name="Description">Description</a></h3>
+<p>Removes a temporary directory and all of its contents. Throws if <tt>dir</tt> is not under <tt>TEMP_DIR</tt>. It does not throw if the directory does not exist.</p>
+<h2><a name="Constants">Constants</a></h2>
+<p>Several platform-specific constants are provided:</p>
+<table>
+<tr>
+<th>name</th><th>unix</th><th>windows</th>
+</tr>
+<tr>
+<td>TEMP_DIR</td><td>$TMPDIR or <i>tmp</i></td><td>%TEMP% or \temp\</td>
+</tr>
+<tr>
+<td>DEV_NULL</td><td>/dev/null</td><td>NUL</td>
+</tr>
+<tr>
+<td>DIR_SLASH</td><td>/</td><td>\</td>
+</tr>
+<tr>
+<td>DIR_SLASHES</td><td>/</td><td>/\:</td>
+</tr>
+<tr>
+<td>DEL_COMMAND</td><td>rm -f</td><td>DEL /Q</td>
+</tr>
+<tr>
+<td>MOVE_COMMAND</td><td>mv</td><td>MOVE</td>
+</tr>
+<tr>
+<td>COPY_COMMAND</td><td>cp -fp</td><td>COPY /Y</td>
+</tr>
+<tr>
+<td>MKDIR_COMMAND</td><td>mkdir</td><td>MKDIR</td>
+</tr>
+<tr>
+<td>RMDIR_COMMAND</td><td>rmdir</td><td>RMDIR /Q</td>
+</tr>
+<tr>
+<td>WIPE_DIR_COMMAND</td><td>rm -Rf</td><td>RMDIR /S /Q</td>
+</tr>
+<tr>
+<td>DIRECT_ALL_TO_NULL</td><td>1&gt;/dev/null 2&gt;&amp;1</td><td>1&gt;NUL 2&gt;&amp;1</td>
+</tr>
+</table>
+<p>These constants help keep scripts portable when spawning <a href="#shell">shell</a> commands or manipulating paths.</p>
+
+        </body>
+</html>

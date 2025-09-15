@@ -1,0 +1,42 @@
+# diff from loose numbstruck:
+# 
+# . only valid characters for unquoted keys are [a-zA-Z0-9_] (and first must not be a digit)
+# . unquoted non-block values may not contain: { } " '# . no ctrl-z eof
+# . only allowed escape chars are: \x \u \l \n \r \t \' \" \\
+# . \x \u \l must have exact number of hex digits
+# . '=' is not accepted as key/value separator, only ':'
+# . ';' is not accepted as element separator, only ',' (or LF)
+# . unquoted elements in lists may not contain '=' or ':'
+# . no trailing ',' in key/value lists
+# . ':' after key must be on the same line also for quoted keys
+# . ',' or lf (or both) is required after each value
+
+root 				<-	arrayRoot / structRoot
+arrayRoot           <-  _lf valueList_? !.
+structRoot          <-  _lf keyValueList_? !.
+valueList_          <-	(arrayValue _ next_ / ',' _lf)* (arrayValue _lf)?
+keyValueList_       <-  keyValue_ (next_ keyValue_)* _lf
+next_ 				<-	([\r\n] (_lf ',')? / _lf ',') _lf
+keyValue_ 			<-	key (_ ':' _ structValue?)? _
+key                 <-  quotedString / identifier
+structValue         <-  array / struct / string / text
+arrayValue       	<-  array / struct / string / noAssignText
+array				<-	'{' _lf valueList_ '}'
+struct				<-	'{' _lf keyValueList_ '}'
+string 			    <-	quotedString
+text 				<-	(_ (![ \t,;{}"'\r\n] !'/*' !'//' .)+)+
+noAssignText		<-	(_ (![ \t,;{}"'=:\r\n] !'/*' !'//' .)+)+
+identifier			<-	[a-zA-Z0-9] [a-zA-Z0-9_]*
+quotedString        <-  dquotedString / squotedString
+dquotedString       <-  '"' ( escapeCode / !["\\\r\n] . )* '"'
+squotedString		<-	"'" ( escapeCode / !['\\\r\n] . )* "'"
+escapeCode          <-  '\\x' hex2 / '\\u' hex4 / '\\l' hex8 / '\\' [0-9]+ / '\\' [nrt'"\\]
+hex8                <-  hex4 hex4
+hex4                <-  hex2 hex2
+hex2                <-  hex hex
+hex                 <-  [0-9A-Fa-f]
+_lf                 <-  (comment / [ \t\r\n])*
+_              		<-  (comment / [ \t])*
+comment             <-  singleLineComment / multiLineComment
+singleLineComment   <-  '//' (![\r\n] .)*
+multiLineComment    <-  '/*' (multiLineComment / !'*/' .)* '*/'

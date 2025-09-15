@@ -1,0 +1,187 @@
+#! /usr/local/bin/PikaCmd
+
+include('stdlib.pika');
+include('systools.pika');
+include('debug.pika');
+
+DICTIONARY_PATH = run.root # '../docs/dictionary.txt';
+OUTPUT_PATH = run.root # '../docs/help/';
+include('help.pika');
+
+foreach(@::, >{
+	if (classify($2) === 'function' && !exists(@::help[$1])) {
+		print('Warning! No documentation exists for global function: ' # $1)
+	}
+});
+
+// variables: category, pages, details
+htmlTemplate =
+'<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"> 
+		<meta http-equiv="Content-Style-Type" content="text/css">
+		<title>PikaScript Library Reference: --{category}--</title>
+	</head>
+	<body>
+		<div class="navigation"><a href="index.html">toc</a></div>
+		<hr>
+		<h2>--{category}--</h2>
+			<p>--{pages}--</p>
+		<hr>
+			--{details}--
+		<div class="navigation"><a href="index.html">toc</a></div>
+	</body>
+</html>
+';
+
+// variables: toc
+tocTemplate =
+'<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"> 
+		<meta http-equiv="Content-Style-Type" content="text/css">
+		<title>PikaScript Library Reference</title>
+	</head>
+	<body>
+	<h2>PikaScript Library Reference</h2>
+		<ul class="toc">
+			--{toc}--
+		</ul>
+	</body>
+</html>
+';
+
+// variables: category, pages
+tocCategoryTemplate = '
+	<li>
+		<h4><a href="--{category}--.html">--{html(category)}--</a></h4>
+		<p>--{pages}--</p>
+	</li>
+';
+
+// variables: page, syntax, description, examples, seealso, native
+detailsTemplate = '
+<div>
+	<h3><a name="--{page}--">--{if (native) "&lt;"}----{page}----{if (native) "&gt;"}--</a></h3>
+	<h4>Syntax</h4>
+	<pre class="syntax">--{html(syntax)}--</pre>
+	<h4>Description</h4>
+	<div class="description"><p>--{html(description)}--</p></div>
+	--{if (examples !== '''') bake(''<h4>Examples</h4><pre class="examples">{html(examples)}</pre>'')}--
+	--{if (seealso !== '''') bake(''<h4>See Also</h4><p class="seealso">{seealso}</p>'')}--
+</div>
+<hr>
+';
+
+::html = function {
+	map(@xlate, ' ',' ' , '<','&lt;' , '>','&gt;' , '&','&amp;' , "\n",'<br>'
+			, "\t",'&nbsp;&nbsp;&nbsp;&nbsp;');
+	out = '';
+	for (src = $0; src !== '';) {
+		out #= src{:i = find(src, "<>&\n\t ")};
+		if ((src = src{i:}) !== '') {
+			c = src{0};
+			if (c === ' ' && (s = span(src, ' ')) > 1) {
+				out #= repeat('&nbsp;', s);
+				src = src{s:};
+			} else if (c === "\n" && (s = span(src, "\n")) > 1) {
+				out #= '</p><p>';
+				src = src{s:};
+			} else {
+				out #= xlate[c];
+				src = src{1:};
+			}
+		}
+	};
+	out
+};
+
+bakeDetails = function { args(@$0, @page, @syntax, @description, @examples, @seealso, @native); bake($0, '--{', '}--'); };
+bakeHtml = function { args(@$0, @category, @pages, @details); bake($0, '--{', '}--'); };
+bakeToc = function { args(@$0, @toc); bake($0, '--{', '}--'); };
+bakeTocCategory = function { args(@$0, @category, @pages); bake($0, '--{', '}--') };
+
+tocList = '';
+lastCategory = '';
+thesePages = '';
+
+saveCategory => {
+	if (lastCategory !== '') {
+		tocList #= bakeTocCategory(tocCategoryTemplate, lastCategory, thesePages);
+		save(OUTPUT_PATH # lastCategory # '.html', bakeHtml(htmlTemplate, lastCategory, thesePages, details));
+	};
+};
+
+alphas = 'abcdefghijklmnopqrstuvwxyz';
+
+spellCheck => {
+	for (src = lower($0); src !== '';) {
+		src = src{find(src, alphas):};
+		for (i = 0; {
+			i += span(src{i:}, alphas);
+			if (src{i} === '.' && span(src{i + 1}, alphas) == 1) { i += 2; true } else false
+		}; );
+		word = src{:i};
+		src = src{i:};
+		if (length(word) >= 2 && !exists(@dictionary[word])
+				&& upper(input('Add ' # escape(word) # ' to dictionary (yes)? '){0}) !== 'N') dictionary[word] = void;
+	}
+};
+
+loadDictionary => {
+	tokenize(load(DICTIONARY_PATH), >dictionary[$0] = void, ' ');
+};
+
+saveDictionary => {
+	dictString = '';
+	foreach(@dictionary, >dictString #= $1 # ' ');
+	save(DICTIONARY_PATH, dictString);
+};
+
+loadDictionary();
+foreach(@::help._categories, >{
+	i = find($1, '.');
+	thisPage = $1{(i + 1):};
+	thisCategory = $1{:i};
+	if (thisCategory{0} === '#') thisCategory = thisCategory{1:};
+	if (lastCategory !== thisCategory) {
+		saveCategory();
+		lastCategory = thisCategory;
+		thesePages = '';
+		details = '';
+	};
+	thesePages #= bake('--{if (thesePages !== '''') '', '' else ''''}--<a href="--{thisCategory}--.html#--{thisPage}--">--{html(thisPage)}--</a>', '--{', '}--');
+	h = @::help[thisPage];
+	seealso = '';
+	seealsos.n = 0;
+	tokenize([h].seealso, >append(@seealsos, $0), ',');
+	lastS = '';
+	for (i = 0; i < seealsos.n; ++i) {
+		s = trim(seealsos[i]);
+		if (s === thisPage) print("Warning! Self-reference: " # escape(s));
+		if (s < lastS) print("Warning! Unordered reference: " # escape(s));
+		lastS = s;
+		if (seealso !== '') seealso #= ', ';
+		if (exists(@::help[s].category)) {
+			c = ::help[s].category;
+			if (c{0} === '#') c = c{1:};
+			s = html(s);
+			seealso #= bake(if (c === thisCategory) '<a href="#--{s}--">--{s}--</a>'
+					else '<a href="--{c}--.html#--{s}--">--{s}--</a>', '--{', '}--');
+		} else {
+			print("Warning! Referencing undefined help page: " # escape(s));
+			seealso #= html(s);
+		};
+	};
+	spellCheck([h].description);
+	native = (exists('::' # thisPage) && classify(['::' # thisPage]) === 'native');
+	if (search([h].syntax, thisPage) >= length([h].syntax)) {
+		print('Warning! ' # escape(thisPage) # ' not found in syntax of ' # thisPage);
+	};
+	details #= bakeDetails(detailsTemplate, thisPage, [h].syntax, [h].description, [h].examples, seealso, native);
+});
+saveDictionary();
+saveCategory();
+save(OUTPUT_PATH # 'index.html', bakeToc(tocTemplate, tocList));

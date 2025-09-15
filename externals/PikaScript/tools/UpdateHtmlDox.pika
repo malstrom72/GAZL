@@ -1,0 +1,38 @@
+#! /usr/local/bin/PikaCmd
+
+include('stdlib.pika');
+include('systools.pika');
+include(run.root # 'htmlify.pika');
+
+css = replace(load(run.root # 'docstyle.css'), "\r\n\t", '', find, 1);
+headPrefix = '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">' # LF #
+'<html>' # LF #
+'  <head>' # LF #
+'        <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">' # LF #
+'          <meta http-equiv="Content-Style-Type" content="text/css">' # LF;
+headSuffix = '                <style type="text/css">' # LF #
+'                  table, th, td { border: 1px solid black; padding: 5px; border-collapse:collapse; }' # LF #
+'                  th { text-align: left }' # LF #
+'                  img { border: 0 none }' # LF #
+'                ' # css # LF #
+'                </style>' # LF #
+'          </head>' # LF #
+'          <body>' # LF;
+tail = '
+        </body>
+</html>
+';
+map(@::STD_PATTERNS, "[?][?]{*}[?][?]" # STD_PATTERN_SUFFIX, '<font color="red">??{$1}??</font>');
+map(@::STD_PATTERNS, "=== {*} ===" # STD_PATTERN_SUFFIX, '<b>{$1}</b>');
+
+dir(run.root # '../docs/*.txt', >{
+        src = run.root # '../docs/' # $0;
+        splitPath(src, @d, @n, @ext);
+        if (n !== 'dictionary') {
+                out = coalesce(d, '') # n # '.html';
+                title = html(n);
+                head = headPrefix # '                <title>' # title # '</title>' # LF # headSuffix;
+                save(out, head # htmlify(load(src)) # tail);
+        }
+});
+print(LF # '***** DONE *****' # LF);

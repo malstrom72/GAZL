@@ -1,0 +1,118 @@
+PikaCmd
+#######
+
+What is PikaCmd?
+================
+
+ PikaCmd is the command line runner for PikaScript programs. It bundles the language runtime and standard library into a
+standalone executable so that scripts can be executed directly from a shell.
+
+Building
+========
+
+ The tool is built from the sources in `tools/PikaCmd/SourceDistribution`. Run `BuildPikaCmd.sh` (or the `.cmd` variant
+on Windows) which compiles `PikaCmdAmalgam.cpp`, executes unit tests and produces a `PikaCmd` binary.
+
+     bash tools/PikaCmd/SourceDistribution/BuildPikaCmd.sh
+
+ After building, you can install `PikaCmd` and helper scripts system wide using `InstallPika.sh` or `InstallPika.cmd`.
+
+systools.pika
+#############
+
+ The helper script `systools.pika` contains cross‑platform file utilities and an improved `include` function used by
+many build scripts. Load it together with `stdlib.pika` at the top of a script:
+
+     include('stdlib.pika');
+     include('systools.pika');
+
+Improved include
+----------------
+
+ The regular `include()` from `stdlib.pika` simply loads the named file. The version in `systools.pika` first searches a
+list of directories and also tracks which file is executing. The variable `::run.root` always contains the directory of
+the currently running file. `include()` looks for the argument relative to `run.root` followed by any paths added with
+`include.addSearchPath()` or by setting the environment variable `PIKAINCLUDE`. Already included files are skipped.
+
+ This mechanism allows scripts to locate other resources regardless of the current working directory. `run()` is
+similarly wrapped so that it sets `run.root` before executing the loaded source.
+
+Writing portable scripts
+========================
+
+ By using `systools.pika` and referencing files via `run.root`, a script can be launched from any directory. Example:
+
+     include('stdlib.pika');
+     include('systools.pika');
+     include(run.root # '../tools/ppeg/ppeg.pika');
+
+     src = load(run.root # 'digits.ppeg');
+     parseDigits = ppeg.compileFunction(src);
+     assert(> parseDigits('123'));   # Works no matter the launch dir
+
+Built-in vs External Files
+--------------------------
+
+ PikaCmd provides a few scripts as built-ins so that they are always available. `stdlib.pika` is among these and is
+embedded in the executable together with `debug.pika`, `help.pika`, `interactive.pika` and `default.pika`. When
+`load('stdlib.pika')` is called, the loader first checks the working directory, then the directory of `PikaCmd` itself
+and finally falls back to the built-in copy. This guarantees that the standard library can be included even if the file
+is missing on disk.
+
+ `systools.pika` is *not* internalized. It is distributed next to the `PikaCmd` binary by `InstallPika.sh` and must
+exist on disk. The overloaded `load()` still searches the current directory and the executable directory, but there is
+no built-in fallback for this file.
+
+Command-line Usage
+------------------
+
+ PikaCmd is launched with either a script file or a block of code enclosed in braces. If launched without a parameter
+PikaCmd runs `default.pika`. The loader first searches the working directory and the directory of `PikaCmd` for this
+file before using the built-in version which simply starts the interactive shell.
+
+Interactive Shell
+-----------------
+
+ Launching PikaCmd without arguments brings up a simple REPL implemented by `interactive.pika`. Each line is evaluated
+immediately. End a line with an opening `{` to start a multi-line block and finish it with a single `}`. The variable
+`_` holds the result of the last evaluation. Use `?` for help, `%` to run scripts and `exit` to quit.
+
+     PikaCmd [ -h | <filename> [<arguments> ...] | '{' <code> '}' ]
+
+ The command line arguments following `<filename>` become available as `$1`, `$2` and so on. `$0` is the script
+filename. Use `getenv('VAR')` to read environment variables and `PLATFORM` to query the operating system identifier.
+`PLATFORM` is set to either `UNIX` or `WINDOWS` depending on which version of `PikaCmd` you built.
+
+Parsing Command-line Parameters
+-------------------------------
+
+ A PikaScript file can act as a command-line tool. At the start of such a script you typically call `args()` or
+`vargs()` to assign the values from `$1`, `$2`, ... to local variables. `args()` is used for mandatory parameters—the
+number of variables passed to it must match the number of arguments supplied or an exception is thrown. `vargs()` works
+the same way but lets you define optional arguments by leaving a blank slot in the call. Passing too few required or
+too many optional arguments will also raise an error.
+
+ Example: an `echo.pika` script that prints a message a number of times:
+
+     vargs(@msg, , @times);
+     defaults(@times, 1);
+     for (i = 0; i < times; ++i) print(msg);
+
+ Running `output/PikaCmd echo.pika Hello 3` prints `Hello` three times. Using `args()` instead would require exactly the
+specified parameters.
+
+Setting Defaults
+----------------
+
+ Use the standard `defaults()` function to assign fallback values only when variables do not yet exist. This is handy
+after `vargs()` to initialize optional parameters or to set globals once.
+
+     vargs(@file, , @mode);
+     defaults(@mode, 'r');
+
+Exceptions and Return Code
+--------------------------
+
+ Raise an error with `throw('message')` and capture it with `try()`. The global variable `exitCode` determines the
+process exit status (default is 0). Assign a value to `exitCode` before returning to set a specific status. If an
+uncaught exception occurs the error is printed and `exitCode` defaults to 255.

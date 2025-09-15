@@ -1,0 +1,68 @@
+include('stdlib.pika');
+
+print('Try to break my secret code. It is four letters from A to F. Any letter is');
+print('allowed to occur more than once. I will rate each guess you make by giving you');
+print('one exclamation mark (!) for each exact match (letter and placement) and one');
+print('question mark (?) for each letter that exists but is placed incorrectly. Guess');
+print('my code within 12 tries and you win. Otherwise I win.');
+print('');
+
+PEGS = 4;
+COLORS = 'ABCDEF';
+
+history.n = 0;
+doQuit = false;
+code = '';
+for (i = 0; i < PEGS; ++i) code #= COLORS{trunc(random(length(COLORS)))};
+for (; !doQuit; ) {
+	for (; {
+		guess = upper(input('Your guess > '));
+		if (guess == 'QUIT') {
+			doQuit = true;
+			false
+		} else if (length(guess) != PEGS || span(guess, COLORS) != PEGS) {
+			print("Enter four letters from A to F, e.g. ABEF or 'quit' to quit");
+			true
+		} else {
+			false
+		}
+	}; ) ;
+	
+	keys = '';
+	
+	for (i = 0; i < PEGS; ++i) {
+		paired[i] = false;
+		if (guess{i} == code{i}) {
+			keys #= '!';
+			paired[i] = true;
+		}
+	};
+	for (i = 0; i < PEGS; ++i) {
+		for (j = 0; j < PEGS && {
+			if (guess{i} != code{i} && !paired[j] && code{j} == guess{i}) {
+				keys #= '?';
+				paired[j] = true;
+				false
+			} else {
+				true
+			}
+		}; ++j) ;
+	};
+	history[history.n++] = guess # ' ' # keys;
+	print('');	
+	for (i = 0; i < history.n; ++i) {
+		print((i + 1) # ' ' # history[i]);
+	};
+	if (code == guess) {
+		print('');
+		print('YOU WIN!');
+		doQuit = true;
+	};
+	if (history.n == 12) {
+		print('');
+		print('I WIN!');
+		print('');
+		print('The code was ' # code);
+		doQuit = true;
+	};
+};

@@ -1,0 +1,175 @@
+#! /usr/local/bin/PikaCmd
+
+/*
+	TODO: testing with tracing (ppeg.trace) and tree dumping (TreePPEG). TreePPEG has to detect and remove actions.
+	TODO: graph verification, detecting missing rules, left-recursion and infinite loops (zero length matches in loops).
+	TODO: work with "function local" version of PPEG compilers, since I think that is the one for keeps, the other global one should go...
+			(this can be done by recreating the entire parser from all the combined rules when necessary, since we now can't really compile rules separetely)
+*/
+
+//include('debug.pika');
+include('stdlib.pika');
+SOURCE_ROOT = coalesce(@::SOURCE_ROOT, @::run.root, 'examples/');
+include(SOURCE_ROOT # 'objects.pika');
+include(SOURCE_ROOT # 'parsing.pika');
+
+if (!exists(@PPEGLab.lastPath)) PPEGLab.lastPath = '';
+
+PPEGLab = function {
+	HELP = '
+''!'' EOL                               # exits (definitions are not erased)
+/ ''?'' EOL                             # help
+/ ''load'' _ FileName? EOL              # loads and defines all rules from FileName (or from last load / saved file)
+/ ''save'' _ FileName? EOL              # saves all rules to FileName (or to last load / saved file)
+/ ''clear''                             # clears all definitions
+/ Rule ''='' EOL                        # displays the definition of Rule
+/ ''='' EOL                             # displays all defined Rules
+/ "''" String "''" _ Rule? _ EOL        # test String against Rule (default Rule is "root")
+/ ''"'' String ''"'' _ Rule? _ EOL        # test String against Rule (default Rule is "root")
+/ ''{'' PikaCode ''}'' _ EOL              # executes PikaCode
+/ Rule? _ ''<-'' _ Definition _ EOL     # defines Rule with Definition (default Rule is "root")
+/ String EOL                          # test String against "root" rule
+/ ''<'' !''-'' _ FileName EOL             # test FileName against "root" rule
+/ ''['' EOL Lines* '']'' EOL              # multi-line input (test, define etc)';
+
+	input =>{
+		args(@$prompt);
+		$s = ::input($prompt);
+		if ($s === '[') {
+			print('(Multi-line input. Finish with a single '']''.)');
+			for ($s = ''; ($l = ::input('')) !== ']'; $s #= $l # LF);
+		};
+		( $s )
+	};
+
+	parse =>{
+		args(@_string, @_rule);
+		if (!exists(@::PPEGLab.defs[_rule])) print(bake('Rule {escape(_rule)} not defined.'))
+		else {
+			print(bake('Parsing {escape(_string{:1000})}{if (length(_string) > 500) "..."} with rule {escape(_rule)}'));
+			::$$ = void;
+			::ppi = 0;
+			::ppm = 0;
+			::pps = _string;
+			error = try(>ok = ::PPEGLab.rules[_rule](@::$$));
+			if (error !== void) print(error)
+			else {
+				if (!ok) print(bake('Parsing failed at offset {::ppm} (... {escape(::pps{::ppm:40}){1:}})'))
+				else {
+					if (::ppi == length(::pps)) print('FULLY PARSED')
+					else print(bake('Partially parsed until offset {::ppi} (... {escape(::pps{::ppi:40}){1:}})'));
+					if (::$$ !== void) print(bake('$$ is: {toSource(::$$)}'));
+					if (classify(::$$) === 'reference') { print("--------"); deepDump(::$$, 0, "\t", 20, true) }
+				}
+			}
+		}
+	};
+	
+	save =>{
+		args(@_path);
+		if (_path === '') _path = PPEGLab.lastPath;
+		::PPEGLab.lastPath = _path;
+		_text = '';
+		foreach(@::PPEGLab.defs, >_text #= $2 # LF);
+		error = try(>::save(_path, _text));
+		if (error !== void) print(error)
+		else print('Saved rules to ' # _path);
+	};
+	
+	load =>{
+		args(@_path);
+		if (_path === '') _path = PPEGLab.lastPath;
+		::PPEGLab.lastPath = _path;
+		if (!exists(@defExtractor.parse)) {
+			construct(@defExtractor, PPEG, ::load(SOURCE_ROOT # 'extractPPEGDefs.ppeg'));
+			print('Compiled definitions extractor');
+		};
+		initBlock = void;
+		error = try(>defs = defExtractor.parse(::load(_path)));
+		if (error === void) error = try(>initBlock = defExtractor.parse(::load(_path), , 'initBlock'));
+		if (error !== void) print(error)
+		else {
+			print('Loaded and extracted definitions from ' # _path);
+			prune(@::PPEGLab.rules);
+			prune(@::PPEGLab.defs);
+			iterate(@[defs].elements, >::PPEGLab.defs[[$2].elements.rule] = bake('{[$2].elements.rule} <- {[$2].elements.definition}'));
+			error = try(>foreach(@::PPEGLab.defs, >ppeg.compile(@::PPEGLab.rules, $2)));
+			if (error !== void) {
+				prune(@::PPEGLab.rules);
+				prune(@::PPEGLab.defs);
+				print(error)
+			} else {
+				print('Compiled rules from ' # _path);
+				if (initBlock !== void) {
+					print('Running init block');
+					initBlock = replace(initBlock, '$$parser', '::PPEGLab.rules');
+					error = try(>evaluate(initBlock, @::PPEGLab.rules));
+					if (error === void) error = 'OK';
+					print(error)
+				}
+			}
+		}
+	};
+	
+	clear =>{
+		prune(@::PPEGLab.rules);
+		prune(@::PPEGLab.defs);
+		print('Cleared all definitions');
+	};
+	
+	for (; {
+			if ((s = input("\nPPEG> ")) === '!') ( false )
+			else {
+				x = try(>{
+					if (s === '?') print(HELP)
+					else if ((s # ' '){:5} === 'load ') load(s{5 + span(s{5:}, " \t\r\n"):})
+					else if ((s # ' '){:5} === 'save ') save(s{5 + span(s{5:}, " \t\r\n"):})
+					else if (s{:5} === 'clear') clear()
+					else if (s{0} === '"' || s{0} === "'") {
+						i = ::parse(s, true);
+						string = evaluate(s{:i});
+						i += span(s{i:}, " \t\r\n");
+						l = find(s{i:}, " \t\r\n");
+						rule = s{i:l};
+						if (rule === '') rule = 'root';
+						parse(string, rule);
+					} else if (s{0} === '<' && s{1} !== '-') {
+						s = s{1:};
+						s = s{span(s, " \t\r\n"):};
+						error = try(>s = ::load(s));
+						if (error !== void) print(error)
+						else parse(s, 'root');
+					} else if (right(s, 1) === '=') {
+						s = chop(s, 1);
+						if (s === '') {
+							gotAny = false;
+							foreach(@::PPEGLab.defs, >{ print($2); gotAny = true });
+							if (!gotAny) print('No rules defined.')
+						} else if (!exists(p = @::PPEGLab.defs[s])) print(bake('Rule {escape(s)} not defined.'))
+						else print([p]);
+					} else if (search(s, '<-') < length(s) || s{0} === '{') {
+						s = s{span(s, " \t\r\n"):};
+						if (s{0:2} === '<-') s = 'root ' # s;
+						error = try(>ppeg.compile(@::PPEGLab.rules, s));
+						if (error !== void) print(error)
+						else if (s{0} !== '{') {
+							rule = s{0:find(s, " \t\r\n<")};
+							p = @::PPEGLab.defs[rule];
+							print(bake('{if (exists(p)) "Replaced rule" else "New rule"}: {escape(rule)}'));
+							[p] = s;
+						};
+					} else parse(s, 'root');
+				});
+				if (x !== void) {
+					print("!!!! " # x);
+				};
+				( true )
+			}
+		}
+		; );
+};
+
+print("Type '?' for help.");
+PPEGLab();
+
+( void )

@@ -1,0 +1,33 @@
+include('systools.pika');
+include('examples/parsing.pika');
+
+PARSING_SOURCE_ROOT = './examples/';
+TEST_FILES_ROOT = '/Users/magnus/Downloads/xmlconf/xmltest/valid/sa/';
+
+/*
+success = ppeg.compileFunction(src=load(PARSING_SOURCE_ROOT # 'xmlPolylithic.ppeg'), @::xml.polyParseFunc, @dd);
+if (!success) throw("Could not compile XML");
+dir(TEST_FILES_ROOT, >{
+	if (wildmatch(lower($0), '*.xml')) {
+		xmlDocument = load(TEST_FILES_ROOT # $0);
+		if (xmlDocument{0:2} == "\xff\xfe") {
+			print($0 # ' is unicode which is not supported');
+		} else {
+			print($0 # ' ' # xml.polyParseFunc(xmlDocument));
+		}
+	}
+});
+*/
+
+success = ppeg.compileFunction(src=load(PARSING_SOURCE_ROOT # 'xmlMini.ppeg'), @::xml.miniParseFunc, @dd);
+if (!success) throw("Could not compile XML");
+dir(TEST_FILES_ROOT, >{
+	if (wildmatch(lower($0), '*.xml')) {
+		xmlDocument = load(TEST_FILES_ROOT # $0);
+		if (xmlDocument{0:2} == "\xff\xfe") {
+			print($0 # ' is unicode which is not supported');
+		} else {
+			print($0 # ' ' # xml.miniParseFunc(xmlDocument));
+		}
+	}
+});

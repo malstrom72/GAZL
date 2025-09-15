@@ -1,0 +1,22 @@
+{
+        "name": "Comments",
+        "scope": "source.pika",
+        "settings": {
+                "shellVariables": [
+                        {
+                                "name": "TM_COMMENT_START", 
+                                "value": "// "
+                        },
+                        {
+                                "name": "TM_COMMENT_START_2", 
+                                "value": "/*"
+                        },
+                        {
+                                "name": "TM_COMMENT_END_2", 
+                                "value": "*/"
+                        }
+
+                ]
+        },
+        "uuid": "ea7ecf72-7186-45f2-b167-ec9bdcd02591"
+}

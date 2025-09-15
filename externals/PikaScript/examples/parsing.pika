@@ -1,0 +1,990 @@
+include('systools.pika');
+include('stdlib.pika');
+ROOT = coalesce(@::ROOT, run.root # '../');
+SOURCE_ROOT = coalesce(@::SOURCE_ROOT, run.root, 'examples/');
+include(SOURCE_ROOT # 'objects.pika');
+
+PIKA_COMMENTS['/*'] = '*/';
+PIKA_COMMENTS['//'] = LF;
+parsePikaWhite = function {
+	for (i = 0; exists(ce = @::PIKA_COMMENTS[$0{(i += span($0{i:}, WS)):2}])
+			; i += search($0{i += 2:}, [ce]) + length([ce]));
+	( i )
+};
+
+parsePikaEscaped = function {
+	l = parse($0, true);
+	if (exists(@$1)) [$1] = evaluate($0{:l});
+	( l )
+};
+
+// TODO : wild idea, switching entire grammar on operators, e.g. <left> = <right>, <right> could have a different grammar than <left>
+// terminator may be required if you have empty binary / suffix ops, otherwise we wouldn't know where to stop and not require a value
+// IDEA : would be cool if you could plug in a different interpreter for an operand (even better than the "different grammar" idea above). The default one would call inner, but you can call interpret again with a different grammar for example (would need to be able to pass at least precedence to "interpret" then).
+interpret = function {
+	vargs(@src, @g, , @valueOut, @terminator);
+	s = src;
+	
+	if (!exists(@[g].$l.ml)) {
+		[g].$l.ml = [g].$r.ml = 0;
+		foreach(map(@opMaps, 'prefixOps','$l' , 'binaryOps','$r' , 'postfixOps','$r'), >{
+			for (i = 0; i < [g][$1].n; ++i) {
+				t = [(op = @[g][$1][i])].token;
+				[g][$2].tm[t] = op;
+				[g][$2].ml = max([g][$2].ml, length(t));
+				defaults(@[op].terminator, '');
+				[op].$xp = if ([op].terminator !== '') 0
+						else [op].precedence + (if (coalesce(@[op].associativity, 'left') === 'right') 0 else 1);
+				[op].$bi = ($1 === 'binaryOps');
+			}
+		});
+		defaults(@[g].skipChars, function { span($0, WS) });
+	};
+
+	findOp = /* $0=$opMap, $1=$xp */ >{
+		for ({ $i = [g][$0].ml; $o = void }; $i >= 0 && !exists($r = @[g][$0].tm[s{:$i}]); --$i);
+		if ($i < 0 || [[$r]].precedence < $1) ( void ) else { s = s{$i:}; ( [$r] ) };
+	};
+	
+	inner = /* $0=$lastOp, $1=$terminator */ >{
+		$1 = coalesce($t = [$0].terminator, $1);
+		$xp = [$0].$xp;
+		
+		if ((s = s{[g].skipChars(s):}) === '') throw('Unexpected end of string')
+		else if (($o = findOp('$l', 0)) !== void) $v = [$o].evaluate(inner($o, $1))
+		else if (($i = [g].parseValue(s, @$v)) != 0) s = s{$i:}
+		else throw('Syntax error: ' # escape(s));
+		
+		for (; ((s = s{[g].skipChars(s):}) !== '' && ($1 === '' || s{:length($1)} !== $1)
+				&& ($o = findOp('$r', $xp)) !== void);)
+			$v = (if ([$o].$bi) [$o].evaluate($v, inner($o, $1)) else [$o].evaluate($v));
+
+		if (s{:$tl = length($t)} !== $t) throw('Missing ' # escape($t));
+		s = s{$tl:};
+		( $v )
+	};
+	
+	map(@dummy, 'token','' , 'precedence',0 , 'terminator',coalesce(@terminator) , '$xp',0);
+	v = inner(@dummy, '');
+	if (exists(@valueOut)) [valueOut] = v;
+	( length(src) - length(s) )
+};
+
+testInterpret = function {
+	if (!exists(@::testGrammar)) {
+		::testGrammar = true;
+		::VALUE_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ$_.";
+		::testGrammar.parseValue = function {
+			if (($u = upper($s = $0{:$i = span($0, VALUE_CHARS)})) === 'PI' || $u === 'E') $s = [$u];
+			[$1] = $s;
+			( $i )
+		};
+		::testGrammar.skipChars = parsePikaWhite;
+		
+		multOrFunc = function { if (classify($0) === 'number') ( $0 * $1 ) else ( [$0]($1) ) };
+		addOp => { $0 = @::testGrammar[$0]; defaults(@[$0].n, 0); $0 = @[$0][[$0].n++]; invoke('map', , @$); };
+		
+		addOp('prefixOps',  'token','(' , 'precedence',0 , 'evaluate',function { $0 } , 'terminator',')');
+		addOp('prefixOps',  'token','|' , 'precedence',0 , 'evaluate',abs , 'terminator','|');
+		addOp('prefixOps',  'token','-' , 'precedence',3 , 'evaluate',function { -$0 });
+		addOp('binaryOps',  'token','+' , 'precedence',1 , 'evaluate',function { $0 + $1 });
+		addOp('binaryOps',  'token','-' , 'precedence',1 , 'evaluate',function { $0 - $1 });
+		addOp('binaryOps',  'token','*' , 'precedence',2 , 'evaluate',function { $0 * $1 });
+		addOp('binaryOps',  'token','/' , 'precedence',2 , 'evaluate',function { $0 / $1 });
+		addOp('binaryOps',  'token','%' , 'precedence',2 , 'evaluate',function { $0 % $1 });
+		addOp('binaryOps',  'token','^' , 'precedence',4 , 'evaluate',pow , 'associativity','right');
+		addOp('binaryOps',  'token','(' , 'precedence',5 , 'evaluate',multOrFunc , 'terminator',')');
+		addOp('binaryOps',  'token',''  , 'precedence',2 , 'evaluate',function { $0 * $1 });
+		addOp('postfixOps', 'token','!' , 'precedence',5 , 'evaluate',factorial);
+	};
+	
+	if (interpret($0, @::testGrammar, @v) < length($0)) throw('Syntax error');
+	( v )
+};
+
+testInterpreter = function {
+	prune(@::testGrammar);
+	assert(> testInterpret('3') == 3);
+	assert(> testInterpret('-3') == -3);
+	prune(@::testGrammar.$);
+	assert(> testInterpret('3+3') == 6);
+	assert(> testInterpret(' 3 + 3 ') == 6);
+	assert(> testInterpret(' 3 /**/ + /**/ 3 ') == 6);
+	assert(> testInterpret(' 3 /* + 3*/') == 3);
+	assert(> testInterpret(" 3 // + 3 \n + 3") == 6);
+	assert(> testInterpret("1+2*3+4") == 11);
+	assert(> testInterpret("(1+2)*3+4") == 13);
+	assert(> testInterpret("(1+2)*(3+4)") == 21);
+	assert(> testInterpret("((1+2)*(3+4))") == 21);
+	assert(> testInterpret("(10)(23)") == 230);
+	assert(> testInterpret("(10)(-23)") == -230);
+	assert(> testInterpret("(-10)(-23)") == 230);
+	assert(> testInterpret("(-10)|-23|") == -230);
+	assert(> testInterpret("1-2+3-4") == -2);
+	assert(> testInterpret("1+5*2^3") == 41);
+	assert(> testInterpret("1+5*2^3^2") == 2561);
+	assert(> testInterpret("1+5*(2^3)^2") == 321);
+	assert(> testInterpret("1+5*(2^3)^3!") == 1310721);
+	assert(> testInterpret("cos(0)") == 1);
+	assert(> testInterpret(" cos (0) ") == 1);
+	assert(> testInterpret(" 5 * cos (0) ! ") == 5);
+	assert(> testInterpret(" 5 * ( cos (0) ) ! ") == 5);
+	assert(> testInterpret(" ( 5 * cos (0) ) ! ") == 120);
+};
+
+//// FIX : lab below
+
+testString = '
+	Outer = {
+		ColonIsOk: too
+		/* multi-line
+		comment */
+		// single-line comment
+		number: /* inline here */ 1234e+34
+		string  : "with \"quotes\" and \\ other escapes \\"  // end of line comment
+		suffixed : 0x3943 is a hex
+		two = on ; a = row ;
+		Inner: {
+			"Even More Inner" = { black = magic, voodoo = spell }
+		}
+		Array: { 0; 1; 2, 3; }
+	}
+';
+
+/*
+	This one handles pretty advanced syntax. Because of a limitation in the design of interpret it allocates all
+	sub-blocks (limitation: "evaluate" is always called after interpretation of operands is finished, which means
+	we create the sub-block data before "knowing" what it will be used for). If interpret was redesigned so you could
+	hook in custom interpreters for operands we could hook in the thing we do in 'parseValue' for { } on prefix operator
+	'{' instead and there set the designated output.
+	
+	Btw, there is one good thing with allocating sub-blocks (except that they are easier to share afterwards etc) and
+	that is that it solves the problem with "deep" maps and keys containing with '.' etc... (e.g. smurf.byxa.tango is
+	the same as smurf["byxa.tango"]).
+*/
+parseNuXStyle = function {
+	target = new(function { });
+	
+	grammar.parseValue => {
+		if ($0{0} === '"' || $0{0} === "'") $i = parsePikaEscaped($0, $1)
+		else if ($0{0} !== '{') { $i = find($0, WS # ",;=:}\x1A"); [$1] = $0{:$i}; }
+		else {
+			$newtarget = new(function { });
+			swap(@target, @$newtarget);
+			$i = 1 + interpret($0{1:}, @grammar, @v, '}');
+			break(v);
+			swap(@target, @$newtarget);
+			[$1] = $newtarget
+		};
+		( $i )
+	};
+	
+	grammar.skipChars = function {
+		for (i = 0; exists(ce = @::PIKA_COMMENTS[$0{(i += span($0{i:}, " \t\r")):2}])
+				; i += search($0{i += 2:}, [ce]) + (length([ce]) & 2));
+		( i )
+	};
+	
+	grammar.prefixOps.n = grammar.binaryOps.n = grammar.postfixOps.n = 0;
+	addOp => { $0 = @grammar[$0]; $0 = @[$0][[$0].n++]; invoke('map', , @$); };
+	
+	assign => { if ($0 === '') throw("Invalid assignment"); [target][$0] = $1; void };
+	concat => { $0 # (if ($0 !== '') ' ') # $1 };
+	break => {
+		if ($0 !== void) append(target, $0);
+		if (exists(@$1) && $1 !== void) append(target, $1);
+		void
+	};
+	
+	addOp('prefixOps', ('token'),"\n" , ('precedence'),0 , ('evaluate'),break);
+	addOp('postfixOps', ('token'),"\n" , ('precedence'),0 , ('evaluate'),break);
+	addOp('postfixOps', ('token'),';' , ('precedence'),0 , ('evaluate'),break);
+	addOp('binaryOps', ('token'),'=' , ('precedence'),1 , ('evaluate'),assign);
+	addOp('binaryOps', ('token'),':' , ('precedence'),1 , ('evaluate'),assign);
+	addOp('binaryOps', ('token'),'' , ('precedence'),2 , ('evaluate'),concat);
+	addOp('binaryOps', ('token'),',' , ('precedence'),0 , ('evaluate'),break);
+	
+	if (interpret($0, @grammar, @v) < length($0)) throw('Syntax error');
+	break(v);
+	( target )
+};
+
+/*
+	NumbStruck -> NuEdge minimal block-style structured key-value format
+	
+	Goals:
+		parsable without any advanced parser algorithms or even a recursive descent style parser
+		dead-simple top-down parsing line for line
+		supports comments
+		value format agnostic (doesn't need to decode escaped strings or anything)
+*/
+// TODO : this one is out of sync, doesn't support one-liners or multi-line /* */... if we should support these... ???
+parseNumbStruckFlat = function {
+	vargs(@string, @target, , @delimiter); defaults(@delimiter, LF);
+	
+	value = '';
+	depth = 0;
+	tokenize(string, >{
+		line = trim($0, " \t", " \t\r\n");
+		if (right(line, 2) === '*/') line = trim(line{:rsearch(line, '/*')}, void, " \t");
+		if (depth > 0) value #= LF # $0;
+		if (line === '}') {
+			if (--depth == 0) [target][key] = value;
+		} else if (depth > 0) {
+			if (right(line, 1) === '{') ++depth;
+		} else if ((i = find(line, ':=')) < length(line)) {
+			key = trim(line{:i}, '', " \t");
+			value = trim(line{i + 1:}, " \t", '');
+			if (right(value, 1) === '{') ++depth else [target][key] = value;
+		}
+	}, delimiter);
+	( target )
+};
+
+// TODO : I don't think we should support '='... but it is needed now for mtpgAnalysis
+parseNumbStruck = function {
+	vargs(@string, @target, , @delimiter); defaults(@delimiter, LF);
+	
+	prune(t = target);
+	inComment = false;
+	tokenize(string, >{
+		if ((line = trim($0, " \t", " \t\r\n")){:2} === '/*') inComment = true;
+		if (!inComment) {
+			if (right(line, 2) === '*/') line = trim(line{:rsearch(line, '/*')}, void, " \t");
+			if (line !== '}') {
+				if (line{0} === '{' || line{(i = find(line, ':=')):} === '') { defaults(@[t].n, 0); key = @[t][[t].n++] }
+				else { key = @[t][trim(line{:i}, void, " \t")]; line = trim(line{i + 1:}, " \t", void) };
+				if (right(line, 1) === '{') t = key
+				else if (line{0} === '{' && right(line, 1) === '}') parseNumbStruck(chop(line{1:}, 1), key, ',')
+				else if (line !== void) [key] = line;
+			} else if (t !== target) t = ascend(t)
+			else throw('Unbalanced ''}''');
+		} else if (right(line, 2) === '*/') inComment = false;
+	}, delimiter);
+	if (t !== target) throw('Unbalanced ''{''');
+	( target )
+};
+
+// TODO : I don't think we should support '='...
+numbStruckCEscape = function {
+	args(@string, @forLeft, @forOneLine);
+	chars = '';
+	if (forLeft) chars #= '=:';
+	if (forOneLine) chars #= ',';
+	replace(escape(string), chars, void, find, 1, >'\u' # radix(ordinal($0), 16, 4));
+};
+
+// TODO : building numb-struck strings... actually harder than parsing I think....
+
+numbTest = '
+	x  :	 "first"	/* a comment must either be last on a single line ... */
+	/* ... or start at the beginning of
+	one line
+	and stop at the ending
+	of one line (either the same line or another) */
+	/* btw, only /* and */
+	/* are supported .. not // */
+	/* you cannot nest comments and star-slash inside a comment is bad */
+	
+	/* you can use ''='' or '':'' */
+	y=second
+	z: {	/* a sub-block starts with a single { last on a line */
+		0: "this sub block will be returned literally"
+		1: "another line"
+		2: {
+			/* nested sub-blocks are ok */
+			sub:way
+		}	/* sub-blocks end with a single } */
+	}
+	array: {
+		no equal sign
+		or colon
+		means array element
+		remember to remove signs or colons with some form of encoding (even if inside quotes)
+		e.g. \x3A instead of colon
+	}
+	oneliner: { "blocks", "may", "alternatively", "be in one line like this" } /* but then all items must be on a single line, any commas inside strings need to be removed with some form of encoding and you may not nest these */
+	nested: {
+		"nested array here"
+		{
+			{ 1, 2 }
+			{ 3, 4 }
+			{ 5, 6 }
+			{ a:b, c:d }
+		}
+	}
+	/* now we are balanced */
+	final: 1000
+';
+
+//testInterpret2("x:\"hello;\" friend; y=23 56\n\n'x', 'y', \"smurf\nen\"= { kokobello=\"blurro\", sub={23,57,12,\"hello}there\",{'yeah'=72}}};53\n111")
+
+// FIX : group them to json.stringSpan etc instead?
+
+::jsonStringSpan = function {
+	args(@s);
+	if (s{0} !== '"') throw('Invalid JSON string format: ' # escape(s{:16} # (if (length(s) > 16) '...')));
+	for (i = 1; s{i} !== '"'; i += find(s{i:}, '\"')) {
+		if (s{i} === '') throw('Unterminated JSON string');
+		if (s{i} === '\') {
+			if (s{i + 1} === 'u') {
+				if (!wildmatch(s{i + 2:4}, '[0-9a-fA-F]????')) throw('Invalid JSON string escape code: ' # escape(s{i:5}));
+				i += 6
+			} else {
+				if (find(s{i + 1}, '"\/bfnrtu') != 0) throw('Invalid JSON string escape code: ' # escape(s{i:2}));
+				i += 2
+			}
+		}
+	};
+	++i
+};
+
+::jsonObjectSpan = function {
+	args(@s);
+	if (s{0} !== '{') throw('Invalid JSON object format: ' # escape(s{:16} # (if (length(s) > 16) '...')));
+	
+	/* etc */
+};
+
+::stringSpan = function {
+	args(@s);
+	if (s{0} === '"') jsonStringSpan(s)
+	else if (s{0} === "'") {
+		if (s{i = 1 + find(s{1:}, "'")} !== "'") throw('Unterminated string');
+		++i
+	} else find(s, " ,;=:\r\n\t\v\x1A")
+};
+
+::blockSpan = function {
+	args(@s);
+	assert(>s{0} === '{'); // assert or throw?
+	
+};
+
+::parseBlock = function {
+	
+};
+
+// FIX : check existence of all referenced non-terminals
+::ebnf.compile = function {
+	args(@target, @syntax);
+	::ebnf.compileTo = target;	// FIX : ugly non-reentrant solution here!
+	i = ebnf.matchRule(@::ebnfOfEBNF, syntax, 'root', '', @actionRetList);
+	if (i < length(syntax)) throw("EBNF format error around here: " # escape(syntax{i:40}));
+	( void )
+};
+
+map(@::ebnf.STOP_CHARS, "'","'" , '<','>' , '>','<' , '[',']' , '{','}' , '(',')' , '/','/' , '-','-');
+::ebnf.ESCAPE_CHARS = '"[]{}()/|\-' # char(255);
+for (i = 0; i < 32; ++i) ::ebnf.ESCAPE_CHARS #= char(i);
+
+::ebnf.unescape = function { evaluate('"' # $0 # '"') };
+::ebnf.escape = function { replace($0, ::ebnf.ESCAPE_CHARS, void, find, 1, >'\x' # radix(ordinal($0), 16, 2)) };
+
+// FIX : Drop the tail idea, it doesn't work performance-wise...
+// NO : we have PEG's for this... let's do the opposite, do tails for all, incl '|' etc to match real CFG (context-free-grammars). Have some option to set the look-ahead amount k tokens to improve performance.
+::ebnf.match = function {
+	args(@ebnf, @source, @expression, @tail, @actionRetList);
+	
+	backup = coalesce(@[actionRetList].n, 0);
+	for (; {
+		s = source;
+		x = expression{:i = find(expression, '|')};
+		expression = expression{i:};
+		[actionRetList].n = backup;
+	
+		for (; {
+			(c = x{0}) !== '' && {
+				i = find(x{1:}, ebnf.STOP_CHARS[c]);
+				sub = ebnf.unescape(x{1:i});
+				x = x{i + 2:};
+				if (c === "'") m = (if (s{:i = length(sub)} !== sub) -1 else i)
+				else if (c === '<') m = ebnf.matchRule(ebnf, s, sub, x # tail, actionRetList)
+				else if (c === '[') {
+					committed = [actionRetList].n;
+					if ((m = ebnf.match(ebnf, s, sub, x # tail, actionRetList)) < 0) m = 0
+					else committed = [actionRetList].n;
+					[actionRetList].n = committed;
+				} else if (c === '{') {
+					committed = [actionRetList].n;
+//	s2 = (if (x{0} !== "'") s else s{:search(s, ebnf.unescape(x{1:find(x{1:}, "'")}))});
+s2 = s;				
+					for (m = 0; (i = ebnf.match(ebnf, s2{m:}, sub, x # tail, actionRetList)) >= 0;) {
+						m += i;
+						committed = [actionRetList].n
+					};
+					[actionRetList].n = committed;
+				} else if (c === '(') m = ebnf.match(ebnf, s, sub, x # tail, actionRetList)
+				else if (c === '/') m = (if (!wildmatch(s, '{' # sub # '}*', @capt)) -1 else length(capt))
+				else if (c === '-') {
+					l = length(source) - length(s);
+					m = (if (ebnf.match(ebnf, source{:l}, sub, '', @dummy) == l) -1 else 0);
+				} else if (c === '>') {
+					committed = [actionRetList].n;
+//	s2 = (if (x{0} !== "'") s else s{:search(s, ebnf.unescape(x{1:find(x{1:}, "'")}))});
+// fix : speed up with search if contents of sub is a ' '
+					for (m = 0; (i = ebnf.match(ebnf, s{m:}, sub, x # tail, actionRetList)) < 0 && m < length(s);) {
+						[actionRetList].n = committed;
+						++m;
+					};
+					if (i < 0) m = i else m += i;
+				};
+				( m >= 0 )
+			}
+		}; ) s = s{m:};
+		
+		if (c === '') {
+			ok = true;
+			( false )
+		} else if (expression{0} !== '') {
+			expression = expression{1:};
+			( true )
+		} else {
+			ok = false;
+			( false )
+		}
+	}; );
+	
+	if (ok) {
+		( length(source) - length(s) )
+	} else {
+		( -1 )
+	}
+};
+
+::ebnf.matchRule = function {
+	args(@ebnf, @source, @rule, @tail, @actionRetList);
+	if (rule === '.') m = (if (source === '') -1 else 1)
+	else if (rule === '...') m = (if (source === '') -1 else length(source))
+	else if (rule === '') m = (if (source === '') 0 else -1)
+	else {
+		thisRetList[0] = void;
+		if ((m = ebnf.match(ebnf, source, [ebnf][rule].expr, tail, @thisRetList)) >= 0) {
+			ret = void;
+			if (exists(p = @[ebnf][rule].action)) {
+				ret = [p](ebnf, rule, source{:m}, @thisRetList);
+			} else if (thisRetList.n > 0) {
+				ret = thisRetList[0];
+			};
+			if (ret !== void) append(actionRetList, ret);
+		}
+	};
+	( m )
+};
+
+::ebnf.parse = function {
+	vargs(@ebnf, @source, , @root);
+	defaults(@root, 'root');
+	( ebnf.matchRule(ebnf, source, root, '', @actionRetList) == length(source) )
+};
+
+::ebnf.assignActions = function { for (i = 1; i < $n; i += 2) { if (!exists(@[$0][$[i]].expr)) throw('Undefined expression: ' # $[i]); [$0][$[i]].action = $[i + 1]; } };
+
+::ebnf.asIsAction = function { $2 };
+
+::ebnf.printAction = function {
+	s = bake('{$1} : {$2}');
+	if ([$3].n > 0) {
+		s #= ' (';
+		for (i = 0; i < [$3].n; ++i) {
+			if (i != 0) s #= ', ';
+			s #= toSource([$3][i]);
+		};
+		s #= ')';
+	};
+	print(s);
+	( if ([$3].n > 0) [$3][0] else void )
+};
+
+EBNF = function {
+	this = this();
+// FIX : 	[this].assignActions = function { ebnf.assignActions(this(), $0, $1) };
+	[this].parse = function { ebnf.parse(this(), $0) };
+	ebnf.compile(this, $0)
+};
+
+testbnf['ys'].expr = "'y'{'y'}";
+testbnf['xs'].expr = "'x'{'x'}";
+testbnf[' '].expr = "{' '\\x7c'\\t'}";
+testbnf['op'].expr = "<number>|<id>";
+testbnf['mul'].expr = "< >'*'< ><op>";
+testbnf['mulExpr'].expr = "<op>{<mul>}";
+testbnf['add'].expr = "< >'+'< ><mulExpr>";
+testbnf['addExpr'].expr = "<mulExpr>{<add>}";
+testbnf['expr'].expr = "<addExpr>";
+testbnf['assign'].expr = "<id>< >'='< ><expr>";
+testbnf['while'].expr = "'while'< >'('< ><expr>< >')'< ><block>";
+testbnf['statement'].expr = "<while>|<assign>|<expr>";
+testbnf['block'].expr = "'{'{< ><statement>< >';'}< >'}'";
+testbnf['root'].expr = "'x='<xs>' y='<ys>';'|'x='<xs>';'|<number>|<number>< >'*'< ><number>|";
+testbnf['digit'].expr = "/[0-9]/";
+testbnf['number'].expr = "<digit>{<digit>}";
+testbnf['id'].expr = "/[a-z]/{/[a-z]/}";
+testbnf['SMURF'].expr = "'SMURF'";
+testbnf['SMURK'].expr = "'SMURK'";
+testbnf['numberList'].expr = "<number>{','(<number>\\\\x7c<SMURK>\\\\x7c<SMURF>)}'.'";
+testbnf['test2'].expr = "'x''y'('z''a'\\x7c'hepp')";
+testbnf['test3'].expr = "/[0-9]//[a-z]//[0-9]/['smurf']";
+
+testbnf['numberList'].action = ebnf.printAction;
+testbnf['number'].action = function { $2 };
+testbnf['SMURF'].action = function { 'SMURFEN SMURFEN' };
+
+// fix : support (... x), now ... is only infix
+// fix : support x & y & z .. where all has to match, e.g. ('start ' ... ' end') & {<lower>|' '}
+ ebnfOfEBNF._.expr = "{' '\\x7c'\\x5cx09'\\x7c'\\x5cx0a'\\x7c'\\x5cx0d'}";
+ ebnfOfEBNF.definition.expr = "<term>{<_>\\x5b','<_>\\x5d<term>}";
+ ebnfOfEBNF.dquote.expr = "'\\x22'{\\x2f\\x5cx5b^\\x5cx22\\x5cx5d\\x2f\\x7c'\\x5cx5c'\\x2f?\\x2f}'\\x22'";
+ ebnfOfEBNF.dressed.expr = '{\x2f\x5cx5b^<>\x5cx5d\x2f}';
+ ebnfOfEBNF.exclExpr.expr = "'\\x2d'<expr>";
+ ebnfOfEBNF.expr.expr = "<_><orExpr>{<_>'...'<_><orExpr>}<_>";
+ ebnfOfEBNF.factor.expr = "<meta>|<literal>|'\\x5b'<optExpr>'\\x5d'|'\\x7b'<repExpr>'\\x7d'|'\\x28'<groupExpr>'\\x29'|'\\x2f'<regExpr>'\\x2f'";
+ ebnfOfEBNF.groupExpr.expr = '<expr>';
+ ebnfOfEBNF.literal.expr = '<dquote>|<squote>';
+ ebnfOfEBNF.meta.expr = '<symbol>';
+ ebnfOfEBNF.naked.expr = '<symChar>{<symChar>}';
+ ebnfOfEBNF.optExpr.expr = '<expr>';
+ ebnfOfEBNF.orExpr.expr = "<definition>{<_>'\\x5cx7c'<_><definition>}";
+ ebnfOfEBNF.regExpr.expr = "{\\x2f\\x5cx5b^\\x5cx5c\\x5cx2f\\x5cx5d\\x2f\\x7c'\\x5cx5c'\\x2f?\\x2f}";
+ ebnfOfEBNF.repExpr.expr = '<expr>';
+ ebnfOfEBNF.root.expr = '<_><rule>{<_><rule>}<_>';
+ ebnfOfEBNF.rule.expr = "<symbol><_>(':'\\x7c'=')<expr>('.'\\x7c';')";
+ ebnfOfEBNF.squote.expr = "/'*'/";
+ ebnfOfEBNF.symChar.expr = '/\x5ba\x2dzA\x2dZ0\x2d9$_\x5d/';
+ ebnfOfEBNF.symbol.expr = "'<'<dressed>'>'|<naked>";
+ ebnfOfEBNF.term.expr = "<factor>[<_>'\\x5cx2d'<_><factor>]";
+
+ebnf.assignActions(@::ebnfOfEBNF
+		, 'definition', function { cat = ''; for (i = 0; i < [$3].n; ++i) cat #= [$3][i]; ( cat ) }
+		, 'dressed', function { $2 }
+		, 'exclExpr', function { '-' # ebnf.escape([$3][0]) # '-' }
+		, 'expr', function { cat = [$3][0]; for (i = 1; i < [$3].n; ++i) cat #= '>' # ebnf.escape([$3][i]) # '<'; ( cat ) }
+		, 'orExpr', function { cat = ''; for (i = 0; i < [$3].n; ++i) { if (cat !== '') cat #= '|'; cat #= [$3][i]; }; ( cat ) }
+		, 'groupExpr', function { '(' # ebnf.escape([$3][0]) # ')' }
+		, 'literal', function { "'" # ebnf.escape(evaluate($2)) # "'" }
+		, 'meta', function { '<' # [$3][0] # '>' }
+		, 'naked', function { $2 }
+		, 'optExpr', function { '[' # ebnf.escape([$3][0]) # ']' }
+		, 'regExpr', function { '/' # ebnf.escape(replace($2, '\', void, find, 2, >{$0{1}})) # '/' }
+		, 'repExpr', function { '{' # ebnf.escape([$3][0]) # '}' }
+		, 'rule', function { [::ebnf.compileTo][[$3][0]].expr = [$3][1]; }
+		, 'term', function { if ([$3].n > 1) ( '(' # ebnf.escape([$3][0] # '-' # ebnf.escape([$3][1]) # '-') # ')' ) else ( [$3][0] ) }
+	);
+
+test = function { print(escape(ebnf.unescape(ebnfOfEBNF[$0].expr))) };
+
+createEBNFParser = function {
+	src = load(SOURCE_ROOT # 'ebnfOfEbnfSource.ebnf');
+	ebnf.compile(@test, src);
+	print("Parsed ebnf syntax source");
+	i = ebnf.matchRule(@test, src, 'root', '', @actionRetList);
+	if (i != length(src)) {
+		throw("Error validating ebnf syntax recursively. Somewhere around: " # src{i:40});
+	} else {
+		print("Successfully parsed ebnf syntax recursively");
+		clone(@test, @::ebnfOfEBNF);
+		show(@::ebnfOfEBNF);
+	};
+};
+
+/*
+ascii_char = ( anything ) .
+
+comment = ( anything ) .
+
+digit = ( "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ) .
+
+*/
+
+/*
+<number>
+	[0-9.]
+	|
+	[0-9.]
+	<number>
+|
+<number>
+	[0-9.]
+	|
+	[0-9.]
+	<number>
+','
+<numberList>
+	<number>
+		[0-9.]
+		|
+		[0-9.]
+		<number>
+	|
+	<number>
+		[0-9.]
+		|
+		[0-9.]
+		<number>
+	','
+	<numberList>
+'.'
+
+
+	<number>
+	<number>
+		[0-9.]
+		[0-9.]<number>
+	','<numberList>'.'
+*/
+assert(> ebnf.parse(@testbnf, 'x=x;'));
+assert(> ebnf.parse(@testbnf, 'x=xx;'));
+assert(> ebnf.parse(@testbnf, 'x=x y=y;'));
+assert(> ebnf.parse(@testbnf, 'x=xx y=y;'));
+assert(> ebnf.parse(@testbnf, 'x=x y=yy;'));
+assert(> ebnf.parse(@testbnf, 'x=xx y=yy;'));
+assert(> ebnf.parse(@testbnf, 'x=xxxx y=yyyy;'));
+assert(> !ebnf.parse(@testbnf, 'x=xxxx y=yyyy'));
+assert(> !ebnf.parse(@testbnf, 'x= y=yyyy;'));
+assert(> ebnf.parse(@testbnf, ''));
+assert(> !ebnf.parse(@testbnf, 'x='));
+assert(> !ebnf.parse(@testbnf, 'x'));
+assert(> !ebnf.parse(@testbnf, ';'));
+assert(> ebnf.parse(@testbnf, '0'));
+assert(> ebnf.parse(@testbnf, '02359'));
+assert(> !ebnf.parse(@testbnf, '02359a'));
+assert(> ebnf.parse(@testbnf, 'xyhepp', 'test2'));
+assert(> ebnf.parse(@testbnf, 'xyza', 'test2'));
+assert(> !ebnf.parse(@testbnf, 'xyzahepp', 'test2'));
+assert(> ebnf.parse(@testbnf, '3b5smurf', 'test3'));
+assert(> ebnf.parse(@testbnf, '5r7', 'test3'));
+assert(> !ebnf.parse(@testbnf, '5rx', 'test3'));
+assert(> !ebnf.parse(@testbnf, '5r77', 'test3'));
+
+/*
+"xx yyy"
+
+<xs> ## ' '<ys>|<xs>
+	'x'|'x'<xs> ##
+		'x'|'x' ## <xs>
+'x'
+
+*/
+
+// FIX: interesting thing here to create map from variable space:
+// t = function { function { prune(@[void]); evaluate(^$1, @[void]); clone(@[void], ^$0); }() };
+// t(@a, 'x=3; ["."]=23; [(@[void])["::"]]=12; t(@plupp, "slupp=\"klupp\"")')
+
+compilePeg = function {
+	if (true || !exists(@::pegGrammar)) {
+prune(@::pegGrammar);
+		::pegGrammar = true;
+		::pegGrammar.idChars0 = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_';
+		::pegGrammar.idChars1 = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789';
+		::pegGrammar.pikaIdChars0 = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$';
+		::pegGrammar.pikaIdChars1 = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789.';
+		::pegGrammar.parseValue = function {
+			if ($0{0} === '"' || $0{0} === "'") {
+				$s = evaluate($0{:$i = parse($0, true)});
+				[$1] = bake("':($0{\1:<%(length($s))%>} == <%(escape($s))%>) && { \1 += <%(length($s))%>; true }", '<%(', ')%>')
+			} else if ($0{0} === '[') {
+				$s = $0{:$i = find($0, ']') + 1};
+				$s = chop($s{1:}, 1);
+				$s = replace($s, '"', '\"');
+				$s = evaluate('"' # $s # '"');
+				set = '';
+				for (; $s !== ''; $s = $s{i:}) {
+					set #= $s{:i = 1 + find($s{1:}, '-')};
+					if ($s{i} === '-') {
+						for ({ f = ordinal($s{i - 1}) + 1; t = ordinal($s{i + 1}) }; f <= t; ++f) set #= char(f);
+						i += 2;
+					}
+				};
+				[$1] = bake("[:(span($0{\1}, <%(escape(set))%>) == 1) && { \1 += 1; true }", '<%(', ')%>');
+			} else if ($0{0} === '.') {
+				[$1] = ".:($0{\1} !== '') && { ++\1; true }";
+				$i = 1;
+			} else if ($0{0} === '%') {
+				[$1] = $0{1:$i = find($0{1:}, '%')};
+				[$1] = '%' # replace([$1], '$$', '[$2]');
+				$i += 2;
+			} else if ($0{:2} === '$$') {
+				[$1] = '$:[$2]';
+				$i = 2;
+			} else if ($0{0} === '$' && $0{1} !== '' && find($0{1}, pegGrammar.pikaIdChars0) == 0) {
+				[$1] = '$:' # $0{:$i = 1 + span($0{1:}, pegGrammar.pikaIdChars1)};
+			} else if ($0 !== '' && find($0{0}, pegGrammar.idChars0) == 0) {
+				$s = $0{:$i = 1 + span($0{1:}, pegGrammar.idChars1)};
+				[$1] = bake("<:peg.<%($s)%>($0, @\1, @\3)", '<%(', ')%>')
+			} else throw("Syntax error");
+			( $i )
+		};
+		::pegGrammar.skipChars = function { span($0, " \t\r\n") };
+		::pegGrammar.tempIndex = 1;
+		::pegGrammar.rollback = function {
+			if ($0{0} === 'R') {
+				iv = '$i' # ::pegGrammar.tempIndex++;
+				xformed = replace($0{2:}, "\1", iv);
+				( bake("{ <%(iv)%> = \1; true } && <%(xformed)%> && { \1 = <%(iv)%>; true }", '<%(', ')%>') )
+			} else ( $0{2:} )
+		};
+		
+		addOp => { $0 = @::pegGrammar[$0]; defaults(@[$0].n, 0); $0 = @[$0][[$0].n++]; invoke('map', , @$); };
+		
+		addOp('prefixOps',  'token','(' , 'precedence',6 , 'evaluate',function { bake('<%($0{0})%>:(<%($0{2:})%>)', '<%(', ')%>'); } , 'terminator',')');
+		addOp('prefixOps',  'token','{' , 'precedence',2 , 'evaluate',function {
+			if ($0{0} !== '%') throw("Invalid type");
+			bake('T:{ <%($0{2:})%>; true }', '<%(', ')%>');
+		} , 'terminator','}');
+//		addOp('postfixOps', 'token','?' , 'precedence',5 , 'evaluate',factorial);
+		addOp('postfixOps', 'token','?' , 'precedence',5 , 'evaluate',function { bake('T:{ <%(pegGrammar.rollback($0))%>; true }', '<%(', ')%>'); });
+		addOp('postfixOps', 'token','*' , 'precedence',5 , 'evaluate',function { bake('T:{ for (; <%(pegGrammar.rollback($0))%>; ); true }', '<%(', ')%>'); });
+		addOp('postfixOps', 'token','+' , 'precedence',5 , 'evaluate',function { bake('R:{ false; for (; <%(pegGrammar.rollback($0))%>; ) true }', '<%(', ')%>'); });
+		addOp('prefixOps',	'token','&' , 'precedence',4 , 'evaluate',function {
+			iv = '$i' # ::pegGrammar.tempIndex++;
+			xformed = replace($0{2:}, "\1", iv);
+			bake("?:{ <%(iv)%> = \1; <%(xformed)%> }", '<%(', ')%>'); });
+		addOp('prefixOps',	'token','!' , 'precedence',4 , 'evaluate',function {
+			iv = '$i' # ::pegGrammar.tempIndex++;
+			xformed = replace($0{2:}, "\1", iv);
+			bake("?:{ <%(iv)%> = \1; !(<%(xformed)%>) }", '<%(', ')%>'); });
+		addOp('binaryOps',  'token','/' , 'precedence',1 , 'evaluate',function { bake("?:<%(pegGrammar.rollback($0))%>\n\t|| <%(pegGrammar.rollback($1))%>", '<%(', ')%>'); });
+		addOp('binaryOps',  'token',''  , 'precedence',3 , 'evaluate',function { bake('R:<%($0{2:})%> && <%($1{2:})%>', '<%(', ')%>'); });
+		addOp('binaryOps',  'token',':'  , 'precedence',7 , 'evaluate',function {
+			if ($0{0} !== '$') throw("Invalid type");
+			id = $0{2:};
+			if ($1{0} !== '<') {
+				xformed = replace($1{2:}, "\3", "_");
+				/* FIX : use alread existing rollback var if ($0{0} === 'R') {
+					iv = '$i' # ::pegGrammar.tempIndex++;
+					xformed = replace($0{2:}, "\1", iv);
+					bake("{ <%(iv)%> = \1; true } && <%(xformed)%> && { \1 = <%(iv)%>; true }", '<%(', ')%>')
+				} else */
+				{
+					bv = '$b' # ::pegGrammar.tempIndex++;
+					( bake("<%($0{0})%>:{ <%(bv)%> = \1; true } && <%(xformed)%> && { <%(id)%> = $0{<%(bv)%>:\1 - <%(bv)%>}; true }", '<%(', ')%>') )
+				}
+			} else {
+				( replace($1, "\3", id) )
+			}
+		});
+		addOp('binaryOps',  'token','<-', 'precedence',8 , 'evaluate',function {
+			if ($1{0} === 'R') {
+				iv = '$i' # ::pegGrammar.tempIndex++;
+				xformed = replace($1{2:}, "\1", iv);
+				$1 = bake("?:{ <%(iv)%> = \1; true } && <%(xformed)%> && { \1 = <%(iv)%>; true }", '<%(', ')%>')
+			};
+			if ($0{0} !== '<') throw("Invalid type");
+			fn = $0{2:find($0{2:}, '(')};
+			if (exists(@::[fn].action)) {
+				xformed = replace($1{2:}, "\1", "$i");
+				xformed = replace(xformed, "@\3", "$2");
+				xformed = replace(xformed, "\3", "[$2]");
+				def = (fn # " = function {\n\t$i = [$1]; a.n = 0; " # ( xformed ) # " && { s = $0{[$1]:$i - [$1]}; [$1] = $i; [$2] = " # ::[fn].action # "; true }\n};\n\n")
+			} else {
+				xformed = replace($1{2:}, "@\1", "$1");
+				xformed = replace(xformed, "\1", "[$1]");
+				xformed = replace(xformed, "@\3", "$2");
+				xformed = replace(xformed, "\3", "[$2]");
+				def = (fn # " = function {\n\t" # ( xformed ) # "\n};\n\n");
+			};
+			print(def);
+			evaluate(def, @::);
+			::pegGrammar.tempIndex = 1;
+		});
+	};
+	
+	if (interpret($0, @::pegGrammar, @result) < length($0)) throw('Syntax error');
+	( void );
+};
+
+ppegTest = '
+	root <-	{ $b.target = "" } _ b:block
+	block <- "{" _ ( l:left _ { $r.target = $$.target # $l # "." } ":" _
+			r:right _ { if ($r !== void) print($$.target # $l # " : " # $r) } )* "}" _ { $$ = void }
+	left <- $$=([a-z0-9_$]+)
+	right <- literal / block
+	literal <- $$=("\"" (!"\"" .)* "\"" / [0-9]+("."[0-9]+)?)
+	_ <- [ \t\n\r]*
+';
+
+runPeg = function {
+	vargs(@source, , @rule);
+	defaults(@rule, 'root');
+	i = 0;
+	success = ::ppeg[rule](source, @i, @o);
+	if (!success || i != length(source)) print("Failure around: " # source{i:40})
+	else {
+		print("Success!");
+		show(@o);
+	}
+};
+
+include(ROOT # 'tools/ppeg/ppeg.pika');
+
+TreePPEG = function {
+	this = this();
+	if (!exists(@::treePPEG.parse)) construct(@::treePPEG, PPEG, load(SOURCE_ROOT # 'treeppeg.ppeg'));
+	construct(this, PPEG, ::treePPEG.parse($0));
+	[this].dump = function {
+		vargs(@object, , @indent);
+		defaults(@indent, 0);
+		this = this();
+		spaces = repeat(' ', indent);
+		print(spaces # '(' # limitLength(escape([object].$text) # ')', CONSOLE_COLS - indent - 2));
+		foreach(object, >{
+			if (right($1, 2) === '.n') {
+				print(spaces # chop($1, 2));
+				iterate(ascend($0), >[this].dump($2, indent + 2));
+			}
+		})
+	};
+};
+
+jsonTest = '{
+      "Image": {
+          "Width":  800,
+          "Height": 600,
+          "Title":  "View from 15th Floor",
+          "Thumbnail": {
+              "Url":    "http://www.example.com/image/481989943",
+              "Height": 125,
+              "Width":  "100"
+          },
+          "IDs": [116, 943, 234, 38793]
+        }
+   }';
+
+numbStruckTest = '{
+      Image: {
+          Width:  800
+          Height: 600
+          Title:  "View from 15th Floor"
+          Thumbnail: {
+              Url:    "http://www.example.com/image/481989943"
+              Height: 125
+              Width:  "100"
+          }
+          IDs: { 116, 943, 234, 38793 }
+        }
+   }';
+
+updatePPEGCompilers = function {
+    oldSource = newSource = load(run.root # '../tools/ppeg/ppegGlobal.ppeg');
+
+	construct(@test1, PPEG, oldSource);
+	print("Successfully compiled source (syntax is alright)");
+	test1.grammar.$compileTo = @test2;
+	test1.parse(newSource);
+	print("Successfully compiled itself once (generated a new compiler)");
+	prune(@test1);
+	test2.$compileTo = @::ppeg;
+	ppeg.parse(@test2, newSource);
+	print("Successfully compiled itself twice (can regenerate)");
+	delete(@::ppeg.$compileTo);
+	delete(@::ppeg.$target);
+	
+    localSource = load(run.root # '../tools/ppeg/ppegLocal.ppeg');
+	construct(@test1, PPEG, localSource);
+	print('Successfully compiled source for "local" version (syntax is alright)');
+	test1.grammar.$compileTo = @test2;
+	newParser = test1.parse(localSource);
+	print("Successfully compiled itself once (generated a new compiler)");
+	prune(@test1);
+	newParser(localSource, @regened);
+	if (regened !== newParser) throw('Regenerated parser is not identical');
+	print("Successfully compiled itself twice (can regenerate)");
+	::ppeg.compileFunction = regened;
+	
+    save(run.root # '../tools/ppeg/initPPEG.pika', sourceFor(@::ppeg));
+	print("initPPEG.pika replaced");
+};
+
+/* FIX : drop
+json.parse = function {
+	vargs(@source, , @target, @nullValue);
+	if (!exists(@target)) {
+		if (!exists(@::json.poly.parse)) construct(@::json.poly, PPEG, load(SOURCE_ROOT # 'jsonPolylithic.ppeg'));
+		( ::json.poly.parse(source) )
+	} else {
+		destruct(target);
+		if (!exists(@::json.mono.parse)) construct(@::json.mono, PPEG, load(SOURCE_ROOT # 'jsonMonolithic.ppeg'));
+		dd.target = target;
+		dd.null = coalesce(@nullValue, <null>);
+		::json.mono.parse(source, @dd);
+		( target )
+	}
+};
+*/
+
+json.parse = function {
+	vargs(@source, , @target, @nullValue);
+	if (!exists(@target)) {
+		if (!exists(@::json.polyParseFunc)) {
+			ok = ppeg.compileFunction(load(SOURCE_ROOT # 'jsonPolylithic.ppeg'), @::json.polyParseFunc);
+			assert(> ok);
+		};
+		if (!::json.polyParseFunc(source, @dd, @i)) ppeg.fail("JSON format error", source, i);
+		( dd )
+	} else {
+		destruct(target);
+		if (!exists(@::json.monoParseFunc)) {
+			ok = ppeg.compileFunction(load(SOURCE_ROOT # 'jsonMonolithic.ppeg'), @::json.monoParseFunc);
+			assert(> ok);
+		};
+		dd.target = target;
+		dd.null = coalesce(@nullValue, <null>);
+		if (!::json.monoParseFunc(source, @dd, @i)) ppeg.fail("JSON format error", source, i);
+		( dd.target )
+	}
+};
+
+// FIX : finish off
+/*
+JSON_CHARS_ALLOWED = '';
+for (i = 32; i < 256; ++i) JSON_CHARS_ALLOWED #= char(i);
+map(@jsonConverters
+		, 'void', >'""'
+		, 'boolean', >$0
+		, 'number', >{ if ($0 == +infinity) 'Infinity' else if ($0 == -infinity) '-Infinity' else $0 }
+		, 'native', >{ if ($0 == <null>) 'null' else jsonConverters.string($0) }
+		, 'string', >{
+			if ($0{0} == '"' || $0{0} == "'") $0 = unescape($0);
+			$0 = replace($0, "\"\\/\b\f\n\r\t", "\"\\/bfnrt", find, 1, >'\' # $1{find("\"\\/\b\f\n\r\t", $0)});
+			( '"' # replace($0, JSON_CHARS_ALLOWED, void, span, 1, >'\u' # radix(ordinal($0), 16, 4)) # '"' )
+		}
+	);
+jsonConverters.reference = jsonConverters.function = jsonConverters.string;
+
+jsonConvert = function { jsonConverters[classify($0)]($0) };
+
+
+json.polyGenerate = function {
+	vargs(@object, , @indent);
+	map(@converters
+			, 'void', >'""'
+			, 'boolean', >$0
+			, 'number', >{ if ($0 == +infinity) 'Infinity' else if ($0 == -infinity) '-Infinity' else $0 }
+			, 'reference', >json.polyGenerate($0, indent # TAB)
+			, 'function', >$0
+			, 'native', >{ if ($0 == <null>) 'null' else $0 }
+			, 'string', >{ if ($0{0} == '"' || $0{0} == "'") $0 = unescape($0); '"' # $0 # '"' } // FIX: here we need an algo for escaping as JSON string
+		);
+	members.n = 0;
+	foreach(object, >append(@members, $1));
+	sort(@members);
+	for (i = 0; i < members.n - 1 && members[i] == i; ++i);
+	if (i == members.n - 1 && members[i] == 'n' && [object].n == i) {
+		s = '[ ';
+		for (i = 0; i < [object].n; ++i) {
+			if (i != 0) s #= ', ';
+			s #= converters[classify(x = [object][i])](x);
+		};
+		s #= ' ]';
+	} else {
+print('OBJECT');
+	}
+};
+
+json.monoGenerate = function {
+	vargs(@structure, , @nullValue); defaults(@nullValue, <null>);
+	// FIX : tough this one
+};
+*/
+
+( void )

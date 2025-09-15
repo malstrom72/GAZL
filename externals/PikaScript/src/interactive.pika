@@ -1,0 +1,120 @@
+#! /usr/local/bin/PikaCmd
+
+/*
+	interactive.pika v0.97
+	
+	PikaScript is released under the BSD 2-Clause License. https://opensource.org/licenses/BSD-2-Clause
+	
+	Copyright (c) 2008-2025, NuEdge Development / Magnus Lidstroem
+	All rights reserved.
+*/
+
+interact = function {
+	HELP = '
+Enter expressions to evaluate them interactively line by line. E.g.:
+
+    3+3
+    print(''hello world'')
+    run(''chess.pika'')
+
+You can evaluate a multi-line expression by ending the first line with an opening curly bracket (''{''). Finish the expression with a single closing curly bracket (''}''). E.g.:
+
+    f = function {
+        print(''hello world'');
+    }
+
+The special global variable ''_'' holds the result of the last evaluated expression. E.g.:
+
+    25 * 25
+    sqrt(_)
+    _ == 25
+
+Special commands are:
+
+    ?                        this help
+    <page>?                  shows a page from the standard library help system (type ''help?'' for more info)
+    =                        displays the full definition of the last evaluated expression
+    <variable>=              displays the full definition of a variable / function / container
+    %                        re-run last executed PikaScript source file
+    %['']<path>[''] [args...]  runs a PikaScript source file (optionally with arguments)
+    !<command>               executes a command with the operating system''s command interpreter
+    exit                     exits
+';
+
+	args(@prompt, @where);
+	printReturn = printError = print;
+	RETURN_COLOR = ERROR_COLOR = '';
+	if (exists(@::PLATFORM) && ::PLATFORM === 'UNIX') {
+		RETURN_COLOR = "\x1B[0;2m";
+		ERROR_COLOR = "\x1B[1;31m";
+		oldPrint = print;
+		oldInput = input;
+		::print = function { <print>((if ($0{0} != "\x1B") "\x1B[0;32m") # $0) };
+		::input = function { <input>(if ($0{0} != "\x1B") "\x1B[0;33m" # $0 # "\x1B[m" else $0) };
+	};
+	::_ = void;
+	oneLine = function { limitLength(singleLine($0), CONSOLE_COLS - 7) };
+	show = function {
+		args(@var);
+		more(var # if (classify(var) === 'reference' && (s = sourceFor(var, ' ')) !== '')
+				(LF # repeat('=', 8) # LF # s # repeat('=', 8)));
+		( void )
+	};
+	for (; {
+		if ((s = input(prompt)) === 'exit') ( false )
+		else {
+			::__ = void;
+			tryThis => (::__ = evaluate(s, where));
+			printThis = RETURN_COLOR # '----- ( {oneLine(toSource(::__))} )';
+
+			if (s{0} === '!') tryThis => (::__ = system(s{1:}))
+			else if (s{0} === '%') {
+				if (s === '%' && !exists(@arglist.n)) {
+					tryThis = void;
+					printThis = "No PikaScript source executed yet."
+				} else {
+					if (s !== '%') {
+						for (prune(@arglist); s !== void; s = s{i:}) {
+							s = s{1 + span(s{1:}, ' '):};
+							if (s !== void) {
+								append(@arglist, if (s{0} === "'" || s{0} === '"') s{1:(i = 1 + find(s{1:}, s{0})) - 1}
+										else s{:i = find(s, ' ')});
+							}
+						};
+						if (!wildmatch(arglist[0], '*.[^/:\]*')) arglist[0] #= '.pika';
+					};
+					l = '';
+					iterate(@arglist, >l #= ' ' # escape($2));
+					print('----- Running' # l);
+					tryThis => (::__ = invoke('run', , @arglist));
+				}
+			}
+			else if (s === '=') { tryThis => show(::_); printThis = void }
+			else if (s === '?') { tryThis => print(HELP); printThis = void }
+			else if (right(s, 1) === '?') { tryThis => help(chop(s, 1)); printThis = void }
+			else if (right(s, 1) === '=') { tryThis => show(@[where][chop(s, 1)]); printThis = void }
+			else if (right(s, 1) === '{') {
+				print('(Multi-line input. Finish with a single ''}''.)');
+				for (; { s #= LF # (l = input('')); l !== '}' }; );
+			};
+
+			if (tryThis !== void && (x = try(tryThis)) !== void) printThis = ERROR_COLOR # '!!!!! {x}';
+			if (printThis !== void) print(bake(printThis));
+			::_ = ::__;
+			( true )
+		}
+	}; );
+
+	if (exists(@oldPrint)) {
+		::print = oldPrint;
+		::input = oldInput;
+		print("\x1B[m");
+	}
+};
+
+if (exists(@$1) && $1 == 'go') {
+	include('stdlib.pika');
+	include('debug.pika');
+	print("Type '?' for help.");
+	interact('Pika> ', @::);
+};

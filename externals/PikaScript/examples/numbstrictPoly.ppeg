@@ -1,0 +1,68 @@
+# diff from loose numbstruck:
+# 
+# . ctrl-z eof is not recognized
+# . valid space characters are [ \t\r\n] (ascii codes 32, 7, 13 and 10)
+# . valid characters in comments are space characters and ascii codes 33 to 255
+# . valid characters for unquoted keys are [a-zA-Z0-9_] (first must not be a digit)
+# . valid characters in unquoted text are [ \t] and ascii codes 33 to 126 except [{}"':,=;]
+# . valid characters in quoted strings are [ ] and ascii codes 33 to 126
+# . recognized escape sequences are: '\x' '\u' '\U' '\n' '\r' '\t' '\'' '\"' '\\'
+# . '\l' escape sequence (for 32-bit characters) has been replaced with '\U'
+# . '\x' '\u' and '\U' must have exact number of hex digits (2, 4 and 8)
+# . no escape sequence for decimal character codes
+# . [=] is not accepted as key/value separator, only [:] (and it is required)
+# . [:] after key must be on the same line (also for quoted keys)
+# . [,] or [\n] (or both) is required between each element
+# . [;] is not accepted as element separator, only [,] or [\n]
+# . trailing [,] in key/value lists is illegal (but ok in value only lists)
+# . '{ : }' may be used to declare an empty struct (to differentiate from an empty array)
+
+{
+	$$parser.fail = function { args(@message, @offset); throw(bake('({offset}) {message}')) };
+}
+
+root                <-  _lf keyValueList_? !.
+
+valueList_          <-													{ $$ = new(Array) }
+						(v:value _ next_								{ append($$, $v) }
+						/ ',' _lf										{ append($$, void) }
+						)*
+						(v:value _lf									{ append($$, $v) }
+						)?
+
+keyValueList_       <-                                              	{ $$ = new(Container) }
+						(':' / keyValue_ (next_ keyValue_)*) _lf
+
+next_ 				<-	([\r\n] (_lf ',')? / _lf ',') _lf
+
+keyValue_ 			<-													{ $offset = $$i }
+						k:key                                       	{ $v = void }
+						(_ ':' _ v:value?
+						) _												{ if (exists(@[$$][$k])) $$parser.fail(bake('Duplicate key: {escape($k)}'), $offset); [$$][$k] = $v }
+
+key                 <-  quotedString / identifier
+value 	        	<-  block / quotedString / text
+
+block               <-  '{' _lf (valueList_ '}' / keyValueList_ '}')
+
+text 				<-													{ $$ = '' }
+						(_ s=(![{}"':,=;] !'/*' !'//' [\41-\176])+ 		{ $$ #= (if ($$ !== '') ' ') # $s }
+						)+
+
+quotedString        <-  $$=('"' ( escapeCode / !["\\] [\40-\176])* '"'
+						/ "'" ( escapeCode / !['\\] [\40-\176])* "'")   { $$ = unescape($$) /* sorry, but no \u or \U supported here */ }
+
+identifier			<-	$$=([a-zA-Z_] [a-zA-Z0-9_]*)
+
+_lf                 <-  (comment / [ \t\r\n])*
+_              		<-  (comment / [ \t])*
+
+comment             <-  singleLineComment / multiLineComment
+singleLineComment   <-  '//' [\40-\377\t]* (!. / &[\r\n])
+multiLineComment    <-  '/*' (multiLineComment / !'*/' [\40-\377\t\r\n])* '*/'
+
+escapeCode          <-  '\\x' hex2 / '\\u' hex4 / '\\U' hex8 / '\\' [nrt'"\\]
+hex8                <-  hex4 hex4
+hex4                <-  hex2 hex2
+hex2                <-  hex hex
+hex                 <-  [0-9A-Fa-f]

@@ -1,0 +1,52 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+  <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+          <meta http-equiv="Content-Style-Type" content="text/css">
+                <title>PikaCmd Documentation</title>
+                <style type="text/css">
+                  table, th, td { border: 1px solid black; padding: 5px; border-collapse:collapse; }
+                  th { text-align: left }
+                  img { border: 0 none }
+                html {background:#faf8f3;}body {min-width:650px;max-width:960px;_width:650px;color:#000;margin:0;font-family:'Cambria',Georgia,'Times New Roman',Times,serif;height:100%;overflow:visible;padding:36px;}table {line-height:18px;margin-bottom:17px;border:1px solid #ccc;border-collapse:collapse;border-bottom-color:#aaa;border-radius:2px;box-shadow:0px 1px 0 #ddd;-moz-border-radius:2px;-moz-box-shadow:0px 1px 0 #ddd;-webkit-box-shadow:0px 1px 0 #ddd;}tr { background:#fff;vertical-align:top;}th,tr:nth-child(even) { background:#eee;}td {border:1px dotted #ccc;padding:2px 18px 4px 9px;font-size:0.9em;}th {background:#ddd;border:1px solid #bbb;color:#000;font-weight:normal;padding:4px 18px 4px 9px;text-align:left;font-size:0.85em;}tr:nth-child(1) th {background:-webkit-gradient(linear, 0% 0%, 0% 100%, from(#ccc), to(#bbb));background:-moz-linear-gradient(top, #ccc, #bbb);border:1px solid #aaa;border-bottom-color:#999;border-top-color:#bbb;box-shadow:0px 1px 1px #ccc;-moz-box-shadow:0px 1px 1px #ccc;-webkit-box-shadow:0px 1px 1px #ccc;color:#333;padding:8px 18px 8px 9px;text-shadow:0 1px #ddd;}tt {color:#5d5d5d;padding-right:4px;padding-left:4px;}pre {border:1px solid #d0d0d0;overflow:auto;color:#5f5f5f;padding:0.4em;}ul {list-style-type:disc;padding-left:14px;list-style-position:inside;}h1,h2,h3,h4,h5,h6 {font-weight:bold;margin-bottom:18px;}h1,h2 { line-height:36px; }h3,h4 { line-height:18px; }h1 { font-size:2.0em; }h2 { font-size:1.5em; }h3 { font-size:1.3em; }h4 { font-size:1.2em; }h5 { font-size:1.1em; }h6 { font-size:1.0em; }a { text-decoration:none; }a[href]:hover { text-decoration:underline; }a sup{ font-size:0.7em; }
+                </style>
+          </head>
+          <body>
+<h1><a name="PikaCmd">PikaCmd</a></h1>
+<h2><a name="What_is_PikaCmd?">What is PikaCmd?</a></h2>
+<p>PikaCmd is the command line runner for PikaScript programs. It bundles the language runtime and standard library into a standalone executable so that scripts can be executed directly from a shell.</p>
+<h2><a name="Building">Building</a></h2>
+<p>The tool is built from the sources in <tt>tools/PikaCmd/SourceDistribution</tt>. Run <tt>BuildPikaCmd.sh</tt> (or the <tt>.cmd</tt> variant on Windows) which compiles <tt>PikaCmdAmalgam.cpp</tt>, executes unit tests and produces a <tt>PikaCmd</tt> binary.</p>
+<pre>bash tools/PikaCmd/SourceDistribution/BuildPikaCmd.sh<br></pre>
+<p>After building, you can install <tt>PikaCmd</tt> and helper scripts system wide using <tt>InstallPika.sh</tt> or <tt>InstallPika.cmd</tt>.</p>
+<h1><a name="systools.pika">systools.pika</a></h1>
+<p>The helper script <tt>systools.pika</tt> contains cross&#8209;platform file utilities and an improved <tt>include</tt> function used by many build scripts. Load it together with <tt>stdlib.pika</tt> at the top of a script:</p>
+<pre>include('stdlib.pika');<br>include('systools.pika');<br></pre>
+<h3><a name="Improved_include">Improved include</a></h3>
+<p>The regular <tt>include()</tt> from <tt>stdlib.pika</tt> simply loads the named file. The version in <tt>systools.pika</tt> first searches a list of directories and also tracks which file is executing. The variable <tt>::run.root</tt> always contains the directory of the currently running file. <tt>include()</tt> looks for the argument relative to <tt>run.root</tt> followed by any paths added with <tt>include.addSearchPath()</tt> or by setting the environment variable <tt>PIKAINCLUDE</tt>. Already included files are skipped.</p>
+<p>This mechanism allows scripts to locate other resources regardless of the current working directory. <tt>run()</tt> is similarly wrapped so that it sets <tt>run.root</tt> before executing the loaded source.</p>
+<h2><a name="Writing_portable_scripts">Writing portable scripts</a></h2>
+<p>By using <tt>systools.pika</tt> and referencing files via <tt>run.root</tt>, a script can be launched from any directory. Example:</p>
+<pre>include('stdlib.pika');<br>include('systools.pika');<br>include(run.root # '../tools/ppeg/ppeg.pika');<br><br>src = load(run.root # 'digits.ppeg');<br>parseDigits = ppeg.compileFunction(src);<br>assert(&gt; parseDigits('123'));   # Works no matter the launch dir<br></pre>
+<h3><a name="Built-in_vs_External_Files">Built-in vs External Files</a></h3>
+<p><a href="#PikaCmd">PikaCmd</a> provides a few scripts as built-ins so that they are always available. <tt>stdlib.pika</tt> is among these and is embedded in the executable together with <tt>debug.pika</tt>, <tt>help.pika</tt>, <tt>interactive.pika</tt> and <tt>default.pika</tt>. When <tt>load('stdlib.pika')</tt> is called, the loader first checks the working directory, then the directory of <tt>PikaCmd</tt> itself and finally falls back to the built-in copy. This guarantees that the standard library can be included even if the file is missing on disk.</p>
+<p><tt>systools.pika</tt> is <b>not</b> internalized. It is distributed next to the <tt>PikaCmd</tt> binary by <tt>InstallPika.sh</tt> and must exist on disk. The overloaded <tt>load()</tt> still searches the current directory and the executable directory, but there is no built-in fallback for this file.</p>
+<h3><a name="Command-line_Usage">Command-line Usage</a></h3>
+<p><a href="#PikaCmd">PikaCmd</a> is launched with either a script file or a block of code enclosed in braces. If launched without a parameter <a href="#PikaCmd">PikaCmd</a> runs <tt>default.pika</tt>. The loader first searches the working directory and the directory of <tt>PikaCmd</tt> for this file before using the built-in version which simply starts the interactive shell.</p>
+<h3><a name="Interactive_Shell">Interactive Shell</a></h3>
+<p>Launching <a href="#PikaCmd">PikaCmd</a> without arguments brings up a simple REPL implemented by <tt>interactive.pika</tt>. Each line is evaluated immediately. End a line with an opening <tt>{</tt> to start a multi-line block and finish it with a single <tt>}</tt>. The variable <tt>_</tt> holds the result of the last evaluation. Use <tt>?</tt> for help, <tt>%</tt> to run scripts and <tt>exit</tt> to quit.</p>
+<pre>PikaCmd [ -h | &lt;filename&gt; [&lt;arguments&gt; ...] | '{' &lt;code&gt; '}' ]<br></pre>
+<p>The command line arguments following <tt>&lt;filename&gt;</tt> become available as <tt>$1</tt>, <tt>$2</tt> and so on. <tt>$0</tt> is the script filename. Use <tt>getenv('VAR')</tt> to read environment variables and <tt>PLATFORM</tt> to query the operating system identifier. <tt>PLATFORM</tt> is set to either <tt>UNIX</tt> or <tt>WINDOWS</tt> depending on which version of <tt>PikaCmd</tt> you built.</p>
+<h3><a name="Parsing_Command-line_Parameters">Parsing Command-line Parameters</a></h3>
+<p>A PikaScript file can act as a command-line tool. At the start of such a script you typically call <tt>args()</tt> or <tt>vargs()</tt> to assign the values from <tt>$1</tt>, <tt>$2</tt>, ... to local variables. <tt>args()</tt> is used for mandatory parameters&#8212;the number of variables passed to it must match the number of arguments supplied or an exception is thrown. <tt>vargs()</tt> works the same way but lets you define optional arguments by leaving a blank slot in the call. Passing too few required or too many optional arguments will also raise an error.</p>
+<p>Example: an <tt>echo.pika</tt> script that prints a message a number of times:</p>
+<pre>vargs(@msg, , @times);<br>defaults(@times, 1);<br>for (i = 0; i &lt; times; ++i) print(msg);<br></pre>
+<p>Running <tt>output/PikaCmd echo.pika Hello 3</tt> prints <tt>Hello</tt> three times. Using <tt>args()</tt> instead would require exactly the specified parameters.</p>
+<h3><a name="Setting_Defaults">Setting Defaults</a></h3>
+<p>Use the standard <tt>defaults()</tt> function to assign fallback values only when variables do not yet exist. This is handy after <tt>vargs()</tt> to initialize optional parameters or to set globals once.</p>
+<pre>vargs(@file, , @mode);<br>defaults(@mode, 'r');<br></pre>
+<h3><a name="Exceptions_and_Return_Code">Exceptions and Return Code</a></h3>
+<p>Raise an error with <tt>throw('message')</tt> and capture it with <tt>try()</tt>. The global variable <tt>exitCode</tt> determines the process exit status (default is 0). Assign a value to <tt>exitCode</tt> before returning to set a specific status. If an uncaught exception occurs the error is printed and <tt>exitCode</tt> defaults to 255.</p>
+
+        </body>
+</html>

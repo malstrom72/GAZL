@@ -1,0 +1,92 @@
+{   
+  "comment": "PikaScript Syntax",
+  "fileTypes": ["pika"],
+  "firstLineMatch": "^#! /usr/local/bin/PikaCmd",
+  "name": "PikaScript",
+  "scopeName": "source.pika",
+  "patterns": [
+    { "name": "comment.line.pika",
+      "match": "^#! /usr/local/bin/PikaCmd"    
+    },
+    { "name": "comment.line.todo.pika",
+      "match": "(//)\\s(FIX|TODO).*"
+    },
+    { "name": "comment.line.double-slash.pika",
+      "match": "(//).*"      
+    },
+    { "name": "comment.block.documentation.pika",
+      "begin": "/\\*\\*(?!/)",
+      "end": "\\*/",
+      "captures": { "0": { "name": "punctuation.definition.comment.pika" } }
+    },
+    { "name": "comment.block.pika",
+      "begin": "/\\*",
+      "end": "\\*/"
+    },
+    { "name": "constant.numeric.pika",
+      "match": "\\b(?<!\\.)((0(x|X)[0-9a-fA-F]+)|([0-9]+(\\.[0-9]+)?(e(-)[0-9]+)?)|infinity|PI|E)(?!\\.)\\b"      
+    },
+    {  "name": "variable.parameter.pika",
+       "match": "(\\^)*\\$[0-9n]+\\b"
+    },
+    {  "name": "variable.other.pika",
+       "match": "\\$[a-zA-Z0-9_]*"
+    },
+    {  "name": "storage.type.pika",
+       "match": "\\b(?<!\\.)(function)(?!\\.)\\b"
+    },
+    {  "name": "storage.type.pika",
+       "match": "(?<==)>|>(?=[a-zA-Z{@])"
+    },
+    {  "name": "keyword.control.pika",
+       "match": "\\b(?<!\\.)(if|else|for)(?!\\.)\\b"
+    },
+    {  "name": "constant.language.boolean.true.pika",
+       "match": "\\b(?<!\\.)true\\b"
+    },
+    {  "name": "constant.language.boolean.false.pika",
+       "match": "\\b(?<!\\.)false(?!\\.)\\b"
+    },
+    {  "name": "constant.language.null.pika",
+       "match": "\\b(?<!\\.)void(?!\\.)\\b"
+    },
+    {  "name": "support.function.pika",
+       "match": "\\b(?<!\\.)(append|compose|copy|decompose|equal|fill|inject|insert|iterate|qsort|remove|rsort|sort|ascend|clone|foreach|map|prune|redotify|set|undotify|assert|trace|describe|help|abs|acos|asin|atan|atan2|cbrt|ceil|cos|cosh|cube|exp|factorial|floor|log|log10|log2|logb|nroot|pow|random|round|sign|sin|sinh|sqr|sqrt|tan|tanh|trunc|construct|destruct|gc|invokeMethod|method|new|newLocal|this|popBack|popFront|pushBack|pushFront|queueSize|resetQueue|bake|char|chop|escape|find|length|lower|mismatch|ordinal|precision|radix|repeat|replace|reverse|rfind|right|rsearch|rspan|search|span|tokenize|trim|unescape|upper|wildfind|wildmatch|args|classify|coalesce|compare|defaults|delete|evaluate|exists|include|input|invoke|load|max|min|parse|print|run|save|sourceFor|swap|system|throw|time|toSource|try|vargs)(?!\\.)\\b"
+    },
+    {  "name": "string.quoted.single.pika",
+       "begin": "'",
+       "end": "'(?!')",
+       "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.pika" } },
+       "endCaptures": { "0": { "name": "punctuation.definition.string.end.pika" } },
+       "patterns": [
+         {          
+           "match": "''",
+           "name": "constant.character.escape.pika"
+         }
+       ]      
+    },
+    { "name": "string.quoted.double.pika",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.pika" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.pika" } },
+      "patterns": [
+        {          
+          "match": "\\\\(x\\h{2}|[0-2][0-7]{,2}|3[0-6][0-7]|37[0-7]?|[4-7][0-7]?|.)",
+          "name": "constant.character.escape.pika"
+        }
+      ]      
+    },    
+    {  "name": "support.constant.pika",
+       "match": "\\b(?<!\\.)(VERSION|CR|LF|TAB|WS)(?!\\.)\\b"
+    },
+    {  "name": "keyword.operator.pika",
+       "match": "@|!|~|\\+|\\-|\\*|/|%|<|>|#|=|&|\\||\\^"
+    },
+    {  "name": "punctuation.terminator.statement.pika",
+       "match": "\\;"
+    }
+    
+  ],
+  "uuid": "dd90b242-b748-4555-b991-87d0b357ad66"
+}

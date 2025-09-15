@@ -1,0 +1,43 @@
+root			<-	Shebang? _ Expr? (';'_ Expr?)* EOF
+Shebang			<-	'#!' (!EOL .)*
+Expr			<-	Assignment
+Assignment		<-	LogicalOr (('<<' / '>>' / [-+*/\\%#&^|])? '='_ Assignment)?
+LogicalOr		<-	LogicalAnd ('||'_ LogicalAnd)*
+LogicalAnd		<-	BitOr ('&&'_ BitOr)*
+BitOr			<-	BitXOr ('|' !'|' _ BitXOr)*
+BitXOr			<-	BitAnd ('^'_ BitAnd)*
+BitAnd			<-	Equality ('&' !'&' _ Equality)*
+Equality		<-	Compare (('===' / '==' / '!==' / '!=') _ Compare)*
+Compare			<-	Concat (('<=' / '<' !'<' / '>=' / '>' !'>') _ Concat)*
+Concat			<-	Shift ('#' _ Shift)*
+Shift			<-	AddSub (('<<' / '>>') _ AddSub)*
+AddSub			<-	MulDiv (('+' !'+' / '-' !'-') _ MulDiv)*
+MulDiv			<-	Prefix (('*' / '/' !'/' / '\\' / '%') _ Prefix)*
+Prefix			<-	(('++' / '--' / [!~@] / [-+] !('infinity' !SYMBOL_CHAR) ) _ Prefix) / Postfix
+Postfix			<-	Value (('++' / '--') _ / Member / Subscript / Substring / Call)*
+Value			<-	Indirection / Compound / For / Group / If / Literal / Identifier
+Compound		<-	'{'_ Expr? (';'_ Expr?)* '}'_
+Indirection		<-	'['_ Expr ']'_
+Member			<-	'.'_ SYMBOL_CHAR* _
+Group			<-	'('_ Expr ')'_
+Subscript		<-	'['_ Expr ']'_
+Substring		<-	'{'_ Expr? (':'_ Expr?)? '}'_
+Call			<-	'('_ Expr? (','_ Expr?)* ')'_
+Native			<-	'<' (!'>' .)* '>' _
+For				<-	'for'_ '('_ Expr? ';'_ Expr? ';'_ Expr? ')'_ Expr?
+If				<-	'if'_ '('_ Expr ')'_ Expr ('else'_ Expr)?
+Lambda			<-	'>'_ Expr
+Function		<-	'function'_ Compound
+Literal			<-	('false' / 'true' / 'void' / '+infinity' / '-infinity') !SYMBOL_CHAR _ / Number / String / Native / Lambda / Function
+Number			<-	[-+]? ( '0x' HEX+ / ('0' / [1-9] DIGIT*) ('.' DIGIT+)? ([eE][-+]? DIGIT+)? ) _
+String			<-	DQString / SQString
+DQString		<-	'"' ( '\\' [\\"'abfnrtv] / '\\x' HEX HEX? / '\\u' HEX HEX? HEX? HEX? / '\\' [-+]? DIGIT+ / !'\\' !'"' . )* '"' _
+SQString		<-	"'" ( ("''" / !"'" .) )* "'" _
+Identifier		<-	([a-zA-Z_$] / '::' / ('^'_)) SYMBOL_CHAR* _
+COMMENT			<-	('/*' (!'*/' .)* '*/') / ("//" (!EOL .)* (EOL / EOF))
+EOL				<-	"\r" / "\n"
+EOF				<-	!.
+SYMBOL_CHAR		<-	[a-zA-Z_$0-9.]
+HEX				<-	[0-9a-fA-F]
+DIGIT			<-	[0-9]
+_				<-	([ \t\r\n] / COMMENT)*

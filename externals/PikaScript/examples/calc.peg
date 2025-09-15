@@ -1,0 +1,23 @@
+# Parsing Expression Grammar for a simple calculator program.
+
+root <- Exp !.
+
+Exp <- Term (AddOp Term)*
+
+Term <- Factor (MulOp Factor)*
+
+Factor <- Number / Group
+
+Number <- [0-9]+ Spacing
+
+Group <- OpenParen Exp CloseParen
+
+AddOp <- ("+" / "-") Spacing
+
+MulOp <- ("*" / "/") Spacing
+
+OpenParen <- "(" Spacing
+
+CloseParen <- ")" Spacing
+
+Spacing <- " "*

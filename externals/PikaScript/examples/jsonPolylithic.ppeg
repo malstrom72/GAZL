@@ -1,0 +1,69 @@
+#################################
+#								#
+#    JSON Polylithic PikaPEG    #
+#								#
+#################################
+
+#
+#	This one creates and return a polylithic datastructure. E.g.:
+#
+#	Parsing { "firstLevel": { "secondLevel":null } } might return:
+#
+#	@::1 // (returned reference)
+#	::1.firstLevel = @::2
+#	::2.secondLevel = @::null
+#
+#	Unlike the monolithic version, keys are not "dotified" since there is no hierarchy within each object
+#	(see jsonMonolithic.ppeg for more info).
+#
+#	String values are interpreted and then "re-escaped" to distinguish their datatype from other values. Thus a string
+#	value always start with a "'" or '"'. This also differs from the monolithic version.
+#
+#	Read more about JSON here: http://www.json.org/
+#
+
+{
+	/*
+		This function is required since JSON (strangely) supports an escaped solidus, whereas PikaScript does not.
+		All other JSON escapes are supported by PikaScript, so we let them through to the evaluate() function.
+	*/
+	$$parser.unsolidus = function {
+		for (out = ''; $0 != '';) {
+			out #= $0{:i = find($0, '\')};
+			if (($0 = $0{i:}){0} == '\') { out #= (if ($0{1} == '/') '/' else $0{:2}); $0 = $0{2:} }
+		};
+		( out )
+	}
+}
+
+root		<-	_ (object / array) !.
+
+object		<-	"{"_ (											{ $$ = new(Container) }
+					member (","_ member)* )? "}"_
+
+member		<-	id:string ":"_ v:value							{ [$$][$id] = $v }
+
+value		<-	string											{ $$ = escape($$) }
+				/ number										# $$ is created by the number rule
+				/ "true" _										{ $$ = true }
+				/ "false" _										{ $$ = false }
+				/ "null" _										{ $$ = <null> }
+				/ object										# $$ is created by the object rule
+				/ array											# $$ is created by the array rule
+				
+array		<-	"["_ (											{ [$$ = new(Container)].n = 0 }
+					v:value										{ append($$, $v) }
+					(","_ v:value								{ append($$, $v) }
+					)* )? "]"_
+
+string		<-	$$=( '"' ( !["\\\0-\37] . / "\\" ( ["\\/bfnrt]
+					/ 'u' HEX HEX HEX HEX ) )* '"' ) _			{ $$ = unescape($$parser.unsolidus($$)) }
+
+number		<-	$$=( "-"? ("0" / [1-9] DIGIT*) ("." DIGIT+)?
+						( [eE][-+]? DIGIT+ )? ) _				{ $$ = evaluate('+' # $$) }
+
+HEX			<-	[0-9a-fA-F]
+
+DIGIT		<-	[0-9]
+
+_			<-	[ \t\r\n]*

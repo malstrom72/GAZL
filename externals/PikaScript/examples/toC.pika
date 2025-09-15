@@ -1,0 +1,83 @@
+stringListToC = function {
+	args(@a, @maxCols, @pre);
+	s = l = '';
+	iterate(a, >{
+		w = chop(escape($2 # "\0"), 5) # '"';
+		if ($1 < [a].n - 1) w #= ', ';
+		if (length(l) + length(w) > maxCols && l != '') { s #= l # LF # pre; l = '' };
+		l #= w;
+	});
+	( s # l )
+};
+
+// maxCols = 0 == one per line
+stringArrayToC = function {
+	vargs(@a,, @maxCols, @name, @indent);
+	defaults(@maxCols, 0, @name, 'array', @indent, 0);
+	pre = repeat(TAB, indent);
+	s = name # '[' # [a].n # '] = {' # LF # pre # TAB;
+	s #= stringListToC(a, maxCols, pre # TAB);
+	( s # LF # pre # '};' # LF )
+};
+
+numberListToC = function {
+	args(@a, @elementsPerLine, @rad, @pre);
+	map(@RADIX_PREFIXES, 8, '0', 10, '', 16, '0x');
+	s = '';
+	iterate(a, >{
+		s #= (if (rad == 0) $2 else RADIX_PREFIXES[rad] # radix($2, rad));
+		if ($1 < [a].n - 1) {
+			s #= ', ';
+			if (($1 % elementsPerLine) == elementsPerLine - 1) s #= LF # pre;
+		}
+	});
+	( s )
+};
+
+numberArrayToC = function {
+	vargs(@a,, @elementsPerLine, @name, @rad, @indent);
+	defaults(@elementsPerLine, 8, @name, 'array', @rad, 0, @indent, 0);
+	pre = repeat(TAB, indent);
+	s = name # '[' # [a].n # '] = {' # LF # pre # TAB;
+	s #= numberListToC(a, elementsPerLine, rad, pre # TAB);
+	( s # LF # pre # '};' # LF )
+};
+
+textToCpp = function {
+	args(@source);
+	result = '';
+	tokenize(source, >{ if (result !== '') result #= LF; result #= TAB # escape($0 # LF) });
+	result
+};
+
+parsePath = function {
+	args(@full, @path, @name, @extension);
+	if (!wildmatch(full, '{*}{[^<>:"/\|?*]*}.{[^<>:"/\|?*.]*}', path, name, extension)) {
+		[extension] = '';
+		if (!wildmatch(full, '{*}{[^<>:"/\|?*]*}', path, name)) throw("Invalid path")
+	}
+};
+
+textFileToCpp = function {
+	args(@path);
+	parsePath(path, @root, @name, @ext);
+	code = 'const char* ' # upper(name) # ' = ' # LF # textToCpp(load(path)) # ';' # LF;
+	save(root # name # '.cpp', code);
+	void
+};
+
+if (coalesce(@$1) == '?') {
+	print(
+"
+'cppSource' = stringListToC(@array, +maxCols, 'prefix')
+'cppSource' = stringArrayToC(@array, [+maxCols=0 /* 0 == one per line */], ['name'='array'], [+indent=0])
+'cppSource' = numberListToC(@array, +elementsPerLine, +radix, 'prefix')
+'cppSource' = numberArrayToC(@array, [+elementsPerLine=8], ['name'='array'], [+radix=0], [+indent=0])
+'cppSource' = textToCpp('sourceText')
+textFileToCpp('filePath')
+
++integer = bytesToInt('binary')
+'binary' = intToBytes(+integer, +length)
+"
+		);
+};

@@ -1,0 +1,11 @@
+{
+        "name": "PikaScript Indent",
+        "scope": "source.pika",
+        "settings": {
+                "decreaseIndentPattern": "^(.*\\*/)?\\s*\\}.*$",
+                "increaseIndentPattern": "^.*\\{[^}\"']*$",
+
+                "bracketIndentNextLinePattern": "(?x)\n^ \\s* \\b(if|while|else)\\b [^;]* $\n| ^ \\s* \\b(for)\\b .* $\n"
+        },
+        "uuid": "53aff164-6c0f-4ff3-91ec-69b20e87d5c0"
+}
