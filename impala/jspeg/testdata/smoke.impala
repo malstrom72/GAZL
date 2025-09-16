@@ -1,0 +1,5 @@
+function main()
+returns int result
+{
+        result = 7;
+}

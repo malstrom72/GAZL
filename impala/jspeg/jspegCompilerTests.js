@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { wrapCompilerSource } = require('./updateJSPEG.js');
+const { compileWithJsImpala } = require('./impalaJsCompilerRunner');
 
 const dir = __dirname;
 const jspegSource = fs.readFileSync(path.join(dir, 'jspegCompiler.js'), 'utf8');
@@ -55,7 +56,7 @@ if (impalaIndex !== impalaGrammar.length) {
 	process.exit(1);
 }
 const impalaExisting = fs.readFileSync(path.join(dir, 'impalaCompiler.js'), 'utf8');
-if (wrapCompilerSource('impalaCompiler', impalaGenerated).trim() !== impalaExisting.trim()) {
+if (wrapCompilerSource('impalaCompiler', impalaGenerated, { prelude: 'var $$parser = {};' }).trim() !== impalaExisting.trim()) {
         console.error('Generated compiler differs from impalaCompiler.js');
         process.exit(1);
 }
@@ -175,5 +176,42 @@ const tagCaptureCases = [
 ];
 
 testGrammarEquivalence('tagCaptureTest.jspeg', 'tagCaptureTest.jspeg', tagCaptureCases);
+
+const parityFixtures = [
+        { name: 'smoke', source: 'smoke.impala', expected: 'smoke.pika.gazl', options: { randomId: 42 } },
+        { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.pika.gazl', options: { randomId: 42 }, expectFailure: 'function arguments and locals are not yet supported' },
+        { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.pika.gazl', options: { randomId: 42 }, expectFailure: 'array locals and native calls are not yet ported' }
+];
+
+parityFixtures.forEach((fixture) => {
+        const sourcePath = path.join(dir, 'testdata', fixture.source);
+        const expectedPath = path.join(dir, 'testdata', fixture.expected);
+        const source = fs.readFileSync(sourcePath, 'utf8');
+        const expected = fs.readFileSync(expectedPath, 'utf8');
+        let actual;
+        try {
+                actual = compileWithJsImpala(source, Object.assign({}, fixture.options));
+        } catch (err) {
+                const message = (err && err.message) ? err.message : String(err);
+                if (fixture.expectFailure) {
+                        console.warn(`Skipping ${fixture.name} fixture until JSPEG supports this feature: ${message}`);
+                        return;
+                }
+                console.error(`impala.jspeg compiler threw on fixture ${fixture.name}`);
+                console.error(message);
+                process.exit(1);
+        }
+
+        if (fixture.expectFailure) {
+                console.error(`impala.jspeg compiler unexpectedly handled ${fixture.name}; remove expectFailure flag to enforce parity.`);
+                process.exit(1);
+        }
+
+        if (actual !== expected) {
+                console.error(`impala.jspeg compiler output diverges from PikaScript fixture: ${fixture.name}`);
+                process.exit(1);
+        }
+        console.log(`impala.jspeg compiler matches ${fixture.name} fixture output`);
+});
 
 console.log('JSPEG regression suite completed successfully');
