@@ -32,6 +32,8 @@ IF ERRORLEVEL 1 EXIT /B 1
 PUSHD jspeg
 node jspegCompilerTests.js
 IF ERRORLEVEL 1 EXIT /B 1
+node runJspegTests.js
+IF ERRORLEVEL 1 EXIT /B 1
 POPD
 POPD
 

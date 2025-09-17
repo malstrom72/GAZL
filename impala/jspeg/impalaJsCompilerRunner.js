@@ -118,7 +118,18 @@ function compileWithJsImpala(source, options = {}) {
 
         const shouldRetabulate = options.retabulate !== false;
         const formatted = shouldRetabulate ? outputLines.map(retabulate) : outputLines;
-        return `${formatted.join('\n')}\n`;
+        let outputText = formatted.join('\n');
+
+        const trailingNewlineOption = options.trailingNewline;
+        if (trailingNewlineOption === true || (trailingNewlineOption === undefined && shouldRetabulate)) {
+                outputText += '\n';
+        } else if (!shouldRetabulate && trailingNewlineOption !== true) {
+                while (outputText.endsWith('\n')) {
+                        outputText = outputText.slice(0, -1);
+                }
+        }
+
+        return outputText;
 }
 
 module.exports = {

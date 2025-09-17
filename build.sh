@@ -16,7 +16,7 @@ cp output/GAZLCmd impala/GAZLCmd 2>/dev/null || cp output/GAZLCmd.exe impala/GAZ
 (cd tools && bash BuildImpala.sh)
 
 # Run the Impala test suite from the source directory
- (cd impala && ../output/PikaCmd runTests.pika && (cd jspeg && node jspegCompilerTests.js))
+ (cd impala && ../output/PikaCmd runTests.pika && (cd jspeg && node jspegCompilerTests.js && node runJspegTests.js))
 
 # Verify the copied files by running the demo from the output directory
 (cd output && ./PikaCmd impala.pika run ../impala/ImpalaDemo.impala)
