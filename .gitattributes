@@ -1,0 +1,4 @@
+# Ensure .gazl files are always treated as text (not binary)
+# and force a text diff using a custom driver (handles files with NULs)
+*.gazl text diff=gazl
+

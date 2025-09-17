@@ -190,7 +190,7 @@
 
     /* push a deep-cloned record into metacode */
     $$parser.emitMeta = function (rec) {
-        $$parser.metacode.push(clone(rec));
+        $$parser.metacode.push(clone(metaSlot(rec)));
     };
 
     /* allocate new (empty) meta record, fill via makeMeta, then push */
@@ -228,14 +228,14 @@
                 /* ———  branch on TRUE / FALSE  ——— */
                 case '?->': {           /* created by AND/OR, e.g.   F->FALSE L1: */
                     targetCond         = inst.type; // boolean
-                    var lbl            = inst.operand[0];
+                    var lbl            = inst.operands[0];
                     target[targetCond] = (lbl in aliases ? aliases[lbl] : lbl);
                     inst.operator      = null;      // remove
                     break;
                 }
 
                 case '<-?': {          /* unique FALSE/TRUE label, e.g.   FALSE L1: */
-                    var lbl = inst.operand[0],
+                    var lbl = inst.operands[0],
                         t   = inst.type;            // false / true
                     inst.type = null;               // will no longer be needed
 
@@ -264,16 +264,16 @@
 
                 /* ———  unconditional GOTO  ——— */
                 case '-->': {
-                    var lbl   = inst.operand[0];
+                    var lbl   = inst.operands[0];
                     var final = (lbl in aliases ? aliases[lbl] : lbl);
-                    target.false = target.true = currentGoto = inst.operand[0] = final;
+                    target.false = target.true = currentGoto = inst.operands[0] = final;
                     break;
                 }
 
                 /* record label after an optimised goto */
                 case '<--':
                     if (currentGoto != null) {
-                        aliases[inst.operand[0]] = currentGoto;
+                        aliases[inst.operands[0]] = currentGoto;
                     }
                     break;
 
@@ -283,9 +283,9 @@
                     if (targetCond === false) inst.operator = '!' + inst.operator;
 
                     /* move operands left and patch jump target */
-                    inst.operand[0] = inst.operand[1];
-                    inst.operand[1] = inst.operand[2];
-                    inst.operand[2] = target[targetCond];
+                    inst.operands[0] = inst.operands[1];
+                    inst.operands[1] = inst.operands[2];
+                    inst.operands[2] = target[targetCond];
 
                     /* reset all branch state */
                     target.false = target.true = currentGoto = null;
@@ -403,6 +403,7 @@
 
     /* pretty-print one meta-instruction (only when it has op) */
     $$parser.debugPrintMeta = function (m) {
+        m = metaSlot(m);
         if (m && m.operator != null) {
             console.log(
                 '{' + m.operator + '}(' + m.type + ') {'
@@ -412,15 +413,50 @@
         }
     };
 
+    /* lazily materialise a meta-record for any parse node */
+    function metaSlot(node) {
+        if (node == null) {
+            return { operator: undefined, type: undefined,
+                     operands: [ undefined, undefined, undefined ] };
+        }
+        if (node.operands !== undefined) {
+            return node;
+        }
+
+        if (!Object.prototype.hasOwnProperty.call(node, '_')) {
+            if (node.operands === undefined) {
+                node.operands = [ undefined, undefined, undefined ];
+            }
+            if (!Object.prototype.hasOwnProperty.call(node, 'operator')) {
+                node.operator = undefined;
+            }
+            if (!Object.prototype.hasOwnProperty.call(node, 'type')) {
+                node.type = undefined;
+            }
+            return node;
+        }
+
+        var slot = node._;
+        if (!slot || slot.operands === undefined) {
+            slot = { operator: undefined, type: undefined,
+                     operands: [ undefined, undefined, undefined ] };
+            node._ = slot;
+        }
+        return slot;
+    }
+
     /* overwrite the fields of an existing meta object */
     $$parser.makeMeta = function (rec, op, type, op0, op1, op2) {
+        rec = metaSlot(rec);
         rec.operator  = op;
         rec.type      = type;
         rec.operands  = [ op0, op1, op2 ];
+        return rec;
     };
 
     /* release all three operands contained in a meta-record */
     $$parser.releaseMeta = function (meta) {
+        meta = metaSlot(meta);
         for (var i = 2; i >= 0; --i) {
             $$parser.returnBack(meta.operands[i]);
         }
@@ -436,6 +472,8 @@
      */
     $$parser.makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
+
+        expr = metaSlot(expr);
 
         var op   = expr.operator;
         var op1  = expr.operands[1];
@@ -471,6 +509,8 @@
      * transient “%<number>”.
      */
     $$parser.makeArgValue = function (expr, number) {
+        expr = metaSlot(expr);
+
         var op   = expr.operator;
         var tgt  = '%' + number;
         var op1  = expr.operands[1];
@@ -520,6 +560,9 @@
      * --------------------------------------------------------- */
     $$parser.binaryOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
+
+        leftx  = metaSlot(leftx);
+        rightx = metaSlot(rightx);
 
         /* validate operand-type combination */
         var sig = operator + leftx.type + rightx.type;
@@ -596,6 +639,9 @@
     $$parser.mulDivOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
 
+        leftx  = metaSlot(leftx);
+        rightx = metaSlot(rightx);
+
         var sig = operator + leftx.type + rightx.type;
         var tp  = $$parser.SUPPORTED_OPS[sig];
         if (tp === undefined) {
@@ -654,6 +700,10 @@
      * --------------------------------------------------------- */
     $$parser.assign = function (x, leftx, rightx,
                                 sourceCode, sourceOffset) {
+
+        x      = metaSlot(x);
+        leftx  = metaSlot(leftx);
+        rightx = metaSlot(rightx);
 
         var lop   = leftx.operator;
         var keep  = 2;          /* operand index to keep for r-value */
@@ -751,6 +801,7 @@
 
     /* *expr  or  [] dereference handling */
     $$parser.dereference = function (operator, expr, sourceCode, sourceOffset) {
+        expr = metaSlot(expr);
         if (expr.operator === '+') {
             /*  &a + i   →   PEEK (&a , i)  */
             expr.operator = '=[]';
@@ -773,6 +824,8 @@
 
     /* & (address-of) operator handling */
     $$parser.reference = function (operator, expr, sourceCode, sourceOffset) {
+
+        expr = metaSlot(expr);
 
         if (expr.operator === '=') {                 // variable
             assert(expr.operands[2] === undefined,
@@ -806,6 +859,7 @@
 
     /* unary minus (integer/float) */
     $$parser.minus = function (operator, expr/*, src, off*/) {
+        expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '-', undefined,
             undefined,
@@ -816,6 +870,7 @@
 
     /* bit-wise NOT / logical NOT  (~expr) */
     $$parser.not = function (operator, expr) {
+        expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '^', undefined,
             undefined,
@@ -826,6 +881,7 @@
 
     /* ABS or FLOOR (unary) – operator is already '=abs' or '=floor' */
     $$parser.absFloor = function (operator, expr) {
+        expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, operator, undefined,
             undefined,
@@ -836,6 +892,7 @@
 
     /* int → float */
     $$parser.intToFloatConvert = function (operator, expr) {
+        expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '=itof', undefined,
             undefined,
@@ -846,6 +903,8 @@
 
     /* float → int, with constant-fold special-case */
     $$parser.floatToIntConvert = function (operator, expr) {
+
+        expr = metaSlot(expr);
 
         var op1 = expr.operands[1],
             op2 = expr.operands[2];
@@ -897,6 +956,8 @@
      *  Generic unary operator
      * -------------------------------------------------------- */
     $$parser.unaryOp = function (operator, expr, sourceCode, sourceOffset) {
+
+        expr = metaSlot(expr);
 
         var key = '=' + operator;                     // e.g. "=abs"
 
@@ -1702,23 +1763,27 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.base  = $$parser.borrowForCall();
                                                     } }
                 (Argument (','_ Argument)*)? ')'_  { if (!$$parser.dry) {
-                                                       if (span($$.type, 'FN') !== 1)
+                                                       var callee = metaSlot($$);
+
+                                                       if (span(callee.type, 'FN') !== 1) {
                                                            $$parser.typeError(
                                                                'Invalid type for function call ({$type1})',
-                                                               $$s, $$i, $$.type
+                                                               $$s, $$i, callee.type
                                                            );
+                                                       }
 
-                                                       var func = $$parser.makeRValue($$, '&^$%');
+                                                       var func = $$parser.makeRValue(callee, '&^$%');
                                                        $$parser.emit('()', '?',
                                                                      func,
                                                                      '%' + $$.base,
                                                                      '*' + ($$.count + 1));
                                                        $$parser.returnBack(func);
 
-                                                       while ($$.count-- > 0)
+                                                       while ($$.count-- > 0) {
                                                            $$parser.returnBack('%' + ($$.base + $$.count + 1));
+                                                       }
 
-                                                       $$parser.makeMeta($$, ':=', '?',
+                                                       $$parser.makeMeta(callee, ':=', '?',
                                                                          undefined,
                                                                          '%' + $$.base,
                                                                          undefined);
@@ -1774,17 +1839,23 @@ Comp        <-  '!'_ Comp                           {
                                                     }
 
 
-Assert      <-  ASSERT _                            { 
+Assert      <-  ASSERT _                            {
                                                         $okLabel = $$parser.newLabel('a');
-                                                        $$parser.emit('<> ==', 'i', '#DEBUG', '#0', $okLabel); 
+                                                        $$parser.emit('<> ==', 'i', '#DEBUG', '#0', $okLabel);
+                                                        var start    = $$i;
+                                                        var exprText = '';
                                                     }
-                str:BoolGroup ';'_                  {
+                str:BoolGroup                       {
+                                                        exprText = $$s.substring(start, $$i);
+                                                        exprText = exprText.replace(/[ \t\r\n]+$/, '');
+                                                    }
+                ';'_                                {
                                                         $$parser.emit('?->', true, $okLabel, undefined, undefined);
 
                                                         var r = $$parser.borrowForCall();
 
                                                         /* store the assert-string constant */
-                                                        $$parser.makeString('a', $str, str, $$s, $$i);
+                                                        $$parser.makeString('a', $str, exprText, $$s, $$i);
 
                                                         /* argument goes into %<r+1> */
                                                         $$parser.makeArgValue($str, r + 1);
@@ -1853,7 +1924,8 @@ Loop        <-  LOOP _                              {
 # ---------------------------------------------------------------------------
 For         <-  FOR _ '('_ var:Variable             {
                                                         /* loop-variable must be local, modifiable int / pointer */
-                                                        if ($var.operator !== '=' || span($var.type, "ip") === 0) {
+                                                        var varMeta = metaSlot($var);
+                                                        if (varMeta.operator !== '=' || span(varMeta.type, "ip") === 0) {
                                                             $$parser.fail(
                                                                 'For variable must be a local modifiable int or pointer variable',
                                                                 $$s, $$i
@@ -1861,28 +1933,31 @@ For         <-  FOR _ '('_ var:Variable             {
                                                         }
                                                         $gotInit = false;            /* flag to detect an explicit start value */
                                                     }
-                ('='_ init:Expr                     {                             
+                ('='_ init:Expr                     {
                                                         $$parser.assign($init, $var, $$, $$s, $$i);
                                                         $gotInit = true;
                                                     }
                 )? TO _ toExpr:Expr ')'_            {
-                                                        if ($toExpr.type !== $var.type) {
+                                                        var varMeta  = metaSlot($var);
+                                                        var toMeta   = metaSlot($toExpr);
+
+                                                        if (toMeta.type !== varMeta.type) {
                                                             $$parser.typeError(
                                                                 'Incompatible types ({$type1} and {$type2})',
-                                                                $$s, $$i, $var.type, $toExpr.type
+                                                                $$s, $$i, varMeta.type, toMeta.type
                                                             );
                                                         }
 
                                                         /* constant upper bound */
-                                                        $to = $$parser.makeRValue($toExpr);
+                                                        $to = $$parser.makeRValue(toMeta);
 
                                                         /* initial comparison  (var < to)                         */
                                                         $$parser.emit(
                                                             '<',
-                                                            $toExpr.type,
+                                                            toMeta.type,
                                                             undefined,
-                                                            $gotInit ? $init.operands[1]     /* start value from “var = expr” */
-                                                                     : $var.operands[1],     /* or the original variable */
+                                                            $gotInit ? metaSlot($init).operands[1]     /* start value from “var = expr” */
+                                                                     : varMeta.operands[1],            /* or the original variable */
                                                             $to
                                                         );
 
@@ -1898,18 +1973,20 @@ For         <-  FOR _ '('_ var:Variable             {
                                                         $$parser.emit('<--', undefined, $loopLabel, undefined, undefined);
                                                     }
                 body:Statement                      {
+                                                        var varMeta = metaSlot($var);
+
                                                         /* increment + jump back */
                                                         $$parser.emit(
                                                             '...',
-                                                            $var.type,
-                                                            $var.operands[1],        /* address of loop variable */
+                                                            varMeta.type,
+                                                            varMeta.operands[1],        /* address of loop variable */
                                                             $to,
                                                             $loopLabel
                                                         );
                                                         $$parser.emit('<-?', false, $noLoopLabel, undefined, undefined);
 
                                                         $$parser.returnBack($to);
-                                                        $$parser.releaseMeta($var);
+                                                        $$parser.releaseMeta(varMeta);
                                                     }
 
 # ---------------------------------------------------------------------------
@@ -1917,26 +1994,30 @@ For         <-  FOR _ '('_ var:Variable             {
 # ---------------------------------------------------------------------------
 Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                     {
+                                                        var fromMeta = metaSlot($f);
+                                                        var toMeta   = metaSlot($t);
+
                                                         $length = $$parser.makeConstant($l, 'i', $$s, $$i);
 
-                                                        if ($f.type + $t.type !== 'pp') {
+                                                        if (fromMeta.type + toMeta.type !== 'pp') {
                                                             $$parser.typeError(
                                                                 'Invalid types ({$type1} and {$type2})',
-                                                                $$s, $$i, $f.type, $t.type
+                                                                $$s, $$i, fromMeta.type, toMeta.type
                                                             );
                                                         }
 
+                                                        var copyMeta = metaSlot($l);
                                                         $$parser.makeMeta(
-                                                            $l,
+                                                            copyMeta,
                                                             'copy',
                                                             '?',
-                                                            $$parser.makeRValue($t, '&$%'),
-                                                            $$parser.makeRValue($f, '&$%'),
+                                                            $$parser.makeRValue(toMeta, '&$%'),
+                                                            $$parser.makeRValue(fromMeta, '&$%'),
                                                             '*' + $$parser.dropHash($length)
                                                         );
 
-                                                        $$parser.emitMeta($l);
-                                                        $$parser.releaseMeta($l);
+                                                        $$parser.emitMeta(copyMeta);
+                                                        $$parser.releaseMeta(copyMeta);
                                                     }
 
 # ---------------------------------------------------------------------------
@@ -1944,35 +2025,37 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
 # ---------------------------------------------------------------------------
 Switch      <-  SWITCH _ '('_ $$:Expr
                 '=='_ f:Expr TO _ t:Expr    {
+                                                        var switchMeta = metaSlot($$);
+
                                                         /* the switch expression must be an int */
-                                                        if ($$.type !== 'i') {
+                                                        if (switchMeta.type !== 'i') {
                                                             $$parser.fail('Switch expression needs to be int', $$s, $$i);
                                                         }
 
                                                         /* lower bound (compile-time constant) */
-                                                        $$.from  = $$parser.makeConstant($f, 'i', $$s, $$i);
+                                                        switchMeta.from = $$parser.makeConstant($f, 'i', $$s, $$i);
 
                                                         /*    size = to - from   */
-                                                        $size    = $$parser.subConstInt(
-                                                                       $$parser.makeConstant($t, 'i', $$s, $$i),
-                                                                       $$.from
-                                                                   );
+                                                        $size = $$parser.subConstInt(
+                                                                     $$parser.makeConstant($t, 'i', $$s, $$i),
+                                                                     switchMeta.from
+                                                                 );
 
                                                         /*   switcher = (expr − from)   */
                                                         $switcher = $$parser.subConstInt(
-                                                                         $$parser.makeRValue($$, '$%'),
-                                                                         $$.from
+                                                                         $$parser.makeRValue(switchMeta, '$%'),
+                                                                         switchMeta.from
                                                                      );
 
-                                                        $$.switchLabel = $$parser.newLabel('s');
-                                                        $switchExit    = $$parser.newLabel('e');
+                                                        switchMeta.switchLabel = $$parser.newLabel('s');
+                                                        $switchExit              = $$parser.newLabel('e');
 
                                                         $$parser.emit(
                                                             '-->#',
-                                                            $$.type,
+                                                            switchMeta.type,
                                                             $switcher,
                                                             '*' + $$parser.dropHash($size),
-                                                            $$.switchLabel
+                                                            switchMeta.switchLabel
                                                         );
 
                                                         $$parser.returnBack($switcher);
@@ -2012,7 +2095,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                             }
 
                                                             $$parser.emit(';',    undefined, 'default',       undefined, undefined);
-                                                            $$parser.emit('<--',  undefined, $$.switchLabel,  undefined, undefined);
+                                                            $$parser.emit('<--',  undefined, metaSlot($$).switchLabel,  undefined, undefined);
                                                             $progress = 'gotDefault';
                                                         }
                     ) ':'_ stmt:Statement
@@ -2020,11 +2103,11 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                 '}'_                                {
                                                         /* no explicit “default” → hook it up now                        */
                                                         if ($progress !== 'gotDefault') {
-                                                            $$parser.emit('<--', undefined, $$.switchLabel, undefined, undefined);
+                                                            $$parser.emit('<--', undefined, metaSlot($$).switchLabel, undefined, undefined);
                                                         }
                                                         $$parser.emit('<--', undefined, $switchExit, undefined, undefined);
 
-                                                        $$parser.returnBack($$.from);
+                                                        $$parser.returnBack(metaSlot($$).from);
                                                     }
 
 # ---------------------------------------------------------------------------
@@ -2032,16 +2115,17 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 # ---------------------------------------------------------------------------
 CaseExpr    <-  Expr                                {
                                                         /* offset = constant(expr) – switch.from                         */
+                                                        var switchMeta = metaSlot($$);
                                                         $n = $$parser.subConstInt(
-                                                                $$parser.makeConstant($$, 'i', $$s, $$i),
-                                                                $$.from
+                                                                $$parser.makeConstant(switchMeta, 'i', $$s, $$i),
+                                                                switchMeta.from
                                                             );
 
                                                         /* create label for this case                                     */
                                                         $$parser.emit(
                                                             '<--',
                                                             undefined,
-                                                            $$.switchLabel + '#' + $$parser.dropHash($n),
+                                                            switchMeta.switchLabel + '#' + $$parser.dropHash($n),
                                                             undefined, undefined
                                                         );
 
@@ -2129,16 +2213,21 @@ RETURNS     <-  'returns' !SYMBOL_CHAR      SWITCH      <-  'switch' !SYMBOL_CHA
 TEMPORARY   <-  'temporary' !SYMBOL_CHAR    TO          <-  'to' !SYMBOL_CHAR
 WHILE       <-  'while' !SYMBOL_CHAR
 
-BITWISE_OP  <-  '|' !'|' / '&' !'&' / '^' / '<<' / '>>>' / '>>'
-ADDSUB_OP   <-  '+' / '-'
-MULDIV_OP   <-  '*' / '/' !'/' / '%'
-COMP_OP     <-  '<=' / '<' / '>=' / '>' / '!=' / '=='
+BITWISE_OP  <-  $$=( '<<' / '>>>' / '>>' / '|' !'|' / '&' !'&' / '^' )
+ADDSUB_OP   <-  $$=( '+' / '-' )
+MULDIV_OP   <-  $$=( '*' / '/' !'/' / '%' )
+COMP_OP     <-  $$=( '<=' / '>=' / '!=' / '==' / '<' / '>' )
 BASE_TYPE   <-  INT                               { $._ = 'int'; }
             /  FLOAT                              { $._ = 'float'; }
             /  FUNCPTR                            { $._ = 'funcptr'; }
             /  POINTER                            { $._ = 'pointer'; }
-BUILT_IN    <-  'abs' / 'floor' / 'itof' / 'ftoi'
-PREFIX_OP   <-  '-' !("'" / DIGIT) / '~' / '&' / '*' / BUILT_IN !SYMBOL_CHAR
+BUILT_IN    <-  $$=( 'abs' / 'floor' / 'itof' / 'ftoi' )
+PREFIX_OP   <-  $$=( '-' !("'" / DIGIT)
+                   / '~'
+                   / '&'
+                   / '*'
+                   / BUILT_IN !SYMBOL_CHAR
+                 )
 SYMBOL_CHAR <-  [A-Za-z_$0-9]
 HEX         <-  [0-9A-Fa-f]
 DIGIT       <-  [0-9]

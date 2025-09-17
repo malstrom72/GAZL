@@ -1,0 +1,25 @@
+ ; Compiled with Impala version 1.0
+
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC
+ 					$value:		OUTi
+ ;-----------------------------------------------------------------------------
+ 								MOVi $value #0 					; value = 0
+ 								NEQi $value #0 @.f0				; if (value == 0)
+ 								MOVi $value #1 					; value = 1
+ 								GOTO @.e1  
+ 					.f0:		MOVi $value #2 					; value = 2
+ 					.e1:		NOOP
+ 								! EQUi #DEBUG #0 @.a2			; assert(value == 1 || value == 2)
+ 								EQUi $value #1 @.a2
+ 								EQUi $value #2 @.a2
+ 								MOVp %1 &.a_value12a 
+ 								CALL ^assertFail %0 *1
+ 					.a2:		RETU   							; }
+
+ 					! EQUi #DEBUG #0 @.noAssertStrings
+ .a_value12a:		CNST *27
+ 					DATs (value == 1 || value == 2)
+ 					DATi #0
+ .noAssertStrings:	!

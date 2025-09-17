@@ -179,8 +179,9 @@ testGrammarEquivalence('tagCaptureTest.jspeg', 'tagCaptureTest.jspeg', tagCaptur
 
 const parityFixtures = [
         { name: 'smoke', source: 'smoke.impala', expected: 'smoke.pika.gazl', options: { randomId: 42 } },
-        { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.pika.gazl', options: { randomId: 42 }, expectFailure: 'function arguments and locals are not yet supported' },
-        { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.pika.gazl', options: { randomId: 42 }, expectFailure: 'array locals and native calls are not yet ported' }
+        { name: 'bool', source: 'bool.impala', expected: 'bool.pika.gazl', options: { randomId: 42 } },
+        { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.pika.gazl', options: { randomId: 42 } },
+        { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.pika.gazl', options: { randomId: 42 } }
 ];
 
 parityFixtures.forEach((fixture) => {
