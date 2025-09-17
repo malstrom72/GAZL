@@ -1,0 +1,49 @@
+const pointer SOURCE = "ABCD";
+const pointer TARGET = "WXYZ";
+
+function controlSample()
+returns int result
+locals int sum, int index, pointer src, pointer dst
+{
+        sum = 0;
+        index = 0;
+
+        do {
+                sum = sum + index;
+                index = index + 1;
+        } while (index < 2);
+
+        while (index < 4) {
+                sum = sum + index;
+                index = index + 1;
+        }
+
+        loop {
+                if (index >= 5) goto done;
+                sum = sum + 1;
+                index = index + 1;
+        }
+done:
+
+        for (index = 0 to 3) {
+                sum = sum + index;
+        }
+
+        src = SOURCE;
+        dst = TARGET;
+        copy (2 from src to dst);
+
+        switch (sum == 5 to 10) {
+                case 5: {
+                        sum = sum + 100;
+                }
+                case 6, 7: {
+                        sum = sum + 10;
+                }
+                default: {
+                        sum = sum + 1;
+                }
+        }
+
+        result = sum;
+}
