@@ -180,6 +180,7 @@ testGrammarEquivalence('tagCaptureTest.jspeg', 'tagCaptureTest.jspeg', tagCaptur
 const parityFixtures = [
         { name: 'smoke', source: 'smoke.impala', expected: 'smoke.pika.gazl', options: { randomId: 42 } },
         { name: 'bool', source: 'bool.impala', expected: 'bool.pika.gazl', options: { randomId: 42 } },
+        { name: 'control', source: 'control.impala', expected: 'control.pika.gazl', options: { randomId: 42 } },
         { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.pika.gazl', options: { randomId: 42 } },
         { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.pika.gazl', options: { randomId: 42 } }
 ];

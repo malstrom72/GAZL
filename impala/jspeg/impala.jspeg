@@ -62,10 +62,11 @@
         return str.split(sub).join(by);
     }
     function find(str, chars) {
-        for (var i = 0; i < str.length; i++) {
-            if (chars.indexOf(str[i]) >= 0) return i;
+        var i = 0;
+        while (i < str.length && chars.indexOf(str[i]) < 0) {
+            i++;
         }
-        return -1;
+        return i;
     }
     function span(str, chars) {
         var i = 0;
@@ -144,6 +145,7 @@
     var $$parser.stock = { '%': [], '<': [] };
     var $$parser.counters = { '%': 0,  '<': 0  };
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
+    var $$parser.switchStack = [];
     var $$parser.noForward = false;
 
     /* 3  bulk-fill the lookup tables */
@@ -184,8 +186,9 @@
                                  'U','function','N','native','A','array','?','untyped');
 
     /* 4  label & metacode helpers */
-    $$parser.newLabel = function () {
-        return '@.' + ($$parser.labelCounter++);
+    $$parser.newLabel = function (prefix) {
+        var tag = (prefix === undefined ? '' : String(prefix));
+        return '@.' + tag + ($$parser.labelCounter++);
     };
 
     /* push a deep-cloned record into metacode */
@@ -1272,12 +1275,13 @@
                 $$parser.declare('DATi', undefined, undefined, 'i',
                                  true, d.substr(1), '', 0);
                 offset += non;
+                continue;
             }
 
             /* printable (plus spaces) */
             var spanLen = span(str.substr(offset),
                                $$parser.printable + ' ');
-            spanLen = rspan(str.substr(offset, spanLen), ' ') + 1;
+            spanLen = rspan(str.substr(offset, spanLen), ' ');
             if (spanLen > 0) {
                 $$parser.declare('DATs', undefined, undefined, 'i',
                                  true, str.substr(offset, spanLen), '', 0);
@@ -1305,7 +1309,7 @@
 
             /* generate unique label */
             var name = '.' + prefix + '_' +
-                       (s.replace(/[0-9a-zA-Z]/g, '')
+                       (s.replace(/[^0-9a-zA-Z]/g, '')
                           .substr(0, 6)) +
                        ( ($$parser.randomId + tbl.length)
                          .toString(16) );
@@ -1363,6 +1367,7 @@
         if (!$$parser.metacode) $$parser.metacode = [];
         if (!$$parser.symbols) $$parser.symbols = {};
         if (!$$parser.strings) $$parser.strings = { s: [], a: [] };
+        if (!$$parser.switchStack) $$parser.switchStack = [];
 
         /* clear transient pools and counters */
         var poolPercent = $$parser.stock['%'] || ($$parser.stock['%'] = []);
@@ -1375,6 +1380,7 @@
         /* wipe accumulated meta-instructions */
         $$parser.metacode.length = 0;
         $$parser.labelCounter    = 0;
+        $$parser.switchStack.length = 0;
 
         /* reset symbol tables */
         $$parser.symbols.locals   = {};
@@ -1716,9 +1722,9 @@ Statement   <-                                                        {
                                                                      }
                 (
                     label:Identifier ':' _                            {
-                                                                             $$parser.emitMeta({ operator:'<--', type:undefined,
-                                                                                                operands:[ '@' + label, undefined, undefined ] });
-                                                                         }
+                                                                            $$parser.emitMeta({ operator:'<--', type:undefined,
+                                                                                                operands:[ '@' + $label._, undefined, undefined ] });
+                                                                        }
                 )*
                 (   ';' _
                 /   Assert
@@ -1842,12 +1848,12 @@ Comp        <-  '!'_ Comp                           {
 Assert      <-  ASSERT _                            {
                                                         $okLabel = $$parser.newLabel('a');
                                                         $$parser.emit('<> ==', 'i', '#DEBUG', '#0', $okLabel);
-                                                        var start    = $$i;
-                                                        var exprText = '';
+                                                        $start    = $$i;
+                                                        $exprText = '';
                                                     }
                 str:BoolGroup                       {
-                                                        exprText = $$s.substring(start, $$i);
-                                                        exprText = exprText.replace(/[ \t\r\n]+$/, '');
+                                                        $exprText = $$s.substring($start, $$i);
+                                                        $exprText = $exprText.replace(/[ \t\r\n]+$/, '');
                                                     }
                 ';'_                                {
                                                         $$parser.emit('?->', true, $okLabel, undefined, undefined);
@@ -1855,7 +1861,7 @@ Assert      <-  ASSERT _                            {
                                                         var r = $$parser.borrowForCall();
 
                                                         /* store the assert-string constant */
-                                                        $$parser.makeString('a', $str, exprText, $$s, $$i);
+                                                        $$parser.makeString('a', $str, $exprText, $$s, $$i);
 
                                                         /* argument goes into %<r+1> */
                                                         $$parser.makeArgValue($str, r + 1);
@@ -1876,8 +1882,8 @@ Assert      <-  ASSERT _                            {
 Block       <-  '{'_ Statement* '}'_
 
 
-Goto        <-  GOTO _ label:Identifier ';'_        { 
-                                                        $$parser.emit('-->', undefined, '@' + label, undefined, undefined); 
+Goto        <-  GOTO _ label:Identifier ';'_        {
+                                                        $$parser.emit('-->', undefined, '@' + $label._, undefined, undefined);
                                                     }
 
 
@@ -1934,7 +1940,7 @@ For         <-  FOR _ '('_ var:Variable             {
                                                         $gotInit = false;            /* flag to detect an explicit start value */
                                                     }
                 ('='_ init:Expr                     {
-                                                        $$parser.assign($init, $var, $$, $$s, $$i);
+                                                        $$parser.assign($init, $var, $init, $$s, $$i);
                                                         $gotInit = true;
                                                     }
                 )? TO _ toExpr:Expr ')'_            {
@@ -1998,8 +2004,10 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                         var toMeta   = metaSlot($t);
 
                                                         $length = $$parser.makeConstant($l, 'i', $$s, $$i);
+                                                        var lengthHash = $$parser.dropHash($length);
 
                                                         if (fromMeta.type + toMeta.type !== 'pp') {
+                                                            $$parser.returnBack($length);
                                                             $$parser.typeError(
                                                                 'Invalid types ({$type1} and {$type2})',
                                                                 $$s, $$i, fromMeta.type, toMeta.type
@@ -2013,10 +2021,11 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                             '?',
                                                             $$parser.makeRValue(toMeta, '&$%'),
                                                             $$parser.makeRValue(fromMeta, '&$%'),
-                                                            '*' + $$parser.dropHash($length)
+                                                            '*' + lengthHash
                                                         );
 
                                                         $$parser.emitMeta(copyMeta);
+                                                        $$parser.returnBack($length);
                                                         $$parser.releaseMeta(copyMeta);
                                                     }
 
@@ -2049,6 +2058,8 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 
                                                         switchMeta.switchLabel = $$parser.newLabel('s');
                                                         $switchExit              = $$parser.newLabel('e');
+
+                                                        $$parser.switchStack.push(switchMeta);
 
                                                         $$parser.emit(
                                                             '-->#',
@@ -2094,20 +2105,24 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                                 $$parser.emit('-->', undefined, $switchExit, undefined, undefined);
                                                             }
 
+                                                            var ctx = $$parser.switchStack[$$parser.switchStack.length - 1];
+
                                                             $$parser.emit(';',    undefined, 'default',       undefined, undefined);
-                                                            $$parser.emit('<--',  undefined, metaSlot($$).switchLabel,  undefined, undefined);
+                                                            $$parser.emit('<--',  undefined, ctx.switchLabel,  undefined, undefined);
                                                             $progress = 'gotDefault';
                                                         }
                     ) ':'_ stmt:Statement
                 )*
                 '}'_                                {
+                                                        var ctx = $$parser.switchStack.pop() || metaSlot($$);
+
                                                         /* no explicit “default” → hook it up now                        */
                                                         if ($progress !== 'gotDefault') {
-                                                            $$parser.emit('<--', undefined, metaSlot($$).switchLabel, undefined, undefined);
+                                                            $$parser.emit('<--', undefined, ctx.switchLabel, undefined, undefined);
                                                         }
                                                         $$parser.emit('<--', undefined, $switchExit, undefined, undefined);
 
-                                                        $$parser.returnBack(metaSlot($$).from);
+                                                        $$parser.returnBack(ctx.from);
                                                     }
 
 # ---------------------------------------------------------------------------
@@ -2115,17 +2130,21 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 # ---------------------------------------------------------------------------
 CaseExpr    <-  Expr                                {
                                                         /* offset = constant(expr) – switch.from                         */
-                                                        var switchMeta = metaSlot($$);
+                                                        var ctx      = $$parser.switchStack[$$parser.switchStack.length - 1];
+                                                        var caseMeta = metaSlot($$);
+                                                        var baseFrom = (ctx ? ctx.from : caseMeta.from);
+                                                        var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel);
+
                                                         $n = $$parser.subConstInt(
-                                                                $$parser.makeConstant(switchMeta, 'i', $$s, $$i),
-                                                                switchMeta.from
+                                                                $$parser.makeConstant(caseMeta, 'i', $$s, $$i),
+                                                                baseFrom
                                                             );
 
                                                         /* create label for this case                                     */
                                                         $$parser.emit(
                                                             '<--',
                                                             undefined,
-                                                            switchMeta.switchLabel + '#' + $$parser.dropHash($n),
+                                                            baseLabel + '#' + $$parser.dropHash($n),
                                                             undefined, undefined
                                                         );
 

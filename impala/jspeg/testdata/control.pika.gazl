@@ -1,0 +1,52 @@
+ ; Compiled with Impala version 1.0
+
+ .s_ABCD2a:			CNST *5
+ 					DATs ABCD
+ 					DATi #0
+ SOURCE:			! DEFp &.s_ABCD2a
+ .s_WXYZ2a:			CNST *5
+ 					DATs WXYZ
+ 					DATi #0
+ TARGET:			! DEFp &.s_WXYZ2a
+
+ ;-----------------------------------------------------------------------------
+ controlSample:		FUNC
+ 					$result:	OUTi
+ 					$sum:		LOCi
+ 					$index:		LOCi
+ 					$src:		LOCp
+ 					$dst:		LOCp
+ ;-----------------------------------------------------------------------------
+ 								MOVi $sum #0 					; sum = 0
+ 								MOVi $index #0 					; index = 0
+ 					.l0:		ADDi $sum $sum $index			; sum = sum + index
+ 								ADDi $index $index #1			; index = index + 1
+ 								LSSi $index #2 @.l0				; } while (index < 2)
+ 					.l1:		GEQi $index #4 @.e2				; while (index < 4) 
+ 								ADDi $sum $sum $index			; sum = sum + index
+ 								ADDi $index $index #1			; index = index + 1
+ 								GOTO @.l1  						; }
+ 					.e2:		NOOP
+ 					.l3:		LSSi $index #5 @.f4				; if (index >= 5) goto done
+ 								GOTO @done  					; goto done
+ 					.f4:		ADDi $sum $sum #1				; sum = sum + 1
+ 								ADDi $index $index #1			; index = index + 1
+ 								GOTO @.l3  						; }
+ 					done:		MOVi $index #0 					; done:
+ 								GEQi #0 #3 @.e5
+ 					.l6:		ADDi $sum $sum $index			; sum = sum + index
+ 								FORi $index #3 @.l6				; }
+ 					.e5:		MOVp $src #SOURCE 				; src = SOURCE
+ 								MOVp $dst #TARGET 				; dst = TARGET
+ 								COPY $dst $src *2				; copy (2 from src to dst)
+ 								SUBi %0 $sum #5					; switch (sum == 5 to 10) 
+ 								SWCH %0 *5 @.s7
+ 					.s7#0:		ADDi $sum $sum #100				; sum = sum + 100
+ 								GOTO @.e8  						; }
+ 					.s7#1:		NOOP
+ 					.s7#2:		ADDi $sum $sum #10				; sum = sum + 10
+ 								GOTO @.e8  						; }
+ 					.s7:		ADDi $sum $sum #1				; sum = sum + 1
+ 					.e8:		MOVi $result $sum 				; result = sum
+ 								RETU   							; }
+
