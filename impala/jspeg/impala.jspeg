@@ -1582,30 +1582,44 @@ InitList    <-  '{' _                                                 { $d = ' '
 # ------------------------------------------------------------------
 #  Parameter & local-variable helper lists                      
 # ------------------------------------------------------------------
-ArgsDecl    <-                                                        { $$.n = 0; }
+ArgsDecl    <-                                                        {
+                                                                         $$ = [];
+                                                                         $$.n = 0;
+                                                                     }
                  ( v:VarDecl                                          {
-                                                                             var idx = $$.n;
-                                                                             $$[idx] = clone($v);
-                                                                             $$.n    = idx + 1;
+                                                                             var entry = {};
+                                                                             entry.type = $v.type;
+                                                                             entry.name = $v.name;
+                                                                             entry.size = $v.size;
+                                                                             $$[$$.n++] = entry;
                                                                          }
                    ( ',' _ v:VarDecl                                  {
-                                                                             var idx = $$.n;
-                                                                             $$[idx] = clone($v);
-                                                                             $$.n    = idx + 1;
+                                                                             var entry = {};
+                                                                             entry.type = $v.type;
+                                                                             entry.name = $v.name;
+                                                                             entry.size = $v.size;
+                                                                             $$[$$.n++] = entry;
                                                                          }
                    )*
                  )?
 
-LocalsDecl  <-                                                        { $$.n = 0; }
+LocalsDecl  <-                                                        {
+                                                                         $$ = [];
+                                                                         $$.n = 0;
+                                                                     }
                  ( v:(VarDecl / ArrayDecl)                            {
-                                                                             var idx = $$.n;
-                                                                             $$[idx] = clone($v);
-                                                                             $$.n    = idx + 1;
+                                                                             var entry = {};
+                                                                             entry.type = $v.type;
+                                                                             entry.name = $v.name;
+                                                                             entry.size = $v.size;
+                                                                             $$[$$.n++] = entry;
                                                                          }
                    ( ',' _ v:(VarDecl / ArrayDecl)                    {
-                                                                             var idx = $$.n;
-                                                                             $$[idx] = clone($v);
-                                                                             $$.n    = idx + 1;
+                                                                             var entry = {};
+                                                                             entry.type = $v.type;
+                                                                             entry.name = $v.name;
+                                                                             entry.size = $v.size;
+                                                                             $$[$$.n++] = entry;
                                                                          }
                    )*
                  )?
