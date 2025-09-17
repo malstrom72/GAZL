@@ -20,17 +20,25 @@ function write(file, contents) {
         fs.writeFileSync(resolve(file), contents);
 }
 
-function wrapCompilerSource(exportName, generated) {
+function wrapCompilerSource(exportName, generated, options = {}) {
         const body = generated.trimEnd();
-        const lines = [
+        const { prelude } = options;
+        const lines = [];
+        if (prelude) {
+                const entries = Array.isArray(prelude) ? prelude : [prelude];
+                entries.forEach((line) => {
+                        lines.push(line);
+                });
+        }
+        lines.push(
                 `var ${exportName} = ${body};`,
                 "if (typeof module !== 'undefined' && module.exports) {",
                 `\tmodule.exports = ${exportName};`,
                 `\tmodule.exports.${exportName} = ${exportName};`,
                 `\tmodule.exports.default = ${exportName};`,
-                '}',
-                ''
-        ];
+                '}'
+        );
+        lines.push('');
         return lines.join('\n');
 }
 
@@ -106,7 +114,9 @@ function regenerate() {
 
         return {
                 jspegCompiler: wrappedGeneratedCompiler,
-                impalaCompiler: wrapCompilerSource('impalaCompiler', generatedImpala)
+                impalaCompiler: wrapCompilerSource('impalaCompiler', generatedImpala, {
+                        prelude: 'var $$parser = {};'
+                })
         };
 }
 

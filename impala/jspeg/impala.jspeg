@@ -84,6 +84,10 @@
         return (ch + "").charCodeAt(0);
     }
 
+    function evaluate(str) {
+        return JSON.parse(str);
+    }
+
     /** queue ops on plain Arrays */
     function resetQueue(q) {
         q.length = 0;
@@ -340,7 +344,7 @@
 
         /* empty ⇒ mint a brand-new one */
         if (stk.length === 0) {
-            return '%' + ($$parser.counters['%']++);
+            return $$parser.counters['%']++;
         }
 
         /* sort in-place on the numeric suffix, ascending           */
@@ -360,7 +364,7 @@
         ++i;               /* point at first element of the run  */
         ++n;               /* numeric id of the chosen transient */
 
-        var chosen = '%' + n;
+        var chosen = n;
         stk.splice(i, 1);  /* remove from the pool                */
 
         /* duplicate-check, like the original assert(validate…)    */
@@ -370,6 +374,9 @@
 
     /* put a token back into its stock bucket */
     $$parser.returnBack = function (op) {
+        if (op == null) {
+            return;
+        }
         var c = op[0];
 
         /* ordinary transients / compile-time vars */
@@ -398,9 +405,9 @@
     $$parser.debugPrintMeta = function (m) {
         if (m && m.operator != null) {
             console.log(
-                bake('{'+m.operator+'}({'+m.type+'}) {'
+                '{' + m.operator + '}(' + m.type + ') {'
                      + m.operands[0] + '} {' + m.operands[1]
-                     + '} {' + m.operands[2] + '}')
+                     + '} {' + m.operands[2] + '}'
             );
         }
     };
@@ -499,11 +506,13 @@
      * --------------------------------------------------------- */
 
     $$parser.typeError = function (desc, source, offset, type1, type2) {
-        type1 = $$parser.VERBOSE_TYPES[type1];
+        var message = replace(desc, '{$type1}',
+                              $$parser.VERBOSE_TYPES[type1]);
         if (type2 !== undefined) {
-            type2 = $$parser.VERBOSE_TYPES[type2];
+            message = replace(message, '{$type2}',
+                               $$parser.VERBOSE_TYPES[type2]);
         }
-        $$parser.fail(bake(desc), source, offset);
+        $$parser.fail(message, source, offset);
     };
 
     /* --------------------------------------------------------- *
@@ -658,8 +667,10 @@
         }
 
         /* fast path: constant expression on RHS */
-        var constPair  = rightx.operands[1][0] +
-                         rightx.operands[2][0];
+        var op1 = rightx.operands[1];
+        var op2 = rightx.operands[2];
+        var constPair  = (op1 ? op1[0] : '') +
+                         (op2 ? op2[0] : '');
         var rhsConst   = (span(constPair, '#<') === constPair.length);
 
         if (lop === '=' && rhsConst) {
@@ -967,6 +978,9 @@
 
         var nextLabel   = TABstr;   // pending label prefix
         var nextComment = '';       // pending trailing comment
+        function formatOperand(op) {
+            return (op == null ? '' : op);
+        }
 
         for (var i = 0; i < $$parser.metacode.length; ++i) {
 
@@ -1015,9 +1029,9 @@
                                    $$parser.TYPE_SUFFIXES[ rec.type ]);
 
                 output(prefix + '\t! ' + gop + ' ' +
-                       rec.operands[0] + ' '   +
-                       rec.operands[1] + ' '   +
-                       rec.operands[2] + nextComment);
+                       formatOperand(rec.operands[0]) + ' '   +
+                       formatOperand(rec.operands[1]) + ' '   +
+                       formatOperand(rec.operands[2]) + nextComment);
 
                 nextComment = '';
                 continue;
@@ -1031,9 +1045,9 @@
                                  $$parser.TYPE_SUFFIXES[ rec.type ]);
 
             output(prefix + nextLabel + gInstr + ' ' +
-                   rec.operands[0] + ' ' +
-                   rec.operands[1] + ' ' +
-                   rec.operands[2] + nextComment);
+                   formatOperand(rec.operands[0]) + ' ' +
+                   formatOperand(rec.operands[1]) + ' ' +
+                   formatOperand(rec.operands[2]) + nextComment);
 
             nextLabel   = TABstr;
             nextComment = '';
@@ -1471,7 +1485,7 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                              $$parser.declare(
                                                                                  '! DEF?', 'defines',
                                                                                  $id, $t, true,
-                                                                                 $$parser.makeConstant(x, $t, $$s, $$i),
+                                                                                 $$parser.makeConstant($x, $t, $$s, $$i),
                                                                                  $$s, $$i
                                                                              );
                                                                          }
@@ -1521,7 +1535,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                  $a.name,
                                                                                  'A',
                                                                                  ($section === 'CNST'),
-                                                                                 '*' + a.size,
+                                                                                 '*' + $a.size,
                                                                                  $$s, $$i
                                                                              );
                                                                          }
@@ -1533,10 +1547,10 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
 # ------------------------------------------------------------------
 InitList    <-  '{' _                                                 { $d = ' '; }
                  ( x:Expr                                             {
-                                                                             $d += $$parser.makeConstant(x, x.type, $$s, $$i);
+                                                                             $d += $$parser.makeConstant($x, $x.type, $$s, $$i);
                                                                          }
                    ( ',' _ x:Expr                                     {
-                                                                             $c = $$parser.makeConstant(x, x.type, $$s, $$i);
+                                                                             $c = $$parser.makeConstant($x, $x.type, $$s, $$i);
 
                                                                              /* decide if we need to flush DATA */
                                                                              if (  $c[0] === '<'
@@ -1545,7 +1559,7 @@ InitList    <-  '{' _                                                 { $d = ' '
 
                                                                                  $$parser.declare(
                                                                                      'DATA', 'globals',
-                                                                                     undefined, x.type,
+                                                                                     undefined, $x.type,
                                                                                      true, $d.substr(1),
                                                                                      $$s, $$i
                                                                                  );
@@ -1558,7 +1572,7 @@ InitList    <-  '{' _                                                 { $d = ' '
                                                                          if ($d.substr(1) !== '') {
                                                                              $$parser.declare(
                                                                                  'DATA', 'globals',
-                                                                                 undefined, x.type,
+                                                                                 undefined, $x.type,
                                                                                  true, $d.substr(1),
                                                                                  $$s, $$i
                                                                              );
@@ -1568,30 +1582,44 @@ InitList    <-  '{' _                                                 { $d = ' '
 # ------------------------------------------------------------------
 #  Parameter & local-variable helper lists                      
 # ------------------------------------------------------------------
-ArgsDecl    <-                                                        { $$.n = 0; }
+ArgsDecl    <-                                                        {
+                                                                         $$ = [];
+                                                                         $$.n = 0;
+                                                                     }
                  ( v:VarDecl                                          {
-                                                                             var idx = $$.n;
-                                                                             $$[idx] = clone(v);
-                                                                             $$.n    = idx + 1;
+                                                                             var entry = {};
+                                                                             entry.type = $v.type;
+                                                                             entry.name = $v.name;
+                                                                             entry.size = $v.size;
+                                                                             $$[$$.n++] = entry;
                                                                          }
                    ( ',' _ v:VarDecl                                  {
-                                                                             var idx = $$.n;
-                                                                             $$[idx] = clone(v);
-                                                                             $$.n    = idx + 1;
+                                                                             var entry = {};
+                                                                             entry.type = $v.type;
+                                                                             entry.name = $v.name;
+                                                                             entry.size = $v.size;
+                                                                             $$[$$.n++] = entry;
                                                                          }
                    )*
                  )?
 
-LocalsDecl  <-                                                        { $$.n = 0; }
+LocalsDecl  <-                                                        {
+                                                                         $$ = [];
+                                                                         $$.n = 0;
+                                                                     }
                  ( v:(VarDecl / ArrayDecl)                            {
-                                                                             var idx = $$.n;
-                                                                             $$[idx] = clone(v);
-                                                                             $$.n    = idx + 1;
+                                                                             var entry = {};
+                                                                             entry.type = $v.type;
+                                                                             entry.name = $v.name;
+                                                                             entry.size = $v.size;
+                                                                             $$[$$.n++] = entry;
                                                                          }
                    ( ',' _ v:(VarDecl / ArrayDecl)                    {
-                                                                             var idx = $$.n;
-                                                                             $$[idx] = clone(v);
-                                                                             $$.n    = idx + 1;
+                                                                             var entry = {};
+                                                                             entry.type = $v.type;
+                                                                             entry.name = $v.name;
+                                                                             entry.size = $v.size;
+                                                                             $$[$$.n++] = entry;
                                                                          }
                    )*
                  )?
@@ -1607,8 +1635,10 @@ VarDecl     <-  type:BASE_TYPE _ id:Identifier                        {
 
 ArrayDecl   <-  ARRAY _ id:Identifier
                 '[' _ x:Expr ']' _                                    {
-                                                                         $size = $$parser.makeConstant(x, 'i', $$s, $$i);
-                                                                         map($$, 'type','A', 'name',id, 'size', $$parser.dropHash($size));
+                                                                         $size = $$parser.makeConstant($x, 'i', $$s, $$i);
+                                                                         $$.type = 'A';
+                                                                         $$.name = $id;
+                                                                         $$.size = $$parser.dropHash($size);
                                                                          $$parser.returnBack($size);
                                                                      }
 
@@ -1616,8 +1646,10 @@ ArrayDecl   <-  ARRAY _ id:Identifier
 #  Statement rule dispatch                                      
 # ------------------------------------------------------------------
 Statement   <-                                                        {
-                                                                         var cut = find($$s.substr($$i), "{;\r\n");
-                                                                         var txt = (cut >= 0 ? $$s.substr($$i, cut) : '');
+                                                                         var snippet = $$s.substr($$i);
+                                                                         var cut     = find(snippet, "{;\r\n");
+                                                                         var txt     = (cut >= 0 ? snippet.substr(0, cut)
+                                                                                              : snippet);
                                                                          $$parser.emitMeta({ operator:';', type:undefined,
                                                                                             operands:[ txt, undefined, undefined ] });
                                                                      }
@@ -1752,10 +1784,10 @@ Assert      <-  ASSERT _                            {
                                                         var r = $$parser.borrowForCall();
 
                                                         /* store the assert-string constant */
-                                                        $$parser.makeString('a', $$, str, $$s, $$i);
+                                                        $$parser.makeString('a', $str, str, $$s, $$i);
 
                                                         /* argument goes into %<r+1> */
-                                                        $$parser.makeArgValue($$, r + 1);
+                                                        $$parser.makeArgValue($str, r + 1);
 
                                                         /* call the failure handler */
                                                         $$parser.emit('()', '?', '^assertFail',
@@ -1959,10 +1991,14 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                             }
 
                                                             /* dump the literal “case …” comment */
-                                                            var pos  = find($$s.substr($$i), ":\r\n");
+                                                            var snippet = $$s.substr($$i);
+                                                            var pos     = find(snippet, ":\r\n");
+                                                            if (pos >= 0) {
+                                                                snippet = snippet.substr(0, pos);
+                                                            }
                                                             $$parser.emit(
                                                                 ';', undefined,
-                                                                'case ' + $$s.substr($$i, pos),
+                                                                'case ' + snippet,
                                                                 undefined, undefined
                                                             );
                                                         }
@@ -2097,7 +2133,10 @@ BITWISE_OP  <-  '|' !'|' / '&' !'&' / '^' / '<<' / '>>>' / '>>'
 ADDSUB_OP   <-  '+' / '-'
 MULDIV_OP   <-  '*' / '/' !'/' / '%'
 COMP_OP     <-  '<=' / '<' / '>=' / '>' / '!=' / '=='
-BASE_TYPE   <-  INT / FLOAT / FUNCPTR / POINTER
+BASE_TYPE   <-  INT                               { $._ = 'int'; }
+            /  FLOAT                              { $._ = 'float'; }
+            /  FUNCPTR                            { $._ = 'funcptr'; }
+            /  POINTER                            { $._ = 'pointer'; }
 BUILT_IN    <-  'abs' / 'floor' / 'itof' / 'ftoi'
 PREFIX_OP   <-  '-' !("'" / DIGIT) / '~' / '&' / '*' / BUILT_IN !SYMBOL_CHAR
 SYMBOL_CHAR <-  [A-Za-z_$0-9]
