@@ -78,7 +78,9 @@ function patchCompilerSourceForMeta(source) {
         const assignRegex = /    assign = function \(x, leftx, rightx,\n[ \t]+sourceCode, sourceOffset\) \{/;
         const assignGuard = `\n        if (!leftx || leftx.operator === undefined) {\n                throw new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));\n        }`;
         patched = patched.replace(assignRegex, (match) => `${match}${assignGuard}`);
-        patched = patched.replace('var _i=0,_im=0,_o={_:void 0},', 'var _i=0,_im=0,_o={},');
+        const rootInitPattern = 'var _i=0,_im=0,_o={_:void 0},';
+        const rootMeta = 'var _i=0,_im=0,_o={_: { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] }},';
+        patched = patched.replace(rootInitPattern, rootMeta);
         return patched;
 }
 
@@ -116,7 +118,18 @@ function compileWithJsImpala(source, options = {}) {
 
         const shouldRetabulate = options.retabulate !== false;
         const formatted = shouldRetabulate ? outputLines.map(retabulate) : outputLines;
-        return `${formatted.join('\n')}\n`;
+        let outputText = formatted.join('\n');
+
+        const trailingNewlineOption = options.trailingNewline;
+        if (trailingNewlineOption === true || (trailingNewlineOption === undefined && shouldRetabulate)) {
+                outputText += '\n';
+        } else if (!shouldRetabulate && trailingNewlineOption !== true) {
+                while (outputText.endsWith('\n')) {
+                        outputText = outputText.slice(0, -1);
+                }
+        }
+
+        return outputText;
 }
 
 module.exports = {

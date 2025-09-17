@@ -62,10 +62,11 @@
         return str.split(sub).join(by);
     }
     function find(str, chars) {
-        for (var i = 0; i < str.length; i++) {
-            if (chars.indexOf(str[i]) >= 0) return i;
+        var i = 0;
+        while (i < str.length && chars.indexOf(str[i]) < 0) {
+            i++;
         }
-        return -1;
+        return i;
     }
     function span(str, chars) {
         var i = 0;
@@ -78,10 +79,10 @@
         return i;
     }
     function char(code) {
-        return String.fromCharCode(code);
+        return String.fromCharCode(code & 0xFF);
     }
     function ordinal(ch) {
-        return (ch + "").charCodeAt(0);
+        return ((ch + "").charCodeAt(0)) & 0xFF;
     }
 
     function evaluate(str) {
@@ -144,6 +145,7 @@
     var $$parser.stock = { '%': [], '<': [] };
     var $$parser.counters = { '%': 0,  '<': 0  };
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
+    var $$parser.switchStack = [];
     var $$parser.noForward = false;
 
     /* 3  bulk-fill the lookup tables */
@@ -184,8 +186,9 @@
                                  'U','function','N','native','A','array','?','untyped');
 
     /* 4  label & metacode helpers */
-    $$parser.newLabel = function () {
-        return '@.' + ($$parser.labelCounter++);
+    $$parser.newLabel = function (prefix) {
+        var tag = (prefix === undefined ? '' : String(prefix));
+        return '@.' + tag + ($$parser.labelCounter++);
     };
 
     /* push a deep-cloned record into metacode */
@@ -367,6 +370,11 @@
         var chosen = n;
         stk.splice(i, 1);  /* remove from the pool                */
 
+        /* Restore the stock order so ordinary borrow() calls reuse
+           the most recently freed registers first, matching the
+           original queue semantics. */
+        stk.reverse();
+
         /* duplicate-check, like the original assert(validate…)    */
         assert($$parser.validateStock('%'));
         return chosen;
@@ -446,11 +454,19 @@
     }
 
     /* overwrite the fields of an existing meta object */
+    function normaliseVoid(value) {
+        return value === null ? undefined : value;
+    }
+
     $$parser.makeMeta = function (rec, op, type, op0, op1, op2) {
         rec = metaSlot(rec);
-        rec.operator  = op;
-        rec.type      = type;
-        rec.operands  = [ op0, op1, op2 ];
+        rec.operator  = normaliseVoid(op);
+        rec.type      = normaliseVoid(type);
+        rec.operands  = [
+            normaliseVoid(op0),
+            normaliseVoid(op1),
+            normaliseVoid(op2)
+        ];
         return rec;
     };
 
@@ -478,10 +494,12 @@
         var op   = expr.operator;
         var op1  = expr.operands[1];
         var op2  = expr.operands[2];
+        var op1Prefix = (op1 ? op1[0] : '');
+        var op2Prefix = (op2 ? op2[0] : '');
 
         /* already a simple l-value we can reuse? */
         if ((op === '=' || op === ':=') &&
-            span(op1[0], classes) === 1) {
+            op1Prefix && span(op1Prefix, classes) === 1) {
             return op1;
         }
 
@@ -490,9 +508,9 @@
         $$parser.returnBack(op1);
 
         var cls = '%';              /* default stock   */
-        var t   = op1[0] + op2[0];
+        var t   = op1Prefix + op2Prefix;
 
-        if (span(t, '#<') === t.length && span('<', classes) === 1) {
+        if (t.length > 0 && span(t, '#<') === t.length && span('<', classes) === 1) {
             expr.operator = '<> ' + op;     /* compile-time op */
             cls = '<';
         }
@@ -654,9 +672,10 @@
         if (operator === '*' && leftx.operator === '=itof'
             && leftx.operands[2] === '#1.0') {
 
-            var t  = rightx.operands[1][0] +
-                     rightx.operands[2][0];
-            var ok = (span(t, '#<') === t.length);
+            var rightOp1Prefix = (rightx.operands[1] ? rightx.operands[1][0] : '');
+            var rightOp2Prefix = (rightx.operands[2] ? rightx.operands[2][0] : '');
+            var t  = rightOp1Prefix + rightOp2Prefix;
+            var ok = (t.length > 0 && span(t, '#<') === t.length);
 
             if (ok) {
                 $$parser.makeMeta(
@@ -672,9 +691,10 @@
         if (operator === '*' && rightx.operator === '=itof'
             && rightx.operands[2] === '#1.0') {
 
-            var t2 = leftx.operands[1][0] +
-                     leftx.operands[2][0];
-            var ok2 = (span(t2, '#<') === t2.length);
+            var leftOp1Prefix = (leftx.operands[1] ? leftx.operands[1][0] : '');
+            var leftOp2Prefix = (leftx.operands[2] ? leftx.operands[2][0] : '');
+            var t2 = leftOp1Prefix + leftOp2Prefix;
+            var ok2 = (t2.length > 0 && span(t2, '#<') === t2.length);
 
             if (ok2) {
                 $$parser.makeMeta(
@@ -1272,12 +1292,13 @@
                 $$parser.declare('DATi', undefined, undefined, 'i',
                                  true, d.substr(1), '', 0);
                 offset += non;
+                continue;
             }
 
             /* printable (plus spaces) */
             var spanLen = span(str.substr(offset),
                                $$parser.printable + ' ');
-            spanLen = rspan(str.substr(offset, spanLen), ' ') + 1;
+            spanLen = rspan(str.substr(offset, spanLen), ' ');
             if (spanLen > 0) {
                 $$parser.declare('DATs', undefined, undefined, 'i',
                                  true, str.substr(offset, spanLen), '', 0);
@@ -1294,6 +1315,12 @@
 
         s += char(0);       // NUL-terminate
 
+        var byteString = '';
+        for (var idx = 0; idx < s.length; ++idx) {
+            byteString += char(ordinal(s[idx]));
+        }
+        s = byteString;
+
         var tbl = $$parser.strings[prefix];
         if (!tbl) {
             tbl = $$parser.strings[prefix] = [];
@@ -1305,7 +1332,7 @@
 
             /* generate unique label */
             var name = '.' + prefix + '_' +
-                       (s.replace(/[0-9a-zA-Z]/g, '')
+                       (s.replace(/[^0-9a-zA-Z]/g, '')
                           .substr(0, 6)) +
                        ( ($$parser.randomId + tbl.length)
                          .toString(16) );
@@ -1363,6 +1390,7 @@
         if (!$$parser.metacode) $$parser.metacode = [];
         if (!$$parser.symbols) $$parser.symbols = {};
         if (!$$parser.strings) $$parser.strings = { s: [], a: [] };
+        if (!$$parser.switchStack) $$parser.switchStack = [];
 
         /* clear transient pools and counters */
         var poolPercent = $$parser.stock['%'] || ($$parser.stock['%'] = []);
@@ -1375,6 +1403,7 @@
         /* wipe accumulated meta-instructions */
         $$parser.metacode.length = 0;
         $$parser.labelCounter    = 0;
+        $$parser.switchStack.length = 0;
 
         /* reset symbol tables */
         $$parser.symbols.locals   = {};
@@ -1606,39 +1635,44 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
 # ------------------------------------------------------------------
 #  Initialiser list for arrays                                  
 # ------------------------------------------------------------------
-InitList    <-  '{' _                                                 { $d = ' '; }
-                 ( x:Expr                                             {
-                                                                             $d += $$parser.makeConstant($x, $x.type, $$s, $$i);
-                                                                         }
-                   ( ',' _ x:Expr                                     {
-                                                                             $c = $$parser.makeConstant($x, $x.type, $$s, $$i);
+InitList    <-  '{' _                                                 { $d = ' '; $type = undefined; }
+                ( x:Expr                                             {
+                                                                            var xMeta = metaSlot($x);
+                                                                            $type = xMeta.type;
+                                                                            $d += $$parser.makeConstant(xMeta, $type, $$s, $$i);
+                                                                        }
+                  ( ',' _ x:Expr                                     {
+                                                                            var xMeta = metaSlot($x);
+                                                                            var xType = xMeta.type;
+                                                                            var constant = $$parser.makeConstant(xMeta, xType, $$s, $$i);
 
-                                                                             /* decide if we need to flush DATA */
-                                                                             if (  $c[0] === '<'
-                                                                               || $d[1] === '<'
-                                                                               || ($d + ' ' + $c).length >= 55) {
+                                                                            /* decide if we need to flush DATA */
+                                                                            if (  constant[0] === '<'
+                                                                              || $d[1] === '<'
+                                                                              || ($d + ' ' + constant).length >= 55) {
 
-                                                                                 $$parser.declare(
-                                                                                     'DATA', 'globals',
-                                                                                     undefined, $x.type,
-                                                                                     true, $d.substr(1),
-                                                                                     $$s, $$i
-                                                                                 );
-                                                                                 $d = '';
-                                                                             }
-                                                                             $d += ' ' + $c;
-                                                                         }
-                   )* )?
-               '}' _                                                  {
-                                                                         if ($d.substr(1) !== '') {
-                                                                             $$parser.declare(
-                                                                                 'DATA', 'globals',
-                                                                                 undefined, $x.type,
-                                                                                 true, $d.substr(1),
-                                                                                 $$s, $$i
-                                                                             );
-                                                                         }
-                                                                     }
+                                                                                $$parser.declare(
+                                                                                    'DATA', 'globals',
+                                                                                    undefined, xType,
+                                                                                    true, $d.substr(1),
+                                                                                    $$s, $$i
+                                                                                );
+                                                                                $d = '';
+                                                                            }
+                                                                            $d += ' ' + constant;
+                                                                            $type = xType;
+                                                                        }
+                  )* )?
+              '}' _                                                  {
+                                                                        if ($d.substr(1) !== '') {
+                                                                            $$parser.declare(
+                                                                                'DATA', 'globals',
+                                                                                undefined, $type,
+                                                                                true, $d.substr(1),
+                                                                                $$s, $$i
+                                                                            );
+                                                                        }
+                                                                    }
 
 # ------------------------------------------------------------------
 #  Parameter & local-variable helper lists                      
@@ -1716,9 +1750,9 @@ Statement   <-                                                        {
                                                                      }
                 (
                     label:Identifier ':' _                            {
-                                                                             $$parser.emitMeta({ operator:'<--', type:undefined,
-                                                                                                operands:[ '@' + label, undefined, undefined ] });
-                                                                         }
+                                                                            $$parser.emitMeta({ operator:'<--', type:undefined,
+                                                                                                operands:[ '@' + $label._, undefined, undefined ] });
+                                                                        }
                 )*
                 (   ';' _
                 /   Assert
@@ -1842,12 +1876,12 @@ Comp        <-  '!'_ Comp                           {
 Assert      <-  ASSERT _                            {
                                                         $okLabel = $$parser.newLabel('a');
                                                         $$parser.emit('<> ==', 'i', '#DEBUG', '#0', $okLabel);
-                                                        var start    = $$i;
-                                                        var exprText = '';
+                                                        $start    = $$i;
+                                                        $exprText = '';
                                                     }
                 str:BoolGroup                       {
-                                                        exprText = $$s.substring(start, $$i);
-                                                        exprText = exprText.replace(/[ \t\r\n]+$/, '');
+                                                        $exprText = $$s.substring($start, $$i);
+                                                        $exprText = $exprText.replace(/[ \t\r\n]+$/, '');
                                                     }
                 ';'_                                {
                                                         $$parser.emit('?->', true, $okLabel, undefined, undefined);
@@ -1855,7 +1889,7 @@ Assert      <-  ASSERT _                            {
                                                         var r = $$parser.borrowForCall();
 
                                                         /* store the assert-string constant */
-                                                        $$parser.makeString('a', $str, exprText, $$s, $$i);
+                                                        $$parser.makeString('a', $str, $exprText, $$s, $$i);
 
                                                         /* argument goes into %<r+1> */
                                                         $$parser.makeArgValue($str, r + 1);
@@ -1876,8 +1910,8 @@ Assert      <-  ASSERT _                            {
 Block       <-  '{'_ Statement* '}'_
 
 
-Goto        <-  GOTO _ label:Identifier ';'_        { 
-                                                        $$parser.emit('-->', undefined, '@' + label, undefined, undefined); 
+Goto        <-  GOTO _ label:Identifier ';'_        {
+                                                        $$parser.emit('-->', undefined, '@' + $label._, undefined, undefined);
                                                     }
 
 
@@ -1934,7 +1968,7 @@ For         <-  FOR _ '('_ var:Variable             {
                                                         $gotInit = false;            /* flag to detect an explicit start value */
                                                     }
                 ('='_ init:Expr                     {
-                                                        $$parser.assign($init, $var, $$, $$s, $$i);
+                                                        $$parser.assign($init, $var, $init, $$s, $$i);
                                                         $gotInit = true;
                                                     }
                 )? TO _ toExpr:Expr ')'_            {
@@ -1998,8 +2032,10 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                         var toMeta   = metaSlot($t);
 
                                                         $length = $$parser.makeConstant($l, 'i', $$s, $$i);
+                                                        var lengthHash = $$parser.dropHash($length);
 
                                                         if (fromMeta.type + toMeta.type !== 'pp') {
+                                                            $$parser.returnBack($length);
                                                             $$parser.typeError(
                                                                 'Invalid types ({$type1} and {$type2})',
                                                                 $$s, $$i, fromMeta.type, toMeta.type
@@ -2013,10 +2049,11 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                             '?',
                                                             $$parser.makeRValue(toMeta, '&$%'),
                                                             $$parser.makeRValue(fromMeta, '&$%'),
-                                                            '*' + $$parser.dropHash($length)
+                                                            '*' + lengthHash
                                                         );
 
                                                         $$parser.emitMeta(copyMeta);
+                                                        $$parser.returnBack($length);
                                                         $$parser.releaseMeta(copyMeta);
                                                     }
 
@@ -2049,6 +2086,8 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 
                                                         switchMeta.switchLabel = $$parser.newLabel('s');
                                                         $switchExit              = $$parser.newLabel('e');
+
+                                                        $$parser.switchStack.push(switchMeta);
 
                                                         $$parser.emit(
                                                             '-->#',
@@ -2094,20 +2133,24 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                                 $$parser.emit('-->', undefined, $switchExit, undefined, undefined);
                                                             }
 
+                                                            var ctx = $$parser.switchStack[$$parser.switchStack.length - 1];
+
                                                             $$parser.emit(';',    undefined, 'default',       undefined, undefined);
-                                                            $$parser.emit('<--',  undefined, metaSlot($$).switchLabel,  undefined, undefined);
+                                                            $$parser.emit('<--',  undefined, ctx.switchLabel,  undefined, undefined);
                                                             $progress = 'gotDefault';
                                                         }
                     ) ':'_ stmt:Statement
                 )*
                 '}'_                                {
+                                                        var ctx = $$parser.switchStack.pop() || metaSlot($$);
+
                                                         /* no explicit “default” → hook it up now                        */
                                                         if ($progress !== 'gotDefault') {
-                                                            $$parser.emit('<--', undefined, metaSlot($$).switchLabel, undefined, undefined);
+                                                            $$parser.emit('<--', undefined, ctx.switchLabel, undefined, undefined);
                                                         }
                                                         $$parser.emit('<--', undefined, $switchExit, undefined, undefined);
 
-                                                        $$parser.returnBack(metaSlot($$).from);
+                                                        $$parser.returnBack(ctx.from);
                                                     }
 
 # ---------------------------------------------------------------------------
@@ -2115,17 +2158,21 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 # ---------------------------------------------------------------------------
 CaseExpr    <-  Expr                                {
                                                         /* offset = constant(expr) – switch.from                         */
-                                                        var switchMeta = metaSlot($$);
+                                                        var ctx      = $$parser.switchStack[$$parser.switchStack.length - 1];
+                                                        var caseMeta = metaSlot($$);
+                                                        var baseFrom = (ctx ? ctx.from : caseMeta.from);
+                                                        var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel);
+
                                                         $n = $$parser.subConstInt(
-                                                                $$parser.makeConstant(switchMeta, 'i', $$s, $$i),
-                                                                switchMeta.from
+                                                                $$parser.makeConstant(caseMeta, 'i', $$s, $$i),
+                                                                baseFrom
                                                             );
 
                                                         /* create label for this case                                     */
                                                         $$parser.emit(
                                                             '<--',
                                                             undefined,
-                                                            switchMeta.switchLabel + '#' + $$parser.dropHash($n),
+                                                            baseLabel + '#' + $$parser.dropHash($n),
                                                             undefined, undefined
                                                         );
 

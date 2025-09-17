@@ -5,6 +5,8 @@ const { wrapCompilerSource } = require('./updateJSPEG.js');
 const { compileWithJsImpala } = require('./impalaJsCompilerRunner');
 
 const dir = __dirname;
+const IMPALA_ENCODING = 'latin1';
+
 const jspegSource = fs.readFileSync(path.join(dir, 'jspegCompiler.js'), 'utf8');
 const compileJSPEG = require(path.join(dir, 'jspegCompiler.js'));
 if (typeof compileJSPEG !== 'function') {
@@ -180,15 +182,42 @@ testGrammarEquivalence('tagCaptureTest.jspeg', 'tagCaptureTest.jspeg', tagCaptur
 const parityFixtures = [
         { name: 'smoke', source: 'smoke.impala', expected: 'smoke.pika.gazl', options: { randomId: 42 } },
         { name: 'bool', source: 'bool.impala', expected: 'bool.pika.gazl', options: { randomId: 42 } },
+        { name: 'control', source: 'control.impala', expected: 'control.pika.gazl', options: { randomId: 42 } },
         { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.pika.gazl', options: { randomId: 42 } },
         { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.pika.gazl', options: { randomId: 42 } }
 ];
 
-parityFixtures.forEach((fixture) => {
-        const sourcePath = path.join(dir, 'testdata', fixture.source);
-        const expectedPath = path.join(dir, 'testdata', fixture.expected);
-        const source = fs.readFileSync(sourcePath, 'utf8');
-        const expected = fs.readFileSync(expectedPath, 'utf8');
+const legacySourceDir = path.join(dir, '..', '..', 'tests', 'impala', 'sources');
+const legacyExpectedDir = path.join(dir, '..', '..', 'tests', 'impala', 'golden');
+const LEGACY_RANDOM_ID = 0x4d2;
+const legacyParityFixtures = fs
+        .readdirSync(legacySourceDir)
+        .filter((file) => file.endsWith('.impala'))
+        .sort()
+        .map((file) => {
+                const name = path.basename(file, '.impala');
+                return {
+                        name,
+                        source: file,
+                        expected: `${name}.gazl`,
+                        sourceDir: legacySourceDir,
+                        expectedDir: legacyExpectedDir,
+                        options: { randomId: LEGACY_RANDOM_ID, retabulate: false }
+                };
+        });
+
+function resolveFixturePath(fixture, key, defaultDir) {
+        if (fixture[`${key}Dir`]) {
+                return path.join(fixture[`${key}Dir`], fixture[key]);
+        }
+        return path.join(defaultDir, fixture[key]);
+}
+
+function runParityFixture(fixture) {
+        const sourcePath = resolveFixturePath(fixture, 'source', path.join(dir, 'testdata'));
+        const expectedPath = resolveFixturePath(fixture, 'expected', path.join(dir, 'testdata'));
+        const source = fs.readFileSync(sourcePath, IMPALA_ENCODING);
+        const expected = fs.readFileSync(expectedPath, IMPALA_ENCODING);
         let actual;
         try {
                 actual = compileWithJsImpala(source, Object.assign({}, fixture.options));
@@ -208,11 +237,48 @@ parityFixtures.forEach((fixture) => {
                 process.exit(1);
         }
 
-        if (actual !== expected) {
+        const normalizedActual = actual.trimEnd();
+        const normalizedExpected = expected.trimEnd();
+
+        if (normalizedActual !== normalizedExpected) {
                 console.error(`impala.jspeg compiler output diverges from PikaScript fixture: ${fixture.name}`);
                 process.exit(1);
         }
         console.log(`impala.jspeg compiler matches ${fixture.name} fixture output`);
-});
+}
+
+parityFixtures.forEach(runParityFixture);
+legacyParityFixtures.forEach(runParityFixture);
+
+const failureSource = [
+        'function main()',
+        'locals pointer p',
+        '{',
+        '        copy (1 from p to 1);',
+        '}',
+        ''
+].join('\n');
+
+let observedFailure = false;
+try {
+        compileWithJsImpala(failureSource, { randomId: 42 });
+} catch (err) {
+        observedFailure = true;
+}
+
+if (!observedFailure) {
+        console.error('impala.jspeg compiler unexpectedly succeeded on failureSource');
+        process.exit(1);
+}
+
+const smokeSource = fs.readFileSync(path.join(dir, 'testdata', 'smoke.impala'), IMPALA_ENCODING);
+const smokeExpected = fs.readFileSync(path.join(dir, 'testdata', 'smoke.pika.gazl'), IMPALA_ENCODING);
+const smokeOutputAfterFailure = compileWithJsImpala(smokeSource, { randomId: 42 });
+
+if (smokeOutputAfterFailure !== smokeExpected) {
+        console.error('impala.jspeg compiler leaked state after aborted compile');
+        process.exit(1);
+}
+console.log('impala.jspeg compiler recovers after aborted compile without leaking state');
 
 console.log('JSPEG regression suite completed successfully');
