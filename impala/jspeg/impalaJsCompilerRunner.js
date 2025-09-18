@@ -69,13 +69,13 @@ function createMetaSlotInitializerScript() {
 }
 
 function patchCompilerSourceForMeta(source) {
-        const marker = '    makeMeta = function (rec, op, type, op0, op1, op2) {';
+        const makeMetaRegex = /    (?:var )?makeMeta = function \(rec, op, type, op0, op1, op2\) \{/;
         const guard = `\n        if (rec == null) {\n                var owner = (typeof __jspegMetaOwner !== 'undefined' ? __jspegMetaOwner : null);\n                if (owner) {\n                        if (!owner.hasOwnProperty('__metaSlot')) {\n                                owner.__metaSlot = { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] };\n                        }\n                        rec = owner.__metaSlot;\n                } else {\n                        rec = { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] };\n                }\n        }`;
-        if (!source.includes(marker)) {
+        if (!makeMetaRegex.test(source)) {
                 return source;
         }
-        let patched = source.replace(marker, `${marker}${guard}`);
-        const assignRegex = /    assign = function \(x, leftx, rightx,\n[ \t]+sourceCode, sourceOffset\) \{/;
+        let patched = source.replace(makeMetaRegex, (match) => `${match}${guard}`);
+        const assignRegex = /    (?:var )?assign = function \(x, leftx, rightx,\n[ \t]+sourceCode, sourceOffset\) \{/;
         const assignGuard = `\n        if (!leftx || leftx.operator === undefined) {\n                throw new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));\n        }`;
         patched = patched.replace(assignRegex, (match) => `${match}${assignGuard}`);
         const rootInitPattern = 'var _i=0,_im=0,_o={_:void 0},';
