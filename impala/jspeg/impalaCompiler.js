@@ -1,6 +1,7 @@
 var $$parser = {};
 var impalaCompiler = (function(_s) {
 {
+    'use strict';
     /**
      * map(target, k1, v1, k2, v2, …)
      *   assigns target[k1]=v1, etc.
@@ -142,6 +143,7 @@ var impalaCompiler = (function(_s) {
     var labelCounter = 0;
     var stock = { '%': [], '<': [] };
     var counters = { '%': 0,  '<': 0  };
+    var randomId = 0;
     var symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
     var switchStack = [];
     var noForward = false;
@@ -184,25 +186,25 @@ var impalaCompiler = (function(_s) {
                                  'U','function','N','native','A','array','?','untyped');
 
     /* 4  label & metacode helpers */
-    newLabel = function (prefix) {
+    var newLabel = function (prefix) {
         var tag = (prefix === undefined ? '' : String(prefix));
         return '@.' + tag + (labelCounter++);
     };
 
     /* push a deep-cloned record into metacode */
-    emitMeta = function (rec) {
+    var emitMeta = function (rec) {
         metacode.push(clone(metaSlot(rec)));
     };
 
     /* allocate new (empty) meta record, fill via makeMeta, then push */
-    emit = function (op, type, op0, op1, op2) {
+    var emit = function (op, type, op0, op1, op2) {
         var slot = {};                // fresh object
         makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
         metacode.push(slot);
     };
 
     /* 5  portable replacement for ppeg.fail */
-    fail = function (error, source, offset) {
+    var fail = function (error, source, offset) {
         function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
         throw bake(error) + ' : ' +
               oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +
@@ -214,7 +216,7 @@ var impalaCompiler = (function(_s) {
     /* ---------------------------------------------------------
      *  Short-circuit / branch processing
      * --------------------------------------------------------- */
-    processBranches = function () {
+    var processBranches = function () {
         var target      = { false: null, true: null }; // last FALSE / TRUE dest labels
         var targetCond  = null;                        // current branch condition (true / false)
         var currentGoto = null;                        // last unconditional goto
@@ -305,7 +307,7 @@ var impalaCompiler = (function(_s) {
      * --------------------------------------------------------- */
 
     /* assure no duplicates exist in a stock bucket */
-    validateStock = function (cls) {
+    var validateStock = function (cls) {
         var seen = {};
         var stk  = stock[cls];
         for (var i = 0; i < stk.length; ++i) {
@@ -317,7 +319,7 @@ var impalaCompiler = (function(_s) {
     };
 
     /* borrow one token from a stock bucket (or create a new one) */
-    borrow = function (cls) {
+    var borrow = function (cls) {
         assert(validateStock(cls));
 
         var stk = stock[cls];
@@ -337,7 +339,7 @@ var impalaCompiler = (function(_s) {
     };
 
     /* smart borrow for CALL args – first free id in last consecutive run */
-    borrowForCall = function () {
+    var borrowForCall = function () {
         /* same safety check the original did */
         assert(validateStock('%'));
 
@@ -379,7 +381,7 @@ var impalaCompiler = (function(_s) {
     };
 
     /* put a token back into its stock bucket */
-    returnBack = function (op) {
+    var returnBack = function (op) {
         if (op == null) {
             return;
         }
@@ -408,7 +410,7 @@ var impalaCompiler = (function(_s) {
      * --------------------------------------------------------- */
 
     /* pretty-print one meta-instruction (only when it has op) */
-    debugPrintMeta = function (m) {
+    var debugPrintMeta = function (m) {
         m = metaSlot(m);
         if (m && m.operator != null) {
             console.log(
@@ -456,7 +458,7 @@ var impalaCompiler = (function(_s) {
         return value === null ? undefined : value;
     }
 
-    makeMeta = function (rec, op, type, op0, op1, op2) {
+    var makeMeta = function (rec, op, type, op0, op1, op2) {
         rec = metaSlot(rec);
         rec.operator  = normaliseVoid(op);
         rec.type      = normaliseVoid(type);
@@ -469,7 +471,7 @@ var impalaCompiler = (function(_s) {
     };
 
     /* release all three operands contained in a meta-record */
-    releaseMeta = function (meta) {
+    var releaseMeta = function (meta) {
         meta = metaSlot(meta);
         for (var i = 2; i >= 0; --i) {
             returnBack(meta.operands[i]);
@@ -484,7 +486,7 @@ var impalaCompiler = (function(_s) {
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
-    makeRValue = function (expr, classes) {
+    var makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
@@ -524,7 +526,7 @@ var impalaCompiler = (function(_s) {
      * Ensure an expression’s value ends up in the given
      * transient “%<number>”.
      */
-    makeArgValue = function (expr, number) {
+    var makeArgValue = function (expr, number) {
         expr = metaSlot(expr);
 
         var op   = expr.operator;
@@ -561,7 +563,7 @@ var impalaCompiler = (function(_s) {
      *  Typed error helper                                       *
      * --------------------------------------------------------- */
 
-    typeError = function (desc, source, offset, type1, type2) {
+    var typeError = function (desc, source, offset, type1, type2) {
         var message = replace(desc, '{$type1}',
                               VERBOSE_TYPES[type1]);
         if (type2 !== undefined) {
@@ -574,7 +576,7 @@ var impalaCompiler = (function(_s) {
     /* --------------------------------------------------------- *
      *  Binary operations ( + – * / [] etc. )                    *
      * --------------------------------------------------------- */
-    binaryOp = function (operator, leftx, rightx,
+    var binaryOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
@@ -652,7 +654,7 @@ var impalaCompiler = (function(_s) {
     /* --------------------------------------------------------- *
      *  Multiplication / division with special int-to-float case *
      * --------------------------------------------------------- */
-    mulDivOp = function (operator, leftx, rightx,
+    var mulDivOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
@@ -716,7 +718,7 @@ var impalaCompiler = (function(_s) {
     /* --------------------------------------------------------- *
      *  Assignment helper                                        *
      * --------------------------------------------------------- */
-    assign = function (x, leftx, rightx,
+    var assign = function (x, leftx, rightx,
                                 sourceCode, sourceOffset) {
 
         x      = metaSlot(x);
@@ -818,7 +820,7 @@ var impalaCompiler = (function(_s) {
      * -------------------------------------------------------- */
 
     /* *expr  or  [] dereference handling */
-    dereference = function (operator, expr, sourceCode, sourceOffset) {
+    var dereference = function (operator, expr, sourceCode, sourceOffset) {
         expr = metaSlot(expr);
         if (expr.operator === '+') {
             /*  &a + i   →   PEEK (&a , i)  */
@@ -841,7 +843,7 @@ var impalaCompiler = (function(_s) {
     };
 
     /* & (address-of) operator handling */
-    reference = function (operator, expr, sourceCode, sourceOffset) {
+    var reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -876,7 +878,7 @@ var impalaCompiler = (function(_s) {
     };
 
     /* unary minus (integer/float) */
-    minus = function (operator, expr/*, src, off*/) {
+    var minus = function (operator, expr/*, src, off*/) {
         expr = metaSlot(expr);
         makeMeta(
             expr, '-', undefined,
@@ -887,7 +889,7 @@ var impalaCompiler = (function(_s) {
     };
 
     /* bit-wise NOT / logical NOT  (~expr) */
-    not = function (operator, expr) {
+    var not = function (operator, expr) {
         expr = metaSlot(expr);
         makeMeta(
             expr, '^', undefined,
@@ -898,7 +900,7 @@ var impalaCompiler = (function(_s) {
     };
 
     /* ABS or FLOOR (unary) – operator is already '=abs' or '=floor' */
-    absFloor = function (operator, expr) {
+    var absFloor = function (operator, expr) {
         expr = metaSlot(expr);
         makeMeta(
             expr, operator, undefined,
@@ -909,7 +911,7 @@ var impalaCompiler = (function(_s) {
     };
 
     /* int → float */
-    intToFloatConvert = function (operator, expr) {
+    var intToFloatConvert = function (operator, expr) {
         expr = metaSlot(expr);
         makeMeta(
             expr, '=itof', undefined,
@@ -920,7 +922,7 @@ var impalaCompiler = (function(_s) {
     };
 
     /* float → int, with constant-fold special-case */
-    floatToIntConvert = function (operator, expr) {
+    var floatToIntConvert = function (operator, expr) {
 
         expr = metaSlot(expr);
 
@@ -948,7 +950,7 @@ var impalaCompiler = (function(_s) {
      *  UNARY_OPS dispatch table
      * -------------------------------------------------------- */
 
-    UNARY_OPS = {};          /* will hold “=xxx” → handler */
+    var UNARY_OPS = {};          /* will hold “=xxx” → handler */
 
     /* no-op casts */
     function noop() {}
@@ -973,7 +975,7 @@ var impalaCompiler = (function(_s) {
     /* -----------------------------------------------------------
      *  Generic unary operator
      * -------------------------------------------------------- */
-    unaryOp = function (operator, expr, sourceCode, sourceOffset) {
+    var unaryOp = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -1050,7 +1052,7 @@ var impalaCompiler = (function(_s) {
     /* -----------------------------------------------------------
      *  Flush all queued meta-code into final text output
      * -------------------------------------------------------- */
-    flushMetaCode = function (prefix) {
+    var flushMetaCode = function (prefix) {
 
         prefix = prefix || '';
         var TABstr = (typeof TAB !== 'undefined') ? TAB : '\t';
@@ -1139,7 +1141,7 @@ var impalaCompiler = (function(_s) {
     /* -----------------------------------------------------------
      *  Identifier lookup helper
      * -------------------------------------------------------- */
-    lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
+    var lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
 
         var sym = symbols;
         var p   = null;
@@ -1206,7 +1208,7 @@ var impalaCompiler = (function(_s) {
     /* -----------------------------------------------------------
      *  Ensure expression resolves to a compile-time constant
      * -------------------------------------------------------- */
-    makeConstant = function (x, wantType,
+    var makeConstant = function (x, wantType,
                                       sourceCode, sourceOffset) {
 
         var r = makeRValue(x, '#<&');
@@ -1225,7 +1227,7 @@ var impalaCompiler = (function(_s) {
     /* -----------------------------------------------------------
      *  Constant subtraction helper
      * -------------------------------------------------------- */
-    subConstInt = function (opL, opR) {
+    var subConstInt = function (opL, opR) {
 
         assert(span(opR[0], '#<') === 1,
                "rhs must be const");
@@ -1258,12 +1260,12 @@ var impalaCompiler = (function(_s) {
     };
 
     /* drop leading “#” helper */
-    dropHash = function (s) {
+    var dropHash = function (s) {
         return (s[0] === '#') ? s.substr(1) : s;
     };
 
     /* printable ASCII table (33–126) */
-    printable = '';
+    var printable = '';
     for (var i = 33; i < 127; ++i) {
         printable += char(i);
     }
@@ -1271,7 +1273,7 @@ var impalaCompiler = (function(_s) {
     /* -----------------------------------------------------------
      *  Dump a string constant into assembly
      * -------------------------------------------------------- */
-    dumpString = function (label, str) {
+    var dumpString = function (label, str) {
 
         var len = str.length;
         declare('CNST', 'globals', label, '?',
@@ -1308,7 +1310,7 @@ var impalaCompiler = (function(_s) {
     /* -----------------------------------------------------------
      *  Manage / share string literals
      * -------------------------------------------------------- */
-    makeString = function (prefix, x, s,
+    var makeString = function (prefix, x, s,
                                     sourceCode, sourceOffset) {
 
         s += char(0);       // NUL-terminate
@@ -1380,7 +1382,7 @@ var impalaCompiler = (function(_s) {
      *  Compiler start / end hooks
      * -------------------------------------------------------- */
 
-    start = function () {
+    var start = function () {
 
         /* reset per-compilation state */
         if (!stock) stock = { '%': [], '<': [] };
@@ -1433,7 +1435,7 @@ var impalaCompiler = (function(_s) {
                IMPALA_VERSION + LF);
     };
 
-    end = function () {
+    var end = function () {
 
         /* dump deferred string literals */
         iterate(strings.s, function (rec) {

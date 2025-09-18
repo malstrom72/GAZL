@@ -3,6 +3,7 @@
 ## ————————————————————————————————
 
 {
+    'use strict';
     /**
      * map(target, k1, v1, k2, v2, …)
      *   assigns target[k1]=v1, etc.
@@ -144,6 +145,7 @@
     var $$parser.labelCounter = 0;
     var $$parser.stock = { '%': [], '<': [] };
     var $$parser.counters = { '%': 0,  '<': 0  };
+    var $$parser.randomId = 0;
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
@@ -186,25 +188,25 @@
                                  'U','function','N','native','A','array','?','untyped');
 
     /* 4  label & metacode helpers */
-    $$parser.newLabel = function (prefix) {
+    var $$parser.newLabel = function (prefix) {
         var tag = (prefix === undefined ? '' : String(prefix));
         return '@.' + tag + ($$parser.labelCounter++);
     };
 
     /* push a deep-cloned record into metacode */
-    $$parser.emitMeta = function (rec) {
+    var $$parser.emitMeta = function (rec) {
         $$parser.metacode.push(clone(metaSlot(rec)));
     };
 
     /* allocate new (empty) meta record, fill via makeMeta, then push */
-    $$parser.emit = function (op, type, op0, op1, op2) {
+    var $$parser.emit = function (op, type, op0, op1, op2) {
         var slot = {};                // fresh object
         $$parser.makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
         $$parser.metacode.push(slot);
     };
 
     /* 5  portable replacement for ppeg.fail */
-    $$parser.fail = function (error, source, offset) {
+    var $$parser.fail = function (error, source, offset) {
         function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
         throw bake(error) + ' : ' +
               oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +
@@ -216,7 +218,7 @@
     /* ---------------------------------------------------------
      *  Short-circuit / branch processing
      * --------------------------------------------------------- */
-    $$parser.processBranches = function () {
+    var $$parser.processBranches = function () {
         var target      = { false: null, true: null }; // last FALSE / TRUE dest labels
         var targetCond  = null;                        // current branch condition (true / false)
         var currentGoto = null;                        // last unconditional goto
@@ -307,7 +309,7 @@
      * --------------------------------------------------------- */
 
     /* assure no duplicates exist in a stock bucket */
-    $$parser.validateStock = function (cls) {
+    var $$parser.validateStock = function (cls) {
         var seen = {};
         var stk  = $$parser.stock[cls];
         for (var i = 0; i < stk.length; ++i) {
@@ -319,7 +321,7 @@
     };
 
     /* borrow one token from a stock bucket (or create a new one) */
-    $$parser.borrow = function (cls) {
+    var $$parser.borrow = function (cls) {
         assert($$parser.validateStock(cls));
 
         var stk = $$parser.stock[cls];
@@ -339,7 +341,7 @@
     };
 
     /* smart borrow for CALL args – first free id in last consecutive run */
-    $$parser.borrowForCall = function () {
+    var $$parser.borrowForCall = function () {
         /* same safety check the original did */
         assert($$parser.validateStock('%'));
 
@@ -381,7 +383,7 @@
     };
 
     /* put a token back into its stock bucket */
-    $$parser.returnBack = function (op) {
+    var $$parser.returnBack = function (op) {
         if (op == null) {
             return;
         }
@@ -410,7 +412,7 @@
      * --------------------------------------------------------- */
 
     /* pretty-print one meta-instruction (only when it has op) */
-    $$parser.debugPrintMeta = function (m) {
+    var $$parser.debugPrintMeta = function (m) {
         m = metaSlot(m);
         if (m && m.operator != null) {
             console.log(
@@ -458,7 +460,7 @@
         return value === null ? undefined : value;
     }
 
-    $$parser.makeMeta = function (rec, op, type, op0, op1, op2) {
+    var $$parser.makeMeta = function (rec, op, type, op0, op1, op2) {
         rec = metaSlot(rec);
         rec.operator  = normaliseVoid(op);
         rec.type      = normaliseVoid(type);
@@ -471,7 +473,7 @@
     };
 
     /* release all three operands contained in a meta-record */
-    $$parser.releaseMeta = function (meta) {
+    var $$parser.releaseMeta = function (meta) {
         meta = metaSlot(meta);
         for (var i = 2; i >= 0; --i) {
             $$parser.returnBack(meta.operands[i]);
@@ -486,7 +488,7 @@
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
-    $$parser.makeRValue = function (expr, classes) {
+    var $$parser.makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
@@ -526,7 +528,7 @@
      * Ensure an expression’s value ends up in the given
      * transient “%<number>”.
      */
-    $$parser.makeArgValue = function (expr, number) {
+    var $$parser.makeArgValue = function (expr, number) {
         expr = metaSlot(expr);
 
         var op   = expr.operator;
@@ -563,7 +565,7 @@
      *  Typed error helper                                       *
      * --------------------------------------------------------- */
 
-    $$parser.typeError = function (desc, source, offset, type1, type2) {
+    var $$parser.typeError = function (desc, source, offset, type1, type2) {
         var message = replace(desc, '{$type1}',
                               $$parser.VERBOSE_TYPES[type1]);
         if (type2 !== undefined) {
@@ -576,7 +578,7 @@
     /* --------------------------------------------------------- *
      *  Binary operations ( + – * / [] etc. )                    *
      * --------------------------------------------------------- */
-    $$parser.binaryOp = function (operator, leftx, rightx,
+    var $$parser.binaryOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
@@ -654,7 +656,7 @@
     /* --------------------------------------------------------- *
      *  Multiplication / division with special int-to-float case *
      * --------------------------------------------------------- */
-    $$parser.mulDivOp = function (operator, leftx, rightx,
+    var $$parser.mulDivOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
@@ -718,7 +720,7 @@
     /* --------------------------------------------------------- *
      *  Assignment helper                                        *
      * --------------------------------------------------------- */
-    $$parser.assign = function (x, leftx, rightx,
+    var $$parser.assign = function (x, leftx, rightx,
                                 sourceCode, sourceOffset) {
 
         x      = metaSlot(x);
@@ -820,7 +822,7 @@
      * -------------------------------------------------------- */
 
     /* *expr  or  [] dereference handling */
-    $$parser.dereference = function (operator, expr, sourceCode, sourceOffset) {
+    var $$parser.dereference = function (operator, expr, sourceCode, sourceOffset) {
         expr = metaSlot(expr);
         if (expr.operator === '+') {
             /*  &a + i   →   PEEK (&a , i)  */
@@ -843,7 +845,7 @@
     };
 
     /* & (address-of) operator handling */
-    $$parser.reference = function (operator, expr, sourceCode, sourceOffset) {
+    var $$parser.reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -878,7 +880,7 @@
     };
 
     /* unary minus (integer/float) */
-    $$parser.minus = function (operator, expr/*, src, off*/) {
+    var $$parser.minus = function (operator, expr/*, src, off*/) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '-', undefined,
@@ -889,7 +891,7 @@
     };
 
     /* bit-wise NOT / logical NOT  (~expr) */
-    $$parser.not = function (operator, expr) {
+    var $$parser.not = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '^', undefined,
@@ -900,7 +902,7 @@
     };
 
     /* ABS or FLOOR (unary) – operator is already '=abs' or '=floor' */
-    $$parser.absFloor = function (operator, expr) {
+    var $$parser.absFloor = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, operator, undefined,
@@ -911,7 +913,7 @@
     };
 
     /* int → float */
-    $$parser.intToFloatConvert = function (operator, expr) {
+    var $$parser.intToFloatConvert = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '=itof', undefined,
@@ -922,7 +924,7 @@
     };
 
     /* float → int, with constant-fold special-case */
-    $$parser.floatToIntConvert = function (operator, expr) {
+    var $$parser.floatToIntConvert = function (operator, expr) {
 
         expr = metaSlot(expr);
 
@@ -950,7 +952,7 @@
      *  UNARY_OPS dispatch table
      * -------------------------------------------------------- */
 
-    $$parser.UNARY_OPS = {};          /* will hold “=xxx” → handler */
+    var $$parser.UNARY_OPS = {};          /* will hold “=xxx” → handler */
 
     /* no-op casts */
     function noop() {}
@@ -975,7 +977,7 @@
     /* -----------------------------------------------------------
      *  Generic unary operator
      * -------------------------------------------------------- */
-    $$parser.unaryOp = function (operator, expr, sourceCode, sourceOffset) {
+    var $$parser.unaryOp = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -1052,7 +1054,7 @@
     /* -----------------------------------------------------------
      *  Flush all queued meta-code into final text output
      * -------------------------------------------------------- */
-    $$parser.flushMetaCode = function (prefix) {
+    var $$parser.flushMetaCode = function (prefix) {
 
         prefix = prefix || '';
         var TABstr = (typeof TAB !== 'undefined') ? TAB : '\t';
@@ -1141,7 +1143,7 @@
     /* -----------------------------------------------------------
      *  Identifier lookup helper
      * -------------------------------------------------------- */
-    $$parser.lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
+    var $$parser.lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
 
         var sym = $$parser.symbols;
         var p   = null;
@@ -1208,7 +1210,7 @@
     /* -----------------------------------------------------------
      *  Ensure expression resolves to a compile-time constant
      * -------------------------------------------------------- */
-    $$parser.makeConstant = function (x, wantType,
+    var $$parser.makeConstant = function (x, wantType,
                                       sourceCode, sourceOffset) {
 
         var r = $$parser.makeRValue(x, '#<&');
@@ -1227,7 +1229,7 @@
     /* -----------------------------------------------------------
      *  Constant subtraction helper
      * -------------------------------------------------------- */
-    $$parser.subConstInt = function (opL, opR) {
+    var $$parser.subConstInt = function (opL, opR) {
 
         assert(span(opR[0], '#<') === 1,
                "rhs must be const");
@@ -1260,12 +1262,12 @@
     };
 
     /* drop leading “#” helper */
-    $$parser.dropHash = function (s) {
+    var $$parser.dropHash = function (s) {
         return (s[0] === '#') ? s.substr(1) : s;
     };
 
     /* printable ASCII table (33–126) */
-    $$parser.printable = '';
+    var $$parser.printable = '';
     for (var i = 33; i < 127; ++i) {
         $$parser.printable += char(i);
     }
@@ -1273,7 +1275,7 @@
     /* -----------------------------------------------------------
      *  Dump a string constant into assembly
      * -------------------------------------------------------- */
-    $$parser.dumpString = function (label, str) {
+    var $$parser.dumpString = function (label, str) {
 
         var len = str.length;
         $$parser.declare('CNST', 'globals', label, '?',
@@ -1310,7 +1312,7 @@
     /* -----------------------------------------------------------
      *  Manage / share string literals
      * -------------------------------------------------------- */
-    $$parser.makeString = function (prefix, x, s,
+    var $$parser.makeString = function (prefix, x, s,
                                     sourceCode, sourceOffset) {
 
         s += char(0);       // NUL-terminate
@@ -1382,7 +1384,7 @@
      *  Compiler start / end hooks
      * -------------------------------------------------------- */
 
-    $$parser.start = function () {
+    var $$parser.start = function () {
 
         /* reset per-compilation state */
         if (!$$parser.stock) $$parser.stock = { '%': [], '<': [] };
@@ -1435,7 +1437,7 @@
                $$parser.IMPALA_VERSION + LF);
     };
 
-    $$parser.end = function () {
+    var $$parser.end = function () {
 
         /* dump deferred string literals */
         iterate($$parser.strings.s, function (rec) {
