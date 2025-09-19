@@ -201,7 +201,7 @@
     /* allocate new (empty) meta record, fill via makeMeta, then push */
     var $$parser.emit = function (op, type, op0, op1, op2) {
         var slot = {};                // fresh object
-        $$parser.makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
+        slot = $$parser.makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
         $$parser.metacode.push(slot);
     };
 
@@ -427,31 +427,37 @@
     function metaSlot(node) {
         if (node == null) {
             return { operator: undefined, type: undefined,
-                     operands: [ undefined, undefined, undefined ] };
+                     operands: [ undefined, undefined, undefined ],
+                     __meta: true };
         }
-        if (node.operands !== undefined) {
-            return node;
-        }
-
-        if (!Object.prototype.hasOwnProperty.call(node, '_')) {
+        if (node.__meta) {
             if (node.operands === undefined) {
                 node.operands = [ undefined, undefined, undefined ];
-            }
-            if (!Object.prototype.hasOwnProperty.call(node, 'operator')) {
-                node.operator = undefined;
-            }
-            if (!Object.prototype.hasOwnProperty.call(node, 'type')) {
-                node.type = undefined;
             }
             return node;
         }
 
         var slot = node._;
-        if (!slot || slot.operands === undefined) {
-            slot = { operator: undefined, type: undefined,
-                     operands: [ undefined, undefined, undefined ] };
+        if (!slot || !slot.__meta) {
+            var operands = (node.operands instanceof Array
+                            ? node.operands
+                            : [ undefined, undefined, undefined ]);
+            slot = {
+                operator: node.operator,
+                type: node.type,
+                operands: operands,
+                __meta: true
+            };
             node._ = slot;
         }
+
+        if (slot.operands === undefined) {
+            slot.operands = [ undefined, undefined, undefined ];
+        }
+
+        node.operator = slot.operator;
+        node.type     = slot.type;
+        node.operands = slot.operands;
         return slot;
     }
 
@@ -1767,39 +1773,39 @@ Statement   <-                                                        {
                 /   If
                 /   Switch
                 /   While
-                /   Expr ';' _                                        { $$parser.releaseMeta($$); }
+                /   Expr ';' _                                        { $$parser.releaseMeta($$.); }
                 )
 
 Expr        <-  Bitwise ('='_ r:Expr               { if (!$$parser.dry)
-                                                       $$parser.assign($$, $$, $r, $$s, $$i); }
+                                                       $$parser.assign($$., $$., $r, $$s, $$i); }
                 )?
 
 Bitwise     <-  AddSub (op:BITWISE_OP _ r:AddSub   { if (!$$parser.dry)
-                                                       $$parser.binaryOp($op, $$, $r, $$s, $$i); }
+                                                       $$parser.binaryOp($op, $$., $r, $$s, $$i); }
                 )*
 
 AddSub      <-  MulDiv (op:ADDSUB_OP _ r:MulDiv    { if (!$$parser.dry)
-                                                       $$parser.binaryOp($op, $$, $r, $$s, $$i); }
+                                                       $$parser.binaryOp($op, $$., $r, $$s, $$i); }
                 )*
 
 MulDiv      <-  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
-                                                       $$parser.mulDivOp($op, $$, $r, $$s, $$i); }
+                                                       $$parser.mulDivOp($op, $$., $r, $$s, $$i); }
                 )*
 
-PrePost     <-  (op:PREFIX_OP _                    
+PrePost     <-  (op:PREFIX_OP _
                 / '('_ op:BASE_TYPE _ ')'_) PrePost { if (!$$parser.dry)
-                                                       $$parser.unaryOp($op, $$, $$s, $$i); }
+                                                       $$parser.unaryOp($op, $$., $$s, $$i); }
                 / Value (FuncCall / Subscript)*
 
 Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry)
-                                                       $$parser.binaryOp('=[]', $$, $s, $$s, $$i); }
+                                                       $$parser.binaryOp('=[]', $$., $s, $$s, $$i); }
 
 FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.count = 0;
                                                        $$.base  = $$parser.borrowForCall();
                                                     } }
                 (Argument (','_ Argument)*)? ')'_  { if (!$$parser.dry) {
-                                                       var callee = metaSlot($$);
+                                                       var callee = metaSlot($$.);
 
                                                        if (span(callee.type, 'FN') !== 1) {
                                                            $$parser.typeError(
@@ -1871,7 +1877,7 @@ Comp        <-  '!'_ Comp                           {
                     Expr op:COMP_OP _ r:Expr        { 
                                                         $$parser.binaryOp($op, $$, $r, $$s, $$i);
                                                         $$parser.emitMeta($$);
-                                                        $$parser.releaseMeta($$);
+                                                       $$parser.releaseMeta($$.);
                                                     }
 
 
@@ -2064,7 +2070,7 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
 # ---------------------------------------------------------------------------
 Switch      <-  SWITCH _ '('_ $$:Expr
                 '=='_ f:Expr TO _ t:Expr    {
-                                                        var switchMeta = metaSlot($$);
+                                                        var switchMeta = metaSlot($$.);
 
                                                         /* the switch expression must be an int */
                                                         if (switchMeta.type !== 'i') {
@@ -2144,7 +2150,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                     ) ':'_ stmt:Statement
                 )*
                 '}'_                                {
-                                                        var ctx = $$parser.switchStack.pop() || metaSlot($$);
+                                                        var ctx = $$parser.switchStack.pop() || metaSlot($$.);
 
                                                         /* no explicit “default” → hook it up now                        */
                                                         if ($progress !== 'gotDefault') {
@@ -2161,7 +2167,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 CaseExpr    <-  Expr                                {
                                                         /* offset = constant(expr) – switch.from                         */
                                                         var ctx      = $$parser.switchStack[$$parser.switchStack.length - 1];
-                                                        var caseMeta = metaSlot($$);
+                                                        var caseMeta = metaSlot($$.);
                                                         var baseFrom = (ctx ? ctx.from : caseMeta.from);
                                                         var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel);
 
@@ -2202,19 +2208,19 @@ While       <-  WHILE _                             {
 # ---------------------------------------------------------------------------
 Value       <-  Group
                 / f:FloatLiteral                    { if (!$$parser.dry) {
-                                                        $$parser.makeMeta($$, ':=', 'f', undefined, '#' + $f, undefined);
+                                                        $$parser.makeMeta($$., ':=', 'f', undefined, '#' + $f, undefined);
                                                       } }
                 / i:IntegerLiteral                  { if (!$$parser.dry) {
-                                                        $$parser.makeMeta($$, ':=', 'i', undefined, '#' + $i, undefined);
+                                                        $$parser.makeMeta($$., ':=', 'i', undefined, '#' + $i, undefined);
                                                       } }
                 / s:StringLiteral                   { if (!$$parser.dry) {
-                                                        $$parser.makeString('s', $$, evaluate($s), $$s, $$i);
+                                                        $$parser.makeString('s', $$., evaluate($s), $$s, $$i);
                                                       } }
                 / NULL _                            { if (!$$parser.dry) {
-                                                        $$parser.makeMeta($$, ':=', 'p', undefined, '&NULL', undefined);
+                                                        $$parser.makeMeta($$., ':=', 'p', undefined, '&NULL', undefined);
                                                       } }
                 / NULLFUNC _                        { if (!$$parser.dry) {
-                                                        $$parser.makeMeta($$, ':=', 'F', undefined, '&NULL', undefined);
+                                                        $$parser.makeMeta($$., ':=', 'F', undefined, '&NULL', undefined);
                                                       } }
                 / Variable
 
@@ -2225,7 +2231,7 @@ Variable    <-                                      { $global = false; }
                 (GLOBAL _                           { $global = true; }
                 )?
                 id:Identifier                       { if (!$$parser.dry) {
-                                                        $$parser.lookup($$, $id, $global, $$s, $$i);
+                                                        $$parser.lookup($$., $id, $global, $$s, $$i);
                                                       } }
 
 
