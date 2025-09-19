@@ -92,7 +92,16 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                       s += '_i';
                                                                                                       $b = $b.slice(3);
                                                                                                     } else if ($b.slice(0, 2) === '\x24\x24') {
-                                                                                                      s += ($b[2] === '.' ? '$' : '$._');
+                                                                                                      // $$ → holder when used as a function argument (next is ',' or ')'),
+                                                                                                      // otherwise value ($._). Direct field access '$$.' stays '$'.
+                                                                                                      var nextCh = $b[2];
+                                                                                                      if (nextCh === '.') {
+                                                                                                        s += '$';
+                                                                                                      } else if (nextCh === ',' || nextCh === ')') {
+                                                                                                        s += '$';
+                                                                                                      } else {
+                                                                                                        s += '$._';
+                                                                                                      }
                                                                                                       $b = $b.slice(2);
                                                                                                     } else {
                                                                                                       var m = $b.slice(1).match(/^[A-Za-z_]+/);
@@ -102,7 +111,8 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                       $b = $b.slice(e);
                                                                                                       if (!hasOwn($$.vr, id)) {
                                                                                                         $$.vr[id] = '';
-                                                                                                      } else if ($$.vr[id] !== '' && $b[0] !== '.') {
+                                                                                                      } else if ($$.vr[id] !== '' && $b[0] !== '.' && $b[0] !== ')' && $b[0] !== ',') {
+                                                                                                        // Append '._' for value, except when used as a function argument (next is ',' or ')').
                                                                                                         s += '._';
                                                                                                       }
                                                                                                     }
@@ -132,6 +142,7 @@ Prefix		<-								{ $c.vi = $$.vi; $c.tag = $$.tag; $c.vr = $$.vr }
 				/ Capture
 
 # ----------------------------------------------------------------------------------------------------------------------
+
 
 Capture		<-	v:Variable EQUALS			{ if ($v !== '$._') $$.vr[$v] = ''; }
 						Tagged				{ $$ = '(function(){var _m=_i;return ' + $$ + '&&(' + $v + '=_s.slice(_m,_i),true)})()' }

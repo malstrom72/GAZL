@@ -56,8 +56,7 @@ const gazl = compileWithJsImpala(sourceText, {
 ```
 
 Details:
-- Runs the generated compiler in a Node `vm` context so required globals (like `output`) and the meta‑slot shim stay sandboxed. The compiler no longer creates sloppy globals.
-- Shims a meta-slot so action helpers operate on a predictable placeholder record when needed.
+- Runs the generated compiler in a Node `vm` context and provides the required `output` callback; no process‑global pollution.
 - `retabulate: false` preserves the original alignment tabs for byte-for-byte comparisons.
 
  

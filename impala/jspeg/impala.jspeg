@@ -566,11 +566,11 @@
      * --------------------------------------------------------- */
 
     var $$parser.typeError = function (desc, source, offset, type1, type2) {
-        var message = replace(desc, '{$type1}',
-                              $$parser.VERBOSE_TYPES[type1]);
+        var message = replace(desc, '{$type1}', $$parser.VERBOSE_TYPES[type1]);
         if (type2 !== undefined) {
-            message = replace(message, '{$type2}',
-                               $$parser.VERBOSE_TYPES[type2]);
+            message = replace(message, '{$type2}', $$parser.VERBOSE_TYPES[type2]);
+        } else {
+            message = replace(message, '{$type2}', '');
         }
         $$parser.fail(message, source, offset);
     };
@@ -1799,6 +1799,8 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.base  = $$parser.borrowForCall();
                                                     } }
                 (Argument (','_ Argument)*)? ')'_  { if (!$$parser.dry) {
+                                                       /* ensure holder has value slot for $$ before metaSlot */
+                                                       if ($._ === void 0) $._ = {};
                                                        var callee = metaSlot($$);
 
                                                        if (span(callee.type, 'FN') !== 1) {
@@ -1959,6 +1961,8 @@ Loop        <-  LOOP _                              {
 #   FOR … TO … loop
 # ---------------------------------------------------------------------------
 For         <-  FOR _ '('_ var:Variable             {
+                                                        /* ensure holder has value slot */
+                                                        if ($var._ === void 0) $var._ = {};
                                                         /* loop-variable must be local, modifiable int / pointer */
                                                         var varMeta = metaSlot($var);
                                                         if (varMeta.operator !== '=' || span(varMeta.type, "ip") === 0) {
@@ -1970,10 +1974,14 @@ For         <-  FOR _ '('_ var:Variable             {
                                                         $gotInit = false;            /* flag to detect an explicit start value */
                                                     }
                 ('='_ init:Expr                     {
+                                                        /* ensure holder has value slot */
+                                                        if ($init._ === void 0) $init._ = {};
                                                         $$parser.assign($init, $var, $init, $$s, $$i);
                                                         $gotInit = true;
                                                     }
                 )? TO _ toExpr:Expr ')'_            {
+                                                        /* ensure holder has value slot */
+                                                        if ($toExpr._ === void 0) $toExpr._ = {};
                                                         var varMeta  = metaSlot($var);
                                                         var toMeta   = metaSlot($toExpr);
 
@@ -2030,6 +2038,10 @@ For         <-  FOR _ '('_ var:Variable             {
 # ---------------------------------------------------------------------------
 Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                     {
+                                                        /* ensure holders have value slots */
+                                                        if ($l._ === void 0) $l._ = {};
+                                                        if ($f._ === void 0) $f._ = {};
+                                                        if ($t._ === void 0) $t._ = {};
                                                         var fromMeta = metaSlot($f);
                                                         var toMeta   = metaSlot($t);
 
@@ -2064,6 +2076,8 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
 # ---------------------------------------------------------------------------
 Switch      <-  SWITCH _ '('_ $$:Expr
                 '=='_ f:Expr TO _ t:Expr    {
+                                                        /* ensure holder has value slot for $$ before metaSlot */
+                                                        if ($._ === void 0) $._ = {};
                                                         var switchMeta = metaSlot($$);
 
                                                         /* the switch expression must be an int */
@@ -2144,6 +2158,8 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                     ) ':'_ stmt:Statement
                 )*
                 '}'_                                {
+                                                        /* ensure holder has value slot for $$ before metaSlot */
+                                                        if ($._ === void 0) $._ = {};
                                                         var ctx = $$parser.switchStack.pop() || metaSlot($$);
 
                                                         /* no explicit “default” → hook it up now                        */
@@ -2161,6 +2177,8 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 CaseExpr    <-  Expr                                {
                                                         /* offset = constant(expr) – switch.from                         */
                                                         var ctx      = $$parser.switchStack[$$parser.switchStack.length - 1];
+                                                        /* ensure holder has value slot for $$ before metaSlot */
+                                                        if ($._ === void 0) $._ = {};
                                                         var caseMeta = metaSlot($$);
                                                         var baseFrom = (ctx ? ctx.from : caseMeta.from);
                                                         var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel);
