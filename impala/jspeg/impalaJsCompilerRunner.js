@@ -1,8 +1,7 @@
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
+const Module = require('module');
 
 const OUTPUT_TAB_WIDTH = 4;
 const INPUT_TAB_STOPS = [0, 20, 32, 64];
@@ -41,29 +40,54 @@ function retabulate(line) {
         return out;
 }
 
+function loadCompiler(compilerPath, compilerSource) {
+        if (compilerSource !== undefined) {
+                const filename = path.resolve(compilerPath);
+                const mod = new Module(filename, module);
+                mod.filename = filename;
+                mod.paths = Module._nodeModulePaths(path.dirname(filename));
+                mod._compile(compilerSource, filename);
+                return mod.exports;
+        }
+
+        const resolvedPath = require.resolve(compilerPath);
+        delete require.cache[resolvedPath];
+        return require(resolvedPath);
+}
+
 function compileWithJsImpala(source, options = {}) {
         const compilerPath = options.compilerPath || path.join(__dirname, 'impalaCompiler.js');
-        const compilerSource = options.compilerSource || fs.readFileSync(compilerPath, 'utf8');
+        const compilerSource = options.compilerSource;
 
         const outputLines = [];
-        const context = {
-                module: { exports: {} },
-                exports: {},
-                console,
-                output: (line) => outputLines.push(line),
-                impalaRandomId: options.randomId ?? 12345678
-        };
-        vm.createContext(context);
+        const compilerFn = loadCompiler(compilerPath, compilerSource);
 
-        new vm.Script(compilerSource, { filename: path.basename(compilerPath) }).runInContext(context);
+        const previousOutput = globalThis.output;
+        const previousRandomId = globalThis.impalaRandomId;
+        const hadOutput = Object.prototype.hasOwnProperty.call(globalThis, 'output');
+        const hadRandomId = Object.prototype.hasOwnProperty.call(globalThis, 'impalaRandomId');
+        globalThis.output = (line) => outputLines.push(line);
+        globalThis.impalaRandomId = options.randomId ?? 12345678;
 
-        const compilerFn = context.module.exports;
-        const [ok, , index] = compilerFn(source);
-        if (!ok) {
-                throw new Error('JSPEG impala compiler failed to compile source');
-        }
-        if (index !== source.length) {
-                throw new Error(`JSPEG impala compiler stopped at ${index} of ${source.length}`);
+        try {
+                const [ok, , index] = compilerFn(source);
+                if (!ok) {
+                        throw new Error('JSPEG impala compiler failed to compile source');
+                }
+                if (index !== source.length) {
+                        throw new Error(`JSPEG impala compiler stopped at ${index} of ${source.length}`);
+                }
+        } finally {
+                if (hadOutput) {
+                        globalThis.output = previousOutput;
+                } else {
+                        delete globalThis.output;
+                }
+                if (hadRandomId) {
+                        globalThis.impalaRandomId = previousRandomId;
+                } else {
+                        delete globalThis.impalaRandomId;
+                }
         }
 
         if (outputLines.length === 0) {

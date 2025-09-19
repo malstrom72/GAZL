@@ -3,7 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
+const Module = require('module');
 const child_process = require('child_process');
 
 const root = __dirname;
@@ -43,23 +43,21 @@ function wrapCompilerSource(exportName, generated, options = {}) {
 }
 
 function loadCompiler(source, description) {
-        const context = {
-                console,
-                module: { exports: {} },
-                exports: {}
-        };
-        vm.createContext(context);
-        const script = new vm.Script(source, { filename: description });
-        script.runInContext(context);
+        const filename = path.isAbsolute(description) ? description : resolve(description);
+        const mod = new Module(filename, module);
+        mod.filename = filename;
+        mod.paths = Module._nodeModulePaths(path.dirname(filename));
+        mod._compile(source, filename);
 
-        if (typeof context.module.exports === 'function') {
-                return context.module.exports;
+        const exported = mod.exports;
+        if (typeof exported === 'function') {
+                return exported;
         }
-        if (typeof context.exports === 'function') {
-                return context.exports;
+        if (exported && typeof exported.compileJSPEG === 'function') {
+                return exported.compileJSPEG;
         }
-        if (typeof context.compileJSPEG === 'function') {
-                return context.compileJSPEG;
+        if (exported && typeof exported.default === 'function') {
+                return exported.default;
         }
 
         throw new Error(`${description} did not define a compiler function`);
@@ -103,7 +101,7 @@ function regenerate() {
         const generatedCompiler = compileWith(compileJSPEG, grammarSource, 'jspeg.jspeg');
 
         const wrappedGeneratedCompiler = wrapCompilerSource('compileJSPEG', generatedCompiler);
-        const updatedCompileJSPEG = loadCompiler(wrappedGeneratedCompiler, 'generated jspeg compiler');
+        const updatedCompileJSPEG = loadCompiler(wrappedGeneratedCompiler, 'generated-jspeg-compiler.js');
         const regenerated = compileWith(updatedCompileJSPEG, grammarSource, 'jspeg.jspeg (self-host)');
         if (canonicalize(regenerated) !== canonicalize(generatedCompiler)) {
                 throw new Error('Self-hosted compile produced different output for jspeg.jspeg');
