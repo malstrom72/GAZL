@@ -58,10 +58,10 @@ If wired correctly, it prints `[ true, 11, 3 ]`.
 - **Concept:** In PPEG/JSPEG, `$$` is the semantic value threaded through rules. It is both input to a rule and output from that rule after actions run. Tags (`name:expr`) and captures (`name=expr`) introduce named temporaries that actions can read.
 - **Why `._`:** JavaScript does not have by-reference variables. JSPEG models each tagged/captured name as a small “holder” object whose `._` property contains its current value. This lets actions either treat a name as a container (`$name.field`) or as the value itself (`$name`), with the latter desugared to `$name._` by the code generator.
 - **Codegen rules:**
-  - `$$` inside actions is rewritten to either `$._` (value) or `$.…` when you write `$$.…` to access fields on the current container. See `impala/jspeg/jspeg.jspeg:73`.
+- Bare `$$` inside actions is rewritten to `$._`, and writing `$$.` (optionally followed by a property) yields the holder `$`, so grammars can opt into container semantics without losing the default value rewrite. See `impala/jspeg/jspeg.jspeg:80`–`110`.
   - The root parser initializes `var _o={_:void 0}` and returns `_o._` as the second element of the parser tuple. See `impala/jspeg/jspeg.jspeg:25` and `impala/jspeg/jspeg.jspeg:26`.
   - Bare `$name` in actions refers to the name’s value and is rewritten to `$name._` unless immediately followed by a `.` (meaning field access on the container). This keeps container vs. value usage unambiguous without extra syntax. See the action rewriter heuristics in `impala/jspeg/jspeg.jspeg:73`–`126`.
-  - The tokeniser special-cases `$$` to the internal `'$._'`. See `impala/jspeg/jspeg.jspeg:189`–`191`.
+- The tokeniser special-cases both `$$.` (rewritten to holder-qualified names) and bare `$$` (rewritten to `'$._'`). See `impala/jspeg/jspeg.jspeg:204`–`207`.
 - **Tags:** `name: expr` temporarily binds `$$` to `$name` while `expr` runs; on return, `$name` holds the produced value and remains visible to subsequent actions in the rule. This mirrors the original PPEG semantics.
 - **Captures:** `name=expr` stores the consumed substring into `$name` before any attached actions run. Actions can then use `$name` (value form) or `$name.…` (container form) within the same rule.
 
