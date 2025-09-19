@@ -1,7 +1,7 @@
-var $$parser = {};
 var impalaCompiler = (function(_s) {
 {
     'use strict';
+    var $$parser = {};
     /**
      * map(target, k1, v1, k2, v2, …)
      *   assigns target[k1]=v1, etc.

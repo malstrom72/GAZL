@@ -114,9 +114,7 @@ function regenerate() {
 
         return {
                 jspegCompiler: wrappedGeneratedCompiler,
-                impalaCompiler: wrapCompilerSource('impalaCompiler', generatedImpala, {
-                        prelude: 'var $$parser = {};'
-                })
+                impalaCompiler: wrapCompilerSource('impalaCompiler', generatedImpala)
         };
 }
 

@@ -51,8 +51,7 @@ function compileWithJsImpala(source, options = {}) {
                 exports: {},
                 console,
                 output: (line) => outputLines.push(line),
-                impalaRandomId: options.randomId ?? 12345678,
-                $$parser: {}
+                impalaRandomId: options.randomId ?? 12345678
         };
         vm.createContext(context);
 
