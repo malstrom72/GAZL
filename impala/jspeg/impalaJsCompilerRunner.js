@@ -1,8 +1,7 @@
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
+const Module = require('module');
 
 const OUTPUT_TAB_WIDTH = 4;
 const INPUT_TAB_STOPS = [0, 20, 32, 64];
@@ -41,75 +40,54 @@ function retabulate(line) {
         return out;
 }
 
-function createMetaSlotInitializerScript() {
-        return new vm.Script(`
-                Object.defineProperty(Object.prototype, '_', {
-                        get: function () {
-                                globalThis.__jspegMetaOwner = this;
-                                if (!this.hasOwnProperty('__metaSlot')) {
-                                        Object.defineProperty(this, '__metaSlot', {
-                                                value: { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] },
-                                                writable: true,
-                                                configurable: true
-                                        });
-                                }
-                                return this.__metaSlot;
-                        },
-                        set: function (value) {
-                                globalThis.__jspegMetaOwner = this;
-                                Object.defineProperty(this, '__metaSlot', {
-                                        value,
-                                        writable: true,
-                                        configurable: true
-                                });
-                        },
-                        configurable: true
-                });
-        `);
-}
-
-function patchCompilerSourceForMeta(source) {
-        const makeMetaRegex = /    (?:var )?makeMeta = function \(rec, op, type, op0, op1, op2\) \{/;
-        const guard = `\n        if (rec == null) {\n                var owner = (typeof __jspegMetaOwner !== 'undefined' ? __jspegMetaOwner : null);\n                if (owner) {\n                        if (!owner.hasOwnProperty('__metaSlot')) {\n                                owner.__metaSlot = { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] };\n                        }\n                        rec = owner.__metaSlot;\n                } else {\n                        rec = { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] };\n                }\n        }`;
-        if (!makeMetaRegex.test(source)) {
-                return source;
+function loadCompiler(compilerPath, compilerSource) {
+        if (compilerSource !== undefined) {
+                const filename = path.resolve(compilerPath);
+                const mod = new Module(filename, module);
+                mod.filename = filename;
+                mod.paths = Module._nodeModulePaths(path.dirname(filename));
+                mod._compile(compilerSource, filename);
+                return mod.exports;
         }
-        let patched = source.replace(makeMetaRegex, (match) => `${match}${guard}`);
-        const assignRegex = /    (?:var )?assign = function \(x, leftx, rightx,\n[ \t]+sourceCode, sourceOffset\) \{/;
-        const assignGuard = `\n        if (!leftx || leftx.operator === undefined) {\n                throw new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));\n        }`;
-        patched = patched.replace(assignRegex, (match) => `${match}${assignGuard}`);
-        const rootInitPattern = 'var _i=0,_im=0,_o={_:void 0},';
-        const rootMeta = 'var _i=0,_im=0,_o={_: { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] }},';
-        patched = patched.replace(rootInitPattern, rootMeta);
-        return patched;
+
+        const resolvedPath = require.resolve(compilerPath);
+        delete require.cache[resolvedPath];
+        return require(resolvedPath);
 }
 
 function compileWithJsImpala(source, options = {}) {
         const compilerPath = options.compilerPath || path.join(__dirname, 'impalaCompiler.js');
-        const compilerSource = options.compilerSource || fs.readFileSync(compilerPath, 'utf8');
-        const patchedCompilerSource = patchCompilerSourceForMeta(compilerSource);
+        const compilerSource = options.compilerSource;
 
         const outputLines = [];
-        const context = {
-                module: { exports: {} },
-                exports: {},
-                console,
-                output: (line) => outputLines.push(line),
-                impalaRandomId: options.randomId ?? 12345678,
-                $$parser: {}
-        };
-        vm.createContext(context);
+        const compilerFn = loadCompiler(compilerPath, compilerSource);
 
-        createMetaSlotInitializerScript().runInContext(context);
-        new vm.Script(patchedCompilerSource, { filename: path.basename(compilerPath) }).runInContext(context);
+        const previousOutput = globalThis.output;
+        const previousRandomId = globalThis.impalaRandomId;
+        const hadOutput = Object.prototype.hasOwnProperty.call(globalThis, 'output');
+        const hadRandomId = Object.prototype.hasOwnProperty.call(globalThis, 'impalaRandomId');
+        globalThis.output = (line) => outputLines.push(line);
+        globalThis.impalaRandomId = options.randomId ?? 12345678;
 
-        const compilerFn = context.module.exports;
-        const [ok, , index] = compilerFn(source);
-        if (!ok) {
-                throw new Error('JSPEG impala compiler failed to compile source');
-        }
-        if (index !== source.length) {
-                throw new Error(`JSPEG impala compiler stopped at ${index} of ${source.length}`);
+        try {
+                const [ok, , index] = compilerFn(source);
+                if (!ok) {
+                        throw new Error('JSPEG impala compiler failed to compile source');
+                }
+                if (index !== source.length) {
+                        throw new Error(`JSPEG impala compiler stopped at ${index} of ${source.length}`);
+                }
+        } finally {
+                if (hadOutput) {
+                        globalThis.output = previousOutput;
+                } else {
+                        delete globalThis.output;
+                }
+                if (hadRandomId) {
+                        globalThis.impalaRandomId = previousRandomId;
+                } else {
+                        delete globalThis.impalaRandomId;
+                }
         }
 
         if (outputLines.length === 0) {

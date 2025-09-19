@@ -58,7 +58,7 @@ if (impalaIndex !== impalaGrammar.length) {
 	process.exit(1);
 }
 const impalaExisting = fs.readFileSync(path.join(dir, 'impalaCompiler.js'), 'utf8');
-if (wrapCompilerSource('impalaCompiler', impalaGenerated, { prelude: 'var $$parser = {};' }).trim() !== impalaExisting.trim()) {
+if (wrapCompilerSource('impalaCompiler', impalaGenerated).trim() !== impalaExisting.trim()) {
         console.error('Generated compiler differs from impalaCompiler.js');
         process.exit(1);
 }

@@ -45,15 +45,22 @@ Grammar		<-								{ $$ = '' }
 
 Definition	<-	id:Identifier LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = $vars = {} }
 					Expression				{
-												var _v = '';
-                                                                                                for (var _k in $vars) {
-                                                                                                        if (hasOwn($vars, _k)) {
-                                                                                                                _v += (_v !== '' ? ',' : '') + _k + $vars[_k];
-                                                                                                        }
-                                                                                                }
-												$$ = 'function ' + $id + '($){' + (_v === '' ? '' : ('var ' + _v + ';'))
-													+ 'return ' + $$ + '}'
+								var _v = '';
+								var _p = '';
+								for (var _k in $vars) {
+									if (hasOwn($vars, _k)) {
+										if (_k.indexOf('.') !== -1) {
+											if ($vars[_k] !== '') {
+												_p += _k + $vars[_k] + ';';
 											}
+										} else {
+											_v += (_v !== '' ? ',' : '') + _k + $vars[_k];
+										}
+									}
+								}
+								$$ = 'function ' + $id + '($){' + (_v === '' ? '' : ('var ' + _v + ';')) + _p
+                                                                                                        + 'return ' + $$ + '}'
+                                                                                        }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -91,8 +98,16 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                     } else if ($b.slice(0, 3) === '\x24\x24i') {
                                                                                                       s += '_i';
                                                                                                       $b = $b.slice(3);
+                                                                                                    } else if ($b.slice(0, 3) === '\x24\x24.') {
+                                                                                                      var next = $b[3] || '';
+                                                                                                      var keepDot = /[A-Za-z0-9_$]/.test(next);
+                                                                                                      s += '$';
+                                                                                                      if (keepDot) {
+                                                                                                        s += '.';
+                                                                                                      }
+                                                                                                      $b = $b.slice(3);
                                                                                                     } else if ($b.slice(0, 2) === '\x24\x24') {
-                                                                                                      s += ($b[2] === '.' ? '$' : '$._');
+                                                                                                      s += '$._';
                                                                                                       $b = $b.slice(2);
                                                                                                     } else {
                                                                                                       var m = $b.slice(1).match(/^[A-Za-z_]+/);
@@ -186,9 +201,10 @@ IdentCont	<-	IdentStart / [0-9]
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Variable	<-	( '$$'						{ $$ = '$._' }
-				  / $$=PikaVar				{ $$ = '$' + $$ }
-				) Spacing
+Variable	<-      ( '$$.' $$=PikaVar			{ $$ = '$.' + $$ }
+			  / '$$'				{ $$ = '$._' }
+			  / $$=PikaVar				{ $$ = '$' + $$ }
+			) Spacing
 
 # ----------------------------------------------------------------------------------------------------------------------
 
