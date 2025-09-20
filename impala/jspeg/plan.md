@@ -1,46 +1,48 @@
-# Plan: Restore PikaScript Semantics and Gradually Modernise Helpers
+# Modernise `impala.jspeg` helpers for ES3 JavaScript
 
-## Context
-- `$$parser.` is a compile-time sigil that JSPEG strips while keeping the identifier local; there is no runtime container to instantiate.
-- The helpers must remain valid for ES3-era syntax once emitted, but the source `.jspeg` file can keep its historical `var $$parser.foo` pattern.
-- We deliberately avoid declaring `var $$parser = {}` so the generated compiler stops emitting the unused container stub.
-- Every milestone ends with `node impala/jspeg/jspegCompilerTests.js` and `timeout 180 ./build.sh` to preserve behaviour.
-
-## Milestone 0 — Roll Back the Alias Experiment
-- [x] Restore the helper block to use the classic `var $$parser.foo` declarations without a `parser` alias.
-- [x] Delete the stray `var $$parser = {};` header assignment so no container leaks into generated output.
-- [x] Regenerate `impalaCompiler.js` via `node impala/jspeg/updateJSPEG.js` once the helpers match the original layout.
+## Milestone 0 — Refresh context and baseline
+- [ ] Re-read the JSPEG documentation, `jspeg.jspeg`, and `jspegCompiler.js` to confirm how helper blocks are spliced into the generated parser.
+- [ ] Document how the compiler strips the `$$parser.` prefix while leaving local declarations intact, and why we avoid emitting a runtime container.
+- [ ] Capture the current helper inventory (constants, tables, state buckets, utility functions) so follow-up cleanups have a checklist.
+- [ ] ✅ `node impala/jspeg/updateJSPEG.js --check`
 - [ ] ✅ `node impala/jspeg/jspegCompilerTests.js`
 - [ ] ✅ `timeout 180 ./build.sh`
 
-## Milestone 1 — Re-document the Baseline
-- [ ] Summarise how the tokenizer handles `$$parser.` stripping and why helpers stay local in the generated compiler.
-- [ ] Inventory helper exports (constants, tables, functions) and note which grammar actions rely on them.
-- [ ] Capture baseline artefacts with `node impala/jspeg/updateJSPEG.js --check` for future diffs.
+## Milestone 1 — Replace pseudo declarations with locals plus aliases
+- [ ] Convert every `var $$parser.name = …` pseudo declaration into a real local (`var name = …;`) followed by `$$parser.name = name;` so the generated JavaScript is valid ES3 while future backends can attach a container.
+- [ ] Lift helper functions to named locals (or `var` bindings) and mirror them through `$$parser` after their bodies so they stay private once the prefix is stripped.
+- [ ] Ensure any stateful helpers read and write through the new locals instead of relying on implicit globals.
+- [ ] Regenerate `impalaCompiler.js` via `node impala/jspeg/updateJSPEG.js` and confirm the emitted header now uses standard declarations.
+- [ ] ✅ `node impala/jspeg/updateJSPEG.js`
+- [ ] ✅ `node impala/jspeg/updateJSPEG.js --check`
 - [ ] ✅ `node impala/jspeg/jspegCompilerTests.js`
 - [ ] ✅ `timeout 180 ./build.sh`
 
-## Milestone 2 — Make Helpers Look Like ES3 Without Changing Scope
-- [ ] Convert obvious constant tables to `var NAME = { ... };` while keeping `var $$parser.NAME = ...;` declarations so JSPEG still strips correctly.
-- [ ] Replace ad-hoc helpers like `map()` with explicit literals or loops, documenting any behavioural nuances.
-- [ ] Ensure each helper that mutates shared state documents the side effects in comments for easier auditing.
+## Milestone 2 — Prefer literals over helper-driven tables
+- [ ] Replace the `map()` helper invocations with explicit object or array literals for lookup tables like `META_TO_GAZL`, `SUPPORTED_OPS`, and `UNARY_OPS`.
+- [ ] Remove the obsolete `map()` helper once all data structures are initialised directly.
+- [ ] Update any documentation/comments to reflect the literal layout and note required ordering.
+- [ ] ✅ `node impala/jspeg/updateJSPEG.js`
 - [ ] ✅ `node impala/jspeg/jspegCompilerTests.js`
 - [ ] ✅ `timeout 180 ./build.sh`
 
-## Milestone 3 — Organise Mutable Buckets
-- [ ] Group related exports (e.g. `metacode`, `strings`, `switchStack`) under comments and keep mutation helpers nearby.
-- [ ] Add small wrapper helpers if grammar actions repeatedly poke the same structure, improving readability without changing APIs.
-- [ ] Re-run the generator and regression suite after each grouping change to ensure behaviour matches the baseline.
+## Milestone 3 — Centralise shared mutable state
+- [ ] Gather mutable buckets (metacode, string pools, counters, switch stack) behind a `parserState` helper object with accessor functions to avoid direct structure pokes.
+- [ ] Update helper routines and grammar actions to use the new accessors while keeping exported names stable.
+- [ ] Document invariants and reset flows so future refactors know which helpers mutate shared state.
+- [ ] ✅ `node impala/jspeg/updateJSPEG.js`
 - [ ] ✅ `node impala/jspeg/jspegCompilerTests.js`
 - [ ] ✅ `timeout 180 ./build.sh`
 
-## Milestone 4 — Re-evaluate Module Layout (Optional)
-- [ ] Investigate whether removing the outer braces or adopting an IIFE keeps `'use strict';` effective without altering grammar semantics.
-- [ ] Consider future packaging modes that could reinterpret `$$parser.` into real container properties once the helpers are fully idiomatic.
-- [ ] Only attempt structural changes after all previous milestones stay green across the full build.
+## Milestone 4 — Evaluate module layout options
+- [ ] Experiment with removing the outer block or adopting an ES3-friendly IIFE to keep `'use strict';` effective without leaking helpers.
+- [ ] Ensure the compiler still strips `$$parser.` correctly under any new layout and record the findings.
+- [ ] Leave the door open for packaging modes that reinterpret `$$parser` as a real container once helpers are idiomatic.
+- [ ] ✅ `node impala/jspeg/updateJSPEG.js`
 - [ ] ✅ `node impala/jspeg/jspegCompilerTests.js`
 - [ ] ✅ `timeout 180 ./build.sh`
 
-## Additional Notes
-- Track any insights about parser packaging separately so they do not interfere with the baseline cleanup.
-- Document regressions immediately if a milestone fails; revert quickly rather than layering more changes.
+## Additional insights
+- Keep `$$parser` references in the grammar so current generators strip the prefix; the alias assignments become no-ops today but preserve a hook for future object-based exports.
+- Note any helper whose side effects depend on evaluation order, especially when switching to literals or shared state accessors.
+- Track optional follow-ups (documentation updates, sample packaging modes) separately so they do not block the milestones above.

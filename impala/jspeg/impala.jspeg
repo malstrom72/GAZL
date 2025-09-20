@@ -130,25 +130,42 @@
      * ———————————————————————————————— */
 
     /* 1  constants & simple flags */
-    var $$parser.IMPALA_VERSION = '1.0';
-    var $$parser.dry            = false;
+    var IMPALA_VERSION = '1.0';
+    $$parser.IMPALA_VERSION = IMPALA_VERSION;
+    var dry = false;
+    $$parser.dry = dry;
 
     /* 2  make sure the buckets exist */
-    var $$parser.META_TO_GAZL   = {};
-    var $$parser.SUPPORTED_OPS  = {};
-    var $$parser.CASTS_TO_TYPES = {};
-    var $$parser.ZEROES = {};
-    var $$parser.TYPE_SUFFIXES  = {};
-    var $$parser.VERBOSE_TYPES  = {};
-    var $$parser.metacode = [];
-    var $$parser.strings = { s:[], a:[] };
-    var $$parser.labelCounter = 0;
-    var $$parser.stock = { '%': [], '<': [] };
-    var $$parser.counters = { '%': 0,  '<': 0  };
-    var $$parser.randomId = 0;
-    var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
-    var $$parser.switchStack = [];
-    var $$parser.noForward = false;
+    var META_TO_GAZL = {};
+    $$parser.META_TO_GAZL = META_TO_GAZL;
+    var SUPPORTED_OPS = {};
+    $$parser.SUPPORTED_OPS = SUPPORTED_OPS;
+    var CASTS_TO_TYPES = {};
+    $$parser.CASTS_TO_TYPES = CASTS_TO_TYPES;
+    var ZEROES = {};
+    $$parser.ZEROES = ZEROES;
+    var TYPE_SUFFIXES = {};
+    $$parser.TYPE_SUFFIXES = TYPE_SUFFIXES;
+    var VERBOSE_TYPES = {};
+    $$parser.VERBOSE_TYPES = VERBOSE_TYPES;
+    var metacode = [];
+    $$parser.metacode = metacode;
+    var strings = { s:[], a:[] };
+    $$parser.strings = strings;
+    var labelCounter = 0;
+    $$parser.labelCounter = labelCounter;
+    var stock = { '%': [], '<': [] };
+    $$parser.stock = stock;
+    var counters = { '%': 0,  '<': 0  };
+    $$parser.counters = counters;
+    var randomId = 0;
+    $$parser.randomId = randomId;
+    var symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
+    $$parser.symbols = symbols;
+    var switchStack = [];
+    $$parser.switchStack = switchStack;
+    var noForward = false;
+    $$parser.noForward = noForward;
 
     /* 3  bulk-fill the lookup tables */
     map($$parser.META_TO_GAZL,
@@ -188,37 +205,41 @@
                                  'U','function','N','native','A','array','?','untyped');
 
     /* 4  label & metacode helpers */
-    var $$parser.newLabel = function (prefix) {
+    var newLabel = function (prefix) {
         var tag = (prefix === undefined ? '' : String(prefix));
         return '@.' + tag + ($$parser.labelCounter++);
     };
+    $$parser.newLabel = newLabel;
 
     /* push a deep-cloned record into metacode */
-    var $$parser.emitMeta = function (rec) {
+    var emitMeta = function (rec) {
         $$parser.metacode.push(clone(metaSlot(rec)));
     };
+    $$parser.emitMeta = emitMeta;
 
     /* allocate new (empty) meta record, fill via makeMeta, then push */
-    var $$parser.emit = function (op, type, op0, op1, op2) {
+    var emit = function (op, type, op0, op1, op2) {
         var slot = {};                // fresh object
         slot = $$parser.makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
         $$parser.metacode.push(slot);
     };
+    $$parser.emit = emit;
 
     /* 5  portable replacement for ppeg.fail */
-    var $$parser.fail = function (error, source, offset) {
+    var fail = function (error, source, offset) {
         function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
         throw bake(error) + ' : ' +
               oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +
               oneLine(source.substr(offset, 40));
     };
+    $$parser.fail = fail;
 
 
 
     /* ---------------------------------------------------------
      *  Short-circuit / branch processing
      * --------------------------------------------------------- */
-    var $$parser.processBranches = function () {
+    var processBranches = function () {
         var target      = { false: null, true: null }; // last FALSE / TRUE dest labels
         var targetCond  = null;                        // current branch condition (true / false)
         var currentGoto = null;                        // last unconditional goto
@@ -303,13 +324,14 @@
             }
         }
     };
+    $$parser.processBranches = processBranches;
 
     /* ---------------------------------------------------------
      *  Pool / stock handling for transients    (‘%’, ‘<…>’)
      * --------------------------------------------------------- */
 
     /* assure no duplicates exist in a stock bucket */
-    var $$parser.validateStock = function (cls) {
+    var validateStock = function (cls) {
         var seen = {};
         var stk  = $$parser.stock[cls];
         for (var i = 0; i < stk.length; ++i) {
@@ -319,9 +341,10 @@
         }
         return true;
     };
+    $$parser.validateStock = validateStock;
 
     /* borrow one token from a stock bucket (or create a new one) */
-    var $$parser.borrow = function (cls) {
+    var borrow = function (cls) {
         assert($$parser.validateStock(cls));
 
         var stk = $$parser.stock[cls];
@@ -339,9 +362,10 @@
         }
         throw new Error("unknown stock class " + cls);
     };
+    $$parser.borrow = borrow;
 
     /* smart borrow for CALL args – first free id in last consecutive run */
-    var $$parser.borrowForCall = function () {
+    var borrowForCall = function () {
         /* same safety check the original did */
         assert($$parser.validateStock('%'));
 
@@ -381,9 +405,10 @@
         assert($$parser.validateStock('%'));
         return chosen;
     };
+    $$parser.borrowForCall = borrowForCall;
 
     /* put a token back into its stock bucket */
-    var $$parser.returnBack = function (op) {
+    var returnBack = function (op) {
         if (op == null) {
             return;
         }
@@ -402,6 +427,7 @@
             $$parser.returnBack(op.substr(op.length - 3));
         }
     };
+    $$parser.returnBack = returnBack;
 
     /* Align with the original PPEG helper while avoiding the reserved
        `return` identifier in generated JavaScript. */
@@ -411,7 +437,7 @@
      * --------------------------------------------------------- */
 
     /* pretty-print one meta-instruction (only when it has op) */
-    var $$parser.debugPrintMeta = function (m) {
+    var debugPrintMeta = function (m) {
         m = metaSlot(m);
         if (m && m.operator != null) {
             console.log(
@@ -421,6 +447,7 @@
             );
         }
     };
+    $$parser.debugPrintMeta = debugPrintMeta;
 
     /* lazily materialise a meta-record for any parse node */
     function metaSlot(node) {
@@ -465,7 +492,7 @@
         return value === null ? undefined : value;
     }
 
-    var $$parser.makeMeta = function (rec, op, type, op0, op1, op2) {
+    var makeMeta = function (rec, op, type, op0, op1, op2) {
         rec = metaSlot(rec);
         rec.operator  = normaliseVoid(op);
         rec.type      = normaliseVoid(type);
@@ -476,14 +503,16 @@
         ];
         return rec;
     };
+    $$parser.makeMeta = makeMeta;
 
     /* release all three operands contained in a meta-record */
-    var $$parser.releaseMeta = function (meta) {
+    var releaseMeta = function (meta) {
         meta = metaSlot(meta);
         for (var i = 2; i >= 0; --i) {
             $$parser.returnBack(meta.operands[i]);
         }
     };
+    $$parser.releaseMeta = releaseMeta;
 
     /* --------------------------------------------------------- *
      *  R-value helpers                                          *
@@ -493,7 +522,7 @@
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
-    var $$parser.makeRValue = function (expr, classes) {
+    var makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
@@ -528,12 +557,13 @@
         $$parser.emitMeta(expr);
         return tmp;
     };
+    $$parser.makeRValue = makeRValue;
 
     /**
      * Ensure an expression’s value ends up in the given
      * transient “%<number>”.
      */
-    var $$parser.makeArgValue = function (expr, number) {
+    var makeArgValue = function (expr, number) {
         expr = metaSlot(expr);
 
         var op   = expr.operator;
@@ -565,12 +595,13 @@
         expr.operands[0] = tgt;
         $$parser.emitMeta(expr);
     };
+    $$parser.makeArgValue = makeArgValue;
 
     /* --------------------------------------------------------- *
      *  Typed error helper                                       *
      * --------------------------------------------------------- */
 
-    var $$parser.typeError = function (desc, source, offset, type1, type2) {
+    var typeError = function (desc, source, offset, type1, type2) {
         var message = replace(desc, '{$type1}',
                               $$parser.VERBOSE_TYPES[type1]);
         if (type2 !== undefined) {
@@ -579,11 +610,12 @@
         }
         $$parser.fail(message, source, offset);
     };
+    $$parser.typeError = typeError;
 
     /* --------------------------------------------------------- *
      *  Binary operations ( + – * / [] etc. )                    *
      * --------------------------------------------------------- */
-    var $$parser.binaryOp = function (operator, leftx, rightx,
+    var binaryOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
@@ -656,12 +688,13 @@
             );
         }
     };
+    $$parser.binaryOp = binaryOp;
 
 
     /* --------------------------------------------------------- *
      *  Multiplication / division with special int-to-float case *
      * --------------------------------------------------------- */
-    var $$parser.mulDivOp = function (operator, leftx, rightx,
+    var mulDivOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
@@ -720,12 +753,13 @@
             $$parser.makeRValue(rightx)
         );
     };
+    $$parser.mulDivOp = mulDivOp;
 
 
     /* --------------------------------------------------------- *
      *  Assignment helper                                        *
      * --------------------------------------------------------- */
-    var $$parser.assign = function (x, leftx, rightx,
+    var assign = function (x, leftx, rightx,
                                 sourceCode, sourceOffset) {
 
         x      = metaSlot(x);
@@ -820,6 +854,7 @@
             null
         );
     };
+    $$parser.assign = assign;
 
     /* -----------------------------------------------------------
      *  Unary helpers  (dereference, reference, -, ~, abs/floor,
@@ -827,7 +862,7 @@
      * -------------------------------------------------------- */
 
     /* *expr  or  [] dereference handling */
-    var $$parser.dereference = function (operator, expr, sourceCode, sourceOffset) {
+    var dereference = function (operator, expr, sourceCode, sourceOffset) {
         expr = metaSlot(expr);
         if (expr.operator === '+') {
             /*  &a + i   →   PEEK (&a , i)  */
@@ -848,9 +883,10 @@
             );
         }
     };
+    $$parser.dereference = dereference;
 
     /* & (address-of) operator handling */
-    var $$parser.reference = function (operator, expr, sourceCode, sourceOffset) {
+    var reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -883,9 +919,10 @@
             $$parser.fail("Invalid lvalue", sourceCode, sourceOffset);
         }
     };
+    $$parser.reference = reference;
 
     /* unary minus (integer/float) */
-    var $$parser.minus = function (operator, expr/*, src, off*/) {
+    var minus = function (operator, expr/*, src, off*/) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '-', undefined,
@@ -894,9 +931,10 @@
             $$parser.makeRValue(expr)
         );
     };
+    $$parser.minus = minus;
 
     /* bit-wise NOT / logical NOT  (~expr) */
-    var $$parser.not = function (operator, expr) {
+    var not = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '^', undefined,
@@ -905,9 +943,10 @@
             '#-1'                                    // XOR with –1
         );
     };
+    $$parser.not = not;
 
     /* ABS or FLOOR (unary) – operator is already '=abs' or '=floor' */
-    var $$parser.absFloor = function (operator, expr) {
+    var absFloor = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, operator, undefined,
@@ -916,9 +955,10 @@
             undefined
         );
     };
+    $$parser.absFloor = absFloor;
 
     /* int → float */
-    var $$parser.intToFloatConvert = function (operator, expr) {
+    var intToFloatConvert = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '=itof', undefined,
@@ -927,9 +967,10 @@
             '#1.0'
         );
     };
+    $$parser.intToFloatConvert = intToFloatConvert;
 
     /* float → int, with constant-fold special-case */
-    var $$parser.floatToIntConvert = function (operator, expr) {
+    var floatToIntConvert = function (operator, expr) {
 
         expr = metaSlot(expr);
 
@@ -952,13 +993,15 @@
             );
         }
     };
+    $$parser.floatToIntConvert = floatToIntConvert;
 
     /* -----------------------------------------------------------
      *  UNARY_OPS dispatch table
      * -------------------------------------------------------- */
 
-    var $$parser.UNARY_OPS = {};          /* will hold “=xxx” → handler */
+    var UNARY_OPS = {};          /* will hold “=xxx” → handler */
 
+    $$parser.UNARY_OPS = UNARY_OPS;
     /* no-op casts */
     function noop() {}
 
@@ -982,7 +1025,7 @@
     /* -----------------------------------------------------------
      *  Generic unary operator
      * -------------------------------------------------------- */
-    var $$parser.unaryOp = function (operator, expr, sourceCode, sourceOffset) {
+    var unaryOp = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -1005,6 +1048,7 @@
         /* update resulting type */
         expr.type = rTyp;
     };
+    $$parser.unaryOp = unaryOp;
 
     /* -----------------------------------------------------------
      *  Symbol declaration helper
@@ -1059,7 +1103,7 @@
     /* -----------------------------------------------------------
      *  Flush all queued meta-code into final text output
      * -------------------------------------------------------- */
-    var $$parser.flushMetaCode = function (prefix) {
+    var flushMetaCode = function (prefix) {
 
         prefix = prefix || '';
         var TABstr = (typeof TAB !== 'undefined') ? TAB : '\t';
@@ -1144,11 +1188,12 @@
         /* reset queue */
         $$parser.metacode.length = 0;
     };
+    $$parser.flushMetaCode = flushMetaCode;
 
     /* -----------------------------------------------------------
      *  Identifier lookup helper
      * -------------------------------------------------------- */
-    var $$parser.lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
+    var lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
 
         var sym = $$parser.symbols;
         var p   = null;
@@ -1211,11 +1256,12 @@
         $$parser.fail('Undeclared identifier: ' + name,
                       sourceCode, sourceOffset);
     };
+    $$parser.lookup = lookup;
 
     /* -----------------------------------------------------------
      *  Ensure expression resolves to a compile-time constant
      * -------------------------------------------------------- */
-    var $$parser.makeConstant = function (x, wantType,
+    var makeConstant = function (x, wantType,
                                       sourceCode, sourceOffset) {
 
         var r = $$parser.makeRValue(x, '#<&');
@@ -1230,11 +1276,12 @@
         }
         return r;
     };
+    $$parser.makeConstant = makeConstant;
 
     /* -----------------------------------------------------------
      *  Constant subtraction helper
      * -------------------------------------------------------- */
-    var $$parser.subConstInt = function (opL, opR) {
+    var subConstInt = function (opL, opR) {
 
         assert(span(opR[0], '#<') === 1,
                "rhs must be const");
@@ -1265,14 +1312,17 @@
         }
         return tmp;
     };
+    $$parser.subConstInt = subConstInt;
 
     /* drop leading “#” helper */
-    var $$parser.dropHash = function (s) {
+    var dropHash = function (s) {
         return (s[0] === '#') ? s.substr(1) : s;
     };
+    $$parser.dropHash = dropHash;
 
     /* printable ASCII table (33–126) */
-    var $$parser.printable = '';
+    var printable = '';
+    $$parser.printable = printable;
     for (var i = 33; i < 127; ++i) {
         $$parser.printable += char(i);
     }
@@ -1280,7 +1330,7 @@
     /* -----------------------------------------------------------
      *  Dump a string constant into assembly
      * -------------------------------------------------------- */
-    var $$parser.dumpString = function (label, str) {
+    var dumpString = function (label, str) {
 
         var len = str.length;
         $$parser.declare('CNST', 'globals', label, '?',
@@ -1313,11 +1363,12 @@
             }
         }
     };
+    $$parser.dumpString = dumpString;
 
     /* -----------------------------------------------------------
      *  Manage / share string literals
      * -------------------------------------------------------- */
-    var $$parser.makeString = function (prefix, x, s,
+    var makeString = function (prefix, x, s,
                                     sourceCode, sourceOffset) {
 
         s += char(0);       // NUL-terminate
@@ -1361,6 +1412,7 @@
         $$parser.makeMeta(x, ':=', 'p',
                           undefined, '&' + entry, undefined);
     };
+    $$parser.makeString = makeString;
 
     /* -----------------------------------------------------------
      *  Tiny utilities still missing from the toolbox
@@ -1389,7 +1441,7 @@
      *  Compiler start / end hooks
      * -------------------------------------------------------- */
 
-    var $$parser.start = function () {
+    var start = function () {
 
         /* reset per-compilation state */
         if (!$$parser.stock) $$parser.stock = { '%': [], '<': [] };
@@ -1441,8 +1493,9 @@
         output('; Compiled with Impala version ' +
                $$parser.IMPALA_VERSION + LF);
     };
+    $$parser.start = start;
 
-    var $$parser.end = function () {
+    var end = function () {
 
         /* dump deferred string literals */
         iterate($$parser.strings.s, function (rec) {
@@ -1461,6 +1514,7 @@
             output('.noAssertStrings:\t!');
         }
     };
+    $$parser.end = end;
 }
 
 #################
