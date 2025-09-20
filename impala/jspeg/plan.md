@@ -57,11 +57,16 @@
 > - Full regression suite re-run (`updateJSPEG.js --check`, `jspegCompilerTests.js`, and `./build.sh`) with all tests still passing after the state-accessor refactor.
 
 ### Milestone 4 — Adopt an ES3-friendly Module Layout and Finalise
-- [ ] Remove the leading/trailing bare block so the helper section becomes standard top-level JavaScript *only after* the new scoping approach is proven safe.
-- [ ] Evaluate a lightweight IIFE versus keeping the existing wrapper, ensuring whichever option we choose still lets JSPEG drop the sigil while preserving the namespace and local scope of helpers.
-- [ ] Place `'use strict';` inside a reachable scope (IIFE body or top-level) without leaking it globally, and verify no ES5-only constructs are introduced.
-- [ ] Confirm all helpers continue exporting through `$$parser`, no implicit globals remain after the refactor, and the generated compiler matches the baseline except for intentional stylistic changes.
-- [ ] Re-run `node impala/jspeg/updateJSPEG.js --check`, `node impala/jspeg/jspegCompilerTests.js`, and `timeout 180 ./build.sh` as the closing checks.
+- [x] Remove the leading/trailing bare block so the helper section becomes standard top-level JavaScript *only after* the new scoping approach is proven safe.
+- [x] Evaluate a lightweight IIFE versus keeping the existing wrapper, ensuring whichever option we choose still lets JSPEG drop the sigil while preserving the namespace and local scope of helpers.
+- [x] Place `'use strict';` inside a reachable scope (IIFE body or top-level) without leaking it globally, and verify no ES5-only constructs are introduced.
+- [x] Confirm all helpers continue exporting through `$$parser`, no implicit globals remain after the refactor, and the generated compiler matches the baseline except for intentional stylistic changes.
+- [x] Re-run `node impala/jspeg/updateJSPEG.js --check`, `node impala/jspeg/jspegCompilerTests.js`, and `timeout 180 ./build.sh` as the closing checks.
+
+> **Milestone 4 notes**
+> - Updated the JSPEG compiler to strip the outer braces from the header block when emitting generated code, so the helper prologue now lands directly in the parser function with `'use strict';` as the first statement.
+> - Verified that the helper surface still uses `var name; $$parser.name = name;` aliases and added a local `state` binding so strict mode no longer trips over the namespace shim.
+> - Regenerated both `jspegCompiler.js` and `impalaCompiler.js`, then reran the JSPEG regression suite and the repository build to confirm behaviour stays identical under the stricter layout.
 
 ## Additional Insights and Opportunities
 - [ ] Introduce sub-objects such as `$$parser.symbols` or `$$parser.codegen` to clarify helper responsibility once the base refactor lands.
