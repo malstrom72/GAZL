@@ -145,6 +145,122 @@
     var noForward = false;
     $$parser.noForward = noForward;
 
+    /* 2b  shared mutable state helpers */
+    var parserState = {
+        metacode: metacode,
+        strings: strings,
+        switchStack: switchStack,
+        stock: stock,
+        counters: counters
+    };
+    $$parser.state = parserState;
+
+    function getMetacode() {
+        return parserState.metacode;
+    }
+    $$parser.getMetacode = getMetacode;
+
+    function appendMetacode(entry) {
+        parserState.metacode.push(entry);
+    }
+    $$parser.appendMetacode = appendMetacode;
+
+    function clearMetacode() {
+        parserState.metacode.length = 0;
+    }
+    $$parser.clearMetacode = clearMetacode;
+
+    function ensureStringTable(prefix) {
+        var tables = parserState.strings;
+        var table = tables[prefix];
+        if (!table) {
+            table = tables[prefix] = [];
+        }
+        if (!table.rlookup) {
+            table.rlookup = {};
+        }
+        return table;
+    }
+    $$parser.ensureStringTable = ensureStringTable;
+
+    function resetStrings() {
+        var tables = parserState.strings;
+        tables.s = [];
+        tables.s.rlookup = {};
+        tables.a = [];
+        tables.a.rlookup = {};
+    }
+    $$parser.resetStrings = resetStrings;
+
+    function getStockBucket(cls) {
+        var buckets = parserState.stock;
+        var bucket = buckets[cls];
+        if (!bucket) {
+            bucket = buckets[cls] = [];
+        }
+        return bucket;
+    }
+    $$parser.getStockBucket = getStockBucket;
+
+    function clearStockBucket(cls) {
+        var bucket = $$parser.getStockBucket(cls);
+        resetQueue(bucket);
+        return bucket;
+    }
+    $$parser.clearStockBucket = clearStockBucket;
+
+    function resetStock() {
+        $$parser.clearStockBucket('%');
+        $$parser.clearStockBucket('<');
+    }
+    $$parser.resetStock = resetStock;
+
+    function getCounter(cls) {
+        return parserState.counters[cls] || 0;
+    }
+    $$parser.getCounter = getCounter;
+
+    function setCounter(cls, value) {
+        parserState.counters[cls] = value;
+        return value;
+    }
+    $$parser.setCounter = setCounter;
+
+    function nextCounter(cls) {
+        var value = $$parser.getCounter(cls);
+        parserState.counters[cls] = value + 1;
+        return value;
+    }
+    $$parser.nextCounter = nextCounter;
+
+    function resetCounters() {
+        $$parser.setCounter('%', 0);
+        $$parser.setCounter('<', 0);
+    }
+    $$parser.resetCounters = resetCounters;
+
+    function pushSwitchContext(ctx) {
+        parserState.switchStack.push(ctx);
+        return ctx;
+    }
+    $$parser.pushSwitchContext = pushSwitchContext;
+
+    function popSwitchContext() {
+        return parserState.switchStack.pop();
+    }
+    $$parser.popSwitchContext = popSwitchContext;
+
+    function peekSwitchContext() {
+        var stack = parserState.switchStack;
+        return stack[stack.length - 1];
+    }
+    $$parser.peekSwitchContext = peekSwitchContext;
+
+    function clearSwitchStack() {
+        parserState.switchStack.length = 0;
+    }
+    $$parser.clearSwitchStack = clearSwitchStack;
+
     /* 3  bulk-fill the lookup tables */
     var META_TO_GAZL = {
         '=':    'MOV?',  ':=':   'MOV?',
@@ -208,7 +324,7 @@
 
     /* push a deep-cloned record into metacode */
     function emitMeta(rec) {
-        $$parser.metacode.push(clone(metaSlot(rec)));
+        $$parser.appendMetacode(clone(metaSlot(rec)));
     }
     $$parser.emitMeta = emitMeta;
 
@@ -216,7 +332,7 @@
     function emit(op, type, op0, op1, op2) {
         var slot = {};                // fresh object
         slot = $$parser.makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
-        $$parser.metacode.push(slot);
+        $$parser.appendMetacode(slot);
     }
     $$parser.emit = emit;
 
@@ -241,8 +357,9 @@
         var aliases     = {};                          // label alias map
 
         /* walk metacode bottom-to-top */
-        for (var i = $$parser.metacode.length - 1; i >= 0; --i) {
-            var inst = $$parser.metacode[i];
+        var meta = $$parser.getMetacode();
+        for (var i = meta.length - 1; i >= 0; --i) {
+            var inst = meta[i];
 
             switch (inst.operator) {
 
@@ -328,7 +445,7 @@
     /* assure no duplicates exist in a stock bucket */
     function validateStock(cls) {
         var seen = {};
-        var stk  = $$parser.stock[cls];
+        var stk  = $$parser.getStockBucket(cls);
         for (var i = 0; i < stk.length; ++i) {
             var tok = stk[i];
             assert(!seen[tok], "duplicate token in stock: " + tok);
@@ -342,17 +459,17 @@
     function borrow(cls) {
         assert($$parser.validateStock(cls));
 
-        var stk = $$parser.stock[cls];
+        var stk = $$parser.getStockBucket(cls);
         if (stk.length) {
             return stk.pop();                      // reuse
         }
 
         /* otherwise mint a fresh id */
         if (cls === '%') {
-            return '%' + ($$parser.counters['%']++);
+            return '%' + $$parser.nextCounter('%');
         }
         if (cls === '<') {
-            var idx = $$parser.counters['<']++;
+            var idx = $$parser.nextCounter('<');
             return '<' + String.fromCharCode('A'.charCodeAt(0) + idx) + '>';
         }
         throw new Error("unknown stock class " + cls);
@@ -364,11 +481,11 @@
         /* same safety check the original did */
         assert($$parser.validateStock('%'));
 
-        var stk = $$parser.stock['%'];
+        var stk = $$parser.getStockBucket('%');
 
         /* empty ⇒ mint a brand-new one */
         if (stk.length === 0) {
-            return $$parser.counters['%']++;
+            return $$parser.nextCounter('%');
         }
 
         /* sort in-place on the numeric suffix, ascending           */
@@ -411,7 +528,7 @@
 
         /* ordinary transients / compile-time vars */
         if (c === '%' || c === '<') {
-            var stk = $$parser.stock[c];
+            var stk = $$parser.getStockBucket(c);
             if (stk.indexOf(op) === -1) stk.push(op);   // avoid dupes
         }
         /* special case “…:<” suffix ---------------------------------
@@ -576,11 +693,12 @@
         $$parser.returnBack(op1);
 
         /* remove %<number> from the free list if present */
-        if ($$parser.counters['%'] === number) {
-            ++$$parser.counters['%'];
+        var transientCounter = $$parser.getCounter('%');
+        if (transientCounter === number) {
+            $$parser.setCounter('%', transientCounter + 1);
         } else {
-            assert($$parser.counters['%'] > number);
-            var stk = $$parser.stock['%'];
+            assert(transientCounter > number);
+            var stk = $$parser.getStockBucket('%');
             for (var idx = stk.length - 1;
                  idx >= 0 && stk[idx] !== tgt;
                  --idx) {}
@@ -1107,9 +1225,10 @@
             return (op == null ? '' : op);
         }
 
-        for (var i = 0; i < $$parser.metacode.length; ++i) {
+        var meta = $$parser.getMetacode();
+        for (var i = 0; i < meta.length; ++i) {
 
-            var rec   = $$parser.metacode[i];
+            var rec   = meta[i];
             var op    = rec.operator;
 
             if (op == null) {
@@ -1179,7 +1298,7 @@
         }
 
         /* reset queue */
-        $$parser.metacode.length = 0;
+        $$parser.clearMetacode();
     }
     $$parser.flushMetaCode = flushMetaCode;
 
@@ -1372,11 +1491,7 @@
         }
         s = byteString;
 
-        var tbl = $$parser.strings[prefix];
-        if (!tbl) {
-            tbl = $$parser.strings[prefix] = [];
-            tbl.rlookup = {};
-        }
+        var tbl = $$parser.ensureStringTable(prefix);
 
         var entry = tbl.rlookup[s];
         if (entry == null) {
@@ -1437,25 +1552,19 @@
     function start() {
 
         /* reset per-compilation state */
-        if (!$$parser.stock) $$parser.stock = { '%': [], '<': [] };
-        if (!$$parser.counters) $$parser.counters = { '%': 0, '<': 0 };
-        if (!$$parser.metacode) $$parser.metacode = [];
+        $$parser.stock = parserState.stock;
+        $$parser.counters = parserState.counters;
+        $$parser.metacode = parserState.metacode;
+        $$parser.strings = parserState.strings;
+        $$parser.switchStack = parserState.switchStack;
         if (!$$parser.symbols) $$parser.symbols = {};
-        if (!$$parser.strings) $$parser.strings = { s: [], a: [] };
-        if (!$$parser.switchStack) $$parser.switchStack = [];
 
-        /* clear transient pools and counters */
-        var poolPercent = $$parser.stock['%'] || ($$parser.stock['%'] = []);
-        var poolAngle   = $$parser.stock['<'] || ($$parser.stock['<'] = []);
-        resetQueue(poolPercent);
-        resetQueue(poolAngle);
-        $$parser.counters['%'] = 0;
-        $$parser.counters['<'] = 0;
+        $$parser.resetStock();
+        $$parser.resetCounters();
 
-        /* wipe accumulated meta-instructions */
-        $$parser.metacode.length = 0;
+        $$parser.clearMetacode();
         $$parser.labelCounter    = 0;
-        $$parser.switchStack.length = 0;
+        $$parser.clearSwitchStack();
 
         /* reset symbol tables */
         $$parser.symbols.locals   = {};
@@ -1464,10 +1573,7 @@
         $$parser.symbols.defines  = {};
 
         /* reset deferred string tables */
-        $$parser.strings.s = [];
-        $$parser.strings.s.rlookup = {};
-        $$parser.strings.a = [];
-        $$parser.strings.a.rlookup = {};
+        $$parser.resetStrings();
 
         $$parser.noForward = false;
 
@@ -2141,7 +2247,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                         switchMeta.switchLabel = $$parser.newLabel('s');
                                                         $switchExit              = $$parser.newLabel('e');
 
-                                                        $$parser.switchStack.push(switchMeta);
+                                                        $$parser.pushSwitchContext(switchMeta);
 
                                                         $$parser.emit(
                                                             '-->#',
@@ -2187,7 +2293,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                                 $$parser.emit('-->', undefined, $switchExit, undefined, undefined);
                                                             }
 
-                                                            var ctx = $$parser.switchStack[$$parser.switchStack.length - 1];
+                                                            var ctx = $$parser.peekSwitchContext();
 
                                                             $$parser.emit(';',    undefined, 'default',       undefined, undefined);
                                                             $$parser.emit('<--',  undefined, ctx.switchLabel,  undefined, undefined);
@@ -2196,7 +2302,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                     ) ':'_ stmt:Statement
                 )*
                 '}'_                                {
-                                                        var ctx = $$parser.switchStack.pop() || metaSlot($$.);
+                                                        var ctx = $$parser.popSwitchContext() || metaSlot($$.);
 
                                                         /* no explicit “default” → hook it up now                        */
                                                         if ($progress !== 'gotDefault') {
@@ -2212,7 +2318,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 # ---------------------------------------------------------------------------
 CaseExpr    <-  Expr                                {
                                                         /* offset = constant(expr) – switch.from                         */
-                                                        var ctx      = $$parser.switchStack[$$parser.switchStack.length - 1];
+                                                        var ctx      = $$parser.peekSwitchContext();
                                                         var caseMeta = metaSlot($$.);
                                                         var baseFrom = (ctx ? ctx.from : caseMeta.from);
                                                         var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel);

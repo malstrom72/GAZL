@@ -142,6 +142,122 @@ var impalaCompiler = (function(_s) {
     var noForward = false;
     noForward = noForward;
 
+    /* 2b  shared mutable state helpers */
+    var parserState = {
+        metacode: metacode,
+        strings: strings,
+        switchStack: switchStack,
+        stock: stock,
+        counters: counters
+    };
+    state = parserState;
+
+    function getMetacode() {
+        return parserState.metacode;
+    }
+    getMetacode = getMetacode;
+
+    function appendMetacode(entry) {
+        parserState.metacode.push(entry);
+    }
+    appendMetacode = appendMetacode;
+
+    function clearMetacode() {
+        parserState.metacode.length = 0;
+    }
+    clearMetacode = clearMetacode;
+
+    function ensureStringTable(prefix) {
+        var tables = parserState.strings;
+        var table = tables[prefix];
+        if (!table) {
+            table = tables[prefix] = [];
+        }
+        if (!table.rlookup) {
+            table.rlookup = {};
+        }
+        return table;
+    }
+    ensureStringTable = ensureStringTable;
+
+    function resetStrings() {
+        var tables = parserState.strings;
+        tables.s = [];
+        tables.s.rlookup = {};
+        tables.a = [];
+        tables.a.rlookup = {};
+    }
+    resetStrings = resetStrings;
+
+    function getStockBucket(cls) {
+        var buckets = parserState.stock;
+        var bucket = buckets[cls];
+        if (!bucket) {
+            bucket = buckets[cls] = [];
+        }
+        return bucket;
+    }
+    getStockBucket = getStockBucket;
+
+    function clearStockBucket(cls) {
+        var bucket = getStockBucket(cls);
+        resetQueue(bucket);
+        return bucket;
+    }
+    clearStockBucket = clearStockBucket;
+
+    function resetStock() {
+        clearStockBucket('%');
+        clearStockBucket('<');
+    }
+    resetStock = resetStock;
+
+    function getCounter(cls) {
+        return parserState.counters[cls] || 0;
+    }
+    getCounter = getCounter;
+
+    function setCounter(cls, value) {
+        parserState.counters[cls] = value;
+        return value;
+    }
+    setCounter = setCounter;
+
+    function nextCounter(cls) {
+        var value = getCounter(cls);
+        parserState.counters[cls] = value + 1;
+        return value;
+    }
+    nextCounter = nextCounter;
+
+    function resetCounters() {
+        setCounter('%', 0);
+        setCounter('<', 0);
+    }
+    resetCounters = resetCounters;
+
+    function pushSwitchContext(ctx) {
+        parserState.switchStack.push(ctx);
+        return ctx;
+    }
+    pushSwitchContext = pushSwitchContext;
+
+    function popSwitchContext() {
+        return parserState.switchStack.pop();
+    }
+    popSwitchContext = popSwitchContext;
+
+    function peekSwitchContext() {
+        var stack = parserState.switchStack;
+        return stack[stack.length - 1];
+    }
+    peekSwitchContext = peekSwitchContext;
+
+    function clearSwitchStack() {
+        parserState.switchStack.length = 0;
+    }
+    clearSwitchStack = clearSwitchStack;
+
     /* 3  bulk-fill the lookup tables */
     var META_TO_GAZL = {
         '=':    'MOV?',  ':=':   'MOV?',
@@ -205,7 +321,7 @@ var impalaCompiler = (function(_s) {
 
     /* push a deep-cloned record into metacode */
     function emitMeta(rec) {
-        metacode.push(clone(metaSlot(rec)));
+        appendMetacode(clone(metaSlot(rec)));
     }
     emitMeta = emitMeta;
 
@@ -213,7 +329,7 @@ var impalaCompiler = (function(_s) {
     function emit(op, type, op0, op1, op2) {
         var slot = {};                // fresh object
         slot = makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
-        metacode.push(slot);
+        appendMetacode(slot);
     }
     emit = emit;
 
@@ -238,8 +354,9 @@ var impalaCompiler = (function(_s) {
         var aliases     = {};                          // label alias map
 
         /* walk metacode bottom-to-top */
-        for (var i = metacode.length - 1; i >= 0; --i) {
-            var inst = metacode[i];
+        var meta = getMetacode();
+        for (var i = meta.length - 1; i >= 0; --i) {
+            var inst = meta[i];
 
             switch (inst.operator) {
 
@@ -325,7 +442,7 @@ var impalaCompiler = (function(_s) {
     /* assure no duplicates exist in a stock bucket */
     function validateStock(cls) {
         var seen = {};
-        var stk  = stock[cls];
+        var stk  = getStockBucket(cls);
         for (var i = 0; i < stk.length; ++i) {
             var tok = stk[i];
             assert(!seen[tok], "duplicate token in stock: " + tok);
@@ -339,17 +456,17 @@ var impalaCompiler = (function(_s) {
     function borrow(cls) {
         assert(validateStock(cls));
 
-        var stk = stock[cls];
+        var stk = getStockBucket(cls);
         if (stk.length) {
             return stk.pop();                      // reuse
         }
 
         /* otherwise mint a fresh id */
         if (cls === '%') {
-            return '%' + (counters['%']++);
+            return '%' + nextCounter('%');
         }
         if (cls === '<') {
-            var idx = counters['<']++;
+            var idx = nextCounter('<');
             return '<' + String.fromCharCode('A'.charCodeAt(0) + idx) + '>';
         }
         throw new Error("unknown stock class " + cls);
@@ -361,11 +478,11 @@ var impalaCompiler = (function(_s) {
         /* same safety check the original did */
         assert(validateStock('%'));
 
-        var stk = stock['%'];
+        var stk = getStockBucket('%');
 
         /* empty ⇒ mint a brand-new one */
         if (stk.length === 0) {
-            return counters['%']++;
+            return nextCounter('%');
         }
 
         /* sort in-place on the numeric suffix, ascending           */
@@ -408,7 +525,7 @@ var impalaCompiler = (function(_s) {
 
         /* ordinary transients / compile-time vars */
         if (c === '%' || c === '<') {
-            var stk = stock[c];
+            var stk = getStockBucket(c);
             if (stk.indexOf(op) === -1) stk.push(op);   // avoid dupes
         }
         /* special case “…:<” suffix ---------------------------------
@@ -573,11 +690,12 @@ var impalaCompiler = (function(_s) {
         returnBack(op1);
 
         /* remove %<number> from the free list if present */
-        if (counters['%'] === number) {
-            ++counters['%'];
+        var transientCounter = getCounter('%');
+        if (transientCounter === number) {
+            setCounter('%', transientCounter + 1);
         } else {
-            assert(counters['%'] > number);
-            var stk = stock['%'];
+            assert(transientCounter > number);
+            var stk = getStockBucket('%');
             for (var idx = stk.length - 1;
                  idx >= 0 && stk[idx] !== tgt;
                  --idx) {}
@@ -1104,9 +1222,10 @@ var impalaCompiler = (function(_s) {
             return (op == null ? '' : op);
         }
 
-        for (var i = 0; i < metacode.length; ++i) {
+        var meta = getMetacode();
+        for (var i = 0; i < meta.length; ++i) {
 
-            var rec   = metacode[i];
+            var rec   = meta[i];
             var op    = rec.operator;
 
             if (op == null) {
@@ -1176,7 +1295,7 @@ var impalaCompiler = (function(_s) {
         }
 
         /* reset queue */
-        metacode.length = 0;
+        clearMetacode();
     }
     flushMetaCode = flushMetaCode;
 
@@ -1369,11 +1488,7 @@ var impalaCompiler = (function(_s) {
         }
         s = byteString;
 
-        var tbl = strings[prefix];
-        if (!tbl) {
-            tbl = strings[prefix] = [];
-            tbl.rlookup = {};
-        }
+        var tbl = ensureStringTable(prefix);
 
         var entry = tbl.rlookup[s];
         if (entry == null) {
@@ -1434,25 +1549,19 @@ var impalaCompiler = (function(_s) {
     function start() {
 
         /* reset per-compilation state */
-        if (!stock) stock = { '%': [], '<': [] };
-        if (!counters) counters = { '%': 0, '<': 0 };
-        if (!metacode) metacode = [];
+        stock = parserState.stock;
+        counters = parserState.counters;
+        metacode = parserState.metacode;
+        strings = parserState.strings;
+        switchStack = parserState.switchStack;
         if (!symbols) symbols = {};
-        if (!strings) strings = { s: [], a: [] };
-        if (!switchStack) switchStack = [];
 
-        /* clear transient pools and counters */
-        var poolPercent = stock['%'] || (stock['%'] = []);
-        var poolAngle   = stock['<'] || (stock['<'] = []);
-        resetQueue(poolPercent);
-        resetQueue(poolAngle);
-        counters['%'] = 0;
-        counters['<'] = 0;
+        resetStock();
+        resetCounters();
 
-        /* wipe accumulated meta-instructions */
-        metacode.length = 0;
+        clearMetacode();
         labelCounter    = 0;
-        switchStack.length = 0;
+        clearSwitchStack();
 
         /* reset symbol tables */
         symbols.locals   = {};
@@ -1461,10 +1570,7 @@ var impalaCompiler = (function(_s) {
         symbols.defines  = {};
 
         /* reset deferred string tables */
-        strings.s = [];
-        strings.s.rlookup = {};
-        strings.a = [];
-        strings.a.rlookup = {};
+        resetStrings();
 
         noForward = false;
 
@@ -1544,8 +1650,8 @@ function DoWhile($){var $loopLabel;return (function(){var _b=_i;return DO($)&&_(
 function Loop($){var $loopLabel;return (function(){var _b=_i;return LOOP($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function For($){var $var={},$gotInit,$init={},$toExpr={},$type,$to,$noLoopLabel,$loopLabel,$body={};return (function(){var _b=_i;return FOR($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Variable($var)&&(function(){ /* loop-variable must be local, modifiable int / pointer */ var varMeta = metaSlot($var._); if (varMeta.operator !== '=' || span(varMeta.type, "ip") === 0) { fail( 'For variable must be a local modifiable int or pointer variable', _s, _i ); } $gotInit = false;            /* flag to detect an explicit start value */ ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($init)&&(function(){ assign($init._, $var._, $init._, _s, _i); $gotInit = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&TO($)&&_($)&&Expr($toExpr)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ var varMeta  = metaSlot($var._); var toMeta   = metaSlot($toExpr._); if (toMeta.type !== varMeta.type) { typeError( 'Incompatible types ({$type1} and {$type2})', _s, _i, varMeta.type, toMeta.type ); } /* constant upper bound */ $to = makeRValue(toMeta); /* initial comparison  (var < to)                         */ emit( '<', toMeta.type, undefined, $gotInit ? metaSlot($init._).operands[1]     /* start value from “var = expr” */ : varMeta.operands[1],            /* or the original variable */ $to ); if ($gotInit) { releaseMeta($init._); } /* branch-out   and  loop label */ $noLoopLabel = newLabel('e'); emit('?->', false, $noLoopLabel, undefined, undefined); $loopLabel   = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($body)&&(function(){ var varMeta = metaSlot($var._); /* increment + jump back */ emit( '...', varMeta.type, varMeta.operands[1],        /* address of loop variable */ $to, $loopLabel ); emit('<-?', false, $noLoopLabel, undefined, undefined); returnBack($to); releaseMeta(varMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Copy($){var $l={},$f={},$t={},$length,$type,$;return (function(){var _b=_i;return COPY($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($l)&&FROM($)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ var fromMeta = metaSlot($f._); var toMeta   = metaSlot($t._); $length = makeConstant($l._, 'i', _s, _i); var lengthHash = dropHash($length); if (fromMeta.type + toMeta.type !== 'pp') { returnBack($length); typeError( 'Invalid types ({$type1} and {$type2})', _s, _i, fromMeta.type, toMeta.type ); } var copyMeta = metaSlot($l._); makeMeta( copyMeta, 'copy', '?', makeRValue(toMeta, '&$%'), makeRValue(fromMeta, '&$%'), '*' + lengthHash ); emitMeta(copyMeta); returnBack($length); releaseMeta(copyMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Switch($){var $f={},$t={},$size,$switcher,$,$switchExit,$progress,$stmt={};return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups → fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case …” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = switchStack.pop() || metaSlot($); /* no explicit “default” → hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) – switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot($); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); $n = subConstInt( makeConstant(caseMeta, 'i', _s, _i), baseFrom ); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Switch($){var $f={},$t={},$size,$switcher,$,$switchExit,$progress,$stmt={};return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); pushSwitchContext(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups → fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case …” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = peekSwitchContext(); emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = popSwitchContext() || metaSlot($); /* no explicit “default” → hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) – switch.from                         */ var ctx      = peekSwitchContext(); var caseMeta = metaSlot($); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); $n = subConstInt( makeConstant(caseMeta, 'i', _s, _i), baseFrom ); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function While($){var $loopLabel,$exitLabel;return (function(){var _b=_i;return WHILE($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&BoolGroup($)&&(function(){ $exitLabel = newLabel('e'); emit('?->', false, $exitLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); emit('<-?', false, $exitLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Value($){var $f={},$i={},$s={};return (function(){var _b=_i;return Group($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FloatLiteral($f)&&(function(){ if (!dry) { makeMeta($, ':=', 'f', undefined, '#' + $f._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||IntegerLiteral($i)&&(function(){ if (!dry) { makeMeta($, ':=', 'i', undefined, '#' + $i._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||StringLiteral($s)&&(function(){ if (!dry) { makeString('s', $, evaluate($s._), _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)&&_($)&&(function(){ if (!dry) { makeMeta($, ':=', 'p', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)&&_($)&&(function(){ if (!dry) { makeMeta($, ':=', 'F', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Variable($){var $global,$id={};return (function(){var _b=_i;return (function(){ $global = false; ; return true})()&&((function(){var _b=_i;return GLOBAL($)&&_($)&&(function(){ $global = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Identifier($id)&&(function(){ if (!dry) { lookup($, $id._, $global, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
