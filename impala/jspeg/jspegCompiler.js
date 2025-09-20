@@ -1,5 +1,5 @@
 var compileJSPEG = (function(_s) {
-
+{
         function dqEscape(s) {
                 return JSON.stringify(s);
         }
@@ -7,7 +7,7 @@ var compileJSPEG = (function(_s) {
         function hasOwn(obj, key) {
                 return Object.prototype.hasOwnProperty.call(obj, key);
         }
-;function root($){var $fn,$b,$g={};return (function(){var _b=_i;return (function(){ $fn = "(function(_s) {\n"; ; return true})()&&((function(){var _b=_i;return Spacing($)&&(function(){var _m=_i;return PikaBlock($)&&($b=_s.slice(_m,_i),true)})()&&(function(){ var header = $b.slice(1, $b.length - 1); $fn += header.replace(/\x24\x24parser\./g, '') + ';' ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Spacing($)&&Grammar($g)&&(function(){ $fn += $g._; $fn += "var _i=0,_im=0,_o={_:void 0},_b=root(_o);\n"; $fn += "return [_b,_o._,(_b?_i:_im)];\n})\n"; $._ = $fn; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+};function root($){var $fn,$b,$g={};return (function(){var _b=_i;return (function(){ $fn = "(function(_s) {\n"; ; return true})()&&((function(){var _b=_i;return Spacing($)&&(function(){var _m=_i;return PikaBlock($)&&($b=_s.slice(_m,_i),true)})()&&(function(){ $fn += $b.replace(/\x24\x24parser\./g, '') + ';' ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Spacing($)&&Grammar($g)&&(function(){ $fn += $g._; $fn += "var _i=0,_im=0,_o={_:void 0},_b=root(_o);\n"; $fn += "return [_b,_o._,(_b?_i:_im)];\n})\n"; $._ = $fn; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Grammar($){var $d={};return (function(){var _b=_i;return (function(){ $._ = '' ; return true})()&&Spacing($)&&((function(){while((function(){var _b=_i;return Definition($d)&&(function(){ $._ += $d._ + ";\n" ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&EndOfFile($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Definition($){var $id={},$,$vars;return (function(){var _b=_i;return Identifier($id)&&LEFTARROW($)&&(function(){ $.tag = '$'; $.vi = 0; $.vr = $vars = {} ; return true})()&&Expression($)&&(function(){ var _v = ''; var _p = ''; for (var _k in $vars) { if (hasOwn($vars, _k)) { if (_k.indexOf('.') !== -1) { if ($vars[_k] !== '') { _p += _k + $vars[_k] + ';'; } } else { _v += (_v !== '' ? ',' : '') + _k + $vars[_k]; } } } $._ = 'function ' + $id._ + '($){' + (_v === '' ? '' : ('var ' + _v + ';')) + _p + 'return ' + $._ + '}' ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Expression($){var $s={};return (function(){var _b=_i;return (function(){ $s.vi = $.vi + 1; $s.tag = $.tag; $s.vr = $.vr; $._ = '' ; return true})()&&Sequence($s)&&(function(){ $._ = $s._ ; return true})()&&((function(){while((function(){var _b=_i;return SLASH($)&&Sequence($s)&&(function(){ $._ += '||' + $s._ ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ $._ = '(function(){var _b=_i;return ' + $._ + '})()' ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

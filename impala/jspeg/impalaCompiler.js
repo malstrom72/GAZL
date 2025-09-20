@@ -1,8 +1,17 @@
 var impalaCompiler = (function(_s) {
-
+{
     'use strict';
-    var $$parser = {};
-    var parser = $$parser;
+    /**
+     * map(target, k1, v1, k2, v2, …)
+     *   assigns target[k1]=v1, etc.
+     */
+    function map(target /*, k1, v1, … */) {
+        for (var i = 1; i + 1 < arguments.length; i += 2) {
+            target[ arguments[i] ] = arguments[i+1];
+        }
+        return target;
+    }
+
     /**
      * Deep-clone an object or array (only handles plain objects & arrays)
      */
@@ -119,246 +128,102 @@ var impalaCompiler = (function(_s) {
 
     /* 1  constants & simple flags */
     var IMPALA_VERSION = '1.0';
-    parser.IMPALA_VERSION = IMPALA_VERSION;
-    var dry = false;
-    parser.dry = dry;
+    var dry            = false;
 
     /* 2  make sure the buckets exist */
+    var META_TO_GAZL   = {};
+    var SUPPORTED_OPS  = {};
+    var CASTS_TO_TYPES = {};
+    var ZEROES = {};
+    var TYPE_SUFFIXES  = {};
+    var VERBOSE_TYPES  = {};
     var metacode = [];
-    parser.metacode = metacode;
     var strings = { s:[], a:[] };
-    parser.strings = strings;
     var labelCounter = 0;
-    parser.labelCounter = labelCounter;
     var stock = { '%': [], '<': [] };
-    parser.stock = stock;
     var counters = { '%': 0,  '<': 0  };
-    parser.counters = counters;
     var randomId = 0;
-    parser.randomId = randomId;
     var symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
-    parser.symbols = symbols;
     var switchStack = [];
-    parser.switchStack = switchStack;
     var noForward = false;
-    parser.noForward = noForward;
-
-    /* 2b  shared mutable state helpers */
-    var parserState = {
-        metacode: metacode,
-        strings: strings,
-        switchStack: switchStack,
-        stock: stock,
-        counters: counters
-    };
-    var state = parserState;
-    parser.state = state;
-
-    function getMetacode() {
-        return parserState.metacode;
-    }
-    parser.getMetacode = getMetacode;
-
-    function appendMetacode(entry) {
-        parserState.metacode.push(entry);
-    }
-    parser.appendMetacode = appendMetacode;
-
-    function clearMetacode() {
-        parserState.metacode.length = 0;
-    }
-    parser.clearMetacode = clearMetacode;
-
-    function ensureStringTable(prefix) {
-        var tables = parserState.strings;
-        var table = tables[prefix];
-        if (!table) {
-            table = tables[prefix] = [];
-        }
-        if (!table.rlookup) {
-            table.rlookup = {};
-        }
-        return table;
-    }
-    parser.ensureStringTable = ensureStringTable;
-
-    function resetStrings() {
-        var tables = parserState.strings;
-        tables.s = [];
-        tables.s.rlookup = {};
-        tables.a = [];
-        tables.a.rlookup = {};
-    }
-    parser.resetStrings = resetStrings;
-
-    function getStockBucket(cls) {
-        var buckets = parserState.stock;
-        var bucket = buckets[cls];
-        if (!bucket) {
-            bucket = buckets[cls] = [];
-        }
-        return bucket;
-    }
-    parser.getStockBucket = getStockBucket;
-
-    function clearStockBucket(cls) {
-        var bucket = getStockBucket(cls);
-        resetQueue(bucket);
-        return bucket;
-    }
-    parser.clearStockBucket = clearStockBucket;
-
-    function resetStock() {
-        clearStockBucket('%');
-        clearStockBucket('<');
-    }
-    parser.resetStock = resetStock;
-
-    function getCounter(cls) {
-        return parserState.counters[cls] || 0;
-    }
-    parser.getCounter = getCounter;
-
-    function setCounter(cls, value) {
-        parserState.counters[cls] = value;
-        return value;
-    }
-    parser.setCounter = setCounter;
-
-    function nextCounter(cls) {
-        var value = getCounter(cls);
-        parserState.counters[cls] = value + 1;
-        return value;
-    }
-    parser.nextCounter = nextCounter;
-
-    function resetCounters() {
-        setCounter('%', 0);
-        setCounter('<', 0);
-    }
-    parser.resetCounters = resetCounters;
-
-    function pushSwitchContext(ctx) {
-        parserState.switchStack.push(ctx);
-        return ctx;
-    }
-    parser.pushSwitchContext = pushSwitchContext;
-
-    function popSwitchContext() {
-        return parserState.switchStack.pop();
-    }
-    parser.popSwitchContext = popSwitchContext;
-
-    function peekSwitchContext() {
-        var stack = parserState.switchStack;
-        return stack[stack.length - 1];
-    }
-    parser.peekSwitchContext = peekSwitchContext;
-
-    function clearSwitchStack() {
-        parserState.switchStack.length = 0;
-    }
-    parser.clearSwitchStack = clearSwitchStack;
 
     /* 3  bulk-fill the lookup tables */
-    var META_TO_GAZL = {
-        '=':    'MOV?',  ':=':   'MOV?',
-        '=itof':'iTOf',  '=ftoi':'fTOi', '=abs':'ABS?', '=floor':'FLOf',
-        '=[]':  'PEEK',  '[]=':  'POKE',  '=[]$':'GETL',  '[]$=':'SETL',
-        '=*':   'PEEK',  ':=*':  'PEEK',  '*=':  'POKE',  '=&':  'ADRL', 'copy':'COPY',
-        '-->':  'GOTO',  '-->#': 'SWCH',  '...': 'FOR?', '()':  'CALL', '--^':'RETU',
-        '|':    'IOR?',  '&':    'AND?',  '^':   'XOR?', '<<':  'SHL?', '>>>':'SHRu', '>>':'SHR?',
-        '+':    'ADD?',  '-':    'SUB?',  '*':   'MUL?', '/':   'DIV?', '%':  'MOD?', 'd':'DIFp',
-        '<=':   'LEQ?',  '<':    'LSS?',  '>=':  'GEQ?', '>':   'GRT?', '!=': 'NEQ?', '==':'EQU?',
-        '!<=':  'GRT?',  '!<':   'GEQ?',  '!>=': 'LSS?', '!>':  'LEQ?', '!!=':'EQU?', '!==':'NEQ?'
-    };
-    parser.META_TO_GAZL = META_TO_GAZL;
+    map(META_TO_GAZL,
+        '=',   'MOV?', ':=',  'MOV?',
+        '=itof','iTOf', '=ftoi','fTOi', '=abs','ABS?', '=floor','FLOf',
+        '=[]','PEEK',  '[]=','POKE',   '=[]$','GETL',  '[]$=','SETL',
+        '=*','PEEK', ':=*','PEEK', '*=','POKE', '=&','ADRL', 'copy','COPY',
+        '-->','GOTO', '-->#','SWCH',  '...','FOR?',  '()','CALL', '--^','RETU',
+        '|','IOR?', '&','AND?', '^','XOR?', '<<','SHL?', '>>>','SHRu', '>>','SHR?',
+        '+','ADD?', '-','SUB?', '*','MUL?', '/','DIV?', '%','MOD?', 'd','DIFp',
+        '<=','LEQ?', '<','LSS?', '>=','GEQ?', '>','GRT?', '!=','NEQ?', '==','EQU?',
+        '!<=','GRT?','!<','GEQ?','!>=','LSS?','!>','LEQ?','!!=','EQU?','!==','NEQ?'
+    );
 
-    var SUPPORTED_OPS = {
-        '=*p': '?', '=&f': 'p', '=&F': 'p', '=&i': 'p', '=&p': 'p', '=&?': 'p',
-        '=-i': 'i', '=-f': 'f', '=~i': 'i',
-        '=floatf': 'f', '=float?': 'f', '=funcptrF': 'F', '=funcptr?': 'F',
-        '=inti': 'i', '=int?': 'i', '=pointerp': 'p', '=pointer?': 'p',
-        '=absi': 'i', '=absf': 'f', '=itofi': 'f', '=ftoif': 'i', '=floorf': 'f',
-        '|ii': 'i', '&ii': 'i', '^ii': 'i', '<<ii': 'i', '>>>ii': 'i', '>>ii': 'i',
-        '+ii': 'i', '-ii': 'i', '*ii': 'i', '/ii': 'i', '%ii': 'i',
-        '+ff': 'f', '-ff': 'f', '*ff': 'f', '/ff': 'f',
-        '+pi': 'p', '-pi': 'p', '-pp': 'i',
-        '=[]pi': '?',
-        '<=ii': 'i', '<ii': 'i', '>=ii': 'i', '>ii': 'i', '!=ii': 'i', '==ii': 'i',
-        '<=ff': 'f', '<ff': 'f', '>=ff': 'f', '>ff': 'f', '!=ff': 'f', '==ff': 'f',
-        '<=pp': 'p', '<pp': 'p', '>=pp': 'p', '>pp': 'p', '!=pp': 'p', '==pp': 'p',
-        '<=FF': 'F', '<FF': 'F', '>=FF': 'F', '>FF': 'F', '!=FF': 'F', '==FF': 'F'
-    };
-    parser.SUPPORTED_OPS = SUPPORTED_OPS;
+    map(SUPPORTED_OPS,
+        '=*p','?', '=&f','p', '=&F','p', '=&i','p', '=&p','p', '=&?','p',
+        '=-i','i', '=-f','f', '=~i','i',
+        '=floatf','f', '=float?','f', '=funcptrF','F', '=funcptr?','F',
+        '=inti','i', '=int?','i', '=pointerp','p', '=pointer?','p',
+        '=absi','i', '=absf','f', '=itofi','f', '=ftoif','i', '=floorf','f',
+        '|ii','i', '&ii','i', '^ii','i', '<<ii','i', '>>>ii','i', '>>ii','i',
+        '+ii','i', '-ii','i', '*ii','i', '/ii','i', '%ii','i',
+        '+ff','f', '-ff','f', '*ff','f', '/ff','f',
+        '+pi','p', '-pi','p', '-pp','i',
+        '=[]pi','?',
+        '<=ii','i', '<ii','i', '>=ii','i', '>ii','i', '!=ii','i', '==ii','i',
+        '<=ff','f', '<ff','f', '>=ff','f', '>ff','f', '!=ff','f', '==ff','f',
+        '<=pp','p', '<pp','p', '>=pp','p', '>pp','p', '!=pp','p', '==pp','p',
+        '<=FF','F', '<FF','F', '>=FF','F', '>FF','F', '!=FF','F', '==FF','F'
+    );
 
-    var CASTS_TO_TYPES = {
-        'float': 'f', 'funcptr': 'F', 'int': 'i', 'pointer': 'p'
-    };
-    parser.CASTS_TO_TYPES = CASTS_TO_TYPES;
-
-    var ZEROES = {
-        'f': '#0.0', 'i': '#0', 'p': '&NULL', 'F': '&NULL'
-    };
-    parser.ZEROES = ZEROES;
-
-    var TYPE_SUFFIXES = {
-        'void': '', 'i': 'i', 'f': 'f', 'p': 'p', 'F': 'p', 'U': '',
-        'N': '', 'A': 'A', '?': 'E'
-    };
-    parser.TYPE_SUFFIXES = TYPE_SUFFIXES;
-
-    var VERBOSE_TYPES = {
-        'i': 'int', 'f': 'float', 'p': 'pointer', 'F': 'funcptr',
-        'U': 'function', 'N': 'native', 'A': 'array', '?': 'untyped'
-    };
-    parser.VERBOSE_TYPES = VERBOSE_TYPES;
+    map(CASTS_TO_TYPES, 'float','f','funcptr','F','int','i','pointer','p');
+    map(ZEROES,         'f','#0.0','i','#0','p','&NULL','F','&NULL');
+    map(TYPE_SUFFIXES,  'void','', 'i','i','f','f','p','p','F','p','U','',
+                                 'N','',   'A','A','?','E');
+    map(VERBOSE_TYPES,  'i','int','f','float','p','pointer','F','funcptr',
+                                 'U','function','N','native','A','array','?','untyped');
 
     /* 4  label & metacode helpers */
-    function newLabel(prefix) {
+    var newLabel = function (prefix) {
         var tag = (prefix === undefined ? '' : String(prefix));
         return '@.' + tag + (labelCounter++);
-    }
-    parser.newLabel = newLabel;
+    };
 
     /* push a deep-cloned record into metacode */
-    function emitMeta(rec) {
-        appendMetacode(clone(metaSlot(rec)));
-    }
-    parser.emitMeta = emitMeta;
+    var emitMeta = function (rec) {
+        metacode.push(clone(metaSlot(rec)));
+    };
 
     /* allocate new (empty) meta record, fill via makeMeta, then push */
-    function emit(op, type, op0, op1, op2) {
+    var emit = function (op, type, op0, op1, op2) {
         var slot = {};                // fresh object
         slot = makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
-        appendMetacode(slot);
-    }
-    parser.emit = emit;
+        metacode.push(slot);
+    };
 
     /* 5  portable replacement for ppeg.fail */
-    function fail(error, source, offset) {
+    var fail = function (error, source, offset) {
         function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
         throw bake(error) + ' : ' +
               oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +
               oneLine(source.substr(offset, 40));
-    }
-    parser.fail = fail;
+    };
 
 
 
     /* ---------------------------------------------------------
      *  Short-circuit / branch processing
      * --------------------------------------------------------- */
-    function processBranches() {
+    var processBranches = function () {
         var target      = { false: null, true: null }; // last FALSE / TRUE dest labels
         var targetCond  = null;                        // current branch condition (true / false)
         var currentGoto = null;                        // last unconditional goto
         var aliases     = {};                          // label alias map
 
         /* walk metacode bottom-to-top */
-        var meta = getMetacode();
-        for (var i = meta.length - 1; i >= 0; --i) {
-            var inst = meta[i];
+        for (var i = metacode.length - 1; i >= 0; --i) {
+            var inst = metacode[i];
 
             switch (inst.operator) {
 
@@ -434,57 +299,54 @@ var impalaCompiler = (function(_s) {
                     target.false = target.true = currentGoto = null;
             }
         }
-    }
-    parser.processBranches = processBranches;
+    };
 
     /* ---------------------------------------------------------
      *  Pool / stock handling for transients    (‘%’, ‘<…>’)
      * --------------------------------------------------------- */
 
     /* assure no duplicates exist in a stock bucket */
-    function validateStock(cls) {
+    var validateStock = function (cls) {
         var seen = {};
-        var stk  = getStockBucket(cls);
+        var stk  = stock[cls];
         for (var i = 0; i < stk.length; ++i) {
             var tok = stk[i];
             assert(!seen[tok], "duplicate token in stock: " + tok);
             seen[tok] = true;
         }
         return true;
-    }
-    parser.validateStock = validateStock;
+    };
 
     /* borrow one token from a stock bucket (or create a new one) */
-    function borrow(cls) {
+    var borrow = function (cls) {
         assert(validateStock(cls));
 
-        var stk = getStockBucket(cls);
+        var stk = stock[cls];
         if (stk.length) {
             return stk.pop();                      // reuse
         }
 
         /* otherwise mint a fresh id */
         if (cls === '%') {
-            return '%' + nextCounter('%');
+            return '%' + (counters['%']++);
         }
         if (cls === '<') {
-            var idx = nextCounter('<');
+            var idx = counters['<']++;
             return '<' + String.fromCharCode('A'.charCodeAt(0) + idx) + '>';
         }
         throw new Error("unknown stock class " + cls);
-    }
-    parser.borrow = borrow;
+    };
 
     /* smart borrow for CALL args – first free id in last consecutive run */
-    function borrowForCall() {
+    var borrowForCall = function () {
         /* same safety check the original did */
         assert(validateStock('%'));
 
-        var stk = getStockBucket('%');
+        var stk = stock['%'];
 
         /* empty ⇒ mint a brand-new one */
         if (stk.length === 0) {
-            return nextCounter('%');
+            return counters['%']++;
         }
 
         /* sort in-place on the numeric suffix, ascending           */
@@ -515,11 +377,10 @@ var impalaCompiler = (function(_s) {
         /* duplicate-check, like the original assert(validate…)    */
         assert(validateStock('%'));
         return chosen;
-    }
-    parser.borrowForCall = borrowForCall;
+    };
 
     /* put a token back into its stock bucket */
-    function returnBack(op) {
+    var returnBack = function (op) {
         if (op == null) {
             return;
         }
@@ -527,7 +388,7 @@ var impalaCompiler = (function(_s) {
 
         /* ordinary transients / compile-time vars */
         if (c === '%' || c === '<') {
-            var stk = getStockBucket(c);
+            var stk = stock[c];
             if (stk.indexOf(op) === -1) stk.push(op);   // avoid dupes
         }
         /* special case “…:<” suffix ---------------------------------
@@ -537,19 +398,17 @@ var impalaCompiler = (function(_s) {
             // recurse with everything from (len-3) to end
             returnBack(op.substr(op.length - 3));
         }
-    }
-    parser.returnBack = returnBack;
+    };
 
     /* Align with the original PPEG helper while avoiding the reserved
        `return` identifier in generated JavaScript. */
-    $$parser["return"] = returnBack;
 
     /* --------------------------------------------------------- *
      *  Debug helpers & meta-record construction / destruction   *
      * --------------------------------------------------------- */
 
     /* pretty-print one meta-instruction (only when it has op) */
-    function debugPrintMeta(m) {
+    var debugPrintMeta = function (m) {
         m = metaSlot(m);
         if (m && m.operator != null) {
             console.log(
@@ -558,8 +417,7 @@ var impalaCompiler = (function(_s) {
                      + '} {' + m.operands[2] + '}'
             );
         }
-    }
-    parser.debugPrintMeta = debugPrintMeta;
+    };
 
     /* lazily materialise a meta-record for any parse node */
     function metaSlot(node) {
@@ -604,7 +462,7 @@ var impalaCompiler = (function(_s) {
         return value === null ? undefined : value;
     }
 
-    function makeMeta(rec, op, type, op0, op1, op2) {
+    var makeMeta = function (rec, op, type, op0, op1, op2) {
         rec = metaSlot(rec);
         rec.operator  = normaliseVoid(op);
         rec.type      = normaliseVoid(type);
@@ -614,17 +472,15 @@ var impalaCompiler = (function(_s) {
             normaliseVoid(op2)
         ];
         return rec;
-    }
-    parser.makeMeta = makeMeta;
+    };
 
     /* release all three operands contained in a meta-record */
-    function releaseMeta(meta) {
+    var releaseMeta = function (meta) {
         meta = metaSlot(meta);
         for (var i = 2; i >= 0; --i) {
             returnBack(meta.operands[i]);
         }
-    }
-    parser.releaseMeta = releaseMeta;
+    };
 
     /* --------------------------------------------------------- *
      *  R-value helpers                                          *
@@ -634,7 +490,7 @@ var impalaCompiler = (function(_s) {
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
-    function makeRValue(expr, classes) {
+    var makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
@@ -668,14 +524,13 @@ var impalaCompiler = (function(_s) {
 
         emitMeta(expr);
         return tmp;
-    }
-    parser.makeRValue = makeRValue;
+    };
 
     /**
      * Ensure an expression’s value ends up in the given
      * transient “%<number>”.
      */
-    function makeArgValue(expr, number) {
+    var makeArgValue = function (expr, number) {
         expr = metaSlot(expr);
 
         var op   = expr.operator;
@@ -692,12 +547,11 @@ var impalaCompiler = (function(_s) {
         returnBack(op1);
 
         /* remove %<number> from the free list if present */
-        var transientCounter = getCounter('%');
-        if (transientCounter === number) {
-            setCounter('%', transientCounter + 1);
+        if (counters['%'] === number) {
+            ++counters['%'];
         } else {
-            assert(transientCounter > number);
-            var stk = getStockBucket('%');
+            assert(counters['%'] > number);
+            var stk = stock['%'];
             for (var idx = stk.length - 1;
                  idx >= 0 && stk[idx] !== tgt;
                  --idx) {}
@@ -707,14 +561,13 @@ var impalaCompiler = (function(_s) {
 
         expr.operands[0] = tgt;
         emitMeta(expr);
-    }
-    parser.makeArgValue = makeArgValue;
+    };
 
     /* --------------------------------------------------------- *
      *  Typed error helper                                       *
      * --------------------------------------------------------- */
 
-    function typeError(desc, source, offset, type1, type2) {
+    var typeError = function (desc, source, offset, type1, type2) {
         var message = replace(desc, '{$type1}',
                               VERBOSE_TYPES[type1]);
         if (type2 !== undefined) {
@@ -722,14 +575,13 @@ var impalaCompiler = (function(_s) {
                                VERBOSE_TYPES[type2]);
         }
         fail(message, source, offset);
-    }
-    parser.typeError = typeError;
+    };
 
     /* --------------------------------------------------------- *
      *  Binary operations ( + – * / [] etc. )                    *
      * --------------------------------------------------------- */
-    function binaryOp(operator, leftx, rightx,
-                      sourceCode, sourceOffset) {
+    var binaryOp = function (operator, leftx, rightx,
+                                  sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
@@ -800,15 +652,14 @@ var impalaCompiler = (function(_s) {
                 makeRValue(rightx)
             );
         }
-    }
-    parser.binaryOp = binaryOp;
+    };
 
 
     /* --------------------------------------------------------- *
      *  Multiplication / division with special int-to-float case *
      * --------------------------------------------------------- */
-    function mulDivOp(operator, leftx, rightx,
-                      sourceCode, sourceOffset) {
+    var mulDivOp = function (operator, leftx, rightx,
+                                  sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
@@ -865,15 +716,14 @@ var impalaCompiler = (function(_s) {
             makeRValue(leftx),
             makeRValue(rightx)
         );
-    }
-    parser.mulDivOp = mulDivOp;
+    };
 
 
     /* --------------------------------------------------------- *
      *  Assignment helper                                        *
      * --------------------------------------------------------- */
-    function assign(x, leftx, rightx,
-                    sourceCode, sourceOffset) {
+    var assign = function (x, leftx, rightx,
+                                sourceCode, sourceOffset) {
 
         x      = metaSlot(x);
         leftx  = metaSlot(leftx);
@@ -966,8 +816,7 @@ var impalaCompiler = (function(_s) {
             x.operands[keep],
             null
         );
-    }
-    parser.assign = assign;
+    };
 
     /* -----------------------------------------------------------
      *  Unary helpers  (dereference, reference, -, ~, abs/floor,
@@ -975,7 +824,7 @@ var impalaCompiler = (function(_s) {
      * -------------------------------------------------------- */
 
     /* *expr  or  [] dereference handling */
-    function dereference(operator, expr, sourceCode, sourceOffset) {
+    var dereference = function (operator, expr, sourceCode, sourceOffset) {
         expr = metaSlot(expr);
         if (expr.operator === '+') {
             /*  &a + i   →   PEEK (&a , i)  */
@@ -995,11 +844,10 @@ var impalaCompiler = (function(_s) {
                 undefined
             );
         }
-    }
-    parser.dereference = dereference;
+    };
 
     /* & (address-of) operator handling */
-    function reference(operator, expr, sourceCode, sourceOffset) {
+    var reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -1031,11 +879,10 @@ var impalaCompiler = (function(_s) {
         } else {
             fail("Invalid lvalue", sourceCode, sourceOffset);
         }
-    }
-    parser.reference = reference;
+    };
 
     /* unary minus (integer/float) */
-    function minus(operator, expr/*, src, off*/) {
+    var minus = function (operator, expr/*, src, off*/) {
         expr = metaSlot(expr);
         makeMeta(
             expr, '-', undefined,
@@ -1043,11 +890,10 @@ var impalaCompiler = (function(_s) {
             ZEROES[ expr.type ],            // 0  of same type
             makeRValue(expr)
         );
-    }
-    parser.minus = minus;
+    };
 
     /* bit-wise NOT / logical NOT  (~expr) */
-    function not(operator, expr) {
+    var not = function (operator, expr) {
         expr = metaSlot(expr);
         makeMeta(
             expr, '^', undefined,
@@ -1055,11 +901,10 @@ var impalaCompiler = (function(_s) {
             makeRValue(expr),
             '#-1'                                    // XOR with –1
         );
-    }
-    parser.not = not;
+    };
 
     /* ABS or FLOOR (unary) – operator is already '=abs' or '=floor' */
-    function absFloor(operator, expr) {
+    var absFloor = function (operator, expr) {
         expr = metaSlot(expr);
         makeMeta(
             expr, operator, undefined,
@@ -1067,11 +912,10 @@ var impalaCompiler = (function(_s) {
             makeRValue(expr),
             undefined
         );
-    }
-    parser.absFloor = absFloor;
+    };
 
     /* int → float */
-    function intToFloatConvert(operator, expr) {
+    var intToFloatConvert = function (operator, expr) {
         expr = metaSlot(expr);
         makeMeta(
             expr, '=itof', undefined,
@@ -1079,11 +923,10 @@ var impalaCompiler = (function(_s) {
             makeRValue(expr),
             '#1.0'
         );
-    }
-    parser.intToFloatConvert = intToFloatConvert;
+    };
 
     /* float → int, with constant-fold special-case */
-    function floatToIntConvert(operator, expr) {
+    var floatToIntConvert = function (operator, expr) {
 
         expr = metaSlot(expr);
 
@@ -1105,36 +948,38 @@ var impalaCompiler = (function(_s) {
                 '#1.0'
             );
         }
-    }
-    parser.floatToIntConvert = floatToIntConvert;
+    };
 
     /* -----------------------------------------------------------
      *  UNARY_OPS dispatch table
      * -------------------------------------------------------- */
 
+    var UNARY_OPS = {};          /* will hold “=xxx” → handler */
+
+    /* no-op casts */
     function noop() {}
 
-    var UNARY_OPS = {
-        '=float':   noop,
-        '=funcptr': noop,
-        '=int':     noop,
-        '=pointer': noop,
+    /* register the handlers */
+    map(UNARY_OPS,
+        '=float',     noop,
+        '=funcptr',   noop,
+        '=int',       noop,
+        '=pointer',   noop,
 
-        '=*':       dereference,
-        '=&':       reference,
-        '=-':       minus,
-        '=~':       not,
-        '=abs':     absFloor,
-        '=itof':    intToFloatConvert,
-        '=ftoi':    floatToIntConvert,
-        '=floor':   absFloor
-    };
-    parser.UNARY_OPS = UNARY_OPS;
+        '=*',         dereference,
+        '=&',         reference,
+        '=-',         minus,
+        '=~',         not,
+        '=abs',       absFloor,
+        '=itof',      intToFloatConvert,
+        '=ftoi',      floatToIntConvert,
+        '=floor',     absFloor
+    );
 
     /* -----------------------------------------------------------
      *  Generic unary operator
      * -------------------------------------------------------- */
-    function unaryOp(operator, expr, sourceCode, sourceOffset) {
+    var unaryOp = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -1156,8 +1001,7 @@ var impalaCompiler = (function(_s) {
 
         /* update resulting type */
         expr.type = rTyp;
-    }
-    parser.unaryOp = unaryOp;
+    };
 
     /* -----------------------------------------------------------
      *  Symbol declaration helper
@@ -1207,13 +1051,12 @@ var impalaCompiler = (function(_s) {
             if (!table) symbols[scope] = table = {};
             table[name] = { type:type, readonly:!!readonly, kind:kind };
         }
-    }
-    parser.declare = declare;
+    };
 
     /* -----------------------------------------------------------
      *  Flush all queued meta-code into final text output
      * -------------------------------------------------------- */
-    function flushMetaCode(prefix) {
+    var flushMetaCode = function (prefix) {
 
         prefix = prefix || '';
         var TABstr = (typeof TAB !== 'undefined') ? TAB : '\t';
@@ -1224,10 +1067,9 @@ var impalaCompiler = (function(_s) {
             return (op == null ? '' : op);
         }
 
-        var meta = getMetacode();
-        for (var i = 0; i < meta.length; ++i) {
+        for (var i = 0; i < metacode.length; ++i) {
 
-            var rec   = meta[i];
+            var rec   = metacode[i];
             var op    = rec.operator;
 
             if (op == null) {
@@ -1297,14 +1139,13 @@ var impalaCompiler = (function(_s) {
         }
 
         /* reset queue */
-        clearMetacode();
-    }
-    parser.flushMetaCode = flushMetaCode;
+        metacode.length = 0;
+    };
 
     /* -----------------------------------------------------------
      *  Identifier lookup helper
      * -------------------------------------------------------- */
-    function lookup(x, name, isGlobal, sourceCode, sourceOffset) {
+    var lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
 
         var sym = symbols;
         var p   = null;
@@ -1366,14 +1207,13 @@ var impalaCompiler = (function(_s) {
         /* not found --------------------------------------------*/
         fail('Undeclared identifier: ' + name,
                       sourceCode, sourceOffset);
-    }
-    parser.lookup = lookup;
+    };
 
     /* -----------------------------------------------------------
      *  Ensure expression resolves to a compile-time constant
      * -------------------------------------------------------- */
-    function makeConstant(x, wantType,
-                          sourceCode, sourceOffset) {
+    var makeConstant = function (x, wantType,
+                                      sourceCode, sourceOffset) {
 
         var r = makeRValue(x, '#<&');
 
@@ -1386,13 +1226,12 @@ var impalaCompiler = (function(_s) {
                 sourceCode, sourceOffset);
         }
         return r;
-    }
-    parser.makeConstant = makeConstant;
+    };
 
     /* -----------------------------------------------------------
      *  Constant subtraction helper
      * -------------------------------------------------------- */
-    function subConstInt(opL, opR) {
+    var subConstInt = function (opL, opR) {
 
         assert(span(opR[0], '#<') === 1,
                "rhs must be const");
@@ -1422,18 +1261,15 @@ var impalaCompiler = (function(_s) {
                           opL, opR);
         }
         return tmp;
-    }
-    parser.subConstInt = subConstInt;
+    };
 
     /* drop leading “#” helper */
-    function dropHash(s) {
+    var dropHash = function (s) {
         return (s[0] === '#') ? s.substr(1) : s;
-    }
-    parser.dropHash = dropHash;
+    };
 
     /* printable ASCII table (33–126) */
     var printable = '';
-    parser.printable = printable;
     for (var i = 33; i < 127; ++i) {
         printable += char(i);
     }
@@ -1441,7 +1277,7 @@ var impalaCompiler = (function(_s) {
     /* -----------------------------------------------------------
      *  Dump a string constant into assembly
      * -------------------------------------------------------- */
-    function dumpString(label, str) {
+    var dumpString = function (label, str) {
 
         var len = str.length;
         declare('CNST', 'globals', label, '?',
@@ -1473,14 +1309,13 @@ var impalaCompiler = (function(_s) {
                 offset += spanLen;
             }
         }
-    }
-    parser.dumpString = dumpString;
+    };
 
     /* -----------------------------------------------------------
      *  Manage / share string literals
      * -------------------------------------------------------- */
-    function makeString(prefix, x, s,
-                        sourceCode, sourceOffset) {
+    var makeString = function (prefix, x, s,
+                                    sourceCode, sourceOffset) {
 
         s += char(0);       // NUL-terminate
 
@@ -1490,7 +1325,11 @@ var impalaCompiler = (function(_s) {
         }
         s = byteString;
 
-        var tbl = ensureStringTable(prefix);
+        var tbl = strings[prefix];
+        if (!tbl) {
+            tbl = strings[prefix] = [];
+            tbl.rlookup = {};
+        }
 
         var entry = tbl.rlookup[s];
         if (entry == null) {
@@ -1518,8 +1357,7 @@ var impalaCompiler = (function(_s) {
 
         makeMeta(x, ':=', 'p',
                           undefined, '&' + entry, undefined);
-    }
-    parser.makeString = makeString;
+    };
 
     /* -----------------------------------------------------------
      *  Tiny utilities still missing from the toolbox
@@ -1548,22 +1386,28 @@ var impalaCompiler = (function(_s) {
      *  Compiler start / end hooks
      * -------------------------------------------------------- */
 
-    function start() {
+    var start = function () {
 
         /* reset per-compilation state */
-        stock = parserState.stock;
-        counters = parserState.counters;
-        metacode = parserState.metacode;
-        strings = parserState.strings;
-        switchStack = parserState.switchStack;
+        if (!stock) stock = { '%': [], '<': [] };
+        if (!counters) counters = { '%': 0, '<': 0 };
+        if (!metacode) metacode = [];
         if (!symbols) symbols = {};
+        if (!strings) strings = { s: [], a: [] };
+        if (!switchStack) switchStack = [];
 
-        resetStock();
-        resetCounters();
+        /* clear transient pools and counters */
+        var poolPercent = stock['%'] || (stock['%'] = []);
+        var poolAngle   = stock['<'] || (stock['<'] = []);
+        resetQueue(poolPercent);
+        resetQueue(poolAngle);
+        counters['%'] = 0;
+        counters['<'] = 0;
 
-        clearMetacode();
+        /* wipe accumulated meta-instructions */
+        metacode.length = 0;
         labelCounter    = 0;
-        clearSwitchStack();
+        switchStack.length = 0;
 
         /* reset symbol tables */
         symbols.locals   = {};
@@ -1572,7 +1416,10 @@ var impalaCompiler = (function(_s) {
         symbols.defines  = {};
 
         /* reset deferred string tables */
-        resetStrings();
+        strings.s = [];
+        strings.s.rlookup = {};
+        strings.a = [];
+        strings.a.rlookup = {};
 
         noForward = false;
 
@@ -1590,10 +1437,9 @@ var impalaCompiler = (function(_s) {
         var LF = '\n';
         output('; Compiled with Impala version ' +
                IMPALA_VERSION + LF);
-    }
-    parser.start = start;
+    };
 
-    function end() {
+    var end = function () {
 
         /* dump deferred string literals */
         iterate(strings.s, function (rec) {
@@ -1611,9 +1457,8 @@ var impalaCompiler = (function(_s) {
 
             output('.noAssertStrings:\t!');
         }
-    }
-    parser.end = end;
-;function root($){return (function(){var _b=_i;return _($)&&(function(){ start(); ; return true})()&&((function(){while((function(){var _b=_i;return FuncDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExternDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ConstDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GlobalDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _l=_i,_x=(!!_s[_i])&&(++_i,true);_i=_l;return !_x})()&&(function(){ end(); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+    };
+};function root($){return (function(){var _b=_i;return _($)&&(function(){ start(); ; return true})()&&((function(){while((function(){var _b=_i;return FuncDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExternDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ConstDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GlobalDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _l=_i,_x=(!!_s[_i])&&(++_i,true);_i=_l;return !_x})()&&(function(){ end(); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FuncDecl($){var $id={},$inp={},$out={},$,$loc={};return (function(){var _b=_i;return FUNCTION($)&&_($)&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ assert(validateStock('%')); assert(validateStock('<')); output(''); output(';-----------------------------------------------------------------------------'); /* declare the function symbol */ declare( 'FUNC',           // kind
                                                                              'functions',      // scope
                                                                              $id._,              // name
@@ -1652,8 +1497,8 @@ function DoWhile($){var $loopLabel;return (function(){var _b=_i;return DO($)&&_(
 function Loop($){var $loopLabel;return (function(){var _b=_i;return LOOP($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function For($){var $var={},$gotInit,$init={},$toExpr={},$type,$to,$noLoopLabel,$loopLabel,$body={};return (function(){var _b=_i;return FOR($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Variable($var)&&(function(){ /* loop-variable must be local, modifiable int / pointer */ var varMeta = metaSlot($var._); if (varMeta.operator !== '=' || span(varMeta.type, "ip") === 0) { fail( 'For variable must be a local modifiable int or pointer variable', _s, _i ); } $gotInit = false;            /* flag to detect an explicit start value */ ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($init)&&(function(){ assign($init._, $var._, $init._, _s, _i); $gotInit = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&TO($)&&_($)&&Expr($toExpr)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ var varMeta  = metaSlot($var._); var toMeta   = metaSlot($toExpr._); if (toMeta.type !== varMeta.type) { typeError( 'Incompatible types ({$type1} and {$type2})', _s, _i, varMeta.type, toMeta.type ); } /* constant upper bound */ $to = makeRValue(toMeta); /* initial comparison  (var < to)                         */ emit( '<', toMeta.type, undefined, $gotInit ? metaSlot($init._).operands[1]     /* start value from “var = expr” */ : varMeta.operands[1],            /* or the original variable */ $to ); if ($gotInit) { releaseMeta($init._); } /* branch-out   and  loop label */ $noLoopLabel = newLabel('e'); emit('?->', false, $noLoopLabel, undefined, undefined); $loopLabel   = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($body)&&(function(){ var varMeta = metaSlot($var._); /* increment + jump back */ emit( '...', varMeta.type, varMeta.operands[1],        /* address of loop variable */ $to, $loopLabel ); emit('<-?', false, $noLoopLabel, undefined, undefined); returnBack($to); releaseMeta(varMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Copy($){var $l={},$f={},$t={},$length,$type,$;return (function(){var _b=_i;return COPY($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($l)&&FROM($)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ var fromMeta = metaSlot($f._); var toMeta   = metaSlot($t._); $length = makeConstant($l._, 'i', _s, _i); var lengthHash = dropHash($length); if (fromMeta.type + toMeta.type !== 'pp') { returnBack($length); typeError( 'Invalid types ({$type1} and {$type2})', _s, _i, fromMeta.type, toMeta.type ); } var copyMeta = metaSlot($l._); makeMeta( copyMeta, 'copy', '?', makeRValue(toMeta, '&$%'), makeRValue(fromMeta, '&$%'), '*' + lengthHash ); emitMeta(copyMeta); returnBack($length); releaseMeta(copyMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Switch($){var $f={},$t={},$size,$switcher,$,$switchExit,$progress,$stmt={};return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); pushSwitchContext(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups → fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case …” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = peekSwitchContext(); emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = popSwitchContext() || metaSlot($); /* no explicit “default” → hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) – switch.from                         */ var ctx      = peekSwitchContext(); var caseMeta = metaSlot($); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); $n = subConstInt( makeConstant(caseMeta, 'i', _s, _i), baseFrom ); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Switch($){var $f={},$t={},$size,$switcher,$,$switchExit,$progress,$stmt={};return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups → fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case …” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = switchStack.pop() || metaSlot($); /* no explicit “default” → hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) – switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot($); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); $n = subConstInt( makeConstant(caseMeta, 'i', _s, _i), baseFrom ); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function While($){var $loopLabel,$exitLabel;return (function(){var _b=_i;return WHILE($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&BoolGroup($)&&(function(){ $exitLabel = newLabel('e'); emit('?->', false, $exitLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); emit('<-?', false, $exitLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Value($){var $f={},$i={},$s={};return (function(){var _b=_i;return Group($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FloatLiteral($f)&&(function(){ if (!dry) { makeMeta($, ':=', 'f', undefined, '#' + $f._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||IntegerLiteral($i)&&(function(){ if (!dry) { makeMeta($, ':=', 'i', undefined, '#' + $i._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||StringLiteral($s)&&(function(){ if (!dry) { makeString('s', $, evaluate($s._), _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)&&_($)&&(function(){ if (!dry) { makeMeta($, ':=', 'p', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)&&_($)&&(function(){ if (!dry) { makeMeta($, ':=', 'F', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Variable($){var $global,$id={};return (function(){var _b=_i;return (function(){ $global = false; ; return true})()&&((function(){var _b=_i;return GLOBAL($)&&_($)&&(function(){ $global = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Identifier($id)&&(function(){ if (!dry) { lookup($, $id._, $global, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

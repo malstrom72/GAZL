@@ -19,10 +19,7 @@
 root		<-								{
 												$fn = "(function(_s) {\n";
 											}
-				( Spacing b=PikaBlock		{
-											var header = $b.slice(1, $b.length - 1);
-											$fn += header.replace(/\x24\x24parser\./g, '') + ';'
-								}
+				( Spacing b=PikaBlock		{ $fn += $b.replace(/\x24\x24parser\./g, '') + ';' }
 				)? Spacing g:Grammar		{
 												$fn += $g;
 												$fn += "var _i=0,_im=0,_o={_:void 0},_b=root(_o);\n";

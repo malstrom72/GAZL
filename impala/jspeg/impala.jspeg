@@ -4,8 +4,17 @@
 
 {
     'use strict';
-    var $$parser = {};
-    var parser = $$parser;
+    /**
+     * map(target, k1, v1, k2, v2, …)
+     *   assigns target[k1]=v1, etc.
+     */
+    function map(target /*, k1, v1, … */) {
+        for (var i = 1; i + 1 < arguments.length; i += 2) {
+            target[ arguments[i] ] = arguments[i+1];
+        }
+        return target;
+    }
+
     /**
      * Deep-clone an object or array (only handles plain objects & arrays)
      */
@@ -121,247 +130,103 @@
      * ———————————————————————————————— */
 
     /* 1  constants & simple flags */
-    var IMPALA_VERSION = '1.0';
-    parser.IMPALA_VERSION = IMPALA_VERSION;
-    var dry = false;
-    parser.dry = dry;
+    var $$parser.IMPALA_VERSION = '1.0';
+    var $$parser.dry            = false;
 
     /* 2  make sure the buckets exist */
-    var metacode = [];
-    parser.metacode = metacode;
-    var strings = { s:[], a:[] };
-    parser.strings = strings;
-    var labelCounter = 0;
-    parser.labelCounter = labelCounter;
-    var stock = { '%': [], '<': [] };
-    parser.stock = stock;
-    var counters = { '%': 0,  '<': 0  };
-    parser.counters = counters;
-    var randomId = 0;
-    parser.randomId = randomId;
-    var symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
-    parser.symbols = symbols;
-    var switchStack = [];
-    parser.switchStack = switchStack;
-    var noForward = false;
-    parser.noForward = noForward;
-
-    /* 2b  shared mutable state helpers */
-    var parserState = {
-        metacode: metacode,
-        strings: strings,
-        switchStack: switchStack,
-        stock: stock,
-        counters: counters
-    };
-    var state = parserState;
-    parser.state = state;
-
-    function getMetacode() {
-        return parserState.metacode;
-    }
-    parser.getMetacode = getMetacode;
-
-    function appendMetacode(entry) {
-        parserState.metacode.push(entry);
-    }
-    parser.appendMetacode = appendMetacode;
-
-    function clearMetacode() {
-        parserState.metacode.length = 0;
-    }
-    parser.clearMetacode = clearMetacode;
-
-    function ensureStringTable(prefix) {
-        var tables = parserState.strings;
-        var table = tables[prefix];
-        if (!table) {
-            table = tables[prefix] = [];
-        }
-        if (!table.rlookup) {
-            table.rlookup = {};
-        }
-        return table;
-    }
-    parser.ensureStringTable = ensureStringTable;
-
-    function resetStrings() {
-        var tables = parserState.strings;
-        tables.s = [];
-        tables.s.rlookup = {};
-        tables.a = [];
-        tables.a.rlookup = {};
-    }
-    parser.resetStrings = resetStrings;
-
-    function getStockBucket(cls) {
-        var buckets = parserState.stock;
-        var bucket = buckets[cls];
-        if (!bucket) {
-            bucket = buckets[cls] = [];
-        }
-        return bucket;
-    }
-    parser.getStockBucket = getStockBucket;
-
-    function clearStockBucket(cls) {
-        var bucket = $$parser.getStockBucket(cls);
-        resetQueue(bucket);
-        return bucket;
-    }
-    parser.clearStockBucket = clearStockBucket;
-
-    function resetStock() {
-        $$parser.clearStockBucket('%');
-        $$parser.clearStockBucket('<');
-    }
-    parser.resetStock = resetStock;
-
-    function getCounter(cls) {
-        return parserState.counters[cls] || 0;
-    }
-    parser.getCounter = getCounter;
-
-    function setCounter(cls, value) {
-        parserState.counters[cls] = value;
-        return value;
-    }
-    parser.setCounter = setCounter;
-
-    function nextCounter(cls) {
-        var value = $$parser.getCounter(cls);
-        parserState.counters[cls] = value + 1;
-        return value;
-    }
-    parser.nextCounter = nextCounter;
-
-    function resetCounters() {
-        $$parser.setCounter('%', 0);
-        $$parser.setCounter('<', 0);
-    }
-    parser.resetCounters = resetCounters;
-
-    function pushSwitchContext(ctx) {
-        parserState.switchStack.push(ctx);
-        return ctx;
-    }
-    parser.pushSwitchContext = pushSwitchContext;
-
-    function popSwitchContext() {
-        return parserState.switchStack.pop();
-    }
-    parser.popSwitchContext = popSwitchContext;
-
-    function peekSwitchContext() {
-        var stack = parserState.switchStack;
-        return stack[stack.length - 1];
-    }
-    parser.peekSwitchContext = peekSwitchContext;
-
-    function clearSwitchStack() {
-        parserState.switchStack.length = 0;
-    }
-    parser.clearSwitchStack = clearSwitchStack;
+    var $$parser.META_TO_GAZL   = {};
+    var $$parser.SUPPORTED_OPS  = {};
+    var $$parser.CASTS_TO_TYPES = {};
+    var $$parser.ZEROES = {};
+    var $$parser.TYPE_SUFFIXES  = {};
+    var $$parser.VERBOSE_TYPES  = {};
+    var $$parser.metacode = [];
+    var $$parser.strings = { s:[], a:[] };
+    var $$parser.labelCounter = 0;
+    var $$parser.stock = { '%': [], '<': [] };
+    var $$parser.counters = { '%': 0,  '<': 0  };
+    var $$parser.randomId = 0;
+    var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
+    var $$parser.switchStack = [];
+    var $$parser.noForward = false;
 
     /* 3  bulk-fill the lookup tables */
-    var META_TO_GAZL = {
-        '=':    'MOV?',  ':=':   'MOV?',
-        '=itof':'iTOf',  '=ftoi':'fTOi', '=abs':'ABS?', '=floor':'FLOf',
-        '=[]':  'PEEK',  '[]=':  'POKE',  '=[]$':'GETL',  '[]$=':'SETL',
-        '=*':   'PEEK',  ':=*':  'PEEK',  '*=':  'POKE',  '=&':  'ADRL', 'copy':'COPY',
-        '-->':  'GOTO',  '-->#': 'SWCH',  '...': 'FOR?', '()':  'CALL', '--^':'RETU',
-        '|':    'IOR?',  '&':    'AND?',  '^':   'XOR?', '<<':  'SHL?', '>>>':'SHRu', '>>':'SHR?',
-        '+':    'ADD?',  '-':    'SUB?',  '*':   'MUL?', '/':   'DIV?', '%':  'MOD?', 'd':'DIFp',
-        '<=':   'LEQ?',  '<':    'LSS?',  '>=':  'GEQ?', '>':   'GRT?', '!=': 'NEQ?', '==':'EQU?',
-        '!<=':  'GRT?',  '!<':   'GEQ?',  '!>=': 'LSS?', '!>':  'LEQ?', '!!=':'EQU?', '!==':'NEQ?'
-    };
-    parser.META_TO_GAZL = META_TO_GAZL;
+    map($$parser.META_TO_GAZL,
+        '=',   'MOV?', ':=',  'MOV?',
+        '=itof','iTOf', '=ftoi','fTOi', '=abs','ABS?', '=floor','FLOf',
+        '=[]','PEEK',  '[]=','POKE',   '=[]$','GETL',  '[]$=','SETL',
+        '=*','PEEK', ':=*','PEEK', '*=','POKE', '=&','ADRL', 'copy','COPY',
+        '-->','GOTO', '-->#','SWCH',  '...','FOR?',  '()','CALL', '--^','RETU',
+        '|','IOR?', '&','AND?', '^','XOR?', '<<','SHL?', '>>>','SHRu', '>>','SHR?',
+        '+','ADD?', '-','SUB?', '*','MUL?', '/','DIV?', '%','MOD?', 'd','DIFp',
+        '<=','LEQ?', '<','LSS?', '>=','GEQ?', '>','GRT?', '!=','NEQ?', '==','EQU?',
+        '!<=','GRT?','!<','GEQ?','!>=','LSS?','!>','LEQ?','!!=','EQU?','!==','NEQ?'
+    );
 
-    var SUPPORTED_OPS = {
-        '=*p': '?', '=&f': 'p', '=&F': 'p', '=&i': 'p', '=&p': 'p', '=&?': 'p',
-        '=-i': 'i', '=-f': 'f', '=~i': 'i',
-        '=floatf': 'f', '=float?': 'f', '=funcptrF': 'F', '=funcptr?': 'F',
-        '=inti': 'i', '=int?': 'i', '=pointerp': 'p', '=pointer?': 'p',
-        '=absi': 'i', '=absf': 'f', '=itofi': 'f', '=ftoif': 'i', '=floorf': 'f',
-        '|ii': 'i', '&ii': 'i', '^ii': 'i', '<<ii': 'i', '>>>ii': 'i', '>>ii': 'i',
-        '+ii': 'i', '-ii': 'i', '*ii': 'i', '/ii': 'i', '%ii': 'i',
-        '+ff': 'f', '-ff': 'f', '*ff': 'f', '/ff': 'f',
-        '+pi': 'p', '-pi': 'p', '-pp': 'i',
-        '=[]pi': '?',
-        '<=ii': 'i', '<ii': 'i', '>=ii': 'i', '>ii': 'i', '!=ii': 'i', '==ii': 'i',
-        '<=ff': 'f', '<ff': 'f', '>=ff': 'f', '>ff': 'f', '!=ff': 'f', '==ff': 'f',
-        '<=pp': 'p', '<pp': 'p', '>=pp': 'p', '>pp': 'p', '!=pp': 'p', '==pp': 'p',
-        '<=FF': 'F', '<FF': 'F', '>=FF': 'F', '>FF': 'F', '!=FF': 'F', '==FF': 'F'
-    };
-    parser.SUPPORTED_OPS = SUPPORTED_OPS;
+    map($$parser.SUPPORTED_OPS,
+        '=*p','?', '=&f','p', '=&F','p', '=&i','p', '=&p','p', '=&?','p',
+        '=-i','i', '=-f','f', '=~i','i',
+        '=floatf','f', '=float?','f', '=funcptrF','F', '=funcptr?','F',
+        '=inti','i', '=int?','i', '=pointerp','p', '=pointer?','p',
+        '=absi','i', '=absf','f', '=itofi','f', '=ftoif','i', '=floorf','f',
+        '|ii','i', '&ii','i', '^ii','i', '<<ii','i', '>>>ii','i', '>>ii','i',
+        '+ii','i', '-ii','i', '*ii','i', '/ii','i', '%ii','i',
+        '+ff','f', '-ff','f', '*ff','f', '/ff','f',
+        '+pi','p', '-pi','p', '-pp','i',
+        '=[]pi','?',
+        '<=ii','i', '<ii','i', '>=ii','i', '>ii','i', '!=ii','i', '==ii','i',
+        '<=ff','f', '<ff','f', '>=ff','f', '>ff','f', '!=ff','f', '==ff','f',
+        '<=pp','p', '<pp','p', '>=pp','p', '>pp','p', '!=pp','p', '==pp','p',
+        '<=FF','F', '<FF','F', '>=FF','F', '>FF','F', '!=FF','F', '==FF','F'
+    );
 
-    var CASTS_TO_TYPES = {
-        'float': 'f', 'funcptr': 'F', 'int': 'i', 'pointer': 'p'
-    };
-    parser.CASTS_TO_TYPES = CASTS_TO_TYPES;
-
-    var ZEROES = {
-        'f': '#0.0', 'i': '#0', 'p': '&NULL', 'F': '&NULL'
-    };
-    parser.ZEROES = ZEROES;
-
-    var TYPE_SUFFIXES = {
-        'void': '', 'i': 'i', 'f': 'f', 'p': 'p', 'F': 'p', 'U': '',
-        'N': '', 'A': 'A', '?': 'E'
-    };
-    parser.TYPE_SUFFIXES = TYPE_SUFFIXES;
-
-    var VERBOSE_TYPES = {
-        'i': 'int', 'f': 'float', 'p': 'pointer', 'F': 'funcptr',
-        'U': 'function', 'N': 'native', 'A': 'array', '?': 'untyped'
-    };
-    parser.VERBOSE_TYPES = VERBOSE_TYPES;
+    map($$parser.CASTS_TO_TYPES, 'float','f','funcptr','F','int','i','pointer','p');
+    map($$parser.ZEROES,         'f','#0.0','i','#0','p','&NULL','F','&NULL');
+    map($$parser.TYPE_SUFFIXES,  'void','', 'i','i','f','f','p','p','F','p','U','',
+                                 'N','',   'A','A','?','E');
+    map($$parser.VERBOSE_TYPES,  'i','int','f','float','p','pointer','F','funcptr',
+                                 'U','function','N','native','A','array','?','untyped');
 
     /* 4  label & metacode helpers */
-    function newLabel(prefix) {
+    var $$parser.newLabel = function (prefix) {
         var tag = (prefix === undefined ? '' : String(prefix));
         return '@.' + tag + ($$parser.labelCounter++);
-    }
-    parser.newLabel = newLabel;
+    };
 
     /* push a deep-cloned record into metacode */
-    function emitMeta(rec) {
-        $$parser.appendMetacode(clone(metaSlot(rec)));
-    }
-    parser.emitMeta = emitMeta;
+    var $$parser.emitMeta = function (rec) {
+        $$parser.metacode.push(clone(metaSlot(rec)));
+    };
 
     /* allocate new (empty) meta record, fill via makeMeta, then push */
-    function emit(op, type, op0, op1, op2) {
+    var $$parser.emit = function (op, type, op0, op1, op2) {
         var slot = {};                // fresh object
         slot = $$parser.makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
-        $$parser.appendMetacode(slot);
-    }
-    parser.emit = emit;
+        $$parser.metacode.push(slot);
+    };
 
     /* 5  portable replacement for ppeg.fail */
-    function fail(error, source, offset) {
+    var $$parser.fail = function (error, source, offset) {
         function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
         throw bake(error) + ' : ' +
               oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +
               oneLine(source.substr(offset, 40));
-    }
-    parser.fail = fail;
+    };
 
 
 
     /* ---------------------------------------------------------
      *  Short-circuit / branch processing
      * --------------------------------------------------------- */
-    function processBranches() {
+    var $$parser.processBranches = function () {
         var target      = { false: null, true: null }; // last FALSE / TRUE dest labels
         var targetCond  = null;                        // current branch condition (true / false)
         var currentGoto = null;                        // last unconditional goto
         var aliases     = {};                          // label alias map
 
         /* walk metacode bottom-to-top */
-        var meta = $$parser.getMetacode();
-        for (var i = meta.length - 1; i >= 0; --i) {
-            var inst = meta[i];
+        for (var i = $$parser.metacode.length - 1; i >= 0; --i) {
+            var inst = $$parser.metacode[i];
 
             switch (inst.operator) {
 
@@ -437,57 +302,54 @@
                     target.false = target.true = currentGoto = null;
             }
         }
-    }
-    parser.processBranches = processBranches;
+    };
 
     /* ---------------------------------------------------------
      *  Pool / stock handling for transients    (‘%’, ‘<…>’)
      * --------------------------------------------------------- */
 
     /* assure no duplicates exist in a stock bucket */
-    function validateStock(cls) {
+    var $$parser.validateStock = function (cls) {
         var seen = {};
-        var stk  = $$parser.getStockBucket(cls);
+        var stk  = $$parser.stock[cls];
         for (var i = 0; i < stk.length; ++i) {
             var tok = stk[i];
             assert(!seen[tok], "duplicate token in stock: " + tok);
             seen[tok] = true;
         }
         return true;
-    }
-    parser.validateStock = validateStock;
+    };
 
     /* borrow one token from a stock bucket (or create a new one) */
-    function borrow(cls) {
+    var $$parser.borrow = function (cls) {
         assert($$parser.validateStock(cls));
 
-        var stk = $$parser.getStockBucket(cls);
+        var stk = $$parser.stock[cls];
         if (stk.length) {
             return stk.pop();                      // reuse
         }
 
         /* otherwise mint a fresh id */
         if (cls === '%') {
-            return '%' + $$parser.nextCounter('%');
+            return '%' + ($$parser.counters['%']++);
         }
         if (cls === '<') {
-            var idx = $$parser.nextCounter('<');
+            var idx = $$parser.counters['<']++;
             return '<' + String.fromCharCode('A'.charCodeAt(0) + idx) + '>';
         }
         throw new Error("unknown stock class " + cls);
-    }
-    parser.borrow = borrow;
+    };
 
     /* smart borrow for CALL args – first free id in last consecutive run */
-    function borrowForCall() {
+    var $$parser.borrowForCall = function () {
         /* same safety check the original did */
         assert($$parser.validateStock('%'));
 
-        var stk = $$parser.getStockBucket('%');
+        var stk = $$parser.stock['%'];
 
         /* empty ⇒ mint a brand-new one */
         if (stk.length === 0) {
-            return $$parser.nextCounter('%');
+            return $$parser.counters['%']++;
         }
 
         /* sort in-place on the numeric suffix, ascending           */
@@ -518,11 +380,10 @@
         /* duplicate-check, like the original assert(validate…)    */
         assert($$parser.validateStock('%'));
         return chosen;
-    }
-    parser.borrowForCall = borrowForCall;
+    };
 
     /* put a token back into its stock bucket */
-    function returnBack(op) {
+    var $$parser.returnBack = function (op) {
         if (op == null) {
             return;
         }
@@ -530,7 +391,7 @@
 
         /* ordinary transients / compile-time vars */
         if (c === '%' || c === '<') {
-            var stk = $$parser.getStockBucket(c);
+            var stk = $$parser.stock[c];
             if (stk.indexOf(op) === -1) stk.push(op);   // avoid dupes
         }
         /* special case “…:<” suffix ---------------------------------
@@ -540,19 +401,17 @@
             // recurse with everything from (len-3) to end
             $$parser.returnBack(op.substr(op.length - 3));
         }
-    }
-    parser.returnBack = returnBack;
+    };
 
     /* Align with the original PPEG helper while avoiding the reserved
        `return` identifier in generated JavaScript. */
-    $$parser["return"] = $$parser.returnBack;
 
     /* --------------------------------------------------------- *
      *  Debug helpers & meta-record construction / destruction   *
      * --------------------------------------------------------- */
 
     /* pretty-print one meta-instruction (only when it has op) */
-    function debugPrintMeta(m) {
+    var $$parser.debugPrintMeta = function (m) {
         m = metaSlot(m);
         if (m && m.operator != null) {
             console.log(
@@ -561,8 +420,7 @@
                      + '} {' + m.operands[2] + '}'
             );
         }
-    }
-    parser.debugPrintMeta = debugPrintMeta;
+    };
 
     /* lazily materialise a meta-record for any parse node */
     function metaSlot(node) {
@@ -607,7 +465,7 @@
         return value === null ? undefined : value;
     }
 
-    function makeMeta(rec, op, type, op0, op1, op2) {
+    var $$parser.makeMeta = function (rec, op, type, op0, op1, op2) {
         rec = metaSlot(rec);
         rec.operator  = normaliseVoid(op);
         rec.type      = normaliseVoid(type);
@@ -617,17 +475,15 @@
             normaliseVoid(op2)
         ];
         return rec;
-    }
-    parser.makeMeta = makeMeta;
+    };
 
     /* release all three operands contained in a meta-record */
-    function releaseMeta(meta) {
+    var $$parser.releaseMeta = function (meta) {
         meta = metaSlot(meta);
         for (var i = 2; i >= 0; --i) {
             $$parser.returnBack(meta.operands[i]);
         }
-    }
-    parser.releaseMeta = releaseMeta;
+    };
 
     /* --------------------------------------------------------- *
      *  R-value helpers                                          *
@@ -637,7 +493,7 @@
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
-    function makeRValue(expr, classes) {
+    var $$parser.makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
@@ -671,14 +527,13 @@
 
         $$parser.emitMeta(expr);
         return tmp;
-    }
-    parser.makeRValue = makeRValue;
+    };
 
     /**
      * Ensure an expression’s value ends up in the given
      * transient “%<number>”.
      */
-    function makeArgValue(expr, number) {
+    var $$parser.makeArgValue = function (expr, number) {
         expr = metaSlot(expr);
 
         var op   = expr.operator;
@@ -695,12 +550,11 @@
         $$parser.returnBack(op1);
 
         /* remove %<number> from the free list if present */
-        var transientCounter = $$parser.getCounter('%');
-        if (transientCounter === number) {
-            $$parser.setCounter('%', transientCounter + 1);
+        if ($$parser.counters['%'] === number) {
+            ++$$parser.counters['%'];
         } else {
-            assert(transientCounter > number);
-            var stk = $$parser.getStockBucket('%');
+            assert($$parser.counters['%'] > number);
+            var stk = $$parser.stock['%'];
             for (var idx = stk.length - 1;
                  idx >= 0 && stk[idx] !== tgt;
                  --idx) {}
@@ -710,14 +564,13 @@
 
         expr.operands[0] = tgt;
         $$parser.emitMeta(expr);
-    }
-    parser.makeArgValue = makeArgValue;
+    };
 
     /* --------------------------------------------------------- *
      *  Typed error helper                                       *
      * --------------------------------------------------------- */
 
-    function typeError(desc, source, offset, type1, type2) {
+    var $$parser.typeError = function (desc, source, offset, type1, type2) {
         var message = replace(desc, '{$type1}',
                               $$parser.VERBOSE_TYPES[type1]);
         if (type2 !== undefined) {
@@ -725,14 +578,13 @@
                                $$parser.VERBOSE_TYPES[type2]);
         }
         $$parser.fail(message, source, offset);
-    }
-    parser.typeError = typeError;
+    };
 
     /* --------------------------------------------------------- *
      *  Binary operations ( + – * / [] etc. )                    *
      * --------------------------------------------------------- */
-    function binaryOp(operator, leftx, rightx,
-                      sourceCode, sourceOffset) {
+    var $$parser.binaryOp = function (operator, leftx, rightx,
+                                  sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
@@ -803,15 +655,14 @@
                 $$parser.makeRValue(rightx)
             );
         }
-    }
-    parser.binaryOp = binaryOp;
+    };
 
 
     /* --------------------------------------------------------- *
      *  Multiplication / division with special int-to-float case *
      * --------------------------------------------------------- */
-    function mulDivOp(operator, leftx, rightx,
-                      sourceCode, sourceOffset) {
+    var $$parser.mulDivOp = function (operator, leftx, rightx,
+                                  sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
@@ -868,15 +719,14 @@
             $$parser.makeRValue(leftx),
             $$parser.makeRValue(rightx)
         );
-    }
-    parser.mulDivOp = mulDivOp;
+    };
 
 
     /* --------------------------------------------------------- *
      *  Assignment helper                                        *
      * --------------------------------------------------------- */
-    function assign(x, leftx, rightx,
-                    sourceCode, sourceOffset) {
+    var $$parser.assign = function (x, leftx, rightx,
+                                sourceCode, sourceOffset) {
 
         x      = metaSlot(x);
         leftx  = metaSlot(leftx);
@@ -969,8 +819,7 @@
             x.operands[keep],
             null
         );
-    }
-    parser.assign = assign;
+    };
 
     /* -----------------------------------------------------------
      *  Unary helpers  (dereference, reference, -, ~, abs/floor,
@@ -978,7 +827,7 @@
      * -------------------------------------------------------- */
 
     /* *expr  or  [] dereference handling */
-    function dereference(operator, expr, sourceCode, sourceOffset) {
+    var $$parser.dereference = function (operator, expr, sourceCode, sourceOffset) {
         expr = metaSlot(expr);
         if (expr.operator === '+') {
             /*  &a + i   →   PEEK (&a , i)  */
@@ -998,11 +847,10 @@
                 undefined
             );
         }
-    }
-    parser.dereference = dereference;
+    };
 
     /* & (address-of) operator handling */
-    function reference(operator, expr, sourceCode, sourceOffset) {
+    var $$parser.reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -1034,11 +882,10 @@
         } else {
             $$parser.fail("Invalid lvalue", sourceCode, sourceOffset);
         }
-    }
-    parser.reference = reference;
+    };
 
     /* unary minus (integer/float) */
-    function minus(operator, expr/*, src, off*/) {
+    var $$parser.minus = function (operator, expr/*, src, off*/) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '-', undefined,
@@ -1046,11 +893,10 @@
             $$parser.ZEROES[ expr.type ],            // 0  of same type
             $$parser.makeRValue(expr)
         );
-    }
-    parser.minus = minus;
+    };
 
     /* bit-wise NOT / logical NOT  (~expr) */
-    function not(operator, expr) {
+    var $$parser.not = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '^', undefined,
@@ -1058,11 +904,10 @@
             $$parser.makeRValue(expr),
             '#-1'                                    // XOR with –1
         );
-    }
-    parser.not = not;
+    };
 
     /* ABS or FLOOR (unary) – operator is already '=abs' or '=floor' */
-    function absFloor(operator, expr) {
+    var $$parser.absFloor = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, operator, undefined,
@@ -1070,11 +915,10 @@
             $$parser.makeRValue(expr),
             undefined
         );
-    }
-    parser.absFloor = absFloor;
+    };
 
     /* int → float */
-    function intToFloatConvert(operator, expr) {
+    var $$parser.intToFloatConvert = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
             expr, '=itof', undefined,
@@ -1082,11 +926,10 @@
             $$parser.makeRValue(expr),
             '#1.0'
         );
-    }
-    parser.intToFloatConvert = intToFloatConvert;
+    };
 
     /* float → int, with constant-fold special-case */
-    function floatToIntConvert(operator, expr) {
+    var $$parser.floatToIntConvert = function (operator, expr) {
 
         expr = metaSlot(expr);
 
@@ -1108,36 +951,38 @@
                 '#1.0'
             );
         }
-    }
-    parser.floatToIntConvert = floatToIntConvert;
+    };
 
     /* -----------------------------------------------------------
      *  UNARY_OPS dispatch table
      * -------------------------------------------------------- */
 
+    var $$parser.UNARY_OPS = {};          /* will hold “=xxx” → handler */
+
+    /* no-op casts */
     function noop() {}
 
-    var UNARY_OPS = {
-        '=float':   noop,
-        '=funcptr': noop,
-        '=int':     noop,
-        '=pointer': noop,
+    /* register the handlers */
+    map($$parser.UNARY_OPS,
+        '=float',     noop,
+        '=funcptr',   noop,
+        '=int',       noop,
+        '=pointer',   noop,
 
-        '=*':       $$parser.dereference,
-        '=&':       $$parser.reference,
-        '=-':       $$parser.minus,
-        '=~':       $$parser.not,
-        '=abs':     $$parser.absFloor,
-        '=itof':    $$parser.intToFloatConvert,
-        '=ftoi':    $$parser.floatToIntConvert,
-        '=floor':   $$parser.absFloor
-    };
-    parser.UNARY_OPS = UNARY_OPS;
+        '=*',         $$parser.dereference,
+        '=&',         $$parser.reference,
+        '=-',         $$parser.minus,
+        '=~',         $$parser.not,
+        '=abs',       $$parser.absFloor,
+        '=itof',      $$parser.intToFloatConvert,
+        '=ftoi',      $$parser.floatToIntConvert,
+        '=floor',     $$parser.absFloor
+    );
 
     /* -----------------------------------------------------------
      *  Generic unary operator
      * -------------------------------------------------------- */
-    function unaryOp(operator, expr, sourceCode, sourceOffset) {
+    var $$parser.unaryOp = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -1159,14 +1004,13 @@
 
         /* update resulting type */
         expr.type = rTyp;
-    }
-    parser.unaryOp = unaryOp;
+    };
 
     /* -----------------------------------------------------------
      *  Symbol declaration helper
      * -------------------------------------------------------- */
 
-    function declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset) {
+    function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset) {
         /* emit data / flush pending code */
         if (kind !== undefined) {
             $$parser.flushMetaCode('');
@@ -1210,13 +1054,12 @@
             if (!table) $$parser.symbols[scope] = table = {};
             table[name] = { type:type, readonly:!!readonly, kind:kind };
         }
-    }
-    parser.declare = declare;
+    };
 
     /* -----------------------------------------------------------
      *  Flush all queued meta-code into final text output
      * -------------------------------------------------------- */
-    function flushMetaCode(prefix) {
+    var $$parser.flushMetaCode = function (prefix) {
 
         prefix = prefix || '';
         var TABstr = (typeof TAB !== 'undefined') ? TAB : '\t';
@@ -1227,10 +1070,9 @@
             return (op == null ? '' : op);
         }
 
-        var meta = $$parser.getMetacode();
-        for (var i = 0; i < meta.length; ++i) {
+        for (var i = 0; i < $$parser.metacode.length; ++i) {
 
-            var rec   = meta[i];
+            var rec   = $$parser.metacode[i];
             var op    = rec.operator;
 
             if (op == null) {
@@ -1300,14 +1142,13 @@
         }
 
         /* reset queue */
-        $$parser.clearMetacode();
-    }
-    parser.flushMetaCode = flushMetaCode;
+        $$parser.metacode.length = 0;
+    };
 
     /* -----------------------------------------------------------
      *  Identifier lookup helper
      * -------------------------------------------------------- */
-    function lookup(x, name, isGlobal, sourceCode, sourceOffset) {
+    var $$parser.lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
 
         var sym = $$parser.symbols;
         var p   = null;
@@ -1369,14 +1210,13 @@
         /* not found --------------------------------------------*/
         $$parser.fail('Undeclared identifier: ' + name,
                       sourceCode, sourceOffset);
-    }
-    parser.lookup = lookup;
+    };
 
     /* -----------------------------------------------------------
      *  Ensure expression resolves to a compile-time constant
      * -------------------------------------------------------- */
-    function makeConstant(x, wantType,
-                          sourceCode, sourceOffset) {
+    var $$parser.makeConstant = function (x, wantType,
+                                      sourceCode, sourceOffset) {
 
         var r = $$parser.makeRValue(x, '#<&');
 
@@ -1389,13 +1229,12 @@
                 sourceCode, sourceOffset);
         }
         return r;
-    }
-    parser.makeConstant = makeConstant;
+    };
 
     /* -----------------------------------------------------------
      *  Constant subtraction helper
      * -------------------------------------------------------- */
-    function subConstInt(opL, opR) {
+    var $$parser.subConstInt = function (opL, opR) {
 
         assert(span(opR[0], '#<') === 1,
                "rhs must be const");
@@ -1425,18 +1264,15 @@
                           opL, opR);
         }
         return tmp;
-    }
-    parser.subConstInt = subConstInt;
+    };
 
     /* drop leading “#” helper */
-    function dropHash(s) {
+    var $$parser.dropHash = function (s) {
         return (s[0] === '#') ? s.substr(1) : s;
-    }
-    parser.dropHash = dropHash;
+    };
 
     /* printable ASCII table (33–126) */
-    var printable = '';
-    parser.printable = printable;
+    var $$parser.printable = '';
     for (var i = 33; i < 127; ++i) {
         $$parser.printable += char(i);
     }
@@ -1444,7 +1280,7 @@
     /* -----------------------------------------------------------
      *  Dump a string constant into assembly
      * -------------------------------------------------------- */
-    function dumpString(label, str) {
+    var $$parser.dumpString = function (label, str) {
 
         var len = str.length;
         $$parser.declare('CNST', 'globals', label, '?',
@@ -1476,14 +1312,13 @@
                 offset += spanLen;
             }
         }
-    }
-    parser.dumpString = dumpString;
+    };
 
     /* -----------------------------------------------------------
      *  Manage / share string literals
      * -------------------------------------------------------- */
-    function makeString(prefix, x, s,
-                        sourceCode, sourceOffset) {
+    var $$parser.makeString = function (prefix, x, s,
+                                    sourceCode, sourceOffset) {
 
         s += char(0);       // NUL-terminate
 
@@ -1493,7 +1328,11 @@
         }
         s = byteString;
 
-        var tbl = $$parser.ensureStringTable(prefix);
+        var tbl = $$parser.strings[prefix];
+        if (!tbl) {
+            tbl = $$parser.strings[prefix] = [];
+            tbl.rlookup = {};
+        }
 
         var entry = tbl.rlookup[s];
         if (entry == null) {
@@ -1521,8 +1360,7 @@
 
         $$parser.makeMeta(x, ':=', 'p',
                           undefined, '&' + entry, undefined);
-    }
-    parser.makeString = makeString;
+    };
 
     /* -----------------------------------------------------------
      *  Tiny utilities still missing from the toolbox
@@ -1551,22 +1389,28 @@
      *  Compiler start / end hooks
      * -------------------------------------------------------- */
 
-    function start() {
+    var $$parser.start = function () {
 
         /* reset per-compilation state */
-        $$parser.stock = parserState.stock;
-        $$parser.counters = parserState.counters;
-        $$parser.metacode = parserState.metacode;
-        $$parser.strings = parserState.strings;
-        $$parser.switchStack = parserState.switchStack;
+        if (!$$parser.stock) $$parser.stock = { '%': [], '<': [] };
+        if (!$$parser.counters) $$parser.counters = { '%': 0, '<': 0 };
+        if (!$$parser.metacode) $$parser.metacode = [];
         if (!$$parser.symbols) $$parser.symbols = {};
+        if (!$$parser.strings) $$parser.strings = { s: [], a: [] };
+        if (!$$parser.switchStack) $$parser.switchStack = [];
 
-        $$parser.resetStock();
-        $$parser.resetCounters();
+        /* clear transient pools and counters */
+        var poolPercent = $$parser.stock['%'] || ($$parser.stock['%'] = []);
+        var poolAngle   = $$parser.stock['<'] || ($$parser.stock['<'] = []);
+        resetQueue(poolPercent);
+        resetQueue(poolAngle);
+        $$parser.counters['%'] = 0;
+        $$parser.counters['<'] = 0;
 
-        $$parser.clearMetacode();
+        /* wipe accumulated meta-instructions */
+        $$parser.metacode.length = 0;
         $$parser.labelCounter    = 0;
-        $$parser.clearSwitchStack();
+        $$parser.switchStack.length = 0;
 
         /* reset symbol tables */
         $$parser.symbols.locals   = {};
@@ -1575,7 +1419,10 @@
         $$parser.symbols.defines  = {};
 
         /* reset deferred string tables */
-        $$parser.resetStrings();
+        $$parser.strings.s = [];
+        $$parser.strings.s.rlookup = {};
+        $$parser.strings.a = [];
+        $$parser.strings.a.rlookup = {};
 
         $$parser.noForward = false;
 
@@ -1593,10 +1440,9 @@
         var LF = '\n';
         output('; Compiled with Impala version ' +
                $$parser.IMPALA_VERSION + LF);
-    }
-    parser.start = start;
+    };
 
-    function end() {
+    var $$parser.end = function () {
 
         /* dump deferred string literals */
         iterate($$parser.strings.s, function (rec) {
@@ -1614,8 +1460,7 @@
 
             output('.noAssertStrings:\t!');
         }
-    }
-    parser.end = end;
+    };
 }
 
 #################
@@ -2249,7 +2094,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                         switchMeta.switchLabel = $$parser.newLabel('s');
                                                         $switchExit              = $$parser.newLabel('e');
 
-                                                        $$parser.pushSwitchContext(switchMeta);
+                                                        $$parser.switchStack.push(switchMeta);
 
                                                         $$parser.emit(
                                                             '-->#',
@@ -2295,7 +2140,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                                 $$parser.emit('-->', undefined, $switchExit, undefined, undefined);
                                                             }
 
-                                                            var ctx = $$parser.peekSwitchContext();
+                                                            var ctx = $$parser.switchStack[$$parser.switchStack.length - 1];
 
                                                             $$parser.emit(';',    undefined, 'default',       undefined, undefined);
                                                             $$parser.emit('<--',  undefined, ctx.switchLabel,  undefined, undefined);
@@ -2304,7 +2149,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                     ) ':'_ stmt:Statement
                 )*
                 '}'_                                {
-                                                        var ctx = $$parser.popSwitchContext() || metaSlot($$.);
+                                                        var ctx = $$parser.switchStack.pop() || metaSlot($$.);
 
                                                         /* no explicit “default” → hook it up now                        */
                                                         if ($progress !== 'gotDefault') {
@@ -2320,7 +2165,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 # ---------------------------------------------------------------------------
 CaseExpr    <-  Expr                                {
                                                         /* offset = constant(expr) – switch.from                         */
-                                                        var ctx      = $$parser.peekSwitchContext();
+                                                        var ctx      = $$parser.switchStack[$$parser.switchStack.length - 1];
                                                         var caseMeta = metaSlot($$.);
                                                         var baseFrom = (ctx ? ctx.from : caseMeta.from);
                                                         var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel);
