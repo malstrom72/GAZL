@@ -2,6 +2,7 @@ var impalaCompiler = (function(_s) {
 
     'use strict';
     var $$parser = {};
+    var parser = $$parser;
     /**
      * Deep-clone an object or array (only handles plain objects & arrays)
      */
@@ -118,29 +119,29 @@ var impalaCompiler = (function(_s) {
 
     /* 1  constants & simple flags */
     var IMPALA_VERSION = '1.0';
-    IMPALA_VERSION = IMPALA_VERSION;
+    parser.IMPALA_VERSION = IMPALA_VERSION;
     var dry = false;
-    dry = dry;
+    parser.dry = dry;
 
     /* 2  make sure the buckets exist */
     var metacode = [];
-    metacode = metacode;
+    parser.metacode = metacode;
     var strings = { s:[], a:[] };
-    strings = strings;
+    parser.strings = strings;
     var labelCounter = 0;
-    labelCounter = labelCounter;
+    parser.labelCounter = labelCounter;
     var stock = { '%': [], '<': [] };
-    stock = stock;
+    parser.stock = stock;
     var counters = { '%': 0,  '<': 0  };
-    counters = counters;
+    parser.counters = counters;
     var randomId = 0;
-    randomId = randomId;
+    parser.randomId = randomId;
     var symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
-    symbols = symbols;
+    parser.symbols = symbols;
     var switchStack = [];
-    switchStack = switchStack;
+    parser.switchStack = switchStack;
     var noForward = false;
-    noForward = noForward;
+    parser.noForward = noForward;
 
     /* 2b  shared mutable state helpers */
     var parserState = {
@@ -151,22 +152,22 @@ var impalaCompiler = (function(_s) {
         counters: counters
     };
     var state = parserState;
-    state = state;
+    parser.state = state;
 
     function getMetacode() {
         return parserState.metacode;
     }
-    getMetacode = getMetacode;
+    parser.getMetacode = getMetacode;
 
     function appendMetacode(entry) {
         parserState.metacode.push(entry);
     }
-    appendMetacode = appendMetacode;
+    parser.appendMetacode = appendMetacode;
 
     function clearMetacode() {
         parserState.metacode.length = 0;
     }
-    clearMetacode = clearMetacode;
+    parser.clearMetacode = clearMetacode;
 
     function ensureStringTable(prefix) {
         var tables = parserState.strings;
@@ -179,7 +180,7 @@ var impalaCompiler = (function(_s) {
         }
         return table;
     }
-    ensureStringTable = ensureStringTable;
+    parser.ensureStringTable = ensureStringTable;
 
     function resetStrings() {
         var tables = parserState.strings;
@@ -188,7 +189,7 @@ var impalaCompiler = (function(_s) {
         tables.a = [];
         tables.a.rlookup = {};
     }
-    resetStrings = resetStrings;
+    parser.resetStrings = resetStrings;
 
     function getStockBucket(cls) {
         var buckets = parserState.stock;
@@ -198,66 +199,66 @@ var impalaCompiler = (function(_s) {
         }
         return bucket;
     }
-    getStockBucket = getStockBucket;
+    parser.getStockBucket = getStockBucket;
 
     function clearStockBucket(cls) {
         var bucket = getStockBucket(cls);
         resetQueue(bucket);
         return bucket;
     }
-    clearStockBucket = clearStockBucket;
+    parser.clearStockBucket = clearStockBucket;
 
     function resetStock() {
         clearStockBucket('%');
         clearStockBucket('<');
     }
-    resetStock = resetStock;
+    parser.resetStock = resetStock;
 
     function getCounter(cls) {
         return parserState.counters[cls] || 0;
     }
-    getCounter = getCounter;
+    parser.getCounter = getCounter;
 
     function setCounter(cls, value) {
         parserState.counters[cls] = value;
         return value;
     }
-    setCounter = setCounter;
+    parser.setCounter = setCounter;
 
     function nextCounter(cls) {
         var value = getCounter(cls);
         parserState.counters[cls] = value + 1;
         return value;
     }
-    nextCounter = nextCounter;
+    parser.nextCounter = nextCounter;
 
     function resetCounters() {
         setCounter('%', 0);
         setCounter('<', 0);
     }
-    resetCounters = resetCounters;
+    parser.resetCounters = resetCounters;
 
     function pushSwitchContext(ctx) {
         parserState.switchStack.push(ctx);
         return ctx;
     }
-    pushSwitchContext = pushSwitchContext;
+    parser.pushSwitchContext = pushSwitchContext;
 
     function popSwitchContext() {
         return parserState.switchStack.pop();
     }
-    popSwitchContext = popSwitchContext;
+    parser.popSwitchContext = popSwitchContext;
 
     function peekSwitchContext() {
         var stack = parserState.switchStack;
         return stack[stack.length - 1];
     }
-    peekSwitchContext = peekSwitchContext;
+    parser.peekSwitchContext = peekSwitchContext;
 
     function clearSwitchStack() {
         parserState.switchStack.length = 0;
     }
-    clearSwitchStack = clearSwitchStack;
+    parser.clearSwitchStack = clearSwitchStack;
 
     /* 3  bulk-fill the lookup tables */
     var META_TO_GAZL = {
@@ -271,7 +272,7 @@ var impalaCompiler = (function(_s) {
         '<=':   'LEQ?',  '<':    'LSS?',  '>=':  'GEQ?', '>':   'GRT?', '!=': 'NEQ?', '==':'EQU?',
         '!<=':  'GRT?',  '!<':   'GEQ?',  '!>=': 'LSS?', '!>':  'LEQ?', '!!=':'EQU?', '!==':'NEQ?'
     };
-    META_TO_GAZL = META_TO_GAZL;
+    parser.META_TO_GAZL = META_TO_GAZL;
 
     var SUPPORTED_OPS = {
         '=*p': '?', '=&f': 'p', '=&F': 'p', '=&i': 'p', '=&p': 'p', '=&?': 'p',
@@ -289,42 +290,42 @@ var impalaCompiler = (function(_s) {
         '<=pp': 'p', '<pp': 'p', '>=pp': 'p', '>pp': 'p', '!=pp': 'p', '==pp': 'p',
         '<=FF': 'F', '<FF': 'F', '>=FF': 'F', '>FF': 'F', '!=FF': 'F', '==FF': 'F'
     };
-    SUPPORTED_OPS = SUPPORTED_OPS;
+    parser.SUPPORTED_OPS = SUPPORTED_OPS;
 
     var CASTS_TO_TYPES = {
         'float': 'f', 'funcptr': 'F', 'int': 'i', 'pointer': 'p'
     };
-    CASTS_TO_TYPES = CASTS_TO_TYPES;
+    parser.CASTS_TO_TYPES = CASTS_TO_TYPES;
 
     var ZEROES = {
         'f': '#0.0', 'i': '#0', 'p': '&NULL', 'F': '&NULL'
     };
-    ZEROES = ZEROES;
+    parser.ZEROES = ZEROES;
 
     var TYPE_SUFFIXES = {
         'void': '', 'i': 'i', 'f': 'f', 'p': 'p', 'F': 'p', 'U': '',
         'N': '', 'A': 'A', '?': 'E'
     };
-    TYPE_SUFFIXES = TYPE_SUFFIXES;
+    parser.TYPE_SUFFIXES = TYPE_SUFFIXES;
 
     var VERBOSE_TYPES = {
         'i': 'int', 'f': 'float', 'p': 'pointer', 'F': 'funcptr',
         'U': 'function', 'N': 'native', 'A': 'array', '?': 'untyped'
     };
-    VERBOSE_TYPES = VERBOSE_TYPES;
+    parser.VERBOSE_TYPES = VERBOSE_TYPES;
 
     /* 4  label & metacode helpers */
     function newLabel(prefix) {
         var tag = (prefix === undefined ? '' : String(prefix));
         return '@.' + tag + (labelCounter++);
     }
-    newLabel = newLabel;
+    parser.newLabel = newLabel;
 
     /* push a deep-cloned record into metacode */
     function emitMeta(rec) {
         appendMetacode(clone(metaSlot(rec)));
     }
-    emitMeta = emitMeta;
+    parser.emitMeta = emitMeta;
 
     /* allocate new (empty) meta record, fill via makeMeta, then push */
     function emit(op, type, op0, op1, op2) {
@@ -332,7 +333,7 @@ var impalaCompiler = (function(_s) {
         slot = makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
         appendMetacode(slot);
     }
-    emit = emit;
+    parser.emit = emit;
 
     /* 5  portable replacement for ppeg.fail */
     function fail(error, source, offset) {
@@ -341,7 +342,7 @@ var impalaCompiler = (function(_s) {
               oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +
               oneLine(source.substr(offset, 40));
     }
-    fail = fail;
+    parser.fail = fail;
 
 
 
@@ -434,7 +435,7 @@ var impalaCompiler = (function(_s) {
             }
         }
     }
-    processBranches = processBranches;
+    parser.processBranches = processBranches;
 
     /* ---------------------------------------------------------
      *  Pool / stock handling for transients    (‘%’, ‘<…>’)
@@ -451,7 +452,7 @@ var impalaCompiler = (function(_s) {
         }
         return true;
     }
-    validateStock = validateStock;
+    parser.validateStock = validateStock;
 
     /* borrow one token from a stock bucket (or create a new one) */
     function borrow(cls) {
@@ -472,7 +473,7 @@ var impalaCompiler = (function(_s) {
         }
         throw new Error("unknown stock class " + cls);
     }
-    borrow = borrow;
+    parser.borrow = borrow;
 
     /* smart borrow for CALL args – first free id in last consecutive run */
     function borrowForCall() {
@@ -515,7 +516,7 @@ var impalaCompiler = (function(_s) {
         assert(validateStock('%'));
         return chosen;
     }
-    borrowForCall = borrowForCall;
+    parser.borrowForCall = borrowForCall;
 
     /* put a token back into its stock bucket */
     function returnBack(op) {
@@ -537,7 +538,7 @@ var impalaCompiler = (function(_s) {
             returnBack(op.substr(op.length - 3));
         }
     }
-    returnBack = returnBack;
+    parser.returnBack = returnBack;
 
     /* Align with the original PPEG helper while avoiding the reserved
        `return` identifier in generated JavaScript. */
@@ -558,7 +559,7 @@ var impalaCompiler = (function(_s) {
             );
         }
     }
-    debugPrintMeta = debugPrintMeta;
+    parser.debugPrintMeta = debugPrintMeta;
 
     /* lazily materialise a meta-record for any parse node */
     function metaSlot(node) {
@@ -614,7 +615,7 @@ var impalaCompiler = (function(_s) {
         ];
         return rec;
     }
-    makeMeta = makeMeta;
+    parser.makeMeta = makeMeta;
 
     /* release all three operands contained in a meta-record */
     function releaseMeta(meta) {
@@ -623,7 +624,7 @@ var impalaCompiler = (function(_s) {
             returnBack(meta.operands[i]);
         }
     }
-    releaseMeta = releaseMeta;
+    parser.releaseMeta = releaseMeta;
 
     /* --------------------------------------------------------- *
      *  R-value helpers                                          *
@@ -668,7 +669,7 @@ var impalaCompiler = (function(_s) {
         emitMeta(expr);
         return tmp;
     }
-    makeRValue = makeRValue;
+    parser.makeRValue = makeRValue;
 
     /**
      * Ensure an expression’s value ends up in the given
@@ -707,7 +708,7 @@ var impalaCompiler = (function(_s) {
         expr.operands[0] = tgt;
         emitMeta(expr);
     }
-    makeArgValue = makeArgValue;
+    parser.makeArgValue = makeArgValue;
 
     /* --------------------------------------------------------- *
      *  Typed error helper                                       *
@@ -722,7 +723,7 @@ var impalaCompiler = (function(_s) {
         }
         fail(message, source, offset);
     }
-    typeError = typeError;
+    parser.typeError = typeError;
 
     /* --------------------------------------------------------- *
      *  Binary operations ( + – * / [] etc. )                    *
@@ -800,7 +801,7 @@ var impalaCompiler = (function(_s) {
             );
         }
     }
-    binaryOp = binaryOp;
+    parser.binaryOp = binaryOp;
 
 
     /* --------------------------------------------------------- *
@@ -865,7 +866,7 @@ var impalaCompiler = (function(_s) {
             makeRValue(rightx)
         );
     }
-    mulDivOp = mulDivOp;
+    parser.mulDivOp = mulDivOp;
 
 
     /* --------------------------------------------------------- *
@@ -966,7 +967,7 @@ var impalaCompiler = (function(_s) {
             null
         );
     }
-    assign = assign;
+    parser.assign = assign;
 
     /* -----------------------------------------------------------
      *  Unary helpers  (dereference, reference, -, ~, abs/floor,
@@ -995,7 +996,7 @@ var impalaCompiler = (function(_s) {
             );
         }
     }
-    dereference = dereference;
+    parser.dereference = dereference;
 
     /* & (address-of) operator handling */
     function reference(operator, expr, sourceCode, sourceOffset) {
@@ -1031,7 +1032,7 @@ var impalaCompiler = (function(_s) {
             fail("Invalid lvalue", sourceCode, sourceOffset);
         }
     }
-    reference = reference;
+    parser.reference = reference;
 
     /* unary minus (integer/float) */
     function minus(operator, expr/*, src, off*/) {
@@ -1043,7 +1044,7 @@ var impalaCompiler = (function(_s) {
             makeRValue(expr)
         );
     }
-    minus = minus;
+    parser.minus = minus;
 
     /* bit-wise NOT / logical NOT  (~expr) */
     function not(operator, expr) {
@@ -1055,7 +1056,7 @@ var impalaCompiler = (function(_s) {
             '#-1'                                    // XOR with –1
         );
     }
-    not = not;
+    parser.not = not;
 
     /* ABS or FLOOR (unary) – operator is already '=abs' or '=floor' */
     function absFloor(operator, expr) {
@@ -1067,7 +1068,7 @@ var impalaCompiler = (function(_s) {
             undefined
         );
     }
-    absFloor = absFloor;
+    parser.absFloor = absFloor;
 
     /* int → float */
     function intToFloatConvert(operator, expr) {
@@ -1079,7 +1080,7 @@ var impalaCompiler = (function(_s) {
             '#1.0'
         );
     }
-    intToFloatConvert = intToFloatConvert;
+    parser.intToFloatConvert = intToFloatConvert;
 
     /* float → int, with constant-fold special-case */
     function floatToIntConvert(operator, expr) {
@@ -1105,7 +1106,7 @@ var impalaCompiler = (function(_s) {
             );
         }
     }
-    floatToIntConvert = floatToIntConvert;
+    parser.floatToIntConvert = floatToIntConvert;
 
     /* -----------------------------------------------------------
      *  UNARY_OPS dispatch table
@@ -1128,7 +1129,7 @@ var impalaCompiler = (function(_s) {
         '=ftoi':    floatToIntConvert,
         '=floor':   absFloor
     };
-    UNARY_OPS = UNARY_OPS;
+    parser.UNARY_OPS = UNARY_OPS;
 
     /* -----------------------------------------------------------
      *  Generic unary operator
@@ -1156,7 +1157,7 @@ var impalaCompiler = (function(_s) {
         /* update resulting type */
         expr.type = rTyp;
     }
-    unaryOp = unaryOp;
+    parser.unaryOp = unaryOp;
 
     /* -----------------------------------------------------------
      *  Symbol declaration helper
@@ -1207,7 +1208,7 @@ var impalaCompiler = (function(_s) {
             table[name] = { type:type, readonly:!!readonly, kind:kind };
         }
     }
-    declare = declare;
+    parser.declare = declare;
 
     /* -----------------------------------------------------------
      *  Flush all queued meta-code into final text output
@@ -1298,7 +1299,7 @@ var impalaCompiler = (function(_s) {
         /* reset queue */
         clearMetacode();
     }
-    flushMetaCode = flushMetaCode;
+    parser.flushMetaCode = flushMetaCode;
 
     /* -----------------------------------------------------------
      *  Identifier lookup helper
@@ -1366,7 +1367,7 @@ var impalaCompiler = (function(_s) {
         fail('Undeclared identifier: ' + name,
                       sourceCode, sourceOffset);
     }
-    lookup = lookup;
+    parser.lookup = lookup;
 
     /* -----------------------------------------------------------
      *  Ensure expression resolves to a compile-time constant
@@ -1386,7 +1387,7 @@ var impalaCompiler = (function(_s) {
         }
         return r;
     }
-    makeConstant = makeConstant;
+    parser.makeConstant = makeConstant;
 
     /* -----------------------------------------------------------
      *  Constant subtraction helper
@@ -1422,17 +1423,17 @@ var impalaCompiler = (function(_s) {
         }
         return tmp;
     }
-    subConstInt = subConstInt;
+    parser.subConstInt = subConstInt;
 
     /* drop leading “#” helper */
     function dropHash(s) {
         return (s[0] === '#') ? s.substr(1) : s;
     }
-    dropHash = dropHash;
+    parser.dropHash = dropHash;
 
     /* printable ASCII table (33–126) */
     var printable = '';
-    printable = printable;
+    parser.printable = printable;
     for (var i = 33; i < 127; ++i) {
         printable += char(i);
     }
@@ -1473,7 +1474,7 @@ var impalaCompiler = (function(_s) {
             }
         }
     }
-    dumpString = dumpString;
+    parser.dumpString = dumpString;
 
     /* -----------------------------------------------------------
      *  Manage / share string literals
@@ -1518,7 +1519,7 @@ var impalaCompiler = (function(_s) {
         makeMeta(x, ':=', 'p',
                           undefined, '&' + entry, undefined);
     }
-    makeString = makeString;
+    parser.makeString = makeString;
 
     /* -----------------------------------------------------------
      *  Tiny utilities still missing from the toolbox
@@ -1590,7 +1591,7 @@ var impalaCompiler = (function(_s) {
         output('; Compiled with Impala version ' +
                IMPALA_VERSION + LF);
     }
-    start = start;
+    parser.start = start;
 
     function end() {
 
@@ -1611,7 +1612,7 @@ var impalaCompiler = (function(_s) {
             output('.noAssertStrings:\t!');
         }
     }
-    end = end;
+    parser.end = end;
 ;function root($){return (function(){var _b=_i;return _($)&&(function(){ start(); ; return true})()&&((function(){while((function(){var _b=_i;return FuncDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExternDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ConstDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GlobalDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _l=_i,_x=(!!_s[_i])&&(++_i,true);_i=_l;return !_x})()&&(function(){ end(); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FuncDecl($){var $id={},$inp={},$out={},$,$loc={};return (function(){var _b=_i;return FUNCTION($)&&_($)&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ assert(validateStock('%')); assert(validateStock('<')); output(''); output(';-----------------------------------------------------------------------------'); /* declare the function symbol */ declare( 'FUNC',           // kind
                                                                              'functions',      // scope
