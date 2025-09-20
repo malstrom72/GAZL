@@ -48,12 +48,13 @@
 - [x] Remove the `map()` helper once literals cover all callers, updating any code that relied on it mutating existing objects.
 - [x] Name shared mutable state (`metacode`, `strings`, `switchStack`, counters) explicitly and provide helper accessors or mutators instead of direct field pokes.
 - [x] Adjust grammar actions to call the new helper surface so state changes happen through a single pathway, documenting side effects inline where necessary.
-- [ ] Re-run `node impala/jspeg/updateJSPEG.js --check`, `node impala/jspeg/jspegCompilerTests.js`, and `timeout 180 ./build.sh` before advancing.
+- [x] Re-run `node impala/jspeg/updateJSPEG.js --check`, `node impala/jspeg/jspegCompilerTests.js`, and `timeout 180 ./build.sh` before advancing.
 
 > **Milestone 3 notes**
 > - Literal tables now live in plain `var` declarations, so the helper header is valid ES3 without relying on the custom `map()` helper.
 > - The standalone `map()` utility has been deleted because every table is initialised declaratively; no other helpers depended on its mutating behaviour.
 > - Shared state now funnels through helpers such as `appendMetacode`, `resetStock`, `resetCounters`, `resetStrings`, and the switch-stack push/pop pair so grammar actions no longer reach into the buckets directly.
+> - Full regression suite re-run (`updateJSPEG.js --check`, `jspegCompilerTests.js`, and `./build.sh`) with all tests still passing after the state-accessor refactor.
 
 ### Milestone 4 — Adopt an ES3-friendly Module Layout and Finalise
 - [ ] Remove the leading/trailing bare block so the helper section becomes standard top-level JavaScript *only after* the new scoping approach is proven safe.
