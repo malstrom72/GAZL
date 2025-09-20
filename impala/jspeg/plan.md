@@ -33,14 +33,15 @@
 
 ### Milestone 2 — Make Helpers Valid ES3 Without Losing Local Scope
 - [x] Lock in the replacement pattern—real locals declared with `var name = …;` immediately mirrored via `$$parser.name = name;`—and document why JSPEG still strips the sigil while keeping the locals scoped.
-- [ ] Prototype the change in a scratch branch or gist, confirming that `var $$parser.foo` still compiles into local declarations in `impalaCompiler.js` and nothing leaks globally.
-- [ ] Update the helper section to use the new pattern one group at a time (constants, lookup tables, functions) with explicit notes on why each export remains local.
-- [ ] Prefer dot notation for export writes and reserve bracket notation for keys that are not valid identifiers.
-- [ ] Re-run `node impala/jspeg/updateJSPEG.js --check`, `node impala/jspeg/jspegCompilerTests.js`, and `timeout 180 ./build.sh` to finish the milestone.
+- [x] Prototype the change in a scratch branch or gist, confirming that `var $$parser.foo` still compiles into local declarations in `impalaCompiler.js` and nothing leaks globally.
+- [x] Update the helper section to use the new pattern one group at a time (constants, lookup tables, functions) with explicit notes on why each export remains local.
+- [x] Prefer dot notation for export writes and reserve bracket notation for keys that are not valid identifiers.
+- [x] Re-run `node impala/jspeg/updateJSPEG.js --check`, `node impala/jspeg/jspegCompilerTests.js`, and `timeout 180 ./build.sh` to finish the milestone.
 
 > **Milestone 2 notes**
 > - The JSPEG compiler continues to apply `$b.replace(/\x24\x24parser\./g, '')`, so the `var name; $$parser.name = name;` alias pattern still compiles down to ordinary locals in `impalaCompiler.js` while leaving the `var $$parser = {};` declaration intact for future container-based packaging.
 > - Helper groups will keep this local-first rule; any export that must stay container-scoped will be documented alongside the alias so we can audit scope expectations during later refactors.
+> - Regenerating `impalaCompiler.js` after the change confirmed that the emitted helpers remain plain locals with identical bodies, proving the alias pattern survives the prefix-stripping pass unchanged.
 
 ### Milestone 3 — Replace Lookup Tables and Clarify Shared State
 - [ ] Rewrite every `map()`-built lookup table (`META_TO_GAZL`, `SUPPORTED_OPS`, `CASTS_TO_TYPES`, `ZEROES`, `TYPE_SUFFIXES`, `VERBOSE_TYPES`, handler arrays) as explicit object or array literals without trailing commas.
