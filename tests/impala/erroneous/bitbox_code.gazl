@@ -1,0 +1,238 @@
+; Compiled with Impala version 1.0
+
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
+FALSE:	! DEFi #0
+TRUE:	! DEFi #1
+panelTextRows:	CNST *8
+	DATA &.s_A4d2 &.s_BBASSD4d3 &.s_C4d4 &.s_D4d5 &.s_A4d2
+	DATA &.s_BHIHAT4d6 &.s_CSNARE4d7 &.s_D4d5
+	GLOB *1
+clock:	DATi #0
+params:	GLOB *PARAM_COUNT
+displayLEDs:	GLOB *4
+	CNST *1
+clockFreqLimit:	DATi #132300
+signal:	GLOB *2
+	CNST *1
+	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
+	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
+	! IORi <A> <A> <B>
+	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
+	! IORi <A> <A> <B>
+	! SHLi <B> #1 #OPERATOR_2_PARAM_INDEX
+	! IORi <A> <A> <B>
+	! SHLi <B> #1 #OPERAND_2_HIGH_PARAM_INDEX
+	! IORi <A> <A> <B>
+	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
+	! IORi <A> <A> <B>
+updateMask:	DATi <A>
+SOUNDS_COUNT:	! DEFi #4
+DRUM_COUNT:	! DEFi #3
+DRUM_PARAM_COUNT:	! DEFi #8
+	! MULi <A> #DRUM_COUNT #SOUNDS_COUNT
+	! MULi <A> <A> #DRUM_PARAM_COUNT
+DRUM_PARAMS:	CNST *<A>
+	DATA #435 #94 #75535 #0 #0 #0 #0 #1523 #773 #136 #52429 #0
+	DATA #0 #0 #0 #523 #556 #58 #65535 #0 #0 #0 #0 #780 #267
+	DATA #10 #35643 #0 #0 #0 #0 #500 #0 #0 #0 #32790 #5233
+	DATA #33422 #27716 #7372 #0 #0 #0 #53569 #17694 #34085
+	DATA #27404 #5160 #0 #0 #0 #23423 #39970 #1 #28783 #3121
+	DATA #0 #0 #0 #22772 #42265 #1110 #25783 #1963 #1300 #252
+	DATA #39324 #8350 #45219 #9832 #35234 #2050 #984 #76
+	DATA #28459 #0 #459 #23332 #34147 #2513 #897 #99 #57673
+	DATA #23423 #24248 #14417 #57671 #6000 #802 #80 #53255
+	DATA #29321 #42598 #1311 #58496 #3522
+stepSounds:	GLOB *16
+
+;-----------------------------------------------------------------------------
+update:	FUNC
+		PARA *1
+	$operand1Bits:	LOCi
+	$operand2Bits:	LOCi
+	$drumSounds:	LOCA *DRUM_COUNT
+	$step:	LOCi
+	$n:	LOCi
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %0 &params:OPERAND_1_HIGH_PARAM_INDEX 	; operand1Bits = ((int) global params[OPERAND_1_HIGH_PARAM_INDEX] << 8) | (int) global params[OPERAND_1_LOW_PARAM_INDEX]
+		SHLi %0 %0 #8
+		PEEK %1 &params:OPERAND_1_LOW_PARAM_INDEX 
+		IORi $operand1Bits %0 %1
+		PEEK %0 &params:OPERAND_2_HIGH_PARAM_INDEX 	; operand2Bits = ((int) global params[OPERAND_2_HIGH_PARAM_INDEX] << 8) | (int) global params[OPERAND_2_LOW_PARAM_INDEX]
+		SHLi %0 %0 #8
+		PEEK %1 &params:OPERAND_2_LOW_PARAM_INDEX 
+		IORi $operand2Bits %0 %1
+		PEEK $drumSounds:0 &params:OPERATOR_1_PARAM_INDEX 	; drumSounds[0] = (int) global params[OPERATOR_1_PARAM_INDEX]
+		PEEK $drumSounds:1 &params:OPERATOR_2_PARAM_INDEX 	; drumSounds[1] = (int) global params[OPERATOR_2_PARAM_INDEX]
+		PEEK $drumSounds:2 &params:OPERATOR_2_PARAM_INDEX 	; drumSounds[2] = (int) global params[OPERATOR_2_PARAM_INDEX]
+		MOVi $step #0 	; for (step = 0 to 16) 
+		GEQi #0 #16 @.e0
+	.l1:	SHRi %0 $operand1Bits $step	; n = (((operand1Bits >> step) & 0x1) | (((operand2Bits >> step) & 0x1) << 1)) - 1
+		SHRi %1 $operand2Bits $step
+		ANDi %1 %1 #0x1
+		ANDi %0 %0 #0x1
+		SHLi %1 %1 #1
+		IORi %0 %0 %1
+		SUBi $n %0 #1
+		MOVi $i #-1 	; i = -1
+		LSSi $n #0 @.f3	; if (n >= 0 && (int) drumSounds[n] > 0) i = (n * SOUNDS_COUNT + ((int) drumSounds[n] - 1)) * DRUM_PARAM_COUNT
+		GETL %0 $drumSounds $n
+		LEQi %0 #0 @.f3
+		GETL %0 $drumSounds $n	; i = (n * SOUNDS_COUNT + ((int) drumSounds[n] - 1)) * DRUM_PARAM_COUNT
+		MULi %1 $n #SOUNDS_COUNT
+		SUBi %0 %0 #1
+		ADDi %1 %1 %0
+		MULi $i %1 #DRUM_PARAM_COUNT
+	.f3:	SUBi %1 #15 $step	; global stepSounds[15 - step] = i
+		POKE &stepSounds %1 $i
+		FORi $step #16 @.l1	; }
+	.e0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+process:	FUNC
+		PARA *1
+	$rnd:	LOCi
+	$rndXor:	LOCi
+	$rndAdd:	LOCi
+	$rndGain:	LOCi
+	$oscPhase:	LOCi
+	$oscRate:	LOCi
+	$oscDrop:	LOCi
+	$oscGain:	LOCi
+	$osc:	LOCi
+	$fadeRate:	LOCi
+	$y:	LOCi
+	$i:	LOCi
+	$lastStep:	LOCi
+	$step:	LOCi
+	$pump:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $oscGain #0 	; oscPhase = oscRate = oscDrop = oscGain = 0
+		MOVi $oscDrop #0 
+		MOVi $oscRate #0 
+		MOVi $oscPhase #0 
+		MOVi $rndGain #0 	; rnd = rndXor = rndAdd = rndGain = 0
+		MOVi $rndAdd #0 
+		MOVi $rndXor #0 
+		MOVi $rnd #0 
+		MOVi $fadeRate #0 	; fadeRate = 0
+		MOVi $lastStep #-1 	; lastStep = -1
+		MOVi $pump #0x1000 	; pump = 0x1000
+	.l0:	PEEK %1 &clock 	; step = global clock >> 12
+		SHRi $step %1 #12
+		EQUi $lastStep $step @.f1	; if (lastStep != step) 
+		MOVi $lastStep $step 	; lastStep = step
+		SHRi %1 #0x80 $step	; global displayLEDs[0] = global displayLEDs[2] = 0x80 >> step
+		POKE &displayLEDs:2 %1 
+		POKE &displayLEDs:0 %1 
+		SHRi %1 #0x8000 $step	; global displayLEDs[1] = global displayLEDs[3] = 0x8000 >> step
+		POKE &displayLEDs:3 %1 
+		POKE &displayLEDs:1 %1 
+		PEEK $i &stepSounds $step	; i = (int) global stepSounds[step]
+		LSSi $i #0 @.f1	; if (i >= 0) 
+		ADDi %1 $i #0	; oscRate = (int)global DRUM_PARAMS[i + 0]
+		PEEK $oscRate &DRUM_PARAMS %1
+		ADDi %1 $i #1	; oscDrop = (int)global DRUM_PARAMS[i + 1]
+		PEEK $oscDrop &DRUM_PARAMS %1
+		ADDi %1 $i #2	; oscGain = (int)global DRUM_PARAMS[i + 2]
+		PEEK $oscGain &DRUM_PARAMS %1
+		ADDi %1 $i #3	; rnd = (int)global DRUM_PARAMS[i + 3]
+		PEEK $rnd &DRUM_PARAMS %1
+		ADDi %1 $i #4	; rndXor = (int)global DRUM_PARAMS[i + 4]
+		PEEK $rndXor &DRUM_PARAMS %1
+		ADDi %1 $i #5	; rndAdd = (int)global DRUM_PARAMS[i + 5]
+		PEEK $rndAdd &DRUM_PARAMS %1
+		ADDi %1 $i #6	; rndGain = (int)global DRUM_PARAMS[i + 6]
+		PEEK $rndGain &DRUM_PARAMS %1
+		ADDi %1 $i #7	; fadeRate = (int)global DRUM_PARAMS[i + 7]
+		PEEK $fadeRate &DRUM_PARAMS %1
+		MOVi $oscPhase #0x2000 	; oscPhase = 0x2000
+		MOVi $pump #0 	; pump = 0
+	.f1:	SUBi $rndGain $rndGain $fadeRate	; rndGain = rndGain - fadeRate
+		GEQi $rndGain #0 @.f3	; if (rndGain < 0) rndGain = 0
+		MOVi $rndGain #0 	; rndGain = 0
+	.f3:	SUBi $oscRate $oscRate $oscDrop	; oscRate = oscRate - oscDrop
+		GEQi $oscRate #0 @.f4	; if (oscRate < 0) oscRate = 0
+		MOVi $oscRate #0 	; oscRate = 0
+	.f4:	SUBi $oscGain $oscGain $fadeRate	; oscGain = oscGain - fadeRate
+		GEQi $oscGain #0 @.f5	; if (oscGain < 0) oscGain = 0
+		MOVi $oscGain #0 	; oscGain = 0
+	.f5:	MOVi $i #0 	; for (i = 0 to 256) 
+		GEQi #0 #256 @.l0
+	.l7:	SHLi %1 $rnd #1	; rnd = ((((rnd << 1) | (rnd >> 15)) ^ rndXor) + rndAdd) & 0xFFFF
+		SHRi %0 $rnd #15
+		IORi %1 %1 %0
+		XORi %1 %1 $rndXor
+		ADDi %1 %1 $rndAdd
+		ANDi $rnd %1 #0xFFFF
+		ADDi %1 $oscPhase $oscRate	; oscPhase = (oscPhase + oscRate) & 0xFFFF
+		ANDi $oscPhase %1 #0xFFFF
+		LEQi $oscPhase #0x8000 @.f8	; if (oscPhase > 0x8000) osc = 0xC000 - oscPhase
+		SUBi $osc #0xC000 $oscPhase	; osc = 0xC000 - oscPhase
+		GOTO @.e9  
+	.f8:	SUBi $osc $oscPhase #0x4000	; osc = oscPhase - 0x4000
+	.e9:	SHRi %1 $osc #4	; y = ((((osc >> 4) * oscGain) >> 16) + ((((rnd - 0x8000) >> 7) * rndGain) >> 16)) * 2
+		MULi %1 %1 $oscGain
+		SUBi %0 $rnd #0x8000
+		SHRi %0 %0 #7
+		MULi %0 %0 $rndGain
+		SHRi %1 %1 #16
+		SHRi %0 %0 #16
+		ADDi %1 %1 %0
+		MULi $y %1 #2
+		PEEK %1 &signal:0 	; global signal[0] = (((int) global signal[0] * pump) >> 12) + y
+		MULi %1 %1 $pump
+		SHRi %1 %1 #12
+		ADDi %1 %1 $y
+		POKE &signal:0 %1 
+		PEEK %1 &signal:1 	; global signal[1] = (((int) global signal[1] * pump) >> 12) + y
+		MULi %1 %1 $pump
+		SHRi %1 %1 #12
+		ADDi %1 %1 $y
+		POKE &signal:1 %1 
+		PEEK %1 &clock 	; write(global clock, 1, global signal)
+		MOVi %2 #1 
+		MOVp %3 &signal 
+		CALL ^write %0 *4
+		CALL ^yield %0 *1	; yield()
+		PEEK %0 &signal:0 	; global signal[0] = (((int) global signal[0] * pump) >> 12) + y
+		MULi %0 %0 $pump
+		SHRi %0 %0 #12
+		ADDi %0 %0 $y
+		POKE &signal:0 %0 
+		PEEK %0 &signal:1 	; global signal[1] = (((int) global signal[1] * pump) >> 12) + y
+		MULi %0 %0 $pump
+		SHRi %0 %0 #12
+		ADDi %0 %0 $y
+		POKE &signal:1 %0 
+		PEEK %1 &clock 	; write(global clock, 1, global signal)
+		MOVi %2 #1 
+		MOVp %3 &signal 
+		CALL ^write %0 *4
+		CALL ^yield %0 *1	; yield()
+		ADDi $pump $pump #0x2	; pump = pump + 0x2
+		LEQi $pump #0x1000 @.f10	; if (pump > 0x1000) pump = 0x1000
+		MOVi $pump #0x1000 	; pump = 0x1000
+	.f10:	FORi $i #256 @.l7	; }
+		GOTO @.l0  	; }
+		RETU   	; }
+
+.s_A4d2:	CNST *2
+	DATs A
+	DATi #0
+.s_BBASSD4d3:	CNST *17
+	DATs B      BASS DRUM
+	DATi #0
+.s_C4d4:	CNST *2
+	DATs C
+	DATi #0
+.s_D4d5:	CNST *2
+	DATs D
+	DATi #0
+.s_BHIHAT4d6:	CNST *47
+	DATs B      HI-HAT                      + BASS DRUM
+	DATi #0
+.s_CSNARE4d7:	CNST *48
+	DATs C                                  = SNARE DRUM
+	DATi #0

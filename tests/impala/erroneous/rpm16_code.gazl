@@ -1,0 +1,124 @@
+; Compiled with Impala version 1.0
+
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
+FALSE:	! DEFi #0
+TRUE:	! DEFi #1
+panelTextRows:	CNST *8
+	DATA &.s_4d2 &.s_4d2 &.s_4d2 &.s_LEFTDE4d3 &.s_4d2 &.s_4d2
+	DATA &.s_4d2 &.s_RINGMO4d4
+	GLOB *1
+clock:	DATi #0
+params:	GLOB *PARAM_COUNT
+displayLEDs:	GLOB *4
+	GLOB *1
+instance:	DATi #0
+	CNST *1
+clockFreqLimit:	DATi #132300
+signal:	GLOB *2
+	CNST *1
+	! SHLi <A> #1 #OPERAND_1_HIGH_PARAM_INDEX
+	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
+	! IORi <A> <A> <B>
+	! SHLi <B> #1 #OPERAND_2_HIGH_PARAM_INDEX
+	! IORi <A> <A> <B>
+	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
+	! IORi <A> <A> <B>
+	! SHLi <B> #1 #SWITCHES_PARAM_INDEX
+	! IORi <A> <A> <B>
+updateMask:	DATi <A>
+
+;-----------------------------------------------------------------------------
+init:	FUNC
+		PARA *1
+;-----------------------------------------------------------------------------
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+reset:	FUNC
+		PARA *1
+;-----------------------------------------------------------------------------
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+update:	FUNC
+		PARA *1
+;-----------------------------------------------------------------------------
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+process:	FUNC
+		PARA *1
+	$tmp:	LOCi
+	$clock:	LOCi
+	$samps:	LOCA *4
+	$diff:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $clock #0 	; clock = 0
+	.l0:	PEEK $tmp &clock 	; if ((tmp = global clock) != clock & 0xFFFF) 
+		ANDi %0 $clock #0xFFFF
+		EQUi $tmp %0 @.f1
+		MOVi $clock $tmp 	; clock = tmp
+	.f1:	DIVi %0 $clock #2	; diff = ((((clock / 2) & 0xFFFF) - (clock & 0xFFFF)) - 2) & 0xFFFF
+		ANDi %0 %0 #0xFFFF
+		ANDi %1 $clock #0xFFFF
+		SUBi %0 %0 %1
+		SUBi %0 %0 #2
+		ANDi $diff %0 #0xFFFF
+		MOVi %1 $clock 	; read(clock, 1, samps)
+		MOVi %2 #1 
+		ADRL %3 $samps *0
+		CALL ^read %0 *4
+		SUBi $diff $diff #0x8000	; diff = diff - 0x8000
+		GEQi $diff #0 @.f2	; if (diff < 0) 
+		MOVi $diff #0 	; diff = 0
+	.f2:	PEEK %0 &signal:0 	; samps[0] = (int) global signal[0] + (((int) samps[0] - (int) global signal[0]) * diff >> 15)
+		SUBi %0 $samps:0 %0
+		MULi %0 %0 $diff
+		PEEK %1 &signal:0 
+		SHRi %0 %0 #15
+		ADDi $samps:0 %1 %0
+		PEEK %1 &signal:1 	; samps[1] = (int) global signal[1] + (((int) samps[1] - (int) global signal[1]) * diff >> 15)
+		SUBi %1 $samps:1 %1
+		MULi %1 %1 $diff
+		PEEK %0 &signal:1 
+		SHRi %1 %1 #15
+		ADDi $samps:1 %0 %1
+		MOVi %1 $clock 	; write(clock, 1, samps)
+		MOVi %2 #1 
+		ADRL %3 $samps *0
+		CALL ^write %0 *4
+		ANDi %0 $clock #1	; if ((clock & 1) == 0) 
+		NEQi %0 #0 @.f3
+		DIVi %1 $clock #2	; read(clock / 2, 1, global signal)
+		MOVi %2 #1 
+		MOVp %3 &signal 
+		CALL ^read %0 *4
+		GOTO @.e4  	; } else 
+	.f3:	DIVi %1 $clock #2	; read(clock / 2, 2, samps)
+		MOVi %2 #2 
+		ADRL %3 $samps *0
+		CALL ^read %0 *4
+		ADDi %0 $samps:0 $samps:2	; global signal[0] = ((int) samps[0] + (int) samps[2]) >> 1
+		SHRi %0 %0 #1
+		POKE &signal:0 %0 
+		ADDi %0 $samps:1 $samps:3	; global signal[1] = ((int) samps[1] + (int) samps[3]) >> 1
+		SHRi %0 %0 #1
+		POKE &signal:1 %0 
+	.e4:	CALL ^yield %0 *1	; yield()
+		ADDi $clock $clock #1	; clock = clock + 1
+		GOTO @.l0  	; }
+		RETU   	; }
+
+.s_4d2:	CNST *2
+	DATi #32 #0
+.s_LEFTDE4d3:	CNST *54
+	DATi #32 #32 #32 #32
+	DATs |----- LEFT DELAY -----| |----- RIGHT DELAY ----|
+	DATi #0
+.s_RINGMO4d4:	CNST *54
+	DATi #32 #32 #32 #32
+	DATs |--- RING MOD RATE ----| |---- STEREO PHASE ----|
+	DATi #0

@@ -1,0 +1,83 @@
+; Compiled with Impala version 1.0
+
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
+FALSE:	! DEFi #0
+TRUE:	! DEFi #1
+panelTextRows:	CNST *8
+	DATA &.s_4d2 &.s_4d2 &.s_4d2 &.s_4d2 &.s_BMSKHI4d3
+	DATA &.s_BMSKHI4d3:53 &.s_BMSKHI4d3:53 &.s_BMSKHI4d3:53
+	GLOB *1
+clock:	DATi #0
+positions:	GLOB *2
+params:	GLOB *PARAM_COUNT
+displayLEDs:	GLOB *4
+	GLOB *1
+instance:	DATi #0
+	CNST *1
+	! SHLi <A> #1 #OPERATOR_2_PARAM_INDEX
+	! SHLi <B> #1 #OPERAND_2_HIGH_PARAM_INDEX
+	! IORi <A> <A> <B>
+	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
+	! IORi <A> <A> <B>
+updateMask:	DATi <A>
+	GLOB *1
+mask:	DATi #0
+
+;-----------------------------------------------------------------------------
+update:	FUNC
+		PARA *1
+	$x:	LOCi
+	$y:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %0 &params:OPERATOR_2_PARAM_INDEX 	; switch ((int) global params[OPERATOR_2_PARAM_INDEX] == 0 to OPERATOR_2_COUNT) 
+		SWCH %0 *OPERATOR_2_COUNT @.s0
+	.s0#OPERATOR_2_OR:	PEEK %0 &params:OPERAND_2_HIGH_PARAM_INDEX 	; x = ((int) global params[OPERAND_2_HIGH_PARAM_INDEX] << 8) | (int) global params[OPERAND_2_LOW_PARAM_INDEX]
+		SHLi %0 %0 #8
+		PEEK %1 &params:OPERAND_2_LOW_PARAM_INDEX 
+		IORi $x %0 %1
+		SHLi $x $x #POSITION_FRACT_BITS	; x = x << POSITION_FRACT_BITS
+		ANDi %0 $x #0x10	; if ((x & 0x10) != 0) x = x | 0xF
+		EQUi %0 #0 @.f2
+		IORi $x $x #0xF	; x = x | 0xF
+	.f2:	POKE &mask $x 	; global mask = x
+	.s0:	NOOP
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+operate2:	FUNC
+	$r:	OUTi
+	$l:	LOCi
+	$x:	LOCi
+	$y:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %0 &params:OPERATOR_2_PARAM_INDEX 	; switch ((int) global params[OPERATOR_2_PARAM_INDEX] == 0 to OPERATOR_2_COUNT) 
+		SWCH %0 *OPERATOR_2_COUNT @.s0
+	.s0:	MOVi $r #0 	; r = 0
+		GOTO @.e1  
+	.s0#OPERATOR_2_OR:	PEEK $x &mask 	; x = global mask
+		PEEK %0 &clock 	; y = ((int) global clock << POSITION_FRACT_BITS) & ~x
+		SHLi %0 %0 #POSITION_FRACT_BITS
+		XORi %1 $x #-1
+		ANDi $y %0 %1
+		PEEK %0 &positions:0 	; l = ((int) global positions[0] & x) | y
+		ANDi %0 %0 $x
+		IORi $l %0 $y
+		PEEK %0 &positions:1 	; r = ((int) global positions[1] & x) | y
+		ANDi %0 %0 $x
+		IORi $r %0 $y
+		POKE &positions:0 $l 	; global positions[0] = l
+		POKE &positions:1 $r 	; global positions[1] = r
+		IORi %0 $l $r	; l = (l | r) >> POSITION_FRACT_BITS
+		SHRi $l %0 #POSITION_FRACT_BITS
+		SHRi %0 $l #8	; global displayLEDs[2] = l >> 8
+		POKE &displayLEDs:2 %0 
+		POKE &displayLEDs:3 $l 	; global displayLEDs[3] = l
+		MOVi $r #1 	; r = 1
+	.e1:	RETU   	; }
+
+.s_4d2:	CNST *1
+	DATi #0
+.s_BMSKHI4d3:	CNST *54
+	DATs BMSK|----- HIGH BITS ------| |------ LOW BITS ------|
+	DATi #0

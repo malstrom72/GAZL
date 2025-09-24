@@ -103,9 +103,8 @@ global array taps[TAPS_COUNT]
 
 /* ------ Firmware functions ------ */
 
-function displayBarValue()
+function displayBarValue(int x)
 returns int y
-locals int x
 {
 	y = ~(0x7F >> (x >> (8 - 3)));
 }

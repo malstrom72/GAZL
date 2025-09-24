@@ -1,9 +1,17 @@
 ; Compiled with Impala version 1.0
 
+; signatures version=1
+; signature extern native print() -> unknown @ 1:20
+; signature extern native printInt() -> unknown @ 2:23
+; signature extern native printLF() -> unknown @ 3:22
+; signature extern native abort() -> unknown @ 4:20
+; signature extern native input() -> unknown @ 5:20
+; signature extern native inputEOF() -> unknown @ 6:23
+; signature extern native launch() -> unknown @ 7:21
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC
 	$d:	OUTi
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 9:17
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -26,30 +34,30 @@ strcmp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
 		PARA *1
+main:	FUNC	; signature func main() -> void @ 22:15
 	$inp:	LOCA *256
 ;-----------------------------------------------------------------------------
 	mainLoop:	MOVp %1 &.s_4d2 	; mainLoop:
-		CALL ^print %0 *2
+		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 27:14
 		MOVi %1 #255 	; input(255, inp)
 		ADRL %2 $inp *0
-		CALL ^input %0 *3
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 28:18
 		ADRL %1 $inp *0	; if ((int)strcmp(inp, "logon") == 0) 
 		MOVp %2 &.s_logon4d3 
-		CALL &strcmp %0 *3
+		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 30:33
 		NEQi %0 #0 @mainLoop
 	.l1:	MOVp %1 &.s_Enteru4d4 	; print("Enter username: ")
-		CALL ^print %0 *2
+		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 32:30
 		MOVi %1 #255 	; input(255, inp)
 		ADRL %2 $inp *0
-		CALL ^input %0 *3
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 33:20
 		ADRL %1 $inp *0	; } while ((int)strcmp(inp, "username") != 0)
 		MOVp %2 &.s_userna4d5 
-		CALL &strcmp %0 *3
+		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 34:42
 		NEQi %0 #0 @.l1
 		MOVp %1 &.s_advent4d6 	; launch("advent")
-		CALL ^launch %0 *2
+		CALL ^launch %0 *2	; expects function(ptr) -> unknown @ 35:20
 		GOTO @mainLoop  	; goto mainLoop
 		RETU   	; }
 

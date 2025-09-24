@@ -31,4 +31,12 @@ if [ $changed -eq 0 ]; then
     exit 1
 fi
 
+gazl_files=("$testdir"/*.pika.gazl)
+if [ ${#gazl_files[@]} -eq 0 ]; then
+    echo "No .pika.gazl outputs found in $testdir" >&2
+    exit 1
+fi
+
+node ./tools/gazl-validate.js "${gazl_files[@]}"
+
 exit 0

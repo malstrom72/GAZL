@@ -1,19 +1,25 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 10:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 13:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:33
 	DATA &.s_BITSCL4d2 &.s_SINSAM4d3 &.s_ROTSRA4d4
 	DATA &.s_DLYLEF4d5 &.s_SHARPS4d6 &.s_SHARPF4d7
 	DATA &.s_SMOOTH4d8 &.s_SMOOTH4d9
+; signature extern native abort() -> unknown @ 25:1
+; signature extern native trace() -> unknown @ 26:1
+; signature extern native yield() -> unknown @ 27:1
+; signature extern native write() -> unknown @ 28:1
+; signature extern native read() -> unknown @ 30:1
 	GLOB *1
-clock:	DATi #0
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int @ 49:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 50:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 51:1
 	CNST *1
-clockFreqLimit:	DATi #132300
-signal:	GLOB *2
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 52:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 53:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -26,8 +32,8 @@ signal:	GLOB *2
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>
-EIGHT_BIT_EXP_TABLE:	CNST *256
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 58:1
+EIGHT_BIT_EXP_TABLE:	CNST *256	; signature array EIGHT_BIT_EXP_TABLE[256] : unknown @ 58:41
 	DATA #0x0 #0x1 #0x2 #0x3 #0x4 #0x5 #0x6 #0x7 #0x8 #0x9
 	DATA #0xa #0xb #0xc #0xd #0xe #0xf #0x10 #0x11 #0x12 #0x13
 	DATA #0x14 #0x15 #0x16 #0x17 #0x18 #0x19 #0x1a #0x1b #0x1c
@@ -62,30 +68,30 @@ EIGHT_BIT_EXP_TABLE:	CNST *256
 	DATA #0x7c00 #0x8000 #0x8800 #0x9000 #0x9800 #0xa000
 	DATA #0xa800 #0xb000 #0xb800 #0xc000 #0xc800 #0xd000
 	DATA #0xd800 #0xe000 #0xe800 #0xf000 #0xffff
-LOG2:	! DEFf #0.69314718055994530942
-LOG2R:	! DEFf #1.44269504088896340736
-LOG10R:	! DEFf #0.43429448190325182765
-E:	! DEFf #2.71828182845904523536
-HALF_PI:	! DEFf #1.57079632679489661923
-PI:	! DEFf #3.14159265358979323846
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 80:1
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 81:1
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 82:1
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ 83:1
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 84:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 85:1
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>
-COS_EPSILON:	! DEFf #1.0e-6
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 86:1
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 88:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC
 		PARA *1
+error:	FUNC	; signature func error(ptr s) -> void @ 88:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2
-		CALL ^abort %0 *1	; abort()
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 90:10
+		CALL ^abort %0 *1	; expects function() -> unknown @ 91:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC
 	$y:	OUTf
+trunc:	FUNC	; signature func trunc(float x) -> float @ 94:16
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -98,25 +104,25 @@ trunc:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC
 	$z:	OUTf
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 101:15
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi4da 	; error("Division by zero")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 104:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
-		CALL &trunc %0 *2
+		CALL &trunc %0 *2	; expects trunc(float) -> float @ 105:35
 		MULf %0 %0 $y
 		SUBf $z $x %0
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC
 	$y:	OUTf
+cos:	FUNC	; signature func cos(float x) -> float @ 119:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -125,7 +131,7 @@ cos:	FUNC
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
 		MOVf %2 #TWICE_PI 
-		CALL &fmod %0 *3
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 123:31
 		MOVf $m %0 
 		SUBf %0 #0.0 $m	; m = -m * m
 		MULf $m %0 $m
@@ -147,74 +153,74 @@ cos:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-sin:	FUNC
 	$y:	OUTf
+sin:	FUNC	; signature func sin(float x) -> float @ 135:14
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 138:30
 		MOVf $y %0 
 		RETU   	; }
 
-CURVE_SIZE_BITS:	! DEFi #4
+CURVE_SIZE_BITS:	! DEFi #4	; signature const CURVE_SIZE_BITS : int @ 144:1
 	! SHLi <A> #1 #CURVE_SIZE_BITS
-CURVE_SIZE:	! DEFi <A>
+CURVE_SIZE:	! DEFi <A>	; signature const CURVE_SIZE : int @ 145:1
 	! ADDi <A> #CURVE_SIZE #1
-CURVE_SIZE_PLUS_1:	! DEFi <A>
+CURVE_SIZE_PLUS_1:	! DEFi <A>	; signature const CURVE_SIZE_PLUS_1 : int @ 146:1
 	! SUBi <A> #12 #CURVE_SIZE_BITS
-CURVE_SHIFT:	! DEFi <A>
+CURVE_SHIFT:	! DEFi <A>	; signature const CURVE_SHIFT : int @ 147:1
 	! XORi <A> #0 #-1
 	! SHLi <A> <A> #CURVE_SHIFT
 	! XORi <A> <A> #-1
-CURVE_FRACTION_MASK:	! DEFi <A>
+CURVE_FRACTION_MASK:	! DEFi <A>	; signature const CURVE_FRACTION_MASK : int @ 148:1
 	! SHLi <A> #1 #CURVE_SHIFT
-CURVE_STEP_SIZE:	! DEFi <A>
+CURVE_STEP_SIZE:	! DEFi <A>	; signature const CURVE_STEP_SIZE : int @ 149:1
 	! iTOf <A> #CURVE_STEP_SIZE #1.0
 	! DIVf <A> #1.0 <A>
-STEP_TO_FLOAT_SCALE:	! DEFf <A>
-NO_SHAPER:	! DEFi #0
-LINEAR_SHAPER:	! DEFi #1
-QUADRATIC_SHAPER:	! DEFi #2
-SHAPER_COUNT:	! DEFi #3
-BIT_CRUSH:	! DEFi #1
-SINE_SHAPE:	! DEFi #2
-SPIN:	! DEFi #3
-STEREO_DELAY:	! DEFi #4
-OPERATOR_SHAPERS:	CNST *5
+STEP_TO_FLOAT_SCALE:	! DEFf <A>	; signature const STEP_TO_FLOAT_SCALE : float @ 149:64
+NO_SHAPER:	! DEFi #0	; signature const NO_SHAPER : int @ 152:1
+LINEAR_SHAPER:	! DEFi #1	; signature const LINEAR_SHAPER : int @ 153:1
+QUADRATIC_SHAPER:	! DEFi #2	; signature const QUADRATIC_SHAPER : int @ 154:1
+SHAPER_COUNT:	! DEFi #3	; signature const SHAPER_COUNT : int @ 155:1
+BIT_CRUSH:	! DEFi #1	; signature const BIT_CRUSH : int @ 156:1
+SINE_SHAPE:	! DEFi #2	; signature const SINE_SHAPE : int @ 157:1
+SPIN:	! DEFi #3	; signature const SPIN : int @ 158:1
+STEREO_DELAY:	! DEFi #4	; signature const STEREO_DELAY : int @ 160:1
+OPERATOR_SHAPERS:	CNST *5	; signature array OPERATOR_SHAPERS[5] : unknown @ 160:36
 	DATA #NO_SHAPER #LINEAR_SHAPER #LINEAR_SHAPER
 	DATA #QUADRATIC_SHAPER #QUADRATIC_SHAPER
-sinTable:	GLOB *0x1000
-linCurveA:	GLOB *CURVE_SIZE
-linCurveB:	GLOB *CURVE_SIZE
-quadCurveA:	GLOB *CURVE_SIZE_PLUS_1
-quadCurveB:	GLOB *CURVE_SIZE_PLUS_1
-quadCurveC:	GLOB *CURVE_SIZE_PLUS_1
+sinTable:	GLOB *0x1000	; signature array sinTable[0x1000] : unknown @ 165:1
+linCurveA:	GLOB *CURVE_SIZE	; signature array linCurveA[CURVE_SIZE] : unknown @ 166:1
+linCurveB:	GLOB *CURVE_SIZE	; signature array linCurveB[CURVE_SIZE] : unknown @ 167:1
+quadCurveA:	GLOB *CURVE_SIZE_PLUS_1	; signature array quadCurveA[CURVE_SIZE_PLUS_1] : unknown @ 168:1
+quadCurveB:	GLOB *CURVE_SIZE_PLUS_1	; signature array quadCurveB[CURVE_SIZE_PLUS_1] : unknown @ 169:1
+quadCurveC:	GLOB *CURVE_SIZE_PLUS_1	; signature array quadCurveC[CURVE_SIZE_PLUS_1] : unknown @ 170:1
 	GLOB *1
-op1:	DATi #-1
+op1:	DATi #-1	; signature global op1 : int @ 171:1
 	GLOB *1
-shaper:	DATi #0
+shaper:	DATi #0	; signature global shaper : int @ 172:1
 	GLOB *1
-op1Stuff:	DATi #0
+op1Stuff:	DATi #0	; signature global op1Stuff : int @ 173:1
 	GLOB *1
-spinXOrR:	DATi #0
+spinXOrR:	DATi #0	; signature global spinXOrR : int @ 174:1
 	GLOB *1
-biasL:	DATi #0
+biasL:	DATi #0	; signature global biasL : int @ 175:1
 	GLOB *1
-biasR:	DATi #0
+biasR:	DATi #0	; signature global biasR : int @ 176:1
 	GLOB *1
-delayL:	DATi #0
+delayL:	DATi #0	; signature global delayL : int @ 177:1
 	GLOB *1
-delayR:	DATi #0
+delayR:	DATi #0	; signature global delayR : int @ 178:1
 	GLOB *1
-lastOp1Param:	DATi #-1
+lastOp1Param:	DATi #-1	; signature global lastOp1Param : int @ 179:1
 	GLOB *1
-lastOp2:	DATi #-1
+lastOp2:	DATi #-1	; signature global lastOp2 : int @ 180:1
 	GLOB *1
-lastShaperBits:	DATi #-1
+lastShaperBits:	DATi #-1	; signature global lastShaperBits : int @ 187:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC
 		PARA *1
+init:	FUNC	; signature func init() -> void @ 187:15
 	$i:	LOCi
 	$s:	LOCi
 ;-----------------------------------------------------------------------------
@@ -224,7 +230,7 @@ init:	FUNC
 		! MULf <A> #2.0 #PI	; s = ftoi(floor(0.5 + itof(0x800) * (float) sin(2.0 * PI / 4096.0 * itof(i))))
 		! DIVf <A> <A> #4096.0
 		iTOf %1 $i <A>
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 191:78
 		! iTOf <A> #0x800 #1.0
 		MULf %0 <A> %0
 		ADDf %0 #0.5 %0
@@ -242,8 +248,8 @@ init:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
 		PARA *1
+update:	FUNC	; signature func update() -> void @ 202:17
 	! ADDi <A> #CURVE_SIZE_PLUS_1 #3
 	$params:	LOCA *PARAM_COUNT
 	$quadPoints:	LOCA *<A>
@@ -412,8 +418,8 @@ update:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC
 		PARA *1
+process:	FUNC	; signature func process() -> void @ 296:18
 	$localSignal:	LOCA *2
 	$left:	LOCi
 	$right:	LOCi
@@ -507,11 +513,11 @@ process:	FUNC
 		MOVi %1 $localClock 	; write(localClock, 1, localSignal)
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
-		CALL ^write %0 *4
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 347:37
 		SUBi %1 $localClock $localDelayR	; read(localClock - localDelayR, 1, localSignal)
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 348:50
 		MOVi $left $localSignal:0 	; left = (int) localSignal[0]
 		MOVi $right $localSignal:1 	; right = (int) localSignal[1]
 		SWCH $localOp1 *5 @.s7	; switch (localOp1 == 0 to 5) 
@@ -552,7 +558,7 @@ process:	FUNC
 	.s7#STEREO_DELAY:	SUBi %1 $localClock $localDelayL	; read(localClock - localDelayL, 1, localSignal)
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 373:52
 		MOVi $left $localSignal:0 	; left = (int) localSignal[0]
 	.s7:	NOOP
 	.e8:	LEQi $left $peak @.f9	; if (left > peak) peak = left
@@ -615,7 +621,7 @@ process:	FUNC
 	.s13:	NOOP
 	.e14:	POKE &signal:0 $left 	; global signal[0] = left
 		POKE &signal:1 $right 	; global signal[1] = right
-		CALL ^yield %0 *1	; yield()
+		CALL ^yield %0 *1	; expects function() -> unknown @ 407:11
 		ADDi %0 $localClock $clockDir	; localClock = (localClock + clockDir) & 0xFFFF
 		ANDi $localClock %0 #0xFFFF
 		FORi $innerLoopIndex #64 @.l6	; }

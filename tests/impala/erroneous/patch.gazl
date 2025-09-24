@@ -1,0 +1,484 @@
+; Compiled with Impala version 1.0
+
+FALSE:	! DEFi #0
+TRUE:	! DEFi #1
+MAX_PATCHES:	! DEFi #64
+MAX_PATCH_NAME_LENGTH:	! DEFi #31
+FILE_MEMORY_SIZE:	! DEFi #8000
+lastPatch:	GLOB *256
+lastConfig:	GLOB *256
+	GLOB *1
+patchCount:	DATi #-1
+	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
+	! MULi <A> #MAX_PATCHES <A>
+patchNames:	GLOB *<A>
+	GLOB *1
+displayedPatchingInfo:	DATi #FALSE
+fileMemory:	GLOB *FILE_MEMORY_SIZE
+
+;-----------------------------------------------------------------------------
+strcpy:	FUNC
+	$r:	OUTp
+	$d:	INPp
+	$s:	INPp
+	$a:	LOCp
+	$b:	LOCp
+;-----------------------------------------------------------------------------
+		MOVp $a $d 	; r = a = d
+		MOVp $r $d 
+		MOVp $b $s 	; b = s
+	.l0:	PEEK %0 $b 	; while ((*a = (int)*b) != 0) 
+		POKE $a %0 
+		EQUi %0 #0 @.e1
+		ADDp $a $a #1	; a = a + 1
+		ADDp $b $b #1	; b = b + 1
+		GOTO @.l0  	; }
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+strcmp:	FUNC
+	$d:	OUTi
+	$s0:	INPp
+	$s1:	INPp
+	$a:	LOCp
+	$b:	LOCp
+	$c:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $a $s0 	; a = s0
+		MOVp $b $s1 	; b = s1
+	.l0:	PEEK $c $a 	; while ((d = (c = (int)*a) - (int)*b) == 0 && c != 0) 
+		PEEK %0 $b 
+		SUBi $d $c %0
+		NEQi $d #0 @.e2
+		EQUi $c #0 @.e2
+		ADDp $a $a #1	; a = a + 1
+		ADDp $b $b #1	; b = b + 1
+		GOTO @.l0  	; }
+	.e2:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+stricmp:	FUNC
+	$d:	OUTi
+	$s0:	INPp
+	$s1:	INPp
+	$a:	LOCp
+	$b:	LOCp
+	$ac:	LOCi
+	$bc:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $a $s0 	; a = s0
+		MOVp $b $s1 	; b = s1
+	.l0:	PEEK $ac $a 	; ac = (int)*a
+		PEEK $bc $b 	; bc = (int)*b
+		LSSi $ac #'A' @.f2	; if (ac >= 'A' && ac <= 'Z') ac = ac + ('a' - 'A')
+		GRTi $ac #'Z' @.f2
+		! SUBi <A> #'a' #'A'	; ac = ac + ('a' - 'A')
+		ADDi $ac $ac <A>
+	.f2:	LSSi $bc #'A' @.f4	; if (bc >= 'A' && bc <= 'Z') bc = bc + ('a' - 'A')
+		GRTi $bc #'Z' @.f4
+		! SUBi <A> #'a' #'A'	; bc = bc + ('a' - 'A')
+		ADDi $bc $bc <A>
+	.f4:	SUBi $d $ac $bc	; d = ac - bc
+		NEQi $d #0 @return	; if (d != 0 || ac == 0) goto return
+		NEQi $ac #0 @.f6
+		GOTO @return  	; goto return
+	.f6:	ADDp $a $a #1	; a = a + 1
+		ADDp $b $b #1	; b = b + 1
+		GOTO @.l0  	; }
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+upper:	FUNC
+		PARA *1
+	$s:	INPp
+	$p:	LOCp
+	$c:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $p $s 	; p = s
+	.l0:	PEEK $c $p 	; while ((c = (int)*p) != 0) 
+		EQUi $c #0 @.e1
+		LSSi $c #'a' @.f3	; if (c >= 'a' && c <= 'z') *p = c + ('A' - 'a')
+		GRTi $c #'z' @.f3
+		! SUBi <A> #'A' #'a'	; *p = c + ('A' - 'a')
+		ADDi %0 $c <A>
+		POKE $p %0 
+	.f3:	ADDp $p $p #1	; p = p + 1
+		GOTO @.l0  	; }
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+outputLF:	FUNC
+		PARA *1
+;-----------------------------------------------------------------------------
+		MOVp %1 &.s_4d2 	; output("\n")
+		CALL ^output %0 *2
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+outputLine:	FUNC
+		PARA *1
+	$s:	INPp
+;-----------------------------------------------------------------------------
+		MOVp %1 $s 	; output(s)
+		CALL ^output %0 *2
+		CALL &outputLF %0 *1	; outputLF()
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+help:	FUNC
+		PARA *1
+;-----------------------------------------------------------------------------
+		CALL &outputLF %0 *1	; outputLF()
+		MOVp %1 &.s_Typeli4d3 	; outputLine("Type \"list\" to list available firmware patches.")
+		CALL &outputLine %0 *2
+		MOVp %1 &.s_Enterp4d4 	; outputLine("Enter patch name to begin firmware patching.")
+		CALL &outputLine %0 *2
+		MOVp %1 &.s_Presse4d5 	; outputLine("Press enter only to retry last patching.")
+		CALL &outputLine %0 *2
+		MOVp %1 &.s_Typere4d6 	; outputLine("Type \"restore\" to restore factory firmware.")
+		CALL &outputLine %0 *2
+		MOVp %1 &.s_Typequ4d7 	; outputLine("Type \"quit\" to quit.")
+		CALL &outputLine %0 *2
+		CALL &outputLF %0 *1	; outputLF()
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+refreshPatchList:	FUNC
+		PARA *1
+	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
+	! ADDi <A> #8 #1
+	$p:	LOCp
+	$dummy:	LOCA *<A>
+	$index:	LOCi
+	$size:	LOCi
+	$modDate:	LOCA *<A>
+;-----------------------------------------------------------------------------
+		MOVi $index #-1 	; index = -1
+	.l0:	ADDi $index $index #1	; index = index + 1
+		GEQi $index #MAX_PATCHES @.f1	; if (index < MAX_PATCHES) p = &global patchNames[index * (MAX_PATCH_NAME_LENGTH + 1)]
+		! ADDi <A> #MAX_PATCH_NAME_LENGTH #1	; p = &global patchNames[index * (MAX_PATCH_NAME_LENGTH + 1)]
+		MULi %0 $index <A>
+		ADDp $p &patchNames %0
+		GOTO @.e2  
+	.f1:	ADRL $p $dummy *0	; p = dummy
+	.e2:	MOVi %1 $index 	; } while ((int)findFirmwarePatch(index, MAX_PATCH_NAME_LENGTH, p, &size, modDate) != FALSE)
+		MOVi %2 #MAX_PATCH_NAME_LENGTH 
+		MOVp %3 $p 
+		ADRL %4 $size *0
+		ADRL %5 $modDate *0
+		CALL ^findFirmwarePatch %0 *6
+		NEQi %0 #FALSE @.l0
+		LEQi $index #MAX_PATCHES @.f3	; if (index > MAX_PATCHES) index = MAX_PATCHES
+		MOVi $index #MAX_PATCHES 	; index = MAX_PATCHES
+	.f3:	POKE &patchCount $index 	; global patchCount = index
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+list:	FUNC
+		PARA *1
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		CALL &refreshPatchList %0 *1	; refreshPatchList()
+		MOVp %1 &.s_Availa4d8 	; output("Available firmwares: ")
+		CALL ^output %0 *2
+		MOVi $i #0 	; for (i = 0 to global patchCount) 
+		PEEK %0 &patchCount 
+		GEQi #0 %0 @.e0
+	.l1:	NOOP
+		! ADDi <A> #MAX_PATCH_NAME_LENGTH #1	; output(&global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)])
+		MULi %2 $i <A>
+		ADDp %2 &patchNames %2
+		CALL ^output %1 *2
+		MOVp %2 &.s_Availa4d8:20 	; output(" ")
+		CALL ^output %1 *2
+		FORi $i %0 @.l1	; }
+	.e0:	CALL &outputLF %0 *1	; outputLF()
+		CALL &outputLF %0 *1	; outputLF()
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+restore:	FUNC
+		PARA *1
+	$error:	LOCA *256
+;-----------------------------------------------------------------------------
+		MOVp %1 &.s_Restor4d9 	; outputLine("Restoring factory firmware. Do not power off...")
+		CALL &outputLine %0 *2
+		MOVp %1 &NULL 	; if ((int)patchFirmware(null, null, 255, error) != 0) 
+		MOVp %2 &NULL 
+		MOVi %3 #255 
+		ADRL %4 $error *0
+		CALL ^patchFirmware %0 *5
+		EQUi %0 #0 @.f0
+		MOVi %1 #500 	; sleep(500)
+		CALL ^sleep %0 *2
+		MOVp %1 &.s_Patchi4da 	; outputLine("Patching failed.")
+		CALL &outputLine %0 *2
+		ADRL %1 $error *0	; outputLine(error)
+		CALL &outputLine %0 *2
+		GOTO @.e1  	; } else 
+	.f0:	MOVi %1 #500 	; sleep(500)
+		CALL ^sleep %0 *2
+		MOVp %1 &.s_Restor4db 	; outputLine("Restore successful.")
+		CALL &outputLine %0 *2
+		MOVp %1 &.s_aboutd4dc 	; writeGUIVariable("about.displayedCRC", "0")
+		MOVp %2 &.s_04dd 
+		CALL ^writeGUIVariable %0 *3
+	.e1:	CALL &outputLF %0 *1	; outputLF()
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+patch:	FUNC
+		PARA *1
+	$name:	INPp
+	$config:	INPp
+	$buffer1:	LOCA *256
+	$buffer2:	LOCA *256
+	$i:	LOCi
+	$p:	LOCp
+;-----------------------------------------------------------------------------
+		PEEK %0 &patchCount 	; if (global patchCount < 0) refreshPatchList()
+		GEQi %0 #0 @.f0
+		CALL &refreshPatchList %0 *1	; refreshPatchList()
+	.f0:	MOVi $i #0 	; for (i = 0 to global patchCount) 
+		PEEK %0 &patchCount 
+		GEQi #0 %0 @.e1
+	.l2:	NOOP
+		! ADDi <A> #MAX_PATCH_NAME_LENGTH #1	; p = &global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)]
+		MULi %1 $i <A>
+		ADDp $p &patchNames %1
+		MOVp %2 $name 	; if ((int)stricmp(name, p) == 0) 
+		MOVp %3 $p 
+		CALL &stricmp %1 *3
+		NEQi %1 #0 @.f3
+		MOVp %2 &.s_Patchi4de 	; outputLine("Patching firmware. Do not power off...")
+		CALL &outputLine %1 *2
+		MOVp %2 $p 	; if ((int)patchFirmware(p, config, 255, buffer1) != 0) 
+		MOVp %3 $config 
+		MOVi %4 #255 
+		ADRL %5 $buffer1 *0
+		CALL ^patchFirmware %1 *5
+		EQUi %1 #0 @.f4
+		MOVi %2 #500 	; sleep(500)
+		CALL ^sleep %1 *2
+		MOVp %2 &.s_Patchi4df 	; output("Patching failed: ")
+		CALL ^output %1 *2
+		ADRL %2 $buffer1 *0	; outputLine(buffer1)
+		CALL &outputLine %1 *2
+		CALL &outputLF %1 *1	; outputLF()
+		GOTO @.e5  	; } else 
+	.f4:	MOVi %2 #500 	; sleep(500)
+		CALL ^sleep %1 *2
+		MOVp %2 &.s_Patchi4e0 	; outputLine("Patching successful.")
+		CALL &outputLine %1 *2
+		CALL &outputLF %1 *1	; outputLF()
+		MOVp %2 &.s_firmwa4e1 	; readGUIVariable("firmware.aboutCRC", 255, buffer1)
+		MOVi %3 #255 
+		ADRL %4 $buffer1 *0
+		CALL ^readGUIVariable %1 *4
+		MOVp %2 &.s_aboutd4dc 	; readGUIVariable("about.displayedCRC", 255, buffer2)
+		MOVi %3 #255 
+		ADRL %4 $buffer2 *0
+		CALL ^readGUIVariable %1 *4
+		ADRL %2 $buffer1 *0	; if ((int) strcmp(buffer1, buffer2) != 0) 
+		ADRL %3 $buffer2 *0
+		CALL &strcmp %1 *3
+		EQUi %1 #0 @.f6
+		MOVp %2 &.s_aboutd4dc 	; writeGUIVariable("about.displayedCRC", buffer1)
+		ADRL %3 $buffer1 *0
+		CALL ^writeGUIVariable %1 *3
+		MOVp %2 &.s_firmwa4e2 	; readGUIVariable("firmware.about", FILE_MEMORY_SIZE - 1, global fileMemory)
+		SUBi %3 #FILE_MEMORY_SIZE #1
+		MOVp %4 &fileMemory 
+		CALL ^readGUIVariable %1 *4
+		PEEK %1 &fileMemory:0 	; if ((int) global fileMemory[0] != 0) 
+		EQUi %1 #0 @.f6
+		MOVp %2 &fileMemory 	; output(global fileMemory)
+		CALL ^output %1 *2
+		CALL &outputLF %1 *1	; outputLF()
+	.f6:	PEEK %1 &displayedPatchingInfo 	; if (global displayedPatchingInfo == FALSE) 
+		NEQi %1 #FALSE @.f8
+		POKE &displayedPatchingInfo #TRUE 	; global displayedPatchingInfo = TRUE
+		MOVp %2 &.s_Ifyous4e3 	; outputLine("If you save the Permut8 Program Bank this firmware code will be included.")
+		CALL &outputLine %1 *2
+		MOVp %2 &.s_Ifyoum4e4 	; outputLine("If you modify the .gazl file, the firmware will auto-update until GUI is closed.")
+		CALL &outputLine %1 *2
+	.f8:	NOOP
+	.e5:	MOVp %2 &lastPatch 	; strcpy(global lastPatch, p)
+		MOVp %3 $p 
+		CALL &strcpy %1 *3
+		MOVp %2 &lastConfig 	; strcpy(global lastConfig, config)
+		MOVp %3 $config 
+		CALL &strcpy %1 *3
+		GOTO @found  	; goto found
+	.f3:	FORi $i %0 @.l2	; }
+	.e1:	MOVp %1 &.s_Firmwa4e5 	; outputLine("Firmware not found.")
+		CALL &outputLine %0 *2
+		CALL &list %0 *1	; list()
+	found:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+repatch:	FUNC
+		PARA *1
+;-----------------------------------------------------------------------------
+		PEEK %0 &lastPatch:0 	; if ((int)global lastPatch[0] == 0) help()
+		NEQi %0 #0 @.f0
+		CALL &help %0 *1	; help()
+		GOTO @.e1  
+	.f0:	MOVp %1 &lastPatch 	; patch(global lastPatch, global lastConfig)
+		MOVp %2 &lastConfig 
+		CALL &patch %0 *3
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC
+		PARA *1
+	$s:	LOCA *256
+	$p:	LOCp
+	$c:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp %1 &.s_Permut4e6 	; output("\nPermut8 firmware patch utility v1.0.\n\n")
+		CALL ^output %0 *2
+	.l0:	MOVp %1 &.s_patch4e7 	; output("patch> ")
+		CALL ^output %0 *2
+		MOVi %1 #255 	; input(255, s)
+		ADRL %2 $s *0
+		CALL ^input %0 *3
+		ADRL %1 $s *0	; if ((int)stricmp(s, "QUIT") == 0) goto quit
+		MOVp %2 &.s_QUIT4e8 
+		CALL &stricmp %0 *3
+		NEQi %0 #0 @.f1
+		GOTO @quit  	; goto quit
+		GOTO @.l0  
+	.f1:	ADRL %1 $s *0	; if ((int)stricmp(s, "LIST") == 0) list()
+		MOVp %2 &.s_LIST4e9 
+		CALL &stricmp %0 *3
+		NEQi %0 #0 @.f3
+		CALL &list %0 *1	; list()
+		GOTO @.l0  
+	.f3:	ADRL %1 $s *0	; if ((int)stricmp(s, "RESTORE") == 0) restore()
+		MOVp %2 &.s_RESTOR4ea 
+		CALL &stricmp %0 *3
+		NEQi %0 #0 @.f5
+		CALL &restore %0 *1	; restore()
+		GOTO @.l0  
+	.f5:	NEQi $s:0 #0 @.f7	; if ((int)s[0] == 0) repatch()
+		CALL &repatch %0 *1	; repatch()
+		GOTO @.l0  
+	.f7:	ADRL %1 $s *0	; if ((int)stricmp(s, "HELP") == 0) help()
+		MOVp %2 &.s_HELP4eb 
+		CALL &stricmp %0 *3
+		NEQi %0 #0 @.f9
+		CALL &help %0 *1	; help()
+		GOTO @.l0  
+	.f9:	ADRL $p $s *0	; p = s
+	.l11:	PEEK $c $p 	; while ((c = (int)*p) != 0 && c != ' ') p = p + 1
+		EQUi $c #0 @.e13
+		EQUi $c #' ' @.e13
+		ADDp $p $p #1	; p = p + 1
+		GOTO @.l11  
+	.e13:	NOOP
+	.l14:	PEEK %0 $p 	; while ((int)*p == ' ') 
+		NEQi %0 #' ' @.e15
+		POKE $p #0 	; *p = 0
+		ADDp $p $p #1	; p = p + 1
+		GOTO @.l14  	; }
+	.e15:	ADRL %1 $s *0	; patch(s, p)
+		MOVp %2 $p 
+		CALL &patch %0 *3
+	.e10:	NOOP
+	.e8:	NOOP
+	.e6:	NOOP
+	.e4:	NOOP
+	.e2:	GOTO @.l0  	; }
+	quit:	RETU   	; }
+
+.s_4d2:	CNST *2
+	DATi #10 #0
+.s_Typeli4d3:	CNST *48
+	DATs Type "list" to list available firmware patches.
+	DATi #0
+.s_Enterp4d4:	CNST *45
+	DATs Enter patch name to begin firmware patching.
+	DATi #0
+.s_Presse4d5:	CNST *41
+	DATs Press enter only to retry last patching.
+	DATi #0
+.s_Typere4d6:	CNST *44
+	DATs Type "restore" to restore factory firmware.
+	DATi #0
+.s_Typequ4d7:	CNST *21
+	DATs Type "quit" to quit.
+	DATi #0
+.s_Availa4d8:	CNST *22
+	DATs Available firmwares:
+	DATi #32 #0
+.s_Restor4d9:	CNST *48
+	DATs Restoring factory firmware. Do not power off...
+	DATi #0
+.s_Patchi4da:	CNST *17
+	DATs Patching failed.
+	DATi #0
+.s_Restor4db:	CNST *20
+	DATs Restore successful.
+	DATi #0
+.s_aboutd4dc:	CNST *19
+	DATs about.displayedCRC
+	DATi #0
+.s_04dd:	CNST *2
+	DATs 0
+	DATi #0
+.s_Patchi4de:	CNST *39
+	DATs Patching firmware. Do not power off...
+	DATi #0
+.s_Patchi4df:	CNST *18
+	DATs Patching failed:
+	DATi #32 #0
+.s_Patchi4e0:	CNST *21
+	DATs Patching successful.
+	DATi #0
+.s_firmwa4e1:	CNST *18
+	DATs firmware.aboutCRC
+	DATi #0
+.s_firmwa4e2:	CNST *15
+	DATs firmware.about
+	DATi #0
+.s_Ifyous4e3:	CNST *74
+	DATs If you save the Permut8 Program Bank this firmware code will be included.
+	DATi #0
+.s_Ifyoum4e4:	CNST *81
+	DATs If you modify the .gazl file, the firmware will auto-update until GUI is closed.
+	DATi #0
+.s_Firmwa4e5:	CNST *20
+	DATs Firmware not found.
+	DATi #0
+.s_Permut4e6:	CNST *40
+	DATi #10
+	DATs Permut8 firmware patch utility v1.0.
+	DATi #10 #10 #0
+.s_patch4e7:	CNST *8
+	DATs patch>
+	DATi #32 #0
+.s_QUIT4e8:	CNST *5
+	DATs QUIT
+	DATi #0
+.s_LIST4e9:	CNST *5
+	DATs LIST
+	DATi #0
+.s_RESTOR4ea:	CNST *8
+	DATs RESTORE
+	DATi #0
+.s_HELP4eb:	CNST *5
+	DATs HELP
+	DATi #0

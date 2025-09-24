@@ -1,35 +1,38 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1
-LOG2:	! DEFf #0.69314718055994530942
-LOG2R:	! DEFf #1.44269504088896340736
-LOG10R:	! DEFf #0.43429448190325182765
-E:	! DEFf #2.71828182845904523536
-HALF_PI:	! DEFf #1.57079632679489661923
-PI:	! DEFf #3.14159265358979323846
+; signatures version=1
+; signature extern native print() -> unknown @ 1:20
+; signature extern native abort() -> unknown @ 2:20
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 4:42
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 6:42
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 7:43
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 8:44
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ 9:39
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 10:45
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 11:40
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>
-COS_EPSILON:	! DEFf #1.0e-6
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 12:32
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 13:33
+FALSE:	! DEFi #0	; signature const FALSE : int @ 15:20
+TRUE:	! DEFi #1	; signature const TRUE : int @ 16:19
 
 ;-----------------------------------------------------------------------------
-error:	FUNC
 		PARA *1
+error:	FUNC	; signature func error(ptr s) -> void @ 18:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		EQUp $s &NULL @.f0	; if (s != null) 
 		MOVp %1 &.s_Error4d2 	; print("Error: ")
-		CALL ^print %0 *2
+		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 21:19
 		MOVp %1 $s 	; print(s)
-		CALL ^print %0 *2
-		CALL ^abort %0 *1	; abort()
+		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 22:11
+		CALL ^abort %0 *1	; expects function() -> unknown @ 23:10
 	.f0:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-exp:	FUNC
 	$y:	OUTf
+exp:	FUNC	; signature func exp(float x) -> float @ 52:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -52,8 +55,8 @@ exp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-log:	FUNC
 	$y:	OUTf
+log:	FUNC	; signature func log(float x) -> float @ 85:14
 	$x:	INPf
 	$a:	LOCf
 	$b:	LOCf
@@ -64,7 +67,7 @@ log:	FUNC
 		LEQf $x #0.0 @.t0	; if (x <= 0.0 || x >= 1.0e38) error("Domain error")
 		LSSf $x #1.0e38 @.f1
 	.t0:	MOVp %1 &.s_Domain4d3 	; error("Domain error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 93:52
 		GOTO @.e2  
 	.f1:	MOVf $b #0.0 	; b = 0.0
 		MOVf $m $x 	; m = x
@@ -92,30 +95,30 @@ log:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-log2:	FUNC
 	$y:	OUTf
+log2:	FUNC	; signature func log2(float x) -> float @ 113:15
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; y = (float)log(x) * LOG2R
-		CALL &log %0 *2
+		CALL &log %0 *2	; expects log(float) -> float @ 116:20
 		MULf $y %0 #LOG2R
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-log10:	FUNC
 	$y:	OUTf
+log10:	FUNC	; signature func log10(float x) -> float @ 119:16
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; y = (float)log(x) * LOG10R
-		CALL &log %0 *2
+		CALL &log %0 *2	; expects log(float) -> float @ 122:20
 		MULf $y %0 #LOG10R
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC
 	$y:	OUTf
+trunc:	FUNC	; signature func trunc(float x) -> float @ 125:16
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -128,25 +131,25 @@ trunc:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC
 	$z:	OUTf
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 132:15
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi4d4 	; error("Division by zero")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 135:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
-		CALL &trunc %0 *2
+		CALL &trunc %0 *2	; expects trunc(float) -> float @ 136:35
 		MULf %0 %0 $y
 		SUBf $z $x %0
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC
 	$y:	OUTf
+cos:	FUNC	; signature func cos(float x) -> float @ 150:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -155,7 +158,7 @@ cos:	FUNC
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; m = (float)fmod(x, TWICE_PI)
 		MOVf %2 #TWICE_PI 
-		CALL &fmod %0 *3
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 157:30
 		MOVf $m %0 
 		SUBf %0 #0.0 $m	; m = -m * m
 		MULf $m %0 $m
@@ -177,39 +180,39 @@ cos:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-sin:	FUNC
 	$y:	OUTf
+sin:	FUNC	; signature func sin(float x) -> float @ 171:14
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float)cos(x - HALF_PI)
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 174:29
 		MOVf $y %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-tan:	FUNC
 	$y:	OUTf
+tan:	FUNC	; signature func tan(float x) -> float @ 177:14
 	$x:	INPf
 	$c:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVf $y #0.0 	; y = 0.0
 		MOVf %1 $x 	; c = (float)cos(x)
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 182:19
 		MOVf $c %0 
 		NEQf $c #0.0 @.f0	; if (c == 0.0) error("Domain error")
 		MOVp %1 &.s_Domain4d3 	; error("Domain error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 183:37
 		GOTO @.e1  
 	.f0:	MOVf %1 $x 	; y = (float)sin(x) / c
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 184:25
 		DIVf $y %0 $c
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-pow:	FUNC
 	$z:	OUTf
+pow:	FUNC	; signature func pow(float x, float y) -> float @ 187:14
 	$x:	INPf
 	$y:	INPf
 	$a:	LOCf
@@ -222,15 +225,15 @@ pow:	FUNC
 		SUBf $a #0.0 $a	; a = -a
 	.f1:	LEQf $a #0.0 @.f2	; if (a > 0.0) z = (float)exp((float)log(a) * y)
 		MOVf %2 $a 	; z = (float)exp((float)log(a) * y)
-		CALL &log %1 *2
+		CALL &log %1 *2	; expects log(float) -> float @ 194:44
 		MULf %1 %1 $y
-		CALL &exp %0 *2
+		CALL &exp %0 *2	; expects exp(float) -> float @ 194:48
 		MOVf $z %0 
 		GOTO @.e3  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
 	.t4:	MOVp %1 &.s_Domain4d3 	; error("Domain error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 195:53
 	.f5:	NOOP
 	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
 		MULf %0 $y #0.5
@@ -242,8 +245,8 @@ pow:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-ceil:	FUNC
 	$y:	OUTf
+ceil:	FUNC	; signature func ceil(float x) -> float @ 199:15
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 #0.0 $x	; y = -floor(-x)
@@ -253,21 +256,21 @@ ceil:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-sqrt:	FUNC
 	$y:	OUTf
+sqrt:	FUNC	; signature func sqrt(float x) -> float @ 205:15
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; y = (float)pow(x, 0.5)
 		MOVf %2 #0.5 
-		CALL &pow %0 *3
+		CALL &pow %0 *3	; expects pow(float, float) -> float @ 208:24
 		MOVf $y %0 
 		RETU   	; }
 
-gGlobalState:	GLOB *14
+gGlobalState:	GLOB *14	; signature array gGlobalState[14] : unknown @ 211:30
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
 		PARA *1
+main:	FUNC	; signature func main() -> void @ 213:15
 	$fpi:	LOCf
 	$rq:	LOCf
 	$dxL:	LOCf
@@ -322,11 +325,11 @@ main:	FUNC
 		ADDf %1 #1.0 $rq
 		DIVf $r %0 %1
 		MOVf %1 $fpi 	; k = ((float) sin(fpi)) / ((float) cos(fpi) + (float) sin(fpi))
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 229:23
 		MOVf %2 $fpi 
-		CALL &cos %1 *2
+		CALL &cos %1 *2	; expects cos(float) -> float @ 229:45
 		MOVf %3 $fpi 
-		CALL &sin %2 *2
+		CALL &sin %2 *2	; expects sin(float) -> float @ 229:63
 		ADDf %1 %1 %2
 		DIVf $k %0 %1
 		MULf %0 $r $k	; g0 = r / (1.0 + r * k * k * k * k)

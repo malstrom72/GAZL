@@ -1,0 +1,5311 @@
+; Compiled with Impala version 1.0
+
+FALSE:	! DEFi #0
+TRUE:	! DEFi #1
+GOTO2:	! DEFi #0
+GOTO8:	! DEFi #1
+GOTO2000:	! DEFi #2
+GOTO2009:	! DEFi #3
+GOTO2010:	! DEFi #4
+GOTO2011:	! DEFi #5
+GOTO2012:	! DEFi #6
+GOTO2600:	! DEFi #7
+GOTO2607:	! DEFi #8
+GOTO2630:	! DEFi #9
+GOTO2800:	! DEFi #10
+GOTO8000:	! DEFi #11
+GOTO18999:	! DEFi #12
+GOTO19000:	! DEFi #13
+CLSMAX:	! DEFi #12
+HNTSIZ:	! DEFi #20
+LINSIZ:	! DEFi #12500
+LOCSIZ:	! DEFi #185
+MESH:	! DEFi #123456789
+RTXSIZ:	! DEFi #277
+TRVSIZ:	! DEFi #885
+VRBSIZ:	! DEFi #35
+VRSION:	! DEFi #25
+TRNSIZ:	! DEFi #5
+MAXTRS:	! DEFi #79
+TABSIZ:	! DEFi #330
+CHLOC:	! DEFi #114
+CHLOC2:	! DEFi #142
+	! SHLi <A> #1 #11
+CONDS:	! DEFi <A>
+DALTLC:	! DEFi #18
+ABB:	GLOB *186
+ATLOC:	GLOB *186
+DLOC:	GLOB *7
+FIXED:	GLOB *101
+LINK:	GLOB *201
+PARMS:	GLOB *26
+PLACE:	GLOB *101
+INLINE:	GLOB *101
+MAP1:	GLOB *129
+MAP2:	GLOB *129
+DSEEN:	GLOB *7
+HINTED:	GLOB *21
+HINTLC:	GLOB *21
+ODLOC:	GLOB *7
+TK:	GLOB *21
+PROP:	GLOB *101
+	GLOB *1
+BLKLIN:	DATi #TRUE
+	GLOB *1
+HOLDNG:	DATi #0
+	GLOB *1
+ABBNUM:	DATi #5
+	GLOB *1
+TRNDEX:	DATi #1
+	GLOB *1
+TRNLUZ:	DATi #0
+	GLOB *1
+TURNS:	DATi #0
+	GLOB *1
+CLOSNG:	DATi #FALSE
+	GLOB *1
+BONUS:	DATi #0
+	GLOB *1
+NOVICE:	DATi #FALSE
+	GLOB *1
+CLSHNT:	DATi #FALSE
+	GLOB *1
+CLOSED:	DATi #FALSE
+	GLOB *1
+NUMDIE:	DATi #0
+	GLOB *1
+SAVED:	DATi #0
+	GLOB *1
+WZDARK:	DATi #FALSE
+	GLOB *1
+LMWARN:	DATi #FALSE
+	GLOB *1
+FOOBAR:	DATi #0
+	GLOB *1
+CLOCK1:	DATi #30
+	GLOB *1
+CLOCK2:	DATi #50
+	GLOB *1
+DETAIL:	DATi #0
+	GLOB *1
+DKILL:	DATi #0
+	GLOB *1
+IGO:	DATi #0
+	GLOB *1
+KNFLOC:	DATi #0
+	GLOB *1
+IWEST:	DATi #0
+	GLOB *1
+PANIC:	DATi #FALSE
+	GLOB *1
+gK:	DATi #0
+	GLOB *1
+gOBJ:	DATi #0
+	GLOB *1
+gLOC:	DATi #0
+	GLOB *1
+DFLAG:	DATi #0
+	GLOB *1
+LNLENG:	DATi #0
+	GLOB *1
+LNPOSN:	DATi #0
+	GLOB *1
+VERB:	DATi #0
+	GLOB *1
+ZZWORD:	DATi #0
+	GLOB *1
+SCORE:	DATi #0
+	GLOB *1
+MAXDIE:	DATi #0
+	GLOB *1
+MXSCOR:	DATi #0
+	GLOB *1
+TALLY:	DATi #0
+	GLOB *1
+THRESH:	DATi #0
+	GLOB *1
+NEWLOC:	DATi #0
+	GLOB *1
+LIMIT:	DATi #0
+	GLOB *1
+OLDLC2:	DATi #0
+	GLOB *1
+OLDLOC:	DATi #0
+	GLOB *1
+DTOTAL:	DATi #0
+	GLOB *1
+SPK:	DATi #0
+	GLOB *1
+WD1:	DATi #0
+	GLOB *1
+WD1X:	DATi #0
+	GLOB *1
+WD2:	DATi #0
+	GLOB *1
+WD2X:	DATi #0
+LINUSE:	! DEFi #12482
+TRVS:	! DEFi #879
+CLSSES:	! DEFi #10
+TRNVLS:	! DEFi #4
+TABNDX:	! DEFi #326
+HNTMAX:	! DEFi #10
+ATAB:	GLOB *331
+	DATA #0 #576501649 #407342340 #358494005 #627590956
+	DATA #342272582 #375946497 #376088268 #325880787
+	DATA #527121725 #305669668 #575365029 #575505951
+	DATA #641674312 #596419488 #529790769 #529934163
+	DATA #363045041 #475613907 #312209991 #411491935
+	DATA #396392300 #597622959 #378351009 #308704320
+	DATA #329021655 #328380474 #429010181 #429136990
+	DATA #429159769 #599025551 #515258257 #513873295
+	DATA #342554001 #544028495 #616502824 #480891024
+	DATA #326335042 #298679023 #395774559 #647593600
+	DATA #632867709 #632875876 #626204297 #294054431
+	DATA #298605009 #341424708 #348259602 #348404224
+	DATA #345910464 #548433732 #534948114 #332902245
+	DATA #602024358 #349232676 #480946593 #582807262
+	DATA #413104193 #452051492 #312757240 #536458640
+	DATA #296795894 #363530884 #360672721 #666861696
+	DATA #662955153 #518776854 #512253145 #602968354
+	DATA #596432553 #516625444 #600658433 #605524032
+	DATA #521785057 #349492471 #419410185 #667546256
+	DATA #319840904 #714948036 #335316093 #487269696
+	DATA #372279172 #621807382 #350890389 #386412396
+	DATA #588673545 #604788580 #604903137 #605051740
+	DATA #692598308 #351918387 #371220148 #555397602
+	DATA #603970280 #334712388 #339290350 #319209439
+	DATA #556120288 #541039836 #335459701 #605810726
+	DATA #588453829 #503628708 #538631310 #471488896
+	DATA #471637281 #487468772 #487623576 #408291231
+	DATA #336900153 #592365892 #592516721 #610761373
+	DATA #322868593 #358135620 #558027922 #657794591
+	DATA #609927896 #390739139 #623604528 #341423104
+	DATA #546383568 #506639240 #444451384 #611531311
+	DATA #159529711 #361996564 #362148977 #477414671
+	DATA #477568288 #394120452 #591950642 #327338790
+	DATA #458029353 #676295424 #438311873 #544447552
+	DATA #511072890 #562274562 #325712102 #562581806
+	DATA #615164228 #612171869 #394509837 #679904153
+	DATA #314853937 #363752727 #562942615 #411037663
+	DATA #362151137 #364369725 #345126584 #633172438
+	DATA #633327383 #328027684 #512806004 #666547931
+	DATA #412477864 #512157207 #664401060 #327989391
+	DATA #344913888 #516516164 #350468772 #548280400
+	DATA #651966057 #345709954 #331944335 #598716956
+	DATA #316532089 #498355136 #519432585 #534860240
+	DATA #617277689 #417700804 #536851008 #366066137
+	DATA #617927296 #330799236 #466242639 #351524397
+	DATA #349831015 #335122532 #637979646 #383605120
+	DATA #383761345 #534441252 #638628728 #667926096
+	DATA #519166425 #619673618 #571413600 #386437131
+	DATA #570866980 #574502235 #569349871 #607280528
+	DATA #569737980 #623074675 #352669145 #607899904
+	DATA #468605857 #536919354 #321068069 #419840110
+	DATA #620290251 #385827303 #625530192 #352343843
+	DATA #637687409 #487877700 #352832651 #626348006
+	DATA #353138920 #421471716 #642358945 #625403728
+	DATA #375012481 #606633967 #408847977 #373152987
+	DATA #376436569 #623061124 #356525743 #625438016
+	DATA #662062509 #528240154 #660781798 #560776336
+	DATA #543960444 #510499044 #358929936 #509267678
+	DATA #561002017 #396138300 #559296265 #692432848
+	DATA #627236552 #631364949 #357337905 #578443083
+	DATA #642881201 #693372804 #614900217 #647780895
+	DATA #429007497 #581056179 #362327092 #398412761
+	DATA #412978650 #649621668 #330764342 #495785488
+	DATA #412043447 #445814788 #633405734 #631404992
+	DATA #582106385 #394046340 #378492856 #382012837
+	DATA #617815593 #648194949 #650200001 #601566144
+	DATA #414056417 #699137011 #466063777 #413469328
+	DATA #414713401 #348512802 #380476297 #465028318
+	DATA #349070224 #632090067 #414634681 #415850256
+	DATA #417590217 #417798372 #419530337 #351787024
+	DATA #616949249 #583633153 #352273150 #635017006
+	DATA #636495531 #700666692 #384198576 #639170447
+	DATA #583772576 #634275780 #618704368 #618872859
+	DATA #419572585 #519595571 #750480229 #418162240
+	DATA #419379873 #421121892 #421332105 #423066128
+	DATA #654661134 #637339931 #573227790 #334898880
+	DATA #335068734 #638733391 #456196950 #590584813
+	DATA #453952393 #1218704996 #557486113 #659168768
+	DATA #659339422 #388722596 #409587145 #524906000
+	DATA #540281369 #426091588 #644153937 #474943296
+	DATA #475114733 #645429828 #709109173 #741757328
+	DATA #557397993 #0 #0 #0 #0 #0
+COND:	GLOB *186
+	DATA #0 #5 #1 #5 #5 #1 #131089 #5 #1050625 #1 #1 #0 #0
+	DATA #4096 #0 #1048576 #0 #0 #0 #8192 #0 #0 #0 #0 #6 #0 #0
+	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #4 #0 #0 #0 #16400
+	DATA #16400 #16400 #16400 #16392 #16392 #16392 #16400
+	DATA #16400 #16400 #16400 #16400 #16392 #16400 #16392 #16
+	DATA #8 #0 #0 #0 #0 #0 #1048576 #0 #0 #0 #0 #0 #0 #0 #0 #0
+	DATA #0 #0 #0 #0 #0 #0 #16400 #16384 #16392 #16 #16 #8
+	DATA #16392 #16400 #0 #0 #0 #0 #0 #0 #0 #4 #0 #0 #0 #32768
+	DATA #32769 #32768 #0 #0 #0 #0 #0 #16 #65552 #1048576 #0
+	DATA #0 #16 #4 #0 #1 #1 #0 #0 #0 #0 #0 #8 #8 #8 #8
+	DATA #1048585 #8 #8 #8 #8 #16 #16 #16 #16 #16 #16 #16 #16
+	DATA #16 #0 #0 #0 #524288 #0 #262161 #262161 #262161
+	DATA #262161 #262161 #262161 #262161 #262161 #262161
+	DATA #262161 #262161 #262161 #262161 #262161 #262161
+	DATA #262161 #262161 #262161 #262161 #262161 #262161
+	DATA #262161 #1 #4 #4 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
+	DATA #0 #0 #0 #0
+OBJSND:	GLOB *101
+	DATA #0 #0 #0 #0 #0 #0 #0 #0 #3 #0 #0 #2 #0 #0 #1 #2 #0 #0
+	DATA #0 #0 #0 #0 #0 #0 #6 #0 #0 #0 #0 #0 #0 #4 #0 #3 #0 #0
+	DATA #0 #0 #0 #0 #0 #1 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
+	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
+	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
+	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
+OBJTXT:	GLOB *101
+	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #1 #0 #0 #1 #0
+	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
+	DATA #1 #0 #1 #0 #0 #0 #0 #0 #0 #0 #0 #1 #1 #1 #0 #0 #0 #0
+	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
+	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
+	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
+AXE:	! DEFi #28
+BATTER:	! DEFi #39
+BEAR:	! DEFi #35
+BIRD:	! DEFi #8
+BLOOD:	! DEFi #44
+BOTTLE:	! DEFi #20
+CAGE:	! DEFi #4
+CAVITY:	! DEFi #43
+CHASM:	! DEFi #32
+CLAM:	! DEFi #14
+DOOR:	! DEFi #9
+DRAGON:	! DEFi #31
+DWARF:	! DEFi #17
+FISSUR:	! DEFi #12
+FOOD:	! DEFi #19
+GRATE:	! DEFi #3
+KEYS:	! DEFi #1
+KNIFE:	! DEFi #18
+LAMP:	! DEFi #2
+MAGZIN:	! DEFi #16
+MESSAG:	! DEFi #36
+MIRROR:	! DEFi #23
+OGRE:	! DEFi #41
+OIL:	! DEFi #22
+OYSTER:	! DEFi #15
+PILLOW:	! DEFi #10
+PLANT:	! DEFi #24
+PLANT2:	! DEFi #25
+RESER:	! DEFi #45
+ROD:	! DEFi #5
+ROD2:	! DEFi #6
+gSIGN:	! DEFi #49
+SNAKE:	! DEFi #11
+STEPS:	! DEFi #7
+TROLL:	! DEFi #33
+TROLL2:	! DEFi #34
+URN:	! DEFi #42
+VEND:	! DEFi #38
+VOLCAN:	! DEFi #37
+WATER:	! DEFi #21
+AMBER:	! DEFi #67
+CHAIN:	! DEFi #64
+CHEST:	! DEFi #55
+COINS:	! DEFi #54
+EGGS:	! DEFi #56
+EMRALD:	! DEFi #59
+JADE:	! DEFi #66
+NUGGET:	! DEFi #50
+PEARL:	! DEFi #61
+PYRAM:	! DEFi #60
+RUBY:	! DEFi #65
+RUG:	! DEFi #62
+SAPPH:	! DEFi #68
+TRIDNT:	! DEFi #57
+VASE:	! DEFi #58
+BACK:	! DEFi #8
+CAVE:	! DEFi #67
+DPRSSN:	! DEFi #63
+ENTER:	! DEFi #3
+ENTRNC:	! DEFi #64
+LOOK:	! DEFi #57
+NUL:	! DEFi #21
+STREAM:	! DEFi #14
+FIND:	! DEFi #19
+INVENT:	! DEFi #20
+LOCK:	! DEFi #6
+SAY:	! DEFi #3
+THROW:	! DEFi #17
+
+;-----------------------------------------------------------------------------
+fBUG:	FUNC
+		PARA *1
+	$NUM:	INPi
+	$numString:	LOCA *3
+;-----------------------------------------------------------------------------
+		MOVp %1 &.s_Fatale4d2 	; output("Fatal error ")
+		CALL ^output %0 *2
+		DIVi %0 $NUM #10	; numString[0] = '0' + NUM / 10
+		ADDi $numString:0 #'0' %0
+		MODi %0 $NUM #10	; numString[1] = '0' + NUM % 10
+		ADDi $numString:1 #'0' %0
+		MOVi $numString:2 #0 	; numString[2] = 0
+		ADRL %1 $numString *0	; output(numString)
+		CALL ^output %0 *2
+		MOVp %1 &.s_Seesou4d3 	; output(".  See source code for interpretation.\n")
+		CALL ^output %0 *2
+		CALL ^abort %0 *1	; abort()
+		RETU   	; }
+
+	GLOB *1
+fRAN_R:	DATi #0
+
+;-----------------------------------------------------------------------------
+fRAN:	FUNC
+	$RAN:	OUTi
+	$RANGE:	INPi
+	$D:	LOCi
+	$T:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $D #1 	; D=1
+		PEEK %0 &fRAN_R 	; if(!(global fRAN_R != 0 && RANGE >= 0)) 
+		EQUi %0 #0 @.f0
+		GEQi $RANGE #0 @.f1
+	.f0:	MOVi $D #1999 	; D=1999
+		CALL ^clock %0 *1	; T=(int)clock() & 0x7FFFFFFF
+		ANDi $T %0 #0x7FFFFFFF
+	.f1:	MOVi $T #1 	; for (T=1 to D+1) global fRAN_R=((global fRAN_R*1093+221587)%1048576)
+		ADDi %0 $D #1
+		GEQi #1 %0 @.e2
+	.l3:	PEEK %1 &fRAN_R 	; global fRAN_R=((global fRAN_R*1093+221587)%1048576)
+		MULi %1 %1 #1093
+		ADDi %1 %1 #221587
+		MODi %1 %1 #1048576
+		POKE &fRAN_R %1 
+		FORi $T %0 @.l3
+	.e2:	PEEK %0 &fRAN_R 	; RAN=(RANGE*global fRAN_R)/1048576
+		MULi %0 $RANGE %0
+		DIVi $RAN %0 #1048576
+		RETU   	; }
+
+	! MULi <A> #7 #2
+fMPINIT_RUNS:	CNST *<A>
+	DATA #32 #34 #39 #46 #65 #90 #97 #122 #37 #37 #48 #57 #0
+	DATA #126
+
+;-----------------------------------------------------------------------------
+fMPINIT:	FUNC
+		PARA *1
+	$FIRST:	LOCi
+	$I:	LOCi
+	$J:	LOCi
+	$LAST:	LOCi
+	$VAL:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $I #1 	; for (I=1 to 129) 
+		GEQi #1 #129 @.e0
+	.l1:	POKE &MAP1 $I #-1	; global MAP1[I]= -1
+		FORi $I #129 @.l1	; } /* end loop */
+	.e0:	MOVi $VAL #0 	; VAL=0
+		MOVi $I #0 	; for (I=0 to 7) 
+		GEQi #0 #7 @.e2
+	.l3:	MULi %0 $I #2	; FIRST=(int)global fMPINIT_RUNS[I * 2 + 0]
+		ADDi %0 %0 #0
+		PEEK $FIRST &fMPINIT_RUNS %0
+		MULi %0 $I #2	; LAST=(int)global fMPINIT_RUNS[I * 2 + 1]
+		ADDi %0 %0 #1
+		PEEK $LAST &fMPINIT_RUNS %0
+		ADDi $J $FIRST #1	; for (J=FIRST+1 to LAST+2) 
+		ADDi %0 $LAST #2
+		GEQi $J %0 @.e4
+	.l5:	PEEK %1 &MAP1 $J	; if(!((int)global MAP1[J] >= 0)) 
+		GEQi %1 #0 @.f6
+		POKE &MAP1 $J $VAL	; global MAP1[J]=VAL
+		ADDi $VAL $VAL #1	; VAL=VAL+1
+	.f6:	FORi $J %0 @.l5	; } /* end loop */
+	.e4:	FORi $I #7 @.l3	; } /* end loop */
+	.e2:	PEEK %0 &MAP1:10 	; global MAP1[128]=global MAP1[10]
+		POKE &MAP1:128 %0 
+		PEEK %0 &MAP1:33 	; global MAP1[10]=global MAP1[33]
+		POKE &MAP1:10 %0 
+		PEEK %0 &MAP1:33 	; global MAP1[11]=global MAP1[33]
+		POKE &MAP1:11 %0 
+		MOVi $I #0 	; for (I=0 to 127) 
+		GEQi #0 #127 @.e7
+	.l8:	ADDi %0 $I #1	; VAL=(int)global MAP1[I+1]+1
+		PEEK %0 &MAP1 %0
+		ADDi $VAL %0 #1
+		! SUBi <A> #'B' #'A'	; global MAP2[VAL]=I*('B'-'A')
+		MULi %0 $I <A>
+		POKE &MAP2 $VAL %0
+		LSSi $I #64 @.f9	; if(I >= 64)global MAP2[VAL]=(I-64)*('B'-'A')+'@'
+		SUBi %0 $I #64	; global MAP2[VAL]=(I-64)*('B'-'A')+'@'
+		! SUBi <A> #'B' #'A'
+		MULi %0 %0 <A>
+		ADDi %0 %0 #'@'
+		POKE &MAP2 $VAL %0
+	.f9:	FORi $I #127 @.l8	; } /* end loop */
+	.e7:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fMAPLIN:	FUNC
+		PARA *1
+	$FIL:	INPi
+	$I:	LOCi
+	$VAL:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %0 &MAP2:1 	; if((int)global MAP2[1] == 0)fMPINIT()
+		NEQi %0 #0 @.l1
+		CALL &fMPINIT %0 *1	; fMPINIT()
+	.l1:	NEQi $FIL #FALSE @.f2	; if(FIL==FALSE) 
+		MOVi %1 #99 	; input(99, global INLINE+1)
+		ADDp %2 &INLINE #1
+		CALL ^input %0 *3
+		CALL ^inputEOF %0 *1	; if ((int)inputEOF() != FALSE) score(1)
+		EQUi %0 #FALSE @.e4
+		MOVi %1 #1 	; score(1)
+		CALL &score %0 *2
+		GOTO @.e4  	; } else 
+	.f2:	MOVi %1 #-1 	; fBUG(-1)
+		CALL &fBUG %0 *2
+	.e4:	POKE &LNLENG #0 	; global LNLENG=0
+		MOVi $I #1 	; for (I=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.e5
+	.l6:	PEEK %0 &INLINE $I	; if ((int)global INLINE[I] == 0) goto break1
+		NEQi %0 #0 @.f7
+		GOTO @break1  	; goto break1
+	.f7:	PEEK %0 &INLINE $I	; VAL=(int)global INLINE[I]+1
+		ADDi $VAL %0 #1
+		PEEK %0 &MAP1 $VAL	; global INLINE[I]=global MAP1[VAL]
+		POKE &INLINE $I %0
+		PEEK %0 &INLINE $I	; if((int)global INLINE[I] != 0)global LNLENG=I
+		EQUi %0 #0 @.f8
+		POKE &LNLENG $I 	; global LNLENG=I
+	.f8:	FORi $I <A> @.l6	; } /* end loop */
+	.e5:	NOOP
+	break1:	POKE &LNPOSN #1 	; break1:
+		EQUi $FIL #FALSE @.f9	; } while (FIL != FALSE && global LNLENG == 0)
+		PEEK %0 &LNLENG 
+		EQUi %0 #0 @.l1
+	.f9:	RETU   	; }
+
+	GLOB *1
+fGETTXT_SPLITTING:	DATi #-1
+
+;-----------------------------------------------------------------------------
+fGETTXT:	FUNC
+	$GETTXT:	OUTi
+	$SKIP:	INPi
+	$ONEWRD:	INPi
+	$UPPER:	INPi
+	$HASH:	INPi
+	$CHAR:	LOCi
+	$I:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %0 &LNPOSN 	; if(global LNPOSN != global fGETTXT_SPLITTING)global fGETTXT_SPLITTING = -1
+		PEEK %1 &fGETTXT_SPLITTING 
+		EQUi %0 %1 @.f0
+		POKE &fGETTXT_SPLITTING #-1 	; global fGETTXT_SPLITTING = -1
+	.f0:	MOVi $GETTXT #-1 	; GETTXT= -1
+	L10:	PEEK %0 &LNPOSN 	; L10:
+		PEEK %1 &LNLENG 
+		LEQi %0 %1 @.f1
+		GOTO @return  	; goto return
+	.f1:	EQUi $SKIP #FALSE @.f3	; if(!((SKIP==FALSE) || (int)global INLINE[global LNPOSN] != 0)) 
+		PEEK %0 &LNPOSN 
+		PEEK %0 &INLINE %0
+		NEQi %0 #0 @.f3
+		PEEK %0 &LNPOSN 	; global LNPOSN=global LNPOSN+1
+		ADDi %0 %0 #1
+		POKE &LNPOSN %0 
+		GOTO @L10  	; goto L10
+	.f3:	MOVi $GETTXT #0 	; GETTXT=0
+		MOVi $I #1 	; for (I=1 to 5+1) 
+		! ADDi <A> #5 #1
+		GEQi #1 <A> @.e4
+	.l5:	MULi $GETTXT $GETTXT #64	; GETTXT=GETTXT*64
+		PEEK %0 &LNPOSN 	; if(global LNPOSN > global LNLENG || (ONEWRD != FALSE && (int)global INLINE[global LNPOSN] == 0)) goto L15
+		PEEK %1 &LNLENG 
+		GRTi %0 %1 @L15
+		EQUi $ONEWRD #FALSE @.f8
+		PEEK %0 &LNPOSN 
+		PEEK %0 &INLINE %0
+		NEQi %0 #0 @.f8
+		GOTO @L15  	; goto L15
+	.f8:	PEEK %0 &LNPOSN 	; CHAR=(int)global INLINE[global LNPOSN]
+		PEEK $CHAR &INLINE %0
+		GEQi $CHAR #63 @.f9	; if(!(CHAR >= 63)) 
+		POKE &fGETTXT_SPLITTING #-1 	; global fGETTXT_SPLITTING = -1
+		EQUi $UPPER #FALSE @.f11	; if(UPPER != FALSE && CHAR >= 37)CHAR=CHAR-26
+		LSSi $CHAR #37 @.f11
+		SUBi $CHAR $CHAR #26	; CHAR=CHAR-26
+	.f11:	ADDi $GETTXT $GETTXT $CHAR	; GETTXT=GETTXT+CHAR
+		GOTO @.e12  	; } else 
+	.f9:	PEEK %0 &fGETTXT_SPLITTING 	; if(!(global fGETTXT_SPLITTING == global LNPOSN)) 
+		PEEK %1 &LNPOSN 
+		EQUi %0 %1 @.f13
+		ADDi $GETTXT $GETTXT #63	; GETTXT=GETTXT+63
+		PEEK %0 &LNPOSN 	; global fGETTXT_SPLITTING = global LNPOSN
+		POKE &fGETTXT_SPLITTING %0 
+		GOTO @L15  	; goto L15
+	.f13:	ADDi %0 $GETTXT $CHAR	; GETTXT=GETTXT+CHAR-63
+		SUBi $GETTXT %0 #63
+		POKE &fGETTXT_SPLITTING #-1 	; global fGETTXT_SPLITTING = -1
+	.e12:	PEEK %0 &LNPOSN 	; global LNPOSN=global LNPOSN+1
+		ADDi %0 %0 #1
+		POKE &LNPOSN %0 
+	L15:	FORi $I <A> @.l5	; } /* end loop */
+	.e4:	EQUi $HASH #FALSE @.f14	; if(HASH != FALSE)GETTXT=GETTXT+((HASH*13579+5432)%97531)*12345+HASH
+		MULi %0 $HASH #13579	; GETTXT=GETTXT+((HASH*13579+5432)%97531)*12345+HASH
+		ADDi %0 %0 #5432
+		MODi %0 %0 #97531
+		MULi %0 %0 #12345
+		ADDi %0 $GETTXT %0
+		ADDi $GETTXT %0 $HASH
+	.f14:	NOOP
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fMAKEWD:	FUNC
+	$MAKEWD:	OUTi
+	$LETTRS:	INPi
+	$I:	LOCi
+	$L:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $MAKEWD #0 	; MAKEWD=0
+		MOVi $I #1 	; I=1
+		MOVi $L $LETTRS 	; L=LETTRS
+	.l0:	MODi %0 $L #50	; MAKEWD=MAKEWD+I*(((L)%50)+10)
+		ADDi %0 %0 #10
+		MULi %0 $I %0
+		ADDi $MAKEWD $MAKEWD %0
+		MULi $I $I #64	; I=I*64
+		MODi %0 $L #100	; if(((L)%100) > 50)MAKEWD=MAKEWD+I*5
+		LEQi %0 #50 @.f1
+		MULi %0 $I #5	; MAKEWD=MAKEWD+I*5
+		ADDi $MAKEWD $MAKEWD %0
+	.f1:	DIVi $L $L #100	; L=L/100
+		NEQi $L #0 @.l0	; } while (L != 0)
+		! MULi <A> #64 #64	; I=64*64*64*64*64/I
+		! MULi <A> <A> #64
+		! MULi <A> <A> #64
+		! MULi <A> <A> #64
+		DIVi $I <A> $I
+		MULi $MAKEWD $MAKEWD $I	; MAKEWD=MAKEWD*I
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fSHFTXT:	FUNC
+		PARA *1
+	$FROM:	INPi
+	$DELTA:	INPi
+	$I:	LOCi
+	$II:	LOCi
+	$JJ:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %0 &LNLENG 	; if(!(global LNLENG < FROM || DELTA == 0)) 
+		LSSi %0 $FROM @.f1
+		EQUi $DELTA #0 @.f1
+		MOVi $I $FROM 	; for (I=FROM to global LNLENG+1) 
+		PEEK %0 &LNLENG 
+		ADDi %0 %0 #1
+		GEQi $FROM %0 @.f1
+	.l3:	MOVi $II $I 	; II=I
+		LEQi $DELTA #0 @.f4	; if(DELTA > 0)II=FROM+global LNLENG-I
+		PEEK %1 &LNLENG 	; II=FROM+global LNLENG-I
+		ADDi %1 $FROM %1
+		SUBi $II %1 $I
+	.f4:	ADDi $JJ $II $DELTA	; JJ=II+DELTA
+		PEEK %1 &INLINE $II	; global INLINE[JJ]=global INLINE[II]
+		POKE &INLINE $JJ %1
+		FORi $I %0 @.l3	; } /* end loop */
+	.f1:	PEEK %0 &LNLENG 	; global LNLENG=global LNLENG+DELTA
+		ADDi %0 %0 $DELTA
+		POKE &LNLENG %0 
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fPUTTXT:	FUNC
+		PARA *1
+	$WORD:	INPi
+	$sTATE:	INPp
+	$CASE:	INPi
+	$HASH:	INPi
+	$ALPH1:	LOCi
+	$ALPH2:	LOCi
+	$BYTE:	LOCi
+	$DIV:	LOCi
+	$I:	LOCi
+	$W:	LOCi
+;-----------------------------------------------------------------------------
+		MULi %0 #13 $CASE	; ALPH1=13*CASE+24
+		ADDi $ALPH1 %0 #24
+		ABSi %0 $CASE 	; ALPH2=26*abs(CASE)+ALPH1
+		MULi %0 #26 %0
+		ADDi $ALPH2 %0 $ALPH1
+		ABSi %0 $CASE 	; if(abs(CASE) > 1)ALPH1=ALPH2
+		LEQi %0 #1 @.f0
+		MOVi $ALPH1 $ALPH2 	; ALPH1=ALPH2
+	.f0:	NOOP
+		! MULi <A> #64 #64	; DIV=64*64*64*64
+		! MULi <A> <A> #64
+		! MULi <A> <A> #64
+		MOVi $DIV <A> 
+		MOVi $W $WORD 	; W=WORD
+		EQUi $HASH #0 @.f1	; if(HASH!=0)W=W-((HASH*13579+5432)%97531)*12345-HASH
+		MULi %0 $HASH #13579	; W=W-((HASH*13579+5432)%97531)*12345-HASH
+		ADDi %0 %0 #5432
+		MODi %0 %0 #97531
+		MULi %0 %0 #12345
+		SUBi %0 $W %0
+		SUBi $W %0 $HASH
+	.f1:	MOVi $I #1 	; for (I=1 to 5+1) 
+		! ADDi <A> #5 #1
+		GEQi #1 <A> @.e2
+	.l3:	GRTi $W #0 @.f5	; if(W <= 0 && (int)(*sTATE) == 0 && abs(CASE) <= 1) goto return
+		PEEK %0 $sTATE 
+		NEQi %0 #0 @.f5
+		ABSi %0 $CASE 
+		GRTi %0 #1 @.f5
+		GOTO @return  	; goto return
+	.f5:	DIVi $BYTE $W $DIV	; BYTE=W/DIV
+		PEEK %0 $sTATE 	; if(!((int)(*sTATE) != 0 || BYTE != 63)) 
+		NEQi %0 #0 @.f7
+		NEQi $BYTE #63 @.f7
+		POKE $sTATE #63 	; (int)(*sTATE)=63
+		GOTO @.e8  	; } else 
+	.f7:	PEEK %1 &LNPOSN 	; fSHFTXT(global LNPOSN,1)
+		MOVi %2 #1 
+		CALL &fSHFTXT %0 *3
+		PEEK %0 $sTATE 	; (*sTATE)=(int)(*sTATE)+BYTE
+		ADDi %0 %0 $BYTE
+		POKE $sTATE %0 
+		PEEK %0 $sTATE 	; if((int)(*sTATE) < ALPH2 && (int)(*sTATE) >= ALPH1)(*sTATE)=(int)(*sTATE)-26*CASE
+		GEQi %0 $ALPH2 @.f10
+		PEEK %0 $sTATE 
+		LSSi %0 $ALPH1 @.f10
+		PEEK %0 $sTATE 	; (*sTATE)=(int)(*sTATE)-26*CASE
+		MULi %1 #26 $CASE
+		SUBi %0 %0 %1
+		POKE $sTATE %0 
+	.f10:	PEEK %0 &LNPOSN 	; global INLINE[global LNPOSN]=(*sTATE)
+		PEEK %1 $sTATE 
+		POKE &INLINE %0 %1
+		PEEK %1 &LNPOSN 	; global LNPOSN=global LNPOSN+1
+		ADDi %1 %1 #1
+		POKE &LNPOSN %1 
+		POKE $sTATE #0 	; (int)(*sTATE)=0
+	.e8:	MULi %1 $BYTE $DIV	; W=(W-BYTE*DIV)*64
+		SUBi %1 $W %1
+		MULi $W %1 #64
+		FORi $I <A> @.l3	; } /* end loop */
+	.e2:	NOOP
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fTYPE:	FUNC
+		PARA *1
+	$I:	LOCi
+	$VAL:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %1 &LNLENG 	; if(!(global LNLENG != 0)) 
+		NEQi %1 #0 @.f0
+		MOVp %1 &.s_Seesou4d3:38 	; output("\n")
+		CALL ^output %0 *2
+		GOTO @return  	; goto return
+	.f0:	PEEK %0 &MAP2:1 	; if((int)global MAP2[1] == 0)fMPINIT()
+		NEQi %0 #0 @.f1
+		CALL &fMPINIT %0 *1	; fMPINIT()
+	.f1:	MOVi $I #1 	; for (I=1 to global LNLENG+1) 
+		PEEK %0 &LNLENG 
+		ADDi %0 %0 #1
+		GEQi #1 %0 @.e2
+	.l3:	PEEK $VAL &INLINE $I	; VAL=(int)global INLINE[I]
+		ADDi %1 $VAL #1	; global INLINE[I]=global MAP2[VAL+1]
+		PEEK %1 &MAP2 %1
+		POKE &INLINE $I %1
+		FORi $I %0 @.l3	; } /* end loop */
+	.e2:	PEEK %0 &LNLENG 	; global INLINE[global LNLENG+1]=0
+		ADDi %0 %0 #1
+		POKE &INLINE %0 #0
+		ADDp %1 &INLINE #1	; output(global INLINE+1)
+		CALL ^output %0 *2
+		MOVp %1 &.s_Seesou4d3:38 	; output("\n")
+		CALL ^output %0 *2
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fTYPE0:	FUNC
+		PARA *1
+	$TEMP:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $TEMP &LNLENG 	; TEMP=global LNLENG
+		POKE &LNLENG #0 	; global LNLENG=0
+		CALL &fTYPE %0 *1	; fTYPE()
+		POKE &LNLENG $TEMP 	; global LNLENG=TEMP
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fSPEAK:	FUNC
+		PARA *1
+	$N:	INPi
+	$BLANK:	LOCi
+	$CASE:	LOCi
+	$I:	LOCi
+	$K:	LOCi
+	$L:	LOCi
+	$NEG:	LOCi
+	$NPARMS:	LOCi
+	$PARM:	LOCi
+	$PRMTYP:	LOCi
+	$STATE:	LOCi
+;-----------------------------------------------------------------------------
+		NEQi $N #0 @.f0	; if(N == 0) goto return
+		GOTO @return  	; goto return
+	.f0:	PEEK $BLANK &BLKLIN 	; BLANK=global BLKLIN
+		MOVi $K $N 	; K=N
+		MOVi $NPARMS #1 	; NPARMS=1
+	L10:	PEEK %0 &LINES $K	; L10:
+		ABSi %0 %0 
+		SUBi $L %0 #1
+		ADDi $K $K #1	; K=K+1
+		POKE &LNLENG #0 	; global LNLENG=0
+		POKE &LNPOSN #1 	; global LNPOSN=1
+		MOVi $STATE #0 	; STATE=0
+		MOVi $I $K 	; for (I=K to L+1) 
+		ADDi %0 $L #1
+		GEQi $K %0 @.e1
+	.l2:	PEEK %2 &LINES $I	; fPUTTXT(global LINES[I],&STATE,2,I)
+		ADRL %3 $STATE *0
+		MOVi %4 #2 
+		MOVi %5 $I 
+		CALL &fPUTTXT %1 *5
+		FORi $I %0 @.l2	; } /* end loop */
+	.e1:	POKE &LNPOSN #0 	; global LNPOSN=0
+	L30:	PEEK %0 &LNPOSN 	; L30:
+		ADDi %0 %0 #1
+		POKE &LNPOSN %0 
+	L32:	PEEK %0 &LNPOSN 	; L32:
+		PEEK %1 &LNLENG 
+		LEQi %0 %1 @.f3
+		GOTO @L40  	; goto L40
+	.f3:	PEEK %0 &LNPOSN 	; if((int)global INLINE[global LNPOSN] != 63) goto L30
+		PEEK %0 &INLINE %0
+		EQUi %0 #63 @.f4
+		GOTO @L30  	; goto L30
+	.f4:	PEEK %0 &LNPOSN 	; PRMTYP=(int)global INLINE[global LNPOSN+1]
+		ADDi %0 %0 #1
+		PEEK $PRMTYP &INLINE %0
+		NEQi $PRMTYP #1 @.f5	; if(PRMTYP == 1) goto return
+		GOTO @return  	; goto return
+	.f5:	NEQi $PRMTYP #29 @.f6	; if(PRMTYP == 29) goto L320
+		GOTO @L320  	; goto L320
+	.f6:	NEQi $PRMTYP #30 @.f7	; if(PRMTYP == 30) goto L340
+		GOTO @L340  	; goto L340
+	.f7:	NEQi $PRMTYP #12 @.f8	; if(PRMTYP == 12) goto L360
+		GOTO @L360  	; goto L360
+	.f8:	EQUi $PRMTYP #33 @L380	; if(PRMTYP == 33 || PRMTYP == 22 || PRMTYP == 31 || PRMTYP == 13) goto
+		EQUi $PRMTYP #22 @L380
+		EQUi $PRMTYP #31 @L380
+		NEQi $PRMTYP #13 @.f10
+		GOTO @L380  	; goto
+	.f10:	SUBi $PRMTYP $PRMTYP #64	; PRMTYP=PRMTYP-64
+		LSSi $PRMTYP #1 @L30	; if(PRMTYP < 1 || PRMTYP > 9) goto L30
+		LEQi $PRMTYP #9 @.f12
+		GOTO @L30  	; goto L30
+	.f12:	PEEK %1 &LNPOSN 	; fSHFTXT(global LNPOSN+2,PRMTYP-2)
+		ADDi %1 %1 #2
+		SUBi %2 $PRMTYP #2
+		CALL &fSHFTXT %0 *3
+		PEEK %0 &LNPOSN 	; global LNPOSN=global LNPOSN+PRMTYP
+		ADDi %0 %0 $PRMTYP
+		POKE &LNPOSN %0 
+		PEEK %0 &PARMS $NPARMS	; PARM=abs((int)global PARMS[NPARMS])
+		ABSi $PARM %0 
+		MOVi $NEG #0 	; NEG=0
+		PEEK %0 &PARMS $NPARMS	; if((int)global PARMS[NPARMS] < 0)NEG=9
+		GEQi %0 #0 @.f13
+		MOVi $NEG #9 	; NEG=9
+	.f13:	MOVi $I #1 	; for (I=1 to PRMTYP+1) 
+		ADDi %0 $PRMTYP #1
+		GEQi #1 %0 @.e14
+	.l15:	PEEK %1 &LNPOSN 	; global LNPOSN=global LNPOSN-1
+		SUBi %1 %1 #1
+		POKE &LNPOSN %1 
+		PEEK %1 &LNPOSN 	; global INLINE[global LNPOSN]=((PARM)%10)+64
+		MODi %2 $PARM #10
+		ADDi %2 %2 #64
+		POKE &INLINE %1 %2
+		EQUi $I #1 @L390	; if(I == 1 || PARM != 0) goto L390
+		EQUi $PARM #0 @.f17
+		GOTO @L390  	; goto L390
+	.f17:	PEEK %2 &LNPOSN 	; global INLINE[global LNPOSN]=NEG
+		POKE &INLINE %2 $NEG
+		MOVi $NEG #0 	; NEG=0
+	L390:	DIVi $PARM $PARM #10	; L390:
+		FORi $I %0 @.l15	; } /* end loop */
+	.e14:	PEEK %0 &LNPOSN 	; global LNPOSN=global LNPOSN+PRMTYP
+		ADDi %0 %0 $PRMTYP
+		POKE &LNPOSN %0 
+	L395:	ADDi $NPARMS $NPARMS #1	; L395:
+		GOTO @L32  	; goto L32
+	L320:	PEEK %1 &LNPOSN 	; L320:
+		ADDi %1 %1 #2
+		MOVi %2 #-1 
+		CALL &fSHFTXT %0 *3
+		PEEK %0 &LNPOSN 	; global INLINE[global LNPOSN]=55
+		POKE &INLINE %0 #55
+		PEEK %0 &PARMS $NPARMS	; if((int)global PARMS[NPARMS] == 1)fSHFTXT(global LNPOSN+1,-1)
+		NEQi %0 #1 @L395
+		PEEK %1 &LNPOSN 	; fSHFTXT(global LNPOSN+1,-1)
+		ADDi %1 %1 #1
+		MOVi %2 #-1 
+		CALL &fSHFTXT %0 *3
+		GOTO @L395  	; goto L395
+	L340:	PEEK %1 &LNPOSN 	; L340:
+		ADDi %1 %1 #2
+		MOVi %2 #-2 
+		CALL &fSHFTXT %0 *3
+		MOVi $STATE #0 	; STATE=0
+		MOVi $CASE #2 	; CASE=2
+	L345:	PEEK %0 &PARMS $NPARMS	; L345:
+		GEQi %0 #0 @.f19
+		GOTO @L395  	; goto L395
+	.f19:	ADDi %0 $NPARMS #1	; if((int)global PARMS[NPARMS+1] < 0)CASE=0
+		PEEK %0 &PARMS %0
+		GEQi %0 #0 @.f20
+		MOVi $CASE #0 	; CASE=0
+	.f20:	PEEK %1 &PARMS $NPARMS	; fPUTTXT(global PARMS[NPARMS],&STATE,CASE,0)
+		ADRL %2 $STATE *0
+		MOVi %3 $CASE 
+		MOVi %4 #0 
+		CALL &fPUTTXT %0 *5
+		ADDi $NPARMS $NPARMS #1	; NPARMS=NPARMS+1
+		GOTO @L345  	; goto L345
+	L360:	PEEK $PRMTYP &PARMS $NPARMS	; L360:
+		PEEK %1 &LNPOSN 	; fSHFTXT(global LNPOSN+2,PRMTYP-2)
+		ADDi %1 %1 #2
+		SUBi %2 $PRMTYP #2
+		CALL &fSHFTXT %0 *3
+		NEQi $PRMTYP #0 @.f21	; if(PRMTYP == 0) goto L395
+		GOTO @L395  	; goto L395
+	.f21:	MOVi $I #1 	; for (I=1 to PRMTYP+1) 
+		ADDi %0 $PRMTYP #1
+		GEQi #1 %0 @L395
+	.l23:	PEEK %1 &LNPOSN 	; global INLINE[global LNPOSN]=0
+		POKE &INLINE %1 #0
+		PEEK %1 &LNPOSN 	; global LNPOSN=global LNPOSN+1
+		ADDi %1 %1 #1
+		POKE &LNPOSN %1 
+		FORi $I %0 @.l23	; } /* end loop */
+		GOTO @L395  	; goto L395
+	L380:	PEEK %1 &LNPOSN 	; L380:
+		ADDi %1 %1 #2
+		MOVi %2 #-2 
+		CALL &fSHFTXT %0 *3
+		MOVi $STATE #0 	; STATE=0
+		MOVi $CASE #-1 	; CASE= -1
+		NEQi $PRMTYP #31 @.f24	; if(PRMTYP == 31)CASE=1
+		MOVi $CASE #1 	; CASE=1
+	.f24:	NEQi $PRMTYP #33 @.f25	; if(PRMTYP == 33)CASE=0
+		MOVi $CASE #0 	; CASE=0
+	.f25:	PEEK $I &LNPOSN 	; I=global LNPOSN
+		PEEK %1 &PARMS $NPARMS	; fPUTTXT(global PARMS[NPARMS],&STATE,CASE,0)
+		ADRL %2 $STATE *0
+		MOVi %3 $CASE 
+		MOVi %4 #0 
+		CALL &fPUTTXT %0 *5
+		ADDi %1 $NPARMS #1	; fPUTTXT(global PARMS[NPARMS+1],&STATE,CASE,0)
+		PEEK %1 &PARMS %1
+		ADRL %2 $STATE *0
+		MOVi %3 $CASE 
+		MOVi %4 #0 
+		CALL &fPUTTXT %0 *5
+		NEQi $PRMTYP #13 @.f27	; if(PRMTYP == 13 && (int)global INLINE[I] >= 37 && (int)global INLINE[I] <= 62)global INLINE[I]=(int)global INLINE[I]-26
+		PEEK %0 &INLINE $I
+		LSSi %0 #37 @.f27
+		PEEK %0 &INLINE $I
+		GRTi %0 #62 @.f27
+		PEEK %0 &INLINE $I	; global INLINE[I]=(int)global INLINE[I]-26
+		SUBi %0 %0 #26
+		POKE &INLINE $I %0
+	.f27:	ADDi $NPARMS $NPARMS #2	; NPARMS=NPARMS+2
+		GOTO @L32  	; goto L32
+	L40:	EQUi $BLANK #FALSE @.f28	; L40:
+		CALL &fTYPE0 %0 *1	; fTYPE0()
+	.f28:	MOVi $BLANK #FALSE 	; BLANK=FALSE
+		CALL &fTYPE %0 *1	; fTYPE()
+		ADDi $K $L #1	; K=L+1
+		PEEK %0 &LINES $K	; if((int)global LINES[K] >= 0) goto L10
+		LSSi %0 #0 @.f29
+		GOTO @L10  	; goto L10
+	.f29:	NOOP
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fPSPEAK:	FUNC
+		PARA *1
+	$MSG:	INPi
+	$SKIP:	INPi
+	$I:	LOCi
+	$M:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $M &PTEXT $MSG	; M=(int)global PTEXT[MSG]
+		LSSi $SKIP #0 @.f0	; if(!(SKIP < 0)) 
+		MOVi $I #0 	; for (I=0 to SKIP+1) 
+		ADDi %0 $SKIP #1
+		GEQi #0 %0 @.f0
+	.l2:	NOOP
+	.l3:	PEEK %1 &LINES $M	; M=abs((int)global LINES[M])
+		ABSi $M %1 
+		PEEK %1 &LINES $M	; } while ((int)global LINES[M] >= 0)
+		GEQi %1 #0 @.l3
+		FORi $I %0 @.l2	; } /* end loop */
+	.f0:	MOVi %1 $M 	; fSPEAK(M)
+		CALL &fSPEAK %0 *2
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fRSPEAK:	FUNC
+		PARA *1
+	$I:	INPi
+;-----------------------------------------------------------------------------
+		EQUi $I #0 @.f0	; if(I != 0)fSPEAK(global RTEXT[I])
+		PEEK %1 &RTEXT $I	; fSPEAK(global RTEXT[I])
+		CALL &fSPEAK %0 *2
+	.f0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fSETPRM:	FUNC
+		PARA *1
+	$FIRST:	INPi
+	$P1:	INPi
+	$P2:	INPi
+;-----------------------------------------------------------------------------
+		LSSi $FIRST #25 @.f0	; if(FIRST >= 25)fBUG(29)
+		MOVi %1 #29 	; fBUG(29)
+		CALL &fBUG %0 *2
+	.f0:	POKE &PARMS $FIRST $P1	; global PARMS[FIRST]=P1
+		ADDi %0 $FIRST #1	; global PARMS[FIRST + 1]=P2
+		POKE &PARMS %0 $P2
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fGETIN:	FUNC
+		PARA *1
+	$wORD1:	INPp
+	$wORD1X:	INPp
+	$wORD2:	INPp
+	$wORD2X:	INPp
+	$JUNK:	LOCi
+;-----------------------------------------------------------------------------
+	L10:	NOOP
+	.l0:	PEEK %0 &BLKLIN 	; if(global BLKLIN != FALSE)fTYPE0()
+		EQUi %0 #FALSE @.f1
+		CALL &fTYPE0 %0 *1	; fTYPE0()
+	.f1:	MOVi %1 #FALSE 	; fMAPLIN(FALSE)
+		CALL &fMAPLIN %0 *2
+		MOVi %1 #TRUE 	; (*wORD1)=fGETTXT(TRUE,TRUE,TRUE,0)
+		MOVi %2 #TRUE 
+		MOVi %3 #TRUE 
+		MOVi %4 #0 
+		CALL &fGETTXT %0 *5
+		POKE $wORD1 %0 
+		PEEK %0 &BLKLIN 	; } while (global BLKLIN != FALSE && (int)(*wORD1) < 0)
+		EQUi %0 #FALSE @.f2
+		PEEK %0 $wORD1 
+		LSSi %0 #0 @.l0
+	.f2:	MOVi %1 #FALSE 	; (*wORD1X)=fGETTXT(FALSE,TRUE,TRUE,0)
+		MOVi %2 #TRUE 
+		MOVi %3 #TRUE 
+		MOVi %4 #0 
+		CALL &fGETTXT %0 *5
+		POKE $wORD1X %0 
+	.l3:	MOVi %1 #FALSE 	; JUNK=(int)fGETTXT(FALSE,TRUE,TRUE,0)
+		MOVi %2 #TRUE 
+		MOVi %3 #TRUE 
+		MOVi %4 #0 
+		CALL &fGETTXT %0 *5
+		MOVi $JUNK %0 
+		GRTi $JUNK #0 @.l3	; } while (JUNK > 0)
+		MOVi %1 #TRUE 	; (*wORD2)=fGETTXT(TRUE,TRUE,TRUE,0)
+		MOVi %2 #TRUE 
+		MOVi %3 #TRUE 
+		MOVi %4 #0 
+		CALL &fGETTXT %0 *5
+		POKE $wORD2 %0 
+		MOVi %1 #FALSE 	; (*wORD2X)=fGETTXT(FALSE,TRUE,TRUE,0)
+		MOVi %2 #TRUE 
+		MOVi %3 #TRUE 
+		MOVi %4 #0 
+		CALL &fGETTXT %0 *5
+		POKE $wORD2X %0 
+	.l4:	MOVi %1 #FALSE 	; JUNK=(int)fGETTXT(FALSE,TRUE,TRUE,0)
+		MOVi %2 #TRUE 
+		MOVi %3 #TRUE 
+		MOVi %4 #0 
+		CALL &fGETTXT %0 *5
+		MOVi $JUNK %0 
+		GRTi $JUNK #0 @.l4	; } while (JUNK > 0)
+		MOVi %1 #TRUE 	; if((int)fGETTXT(TRUE,TRUE,TRUE,0) <= 0)goto return
+		MOVi %2 #TRUE 
+		MOVi %3 #TRUE 
+		MOVi %4 #0 
+		CALL &fGETTXT %0 *5
+		GRTi %0 #0 @.f5
+		GOTO @return  	; goto return
+	.f5:	MOVi %1 #53 	; fRSPEAK(53)
+		CALL &fRSPEAK %0 *2
+		GOTO @L10  	; goto L10
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fYES:	FUNC
+	$YES:	OUTi
+	$X:	INPi
+	$Y:	INPi
+	$Z:	INPi
+	$REPLY:	LOCi
+	$JUNK1:	LOCi
+	$JUNK2:	LOCi
+	$JUNK3:	LOCi
+;-----------------------------------------------------------------------------
+	L1:	MOVi %1 $X 	; L1:
+		CALL &fRSPEAK %0 *2
+		ADRL %1 $REPLY *0	; fGETIN(&REPLY,&JUNK1,&JUNK2,&JUNK3)
+		ADRL %2 $JUNK1 *0
+		ADRL %3 $JUNK2 *0
+		ADRL %4 $JUNK3 *0
+		CALL &fGETIN %0 *5
+		MOVi %1 #250519 	; if(REPLY == (int)fMAKEWD(250519) || REPLY == (int)fMAKEWD(25)) 
+		CALL &fMAKEWD %0 *2
+		EQUi $REPLY %0 @.t0
+		MOVi %1 #25 
+		CALL &fMAKEWD %0 *2
+		NEQi $REPLY %0 @.f1
+	.t0:	MOVi $YES #TRUE 	; YES=TRUE
+		MOVi %1 $Y 	; fRSPEAK(Y)
+		CALL &fRSPEAK %0 *2
+		GOTO @return  	; goto return
+	.f1:	MOVi %1 #1415 	; if(REPLY == (int)fMAKEWD(1415) || REPLY == (int)fMAKEWD(14)) 
+		CALL &fMAKEWD %0 *2
+		EQUi $REPLY %0 @.t2
+		MOVi %1 #14 
+		CALL &fMAKEWD %0 *2
+		NEQi $REPLY %0 @.f3
+	.t2:	MOVi $YES #FALSE 	; YES=FALSE
+		MOVi %1 $Z 	; fRSPEAK(Z)
+		CALL &fRSPEAK %0 *2
+		GOTO @return  	; goto return
+	.f3:	MOVi %1 #185 	; fRSPEAK(185)
+		CALL &fRSPEAK %0 *2
+		GOTO @L1  	; goto L1
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+score:	FUNC
+		PARA *1
+	$MODE:	INPi
+	$I:	LOCi
+	$K:	LOCi
+;-----------------------------------------------------------------------------
+		POKE &SCORE #0 	; global SCORE=0
+		POKE &MXSCOR #0 	; global MXSCOR=0
+		MOVi $I #50 	; for (I=50 to MAXTRS+1) 
+		! ADDi <A> #MAXTRS #1
+		GEQi #50 <A> @.e0
+	.l1:	PEEK %0 &PTEXT $I	; if((int)global PTEXT[I] != 0) 
+		EQUi %0 #0 @.f2
+		MOVi $K #12 	; K=12
+		NEQi $I #CHEST @.f3	; if(I == CHEST)K=14
+		MOVi $K #14 	; K=14
+	.f3:	LEQi $I #CHEST @.f4	; if(I > CHEST)K=16
+		MOVi $K #16 	; K=16
+	.f4:	PEEK %0 &PROP $I	; if((int)global PROP[I] >= 0)global SCORE=global SCORE+2
+		LSSi %0 #0 @.f5
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+2
+		ADDi %0 %0 #2
+		POKE &SCORE %0 
+	.f5:	PEEK %0 &PLACE $I	; if((int)global PLACE[I] == 3 && (int)global PROP[I] == 0)global SCORE=global SCORE+K-2
+		NEQi %0 #3 @.f7
+		PEEK %0 &PROP $I
+		NEQi %0 #0 @.f7
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+K-2
+		ADDi %0 %0 $K
+		SUBi %0 %0 #2
+		POKE &SCORE %0 
+	.f7:	PEEK %0 &MXSCOR 	; global MXSCOR=global MXSCOR+K
+		ADDi %0 %0 $K
+		POKE &MXSCOR %0 
+	.f2:	FORi $I <A> @.l1	; } /* end loop */
+	.e0:	PEEK %0 &MAXDIE 	; global SCORE=global SCORE+(global MAXDIE-global NUMDIE)*10
+		PEEK %1 &NUMDIE 
+		SUBi %0 %0 %1
+		PEEK %1 &SCORE 
+		MULi %0 %0 #10
+		ADDi %1 %1 %0
+		POKE &SCORE %1 
+		PEEK %1 &MAXDIE 	; global MXSCOR=global MXSCOR+global MAXDIE*10
+		PEEK %0 &MXSCOR 
+		MULi %1 %1 #10
+		ADDi %0 %0 %1
+		POKE &MXSCOR %0 
+		NEQi $MODE #0 @.f8	; if(MODE == 0)global SCORE=global SCORE+4
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+4
+		ADDi %0 %0 #4
+		POKE &SCORE %0 
+	.f8:	PEEK %0 &MXSCOR 	; global MXSCOR=global MXSCOR+4
+		ADDi %0 %0 #4
+		POKE &MXSCOR %0 
+		PEEK %0 &DFLAG 	; if(global DFLAG != 0)global SCORE=global SCORE+25
+		EQUi %0 #0 @.f9
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+25
+		ADDi %0 %0 #25
+		POKE &SCORE %0 
+	.f9:	PEEK %0 &MXSCOR 	; global MXSCOR=global MXSCOR+25
+		ADDi %0 %0 #25
+		POKE &MXSCOR %0 
+		PEEK %0 &CLOSNG 	; if(global CLOSNG != FALSE)global SCORE=global SCORE+25
+		EQUi %0 #FALSE @.f10
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+25
+		ADDi %0 %0 #25
+		POKE &SCORE %0 
+	.f10:	PEEK %0 &MXSCOR 	; global MXSCOR=global MXSCOR+25
+		ADDi %0 %0 #25
+		POKE &MXSCOR %0 
+		PEEK %0 &CLOSED 	; if(global CLOSED != FALSE) 
+		EQUi %0 #FALSE @.f11
+		PEEK %0 &BONUS 	; if(global BONUS == 0)global SCORE=global SCORE+10
+		NEQi %0 #0 @.f12
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+10
+		ADDi %0 %0 #10
+		POKE &SCORE %0 
+	.f12:	PEEK %0 &BONUS 	; if(global BONUS == 135)global SCORE=global SCORE+25
+		NEQi %0 #135 @.f13
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+25
+		ADDi %0 %0 #25
+		POKE &SCORE %0 
+	.f13:	PEEK %0 &BONUS 	; if(global BONUS == 134)global SCORE=global SCORE+30
+		NEQi %0 #134 @.f14
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+30
+		ADDi %0 %0 #30
+		POKE &SCORE %0 
+	.f14:	PEEK %0 &BONUS 	; if(global BONUS == 133)global SCORE=global SCORE+45
+		NEQi %0 #133 @.f11
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+45
+		ADDi %0 %0 #45
+		POKE &SCORE %0 
+	.f11:	PEEK %0 &MXSCOR 	; global MXSCOR=global MXSCOR+45
+		ADDi %0 %0 #45
+		POKE &MXSCOR %0 
+		PEEK %0 &PLACE:MAGZIN 	; if((int)global PLACE[MAGZIN] == 108)global SCORE=global SCORE+1
+		NEQi %0 #108 @.f16
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+1
+		ADDi %0 %0 #1
+		POKE &SCORE %0 
+	.f16:	PEEK %0 &MXSCOR 	; global MXSCOR=global MXSCOR+1
+		ADDi %0 %0 #1
+		POKE &MXSCOR %0 
+		PEEK %0 &SCORE 	; global SCORE=global SCORE+2
+		ADDi %0 %0 #2
+		POKE &SCORE %0 
+		PEEK %0 &MXSCOR 	; global MXSCOR=global MXSCOR+2
+		ADDi %0 %0 #2
+		POKE &MXSCOR %0 
+		MOVi $I #1 	; for (I=1 to HNTMAX+1) 
+		! ADDi <A> #HNTMAX #1
+		GEQi #1 <A> @.e17
+	.l18:	PEEK %0 &HINTED $I	; if((int)global HINTED[I] != 0)global SCORE=global SCORE-(int)global HINTS[I * 5 + 2]
+		EQUi %0 #0 @.f19
+		MULi %0 $I #5	; global SCORE=global SCORE-(int)global HINTS[I * 5 + 2]
+		ADDi %0 %0 #2
+		PEEK %1 &SCORE 
+		PEEK %0 &HINTS %0
+		SUBi %1 %1 %0
+		POKE &SCORE %1 
+	.f19:	FORi $I <A> @.l18	; } /* end loop */
+	.e17:	PEEK %1 &NOVICE 	; if(global NOVICE != FALSE)global SCORE=global SCORE-5
+		EQUi %1 #FALSE @.f20
+		PEEK %1 &SCORE 	; global SCORE=global SCORE-5
+		SUBi %1 %1 #5
+		POKE &SCORE %1 
+	.f20:	PEEK %1 &CLSHNT 	; if(global CLSHNT != FALSE)global SCORE=global SCORE-10
+		EQUi %1 #FALSE @.f21
+		PEEK %1 &SCORE 	; global SCORE=global SCORE-10
+		SUBi %1 %1 #10
+		POKE &SCORE %1 
+	.f21:	PEEK %1 &SCORE 	; global SCORE=global SCORE-global TRNLUZ-global SAVED
+		PEEK %0 &TRNLUZ 
+		SUBi %1 %1 %0
+		PEEK %0 &SAVED 
+		SUBi %1 %1 %0
+		POKE &SCORE %1 
+		GEQi $MODE #0 @.f22	; if(MODE < 0) goto return
+		GOTO @return  	; goto return
+	.f22:	PEEK %1 &SCORE 	; if(global SCORE+global TRNLUZ+1 >= global MXSCOR && global TRNLUZ != 0)fRSPEAK(242)
+		PEEK %0 &TRNLUZ 
+		ADDi %1 %1 %0
+		ADDi %1 %1 #1
+		PEEK %0 &MXSCOR 
+		LSSi %1 %0 @.f24
+		PEEK %1 &TRNLUZ 
+		EQUi %1 #0 @.f24
+		MOVi %1 #242 	; fRSPEAK(242)
+		CALL &fRSPEAK %0 *2
+	.f24:	PEEK %0 &SCORE 	; if(global SCORE+global SAVED+1 >= global MXSCOR && global SAVED != 0)fRSPEAK(143)
+		PEEK %1 &SAVED 
+		ADDi %0 %0 %1
+		ADDi %0 %0 #1
+		PEEK %1 &MXSCOR 
+		LSSi %0 %1 @.f26
+		PEEK %0 &SAVED 
+		EQUi %0 #0 @.f26
+		MOVi %1 #143 	; fRSPEAK(143)
+		CALL &fRSPEAK %0 *2
+	.f26:	MOVi %1 #1 	; fSETPRM(1,global SCORE,global MXSCOR)
+		PEEK %2 &SCORE 
+		PEEK %3 &MXSCOR 
+		CALL &fSETPRM %0 *4
+		MOVi %1 #3 	; fSETPRM(3,global TURNS,global TURNS)
+		PEEK %2 &TURNS 
+		PEEK %3 &TURNS 
+		CALL &fSETPRM %0 *4
+		MOVi %1 #262 	; fRSPEAK(262)
+		CALL &fRSPEAK %0 *2
+		MOVi $I #1 	; for (I=1 to CLSSES+1) 
+		! ADDi <A> #CLSSES #1
+		GEQi #1 <A> @.e27
+	.l28:	PEEK %0 &CVAL $I	; if((int)global CVAL[I] >= global SCORE) 
+		PEEK %1 &SCORE 
+		LSSi %0 %1 @.f29
+		PEEK %1 &CTEXT $I	; fSPEAK(global CTEXT[I])
+		CALL &fSPEAK %0 *2
+		POKE &SPK #264 	; global SPK=264
+		GEQi $I #CLSSES @.f30	; if(I < CLSSES) 
+		PEEK %0 &CVAL $I	; I=(int)global CVAL[I]+1-global SCORE
+		ADDi %0 %0 #1
+		PEEK %1 &SCORE 
+		SUBi $I %0 %1
+		MOVi %1 #1 	; fSETPRM(1,I,I)
+		MOVi %2 $I 
+		MOVi %3 $I 
+		CALL &fSETPRM %0 *4
+		POKE &SPK #263 	; global SPK=263
+	.f30:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #0 	; exit(0)
+		CALL ^exit %0 *2
+	.f29:	FORi $I <A> @.l28	; } /* end loop */
+	.e27:	POKE &SPK #265 	; global SPK=265
+		PEEK %1 &SPK 	; fRSPEAK(global SPK)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #0 	; exit(0)
+		CALL ^exit %0 *2
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fVOCAB:	FUNC
+	$VOCAB:	OUTi
+	$ID:	INPi
+	$INIT:	INPi
+	$HASH:	LOCi
+	$I:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $HASH #10000 	; HASH=10000
+		MOVi $I #1 	; for (I=1 to TABSIZ+1) 
+		! ADDi <A> #TABSIZ #1
+		GEQi #1 <A> @.e0
+	.l1:	PEEK %0 &KTAB $I	; if((int)global KTAB[I] == -1) 
+		NEQi %0 #-1 @.f2
+		MOVi $VOCAB #-1 	; VOCAB= -1
+		GEQi $INIT #0 @.f3	; if(INIT < 0) goto return
+		GOTO @return  	; goto return
+	.f3:	MOVi %1 #5 	; fBUG(5)
+		CALL &fBUG %0 *2
+	.f2:	ADDi $HASH $HASH #7	; HASH=HASH+7
+		LSSi $INIT #0 @.f4	; if(!(INIT >= 0 && (int)global KTAB[I]/1000 != INIT)) 
+		PEEK %0 &KTAB $I
+		DIVi %0 %0 #1000
+		NEQi %0 $INIT @.f5
+	.f4:	MULi %0 $HASH $HASH	; if((int)global ATAB[I] == ID+HASH*HASH) 
+		PEEK %1 &ATAB $I
+		ADDi %0 $ID %0
+		NEQi %1 %0 @.f5
+		PEEK $VOCAB &KTAB $I	; VOCAB=(int)global KTAB[I]
+		LSSi $INIT #0 @return	; if(INIT >= 0)VOCAB=((VOCAB)%1000)
+		MODi $VOCAB $VOCAB #1000	; VOCAB=((VOCAB)%1000)
+		GOTO @return  	; goto return
+	.f5:	FORi $I <A> @.l1	; } /* end loop */
+	.e0:	MOVi %1 #21 	; fBUG(21)
+		CALL &fBUG %0 *2
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fCARRY:	FUNC
+		PARA *1
+	$OBJECT:	INPi
+	$WHERE:	INPi
+	$TEMP:	LOCi
+;-----------------------------------------------------------------------------
+		GRTi $OBJECT #100 @.f0	; if(OBJECT <= 100) 
+		PEEK %0 &PLACE $OBJECT	; if((int)global PLACE[OBJECT] == -1) goto return
+		NEQi %0 #-1 @.f1
+		GOTO @return  	; goto return
+	.f1:	POKE &PLACE $OBJECT #-1	; global PLACE[OBJECT]= -1
+		PEEK %0 &HOLDNG 	; global HOLDNG=global HOLDNG+1
+		ADDi %0 %0 #1
+		POKE &HOLDNG %0 
+	.f0:	PEEK %0 &ATLOC $WHERE	; if((int)global ATLOC[WHERE] == OBJECT) 
+		NEQi %0 $OBJECT @.f2
+		PEEK %0 &LINK $OBJECT	; global ATLOC[WHERE]=global LINK[OBJECT]
+		POKE &ATLOC $WHERE %0
+		GOTO @return  	; goto return
+	.f2:	PEEK $TEMP &ATLOC $WHERE	; TEMP=(int)global ATLOC[WHERE]
+	.l3:	PEEK %0 &LINK $TEMP	; while ((int)global LINK[TEMP] != OBJECT) 
+		EQUi %0 $OBJECT @.e4
+		PEEK $TEMP &LINK $TEMP	; TEMP=(int)global LINK[TEMP]
+		GOTO @.l3  	; }
+	.e4:	PEEK %0 &LINK $OBJECT	; global LINK[TEMP]=global LINK[OBJECT]
+		POKE &LINK $TEMP %0
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fDROP:	FUNC
+		PARA *1
+	$OBJECT:	INPi
+	$WHERE:	INPi
+;-----------------------------------------------------------------------------
+		GRTi $OBJECT #100 @.f0	; if(OBJECT <= 100) 
+		PEEK %0 &PLACE $OBJECT	; if((int)global PLACE[OBJECT] == -1)global HOLDNG=global HOLDNG-1
+		NEQi %0 #-1 @.f1
+		PEEK %0 &HOLDNG 	; global HOLDNG=global HOLDNG-1
+		SUBi %0 %0 #1
+		POKE &HOLDNG %0 
+	.f1:	POKE &PLACE $OBJECT $WHERE	; global PLACE[OBJECT]=WHERE
+		GOTO @.e2  	; } else 
+	.f0:	SUBi %0 $OBJECT #100	; global FIXED[OBJECT-100]=WHERE
+		POKE &FIXED %0 $WHERE
+	.e2:	LEQi $WHERE #0 @.f3	; if(WHERE > 0) 
+		PEEK %0 &ATLOC $WHERE	; global LINK[OBJECT]=global ATLOC[WHERE]
+		POKE &LINK $OBJECT %0
+		POKE &ATLOC $WHERE $OBJECT	; global ATLOC[WHERE]=OBJECT
+	.f3:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fMOVE:	FUNC
+		PARA *1
+	$OBJECT:	INPi
+	$WHERE:	INPi
+	$FROM:	LOCi
+;-----------------------------------------------------------------------------
+		GRTi $OBJECT #100 @.f0	; if(OBJECT <= 100) 
+		PEEK $FROM &PLACE $OBJECT	; FROM=(int)global PLACE[OBJECT]
+		GOTO @.e1  	; } else 
+	.f0:	SUBi %0 $OBJECT #100	; FROM=(int)global FIXED[OBJECT-100]
+		PEEK $FROM &FIXED %0
+	.e1:	LEQi $FROM #0 @.f3	; if(FROM > 0 && FROM <= 300)fCARRY(OBJECT,FROM)
+		GRTi $FROM #300 @.f3
+		MOVi %1 $OBJECT 	; fCARRY(OBJECT,FROM)
+		MOVi %2 $FROM 
+		CALL &fCARRY %0 *3
+	.f3:	MOVi %1 $OBJECT 	; fDROP(OBJECT,WHERE)
+		MOVi %2 $WHERE 
+		CALL &fDROP %0 *3
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fDSTROY:	FUNC
+		PARA *1
+	$OBJECT:	INPi
+;-----------------------------------------------------------------------------
+		MOVi %1 $OBJECT 	; fMOVE(OBJECT,0)
+		MOVi %2 #0 
+		CALL &fMOVE %0 *3
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fJUGGLE:	FUNC
+		PARA *1
+	$OBJECT:	INPi
+	$I:	LOCi
+	$J:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $I &PLACE $OBJECT	; I=(int)global PLACE[OBJECT]
+		PEEK $J &FIXED $OBJECT	; J=(int)global FIXED[OBJECT]
+		MOVi %1 $OBJECT 	; fMOVE(OBJECT,I)
+		MOVi %2 $I 
+		CALL &fMOVE %0 *3
+		ADDi %1 $OBJECT #100	; fMOVE(OBJECT+100,J)
+		MOVi %2 $J 
+		CALL &fMOVE %0 *3
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fPUT:	FUNC
+	$PUT:	OUTi
+	$OBJECT:	INPi
+	$WHERE:	INPi
+	$PVAL:	INPi
+;-----------------------------------------------------------------------------
+		MOVi %1 $OBJECT 	; fMOVE(OBJECT,WHERE)
+		MOVi %2 $WHERE 
+		CALL &fMOVE %0 *3
+		SUBi $PUT #-1 $PVAL	; PUT=(-1)-PVAL
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fATDWRF:	FUNC
+	$ATDWRF:	OUTi
+	$WHERE:	INPi
+	$I:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $ATDWRF #0 	; ATDWRF=0
+		PEEK %0 &DFLAG 	; if(global DFLAG < 2) goto return
+		GEQi %0 #2 @.f0
+		GOTO @return  	; goto return
+	.f0:	MOVi $ATDWRF #-1 	; ATDWRF= -1
+		MOVi $I #1 	; for (I=1 to 5+1) 
+		! ADDi <A> #5 #1
+		GEQi #1 <A> @.e1
+	.l2:	PEEK %0 &DLOC $I	; if((int)global DLOC[I] == WHERE) 
+		NEQi %0 $WHERE @.f3
+		MOVi $ATDWRF $I 	; ATDWRF=I
+		GOTO @return  	; goto return
+	.f3:	PEEK %0 &DLOC $I	; if((int)global DLOC[I] != 0)ATDWRF=0
+		EQUi %0 #0 @.f4
+		MOVi $ATDWRF #0 	; ATDWRF=0
+	.f4:	FORi $I <A> @.l2	; } /* end loop */
+	.e1:	NOOP
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fRNDVOC:	FUNC
+	$RNDVOC:	OUTi
+	$CHAR:	INPi
+	$FORCE:	INPi
+	$DIV:	LOCi
+	$I:	LOCi
+	$J:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $RNDVOC $FORCE 	; RNDVOC=FORCE
+		NEQi $RNDVOC #0 @.f0	; if(RNDVOC == 0) 
+		MOVi $I #1 	; for (I=1 to 5+1) 
+		! ADDi <A> #5 #1
+		GEQi #1 <A> @.f0
+	.l2:	MOVi %1 #26 	; J=11+(int)fRAN(26)
+		CALL &fRAN %0 *2
+		ADDi $J #11 %0
+		NEQi $I #2 @.f3	; if(I == 2)J=CHAR
+		MOVi $J $CHAR 	; J=CHAR
+	.f3:	MULi %0 $RNDVOC #64	; RNDVOC=RNDVOC*64+J
+		ADDi $RNDVOC %0 $J
+		FORi $I <A> @.l2	; } /* end loop */
+	.f0:	MOVi $J #10000 	; J=10000
+		! MULi <A> #64 #64	; DIV=64*64*64
+		! MULi <A> <A> #64
+		MOVi $DIV <A> 
+		MOVi $I #1 	; for (I=1 to TABSIZ+1) 
+		! ADDi <A> #TABSIZ #1
+		GEQi #1 <A> @.e4
+	.l5:	ADDi $J $J #7	; J=J+7
+		PEEK %0 &ATAB $I	; if(((((int)global ATAB[I]-J*J)/DIV)%64) == CHAR) 
+		MULi %1 $J $J
+		SUBi %0 %0 %1
+		DIVi %0 %0 $DIV
+		MODi %0 %0 #64
+		NEQi %0 $CHAR @.f6
+		MULi %0 $J $J	; (int)global ATAB[I]=RNDVOC+J*J
+		ADDi %0 $RNDVOC %0
+		POKE &ATAB $I %0
+		GOTO @return  	; goto return
+	.f6:	FORi $I <A> @.l5	; } /* end loop */
+	.e4:	MOVi %1 #5 	; fBUG(5)
+		CALL &fBUG %0 *2
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+initialise:	FUNC
+		PARA *1
+	$I:	LOCi
+	$K:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $I #1 	; for (I=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.e0
+	.l1:	POKE &PLACE $I #0	; global PLACE[I]=0
+		POKE &PROP $I #0	; global PROP[I]=0
+		POKE &LINK $I #0	; global LINK[I]=0
+		ADDi %0 $I #100	; global LINK[I + 100]=0
+		POKE &LINK %0 #0
+		FORi $I <A> @.l1	; } /* end loop */
+	.e0:	MOVi $I #1 	; for (I=1 to LOCSIZ+1) 
+		! ADDi <A> #LOCSIZ #1
+		GEQi #1 <A> @.e2
+	.l3:	POKE &ABB $I #0	; global ABB[I]=0
+		PEEK %0 &LTEXT $I	; if(!((int)global LTEXT[I] == 0 || (int)global KEY[I] == 0)) 
+		EQUi %0 #0 @.f5
+		PEEK %0 &KEY $I
+		EQUi %0 #0 @.f5
+		PEEK $K &KEY $I	; K=(int)global KEY[I]
+		PEEK %0 &TRAVEL $K	; if(((abs((int)global TRAVEL[K]))%1000) == 1)global COND[I]=2
+		ABSi %0 %0 
+		MODi %0 %0 #1000
+		NEQi %0 #1 @.f5
+		POKE &COND $I #2	; global COND[I]=2
+	.f5:	POKE &ATLOC $I #0	; global ATLOC[I]=0
+		FORi $I <A> @.l3	; } /* end loop */
+	.e2:	MOVi $I #1 	; for (I=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.e7
+	.l8:	SUBi $K #101 $I	; K=101-I
+		PEEK %0 &FIXD $K	; if(!((int)global FIXD[K] <= 0)) 
+		LEQi %0 #0 @.f9
+		ADDi %1 $K #100	; fDROP(K+100,global FIXD[K])
+		PEEK %2 &FIXD $K
+		CALL &fDROP %0 *3
+		MOVi %1 $K 	; fDROP(K,global PLAC[K])
+		PEEK %2 &PLAC $K
+		CALL &fDROP %0 *3
+	.f9:	FORi $I <A> @.l8	; } /* end loop */
+	.e7:	MOVi $I #1 	; for (I=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.e10
+	.l11:	SUBi $K #101 $I	; K=101-I
+		PEEK %0 &FIXD $K	; global FIXED[K]=global FIXD[K]
+		POKE &FIXED $K %0
+		PEEK %0 &PLAC $K	; if((int)global PLAC[K] != 0 && (int)global FIXD[K] <= 0)fDROP(K,global PLAC[K])
+		EQUi %0 #0 @.f13
+		PEEK %0 &FIXD $K
+		GRTi %0 #0 @.f13
+		MOVi %1 $K 	; fDROP(K,global PLAC[K])
+		PEEK %2 &PLAC $K
+		CALL &fDROP %0 *3
+	.f13:	FORi $I <A> @.l11	; } /* end loop */
+	.e10:	POKE &TALLY #0 	; global TALLY=0
+		MOVi $I #50 	; for (I=50 to MAXTRS+1) 
+		! ADDi <A> #MAXTRS #1
+		GEQi #50 <A> @.e14
+	.l15:	PEEK %0 &PTEXT $I	; if((int)global PTEXT[I] != 0)global PROP[I]= -1
+		EQUi %0 #0 @.f16
+		POKE &PROP $I #-1	; global PROP[I]= -1
+	.f16:	PEEK %0 &TALLY 	; global TALLY=global TALLY-(int)global PROP[I]
+		PEEK %1 &PROP $I
+		SUBi %0 %0 %1
+		POKE &TALLY %0 
+		FORi $I <A> @.l15	; } /* end loop */
+	.e14:	MOVi $I #1 	; for (I=1 to HNTMAX+1) 
+		! ADDi <A> #HNTMAX #1
+		GEQi #1 <A> @.e17
+	.l18:	POKE &HINTED $I #FALSE	; global HINTED[I]=FALSE
+		POKE &HINTLC $I #0	; global HINTLC[I]=0
+		FORi $I <A> @.l18	; } /* end loop */
+	.e17:	MOVi $I #1 	; for (I=1 to 6+1) 
+		! ADDi <A> #6 #1
+		GEQi #1 <A> @.e19
+	.l20:	POKE &DSEEN $I #FALSE	; global DSEEN[I]=FALSE
+		FORi $I <A> @.l20	; } /* end loop */
+	.e19:	POKE &DFLAG #0 	; global DFLAG=0
+		POKE &DLOC:1 #19 	; global DLOC[1]=19
+		POKE &DLOC:2 #27 	; global DLOC[2]=27
+		POKE &DLOC:3 #33 	; global DLOC[3]=33
+		POKE &DLOC:4 #44 	; global DLOC[4]=44
+		POKE &DLOC:5 #64 	; global DLOC[5]=64
+		POKE &DLOC:6 #CHLOC 	; global DLOC[6]=CHLOC
+		POKE &THRESH #-1 	; global THRESH= -1
+		LEQi #TRNVLS #0 @.f21	; if(TRNVLS > 0)global THRESH=(((int)global TRNVAL[1])%100000)+1
+		PEEK %0 &TRNVAL:1 	; global THRESH=(((int)global TRNVAL[1])%100000)+1
+		MODi %0 %0 #100000
+		ADDi %0 %0 #1
+		POKE &THRESH %0 
+	.f21:	MOVi $I #0 	; for (I=0 to 4+1) 
+		! ADDi <A> #4 #1
+		GEQi #0 <A> @.e22
+	.l23:	MULi %0 #2 $I	; if((int)global RTEXT[2*I+81] != 0)global MAXDIE=I+1
+		ADDi %0 %0 #81
+		PEEK %0 &RTEXT %0
+		EQUi %0 #0 @.f24
+		ADDi %0 $I #1	; global MAXDIE=I+1
+		POKE &MAXDIE %0 
+	.f24:	FORi $I <A> @.l23	; } /* end loop */
+	.e22:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+TOTING:	FUNC
+	$r:	OUTi
+	$OBJ:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #FALSE 	; r = FALSE
+		PEEK %0 &PLACE $OBJ	; if ((int)global PLACE[OBJ] == -1) r = TRUE
+		NEQi %0 #-1 @.f0
+		MOVi $r #TRUE 	; r = TRUE
+	.f0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+AT:	FUNC
+	$r:	OUTi
+	$OBJ:	INPi
+	$LOC:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #FALSE 	; r = FALSE
+		PEEK %0 &PLACE $OBJ	; if ((int)global PLACE[OBJ] == LOC || (int)global FIXED[OBJ] == LOC) r = TRUE
+		EQUi %0 $LOC @.t0
+		PEEK %0 &FIXED $OBJ
+		NEQi %0 $LOC @.f1
+	.t0:	MOVi $r #TRUE 	; r = TRUE
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+HERE:	FUNC
+	$r:	OUTi
+	$OBJ:	INPi
+	$LOC:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #FALSE 	; r = FALSE
+		MOVi %1 $OBJ 	; if (((int)AT(OBJ, LOC) | (int)TOTING(OBJ)) != FALSE) r = TRUE
+		MOVi %2 $LOC 
+		CALL &AT %0 *3
+		MOVi %2 $OBJ 
+		CALL &TOTING %1 *2
+		IORi %0 %0 %1
+		EQUi %0 #FALSE @.f0
+		MOVi $r #TRUE 	; r = TRUE
+	.f0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+LIQ2:	FUNC
+	$r:	OUTi
+	$PBOTL:	INPi
+;-----------------------------------------------------------------------------
+		SUBi %0 #1 $PBOTL	; r = ((1-(PBOTL))*WATER+((PBOTL)/2)*(WATER+OIL))
+		DIVi %1 $PBOTL #2
+		! ADDi <A> #WATER #OIL
+		MULi %0 %0 #WATER
+		MULi %1 %1 <A>
+		ADDi $r %0 %1
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+LIQ:	FUNC
+	$r:	OUTi
+;-----------------------------------------------------------------------------
+		PEEK %0 &PROP:BOTTLE 	; if ((int)global PROP[BOTTLE]<0) r = -1-(int)global PROP[BOTTLE]
+		GEQi %0 #0 @.f0
+		PEEK %0 &PROP:BOTTLE 	; r = -1-(int)global PROP[BOTTLE]
+		SUBi $r #-1 %0
+		GOTO @.e1  
+	.f0:	PEEK $r &PROP:BOTTLE 	; r = (int)global PROP[BOTTLE]
+	.e1:	MOVi %1 $r 	; r = (int)LIQ2(r)
+		CALL &LIQ2 %0 *2
+		MOVi $r %0 
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+LIQLOC:	FUNC
+	$r:	OUTi
+	$LOC:	INPi
+;-----------------------------------------------------------------------------
+		PEEK %1 &COND $LOC	; r = (int)LIQ2(((((int)global COND[LOC]/2*2)%8)-5)*(((int)global COND[LOC]/4)%2)+1)
+		DIVi %1 %1 #2
+		MULi %1 %1 #2
+		MODi %1 %1 #8
+		PEEK %2 &COND $LOC
+		DIVi %2 %2 #4
+		SUBi %1 %1 #5
+		MODi %2 %2 #2
+		MULi %1 %1 %2
+		ADDi %1 %1 #1
+		CALL &LIQ2 %0 *2
+		MOVi $r %0 
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+CNDBIT:	FUNC
+	$r:	OUTi
+	$L:	INPi
+	$N:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #FALSE 	; r = FALSE
+		PEEK %0 &COND $L	; if (((int)global COND[L] & (1 << N)) != 0) r = TRUE
+		SHLi %1 #1 $N
+		ANDi %0 %0 %1
+		EQUi %0 #0 @.f0
+		MOVi $r #TRUE 	; r = TRUE
+	.f0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+DARK:	FUNC
+	$r:	OUTi
+	$LOC:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #FALSE 	; r = FALSE
+		MOVi %1 $LOC 	; if (((int)CNDBIT(LOC,0) == FALSE) && ((int)global PROP[LAMP] == 0 || (int)HERE(LAMP, LOC) == FALSE)) r = TRUE
+		MOVi %2 #0 
+		CALL &CNDBIT %0 *3
+		NEQi %0 #FALSE @.f2
+		PEEK %0 &PROP:LAMP 
+		EQUi %0 #0 @.t1
+		MOVi %1 #LAMP 
+		MOVi %2 $LOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f2
+	.t1:	MOVi $r #TRUE 	; r = TRUE
+	.f2:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+GSTONE:	FUNC
+	$r:	OUTi
+	$OBJ:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #FALSE 	; r = FALSE
+		EQUi $OBJ #EMRALD @.t0	; if ((OBJ) == EMRALD || (OBJ) == RUBY || (OBJ) == AMBER || (OBJ) == SAPPH) r = TRUE
+		EQUi $OBJ #RUBY @.t0
+		EQUi $OBJ #AMBER @.t0
+		NEQi $OBJ #SAPPH @.f1
+	.t0:	MOVi $r #TRUE 	; r = TRUE
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+FOREST:	FUNC
+	$r:	OUTi
+	$LOC:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #FALSE 	; r = FALSE
+		LSSi $LOC #145 @.f1	; if ((LOC) >= 145 && (LOC) <= 166) r = TRUE
+		GRTi $LOC #166 @.f1
+		MOVi $r #TRUE 	; r = TRUE
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+OUTSID:	FUNC
+	$r:	OUTi
+	$LOC:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #FALSE 	; r = FALSE
+		LEQi $LOC #8 @.t0	; if ((LOC) <= 8 || (int)FOREST(LOC) != FALSE || (LOC) == (int)global PLAC[SAPPH] || (LOC) == 180 || (LOC) == 182) r = TRUE
+		MOVi %1 $LOC 
+		CALL &FOREST %0 *2
+		NEQi %0 #FALSE @.t0
+		PEEK %0 &PLAC:SAPPH 
+		EQUi $LOC %0 @.t0
+		EQUi $LOC #180 @.t0
+		NEQi $LOC #182 @.f1
+	.t0:	MOVi $r #TRUE 	; r = TRUE
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+INDEEP:	FUNC
+	$r:	OUTi
+	$LOC:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #FALSE 	; r = FALSE
+		LSSi $LOC #15 @.f1	; if ((LOC) >= 15 && (int)OUTSID(LOC) == FALSE && (LOC) != 179) r = TRUE
+		MOVi %1 $LOC 
+		CALL &OUTSID %0 *2
+		NEQi %0 #FALSE @.f1
+		EQUi $LOC #179 @.f1
+		MOVi $r #TRUE 	; r = TRUE
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+discard:	FUNC
+	$goValue:	OUTi
+	$just_do_it:	INPi
+	$lK:	LOCi
+	$lLOC:	LOCi
+	$lOBJ:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $lLOC &gLOC 	; lLOC = global gLOC
+		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
+		NEQi $just_do_it #FALSE @.f0	; if(just_do_it == FALSE) 
+		MOVi %1 #ROD2 	; if((int)TOTING(ROD2) != FALSE && lOBJ == ROD && (int)TOTING(ROD) == FALSE) 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f2
+		NEQi $lOBJ #ROD @.f2
+		MOVi %1 #ROD 
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f2
+		MOVi $lOBJ #ROD2 	; lOBJ=ROD2
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f2:	MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) == FALSE) 
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f3
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e4  	; }
+	.f3:	NEQi $lOBJ #BIRD @.f6	; if(!(lOBJ != BIRD || (int)HERE(SNAKE, lLOC) == FALSE)) 
+		MOVi %1 #SNAKE 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f6
+		MOVi %1 #30 	; fRSPEAK(30)
+		CALL &fRSPEAK %0 *2
+		PEEK %0 &CLOSED 	; if(global CLOSED != FALSE) 
+		EQUi %0 #FALSE @.f7
+		MOVi $goValue #GOTO19000 	; goValue = GOTO19000
+		GOTO @return  	; goto return
+	.f7:	MOVi %1 #SNAKE 	; fDSTROY(SNAKE)
+		CALL &fDSTROY %0 *2
+		POKE &PROP:SNAKE #1 	; global PROP[SNAKE]=1
+		GOTO @.e8  	; } else if(!(!((int)GSTONE(lOBJ) != FALSE && (int)AT(CAVITY, lLOC) != FALSE && (int)global PROP[CAVITY] != 0))) 
+	.f6:	MOVi %1 $lOBJ 	; if(!(!((int)GSTONE(lOBJ) != FALSE && (int)AT(CAVITY, lLOC) != FALSE && (int)global PROP[CAVITY] != 0))) 
+		CALL &GSTONE %0 *2
+		EQUi %0 #FALSE @.f10
+		MOVi %1 #CAVITY 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f10
+		PEEK %0 &PROP:CAVITY 
+		EQUi %0 #0 @.f10
+		MOVi %1 #218 	; fRSPEAK(218)
+		CALL &fRSPEAK %0 *2
+		POKE &PROP $lOBJ #1	; global PROP[lOBJ]=1
+		POKE &PROP:CAVITY #0 	; global PROP[CAVITY]=0
+		MOVi %1 #RUG 	; if(!((int)HERE(RUG, lLOC) == FALSE || !((lOBJ == EMRALD && (int)global PROP[RUG] != 2) || (lOBJ == RUBY && (int)global PROP[RUG] == 2)))) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.e20
+		NEQi $lOBJ #EMRALD @.f12
+		PEEK %0 &PROP:RUG 
+		NEQi %0 #2 @.t13
+	.f12:	NEQi $lOBJ #RUBY @.e20
+		PEEK %0 &PROP:RUG 
+		NEQi %0 #2 @.e20
+	.t13:	POKE &SPK #219 	; global SPK=219
+		MOVi %1 #RUG 	; if((int)TOTING(RUG) != FALSE)global SPK=220
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f16
+		POKE &SPK #220 	; global SPK=220
+	.f16:	NEQi $lOBJ #RUBY @.f17	; if(lOBJ == RUBY)global SPK=221
+		POKE &SPK #221 	; global SPK=221
+	.f17:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
+		CALL &fRSPEAK %0 *2
+		PEEK %0 &SPK 	; if(!(global SPK == 220)) 
+		EQUi %0 #220 @.e20
+		PEEK %0 &PROP:RUG 	; lK=2-(int)global PROP[RUG]
+		SUBi $lK #2 %0
+		POKE &PROP:RUG $lK 	; global PROP[RUG]=lK
+		NEQi $lK #2 @.f19	; if(lK == 2) lK=(int)global PLAC[SAPPH]
+		PEEK $lK &PLAC:SAPPH 	; lK=(int)global PLAC[SAPPH]
+	.f19:	ADDi %1 #RUG #100	; fMOVE(RUG+100,lK)
+		MOVi %2 $lK 
+		CALL &fMOVE %0 *3
+		GOTO @.e20  	; } else if(!(lOBJ != COINS || (int)HERE(VEND, lLOC) == FALSE)) 
+	.f10:	NEQi $lOBJ #COINS @.f22	; if(!(lOBJ != COINS || (int)HERE(VEND, lLOC) == FALSE)) 
+		MOVi %1 #VEND 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f22
+		MOVi %1 #COINS 	; fDSTROY(COINS)
+		CALL &fDSTROY %0 *2
+		MOVi %1 #BATTER 	; fDROP(BATTER,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+		MOVi %1 #BATTER 	; fPSPEAK(BATTER,0)
+		MOVi %2 #0 
+		CALL &fPSPEAK %0 *3
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+		GOTO @.e23  	; } else if(!(lOBJ != BIRD || (int)AT(DRAGON, lLOC) == FALSE || (int)global PROP[DRAGON] != 0)) 
+	.f22:	NEQi $lOBJ #BIRD @.f25	; if(!(lOBJ != BIRD || (int)AT(DRAGON, lLOC) == FALSE || (int)global PROP[DRAGON] != 0)) 
+		MOVi %1 #DRAGON 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f25
+		PEEK %0 &PROP:DRAGON 
+		NEQi %0 #0 @.f25
+		MOVi %1 #154 	; fRSPEAK(154)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #BIRD 	; fDSTROY(BIRD)
+		CALL &fDSTROY %0 *2
+		POKE &PROP:BIRD #0 	; global PROP[BIRD]=0
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+		GOTO @.e26  	; } else if(!(lOBJ != BEAR || (int)AT(TROLL, lLOC) == FALSE)) 
+	.f25:	NEQi $lOBJ #BEAR @.f28	; if(!(lOBJ != BEAR || (int)AT(TROLL, lLOC) == FALSE)) 
+		MOVi %1 #TROLL 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f28
+		MOVi %1 #163 	; fRSPEAK(163)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #TROLL 	; fMOVE(TROLL,0)
+		MOVi %2 #0 
+		CALL &fMOVE %0 *3
+		ADDi %1 #TROLL #100	; fMOVE(TROLL+100,0)
+		MOVi %2 #0 
+		CALL &fMOVE %0 *3
+		MOVi %1 #TROLL2 	; fMOVE(TROLL2,global PLAC[TROLL])
+		PEEK %2 &PLAC:TROLL 
+		CALL &fMOVE %0 *3
+		ADDi %1 #TROLL2 #100	; fMOVE(TROLL2+100,global FIXD[TROLL])
+		PEEK %2 &FIXD:TROLL 
+		CALL &fMOVE %0 *3
+		MOVi %1 #CHASM 	; fJUGGLE(CHASM)
+		CALL &fJUGGLE %0 *2
+		POKE &PROP:TROLL #2 	; global PROP[TROLL]=2
+		GOTO @.e29  	; } else if(!(lOBJ == VASE && lLOC != (int)global PLAC[PILLOW])) 
+	.f28:	NEQi $lOBJ #VASE @.f30	; if(!(lOBJ == VASE && lLOC != (int)global PLAC[PILLOW])) 
+		PEEK %0 &PLAC:PILLOW 
+		NEQi $lLOC %0 @.f31
+	.f30:	MOVi %1 #54 	; fRSPEAK(54)
+		CALL &fRSPEAK %0 *2
+		GOTO @.e32  	; } else 
+	.f31:	POKE &PROP:VASE #2 	; global PROP[VASE]=2
+		MOVi %1 #PILLOW 	; if((int)AT(PILLOW, lLOC) != FALSE)global PROP[VASE]=0
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f33
+		POKE &PROP:VASE #0 	; global PROP[VASE]=0
+	.f33:	MOVi %1 #VASE 	; fPSPEAK(VASE,(int)global PROP[VASE]+1)
+		PEEK %2 &PROP:VASE 
+		ADDi %2 %2 #1
+		CALL &fPSPEAK %0 *3
+		PEEK %0 &PROP:VASE 	; if((int)global PROP[VASE] != 0)global FIXED[VASE]= -1
+		EQUi %0 #0 @.f0
+		POKE &FIXED:VASE #-1 	; global FIXED[VASE]= -1
+	.e32:	NOOP
+	.e29:	NOOP
+	.e26:	NOOP
+	.e23:	NOOP
+	.e20:	NOOP
+	.e8:	NOOP
+	.e4:	NOOP
+	.f0:	CALL &LIQ %0 *1	; lK=(int)LIQ()
+		MOVi $lK %0 
+		POKE &gK $lK 	; global gK = lK
+		NEQi $lK $lOBJ @.f35	; if(lK == lOBJ) 
+		MOVi $lOBJ #BOTTLE 	; lOBJ=BOTTLE
+		POKE &gOBJ #BOTTLE 	; global gOBJ = BOTTLE
+	.f35:	NEQi $lOBJ #BOTTLE @.f37	; if(lOBJ == BOTTLE && lK != 0)global PLACE[lK]=0
+		EQUi $lK #0 @.f37
+		POKE &PLACE $lK #0	; global PLACE[lK]=0
+	.f37:	NEQi $lOBJ #CAGE @.f39	; if(lOBJ == CAGE && (int)global PROP[BIRD] == 1)fDROP(BIRD,lLOC)
+		PEEK %0 &PROP:BIRD 
+		NEQi %0 #1 @.f39
+		MOVi %1 #BIRD 	; fDROP(BIRD,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+	.f39:	MOVi %1 $lOBJ 	; fDROP(lOBJ,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+		EQUi $lOBJ #BIRD @.f40	; if(lOBJ != BIRD) 
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	.f40:	POKE &PROP:BIRD #0 	; global PROP[BIRD]=0
+		MOVi %1 $lLOC 	; if((int)FOREST(lLOC) != FALSE)global PROP[BIRD]=2
+		CALL &FOREST %0 *2
+		EQUi %0 #FALSE @.f41
+		POKE &PROP:BIRD #2 	; global PROP[BIRD]=2
+	.f41:	MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fill:	FUNC
+	$goValue:	OUTi
+	$OBJ:	INPi
+	$lK:	LOCi
+	$lLOC:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $lLOC &gLOC 	; lLOC = global gLOC
+		EQUi $OBJ #VASE @.f0	; if(OBJ != VASE) 
+		NEQi $OBJ #URN @.f1	; if(OBJ == URN) 
+		POKE &SPK #213 	; global SPK=213
+		PEEK %0 &PROP:URN 	; if((int)global PROP[URN] != 0) 
+		EQUi %0 #0 @.f2
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f2:	POKE &SPK #144 	; global SPK=144
+		CALL &LIQ %0 *1	; lK=(int)LIQ()
+		MOVi $lK %0 
+		POKE &gK $lK 	; global gK = lK
+		EQUi $lK #0 @.t3	; if(lK == 0 || (int)HERE(BOTTLE, lLOC) == FALSE) 
+		MOVi %1 #BOTTLE 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f4
+	.t3:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f4:	POKE &PLACE $lK #0	; global PLACE[lK]=0
+		POKE &PROP:BOTTLE #1 	; global PROP[BOTTLE]=1
+		NEQi $lK #OIL @.f5	; if(lK == OIL)global PROP[URN]=1
+		POKE &PROP:URN #1 	; global PROP[URN]=1
+	.f5:	PEEK %0 &PROP:URN 	; global SPK=211+(int)global PROP[URN]
+		ADDi %0 #211 %0
+		POKE &SPK %0 
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f1:	EQUi $OBJ #0 @.f7	; if(OBJ != 0 && OBJ != BOTTLE) 
+		EQUi $OBJ #BOTTLE @.f7
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f7:	NEQi $OBJ #0 @.f9	; if(OBJ == 0 && (int)HERE(BOTTLE, lLOC) == FALSE) 
+		MOVi %1 #BOTTLE 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f9
+		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f9:	POKE &SPK #107 	; global SPK=107
+		MOVi %1 $lLOC 	; if((int)LIQLOC(lLOC) == 0)global SPK=106
+		CALL &LIQLOC %0 *2
+		NEQi %0 #0 @.f10
+		POKE &SPK #106 	; global SPK=106
+	.f10:	MOVi %1 #URN 	; if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] != 0)global SPK=214
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f12
+		PEEK %0 &PROP:URN 
+		EQUi %0 #0 @.f12
+		POKE &SPK #214 	; global SPK=214
+	.f12:	CALL &LIQ %0 *1	; if((int)LIQ() != 0)global SPK=105
+		EQUi %0 #0 @.f13
+		POKE &SPK #105 	; global SPK=105
+	.f13:	PEEK %0 &SPK 	; if(global SPK != 107) 
+		EQUi %0 #107 @.f14
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f14:	PEEK %0 &COND $lLOC	; global PROP[BOTTLE]=(((int)global COND[lLOC])%4)/2*2
+		MODi %0 %0 #4
+		DIVi %0 %0 #2
+		MULi %0 %0 #2
+		POKE &PROP:BOTTLE %0 
+		CALL &LIQ %0 *1	; lK=(int)LIQ()
+		MOVi $lK %0 
+		POKE &gK $lK 	; global gK = lK
+		MOVi %1 #BOTTLE 	; if((int)TOTING(BOTTLE) != FALSE)global PLACE[lK]= -1
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f15
+		POKE &PLACE $lK #-1	; global PLACE[lK]= -1
+	.f15:	NEQi $lK #OIL @.f16	; if(lK == OIL)global SPK=108
+		POKE &SPK #108 	; global SPK=108
+	.f16:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e17  	; } else 
+	.f0:	POKE &SPK #29 	; global SPK=29
+		MOVi %1 $lLOC 	; if((int)LIQLOC(lLOC) == 0)global SPK=144
+		CALL &LIQLOC %0 *2
+		NEQi %0 #0 @.f18
+		POKE &SPK #144 	; global SPK=144
+	.f18:	MOVi %1 $lLOC 	; if((int)LIQLOC(lLOC) == 0 || (int)TOTING(VASE) == FALSE) 
+		CALL &LIQLOC %0 *2
+		EQUi %0 #0 @.t19
+		MOVi %1 #VASE 
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f20
+	.t19:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f20:	MOVi %1 #145 	; fRSPEAK(145)
+		CALL &fRSPEAK %0 *2
+		POKE &PROP:VASE #2 	; global PROP[VASE]=2
+		POKE &FIXED:VASE #-1 	; global FIXED[VASE]= -1
+		MOVi %1 #TRUE 	; goValue = (int)discard(TRUE)
+		CALL &discard %0 *2
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+	.e17:	NOOP
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+carry:	FUNC
+	$goValue:	OUTi
+	$lK:	LOCi
+	$lLOC:	LOCi
+	$lOBJ:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $lK &gK 	; lK = global gK
+		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
+		PEEK $lLOC &gLOC 	; lLOC = global gLOC
+		MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) != FALSE) 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f0
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f0:	POKE &SPK #25 	; global SPK=25
+		NEQi $lOBJ #PLANT @.f2	; if(lOBJ == PLANT && (int)global PROP[PLANT] <= 0)global SPK=115
+		PEEK %0 &PROP:PLANT 
+		GRTi %0 #0 @.f2
+		POKE &SPK #115 	; global SPK=115
+	.f2:	NEQi $lOBJ #BEAR @.f4	; if(lOBJ == BEAR && (int)global PROP[BEAR] == 1)global SPK=169
+		PEEK %0 &PROP:BEAR 
+		NEQi %0 #1 @.f4
+		POKE &SPK #169 	; global SPK=169
+	.f4:	NEQi $lOBJ #CHAIN @.f6	; if(lOBJ == CHAIN && (int)global PROP[BEAR] != 0)global SPK=170
+		PEEK %0 &PROP:BEAR 
+		EQUi %0 #0 @.f6
+		POKE &SPK #170 	; global SPK=170
+	.f6:	NEQi $lOBJ #URN @.f7	; if(lOBJ == URN)global SPK=215
+		POKE &SPK #215 	; global SPK=215
+	.f7:	NEQi $lOBJ #CAVITY @.f8	; if(lOBJ == CAVITY)global SPK=217
+		POKE &SPK #217 	; global SPK=217
+	.f8:	NEQi $lOBJ #BLOOD @.f9	; if(lOBJ == BLOOD)global SPK=239
+		POKE &SPK #239 	; global SPK=239
+	.f9:	NEQi $lOBJ #RUG @.f11	; if(lOBJ == RUG && (int)global PROP[RUG] == 2)global SPK=222
+		PEEK %0 &PROP:RUG 
+		NEQi %0 #2 @.f11
+		POKE &SPK #222 	; global SPK=222
+	.f11:	NEQi $lOBJ #gSIGN @.f12	; if(lOBJ == gSIGN)global SPK=196
+		POKE &SPK #196 	; global SPK=196
+	.f12:	NEQi $lOBJ #MESSAG @.f13	; if(lOBJ == MESSAG) 
+		POKE &SPK #190 	; global SPK=190
+		MOVi %1 #MESSAG 	; fDSTROY(MESSAG)
+		CALL &fDSTROY %0 *2
+	.f13:	PEEK %0 &FIXED $lOBJ	; if((int)global FIXED[lOBJ] != 0) 
+		EQUi %0 #0 @.f14
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f14:	EQUi $lOBJ #WATER @.f15	; if(!(lOBJ != WATER && lOBJ != OIL)) 
+		NEQi $lOBJ #OIL @.f16
+	.f15:	MOVi $lK $lOBJ 	; lK=lOBJ
+		POKE &gK $lOBJ 	; global gK = lOBJ
+		MOVi $lOBJ #BOTTLE 	; lOBJ=BOTTLE
+		POKE &gOBJ #BOTTLE 	; global gOBJ = BOTTLE
+		MOVi %1 #BOTTLE 	; if(!((int)HERE(BOTTLE, lLOC) != FALSE && (int)LIQ() == lK)) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f17
+		CALL &LIQ %0 *1
+		EQUi %0 $lK @.f16
+	.f17:	MOVi %1 #BOTTLE 	; if((int)TOTING(BOTTLE) != FALSE && (int)global PROP[BOTTLE] == 1) 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f20
+		PEEK %0 &PROP:BOTTLE 
+		NEQi %0 #1 @.f20
+		MOVi %1 $lOBJ 	; goValue = (int)fill(lOBJ)
+		CALL &fill %0 *2
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+	.f20:	PEEK %0 &PROP:BOTTLE 	; if((int)global PROP[BOTTLE] != 1)global SPK=105
+		EQUi %0 #1 @.f21
+		POKE &SPK #105 	; global SPK=105
+	.f21:	MOVi %1 #BOTTLE 	; if((int)TOTING(BOTTLE) == FALSE)global SPK=104
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f22
+		POKE &SPK #104 	; global SPK=104
+	.f22:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f16:	POKE &SPK #92 	; global SPK=92
+		PEEK %0 &HOLDNG 	; if(global HOLDNG >= 7) 
+		LSSi %0 #7 @.f23
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f23:	NEQi $lOBJ #BIRD @.f25	; if(!(lOBJ != BIRD || (int)global PROP[BIRD] == 1 || -1-(int)global PROP[BIRD] == 1)) 
+		PEEK %0 &PROP:BIRD 
+		EQUi %0 #1 @.f25
+		PEEK %0 &PROP:BIRD 
+		SUBi %0 #-1 %0
+		EQUi %0 #1 @.f25
+		PEEK %0 &PROP:BIRD 	; if((int)global PROP[BIRD] == 2) 
+		NEQi %0 #2 @.f26
+		POKE &SPK #238 	; global SPK=238
+		MOVi %1 #BIRD 	; fDSTROY(BIRD)
+		CALL &fDSTROY %0 *2
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f26:	MOVi %1 #CAGE 	; if((int)TOTING(CAGE) == FALSE)global SPK=27
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f27
+		POKE &SPK #27 	; global SPK=27
+	.f27:	MOVi %1 #ROD 	; if((int)TOTING(ROD) != FALSE)global SPK=26
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f28
+		POKE &SPK #26 	; global SPK=26
+	.f28:	PEEK %0 &SPK 	; if(global SPK/2 == 13) 
+		DIVi %0 %0 #2
+		NEQi %0 #13 @.f29
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f29:	POKE &PROP:BIRD #1 	; global PROP[BIRD]=1
+	.f25:	EQUi $lOBJ #BIRD @.t30	; if((lOBJ == BIRD || lOBJ == CAGE) && ((int)global PROP[BIRD] == 1 || -1-(int)global PROP[BIRD] == 1))fCARRY(BIRD+CAGE-lOBJ,lLOC)
+		NEQi $lOBJ #CAGE @.f33
+	.t30:	PEEK %0 &PROP:BIRD 
+		EQUi %0 #1 @.t32
+		PEEK %0 &PROP:BIRD 
+		SUBi %0 #-1 %0
+		NEQi %0 #1 @.f33
+	.t32:	NOOP
+		! ADDi <A> #BIRD #CAGE	; fCARRY(BIRD+CAGE-lOBJ,lLOC)
+		SUBi %1 <A> $lOBJ
+		MOVi %2 $lLOC 
+		CALL &fCARRY %0 *3
+	.f33:	MOVi %1 $lOBJ 	; fCARRY(lOBJ,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fCARRY %0 *3
+		CALL &LIQ %0 *1	; lK=(int)LIQ()
+		MOVi $lK %0 
+		POKE &gK $lK 	; global gK = lK
+		NEQi $lOBJ #BOTTLE @.f35	; if(lOBJ == BOTTLE && lK != 0)global PLACE[lK]= -1
+		EQUi $lK #0 @.f35
+		POKE &PLACE $lK #-1	; global PLACE[lK]= -1
+	.f35:	MOVi %1 $lOBJ 	; if((int)GSTONE(lOBJ) == FALSE || (int)global PROP[lOBJ] == 0) 
+		CALL &GSTONE %0 *2
+		EQUi %0 #FALSE @.t36
+		PEEK %0 &PROP $lOBJ
+		NEQi %0 #0 @.f37
+	.t36:	MOVi $goValue #GOTO2009 	; goValue = GOTO2009
+		GOTO @return  	; goto return
+	.f37:	POKE &PROP $lOBJ #0	; global PROP[lOBJ]=0
+		POKE &PROP:CAVITY #1 	; global PROP[CAVITY]=1
+		MOVi $goValue #GOTO2009 	; goValue = GOTO2009
+		GOTO @return  	; goto return
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+attack:	FUNC
+	$goValue:	OUTi
+	$I:	LOCi
+	$lK:	LOCi
+	$lLOC:	LOCi
+	$lOBJ:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $lLOC &gLOC 	; lLOC = global gLOC
+		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
+		MOVi %1 $lLOC 	; I=(int)fATDWRF(lLOC)
+		CALL &fATDWRF %0 *2
+		MOVi $I %0 
+		NEQi $lOBJ #0 @.f0	; if(lOBJ == 0) 
+		LEQi $I #0 @.f1	; if(I > 0) 
+		MOVi $lOBJ #DWARF 	; lOBJ = DWARF
+		POKE &gOBJ #DWARF 	; global gOBJ = DWARF
+	.f1:	MOVi %1 #SNAKE 	; if((int)HERE(SNAKE, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f2
+		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+SNAKE
+		ADDi $lOBJ %0 #SNAKE
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f2:	MOVi %1 #DRAGON 	; if((int)AT(DRAGON, lLOC) != FALSE && (int)global PROP[DRAGON] == 0) 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f4
+		PEEK %0 &PROP:DRAGON 
+		NEQi %0 #0 @.f4
+		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+DRAGON
+		ADDi $lOBJ %0 #DRAGON
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f4:	MOVi %1 #TROLL 	; if((int)AT(TROLL, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f5
+		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+TROLL
+		ADDi $lOBJ %0 #TROLL
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f5:	MOVi %1 #OGRE 	; if((int)AT(OGRE, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f6
+		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+OGRE
+		ADDi $lOBJ %0 #OGRE
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f6:	MOVi %1 #BEAR 	; if((int)HERE(BEAR, lLOC) != FALSE && (int)global PROP[BEAR] == 0) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f8
+		PEEK %0 &PROP:BEAR 
+		NEQi %0 #0 @.f8
+		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+BEAR
+		ADDi $lOBJ %0 #BEAR
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f8:	LEQi $lOBJ #100 @.f9	; if(lOBJ > 100) 
+		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f9:	NEQi $lOBJ #0 @.f0	; if(lOBJ == 0) 
+		MOVi %1 #BIRD 	; if((int)HERE(BIRD, lLOC) != FALSE && global VERB != THROW) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f12
+		PEEK %0 &VERB 
+		EQUi %0 #THROW @.f12
+		MOVi $lOBJ #BIRD 	; lOBJ=BIRD
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f12:	MOVi %1 #VEND 	; if((int)HERE(VEND, lLOC) != FALSE && global VERB != THROW) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f14
+		PEEK %0 &VERB 
+		EQUi %0 #THROW @.f14
+		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+VEND
+		ADDi $lOBJ %0 #VEND
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f14:	MOVi %1 #CLAM 	; if((int)HERE(CLAM, lLOC) != FALSE || (int)HERE(OYSTER, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.t15
+		MOVi %1 #OYSTER 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f16
+	.t15:	MULi %0 #100 $lOBJ	; lOBJ=100*lOBJ+CLAM
+		ADDi $lOBJ %0 #CLAM
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f16:	LEQi $lOBJ #100 @.f0	; if(lOBJ > 100) 
+		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f0:	NEQi $lOBJ #BIRD @.f18	; if(lOBJ == BIRD) 
+		POKE &SPK #137 	; global SPK=137
+		PEEK %0 &CLOSED 	; if(global CLOSED != FALSE) 
+		EQUi %0 #FALSE @.f19
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f19:	MOVi %1 #BIRD 	; fDSTROY(BIRD)
+		CALL &fDSTROY %0 *2
+		POKE &PROP:BIRD #0 	; global PROP[BIRD]=0
+		POKE &SPK #45 	; global SPK=45
+	.f18:	NEQi $lOBJ #VEND @.f20	; if(lOBJ == VEND) 
+		MOVi %1 #VEND 	; fPSPEAK(VEND,(int)global PROP[VEND]+2)
+		PEEK %2 &PROP:VEND 
+		ADDi %2 %2 #2
+		CALL &fPSPEAK %0 *3
+		PEEK %0 &PROP:VEND 	; global PROP[VEND]=3-(int)global PROP[VEND]
+		SUBi %0 #3 %0
+		POKE &PROP:VEND %0 
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	.f20:	NEQi $lOBJ #0 @.f21	; if(lOBJ == 0)global SPK=44
+		POKE &SPK #44 	; global SPK=44
+	.f21:	EQUi $lOBJ #CLAM @.t22	; if(lOBJ == CLAM || lOBJ == OYSTER)global SPK=150
+		NEQi $lOBJ #OYSTER @.f23
+	.t22:	POKE &SPK #150 	; global SPK=150
+	.f23:	NEQi $lOBJ #SNAKE @.f24	; if(lOBJ == SNAKE)global SPK=46
+		POKE &SPK #46 	; global SPK=46
+	.f24:	NEQi $lOBJ #DWARF @.f25	; if(lOBJ == DWARF)global SPK=49
+		POKE &SPK #49 	; global SPK=49
+	.f25:	NEQi $lOBJ #DWARF @.f27	; if(lOBJ == DWARF && global CLOSED != FALSE) 
+		PEEK %0 &CLOSED 
+		EQUi %0 #FALSE @.f27
+		MOVi $goValue #GOTO19000 	; goValue = GOTO19000
+		GOTO @return  	; goto return
+	.f27:	NEQi $lOBJ #DRAGON @.f28	; if(lOBJ == DRAGON)global SPK=167
+		POKE &SPK #167 	; global SPK=167
+	.f28:	NEQi $lOBJ #TROLL @.f29	; if(lOBJ == TROLL)global SPK=157
+		POKE &SPK #157 	; global SPK=157
+	.f29:	NEQi $lOBJ #OGRE @.f30	; if(lOBJ == OGRE)global SPK=203
+		POKE &SPK #203 	; global SPK=203
+	.f30:	NEQi $lOBJ #OGRE @.f31	; if(!(lOBJ == OGRE && I > 0)) 
+		GRTi $I #0 @.f32
+	.f31:	NEQi $lOBJ #BEAR @.f33	; if(lOBJ == BEAR)global SPK=165+((int)global PROP[BEAR]+1)/2
+		PEEK %0 &PROP:BEAR 	; global SPK=165+((int)global PROP[BEAR]+1)/2
+		ADDi %0 %0 #1
+		DIVi %0 %0 #2
+		ADDi %0 #165 %0
+		POKE &SPK %0 
+	.f33:	NEQi $lOBJ #DRAGON @.t34	; if(lOBJ != DRAGON || (int)global PROP[DRAGON] != 0) 
+		PEEK %0 &PROP:DRAGON 
+		EQUi %0 #0 @.f35
+	.t34:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f35:	MOVi %1 #49 	; fRSPEAK(49)
+		CALL &fRSPEAK %0 *2
+		POKE &VERB #0 	; global VERB=0
+		MOVi $lOBJ #0 	; lOBJ=0
+		POKE &gOBJ #0 	; global gOBJ=0
+		MOVp %1 &WD1 	; fGETIN(&global WD1,&global WD1X,&global WD2,&global WD2X)
+		MOVp %2 &WD1X 
+		MOVp %3 &WD2 
+		MOVp %4 &WD2X 
+		CALL &fGETIN %0 *5
+		MOVi %1 #25 	; if(global WD1 != (int)fMAKEWD(25) && global WD1 != (int)fMAKEWD(250519)) 
+		CALL &fMAKEWD %0 *2
+		PEEK %1 &WD1 
+		EQUi %1 %0 @.f37
+		MOVi %1 #250519 
+		CALL &fMAKEWD %0 *2
+		PEEK %1 &WD1 
+		EQUi %1 %0 @.f37
+		MOVi $goValue #GOTO2607 	; goValue = GOTO2607
+		GOTO @return  	; goto return
+	.f37:	MOVi %1 #DRAGON 	; fPSPEAK(DRAGON,3)
+		MOVi %2 #3 
+		CALL &fPSPEAK %0 *3
+		POKE &PROP:DRAGON #1 	; global PROP[DRAGON]=1
+		POKE &PROP:RUG #0 	; global PROP[RUG]=0
+		PEEK %0 &PLAC:DRAGON 	; lK=((int)global PLAC[DRAGON]+(int)global FIXD[DRAGON])/2
+		PEEK %1 &FIXD:DRAGON 
+		ADDi %0 %0 %1
+		DIVi $lK %0 #2
+		ADDi %1 #DRAGON #100	; fMOVE(DRAGON+100,-1)
+		MOVi %2 #-1 
+		CALL &fMOVE %0 *3
+		ADDi %1 #RUG #100	; fMOVE(RUG+100,0)
+		MOVi %2 #0 
+		CALL &fMOVE %0 *3
+		MOVi %1 #DRAGON 	; fMOVE(DRAGON,lK)
+		MOVi %2 $lK 
+		CALL &fMOVE %0 *3
+		MOVi %1 #RUG 	; fMOVE(RUG,lK)
+		MOVi %2 $lK 
+		CALL &fMOVE %0 *3
+		MOVi %1 #BLOOD 	; fDROP(BLOOD,lK)
+		MOVi %2 $lK 
+		CALL &fDROP %0 *3
+		MOVi $lOBJ #1 	; for (lOBJ=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.e38
+	.l39:	PEEK %0 &PLACE $lOBJ	; if((int)global PLACE[lOBJ] == (int)global PLAC[DRAGON] || (int)global PLACE[lOBJ] == (int)global FIXD[DRAGON])fMOVE(lOBJ,lK)
+		PEEK %1 &PLAC:DRAGON 
+		EQUi %0 %1 @.t40
+		PEEK %0 &PLACE $lOBJ
+		PEEK %1 &FIXD:DRAGON 
+		NEQi %0 %1 @.f41
+	.t40:	MOVi %1 $lOBJ 	; fMOVE(lOBJ,lK)
+		MOVi %2 $lK 
+		CALL &fMOVE %0 *3
+	.f41:	FORi $lOBJ <A> @.l39	; }
+	.e38:	POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+		POKE &gLOC $lK 	; global gLOC=lK
+		POKE &gK #NUL 	; global gK = NUL
+		MOVi $goValue #GOTO8 	; goValue = GOTO8
+		GOTO @return  	; goto return
+	.f32:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #6 	; fRSPEAK(6)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #OGRE 	; fDSTROY(OGRE)
+		CALL &fDSTROY %0 *2
+		MOVi $lK #0 	; lK=0
+		MOVi $I #1 	; for (I=1 to 5+1) 
+		! ADDi <A> #5 #1
+		GEQi #1 <A> @.e42
+	.l43:	PEEK %0 &DLOC $I	; if((int)global DLOC[I] != lLOC) goto continue1
+		EQUi %0 $lLOC @.f44
+		GOTO @continue1  	; goto continue1
+	.f44:	ADDi $lK $lK #1	; lK=lK+1
+		POKE &DLOC $I #61	; global DLOC[I]=61
+		POKE &DSEEN $I #FALSE	; global DSEEN[I]=FALSE
+	continue1:	FORi $I <A> @.l43	; } /* end loop */
+	.e42:	POKE &gK $lK 	; global gK = lK
+		PEEK %0 &SPK 	; global SPK=global SPK+1+1/lK
+		ADDi %0 %0 #1
+		DIVi %1 #1 $lK
+		ADDi %0 %0 %1
+		POKE &SPK %0 
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+feed:	FUNC
+	$goValue:	OUTi
+	$OBJ:	INPi
+	$lLOC:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $lLOC &gLOC 	; lLOC = global gLOC
+		NEQi $OBJ #BIRD @.f0	; if(OBJ == BIRD) 
+		POKE &SPK #100 	; global SPK=100
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f0:	EQUi $OBJ #SNAKE @.f1	; if(!(OBJ != SNAKE && OBJ != DRAGON && OBJ != TROLL)) 
+		EQUi $OBJ #DRAGON @.f1
+		NEQi $OBJ #TROLL @.f2
+	.f1:	POKE &SPK #102 	; global SPK=102
+		NEQi $OBJ #DRAGON @.f4	; if(OBJ == DRAGON && (int)global PROP[DRAGON] != 0)global SPK=110
+		PEEK %0 &PROP:DRAGON 
+		EQUi %0 #0 @.f4
+		POKE &SPK #110 	; global SPK=110
+	.f4:	NEQi $OBJ #TROLL @.f5	; if(OBJ == TROLL)global SPK=182
+		POKE &SPK #182 	; global SPK=182
+	.f5:	NEQi $OBJ #SNAKE @.t6	; if(OBJ != SNAKE || global CLOSED != FALSE || (int)HERE(BIRD, lLOC) == FALSE) 
+		PEEK %0 &CLOSED 
+		NEQi %0 #FALSE @.t6
+		MOVi %1 #BIRD 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f7
+	.t6:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f7:	POKE &SPK #101 	; global SPK=101
+		MOVi %1 #BIRD 	; fDSTROY(BIRD)
+		CALL &fDSTROY %0 *2
+		POKE &PROP:BIRD #0 	; global PROP[BIRD]=0
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f2:	NEQi $OBJ #DWARF @.f8	; if(OBJ == DWARF) 
+		MOVi %1 #FOOD 	; if((int)HERE(FOOD, lLOC) == FALSE) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f9
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f9:	PEEK %0 &DFLAG 	; global DFLAG=global DFLAG+2
+		ADDi %0 %0 #2
+		POKE &DFLAG %0 
+		POKE &SPK #103 	; global SPK=103
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f8:	NEQi $OBJ #BEAR @.f10	; if(OBJ == BEAR) 
+		PEEK %0 &PROP:BEAR 	; if((int)global PROP[BEAR] == 0)global SPK=102
+		NEQi %0 #0 @.f11
+		POKE &SPK #102 	; global SPK=102
+	.f11:	PEEK %0 &PROP:BEAR 	; if((int)global PROP[BEAR] == 3)global SPK=110
+		NEQi %0 #3 @.f12
+		POKE &SPK #110 	; global SPK=110
+	.f12:	MOVi %1 #FOOD 	; if((int)HERE(FOOD, lLOC) == FALSE) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f13
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f13:	MOVi %1 #FOOD 	; fDSTROY(FOOD)
+		CALL &fDSTROY %0 *2
+		POKE &PROP:BEAR #1 	; global PROP[BEAR]=1
+		POKE &FIXED:AXE #0 	; global FIXED[AXE]=0
+		POKE &PROP:AXE #0 	; global PROP[AXE]=0
+		POKE &SPK #168 	; global SPK=168
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f10:	NEQi $OBJ #OGRE @.f14	; if(OBJ == OGRE) 
+		MOVi %1 #FOOD 	; if((int)HERE(FOOD, lLOC) != FALSE)global SPK=202
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f15
+		POKE &SPK #202 	; global SPK=202
+	.f15:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f14:	POKE &SPK #14 	; global SPK=14
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+doThrow:	FUNC
+	$goValue:	OUTi
+	$I:	LOCi
+	$lLOC:	LOCi
+	$lOBJ:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $lLOC &gLOC 	; lLOC = global gLOC
+		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
+		MOVi %1 #ROD2 	; if((int)TOTING(ROD2) != FALSE && lOBJ == ROD && (int)TOTING(ROD) == FALSE) 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f1
+		NEQi $lOBJ #ROD @.f1
+		MOVi %1 #ROD 
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f1
+		MOVi $lOBJ #ROD2 	; lOBJ=ROD2
+		POKE &gOBJ #ROD2 	; global gOBJ = ROD2
+	.f1:	MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) == FALSE) 
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f2
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f2:	LSSi $lOBJ #50 @.f4	; if(lOBJ >= 50 && lOBJ <= MAXTRS && (int)AT(TROLL, lLOC) != FALSE) 
+		GRTi $lOBJ #MAXTRS @.f4
+		MOVi %1 #TROLL 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f4
+		POKE &SPK #159 	; global SPK=159
+		MOVi %1 $lOBJ 	; fDROP(lOBJ,0)
+		MOVi %2 #0 
+		CALL &fDROP %0 *3
+		MOVi %1 #TROLL 	; fMOVE(TROLL,0)
+		MOVi %2 #0 
+		CALL &fMOVE %0 *3
+		ADDi %1 #TROLL #100	; fMOVE(TROLL+100,0)
+		MOVi %2 #0 
+		CALL &fMOVE %0 *3
+		MOVi %1 #TROLL2 	; fDROP(TROLL2,global PLAC[TROLL])
+		PEEK %2 &PLAC:TROLL 
+		CALL &fDROP %0 *3
+		ADDi %1 #TROLL2 #100	; fDROP(TROLL2+100,(int)global FIXD[TROLL])
+		PEEK %2 &FIXD:TROLL 
+		CALL &fDROP %0 *3
+		MOVi %1 #CHASM 	; fJUGGLE(CHASM)
+		CALL &fJUGGLE %0 *2
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f4:	NEQi $lOBJ #FOOD @.f6	; if(lOBJ == FOOD && (int)HERE(BEAR, lLOC) != FALSE) 
+		MOVi %1 #BEAR 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f6
+		MOVi $lOBJ #BEAR 	; lOBJ=BEAR
+		POKE &gOBJ #BEAR 	; global gOBJ = BEAR
+		MOVi %1 $lOBJ 	; goValue = (int)feed(lOBJ)
+		CALL &feed %0 *2
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+	.f6:	EQUi $lOBJ #AXE @.f7	; if(lOBJ != AXE) 
+		MOVi %1 #FALSE 	; goValue = (int)discard(FALSE)
+		CALL &discard %0 *2
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+	.f7:	MOVi %1 $lLOC 	; I=(int)fATDWRF(lLOC)
+		CALL &fATDWRF %0 *2
+		MOVi $I %0 
+		GRTi $I #0 @.f8	; if(I <= 0) 
+		POKE &SPK #152 	; global SPK=152
+		MOVi %1 #DRAGON 	; if((int)AT(DRAGON, lLOC) != FALSE && (int)global PROP[DRAGON] == 0) goto L9175
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f10
+		PEEK %0 &PROP:DRAGON 
+		NEQi %0 #0 @.f10
+		GOTO @L9175  	; goto L9175
+	.f10:	POKE &SPK #158 	; global SPK=158
+		MOVi %1 #TROLL 	; if((int)AT(TROLL, lLOC) != FALSE) goto L9175
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f11
+		GOTO @L9175  	; goto L9175
+	.f11:	POKE &SPK #203 	; global SPK=203
+		MOVi %1 #OGRE 	; if((int)AT(OGRE, lLOC) != FALSE) goto L9175
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f12
+		GOTO @L9175  	; goto L9175
+	.f12:	MOVi %1 #BEAR 	; if((int)HERE(BEAR, lLOC) != FALSE && (int)global PROP[BEAR] == 0) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f14
+		PEEK %0 &PROP:BEAR 
+		NEQi %0 #0 @.f14
+		POKE &SPK #164 	; global SPK=164
+		MOVi %1 #AXE 	; fDROP(AXE,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+		POKE &FIXED:AXE #-1 	; global FIXED[AXE]= -1
+		POKE &PROP:AXE #1 	; global PROP[AXE]=1
+		MOVi %1 #BEAR 	; fJUGGLE(BEAR)
+		CALL &fJUGGLE %0 *2
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f14:	MOVi $lOBJ #0 	; lOBJ=0
+		POKE &gOBJ #0 	; global gOBJ = 0
+		CALL &attack %0 *1	; goValue = (int)attack()
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+	.f8:	POKE &SPK #48 	; global SPK=48
+		MOVi %1 #7 	; if((int)fRAN(7) >= global DFLAG) 
+		CALL &fRAN %0 *2
+		PEEK %1 &DFLAG 
+		LSSi %0 %1 @.f15
+		POKE &DSEEN $I #FALSE	; global DSEEN[I]=FALSE
+		POKE &DLOC $I #0	; global DLOC[I]=0
+		POKE &SPK #47 	; global SPK=47
+		PEEK %0 &DKILL 	; global DKILL=global DKILL+1
+		ADDi %0 %0 #1
+		POKE &DKILL %0 
+		PEEK %0 &DKILL 	; if(global DKILL == 1)global SPK=149
+		NEQi %0 #1 @.f15
+		POKE &SPK #149 	; global SPK=149
+	.f15:	NOOP
+	L9175:	PEEK %1 &SPK 	; L9175:
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #AXE 	; fDROP(AXE,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+		POKE &gK #NUL 	; global gK = NUL
+		MOVi $goValue #GOTO8 	; goValue = GOTO8
+		GOTO @return  	; goto return
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+action:	FUNC
+	$goValue:	OUTi
+	$STARTAT:	INPi
+	$I:	LOCi
+	$lK:	LOCi
+	$lLOC:	LOCi
+	$lOBJ:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $lLOC &gLOC 	; lLOC = global gLOC
+		PEEK $lK &gK 	; lK = global gK
+		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
+		SWCH $STARTAT *3 @.s0	; switch(STARTAT == 0 to 3) 
+	.s0#0:	POKE &VERB $lK 	; global VERB=lK
+		PEEK %0 &VERB 	; global SPK=(int)global ACTSPK[global VERB]
+		PEEK %0 &ACTSPK %0
+		POKE &SPK %0 
+		PEEK %0 &WD2 	; if(global WD2 > 0 && global VERB != SAY) 
+		LEQi %0 #0 @.f3
+		PEEK %0 &VERB 
+		EQUi %0 #SAY @.f3
+		MOVi $goValue #GOTO2800 	; goValue = GOTO2800
+		GOTO @return  	; goto return
+	.f3:	PEEK %0 &VERB 	; if(global VERB == SAY) 
+		NEQi %0 #SAY @.f4
+		PEEK $lOBJ &WD2 	; lOBJ=global WD2
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f4:	LEQi $lOBJ #0 @.f5	; if(lOBJ > 0) goto L4090
+		GOTO @L4090  	; goto L4090
+	.f5:	PEEK %0 &VERB 	; switch (global VERB-1 == 0 to 34) 
+		SUBi %0 %0 #1
+		SWCH %0 *34 @.s6
+	.s6#0:	PEEK %0 &ATLOC $lLOC	; if((int)global ATLOC[lLOC] == 0 || (int)global LINK[(int)global ATLOC[lLOC]] != 0 || (int)fATDWRF(lLOC) > 0) 
+		EQUi %0 #0 @.t8
+		PEEK %0 &ATLOC $lLOC
+		PEEK %0 &LINK %0
+		NEQi %0 #0 @.t8
+		MOVi %1 $lLOC 
+		CALL &fATDWRF %0 *2
+		LEQi %0 #0 @.f9
+	.t8:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f9:	PEEK $lOBJ &ATLOC $lLOC	; lOBJ=(int)global ATLOC[lLOC]
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+		CALL &carry %0 *1	; goValue = (int)carry()
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#1:	NOOP
+	.s6#8:	NOOP
+	.s6#9:	NOOP
+	.s6#2:	NOOP
+	.s6#15:	NOOP
+	.s6#16:	NOOP
+	.s6#18:	NOOP
+	.s6#20:	NOOP
+	.s6#27:	NOOP
+	.s6#28:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#3:	NOOP
+	.s6#5:	POKE &SPK #28 	; global SPK=28
+		MOVi %1 #CLAM 	; if((int)HERE(CLAM, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f10
+		MOVi $lOBJ #CLAM 	; lOBJ=CLAM
+		POKE &gOBJ #CLAM 	; global gOBJ = CLAM
+	.f10:	MOVi %1 #OYSTER 	; if((int)HERE(OYSTER, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f11
+		MOVi $lOBJ #OYSTER 	; lOBJ=OYSTER
+		POKE &gOBJ #OYSTER 	; global gOBJ = OYSTER
+	.f11:	MOVi %1 #DOOR 	; if((int)AT(DOOR, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f12
+		MOVi $lOBJ #DOOR 	; lOBJ=DOOR
+		POKE &gOBJ #DOOR 	; global gOBJ = DOOR
+	.f12:	MOVi %1 #GRATE 	; if((int)AT(GRATE, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f13
+		MOVi $lOBJ #GRATE 	; lOBJ=GRATE
+		POKE &gOBJ #GRATE 	; global gOBJ = GRATE
+	.f13:	EQUi $lOBJ #0 @.f15	; if(lOBJ != 0 && (int)HERE(CHAIN, lLOC) != FALSE) 
+		MOVi %1 #CHAIN 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f15
+		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f15:	MOVi %1 #CHAIN 	; if((int)HERE(CHAIN, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f16
+		MOVi $lOBJ #CHAIN 	; lOBJ=CHAIN
+		POKE &gOBJ #CHAIN 	; global gOBJ = CHAIN
+	.f16:	NEQi $lOBJ #0 @.f17	; if(lOBJ == 0) 
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f17:	NOOP
+	L9040:	EQUi $lOBJ #CLAM @.f19	; L9040:
+		EQUi $lOBJ #OYSTER @.f19
+		NEQi $lOBJ #DOOR @.f20	; if(lOBJ == DOOR)global SPK=111
+		POKE &SPK #111 	; global SPK=111
+	.f20:	NEQi $lOBJ #DOOR @.f22	; if(lOBJ == DOOR && (int)global PROP[DOOR] == 1)global SPK=54
+		PEEK %0 &PROP:DOOR 
+		NEQi %0 #1 @.f22
+		POKE &SPK #54 	; global SPK=54
+	.f22:	NEQi $lOBJ #CAGE @.f23	; if(lOBJ == CAGE)global SPK=32
+		POKE &SPK #32 	; global SPK=32
+	.f23:	NEQi $lOBJ #KEYS @.f24	; if(lOBJ == KEYS)global SPK=55
+		POKE &SPK #55 	; global SPK=55
+	.f24:	EQUi $lOBJ #GRATE @.t25	; if(lOBJ == GRATE || lOBJ == CHAIN)global SPK=31
+		NEQi $lOBJ #CHAIN @.f26
+	.t25:	POKE &SPK #31 	; global SPK=31
+	.f26:	PEEK %0 &SPK 	; if(global SPK != 31 || (int)HERE(KEYS, lLOC) == FALSE) 
+		NEQi %0 #31 @.t27
+		MOVi %1 #KEYS 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f28
+	.t27:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f28:	NEQi $lOBJ #CHAIN @.f29	; if(lOBJ == CHAIN) 
+		PEEK %0 &VERB 	; if(global VERB == LOCK) 
+		NEQi %0 #LOCK @.f30
+		POKE &SPK #172 	; global SPK=172
+		PEEK %0 &PROP:CHAIN 	; if((int)global PROP[CHAIN] != 0)global SPK=34
+		EQUi %0 #0 @.f31
+		POKE &SPK #34 	; global SPK=34
+	.f31:	PEEK %0 &PLAC:CHAIN 	; if(lLOC != (int)global PLAC[CHAIN])global SPK=173
+		EQUi $lLOC %0 @.f32
+		POKE &SPK #173 	; global SPK=173
+	.f32:	PEEK %0 &SPK 	; if(global SPK != 172) 
+		EQUi %0 #172 @.f33
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f33:	POKE &PROP:CHAIN #2 	; global PROP[CHAIN]=2
+		MOVi %1 #CHAIN 	; if((int)TOTING(CHAIN) != FALSE)fDROP(CHAIN,lLOC)
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f34
+		MOVi %1 #CHAIN 	; fDROP(CHAIN,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+	.f34:	POKE &FIXED:CHAIN #-1 	; global FIXED[CHAIN]= -1
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f30:	POKE &SPK #171 	; global SPK=171
+		PEEK %0 &PROP:BEAR 	; if((int)global PROP[BEAR] == 0)global SPK=41
+		NEQi %0 #0 @.f35
+		POKE &SPK #41 	; global SPK=41
+	.f35:	PEEK %0 &PROP:CHAIN 	; if((int)global PROP[CHAIN] == 0)global SPK=37
+		NEQi %0 #0 @.f36
+		POKE &SPK #37 	; global SPK=37
+	.f36:	PEEK %0 &SPK 	; if(global SPK != 171) 
+		EQUi %0 #171 @.f37
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f37:	POKE &PROP:CHAIN #0 	; global PROP[CHAIN]=0
+		POKE &FIXED:CHAIN #0 	; global FIXED[CHAIN]=0
+		PEEK %0 &PROP:BEAR 	; if((int)global PROP[BEAR] != 3)global PROP[BEAR]=2
+		EQUi %0 #3 @.f38
+		POKE &PROP:BEAR #2 	; global PROP[BEAR]=2
+	.f38:	PEEK %0 &PROP:BEAR 	; global FIXED[BEAR]=2-(int)global PROP[BEAR]
+		SUBi %0 #2 %0
+		POKE &FIXED:BEAR %0 
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f29:	PEEK %0 &CLOSNG 	; if(global CLOSNG != FALSE) 
+		EQUi %0 #FALSE @.f39
+		MOVi $lK #130 	; lK=130
+		POKE &gK #130 	; global gK = 130
+		PEEK %0 &PANIC 	; if(global PANIC == FALSE)global CLOCK2=15
+		NEQi %0 #FALSE @.f40
+		POKE &CLOCK2 #15 	; global CLOCK2=15
+	.f40:	POKE &PANIC #TRUE 	; global PANIC=TRUE
+		MOVi $goValue #GOTO2010 	; goValue = GOTO2010
+		GOTO @return  	; goto return
+	.f39:	PEEK %0 &PROP:GRATE 	; lK=34+(int)global PROP[GRATE]
+		ADDi $lK #34 %0
+		POKE &gK $lK 	; global gK = lK
+		POKE &PROP:GRATE #1 	; global PROP[GRATE]=1
+		PEEK %0 &VERB 	; if(global VERB == LOCK)global PROP[GRATE]=0
+		NEQi %0 #LOCK @.f41
+		POKE &PROP:GRATE #0 	; global PROP[GRATE]=0
+	.f41:	PEEK %0 &PROP:GRATE 	; lK=lK+2*(int)global PROP[GRATE]
+		MULi %0 #2 %0
+		ADDi $lK $lK %0
+		POKE &gK $lK 	; global gK = lK
+		MOVi $goValue #GOTO2010 	; goValue = GOTO2010
+		GOTO @return  	; goto return
+	.f19:	MOVi $lK #0 	; lK=0
+		POKE &gK #0 	; global gK = 0
+		NEQi $lOBJ #OYSTER @.f42	; if(lOBJ == OYSTER) 
+		MOVi $lK #1 	; lK=1
+		POKE &gK #1 	; global gK = 1
+	.f42:	ADDi %0 #124 $lK	; global SPK=124+lK
+		POKE &SPK %0 
+		MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) != FALSE)global SPK=120+lK
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f43
+		ADDi %0 #120 $lK	; global SPK=120+lK
+		POKE &SPK %0 
+	.f43:	MOVi %1 #TRIDNT 	; if((int)TOTING(TRIDNT) == FALSE)global SPK=122+lK
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f44
+		ADDi %0 #122 $lK	; global SPK=122+lK
+		POKE &SPK %0 
+	.f44:	PEEK %0 &VERB 	; if(global VERB == LOCK)global SPK=61
+		NEQi %0 #LOCK @.f45
+		POKE &SPK #61 	; global SPK=61
+	.f45:	PEEK %0 &SPK 	; if(global SPK != 124) 
+		EQUi %0 #124 @.f46
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f46:	MOVi %1 #CLAM 	; fDSTROY(CLAM)
+		CALL &fDSTROY %0 *2
+		MOVi %1 #OYSTER 	; fDROP(OYSTER,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+		MOVi %1 #PEARL 	; fDROP(PEARL,105)
+		MOVi %2 #105 
+		CALL &fDROP %0 *3
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#4:	MOVi $goValue #GOTO2009 	; goValue = GOTO2009
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#6:	MOVi %1 #LAMP 	; if((int)HERE(LAMP, lLOC) != FALSE && (int)global PROP[LAMP] == 0 && global LIMIT >= 0) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f48
+		PEEK %0 &PROP:LAMP 
+		NEQi %0 #0 @.f48
+		PEEK %0 &LIMIT 
+		LSSi %0 #0 @.f48
+		MOVi $lOBJ #LAMP 	; lOBJ=LAMP
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f48:	MOVi %1 #URN 	; if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 1) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f50
+		PEEK %0 &PROP:URN 
+		NEQi %0 #1 @.f50
+		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+URN
+		ADDi $lOBJ %0 #URN
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f50:	EQUi $lOBJ #0 @.t51	; if(lOBJ == 0 || lOBJ > 100) 
+		LEQi $lOBJ #100 @.f52
+	.t51:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f52:	NOOP
+	L9070:	EQUi $lOBJ #URN @.f53	; L9070:
+		EQUi $lOBJ #LAMP @.f54	; if(lOBJ != LAMP) 
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f54:	POKE &SPK #184 	; global SPK=184
+		PEEK %0 &LIMIT 	; if(global LIMIT < 0) 
+		GEQi %0 #0 @.f55
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f55:	POKE &PROP:LAMP #1 	; global PROP[LAMP]=1
+		MOVi %1 #39 	; fRSPEAK(39)
+		CALL &fRSPEAK %0 *2
+		PEEK %0 &WZDARK 	; if(global WZDARK != FALSE) 
+		EQUi %0 #FALSE @.f56
+		MOVi $goValue #GOTO2000 	; goValue = GOTO2000
+		GOTO @return  	; goto return
+	.f56:	MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	.f53:	POKE &SPK #38 	; global SPK=38
+		PEEK %0 &PROP:URN 	; if((int)global PROP[URN] == 0) 
+		NEQi %0 #0 @.f57
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f57:	POKE &SPK #209 	; global SPK=209
+		POKE &PROP:URN #2 	; global PROP[URN]=2
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#7:	MOVi %1 #LAMP 	; if((int)HERE(LAMP, lLOC) != FALSE && (int)global PROP[LAMP] == 1) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f59
+		PEEK %0 &PROP:LAMP 
+		NEQi %0 #1 @.f59
+		MOVi $lOBJ #LAMP 	; lOBJ=LAMP
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f59:	MOVi %1 #URN 	; if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 2) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f61
+		PEEK %0 &PROP:URN 
+		NEQi %0 #2 @.f61
+		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+URN
+		ADDi $lOBJ %0 #URN
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f61:	EQUi $lOBJ #0 @.t62	; if(lOBJ == 0 || lOBJ > 100) 
+		LEQi $lOBJ #100 @.f63
+	.t62:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f63:	NOOP
+	L9080:	EQUi $lOBJ #URN @.f64	; L9080:
+		NEQi $lOBJ #LAMP @.f65	; if(lOBJ == LAMP) 
+		POKE &PROP:LAMP #0 	; global PROP[LAMP]=0
+		MOVi %1 #40 	; fRSPEAK(40)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 $lLOC 	; if((int)DARK(lLOC) != FALSE)fRSPEAK(16)
+		CALL &DARK %0 *2
+		EQUi %0 #FALSE @.f66
+		MOVi %1 #16 	; fRSPEAK(16)
+		CALL &fRSPEAK %0 *2
+	.f66:	MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	.f65:	EQUi $lOBJ #DRAGON @.t67	; if(lOBJ == DRAGON || lOBJ == VOLCAN)global SPK=146
+		NEQi $lOBJ #VOLCAN @.f68
+	.t67:	POKE &SPK #146 	; global SPK=146
+	.f68:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f64:	PEEK %0 &PROP:URN 	; global PROP[URN]=(int)global PROP[URN]/2
+		DIVi %0 %0 #2
+		POKE &PROP:URN %0 
+		POKE &SPK #210 	; global SPK=210
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#10:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#11:	CALL &attack %0 *1	; goValue = (int)attack()
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#12:	NOOP
+	L9130:	EQUi $lOBJ #BOTTLE @.t69	; L9130:
+		NEQi $lOBJ #0 @.f70
+	.t69:	CALL &LIQ %0 *1	; lOBJ=(int)LIQ()
+		MOVi $lOBJ %0 
+	.f70:	POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+		NEQi $lOBJ #0 @.f71	; if(lOBJ == 0) 
+		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f71:	MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) == FALSE) 
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f72
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f72:	POKE &SPK #78 	; global SPK=78
+		EQUi $lOBJ #OIL @.f74	; if(lOBJ != OIL && lOBJ != WATER) 
+		EQUi $lOBJ #WATER @.f74
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f74:	MOVi %1 #URN 	; if(!((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 0)) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f75
+		PEEK %0 &PROP:URN 
+		EQUi %0 #0 @.f76
+	.f75:	POKE &PROP:BOTTLE #1 	; global PROP[BOTTLE]=1
+		POKE &PLACE $lOBJ #0	; global PLACE[lOBJ]=0
+		POKE &SPK #77 	; global SPK=77
+		MOVi %1 #PLANT 	; if(!((int)AT(PLANT, lLOC) != FALSE || (int)AT(DOOR, lLOC) != FALSE)) 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		NEQi %0 #FALSE @.f78
+		MOVi %1 #DOOR 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		NEQi %0 #FALSE @.f78
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f78:	MOVi %1 #DOOR 	; if(!((int)AT(DOOR, lLOC) != FALSE)) 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		NEQi %0 #FALSE @.f79
+		POKE &SPK #112 	; global SPK=112
+		EQUi $lOBJ #WATER @.f80	; if(lOBJ != WATER) 
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f80:	MOVi %1 #PLANT 	; fPSPEAK(PLANT,(int)global PROP[PLANT]+3)
+		PEEK %2 &PROP:PLANT 
+		ADDi %2 %2 #3
+		CALL &fPSPEAK %0 *3
+		PEEK %0 &PROP:PLANT 	; global PROP[PLANT]=(((int)global PROP[PLANT]+1)%3)
+		ADDi %0 %0 #1
+		MODi %0 %0 #3
+		POKE &PROP:PLANT %0 
+		PEEK %0 &PROP:PLANT 	; global PROP[PLANT2]=global PROP[PLANT]
+		POKE &PROP:PLANT2 %0 
+		MOVi $lK #NUL 	; lK=NUL
+		POKE &gK #NUL 	; global gK = NUL
+		MOVi $goValue #GOTO8 	; goValue = GOTO8
+		GOTO @return  	; goto return
+	.f79:	POKE &PROP:DOOR #0 	; global PROP[DOOR]=0
+		NEQi $lOBJ #OIL @.f81	; if(lOBJ == OIL)global PROP[DOOR]=1
+		POKE &PROP:DOOR #1 	; global PROP[DOOR]=1
+	.f81:	PEEK %0 &PROP:DOOR 	; global SPK=113+(int)global PROP[DOOR]
+		ADDi %0 #113 %0
+		POKE &SPK %0 
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f76:	MOVi $lOBJ #URN 	; lOBJ=URN
+		POKE &gOBJ #URN 	; global gOBJ = URN
+		MOVi %1 $lOBJ 	; goValue = (int)fill(lOBJ)
+		CALL &fill %0 *2
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#13:	MOVi %1 #FOOD 	; if((int)HERE(FOOD, lLOC) == FALSE) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f82
+		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f82:	MOVi %1 #FOOD 	; fDSTROY(FOOD)
+		CALL &fDSTROY %0 *2
+		POKE &SPK #72 	; global SPK=72
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#14:	NOOP
+	L9150:	NEQi $lOBJ #0 @.f85	; L9150:
+		MOVi %1 $lLOC 
+		CALL &LIQLOC %0 *2
+		EQUi %0 #WATER @.f85
+		CALL &LIQ %0 *1
+		NEQi %0 #WATER @.t84
+		MOVi %1 #BOTTLE 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f85
+	.t84:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f85:	EQUi $lOBJ #BLOOD @.f86	; if(lOBJ != BLOOD) 
+		EQUi $lOBJ #0 @.f88	; if(lOBJ != 0 && lOBJ != WATER)global SPK=110
+		EQUi $lOBJ #WATER @.f88
+		POKE &SPK #110 	; global SPK=110
+	.f88:	PEEK %0 &SPK 	; if(global SPK == 110 || (int)LIQ() != WATER || (int)HERE(BOTTLE, lLOC) == FALSE) 
+		EQUi %0 #110 @.t89
+		CALL &LIQ %0 *1
+		NEQi %0 #WATER @.t89
+		MOVi %1 #BOTTLE 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f90
+	.t89:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f90:	POKE &PROP:BOTTLE #1 	; global PROP[BOTTLE]=1
+		POKE &PLACE:WATER #0 	; global PLACE[WATER]=0
+		POKE &SPK #74 	; global SPK=74
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f86:	MOVi %1 #BLOOD 	; fDSTROY(BLOOD)
+		CALL &fDSTROY %0 *2
+		POKE &PROP:DRAGON #2 	; global PROP[DRAGON]=2
+		PEEK %0 &OBJSND:BIRD 	; global OBJSND[BIRD]=(int)global OBJSND[BIRD]+3
+		ADDi %0 %0 #3
+		POKE &OBJSND:BIRD %0 
+		POKE &SPK #240 	; global SPK=240
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#17:	MOVi %1 #22 	; if((int)fYES(22,54,54) != FALSE) score(1)
+		MOVi %2 #54 
+		MOVi %3 #54 
+		CALL &fYES %0 *4
+		EQUi %0 #FALSE @.f91
+		MOVi %1 #1 	; score(1)
+		CALL &score %0 *2
+	.f91:	MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#19:	POKE &SPK #98 	; global SPK=98
+		MOVi $I #1 	; for (I=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.e92
+	.l93:	EQUi $I #BEAR @.f95	; if(!(I == BEAR || (int)TOTING(I) == FALSE)) 
+		MOVi %1 $I 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f95
+		PEEK %0 &SPK 	; if(global SPK == 98)fRSPEAK(99)
+		NEQi %0 #98 @.f96
+		MOVi %1 #99 	; fRSPEAK(99)
+		CALL &fRSPEAK %0 *2
+	.f96:	POKE &BLKLIN #FALSE 	; global BLKLIN=FALSE
+		MOVi %1 $I 	; fPSPEAK(I,-1)
+		MOVi %2 #-1 
+		CALL &fPSPEAK %0 *3
+		POKE &BLKLIN #TRUE 	; global BLKLIN=TRUE
+		POKE &SPK #0 	; global SPK=0
+	.f95:	FORi $I <A> @.l93	; } /* end loop */
+	.e92:	MOVi %1 #BEAR 	; if((int)TOTING(BEAR) != FALSE)global SPK=141
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f97
+		POKE &SPK #141 	; global SPK=141
+	.f97:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#21:	MOVi %1 $lOBJ 	; goValue = (int)fill(lOBJ)
+		CALL &fill %0 *2
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#22:	NOOP
+	L9230:	PEEK %0 &PROP:ROD2 	; L9230:
+		LSSi %0 #0 @.t98
+		PEEK %0 &CLOSED 
+		NEQi %0 #FALSE @.f99
+	.t98:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f99:	POKE &BONUS #133 	; global BONUS=133
+		NEQi $lLOC #115 @.f100	; if(lLOC == 115)global BONUS=134
+		POKE &BONUS #134 	; global BONUS=134
+	.f100:	MOVi %1 #ROD2 	; if((int)HERE(ROD2, lLOC) != FALSE)global BONUS=135
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f101
+		POKE &BONUS #135 	; global BONUS=135
+	.f101:	PEEK %1 &BONUS 	; fRSPEAK(global BONUS)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #0 	; score(0)
+		CALL &score %0 *2
+		GOTO @.e7  	; }
+	.s6#23:	MOVi %1 #-1 	; score(-1)
+		CALL &score %0 *2
+		MOVi %1 #1 	; fSETPRM(1,global SCORE,global MXSCOR)
+		PEEK %2 &SCORE 
+		PEEK %3 &MXSCOR 
+		CALL &fSETPRM %0 *4
+		MOVi %1 #3 	; fSETPRM(3,global TURNS,global TURNS)
+		PEEK %2 &TURNS 
+		PEEK %3 &TURNS 
+		CALL &fSETPRM %0 *4
+		MOVi %1 #259 	; fRSPEAK(259)
+		CALL &fRSPEAK %0 *2
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#24:	PEEK %1 &WD1 	; lK=(int)fVOCAB(global WD1,3)
+		MOVi %2 #3 
+		CALL &fVOCAB %0 *3
+		MOVi $lK %0 
+		POKE &gK $lK 	; global gK = lK
+		POKE &SPK #42 	; global SPK=42
+		PEEK %0 &FOOBAR 	; if(global FOOBAR != 1-lK) 
+		SUBi %1 #1 $lK
+		EQUi %0 %1 @.f102
+		PEEK %0 &FOOBAR 	; if(global FOOBAR != 0)global SPK=151
+		EQUi %0 #0 @.f103
+		POKE &SPK #151 	; global SPK=151
+	.f103:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f102:	POKE &FOOBAR $lK 	; global FOOBAR=lK
+		EQUi $lK #4 @.f104	; if(lK != 4) 
+		MOVi $goValue #GOTO2009 	; goValue = GOTO2009
+		GOTO @return  	; goto return
+	.f104:	POKE &FOOBAR #0 	; global FOOBAR=0
+		PEEK %0 &PLACE:EGGS 	; if((int)global PLACE[EGGS] == (int)global PLAC[EGGS] || ((int)TOTING(EGGS) != FALSE && lLOC == (int)global PLAC[EGGS])) 
+		PEEK %1 &PLAC:EGGS 
+		EQUi %0 %1 @.t105
+		MOVi %1 #EGGS 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f107
+		PEEK %0 &PLAC:EGGS 
+		NEQi $lLOC %0 @.f107
+	.t105:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f107:	PEEK %0 &PLACE:EGGS 	; if((int)global PLACE[EGGS] == 0 && (int)global PLACE[TROLL] == 0 && (int)global PROP[TROLL] == 0)global PROP[TROLL]=1
+		NEQi %0 #0 @.f109
+		PEEK %0 &PLACE:TROLL 
+		NEQi %0 #0 @.f109
+		PEEK %0 &PROP:TROLL 
+		NEQi %0 #0 @.f109
+		POKE &PROP:TROLL #1 	; global PROP[TROLL]=1
+	.f109:	MOVi $lK #2 	; lK=2
+		POKE &gK #2 	; global gK = 2
+		MOVi %1 #EGGS 	; if((int)HERE(EGGS, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f110
+		MOVi $lK #1 	; lK=1
+		POKE &gK #2 	; global gK = 2
+	.f110:	PEEK %0 &PLAC:EGGS 	; if(lLOC == (int)global PLAC[EGGS]) 
+		NEQi $lLOC %0 @.f111
+		MOVi $lK #0 	; lK=0
+		POKE &gK #0 	; global gK = 0
+	.f111:	MOVi %1 #EGGS 	; fMOVE(EGGS,global PLAC[EGGS])
+		PEEK %2 &PLAC:EGGS 
+		CALL &fMOVE %0 *3
+		MOVi %1 #EGGS 	; fPSPEAK(EGGS,lK)
+		MOVi %2 $lK 
+		CALL &fPSPEAK %0 *3
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#25:	POKE &ABBNUM #10000 	; global ABBNUM=10000
+		POKE &DETAIL #3 	; global DETAIL=3
+		POKE &SPK #156 	; global SPK=156
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#26:	MOVi $I #1 	; for (I=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.e112
+	.l113:	MOVi %1 $I 	; if((int)HERE(I, lLOC) != FALSE && (int)global OBJTXT[I] != 0 && (int)global PROP[I] >= 0) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f115
+		PEEK %0 &OBJTXT $I
+		EQUi %0 #0 @.f115
+		PEEK %0 &PROP $I
+		LSSi %0 #0 @.f115
+		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+I
+		ADDi $lOBJ %0 $I
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+	.f115:	FORi $I <A> @.l113	; } /* end loop */
+	.e112:	GRTi $lOBJ #100 @.t116	; if(lOBJ > 100 || lOBJ == 0 || (int)DARK(lLOC) != FALSE) 
+		EQUi $lOBJ #0 @.t116
+		MOVi %1 $lLOC 
+		CALL &DARK %0 *2
+		EQUi %0 #FALSE @.f117
+	.t116:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+		GOTO @return  	; goto return
+	.f117:	NOOP
+	L9270:	MOVi %1 $lLOC 	; L9270:
+		CALL &DARK %0 *2
+		EQUi %0 #FALSE @.f118
+		GOTO @L5190  	; goto L5190
+	.f118:	PEEK %0 &OBJTXT $lOBJ	; if((int)global OBJTXT[lOBJ] == 0 || (int)global PROP[lOBJ] < 0) 
+		EQUi %0 #0 @.t119
+		PEEK %0 &PROP $lOBJ
+		GEQi %0 #0 @.f120
+	.t119:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f120:	NEQi $lOBJ #OYSTER @.f121	; if(!(lOBJ == OYSTER && global CLSHNT == FALSE)) 
+		PEEK %0 &CLSHNT 
+		EQUi %0 #FALSE @.f122
+	.f121:	MOVi %1 $lOBJ 	; fPSPEAK(lOBJ,(int)global OBJTXT[lOBJ]+(int)global PROP[lOBJ])
+		PEEK %2 &OBJTXT $lOBJ
+		PEEK %3 &PROP $lOBJ
+		ADDi %2 %2 %3
+		CALL &fPSPEAK %0 *3
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	.f122:	MOVi %1 #192 	; global CLSHNT=(int)fYES(192,193,54)
+		MOVi %2 #193 
+		MOVi %3 #54 
+		CALL &fYES %0 *4
+		POKE &CLSHNT %0 
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#29:	NOOP
+	.s6#30:	MOVp %1 &.s_SorryF4d4 	; output("Sorry. File operationrs are disabled.\n")
+		CALL ^output %0 *2
+		POKE &gK #NUL 	; global gK = NUL
+		MOVi $goValue #GOTO8 	; goValue = GOTO8
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#31:	PEEK %0 &PROP:RUG 	; if((int)global PROP[RUG] != 2)global SPK=224
+		EQUi %0 #2 @.f123
+		POKE &SPK #224 	; global SPK=224
+	.f123:	MOVi %1 #RUG 	; if((int)HERE(RUG, lLOC) == FALSE)global SPK=225
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f124
+		POKE &SPK #225 	; global SPK=225
+	.f124:	PEEK %0 &SPK 	; if(global SPK/2 == 112) 
+		DIVi %0 %0 #2
+		NEQi %0 #112 @.f125
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f125:	MOVi $lOBJ #RUG 	; lOBJ=RUG
+		POKE &gOBJ #RUG 	; global gOBJ = RUG
+	L9320:	EQUi $lOBJ #RUG @.f126	; L9320:
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f126:	POKE &SPK #223 	; global SPK=223
+		PEEK %0 &PROP:RUG 	; if((int)global PROP[RUG] != 2) 
+		EQUi %0 #2 @.f127
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f127:	PEEK %0 &OLDLOC 	; global OLDLC2=global OLDLOC
+		POKE &OLDLC2 %0 
+		POKE &OLDLOC $lLOC 	; global OLDLOC=lLOC
+		PEEK %0 &PLACE:RUG 	; global NEWLOC=(int)global PLACE[RUG]+(int)global FIXED[RUG]-lLOC
+		PEEK %1 &FIXED:RUG 
+		ADDi %0 %0 %1
+		SUBi %0 %0 $lLOC
+		POKE &NEWLOC %0 
+		POKE &SPK #226 	; global SPK=226
+		PEEK %0 &PROP:SAPPH 	; if((int)global PROP[SAPPH] >= 0)global SPK=227
+		LSSi %0 #0 @.f128
+		POKE &SPK #227 	; global SPK=227
+	.f128:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
+		CALL &fRSPEAK %0 *2
+		MOVi $goValue #GOTO2 	; goValue = GOTO2
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#32:	POKE &SPK #228 	; global SPK=228
+		PEEK $lK &LOCSND $lLOC	; lK=(int)global LOCSND[lLOC]
+		POKE &gK $lK 	; global gK = lK
+		EQUi $lK #0 @.f129	; if(lK != 0) 
+		ABSi %1 $lK 	; fRSPEAK(abs(lK))
+		CALL &fRSPEAK %0 *2
+		GEQi $lK #0 @.f130	; if(lK < 0) 
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	.f130:	POKE &SPK #0 	; global SPK=0
+	.f129:	MOVi %1 #1 	; fSETPRM(1,global ZZWORD-MESH*2,0)
+		PEEK %2 &ZZWORD 
+		! MULi <A> #MESH #2
+		SUBi %2 %2 <A>
+		MOVi %3 #0 
+		CALL &fSETPRM %0 *4
+		MOVi $I #1 	; for (I=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.e131
+	.l132:	MOVi %1 $I 	; if (!((int)HERE(I, lLOC) == FALSE || (int)global OBJSND[I] == 0 || (int)global PROP[I] < 0)) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f134
+		PEEK %0 &OBJSND $I
+		EQUi %0 #0 @.f134
+		PEEK %0 &PROP $I
+		LSSi %0 #0 @.f134
+		MOVi %1 $I 	; fPSPEAK(I,(int)global OBJSND[I]+(int)global PROP[I])
+		PEEK %2 &OBJSND $I
+		PEEK %3 &PROP $I
+		ADDi %2 %2 %3
+		CALL &fPSPEAK %0 *3
+		POKE &SPK #0 	; global SPK=0
+		NEQi $I #BIRD @.f134	; if(I == BIRD && (int)global OBJSND[I]+(int)global PROP[I] == 8)fDSTROY(BIRD)
+		PEEK %0 &OBJSND $I
+		PEEK %1 &PROP $I
+		ADDi %0 %0 %1
+		NEQi %0 #8 @.f134
+		MOVi %1 #BIRD 	; fDSTROY(BIRD)
+		CALL &fDSTROY %0 *2
+	.f134:	FORi $I <A> @.l132	; } /* end loop */
+	.e131:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e7  	; }
+	.s6#33:	NOOP
+	L8340:	MOVi %1 #RESER 	; L8340:
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		NEQi %0 #FALSE @.f138
+		PEEK %0 &FIXED:RESER 
+		SUBi %0 %0 #1
+		EQUi $lLOC %0 @.f138
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f138:	MOVi %1 #RESER 	; fPSPEAK(RESER,(int)global PROP[RESER]+1)
+		PEEK %2 &PROP:RESER 
+		ADDi %2 %2 #1
+		CALL &fPSPEAK %0 *3
+		PEEK %0 &PROP:RESER 	; global PROP[RESER]=1-(int)global PROP[RESER]
+		SUBi %0 #1 %0
+		POKE &PROP:RESER %0 
+		MOVi %1 #RESER 	; if((int)AT(RESER, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f139
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	.f139:	POKE &OLDLC2 $lLOC 	; global OLDLC2=lLOC
+		POKE &NEWLOC #0 	; global NEWLOC=0
+		MOVi %1 #241 	; fRSPEAK(241)
+		CALL &fRSPEAK %0 *2
+		MOVi $goValue #GOTO2 	; goValue = GOTO2
+		GOTO @return  	; goto return
+	.s6:	NOOP
+	.e7:	MOVi %1 #23 	; fBUG(23)
+		CALL &fBUG %0 *2
+		GOTO @.e1  	; }
+	.s0#1:	NOOP
+	L4090:	PEEK %0 &VERB 	; L4090:
+		SUBi %0 %0 #1
+		SWCH %0 *34 @.s140
+	.s140#0:	CALL &carry %0 *1	; goValue = (int)carry()
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#1:	MOVi %1 #FALSE 	; goValue = (int)discard(FALSE)
+		CALL &discard %0 *2
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#2:	MOVi %1 #1 	; fSETPRM(1,global WD2,global WD2X)
+		PEEK %2 &WD2 
+		PEEK %3 &WD2X 
+		CALL &fSETPRM %0 *4
+		PEEK %0 &WD2 	; if(global WD2 <= 0)fSETPRM(1,global WD1,global WD1X)
+		GRTi %0 #0 @.f142
+		MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
+		PEEK %2 &WD1 
+		PEEK %3 &WD1X 
+		CALL &fSETPRM %0 *4
+	.f142:	PEEK %0 &WD2 	; if(global WD2 > 0)global WD1=global WD2
+		LEQi %0 #0 @.f143
+		PEEK %0 &WD2 	; global WD1=global WD2
+		POKE &WD1 %0 
+	.f143:	PEEK %1 &WD1 	; I=(int)fVOCAB(global WD1,-1)
+		MOVi %2 #-1 
+		CALL &fVOCAB %0 *3
+		MOVi $I %0 
+		EQUi $I #62 @.f145	; if(!(I == 62 || I == 65 || I == 71 || I == 2025 || I == 2034)) 
+		EQUi $I #65 @.f145
+		EQUi $I #71 @.f145
+		EQUi $I #2025 @.f145
+		EQUi $I #2034 @.f145
+		MOVi %1 #258 	; fRSPEAK(258)
+		CALL &fRSPEAK %0 *2
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	.f145:	POKE &WD2 #0 	; global WD2=0
+		MOVi $lOBJ #0 	; lOBJ=0
+		POKE &gOBJ #0 	; global gOBJ = 0
+		MOVi $goValue #GOTO2630 	; goValue = GOTO2630
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#3:	NOOP
+	.s140#5:	GOTO @L9040  	; goto L9040
+		GOTO @.e141  
+	.s140#4:	MOVi $goValue #GOTO2009 	; goValue = GOTO2009
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#6:	GOTO @L9070  	; goto L9070
+		GOTO @.e141  
+	.s140#7:	GOTO @L9080  	; goto L9080
+		GOTO @.e141  
+	.s140#8:	MOVi %1 $lOBJ 	; if(((int)TOTING(lOBJ) == FALSE) && (lOBJ != ROD || (int)TOTING(ROD2) == FALSE))global SPK=29
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f148
+		NEQi $lOBJ #ROD @.t147
+		MOVi %1 #ROD2 
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f148
+	.t147:	POKE &SPK #29 	; global SPK=29
+	.f148:	NEQi $lOBJ #ROD @.t149	; if(lOBJ != ROD || (int)TOTING(lOBJ) == FALSE || ((int)HERE(BIRD, lLOC) == FALSE && (global CLOSNG != FALSE || (int)AT(FISSUR, lLOC) == FALSE))) 
+		MOVi %1 $lOBJ 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.t149
+		MOVi %1 #BIRD 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f152
+		PEEK %0 &CLOSNG 
+		NEQi %0 #FALSE @.t149
+		MOVi %1 #FISSUR 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		NEQi %0 #FALSE @.f152
+	.t149:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f152:	MOVi %1 #BIRD 	; if((int)HERE(BIRD, lLOC) != FALSE)global SPK=206+(((int)global PROP[BIRD])%2)
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f153
+		PEEK %0 &PROP:BIRD 	; global SPK=206+(((int)global PROP[BIRD])%2)
+		MODi %0 %0 #2
+		ADDi %0 #206 %0
+		POKE &SPK %0 
+	.f153:	PEEK %0 &SPK 	; if(!(global SPK == 206 && lLOC == (int)global PLACE[STEPS] && (int)global PROP[JADE] < 0)) 
+		NEQi %0 #206 @.f154
+		PEEK %0 &PLACE:STEPS 
+		NEQi $lLOC %0 @.f154
+		PEEK %0 &PROP:JADE 
+		LSSi %0 #0 @.f155
+	.f154:	PEEK %0 &CLOSED 	; if(global CLOSED != FALSE) 
+		EQUi %0 #FALSE @.f156
+		MOVi $goValue #GOTO18999 	; goValue = GOTO18999
+		GOTO @return  	; goto return
+	.f156:	PEEK %0 &CLOSNG 	; if(global CLOSNG != FALSE || (int)AT(FISSUR, lLOC) == FALSE) 
+		NEQi %0 #FALSE @.t157
+		MOVi %1 #FISSUR 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		NEQi %0 #FALSE @.f158
+	.t157:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f158:	MOVi %1 #BIRD 	; if((int)HERE(BIRD, lLOC) != FALSE)fRSPEAK(global SPK)
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f159
+		PEEK %1 &SPK 	; fRSPEAK(global SPK)
+		CALL &fRSPEAK %0 *2
+	.f159:	PEEK %0 &PROP:FISSUR 	; global PROP[FISSUR]=1-(int)global PROP[FISSUR]
+		SUBi %0 #1 %0
+		POKE &PROP:FISSUR %0 
+		MOVi %1 #FISSUR 	; fPSPEAK(FISSUR,2-(int)global PROP[FISSUR])
+		PEEK %2 &PROP:FISSUR 
+		SUBi %2 #2 %2
+		CALL &fPSPEAK %0 *3
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	.f155:	MOVi %1 #JADE 	; fDROP(JADE,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+		POKE &PROP:JADE #0 	; global PROP[JADE]=0
+		PEEK %0 &TALLY 	; global TALLY=global TALLY-1
+		SUBi %0 %0 #1
+		POKE &TALLY %0 
+		POKE &SPK #208 	; global SPK=208
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#9:	NOOP
+	.s140#10:	NOOP
+	.s140#17:	NOOP
+	.s140#23:	NOOP
+	.s140#24:	NOOP
+	.s140#25:	NOOP
+	.s140#29:	NOOP
+	.s140#30:	NOOP
+	.s140#32:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#11:	CALL &attack %0 *1	; goValue = (int)attack()
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#12:	GOTO @L9130  	; goto L9130
+		GOTO @.e141  
+	.s140#13:	NEQi $lOBJ #FOOD @.f160	; if(lOBJ == FOOD) 
+		MOVi %1 #FOOD 	; fDSTROY(FOOD)
+		CALL &fDSTROY %0 *2
+		POKE &SPK #72 	; global SPK=72
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f160:	EQUi $lOBJ #BIRD @.t161	; if(lOBJ == BIRD || lOBJ == SNAKE || lOBJ == CLAM || lOBJ == OYSTER || lOBJ ==
+		EQUi $lOBJ #SNAKE @.t161
+		EQUi $lOBJ #CLAM @.t161
+		EQUi $lOBJ #OYSTER @.t161
+		EQUi $lOBJ #DWARF @.t161
+		EQUi $lOBJ #DRAGON @.t161
+		EQUi $lOBJ #TROLL @.t161
+		EQUi $lOBJ #BEAR @.t161
+		NEQi $lOBJ #OGRE @.f162
+	.t161:	POKE &SPK #71 	; global SPK=71
+	.f162:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#14:	GOTO @L9150  	; goto L9150
+		GOTO @.e141  
+	.s140#15:	EQUi $lOBJ #LAMP @.f163	; if(lOBJ != LAMP)global SPK=76
+		POKE &SPK #76 	; global SPK=76
+	.f163:	NEQi $lOBJ #URN @.t164	; if(lOBJ != URN || (int)global PROP[URN] != 2) 
+		PEEK %0 &PROP:URN 
+		EQUi %0 #2 @.f165
+	.t164:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f165:	MOVi %1 #URN 	; fDSTROY(URN)
+		CALL &fDSTROY %0 *2
+		MOVi %1 #AMBER 	; fDROP(AMBER,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+		POKE &PROP:AMBER #1 	; global PROP[AMBER]=1
+		PEEK %0 &TALLY 	; global TALLY=global TALLY-1
+		SUBi %0 %0 #1
+		POKE &TALLY %0 
+		MOVi %1 #CAVITY 	; fDROP(CAVITY,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+		POKE &SPK #216 	; global SPK=216
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#16:	CALL &doThrow %0 *1	; goValue = (int)doThrow()
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#18:	NOOP
+	.s140#19:	MOVi %1 $lOBJ 	; if((int)AT(lOBJ, lLOC) != FALSE || ((int)LIQ() == lOBJ && (int)AT(BOTTLE, lLOC) != FALSE) || lK == (int)LIQLOC(lLOC) || (lOBJ ==
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		NEQi %0 #FALSE @.t166
+		CALL &LIQ %0 *1
+		NEQi %0 $lOBJ @.f167
+		MOVi %1 #BOTTLE 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		NEQi %0 #FALSE @.t166
+	.f167:	MOVi %1 $lLOC 
+		CALL &LIQLOC %0 *2
+		EQUi $lK %0 @.t166
+		NEQi $lOBJ #DWARF @.f169
+		MOVi %1 $lLOC 
+		CALL &fATDWRF %0 *2
+		LEQi %0 #0 @.f169
+	.t166:	POKE &SPK #94 	; global SPK=94
+	.f169:	PEEK %0 &CLOSED 	; if(global CLOSED != FALSE)global SPK=138
+		EQUi %0 #FALSE @.f170
+		POKE &SPK #138 	; global SPK=138
+	.f170:	MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) != FALSE)global SPK=24
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f171
+		POKE &SPK #24 	; global SPK=24
+	.f171:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#20:	MOVi %1 $lOBJ 	; goValue = (int)feed(lOBJ)
+		CALL &feed %0 *2
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#21:	MOVi %1 $lOBJ 	; goValue = (int)fill(lOBJ)
+		CALL &fill %0 *2
+		MOVi $goValue %0 
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#22:	GOTO @L9230  	; goto L9230
+		GOTO @.e141  
+	.s140#26:	GOTO @L9270  	; goto L9270
+		GOTO @.e141  
+	.s140#27:	NEQi $lOBJ #MIRROR @.f172	; if(lOBJ == MIRROR)global SPK=148
+		POKE &SPK #148 	; global SPK=148
+	.f172:	NEQi $lOBJ #VASE @.f173	; if(!(lOBJ == VASE && (int)global PROP[VASE] == 0)) 
+		PEEK %0 &PROP:VASE 
+		EQUi %0 #0 @.f174
+	.f173:	NEQi $lOBJ #MIRROR @.t175	; if(lOBJ != MIRROR || global CLOSED == FALSE) 
+		PEEK %0 &CLOSED 
+		NEQi %0 #FALSE @.f176
+	.t175:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f176:	POKE &SPK #197 	; global SPK=197
+		MOVi $goValue #GOTO18999 	; goValue = GOTO18999
+		GOTO @return  	; goto return
+	.f174:	POKE &SPK #198 	; global SPK=198
+		MOVi %1 #VASE 	; if((int)TOTING(VASE) != FALSE)fDROP(VASE,lLOC)
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f177
+		MOVi %1 #VASE 	; fDROP(VASE,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+	.f177:	POKE &PROP:VASE #2 	; global PROP[VASE]=2
+		POKE &FIXED:VASE #-1 	; global FIXED[VASE]= -1
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#28:	NEQi $lOBJ #DWARF @.t178	; if(lOBJ != DWARF || global CLOSED == FALSE) 
+		PEEK %0 &CLOSED 
+		NEQi %0 #FALSE @.f179
+	.t178:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f179:	POKE &SPK #199 	; global SPK=199
+		MOVi $goValue #GOTO18999 	; goValue = GOTO18999
+		GOTO @return  	; goto return
+		GOTO @.e141  	; }
+	.s140#31:	GOTO @L9320  	; goto L9320
+		GOTO @.e141  
+	.s140#33:	GOTO @L8340  	; goto L8340
+	.s140:	NOOP
+	.e141:	MOVi %1 #24 	; fBUG(24)
+		CALL &fBUG %0 *2
+		GOTO @.e1  	; }
+	.s0#2:	MOVi $lOBJ $lK 	; lOBJ=lK
+		POKE &gOBJ $lK 	; global gOBJ = lK
+		MOVi %1 $lK 	; if((int)HERE(lK, lLOC) != FALSE) 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f180
+	L5010:	PEEK %0 &WD2 	; L5010:
+		LEQi %0 #0 @.f181
+		MOVi $goValue #GOTO2800 	; goValue = GOTO2800
+		GOTO @return  	; goto return
+	.f181:	PEEK %0 &VERB 	; if(global VERB != 0) goto L4090
+		EQUi %0 #0 @.f182
+		GOTO @L4090  	; goto L4090
+	.f182:	MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
+		PEEK %2 &WD1 
+		PEEK %3 &WD1X 
+		CALL &fSETPRM %0 *4
+		MOVi %1 #255 	; fRSPEAK(255)
+		CALL &fRSPEAK %0 *2
+		MOVi $goValue #GOTO2600 	; goValue = GOTO2600
+		GOTO @return  	; goto return
+	.f180:	NEQi $lK #GRATE @.f183	; if(lK == GRATE) 
+		EQUi $lLOC #1 @.t184	; if(lLOC == 1 || lLOC == 4 || lLOC == 7) 
+		EQUi $lLOC #4 @.t184
+		NEQi $lLOC #7 @.f185
+	.t184:	MOVi $lK #DPRSSN 	; lK=DPRSSN
+		POKE &gK $lK 	; global gK = lK
+	.f185:	LEQi $lLOC #9 @.f187	; if(lLOC > 9 && lLOC < 15) 
+		GEQi $lLOC #15 @.f187
+		MOVi $lK #ENTRNC 	; lK=ENTRNC
+		POKE &gK $lK 	; global gK = lK
+	.f187:	EQUi $lK #GRATE @.f183	; if(lK != GRATE) 
+		MOVi $goValue #GOTO8 	; goValue = GOTO8
+		GOTO @return  	; goto return
+	.f183:	NEQi $lK #DWARF @.f190	; if(lK == DWARF && (int)fATDWRF(lLOC) > 0) goto L5010
+		MOVi %1 $lLOC 
+		CALL &fATDWRF %0 *2
+		LEQi %0 #0 @.f190
+		GOTO @L5010  	; goto L5010
+	.f190:	CALL &LIQ %0 *1	; if(((int)LIQ() == lK && (int)HERE(BOTTLE, lLOC) != FALSE) || lK == (int)LIQLOC(lLOC)) goto L5010
+		NEQi %0 $lK @.f191
+		MOVi %1 #BOTTLE 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @L5010
+	.f191:	MOVi %1 $lLOC 
+		CALL &LIQLOC %0 *2
+		NEQi $lK %0 @.f193
+		GOTO @L5010  	; goto L5010
+	.f193:	NEQi $lOBJ #OIL @.f195	; if(!(lOBJ != OIL || (int)HERE(URN, lLOC) == FALSE || (int)global PROP[URN] == 0)) 
+		MOVi %1 #URN 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f195
+		PEEK %0 &PROP:URN 
+		EQUi %0 #0 @.f195
+		MOVi $lOBJ #URN 	; lOBJ=URN
+		POKE &gOBJ #URN 	; global gOBJ = URN
+		GOTO @L5010  	; goto L5010
+	.f195:	NEQi $lOBJ #PLANT @.f197	; if(!(lOBJ != PLANT || (int)AT(PLANT2, lLOC) == FALSE || (int)global PROP[PLANT2] == 0)) 
+		MOVi %1 #PLANT2 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f197
+		PEEK %0 &PROP:PLANT2 
+		EQUi %0 #0 @.f197
+		MOVi $lOBJ #PLANT2 	; lOBJ=PLANT2
+		POKE &gOBJ #PLANT2 	; global gOBJ = PLANT2
+		GOTO @L5010  	; goto L5010
+	.f197:	NEQi $lOBJ #KNIFE @.f199	; if(!(lOBJ != KNIFE || global KNFLOC != lLOC)) 
+		PEEK %0 &KNFLOC 
+		NEQi %0 $lLOC @.f199
+		POKE &KNFLOC #-1 	; global KNFLOC= -1
+		POKE &SPK #116 	; global SPK=116
+		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
+		GOTO @return  	; goto return
+	.f199:	NEQi $lOBJ #ROD @L5190	; if(lOBJ != ROD || (int)HERE(ROD2, lLOC) == FALSE) goto L5190
+		MOVi %1 #ROD2 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		NEQi %0 #FALSE @.f201
+		GOTO @L5190  	; goto L5190
+	.f201:	MOVi $lOBJ #ROD2 	; lOBJ=ROD2
+		POKE &gOBJ #ROD2 	; global gOBJ = ROD2
+		GOTO @L5010  	; goto L5010
+	L5190:	PEEK %0 &VERB 	; L5190:
+		EQUi %0 #FIND @.t202
+		PEEK %0 &VERB 
+		NEQi %0 #INVENT @.f204
+	.t202:	PEEK %0 &WD2 
+		GRTi %0 #0 @.f204
+		GOTO @L5010  	; goto L5010
+	.f204:	MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
+		PEEK %2 &WD1 
+		PEEK %3 &WD1X 
+		CALL &fSETPRM %0 *4
+		MOVi %1 #256 	; fRSPEAK(256)
+		CALL &fRSPEAK %0 *2
+		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
+		GOTO @return  	; goto return
+	.s0:	NOOP
+	.e1:	MOVi %1 #99 	; fBUG(99)
+		CALL &fBUG %0 *2
+		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
+	return:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC
+		PARA *1
+	$gotoChoice:	LOCi
+	$I:	LOCi
+	$J:	LOCi
+	$lK:	LOCi
+	$K2:	LOCi
+	$KK:	LOCi
+	$KQ:	LOCi
+	$LL:	LOCi
+	$V1:	LOCi
+	$V2:	LOCi
+	$lOBJ:	LOCi
+	$lLOC:	LOCi
+	$HINT:	LOCi
+	$OLDOBJ:	LOCi
+	$STICK:	LOCi
+	$ATTACK:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $lK #0 	; lK=0
+		MOVi $lOBJ #0 	; lOBJ=0
+		MOVi $OLDOBJ #0 	; OLDOBJ = 0
+		MOVi $STICK #0 	; STICK = 0
+		MOVi $ATTACK #0 	; ATTACK = 0
+		POKE &MAP2:1 #0 	; global MAP2[1] = 0
+		CALL &initialise %0 *1	; initialise()
+		MOVi %1 #-1 	; I=(int)fRAN(-1)
+		CALL &fRAN %0 *2
+		MOVi $I %0 
+		MOVi %1 #3 	; global ZZWORD=(int)fRNDVOC(3,0)+MESH*2
+		MOVi %2 #0 
+		CALL &fRNDVOC %0 *3
+		! MULi <A> #MESH #2
+		ADDi %0 %0 <A>
+		POKE &ZZWORD %0 
+		MOVi %1 #65 	; global NOVICE=(int)fYES(65,1,0)
+		MOVi %2 #1 
+		MOVi %3 #0 
+		CALL &fYES %0 *4
+		POKE &NOVICE %0 
+		POKE &NEWLOC #1 	; global NEWLOC=1
+		MOVi $lLOC #1 	; lLOC=1
+		POKE &LIMIT #330 	; global LIMIT=330
+		PEEK %0 &NOVICE 	; if(global NOVICE != FALSE)global LIMIT=1000
+		EQUi %0 #FALSE @.f0
+		POKE &LIMIT #1000 	; global LIMIT=1000
+	.f0:	NOOP
+	L2:	PEEK %1 &NEWLOC 	; L2:
+		CALL &OUTSID %0 *2
+		EQUi %0 #FALSE @.f2
+		PEEK %0 &NEWLOC 
+		EQUi %0 #0 @.f2
+		PEEK %0 &CLOSNG 
+		EQUi %0 #FALSE @.f2
+		MOVi %1 #130 	; fRSPEAK(130)
+		CALL &fRSPEAK %0 *2
+		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
+		PEEK %0 &PANIC 	; if(global PANIC == FALSE)global CLOCK2=15
+		NEQi %0 #FALSE @.f3
+		POKE &CLOCK2 #15 	; global CLOCK2=15
+	.f3:	POKE &PANIC #TRUE 	; global PANIC=TRUE
+	.f2:	PEEK %0 &NEWLOC 	; if(!(global NEWLOC == lLOC || ((int)global COND[lLOC] == 2) || (int)CNDBIT(lLOC,3) != FALSE)) 
+		EQUi %0 $lLOC @.f5
+		PEEK %0 &COND $lLOC
+		EQUi %0 #2 @.f5
+		MOVi %1 $lLOC 
+		MOVi %2 #3 
+		CALL &CNDBIT %0 *3
+		NEQi %0 #FALSE @.f5
+		MOVi $I #1 	; for (I=1 to 5+1) 
+		! ADDi <A> #5 #1
+		GEQi #1 <A> @.f5
+	.l7:	PEEK %0 &ODLOC $I	; if(!((int)global ODLOC[I] != global NEWLOC || (int)global DSEEN[I] == FALSE)) 
+		PEEK %1 &NEWLOC 
+		NEQi %0 %1 @.f9
+		PEEK %0 &DSEEN $I
+		EQUi %0 #FALSE @.f9
+		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
+		MOVi %1 #2 	; fRSPEAK(2)
+		CALL &fRSPEAK %0 *2
+		GOTO @break1  	; goto break1
+	.f9:	FORi $I <A> @.l7	; } /* end loop */
+	break1:	NOOP
+	.f5:	PEEK $lLOC &NEWLOC 	; lLOC=global NEWLOC
+		EQUi $lLOC #0 @L2000	; if(lLOC == 0 || ((int)global COND[lLOC] == 2) || (int)CNDBIT(global NEWLOC,3) != FALSE) goto L2000
+		PEEK %0 &COND $lLOC
+		EQUi %0 #2 @L2000
+		PEEK %1 &NEWLOC 
+		MOVi %2 #3 
+		CALL &CNDBIT %0 *3
+		EQUi %0 #FALSE @.f11
+		GOTO @L2000  	; goto L2000
+	.f11:	PEEK %0 &DFLAG 	; if(global DFLAG == 0) 
+		NEQi %0 #0 @.f12
+		MOVi %1 $lLOC 	; if((int)INDEEP(lLOC) != FALSE)global DFLAG=1
+		CALL &INDEEP %0 *2
+		EQUi %0 #FALSE @L2000
+		POKE &DFLAG #1 	; global DFLAG=1
+		GOTO @L2000  	; goto L2000
+	.f12:	PEEK %0 &DFLAG 	; if(global DFLAG == 1) 
+		NEQi %0 #1 @.f14
+		MOVi %1 $lLOC 	; if((int)INDEEP(lLOC) == FALSE || (((int)fRAN(100) < (95)) && ((int)CNDBIT(lLOC,4) == FALSE || ((int)fRAN(100) < (85))))) goto L2000
+		CALL &INDEEP %0 *2
+		EQUi %0 #FALSE @L2000
+		MOVi %1 #100 
+		CALL &fRAN %0 *2
+		GEQi %0 #95 @.f18
+		MOVi %1 $lLOC 
+		MOVi %2 #4 
+		CALL &CNDBIT %0 *3
+		EQUi %0 #FALSE @L2000
+		MOVi %1 #100 
+		CALL &fRAN %0 *2
+		GEQi %0 #85 @.f18
+		GOTO @L2000  	; goto L2000
+	.f18:	POKE &DFLAG #2 	; global DFLAG=2
+		MOVi $I #1 	; for (I=1 to 2+1) 
+		! ADDi <A> #2 #1
+		GEQi #1 <A> @.e19
+	.l20:	MOVi %1 #5 	; J=1+(int)fRAN(5)
+		CALL &fRAN %0 *2
+		ADDi $J #1 %0
+		MOVi %1 #100 	; if(((int)fRAN(100) < (50)))global DLOC[J]=0
+		CALL &fRAN %0 *2
+		GEQi %0 #50 @.f21
+		POKE &DLOC $J #0	; global DLOC[J]=0
+	.f21:	FORi $I <A> @.l20	; } /* end loop */
+	.e19:	MOVi $I #1 	; for (I=1 to 5+1) 
+		! ADDi <A> #5 #1
+		GEQi #1 <A> @.e22
+	.l23:	PEEK %0 &DLOC $I	; if((int)global DLOC[I] == lLOC)global DLOC[I]=DALTLC
+		NEQi %0 $lLOC @.f24
+		POKE &DLOC $I #DALTLC	; global DLOC[I]=DALTLC
+	.f24:	PEEK %0 &DLOC $I	; global ODLOC[I]=global DLOC[I]
+		POKE &ODLOC $I %0
+		FORi $I <A> @.l23	; } /* end loop */
+	.e22:	MOVi %1 #3 	; fRSPEAK(3)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #AXE 	; fDROP(AXE,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+		GOTO @L2000  	; goto L2000
+	.f14:	POKE &DTOTAL #0 	; global DTOTAL=0
+		MOVi $ATTACK #0 	; ATTACK=0
+		MOVi $STICK #0 	; STICK=0
+		MOVi $I #1 	; for (I=1 to 6+1) 
+		! ADDi <A> #6 #1
+		GEQi #1 <A> @.e25
+	.l26:	PEEK %0 &DLOC $I	; if((int)global DLOC[I] != 0) 
+		EQUi %0 #0 @.f27
+		MOVi $J #1 	; J=1
+		PEEK $KK &DLOC $I	; KK=(int)global DLOC[I]
+		PEEK $KK &KEY $KK	; KK=(int)global KEY[KK]
+		EQUi $KK #0 @.f28	; if(KK != 0) 
+	.l29:	PEEK %0 &TRAVEL $KK	; global NEWLOC=((abs((int)global TRAVEL[KK])/1000)%1000)
+		ABSi %0 %0 
+		DIVi %0 %0 #1000
+		MODi %0 %0 #1000
+		POKE &NEWLOC %0 
+		PEEK %0 &NEWLOC 	; if(!(global NEWLOC > 300 || (int)INDEEP(global NEWLOC) == FALSE
+		GRTi %0 #300 @.f33
+		PEEK %1 &NEWLOC 
+		CALL &INDEEP %0 *2
+		EQUi %0 #FALSE @.f33
+		PEEK %0 &NEWLOC 
+		PEEK %1 &ODLOC $I
+		EQUi %0 %1 @.f33
+		LEQi $J #1 @.f31
+		SUBi %0 $J #1
+		PEEK %1 &NEWLOC 
+		PEEK %0 &TK %0
+		EQUi %1 %0 @.f33
+	.f31:	GEQi $J #20 @.f33
+		PEEK %1 &NEWLOC 
+		PEEK %0 &DLOC $I
+		EQUi %1 %0 @.f33
+		PEEK %1 &NEWLOC 
+		PEEK %1 &COND %1
+		EQUi %1 #2 @.f33
+		NEQi $I #6 @.f32
+		PEEK %1 &NEWLOC 
+		MOVi %2 #3 
+		CALL &CNDBIT %0 *3
+		NEQi %0 #FALSE @.f33
+	.f32:	PEEK %0 &TRAVEL $KK
+		ABSi %0 %0 
+		DIVi %0 %0 #1000000
+		EQUi %0 #100 @.f33
+		PEEK %0 &NEWLOC 	; global TK[J]=global NEWLOC
+		POKE &TK $J %0
+		ADDi $J $J #1	; J=J+1
+	.f33:	ADDi $KK $KK #1	; KK=KK+1
+		SUBi %0 $KK #1	; } while ((int)global TRAVEL[KK-1] >= 0)
+		PEEK %0 &TRAVEL %0
+		GEQi %0 #0 @.l29
+	.f28:	PEEK %0 &ODLOC $I	; global TK[J]=(int)global ODLOC[I]
+		POKE &TK $J %0
+		LSSi $J #2 @.f34	; if(J >= 2)J=J-1
+		SUBi $J $J #1	; J=J-1
+	.f34:	MOVi %1 $J 	; J=1+(int)fRAN(J)
+		CALL &fRAN %0 *2
+		ADDi $J #1 %0
+		PEEK %0 &DLOC $I	; global ODLOC[I]=global DLOC[I]
+		POKE &ODLOC $I %0
+		PEEK %0 &TK $J	; global DLOC[I]=global TK[J]
+		POKE &DLOC $I %0
+		PEEK %0 &DSEEN $I	; if (((int)global DSEEN[I] != FALSE && (int)INDEEP(lLOC) != FALSE) || ((int)global DLOC[I] == lLOC || (int)global ODLOC[I] == lLOC)) 
+		EQUi %0 #FALSE @.f35
+		MOVi %1 $lLOC 
+		CALL &INDEEP %0 *2
+		NEQi %0 #FALSE @.t36
+	.f35:	PEEK %0 &DLOC $I
+		EQUi %0 $lLOC @.t36
+		PEEK %0 &ODLOC $I
+		NEQi %0 $lLOC @.f38
+	.t36:	POKE &DSEEN $I #TRUE	; global DSEEN[I]=TRUE
+		POKE &DLOC $I $lLOC	; global DLOC[I]=lLOC
+		EQUi $I #6 @.f39	; if(I != 6) 
+		PEEK %0 &DTOTAL 	; global DTOTAL=global DTOTAL+1
+		ADDi %0 %0 #1
+		POKE &DTOTAL %0 
+		PEEK %0 &ODLOC $I	; if((int)global ODLOC[I] == (int)global DLOC[I]) 
+		PEEK %1 &DLOC $I
+		NEQi %0 %1 @.e68
+		ADDi $ATTACK $ATTACK #1	; ATTACK=ATTACK+1
+		PEEK %0 &KNFLOC 	; if(global KNFLOC >= 0)global KNFLOC=lLOC
+		LSSi %0 #0 @.f41
+		POKE &KNFLOC $lLOC 	; global KNFLOC=lLOC
+	.f41:	MOVi %1 #1000 	; if((int)fRAN(1000) < 95*(global DFLAG-2))STICK=STICK+1
+		CALL &fRAN %0 *2
+		PEEK %1 &DFLAG 
+		SUBi %1 %1 #2
+		MULi %1 #95 %1
+		GEQi %0 %1 @.e68
+		ADDi $STICK $STICK #1	; STICK=STICK+1
+		GOTO @.e68  	; } else if (!(lLOC == CHLOC || (int)global PROP[CHEST] >= 0)) 
+	.f39:	EQUi $lLOC #CHLOC @.e68	; if (!(lLOC == CHLOC || (int)global PROP[CHEST] >= 0)) 
+		PEEK %0 &PROP:CHEST 
+		GEQi %0 #0 @.e68
+		MOVi $lK #0 	; lK=0
+		MOVi $J #50 	; for (J=50 to MAXTRS+1) 
+		! ADDi <B> #MAXTRS #1
+		GEQi #50 <B> @.e46
+	.l47:	NEQi $J #PYRAM @.f48	; if(!(J == PYRAM && (lLOC == (int)global PLAC[PYRAM] || lLOC == (int)global PLAC[EMRALD]))) 
+		PEEK %0 &PLAC:PYRAM 
+		EQUi $lLOC %0 @.f50
+		PEEK %0 &PLAC:EMRALD 
+		EQUi $lLOC %0 @.f50
+	.f48:	MOVi %1 $J 	; if((int)TOTING(J) != FALSE) 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f50
+		PEEK %0 &PLACE:CHEST 	; if((int)global PLACE[CHEST] == 0) 
+		NEQi %0 #0 @.f52
+		MOVi %1 #CHEST 	; fMOVE(CHEST,CHLOC)
+		MOVi %2 #CHLOC 
+		CALL &fMOVE %0 *3
+		MOVi %1 #MESSAG 	; fMOVE(MESSAG,CHLOC2)
+		MOVi %2 #CHLOC2 
+		CALL &fMOVE %0 *3
+	.f52:	MOVi %1 #128 	; fRSPEAK(128)
+		CALL &fRSPEAK %0 *2
+		MOVi $J #50 	; for (J=50 to MAXTRS+1) 
+		! ADDi <C> #MAXTRS #1
+		GEQi #50 <C> @.e53
+	.l54:	NEQi $J #PYRAM @.f55	; if(!(J == PYRAM && (lLOC == (int)global PLAC[PYRAM] || lLOC == (int)global PLAC[EMRALD]))) 
+		PEEK %0 &PLAC:PYRAM 
+		EQUi $lLOC %0 @.f57
+		PEEK %0 &PLAC:EMRALD 
+		EQUi $lLOC %0 @.f57
+	.f55:	MOVi %1 $J 	; if((int)AT(J, lLOC) != FALSE && (int)global FIXED[J] == 0)fCARRY(J,lLOC)
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f59
+		PEEK %0 &FIXED $J
+		NEQi %0 #0 @.f59
+		MOVi %1 $J 	; fCARRY(J,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fCARRY %0 *3
+	.f59:	MOVi %1 $J 	; if((int)TOTING(J) != FALSE)fDROP(J,CHLOC)
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f57
+		MOVi %1 $J 	; fDROP(J,CHLOC)
+		MOVi %2 #CHLOC 
+		CALL &fDROP %0 *3
+	.f57:	FORi $J <C> @.l54	; }
+	.e53:	POKE &DLOC:6 #CHLOC 	; global DLOC[6]=CHLOC
+		POKE &ODLOC:6 #CHLOC 	; global ODLOC[6]=CHLOC
+		POKE &DSEEN:6 #FALSE 	; global DSEEN[6]=FALSE
+		GOTO @L6030  	; goto L6030
+	.f50:	MOVi %1 $J 	; if((int)HERE(J, lLOC) != FALSE)lK=1
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f61
+		MOVi $lK #1 	; lK=1
+	.f61:	FORi $J <B> @.l47	; } /* end loop */
+	.e46:	PEEK %0 &TALLY 	; if(global TALLY == 1 && lK == 0 && (int)global PLACE[CHEST] == 0 && ((int)AT(LAMP, lLOC) != FALSE || (int)TOTING(LAMP) != FALSE) && (int)global PROP[LAMP] == 1) 
+		NEQi %0 #1 @.f64
+		NEQi $lK #0 @.f64
+		PEEK %0 &PLACE:CHEST 
+		NEQi %0 #0 @.f64
+		MOVi %1 #LAMP 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		NEQi %0 #FALSE @.t63
+		MOVi %1 #LAMP 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f64
+	.t63:	PEEK %0 &PROP:LAMP 
+		NEQi %0 #1 @.f64
+		MOVi %1 #186 	; fRSPEAK(186)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #CHEST 	; fMOVE(CHEST,CHLOC)
+		MOVi %2 #CHLOC 
+		CALL &fMOVE %0 *3
+		MOVi %1 #MESSAG 	; fMOVE(MESSAG,CHLOC2)
+		MOVi %2 #CHLOC2 
+		CALL &fMOVE %0 *3
+		POKE &DLOC:6 #CHLOC 	; global DLOC[6]=CHLOC
+		POKE &ODLOC:6 #CHLOC 	; global ODLOC[6]=CHLOC
+		POKE &DSEEN:6 #FALSE 	; global DSEEN[6]=FALSE
+		GOTO @.e68  	; } else 
+	.f64:	PEEK %0 &ODLOC:6 	; if((int)global ODLOC[6] != (int)global DLOC[6] && ((int)fRAN(100) < (20)))fRSPEAK(127)
+		PEEK %1 &DLOC:6 
+		EQUi %0 %1 @.e68
+		MOVi %1 #100 
+		CALL &fRAN %0 *2
+		GEQi %0 #20 @.e68
+		MOVi %1 #127 	; fRSPEAK(127)
+		CALL &fRSPEAK %0 *2
+	.e65:	NOOP
+	.e43:	GOTO @.e68  	; } else 
+	.f38:	POKE &DSEEN $I #FALSE	; global DSEEN[I]=FALSE
+	.e68:	NOOP
+	.f27:	NOOP
+	L6030:	FORi $I <A> @.l26	; } /* end loop */
+	.e25:	PEEK %0 &DTOTAL 	; if(global DTOTAL != 0) 
+		EQUi %0 #0 @.f69
+		MOVi %1 #1 	; fSETPRM(1,global DTOTAL,0)
+		PEEK %2 &DTOTAL 
+		MOVi %3 #0 
+		CALL &fSETPRM %0 *4
+		PEEK %1 &DTOTAL 	; fRSPEAK(4+1/global DTOTAL)
+		DIVi %1 #1 %1
+		ADDi %1 #4 %1
+		CALL &fRSPEAK %0 *2
+		EQUi $ATTACK #0 @.f69	; if(ATTACK != 0) 
+		PEEK %0 &DFLAG 	; if(global DFLAG == 2)global DFLAG=3
+		NEQi %0 #2 @.f71
+		POKE &DFLAG #3 	; global DFLAG=3
+	.f71:	MOVi %1 #1 	; fSETPRM(1,ATTACK,0)
+		MOVi %2 $ATTACK 
+		MOVi %3 #0 
+		CALL &fSETPRM %0 *4
+		MOVi $lK #6 	; lK=6
+		LEQi $ATTACK #1 @.f72	; if(ATTACK > 1)lK=250
+		MOVi $lK #250 	; lK=250
+	.f72:	MOVi %1 $lK 	; fRSPEAK(lK)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #1 	; fSETPRM(1,STICK,0)
+		MOVi %2 $STICK 
+		MOVi %3 #0 
+		CALL &fSETPRM %0 *4
+		ADDi %1 #1 $STICK	; fRSPEAK(lK+1+2/(1+STICK))
+		ADDi %2 $lK #1
+		DIVi %1 #2 %1
+		ADDi %1 %2 %1
+		CALL &fRSPEAK %0 *2
+		EQUi $STICK #0 @.f69	; if(STICK != 0) 
+		POKE &OLDLC2 $lLOC 	; global OLDLC2=lLOC
+		GOTO @L99  	; goto L99
+	.f69:	NOOP
+	L2000:	NEQi $lLOC #0 @.f74	; L2000:
+		GOTO @L99  	; goto L99
+	.f74:	PEEK $KK &STEXT $lLOC	; KK=(int)global STEXT[lLOC]
+		PEEK %0 &ABB $lLOC	; if((((int)global ABB[lLOC])%global ABBNUM) == 0 || KK == 0)KK=(int)global LTEXT[lLOC]
+		PEEK %1 &ABBNUM 
+		MODi %0 %0 %1
+		EQUi %0 #0 @.t75
+		NEQi $KK #0 @.f76
+	.t75:	PEEK $KK &LTEXT $lLOC	; KK=(int)global LTEXT[lLOC]
+	.f76:	PEEK %0 &COND $lLOC	; if(!(((int)global COND[lLOC] == 2) || (int)DARK(lLOC) == FALSE)) 
+		EQUi %0 #2 @.f78
+		MOVi %1 $lLOC 
+		CALL &DARK %0 *2
+		EQUi %0 #FALSE @.f78
+		PEEK %0 &WZDARK 	; if(global WZDARK != FALSE && ((int)fRAN(100) < (35))) goto L90
+		EQUi %0 #FALSE @.f80
+		MOVi %1 #100 
+		CALL &fRAN %0 *2
+		GEQi %0 #35 @.f80
+		GOTO @L90  	; goto L90
+	.f80:	PEEK $KK &RTEXT:16 	; KK=(int)global RTEXT[16]
+	.f78:	MOVi %1 #BEAR 	; if((int)TOTING(BEAR) != FALSE)fRSPEAK(141)
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f81
+		MOVi %1 #141 	; fRSPEAK(141)
+		CALL &fRSPEAK %0 *2
+	.f81:	MOVi %1 $KK 	; fSPEAK(KK)
+		CALL &fSPEAK %0 *2
+		MOVi $lK #1 	; lK=1
+		PEEK %0 &COND $lLOC	; if(((int)global COND[lLOC] == 2)) goto L8
+		NEQi %0 #2 @.f82
+		GOTO @L8  	; goto L8
+	.f82:	NEQi $lLOC #33 @.f84	; if(lLOC == 33 && ((int)fRAN(100) < (25)) && global CLOSNG == FALSE)fRSPEAK(7)
+		MOVi %1 #100 
+		CALL &fRAN %0 *2
+		GEQi %0 #25 @.f84
+		PEEK %0 &CLOSNG 
+		NEQi %0 #FALSE @.f84
+		MOVi %1 #7 	; fRSPEAK(7)
+		CALL &fRSPEAK %0 *2
+	.f84:	MOVi %1 $lLOC 	; if((int)DARK(lLOC) != FALSE) goto L2012
+		CALL &DARK %0 *2
+		EQUi %0 #FALSE @.f85
+		GOTO @L2012  	; goto L2012
+	.f85:	PEEK %0 &ABB $lLOC	; global ABB[lLOC]=(int)global ABB[lLOC]+1
+		ADDi %0 %0 #1
+		POKE &ABB $lLOC %0
+		PEEK $I &ATLOC $lLOC	; I=(int)global ATLOC[lLOC]
+	L2004:	NEQi $I #0 @.f86	; L2004:
+		GOTO @L2012  	; goto L2012
+	.f86:	MOVi $lOBJ $I 	; lOBJ=I
+		LEQi $lOBJ #100 @.f87	; if(lOBJ > 100)lOBJ=lOBJ-100
+		SUBi $lOBJ $lOBJ #100	; lOBJ=lOBJ-100
+	.f87:	NEQi $lOBJ #STEPS @.f88	; if(!(lOBJ == STEPS && (int)TOTING(NUGGET) != FALSE)) 
+		MOVi %1 #NUGGET 
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f89
+	.f88:	PEEK %0 &CLOSED 	; if(global CLOSED == FALSE || (int)global PROP[lOBJ] >= 0) 
+		EQUi %0 #FALSE @.t90
+		PEEK %0 &PROP $lOBJ
+		LSSi %0 #0 @.f89
+	.t90:	PEEK %0 &CLOSED 	; if(global CLOSED == FALSE && (int)global PROP[lOBJ] < 0) 
+		NEQi %0 #FALSE @.f93
+		PEEK %0 &PROP $lOBJ
+		GEQi %0 #0 @.f93
+		POKE &PROP $lOBJ #0	; global PROP[lOBJ]=0
+		EQUi $lOBJ #RUG @.t94	; if(lOBJ == RUG || lOBJ == CHAIN)global PROP[lOBJ]=1
+		NEQi $lOBJ #CHAIN @.f95
+	.t94:	POKE &PROP $lOBJ #1	; global PROP[lOBJ]=1
+	.f95:	PEEK %0 &TALLY 	; global TALLY=global TALLY-1
+		SUBi %0 %0 #1
+		POKE &TALLY %0 
+	.f93:	PEEK $KK &PROP $lOBJ	; KK=(int)global PROP[lOBJ]
+		NEQi $lOBJ #STEPS @.f97	; if(lOBJ == STEPS && lLOC == (int)global FIXED[STEPS])KK=1
+		PEEK %0 &FIXED:STEPS 
+		NEQi $lLOC %0 @.f97
+		MOVi $KK #1 	; KK=1
+	.f97:	MOVi %1 $lOBJ 	; fPSPEAK(lOBJ,KK)
+		MOVi %2 $KK 
+		CALL &fPSPEAK %0 *3
+	.f89:	PEEK $I &LINK $I	; I=(int)global LINK[I]
+		GOTO @L2004  	; goto L2004
+	L2009:	MOVi $lK #54 	; L2009:
+	L2010:	POKE &SPK $lK 	; L2010:
+	L2011:	PEEK %1 &SPK 	; L2011:
+		CALL &fRSPEAK %0 *2
+	L2012:	POKE &VERB #0 	; L2012:
+		MOVi $OLDOBJ $lOBJ 	; OLDOBJ=lOBJ
+		MOVi $lOBJ #0 	; lOBJ=0
+	L2600:	PEEK %0 &COND $lLOC	; L2600:
+		LSSi %0 #CONDS @.f98
+		MOVi $HINT #1 	; for (HINT=1 to HNTMAX+1) 
+		! ADDi <A> #HNTMAX #1
+		GEQi #1 <A> @.f98
+	.l100:	PEEK %0 &HINTED $HINT	; if((int)global HINTED[HINT] == FALSE) 
+		NEQi %0 #FALSE @.f101
+		MOVi %1 $lLOC 	; if((int)CNDBIT(lLOC,HINT+10) == FALSE)global HINTLC[HINT]= -1
+		ADDi %2 $HINT #10
+		CALL &CNDBIT %0 *3
+		NEQi %0 #FALSE @.f102
+		POKE &HINTLC $HINT #-1	; global HINTLC[HINT]= -1
+	.f102:	PEEK %0 &HINTLC $HINT	; global HINTLC[HINT]=(int)global HINTLC[HINT]+1
+		ADDi %0 %0 #1
+		POKE &HINTLC $HINT %0
+		MULi %0 $HINT #5	; if((int)global HINTLC[HINT] >= (int)global HINTS[HINT * 5 + 1]) 
+		ADDi %0 %0 #1
+		PEEK %1 &HINTLC $HINT
+		PEEK %0 &HINTS %0
+		LSSi %1 %0 @.f101
+		SUBi %1 $HINT #1	; switch (HINT == 1 to 11) 
+		SWCH %1 *10 @.s104
+	.s104#0:	PEEK %1 &PROP:GRATE 	; if(!((int)global PROP[GRATE] == 0 && !((int)AT(KEYS, lLOC) != FALSE || (int)TOTING(KEYS) != FALSE))) goto L40020
+		NEQi %1 #0 @L40020
+		MOVi %1 #KEYS 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		NEQi %0 #FALSE @L40020
+		MOVi %1 #KEYS 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.e105
+		GOTO @L40020  	; goto L40020
+		GOTO @.e105  	; }
+	.s104#1:	PEEK %0 &PLACE:BIRD 	; if(!((int)global PLACE[BIRD] == lLOC && (int)TOTING(ROD) != FALSE && OLDOBJ == BIRD)) goto L2602
+		NEQi %0 $lLOC @L2602
+		MOVi %1 #ROD 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @L2602
+		EQUi $OLDOBJ #BIRD @.e105
+		GOTO @L2602  	; goto L2602
+		GOTO @.e105  	; }
+	.s104#2:	MOVi %1 #SNAKE 	; if(!((int)HERE(SNAKE, lLOC) != FALSE && (int)HERE(BIRD, lLOC) == FALSE)) goto L40020
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @L40020
+		MOVi %1 #BIRD 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.e105
+		GOTO @L40020  	; goto L40020
+		GOTO @.e105  	; }
+	.s104#3:	PEEK %0 &ATLOC $lLOC	; if(!((int)global ATLOC[lLOC] == 0 && (int)global ATLOC[global OLDLOC] == 0 && (int)global ATLOC[global OLDLC2] == 0 && global HOLDNG > 1)) goto L40020
+		NEQi %0 #0 @L40020
+		PEEK %0 &OLDLOC 
+		PEEK %0 &ATLOC %0
+		NEQi %0 #0 @L40020
+		PEEK %0 &OLDLC2 
+		PEEK %0 &ATLOC %0
+		NEQi %0 #0 @L40020
+		PEEK %0 &HOLDNG 
+		GRTi %0 #1 @.e105
+		GOTO @L40020  	; goto L40020
+		GOTO @.e105  	; }
+	.s104#4:	PEEK %0 &PROP:EMRALD 	; if(!((int)global PROP[EMRALD] != -1 && (int)global PROP[PYRAM] == -1)) goto L40020
+		EQUi %0 #-1 @L40020
+		PEEK %0 &PROP:PYRAM 
+		EQUi %0 #-1 @.e105
+		GOTO @L40020  	; goto L40020
+		GOTO @.e105  	; }
+	.s104#5:	GOTO @.e105  	; }
+	.s104#6:	PEEK %0 &DFLAG 	; if(global DFLAG != 0) goto L40020
+		EQUi %0 #0 @.e105
+		GOTO @L40020  	; goto L40020
+		GOTO @.e105  	; }
+	.s104#7:	PEEK %0 &ATLOC $lLOC	; if(!((int)global ATLOC[lLOC] == 0 && (int)global ATLOC[global OLDLOC] == 0 && (int)global ATLOC[global OLDLC2] == 0)) goto L2602
+		NEQi %0 #0 @L2602
+		PEEK %0 &OLDLOC 
+		PEEK %0 &ATLOC %0
+		NEQi %0 #0 @L2602
+		PEEK %0 &OLDLC2 
+		PEEK %0 &ATLOC %0
+		EQUi %0 #0 @.e105
+		GOTO @L2602  	; goto L2602
+		GOTO @.e105  	; }
+	.s104#8:	MOVi %1 $lLOC 	; I=(int)fATDWRF(lLOC)
+		CALL &fATDWRF %0 *2
+		MOVi $I %0 
+		GEQi $I #0 @.f120	; if(I < 0) goto L40020
+		GOTO @L40020  	; goto L40020
+	.f120:	MOVi %1 #OGRE 	; if(!((int)HERE(OGRE, lLOC) != FALSE && I == 0)) goto L2602
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @L2602
+		EQUi $I #0 @.e105
+		GOTO @L2602  	; goto L2602
+		GOTO @.e105  	; }
+	.s104#9:	PEEK %0 &TALLY 	; if(!(global TALLY == 1 && (int)global PROP[JADE] < 0)) goto L40020
+		NEQi %0 #1 @L40020
+		PEEK %0 &PROP:JADE 
+		LSSi %0 #0 @.e105
+		GOTO @L40020  	; goto L40020
+		GOTO @.e105  	; }
+	.s104:	MOVi %1 #27 	; fBUG(27)
+		CALL &fBUG %0 *2
+	.e105:	MULi %1 $HINT #5	; if((int)fYES(global HINTS[HINT * 5 + 3],0,54) != FALSE) 
+		ADDi %1 %1 #3
+		PEEK %1 &HINTS %1
+		MOVi %2 #0 
+		MOVi %3 #54 
+		CALL &fYES %0 *4
+		EQUi %0 #FALSE @.f125
+		MOVi %1 #1 	; fSETPRM(1,global HINTS[HINT * 5 + 2],global HINTS[HINT * 5 + 2])
+		MULi %2 $HINT #5
+		ADDi %2 %2 #2
+		PEEK %2 &HINTS %2
+		MULi %3 $HINT #5
+		ADDi %3 %3 #2
+		PEEK %3 &HINTS %3
+		CALL &fSETPRM %0 *4
+		MOVi %1 #261 	; fRSPEAK(261)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #175 	; global HINTED[HINT]=(int)fYES(175,global HINTS[HINT * 5 + 4],54)
+		MULi %2 $HINT #5
+		ADDi %2 %2 #4
+		PEEK %2 &HINTS %2
+		MOVi %3 #54 
+		CALL &fYES %0 *4
+		POKE &HINTED $HINT %0
+		PEEK %0 &HINTED $HINT	; if((int)global HINTED[HINT] != FALSE && global LIMIT > 30)global LIMIT=global LIMIT+30*(int)global HINTS[HINT * 5 + 2]
+		EQUi %0 #FALSE @.f125
+		PEEK %0 &LIMIT 
+		LEQi %0 #30 @.f125
+		MULi %0 $HINT #5	; global LIMIT=global LIMIT+30*(int)global HINTS[HINT * 5 + 2]
+		ADDi %0 %0 #2
+		PEEK %0 &HINTS %0
+		PEEK %1 &LIMIT 
+		MULi %0 #30 %0
+		ADDi %1 %1 %0
+		POKE &LIMIT %1 
+	.f125:	NOOP
+	L40020:	POKE &HINTLC $HINT #0	; L40020:
+	.f101:	NOOP
+	L2602:	FORi $HINT <A> @.l100	; } /* end loop */
+	.f98:	PEEK %1 &CLOSED 	; if(global CLOSED != FALSE) 
+		EQUi %1 #FALSE @.f128
+		PEEK %1 &PROP:OYSTER 	; if((int)global PROP[OYSTER] < 0 && (int)TOTING(OYSTER) != FALSE)fPSPEAK(OYSTER,1)
+		GEQi %1 #0 @.f130
+		MOVi %1 #OYSTER 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f130
+		MOVi %1 #OYSTER 	; fPSPEAK(OYSTER,1)
+		MOVi %2 #1 
+		CALL &fPSPEAK %0 *3
+	.f130:	MOVi $I #1 	; for (I=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.f128
+	.l132:	MOVi %1 $I 	; if((int)TOTING(I) != FALSE && (int)global PROP[I] < 0)global PROP[I]= -1-(int)global PROP[I]
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f134
+		PEEK %0 &PROP $I
+		GEQi %0 #0 @.f134
+		PEEK %0 &PROP $I	; global PROP[I]= -1-(int)global PROP[I]
+		SUBi %0 #-1 %0
+		POKE &PROP $I %0
+	.f134:	FORi $I <A> @.l132	; } /* end loop */
+	.f128:	MOVi %1 $lLOC 	; global WZDARK=(int)DARK(lLOC)
+		CALL &DARK %0 *2
+		POKE &WZDARK %0 
+		PEEK %0 &KNFLOC 	; if(global KNFLOC > 0 && global KNFLOC != lLOC)global KNFLOC=0
+		LEQi %0 #0 @.f136
+		PEEK %0 &KNFLOC 
+		EQUi %0 $lLOC @.f136
+		POKE &KNFLOC #0 	; global KNFLOC=0
+	.f136:	MOVi %1 #1 	; I=(int)fRAN(1)
+		CALL &fRAN %0 *2
+		MOVi $I %0 
+		MOVp %1 &WD1 	; fGETIN(&global WD1,&global WD1X,&global WD2,&global WD2X)
+		MOVp %2 &WD1X 
+		MOVp %3 &WD2 
+		MOVp %4 &WD2X 
+		CALL &fGETIN %0 *5
+	L2607:	PEEK %0 &FOOBAR 	; L2607:
+		LEQi %0 #0 @.f137
+		PEEK %0 &FOOBAR 	; global FOOBAR=-global FOOBAR
+		SUBi %0 #0 %0
+		POKE &FOOBAR %0 
+		GOTO @.e138  
+	.f137:	POKE &FOOBAR #0 	; global FOOBAR=0
+	.e138:	PEEK %0 &TURNS 	; global TURNS=global TURNS+1
+		ADDi %0 %0 #1
+		POKE &TURNS %0 
+		PEEK %0 &TURNS 	; if(global TURNS == global THRESH) 
+		PEEK %1 &THRESH 
+		NEQi %0 %1 @.f139
+		PEEK %1 &TRNDEX 	; fSPEAK(global TTEXT[global TRNDEX])
+		PEEK %1 &TTEXT %1
+		CALL &fSPEAK %0 *2
+		PEEK %0 &TRNDEX 	; global TRNLUZ=global TRNLUZ+(int)global TRNVAL[global TRNDEX]/100000
+		PEEK %0 &TRNVAL %0
+		PEEK %1 &TRNLUZ 
+		DIVi %0 %0 #100000
+		ADDi %1 %1 %0
+		POKE &TRNLUZ %1 
+		PEEK %1 &TRNDEX 	; global TRNDEX=global TRNDEX+1
+		ADDi %1 %1 #1
+		POKE &TRNDEX %1 
+		POKE &THRESH #-1 	; global THRESH= -1
+		PEEK %1 &TRNDEX 	; if(global TRNDEX <= TRNVLS)global THRESH=(((int)global TRNVAL[global TRNDEX])%100000)+1
+		GRTi %1 #TRNVLS @.f139
+		PEEK %1 &TRNDEX 	; global THRESH=(((int)global TRNVAL[global TRNDEX])%100000)+1
+		PEEK %1 &TRNVAL %1
+		MODi %1 %1 #100000
+		ADDi %1 %1 #1
+		POKE &THRESH %1 
+	.f139:	PEEK %1 &VERB 	; if(global VERB == SAY && global WD2 > 0)global VERB=0
+		NEQi %1 #SAY @.f142
+		PEEK %1 &WD2 
+		LEQi %1 #0 @.f142
+		POKE &VERB #0 	; global VERB=0
+	.f142:	PEEK %1 &VERB 	; if(global VERB == SAY) 
+		NEQi %1 #SAY @.f143
+		MOVi $I #1 	; I=1
+		GOTO @Laction  	; goto Laction
+	.f143:	PEEK %1 &TALLY 	; if(global TALLY == 0 && (int)INDEEP(lLOC) != FALSE && lLOC != 33) 
+		NEQi %1 #0 @.f145
+		MOVi %1 $lLOC 
+		CALL &INDEEP %0 *2
+		EQUi %0 #FALSE @.f145
+		EQUi $lLOC #33 @.f145
+		PEEK %0 &CLOCK1 	; global CLOCK1=global CLOCK1-1
+		SUBi %0 %0 #1
+		POKE &CLOCK1 %0 
+	.f145:	PEEK %0 &CLOCK1 	; if(global CLOCK1 == 0) 
+		NEQi %0 #0 @.f146
+		POKE &PROP:GRATE #0 	; global PROP[GRATE]=0
+		POKE &PROP:FISSUR #0 	; global PROP[FISSUR]=0
+		MOVi $I #1 	; for (I=1 to 6+1) 
+		! ADDi <A> #6 #1
+		GEQi #1 <A> @.e147
+	.l148:	POKE &DSEEN $I #FALSE	; global DSEEN[I]=FALSE
+		POKE &DLOC $I #0	; global DLOC[I]=0
+		FORi $I <A> @.l148	; } /* end loop */
+	.e147:	MOVi %1 #TROLL 	; fMOVE(TROLL,0)
+		MOVi %2 #0 
+		CALL &fMOVE %0 *3
+		ADDi %1 #TROLL #100	; fMOVE(TROLL+100,0)
+		MOVi %2 #0 
+		CALL &fMOVE %0 *3
+		MOVi %1 #TROLL2 	; fMOVE(TROLL2,global PLAC[TROLL])
+		PEEK %2 &PLAC:TROLL 
+		CALL &fMOVE %0 *3
+		ADDi %1 #TROLL2 #100	; fMOVE(TROLL2+100,global FIXD[TROLL])
+		PEEK %2 &FIXD:TROLL 
+		CALL &fMOVE %0 *3
+		MOVi %1 #CHASM 	; fJUGGLE(CHASM)
+		CALL &fJUGGLE %0 *2
+		PEEK %0 &PROP:BEAR 	; if((int)global PROP[BEAR] != 3)fDSTROY(BEAR)
+		EQUi %0 #3 @.f149
+		MOVi %1 #BEAR 	; fDSTROY(BEAR)
+		CALL &fDSTROY %0 *2
+	.f149:	POKE &PROP:CHAIN #0 	; global PROP[CHAIN]=0
+		POKE &FIXED:CHAIN #0 	; global FIXED[CHAIN]=0
+		POKE &PROP:AXE #0 	; global PROP[AXE]=0
+		POKE &FIXED:AXE #0 	; global FIXED[AXE]=0
+		MOVi %1 #129 	; fRSPEAK(129)
+		CALL &fRSPEAK %0 *2
+		POKE &CLOCK1 #-1 	; global CLOCK1= -1
+		POKE &CLOSNG #TRUE 	; global CLOSNG=TRUE
+		GOTO @.e150  	; } else 
+	.f146:	PEEK %0 &CLOCK1 	; if(global CLOCK1 < 0)global CLOCK2=global CLOCK2-1
+		GEQi %0 #0 @.f151
+		PEEK %0 &CLOCK2 	; global CLOCK2=global CLOCK2-1
+		SUBi %0 %0 #1
+		POKE &CLOCK2 %0 
+	.f151:	PEEK %0 &CLOCK2 	; if(global CLOCK2 == 0) 
+		NEQi %0 #0 @.f152
+		MOVi %1 #BOTTLE 	; global PROP[BOTTLE]=(int)fPUT(BOTTLE,115,1)
+		MOVi %2 #115 
+		MOVi %3 #1 
+		CALL &fPUT %0 *4
+		POKE &PROP:BOTTLE %0 
+		MOVi %1 #PLANT 	; global PROP[PLANT]=(int)fPUT(PLANT,115,0)
+		MOVi %2 #115 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		POKE &PROP:PLANT %0 
+		MOVi %1 #OYSTER 	; global PROP[OYSTER]=(int)fPUT(OYSTER,115,0)
+		MOVi %2 #115 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		POKE &PROP:OYSTER %0 
+		POKE &OBJTXT:OYSTER #3 	; global OBJTXT[OYSTER]=3
+		MOVi %1 #LAMP 	; global PROP[LAMP]=(int)fPUT(LAMP,115,0)
+		MOVi %2 #115 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		POKE &PROP:LAMP %0 
+		MOVi %1 #ROD 	; global PROP[ROD]=(int)fPUT(ROD,115,0)
+		MOVi %2 #115 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		POKE &PROP:ROD %0 
+		MOVi %1 #DWARF 	; global PROP[DWARF]=(int)fPUT(DWARF,115,0)
+		MOVi %2 #115 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		POKE &PROP:DWARF %0 
+		MOVi $lLOC #115 	; lLOC=115
+		POKE &OLDLOC #115 	; global OLDLOC=115
+		POKE &NEWLOC #115 	; global NEWLOC=115
+		MOVi %1 #GRATE 	; I=(int)fPUT(GRATE,116,0)
+		MOVi %2 #116 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		MOVi $I %0 
+		MOVi %1 #gSIGN 	; I=(int)fPUT(gSIGN,116,0)
+		MOVi %2 #116 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		MOVi $I %0 
+		PEEK %0 &OBJTXT:gSIGN 	; global OBJTXT[gSIGN]=(int)global OBJTXT[gSIGN]+1
+		ADDi %0 %0 #1
+		POKE &OBJTXT:gSIGN %0 
+		MOVi %1 #SNAKE 	; global PROP[SNAKE]=(int)fPUT(SNAKE,116,1)
+		MOVi %2 #116 
+		MOVi %3 #1 
+		CALL &fPUT %0 *4
+		POKE &PROP:SNAKE %0 
+		MOVi %1 #BIRD 	; global PROP[BIRD]=(int)fPUT(BIRD,116,1)
+		MOVi %2 #116 
+		MOVi %3 #1 
+		CALL &fPUT %0 *4
+		POKE &PROP:BIRD %0 
+		MOVi %1 #CAGE 	; global PROP[CAGE]=(int)fPUT(CAGE,116,0)
+		MOVi %2 #116 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		POKE &PROP:CAGE %0 
+		MOVi %1 #ROD2 	; global PROP[ROD2]=(int)fPUT(ROD2,116,0)
+		MOVi %2 #116 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		POKE &PROP:ROD2 %0 
+		MOVi %1 #PILLOW 	; global PROP[PILLOW]=(int)fPUT(PILLOW,116,0)
+		MOVi %2 #116 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		POKE &PROP:PILLOW %0 
+		MOVi %1 #MIRROR 	; global PROP[MIRROR]=(int)fPUT(MIRROR,115,0)
+		MOVi %2 #115 
+		MOVi %3 #0 
+		CALL &fPUT %0 *4
+		POKE &PROP:MIRROR %0 
+		POKE &FIXED:MIRROR #116 	; global FIXED[MIRROR]=116
+		MOVi $I #1 	; for (I=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.e153
+	.l154:	MOVi %1 $I 	; if((int)TOTING(I) != FALSE)fDSTROY(I)
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f155
+		MOVi %1 $I 	; fDSTROY(I)
+		CALL &fDSTROY %0 *2
+	.f155:	FORi $I <A> @.l154	; } /* end loop */
+	.e153:	MOVi %1 #132 	; fRSPEAK(132)
+		CALL &fRSPEAK %0 *2
+		POKE &CLOSED #TRUE 	; global CLOSED=TRUE
+		GOTO @L2  	; goto L2
+	.f152:	PEEK %0 &PROP:LAMP 	; if((int)global PROP[LAMP] == 1)global LIMIT=global LIMIT-1
+		NEQi %0 #1 @.f156
+		PEEK %0 &LIMIT 	; global LIMIT=global LIMIT-1
+		SUBi %0 %0 #1
+		POKE &LIMIT %0 
+	.f156:	PEEK %0 &LIMIT 	; if(global LIMIT <= 30 && (int)HERE(BATTER, lLOC) != FALSE && (int)global PROP[BATTER] == 0 && (int)HERE(LAMP, lLOC) != FALSE) 
+		GRTi %0 #30 @.f158
+		MOVi %1 #BATTER 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f158
+		PEEK %0 &PROP:BATTER 
+		NEQi %0 #0 @.f158
+		MOVi %1 #LAMP 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f158
+		MOVi %1 #188 	; fRSPEAK(188)
+		CALL &fRSPEAK %0 *2
+		POKE &PROP:BATTER #1 	; global PROP[BATTER]=1
+		MOVi %1 #BATTER 	; if((int)TOTING(BATTER) != FALSE)fDROP(BATTER,lLOC)
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f159
+		MOVi %1 #BATTER 	; fDROP(BATTER,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+	.f159:	PEEK %0 &LIMIT 	; global LIMIT=global LIMIT+2500
+		ADDi %0 %0 #2500
+		POKE &LIMIT %0 
+		POKE &LMWARN #FALSE 	; global LMWARN=FALSE
+		GOTO @.e160  	; } else  if(global LIMIT == 0) 
+	.f158:	PEEK %0 &LIMIT 	; if(global LIMIT == 0) 
+		NEQi %0 #0 @.f161
+		POKE &LIMIT #-1 	; global LIMIT= -1
+		POKE &PROP:LAMP #0 	; global PROP[LAMP]=0
+		MOVi %1 #LAMP 	; if((int)HERE(LAMP, lLOC) != FALSE)fRSPEAK(184)
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.e163
+		MOVi %1 #184 	; fRSPEAK(184)
+		CALL &fRSPEAK %0 *2
+		GOTO @.e163  	; } else if(global LIMIT <= 30) 
+	.f161:	PEEK %0 &LIMIT 	; if(global LIMIT <= 30) 
+		GRTi %0 #30 @.f164
+		PEEK %0 &LMWARN 	; if(!(global LMWARN != FALSE || (int)HERE(LAMP, lLOC) == FALSE)) 
+		NEQi %0 #FALSE @.f164
+		MOVi %1 #LAMP 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f164
+		POKE &LMWARN #TRUE 	; global LMWARN=TRUE
+		POKE &SPK #187 	; global SPK=187
+		PEEK %0 &PLACE:BATTER 	; if((int)global PLACE[BATTER] == 0)global SPK=183
+		NEQi %0 #0 @.f167
+		POKE &SPK #183 	; global SPK=183
+	.f167:	PEEK %0 &PROP:BATTER 	; if((int)global PROP[BATTER] == 1)global SPK=189
+		NEQi %0 #1 @.f168
+		POKE &SPK #189 	; global SPK=189
+	.f168:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
+		CALL &fRSPEAK %0 *2
+	.f164:	NOOP
+	.e163:	NOOP
+	.e160:	NOOP
+	.e150:	MOVi $lK #43 	; lK=43
+		MOVi %1 $lLOC 	; if((int)LIQLOC(lLOC) == WATER)lK=70
+		CALL &LIQLOC %0 *2
+		NEQi %0 #WATER @.f169
+		MOVi $lK #70 	; lK=70
+	.f169:	PEEK %1 &WD1 	; V1=(int)fVOCAB(global WD1,-1)
+		MOVi %2 #-1 
+		CALL &fVOCAB %0 *3
+		MOVi $V1 %0 
+		PEEK %1 &WD2 	; V2=(int)fVOCAB(global WD2,-1)
+		MOVi %2 #-1 
+		CALL &fVOCAB %0 *3
+		MOVi $V2 %0 
+		NEQi $V1 #ENTER @.f172	; if(V1 == ENTER && (V2 == STREAM || V2 == 1000+WATER)) goto L2010
+		EQUi $V2 #STREAM @L2010
+		! ADDi <A> #1000 #WATER
+		NEQi $V2 <A> @.f172
+		GOTO @L2010  	; goto L2010
+	.f172:	NEQi $V1 #ENTER @.f174	; if(V1 == ENTER && global WD2 > 0) goto L2800
+		PEEK %0 &WD2 
+		LEQi %0 #0 @.f174
+		GOTO @L2800  	; goto L2800
+	.f174:	NOOP
+		! ADDi <A> #1000 #WATER	; if(!((V1 != 1000+WATER && V1 != 1000+OIL) || (V2 != 1000+PLANT && V2 != 1000+DOOR))) 
+		EQUi $V1 <A> @.f175
+		! ADDi <A> #1000 #OIL
+		NEQi $V1 <A> @.f178
+	.f175:	NOOP
+		! ADDi <A> #1000 #PLANT
+		EQUi $V2 <A> @.f177
+		! ADDi <A> #1000 #DOOR
+		NEQi $V2 <A> @.f178
+	.f177:	SUBi %1 $V2 #1000	; if((int)AT(V2-1000, lLOC) != FALSE)global WD2=(int)fMAKEWD(16152118)
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @.f178
+		MOVi %1 #16152118 	; global WD2=(int)fMAKEWD(16152118)
+		CALL &fMAKEWD %0 *2
+		POKE &WD2 %0 
+	.f178:	NOOP
+		! ADDi <A> #1000 #CAGE	; if(V1 == 1000+CAGE && V2 == 1000+BIRD && (int)HERE(CAGE, lLOC) != FALSE && (int)HERE(BIRD, lLOC) != FALSE)global WD1=(int)fMAKEWD(301200308)
+		NEQi $V1 <A> @.f181
+		! ADDi <A> #1000 #BIRD
+		NEQi $V2 <A> @.f181
+		MOVi %1 #CAGE 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f181
+		MOVi %1 #BIRD 
+		MOVi %2 $lLOC 
+		CALL &HERE %0 *3
+		EQUi %0 #FALSE @.f181
+		MOVi %1 #301200308 	; global WD1=(int)fMAKEWD(301200308)
+		CALL &fMAKEWD %0 *2
+		POKE &WD1 %0 
+	.f181:	NOOP
+	L2620:	MOVi %1 #23051920 	; L2620:
+		CALL &fMAKEWD %0 *2
+		PEEK %1 &WD1 
+		NEQi %1 %0 @.f182
+		PEEK %1 &IWEST 	; global IWEST=global IWEST+1
+		ADDi %1 %1 #1
+		POKE &IWEST %1 
+		PEEK %1 &IWEST 	; if(global IWEST == 10)fRSPEAK(17)
+		NEQi %1 #10 @.f182
+		MOVi %1 #17 	; fRSPEAK(17)
+		CALL &fRSPEAK %0 *2
+	.f182:	MOVi %1 #715 	; if(!(global WD1 != (int)fMAKEWD( 715) || global WD2 == 0)) 
+		CALL &fMAKEWD %0 *2
+		PEEK %1 &WD1 
+		NEQi %1 %0 @.f185
+		PEEK %1 &WD2 
+		EQUi %1 #0 @.f185
+		PEEK %1 &IGO 	; global IGO=global IGO+1
+		ADDi %1 %1 #1
+		POKE &IGO %1 
+		PEEK %1 &IGO 	; if(global IGO == 10)fRSPEAK(276)
+		NEQi %1 #10 @.f185
+		MOVi %1 #276 	; fRSPEAK(276)
+		CALL &fRSPEAK %0 *2
+	.f185:	NOOP
+	L2630:	PEEK %1 &WD1 	; L2630:
+		MOVi %2 #-1 
+		CALL &fVOCAB %0 *3
+		MOVi $I %0 
+		NEQi $I #-1 @.f187	; if(I == -1) 
+		MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
+		PEEK %2 &WD1 
+		PEEK %3 &WD1X 
+		CALL &fSETPRM %0 *4
+		MOVi %1 #254 	; fRSPEAK(254)
+		CALL &fRSPEAK %0 *2
+		GOTO @L2600  	; goto L2600
+	.f187:	MODi $lK $I #1000	; lK=((I)%1000)
+		DIVi %0 $I #1000	; KQ=I/1000+1
+		ADDi $KQ %0 #1
+		SUBi %0 $KQ #1	; switch (KQ-1 == 0 to 4) 
+		SWCH %0 *4 @.s188
+	.s188#0:	GOTO @L8  	; goto L8
+		GOTO @.e189  
+	.s188#1:	MOVi $I #2 	; I=2
+		GOTO @Laction  	; goto Laction
+		GOTO @.e189  	; }
+	.s188#2:	MOVi $I #0 	; I=0
+		GOTO @Laction  	; goto Laction
+		GOTO @.e189  	; }
+	.s188#3:	GOTO @L2010  	; goto L2010
+	.s188:	NOOP
+	.e189:	MOVi %1 #22 	; fBUG(22)
+		CALL &fBUG %0 *2
+	L2800:	PEEK %0 &WD2 	; L2800:
+		POKE &WD1 %0 
+		PEEK %0 &WD2X 	; global WD1X=global WD2X
+		POKE &WD1X %0 
+		POKE &WD2 #0 	; global WD2=0
+		GOTO @L2620  	; goto L2620
+	Laction:	POKE &gK $lK 	; Laction:
+		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
+		POKE &gLOC $lLOC 	; global gLOC = lLOC
+		MOVi %1 $I 	; gotoChoice = (int)action(I)
+		CALL &action %0 *2
+		MOVi $gotoChoice %0 
+		PEEK $lK &gK 	; lK = global gK
+		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
+		PEEK $lLOC &gLOC 	; lLOC = global gLOC
+		! ADDi <A> #GOTO19000 #1	; switch (gotoChoice == GOTO2 to GOTO19000 + 1) 
+		! SUBi <A> <A> #GOTO2
+		SUBi %0 $gotoChoice #GOTO2
+		SWCH %0 *<A> @.s190
+		! SUBi <A> #GOTO2 #GOTO2	; case GOTO2
+	.s190#<A>:	GOTO @L2  	; goto L2
+		GOTO @.e191  
+		! SUBi <A> #GOTO8 #GOTO2	; case GOTO8
+	.s190#<A>:	GOTO @L8  	; goto L8
+		GOTO @.e191  
+		! SUBi <A> #GOTO2000 #GOTO2	; case GOTO2000
+	.s190#<A>:	GOTO @L2000  	; goto L2000
+		GOTO @.e191  
+		! SUBi <A> #GOTO2009 #GOTO2	; case GOTO2009
+	.s190#<A>:	GOTO @L2009  	; goto L2009
+		GOTO @.e191  
+		! SUBi <A> #GOTO2010 #GOTO2	; case GOTO2010
+	.s190#<A>:	GOTO @L2010  	; goto L2010
+		GOTO @.e191  
+		! SUBi <A> #GOTO2011 #GOTO2	; case GOTO2011
+	.s190#<A>:	GOTO @L2011  	; goto L2011
+		GOTO @.e191  
+		! SUBi <A> #GOTO2012 #GOTO2	; case GOTO2012
+	.s190#<A>:	GOTO @L2012  	; goto L2012
+		GOTO @.e191  
+		! SUBi <A> #GOTO2600 #GOTO2	; case GOTO2600
+	.s190#<A>:	GOTO @L2600  	; goto L2600
+		GOTO @.e191  
+		! SUBi <A> #GOTO2607 #GOTO2	; case GOTO2607
+	.s190#<A>:	GOTO @L2607  	; goto L2607
+		GOTO @.e191  
+		! SUBi <A> #GOTO2630 #GOTO2	; case GOTO2630
+	.s190#<A>:	GOTO @L2630  	; goto L2630
+		GOTO @.e191  
+		! SUBi <A> #GOTO2800 #GOTO2	; case GOTO2800
+	.s190#<A>:	GOTO @L2800  	; goto L2800
+		GOTO @.e191  
+		! SUBi <A> #GOTO8000 #GOTO2	; case GOTO8000
+	.s190#<A>:	MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
+		PEEK %2 &WD1 
+		PEEK %3 &WD1X 
+		CALL &fSETPRM %0 *4
+		MOVi %1 #257 	; fRSPEAK(257)
+		CALL &fRSPEAK %0 *2
+		MOVi $lOBJ #0 	; lOBJ=0
+		GOTO @L2600  	; goto L2600
+		GOTO @.e191  	; }
+		! SUBi <A> #GOTO18999 #GOTO2	; case GOTO18999
+	.s190#<A>:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #136 	; fRSPEAK(136)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #0 	; score(0)
+		CALL &score %0 *2
+		GOTO @.e191  	; }
+		! SUBi <A> #GOTO19000 #GOTO2	; case GOTO19000
+	.s190#<A>:	MOVi %1 #136 	; fRSPEAK(136)
+		CALL &fRSPEAK %0 *2
+		MOVi %1 #0 	; score(0)
+		CALL &score %0 *2
+		GOTO @.e191  	; }
+	.s190:	MOVi %1 #-1 	; fBUG(-1)
+		CALL &fBUG %0 *2
+	.e191:	MOVi %1 #99 	; fBUG(99)
+		CALL &fBUG %0 *2
+	L8:	PEEK $KK &KEY $lLOC	; L8:
+		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
+		NEQi $KK #0 @.f192	; if(KK == 0)fBUG(26)
+		MOVi %1 #26 	; fBUG(26)
+		CALL &fBUG %0 *2
+	.f192:	NEQi $lK #NUL @.f193	; if(lK == NUL) goto L2
+		GOTO @L2  	; goto L2
+	.f193:	NEQi $lK #BACK @.f194	; if(lK == BACK) 
+		PEEK $lK &OLDLOC 	; lK=global OLDLOC
+		PEEK %0 &COND $lK	; if(((int)global COND[lK] == 2))lK=global OLDLC2
+		NEQi %0 #2 @.f195
+		PEEK $lK &OLDLC2 	; lK=global OLDLC2
+	.f195:	PEEK %0 &OLDLOC 	; global OLDLC2=global OLDLOC
+		POKE &OLDLC2 %0 
+		POKE &OLDLOC $lLOC 	; global OLDLOC=lLOC
+		MOVi $K2 #0 	; K2=0
+		NEQi $lK $lLOC @.f196	; if(lK == lLOC)K2=91
+		MOVi $K2 #91 	; K2=91
+	.f196:	MOVi %1 $lLOC 	; if((int)CNDBIT(lLOC,4) != FALSE)K2=274
+		MOVi %2 #4 
+		CALL &CNDBIT %0 *3
+		EQUi %0 #FALSE @.f197
+		MOVi $K2 #274 	; K2=274
+	.f197:	NEQi $K2 #0 @.f198	; if(K2 == 0) 
+	L21:	PEEK %0 &TRAVEL $KK	; L21:
+		ABSi %0 %0 
+		DIVi %0 %0 #1000
+		MODi $LL %0 #1000
+		NEQi $LL $lK @.f199	; if(LL == lK) 
+	L25:	PEEK %0 &TRAVEL $KK	; L25:
+		ABSi %0 %0 
+		MODi $lK %0 #1000
+		PEEK $KK &KEY $lLOC	; KK=(int)global KEY[lLOC]
+		GOTO @L9  	; goto L9
+	.f199:	GRTi $LL #300 @.f200	; if(LL <= 300) 
+		PEEK $J &KEY $LL	; J=(int)global KEY[LL]
+		PEEK %0 &COND $LL	; if(((int)global COND[LL] == 2) && (((abs((int)global TRAVEL[J])/1000))%1000) == lK)K2=KK
+		NEQi %0 #2 @.f200
+		PEEK %0 &TRAVEL $J
+		ABSi %0 %0 
+		DIVi %0 %0 #1000
+		MODi %0 %0 #1000
+		NEQi %0 $lK @.f200
+		MOVi $K2 $KK 	; K2=KK
+	.f200:	PEEK %0 &TRAVEL $KK	; if((int)global TRAVEL[KK] < 0) 
+		GEQi %0 #0 @.f203
+		MOVi $KK $K2 	; KK=K2
+		EQUi $KK #0 @.f204	; if(KK != 0) goto L25
+		GOTO @L25  	; goto L25
+	.f204:	MOVi %1 #140 	; fRSPEAK(140)
+		CALL &fRSPEAK %0 *2
+		GOTO @L2  	; goto L2
+	.f203:	ADDi $KK $KK #1	; KK=KK+1
+		GOTO @L21  	; goto L21
+	.f198:	MOVi %1 $K2 	; fRSPEAK(K2)
+		CALL &fRSPEAK %0 *2
+		GOTO @L2  	; goto L2
+	.f194:	NEQi $lK #LOOK @.f205	; if(lK == LOOK) 
+		PEEK %0 &DETAIL 	; if(global DETAIL < 3)fRSPEAK(15)
+		GEQi %0 #3 @.f206
+		MOVi %1 #15 	; fRSPEAK(15)
+		CALL &fRSPEAK %0 *2
+	.f206:	PEEK %0 &DETAIL 	; global DETAIL=global DETAIL+1
+		ADDi %0 %0 #1
+		POKE &DETAIL %0 
+		POKE &WZDARK #FALSE 	; global WZDARK=FALSE
+		POKE &ABB $lLOC #0	; global ABB[lLOC]=0
+		GOTO @L2  	; goto L2
+	.f205:	NEQi $lK #CAVE @.f207	; if(lK == CAVE) 
+		MOVi $lK #58 	; lK=58
+		MOVi %1 $lLOC 	; if((int)OUTSID(lLOC) != FALSE && lLOC != 8)lK=57
+		CALL &OUTSID %0 *2
+		EQUi %0 #FALSE @.f209
+		EQUi $lLOC #8 @.f209
+		MOVi $lK #57 	; lK=57
+	.f209:	MOVi %1 $lK 	; fRSPEAK(lK)
+		CALL &fRSPEAK %0 *2
+		GOTO @L2  	; goto L2
+	.f207:	PEEK %0 &OLDLOC 	; global OLDLC2=global OLDLOC
+		POKE &OLDLC2 %0 
+		POKE &OLDLOC $lLOC 	; global OLDLOC=lLOC
+	L9:	PEEK %0 &TRAVEL $KK	; L9:
+		ABSi $LL %0 
+		MODi %0 $LL #1000	; if(!(((LL)%1000) == 1 || ((LL)%1000) == lK)) 
+		EQUi %0 #1 @.f211
+		MODi %0 $LL #1000
+		EQUi %0 $lK @.f211
+		PEEK %0 &TRAVEL $KK	; if((int)global TRAVEL[KK] < 0) 
+		GEQi %0 #0 @.f212
+		POKE &SPK #12 	; global SPK=12
+		LSSi $lK #43 @.f214	; if(lK >= 43 && lK <= 50)global SPK=52
+		GRTi $lK #50 @.f214
+		POKE &SPK #52 	; global SPK=52
+	.f214:	EQUi $lK #29 @.t215	; if(lK == 29 || lK == 30)global SPK=52
+		NEQi $lK #30 @.f216
+	.t215:	POKE &SPK #52 	; global SPK=52
+	.f216:	EQUi $lK #7 @.t217	; if(lK == 7 || lK == 36 || lK == 37)global SPK=10
+		EQUi $lK #36 @.t217
+		NEQi $lK #37 @.f218
+	.t217:	POKE &SPK #10 	; global SPK=10
+	.f218:	EQUi $lK #11 @.t219	; if(lK == 11 || lK == 19)global SPK=11
+		NEQi $lK #19 @.f220
+	.t219:	POKE &SPK #11 	; global SPK=11
+	.f220:	PEEK %0 &VERB 	; if(global VERB == FIND || global VERB == INVENT)global SPK=59
+		EQUi %0 #FIND @.t221
+		PEEK %0 &VERB 
+		NEQi %0 #INVENT @.f222
+	.t221:	POKE &SPK #59 	; global SPK=59
+	.f222:	EQUi $lK #62 @.t223	; if(lK == 62 || lK == 65)global SPK=42
+		NEQi $lK #65 @.f224
+	.t223:	POKE &SPK #42 	; global SPK=42
+	.f224:	NEQi $lK #17 @.f225	; if(lK == 17)global SPK=80
+		POKE &SPK #80 	; global SPK=80
+	.f225:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
+		CALL &fRSPEAK %0 *2
+		GOTO @L2  	; goto L2
+	.f212:	ADDi $KK $KK #1	; KK=KK+1
+		GOTO @L9  	; goto L9
+	.f211:	DIVi $LL $LL #1000	; LL=LL/1000
+	L11:	DIVi %0 $LL #1000	; L11:
+		POKE &NEWLOC %0 
+		PEEK %0 &NEWLOC 	; lK=((global NEWLOC)%100)
+		MODi $lK %0 #100
+		PEEK %0 &NEWLOC 	; if(global NEWLOC > 300) 
+		LEQi %0 #300 @.f226
+		PEEK %0 &NEWLOC 	; if((int)global PROP[lK] != global NEWLOC/100-3) goto L16
+		DIVi %0 %0 #100
+		PEEK %1 &PROP $lK
+		SUBi %0 %0 #3
+		EQUi %1 %0 @.l228
+		GOTO @L16  	; goto L16
+	L12:	NOOP
+	.l228:	PEEK %1 &TRAVEL $KK	; if((int)global TRAVEL[KK] < 0)fBUG(25)
+		GEQi %1 #0 @.f229
+		MOVi %1 #25 	; fBUG(25)
+		CALL &fBUG %0 *2
+	.f229:	ADDi $KK $KK #1	; KK=KK+1
+		PEEK %0 &TRAVEL $KK	; global NEWLOC=abs((int)global TRAVEL[KK])/1000
+		ABSi %0 %0 
+		DIVi %0 %0 #1000
+		POKE &NEWLOC %0 
+		PEEK %0 &NEWLOC 	; } while (global NEWLOC == LL)
+		EQUi %0 $LL @.l228
+		PEEK $LL &NEWLOC 	; LL=global NEWLOC
+		GOTO @L11  	; goto L11
+	.f226:	PEEK %0 &NEWLOC 	; if(global NEWLOC > 100) 
+		LEQi %0 #100 @.f230
+		MOVi %1 $lK 	; if((int)TOTING(lK) != FALSE || (global NEWLOC > 200 && (int)AT(lK, lLOC) != FALSE)) goto L16
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @L16
+		PEEK %0 &NEWLOC 
+		LEQi %0 #200 @L12
+		MOVi %1 $lK 
+		MOVi %2 $lLOC 
+		CALL &AT %0 *3
+		EQUi %0 #FALSE @L12
+		GOTO @L16  	; goto L16
+		GOTO @L12  	; goto L12
+	.f230:	PEEK %0 &NEWLOC 	; if(global NEWLOC != 0 && !((int)fRAN(100) < (global NEWLOC))) goto L12
+		EQUi %0 #0 @.f235
+		MOVi %1 #100 
+		CALL &fRAN %0 *2
+		PEEK %1 &NEWLOC 
+		LSSi %0 %1 @.f235
+		GOTO @L12  	; goto L12
+	.f235:	NOOP
+	L16:	MODi %0 $LL #1000	; L16:
+		POKE &NEWLOC %0 
+		PEEK %0 &NEWLOC 	; if(global NEWLOC <= 300) goto L2
+		GRTi %0 #300 @.f236
+		GOTO @L2  	; goto L2
+	.f236:	PEEK %0 &NEWLOC 	; if(global NEWLOC > 500) 
+		LEQi %0 #500 @.f237
+		PEEK %1 &NEWLOC 	; fRSPEAK(global NEWLOC-500)
+		SUBi %1 %1 #500
+		CALL &fRSPEAK %0 *2
+		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
+		GOTO @L2  	; goto L2
+	.f237:	PEEK %0 &NEWLOC 	; global NEWLOC=global NEWLOC-300
+		SUBi %0 %0 #300
+		POKE &NEWLOC %0 
+		PEEK %0 &NEWLOC 	; switch (global NEWLOC == 1 to 4) 
+		SUBi %0 %0 #1
+		SWCH %0 *3 @.s238
+	.s238#0:	NOOP
+		! ADDi <A> #99 #100	; global NEWLOC=99+100-lLOC
+		SUBi %0 <A> $lLOC
+		POKE &NEWLOC %0 
+		PEEK %0 &HOLDNG 	; if(global HOLDNG == 0 || (global HOLDNG == 1 && (int)TOTING(EMRALD) != FALSE)) goto L2
+		EQUi %0 #0 @L2
+		PEEK %0 &HOLDNG 
+		NEQi %0 #1 @.f242
+		MOVi %1 #EMRALD 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f242
+		GOTO @L2  	; goto L2
+	.f242:	POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
+		MOVi %1 #117 	; fRSPEAK(117)
+		CALL &fRSPEAK %0 *2
+		GOTO @L2  	; goto L2
+		GOTO @.e239  	; }
+	.s238#1:	MOVi %1 #EMRALD 	; fDROP(EMRALD,lLOC)
+		MOVi %2 $lLOC 
+		CALL &fDROP %0 *3
+		GOTO @L12  	; goto L12
+		GOTO @.e239  	; }
+	.s238#2:	PEEK %0 &PROP:TROLL 	; if((int)global PROP[TROLL] != 1) 
+		EQUi %0 #1 @.f243
+		PEEK %0 &PLAC:TROLL 	; global NEWLOC=(int)global PLAC[TROLL]+(int)global FIXD[TROLL]-lLOC
+		PEEK %1 &FIXD:TROLL 
+		ADDi %0 %0 %1
+		SUBi %0 %0 $lLOC
+		POKE &NEWLOC %0 
+		PEEK %0 &PROP:TROLL 	; if((int)global PROP[TROLL] == 0)global PROP[TROLL]=1
+		NEQi %0 #0 @.f244
+		POKE &PROP:TROLL #1 	; global PROP[TROLL]=1
+	.f244:	MOVi %1 #BEAR 	; if((int)TOTING(BEAR) == FALSE) goto L2
+		CALL &TOTING %0 *2
+		NEQi %0 #FALSE @.f245
+		GOTO @L2  	; goto L2
+	.f245:	MOVi %1 #162 	; fRSPEAK(162)
+		CALL &fRSPEAK %0 *2
+		POKE &PROP:CHASM #1 	; global PROP[CHASM]=1
+		POKE &PROP:TROLL #2 	; global PROP[TROLL]=2
+		MOVi %1 #BEAR 	; fDROP(BEAR,global NEWLOC)
+		PEEK %2 &NEWLOC 
+		CALL &fDROP %0 *3
+		POKE &FIXED:BEAR #-1 	; global FIXED[BEAR]= -1
+		POKE &PROP:BEAR #3 	; global PROP[BEAR]=3
+		PEEK %0 &NEWLOC 	; global OLDLC2=global NEWLOC
+		POKE &OLDLC2 %0 
+		GOTO @L99  	; goto L99
+	.f243:	MOVi %1 #TROLL 	; fPSPEAK(TROLL,1)
+		MOVi %2 #1 
+		CALL &fPSPEAK %0 *3
+		POKE &PROP:TROLL #0 	; global PROP[TROLL]=0
+		MOVi %1 #TROLL2 	; fMOVE(TROLL2,0)
+		MOVi %2 #0 
+		CALL &fMOVE %0 *3
+		ADDi %1 #TROLL2 #100	; fMOVE(TROLL2+100,0)
+		MOVi %2 #0 
+		CALL &fMOVE %0 *3
+		MOVi %1 #TROLL 	; fMOVE(TROLL,global PLAC[TROLL])
+		PEEK %2 &PLAC:TROLL 
+		CALL &fMOVE %0 *3
+		ADDi %1 #TROLL #100	; fMOVE(TROLL+100,global FIXD[TROLL])
+		PEEK %2 &FIXD:TROLL 
+		CALL &fMOVE %0 *3
+		MOVi %1 #CHASM 	; fJUGGLE(CHASM)
+		CALL &fJUGGLE %0 *2
+		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
+		GOTO @L2  	; goto L2
+	.s238:	NOOP
+	.e239:	MOVi %1 #20 	; fBUG(20)
+		CALL &fBUG %0 *2
+	L90:	MOVi %1 #23 	; L90:
+		CALL &fRSPEAK %0 *2
+		POKE &OLDLC2 $lLOC 	; global OLDLC2=lLOC
+	L99:	PEEK %0 &CLOSNG 	; L99:
+		EQUi %0 #FALSE @.f246
+		MOVi %1 #131 	; fRSPEAK(131)
+		CALL &fRSPEAK %0 *2
+		PEEK %0 &NUMDIE 	; global NUMDIE=global NUMDIE+1
+		ADDi %0 %0 #1
+		POKE &NUMDIE %0 
+		MOVi %1 #0 	; score(0)
+		CALL &score %0 *2
+	.f246:	PEEK %0 &NUMDIE 	; global NUMDIE=global NUMDIE+1
+		ADDi %0 %0 #1
+		POKE &NUMDIE %0 
+		PEEK %1 &NUMDIE 	; if((int)fYES(79+global NUMDIE*2,80+global NUMDIE*2,54) == FALSE) score(0)
+		MULi %1 %1 #2
+		ADDi %1 #79 %1
+		PEEK %2 &NUMDIE 
+		MULi %2 %2 #2
+		ADDi %2 #80 %2
+		MOVi %3 #54 
+		CALL &fYES %0 *4
+		NEQi %0 #FALSE @.f247
+		MOVi %1 #0 	; score(0)
+		CALL &score %0 *2
+	.f247:	PEEK %0 &NUMDIE 	; if(global NUMDIE == global MAXDIE) score(0)
+		PEEK %1 &MAXDIE 
+		NEQi %0 %1 @.f248
+		MOVi %1 #0 	; score(0)
+		CALL &score %0 *2
+	.f248:	POKE &PLACE:WATER #0 	; global PLACE[WATER]=0
+		POKE &PLACE:OIL #0 	; global PLACE[OIL]=0
+		MOVi %1 #LAMP 	; if((int)TOTING(LAMP) != FALSE)global PROP[LAMP]=0
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f249
+		POKE &PROP:LAMP #0 	; global PROP[LAMP]=0
+	.f249:	MOVi $J #1 	; for (J=1 to 100+1) 
+		! ADDi <A> #100 #1
+		GEQi #1 <A> @.e250
+	.l251:	SUBi $I #101 $J	; I=101-J
+		MOVi %1 $I 	; if((int)TOTING(I) != FALSE) 
+		CALL &TOTING %0 *2
+		EQUi %0 #FALSE @.f252
+		PEEK $lK &OLDLC2 	; lK=global OLDLC2
+		NEQi $I #LAMP @.f253	; if(I == LAMP)lK=1
+		MOVi $lK #1 	; lK=1
+	.f253:	MOVi %1 $I 	; fDROP(I,lK)
+		MOVi %2 $lK 
+		CALL &fDROP %0 *3
+	.f252:	FORi $J <A> @.l251	; } /* end loop */
+	.e250:	MOVi $lLOC #3 	; lLOC=3
+		POKE &OLDLOC $lLOC 	; global OLDLOC=lLOC
+		GOTO @L2000  	; goto L2000
+		RETU   	; }
+
+.s_Fatale4d2:	CNST *13
+	DATs Fatal error
+	DATi #32 #0
+.s_Seesou4d3:	CNST *40
+	DATs .  See source code for interpretation.
+	DATi #10 #0
+.s_SorryF4d4:	CNST *39
+	DATs Sorry. File operationrs are disabled.
+	DATi #10 #0

@@ -1,0 +1,1118 @@
+; Compiled with Impala version 1.0
+
+FALSE:	! DEFi #0
+TRUE:	! DEFi #1
+PARENTHESIS_PRECEDENCE:	! DEFi #0
+BITWISE_PRECEDENCE:	! DEFi #1
+ADD_SUB_PRECEDENCE:	! DEFi #2
+MUL_DIV_PRECEDENCE:	! DEFi #3
+PREFIX_PRECEDENCE:	! DEFi #4
+POW_PRECEDENCE:	! DEFi #5
+LOG2:	! DEFf #0.69314718055994530942
+LOG2R:	! DEFf #1.44269504088896340736
+LOG10R:	! DEFf #0.43429448190325182765
+E:	! DEFf #2.71828182845904523536
+HALF_PI:	! DEFf #1.57079632679489661923
+PI:	! DEFf #3.14159265358979323846
+	! MULf <A> #PI #2.0
+TWICE_PI:	! DEFf <A>
+COS_EPSILON:	! DEFf #1.0e-6
+	GLOB *1
+lastError:	DATp &NULL
+	! SUBi <A> #'z' #'a'
+	! ADDi <A> <A> #1
+memoryUsed:	GLOB *<A>
+	! SUBi <A> #'z' #'a'
+	! ADDi <A> <A> #1
+memory:	GLOB *<A>
+	GLOB *1
+lastResult:	DATf #0.0
+
+;-----------------------------------------------------------------------------
+strcmp:	FUNC
+	$d:	OUTi
+	$s0:	INPp
+	$s1:	INPp
+	$a:	LOCp
+	$b:	LOCp
+	$c:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $a $s0 	; a = s0
+		MOVp $b $s1 	; b = s1
+	.l0:	PEEK $c $a 	; while ((d = (c = (int) *a) - (int) *b) == 0 && c != 0) 
+		PEEK %0 $b 
+		SUBi $d $c %0
+		NEQi $d #0 @.e2
+		EQUi $c #0 @.e2
+		ADDp $a $a #1	; a = a + 1
+		ADDp $b $b #1	; b = b + 1
+		GOTO @.l0  	; }
+	.e2:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+error:	FUNC
+		PARA *1
+	$s:	INPp
+;-----------------------------------------------------------------------------
+		PEEK %0 &lastError 	; if (global lastError == null) global lastError = s
+		NEQp %0 &NULL @.f0
+		POKE &lastError $s 	; global lastError = s
+	.f0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+exp:	FUNC
+	$y:	OUTf
+	$x:	INPf
+	$a:	LOCf
+	$n:	LOCf
+	$m:	LOCf
+	$t:	LOCf
+;-----------------------------------------------------------------------------
+		ABSf $m $x 	; m = abs(x)
+		MOVf $a #1.0 	; a = 1.0
+		MOVf $n #1.0 	; n = 1.0
+		MOVf $y #1.0 	; y = 1.0
+	.l0:	MOVf $t $y 	; t = y
+		MULf %0 $a $m	; a = a * m / n
+		DIVf $a %0 $n
+		ADDf $y $y $a	; y = y + a
+		ADDf $n $n #1.0	; n = n + 1.0
+		NEQf $y $t @.l0	; } while (y != t)
+		GEQf $x #0.0 @.f1	; if (x < 0.0) y = 1.0 / y
+		DIVf $y #1.0 $y	; y = 1.0 / y
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+log:	FUNC
+	$y:	OUTf
+	$x:	INPf
+	$a:	LOCf
+	$b:	LOCf
+	$m:	LOCf
+	$n:	LOCf
+	$t:	LOCf
+;-----------------------------------------------------------------------------
+		LEQf $x #0.0 @.t0	; if (x <= 0.0 || x >= 1.0e38) error("Domain error")
+		LSSf $x #1.0e38 @.f1
+	.t0:	MOVp %1 &.s_Domain4d2 	; error("Domain error")
+		CALL &error %0 *2
+		GOTO @.e2  
+	.f1:	MOVf $b #0.0 	; b = 0.0
+		MOVf $m $x 	; m = x
+	.l3:	GEQf $m #0.5 @.e4	; while (m < 0.5) 
+		MULf $m $m #2.0	; m = m * 2.0
+		SUBf $b $b #LOG2	; b = b - LOG2
+		GOTO @.l3  	; }
+	.e4:	NOOP
+	.l5:	LEQf $m #1.5 @.e6	; while (m > 1.5) 
+		MULf $m $m #0.5	; m = m * 0.5
+		ADDf $b $b #LOG2	; b = b + LOG2
+		GOTO @.l5  	; }
+	.e6:	SUBf $m #1.0 $m	; m = 1.0 - m
+		MOVf $a #-1.0 	; a = -1.0
+		MOVf $n #1.0 	; n = 1.0
+		MOVf $y #0.0 	; y = 0.0
+	.l7:	MOVf $t $y 	; t = y
+		MULf $a $a $m	; a = a * m
+		DIVf %0 $a $n	; y = y + a / n
+		ADDf $y $y %0
+		ADDf $n $n #1.0	; n = n + 1.0
+		NEQf $y $t @.l7	; } while (y != t)
+		ADDf $y $y $b	; y = y + b
+	.e2:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+log2:	FUNC
+	$y:	OUTf
+	$x:	INPf
+;-----------------------------------------------------------------------------
+		MOVf %1 $x 	; y = (float) log(x) * LOG2R
+		CALL &log %0 *2
+		MULf $y %0 #LOG2R
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+log10:	FUNC
+	$y:	OUTf
+	$x:	INPf
+;-----------------------------------------------------------------------------
+		MOVf %1 $x 	; y = (float) log(x) * LOG10R
+		CALL &log %0 *2
+		MULf $y %0 #LOG10R
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+trunc:	FUNC
+	$y:	OUTf
+	$x:	INPf
+;-----------------------------------------------------------------------------
+		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
+		SUBf %0 #0.0 $x	; y = -floor(-x)
+		FLOf %0 %0 
+		SUBf $y #0.0 %0
+		GOTO @.e1  
+	.f0:	FLOf $y $x 	; y = floor(x)
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fmod:	FUNC
+	$z:	OUTf
+	$x:	INPf
+	$y:	INPf
+;-----------------------------------------------------------------------------
+		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
+		MOVp %1 &.s_Divisi4d3 	; error("Division by zero")
+		CALL &error %0 *2
+		GOTO @.e1  
+	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
+		CALL &trunc %0 *2
+		MULf %0 %0 $y
+		SUBf $z $x %0
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+cos:	FUNC
+	$y:	OUTf
+	$x:	INPf
+	$a:	LOCf
+	$n:	LOCf
+	$m:	LOCf
+	$t:	LOCf
+;-----------------------------------------------------------------------------
+		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
+		MOVf %2 #TWICE_PI 
+		CALL &fmod %0 *3
+		MOVf $m %0 
+		SUBf %0 #0.0 $m	; m = -m * m
+		MULf $m %0 $m
+		MOVf $a #1.0 	; a = 1.0
+		MOVf $n #1.0 	; n = 1.0
+		MOVf $y #1.0 	; y = 1.0
+	.l0:	MOVf $t $y 	; t = y
+		MULf %0 $n $n	; a = a * m / (n * n + n)
+		MULf %1 $a $m
+		ADDf %0 %0 $n
+		DIVf $a %1 %0
+		ADDf $y $y $a	; y = y + a
+		ADDf $n $n #2.0	; n = n + 2.0
+		NEQf $y $t @.l0	; } while (y != t)
+		ABSf %1 $y 	; if (abs(y) < COS_EPSILON) y = 0.0
+		GEQf %1 #COS_EPSILON @.f1
+		MOVf $y #0.0 	; y = 0.0
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+sin:	FUNC
+	$y:	OUTf
+	$x:	INPf
+;-----------------------------------------------------------------------------
+		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
+		CALL &cos %0 *2
+		MOVf $y %0 
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+tan:	FUNC
+	$y:	OUTf
+	$x:	INPf
+	$c:	LOCf
+;-----------------------------------------------------------------------------
+		MOVf $y #0.0 	; y = 0.0
+		MOVf %1 $x 	; c = (float) cos(x)
+		CALL &cos %0 *2
+		MOVf $c %0 
+		NEQf $c #0.0 @.f0	; if (c == 0.0) error("Domain error")
+		MOVp %1 &.s_Domain4d2 	; error("Domain error")
+		CALL &error %0 *2
+		GOTO @.e1  
+	.f0:	MOVf %1 $x 	; y = (float) sin(x) / c
+		CALL &sin %0 *2
+		DIVf $y %0 $c
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+pow:	FUNC
+	$z:	OUTf
+	$x:	INPf
+	$y:	INPf
+	$a:	LOCf
+;-----------------------------------------------------------------------------
+		MOVf $z #0.0 	; z = 0.0
+		MOVf $a $x 	; a = x
+		GEQf $a #0.0 @.f1	; if (a < 0.0 && y == floor(y)) a = -a
+		FLOf %0 $y 
+		NEQf $y %0 @.f1
+		SUBf $a #0.0 $a	; a = -a
+	.f1:	LEQf $a #0.0 @.f2	; if (a > 0.0) z = (float) exp((float) log(a) * y)
+		MOVf %2 $a 	; z = (float) exp((float) log(a) * y)
+		CALL &log %1 *2
+		MULf %1 %1 $y
+		CALL &exp %0 *2
+		MOVf $z %0 
+		GOTO @.e3  
+	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
+		GRTf $y #0.0 @.f5
+	.t4:	MOVp %1 &.s_Domain4d2 	; error("Domain error")
+		CALL &error %0 *2
+	.f5:	NOOP
+	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
+		MULf %0 $y #0.5
+		MULf %1 $y #0.5
+		FLOf %0 %0 
+		EQUf %1 %0 @.f7
+		SUBf $z #0.0 $z	; z = -z
+	.f7:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+floorFunc:	FUNC
+	$y:	OUTf
+	$x:	INPf
+;-----------------------------------------------------------------------------
+		FLOf $y $x 	; y = floor(x)
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+ceilFunc:	FUNC
+	$y:	OUTf
+	$x:	INPf
+;-----------------------------------------------------------------------------
+		SUBf %1 #0.0 $x	; y = -floor(-x)
+		FLOf %1 %1 
+		SUBf $y #0.0 %1
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+sqrt:	FUNC
+	$y:	OUTf
+	$x:	INPf
+;-----------------------------------------------------------------------------
+		MOVf %1 $x 	; y = (float) pow(x, 0.5)
+		MOVf %2 #0.5 
+		CALL &pow %0 *3
+		MOVf $y %0 
+		RETU   	; }
+
+FUNCTION_COUNT:	! DEFi #10
+	! MULi <A> #FUNCTION_COUNT #2
+FUNCTIONS:	CNST *<A>
+	DATA &.s_ceil4d4 &ceilFunc &.s_exp4d5 &exp &.s_floor4d6
+	DATA &floorFunc &.s_log4d7 &log &.s_log24d8 &log2
+	DATA &.s_log104d9 &log10 &.s_sqrt4da &sqrt &.s_cos4db &cos
+	DATA &.s_sin4dc &sin &.s_tan4dd &tan
+
+;-----------------------------------------------------------------------------
+isalpha:	FUNC
+	$b:	OUTi
+	$c:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $b #FALSE 	; b = FALSE
+		LSSi $c #'a' @.f0	; if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) b = TRUE
+		LEQi $c #'z' @.t1
+	.f0:	LSSi $c #'A' @.f3
+		GRTi $c #'Z' @.f3
+	.t1:	MOVi $b #TRUE 	; b = TRUE
+	.f3:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+lower:	FUNC
+	$l:	OUTi
+	$c:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $l $c 	; l = c
+		LSSi $c #'A' @.f1	; if (c >= 'A' && c <= 'Z') l = l + ('a' - 'A')
+		GRTi $c #'Z' @.f1
+		! SUBi <A> #'a' #'A'	; l = l + ('a' - 'A')
+		ADDi $l $l <A>
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+eatWhite:	FUNC
+	$p:	OUTp
+	$b:	INPp
+;-----------------------------------------------------------------------------
+		MOVp $p $b 	; p = b
+	.l0:	PEEK %0 $p 	; while ((int) *p == ' ') p = p + 1
+		NEQi %0 #' ' @.e1
+		ADDp $p $p #1	; p = p + 1
+		GOTO @.l0  
+	.e1:	RETU   	; }
+
+EPSILON_FLOAT:	! DEFf #1.0e-45
+SMALL_FLOAT:	! DEFf #1.0e-5
+LARGE_FLOAT:	! DEFf #1.0e+10
+HUGE_FLOAT:	! DEFf #1.0e+38
+
+;-----------------------------------------------------------------------------
+hexToFloat:	FUNC
+	$p:	OUTp
+	$b:	INPp
+	$v:	INPp
+	$i:	LOCi
+	$c:	LOCi
+	$d:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $p $b 	; p = b
+		MOVi $i #0 	; i = 0
+	.l0:	PEEK $c $p 	; while (((c = (int) *p) >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) 
+		LSSi $c #'0' @.f1
+		LEQi $c #'9' @.t2
+	.f1:	LSSi $c #'a' @.f3
+		LEQi $c #'f' @.t2
+	.f3:	LSSi $c #'A' @.e5
+		GRTi $c #'F' @.e5
+	.t2:	GRTi $c #'9' @.f6	; if (c <= '9') d = (c - '0')
+		SUBi $d $c #'0'	; d = (c - '0')
+		GOTO @.e7  
+	.f6:	NOOP
+		! XORi <A> #0x20 #-1	; d = ((c & ~0x20) - ('A' - 10))
+		ANDi %0 $c <A>
+		! SUBi <A> #'A' #10
+		SUBi $d %0 <A>
+	.e7:	SHLi %0 $i #4	; i = (i << 4) | d
+		IORi $i %0 $d
+		ADDp $p $p #1	; p = p + 1
+		GOTO @.l0  	; }
+	.e5:	iTOf %0 $i #1.0	; *v = itof(i)
+		POKE $v %0 
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+intToHex:	FUNC
+	$p:	OUTp
+	$i:	INPi
+	$buffer:	INPp
+	$x:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $x $i 	; x = i
+		ADDp $p $buffer #8	; p = buffer + 8
+		POKE $p #0 	; *p = 0
+	.l0:	SUBp $p $p #1	; *(p = p - 1) = ("FEDCBA9876543210123456789ABCDEF")[15 + (x & 0xF)]
+		ANDi %0 $x #0xF
+		ADDi %0 #15 %0
+		PEEK %0 &.s_FEDCBA4de %0
+		POKE $p %0 
+		SHRu $x $x #4	; x = x >>> 4
+		NEQi $x #0 @.l0	; } while (x != 0)
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+stringToFloat:	FUNC
+	$p:	OUTp
+	$b:	INPp
+	$v:	INPp
+	$f:	LOCf
+	$e:	LOCf
+	$n:	LOCi
+	$i:	LOCi
+	$c:	LOCi
+	$q:	LOCp
+;-----------------------------------------------------------------------------
+		MOVp $p $b 	; p = b
+		MOVf $f #0.0 	; f = 0.0
+	.l0:	PEEK $c $p 	; while ((c = (int) *p) >= '0' && c <= '9') 
+		LSSi $c #'0' @.e2
+		GRTi $c #'9' @.e2
+		SUBi %0 $c #'0'	; f = f * 10.0 + itof(c - '0')
+		MULf %1 $f #10.0
+		iTOf %0 %0 #1.0
+		ADDf $f %1 %0
+		ADDp $p $p #1	; p = p + 1
+		GOTO @.l0  	; }
+	.e2:	PEEK %1 $p 	; if ((int) *p == '.') 
+		NEQi %1 #'.' @.f3
+		ADDp $p $p #1	; p = p + 1
+		MOVf $e #0.1 	; e = 0.1
+	.l4:	PEEK $c $p 	; while ((c = (int) *p) >= '0' && c <= '9') 
+		LSSi $c #'0' @.f3
+		GRTi $c #'9' @.f3
+		SUBi %1 $c #'0'	; f = f + e * itof(c - '0')
+		iTOf %1 %1 #1.0
+		MULf %1 $e %1
+		ADDf $f $f %1
+		MULf $e $e #0.1	; e = e * 0.1
+		ADDp $p $p #1	; p = p + 1
+		GOTO @.l4  	; }
+	.f3:	PEEK $c $p 	; if ((c = (int) *p) == 'e' || c == 'E') 
+		EQUi $c #'e' @.t7
+		NEQi $c #'E' @.f8
+	.t7:	ADDp $q $p #1	; q = p + 1
+		MOVf $e #10.0 	; e = 10.0
+		PEEK $c $q 	; if ((c = (int) *q) == '+') q = q + 1
+		NEQi $c #'+' @.f9
+		ADDp $q $q #1	; q = q + 1
+		GOTO @.e10  
+	.f9:	NEQi $c #'-' @.f11	; if (c == '-') 
+		MOVf $e #0.1 	; e = 0.1
+		ADDp $q $q #1	; q = q + 1
+	.f11:	NOOP
+	.e10:	MOVi $n #0 	; n = 0
+	.l12:	PEEK $c $q 	; while ((c = (int) *q) >= '0' && c <= '9') 
+		LSSi $c #'0' @.e14
+		GRTi $c #'9' @.e14
+		MULi %1 $n #10	; n = n * 10 + (c - '0')
+		SUBi %0 $c #'0'
+		ADDi $n %1 %0
+		ADDp $q $q #1	; q = q + 1
+		MOVp $p $q 	; p = q
+		GOTO @.l12  	; }
+	.e14:	LEQi $n #50 @.f15	; if (n > 50) n = 50
+		MOVi $n #50 	; n = 50
+	.f15:	MOVi $i #0 	; for (i = 0 to n) f = f * e
+		GEQi #0 $n @.f8
+	.l17:	MULf $f $f $e	; f = f * e
+		FORi $i $n @.l17
+	.f8:	POKE $v $f 	; *v = f
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+floatToString:	FUNC
+	$p:	OUTp
+	$f:	INPf
+	$precision:	INPi
+	$buffer:	INPp
+	$x:	LOCf
+	$y:	LOCf
+	$e:	LOCi
+	$g:	LOCf
+	$dp:	LOCp
+	$pp:	LOCp
+	$ep:	LOCp
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(1 <= precision && precision <= 24)
+		GRTi #1 $precision @.f1
+		LEQi $precision #24 @.a0
+	.f1:	MOVp %1 &.a_1preci4d2 
+		CALL ^assertFail %0 *1
+	.a0:	ABSf $y $f 	; y = abs(f)
+		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
+		MOVp $p &.s_log104d9:4 	; p = "0"
+		GOTO @.e3  
+	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
+		MOVp $p &.s_HUGE4df 	; p = "HUGE"
+		GOTO @.e5  
+	.f4:	MOVi $e #0 	; e = 0
+		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
+		ADDp $ep %0 $precision
+	.l6:	ADDp $pp $buffer #3	; pp = buffer + 3
+		MOVf $x $y 	; x = y
+	.l7:	LSSf $x #10.0 @.e9	; while (x >= 10.0 && pp < ep) 
+		GEQp $pp $ep @.e9
+		ADDp $pp $pp #1	; pp = pp + 1
+		MULf $x $x #0.1	; x = x * 0.1
+		GOTO @.l7  	; }
+	.e9:	GEQp $pp $ep @.f11	; if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break
+		LEQf $y #SMALL_FLOAT @.f11
+		GEQf $y #LARGE_FLOAT @.f11
+		GOTO @break  	; goto break
+	.f11:	MOVf $g $y 	; g = y
+	.l12:	GEQf $y #1.0 @.e13	; while (y < 1.0) 
+		SUBi $e $e #1	; e = e - 1
+		MULf $y $y #10.0	; y = y * 10.0
+		GOTO @.l12  	; }
+	.e13:	NOOP
+	.l14:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
+		ADDi $e $e #1	; e = e + 1
+		MULf $y $y #0.1	; y = y * 0.1
+		GOTO @.l14  	; }
+		GOTO @.l6  	; }
+	break:	ADDp $dp $buffer #2	; break:
+	.l16:	GEQf $x #1.0 @.e18	; while (x < 1.0 && dp < buffer + 32) 
+		ADDp %0 $buffer #32
+		GEQp $dp %0 @.e18
+		POKE $dp #'0' 	; *dp = '0'
+		ADDp $dp $dp #1	; dp = dp + 1
+		NEQp $dp $pp @.f19	; if (dp == pp) 
+		POKE $dp #'9' 	; *dp = '9'
+		ADDp $dp $dp #1	; dp = dp + 1
+	.f19:	ADDp $ep $ep #1	; ep = ep + 1
+		MULf $x $x #10.0	; x = x * 10.0
+		GOTO @.l16  	; }
+	.e18:	NOOP
+	.l20:	GEQp $dp $ep @.e21	; while (dp < ep) 
+		fTOi $i $x #1.0	; i = ftoi(x)
+		ADDi %0 $i #'0'	; *dp = i + '0'
+		POKE $dp %0 
+		ADDp $dp $dp #1	; dp = dp + 1
+		NEQp $dp $pp @.f22	; if (dp == pp) 
+		POKE $dp #'9' 	; *dp = '9'
+		ADDp $dp $dp #1	; dp = dp + 1
+	.f22:	iTOf %0 $i #1.0	; x = (x - itof(i)) * 10.0
+		SUBf %0 $x %0
+		MULf $x %0 #10.0
+		GOTO @.l20  	; }
+	.e21:	ADDp $p $buffer #2	; p = buffer + 2
+		LSSf $x #5.0 @.f23	; if (x >= 5.0) 
+	.l24:	PEEK %0 $dp #-1	; while ((int) dp[-1] == '9') *(dp = dp - 1) = '0'
+		NEQi %0 #'9' @.e25
+		SUBp $dp $dp #1	; *(dp = dp - 1) = '0'
+		POKE $dp #'0' 
+		GOTO @.l24  
+	.e25:	NEQp $dp $p @.f26	; if (dp == p) *(p = p - 1) = '1'
+		SUBp $p $p #1	; *(p = p - 1) = '1'
+		POKE $p #'1' 
+		GOTO @.e27  
+	.f26:	PEEK %0 $dp #-1	; dp[-1] = (int) dp[-1] + 1
+		ADDi %0 %0 #1
+		POKE $dp #-1 %0
+	.e27:	NOOP
+	.f23:	POKE $pp #'.' 	; *pp = '.'
+		LEQp $ep $pp @.f28	; if (ep > pp) while ((int) ep[-1] == '0') ep = ep - 1
+	.l29:	PEEK %0 $ep #-1	; while ((int) ep[-1] == '0') ep = ep - 1
+		NEQi %0 #'0' @.f28
+		SUBp $ep $ep #1	; ep = ep - 1
+		GOTO @.l29  
+	.f28:	SUBp %0 $ep #1	; if (ep - 1 == pp) ep = ep - 1
+		NEQp %0 $pp @.f31
+		SUBp $ep $ep #1	; ep = ep - 1
+	.f31:	EQUi $e #0 @.f32	; if (e != 0) 
+		POKE $ep #'e' 	; *ep = 'e'
+		MOVi $i #'+' 	; i = '+'
+		GEQi $e #0 @.f33	; if (e < 0) i = '-'
+		MOVi $i #'-' 	; i = '-'
+	.f33:	ADDp $ep $ep #1	; *(ep = ep + 1) = i
+		POKE $ep $i 
+		ABSi $i $e 	; i = abs(e)
+		LSSi $i #100 @.f34	; if (i >= 100) *(ep = ep + 1) = '0' + ((i / 100) % 10)
+		ADDp $ep $ep #1	; *(ep = ep + 1) = '0' + ((i / 100) % 10)
+		DIVi %0 $i #100
+		MODi %0 %0 #10
+		ADDi %0 #'0' %0
+		POKE $ep %0 
+	.f34:	LSSi $i #10 @.f35	; if (i >= 10) *(ep = ep + 1) = '0' + ((i / 10) % 10)
+		ADDp $ep $ep #1	; *(ep = ep + 1) = '0' + ((i / 10) % 10)
+		DIVi %0 $i #10
+		MODi %0 %0 #10
+		ADDi %0 #'0' %0
+		POKE $ep %0 
+	.f35:	ADDp $ep $ep #1	; *(ep = ep + 1) = '0' + (i % 10)
+		MODi %0 $i #10
+		ADDi %0 #'0' %0
+		POKE $ep %0 
+		ADDp $ep $ep #1	; ep = ep + 1
+	.f32:	POKE $ep #0 	; *ep = 0
+		GEQf $f #0.0 @.f36	; if (f < 0.0) *(p = p - 1) = '-'
+		SUBp $p $p #1	; *(p = p - 1) = '-'
+		POKE $p #'-' 
+	.f36:	NOOP
+	.e5:	NOOP
+	.e3:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+evaluate:	FUNC
+	$p:	OUTp
+	$b:	INPp
+	$v:	INPp
+	$precedence:	INPi
+	$f:	LOCf
+	$q:	LOCp
+	$s:	LOCp
+	$c:	LOCi
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp %1 $b 	; p = (pointer) eatWhite(b)
+		CALL &eatWhite %0 *2
+		MOVp $p %0 
+		PEEK %0 $p 	; switch ((int) *p == 0 to 128) 
+		SWCH %0 *128 @.s0
+	.s0#0:	MOVp %1 &.s_Unexpe4e0 	; error("Unexpected end of line")
+		CALL &error %0 *2
+		GOTO @.e1  
+	.s0#'-':	ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, v, PREFIX_PRECEDENCE)
+		MOVp %2 $v 
+		MOVi %3 #PREFIX_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $v 	; *v = -(float) *v
+		SUBf %0 #0.0 %0
+		POKE $v %0 
+		GOTO @.e1  	; }
+	.s0#'_':	PEEK %0 &lastResult 	; *v = global lastResult
+		POKE $v %0 
+		ADDp $p $p #1	; p = p + 1
+		GOTO @.e1  	; }
+	.s0#'(':	ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, v, PARENTHESIS_PRECEDENCE)
+		MOVp %2 $v 
+		MOVi %3 #PARENTHESIS_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $p 	; if ((int) *p != ')') error("Expected ')'")
+		EQUi %0 #')' @.f2
+		MOVp %1 &.s_Expect4e1 	; error("Expected ')'")
+		CALL &error %0 *2
+	.f2:	ADDp $p $p #1	; p = p + 1
+		GOTO @.e1  	; }
+	.s0#'0':	NOOP
+	.s0#'1':	NOOP
+	.s0#'2':	NOOP
+	.s0#'3':	NOOP
+	.s0#'4':	NOOP
+	.s0#'5':	NOOP
+	.s0#'6':	NOOP
+	.s0#'7':	NOOP
+	.s0#'8':	NOOP
+	.s0#'9':	PEEK %0 $p 	; if ((int) *p == '0' && (int) lower(p[1]) == 'x') q = (pointer) hexToFloat(p + 2, v)
+		NEQi %0 #'0' @.f4
+		PEEK %1 $p #1
+		CALL &lower %0 *2
+		NEQi %0 #'x' @.f4
+		ADDp %1 $p #2	; q = (pointer) hexToFloat(p + 2, v)
+		MOVp %2 $v 
+		CALL &hexToFloat %0 *3
+		MOVp $q %0 
+		GOTO @.e5  
+	.f4:	MOVp %1 $p 	; q = (pointer) stringToFloat(p, v)
+		MOVp %2 $v 
+		CALL &stringToFloat %0 *3
+		MOVp $q %0 
+	.e5:	NEQp $p $q @.f6	; if (p == q) error("Invalid number")
+		MOVp %1 &.s_Invali4e2 	; error("Invalid number")
+		CALL &error %0 *2
+	.f6:	MOVp $p $q 	; p = q
+		GOTO @.e1  	; }
+	.s0#'e':	NOOP
+	.s0#'E':	PEEK %1 $p #1	; if ((int) isalpha(p[1]) != FALSE) goto symbol
+		CALL &isalpha %0 *2
+		EQUi %0 #FALSE @.f7
+		GOTO @symbol  	; goto symbol
+	.f7:	ADDp $p $p #1	; p = p + 1
+		POKE $v #E 	; *v = E
+		GOTO @.e1  	; }
+	.s0#'p':	NOOP
+	.s0#'P':	PEEK %1 $p #1	; if ((int) lower(p[1]) != 'i' || (int) isalpha(p[2]) != FALSE) goto symbol
+		CALL &lower %0 *2
+		NEQi %0 #'i' @symbol
+		PEEK %1 $p #2
+		CALL &isalpha %0 *2
+		EQUi %0 #FALSE @.f9
+		GOTO @symbol  	; goto symbol
+	.f9:	ADDp $p $p #2	; p = p + 2
+		POKE $v #PI 	; *v = PI
+		GOTO @.e1  	; }
+	.s0:	NOOP
+	symbol:	MOVi $i #0 	; symbol:
+		GEQi #0 #FUNCTION_COUNT @.e10
+	.l11:	MOVp $q $p 	; q = p
+		MULi %0 $i #2	; s = (pointer) global FUNCTIONS[i * 2 + 0]
+		ADDi %0 %0 #0
+		PEEK $s &FUNCTIONS %0
+	.l12:	PEEK $c $s 	; while ((c = (int) *s) != 0 && (int) lower(*q) == c) 
+		EQUi $c #0 @.e14
+		PEEK %1 $q 
+		CALL &lower %0 *2
+		NEQi %0 $c @.e14
+		ADDp $s $s #1	; s = s + 1
+		ADDp $q $q #1	; q = q + 1
+		GOTO @.l12  	; }
+	.e14:	PEEK %0 $s 	; if ((int) *s == 0) 
+		NEQi %0 #0 @.f15
+		MOVp %1 $q 	; q = (pointer) eatWhite(q)
+		CALL &eatWhite %0 *2
+		MOVp $q %0 
+		PEEK %0 $q 	; if ((int) *q == '(') 
+		NEQi %0 #'(' @.f15
+		ADDp %1 $q #1	; p = (pointer) evaluate(q + 1, v, PARENTHESIS_PRECEDENCE)
+		MOVp %2 $v 
+		MOVi %3 #PARENTHESIS_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $p 	; if ((int) *p != ')') error("Expected ')'")
+		EQUi %0 #')' @.f17
+		MOVp %1 &.s_Expect4e1 	; error("Expected ')'")
+		CALL &error %0 *2
+	.f17:	ADDp $p $p #1	; p = p + 1
+		MULi %0 $i #2	; (float) *v = (float) ((funcptr)global FUNCTIONS[i * 2 + 1])((float) *v)
+		ADDi %0 %0 #1
+		PEEK %2 $v 
+		PEEK %0 &FUNCTIONS %0
+		CALL %0 %1 *2
+		POKE $v %1 
+		GOTO @wasFunction  	; goto wasFunction
+	.f15:	FORi $i #FUNCTION_COUNT @.l11	; }
+	.e10:	PEEK %1 $p 	; c = (int) lower(*p)
+		CALL &lower %0 *2
+		MOVi $c %0 
+		MOVi %1 $c 	; if ((int) isalpha(c) == FALSE || (int) isalpha(p[1]) == TRUE) error("Syntax error")
+		CALL &isalpha %0 *2
+		EQUi %0 #FALSE @.t18
+		PEEK %1 $p #1
+		CALL &isalpha %0 *2
+		NEQi %0 #TRUE @.f19
+	.t18:	MOVp %1 &.s_Syntax4e3 	; error("Syntax error")
+		CALL &error %0 *2
+		GOTO @.e20  
+	.f19:	SUBi %0 $c #'a'	; if ((int) global memoryUsed[c - 'a'] == 0) error("Undefined variable")
+		PEEK %0 &memoryUsed %0
+		NEQi %0 #0 @.f21
+		MOVp %1 &.s_Undefi4e4 	; error("Undefined variable")
+		CALL &error %0 *2
+		GOTO @.e22  
+	.f21:	ADDp $p $p #1	; p = p + 1
+		SUBi %0 $c #'a'	; *v = (float) global memory[c - 'a']
+		PEEK %0 &memory %0
+		POKE $v %0 
+	.e22:	NOOP
+	.e20:	NOOP
+	wasFunction:	NOOP
+	.e1:	NOOP
+	repeat:	MOVp %1 $p 	; p = (pointer) eatWhite(p)
+		CALL &eatWhite %0 *2
+		MOVp $p %0 
+		! ADDi <A> #'|' #1	; switch ((int) *p == '%' to ('|' + 1)) 
+		! SUBi <A> <A> #'%'
+		PEEK %0 $p 
+		SUBi %0 %0 #'%'
+		SWCH %0 *<A> @.s23
+		! SUBi <A> #'|' #'%'	; case '|'
+	.s23#<A>:	GEQi $precedence #BITWISE_PRECEDENCE @.e24	; if (precedence < BITWISE_PRECEDENCE) 
+		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #BITWISE_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $v 	; *v = itof(ftoi((float) *v) | ftoi(f))
+		fTOi %0 %0 #1.0
+		fTOi %1 $f #1.0
+		IORi %0 %0 %1
+		iTOf %0 %0 #1.0
+		POKE $v %0 
+		GOTO @repeat  	; goto repeat
+		GOTO @.e24  	; }
+		! SUBi <A> #'&' #'%'	; case '&'
+	.s23#<A>:	GEQi $precedence #BITWISE_PRECEDENCE @.e24	; if (precedence < BITWISE_PRECEDENCE) 
+		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #BITWISE_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $v 	; *v = itof(ftoi((float) *v) & ftoi(f))
+		fTOi %0 %0 #1.0
+		fTOi %1 $f #1.0
+		ANDi %0 %0 %1
+		iTOf %0 %0 #1.0
+		POKE $v %0 
+		GOTO @repeat  	; goto repeat
+		GOTO @.e24  	; }
+		! SUBi <A> #'^' #'%'	; case '^'
+	.s23#<A>:	GEQi $precedence #BITWISE_PRECEDENCE @.e24	; if (precedence < BITWISE_PRECEDENCE) 
+		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #BITWISE_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $v 	; *v = itof(ftoi((float) *v) ^ ftoi(f))
+		fTOi %0 %0 #1.0
+		fTOi %1 $f #1.0
+		XORi %0 %0 %1
+		iTOf %0 %0 #1.0
+		POKE $v %0 
+		GOTO @repeat  	; goto repeat
+		GOTO @.e24  	; }
+		! SUBi <A> #'<' #'%'	; case '<'
+	.s23#<A>:	PEEK %0 $p #1	; if ((int) p[1] == '<' && precedence < BITWISE_PRECEDENCE) 
+		NEQi %0 #'<' @.e24
+		GEQi $precedence #BITWISE_PRECEDENCE @.e24
+		ADDp %1 $p #2	; p = (pointer) evaluate(p + 2, &f, BITWISE_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #BITWISE_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $v 	; *v = itof(ftoi((float) *v) << ftoi(f))
+		fTOi %0 %0 #1.0
+		fTOi %1 $f #1.0
+		SHLi %0 %0 %1
+		iTOf %0 %0 #1.0
+		POKE $v %0 
+		GOTO @repeat  	; goto repeat
+		GOTO @.e24  	; }
+		! SUBi <A> #'>' #'%'	; case '>'
+	.s23#<A>:	PEEK %0 $p #1	; if ((int) p[1] == '>' && precedence < BITWISE_PRECEDENCE) 
+		NEQi %0 #'>' @.e24
+		GEQi $precedence #BITWISE_PRECEDENCE @.e24
+		ADDp %1 $p #2	; p = (pointer) evaluate(p + 2, &f, BITWISE_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #BITWISE_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $v 	; *v = itof(ftoi((float) *v) >>> ftoi(f))
+		fTOi %0 %0 #1.0
+		fTOi %1 $f #1.0
+		SHRu %0 %0 %1
+		iTOf %0 %0 #1.0
+		POKE $v %0 
+		GOTO @repeat  	; goto repeat
+		GOTO @.e24  	; }
+		! SUBi <A> #'+' #'%'	; case '+'
+	.s23#<A>:	GEQi $precedence #ADD_SUB_PRECEDENCE @.e24	; if (precedence < ADD_SUB_PRECEDENCE) 
+		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #ADD_SUB_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $v 	; *v = (float) *v + f
+		ADDf %0 %0 $f
+		POKE $v %0 
+		GOTO @repeat  	; goto repeat
+		GOTO @.e24  	; }
+		! SUBi <A> #'-' #'%'	; case '-'
+	.s23#<A>:	GEQi $precedence #ADD_SUB_PRECEDENCE @.e24	; if (precedence < ADD_SUB_PRECEDENCE) 
+		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #ADD_SUB_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $v 	; *v = (float) *v - f
+		SUBf %0 %0 $f
+		POKE $v %0 
+		GOTO @repeat  	; goto repeat
+		GOTO @.e24  	; }
+		! SUBi <A> #'*' #'%'	; case '*'
+	.s23#<A>:	PEEK %0 $p #1	; if ((int) p[1] == '*') 
+		NEQi %0 #'*' @.f34
+		GRTi $precedence #POW_PRECEDENCE @.e24	; if (precedence <= POW_PRECEDENCE) 
+		ADDp %1 $p #2	; p = (pointer) evaluate(p + 2, &f, POW_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #POW_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %1 $v 	; *v = pow((float) *v, f)
+		MOVf %2 $f 
+		CALL &pow %0 *3
+		POKE $v %0 
+		GOTO @repeat  	; goto repeat
+		GOTO @.e24  	; } else 
+	.f34:	GEQi $precedence #MUL_DIV_PRECEDENCE @.e24	; if (precedence < MUL_DIV_PRECEDENCE) 
+		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #MUL_DIV_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %0 $v 	; *v = (float) *v * f
+		MULf %0 %0 $f
+		POKE $v %0 
+		GOTO @repeat  	; goto repeat
+	.e36:	GOTO @.e24  	; }
+		! SUBi <A> #'/' #'%'	; case '/'
+	.s23#<A>:	GEQi $precedence #MUL_DIV_PRECEDENCE @.e24	; if (precedence < MUL_DIV_PRECEDENCE) 
+		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #MUL_DIV_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		NEQf $f #0.0 @.f39	; if (f == 0.0) error("Division by zero")
+		MOVp %1 &.s_Divisi4d3 	; error("Division by zero")
+		CALL &error %0 *2
+		GOTO @repeat  
+	.f39:	PEEK %0 $v 	; *v = (float) *v / f
+		DIVf %0 %0 $f
+		POKE $v %0 
+	.e40:	GOTO @repeat  	; goto repeat
+		GOTO @.e24  	; }
+		! SUBi <A> #'%' #'%'	; case '%'
+	.s23#<A>:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f41	; if (precedence < MUL_DIV_PRECEDENCE) 
+		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
+		ADRL %2 $f *0
+		MOVi %3 #MUL_DIV_PRECEDENCE 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		PEEK %1 $v 	; *v = fmod(*v, f)
+		MOVf %2 $f 
+		CALL &fmod %0 *3
+		POKE $v %0 
+		GOTO @repeat  	; goto repeat
+	.f41:	NOOP
+	.s23:	NOOP
+	.e24:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC
+		PARA *1
+	$s:	LOCA *256
+	$p:	LOCp
+	$q:	LOCp
+	$f:	LOCf
+	$c:	LOCi
+	$assignTo:	LOCi
+	$buffer:	LOCA *32
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+	.l0:	MOVp %1 &.s_calc4e5 	; output("calc> ")
+		CALL ^output %0 *2
+		MOVi %1 #255 	; input(255, s)
+		ADRL %2 $s *0
+		CALL ^input %0 *3
+		ADRL %1 $s *0	; p = (pointer) eatWhite(s)
+		CALL &eatWhite %0 *2
+		MOVp $p %0 
+		PEEK %0 $p 	; if ((int) *p == 0 || (int) strcmp(p, "quit") == 0) goto quit
+		EQUi %0 #0 @quit
+		MOVp %1 $p 
+		MOVp %2 &.s_quit4e6 
+		CALL &strcmp %0 *3
+		NEQi %0 #0 @.f2
+		GOTO @quit  	; goto quit
+	.f2:	MOVi $assignTo #-1 	; assignTo = -1
+		PEEK %1 $p 	; c = (int) lower(*p)
+		CALL &lower %0 *2
+		MOVi $c %0 
+		MOVi %1 $c 	; if ((int) isalpha(c) != FALSE && c != 'e') 
+		CALL &isalpha %0 *2
+		EQUi %0 #FALSE @.f4
+		EQUi $c #'e' @.f4
+		ADDp %1 $p #1	; q = (pointer) eatWhite(p + 1)
+		CALL &eatWhite %0 *2
+		MOVp $q %0 
+		PEEK %0 $q 	; if ((int) *q == '=') 
+		NEQi %0 #'=' @.f4
+		ADDp %1 $q #1	; p = (pointer) eatWhite(q + 1)
+		CALL &eatWhite %0 *2
+		MOVp $p %0 
+		SUBi $assignTo $c #'a'	; assignTo = c - 'a'
+	.f4:	POKE &lastError &NULL 	; global lastError = null
+		MOVp %1 $p 	; p = (pointer) evaluate(p, &f, 0)
+		ADRL %2 $f *0
+		MOVi %3 #0 
+		CALL &evaluate %0 *4
+		MOVp $p %0 
+		MOVp %1 $p 	; p = (pointer) eatWhite(p)
+		CALL &eatWhite %0 *2
+		MOVp $p %0 
+		PEEK %0 $p 	; if ((int) *p != 0) error("Syntax error")
+		EQUi %0 #0 @.f6
+		MOVp %1 &.s_Syntax4e3 	; error("Syntax error")
+		CALL &error %0 *2
+	.f6:	PEEK $p &lastError 	; if ((p = global lastError) != null) output(p)
+		EQUp $p &NULL @.f7
+		MOVp %1 $p 	; output(p)
+		CALL ^output %0 *2
+		GOTO @.e8  
+	.f7:	POKE &lastResult $f 	; global lastResult = f
+		LSSi $assignTo #0 @.f9	; if (assignTo >= 0) 
+		ADDi $s:0 #'a' $assignTo	; s[0] = 'a' + assignTo
+		MOVi $s:1 #0 	; s[1] = 0
+		ADRL %1 $s *0	; output(s)
+		CALL ^output %0 *2
+	.f9:	MOVp %1 &.s_4e7 	; output(" = ")
+		CALL ^output %0 *2
+		MOVf %2 $f 	; output(floatToString(f, 6, buffer))
+		MOVi %3 #6 
+		ADRL %4 $buffer *0
+		CALL &floatToString %1 *4
+		CALL ^output %0 *2
+		fTOi $i $f #1.0	; if (itof(i = ftoi(f)) == f) 
+		iTOf %0 $i #1.0
+		NEQf %0 $f @.f10
+		MOVp %1 &.s_0x4e8 	; output("\n = 0x")
+		CALL ^output %0 *2
+		MOVi %2 $i 	; output(intToHex(i, buffer))
+		ADRL %3 $buffer *0
+		CALL &intToHex %1 *3
+		CALL ^output %0 *2
+	.f10:	LSSi $assignTo #0 @.f11	; if (assignTo >= 0) 
+		POKE &memory $assignTo $f	; global memory[assignTo] = f
+		POKE &memoryUsed $assignTo #1	; global memoryUsed[assignTo] = 1
+	.f11:	NOOP
+	.e8:	MOVp %1 &.s_4e9 	; output("\n")
+		CALL ^output %0 *2
+		GOTO @.l0  	; }
+	quit:	RETU   	; }
+
+.s_Domain4d2:	CNST *13
+	DATs Domain error
+	DATi #0
+.s_Divisi4d3:	CNST *17
+	DATs Division by zero
+	DATi #0
+.s_ceil4d4:	CNST *5
+	DATs ceil
+	DATi #0
+.s_exp4d5:	CNST *4
+	DATs exp
+	DATi #0
+.s_floor4d6:	CNST *6
+	DATs floor
+	DATi #0
+.s_log4d7:	CNST *4
+	DATs log
+	DATi #0
+.s_log24d8:	CNST *5
+	DATs log2
+	DATi #0
+.s_log104d9:	CNST *6
+	DATs log10
+	DATi #0
+.s_sqrt4da:	CNST *5
+	DATs sqrt
+	DATi #0
+.s_cos4db:	CNST *4
+	DATs cos
+	DATi #0
+.s_sin4dc:	CNST *4
+	DATs sin
+	DATi #0
+.s_tan4dd:	CNST *4
+	DATs tan
+	DATi #0
+.s_FEDCBA4de:	CNST *32
+	DATs FEDCBA9876543210123456789ABCDEF
+	DATi #0
+.s_HUGE4df:	CNST *5
+	DATs HUGE
+	DATi #0
+.s_Unexpe4e0:	CNST *23
+	DATs Unexpected end of line
+	DATi #0
+.s_Expect4e1:	CNST *13
+	DATs Expected ')'
+	DATi #0
+.s_Invali4e2:	CNST *15
+	DATs Invalid number
+	DATi #0
+.s_Syntax4e3:	CNST *13
+	DATs Syntax error
+	DATi #0
+.s_Undefi4e4:	CNST *19
+	DATs Undefined variable
+	DATi #0
+.s_calc4e5:	CNST *7
+	DATs calc>
+	DATi #32 #0
+.s_quit4e6:	CNST *5
+	DATs quit
+	DATi #0
+.s_4e7:	CNST *4
+	DATi #32
+	DATs =
+	DATi #32 #0
+.s_0x4e8:	CNST *7
+	DATi #10 #32
+	DATs = 0x
+	DATi #0
+.s_4e9:	CNST *2
+	DATi #10 #0
+	! EQUi #DEBUG #0 @.noAssertStrings
+.a_1preci4d2:	CNST *36
+	DATs (1 <= precision && precision <= 24)
+	DATi #0
+.noAssertStrings:	!
