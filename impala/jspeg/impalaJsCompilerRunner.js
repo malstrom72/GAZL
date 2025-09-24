@@ -130,19 +130,36 @@ column: pointerColumn
 };
 }
 
-function formatParseError(source, options, rawIndex) {
+function formatErrorWithLocation(source, options, rawIndex, baseMessage, explicitLocationLabel) {
 const index = clampIndex(rawIndex, 0, source.length);
 const { line, lineStart, lineEnd } = findLineBounds(source, index);
 const context = renderErrorContext(source, lineStart, lineEnd, index);
-const locationLabel = options && options.sourceName ? ` ${options.sourceName}` : ' source';
-const locationDetails = `line ${line}, column ${context.column}, offset ${index}`;
-let message = `JSPEG impala compiler failed to compile${locationLabel} at ${locationDetails}.`;
+let locationLabel;
+if (explicitLocationLabel !== undefined) {
+locationLabel = explicitLocationLabel;
+} else if (options && options.sourceName) {
+locationLabel = ` ${options.sourceName}`;
+} else {
+locationLabel = ' source';
+}
+let message = `${baseMessage}${locationLabel} at line ${line}, column ${context.column}, offset ${index}.`;
 if (context.displayLine.length > 0 || lineEnd > lineStart) {
 message += `\n${context.displayLine}\n${context.pointerLine}`;
 } else {
 message += '\n^';
 }
 return message;
+}
+
+function formatThrownCompilerError(err, source, options) {
+if (err && typeof err === 'object' && Number.isFinite(err.impalaOffset)) {
+const baseMessage = err.impalaMessage || (err.message ? err.message.split(' : ')[0] : 'JSPEG impala compiler error');
+return formatErrorWithLocation(source, options, err.impalaOffset, baseMessage);
+}
+if (err && err.message) {
+return err.message;
+}
+return String(err);
 }
 
 function patchCompilerSourceForMeta(source) {
@@ -153,6 +170,10 @@ let patched = source.replace(metaSectionHeader, createContextHelper);
 const metaSlotRegex = /    function metaSlot\(node\) \{[\s\S]*?^    }\n/m;
 patched = patched.replace(metaSlotRegex, metaSlotReplacement);
 patched = patched.replace(/\$[A-Za-z0-9_]*={}/g, (match) => match.replace('={}', '=__jspegCreateContext()'));
+
+const failFunctionPattern = `    fail = function (error, source, offset) {\n        function oneLine(s) { return replace(replace(replace(s,"\\t",' '),"\\r",' '),"\\n",' '); }\n        throw bake(error) + ' : ' +\n              oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +\n              oneLine(source.substr(offset, 40));\n    };\n`;
+const failFunctionReplacement = `    fail = function (error, source, offset) {\n        function oneLine(s) { return replace(replace(replace(s,"\\t",' '),"\\r",' '),"\\n",' '); }\n        var message = bake(error);\n        var hasSource = typeof source === 'string';\n        var snippetSource = hasSource ? source : '';\n        var snippetOffset = Number.isFinite(offset) ? offset : 0;\n        var before = oneLine(snippetSource.substr(snippetOffset - 8, 8));\n        var after = oneLine(snippetSource.substr(snippetOffset, 40));\n        var err = new Error(message + ' : ' + before + ' <!!!!> ' + after);\n        err.impalaMessage = message;\n        if (Number.isFinite(offset)) {\n                err.impalaOffset = offset;\n        }\n        err.impalaSnippetBefore = before;\n        err.impalaSnippetAfter = after;\n        throw err;\n    };\n`;
+patched = patched.replace(failFunctionPattern, failFunctionReplacement);
 
 const marker = '    makeMeta = function (rec, op, type, op0, op1, op2) {';
 const guard = `\n        if (rec == null) {\n                rec = { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] };\n        }`;
@@ -213,9 +234,15 @@ throw new Error('JSPEG impala compiler did not export a function');
 const compilerOptions = (options && Object.prototype.hasOwnProperty.call(options, 'sourceName'))
 ? { sourceName: options.sourceName }
 : undefined;
-const [ok, , index] = compilerFn(source, compilerOptions);
+let compileResult;
+try {
+compileResult = compilerFn(source, compilerOptions);
+} catch (err) {
+throw new Error(formatThrownCompilerError(err, source, options));
+}
+const [ok, , index] = compileResult;
 if (!ok) {
-throw new Error(formatParseError(source, options, index));
+throw new Error(formatErrorWithLocation(source, options, index, 'JSPEG impala compiler failed to compile'));
 }
 if (index !== source.length) {
 throw new Error(`JSPEG impala compiler stopped at ${index} of ${source.length}`);
