@@ -1,24 +1,33 @@
 ; Compiled with Impala version 1.0
 
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-MAX_PATCHES:	! DEFi #64
-MAX_PATCH_NAME_LENGTH:	! DEFi #31
-FILE_MEMORY_SIZE:	! DEFi #8000
-lastPatch:	GLOB *256
-lastConfig:	GLOB *256
+; signatures version=1
+; signature extern native output() -> unknown
+; signature extern native input() -> unknown
+; signature extern native inputEOF() -> unknown
+; signature extern native sleep() -> unknown
+; signature extern native findFirmwarePatch() -> unknown
+; signature extern native patchFirmware() -> unknown
+; signature extern native readGUIVariable() -> unknown
+; signature extern native writeGUIVariable() -> unknown
+FALSE:	! DEFi #0	; signature const FALSE : int
+TRUE:	! DEFi #1	; signature const TRUE : int
+MAX_PATCHES:	! DEFi #64	; signature const MAX_PATCHES : int
+MAX_PATCH_NAME_LENGTH:	! DEFi #31	; signature const MAX_PATCH_NAME_LENGTH : int
+FILE_MEMORY_SIZE:	! DEFi #8000	; signature const FILE_MEMORY_SIZE : int
+lastPatch:	GLOB *256	; signature array lastPatch[256] : unknown
+lastConfig:	GLOB *256	; signature array lastConfig[256] : unknown
 	GLOB *1
-patchCount:	DATi #-1
+patchCount:	DATi #-1	; signature global patchCount : int
 	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
 	! MULi <A> #MAX_PATCHES <A>
-patchNames:	GLOB *<A>
+patchNames:	GLOB *<A>	; signature array patchNames[<A>] : unknown
 	GLOB *1
-displayedPatchingInfo:	DATi #FALSE
-fileMemory:	GLOB *FILE_MEMORY_SIZE
+displayedPatchingInfo:	DATi #FALSE	; signature global displayedPatchingInfo : int
+fileMemory:	GLOB *FILE_MEMORY_SIZE	; signature array fileMemory[FILE_MEMORY_SIZE] : unknown
 
 ;-----------------------------------------------------------------------------
-strcpy:	FUNC
 	$r:	OUTp
+strcpy:	FUNC	; signature func strcpy(ptr d, ptr s) -> ptr
 	$d:	INPp
 	$s:	INPp
 	$a:	LOCp
@@ -37,8 +46,8 @@ strcpy:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC
 	$d:	OUTi
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -59,8 +68,8 @@ strcmp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-stricmp:	FUNC
 	$d:	OUTi
+stricmp:	FUNC	; signature func stricmp(ptr s0, ptr s1) -> int
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -91,8 +100,8 @@ stricmp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-upper:	FUNC
 		PARA *1
+upper:	FUNC	; signature func upper(ptr s) -> void
 	$s:	INPp
 	$p:	LOCp
 	$c:	LOCi
@@ -111,48 +120,47 @@ upper:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-outputLF:	FUNC
 		PARA *1
-	$s:	INPp
+outputLF:	FUNC	; signature func outputLF() -> void
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_4d2 	; output("\n")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-outputLine:	FUNC
 		PARA *1
+outputLine:	FUNC	; signature func outputLine(ptr s) -> void
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; output(s)
-		CALL ^output %0 *2
-		CALL &outputLF %0 *1	; outputLF()
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
+		CALL &outputLF %0 *1	; expects outputLF() -> void
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-help:	FUNC
 		PARA *1
+help:	FUNC	; signature func help() -> void
 ;-----------------------------------------------------------------------------
-		CALL &outputLF %0 *1	; outputLF()
+		CALL &outputLF %0 *1	; expects outputLF() -> void
 		MOVp %1 &.s_Typeli4d3 	; outputLine("Type \"list\" to list available firmware patches.")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		MOVp %1 &.s_Enterp4d4 	; outputLine("Enter patch name to begin firmware patching.")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		MOVp %1 &.s_Presse4d5 	; outputLine("Press enter only to retry last patching.")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		MOVp %1 &.s_Typere4d6 	; outputLine("Type \"restore\" to restore factory firmware.")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		MOVp %1 &.s_Typequ4d7 	; outputLine("Type \"quit\" to quit.")
-		CALL &outputLine %0 *2
-		CALL &outputLF %0 *1	; outputLF()
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
+		CALL &outputLF %0 *1	; expects outputLF() -> void
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-refreshPatchList:	FUNC
 		PARA *1
+refreshPatchList:	FUNC	; signature func refreshPatchList() -> void
 	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
 	! ADDi <A> #8 #1
 	$p:	LOCp
@@ -174,7 +182,7 @@ refreshPatchList:	FUNC
 		MOVp %3 $p 
 		ADRL %4 $size *0
 		ADRL %5 $modDate *0
-		CALL ^findFirmwarePatch %0 *6
+		CALL ^findFirmwarePatch %0 *6	; expects function(int, int, ptr, ptr, ptr) -> unknown
 		NEQi %0 #FALSE @.l0
 		LEQi $index #MAX_PATCHES @.f3	; if (index > MAX_PATCHES) index = MAX_PATCHES
 		MOVi $index #MAX_PATCHES 	; index = MAX_PATCHES
@@ -183,13 +191,13 @@ refreshPatchList:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-list:	FUNC
 		PARA *1
+list:	FUNC	; signature func list() -> void
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
-		CALL &refreshPatchList %0 *1	; refreshPatchList()
+		CALL &refreshPatchList %0 *1	; expects refreshPatchList() -> void
 		MOVp %1 &.s_Availa4d8 	; output("Available firmwares: ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
 		MOVi $i #0 	; for (i = 0 to global patchCount) 
 		PEEK %0 &patchCount 
 		GEQi #0 %0 @.e0
@@ -197,49 +205,49 @@ list:	FUNC
 		! ADDi <A> #MAX_PATCH_NAME_LENGTH #1	; output(&global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)])
 		MULi %2 $i <A>
 		ADDp %2 &patchNames %2
-		CALL ^output %1 *2
+		CALL ^output %1 *2	; expects function(ptr) -> unknown
 		MOVp %2 &.s_Availa4d8:20 	; output(" ")
-		CALL ^output %1 *2
+		CALL ^output %1 *2	; expects function(ptr) -> unknown
 		FORi $i %0 @.l1	; }
-	.e0:	CALL &outputLF %0 *1	; outputLF()
-		CALL &outputLF %0 *1	; outputLF()
+	.e0:	CALL &outputLF %0 *1	; expects outputLF() -> void
+		CALL &outputLF %0 *1	; expects outputLF() -> void
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-restore:	FUNC
 		PARA *1
+restore:	FUNC	; signature func restore() -> void
 	$error:	LOCA *256
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Restor4d9 	; outputLine("Restoring factory firmware. Do not power off...")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		MOVp %1 &NULL 	; if ((int)patchFirmware(null, null, 255, error) != 0) 
 		MOVp %2 &NULL 
 		MOVi %3 #255 
 		ADRL %4 $error *0
-		CALL ^patchFirmware %0 *5
+		CALL ^patchFirmware %0 *5	; expects function(ptr, ptr, int, ptr) -> unknown
 		EQUi %0 #0 @.f0
 		MOVi %1 #500 	; sleep(500)
-		CALL ^sleep %0 *2
+		CALL ^sleep %0 *2	; expects function(int) -> unknown
 		MOVp %1 &.s_Patchi4da 	; outputLine("Patching failed.")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		ADRL %1 $error *0	; outputLine(error)
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		GOTO @.e1  	; } else 
 	.f0:	MOVi %1 #500 	; sleep(500)
-		CALL ^sleep %0 *2
+		CALL ^sleep %0 *2	; expects function(int) -> unknown
 		MOVp %1 &.s_Restor4db 	; outputLine("Restore successful.")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		MOVp %1 &.s_aboutd4dc 	; writeGUIVariable("about.displayedCRC", "0")
 		MOVp %2 &.s_04dd 
-		CALL ^writeGUIVariable %0 *3
-	.e1:	CALL &outputLF %0 *1	; outputLF()
+		CALL ^writeGUIVariable %0 *3	; expects function(ptr, ptr) -> unknown
+	.e1:	CALL &outputLF %0 *1	; expects outputLF() -> void
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-patch:	FUNC
 		PARA *1
+patch:	FUNC	; signature func patch(ptr name, ptr config) -> void
 	$name:	INPp
 	$config:	INPp
 	$buffer1:	LOCA *256
@@ -249,7 +257,7 @@ patch:	FUNC
 ;-----------------------------------------------------------------------------
 		PEEK %0 &patchCount 	; if (global patchCount < 0) refreshPatchList()
 		GEQi %0 #0 @.f0
-		CALL &refreshPatchList %0 *1	; refreshPatchList()
+		CALL &refreshPatchList %0 *1	; expects refreshPatchList() -> void
 	.f0:	MOVi $i #0 	; for (i = 0 to global patchCount) 
 		PEEK %0 &patchCount 
 		GEQi #0 %0 @.e1
@@ -259,129 +267,129 @@ patch:	FUNC
 		ADDp $p &patchNames %1
 		MOVp %2 $name 	; if ((int)stricmp(name, p) == 0) 
 		MOVp %3 $p 
-		CALL &stricmp %1 *3
+		CALL &stricmp %1 *3	; expects stricmp(ptr, ptr) -> int
 		NEQi %1 #0 @.f3
 		MOVp %2 &.s_Patchi4de 	; outputLine("Patching firmware. Do not power off...")
-		CALL &outputLine %1 *2
+		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void
 		MOVp %2 $p 	; if ((int)patchFirmware(p, config, 255, buffer1) != 0) 
 		MOVp %3 $config 
 		MOVi %4 #255 
 		ADRL %5 $buffer1 *0
-		CALL ^patchFirmware %1 *5
+		CALL ^patchFirmware %1 *5	; expects function(ptr, ptr, int, ptr) -> unknown
 		EQUi %1 #0 @.f4
 		MOVi %2 #500 	; sleep(500)
-		CALL ^sleep %1 *2
+		CALL ^sleep %1 *2	; expects function(int) -> unknown
 		MOVp %2 &.s_Patchi4df 	; output("Patching failed: ")
-		CALL ^output %1 *2
+		CALL ^output %1 *2	; expects function(ptr) -> unknown
 		ADRL %2 $buffer1 *0	; outputLine(buffer1)
-		CALL &outputLine %1 *2
-		CALL &outputLF %1 *1	; outputLF()
+		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void
+		CALL &outputLF %1 *1	; expects outputLF() -> void
 		GOTO @.e5  	; } else 
 	.f4:	MOVi %2 #500 	; sleep(500)
-		CALL ^sleep %1 *2
+		CALL ^sleep %1 *2	; expects function(int) -> unknown
 		MOVp %2 &.s_Patchi4e0 	; outputLine("Patching successful.")
-		CALL &outputLine %1 *2
-		CALL &outputLF %1 *1	; outputLF()
+		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void
+		CALL &outputLF %1 *1	; expects outputLF() -> void
 		MOVp %2 &.s_firmwa4e1 	; readGUIVariable("firmware.aboutCRC", 255, buffer1)
 		MOVi %3 #255 
 		ADRL %4 $buffer1 *0
-		CALL ^readGUIVariable %1 *4
+		CALL ^readGUIVariable %1 *4	; expects function(ptr, int, ptr) -> unknown
 		MOVp %2 &.s_aboutd4dc 	; readGUIVariable("about.displayedCRC", 255, buffer2)
 		MOVi %3 #255 
 		ADRL %4 $buffer2 *0
-		CALL ^readGUIVariable %1 *4
+		CALL ^readGUIVariable %1 *4	; expects function(ptr, int, ptr) -> unknown
 		ADRL %2 $buffer1 *0	; if ((int) strcmp(buffer1, buffer2) != 0) 
 		ADRL %3 $buffer2 *0
-		CALL &strcmp %1 *3
+		CALL &strcmp %1 *3	; expects strcmp(ptr, ptr) -> int
 		EQUi %1 #0 @.f6
 		MOVp %2 &.s_aboutd4dc 	; writeGUIVariable("about.displayedCRC", buffer1)
 		ADRL %3 $buffer1 *0
-		CALL ^writeGUIVariable %1 *3
+		CALL ^writeGUIVariable %1 *3	; expects function(ptr, ptr) -> unknown
 		MOVp %2 &.s_firmwa4e2 	; readGUIVariable("firmware.about", FILE_MEMORY_SIZE - 1, global fileMemory)
 		SUBi %3 #FILE_MEMORY_SIZE #1
 		MOVp %4 &fileMemory 
-		CALL ^readGUIVariable %1 *4
+		CALL ^readGUIVariable %1 *4	; expects function(ptr, int, ptr) -> unknown
 		PEEK %1 &fileMemory:0 	; if ((int) global fileMemory[0] != 0) 
 		EQUi %1 #0 @.f6
 		MOVp %2 &fileMemory 	; output(global fileMemory)
-		CALL ^output %1 *2
-		CALL &outputLF %1 *1	; outputLF()
+		CALL ^output %1 *2	; expects function(ptr) -> unknown
+		CALL &outputLF %1 *1	; expects outputLF() -> void
 	.f6:	PEEK %1 &displayedPatchingInfo 	; if (global displayedPatchingInfo == FALSE) 
 		NEQi %1 #FALSE @.f8
 		POKE &displayedPatchingInfo #TRUE 	; global displayedPatchingInfo = TRUE
 		MOVp %2 &.s_Ifyous4e3 	; outputLine("If you save the Permut8 Program Bank this firmware code will be included.")
-		CALL &outputLine %1 *2
+		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void
 		MOVp %2 &.s_Ifyoum4e4 	; outputLine("If you modify the .gazl file, the firmware will auto-update until GUI is closed.")
-		CALL &outputLine %1 *2
+		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void
 	.f8:	NOOP
 	.e5:	MOVp %2 &lastPatch 	; strcpy(global lastPatch, p)
 		MOVp %3 $p 
-		CALL &strcpy %1 *3
+		CALL &strcpy %1 *3	; expects strcpy(ptr, ptr) -> ptr
 		MOVp %2 &lastConfig 	; strcpy(global lastConfig, config)
 		MOVp %3 $config 
-		CALL &strcpy %1 *3
+		CALL &strcpy %1 *3	; expects strcpy(ptr, ptr) -> ptr
 		GOTO @found  	; goto found
 	.f3:	FORi $i %0 @.l2	; }
 	.e1:	MOVp %1 &.s_Firmwa4e5 	; outputLine("Firmware not found.")
-		CALL &outputLine %0 *2
-		CALL &list %0 *1	; list()
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
+		CALL &list %0 *1	; expects list() -> void
 	found:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-repatch:	FUNC
 		PARA *1
+repatch:	FUNC	; signature func repatch() -> void
 ;-----------------------------------------------------------------------------
 		PEEK %0 &lastPatch:0 	; if ((int)global lastPatch[0] == 0) help()
 		NEQi %0 #0 @.f0
-		CALL &help %0 *1	; help()
+		CALL &help %0 *1	; expects help() -> void
 		GOTO @.e1  
 	.f0:	MOVp %1 &lastPatch 	; patch(global lastPatch, global lastConfig)
 		MOVp %2 &lastConfig 
-		CALL &patch %0 *3
+		CALL &patch %0 *3	; expects patch(ptr, ptr) -> void
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
 		PARA *1
+main:	FUNC	; signature func main() -> void
 	$s:	LOCA *256
 	$p:	LOCp
 	$c:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Permut4e6 	; output("\nPermut8 firmware patch utility v1.0.\n\n")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
 	.l0:	MOVp %1 &.s_patch4e7 	; output("patch> ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
-		CALL ^input %0 *3
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown
 		ADRL %1 $s *0	; if ((int)stricmp(s, "QUIT") == 0) goto quit
 		MOVp %2 &.s_QUIT4e8 
-		CALL &stricmp %0 *3
+		CALL &stricmp %0 *3	; expects stricmp(ptr, ptr) -> int
 		NEQi %0 #0 @.f1
 		GOTO @quit  	; goto quit
 		GOTO @.l0  
 	.f1:	ADRL %1 $s *0	; if ((int)stricmp(s, "LIST") == 0) list()
 		MOVp %2 &.s_LIST4e9 
-		CALL &stricmp %0 *3
+		CALL &stricmp %0 *3	; expects stricmp(ptr, ptr) -> int
 		NEQi %0 #0 @.f3
-		CALL &list %0 *1	; list()
+		CALL &list %0 *1	; expects list() -> void
 		GOTO @.l0  
 	.f3:	ADRL %1 $s *0	; if ((int)stricmp(s, "RESTORE") == 0) restore()
 		MOVp %2 &.s_RESTOR4ea 
-		CALL &stricmp %0 *3
+		CALL &stricmp %0 *3	; expects stricmp(ptr, ptr) -> int
 		NEQi %0 #0 @.f5
-		CALL &restore %0 *1	; restore()
+		CALL &restore %0 *1	; expects restore() -> void
 		GOTO @.l0  
 	.f5:	NEQi $s:0 #0 @.f7	; if ((int)s[0] == 0) repatch()
-		CALL &repatch %0 *1	; repatch()
+		CALL &repatch %0 *1	; expects repatch() -> void
 		GOTO @.l0  
 	.f7:	ADRL %1 $s *0	; if ((int)stricmp(s, "HELP") == 0) help()
 		MOVp %2 &.s_HELP4eb 
-		CALL &stricmp %0 *3
+		CALL &stricmp %0 *3	; expects stricmp(ptr, ptr) -> int
 		NEQi %0 #0 @.f9
-		CALL &help %0 *1	; help()
+		CALL &help %0 *1	; expects help() -> void
 		GOTO @.l0  
 	.f9:	ADRL $p $s *0	; p = s
 	.l11:	PEEK $c $p 	; while ((c = (int)*p) != 0 && c != ' ') p = p + 1
@@ -397,7 +405,7 @@ main:	FUNC
 		GOTO @.l14  	; }
 	.e15:	ADRL %1 $s *0	; patch(s, p)
 		MOVp %2 $p 
-		CALL &patch %0 *3
+		CALL &patch %0 *3	; expects patch(ptr, ptr) -> void
 	.e10:	NOOP
 	.e8:	NOOP
 	.e6:	NOOP

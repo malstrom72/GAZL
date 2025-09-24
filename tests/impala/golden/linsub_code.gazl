@@ -1,32 +1,38 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int
+FALSE:	! DEFi #0	; signature const FALSE : int
+TRUE:	! DEFi #1	; signature const TRUE : int
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown
 	DATA &.s_4d2 &.s_SUB16B4d3 &.s_SUB16B4d3:53
 	DATA &.s_SUB16B4d3:53 &.s_SUB16B4d3:53 &.s_SUB16B4d3:53
 	DATA &.s_SUB16B4d3:53 &.s_SUB16B4d3:53
+; signature extern native abort() -> unknown
+; signature extern native trace() -> unknown
+; signature extern native yield() -> unknown
+; signature extern native write() -> unknown
+; signature extern native read() -> unknown
 	GLOB *1
-clock:	DATi #0
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown
 	GLOB *1
-instance:	DATi #0
-positions:	GLOB *2
+instance:	DATi #0	; signature global instance : int
+positions:	GLOB *2	; signature array positions[2] : unknown
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>
+updateMask:	DATi <A>	; signature readonly updateMask : int
 	GLOB *1
-subTerm:	DATi #0
+subTerm:	DATi #0	; signature global subTerm : int
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
 		PARA *1
+update:	FUNC	; signature func update() -> void
 	$x:	LOCi
 	$y:	LOCi
 ;-----------------------------------------------------------------------------
@@ -48,8 +54,8 @@ update:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-operate1:	FUNC
 	$r:	OUTi
+operate1:	FUNC	; signature func operate1(int a) -> int
 	$a:	INPi
 	$x:	LOCi
 ;-----------------------------------------------------------------------------

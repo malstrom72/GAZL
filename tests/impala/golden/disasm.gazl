@@ -1,15 +1,29 @@
 ; Compiled with Impala version 1.0
 
-FILE_BUFFER_SIZE:	! DEFi #8192
-TERMINAL_COLUMNS:	! DEFi #80
-TERMINAL_ROWS:	! DEFi #25
-TERMINAL_TAB_SIZE:	! DEFi #4
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
+; signatures version=1
+FILE_BUFFER_SIZE:	! DEFi #8192	; signature const FILE_BUFFER_SIZE : int
+TERMINAL_COLUMNS:	! DEFi #80	; signature const TERMINAL_COLUMNS : int
+TERMINAL_ROWS:	! DEFi #25	; signature const TERMINAL_ROWS : int
+TERMINAL_TAB_SIZE:	! DEFi #4	; signature const TERMINAL_TAB_SIZE : int
+; signature extern native output() -> unknown
+; signature extern native input() -> unknown
+; signature extern native inputEOF() -> unknown
+; signature extern native launch() -> unknown
+; signature extern native loadText() -> unknown
+; signature extern native sleep() -> unknown
+; signature extern array FILE_TYPE_STRINGS[] : unknown
+; signature extern global fileCount : int
+; signature extern array FILES[] : unknown
+; signature extern func strcmp() -> unknown
+; signature extern func findFile() -> unknown
+; signature extern func lower() -> unknown
+; signature extern func initFilesIfNecessary() -> unknown
+FALSE:	! DEFi #0	; signature const FALSE : int
+TRUE:	! DEFi #1	; signature const TRUE : int
 
 ;-----------------------------------------------------------------------------
-strlen:	FUNC
 	$l:	OUTi
+strlen:	FUNC	; signature func strlen(ptr s) -> int
 	$s:	INPp
 	$a:	LOCp
 ;-----------------------------------------------------------------------------
@@ -23,8 +37,8 @@ strlen:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-strcat:	FUNC
 	$r:	OUTp
+strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr
 	$d:	INPp
 	$s:	INPp
 	$a:	LOCp
@@ -47,22 +61,22 @@ strcat:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-outputLine:	FUNC
 		PARA *1
+outputLine:	FUNC	; signature func outputLine(ptr s) -> void
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; output(s)
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
 		MOVp %1 &.s_4d2 	; output("\n")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
 		RETU   	; }
 
 	! ADDi <A> #FILE_BUFFER_SIZE #1
-fileBuffer:	GLOB *<A>
+fileBuffer:	GLOB *<A>	; signature array fileBuffer[<A>] : unknown
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
 		PARA *1
+main:	FUNC	; signature func main() -> void
 	$s:	LOCA *256
 	$type:	LOCi
 	$offset:	LOCi
@@ -77,23 +91,23 @@ main:	FUNC
 	$i:	LOCi
 	$yn:	LOCA *64
 ;-----------------------------------------------------------------------------
-		CALL &initFilesIfNecessary %0 *1	; initFilesIfNecessary()
+		CALL &initFilesIfNecessary %0 *1	; expects initFilesIfNecessary() -> unknown
 		MOVp %1 &.s_GAZLdi4d3 	; outputLine("GAZL disassembler v2.1.")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		MOVp %1 &.s_Disass4d4 	; output("Disassemble file: ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
-		CALL ^input %0 *3
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown
 		EQUi $s:0 #0 @.f0	; if ((int)s[0] != 0) 
 		ADRL %1 $s *0	; lower(s)
-		CALL &lower %0 *2
+		CALL &lower %0 *2	; expects lower(ptr) -> unknown
 		ADRL %1 $s *0	; if ((file = (int)findFile(s)) < 0) outputLine("File not found")
-		CALL &findFile %0 *2
+		CALL &findFile %0 *2	; expects findFile(ptr) -> unknown
 		MOVi $file %0 
 		GEQi %0 #0 @.f1
 		MOVp %1 &.s_Fileno4d5 	; outputLine("File not found")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		GOTO @.e2  
 	.f1:	MULi %0 $file #FILE_FIELD_COUNT	; if ((type = (int)global FILES[file * FILE_FIELD_COUNT + FILE_FIELD_TYPE]) != FILE_TYPE_EXE
 		ADDi %0 %0 #FILE_FIELD_TYPE
@@ -102,21 +116,21 @@ main:	FUNC
 		EQUi $type #FILE_TYPE_SYS @.f4
 		EQUi $type #FILE_TYPE_BIN @.f4
 		MOVp %1 &.s_Fileis4d6 	; outputLine("File is not GAZL format")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		GOTO @.e5  	; } else if ((int)strcmp(s, "permut8") == 0) 
 	.f4:	ADRL %1 $s *0	; if ((int)strcmp(s, "permut8") == 0) 
 		MOVp %2 &.s_permut4d7 
-		CALL &strcmp %0 *3
+		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> unknown
 		NEQi %0 #0 @.f6
 		MOVp %1 &.s_Protec4d8 	; outputLine("Protected file")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		GOTO @.e7  	; } else 
 	.f6:	MOVp $p &.s_zl4d9 	; p = ".zl"
 		NEQi $type #FILE_TYPE_BIN @.f8	; if (type == FILE_TYPE_BIN) p = ".gazl"
 		MOVp $p &.s_gazl4da 	; p = ".gazl"
 	.f8:	ADRL %1 $s *0	; strcat(s, p)
 		MOVp %2 $p 
-		CALL &strcat %0 *3
+		CALL &strcat %0 *3	; expects strcat(ptr, ptr) -> ptr
 		MOVi $offset #0 	; offset = 0
 		MOVi $row #0 	; row = 0
 		MOVi $col #0 	; col = 0
@@ -124,11 +138,11 @@ main:	FUNC
 		MOVi %2 $offset 
 		MOVi %3 #FILE_BUFFER_SIZE 
 		MOVp %4 &fileBuffer 
-		CALL ^loadText %0 *5
+		CALL ^loadText %0 *5	; expects function(ptr, int, int, ptr) -> unknown
 		MOVi $readCount %0 
 		GEQi $readCount #0 @.f10	; if (readCount < 0) 
 		MOVp %1 &.s_Reader4db 	; outputLine("Read error")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 		GOTO @stopIt  	; goto stopIt
 		GOTO @.e11  	; } else 
 	.f10:	MOVp $p &fileBuffer 	; p = global fileBuffer
@@ -149,14 +163,14 @@ main:	FUNC
 		PEEK $c $p 	; c = (int)*p
 		POKE $p #0 	; *p = 0
 		MOVp %1 $b 	; output(b)
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
 		POKE $p $c 	; (int)*p = c
 		MOVp $b $p 	; b = p
 		MOVp %1 &.s_Morey4dc 	; output("More (y)? ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
 		MOVi %1 #63 	; input(63, yn)
 		ADRL %2 $yn *0
-		CALL ^input %0 *3
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown
 		EQUi $yn:0 #'n' @stopIt	; if ((int)yn[0] == 'n' || (int)yn[0] == 'N') goto stopIt
 		NEQi $yn:0 #'N' @.f19
 		GOTO @stopIt  	; goto stopIt
@@ -165,11 +179,11 @@ main:	FUNC
 		GOTO @.l12  	; }
 	.e13:	POKE $e #0 	; *e = 0
 		MOVp %1 $b 	; output(b)
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown
 		ADDi $offset $offset $readCount	; offset = offset + readCount
 	.e11:	GRTi $readCount #0 @.l9	; } while (readCount > 0)
 		MOVp %1 &.s_Morey4dc:10 	; outputLine("")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void
 	.e7:	NOOP
 	.e5:	NOOP
 	.e2:	NOOP

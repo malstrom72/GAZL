@@ -1,20 +1,26 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int
+FALSE:	! DEFi #0	; signature const FALSE : int
+TRUE:	! DEFi #1	; signature const TRUE : int
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown
 	DATA &.s_4d2 &.s_4d2 &.s_4d2 &.s_ROOMSI4d3 &.s_4d2 &.s_4d2
 	DATA &.s_4d2 &.s_FEEDBA4d4
+; signature extern native abort() -> unknown
+; signature extern native trace() -> unknown
+; signature extern native yield() -> unknown
+; signature extern native write() -> unknown
+; signature extern native read() -> unknown
 	GLOB *1
-clock:	DATi #0
-signal:	GLOB *2
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int
+signal:	GLOB *2	; signature array signal[2] : unknown
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown
 	GLOB *1
-instance:	DATi #0
+instance:	DATi #0	; signature global instance : int
 	CNST *1
-clockFreqLimit:	DATi #88200
+clockFreqLimit:	DATi #88200	; signature readonly clockFreqLimit : int
 	CNST *1
 	! SHLi <A> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
@@ -23,31 +29,31 @@ clockFreqLimit:	DATi #88200
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>
-TAPS_COUNT:	! DEFi #10
-BATCH_SIZE:	! DEFi #32
+updateMask:	DATi <A>	; signature readonly updateMask : int
+TAPS_COUNT:	! DEFi #10	; signature const TAPS_COUNT : int
+BATCH_SIZE:	! DEFi #32	; signature const BATCH_SIZE : int
 	! MULi <A> #BATCH_SIZE #2
-BATCH_SIZE_2:	! DEFi <A>
-T0:	! DEFi #0
-T3:	! DEFi #1
-T5:	! DEFi #2
-T7:	! DEFi #3
-T11:	! DEFi #4
-T13:	! DEFi #5
-TFB:	! DEFi #6
-TL1:	! DEFi #7
-TL2:	! DEFi #8
-TR:	! DEFi #9
+BATCH_SIZE_2:	! DEFi <A>	; signature const BATCH_SIZE_2 : int
+T0:	! DEFi #0	; signature const T0 : int
+T3:	! DEFi #1	; signature const T3 : int
+T5:	! DEFi #2	; signature const T5 : int
+T7:	! DEFi #3	; signature const T7 : int
+T11:	! DEFi #4	; signature const T11 : int
+T13:	! DEFi #5	; signature const T13 : int
+TFB:	! DEFi #6	; signature const TFB : int
+TL1:	! DEFi #7	; signature const TL1 : int
+TL2:	! DEFi #8	; signature const TL2 : int
+TR:	! DEFi #9	; signature const TR : int
 	GLOB *1
-feedback:	DATi #0
+feedback:	DATi #0	; signature global feedback : int
 	GLOB *1
-damping:	DATi #0
-taps:	GLOB *TAPS_COUNT
+damping:	DATi #0	; signature global damping : int
+taps:	GLOB *TAPS_COUNT	; signature array taps[TAPS_COUNT] : unknown
 
 ;-----------------------------------------------------------------------------
-displayBarValue:	FUNC
 	$y:	OUTi
-	$x:	LOCi
+displayBarValue:	FUNC	; signature func displayBarValue(int x) -> int
+	$x:	INPi
 ;-----------------------------------------------------------------------------
 		! SUBi <A> #8 #3	; y = ~(0x7F >> (x >> (8 - 3)))
 		SHRi %0 $x <A>
@@ -57,8 +63,8 @@ displayBarValue:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
 		PARA *1
+update:	FUNC	; signature func update() -> void
 	$params:	LOCA *PARAM_COUNT
 	$taps:	LOCA *TAPS_COUNT
 	$size:	LOCi
@@ -79,16 +85,16 @@ update:	FUNC
 		SHRi %0 %0 #8
 		POKE &damping %0 
 		MOVi %1 $params:OPERAND_1_HIGH_PARAM_INDEX 	; global displayLEDs[0] = (int) displayBarValue((int) params[OPERAND_1_HIGH_PARAM_INDEX])
-		CALL &displayBarValue %0 *2
+		CALL &displayBarValue %0 *2	; expects displayBarValue(int) -> int
 		POKE &displayLEDs:0 %0 
 		MOVi %1 $params:OPERAND_1_LOW_PARAM_INDEX 	; global displayLEDs[1] = (int) displayBarValue((int) params[OPERAND_1_LOW_PARAM_INDEX])
-		CALL &displayBarValue %0 *2
+		CALL &displayBarValue %0 *2	; expects displayBarValue(int) -> int
 		POKE &displayLEDs:1 %0 
 		MOVi %1 $params:OPERAND_2_HIGH_PARAM_INDEX 	; global displayLEDs[2] = (int) displayBarValue((int) params[OPERAND_2_HIGH_PARAM_INDEX])
-		CALL &displayBarValue %0 *2
+		CALL &displayBarValue %0 *2	; expects displayBarValue(int) -> int
 		POKE &displayLEDs:2 %0 
 		MOVi %1 $params:OPERAND_2_LOW_PARAM_INDEX 	; global displayLEDs[3] = (int) displayBarValue((int) params[OPERAND_2_LOW_PARAM_INDEX])
-		CALL &displayBarValue %0 *2
+		CALL &displayBarValue %0 *2	; expects displayBarValue(int) -> int
 		POKE &displayLEDs:3 %0 
 		MOVi $taps:T0 #0 	; taps[T0] = 0
 		ADDi %0 $size #1	; taps[T3] = (size + 1) / 3
@@ -114,8 +120,8 @@ update:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC
 		PARA *1
+process:	FUNC	; signature func process() -> void
 	! MULi <A> #BATCH_SIZE_2 #TAPS_COUNT
 	$offset:	LOCi
 	$i:	LOCi
@@ -167,7 +173,7 @@ process:	FUNC
 		SUBi %1 $offset %1
 		MOVi %2 #BATCH_SIZE 
 		MOVp %3 $p 
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
 		ADDp $p $p #BATCH_SIZE_2	; p = p + BATCH_SIZE_2
 		FORi $i <A> @.l4	; }
 	.e3:	MOVi $bi #0 	; for (bi = 0 to BATCH_SIZE) 
@@ -230,7 +236,7 @@ process:	FUNC
 		SUBi %0 %0 %1
 		POKE &signal:0 %0 
 		POKE &signal:1 $tr 	; global signal[1] = (int) tr
-		CALL ^yield %0 *1	; yield()
+		CALL ^yield %0 *1	; expects function() -> unknown
 		! MULi <A> #T0 #BATCH_SIZE_2	; b[T0 * BATCH_SIZE_2] = t0
 		POKE $b <A> $t0
 		! MULi <A> #T3 #BATCH_SIZE_2	; b[T3 * BATCH_SIZE_2] = t3
@@ -255,7 +261,7 @@ process:	FUNC
 		SUBi %1 $offset %1
 		MOVi %2 #BATCH_SIZE 
 		MOVp %3 $p 
-		CALL ^write %0 *4
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown
 		ADDp $p $p #BATCH_SIZE_2	; p = p + BATCH_SIZE_2
 		FORi $i <A> @.l8	; }
 		GOTO @.l0  	; }

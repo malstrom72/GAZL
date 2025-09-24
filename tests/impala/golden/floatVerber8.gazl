@@ -1,66 +1,72 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int
+FALSE:	! DEFi #0	; signature const FALSE : int
+TRUE:	! DEFi #1	; signature const TRUE : int
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown
 	DATA &.s_sillyr4d2 &.s_sillyr4d2:51 &.s_sillyr4d2:51
 	DATA &.s_ROOMSI4d3 &.s_ROOMSI4d3:53 &.s_ROOMSI4d3:53
 	DATA &.s_ROOMSI4d3:53 &.s_FEEDBA4d4
+; signature extern native abort() -> unknown
+; signature extern native trace() -> unknown
+; signature extern native yield() -> unknown
+; signature extern native read() -> unknown
+; signature extern native write() -> unknown
 	GLOB *1
-left:	DATi #0
+left:	DATi #0	; signature global left : int
 	GLOB *1
-right:	DATi #0
+right:	DATi #0	; signature global right : int
 	GLOB *1
-clock:	DATi #0
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown
 	GLOB *1
-instance:	DATi #0
-AND:	! DEFi #32767
-TAPS_COUNT:	! DEFi #10
-ALLPASS_COUNT:	! DEFi #5
-T0:	! DEFi #0
-T3:	! DEFi #1
-T5:	! DEFi #2
-T7:	! DEFi #3
-T11:	! DEFi #4
-T13:	! DEFi #5
-TFB:	! DEFi #6
-TL1:	! DEFi #7
-TL2:	! DEFi #8
-TR:	! DEFi #9
-ALLPASS_PAIRS_A:	CNST *ALLPASS_COUNT
+instance:	DATi #0	; signature global instance : int
+AND:	! DEFi #32767	; signature const AND : int
+TAPS_COUNT:	! DEFi #10	; signature const TAPS_COUNT : int
+ALLPASS_COUNT:	! DEFi #5	; signature const ALLPASS_COUNT : int
+T0:	! DEFi #0	; signature const T0 : int
+T3:	! DEFi #1	; signature const T3 : int
+T5:	! DEFi #2	; signature const T5 : int
+T7:	! DEFi #3	; signature const T7 : int
+T11:	! DEFi #4	; signature const T11 : int
+T13:	! DEFi #5	; signature const T13 : int
+TFB:	! DEFi #6	; signature const TFB : int
+TL1:	! DEFi #7	; signature const TL1 : int
+TL2:	! DEFi #8	; signature const TL2 : int
+TR:	! DEFi #9	; signature const TR : int
+ALLPASS_PAIRS_A:	CNST *ALLPASS_COUNT	; signature array ALLPASS_PAIRS_A[ALLPASS_COUNT] : unknown
 	DATA #T0 #T0 #T3 #T3 #T5
-ALLPASS_PAIRS_B:	CNST *ALLPASS_COUNT
+ALLPASS_PAIRS_B:	CNST *ALLPASS_COUNT	; signature array ALLPASS_PAIRS_B[ALLPASS_COUNT] : unknown
 	DATA #T3 #T13 #T5 #T11 #T7
 	GLOB *1
-roomSize:	DATi #11579
+roomSize:	DATi #11579	; signature global roomSize : int
 	GLOB *1
-preDelay:	DATi #0
+preDelay:	DATi #0	; signature global preDelay : int
 	GLOB *1
-feedback:	DATf #0.5
+feedback:	DATf #0.5	; signature global feedback : float
 	GLOB *1
-damping:	DATf #1.0
-taps:	GLOB *TAPS_COUNT
+damping:	DATf #1.0	; signature global damping : float
+taps:	GLOB *TAPS_COUNT	; signature array taps[TAPS_COUNT] : unknown
 
 ;-----------------------------------------------------------------------------
-init:	FUNC
 		PARA *1
+init:	FUNC	; signature func init() -> void
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC
 		PARA *1
+reset:	FUNC	; signature func reset() -> void
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
 		PARA *1
+update:	FUNC	; signature func update() -> void
 	$taps:	LOCA *TAPS_COUNT
 	$size:	LOCi
 	$predelay:	LOCi
@@ -102,8 +108,8 @@ update:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC
 		PARA *1
+process:	FUNC	; signature func process() -> void
 	$spinner:	LOCi
 	$in:	LOCf
 	$dI:	LOCf
@@ -128,7 +134,7 @@ process:	FUNC
 		SUBi $index $spinner %0
 		MOVi %1 $index 	; t[i] = itof((int) read(index, 0))
 		MOVi %2 #0 
-		CALL ^read %0 *3
+		CALL ^read %0 *3	; expects function(int, int) -> unknown
 		iTOf %0 %0 #1.0
 		SETL $t $i %0
 		SETL $o $i $index	; o[i] = index
@@ -163,14 +169,14 @@ process:	FUNC
 		MOVi %2 #0 
 		GETL %3 $t $i
 		fTOi %3 %3 #1.0
-		CALL ^write %0 *4
+		CALL ^write %0 *4	; expects function(int, int, int) -> unknown
 		FORi $i <A> @.l6
 	.e5:	SUBf %0 $t:TL1 $t:TL2	; global left = ftoi(((float) t[TL1] - (float) t[TL2]) * 0.75)
 		fTOi %0 %0 #0.75
 		POKE &left %0 
 		fTOi %0 $t:TR #1.0	; global right = ftoi((float) t[TR])
 		POKE &right %0 
-		CALL ^yield %0 *1	; yield()
+		CALL ^yield %0 *1	; expects function() -> unknown
 		GOTO @.l0  	; }
 		RETU   	; }
 

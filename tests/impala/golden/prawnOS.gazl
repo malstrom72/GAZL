@@ -1,9 +1,17 @@
 ; Compiled with Impala version 1.0
 
+; signatures version=1
+; signature extern native print() -> unknown
+; signature extern native printInt() -> unknown
+; signature extern native printLF() -> unknown
+; signature extern native abort() -> unknown
+; signature extern native input() -> unknown
+; signature extern native inputEOF() -> unknown
+; signature extern native launch() -> unknown
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC
 	$d:	OUTi
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -26,30 +34,30 @@ strcmp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
 		PARA *1
+main:	FUNC	; signature func main() -> void
 	$inp:	LOCA *256
 ;-----------------------------------------------------------------------------
 	mainLoop:	MOVp %1 &.s_4d2 	; mainLoop:
-		CALL ^print %0 *2
+		CALL ^print %0 *2	; expects function(ptr) -> unknown
 		MOVi %1 #255 	; input(255, inp)
 		ADRL %2 $inp *0
-		CALL ^input %0 *3
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown
 		ADRL %1 $inp *0	; if ((int)strcmp(inp, "logon") == 0) 
 		MOVp %2 &.s_logon4d3 
-		CALL &strcmp %0 *3
+		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int
 		NEQi %0 #0 @mainLoop
 	.l1:	MOVp %1 &.s_Enteru4d4 	; print("Enter username: ")
-		CALL ^print %0 *2
+		CALL ^print %0 *2	; expects function(ptr) -> unknown
 		MOVi %1 #255 	; input(255, inp)
 		ADRL %2 $inp *0
-		CALL ^input %0 *3
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown
 		ADRL %1 $inp *0	; } while ((int)strcmp(inp, "username") != 0)
 		MOVp %2 &.s_userna4d5 
-		CALL &strcmp %0 *3
+		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int
 		NEQi %0 #0 @.l1
 		MOVp %1 &.s_advent4d6 	; launch("advent")
-		CALL ^launch %0 *2
+		CALL ^launch %0 *2	; expects function(ptr) -> unknown
 		GOTO @mainLoop  	; goto mainLoop
 		RETU   	; }
 

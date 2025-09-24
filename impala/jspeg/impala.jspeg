@@ -185,6 +185,159 @@
     map($$parser.VERBOSE_TYPES,  'i','int','f','float','p','pointer','F','funcptr',
                                  'U','function','N','native','A','array','?','untyped');
 
+    function signatureParamCategory(type) {
+        switch (type) {
+            case 'i': return 'int';
+            case 'f': return 'float';
+            case 'p': return 'ptr';
+            case 'F': return 'funcptr';
+            default:  return 'unknown';
+        }
+    }
+
+    function signatureReturnCategory(type, known) {
+        switch (type) {
+            case 'i': return 'int';
+            case 'f': return 'float';
+            case 'p': return 'ptr';
+            case 'F': return 'funcptr';
+            case '?': return (known ? 'void' : 'unknown');
+            default:  return 'unknown';
+        }
+    }
+
+    function renderParamList(params) {
+        if (!params || params.length === 0) {
+            return '';
+        }
+
+        var parts = [];
+        for (var idx = 0; idx < params.length; ++idx) {
+            var param = params[idx] || {};
+            var typeName = signatureParamCategory(param.type);
+            var name = param.name;
+            if (!name) {
+                name = 'arg' + idx;
+            }
+            parts.push(typeName + ' ' + name);
+        }
+        return parts.join(', ');
+    }
+
+    function renderTypeList(typeCodes) {
+        if (!typeCodes || typeCodes.length === 0) {
+            return '';
+        }
+
+        var parts = [];
+        for (var i = 0; i < typeCodes.length; ++i) {
+            parts.push(signatureParamCategory(typeCodes[i]));
+        }
+        return parts.join(', ');
+    }
+
+    $$parser.formatFunctionSignatureComment = function (name, signature, role) {
+        if (!signature) {
+            return undefined;
+        }
+
+        var paramsText = renderParamList(signature.params);
+        var hasReturn = (signature && signature.returns !== undefined);
+        var returnType = signatureReturnCategory(signature.returns, hasReturn);
+        var kind = (role ? role : 'func');
+
+        return 'signature ' + kind + ' ' + name + '(' + paramsText + ') -> ' + returnType;
+    };
+
+    $$parser.formatCallExpectationComment = function (name, signature, actualTypes, callResultType) {
+        var label = (name || 'function');
+        var paramsText;
+        var hasSignature = !!(signature && signature.params);
+
+        if (hasSignature) {
+            var extracted = [];
+            for (var i = 0; i < signature.params.length; ++i) {
+                extracted.push(signatureParamCategory(signature.params[i].type));
+            }
+            paramsText = extracted.join(', ');
+        } else {
+            paramsText = renderTypeList(actualTypes);
+        }
+
+        var returnCode;
+        if (signature && signature.returns !== undefined) {
+            returnCode = signature.returns;
+        } else {
+            returnCode = callResultType;
+        }
+        var returnType = signatureReturnCategory(returnCode, !!signature);
+
+        return 'expects ' + label + '(' + paramsText + ') -> ' + returnType;
+    };
+
+    $$parser.emitFunctionSignature = function (name) {
+        var entry = $$parser.symbols.functions[name];
+        if (!entry || entry.kind === 'FUNC') {
+            return;
+        }
+
+        var comment = $$parser.formatFunctionSignatureComment(name, entry.signature);
+
+        var entryType = (entry.type !== undefined ? entry.type : 'U');
+
+        $$parser.declare('FUNC',
+                         'functions',
+                         name,
+                         entryType,
+                         true,
+                         undefined,
+                         entry.sourceCode,
+                         entry.sourceOffset,
+                         comment);
+    };
+
+    function signatureRoleForSection(section) {
+        switch (section) {
+            case 'CNST': return 'readonly';
+            case 'TEMP': return 'temporary';
+            default:     return 'global';
+        }
+    }
+
+    $$parser.formatGlobalSignatureComment = function (section, name, type, size, flavor) {
+        if (!name) {
+            return undefined;
+        }
+
+        var prefix = (flavor ? flavor + ' ' : '');
+
+        if (type === 'A') {
+            var extent = (size !== undefined ? '[' + size + ']' : '[]');
+            return 'signature ' + prefix + 'array ' + name + extent + ' : unknown';
+        }
+
+        return 'signature ' + prefix + signatureRoleForSection(section) + ' ' +
+               name + ' : ' + signatureParamCategory(type);
+    };
+
+    function emitStandaloneSignatureComment(comment) {
+        if (!comment) {
+            return;
+        }
+
+        if (typeof output === 'function') {
+            output('; ' + comment);
+        }
+    }
+
+    $$parser.formatConstSignatureComment = function (name, type) {
+        if (!name) {
+            return undefined;
+        }
+
+        return 'signature const ' + name + ' : ' + signatureParamCategory(type);
+    };
+
     /* 4  label & metacode helpers */
     $$parser.newLabel = function (prefix) {
         var tag = (prefix === undefined ? '' : String(prefix));
@@ -1003,7 +1156,7 @@
      *  Symbol declaration helper
      * -------------------------------------------------------- */
 
-    function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset) {
+    function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment) {
         /* emit data / flush pending code */
         if (kind !== undefined) {
             $$parser.flushMetaCode('');
@@ -1015,6 +1168,7 @@
                 line += '\t' +
                         replace(kind, '?', $$parser.TYPE_SUFFIXES[type] || '');
                 if (value !== undefined) line += ' ' + value;
+                if (comment)             line += '\t; ' + comment;
 
                 output( line );
             }
@@ -1045,7 +1199,14 @@
 
             /* store / update */
             if (!table) $$parser.symbols[scope] = table = {};
-            table[name] = { type:type, readonly:!!readonly, kind:kind };
+            table[name] = {
+                type: type,
+                readonly: !!readonly,
+                kind: kind,
+                signature: prev && prev.signature,
+                sourceCode: sourceCode,
+                sourceOffset: sourceOffset
+            };
         }
     };
 
@@ -1433,6 +1594,7 @@
         var LF = '\n';
         output('; Compiled with Impala version ' +
                $$parser.IMPALA_VERSION + LF);
+        output('; signatures version=1');
     };
 
     $$parser.end = function () {
@@ -1476,14 +1638,25 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
 
                                                                          /* declare the function symbol */
                                                                          $$parser.declare(
-                                                                             'FUNC',           // kind
-                                                                             'functions',      // scope
-                                                                             $id,              // name
-                                                                             'U',              // type
-                                                                             true,             // read-only
-                                                                             undefined,        // no init
+                                                                             undefined,
+                                                                             'functions',
+                                                                             $id,
+                                                                             'U',
+                                                                             true,
+                                                                             undefined,
                                                                              $$s, $$i
                                                                          );
+                                                                         var entry = $$parser.symbols.functions[$id];
+                                                                         if (entry) {
+                                                                             if (!entry.signature) {
+                                                                                 entry.signature = {};
+                                                                             }
+                                                                             entry.signature.params = [];
+                                                                             entry.signature.returns = '?';
+                                                                             entry.signature.returnName = undefined;
+                                                                             entry.signature.sourceCode = $$s;
+                                                                             entry.signature.sourceOffset = $$i;
+                                                                         }
                                                                      }
                 inp:ArgsDecl ')'_ 
                 (
@@ -1496,6 +1669,11 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                              ($out.size !== undefined ? '*' + $out.size : undefined),
                                                                              $$s, $$i
                                                                          );
+                                                                         var entry = $$parser.symbols.functions[$id];
+                                                                         if (entry && entry.signature) {
+                                                                             entry.signature.returns = $out.type;
+                                                                             entry.signature.returnName = $out.name;
+                                                                         }
                                                                      }
                   /
                                                                      {
@@ -1506,9 +1684,27 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                              false, '*1',
                                                                              $$s, $$i
                                                                          );
+                                                                         var entry = $$parser.symbols.functions[$id];
+                                                                         if (entry && entry.signature) {
+                                                                             entry.signature.returns = '?';
+                                                                             entry.signature.returnName = undefined;
+                                                                         }
                                                                      }
                 )                                                     {
                                                                          /* declare input parameters */
+                                                                         var entry = $$parser.symbols.functions[$id];
+                                                                         if (entry && entry.signature) {
+                                                                             entry.signature.params = [];
+                                                                             for (var idx = 0; idx < $inp.n; ++idx) {
+                                                                                 var param = $inp[idx];
+                                                                                 entry.signature.params.push({
+                                                                                     type: param.type,
+                                                                                     name: param.name,
+                                                                                     size: param.size
+                                                                                 });
+                                                                             }
+                                                                         }
+                                                                         $$parser.emitFunctionSignature($id);
                                                                          iterate($inp, function (p) {
                                                                              $$parser.declare(
                                                                                  'INP?', 'locals',
@@ -1545,7 +1741,6 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
 
                                                                          output('');
                                                                      }
-
 ExternDecl  <-  EXTERN _                                              { $$.scope = 'globals'; }
                 (
                     (   FUNCTION                                      { $$.type  = 'U';  $$.scope = 'functions'; }
@@ -1563,6 +1758,47 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              '?',
                                                                              $$s, $$i
                                                                          );
+                                                                         if ($$.scope === 'functions') {
+                                                                             var entry = $$parser.symbols.functions[$$.name];
+                                                                             var signature = entry && entry.signature;
+
+                                                                             if (entry) {
+                                                                                 if (!signature) {
+                                                                                     signature = entry.signature = {};
+                                                                                 }
+                                                                                 if (signature.sourceCode === undefined) {
+                                                                                     signature.sourceCode = $$s;
+                                                                                     signature.sourceOffset = $$i;
+                                                                                 }
+                                                                             }
+
+                                                                             var role = ($$.type === 'N' ? 'extern native' : 'extern func');
+                                                                             var prototypeComment = $$parser.formatFunctionSignatureComment(
+                                                                                 $$.name,
+                                                                                 signature,
+                                                                                 role
+                                                                             );
+
+                                                                             if (!prototypeComment) {
+                                                                                 prototypeComment = $$parser.formatFunctionSignatureComment(
+                                                                                     $$.name,
+                                                                                     { params: [], returns: undefined },
+                                                                                     role
+                                                                                 );
+                                                                             }
+
+                                                                             emitStandaloneSignatureComment(prototypeComment);
+                                                                         } else if ($$.scope === 'globals') {
+                                                                             emitStandaloneSignatureComment(
+                                                                                 $$parser.formatGlobalSignatureComment(
+                                                                                     'GLOB',
+                                                                                     $$.name,
+                                                                                     $$.type,
+                                                                                     $$.size,
+                                                                                     'extern'
+                                                                                 )
+                                                                             );
+                                                                         }
                                                                      }
 
 ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
@@ -1576,7 +1812,8 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                                  '! DEF?', 'defines',
                                                                                  $id, $t, true,
                                                                                  $$parser.makeConstant($x, $t, $$s, $$i),
-                                                                                 $$s, $$i
+                                                                                 $$s, $$i,
+                                                                                 $$parser.formatConstSignatureComment($id, $t)
                                                                              );
                                                                          }
                  /                                                     {
@@ -1614,7 +1851,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                  $v.type,
                                                                                  ($section === 'CNST'),
                                                                                  $init,
-                                                                                 $$s, $$i
+                                                                                 $$s, $$i,
+                                                                                 $$parser.formatGlobalSignatureComment($section, $v.name, $v.type)
                                                                              );
                                                                          }
 
@@ -1626,7 +1864,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                  'A',
                                                                                  ($section === 'CNST'),
                                                                                  '*' + $a.size,
-                                                                                 $$s, $$i
+                                                                                 $$s, $$i,
+                                                                                 $$parser.formatGlobalSignatureComment($section, $a.name, 'A', $a.size)
                                                                              );
                                                                          }
                          ( '=' _ d:InitList )?
@@ -1795,15 +2034,78 @@ Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry)
 FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.count = 0;
                                                        $$.base  = $$parser.borrowForCall();
+                                                       $$.types = [];
                                                     } }
                 (Argument (','_ Argument)*)? ')'_  { if (!$$parser.dry) {
                                                        var callee = metaSlot($$);
+                                                       var callResultType = '?';
+                                                       var signature = null;
+                                                       var calleeName = null;
 
                                                        if (span(callee.type, 'FN') !== 1) {
                                                            $$parser.typeError(
                                                                'Invalid type for function call ({$type1})',
                                                                $$s, $$i, callee.type
                                                            );
+                                                       }
+
+                                                       if (callee.operator === ':=' &&
+                                                           callee.operands[1] &&
+                                                           callee.operands[1][0] === '&') {
+                                                           calleeName = callee.operands[1].substr(1);
+                                                           var entry = $$parser.symbols.functions[calleeName];
+                                                           if (entry && entry.kind === 'FUNC' && entry.signature) {
+                                                               signature = entry.signature;
+                                                           }
+                                                       }
+
+                                                       if (signature) {
+                                                           var params = signature.params || [];
+                                                           var actualCount = ($$.types ? $$.types.length : 0);
+                                                           var expectedCount = params.length;
+                                                           var label = (calleeName || 'function');
+
+                                                           if (actualCount !== expectedCount) {
+                                                               $$parser.fail(
+                                                                   'Invalid argument count when calling ' + label +
+                                                                   ' (expected ' + expectedCount + ', got ' + actualCount + ')',
+                                                                   $$s, $$i
+                                                               );
+                                                           }
+
+                                                           for (var argIdx = 0; argIdx < expectedCount; ++argIdx) {
+                                                               var expected = params[argIdx].type;
+                                                               var actual = $$.types[argIdx];
+                                                               if (actual === undefined) {
+                                                                   actual = '?';
+                                                               }
+                                                               if (actual === '?' || expected === undefined) {
+                                                                   continue;
+                                                               }
+                                                               if (actual !== expected) {
+                                                                   $$parser.typeError(
+                                                                       'Argument type mismatch when calling ' + label +
+                                                                           ' ({$type1} vs expected {$type2})',
+                                                                       $$s, $$i,
+                                                                       actual,
+                                                                       expected
+                                                                   );
+                                                               }
+                                                           }
+
+                                                           if (signature.returns !== undefined) {
+                                                               callResultType = signature.returns;
+                                                           }
+                                                       }
+
+                                                       var callComment = $$parser.formatCallExpectationComment(
+                                                           calleeName,
+                                                           signature,
+                                                           $$.types,
+                                                           callResultType
+                                                       );
+                                                       if (callComment) {
+                                                           $$parser.emit(';', undefined, callComment, undefined, undefined);
                                                        }
 
                                                        var func = $$parser.makeRValue(callee, '&^$%');
@@ -1817,7 +2119,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            $$parser.returnBack('%' + ($$.base + $$.count + 1));
                                                        }
 
-                                                       $$parser.makeMeta(callee, ':=', '?',
+                                                       $$parser.makeMeta(callee, ':=', callResultType,
                                                                          undefined,
                                                                          '%' + $$.base,
                                                                          undefined);
@@ -1825,6 +2127,10 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
 
 Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        ++$$.count;
+                                                       var meta = metaSlot($a);
+                                                       if ($$.types) {
+                                                           $$.types.push(meta.type);
+                                                       }
                                                        $$parser.makeArgValue($a, $$.base + $$.count);
                                                     } }
 

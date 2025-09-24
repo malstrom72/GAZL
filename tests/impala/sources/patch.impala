@@ -81,7 +81,7 @@ locals pointer p, int c
 	}
 }
 
-function outputLF(pointer s)
+function outputLF()
 {
 	output("\n");
 }

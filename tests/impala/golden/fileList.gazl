@@ -1,24 +1,26 @@
 ; Compiled with Impala version 1.0
 
-FILE_TYPE_COUNT:	! DEFi #4
-FILE_TYPE_EXE:	! DEFi #0
-FILE_TYPE_SYS:	! DEFi #1
-FILE_TYPE_TXT:	! DEFi #2
-FILE_TYPE_BIN:	! DEFi #3
-FILE_TYPE_STRINGS:	CNST *FILE_TYPE_COUNT
+; signatures version=1
+; signature extern native findFirmwarePatch() -> unknown
+FILE_TYPE_COUNT:	! DEFi #4	; signature const FILE_TYPE_COUNT : int
+FILE_TYPE_EXE:	! DEFi #0	; signature const FILE_TYPE_EXE : int
+FILE_TYPE_SYS:	! DEFi #1	; signature const FILE_TYPE_SYS : int
+FILE_TYPE_TXT:	! DEFi #2	; signature const FILE_TYPE_TXT : int
+FILE_TYPE_BIN:	! DEFi #3	; signature const FILE_TYPE_BIN : int
+FILE_TYPE_STRINGS:	CNST *FILE_TYPE_COUNT	; signature array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] : unknown
 	DATA &.s_exe4d2 &.s_sys4d3 &.s_txt4d4 &.s_bin4d5
-FILE_FIELD_NAME:	! DEFi #0
-FILE_FIELD_TYPE:	! DEFi #1
-FILE_FIELD_SIZE:	! DEFi #2
-FILE_FIELD_DATE:	! DEFi #3
-FILE_FIELD_COUNT:	! DEFi #4
-MAX_FILE_COUNT:	! DEFi #100
-MAX_FILE_NAME_LENGTH:	! DEFi #31
-BUILT_IN_FILE_COUNT:	! DEFi #14
+FILE_FIELD_NAME:	! DEFi #0	; signature const FILE_FIELD_NAME : int
+FILE_FIELD_TYPE:	! DEFi #1	; signature const FILE_FIELD_TYPE : int
+FILE_FIELD_SIZE:	! DEFi #2	; signature const FILE_FIELD_SIZE : int
+FILE_FIELD_DATE:	! DEFi #3	; signature const FILE_FIELD_DATE : int
+FILE_FIELD_COUNT:	! DEFi #4	; signature const FILE_FIELD_COUNT : int
+MAX_FILE_COUNT:	! DEFi #100	; signature const MAX_FILE_COUNT : int
+MAX_FILE_NAME_LENGTH:	! DEFi #31	; signature const MAX_FILE_NAME_LENGTH : int
+BUILT_IN_FILE_COUNT:	! DEFi #14	; signature const BUILT_IN_FILE_COUNT : int
 	GLOB *1
-fileCount:	DATi #BUILT_IN_FILE_COUNT
+fileCount:	DATi #BUILT_IN_FILE_COUNT	; signature global fileCount : int
 	! MULi <A> #MAX_FILE_COUNT #FILE_FIELD_COUNT
-FILES:	GLOB *<A>
+FILES:	GLOB *<A>	; signature array FILES[<A>] : unknown
 	DATA &.s_about4d6 #FILE_TYPE_TXT #2 &.s_1113844d7
 	DATA &.s_advent4d8 #FILE_TYPE_EXE #91 &.s_221784d9
 	DATA &.s_blupri4da #FILE_TYPE_TXT #2 &.s_65794db
@@ -35,15 +37,15 @@ FILES:	GLOB *<A>
 	DATA &.s_versio4ef #FILE_TYPE_TXT #1 &.s_1113844d7
 	! ADDi <A> #MAX_FILE_NAME_LENGTH #1
 	! MULi <A> #MAX_FILE_COUNT <A>
-FILE_NAMES:	GLOB *<A>
+FILE_NAMES:	GLOB *<A>	; signature array FILE_NAMES[<A>] : unknown
 	! MULi <A> #MAX_FILE_COUNT #9
-FILE_DATES:	GLOB *<A>
+FILE_DATES:	GLOB *<A>	; signature array FILE_DATES[<A>] : unknown
 	GLOB *1
-filesAreInited:	DATi #0
+filesAreInited:	DATi #0	; signature global filesAreInited : int
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC
 	$d:	OUTi
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -64,8 +66,8 @@ strcmp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-sortFiles:	FUNC
 		PARA *1
+sortFiles:	FUNC	; signature func sortFiles() -> void
 	$i:	LOCi
 	$j:	LOCi
 	$minJ:	LOCi
@@ -90,7 +92,7 @@ sortFiles:	FUNC
 		PEEK $s &FILES %3
 		MOVp %3 $s 
 		MOVp %4 $minS 
-		CALL &strcmp %2 *3
+		CALL &strcmp %2 *3	; expects strcmp(ptr, ptr) -> int
 		GEQi %2 #0 @.f4
 		MOVi $minJ $j 	; minJ = j
 		MOVp $minS $s 	; minS = s
@@ -109,8 +111,8 @@ sortFiles:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-initFilesIfNecessary:	FUNC
 		PARA *1
+initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void
 	$index:	LOCi
 	$size:	LOCi
 	$filePointer:	LOCp
@@ -134,7 +136,7 @@ initFilesIfNecessary:	FUNC
 		MOVp %3 $namePointer 
 		ADRL %4 $size *0
 		MOVp %5 $datePointer 
-		CALL ^findFirmwarePatch %0 *6
+		CALL ^findFirmwarePatch %0 *6	; expects function(int, int, ptr, ptr, ptr) -> unknown
 		NEQi %0 #1 @.e3
 		GEQi $index #MAX_FILE_COUNT @.l2	; if (index < MAX_FILE_COUNT) 
 		POKE $filePointer #FILE_FIELD_NAME $namePointer	; filePointer[FILE_FIELD_NAME] = namePointer
@@ -169,17 +171,17 @@ initFilesIfNecessary:	FUNC
 	.a7:	GOTO @.l2  	; }
 	.e3:	ADDi %0 #BUILT_IN_FILE_COUNT $index	; global fileCount = BUILT_IN_FILE_COUNT + index
 		POKE &fileCount %0 
-		CALL &sortFiles %0 *1	; sortFiles()
+		CALL &sortFiles %0 *1	; expects sortFiles() -> void
 		POKE &filesAreInited #1 	; global filesAreInited = 1
 	.f0:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-findFile:	FUNC
 	$file:	OUTi
+findFile:	FUNC	; signature func findFile(ptr s0) -> int
 	$s0:	INPp
 ;-----------------------------------------------------------------------------
-		CALL &initFilesIfNecessary %0 *1	; initFilesIfNecessary()
+		CALL &initFilesIfNecessary %0 *1	; expects initFilesIfNecessary() -> void
 		MOVi $file #0 	; for (file = 0 to global fileCount)
 		PEEK %0 &fileCount 
 		GEQi #0 %0 @.e0
@@ -187,7 +189,7 @@ findFile:	FUNC
 		MULi %3 $file #FILE_FIELD_COUNT
 		ADDi %3 %3 #FILE_FIELD_NAME
 		PEEK %3 &FILES %3
-		CALL &strcmp %1 *3
+		CALL &strcmp %1 *3	; expects strcmp(ptr, ptr) -> int
 		NEQi %1 #0 @.f2
 		GOTO @found  	; goto found
 	.f2:	FORi $file %0 @.l1
@@ -196,8 +198,8 @@ findFile:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-lower:	FUNC
 		PARA *1
+lower:	FUNC	; signature func lower(ptr s) -> void
 	$s:	INPp
 	$p:	LOCp
 	$c:	LOCi

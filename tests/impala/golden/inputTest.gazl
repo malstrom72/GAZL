@@ -1,22 +1,27 @@
 ; Compiled with Impala version 1.0
 
+; signatures version=1
+; signature extern native print() -> unknown
+; signature extern native printLF() -> unknown
+; signature extern native input() -> unknown
+; signature extern native printInt() -> unknown
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
 		PARA *1
+main:	FUNC	; signature func main() -> void
 	$buffer:	LOCA *1024
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_HEJ4d2 	; print("HEJ")
-		CALL ^print %0 *2
-		CALL ^printLF %0 *1	; printLF()
+		CALL ^print %0 *2	; expects function(ptr) -> unknown
+		CALL ^printLF %0 *1	; expects function() -> unknown
 		MOVi %2 #10 	; printInt((int) input(10, buffer))
 		ADRL %3 $buffer *0
-		CALL ^input %1 *3
-		CALL ^printInt %0 *2
-		CALL ^printLF %0 *1	; printLF()
+		CALL ^input %1 *3	; expects function(int, ptr) -> unknown
+		CALL ^printInt %0 *2	; expects function(int) -> unknown
+		CALL ^printLF %0 *1	; expects function() -> unknown
 		ADRL %1 $buffer *0	; print(buffer)
-		CALL ^print %0 *2
-		CALL ^printLF %0 *1	; printLF()
+		CALL ^print %0 *2	; expects function(ptr) -> unknown
+		CALL ^printLF %0 *1	; expects function() -> unknown
 		RETU   	; }
 
 .s_HEJ4d2:	CNST *4

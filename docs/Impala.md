@@ -122,8 +122,7 @@ locals int i, array mydata[TEST_SIZE]
                 mydata[i] = myrand()
 }
 ```
-Function arguments and return values are untyped. Pointers and arrays carry no compile-time type either, so casts are common. A side effect of this simplicity is that external functions require no prototypes and multiple Impala sources can be linked just by concatenating their assembled .gazl output.
-Casting does not convert between ints and floats; use itof() or ftoi() for that.
+Function arguments and return values are untyped. Pointers and arrays carry no compile-time type either, so casts are common. A side effect of this simplicity is that external functions require no prototypes and multiple Impala sources can be linked just by concatenating their assembled .gazl output. When you enable signature metadata (see below) the compiler records those prototype shapes in comments without changing the generated instructions, so legacy assemblers continue to accept the files. Casting does not convert between ints and floats; use itof() or ftoi() for that.
 
 The demo ends with a simple `main`:
 
@@ -187,6 +186,41 @@ and shipped as `.pika` files under `impala/`:
 `BuildImpala` scripts then call `PikaCmd impala.pika rebuild` to create
 `impalaCompiler.pika` before copying all required files to `output/` for
 convenient use.
+
+### Signature metadata and validation
+
+The compiler can emit human-readable signature comments alongside the
+`.gazl` instructions it produces. Each definition, global, and call site
+is annotated with its expected `{int, float, ptr, funcptr, void}`
+categories so cross-unit mismatches can be caught after concatenating
+multiple files. Functions that omit an explicit `returns` clause map the
+compiler's implicit `?` type to `void` in the comment stream, keeping the
+metadata aligned with the language's behaviour.
+
+```gazl
+; signatures version=1
+FUNC showoff         ; signature func showoff(ptr text) -> void
+LOC demoFloat        ; signature global demoFloat : float
+CALL showoff         ; expects showoff(ptr) -> void
+; signature extern func print(ptr message) -> void
+```
+
+Run the validator to compare the expectations recorded by callers with
+the definitions supplied by other units. After building the toolchain
+(`bash build.sh`) you can compile two sample sources and validate them
+without leaving the `output/` directory:
+
+```bash
+cd output
+./PikaCmd impala.pika compile ../tests/impala/sources/calc.impala calc.gazl
+./PikaCmd impala.pika compile ../tests/impala/sources/multitap_code.impala multitap.gazl
+node ../tools/gazl-validate.js calc.gazl multitap.gazl
+```
+
+The validator reports mismatched signatures as errors by default. Pass
+`--warn-only` to downgrade them while you migrate existing modules, or
+set `GAZL_VALIDATE=1` in the environment before invoking `build.sh` to
+run the check automatically during the normal build.
 
 ## Compiling and running
 

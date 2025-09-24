@@ -1,17 +1,18 @@
  ; Compiled with Impala version 1.0
 
+ ; signatures version=1
  .s_ABCD2a:			CNST *5
  					DATs ABCD
  					DATi #0
- SOURCE:			! DEFp &.s_ABCD2a
+ SOURCE:			! DEFp &.s_ABCD2a ; signature const SOURCE : ptr
  .s_WXYZ2a:			CNST *5
  					DATs WXYZ
  					DATi #0
- TARGET:			! DEFp &.s_WXYZ2a
+ TARGET:			! DEFp &.s_WXYZ2a ; signature const TARGET : ptr
 
  ;-----------------------------------------------------------------------------
- controlSample:		FUNC
  					$result:	OUTi
+ controlSample:		FUNC		; signature func controlSample() -> int
  					$sum:		LOCi
  					$index:		LOCi
  					$src:		LOCp

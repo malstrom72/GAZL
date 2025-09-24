@@ -1,0 +1,6 @@
+; signatures version=1
+FUNC foo	; signature func foo(int, ptr) -> int
+	RETU
+
+LOC sharedValue	; signature global sharedValue : ptr
+	DATp #0

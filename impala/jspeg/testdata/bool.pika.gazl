@@ -1,9 +1,10 @@
  ; Compiled with Impala version 1.0
 
+ ; signatures version=1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC
  					$value:		OUTi
+ main:				FUNC		; signature func main() -> int
  ;-----------------------------------------------------------------------------
  								MOVi $value #0 					; value = 0
  								NEQi $value #0 @.f0				; if (value == 0)

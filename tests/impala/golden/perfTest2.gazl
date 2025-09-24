@@ -1,16 +1,18 @@
 ; Compiled with Impala version 1.0
 
+; signatures version=1
+; signature extern native printInt() -> unknown
 
 ;-----------------------------------------------------------------------------
-fib:	FUNC
 	$x:	OUTi
+fib:	FUNC	; signature func fib(int y) -> int
 	$y:	INPi
 ;-----------------------------------------------------------------------------
 		LSSi $y #2 @.f0	; if (y >= 2) 
 		SUBi %1 $y #1	; x = (int) fib(y - 1) + (int) fib(y - 2)
-		CALL &fib %0 *2
+		CALL &fib %0 *2	; expects fib(int) -> int
 		SUBi %2 $y #2
-		CALL &fib %1 *2
+		CALL &fib %1 *2	; expects fib(int) -> int
 		ADDi $x %0 %1
 		GOTO @.e1  	; } else 
 	.f0:	MOVi $x $y 	; x = y
@@ -18,10 +20,10 @@ fib:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
 		PARA *1
+main:	FUNC	; signature func main() -> void
 ;-----------------------------------------------------------------------------
 		MOVi %2 #35 	; printInt(fib(35))
-		CALL &fib %1 *2
-		CALL ^printInt %0 *2
+		CALL &fib %1 *2	; expects fib(int) -> int
+		CALL ^printInt %0 *2	; expects function(int) -> unknown
 		RETU   	; }

@@ -183,6 +183,159 @@ var impalaCompiler = (function(_s) {
     map(VERBOSE_TYPES,  'i','int','f','float','p','pointer','F','funcptr',
                                  'U','function','N','native','A','array','?','untyped');
 
+    function signatureParamCategory(type) {
+        switch (type) {
+            case 'i': return 'int';
+            case 'f': return 'float';
+            case 'p': return 'ptr';
+            case 'F': return 'funcptr';
+            default:  return 'unknown';
+        }
+    }
+
+    function signatureReturnCategory(type, known) {
+        switch (type) {
+            case 'i': return 'int';
+            case 'f': return 'float';
+            case 'p': return 'ptr';
+            case 'F': return 'funcptr';
+            case '?': return (known ? 'void' : 'unknown');
+            default:  return 'unknown';
+        }
+    }
+
+    function renderParamList(params) {
+        if (!params || params.length === 0) {
+            return '';
+        }
+
+        var parts = [];
+        for (var idx = 0; idx < params.length; ++idx) {
+            var param = params[idx] || {};
+            var typeName = signatureParamCategory(param.type);
+            var name = param.name;
+            if (!name) {
+                name = 'arg' + idx;
+            }
+            parts.push(typeName + ' ' + name);
+        }
+        return parts.join(', ');
+    }
+
+    function renderTypeList(typeCodes) {
+        if (!typeCodes || typeCodes.length === 0) {
+            return '';
+        }
+
+        var parts = [];
+        for (var i = 0; i < typeCodes.length; ++i) {
+            parts.push(signatureParamCategory(typeCodes[i]));
+        }
+        return parts.join(', ');
+    }
+
+    formatFunctionSignatureComment = function (name, signature, role) {
+        if (!signature) {
+            return undefined;
+        }
+
+        var paramsText = renderParamList(signature.params);
+        var hasReturn = (signature && signature.returns !== undefined);
+        var returnType = signatureReturnCategory(signature.returns, hasReturn);
+        var kind = (role ? role : 'func');
+
+        return 'signature ' + kind + ' ' + name + '(' + paramsText + ') -> ' + returnType;
+    };
+
+    formatCallExpectationComment = function (name, signature, actualTypes, callResultType) {
+        var label = (name || 'function');
+        var paramsText;
+        var hasSignature = !!(signature && signature.params);
+
+        if (hasSignature) {
+            var extracted = [];
+            for (var i = 0; i < signature.params.length; ++i) {
+                extracted.push(signatureParamCategory(signature.params[i].type));
+            }
+            paramsText = extracted.join(', ');
+        } else {
+            paramsText = renderTypeList(actualTypes);
+        }
+
+        var returnCode;
+        if (signature && signature.returns !== undefined) {
+            returnCode = signature.returns;
+        } else {
+            returnCode = callResultType;
+        }
+        var returnType = signatureReturnCategory(returnCode, !!signature);
+
+        return 'expects ' + label + '(' + paramsText + ') -> ' + returnType;
+    };
+
+    emitFunctionSignature = function (name) {
+        var entry = symbols.functions[name];
+        if (!entry || entry.kind === 'FUNC') {
+            return;
+        }
+
+        var comment = formatFunctionSignatureComment(name, entry.signature);
+
+        var entryType = (entry.type !== undefined ? entry.type : 'U');
+
+        declare('FUNC',
+                         'functions',
+                         name,
+                         entryType,
+                         true,
+                         undefined,
+                         entry.sourceCode,
+                         entry.sourceOffset,
+                         comment);
+    };
+
+    function signatureRoleForSection(section) {
+        switch (section) {
+            case 'CNST': return 'readonly';
+            case 'TEMP': return 'temporary';
+            default:     return 'global';
+        }
+    }
+
+    formatGlobalSignatureComment = function (section, name, type, size, flavor) {
+        if (!name) {
+            return undefined;
+        }
+
+        var prefix = (flavor ? flavor + ' ' : '');
+
+        if (type === 'A') {
+            var extent = (size !== undefined ? '[' + size + ']' : '[]');
+            return 'signature ' + prefix + 'array ' + name + extent + ' : unknown';
+        }
+
+        return 'signature ' + prefix + signatureRoleForSection(section) + ' ' +
+               name + ' : ' + signatureParamCategory(type);
+    };
+
+    function emitStandaloneSignatureComment(comment) {
+        if (!comment) {
+            return;
+        }
+
+        if (typeof output === 'function') {
+            output('; ' + comment);
+        }
+    }
+
+    formatConstSignatureComment = function (name, type) {
+        if (!name) {
+            return undefined;
+        }
+
+        return 'signature const ' + name + ' : ' + signatureParamCategory(type);
+    };
+
     /* 4  label & metacode helpers */
     newLabel = function (prefix) {
         var tag = (prefix === undefined ? '' : String(prefix));
@@ -1001,7 +1154,7 @@ var impalaCompiler = (function(_s) {
      *  Symbol declaration helper
      * -------------------------------------------------------- */
 
-    function declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset) {
+    function declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment) {
         /* emit data / flush pending code */
         if (kind !== undefined) {
             flushMetaCode('');
@@ -1013,6 +1166,7 @@ var impalaCompiler = (function(_s) {
                 line += '\t' +
                         replace(kind, '?', TYPE_SUFFIXES[type] || '');
                 if (value !== undefined) line += ' ' + value;
+                if (comment)             line += '\t; ' + comment;
 
                 output( line );
             }
@@ -1043,7 +1197,14 @@ var impalaCompiler = (function(_s) {
 
             /* store / update */
             if (!table) symbols[scope] = table = {};
-            table[name] = { type:type, readonly:!!readonly, kind:kind };
+            table[name] = {
+                type: type,
+                readonly: !!readonly,
+                kind: kind,
+                signature: prev && prev.signature,
+                sourceCode: sourceCode,
+                sourceOffset: sourceOffset
+            };
         }
     };
 
@@ -1431,6 +1592,7 @@ var impalaCompiler = (function(_s) {
         var LF = '\n';
         output('; Compiled with Impala version ' +
                IMPALA_VERSION + LF);
+        output('; signatures version=1');
     };
 
     end = function () {
@@ -1453,18 +1615,12 @@ var impalaCompiler = (function(_s) {
         }
     };
 };function root($){return (function(){var _b=_i;return _($)&&(function(){ start(); ; return true})()&&((function(){while((function(){var _b=_i;return FuncDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExternDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ConstDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GlobalDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _l=_i,_x=(!!_s[_i])&&(++_i,true);_i=_l;return !_x})()&&(function(){ end(); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function FuncDecl($){var $id={},$inp={},$out={},$,$loc={};return (function(){var _b=_i;return FUNCTION($)&&_($)&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ assert(validateStock('%')); assert(validateStock('<')); output(''); output(';-----------------------------------------------------------------------------'); /* declare the function symbol */ declare( 'FUNC',           // kind
-                                                                             'functions',      // scope
-                                                                             $id._,              // name
-                                                                             'U',              // type
-                                                                             true,             // read-only
-                                                                             undefined,        // no init
-                                                                             _s, _i ); ; return true})()&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ declare( 'OUT?', 'locals', '$' + $out.name, $out.type, false, ($out.size !== undefined ? '*' + $out.size : undefined), _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* implicit 1-word return */ declare( 'PARA', 'locals', undefined, '?', false, '*1', _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ /* declare input parameters */ iterate($inp._, function (p) { declare( 'INP?', 'locals', '$' + p.name, p.type, true, (p.size !== undefined ? '*' + p.size : undefined), _s, _i ); }); ; return true})()&&((function(){var _b=_i;return LOCALS($)&&_($)&&LocalsDecl($loc)&&(function(){ iterate($loc._, function (v) { declare( 'LOC?', 'locals', '$' + v.name, v.type, false, (v.size !== undefined ? '*' + v.size : undefined), _s, _i ); }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ output(';-----------------------------------------------------------------------------'); ; return true})()&&Block($)&&(function(){ /* wrap-up body */ processBranches(); emit('--^', undefined, undefined, undefined, undefined); flushMetaCode('\t'); prune(symbols.locals); labelCounter = 0; output(''); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function FuncDecl($){var $id={},$inp={},$out={},$,$loc={};return (function(){var _b=_i;return FUNCTION($)&&_($)&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ assert(validateStock('%')); assert(validateStock('<')); output(''); output(';-----------------------------------------------------------------------------'); /* declare the function symbol */ declare( undefined, 'functions', $id._, 'U', true, undefined, _s, _i ); var entry = symbols.functions[$id._]; if (entry) { if (!entry.signature) { entry.signature = {}; } entry.signature.params = []; entry.signature.returns = '?'; entry.signature.returnName = undefined; entry.signature.sourceCode = _s; entry.signature.sourceOffset = _i; } ; return true})()&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ declare( 'OUT?', 'locals', '$' + $out.name, $out.type, false, ($out.size !== undefined ? '*' + $out.size : undefined), _s, _i ); var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.returns = $out.type; entry.signature.returnName = $out.name; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* implicit 1-word return */ declare( 'PARA', 'locals', undefined, '?', false, '*1', _s, _i ); var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.returns = '?'; entry.signature.returnName = undefined; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ /* declare input parameters */ var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.params = []; for (var idx = 0; idx < $inp.n; ++idx) { var param = $inp._[idx]; entry.signature.params.push({ type: param.type, name: param.name, size: param.size }); } } emitFunctionSignature($id._); iterate($inp._, function (p) { declare( 'INP?', 'locals', '$' + p.name, p.type, true, (p.size !== undefined ? '*' + p.size : undefined), _s, _i ); }); ; return true})()&&((function(){var _b=_i;return LOCALS($)&&_($)&&LocalsDecl($loc)&&(function(){ iterate($loc._, function (v) { declare( 'LOC?', 'locals', '$' + v.name, v.type, false, (v.size !== undefined ? '*' + v.size : undefined), _s, _i ); }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ output(';-----------------------------------------------------------------------------'); ; return true})()&&Block($)&&(function(){ /* wrap-up body */ processBranches(); emit('--^', undefined, undefined, undefined, undefined); flushMetaCode('\t'); prune(symbols.locals); labelCounter = 0; output(''); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ExternDecl($){var $id={};return (function(){var _b=_i;return EXTERN($)&&_($)&&(function(){ $.scope = 'globals'; ; return true})()&&(function(){var _b=_i;return (function(){var _b=_i;return FUNCTION($)&&(function(){ $.type  = 'U';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NATIVE($)&&(function(){ $.type  = 'N';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ARRAY($)&&(function(){ $.type  = 'A'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&Identifier($id)&&(function(){ $.name  = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ declare( undefined,                 // no section for extern
                                                                              $.scope, $.name, $.type, false,                     // not readonly
-                                                                             '?', _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function ConstDecl($){var $type={},$t,$nf,$id={},$x={};return (function(){var _b=_i;return CONST($)&&_($)&&BASE_TYPE($type)&&_($)&&(function(){ $t  = CASTS_TO_TYPES[$type._]; $nf = noForward; noForward = true; ; return true})()&&Identifier($id)&&(function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ declare( '! DEF?', 'defines', $id._, $t, true, makeConstant($x._, $t, _s, _i), _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ declare( undefined, 'defines', $id._, $t, true, undefined, _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ noForward = $nf; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function GlobalDecl($){var $section,$v={},$init,$x={},$a={},$d={};return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), '*' + $a.size, _s, _i ); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&InitList($d)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+                                                                             '?', _s, _i ); if ($.scope === 'functions') { var entry = symbols.functions[$.name]; var signature = entry && entry.signature; if (entry) { if (!signature) { signature = entry.signature = {}; } if (signature.sourceCode === undefined) { signature.sourceCode = _s; signature.sourceOffset = _i; } } var role = ($.type === 'N' ? 'extern native' : 'extern func'); var prototypeComment = formatFunctionSignatureComment( $.name, signature, role ); if (!prototypeComment) { prototypeComment = formatFunctionSignatureComment( $.name, { params: [], returns: undefined }, role ); } emitStandaloneSignatureComment(prototypeComment); } else if ($.scope === 'globals') { emitStandaloneSignatureComment( formatGlobalSignatureComment( 'GLOB', $.name, $.type, $.size, 'extern' ) ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function ConstDecl($){var $type={},$t,$nf,$id={},$x={};return (function(){var _b=_i;return CONST($)&&_($)&&BASE_TYPE($type)&&_($)&&(function(){ $t  = CASTS_TO_TYPES[$type._]; $nf = noForward; noForward = true; ; return true})()&&Identifier($id)&&(function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ declare( '! DEF?', 'defines', $id._, $t, true, makeConstant($x._, $t, _s, _i), _s, _i, formatConstSignatureComment($id._, $t) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ declare( undefined, 'defines', $id._, $t, true, undefined, _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ noForward = $nf; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function GlobalDecl($){var $section,$v={},$init,$x={},$a={},$d={};return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i, formatGlobalSignatureComment($section, $v.name, $v.type) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), '*' + $a.size, _s, _i, formatGlobalSignatureComment($section, $a.name, 'A', $a.size) ); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&InitList($d)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function InitList($){var $d,$type,$x={};return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ $d = ' '; $type = undefined; ; return true})()&&((function(){var _b=_i;return Expr($x)&&(function(){ var xMeta = metaSlot($x._); $type = xMeta.type; $d += makeConstant(xMeta, $type, _s, _i); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ var xMeta = metaSlot($x._); var xType = xMeta.type; var constant = makeConstant(xMeta, xType, _s, _i); /* decide if we need to flush DATA */ if (  constant[0] === '<' || $d[1] === '<' || ($d + ' ' + constant).length >= 55) { declare( 'DATA', 'globals', undefined, xType, true, $d.substr(1), _s, _i ); $d = ''; } $d += ' ' + constant; $type = xType; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ if ($d.substr(1) !== '') { declare( 'DATA', 'globals', undefined, $type, true, $d.substr(1), _s, _i ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ArgsDecl($){var $v={};return (function(){var _b=_i;return (function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return VarDecl($v)&&(function(){ var entry = {}; entry.type = $v.type; entry.name = $v.name; entry.size = $v.size; $._[$.n++] = entry; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&VarDecl($v)&&(function(){ var entry = {}; entry.type = $v.type; entry.name = $v.name; entry.size = $v.size; $._[$.n++] = entry; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function LocalsDecl($){var $v={};return (function(){var _b=_i;return (function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return (function(){var _b=_i;return VarDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ var entry = {}; entry.type = $v.type; entry.name = $v.name; entry.size = $v.size; $._[$.n++] = entry; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&(function(){var _b=_i;return VarDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ var entry = {}; entry.type = $v.type; entry.name = $v.name; entry.size = $v.size; $._[$.n++] = entry; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
@@ -1477,8 +1633,8 @@ function AddSub($){var $op={},$r={};return (function(){var _b=_i;return MulDiv($
 function MulDiv($){var $op={},$r={};return (function(){var _b=_i;return PrePost($)&&((function(){while((function(){var _b=_i;return MULDIV_OP($op)&&_($)&&PrePost($r)&&(function(){ if (!dry) mulDivOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function PrePost($){var $op={};return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) unaryOp($op._, $._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Subscript($){var $s={};return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) binaryOp('=[]', $._, $s._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; $.base  = borrowForCall(); } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type ); } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.count + 1)); returnBack(func); while ($.count-- > 0) { returnBack('%' + ($.base + $.count + 1)); } makeMeta(callee, ':=', '?', undefined, '%' + $.base, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Argument($){var $a={};return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; makeArgValue($a._, $.base + $.count); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; $.base  = borrowForCall(); $.types = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type ); } if (callee.operator === ':=' && callee.operands[1] && callee.operands[1][0] === '&') { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; if (entry && entry.kind === 'FUNC' && entry.signature) { signature = entry.signature; } } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i ); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { typeError( 'Argument type mismatch when calling ' + label + ' ({$type1} vs expected {$type2})', _s, _i, actual, expected ); } } if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType ); if (callComment) { emit(';', undefined, callComment, undefined, undefined); } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.count + 1)); returnBack(func); while ($.count-- > 0) { returnBack('%' + ($.base + $.count + 1)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Argument($){var $a={};return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if ($.types) { $.types.push(meta.type); } makeArgValue($a._, $.base + $.count); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Group($){return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BoolGroup($){var $label;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ $label = undefined; ; return true})()&&And($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="||")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('t'); } emit('?->', true, $label, undefined, undefined); ; return true})()&&And($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if ($label !== undefined) { emit('<-?', true, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function And($){var $label;return (function(){var _b=_i;return (function(){ $label = undefined; ; return true})()&&Comp($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="&&")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('f'); } emit('?->', false, $label, undefined, undefined); ; return true})()&&Comp($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ if ($label !== undefined) { emit('<-?', false, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

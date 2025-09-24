@@ -1,31 +1,37 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int
+FALSE:	! DEFi #0	; signature const FALSE : int
+TRUE:	! DEFi #1	; signature const TRUE : int
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown
 	DATA &.s_4d2 &.s_4d2 &.s_4d2 &.s_4d2 &.s_BMSKHI4d3
 	DATA &.s_BMSKHI4d3:53 &.s_BMSKHI4d3:53 &.s_BMSKHI4d3:53
+; signature extern native abort() -> unknown
+; signature extern native trace() -> unknown
+; signature extern native yield() -> unknown
+; signature extern native write() -> unknown
+; signature extern native read() -> unknown
 	GLOB *1
-clock:	DATi #0
-positions:	GLOB *2
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int
+positions:	GLOB *2	; signature array positions[2] : unknown
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown
 	GLOB *1
-instance:	DATi #0
+instance:	DATi #0	; signature global instance : int
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_2_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_2_HIGH_PARAM_INDEX
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>
+updateMask:	DATi <A>	; signature readonly updateMask : int
 	GLOB *1
-mask:	DATi #0
+mask:	DATi #0	; signature global mask : int
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
 		PARA *1
+update:	FUNC	; signature func update() -> void
 	$x:	LOCi
 	$y:	LOCi
 ;-----------------------------------------------------------------------------
@@ -45,8 +51,8 @@ update:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-operate2:	FUNC
 	$r:	OUTi
+operate2:	FUNC	; signature func operate2() -> int
 	$l:	LOCi
 	$x:	LOCi
 	$y:	LOCi
