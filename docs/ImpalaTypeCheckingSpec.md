@@ -55,6 +55,16 @@ However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCal
   ; signature extern func bar() -> unknown
   ```
 
+  Signature annotations follow a compact grammar so tooling can parse them deterministically:
+
+  * **Header.** Each unit advertises support once via `; signatures version=<n>`.
+  * **Function definitions and prototypes.** Any line that emits `FUNC name` (or an implicit forward declaration) appends `; signature func name(<params>) -> <return>`. Extern shims use the same shape with an `extern func` or `extern native` prefix to distinguish host-provided entry points.
+  * **Call sites.** Every `CALL` instruction gains `; expects <label>(<arg-types>) -> <return>` describing the caller’s view.
+  * **Globals and constants.** `LOC`, `DATA`, and directive-driven constants append `; signature global name : <type>` (or `readonly`/`temporary` depending on section). Array declarations render as `; signature array name[size] : <type>`.
+  * **Standalone externs.** Declarations that produce no GAZL directive still emit their own comment block, allowing validators to collect imports even when no code follows the declaration.
+
+  Parameter entries are rendered as `type name` pairs (falling back to `argN` when the source omits a name), and all primitive types are normalised to the `{int, float, ptr, funcptr, void}` vocabulary. Comments are attached through the existing `$$parser.emit(';', …)` path so they obey the same indentation and spacing rules as other debugger notes.
+
   The comments describe the definition’s signature, the exported global, the caller’s expectations, and now even bare extern declarations using the same primitive categories (rendered as `int`, `float`, `ptr`, `funcptr`, `void`). Because they are ordinary comments, concatenating multiple `.gazl` files simply produces a larger stream of inline signature notes for the validator to consume without affecting assemblers that ignore comments.
   Standalone `extern` declarations that produce no GAZL directive still emit a one-line annotation (for example, `; signature extern func bar() -> unknown`) so validators can record imports alongside executable code.
   The call-site comment rides on the `CALL` instruction itself, so there is no need for a `caller->callee` shorthand—the surrounding assembler already makes the callee obvious.
@@ -95,9 +105,11 @@ However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCal
     - [x] Extend extern declarations to emit or preserve compatible signature comments.
   - [x] Persist the ordered parameter list from `ArgsDecl` in each function symbol, compare it against the call-site operands inside `FuncCall`, and invoke `typeError` when intra-unit calls disagree on category or arity before emitting the `()` instruction.【F:impala/jspeg/impala.jspeg†L1006-L1055】【F:impala/jspeg/impala.jspeg†L1719-L1738】【F:impala/jspeg/impala.jspeg†L1834-L1916】
   - [ ] Teach the emitter to format argument lists and return categories using the `{int, float, ptr, funcptr, void}` vocabulary (while preserving the internal `i/f/p/F/?` mapping) and to include positional source spans where available for better diagnostics.
+    - [x] Format function signatures, call expectations, and global annotations using the shared vocabulary helpers and stable parameter ordering.
+    - [ ] Thread explicit source-span markers through the emitted comments so downstream tooling can cite the original Impala locations when reporting validation errors.
 - [ ] **Comment schema**
-  - [ ] Lock down the comment grammar (for example, `FUNC foo    ; signature func foo(int a, ptr b) -> int` and `CALL foo    ; expects foo(int, ptr) -> int`) and document it alongside the Impala assembly reference so downstream tooling knows how to parse it.
-  - [ ] Ensure comments never break layout-sensitive sections by routing them through the same helpers that already insert `;`-prefixed notes when `-g` is enabled today.
+  - [x] Lock down the comment grammar (for example, `FUNC foo    ; signature func foo(int a, ptr b) -> int` and `CALL foo    ; expects foo(int, ptr) -> int`) and document it alongside the Impala assembly reference so downstream tooling knows how to parse it.
+  - [x] Ensure comments never break layout-sensitive sections by routing them through the same helpers that already insert `;`-prefixed notes when `-g` is enabled today.
 - [x] **Validator tool**
   - [x] Create `tools/gazl-validate.{js,cmd}` (mirroring existing script conventions) that parses the signature comments, performs the matching described above, and exits non-zero on fatal mismatches unless `--warn-only` is passed.【F:tools/gazl-validate.js†L1-L338】【F:tools/gazl-validate.js†L486-L679】
   - [x] Add integration to `build.sh` behind an environment toggle (`GAZL_VALIDATE=1`), letting CI enable it without slowing local builds immediately.【F:build.sh†L18-L33】【F:build.cmd†L27-L42】
