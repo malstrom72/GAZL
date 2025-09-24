@@ -1,51 +1,51 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 53:1
 	GLOB *1
-uninited:	DATi #0	; signature global uninited : int
+uninited:	DATi #0	; signature global uninited : int @ 60:1
 	GLOB *1
-inited:	DATi #23	; signature global inited : int
+inited:	DATi #23	; signature global inited : int @ 60:23
 	GLOB *1
-aFloat:	DATf #0.0	; signature global aFloat : float
+aFloat:	DATf #0.0	; signature global aFloat : float @ 63:20
 	GLOB *1
-aPointer:	DATp &aFloat	; signature global aPointer : ptr
+aPointer:	DATp &aFloat	; signature global aPointer : ptr @ 65:41
 	GLOB *1
-aFuncPointer:	DATp &NULL	; signature global aFuncPointer : funcptr
-defaultArray:	GLOB *100	; signature array defaultArray[100] : unknown
-initedArray:	GLOB *10	; signature array initedArray[10] : unknown
+aFuncPointer:	DATp &NULL	; signature global aFuncPointer : funcptr @ 68:28
+defaultArray:	GLOB *100	; signature array defaultArray[100] : unknown @ 73:31
+initedArray:	GLOB *10	; signature array initedArray[10] : unknown @ 78:30
 	DATA #1 #2.0 &defaultArray:0 #4
 	TEMP *1
-forgetMe:	DATi #0	; signature temporary forgetMe : int
-SOME_COUNT:	! DEFi #4	; signature const SOME_COUNT : int
-SOME_CONSTS:	CNST *SOME_COUNT	; signature array SOME_CONSTS[SOME_COUNT] : unknown
+forgetMe:	DATi #0	; signature temporary forgetMe : int @ 82:23
+SOME_COUNT:	! DEFi #4	; signature const SOME_COUNT : int @ 87:25
+SOME_CONSTS:	CNST *SOME_COUNT	; signature array SOME_CONSTS[SOME_COUNT] : unknown @ 94:40
 	DATA #100 #200 #300 #400
-; signature extern global defineMeLaterPlease : int
-; signature extern array futureArray[] : unknown
-; signature extern func thisFunctionInAnotherSource() -> unknown
-; signature extern native abort() -> unknown
+; signature extern global defineMeLaterPlease : int @ 98:31
+; signature extern array futureArray[] : unknown @ 101:25
+; signature extern func thisFunctionInAnotherSource() -> unknown @ 103:44
+; signature extern native abort() -> unknown @ 107:20
 .s_Welcom4d2:	CNST *20
 	DATs Welcome to Impala!
 	DATi #10 #0
-WELCOME:	! DEFp &.s_Welcom4d2	; signature const WELCOME : ptr
-VARIOUS_LITERALS:	CNST *15	; signature array VARIOUS_LITERALS[15] : unknown
+WELCOME:	! DEFp &.s_Welcom4d2	; signature const WELCOME : ptr @ 116:1
+VARIOUS_LITERALS:	CNST *15	; signature array VARIOUS_LITERALS[15] : unknown @ 116:37
 	DATA #123 #-393 #+494 #0xAA55 #-0x1F2E3C4D #'A' #-''
 	DATA #'ROFL' #34.0 #-123.0e10 #256.11E-10 &.s_string4d2
 	DATA &.s_allesc4d3 &NULL &NULL
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void
+abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void @ 138:22
 	$v:	INPi
 ;-----------------------------------------------------------------------------
 		NEQi $v #0 @.f0	; if (v == 0) abort()
-		CALL ^abort %0 *1	; expects function() -> unknown
+		CALL ^abort %0 *1	; expects function() -> unknown @ 140:21
 	.f0:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
 	$fetched:	OUTi
-fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int
+fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int @ 143:25
 	$index:	INPi
 ;-----------------------------------------------------------------------------
 		PEEK $fetched &SOME_CONSTS $index	; fetched = (int) global SOME_CONSTS[index]
@@ -54,7 +54,7 @@ fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int
 
 ;-----------------------------------------------------------------------------
 	$j:	OUTi
-findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int
+findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int @ 156:23
 	$n:	INPi
 	$vector:	INPp
 	$i:	LOCi
@@ -69,39 +69,39 @@ findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int
 	.f2:	FORi $i $n @.l1
 	.e0:	RETU   	; }
 
-TEST_SIZE:	! DEFi #50	; signature const TEST_SIZE : int
-; signature extern func myrand() -> unknown
-; signature extern native printInt() -> unknown
-; signature extern native printLF() -> unknown
+TEST_SIZE:	! DEFi #50	; signature const TEST_SIZE : int @ 166:25
+; signature extern func myrand() -> unknown @ 167:23
+; signature extern native printInt() -> unknown @ 168:23
+; signature extern native printLF() -> unknown @ 169:22
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-test:	FUNC	; signature func test() -> void
+test:	FUNC	; signature func test() -> void @ 171:15
 	$i:	LOCi
 	$mydata:	LOCA *TEST_SIZE
 ;-----------------------------------------------------------------------------
 		MOVi $i #0 	; for (i = 0 to TEST_SIZE)
 		GEQi #0 #TEST_SIZE @.e0
-	.l1:	CALL &myrand %0 *1	; expects myrand() -> unknown
+	.l1:	CALL &myrand %0 *1	; expects myrand() -> unknown @ 176:23
 		SETL $mydata $i %0
 		FORi $i #TEST_SIZE @.l1
 	.e0:	MOVi $i #0 	; for (i = 0 to TEST_SIZE) 
 		GEQi #0 #TEST_SIZE @.e2
 	.l3:	GETL %1 $mydata $i	; printInt(mydata[i])
-		CALL ^printInt %0 *2	; expects function(unknown) -> unknown
-		CALL ^printLF %0 *1	; expects function() -> unknown
+		CALL ^printInt %0 *2	; expects function(unknown) -> unknown @ 178:22
+		CALL ^printLF %0 *1	; expects function() -> unknown @ 179:12
 		FORi $i #TEST_SIZE @.l3	; }
 	.e2:	MOVi %2 #TEST_SIZE 	; printInt(findSmallest(TEST_SIZE, mydata))
 		ADRL %3 $mydata *0
-		CALL &findSmallest %1 *3	; expects findSmallest(int, ptr) -> int
-		CALL ^printInt %0 *2	; expects function(int) -> unknown
+		CALL &findSmallest %1 *3	; expects findSmallest(int, ptr) -> int @ 181:42
+		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 181:43
 		RETU   	; }
 
-; signature extern native printFloat() -> unknown
+; signature extern native printFloat() -> unknown @ 191:25
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-showoff:	FUNC	; signature func showoff() -> void
+showoff:	FUNC	; signature func showoff() -> void @ 193:18
 	$a:	LOCi
 	$b:	LOCi
 	$c:	LOCi
@@ -134,8 +134,8 @@ showoff:	FUNC	; signature func showoff() -> void
 		GOTO @.e1  
 	.f0:	MOVi $ok #0 	; ok = 0
 	.e1:	MOVi %1 $ok 	; printInt(ok)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown
-		CALL ^printLF %0 *1	; expects function() -> unknown
+		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 223:14
+		CALL ^printLF %0 *1	; expects function() -> unknown @ 224:11
 		MOVi $b #'xyz' 	; a = b = 'xyz'
 		MOVi $a #'xyz' 
 		! MULi <A> #345 #123	; a = b = 345 * 123
@@ -155,8 +155,8 @@ showoff:	FUNC	; signature func showoff() -> void
 	.e4:	MOVp $p &SOME_CONSTS 	; for (p = global SOME_CONSTS to &global SOME_CONSTS[0]) 
 		GEQp &SOME_CONSTS &SOME_CONSTS:0 @.e6
 	.l7:	MOVp %1 $p 	; printInt(p)
-		CALL ^printInt %0 *2	; expects function(ptr) -> unknown
-		CALL ^printLF %0 *1	; expects function() -> unknown
+		CALL ^printInt %0 *2	; expects function(ptr) -> unknown @ 233:69
+		CALL ^printLF %0 *1	; expects function() -> unknown @ 233:80
 		FORp $p &SOME_CONSTS:0 @.l7	; }
 	.e6:	PEEK $a &forgetMe 	; a = global forgetMe
 		MOVf $f #23.3 	; f = 23.3
@@ -174,11 +174,11 @@ showoff:	FUNC	; signature func showoff() -> void
 		iTOf %0 $a #1.0	; f = itof(a) / 100.0
 		DIVf $f %0 #100.0
 		MOVi %1 $a 	; printInt(a)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown
-		CALL ^printLF %0 *1	; expects function() -> unknown
+		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 242:12
+		CALL ^printLF %0 *1	; expects function() -> unknown @ 242:22
 		MOVf %1 $f 	; printFloat(f)
-		CALL ^printFloat %0 *2	; expects function(float) -> unknown
-		CALL ^printLF %0 *1	; expects function() -> unknown
+		CALL ^printFloat %0 *2	; expects function(float) -> unknown @ 243:14
+		CALL ^printLF %0 *1	; expects function() -> unknown @ 243:24
 		POKE &initedArray:2 &futureArray:4 	; global initedArray[2] = &global futureArray[4]
 		NEQi #1 #1 @.f8	; if (1 == 1) 
 		! EQUi #DEBUG #0 @.a9	; assert((pointer)global initedArray[2] == &global futureArray[4])
@@ -196,19 +196,19 @@ showoff:	FUNC	; signature func showoff() -> void
 	.e10:	POKE &aFuncPointer &showoff 	; global aFuncPointer = showoff
 		PEEK %0 &aFuncPointer 	; if (global aFuncPointer == nullfunc) global aFuncPointer()
 		NEQp %0 &NULL @.f12
-		PEEK %1 &aFuncPointer 	; expects function() -> unknown
+		PEEK %1 &aFuncPointer 	; expects function() -> unknown @ 253:59
 		CALL %1 %0 *1
 	.f12:	RETU   	; }
 
 	GLOB *1
-defineMeLaterPlease:	DATi #0	; signature global defineMeLaterPlease : int
-futureArray:	GLOB *10	; signature array futureArray[10] : unknown
+defineMeLaterPlease:	DATi #0	; signature global defineMeLaterPlease : int @ 266:31
+futureArray:	GLOB *10	; signature array futureArray[10] : unknown @ 267:29
 	GLOB *1
-myrand_seed:	DATi #2463534242	; signature global myrand_seed : int
+myrand_seed:	DATi #2463534242	; signature global myrand_seed : int @ 269:36
 
 ;-----------------------------------------------------------------------------
 	$y:	OUTi
-myrand:	FUNC	; signature func myrand() -> int
+myrand:	FUNC	; signature func myrand() -> int @ 270:17
 ;-----------------------------------------------------------------------------
 		PEEK $y &myrand_seed 	; y = global myrand_seed
 		SHLi %0 $y #13	; y = y ^ (y << 13)
@@ -220,26 +220,26 @@ myrand:	FUNC	; signature func myrand() -> int
 		POKE &myrand_seed $y 	; global myrand_seed = y
 		RETU   	; }
 
-anInt:	! DEFi #4	; signature const anInt : int
-; signature extern native print() -> unknown
+anInt:	! DEFi #4	; signature const anInt : int @ 280:20
+; signature extern native print() -> unknown @ 282:20
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-main:	FUNC	; signature func main() -> void
+main:	FUNC	; signature func main() -> void @ 283:15
 	$myFloat:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 #WELCOME 	; print(WELCOME)
-		CALL ^print %0 *2	; expects function(ptr) -> unknown
+		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 286:16
 		MOVf $myFloat #1000.0 	; myFloat = 1000.0
 		! SHLi <B> #1 #anInt	; printInt(ftoi(myFloat * (1.0 / itof(1 << anInt))))
 		! iTOf <B> <B> #1.0
 		! DIVf <B> #1.0 <B>
 		fTOi %1 $myFloat <B>
-		CALL ^printInt %0 *2	; expects function(int) -> unknown
-		CALL ^printLF %0 *1	; expects function() -> unknown
-		CALL &showoff %0 *1	; expects showoff() -> void
+		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 288:52
+		CALL ^printLF %0 *1	; expects function() -> unknown @ 288:63
+		CALL &showoff %0 *1	; expects showoff() -> void @ 289:11
 		MOVp %1 &.s_Bye4d4 	; print("Bye!\n")
-		CALL ^print %0 *2	; expects function(ptr) -> unknown
+		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 290:17
 		RETU   	; }
 
 .s_string4d2:	CNST *8

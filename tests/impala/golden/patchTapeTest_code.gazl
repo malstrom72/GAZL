@@ -1,16 +1,16 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int
-panelTextRows:	GLOB *8	; signature array panelTextRows[8] : unknown
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 3:1
+panelTextRows:	GLOB *8	; signature array panelTextRows[8] : unknown @ 3:31
 	DATA &.s_4d2 &.s_4d2 &.s_4d2 &.s_4d2 &.s_4d2 &.s_4d2
 	DATA &.s_4d2 &.s_4d2
-config:	GLOB *80	; signature array config[80] : unknown
-positions:	GLOB *2	; signature array positions[2] : unknown
+config:	GLOB *80	; signature array config[80] : unknown @ 9:1
+positions:	GLOB *2	; signature array positions[2] : unknown @ 11:1
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-init:	FUNC	; signature func init() -> void
+init:	FUNC	; signature func init() -> void @ 11:15
 	$i:	LOCi
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
@@ -27,7 +27,7 @@ init:	FUNC	; signature func init() -> void
 
 ;-----------------------------------------------------------------------------
 	$r:	OUTi
-operate1:	FUNC	; signature func operate1() -> int
+operate1:	FUNC	; signature func operate1() -> int @ 21:19
 ;-----------------------------------------------------------------------------
 		MOVi $r #0 	; r = 0
 		RETU   	; }

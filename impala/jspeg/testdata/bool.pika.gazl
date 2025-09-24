@@ -4,7 +4,7 @@
 
  ;-----------------------------------------------------------------------------
  					$value:		OUTi
- main:				FUNC		; signature func main() -> int
+ main:				FUNC		; signature func main() -> int @ 1:15
  ;-----------------------------------------------------------------------------
  								MOVi $value #0 					; value = 0
  								NEQi $value #0 @.f0				; if (value == 0)

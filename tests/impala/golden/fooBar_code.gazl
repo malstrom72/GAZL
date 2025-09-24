@@ -1,25 +1,25 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int
-FALSE:	! DEFi #0	; signature const FALSE : int
-TRUE:	! DEFi #1	; signature const TRUE : int
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 18:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
 	DATA &.s_stdREV4d2 &.s_fastCR4d3 &.s_slowCH4d4
 	DATA &.s_rndAK44d5 &.s_16164d6 &.s_32164d7 &.s_884d8
 	DATA &.s_168Gat4d9
-; signature extern native abort() -> unknown
-; signature extern native trace() -> unknown
-; signature extern native yield() -> unknown
-; signature extern native write() -> unknown
-; signature extern native read() -> unknown
+; signature extern native abort() -> unknown @ 40:1
+; signature extern native trace() -> unknown @ 41:1
+; signature extern native yield() -> unknown @ 42:1
+; signature extern native write() -> unknown @ 43:1
+; signature extern native read() -> unknown @ 45:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown
+clock:	DATi #0	; signature global clock : int @ 81:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 82:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 84:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int
-signal:	GLOB *2	; signature array signal[2] : unknown
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 87:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 89:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -34,15 +34,15 @@ signal:	GLOB *2	; signature array signal[2] : unknown
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #SWITCHES_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 92:32
 	GLOB *1
-rndSeedX:	DATi #1	; signature global rndSeedX : int
+rndSeedX:	DATi #1	; signature global rndSeedX : int @ 98:24
 	GLOB *1
-rndSeedY:	DATi #1	; signature global rndSeedY : int
+rndSeedY:	DATi #1	; signature global rndSeedY : int @ 99:24
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-seedRandom:	FUNC	; signature func seedRandom(int seed) -> void
+seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 101:21
 	$seed:	INPi
 	$x:	LOCi
 ;-----------------------------------------------------------------------------
@@ -61,7 +61,7 @@ seedRandom:	FUNC	; signature func seedRandom(int seed) -> void
 
 ;-----------------------------------------------------------------------------
 	$f:	OUTf
-randomFloat:	FUNC	; signature func randomFloat() -> float
+randomFloat:	FUNC	; signature func randomFloat() -> float @ 112:22
 	$x:	LOCi
 	$y:	LOCi
 	$t:	LOCi
@@ -83,56 +83,56 @@ randomFloat:	FUNC	; signature func randomFloat() -> float
 		POKE &rndSeedY $y 	; global rndSeedY = y
 		RETU   	; }
 
-STEP_COUNT:	! DEFi #32	; signature const STEP_COUNT : int
-REVERSE_FX:	! DEFi #0	; signature const REVERSE_FX : int
-BIT_CRUSH_EFFECT:	! DEFi #1	; signature const BIT_CRUSH_EFFECT : int
-TRANCE_GATE_EFFECT:	! DEFi #2	; signature const TRANCE_GATE_EFFECT : int
-REPEAT_EFFECT:	! DEFi #3	; signature const REPEAT_EFFECT : int
-STRETCH_EFFECT:	! DEFi #4	; signature const STRETCH_EFFECT : int
-PITCH_SHIFT_EFFECT:	! DEFi #5	; signature const PITCH_SHIFT_EFFECT : int
-HALF_SPEED_EFFECT:	! DEFi #6	; signature const HALF_SPEED_EFFECT : int
-TAPE_STOP_FX:	! DEFi #7	; signature const TAPE_STOP_FX : int
-FX_PARAM_TAPE_STOP_RATE:	! DEFi #0	; signature const FX_PARAM_TAPE_STOP_RATE : int
-FX_PARAM_TRANCE_GATE_RATE:	! DEFi #1	; signature const FX_PARAM_TRANCE_GATE_RATE : int
-FX_PARAM_BIT_CRUSH_MASK:	! DEFi #2	; signature const FX_PARAM_BIT_CRUSH_MASK : int
-FX_PARAM_REPEAT_MASK:	! DEFi #3	; signature const FX_PARAM_REPEAT_MASK : int
-FX_PARAM_REPEAT_OFF_3:	! DEFi #4	; signature const FX_PARAM_REPEAT_OFF_3 : int
-FX_PARAM_SHIFT_9:	! DEFi #5	; signature const FX_PARAM_SHIFT_9 : int
-FX_PARAM_SHIFT_10:	! DEFi #6	; signature const FX_PARAM_SHIFT_10 : int
-FX_PARAM_1_LSHIFT_9:	! DEFi #7	; signature const FX_PARAM_1_LSHIFT_9 : int
-FX_PARAM_1_LSHIFT_10:	! DEFi #8	; signature const FX_PARAM_1_LSHIFT_10 : int
-FX_PARAM_MASK_10:	! DEFi #9	; signature const FX_PARAM_MASK_10 : int
-FX_PARAM_COUNT:	! DEFi #10	; signature const FX_PARAM_COUNT : int
+STEP_COUNT:	! DEFi #32	; signature const STEP_COUNT : int @ 130:1
+REVERSE_FX:	! DEFi #0	; signature const REVERSE_FX : int @ 130:25
+BIT_CRUSH_EFFECT:	! DEFi #1	; signature const BIT_CRUSH_EFFECT : int @ 131:31
+TRANCE_GATE_EFFECT:	! DEFi #2	; signature const TRANCE_GATE_EFFECT : int @ 132:33
+REPEAT_EFFECT:	! DEFi #3	; signature const REPEAT_EFFECT : int @ 133:28
+STRETCH_EFFECT:	! DEFi #4	; signature const STRETCH_EFFECT : int @ 134:29
+PITCH_SHIFT_EFFECT:	! DEFi #5	; signature const PITCH_SHIFT_EFFECT : int @ 135:33
+HALF_SPEED_EFFECT:	! DEFi #6	; signature const HALF_SPEED_EFFECT : int @ 136:32
+TAPE_STOP_FX:	! DEFi #7	; signature const TAPE_STOP_FX : int @ 137:27
+FX_PARAM_TAPE_STOP_RATE:	! DEFi #0	; signature const FX_PARAM_TAPE_STOP_RATE : int @ 139:38
+FX_PARAM_TRANCE_GATE_RATE:	! DEFi #1	; signature const FX_PARAM_TRANCE_GATE_RATE : int @ 140:40
+FX_PARAM_BIT_CRUSH_MASK:	! DEFi #2	; signature const FX_PARAM_BIT_CRUSH_MASK : int @ 141:38
+FX_PARAM_REPEAT_MASK:	! DEFi #3	; signature const FX_PARAM_REPEAT_MASK : int @ 142:35
+FX_PARAM_REPEAT_OFF_3:	! DEFi #4	; signature const FX_PARAM_REPEAT_OFF_3 : int @ 143:36
+FX_PARAM_SHIFT_9:	! DEFi #5	; signature const FX_PARAM_SHIFT_9 : int @ 144:31
+FX_PARAM_SHIFT_10:	! DEFi #6	; signature const FX_PARAM_SHIFT_10 : int @ 145:32
+FX_PARAM_1_LSHIFT_9:	! DEFi #7	; signature const FX_PARAM_1_LSHIFT_9 : int @ 146:34
+FX_PARAM_1_LSHIFT_10:	! DEFi #8	; signature const FX_PARAM_1_LSHIFT_10 : int @ 147:35
+FX_PARAM_MASK_10:	! DEFi #9	; signature const FX_PARAM_MASK_10 : int @ 148:31
+FX_PARAM_COUNT:	! DEFi #10	; signature const FX_PARAM_COUNT : int @ 149:30
 	! MULi <A> #FX_PARAM_COUNT #3
-FX_PARAMS:	GLOB *<A>	; signature array FX_PARAMS[<A>] : unknown
-stepFXs:	GLOB *STEP_COUNT	; signature array stepFXs[STEP_COUNT] : unknown
-stepFXParams:	GLOB *STEP_COUNT	; signature array stepFXParams[STEP_COUNT] : unknown
+FX_PARAMS:	GLOB *<A>	; signature array FX_PARAMS[<A>] : unknown @ 153:43
+stepFXs:	GLOB *STEP_COUNT	; signature array stepFXs[STEP_COUNT] : unknown @ 155:1
+stepFXParams:	GLOB *STEP_COUNT	; signature array stepFXParams[STEP_COUNT] : unknown @ 155:38
 	GLOB *1
-doReset:	DATi #TRUE	; signature global doReset : int
+doReset:	DATi #TRUE	; signature global doReset : int @ 157:1
 	GLOB *1
-updateBits:	DATi #TRUE	; signature global updateBits : int
+updateBits:	DATi #TRUE	; signature global updateBits : int @ 158:1
 	GLOB *1
-clockMask:	DATi #0x1FFFF	; signature global clockMask : int
+clockMask:	DATi #0x1FFFF	; signature global clockMask : int @ 158:31
 	GLOB *1
-clockShift:	DATi #13	; signature global clockShift : int
+clockShift:	DATi #13	; signature global clockShift : int @ 159:27
 	GLOB *1
-fxQuantize:	DATi #0xFFF	; signature global fxQuantize : int
+fxQuantize:	DATi #0xFFF	; signature global fxQuantize : int @ 160:30
 	GLOB *1
-dirXor:	DATi #0x0	; signature global dirXor : int
+dirXor:	DATi #0x0	; signature global dirXor : int @ 161:24
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-reset:	FUNC	; signature func reset() -> void
+reset:	FUNC	; signature func reset() -> void @ 171:16
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4da 	; trace("reset")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 173:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-update:	FUNC	; signature func update() -> void
+update:	FUNC	; signature func update() -> void @ 184:17
 	$i:	LOCi
 	$fx:	LOCi
 	$fxRnd:	LOCi
@@ -145,7 +145,7 @@ update:	FUNC	; signature func update() -> void
 	$fxCountFloat:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4db 	; trace("update")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 196:17
 		POKE &dirXor #0 	; global dirXor = 0
 		PEEK %0 &params:SWITCHES_PARAM_INDEX 	; if (((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_REVERSE_MASK) != 0) 
 		ANDi %0 %0 #SWITCHES_REVERSE_MASK
@@ -165,7 +165,7 @@ update:	FUNC	; signature func update() -> void
 	.f4:	FORi $i #8 @.l3	; }
 	.f1:	PEEK %1 &params:OPERAND_1_LOW_PARAM_INDEX 	; seedRandom((int) global params[OPERAND_1_LOW_PARAM_INDEX] + 1)
 		ADDi %1 %1 #1
-		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void
+		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ 215:64
 		PEEK %0 &params:OPERATOR_2_PARAM_INDEX 	; stepRate = (int) global params[OPERATOR_2_PARAM_INDEX] - 1
 		SUBi $stepRate %0 #1
 		GEQi $stepRate #0 @.f5	; if (stepRate < 0) 
@@ -199,7 +199,7 @@ update:	FUNC	; signature func update() -> void
 		MOVi $fx #-1 	; fx = -1
 		MOVi $i #0 	; for (i = 0 to STEP_COUNT) 
 		GEQi #0 #STEP_COUNT @.e12
-	.l13:	CALL &randomFloat %0 *1	; expects randomFloat() -> float
+	.l13:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 241:40
 		MULf %0 %0 $fxCountFloat
 		fTOi $fxRnd %0 #1.0
 		LEQi $fxRnd $fxCount @.f14	; if (fxRnd > fxCount) 
@@ -227,7 +227,7 @@ update:	FUNC	; signature func update() -> void
 		GOTO @.e21  
 	.s20#3:	MOVi $fx #0 	; fx = 0
 		GOTO @.e21  
-	.s20#4:	CALL &randomFloat %0 *1	; expects randomFloat() -> float
+	.s20#4:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 262:44
 		fTOi $fx %0 #2.9999
 	.s20:	NOOP
 	.e21:	POKE &stepFXParams $i $fx	; global stepFXParams[i] = fx
@@ -237,7 +237,7 @@ update:	FUNC	; signature func update() -> void
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-init:	FUNC	; signature func init() -> void
+init:	FUNC	; signature func init() -> void @ 273:15
 	$i:	LOCi
 	$p:	LOCp
 	$fxRate:	LOCi
@@ -245,8 +245,8 @@ init:	FUNC	; signature func init() -> void
 	$t:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4dc 	; trace("init")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown
-		CALL &update %0 *1	; expects update() -> void
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 276:15
+		CALL &update %0 *1	; expects update() -> void @ 277:10
 		MOVp $p &FX_PARAMS 	; p = global FX_PARAMS
 		MOVi $i #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0
@@ -281,7 +281,7 @@ init:	FUNC	; signature func init() -> void
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-process:	FUNC	; signature func process() -> void
+process:	FUNC	; signature func process() -> void @ 311:18
 	$i:	LOCi
 	$x:	LOCi
 	$mask:	LOCi
@@ -352,11 +352,11 @@ process:	FUNC	; signature func process() -> void
 	.f3:	MOVi %1 $clock 	; write(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 368:33
 		MOVi %1 $clock 	; read(clock, 1, inp)
 		MOVi %2 #1 
 		ADRL %3 $inp *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 369:22
 		SWCH $held *8 @.s7	; switch (held == 0 to 8) 
 	.s7#REVERSE_FX:	EQUi $trig #FALSE @.f9	; if (trig != FALSE) 
 		MOVi $pos $clock 	; pos = clock
@@ -364,7 +364,7 @@ process:	FUNC	; signature func process() -> void
 		MOVi %1 $pos 	; read(pos, 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 377:23
 		GOTO @.e8  	; }
 	.s7#TAPE_STOP_FX:	EQUi $trig #FALSE @.f10	; if (trig != FALSE) 
 		SHLi $pos $clock #16	; pos = clock << 16
@@ -373,7 +373,7 @@ process:	FUNC	; signature func process() -> void
 		SHRi %1 $pos #16	; read(pos >> 16, 2, samples)
 		MOVi %2 #2 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 386:32
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> 16)
 		MULi %0 %0 $x
 		SHRi %0 %0 #16
@@ -392,7 +392,7 @@ process:	FUNC	; signature func process() -> void
 	.f12:	SHRi %1 $pos #1	; read(pos >> 1, 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 400:28
 		ADDi $pos $pos #1	; pos = pos + 1
 		GOTO @.e8  	; }
 	.s7#TRANCE_GATE_EFFECT:	SHRi %0 $clock $fxParams:FX_PARAM_TRANCE_GATE_RATE	; x = (clock >> (int) fxParams[FX_PARAM_TRANCE_GATE_RATE]) & 0x7FF
@@ -420,7 +420,7 @@ process:	FUNC	; signature func process() -> void
 	.s7#BIT_CRUSH_EFFECT:	ANDi %1 $clock $fxParams:FX_PARAM_BIT_CRUSH_MASK	; read(clock & (int) fxParams[FX_PARAM_BIT_CRUSH_MASK], 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 420:67
 		! XORi <A> #0x7F #-1	; outp[0] = (int) outp[0] & ~0x7F
 		ANDi $outp:0 $outp:0 <A>
 		! XORi <A> #0x7F #-1	; outp[1] = (int) outp[1] & ~0x7F
@@ -434,7 +434,7 @@ process:	FUNC	; signature func process() -> void
 		MOVi %1 $pos 	; read(pos, 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 429:26
 		ANDi %0 $clock $fxParams:FX_PARAM_REPEAT_OFF_3	; if ((clock & (int) fxParams[FX_PARAM_REPEAT_OFF_3]) == (int) fxParams[FX_PARAM_REPEAT_OFF_3]) 
 		NEQi %0 $fxParams:FX_PARAM_REPEAT_OFF_3 @.f19
 		ADDi $pos $pos $fxParams:FX_PARAM_REPEAT_OFF_3	; pos = pos + (int) fxParams[FX_PARAM_REPEAT_OFF_3]
@@ -452,7 +452,7 @@ process:	FUNC	; signature func process() -> void
 	.e22:	MOVi %1 $pos 	; read(pos, 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 441:30
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_10])
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_10
@@ -467,11 +467,11 @@ process:	FUNC	; signature func process() -> void
 	.f24:	MOVi %1 $pos 	; read(pos, 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 450:26
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_9	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_9], 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 451:68
 		ANDi $x $clock $fxParams:FX_PARAM_MASK_10	; x = clock & (int) fxParams[FX_PARAM_MASK_10]
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_10])
 		MULi %0 %0 $x
@@ -495,11 +495,11 @@ process:	FUNC	; signature func process() -> void
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_9	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_9], 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 464:64
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_10	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_10], 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 465:69
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_9])
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_9
@@ -528,7 +528,7 @@ process:	FUNC	; signature func process() -> void
 		SHRi %0 %0 #15
 		ADDi %0 $inp:1 %0
 		POKE &signal:1 %0 
-		CALL ^yield %0 *1	; expects function() -> unknown
+		CALL ^yield %0 *1	; expects function() -> unknown @ 485:10
 		ADDi $clock $clock #1	; clock = clock + 1
 		GOTO @.l0  	; }
 		RETU   	; }

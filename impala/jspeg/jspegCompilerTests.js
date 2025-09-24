@@ -61,7 +61,7 @@ if (impalaIndex !== impalaGrammar.length) {
 	process.exit(1);
 }
 const impalaExisting = fs.readFileSync(path.join(dir, 'impalaCompiler.js'), 'utf8');
-if (wrapCompilerSource('impalaCompiler', impalaGenerated, { prelude: 'var $$parser = {};' }).trim() !== impalaExisting.trim()) {
+if (wrapCompilerSource('impalaCompiler', impalaGenerated, { prelude: 'var $$parser = {};', exposeSourceNameOption: true }).trim() !== impalaExisting.trim()) {
         console.error('Generated compiler differs from impalaCompiler.js');
         process.exit(1);
 }
@@ -183,11 +183,11 @@ const tagCaptureCases = [
 testGrammarEquivalence('tagCaptureTest.jspeg', 'tagCaptureTest.jspeg', tagCaptureCases);
 
 const parityFixtures = [
-        { name: 'smoke', source: 'smoke.impala', expected: 'smoke.pika.gazl', options: { randomId: 42 } },
-        { name: 'bool', source: 'bool.impala', expected: 'bool.pika.gazl', options: { randomId: 42 } },
-        { name: 'control', source: 'control.impala', expected: 'control.pika.gazl', options: { randomId: 42 } },
-        { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.pika.gazl', options: { randomId: 42 } },
-        { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.pika.gazl', options: { randomId: 42 } }
+        { name: 'smoke', source: 'smoke.impala', expected: 'smoke.pika.gazl', options: { randomId: 42, sourceName: 'smoke.impala' } },
+        { name: 'bool', source: 'bool.impala', expected: 'bool.pika.gazl', options: { randomId: 42, sourceName: 'bool.impala' } },
+        { name: 'control', source: 'control.impala', expected: 'control.pika.gazl', options: { randomId: 42, sourceName: 'control.impala' } },
+        { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.pika.gazl', options: { randomId: 42, sourceName: 'perfTest2.impala' } },
+        { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.pika.gazl', options: { randomId: 42, sourceName: 'inputTest.impala' } }
 ];
 
 const legacySourceDir = path.join(dir, '..', '..', 'tests', 'impala', 'sources');
@@ -205,7 +205,7 @@ const legacyParityFixtures = fs
                         expected: `${name}.gazl`,
                         sourceDir: legacySourceDir,
                         expectedDir: legacyExpectedDir,
-                        options: { randomId: LEGACY_RANDOM_ID, retabulate: false }
+                        options: { randomId: LEGACY_RANDOM_ID, retabulate: false, sourceName: path.join(legacySourceDir, file) }
                 };
         });
 

@@ -1,24 +1,24 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int
-FALSE:	! DEFi #0	; signature const FALSE : int
-TRUE:	! DEFi #1	; signature const TRUE : int
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 10:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 13:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:33
 	DATA &.s_A4d2 &.s_BBASSD4d3 &.s_C4d4 &.s_D4d5 &.s_A4d2
 	DATA &.s_BHIHAT4d6 &.s_CSNARE4d7 &.s_D4d5
-; signature extern native abort() -> unknown
-; signature extern native trace() -> unknown
-; signature extern native yield() -> unknown
-; signature extern native write() -> unknown
-; signature extern native read() -> unknown
+; signature extern native abort() -> unknown @ 25:1
+; signature extern native trace() -> unknown @ 26:1
+; signature extern native yield() -> unknown @ 27:1
+; signature extern native write() -> unknown @ 28:1
+; signature extern native read() -> unknown @ 30:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown
+clock:	DATi #0	; signature global clock : int @ 49:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 50:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 51:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int
-signal:	GLOB *2	; signature array signal[2] : unknown
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 52:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 53:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -31,13 +31,13 @@ signal:	GLOB *2	; signature array signal[2] : unknown
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int
-SOUNDS_COUNT:	! DEFi #4	; signature const SOUNDS_COUNT : int
-DRUM_COUNT:	! DEFi #3	; signature const DRUM_COUNT : int
-DRUM_PARAM_COUNT:	! DEFi #8	; signature const DRUM_PARAM_COUNT : int
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 122:1
+SOUNDS_COUNT:	! DEFi #4	; signature const SOUNDS_COUNT : int @ 122:27
+DRUM_COUNT:	! DEFi #3	; signature const DRUM_COUNT : int @ 123:25
+DRUM_PARAM_COUNT:	! DEFi #8	; signature const DRUM_PARAM_COUNT : int @ 124:31
 	! MULi <A> #DRUM_COUNT #SOUNDS_COUNT
 	! MULi <A> <A> #DRUM_PARAM_COUNT
-DRUM_PARAMS:	CNST *<A>	; signature array DRUM_PARAMS[<A>] : unknown
+DRUM_PARAMS:	CNST *<A>	; signature array DRUM_PARAMS[<A>] : unknown @ 128:74
 	DATA #435 #94 #75535 #0 #0 #0 #0 #1523 #773 #136 #52429 #0
 	DATA #0 #0 #0 #523 #556 #58 #65535 #0 #0 #0 #0 #780 #267
 	DATA #10 #35643 #0 #0 #0 #0 #500 #0 #0 #0 #32790 #5233
@@ -48,11 +48,11 @@ DRUM_PARAMS:	CNST *<A>	; signature array DRUM_PARAMS[<A>] : unknown
 	DATA #28459 #0 #459 #23332 #34147 #2513 #897 #99 #57673
 	DATA #23423 #24248 #14417 #57671 #6000 #802 #80 #53255
 	DATA #29321 #42598 #1311 #58496 #3522
-stepSounds:	GLOB *16	; signature array stepSounds[16] : unknown
+stepSounds:	GLOB *16	; signature array stepSounds[16] : unknown @ 153:28
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-update:	FUNC	; signature func update() -> void
+update:	FUNC	; signature func update() -> void @ 170:17
 	$operand1Bits:	LOCi
 	$operand2Bits:	LOCi
 	$drumSounds:	LOCA *DRUM_COUNT
@@ -97,7 +97,7 @@ update:	FUNC	; signature func update() -> void
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-process:	FUNC	; signature func process() -> void
+process:	FUNC	; signature func process() -> void @ 201:18
 	$rnd:	LOCi
 	$rndXor:	LOCi
 	$rndAdd:	LOCi
@@ -200,8 +200,8 @@ process:	FUNC	; signature func process() -> void
 		PEEK %1 &clock 	; write(global clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown
-		CALL ^yield %0 *1	; expects function() -> unknown
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 252:41
+		CALL ^yield %0 *1	; expects function() -> unknown @ 253:11
 		PEEK %0 &signal:0 	; global signal[0] = (((int) global signal[0] * pump) >> 12) + y
 		MULi %0 %0 $pump
 		SHRi %0 %0 #12
@@ -215,8 +215,8 @@ process:	FUNC	; signature func process() -> void
 		PEEK %1 &clock 	; write(global clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown
-		CALL ^yield %0 *1	; expects function() -> unknown
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 256:41
+		CALL ^yield %0 *1	; expects function() -> unknown @ 257:11
 		ADDi $pump $pump #0x2	; pump = pump + 0x2
 		LEQi $pump #0x1000 @.f10	; if (pump > 0x1000) pump = 0x1000
 		MOVi $pump #0x1000 	; pump = 0x1000

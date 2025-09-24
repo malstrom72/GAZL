@@ -104,7 +104,10 @@ function compileWithJsImpala(source, options = {}) {
         new vm.Script(patchedCompilerSource, { filename: path.basename(compilerPath) }).runInContext(context);
 
         const compilerFn = context.module.exports;
-        const [ok, , index] = compilerFn(source);
+        const compilerOptions = (options && Object.prototype.hasOwnProperty.call(options, 'sourceName'))
+                ? { sourceName: options.sourceName }
+                : undefined;
+        const [ok, , index] = compilerFn(source, compilerOptions);
         if (!ok) {
                 throw new Error('JSPEG impala compiler failed to compile source');
         }
