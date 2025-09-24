@@ -2,7 +2,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const Module = require('module');
 const vm = require('vm');
 
 const OUTPUT_TAB_WIDTH = 4;
@@ -42,23 +41,56 @@ function retabulate(line) {
         return out;
 }
 
-// No meta-slot prototype shim. Patch only root holder to a plain object.
+function createMetaSlotInitializerScript() {
+        return new vm.Script(`
+                Object.defineProperty(Object.prototype, '_', {
+                        get: function () {
+                                globalThis.__jspegMetaOwner = this;
+                                if (!this.hasOwnProperty('__metaSlot')) {
+                                        Object.defineProperty(this, '__metaSlot', {
+                                                value: { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] },
+                                                writable: true,
+                                                configurable: true
+                                        });
+                                }
+                                return this.__metaSlot;
+                        },
+                        set: function (value) {
+                                globalThis.__jspegMetaOwner = this;
+                                Object.defineProperty(this, '__metaSlot', {
+                                        value,
+                                        writable: true,
+                                        configurable: true
+                                });
+                        },
+                        configurable: true
+                });
+        `);
+}
 
-function patchCompilerRootHolder(source) {
+function patchCompilerSourceForMeta(source) {
+        const marker = '    makeMeta = function (rec, op, type, op0, op1, op2) {';
+        const guard = `\n        if (rec == null) {\n                var owner = (typeof __jspegMetaOwner !== 'undefined' ? __jspegMetaOwner : null);\n                if (owner) {\n                        if (!owner.hasOwnProperty('__metaSlot')) {\n                                owner.__metaSlot = { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] };\n                        }\n                        rec = owner.__metaSlot;\n                } else {\n                        rec = { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] };\n                }\n        }`;
+        if (!source.includes(marker)) {
+                return source;
+        }
+        let patched = source.replace(marker, `${marker}${guard}`);
+        const assignRegex = /    assign = function \(x, leftx, rightx,\n[ \t]+sourceCode, sourceOffset\) \{/;
+        const assignGuard = `\n        if (!leftx || leftx.operator === undefined) {\n                throw new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));\n        }`;
+        patched = patched.replace(assignRegex, (match) => `${match}${assignGuard}`);
         const rootInitPattern = 'var _i=0,_im=0,_o={_:void 0},';
-        const rootInitObject = 'var _i=0,_im=0,_o={_: {}},';
-        return source.includes(rootInitPattern)
-                ? source.replace(rootInitPattern, rootInitObject)
-                : source;
+        const rootMeta = 'var _i=0,_im=0,_o={_: { operator: undefined, type: undefined, operands: [undefined, undefined, undefined] }},';
+        patched = patched.replace(rootInitPattern, rootMeta);
+        return patched;
 }
 
 function compileWithJsImpala(source, options = {}) {
         const compilerPath = options.compilerPath || path.join(__dirname, 'impalaCompiler.js');
-        let compilerSource = options.compilerSource || fs.readFileSync(compilerPath, 'utf8');
-        compilerSource = patchCompilerRootHolder(compilerSource);
+        const compilerSource = options.compilerSource || fs.readFileSync(compilerPath, 'utf8');
+        const patchedCompilerSource = patchCompilerSourceForMeta(compilerSource);
 
         const outputLines = [];
-        const contextGlobals = {
+        const context = {
                 module: { exports: {} },
                 exports: {},
                 console,
@@ -66,44 +98,21 @@ function compileWithJsImpala(source, options = {}) {
                 impalaRandomId: options.randomId ?? 12345678,
                 $$parser: {}
         };
-        const context = vm.createContext(contextGlobals);
-        new vm.Script(compilerSource, { filename: path.basename(compilerPath) }).runInContext(context);
+        vm.createContext(context);
 
-        let compilerFn = context.module.exports;
-        if (compilerFn && typeof compilerFn === 'object') {
-                compilerFn = compilerFn.impalaCompiler || compilerFn.default || compilerFn.compile || compilerFn.compiler || compilerFn;
+        createMetaSlotInitializerScript().runInContext(context);
+        new vm.Script(patchedCompilerSource, { filename: path.basename(compilerPath) }).runInContext(context);
+
+        const compilerFn = context.module.exports;
+        const compilerOptions = (options && Object.prototype.hasOwnProperty.call(options, 'sourceName'))
+                ? { sourceName: options.sourceName }
+                : undefined;
+        const [ok, , index] = compilerFn(source, compilerOptions);
+        if (!ok) {
+                throw new Error('JSPEG impala compiler failed to compile source');
         }
-        if (typeof compilerFn !== 'function') {
-                throw new Error('JSPEG impala compiler did not export a function');
-        }
-
-        const previousOutput = globalThis.output;
-        const hadOutput = Object.prototype.hasOwnProperty.call(globalThis, 'output');
-        const previousRandomId = globalThis.impalaRandomId;
-        const hadRandomId = Object.prototype.hasOwnProperty.call(globalThis, 'impalaRandomId');
-
-        globalThis.output = contextGlobals.output;
-        globalThis.impalaRandomId = contextGlobals.impalaRandomId;
-
-        try {
-                const [ok, , index] = compilerFn(source);
-                if (!ok) {
-                        throw new Error('JSPEG impala compiler failed to compile source');
-                }
-                if (index !== source.length) {
-                        throw new Error(`JSPEG impala compiler stopped at ${index} of ${source.length}`);
-                }
-        } finally {
-                if (hadOutput) {
-                        globalThis.output = previousOutput;
-                } else {
-                        delete globalThis.output;
-                }
-                if (hadRandomId) {
-                        globalThis.impalaRandomId = previousRandomId;
-                } else {
-                        delete globalThis.impalaRandomId;
-                }
+        if (index !== source.length) {
+                throw new Error(`JSPEG impala compiler stopped at ${index} of ${source.length}`);
         }
 
         if (outputLines.length === 0) {

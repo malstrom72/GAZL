@@ -1,33 +1,36 @@
 ; Compiled with Impala version 1.0
 
-PI:	! DEFf #3.14159265358979323846
-BATCH_SIZE:	! DEFi #64
-rq:	! DEFf #0.1
-f:	! DEFf #0.01
+; signatures version=1
+; signature extern native sin() -> unknown @ 1:18
+; signature extern native cos() -> unknown @ 2:18
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 3:40
+BATCH_SIZE:	! DEFi #64	; signature const BATCH_SIZE : int @ 4:26
+rq:	! DEFf #0.1	; signature const rq : float @ 6:21
+f:	! DEFf #0.01	; signature const f : float @ 7:21
 	TEMP *1
-_ldxz:	DATf #0.0
+_ldxz:	DATf #0.0	; signature temporary _ldxz : float @ 9:22
 	TEMP *1
-_ld0z:	DATf #0.0
+_ld0z:	DATf #0.0	; signature temporary _ld0z : float @ 10:22
 	TEMP *1
-_ld1z:	DATf #0.0
+_ld1z:	DATf #0.0	; signature temporary _ld1z : float @ 11:22
 	TEMP *1
-_ld2z:	DATf #0.0
+_ld2z:	DATf #0.0	; signature temporary _ld2z : float @ 12:22
 	TEMP *1
-_ld3z:	DATf #0.0
+_ld3z:	DATf #0.0	; signature temporary _ld3z : float @ 13:22
 	TEMP *1
-_rdxz:	DATf #0.0
+_rdxz:	DATf #0.0	; signature temporary _rdxz : float @ 14:22
 	TEMP *1
-_rd0z:	DATf #0.0
+_rd0z:	DATf #0.0	; signature temporary _rd0z : float @ 15:22
 	TEMP *1
-_rd1z:	DATf #0.0
+_rd1z:	DATf #0.0	; signature temporary _rd1z : float @ 16:22
 	TEMP *1
-_rd2z:	DATf #0.0
+_rd2z:	DATf #0.0	; signature temporary _rd2z : float @ 17:22
 	TEMP *1
-_rd3z:	DATf #0.0
+_rd3z:	DATf #0.0	; signature temporary _rd3z : float @ 18:22
 
 ;-----------------------------------------------------------------------------
-filter:	FUNC
 	$hasSoundOut:	OUTi
+filter:	FUNC	; signature func filter(int hasSoundIn, ptr left, ptr right) -> int @ 20:17
 	$hasSoundIn:	INPi
 	$left:	INPp
 	$right:	INPp
@@ -66,11 +69,11 @@ filter:	FUNC
 		! MULf <A> #f #PI	; fpi = f * PI
 		MOVf $fpi <A> 
 		MOVf %1 $fpi 	; k = ((float) sin(fpi)) / ((float) cos(fpi) + (float) sin(fpi))
-		CALL ^sin %0 *2
+		CALL ^sin %0 *2	; expects function(float) -> unknown @ 32:23
 		MOVf %2 $fpi 
-		CALL ^cos %1 *2
+		CALL ^cos %1 *2	; expects function(float) -> unknown @ 32:45
 		MOVf %3 $fpi 
-		CALL ^sin %2 *2
+		CALL ^sin %2 *2	; expects function(float) -> unknown @ 32:63
 		ADDf %1 %1 %2
 		DIVf $k %0 %1
 		MULf %0 $r $k	; g0 = r / (1.0 + r * k * k * k * k)
@@ -136,4 +139,4 @@ filter:	FUNC
 		RETU   	; }
 
 	! MULi <A> #BATCH_SIZE #2
-audioBuffers:	TEMP *<A>
+audioBuffers:	TEMP *<A>	; signature array audioBuffers[<A>] : unknown @ 72:45

@@ -1,24 +1,25 @@
 ; Compiled with Impala version 1.0
 
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
-panelTextRows:	GLOB *8
+; signatures version=1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 9:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 10:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 12:1
+panelTextRows:	GLOB *8	; signature array panelTextRows[8] : unknown @ 40:31
 	DATA &.s_5Khz4d2 &.s_114d3 &.s_224d4 &.s_44SPEE4d5
 	DATA &.s_ONCE4d6 &.s_LOOPcl4d7 &.s_LOOPcl4d7:52
 	DATA &.s_MOUTHT4d8
-params:	GLOB *PARAM_COUNT
-CONFIG_STRING_MAX_SIZE:	! DEFi #100
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 53:1
+CONFIG_STRING_MAX_SIZE:	! DEFi #100	; signature const CONFIG_STRING_MAX_SIZE : int @ 53:39
 	GLOB *1
-clock:	DATi #0
-signal:	GLOB *2
-config:	GLOB *CONFIG_STRING_MAX_SIZE
+clock:	DATi #0	; signature global clock : int @ 55:17
+signal:	GLOB *2	; signature array signal[2] : unknown @ 56:23
+config:	GLOB *CONFIG_STRING_MAX_SIZE	; signature array config[CONFIG_STRING_MAX_SIZE] : unknown @ 57:44
 	GLOB *1
-configText:	DATp &.s_Enters4d9
+configText:	DATp &.s_Enters4d9	; signature global configText : ptr @ 58:88
 	! ADDi <A> #CONFIG_STRING_MAX_SIZE #20
-dynamicPanelTextRow:	GLOB *<A>
+dynamicPanelTextRow:	GLOB *<A>	; signature array dynamicPanelTextRow[<A>] : unknown @ 59:62
 	CNST *1
-clockFreqLimit:	DATi #88200
+clockFreqLimit:	DATi #88200	; signature readonly clockFreqLimit : int @ 61:1
 	CNST *1
 	! SHLi <A> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
@@ -29,29 +30,33 @@ clockFreqLimit:	DATi #88200
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERATOR_1_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>
-scales:	CNST *5
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 65:1
+; signature extern native trace() -> unknown @ 65:20
+; signature extern native yield() -> unknown @ 66:20
+; signature extern native abort() -> unknown @ 67:20
+; signature extern native exit() -> unknown @ 68:19
+scales:	CNST *5	; signature array scales[5] : unknown @ 70:26
 	DATA #200 #200 #100 #50 #25
 	GLOB *1
-lastClock:	DATi #65535
+lastClock:	DATi #65535	; signature global lastClock : int @ 72:29
 	GLOB *1
-pleaseBreak:	DATi #FALSE
+pleaseBreak:	DATi #FALSE	; signature global pleaseBreak : int @ 73:31
 	GLOB *1
-abortWhenDone:	DATi #FALSE
+abortWhenDone:	DATi #FALSE	; signature global abortWhenDone : int @ 74:33
 	GLOB *1
-writepos:	DATi #0
+writepos:	DATi #0	; signature global writepos : int @ 75:24
 	GLOB *1
-lastSample:	DATi #0
+lastSample:	DATi #0	; signature global lastSample : int @ 76:26
 	GLOB *1
-bufferpos:	DATi #0
+bufferpos:	DATi #0	; signature global bufferpos : int @ 77:25
 	GLOB *1
-useScale:	DATi #25
+useScale:	DATi #25	; signature global useScale : int @ 78:25
 	GLOB *1
-scale:	DATi #25
+scale:	DATi #25	; signature global scale : int @ 79:22
 
 ;-----------------------------------------------------------------------------
-strcpy:	FUNC
 	$r:	OUTp
+strcpy:	FUNC	; signature func strcpy(ptr d, ptr s) -> ptr @ 81:17
 	$d:	INPp
 	$s:	INPp
 	$a:	LOCp
@@ -70,8 +75,8 @@ strcpy:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-stpcpy:	FUNC
 	$a:	OUTp
+stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 93:17
 	$d:	INPp
 	$s:	INPp
 	$b:	LOCp
@@ -88,8 +93,8 @@ stpcpy:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-strcat:	FUNC
 	$r:	OUTp
+strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr @ 105:17
 	$d:	INPp
 	$s:	INPp
 	$a:	LOCp
@@ -110,7 +115,7 @@ strcat:	FUNC
 		GOTO @.l2  	; }
 	.e3:	RETU   	; }
 
-someFlags:	CNST *108
+someFlags:	CNST *108	; signature array someFlags[108] : unknown @ 119:31
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #2 #2 #2
 	DATA #2 #2 #2 #130 #0 #0 #2 #2 #2 #2 #2 #2 #3 #3 #3 #3 #3
@@ -119,8 +124,8 @@ someFlags:	CNST *108
 	DATA #172 #192 #160 #160 #172 #180 #164 #192 #168 #168
 	DATA #176 #192 #188 #0 #0 #0 #2 #0 #32 #32 #155 #32 #192
 	DATA #185 #32 #205 #163 #76 #138 #142
-RULES_SIZE:	! DEFi #6000
-rules:	CNST *RULES_SIZE
+RULES_SIZE:	! DEFi #6000	; signature const RULES_SIZE : int @ 136:28
+rules:	CNST *RULES_SIZE	; signature array rules[RULES_SIZE] : unknown @ 137:34
 	DATA #93 #193 #32 #40 #65 #46 #41 #61 #69 #72 #52 #89 #46
 	DATA #160 #40 #65 #41 #32 #61 #65 #200 #32 #40 #65 #82 #69
 	DATA #41 #32 #61 #65 #65 #210 #32 #40 #65 #82 #41 #79 #61
@@ -591,14 +596,14 @@ rules:	CNST *RULES_SIZE
 	DATA #32 #65 #69 #54 #212 #40 #94 #41 #61 #32 #75 #65 #69
 	DATA #52 #82 #73 #88 #212 #93 #193 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0
-rulesOffsets:	CNST *26
+rulesOffsets:	CNST *26	; signature array rulesOffsets[26] : unknown @ 329:33
 	DATA #0 #405 #503 #674 #825 #1221 #1286 #1406 #1479 #1830
 	DATA #1847 #1870 #1937 #2033 #2133 #2721 #2814 #2852 #2885
 	DATA #3117 #3495 #3638 #3667 #3886 #3911 #4058
 
 ;-----------------------------------------------------------------------------
-TextToPhonemes:	FUNC
 	$r:	OUTi
+TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ 333:25
 	$input:	INPp
 	$inputCopy:	LOCA *256
 	$p:	LOCp
@@ -946,9 +951,9 @@ TextToPhonemes:	FUNC
 		GOTO @.l46  	; }
 	_return:	RETU   	; }
 
-stressInputTable:	CNST *9
+stressInputTable:	CNST *9	; signature array stressInputTable[9] : unknown @ 623:36
 	DATA #'*' #'1' #'2' #'3' #'4' #'5' #'6' #'7' #'8'
-signInputTable1:	CNST *81
+signInputTable1:	CNST *81	; signature array signInputTable1[81] : unknown @ 627:36
 	DATA #' ' #'.' #'?' #',' #'-' #'I' #'I' #'E' #'A' #'A'
 	DATA #'A' #'A' #'U' #'A' #'I' #'E' #'U' #'O' #'R' #'L'
 	DATA #'W' #'Y' #'W' #'R' #'L' #'W' #'Y' #'M' #'N' #'N'
@@ -958,7 +963,7 @@ signInputTable1:	CNST *81
 	DATA #'G' #'*' #'*' #'G' #'*' #'*' #'P' #'*' #'*' #'T'
 	DATA #'*' #'*' #'K' #'*' #'*' #'K' #'*' #'*' #'U' #'U'
 	DATA #'U'
-signInputTable2:	CNST *81
+signInputTable2:	CNST *81	; signature array signInputTable2[81] : unknown @ 641:36
 	DATA #'*' #'*' #'*' #'*' #'*' #'Y' #'H' #'H' #'E' #'A'
 	DATA #'H' #'O' #'H' #'X' #'X' #'R' #'X' #'H' #'X' #'X'
 	DATA #'X' #'X' #'H' #'*' #'*' #'*' #'*' #'*' #'*' #'X'
@@ -968,7 +973,7 @@ signInputTable2:	CNST *81
 	DATA #'*' #'*' #'*' #'X' #'*' #'*' #'*' #'*' #'*' #'*'
 	DATA #'*' #'*' #'*' #'*' #'*' #'X' #'*' #'*' #'L' #'M'
 	DATA #'N'
-flags:	CNST *81
+flags:	CNST *81	; signature array flags[81] : unknown @ 655:26
 	DATA #0 #0 #0 #0 #0 #0xA4 #0xA4 #0xA4 #0xA4 #0xA4 #0xA4
 	DATA #0x84 #0x84 #0xA4 #0xA4 #0x84 #0x84 #0x84 #0x84 #0x84
 	DATA #0x84 #0x84 #0x44 #0x44 #0x44 #0x44 #0x44 #0x4C #0x4C
@@ -978,14 +983,14 @@ flags:	CNST *81
 	DATA #0x4E #0x4E #0x4E #0x4E #0x4E #0x4E #0x4E #0x4E #0x4E
 	DATA #0x4B #0x4B #0x4B #0x4B #0x4B #0x4B #0x4B #0x4B #0x4B
 	DATA #0x4B #0x4B #0x4B #0x80 #0xC1 #0xC1
-flags2:	CNST *78
+flags2:	CNST *78	; signature array flags2[78] : unknown @ 669:26
 	DATA #0x80 #0xC1 #0xC1 #0xC1 #0xC1 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0x10 #0x10 #0x10 #0x10
 	DATA #8 #0xC #8 #4 #0x40 #0x24 #0x20 #0x20 #0x24 #0 #0
 	DATA #0x24 #0x20 #0x20 #0x24 #0x20 #0x20 #0 #0x20 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #4 #4 #4 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #4 #4 #4 #0 #0 #0 #0 #0 #0
-sinus:	CNST *256
+sinus:	CNST *256	; signature array sinus[256] : unknown @ 682:26
 	DATA #0 #0 #0 #0x10 #0x10 #0x10 #0x10 #0x10 #0x10 #0x20
 	DATA #0x20 #0x20 #0x20 #0x20 #0x20 #0x30 #0x30 #0x30 #0x30
 	DATA #0x30 #0x30 #0x30 #0x40 #0x40 #0x40 #0x40 #0x40 #0x40
@@ -1014,7 +1019,7 @@ sinus:	CNST *256
 	DATA #0xC0 #0xC0 #0xC0 #0xC0 #0xC0 #0xC0 #0xC0 #0xD0 #0xD0
 	DATA #0xD0 #0xD0 #0xD0 #0xD0 #0xD0 #0xE0 #0xE0 #0xE0 #0xE0
 	DATA #0xE0 #0xE0 #0xF0 #0xF0 #0xF0 #0xF0 #0xF0 #0xF0 #0 #0
-rectangle:	GLOB *256
+rectangle:	GLOB *256	; signature array rectangle[256] : unknown @ 717:28
 	DATA #0x90 #0x90 #0x90 #0x90 #0x90 #0x90 #0x90 #0x90 #0x90
 	DATA #0x90 #0x90 #0x90 #0x90 #0x90 #0x90 #0x90 #0x90 #0x90
 	DATA #0x90 #0x90 #0x90 #0x90 #0x90 #0x90 #0x90 #0x90 #0x90
@@ -1044,7 +1049,7 @@ rectangle:	GLOB *256
 	DATA #0x70 #0x70 #0x70 #0x70 #0x70 #0x70 #0x70 #0x70 #0x70
 	DATA #0x70 #0x70 #0x70 #0x70 #0x70 #0x70 #0x70 #0x70 #0x70
 	DATA #0x70 #0x70 #0x70 #0x70
-multtable:	CNST *256
+multtable:	CNST *256	; signature array multtable[256] : unknown @ 752:31
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #1 #1 #2 #2 #3 #3 #4 #4 #5 #5 #6 #6 #7 #7 #0 #1 #2 #3
 	DATA #4 #5 #6 #7 #8 #9 #0xA #0xB #0xC #0xD #0xE #0xF #0 #1
@@ -1070,7 +1075,7 @@ multtable:	CNST *256
 	DATA #0xF8 #0xF7 #0xF6 #0xF5 #0xF4 #0xF3 #0xF2 #0xF1 #0
 	DATA #0xFF #0xFF #0xFE #0xFE #0xFD #0xFD #0xFC #0xFC #0xFB
 	DATA #0xFB #0xFA #0xFA #0xF9 #0xF9 #0xF8
-freq1data:	GLOB *80
+freq1data:	GLOB *80	; signature array freq1data[80] : unknown @ 787:28
 	DATA #0 #0x13 #0x13 #0x13 #0x13 #0xA #0xE #0x12 #0x18
 	DATA #0x1A #0x16 #0x14 #0x10 #0x14 #0xE #0x12 #0xE #0x12
 	DATA #0x12 #0x10 #0xC #0xE #0xA #0x12 #0xE #0xA #8 #6 #6
@@ -1078,7 +1083,7 @@ freq1data:	GLOB *80
 	DATA #6 #6 #5 #6 #0 #0x12 #0x1A #0x14 #0x1A #0x12 #0xC #6
 	DATA #6 #6 #6 #6 #6 #6 #6 #6 #6 #6 #6 #6 #6 #6 #6 #6 #6 #6
 	DATA #0xA #0xA #6 #6 #6 #0x2C #0x13
-freq2data:	GLOB *80
+freq2data:	GLOB *80	; signature array freq2data[80] : unknown @ 800:27
 	DATA #0 #0x43 #0x43 #0x43 #0x43 #0x54 #0x48 #0x42 #0x3E
 	DATA #0x28 #0x2C #0x1E #0x24 #0x2C #0x48 #0x30 #0x24 #0x1E
 	DATA #0x32 #0x24 #0x1C #0x44 #0x18 #0x32 #0x1E #0x18 #0x52
@@ -1088,7 +1093,7 @@ freq2data:	GLOB *80
 	DATA #0x1A #0x1A #0x1A #0x42 #0x42 #0x42 #0x6E #0x6E #0x6E
 	DATA #0x54 #0x54 #0x54 #0x1A #0x1A #0x1A #0x42 #0x42 #0x42
 	DATA #0x6D #0x56 #0x6D #0x54 #0x54 #0x54 #0x7F #0x7F
-freq3data:	CNST *80
+freq3data:	CNST *80	; signature array freq3data[80] : unknown @ 813:29
 	DATA #0 #0x5B #0x5B #0x5B #0x5B #0x6E #0x5D #0x5B #0x58
 	DATA #0x59 #0x57 #0x58 #0x52 #0x59 #0x5D #0x3E #0x52 #0x58
 	DATA #0x3E #0x6E #0x50 #0x5D #0x5A #0x3C #0x6E #0x5A #0x6E
@@ -1098,7 +1103,7 @@ freq3data:	CNST *80
 	DATA #0x51 #0x51 #0x51 #0x79 #0x79 #0x79 #0x70 #0x6E #0x6E
 	DATA #0x5E #0x5E #0x5E #0x51 #0x51 #0x51 #0x79 #0x79 #0x79
 	DATA #0x65 #0x65 #0x70 #0x5E #0x5E #0x5E #8 #1
-ampl1data:	CNST *80
+ampl1data:	CNST *80	; signature array ampl1data[80] : unknown @ 826:29
 	DATA #0 #0 #0 #0 #0 #0xD #0xD #0xE #0xF #0xF #0xF #0xF
 	DATA #0xF #0xC #0xD #0xC #0xF #0xF #0xD #0xD #0xD #0xE
 	DATA #0xD #0xC #0xD #0xD #0xD #0xC #9 #9 #0 #0 #0 #0 #0 #0
@@ -1106,46 +1111,46 @@ ampl1data:	CNST *80
 	DATA #0xF #0xF #0xF #0xF #0xD #2 #4 #0 #2 #4 #0 #1 #4 #0
 	DATA #1 #4 #0 #0 #0 #0 #0 #0 #0 #0 #0xC #0 #0 #0 #0 #0xF
 	DATA #0xF
-ampl2data:	CNST *80
+ampl2data:	CNST *80	; signature array ampl2data[80] : unknown @ 839:29
 	DATA #0 #0 #0 #0 #0 #0xA #0xB #0xD #0xE #0xD #0xC #0xC
 	DATA #0xB #9 #0xB #0xB #0xC #0xC #0xC #8 #8 #0xC #8 #0xA
 	DATA #8 #8 #0xA #3 #9 #6 #0 #0 #0 #0 #0 #0 #0 #0 #3 #5 #3
 	DATA #4 #0 #0 #0 #5 #0xA #2 #0xE #0xD #0xC #0xD #0xC #8 #0
 	DATA #1 #0 #0 #1 #0 #0 #1 #0 #0 #1 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0xA #0 #0 #0xA #0 #0 #0
-ampl3data:	CNST *80
+ampl3data:	CNST *80	; signature array ampl3data[80] : unknown @ 852:29
 	DATA #0 #0 #0 #0 #0 #8 #7 #8 #8 #1 #1 #0 #1 #0 #7 #5 #1 #0
 	DATA #6 #1 #0 #7 #0 #5 #1 #0 #8 #0 #0 #3 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #1 #0 #0 #0 #0 #0 #1 #0xE #1 #9 #1 #0 #1 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #7 #0 #0 #5 #0 #0x13 #0x10
-phonemeLengthTable2:	CNST *80
+phonemeLengthTable2:	CNST *80	; signature array phonemeLengthTable2[80] : unknown @ 865:39
 	DATA #0 #0x12 #0x12 #0x12 #8 #0xB #9 #0xB #0xE #0xF #0xB
 	DATA #0x10 #0xC #6 #6 #0xE #0xC #0xE #0xC #0xB #8 #8 #0xB
 	DATA #0xA #9 #8 #8 #8 #8 #8 #3 #5 #2 #2 #2 #2 #2 #2 #6 #6
 	DATA #8 #6 #6 #2 #9 #4 #2 #1 #0xE #0xF #0xF #0xF #0xE #0xE
 	DATA #8 #2 #2 #7 #2 #1 #7 #2 #2 #7 #2 #2 #8 #2 #2 #6 #2 #2
 	DATA #7 #2 #4 #7 #1 #4 #5 #5
-phonemeLengthTable1:	CNST *80
+phonemeLengthTable1:	CNST *80	; signature array phonemeLengthTable1[80] : unknown @ 878:39
 	DATA #0 #0x12 #0x12 #0x12 #8 #8 #8 #8 #8 #0xB #6 #0xC #0xA
 	DATA #5 #5 #0xB #0xA #0xA #0xA #9 #8 #7 #9 #7 #6 #8 #6 #7
 	DATA #7 #7 #2 #5 #2 #2 #2 #2 #2 #2 #6 #6 #7 #6 #6 #2 #8 #3
 	DATA #1 #0x1E #0xD #0xC #0xC #0xC #0xE #9 #6 #1 #2 #5 #1
 	DATA #1 #6 #1 #2 #6 #1 #2 #8 #2 #2 #4 #2 #2 #6 #1 #4 #6 #1
 	DATA #4 #0xC7 #0xFF
-tab45696:	CNST *80
+tab45696:	CNST *80	; signature array tab45696[80] : unknown @ 891:28
 	DATA #0 #2 #2 #2 #2 #4 #4 #4 #4 #4 #4 #4 #4 #4 #4 #4 #4 #4
 	DATA #3 #2 #4 #4 #2 #2 #2 #2 #2 #1 #1 #1 #1 #1 #1 #1 #1 #1
 	DATA #1 #1 #2 #2 #2 #1 #0 #1 #0 #1 #0 #5 #5 #5 #5 #5 #4 #4
 	DATA #2 #0 #1 #2 #0 #1 #2 #0 #1 #2 #0 #1 #2 #0 #2 #2 #0 #1
 	DATA #3 #0 #2 #3 #0 #2 #0xA0 #0xA0
-tab45776:	CNST *80
+tab45776:	CNST *80	; signature array tab45776[80] : unknown @ 904:28
 	DATA #0 #2 #2 #2 #2 #4 #4 #4 #4 #4 #4 #4 #4 #4 #4 #4 #4 #4
 	DATA #3 #3 #4 #4 #3 #3 #3 #3 #3 #1 #2 #3 #2 #1 #3 #3 #3 #3
 	DATA #1 #1 #3 #3 #3 #2 #2 #3 #2 #3 #0 #0 #5 #5 #5 #5 #4 #4
 	DATA #2 #0 #2 #2 #0 #3 #2 #0 #4 #2 #0 #3 #2 #0 #2 #2 #0 #2
 	DATA #3 #0 #3 #3 #0 #3 #0xB0 #0xA0
-tab45856:	CNST *80
+tab45856:	CNST *80	; signature array tab45856[80] : unknown @ 917:28
 	DATA #0 #0x1F #0x1F #0x1F #0x1F #2 #2 #2 #2 #2 #2 #2 #2 #2
 	DATA #5 #5 #2 #0xA #2 #8 #5 #5 #0xB #0xA #9 #8 #8 #0xA0 #8
 	DATA #8 #0x17 #0x1F #0x12 #0x12 #0x12 #0x12 #0x1E #0x1E
@@ -1154,20 +1159,20 @@ tab45856:	CNST *80
 	DATA #0x1B #0x1A #0x1D #0x1B #0x1A #0x1D #0x1B #0x17 #0x1D
 	DATA #0x17 #0x17 #0x1D #0x17 #0x17 #0x1D #0x17 #0x17 #0x1D
 	DATA #0x17 #0x17 #0x17
-tab45936:	CNST *80
+tab45936:	CNST *80	; signature array tab45936[80] : unknown @ 930:29
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0xF1 #0xE2
 	DATA #0xD3 #0xBB #0x7C #0x95 #1 #2 #3 #3 #0 #0x72 #0 #2 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0x1B #0 #0 #0x19 #0 #0 #0 #0 #0 #0 #0 #0 #0
-amplitudeRescale:	CNST *17
+amplitudeRescale:	CNST *17	; signature array amplitudeRescale[17] : unknown @ 943:36
 	DATA #0 #1 #2 #2 #2 #3 #3 #4 #4 #5 #6 #8 #9 #0xB #0xD #0xF
 	DATA #0
-tab47492:	CNST *12
+tab47492:	CNST *12	; signature array tab47492[12] : unknown @ 948:28
 	DATA #0 #0 #-32 #-26 #-20 #-13 #-7 #0 #6 #0xC #6
-tab48426:	CNST *5
+tab48426:	CNST *5	; signature array tab48426[5] : unknown @ 951:28
 	DATA #0x18 #0x1A #0x17 #0x17 #0x17
-randomtable:	CNST *0x500
+randomtable:	CNST *0x500	; signature array randomtable[0x500] : unknown @ 954:35
 	DATA #0x38 #0x84 #0x6B #0x19 #0xC6 #0x63 #0x18 #0x86 #0x73
 	DATA #0x98 #0xC6 #0xB1 #0x1C #0xCA #0x31 #0x8C #0xC7 #0x31
 	DATA #0x88 #0xC2 #0x30 #0x98 #0x46 #0x31 #0x18 #0xC6 #0x35
@@ -1306,38 +1311,38 @@ randomtable:	CNST *0x500
 	DATA #0xF #0xF8 #6 #0xC1 #0xFE #1 #0xFC #3 #0xE0 #0xF #0
 	DATA #0xFC
 	GLOB *1
-speed:	DATi #72
+speed:	DATi #72	; signature global speed : int @ 1269:22
 	GLOB *1
-pitch:	DATi #64
+pitch:	DATi #64	; signature global pitch : int @ 1270:22
 	GLOB *1
-mouth:	DATi #128
+mouth:	DATi #128	; signature global mouth : int @ 1271:23
 	GLOB *1
-throat:	DATi #128
-input:	GLOB *256
-stress:	GLOB *256
-phonemeLength:	GLOB *256
-phonemeIndex:	GLOB *256
-phonemeIndexOutput:	GLOB *60
-stressOutput:	GLOB *60
-phonemeLengthOutput:	GLOB *60
-tab44800:	GLOB *256
-pitches:	GLOB *256
-frequency1:	GLOB *256
-frequency2:	GLOB *256
-frequency3:	GLOB *256
-amplitude1:	GLOB *256
-amplitude2:	GLOB *256
-amplitude3:	GLOB *256
+throat:	DATi #128	; signature global throat : int @ 1272:24
+input:	GLOB *256	; signature array input[256] : unknown @ 1274:24
+stress:	GLOB *256	; signature array stress[256] : unknown @ 1276:25
+phonemeLength:	GLOB *256	; signature array phonemeLength[256] : unknown @ 1277:32
+phonemeIndex:	GLOB *256	; signature array phonemeIndex[256] : unknown @ 1278:31
+phonemeIndexOutput:	GLOB *60	; signature array phonemeIndexOutput[60] : unknown @ 1281:36
+stressOutput:	GLOB *60	; signature array stressOutput[60] : unknown @ 1282:30
+phonemeLengthOutput:	GLOB *60	; signature array phonemeLengthOutput[60] : unknown @ 1283:37
+tab44800:	GLOB *256	; signature array tab44800[256] : unknown @ 1285:27
+pitches:	GLOB *256	; signature array pitches[256] : unknown @ 1287:26
+frequency1:	GLOB *256	; signature array frequency1[256] : unknown @ 1289:29
+frequency2:	GLOB *256	; signature array frequency2[256] : unknown @ 1290:29
+frequency3:	GLOB *256	; signature array frequency3[256] : unknown @ 1291:29
+amplitude1:	GLOB *256	; signature array amplitude1[256] : unknown @ 1293:29
+amplitude2:	GLOB *256	; signature array amplitude2[256] : unknown @ 1294:29
+amplitude3:	GLOB *256	; signature array amplitude3[256] : unknown @ 1295:29
 	GLOB *1
-oldtimetableindex:	DATi #0
+oldtimetableindex:	DATi #0	; signature global oldtimetableindex : int @ 1298:33
 	! MULi <A> #5 #5
-timetable:	CNST *<A>
+timetable:	CNST *<A>	; signature array timetable[<A>] : unknown @ 1300:33
 	DATA #162 #167 #167 #127 #128 #226 #60 #60 #0 #0 #225 #60
 	DATA #59 #0 #0 #200 #0 #0 #54 #55 #199 #0 #0 #54 #54
 
 ;-----------------------------------------------------------------------------
-outputSample:	FUNC
 		PARA *1
+outputSample:	FUNC	; signature func outputSample(int delayIndex, int sample) -> void @ 1308:23
 	$delayIndex:	INPi
 	$sample:	INPi
 	$delay:	LOCi
@@ -1367,7 +1372,7 @@ outputSample:	FUNC
 		GEQi #0 %0 @.e2
 	.l3:	POKE &signal:1 $s 	; global signal[0] = global signal[1] = s
 		POKE &signal:0 $s 
-		CALL ^yield %1 *1	; yield()
+		CALL ^yield %1 *1	; expects function() -> unknown @ 1318:10
 		FORi $i %0 @.l3	; }
 	.e2:	POKE &writepos $bufferposScaled 	; global writepos = bufferposScaled
 		SHLi %0 $sample #7	; global lastSample = (sample << 7) - 1024
@@ -1377,8 +1382,8 @@ outputSample:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-SAMInit:	FUNC
 		PARA *1
+SAMInit:	FUNC	; signature func SAMInit() -> void @ 1324:18
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $i #0 	; for (i = 0 to 256) 
@@ -1402,13 +1407,13 @@ SAMInit:	FUNC
 		FORi $i #60 @.l3	; }
 	.e2:	RETU   	; }
 
-tables:	CNST *7
+tables:	CNST *7	; signature array tables[7] : unknown @ 1347:26
 	DATA &pitches &frequency1 &frequency2 &frequency3
 	DATA &amplitude1 &amplitude2 &amplitude3
 
 ;-----------------------------------------------------------------------------
-Parser1:	FUNC
 	$r:	OUTi
+Parser1:	FUNC	; signature func Parser1() -> int @ 1352:18
 	$i:	LOCi
 	$sign1:	LOCi
 	$sign2:	LOCi
@@ -1472,8 +1477,8 @@ Parser1:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-Insert:	FUNC
 		PARA *1
+Insert:	FUNC	; signature func Insert(int position, int mem60, int mem59, int mem58) -> void @ 1411:17
 	$position:	INPi
 	$mem60:	INPi
 	$mem59:	INPi
@@ -1499,8 +1504,8 @@ Insert:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-Parser2:	FUNC
 		PARA *1
+Parser2:	FUNC	; signature func Parser2() -> void @ 1427:18
 	$pos:	LOCi
 	$mem58:	LOCi
 	$X:	LOCi
@@ -1531,7 +1536,7 @@ Parser2:	FUNC
 		MOVi %2 $A 
 		MOVi %3 #0 
 		MOVi %4 $mem58 
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1448:30
 		MOVi $X $pos 	; X = pos
 		GOTO @pos41749  	; goto pos41749
 	.f3:	PEEK $A &phonemeIndex $X	; A = (int)global phonemeIndex[X]
@@ -1551,7 +1556,7 @@ Parser2:	FUNC
 		MOVi %2 $A 
 		MOVi %3 #0 
 		MOVi %4 $mem58 
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1464:28
 		GOTO @continue0  	; goto continue0
 	.f7:	MOVi $Y $A 	; Y = A
 		PEEK %0 &flags $A	; A = (int)global flags[A] & 128
@@ -1574,7 +1579,7 @@ Parser2:	FUNC
 		MOVi %2 #31 
 		MOVi %3 #0 
 		MOVi %4 #0 
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1484:27
 		GOTO @continue0  	; goto continue0
 	.f12:	MOVi $X $pos 	; X = pos
 		PEEK $A &phonemeIndex $pos	; A = (int)global phonemeIndex[pos]
@@ -1659,7 +1664,7 @@ Parser2:	FUNC
 		ADDi %2 $A #1
 		MOVi %3 #0 
 		PEEK %4 &stress $X
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1556:41
 		GOTO @continue0  	; goto continue0
 	.f37:	NOOP
 	pos41788:	NEQi $A #44 @.f38	; pos41788:
@@ -1667,7 +1672,7 @@ Parser2:	FUNC
 		ADDi %2 $A #1
 		MOVi %3 #0 
 		PEEK %4 &stress $X
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1562:41
 		GOTO @continue0  	; goto continue0
 	.f38:	NOOP
 	pos41812:	EQUi $A #69 @.f39	; pos41812:
@@ -1704,8 +1709,8 @@ Parser2:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-Code41883:	FUNC
 		PARA *1
+Code41883:	FUNC	; signature func Code41883() -> void @ 1589:20
 	$pos:	LOCi
 	$Y:	LOCi
 ;-----------------------------------------------------------------------------
@@ -1734,8 +1739,8 @@ Code41883:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-Code48619:	FUNC
 		PARA *1
+Code48619:	FUNC	; signature func Code48619() -> void @ 1606:20
 	$X:	LOCi
 	$A:	LOCi
 	$index:	LOCi
@@ -1894,8 +1899,8 @@ Code48619:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-SetPhonemeLength:	FUNC
 		PARA *1
+SetPhonemeLength:	FUNC	; signature func SetPhonemeLength() -> void @ 1709:27
 	$A:	LOCi
 	$position:	LOCi
 	$table:	LOCp
@@ -1918,8 +1923,8 @@ SetPhonemeLength:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-Code41240:	FUNC
 	$X:	OUTi
+Code41240:	FUNC	; signature func Code41240() -> int @ 1723:20
 	$pos:	LOCi
 	$A:	LOCi
 	$index:	LOCi
@@ -1944,13 +1949,13 @@ Code41240:	FUNC
 		ADDi %3 $index #1
 		PEEK %3 &phonemeLengthTable1 %3
 		PEEK %4 &stress $pos
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1737:93
 		ADDi %1 $pos #2	; Insert(pos+2, index+2, (int)global phonemeLengthTable1[index+2], (int)global stress[pos])
 		ADDi %2 $index #2
 		ADDi %3 $index #2
 		PEEK %3 &phonemeLengthTable1 %3
 		PEEK %4 &stress $pos
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1738:93
 		GOTO @inc3AndContinue0  	; goto inc3AndContinue0
 	.e3:	NOOP
 	.l5:	ADDi $X $X #1	; X = X + 1
@@ -1969,21 +1974,21 @@ Code41240:	FUNC
 		ADDi %3 $index #1
 		PEEK %3 &phonemeLengthTable1 %3
 		PEEK %4 &stress $pos
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1752:92
 		ADDi %1 $pos #2	; Insert(pos+2, index+2, (int)global phonemeLengthTable1[index+2], (int)global stress[pos])
 		ADDi %2 $index #2
 		ADDi %3 $index #2
 		PEEK %3 &phonemeLengthTable1 %3
 		PEEK %4 &stress $pos
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1753:92
 	inc3AndContinue0:	ADDi $pos $pos #3	; pos = pos + 3
 	continue0:	GOTO @.l0  	; }
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-InitPlayback:	FUNC
 	$r:	OUTi
+InitPlayback:	FUNC	; signature func InitPlayback() -> int @ 1760:23
 	$A:	LOCi
 	$X:	LOCi
 	$mem54:	LOCi
@@ -1991,17 +1996,17 @@ InitPlayback:	FUNC
 	$index:	LOCi
 	$mem66:	LOCi
 ;-----------------------------------------------------------------------------
-		CALL &SAMInit %0 *1	; SAMInit()
+		CALL &SAMInit %0 *1	; expects SAMInit() -> void @ 1764:11
 		POKE &phonemeIndex:255 #255 	; (int)global phonemeIndex[255] = 255
-		CALL &Parser1 %0 *1	; if ((int)Parser1() == 0) 
+		CALL &Parser1 %0 *1	; expects Parser1() -> int @ 1768:21
 		NEQi %0 #0 @.f0
 		MOVi $r #0 	; r = 0
 		GOTO @_return  	; goto _return
-	.f0:	CALL &Parser2 %0 *1	; Parser2()
-		CALL &Code41883 %0 *1	; Code41883()
-		CALL &SetPhonemeLength %0 *1	; SetPhonemeLength()
-		CALL &Code48619 %0 *1	; Code48619()
-		CALL &Code41240 %0 *1	; for (X = (int)Code41240() to 256) 
+	.f0:	CALL &Parser2 %0 *1	; expects Parser2() -> void @ 1772:11
+		CALL &Code41883 %0 *1	; expects Code41883() -> void @ 1773:13
+		CALL &SetPhonemeLength %0 *1	; expects SetPhonemeLength() -> void @ 1774:20
+		CALL &Code48619 %0 *1	; expects Code48619() -> void @ 1775:13
+		CALL &Code41240 %0 *1	; expects Code41240() -> int @ 1776:28
 		MOVi $X %0 
 		GEQi %0 #256 @.e1
 	.l2:	PEEK %0 &phonemeIndex $X	; if ((int)global phonemeIndex[X] > 80) 
@@ -2032,7 +2037,7 @@ InitPlayback:	FUNC
 		MOVi %2 #254 
 		MOVi %3 #0 
 		MOVi %4 #0 
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1802:26
 		ADDi $mem66 $mem66 #2	; mem66 = mem66 + 2
 		GOTO @continue1  	; goto continue1
 	.f7:	NEQi $index #0 @.f9	; if (index == 0) mem54 = X
@@ -2049,29 +2054,29 @@ InitPlayback:	FUNC
 		MOVi %2 #254 
 		MOVi %3 #0 
 		MOVi %4 #0 
-		CALL &Insert %0 *5
+		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ 1816:24
 		ADDi $X $X #1	; X = X + 1
 		MOVi $mem66 $X 	; mem66 = X
 	.e10:	GOTO @.l4  	; }
 	break1:	MOVi $r #1 	; break1:
 	_return:	RETU   	; }
 
-tab39140:	CNST *30
+tab39140:	CNST *30	; signature array tab39140[30] : unknown @ 1828:29
 	DATA #0 #0 #0 #0 #0 #10 #14 #19 #24 #27 #23 #21 #16 #20
 	DATA #14 #18 #14 #18 #18 #16 #13 #15 #11 #18 #14 #11 #9 #6
 	DATA #6 #6
-tab39170:	CNST *30
+tab39170:	CNST *30	; signature array tab39170[30] : unknown @ 1829:29
 	DATA #255 #255 #255 #255 #255 #84 #73 #67 #63 #40 #44 #31
 	DATA #37 #45 #73 #49 #36 #30 #51 #37 #29 #69 #24 #50 #30
 	DATA #24 #83 #46 #54 #86
-tab39200:	CNST *6
+tab39200:	CNST *6	; signature array tab39200[6] : unknown @ 1832:28
 	DATA #19 #27 #21 #27 #18 #13
-tab39206:	CNST *6
+tab39206:	CNST *6	; signature array tab39206[6] : unknown @ 1833:28
 	DATA #72 #39 #31 #43 #30 #34
 
 ;-----------------------------------------------------------------------------
-trans:	FUNC
 	$r:	OUTi
+trans:	FUNC	; signature func trans(int a, int b) -> int @ 1836:16
 	$a:	INPi
 	$b:	INPi
 	$carry:	LOCi
@@ -2123,8 +2128,8 @@ trans:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-SetMouthThroat:	FUNC
 		PARA *1
+SetMouthThroat:	FUNC	; signature func SetMouthThroat(int mouth, int throat) -> void @ 1866:25
 	$mouth:	INPi
 	$throat:	INPi
 	$b:	LOCi
@@ -2139,14 +2144,14 @@ SetMouthThroat:	FUNC
 		EQUi $b #0 @.f2	; if (b != 0) c = (int)trans(mouth, b)
 		MOVi %1 $mouth 	; c = (int)trans(mouth, b)
 		MOVi %2 $b 
-		CALL &trans %0 *3
+		CALL &trans %0 *3	; expects trans(int, int) -> int @ 1873:39
 		MOVi $c %0 
 	.f2:	POKE &freq1data $pos $c	; global freq1data[pos] = c
 		PEEK $b &tab39170 $pos	; b = (int)global tab39170[pos]
 		EQUi $b #0 @.f3	; if (b != 0) c = (int)trans(throat, b)
 		MOVi %1 $throat 	; c = (int)trans(throat, b)
 		MOVi %2 $b 
-		CALL &trans %0 *3
+		CALL &trans %0 *3	; expects trans(int, int) -> int @ 1876:40
 		MOVi $c %0 
 	.f3:	POKE &freq2data $pos $c	; global freq2data[pos] = c
 		FORi $pos #30 @.l1	; }
@@ -2156,13 +2161,13 @@ SetMouthThroat:	FUNC
 		PEEK $b &tab39200 $Y	; b = (int)global tab39200[Y]
 		MOVi %1 $mouth 	; c = (int)trans(mouth, b)
 		MOVi %2 $b 
-		CALL &trans %0 *3
+		CALL &trans %0 *3	; expects trans(int, int) -> int @ 1883:27
 		MOVi $c %0 
 		POKE &freq1data $pos $c	; global freq1data[pos] = c
 		PEEK $b &tab39206 $Y	; b = (int)global tab39206[Y]
 		MOVi %1 $throat 	; c = (int)trans(throat, b)
 		MOVi %2 $b 
-		CALL &trans %0 *3
+		CALL &trans %0 *3	; expects trans(int, int) -> int @ 1886:28
 		MOVi $c %0 
 		POKE &freq2data $pos $c	; global freq2data[pos] = c
 		FORi $pos #54 @.l5	; }
@@ -2170,8 +2175,8 @@ SetMouthThroat:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-Special1:	FUNC
 	$i:	OUTi
+Special1:	FUNC	; signature func Special1(int mem48, int X) -> int @ 1891:19
 	$mem48:	INPi
 	$X:	INPi
 	$A:	LOCi
@@ -2199,8 +2204,8 @@ Special1:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-GenerateNoise:	FUNC
 	$Y:	OUTi
+GenerateNoise:	FUNC	; signature func GenerateNoise(int Y0, int mem39, ptr mem44, ptr mem66) -> int @ 1912:24
 	$Y0:	INPi
 	$mem39:	INPi
 	$mem44:	INPp
@@ -2237,11 +2242,11 @@ GenerateNoise:	FUNC
 		EQUi %0 #0 @.f5
 		MOVi %1 #3 	; outputSample(3, 26 & 15)
 		ANDi %2 #26 #15
-		CALL &outputSample %0 *3
+		CALL &outputSample %0 *3	; expects outputSample(int, int) -> void @ 1932:30
 		GOTO @.e6  	; } else 
 	.f5:	MOVi %1 #4 	; outputSample(4, 6)
 		MOVi %2 #6 
-		CALL &outputSample %0 *3
+		CALL &outputSample %0 *3	; expects outputSample(int, int) -> void @ 1934:24
 	.e6:	FORi $j #8 @.l4	; }
 	.e3:	ADDi $Y $Y #1	; Y = Y + 1
 		FORi $i #256 @.l2	; }
@@ -2261,12 +2266,12 @@ GenerateNoise:	FUNC
 		NEQi %0 #0 @.f12
 		MOVi %1 #1 	; outputSample(1, mem53 & 15)
 		ANDi %2 $mem53 #15
-		CALL &outputSample %0 *3
+		CALL &outputSample %0 *3	; expects outputSample(int, int) -> void @ 1950:33
 		EQUi $mem53 #0 @.f12	; if(mem53 != 0) goto pos48296
 		GOTO @pos48296  	; goto pos48296
 	.f12:	MOVi %1 #2 	; outputSample(2, 5)
 		MOVi %2 #5 
-		CALL &outputSample %0 *3
+		CALL &outputSample %0 *3	; expects outputSample(int, int) -> void @ 1953:23
 	pos48296:	FORi $j #8 @.l11	; }
 	.e10:	FORi $Y #256 @.l9	; }
 	.e8:	POKE $mem44 #1 	; (int)*mem44 = 1
@@ -2275,8 +2280,8 @@ GenerateNoise:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-ProduceOutput:	FUNC
 		PARA *1
+ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ 1964:24
 	$phase1:	LOCi
 	$phase2:	LOCi
 	$phase3:	LOCi
@@ -2324,13 +2329,13 @@ ProduceOutput:	FUNC
 	.f3:	NEQi $mem56 #1 @.f5	; if (mem56 == 1) X = (int)Special1(1, X)
 		MOVi %1 #1 	; X = (int)Special1(1, X)
 		MOVi %2 $X 
-		CALL &Special1 %0 *3
+		CALL &Special1 %0 *3	; expects Special1(int, int) -> int @ 1987:47
 		MOVi $X %0 
 		GOTO @.e6  
 	.f5:	NEQi $mem56 #2 @.f7	; if (mem56 == 2) X = (int)Special1(255, X)
 		MOVi %1 #255 	; X = (int)Special1(255, X)
 		MOVi %2 $X 
-		CALL &Special1 %0 *3
+		CALL &Special1 %0 *3	; expects Special1(int, int) -> int @ 1988:49
 		MOVi $X %0 
 	.f7:	NOOP
 	.e6:	NOOP
@@ -2509,7 +2514,7 @@ ProduceOutput:	FUNC
 		MOVi %2 $mem39 
 		ADRL %3 $mem44 *0
 		ADRL %4 $mem66 *0
-		CALL &GenerateNoise %0 *5
+		CALL &GenerateNoise %0 *5	; expects GenerateNoise(int, int, ptr, ptr) -> int @ 2127:54
 		ADDi $Y %0 #2
 		PEEK $speedcounter &speed 	; speedcounter = global speed
 		SUBi $mem48 $mem48 #2	; mem48 = mem48 - 2
@@ -2542,7 +2547,7 @@ ProduceOutput:	FUNC
 		SHRi $A %1 #4
 		MOVi %1 #0 	; outputSample(0, A)
 		MOVi %2 $A 
-		CALL &outputSample %0 *3
+		CALL &outputSample %0 *3	; expects outputSample(int, int) -> void @ 2138:23
 		SUBi $speedcounter $speedcounter #1	; speedcounter = speedcounter - 1
 		NEQi $speedcounter #0 @.f43	; if (speedcounter == 0) 
 		PEEK $speedcounter &speed 	; speedcounter = global speed
@@ -2561,7 +2566,7 @@ ProduceOutput:	FUNC
 		MOVi %2 $mem39 
 		ADRL %3 $mem44 *0
 		ADRL %4 $mem66 *0
-		CALL &GenerateNoise %0 *5
+		CALL &GenerateNoise %0 *5	; expects GenerateNoise(int, int, ptr, ptr) -> int @ 2151:53
 		MOVi $Y %0 
 		GOTO @.l37  	; goto break4
 	.f47:	PEEK %0 &frequency1 $Y	; phase1 = (phase1 + (int)global frequency1[Y]) & 0xFF
@@ -2580,8 +2585,8 @@ ProduceOutput:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-Play:	FUNC
 		PARA *1
+Play:	FUNC	; signature func Play() -> void @ 2163:15
 	$A:	LOCi
 	$X:	LOCi
 	$Y:	LOCi
@@ -2595,18 +2600,18 @@ Play:	FUNC
 		POKE &useScale %0 
 		PEEK %1 &mouth 	; SetMouthThroat(global mouth, global throat)
 		PEEK %2 &throat 
-		CALL &SetMouthThroat %0 *3
+		CALL &SetMouthThroat %0 *3	; expects SetMouthThroat(int, int) -> void @ 2173:45
 	.l0:	PEEK %0 &pleaseBreak 	; while (global pleaseBreak == FALSE) 
 		NEQi %0 #FALSE @.e1
 		PEEK $A &phonemeIndex $X	; A = (int)global phonemeIndex[X]
 		NEQi $A #255 @.f2	; if (A == 255) 
 		POKE &phonemeIndexOutput $Y #255	; (int)global phonemeIndexOutput[Y] = 255
-		CALL &ProduceOutput %0 *1	; ProduceOutput()
+		CALL &ProduceOutput %0 *1	; expects ProduceOutput() -> void @ 2178:19
 		GOTO @break0  	; goto break0
 		GOTO @.e3  	; } else if (A == 254) 
 	.f2:	NEQi $A #254 @.f4	; if (A == 254) 
 		POKE &phonemeIndexOutput $Y #255	; (int)global phonemeIndexOutput[Y] = 255
-		CALL &ProduceOutput %0 *1	; ProduceOutput()
+		CALL &ProduceOutput %0 *1	; expects ProduceOutput() -> void @ 2182:19
 		MOVi $Y #0 	; Y = 0
 		GOTO @.e5  	; } else if (A != 0) 
 	.f4:	EQUi $A #0 @.f6	; if (A != 0) 
@@ -2625,8 +2630,8 @@ Play:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-init:	FUNC
 		PARA *1
+init:	FUNC	; signature func init() -> void @ 2195:15
 	$buffer:	LOCA *256
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
@@ -2634,17 +2639,17 @@ init:	FUNC
 		PEEK %0 $p 	; if ((int) *p == 0) 
 		NEQi %0 #0 @.f0
 		MOVp %1 &.s_Thisfi4da 	; trace("This firmware requires a configuration string. E.g. \"reciter HI THERE!\"")
-		CALL ^trace %0 *2
-		CALL ^abort %0 *1	; abort()
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 2200:85
+		CALL ^abort %0 *1	; expects function() -> unknown @ 2201:10
 	.f0:	MOVp %1 &dynamicPanelTextRow 	; strcpy(global dynamicPanelTextRow, global panelTextRows[4])
 		PEEK %2 &panelTextRows:4 
-		CALL &strcpy %0 *3
+		CALL &strcpy %0 *3	; expects strcpy(ptr, ptr) -> ptr @ 2203:61
 		MOVp %1 &dynamicPanelTextRow:6 	; strcpy(&global dynamicPanelTextRow[6], global config)
 		MOVp %2 &config 
-		CALL &strcpy %0 *3
+		CALL &strcpy %0 *3	; expects strcpy(ptr, ptr) -> ptr @ 2204:55
 		MOVp %1 &dynamicPanelTextRow:6 	; strcat(&global dynamicPanelTextRow[6], "\"")
 		MOVp %2 &.s_Thisfi4da:70 
-		CALL &strcat %0 *3
+		CALL &strcat %0 *3	; expects strcat(ptr, ptr) -> ptr @ 2205:46
 		POKE &panelTextRows:4 &dynamicPanelTextRow 	; global panelTextRows[4] = global dynamicPanelTextRow
 		PEEK %0 $p 	; if ((int) *p == '!') 
 		NEQi %0 #'!' @.f1
@@ -2654,22 +2659,22 @@ init:	FUNC
 		NEQi %0 #'%' @.f2
 		MOVp %1 &input 	; strcpy(global input, p + 1)
 		ADDp %2 $p #1
-		CALL &strcpy %0 *3
+		CALL &strcpy %0 *3	; expects strcpy(ptr, ptr) -> ptr @ 2213:50
 		GOTO @.e3  
 	.f2:	MOVp %1 &input 	; strcpy(global input, p)
 		MOVp %2 $p 
-		CALL &strcpy %0 *3
+		CALL &strcpy %0 *3	; expects strcpy(ptr, ptr) -> ptr @ 2215:26
 		MOVp %1 &input 	; if ((int) TextToPhonemes(global input) == 0) abort()
-		CALL &TextToPhonemes %0 *2
+		CALL &TextToPhonemes %0 *2	; expects TextToPhonemes(ptr) -> int @ 2216:42
 		NEQi %0 #0 @.f4
-		CALL ^abort %0 *1	; abort()
+		CALL ^abort %0 *1	; expects function() -> unknown @ 2216:55
 	.f4:	ADRL %1 $buffer *0	; p = (pointer) stpcpy(buffer, "Phonetic: %")
 		MOVp %2 &.s_Phonet4db 
-		CALL &stpcpy %0 *3
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 2217:46
 		MOVp $p %0 
 		MOVp %1 $p 	; p = (pointer) stpcpy(p, global input)
 		MOVp %2 &input 
-		CALL &stpcpy %0 *3
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 2218:40
 		MOVp $p %0 
 		ADRL %0 $buffer *0	; if (p != buffer && (int) *(p = p - 1) == 155) 
 		EQUp $p %0 @.f6
@@ -2683,24 +2688,24 @@ init:	FUNC
 		PEEK %0 $p 
 		EQUi %0 #' ' @.l7
 	.f6:	ADRL %1 $buffer *0	; trace(buffer)
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 2224:16
 	.e3:	MOVp %1 &input 	; strcat(global input, "\u009b")
 		MOVp %2 &.s_4dc 
-		CALL &strcat %0 *3
+		CALL &strcat %0 *3	; expects strcat(ptr, ptr) -> ptr @ 2226:32
 		MOVp %1 &input 	; strcat(global input, "?")
 		MOVp %2 &.s_4dd 
-		CALL &strcat %0 *3
-		CALL &InitPlayback %0 *1	; if ((int) InitPlayback() == 0) 
+		CALL &strcat %0 *3	; expects strcat(ptr, ptr) -> ptr @ 2227:27
+		CALL &InitPlayback %0 *1	; expects InitPlayback() -> int @ 2228:27
 		NEQi %0 #0 @.f9
 		MOVp %1 &.s_Couldn4de 	; trace("Couldn't initialize playback. Invalid input?")
-		CALL ^trace %0 *2
-		CALL ^abort %0 *1	; abort()
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 2229:56
+		CALL ^abort %0 *1	; expects function() -> unknown @ 2230:10
 	.f9:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC
 		PARA *1
+reset:	FUNC	; signature func reset() -> void @ 2234:16
 ;-----------------------------------------------------------------------------
 		POKE &lastClock #0x7FFFFFFF 	; global lastClock = 0x7FFFFFFF
 		POKE &pleaseBreak #TRUE 	; global pleaseBreak = TRUE
@@ -2708,8 +2713,8 @@ reset:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
 		PARA *1
+update:	FUNC	; signature func update() -> void @ 2240:17
 	$localParams:	LOCA *PARAM_COUNT
 	$newSpeed:	LOCi
 	$newPitch:	LOCi
@@ -2745,8 +2750,8 @@ update:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC
 		PARA *1
+process:	FUNC	; signature func process() -> void @ 2310:18
 	$c:	LOCi
 ;-----------------------------------------------------------------------------
 	.l0:	NOOP
@@ -2757,10 +2762,10 @@ process:	FUNC
 		POKE &lastClock $c 	; global lastClock = c
 		POKE &signal:1 #0 	; global signal[0] = global signal[1] = 0
 		POKE &signal:0 #0 
-		CALL ^yield %0 *1	; yield()
+		CALL ^yield %0 *1	; expects function() -> unknown @ 2320:12
 		GOTO @.l2  	; }
 	.e3:	POKE &pleaseBreak #FALSE 	; global pleaseBreak = FALSE
-		CALL &Play %0 *1	; Play()
+		CALL &Play %0 *1	; expects Play() -> void @ 2325:10
 		PEEK %0 &pleaseBreak 	; if (global pleaseBreak == FALSE) global lastClock = global clock
 		NEQi %0 #FALSE @.f4
 		PEEK %0 &clock 	; global lastClock = global clock
@@ -2771,7 +2776,7 @@ process:	FUNC
 		GEQi %0 #2 @.l1
 		PEEK %0 &abortWhenDone 	; if (global abortWhenDone != FALSE) exit()
 		EQUi %0 #FALSE @.f6
-		CALL ^exit %0 *1	; exit()
+		CALL ^exit %0 *1	; expects function() -> unknown @ 2331:44
 		GOTO @.l0  
 	.f6:	NOOP
 	.l8:	PEEK %0 &pleaseBreak 	; while (global pleaseBreak == FALSE && (int) global params[OPERATOR_2_PARAM_INDEX] < 2) 
@@ -2780,7 +2785,7 @@ process:	FUNC
 		GEQi %0 #2 @.l0
 		POKE &signal:1 #0 	; global signal[0] = global signal[1] = 0
 		POKE &signal:0 #0 
-		CALL ^yield %0 *1	; yield()
+		CALL ^yield %0 *1	; expects function() -> unknown @ 2335:12
 		GOTO @.l8  	; }
 	.e7:	GOTO @.l0  	; }
 		RETU   	; }

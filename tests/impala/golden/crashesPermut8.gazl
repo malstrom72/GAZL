@@ -1,19 +1,25 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 18:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
 	DATA &.s_stdREV4d2 &.s_fastCR4d3 &.s_slowCH4d4
 	DATA &.s_rndAK44d5 &.s_16164d6 &.s_32164d7 &.s_884d8
 	DATA &.s_168Gat4d9
+; signature extern native abort() -> unknown @ 40:1
+; signature extern native trace() -> unknown @ 41:1
+; signature extern native yield() -> unknown @ 42:1
+; signature extern native write() -> unknown @ 43:1
+; signature extern native read() -> unknown @ 45:1
 	GLOB *1
-clock:	DATi #0
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int @ 81:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 82:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 84:1
 	CNST *1
-clockFreqLimit:	DATi #132300
-signal:	GLOB *2
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 87:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 89:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -28,15 +34,15 @@ signal:	GLOB *2
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #SWITCHES_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>
-EPSILON_FLOAT:	! DEFf #1.0e-45
-SMALL_FLOAT:	! DEFf #1.0e-5
-LARGE_FLOAT:	! DEFf #1.0e+10
-HUGE_FLOAT:	! DEFf #1.0e+38
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 92:32
+EPSILON_FLOAT:	! DEFf #1.0e-45	; signature const EPSILON_FLOAT : float @ 99:1
+SMALL_FLOAT:	! DEFf #1.0e-5	; signature const SMALL_FLOAT : float @ 100:1
+LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ 101:1
+HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ 103:1
 
 ;-----------------------------------------------------------------------------
-stpcpy:	FUNC
 	$a:	OUTp
+stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 103:17
 	$d:	INPp
 	$s:	INPp
 	$b:	LOCp
@@ -53,8 +59,8 @@ stpcpy:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-intToString:	FUNC
 	$p:	OUTp
+intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 122:22
 	$i:	INPi
 	$radix:	INPi
 	$minLength:	INPi
@@ -100,8 +106,8 @@ intToString:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-stringToFloat:	FUNC
 	$p:	OUTp
+stringToFloat:	FUNC	; signature func stringToFloat(ptr b, ptr v) -> ptr @ 140:24
 	$b:	INPp
 	$v:	INPp
 	$f:	LOCf
@@ -170,8 +176,8 @@ stringToFloat:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-floatToString:	FUNC
 	$p:	OUTp
+floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ 182:24
 	$f:	INPf
 	$precision:	INPi
 	$buffer:	INPp
@@ -305,8 +311,8 @@ floatToString:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-traceInts:	FUNC
 		PARA *1
+traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 287:20
 	$text:	INPp
 	$n:	INPi
 	$ints:	INPp
@@ -320,7 +326,7 @@ traceInts:	FUNC
 		EQUp $text &NULL @.f0	; if (text != null) p = (pointer) stpcpy(p, text)
 		MOVp %1 $p 	; p = (pointer) stpcpy(p, text)
 		MOVp %2 $text 
-		CALL &stpcpy %0 *3
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 294:49
 		MOVp $p %0 
 	.f0:	POKE $p #0 	; *p = 0
 		MOVi $i #0 	; for (i = 0 to n) 
@@ -333,18 +339,18 @@ traceInts:	FUNC
 		MOVi %4 #10 
 		MOVi %5 #1 
 		ADRL %6 $buffer *0
-		CALL &intToString %2 *5
-		CALL &stpcpy %0 *3
+		CALL &intToString %2 *5	; expects intToString(int, int, int, ptr) -> ptr @ 298:62
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 298:63
 		MOVp $p %0 
 		FORi $i $n @.l2	; }
 	.e1:	ADRL %1 $line *0	; trace(line)
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 300:13
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-traceInt:	FUNC
 		PARA *1
+traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 303:19
 	$text:	INPp
 	$i:	INPi
 	$ints:	LOCA *1
@@ -353,13 +359,13 @@ traceInt:	FUNC
 		MOVp %1 $text 	; traceInts(text, 1, ints)
 		MOVi %2 #1 
 		ADRL %3 $ints *0
-		CALL &traceInts %0 *4
+		CALL &traceInts %0 *4	; expects traceInts(ptr, int, ptr) -> void @ 307:26
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-traceFloats:	FUNC
 		PARA *1
+traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats) -> void @ 310:22
 	$text:	INPp
 	$n:	INPi
 	$floats:	INPp
@@ -372,7 +378,7 @@ traceFloats:	FUNC
 		EQUp $text &NULL @.f0	; if (text != null) p = (pointer) stpcpy(p, text)
 		MOVp %1 $p 	; p = (pointer) stpcpy(p, text)
 		MOVp %2 $text 
-		CALL &stpcpy %0 *3
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 317:49
 		MOVp $p %0 
 	.f0:	POKE $p #0 	; *p = 0
 		MOVi $i #0 	; for (i = 0 to n) 
@@ -384,18 +390,18 @@ traceFloats:	FUNC
 		PEEK %3 $floats $i
 		MOVi %4 #8 
 		ADRL %5 $buffer *0
-		CALL &floatToString %2 *4
-		CALL &stpcpy %0 *3
+		CALL &floatToString %2 *4	; expects floatToString(float, int, ptr) -> ptr @ 321:62
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 321:63
 		MOVp $p %0 
 		FORi $i $n @.l2	; }
 	.e1:	ADRL %1 $line *0	; trace(line)
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 323:13
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-traceFloat:	FUNC
 		PARA *1
+traceFloat:	FUNC	; signature func traceFloat(ptr text, float f) -> void @ 326:21
 	$text:	INPp
 	$f:	INPf
 	$floats:	LOCA *1
@@ -404,25 +410,25 @@ traceFloat:	FUNC
 		MOVp %1 $text 	; traceFloats(text, 1, floats)
 		MOVi %2 #1 
 		ADRL %3 $floats *0
-		CALL &traceFloats %0 *4
+		CALL &traceFloats %0 *4	; expects traceFloats(ptr, int, ptr) -> void @ 330:30
 		RETU   	; }
 
-LOG2:	! DEFf #0.69314718055994530942
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 335:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC
 		PARA *1
+error:	FUNC	; signature func error(ptr s) -> void @ 335:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2
-		CALL ^abort %0 *1	; abort()
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 337:10
+		CALL ^abort %0 *1	; expects function() -> unknown @ 338:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-exp:	FUNC
 	$y:	OUTf
+exp:	FUNC	; signature func exp(float x) -> float @ 366:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -445,14 +451,14 @@ exp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-sqrt:	FUNC
 	$y:	OUTf
+sqrt:	FUNC	; signature func sqrt(float x) -> float @ 386:15
 	$x:	INPf
 	$t:	LOCf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) error("Domain error")
 		MOVp %1 &.s_Domain4dd 	; error("Domain error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 390:36
 	.f0:	MOVf $y $x 	; y = x
 		MOVf $t #0.0 	; t = 0.0
 	.l1:	EQUf $y $t @.e2	; while (y != t) 
@@ -464,13 +470,13 @@ sqrt:	FUNC
 	.e2:	RETU   	; }
 
 	GLOB *1
-rndSeedX:	DATi #123456789
+rndSeedX:	DATi #123456789	; signature global rndSeedX : int @ 399:32
 	GLOB *1
-rndSeedY:	DATi #362436069
+rndSeedY:	DATi #362436069	; signature global rndSeedY : int @ 400:32
 
 ;-----------------------------------------------------------------------------
-seedRandom:	FUNC
 		PARA *1
+seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 402:21
 	$seed:	INPi
 	$x:	LOCi
 ;-----------------------------------------------------------------------------
@@ -488,8 +494,8 @@ seedRandom:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-randomFloat:	FUNC
 	$f:	OUTf
+randomFloat:	FUNC	; signature func randomFloat() -> float @ 413:22
 	$x:	LOCi
 	$y:	LOCi
 	$t:	LOCi
@@ -510,57 +516,57 @@ randomFloat:	FUNC
 		POKE &rndSeedY $y 	; global rndSeedY = y
 		RETU   	; }
 
-STEP_COUNT:	! DEFi #32
-REVERSE_FX:	! DEFi #0
-BIT_CRUSH_EFFECT:	! DEFi #1
-TRANCE_GATE_EFFECT:	! DEFi #2
-REPEAT_EFFECT:	! DEFi #3
-STRETCH_EFFECT:	! DEFi #4
-PITCH_SHIFT_EFFECT:	! DEFi #5
-HALF_SPEED_EFFECT:	! DEFi #6
-TAPE_STOP_FX:	! DEFi #7
-fxRate:	! DEFi #0
-FX_PARAM_TAPE_STOP_RATE:	! DEFi #0
-FX_PARAM_TRANCE_GATE_RATE:	! DEFi #1
-FX_PARAM_BIT_CRUSH_MASK:	! DEFi #2
-FX_PARAM_REPEAT_MASK:	! DEFi #3
-FX_PARAM_REPEAT_OFF_3:	! DEFi #4
-FX_PARAM_SHIFT_9:	! DEFi #5
-FX_PARAM_SHIFT_10:	! DEFi #6
-FX_PARAM_1_LSHIFT_9:	! DEFi #7
-FX_PARAM_1_LSHIFT_10:	! DEFi #8
-FX_PARAM_MASK_10:	! DEFi #9
-FX_PARAM_COUNT:	! DEFi #10
+STEP_COUNT:	! DEFi #32	; signature const STEP_COUNT : int @ 431:1
+REVERSE_FX:	! DEFi #0	; signature const REVERSE_FX : int @ 431:25
+BIT_CRUSH_EFFECT:	! DEFi #1	; signature const BIT_CRUSH_EFFECT : int @ 432:31
+TRANCE_GATE_EFFECT:	! DEFi #2	; signature const TRANCE_GATE_EFFECT : int @ 433:33
+REPEAT_EFFECT:	! DEFi #3	; signature const REPEAT_EFFECT : int @ 434:28
+STRETCH_EFFECT:	! DEFi #4	; signature const STRETCH_EFFECT : int @ 435:29
+PITCH_SHIFT_EFFECT:	! DEFi #5	; signature const PITCH_SHIFT_EFFECT : int @ 436:33
+HALF_SPEED_EFFECT:	! DEFi #6	; signature const HALF_SPEED_EFFECT : int @ 437:32
+TAPE_STOP_FX:	! DEFi #7	; signature const TAPE_STOP_FX : int @ 438:27
+fxRate:	! DEFi #0	; signature const fxRate : int @ 440:21
+FX_PARAM_TAPE_STOP_RATE:	! DEFi #0	; signature const FX_PARAM_TAPE_STOP_RATE : int @ 441:38
+FX_PARAM_TRANCE_GATE_RATE:	! DEFi #1	; signature const FX_PARAM_TRANCE_GATE_RATE : int @ 442:40
+FX_PARAM_BIT_CRUSH_MASK:	! DEFi #2	; signature const FX_PARAM_BIT_CRUSH_MASK : int @ 443:38
+FX_PARAM_REPEAT_MASK:	! DEFi #3	; signature const FX_PARAM_REPEAT_MASK : int @ 444:35
+FX_PARAM_REPEAT_OFF_3:	! DEFi #4	; signature const FX_PARAM_REPEAT_OFF_3 : int @ 445:36
+FX_PARAM_SHIFT_9:	! DEFi #5	; signature const FX_PARAM_SHIFT_9 : int @ 446:31
+FX_PARAM_SHIFT_10:	! DEFi #6	; signature const FX_PARAM_SHIFT_10 : int @ 447:32
+FX_PARAM_1_LSHIFT_9:	! DEFi #7	; signature const FX_PARAM_1_LSHIFT_9 : int @ 448:34
+FX_PARAM_1_LSHIFT_10:	! DEFi #8	; signature const FX_PARAM_1_LSHIFT_10 : int @ 449:35
+FX_PARAM_MASK_10:	! DEFi #9	; signature const FX_PARAM_MASK_10 : int @ 450:31
+FX_PARAM_COUNT:	! DEFi #10	; signature const FX_PARAM_COUNT : int @ 451:30
 	! MULi <A> #FX_PARAM_COUNT #5
-FX_PARAMS:	GLOB *<A>
-stepFXs:	GLOB *STEP_COUNT
-stepFXParams:	GLOB *STEP_COUNT
+FX_PARAMS:	GLOB *<A>	; signature array FX_PARAMS[<A>] : unknown @ 455:43
+stepFXs:	GLOB *STEP_COUNT	; signature array stepFXs[STEP_COUNT] : unknown @ 457:1
+stepFXParams:	GLOB *STEP_COUNT	; signature array stepFXParams[STEP_COUNT] : unknown @ 457:38
 	GLOB *1
-doReset:	DATi #TRUE
+doReset:	DATi #TRUE	; signature global doReset : int @ 459:1
 	GLOB *1
-updateBits:	DATi #TRUE
+updateBits:	DATi #TRUE	; signature global updateBits : int @ 460:1
 	GLOB *1
-clockMask:	DATi #0x1FFFF
+clockMask:	DATi #0x1FFFF	; signature global clockMask : int @ 460:31
 	GLOB *1
-clockShift:	DATi #13
+clockShift:	DATi #13	; signature global clockShift : int @ 461:27
 	GLOB *1
-fxQuantize:	DATi #0xFFF
+fxQuantize:	DATi #0xFFF	; signature global fxQuantize : int @ 462:30
 	GLOB *1
-dirXor:	DATi #0x0
+dirXor:	DATi #0x0	; signature global dirXor : int @ 463:24
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC
 		PARA *1
+reset:	FUNC	; signature func reset() -> void @ 473:16
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4de 	; trace("reset")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 475:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
 		PARA *1
+update:	FUNC	; signature func update() -> void @ 486:17
 	$i:	LOCi
 	$fx:	LOCi
 	$fxRnd:	LOCi
@@ -574,7 +580,7 @@ update:	FUNC
 	$f:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4df 	; trace("update")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 499:17
 		POKE &dirXor #0 	; global dirXor = 0
 		PEEK %0 &params:SWITCHES_PARAM_INDEX 	; if (((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_REVERSE_MASK) != 0) 
 		ANDi %0 %0 #SWITCHES_REVERSE_MASK
@@ -594,7 +600,7 @@ update:	FUNC
 	.f4:	FORi $i #8 @.l3	; }
 	.f1:	PEEK %1 &params:OPERAND_1_LOW_PARAM_INDEX 	; seedRandom((int) global params[OPERAND_1_LOW_PARAM_INDEX] + 1283756)
 		ADDi %1 %1 #1283756
-		CALL &seedRandom %0 *2
+		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ 518:70
 		PEEK %0 &params:OPERATOR_2_PARAM_INDEX 	; stepRate = (int) global params[OPERATOR_2_PARAM_INDEX] - 1
 		SUBi $stepRate %0 #1
 		GEQi $stepRate #0 @.f5	; if (stepRate < 0) 
@@ -628,15 +634,16 @@ update:	FUNC
 		MOVi $fx #-1 	; fx = -1
 		MOVi $i #0 	; for (i = 0 to STEP_COUNT) 
 		GEQi #0 #STEP_COUNT @.e12
-	.l13:	CALL &randomFloat %0 *1	; f = (float) randomFloat()
+	.l13:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 544:30
 		MOVf $f %0 
 		EQUi $i #0 @.t14	; if (i == 0 || i == 7) 
 		NEQi $i #7 @.f15
-	.t14:	ADDp %1 &.s_s4e0 $i	; traceInt("s:"+i)
-		CALL &traceInt %0 *2
+	.t14:	MOVp %1 &.s_s4e0 	; traceInt("s:", i)
+		MOVi %2 $i 
+		CALL &traceInt %0 *3	; expects traceInt(ptr, int) -> void @ 546:23
 		MOVp %1 &.s_f4e1 	; traceFloat("f:",f)
 		MOVf %2 $f 
-		CALL &traceFloat %0 *3
+		CALL &traceFloat %0 *3	; expects traceFloat(ptr, float) -> void @ 547:24
 	.f15:	MULf %0 $f $fxCountFloat	; fxRnd = ftoi(f * fxCountFloat)
 		fTOi $fxRnd %0 #1.0
 		LEQi $fxRnd $fxCount @.f16	; if (fxRnd > fxCount) 
@@ -652,7 +659,7 @@ update:	FUNC
 	.e19:	POKE &stepFXs $i $fx	; global stepFXs[i] = fx
 		FORi $i #STEP_COUNT @.l13	; }
 	.e12:	MOVp %1 &.s_4e2 	; trace("---")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 562:16
 	.e11:	NOOP
 	.e7:	MOVi $i #0 	; for (i = 0 to STEP_COUNT) 
 		GEQi #0 #STEP_COUNT @.e20
@@ -665,7 +672,7 @@ update:	FUNC
 		GOTO @.e23  
 	.s22#3:	MOVi $fx #0 	; fx = 0
 		GOTO @.e23  
-	.s22#4:	CALL &randomFloat %0 *1	; fx = ftoi((float) randomFloat() * 2.9999)
+	.s22#4:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 571:44
 		fTOi $fx %0 #2.9999
 	.s22:	NOOP
 	.e23:	POKE &stepFXParams $i $fx	; global stepFXParams[i] = fx
@@ -673,17 +680,17 @@ update:	FUNC
 	.e20:	MOVp %1 &.s_steps4e3 	; traceInts("steps: ", 16, global stepFXs)
 		MOVi %2 #16 
 		MOVp %3 &stepFXs 
-		CALL &traceInts %0 *4
+		CALL &traceInts %0 *4	; expects traceInts(ptr, int, ptr) -> void @ 575:42
 		MOVp %1 &.s_params4e4 	; traceInts("params: ", 16, global stepFXParams)
 		MOVi %2 #16 
 		MOVp %3 &stepFXParams 
-		CALL &traceInts %0 *4
+		CALL &traceInts %0 *4	; expects traceInts(ptr, int, ptr) -> void @ 576:48
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-init:	FUNC
 		PARA *1
+init:	FUNC	; signature func init() -> void @ 584:15
 	$i:	LOCi
 	$p:	LOCp
 	$fxRate:	LOCi
@@ -691,8 +698,8 @@ init:	FUNC
 	$t:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4e5 	; trace("init")
-		CALL ^trace %0 *2
-		CALL &update %0 *1	; update()
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 587:15
+		CALL &update %0 *1	; expects update() -> void @ 588:10
 		MOVp $p &FX_PARAMS 	; p = global FX_PARAMS
 		MOVi $i #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0
@@ -726,8 +733,8 @@ init:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC
 		PARA *1
+process:	FUNC	; signature func process() -> void @ 622:18
 	$i:	LOCi
 	$x:	LOCi
 	$mask:	LOCi
@@ -798,11 +805,11 @@ process:	FUNC
 	.f3:	MOVi %1 $clock 	; write(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 679:33
 		MOVi %1 $clock 	; read(clock, 1, inp)
 		MOVi %2 #1 
 		ADRL %3 $inp *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 680:22
 		SWCH $held *8 @.s7	; switch (held == 0 to 8) 
 	.s7#REVERSE_FX:	EQUi $trig #FALSE @.f9	; if (trig != FALSE) 
 		MOVi $pos $clock 	; pos = clock
@@ -810,7 +817,7 @@ process:	FUNC
 		MOVi %1 $pos 	; read(pos, 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 688:23
 		GOTO @.e8  	; }
 	.s7#TAPE_STOP_FX:	EQUi $trig #FALSE @.f10	; if (trig != FALSE) 
 		SHLi $pos $clock #16	; pos = clock << 16
@@ -819,7 +826,7 @@ process:	FUNC
 		SHRi %1 $pos #16	; read(pos >> 16, 2, samples)
 		MOVi %2 #2 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 697:32
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> 16)
 		MULi %0 %0 $x
 		SHRi %0 %0 #16
@@ -838,7 +845,7 @@ process:	FUNC
 	.f12:	SHRi %1 $pos #1	; read(pos >> 1, 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 711:28
 		ADDi $pos $pos #1	; pos = pos + 1
 		GOTO @.e8  	; }
 	.s7#TRANCE_GATE_EFFECT:	SHRi %0 $clock $fxParams:FX_PARAM_TRANCE_GATE_RATE	; x = (clock >> (int) fxParams[FX_PARAM_TRANCE_GATE_RATE]) & 0x7FF
@@ -866,7 +873,7 @@ process:	FUNC
 	.s7#BIT_CRUSH_EFFECT:	ANDi %1 $clock $fxParams:FX_PARAM_BIT_CRUSH_MASK	; read(clock & (int) fxParams[FX_PARAM_BIT_CRUSH_MASK], 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 731:67
 		! XORi <A> #0x7F #-1	; outp[0] = (int) outp[0] & ~0x7F
 		ANDi $outp:0 $outp:0 <A>
 		! XORi <A> #0x7F #-1	; outp[1] = (int) outp[1] & ~0x7F
@@ -880,7 +887,7 @@ process:	FUNC
 		MOVi %1 $pos 	; read(pos, 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 740:26
 		ANDi %0 $clock $fxParams:FX_PARAM_REPEAT_OFF_3	; if ((clock & (int) fxParams[FX_PARAM_REPEAT_OFF_3]) == (int) fxParams[FX_PARAM_REPEAT_OFF_3]) 
 		NEQi %0 $fxParams:FX_PARAM_REPEAT_OFF_3 @.f19
 		ADDi $pos $pos $fxParams:FX_PARAM_REPEAT_OFF_3	; pos = pos + (int) fxParams[FX_PARAM_REPEAT_OFF_3]
@@ -898,7 +905,7 @@ process:	FUNC
 	.e22:	MOVi %1 $pos 	; read(pos, 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 752:30
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_10])
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_10
@@ -913,11 +920,11 @@ process:	FUNC
 	.f24:	MOVi %1 $pos 	; read(pos, 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 761:26
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_9	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_9], 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 762:68
 		ANDi $x $clock $fxParams:FX_PARAM_MASK_10	; x = clock & (int) fxParams[FX_PARAM_MASK_10]
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_10])
 		MULi %0 %0 $x
@@ -941,11 +948,11 @@ process:	FUNC
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_9	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_9], 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 775:64
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_10	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_10], 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 776:69
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_9])
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_9
@@ -974,7 +981,7 @@ process:	FUNC
 		SHRi %0 %0 #15
 		ADDi %0 $inp:1 %0
 		POKE &signal:1 %0 
-		CALL ^yield %0 *1	; yield()
+		CALL ^yield %0 *1	; expects function() -> unknown @ 796:10
 		ADDi $clock $clock #1	; clock = clock + 1
 		GOTO @.l0  	; }
 		RETU   	; }

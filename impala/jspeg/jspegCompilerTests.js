@@ -1,11 +1,14 @@
 const fs = require('fs');
 const path = require('path');
+const childProcess = require('child_process');
 
 const { wrapCompilerSource } = require('./updateJSPEG.js');
 const { compileWithJsImpala } = require('./impalaJsCompilerRunner');
 
 const dir = __dirname;
 const IMPALA_ENCODING = 'latin1';
+const validatorScript = path.join(dir, '..', '..', 'tools', 'gazl-validate.js');
+const validatorFixturesDir = path.join(dir, 'testdata', 'validator');
 
 const jspegSource = fs.readFileSync(path.join(dir, 'jspegCompiler.js'), 'utf8');
 const compileJSPEG = require(path.join(dir, 'jspegCompiler.js'));
@@ -58,7 +61,7 @@ if (impalaIndex !== impalaGrammar.length) {
 	process.exit(1);
 }
 const impalaExisting = fs.readFileSync(path.join(dir, 'impalaCompiler.js'), 'utf8');
-if (wrapCompilerSource('impalaCompiler', impalaGenerated).trim() !== impalaExisting.trim()) {
+if (wrapCompilerSource('impalaCompiler', impalaGenerated, { prelude: 'var $$parser = {};', exposeSourceNameOption: true }).trim() !== impalaExisting.trim()) {
         console.error('Generated compiler differs from impalaCompiler.js');
         process.exit(1);
 }
@@ -180,11 +183,11 @@ const tagCaptureCases = [
 testGrammarEquivalence('tagCaptureTest.jspeg', 'tagCaptureTest.jspeg', tagCaptureCases);
 
 const parityFixtures = [
-        { name: 'smoke', source: 'smoke.impala', expected: 'smoke.pika.gazl', options: { randomId: 42 } },
-        { name: 'bool', source: 'bool.impala', expected: 'bool.pika.gazl', options: { randomId: 42 } },
-        { name: 'control', source: 'control.impala', expected: 'control.pika.gazl', options: { randomId: 42 } },
-        { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.pika.gazl', options: { randomId: 42 } },
-        { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.pika.gazl', options: { randomId: 42 } }
+        { name: 'smoke', source: 'smoke.impala', expected: 'smoke.pika.gazl', options: { randomId: 42, sourceName: 'smoke.impala' } },
+        { name: 'bool', source: 'bool.impala', expected: 'bool.pika.gazl', options: { randomId: 42, sourceName: 'bool.impala' } },
+        { name: 'control', source: 'control.impala', expected: 'control.pika.gazl', options: { randomId: 42, sourceName: 'control.impala' } },
+        { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.pika.gazl', options: { randomId: 42, sourceName: 'perfTest2.impala' } },
+        { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.pika.gazl', options: { randomId: 42, sourceName: 'inputTest.impala' } }
 ];
 
 const legacySourceDir = path.join(dir, '..', '..', 'tests', 'impala', 'sources');
@@ -202,7 +205,7 @@ const legacyParityFixtures = fs
                         expected: `${name}.gazl`,
                         sourceDir: legacySourceDir,
                         expectedDir: legacyExpectedDir,
-                        options: { randomId: LEGACY_RANDOM_ID, retabulate: false }
+                        options: { randomId: LEGACY_RANDOM_ID, retabulate: false, sourceName: path.join(legacySourceDir, file) }
                 };
         });
 
@@ -214,10 +217,10 @@ function resolveFixturePath(fixture, key, defaultDir) {
 }
 
 function runParityFixture(fixture) {
-        const sourcePath = resolveFixturePath(fixture, 'source', path.join(dir, 'testdata'));
-        const expectedPath = resolveFixturePath(fixture, 'expected', path.join(dir, 'testdata'));
-        const source = fs.readFileSync(sourcePath, IMPALA_ENCODING);
-        const expected = fs.readFileSync(expectedPath, IMPALA_ENCODING);
+	const sourcePath = resolveFixturePath(fixture, 'source', path.join(dir, 'testdata'));
+	const expectedPath = resolveFixturePath(fixture, 'expected', path.join(dir, 'testdata'));
+	const source = fs.readFileSync(sourcePath, IMPALA_ENCODING);
+	const expected = fs.readFileSync(expectedPath, IMPALA_ENCODING);
         let actual;
         try {
                 actual = compileWithJsImpala(source, Object.assign({}, fixture.options));
@@ -227,13 +230,13 @@ function runParityFixture(fixture) {
                         console.warn(`Skipping ${fixture.name} fixture until JSPEG supports this feature: ${message}`);
                         return;
                 }
-                console.error(`impala.jspeg compiler threw on fixture ${fixture.name}`);
-                console.error(message);
+		console.error(`impala.jspeg compiler threw on fixture ${fixture.name}`);
+		console.error(message);
                 process.exit(1);
         }
 
         if (fixture.expectFailure) {
-                console.error(`impala.jspeg compiler unexpectedly handled ${fixture.name}; remove expectFailure flag to enforce parity.`);
+		console.error(`impala.jspeg compiler unexpectedly handled ${fixture.name}; remove expectFailure flag to enforce parity.`);
                 process.exit(1);
         }
 
@@ -241,14 +244,97 @@ function runParityFixture(fixture) {
         const normalizedExpected = expected.trimEnd();
 
         if (normalizedActual !== normalizedExpected) {
-                console.error(`impala.jspeg compiler output diverges from PikaScript fixture: ${fixture.name}`);
+		console.error(`impala.jspeg compiler output diverges from PikaScript fixture: ${fixture.name}`);
                 process.exit(1);
         }
         console.log(`impala.jspeg compiler matches ${fixture.name} fixture output`);
 }
 
+function resolveValidatorFixture(name) {
+        return path.join(validatorFixturesDir, name);
+}
+
+function runValidatorCase(label, fixtureNames, expectedExitCode, expectedMessageSubstring) {
+        const files = fixtureNames.map(resolveValidatorFixture);
+        const result = childProcess.spawnSync(process.execPath, [validatorScript].concat(files), {
+                encoding: 'utf8'
+        });
+
+        if (result.error) {
+		console.error(`Failed to launch gazl-validate for ${label}`);
+		console.error(result.error);
+                process.exit(1);
+        }
+
+        if (result.status !== expectedExitCode) {
+		console.error(`gazl-validate exited with ${result.status} for ${label}, expected ${expectedExitCode}`);
+                if (result.stdout) {
+		console.error('stdout:');
+		console.error(result.stdout);
+                }
+                if (result.stderr) {
+		console.error('stderr:');
+		console.error(result.stderr);
+                }
+                process.exit(1);
+        }
+
+        const stderr = result.stderr || '';
+        if (expectedMessageSubstring) {
+                if (!stderr.includes(expectedMessageSubstring)) {
+		console.error(`gazl-validate output for ${label} did not include expected message: ${expectedMessageSubstring}`);
+		console.error('stderr:');
+		console.error(stderr);
+                        process.exit(1);
+                }
+        } else if (stderr.trim().length !== 0) {
+		console.error(`gazl-validate produced unexpected diagnostics for ${label}`);
+		console.error('stderr:');
+		console.error(stderr);
+                process.exit(1);
+        }
+
+        if (expectedExitCode === 0) {
+                console.log(`gazl-validate ${label} fixture passed`);
+        } else {
+                console.log(`gazl-validate ${label} fixture produced expected failure`);
+        }
+}
+
 parityFixtures.forEach(runParityFixture);
 legacyParityFixtures.forEach(runParityFixture);
+
+runValidatorCase('matching metadata fixtures', ['exports.gazl', 'imports-valid.gazl'], 0);
+runValidatorCase(
+'mismatched metadata fixtures',
+['exports.gazl', 'imports-mismatch.gazl'],
+1,
+'Call to foo does not match its definition'
+);
+
+	const validatorUnitTestScript = path.join(dir, '..', '..', 'tests', 'gazl-validator-tests.js');
+	const validatorUnitResult = childProcess.spawnSync(process.execPath, [validatorUnitTestScript], {
+		encoding: 'utf8'
+});
+
+	if (validatorUnitResult.error) {
+		console.error('Failed to run gazl-validator unit tests');
+		console.error(validatorUnitResult.error);
+		process.exit(1);
+}
+
+	if (validatorUnitResult.stdout) {
+		process.stdout.write(validatorUnitResult.stdout);
+}
+
+	if (validatorUnitResult.stderr) {
+		process.stderr.write(validatorUnitResult.stderr);
+}
+
+	if (validatorUnitResult.status !== 0) {
+		console.error('gazl-validator unit tests failed');
+		process.exit(1);
+}
 
 const failureSource = [
         'function main()',

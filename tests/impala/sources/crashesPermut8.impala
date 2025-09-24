@@ -543,7 +543,7 @@ locals	int i,
 			for (i = 0 to STEP_COUNT) {
 				f = (float) randomFloat();
 				if (i == 0 || i == 7) {
-					traceInt("s:"+i);
+					traceInt("s:", i);
 					traceFloat("f:",f);
 				}
 				fxRnd = ftoi(f * fxCountFloat);

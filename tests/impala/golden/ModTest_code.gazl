@@ -1,27 +1,33 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 18:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
 	DATA &.s_XORHIG4d2 &.s_XORHIG4d2:53 &.s_XORHIG4d2:53
 	DATA &.s_XORHIG4d2:53 &.s_XORHIG4d2:53 &.s_SUB16B4d3
 	DATA &.s_SUB16B4d3:53 &.s_SUB16B4d3:53
+; signature extern native abort() -> unknown @ 39:1
+; signature extern native trace() -> unknown @ 40:1
+; signature extern native yield() -> unknown @ 41:1
+; signature extern native write() -> unknown @ 42:1
+; signature extern native read() -> unknown @ 44:1
 	GLOB *1
-clock:	DATi #0
-positions:	GLOB *2
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int @ 80:1
+positions:	GLOB *2	; signature array positions[2] : unknown @ 81:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 82:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 83:1
 	GLOB *1
-instance:	DATi #0
+instance:	DATi #0	; signature global instance : int @ 88:1
 	GLOB *1
-xorMask:	DATi #0
+xorMask:	DATi #0	; signature global xorMask : int @ 88:19
 	GLOB *1
-subTerm:	DATi #0
+subTerm:	DATi #0	; signature global subTerm : int @ 89:19
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
 		PARA *1
+update:	FUNC	; signature func update() -> void @ 113:17
 	$x:	LOCi
 	$y:	LOCi
 ;-----------------------------------------------------------------------------
@@ -56,8 +62,8 @@ update:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-operate1:	FUNC
 	$r:	OUTi
+operate1:	FUNC	; signature func operate1() -> int @ 144:19
 	$l:	LOCi
 	$x:	LOCi
 ;-----------------------------------------------------------------------------
@@ -82,8 +88,8 @@ operate1:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-operate2:	FUNC
 	$r:	OUTi
+operate2:	FUNC	; signature func operate2() -> int @ 164:19
 	$x:	LOCi
 ;-----------------------------------------------------------------------------
 		PEEK %0 &params:OPERATOR_2_PARAM_INDEX 	; switch ((int) global params[OPERATOR_2_PARAM_INDEX] == 0 to OPERATOR_2_COUNT) 

@@ -1,18 +1,24 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 10:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 13:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:33
 	DATA &.s_4d2 &.s_4d2 &.s_CRUSH4d3 &.s_BLOCKR4d4 &.s_4d2
 	DATA &.s_4d2 &.s_4d5 &.s_BLOCKS4d6
+; signature extern native abort() -> unknown @ 25:1
+; signature extern native trace() -> unknown @ 26:1
+; signature extern native yield() -> unknown @ 27:1
+; signature extern native write() -> unknown @ 28:1
+; signature extern native read() -> unknown @ 30:1
 	GLOB *1
-clock:	DATi #0
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int @ 49:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 50:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 51:1
 	CNST *1
-clockFreqLimit:	DATi #132300
-signal:	GLOB *2
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 52:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 53:1
 	CNST *1
 	! SHLi <A> #1 #SWITCHES_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -23,23 +29,23 @@ signal:	GLOB *2
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>
-LOG2:	! DEFf #0.69314718055994530942
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 119:1
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 121:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC
 		PARA *1
+error:	FUNC	; signature func error(ptr s) -> void @ 121:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2
-		CALL ^abort %0 *1	; abort()
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 123:10
+		CALL ^abort %0 *1	; expects function() -> unknown @ 124:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-exp:	FUNC
 	$y:	OUTf
+exp:	FUNC	; signature func exp(float x) -> float @ 127:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -62,8 +68,8 @@ exp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-log:	FUNC
 	$y:	OUTf
+log:	FUNC	; signature func log(float x) -> float @ 147:14
 	$x:	INPf
 	$a:	LOCf
 	$b:	LOCf
@@ -74,7 +80,7 @@ log:	FUNC
 		LEQf $x #0.0 @.t0	; if (x <= 0.0 || x >= 1.0e38) error("Domain error")
 		LSSf $x #1.0e38 @.f1
 	.t0:	MOVp %1 &.s_Domain4d7 	; error("Domain error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 155:52
 		GOTO @.e2  
 	.f1:	MOVf $b #0.0 	; b = 0.0
 		MOVf $m $x 	; m = x
@@ -102,8 +108,8 @@ log:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-pow:	FUNC
 	$z:	OUTf
+pow:	FUNC	; signature func pow(float x, float y) -> float @ 175:14
 	$x:	INPf
 	$y:	INPf
 	$a:	LOCf
@@ -116,15 +122,15 @@ pow:	FUNC
 		SUBf $a #0.0 $a	; a = -a
 	.f1:	LEQf $a #0.0 @.f2	; if (a > 0.0) z = (float) exp((float) log(a) * y)
 		MOVf %2 $a 	; z = (float) exp((float) log(a) * y)
-		CALL &log %1 *2
+		CALL &log %1 *2	; expects log(float) -> float @ 182:46
 		MULf %1 %1 $y
-		CALL &exp %0 *2
+		CALL &exp %0 *2	; expects exp(float) -> float @ 182:50
 		MOVf $z %0 
 		GOTO @.e3  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
 	.t4:	MOVp %1 &.s_Domain4d7 	; error("Domain error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 183:53
 	.f5:	NOOP
 	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
 		MULf %0 $y #0.5
@@ -136,47 +142,47 @@ pow:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-logScale:	FUNC
 	$y:	OUTf
+logScale:	FUNC	; signature func logScale(float x, float outFrom, float outTo) -> float @ 187:19
 	$x:	INPf
 	$outFrom:	INPf
 	$outTo:	INPf
 ;-----------------------------------------------------------------------------
 		DIVf %1 $outTo $outFrom	; y = outFrom * (float) pow(outTo / outFrom, x)
 		MOVf %2 $x 
-		CALL &pow %0 *3
+		CALL &pow %0 *3	; expects pow(float, float) -> float @ 190:47
 		MULf $y $outFrom %0
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-decayConstant:	FUNC
 	$factor:	OUTf
+decayConstant:	FUNC	; signature func decayConstant(float time, float reach) -> float @ 193:24
 	$time:	INPf
 	$reach:	INPf
 ;-----------------------------------------------------------------------------
 		DIVf %2 #1.0 $reach	; factor = (float) exp(-1.0 / time * (float) log(1.0 / reach))
-		CALL &log %1 *2
+		CALL &log %1 *2	; expects log(float) -> float @ 196:61
 		DIVf %2 #-1.0 $time
 		MULf %1 %2 %1
-		CALL &exp %0 *2
+		CALL &exp %0 *2	; expects exp(float) -> float @ 196:62
 		MOVf $factor %0 
 		RETU   	; }
 
-HP_EPSILON:	! DEFf #1.0e-011
-HP_K:	! DEFf #0.0056828256022101
+HP_EPSILON:	! DEFf #1.0e-011	; signature const HP_EPSILON : float @ 201:34
+HP_K:	! DEFf #0.0056828256022101	; signature const HP_K : float @ 202:38
 	GLOB *1
-wantsReset:	DATi #FALSE
+wantsReset:	DATi #FALSE	; signature global wantsReset : int @ 206:30
 	GLOB *1
-breakLoop:	DATi #FALSE
-readRates:	GLOB *256
-blockLens:	GLOB *256
-minCycles:	GLOB *256
-thresDKs:	GLOB *256
+breakLoop:	DATi #FALSE	; signature global breakLoop : int @ 207:29
+readRates:	GLOB *256	; signature array readRates[256] : unknown @ 208:28
+blockLens:	GLOB *256	; signature array blockLens[256] : unknown @ 209:28
+minCycles:	GLOB *256	; signature array minCycles[256] : unknown @ 210:28
+thresDKs:	GLOB *256	; signature array thresDKs[256] : unknown @ 211:27
 
 ;-----------------------------------------------------------------------------
-init:	FUNC
 		PARA *1
+init:	FUNC	; signature func init() -> void @ 218:15
 	$i:	LOCi
 	$x:	LOCf
 	$minCycle:	LOCi
@@ -191,27 +197,27 @@ init:	FUNC
 		MOVf %1 $x 	; global readRates[i] = ftoi((float) logScale(x, 32768.0, 131072.0) + 0.5)
 		MOVf %2 #32768.0 
 		MOVf %3 #131072.0 
-		CALL &logScale %0 *4
+		CALL &logScale %0 *4	; expects logScale(float, float, float) -> float @ 226:69
 		ADDf %0 %0 #0.5
 		fTOi %0 %0 #1.0
 		POKE &readRates $i %0
 		MOVf %1 $x 	; global blockLens[i] = ftoi((float) logScale(x, 128.0, 32768.0) + 0.5)
 		MOVf %2 #128.0 
 		MOVf %3 #32768.0 
-		CALL &logScale %0 *4
+		CALL &logScale %0 *4	; expects logScale(float, float, float) -> float @ 227:66
 		ADDf %0 %0 #0.5
 		fTOi %0 %0 #1.0
 		POKE &blockLens $i %0
 		MOVf %1 $x 	; minCycle = ftoi((float) logScale(x, 10.0, 2000.0) + 0.5)
 		MOVf %2 #10.0 
 		MOVf %3 #2000.0 
-		CALL &logScale %0 *4
+		CALL &logScale %0 *4	; expects logScale(float, float, float) -> float @ 228:53
 		ADDf %0 %0 #0.5
 		fTOi $minCycle %0 #1.0
 		POKE &minCycles $i $minCycle	; global minCycles[i] = minCycle
 		iTOf %1 $minCycle #1.0	; global thresDKs[i] = (float) decayConstant(itof(minCycle), 0.6666666)
 		MOVf %2 #0.6666666 
-		CALL &decayConstant %0 *3
+		CALL &decayConstant %0 *3	; expects decayConstant(float, float) -> float @ 230:72
 		POKE &thresDKs $i %0
 		FORi $i #256 @.l1	; }
 	.e0:	POKE &blockLens:0 #0 	; global blockLens[0] = 0
@@ -219,16 +225,16 @@ init:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
 		PARA *1
+update:	FUNC	; signature func update() -> void @ 239:17
 ;-----------------------------------------------------------------------------
 		POKE &breakLoop #TRUE 	; global breakLoop = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC
 		PARA *1
+process:	FUNC	; signature func process() -> void @ 244:18
 	$inL:	LOCf
 	$inR:	LOCf
 	$yL:	LOCf
@@ -360,7 +366,7 @@ process:	FUNC
 		MOVi %1 $clock 	; write(clock, 1, y2)
 		MOVi %2 #1 
 		ADRL %3 $y2 *0
-		CALL ^write %0 *4
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 300:23
 		MULf $thresPosL $thresPosL $thresDK	; thresPosL = thresPosL * thresDK
 		MULf $thresNegL $thresNegL $thresDK	; thresNegL = thresNegL * thresDK
 		MULf $thresPosR $thresPosR $thresDK	; thresPosR = thresPosR * thresDK
@@ -418,7 +424,7 @@ process:	FUNC
 		ADDi %1 $rcStartL %1
 		MOVi %2 #1 
 		ADRL %3 $y2 *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 354:76
 		ANDi %0 $y2:0 $bitCrushMask	; global signal[0] = (int) y2[0] & bitCrushMask
 		POKE &signal:0 %0 
 		SHRi %1 $playPosR #16	; read(rcStartR + ((playPosR >> 16) & rateCrushMask ^ reverseMask), 1, y2)
@@ -427,7 +433,7 @@ process:	FUNC
 		ADDi %1 $rcStartR %1
 		MOVi %2 #1 
 		ADRL %3 $y2 *0
-		CALL ^read %0 *4
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 356:76
 		ANDi %0 $y2:1 $bitCrushMask	; global signal[1] = (int) y2[1] & bitCrushMask
 		POKE &signal:1 %0 
 		ADDi $playPosL $playPosL $readRate	; playPosL = playPosL + readRate
@@ -448,7 +454,7 @@ process:	FUNC
 		SHLi $rcLenR $ccLenR #16	; rcLenR = ccLenR << 16
 		MOVi $newRCR #FALSE 	; newRCR = FALSE
 	.f31:	MOVi $playPosR #0 	; playPosR = 0
-	.f29:	CALL ^yield %0 *1	; yield()
+	.f29:	CALL ^yield %0 *1	; expects function() -> unknown @ 379:11
 		GOTO @.l3  	; }
 		GOTO @.l0  	; }
 		RETU   	; }

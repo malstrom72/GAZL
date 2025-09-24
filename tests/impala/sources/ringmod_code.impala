@@ -288,9 +288,8 @@ function reset()
 	global doReset = TRUE;
 }
 
-function displayDelayValue()
+function displayDelayValue(int x)
 returns int y
-locals int x
 {
 	y = 0x1 << (x >> (8 - 3));
 }

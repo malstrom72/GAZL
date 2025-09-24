@@ -17,7 +17,7 @@ const int TRUE = 1
 	first group, space again, and then the same for the second group. The pointers do not need to point to constant
 	data, but after the call to init() they shouldn't change.
 	
-	Special character – can be used for displaying a continuous line.
+	Special character √ê can be used for displaying a continuous line.
 */
 readonly array panelTextRows[8] = {
 	"   Silly ring-modulator firmware demo by M Lidstrom",
@@ -266,9 +266,8 @@ function reset()
 	global doReset = TRUE;
 }
 
-function displayDelayValue()
+function displayDelayValue(int x)
 returns int y
-locals int x
 {
 	y = 0x1 << (x >> (8 - 3));
 }

@@ -1,9 +1,10 @@
  ; Compiled with Impala version 1.0
 
+ ; signatures version=1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC
  					$result:	OUTi
+ main:				FUNC		; signature func main() -> int @ 1:15
  ;-----------------------------------------------------------------------------
  								MOVi $result #7 				; result = 7
  								RETU   							; }

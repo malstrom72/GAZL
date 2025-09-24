@@ -3,7 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const Module = require('module');
+const vm = require('vm');
 const child_process = require('child_process');
 
 const root = __dirname;
@@ -22,7 +22,7 @@ function write(file, contents) {
 
 function wrapCompilerSource(exportName, generated, options = {}) {
         const body = generated.trimEnd();
-        const { prelude } = options;
+        const { prelude, exposeSourceNameOption } = options;
         const lines = [];
         if (prelude) {
                 const entries = Array.isArray(prelude) ? prelude : [prelude];
@@ -30,34 +30,67 @@ function wrapCompilerSource(exportName, generated, options = {}) {
                         lines.push(line);
                 });
         }
-        lines.push(
-                `var ${exportName} = ${body};`,
-                "if (typeof module !== 'undefined' && module.exports) {",
-                `\tmodule.exports = ${exportName};`,
-                `\tmodule.exports.${exportName} = ${exportName};`,
-                `\tmodule.exports.default = ${exportName};`,
-                '}'
-        );
+
+        if (exposeSourceNameOption) {
+                const implName = `${exportName}Impl`;
+                lines.push(`var ${implName} = ${body};`);
+                lines.push(
+                        `function ${exportName}(source, options) {`,
+                        "\tvar sourceName;",
+                        "\tif (typeof options === 'string') {",
+                        "\t\tsourceName = options;",
+                        "\t} else if (options && Object.prototype.hasOwnProperty.call(options, 'sourceName')) {",
+                        "\t\tsourceName = options.sourceName;",
+                        "\t} else if (options && options.sourceName !== undefined) {",
+                        "\t\tsourceName = options.sourceName;",
+                        "\t} else {",
+                        "\t\tsourceName = undefined;",
+                        "\t}",
+                        "\t$$parser.sourceName = sourceName;",
+                        `\treturn ${implName}(source);`,
+                        "}"
+                );
+                lines.push(
+                        "if (typeof module !== 'undefined' && module.exports) {",
+                        `\tmodule.exports = ${exportName};`,
+                        `\tmodule.exports.${exportName} = ${exportName};`,
+                        `\tmodule.exports.default = ${exportName};`,
+                        `\tmodule.exports.raw = ${implName};`,
+                        '}'
+                );
+        } else {
+                lines.push(
+                        `var ${exportName} = ${body};`,
+                        "if (typeof module !== 'undefined' && module.exports) {",
+                        `\tmodule.exports = ${exportName};`,
+                        `\tmodule.exports.${exportName} = ${exportName};`,
+                        `\tmodule.exports.default = ${exportName};`,
+                        '}'
+                );
+        }
+
         lines.push('');
         return lines.join('\n');
 }
 
 function loadCompiler(source, description) {
-        const filename = path.isAbsolute(description) ? description : resolve(description);
-        const mod = new Module(filename, module);
-        mod.filename = filename;
-        mod.paths = Module._nodeModulePaths(path.dirname(filename));
-        mod._compile(source, filename);
+        const context = {
+                console,
+                module: { exports: {} },
+                exports: {}
+        };
+        vm.createContext(context);
+        const script = new vm.Script(source, { filename: description });
+        script.runInContext(context);
 
-        const exported = mod.exports;
-        if (typeof exported === 'function') {
-                return exported;
+        if (typeof context.module.exports === 'function') {
+                return context.module.exports;
         }
-        if (exported && typeof exported.compileJSPEG === 'function') {
-                return exported.compileJSPEG;
+        if (typeof context.exports === 'function') {
+                return context.exports;
         }
-        if (exported && typeof exported.default === 'function') {
-                return exported.default;
+        if (typeof context.compileJSPEG === 'function') {
+                return context.compileJSPEG;
         }
 
         throw new Error(`${description} did not define a compiler function`);
@@ -101,7 +134,7 @@ function regenerate() {
         const generatedCompiler = compileWith(compileJSPEG, grammarSource, 'jspeg.jspeg');
 
         const wrappedGeneratedCompiler = wrapCompilerSource('compileJSPEG', generatedCompiler);
-        const updatedCompileJSPEG = loadCompiler(wrappedGeneratedCompiler, 'generated-jspeg-compiler.js');
+        const updatedCompileJSPEG = loadCompiler(wrappedGeneratedCompiler, 'generated jspeg compiler');
         const regenerated = compileWith(updatedCompileJSPEG, grammarSource, 'jspeg.jspeg (self-host)');
         if (canonicalize(regenerated) !== canonicalize(generatedCompiler)) {
                 throw new Error('Self-hosted compile produced different output for jspeg.jspeg');
@@ -112,7 +145,10 @@ function regenerate() {
 
         return {
                 jspegCompiler: wrappedGeneratedCompiler,
-                impalaCompiler: wrapCompilerSource('impalaCompiler', generatedImpala)
+                impalaCompiler: wrapCompilerSource('impalaCompiler', generatedImpala, {
+                        prelude: 'var $$parser = {};',
+                        exposeSourceNameOption: true
+                })
         };
 }
 
