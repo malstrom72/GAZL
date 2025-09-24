@@ -47,27 +47,35 @@ However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCal
 
   ```
   ; signatures version=1
-  FUNC foo    ; signature func foo(int a, ptr b) -> int
+  FUNC foo    ; signature func foo(int a, ptr b) -> int @ foo.impala:5:1
   ...
-  LOC sharedBuffer    ; signature global sharedBuffer : ptr
+  LOC sharedBuffer    ; signature global sharedBuffer : ptr @ foo.impala:2:1
   ...
-  CALL foo    ; expects foo(int, ptr) -> int
-  ; signature extern func bar() -> unknown
+  CALL foo    ; expects foo(int, ptr) -> int @ foo.impala:12:9
+  ; signature extern func bar() -> unknown @ foo.impala:1:1
   ```
 
   Signature annotations follow a compact grammar so tooling can parse them deterministically:
 
   * **Header.** Each unit advertises support once via `; signatures version=<n>`.
-  * **Function definitions and prototypes.** Any line that emits `FUNC name` (or an implicit forward declaration) appends `; signature func name(<params>) -> <return>`. Extern shims use the same shape with an `extern func` or `extern native` prefix to distinguish host-provided entry points.
-  * **Call sites.** Every `CALL` instruction gains `; expects <label>(<arg-types>) -> <return>` describing the caller’s view.
+  * **Function definitions and prototypes.** Any line that emits `FUNC name` (or an implicit forward declaration) appends `; signature func name(<params>) -> <return>` with an optional trailing `@ <origin>` token identifying the Impala source location. Extern shims use the same shape with an `extern func` or `extern native` prefix to distinguish host-provided entry points.
+  * **Call sites.** Every `CALL` instruction gains `; expects <label>(<arg-types>) -> <return>` (likewise with an optional `@ <origin>` suffix) describing the caller’s view.
   * **Globals and constants.** `LOC`, `DATA`, and directive-driven constants append `; signature global name : <type>` (or `readonly`/`temporary` depending on section). Array declarations render as `; signature array name[size] : <type>`.
   * **Standalone externs.** Declarations that produce no GAZL directive still emit their own comment block, allowing validators to collect imports even when no code follows the declaration.
 
-  Parameter entries are rendered as `type name` pairs (falling back to `argN` when the source omits a name), and all primitive types are normalised to the `{int, float, ptr, funcptr, void}` vocabulary. Comments are attached through the existing `$$parser.emit(';', …)` path so they obey the same indentation and spacing rules as other debugger notes.
+  Parameter entries are rendered as `type name` pairs (falling back to `argN` when the source omits a name), and all primitive types are normalised to the `{int, float, ptr, funcptr, void}` vocabulary. When the compiler knows the originating source buffer and offset, it appends `@ <path>:<line>:<column>` (using 1-based line and column numbers) to the same comment so validators and editors can surface precise diagnostics; callers that cannot supply a filename emit just the line/column pair. Comments are attached through the existing `$$parser.emit(';', …)` path so they obey the same indentation and spacing rules as other debugger notes.
 
   The comments describe the definition’s signature, the exported global, the caller’s expectations, and now even bare extern declarations using the same primitive categories (rendered as `int`, `float`, `ptr`, `funcptr`, `void`). Because they are ordinary comments, concatenating multiple `.gazl` files simply produces a larger stream of inline signature notes for the validator to consume without affecting assemblers that ignore comments.
   Standalone `extern` declarations that produce no GAZL directive still emit a one-line annotation (for example, `; signature extern func bar() -> unknown`) so validators can record imports alongside executable code.
   The call-site comment rides on the `CALL` instruction itself, so there is no need for a `caller->callee` shorthand—the surrounding assembler already makes the callee obvious.
+
+  #### Source span capture and formatting
+
+  * **Record filenames.** Compiler runners already know which file they are compiling. Thread a `sourceName` (or equivalent) option into `impalaCompiler`, cache it on `$$parser`, and copy it into each symbol’s signature record alongside the existing `sourceCode` and `sourceOffset` data.
+  * **Retain offsets.** `FuncDecl`, `ArgsDecl`, `ExternDecl`, `GlobalDecl`, `ConstDecl`, and `FuncCall` all receive `$$s`/`$$i` pairs today. Persist those offsets on the metadata objects we already store so the emitter can recover precise origin information.
+  * **Normalise coordinates.** Introduce a helper such as `formatSignatureSourceOrigin(sourceCode, offset, filename)` that converts offsets to 1-based `line:column` coordinates, collapses Windows-style newlines, and falls back to just `line:column` when no filename is provided. The helper returns strings like `voice.impala:42:9` or `42:9`.
+  * **Emit `@ origin` markers.** Extend `formatFunctionSignatureComment`, `formatGlobalSignatureComment`, `formatConstSignatureComment`, and `formatCallExpectationComment` to append `@ <origin>` whenever metadata includes a computed span. Standalone extern annotations use the same helper so imports carry comparable location data.
+
 * Extend `FuncCall` so that when the callee resolves to a definition or prototype inside the current unit it consults the stored signature, compares the number of arguments and each `{int, float, ptr, funcptr, void}` category (derived from the internal `i/f/p/F/?` codes), and calls `typeError` if they disagree. Extern-only calls continue to defer to metadata validation, preserving today’s lax behaviour for units that lack full signatures.【F:impala/jspeg/impala.jspeg†L1006-L1049】【F:impala/jspeg/impala.jspeg†L1680-L1718】【F:impala/jspeg/impala.jspeg†L1800-L1823】
 * Each call site (`makeCall`/`callExpr`) should stamp the expected signature for the callee based on the parser’s current knowledge. Placing the comment after the emitted instruction (`CALL foo; expects foo(int, ptr) -> int`) keeps the metadata adjacent to the code that depends on it while still being trivial to strip. This captures the caller’s view even when the callee lives in another unit, letting a validator spot mismatched assumptions once files are combined.【F:impala/jspeg/impala.jspeg†L1789-L1831】
 * Globals, constants, and arrays get analogous annotations (`LOC sharedBuffer; signature global sharedBuffer : ptr`, `DATA sineTable; signature array sineTable[8] : float`). Because the comments live inside the `.gazl`, legacy assemblers continue to run unmodified while newer tooling can parse the extra metadata.【F:impala/jspeg/impala.jspeg†L1086-L1114】
@@ -81,7 +89,7 @@ However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCal
   * Globals/constants must align on category (`int`, `float`, `ptr`, `array`, encoded as `i/f/p/A`). Array sizes must also match.
   * Function pointers (`F`) can bind to `extern function` exports by erasing the pointer level, mirroring how `lookup` rewrites function declarations into address expressions today.【F:impala/jspeg/impala.jspeg†L1128-L1157】
   * Native (`N`) exports satisfy any matching import but are never type-checked, deferring to host integration.
-* When mismatches are found, emit actionable diagnostics that cite both the importer and exporter source locations captured during comment emission (`$$s`/`$$i` are already threaded through declarations for this purpose).【F:impala/jspeg/impala.jspeg†L1466-L1546】
+* When mismatches are found, emit actionable diagnostics that cite both the importer and exporter source locations. The validator should parse the optional `@ <origin>` suffix on each comment and, when absent, fall back to the legacy `$$s`/`$$i` offsets that are already threaded through declarations for this purpose.【F:impala/jspeg/impala.jspeg†L1466-L1546】
 * Provide `--warn-only` and `--force` flags so teams can adopt strictness gradually.
 * `tools/gazl-validate.js` (with a Windows shim in `tools/gazl-validate.cmd`) accepts `.gazl` files or directories, downgrades errors to warnings when `--warn-only` is supplied, and promotes missing-definition warnings to hard failures when `--force` is used.【F:tools/gazl-validate.js†L1-L71】【F:tools/gazl-validate.js†L636-L668】
 
@@ -107,12 +115,16 @@ However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCal
   - [ ] Teach the emitter to format argument lists and return categories using the `{int, float, ptr, funcptr, void}` vocabulary (while preserving the internal `i/f/p/F/?` mapping) and to include positional source spans where available for better diagnostics.
     - [x] Format function signatures, call expectations, and global annotations using the shared vocabulary helpers and stable parameter ordering.
     - [ ] Thread explicit source-span markers through the emitted comments so downstream tooling can cite the original Impala locations when reporting validation errors.
+      - [ ] Expose a stable `sourceName` option on the compiler entry points and store it alongside the existing `sourceCode`/`sourceOffset` metadata for declarations and call sites.
+      - [ ] Derive 1-based line/column coordinates from the stored offsets and stash a formatted origin string on each signature or call expectation.
+      - [ ] Extend the signature-formatting helpers to append `@ <origin>` tokens to inline and standalone comments when origin data exists.
 - [ ] **Comment schema**
   - [x] Lock down the comment grammar (for example, `FUNC foo    ; signature func foo(int a, ptr b) -> int` and `CALL foo    ; expects foo(int, ptr) -> int`) and document it alongside the Impala assembly reference so downstream tooling knows how to parse it.
   - [x] Ensure comments never break layout-sensitive sections by routing them through the same helpers that already insert `;`-prefixed notes when `-g` is enabled today.
-- [x] **Validator tool**
+- [ ] **Validator tool**
   - [x] Create `tools/gazl-validate.{js,cmd}` (mirroring existing script conventions) that parses the signature comments, performs the matching described above, and exits non-zero on fatal mismatches unless `--warn-only` is passed.【F:tools/gazl-validate.js†L1-L338】【F:tools/gazl-validate.js†L486-L679】
   - [x] Add integration to `build.sh` behind an environment toggle (`GAZL_VALIDATE=1`), letting CI enable it without slowing local builds immediately.【F:build.sh†L18-L33】【F:build.cmd†L27-L42】
+  - [ ] Parse optional `@ <origin>` markers so mismatch diagnostics can cite both the importer and exporter spans when metadata is available.
 - [x] **Documentation & onboarding**
   - [x] Update `docs/Impala.md` and add a quickstart snippet showing how to run the validator on two sample units.
   - [x] Document how implicit void returns (`?`) in the compiler map to the signature comment’s `void` category so users understand the translation.【F:impala/jspeg/impala.jspeg†L1489-L1524】
