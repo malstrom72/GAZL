@@ -1,15 +1,15 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native printInt() -> unknown
-; signature extern native printLF() -> unknown
-; signature extern native print() -> unknown
+; signature extern native printInt() -> unknown @ 1:23
+; signature extern native printLF() -> unknown @ 2:22
+; signature extern native print() -> unknown @ 3:20
 	GLOB *1
-seed:	DATi #2463534242	; signature global seed : int
+seed:	DATi #2463534242	; signature global seed : int @ 5:29
 
 ;-----------------------------------------------------------------------------
 	$y:	OUTi
-myrand:	FUNC	; signature func myrand() -> int
+myrand:	FUNC	; signature func myrand() -> int @ 7:17
 ;-----------------------------------------------------------------------------
 		PEEK $y &seed 	; y = global seed
 		SHLi %0 $y #13	; y = y ^ (y << 13)
@@ -21,18 +21,18 @@ myrand:	FUNC	; signature func myrand() -> int
 		POKE &seed $y 	; global seed = y
 		RETU   	; }
 
-a:	GLOB *20000	; signature array a[20000] : unknown
+a:	GLOB *20000	; signature array a[20000] : unknown @ 17:22
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-main:	FUNC	; signature func main() -> void
+main:	FUNC	; signature func main() -> void @ 19:15
 	$i:	LOCi
 	$j:	LOCi
 	$minj:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $i #0 	; for (i = 0 to 20000) global a[i] = (int) myrand()
 		GEQi #0 #20000 @.e0
-	.l1:	CALL &myrand %0 *1	; expects myrand() -> int
+	.l1:	CALL &myrand %0 *1	; expects myrand() -> int @ 22:51
 		POKE &a $i %0
 		FORi $i #20000 @.l1
 	.e0:	MOVi $i #0 	; for (i = 0 to 2000) 
@@ -47,12 +47,12 @@ main:	FUNC	; signature func main() -> void
 	.f6:	FORi $j #20000 @.l5	; }
 	.e4:	FORi $i #2000 @.l3	; }
 	.e2:	MOVi %1 $minj 	; printInt(minj)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown
+		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 29:16
 		MOVp %1 &.s_4d2 	; print(": ")
-		CALL ^print %0 *2	; expects function(ptr) -> unknown
+		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 30:13
 		PEEK %1 &a $minj	; printInt(global a[minj])
-		CALL ^printInt %0 *2	; expects function(unknown) -> unknown
-		CALL ^printLF %0 *1	; expects function() -> unknown
+		CALL ^printInt %0 *2	; expects function(unknown) -> unknown @ 31:26
+		CALL ^printLF %0 *1	; expects function() -> unknown @ 32:11
 		RETU   	; }
 
 .s_4d2:	CNST *3

@@ -1,27 +1,27 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int
-FALSE:	! DEFi #0	; signature const FALSE : int
-TRUE:	! DEFi #1	; signature const TRUE : int
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 10:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 19:33
 	DATA &.s_18PPVV4d2 &.s_116AAO4d3 &.s_132NNL4d4
 	DATA &.s_164TAP4d5 &.s_1PPVVT4d6 &.s_2AAOOI4d7
 	DATA &.s_12NNLL4d8 &.s_contTA4d9
-; signature extern native abort() -> unknown
-; signature extern native trace() -> unknown
-; signature extern native yield() -> unknown
-; signature extern native write() -> unknown
-; signature extern native read() -> unknown
+; signature extern native abort() -> unknown @ 31:1
+; signature extern native trace() -> unknown @ 32:1
+; signature extern native yield() -> unknown @ 33:1
+; signature extern native write() -> unknown @ 34:1
+; signature extern native read() -> unknown @ 36:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown
+clock:	DATi #0	; signature global clock : int @ 72:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 73:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 74:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int
+instance:	DATi #0	; signature global instance : int @ 75:1
 	CNST *1
-clockFreqLimit:	DATi #88200	; signature readonly clockFreqLimit : int
-signal:	GLOB *2	; signature array signal[2] : unknown
+clockFreqLimit:	DATi #88200	; signature readonly clockFreqLimit : int @ 78:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 80:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -34,16 +34,16 @@ signal:	GLOB *2	; signature array signal[2] : unknown
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int
-XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR:	! DEFf #4.6566128730774e-10	; signature const XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR : float
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 87:1
+XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR:	! DEFf #4.6566128730774e-10	; signature const XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR : float @ 89:1
 	GLOB *1
-xorShiftRandomSeedX:	DATi #123456789	; signature global xorShiftRandomSeedX : int
+xorShiftRandomSeedX:	DATi #123456789	; signature global xorShiftRandomSeedX : int @ 90:1
 	GLOB *1
-xorShiftRandomSeedY:	DATi #362436069	; signature global xorShiftRandomSeedY : int
+xorShiftRandomSeedY:	DATi #362436069	; signature global xorShiftRandomSeedY : int @ 91:1
 
 ;-----------------------------------------------------------------------------
 	$y:	OUTi
-xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int
+xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ 91:25
 	$x:	LOCi
 	$t:	LOCi
 ;-----------------------------------------------------------------------------
@@ -61,48 +61,48 @@ xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int
 		POKE &xorShiftRandomSeedY $y 	; global xorShiftRandomSeedY = y
 		RETU   	; }
 
-MAX_TAP_COUNT:	! DEFi #16	; signature const MAX_TAP_COUNT : int
-PAN_LEFT_BIT:	! DEFi #7	; signature const PAN_LEFT_BIT : int
-PAN_RIGHT_BIT:	! DEFi #6	; signature const PAN_RIGHT_BIT : int
-VOL_DEC_BIT:	! DEFi #5	; signature const VOL_DEC_BIT : int
-VOL_INC_BIT:	! DEFi #4	; signature const VOL_INC_BIT : int
-ACCELERATE_BIT:	! DEFi #3	; signature const ACCELERATE_BIT : int
-DEACCELERATE_BIT:	! DEFi #2	; signature const DEACCELERATE_BIT : int
-RANDOM_BIT:	! DEFi #1	; signature const RANDOM_BIT : int
-RECTIFIER_BIT:	! DEFi #0	; signature const RECTIFIER_BIT : int
-VOL_DEC_FACTOR:	! DEFf #0.70710678118655	; signature const VOL_DEC_FACTOR : float
-VOL_INC_FACTOR:	! DEFf #1.414213562373	; signature const VOL_INC_FACTOR : float
-TIME_DEC_FACTOR:	! DEFf #0.70710678118655	; signature const TIME_DEC_FACTOR : float
-TIME_INC_FACTOR:	! DEFf #1.414213562373	; signature const TIME_INC_FACTOR : float
-PAN_ATTENUATE:	! DEFf #0.25	; signature const PAN_ATTENUATE : float
-BATCH_SIZE:	! DEFi #64	; signature const BATCH_SIZE : int
-TAP_BITS:	! DEFi #0	; signature const TAP_BITS : int
-TAP_DELAY:	! DEFi #1	; signature const TAP_DELAY : int
-TAP_LEFT_GAIN:	! DEFi #2	; signature const TAP_LEFT_GAIN : int
-TAP_RIGHT_GAIN:	! DEFi #3	; signature const TAP_RIGHT_GAIN : int
-TAP_STRUCT_SIZE:	! DEFi #4	; signature const TAP_STRUCT_SIZE : int
+MAX_TAP_COUNT:	! DEFi #16	; signature const MAX_TAP_COUNT : int @ 109:1
+PAN_LEFT_BIT:	! DEFi #7	; signature const PAN_LEFT_BIT : int @ 110:1
+PAN_RIGHT_BIT:	! DEFi #6	; signature const PAN_RIGHT_BIT : int @ 111:1
+VOL_DEC_BIT:	! DEFi #5	; signature const VOL_DEC_BIT : int @ 112:1
+VOL_INC_BIT:	! DEFi #4	; signature const VOL_INC_BIT : int @ 113:1
+ACCELERATE_BIT:	! DEFi #3	; signature const ACCELERATE_BIT : int @ 114:1
+DEACCELERATE_BIT:	! DEFi #2	; signature const DEACCELERATE_BIT : int @ 115:1
+RANDOM_BIT:	! DEFi #1	; signature const RANDOM_BIT : int @ 116:1
+RECTIFIER_BIT:	! DEFi #0	; signature const RECTIFIER_BIT : int @ 118:1
+VOL_DEC_FACTOR:	! DEFf #0.70710678118655	; signature const VOL_DEC_FACTOR : float @ 119:1
+VOL_INC_FACTOR:	! DEFf #1.414213562373	; signature const VOL_INC_FACTOR : float @ 120:1
+TIME_DEC_FACTOR:	! DEFf #0.70710678118655	; signature const TIME_DEC_FACTOR : float @ 121:1
+TIME_INC_FACTOR:	! DEFf #1.414213562373	; signature const TIME_INC_FACTOR : float @ 122:1
+PAN_ATTENUATE:	! DEFf #0.25	; signature const PAN_ATTENUATE : float @ 124:1
+BATCH_SIZE:	! DEFi #64	; signature const BATCH_SIZE : int @ 124:26
+TAP_BITS:	! DEFi #0	; signature const TAP_BITS : int @ 129:1
+TAP_DELAY:	! DEFi #1	; signature const TAP_DELAY : int @ 130:1
+TAP_LEFT_GAIN:	! DEFi #2	; signature const TAP_LEFT_GAIN : int @ 131:1
+TAP_RIGHT_GAIN:	! DEFi #3	; signature const TAP_RIGHT_GAIN : int @ 132:1
+TAP_STRUCT_SIZE:	! DEFi #4	; signature const TAP_STRUCT_SIZE : int @ 134:1
 	GLOB *1
-tapCount:	DATi #0	; signature global tapCount : int
+tapCount:	DATi #0	; signature global tapCount : int @ 135:1
 	! MULi <A> #TAP_STRUCT_SIZE #MAX_TAP_COUNT
-tapData:	GLOB *<A>	; signature array tapData[<A>] : unknown
+tapData:	GLOB *<A>	; signature array tapData[<A>] : unknown @ 142:1
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-init:	FUNC	; signature func init() -> void
+init:	FUNC	; signature func init() -> void @ 142:15
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-reset:	FUNC	; signature func reset() -> void
+reset:	FUNC	; signature func reset() -> void @ 150:16
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
 	$y:	OUTi
-maxi:	FUNC	; signature func maxi(int a, int b) -> int
+maxi:	FUNC	; signature func maxi(int a, int b) -> int @ 154:15
 	$a:	INPi
 	$b:	INPi
 ;-----------------------------------------------------------------------------
@@ -114,7 +114,7 @@ maxi:	FUNC	; signature func maxi(int a, int b) -> int
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-calcGainsAndDelays:	FUNC	; signature func calcGainsAndDelays(int configBits, int stepBits, float initGain, float initDelay, ptr gains, ptr delays, ptr maxGain, ptr maxDelay, ptr endGain, ptr endDelay) -> void
+calcGainsAndDelays:	FUNC	; signature func calcGainsAndDelays(int configBits, int stepBits, float initGain, float initDelay, ptr gains, ptr delays, ptr maxGain, ptr maxDelay, ptr endGain, ptr endDelay) -> void @ 161:29
 	$configBits:	INPi
 	$stepBits:	INPi
 	$initGain:	INPf
@@ -171,7 +171,7 @@ calcGainsAndDelays:	FUNC	; signature func calcGainsAndDelays(int configBits, int
 
 ;-----------------------------------------------------------------------------
 	$o:	OUTf
-addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, float offset, ptr gains, ptr delays, float gainScale, float delayScale, int firstStep) -> float
+addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, float offset, ptr gains, ptr delays, float gainScale, float delayScale, int firstStep) -> float @ 183:18
 	$op:	INPi
 	$configBits:	INPi
 	$stepBits:	INPi
@@ -217,7 +217,7 @@ addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, flo
 		! SHLi <A> #1 #RANDOM_BIT	; if ((configBits & (1 << RANDOM_BIT)) != 0) r = itof((int) xorShiftRandom()) * (XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR * (1.0/12.0)) * d
 		ANDi %0 $configBits <A>
 		EQUi %0 #0 @.f5
-		CALL &xorShiftRandom %0 *1	; expects xorShiftRandom() -> int
+		CALL &xorShiftRandom %0 *1	; expects xorShiftRandom() -> int @ 200:78
 		! DIVf <A> #1.0 #12.0
 		! MULf <A> #XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR <A>
 		iTOf %0 %0 <A>
@@ -230,7 +230,7 @@ addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, flo
 		fTOi %1 %1 #1.0
 		SUBi %1 %1 #BATCH_SIZE
 		MOVi %2 #0 
-		CALL &maxi %0 *3	; expects maxi(int, int) -> int
+		CALL &maxi %0 *3	; expects maxi(int, int) -> int @ 202:52
 		POKE $p #TAP_DELAY %0
 		fTOi %0 $lg #1.0	; p[TAP_LEFT_GAIN] = ftoi(lg)
 		POKE $p #TAP_LEFT_GAIN %0
@@ -247,7 +247,7 @@ addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, flo
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-update:	FUNC	; signature func update() -> void
+update:	FUNC	; signature func update() -> void @ 216:17
 	$localParams:	LOCA *PARAM_COUNT
 	$i:	LOCi
 	$v:	LOCi
@@ -287,7 +287,7 @@ update:	FUNC	; signature func update() -> void
 		ADRL %8 $maxDelay1 *0
 		ADRL %9 $endGain *0
 		ADRL %10 $endDelay *0
-		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void
+		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void @ 231:183
 	.f0:	MOVf $stepLength2 $stepLength1 	; stepLength2 = stepLength1
 		MOVf $offset #0.0 	; offset = 0.0
 		SWCH $localParams:OPERATOR_2_PARAM_INDEX *5 @.s1	; switch ((int) localParams[OPERATOR_2_PARAM_INDEX] == 0 to 5) 
@@ -308,7 +308,7 @@ update:	FUNC	; signature func update() -> void
 		ADRL %8 $maxDelay1 *0
 		ADRL %9 $endGain *0
 		ADRL %10 $endDelay *0
-		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void
+		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void @ 241:201
 		MOVi %1 $localParams:OPERATOR_1_PARAM_INDEX 	; offset = (float) addTaps((int) localParams[OPERATOR_1_PARAM_INDEX], (int) localParams[OPERAND_1_LOW_PARAM_INDEX], (int) localParams[OPERAND_1_HIGH_PARAM_INDEX], 0.0, gains, delays, 256.0 / maxGain1, stepLength1 / maxDelay1, 0)
 		MOVi %2 $localParams:OPERAND_1_LOW_PARAM_INDEX 
 		MOVi %3 $localParams:OPERAND_1_HIGH_PARAM_INDEX 
@@ -318,7 +318,7 @@ update:	FUNC	; signature func update() -> void
 		DIVf %7 #256.0 $maxGain1
 		DIVf %8 $stepLength1 $maxDelay1
 		MOVi %9 #0 
-		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float
+		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 242:230
 		MOVf $offset %0 
 		MOVi %1 $localParams:OPERATOR_2_PARAM_INDEX 	; addTaps((int) localParams[OPERATOR_2_PARAM_INDEX], (int) localParams[OPERAND_2_LOW_PARAM_INDEX], (int) localParams[OPERAND_2_HIGH_PARAM_INDEX], offset, &gains[8], &delays[8], 256.0 / maxGain1, stepLength2 / maxDelay1, 8)
 		MOVi %2 $localParams:OPERAND_2_LOW_PARAM_INDEX 
@@ -329,7 +329,7 @@ update:	FUNC	; signature func update() -> void
 		DIVf %7 #256.0 $maxGain1
 		DIVf %8 $stepLength2 $maxDelay1
 		MOVi %9 #8 
-		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float
+		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 243:224
 		GOTO @done  	; goto done
 	.s1:	NOOP
 	.e2:	MOVf $maxGain2 #0.00001 	; maxGain2 = 0.00001
@@ -344,7 +344,7 @@ update:	FUNC	; signature func update() -> void
 		ADRL %8 $maxDelay2 *0
 		ADRL %9 $endGain *0
 		ADRL %10 $endDelay *0
-		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void
+		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void @ 249:190
 		MOVi %1 $localParams:OPERATOR_2_PARAM_INDEX 	; addTaps((int) localParams[OPERATOR_2_PARAM_INDEX], (int) localParams[OPERAND_2_LOW_PARAM_INDEX], (int) localParams[OPERAND_2_HIGH_PARAM_INDEX], offset, &gains[8], &delays[8], 256.0 / maxGain2, stepLength2 / maxDelay2, 8)
 		MOVi %2 $localParams:OPERAND_2_LOW_PARAM_INDEX 
 		MOVi %3 $localParams:OPERAND_2_HIGH_PARAM_INDEX 
@@ -354,7 +354,7 @@ update:	FUNC	; signature func update() -> void
 		DIVf %7 #256.0 $maxGain2
 		DIVf %8 $stepLength2 $maxDelay2
 		MOVi %9 #8 
-		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float
+		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 250:222
 	noSecond:	LEQi $localParams:OPERATOR_1_PARAM_INDEX #0 @.f3	; if ((int) localParams[OPERATOR_1_PARAM_INDEX] > 0) 
 		MOVi %1 $localParams:OPERATOR_1_PARAM_INDEX 	; addTaps((int) localParams[OPERATOR_1_PARAM_INDEX], (int) localParams[OPERAND_1_LOW_PARAM_INDEX], (int) localParams[OPERAND_1_HIGH_PARAM_INDEX], 0.0, gains, delays, 256.0 / maxGain1, stepLength1 / maxDelay1, 0)
 		MOVi %2 $localParams:OPERAND_1_LOW_PARAM_INDEX 
@@ -365,17 +365,17 @@ update:	FUNC	; signature func update() -> void
 		DIVf %7 #256.0 $maxGain1
 		DIVf %8 $stepLength1 $maxDelay1
 		MOVi %9 #0 
-		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float
+		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 253:212
 	.f3:	NOOP
 	done:	RETU   	; }
 
-temp:	GLOB *2	; signature array temp[2] : unknown
+temp:	GLOB *2	; signature array temp[2] : unknown @ 258:21
 	! MULi <A> #BATCH_SIZE #2
-buffer:	GLOB *<A>	; signature array buffer[<A>] : unknown
+buffer:	GLOB *<A>	; signature array buffer[<A>] : unknown @ 259:36
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-process:	FUNC	; signature func process() -> void
+process:	FUNC	; signature func process() -> void @ 276:18
 	! MULi <A> #BATCH_SIZE #2
 	$tapData:	LOCA *TAP_STRUCT_SIZE
 	$i:	LOCi
@@ -406,14 +406,14 @@ process:	FUNC	; signature func process() -> void
 		COPY &signal $bp *2	; copy (2 from bp to global signal)
 		COPY $bp &temp *2	; copy (2 from global temp to bp)
 		ADDp $bp $bp $dir	; bp = bp + dir
-		CALL ^yield %0 *1	; expects function() -> unknown
+		CALL ^yield %0 *1	; expects function() -> unknown @ 295:11
 		FORi $bi #BATCH_SIZE @.l3	; }
 	.e2:	PEEK %0 &clock 	; clock = global clock - BATCH_SIZE
 		SUBi $clock %0 #BATCH_SIZE
 		MOVi %1 $clock 	; write(clock, BATCH_SIZE, global buffer)
 		MOVi %2 #BATCH_SIZE 
 		MOVp %3 &buffer 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 299:42
 		MOVp $bp &buffer 	; for (bp = global buffer to global buffer + BATCH_SIZE * 2) *bp = 0
 		! MULi <A> #BATCH_SIZE #2
 		ADDp %0 &buffer <A>
@@ -430,7 +430,7 @@ process:	FUNC	; signature func process() -> void
 		SUBi %2 $clock $tapData:TAP_DELAY	; read(clock - (int) tapData[TAP_DELAY], BATCH_SIZE, tapped)
 		MOVi %3 #BATCH_SIZE 
 		ADRL %4 $tapped *0
-		CALL ^read %1 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %1 *4	; expects function(int, int, ptr) -> unknown @ 306:62
 		! SHLi <A> #1 #RECTIFIER_BIT	; if (((int) tapData[TAP_BITS] & (1 << RECTIFIER_BIT)) != 0) 
 		ANDi %1 $tapData:TAP_BITS <A>
 		EQUi %1 #0 @.f8

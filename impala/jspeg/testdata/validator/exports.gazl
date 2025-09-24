@@ -1,6 +1,6 @@
 ; signatures version=1
-FUNC foo	; signature func foo(int, ptr) -> int
+FUNC foo	; signature func foo(int, ptr) -> int @ exports.gazl:2:1
 	RETU
 
-LOC sharedValue	; signature global sharedValue : ptr
+LOC sharedValue	; signature global sharedValue : ptr @ exports.gazl:5:1
 	DATp #0

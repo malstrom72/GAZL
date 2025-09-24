@@ -139,6 +139,7 @@
     var $$parser.ZEROES = {};
     var $$parser.TYPE_SUFFIXES  = {};
     var $$parser.VERBOSE_TYPES  = {};
+    var $$parser.sourceName = undefined;
     var $$parser.metacode = [];
     var $$parser.strings = { s:[], a:[] };
     var $$parser.labelCounter = 0;
@@ -236,7 +237,60 @@
         return parts.join(', ');
     }
 
-    $$parser.formatFunctionSignatureComment = function (name, signature, role) {
+    function computeOrigin(sourceName, sourceCode, sourceOffset) {
+        if (!sourceCode || sourceOffset == null) {
+            return undefined;
+        }
+
+        var offset = sourceOffset;
+        if (offset < 0) {
+            return undefined;
+        }
+        if (offset > sourceCode.length) {
+            offset = sourceCode.length;
+        }
+
+        var line = 1;
+        var column = 1;
+        for (var idx = 0; idx < offset; ++idx) {
+            var ch = sourceCode.charAt(idx);
+            if (ch === '\r') {
+                if (idx + 1 < sourceCode.length && sourceCode.charAt(idx + 1) === '\n') {
+                    idx += 1;
+                }
+                line += 1;
+                column = 1;
+                continue;
+            }
+            if (ch === '\n') {
+                line += 1;
+                column = 1;
+                continue;
+            }
+            column += 1;
+        }
+
+        var origin = line + ':' + column;
+        if (sourceName) {
+            origin = sourceName + ':' + origin;
+        }
+        return origin;
+    }
+
+    function appendOrigin(comment, sourceName, sourceCode, sourceOffset) {
+        if (!comment) {
+            return comment;
+        }
+
+        var origin = computeOrigin(sourceName, sourceCode, sourceOffset);
+        if (origin) {
+            return comment + ' @ ' + origin;
+        }
+        return comment;
+    }
+
+    $$parser.formatFunctionSignatureComment = function (name, signature, role,
+                                                         sourceName, sourceCode, sourceOffset) {
         if (!signature) {
             return undefined;
         }
@@ -246,10 +300,16 @@
         var returnType = signatureReturnCategory(signature.returns, hasReturn);
         var kind = (role ? role : 'func');
 
-        return 'signature ' + kind + ' ' + name + '(' + paramsText + ') -> ' + returnType;
+        var originName = (sourceName !== undefined ? sourceName : (signature ? signature.sourceName : undefined));
+        var originCode = (sourceCode !== undefined ? sourceCode : (signature ? signature.sourceCode : undefined));
+        var originOffset = (sourceOffset !== undefined ? sourceOffset : (signature ? signature.sourceOffset : undefined));
+
+        return appendOrigin('signature ' + kind + ' ' + name + '(' + paramsText + ') -> ' + returnType,
+                            originName, originCode, originOffset);
     };
 
-    $$parser.formatCallExpectationComment = function (name, signature, actualTypes, callResultType) {
+    $$parser.formatCallExpectationComment = function (name, signature, actualTypes, callResultType,
+                                                      sourceName, sourceCode, sourceOffset) {
         var label = (name || 'function');
         var paramsText;
         var hasSignature = !!(signature && signature.params);
@@ -272,7 +332,8 @@
         }
         var returnType = signatureReturnCategory(returnCode, !!signature);
 
-        return 'expects ' + label + '(' + paramsText + ') -> ' + returnType;
+        return appendOrigin('expects ' + label + '(' + paramsText + ') -> ' + returnType,
+                            sourceName, sourceCode, sourceOffset);
     };
 
     $$parser.emitFunctionSignature = function (name) {
@@ -304,7 +365,8 @@
         }
     }
 
-    $$parser.formatGlobalSignatureComment = function (section, name, type, size, flavor) {
+    $$parser.formatGlobalSignatureComment = function (section, name, type, size, flavor,
+                                                      sourceName, sourceCode, sourceOffset) {
         if (!name) {
             return undefined;
         }
@@ -313,11 +375,13 @@
 
         if (type === 'A') {
             var extent = (size !== undefined ? '[' + size + ']' : '[]');
-            return 'signature ' + prefix + 'array ' + name + extent + ' : unknown';
+            return appendOrigin('signature ' + prefix + 'array ' + name + extent + ' : unknown',
+                                sourceName, sourceCode, sourceOffset);
         }
 
-        return 'signature ' + prefix + signatureRoleForSection(section) + ' ' +
-               name + ' : ' + signatureParamCategory(type);
+        return appendOrigin('signature ' + prefix + signatureRoleForSection(section) + ' ' +
+                            name + ' : ' + signatureParamCategory(type),
+                            sourceName, sourceCode, sourceOffset);
     };
 
     function emitStandaloneSignatureComment(comment) {
@@ -330,12 +394,13 @@
         }
     }
 
-    $$parser.formatConstSignatureComment = function (name, type) {
+    $$parser.formatConstSignatureComment = function (name, type, sourceName, sourceCode, sourceOffset) {
         if (!name) {
             return undefined;
         }
 
-        return 'signature const ' + name + ' : ' + signatureParamCategory(type);
+        return appendOrigin('signature const ' + name + ' : ' + signatureParamCategory(type),
+                            sourceName, sourceCode, sourceOffset);
     };
 
     /* 4  label & metacode helpers */
@@ -1205,7 +1270,9 @@
                 kind: kind,
                 signature: prev && prev.signature,
                 sourceCode: sourceCode,
-                sourceOffset: sourceOffset
+                sourceOffset: sourceOffset,
+                sourceName: ($$parser.sourceName !== undefined ? $$parser.sourceName
+                                                               : (prev ? prev.sourceName : undefined))
             };
         }
     };
@@ -1656,6 +1723,7 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                              entry.signature.returnName = undefined;
                                                                              entry.signature.sourceCode = $$s;
                                                                              entry.signature.sourceOffset = $$i;
+                                                                             entry.signature.sourceName = $$parser.sourceName;
                                                                          }
                                                                      }
                 inp:ArgsDecl ')'_ 
@@ -1766,40 +1834,53 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                                  if (!signature) {
                                                                                      signature = entry.signature = {};
                                                                                  }
+                                                                                 if (signature.sourceName === undefined) {
+                                                                                     signature.sourceName = $$parser.sourceName;
+                                                                                 }
                                                                                  if (signature.sourceCode === undefined) {
                                                                                      signature.sourceCode = $$s;
                                                                                      signature.sourceOffset = $$i;
+                                                                                     signature.sourceName = $$parser.sourceName;
                                                                                  }
-                                                                             }
+                                                                            }
 
-                                                                             var role = ($$.type === 'N' ? 'extern native' : 'extern func');
-                                                                             var prototypeComment = $$parser.formatFunctionSignatureComment(
-                                                                                 $$.name,
-                                                                                 signature,
-                                                                                 role
-                                                                             );
+                                                                            var role = ($$.type === 'N' ? 'extern native' : 'extern func');
+                                                                            var prototypeComment = $$parser.formatFunctionSignatureComment(
+                                                                                $$.name,
+                                                                                signature,
+                                                                                role,
+                                                                                $$parser.sourceName,
+                                                                                $$s,
+                                                                                $$i
+                                                                            );
 
-                                                                             if (!prototypeComment) {
-                                                                                 prototypeComment = $$parser.formatFunctionSignatureComment(
-                                                                                     $$.name,
-                                                                                     { params: [], returns: undefined },
-                                                                                     role
-                                                                                 );
-                                                                             }
+                                                                            if (!prototypeComment) {
+                                                                                prototypeComment = $$parser.formatFunctionSignatureComment(
+                                                                                    $$.name,
+                                                                                    { params: [], returns: undefined },
+                                                                                    role,
+                                                                                    $$parser.sourceName,
+                                                                                    $$s,
+                                                                                    $$i
+                                                                                );
+                                                                            }
 
                                                                              emitStandaloneSignatureComment(prototypeComment);
                                                                          } else if ($$.scope === 'globals') {
-                                                                             emitStandaloneSignatureComment(
-                                                                                 $$parser.formatGlobalSignatureComment(
-                                                                                     'GLOB',
-                                                                                     $$.name,
-                                                                                     $$.type,
-                                                                                     $$.size,
-                                                                                     'extern'
-                                                                                 )
-                                                                             );
-                                                                         }
-                                                                     }
+                                                                            emitStandaloneSignatureComment(
+                                                                                $$parser.formatGlobalSignatureComment(
+                                                                                    'GLOB',
+                                                                                    $$.name,
+                                                                                    $$.type,
+                                                                                    $$.size,
+                                                                                    'extern',
+                                                                                    $$parser.sourceName,
+                                                                                    $$s,
+                                                                                    $$i
+                                                                                )
+                                                                            );
+                                                                        }
+                                                                    }
 
 ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                          $t  = $$parser.CASTS_TO_TYPES[$type];
@@ -1808,13 +1889,19 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                      }
                  id:Identifier
                  (   '=' _ x:Expr                                     {
-                                                                             $$parser.declare(
-                                                                                 '! DEF?', 'defines',
-                                                                                 $id, $t, true,
-                                                                                 $$parser.makeConstant($x, $t, $$s, $$i),
-                                                                                 $$s, $$i,
-                                                                                 $$parser.formatConstSignatureComment($id, $t)
-                                                                             );
+                                                                            $$parser.declare(
+                                                                                '! DEF?', 'defines',
+                                                                                $id, $t, true,
+                                                                                $$parser.makeConstant($x, $t, $$s, $$i),
+                                                                                $$s, $$i,
+                                                                                $$parser.formatConstSignatureComment(
+                                                                                    $id,
+                                                                                    $t,
+                                                                                    $$parser.sourceName,
+                                                                                    $$s,
+                                                                                    $$i
+                                                                                )
+                                                                            );
                                                                          }
                  /                                                     {
                                                                              $$parser.declare(
@@ -1845,28 +1932,46 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                          }
                          ( '=' _ x:Expr                               { $init = $$parser.makeConstant($x, $v.type, $$s, $$i); } )?
                                                                        {
-                                                                             $$parser.declare(
-                                                                                 'DAT?', 'globals',
-                                                                                 $v.name,
-                                                                                 $v.type,
-                                                                                 ($section === 'CNST'),
-                                                                                 $init,
-                                                                                 $$s, $$i,
-                                                                                 $$parser.formatGlobalSignatureComment($section, $v.name, $v.type)
-                                                                             );
+                                                                            $$parser.declare(
+                                                                                'DAT?', 'globals',
+                                                                                $v.name,
+                                                                                $v.type,
+                                                                                ($section === 'CNST'),
+                                                                                $init,
+                                                                                $$s, $$i,
+                                                                                $$parser.formatGlobalSignatureComment(
+                                                                                    $section,
+                                                                                    $v.name,
+                                                                                    $v.type,
+                                                                                    undefined,
+                                                                                    undefined,
+                                                                                    $$parser.sourceName,
+                                                                                    $$s,
+                                                                                    $$i
+                                                                                )
+                                                                            );
                                                                          }
 
                    / # array ----------------------------------------------
                      a:ArrayDecl                                      {
-                                                                             $$parser.declare(
-                                                                                 $section, 'globals',
-                                                                                 $a.name,
-                                                                                 'A',
-                                                                                 ($section === 'CNST'),
-                                                                                 '*' + $a.size,
-                                                                                 $$s, $$i,
-                                                                                 $$parser.formatGlobalSignatureComment($section, $a.name, 'A', $a.size)
-                                                                             );
+                                                                            $$parser.declare(
+                                                                                $section, 'globals',
+                                                                                $a.name,
+                                                                                'A',
+                                                                                ($section === 'CNST'),
+                                                                                '*' + $a.size,
+                                                                                $$s, $$i,
+                                                                                $$parser.formatGlobalSignatureComment(
+                                                                                    $section,
+                                                                                    $a.name,
+                                                                                    'A',
+                                                                                    $a.size,
+                                                                                    undefined,
+                                                                                    $$parser.sourceName,
+                                                                                    $$s,
+                                                                                    $$i
+                                                                                )
+                                                                            );
                                                                          }
                          ( '=' _ d:InitList )?
                  )
@@ -2102,7 +2207,10 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            calleeName,
                                                            signature,
                                                            $$.types,
-                                                           callResultType
+                                                           callResultType,
+                                                           $$parser.sourceName,
+                                                           $$s,
+                                                           $$i
                                                        );
                                                        if (callComment) {
                                                            $$parser.emit(';', undefined, callComment, undefined, undefined);

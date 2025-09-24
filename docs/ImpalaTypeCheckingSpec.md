@@ -112,19 +112,19 @@ However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCal
     - [x] Attach signature metadata for function definitions, globals, constants, and call sites.
     - [x] Extend extern declarations to emit or preserve compatible signature comments.
   - [x] Persist the ordered parameter list from `ArgsDecl` in each function symbol, compare it against the call-site operands inside `FuncCall`, and invoke `typeError` when intra-unit calls disagree on category or arity before emitting the `()` instruction.【F:impala/jspeg/impala.jspeg†L1006-L1055】【F:impala/jspeg/impala.jspeg†L1719-L1738】【F:impala/jspeg/impala.jspeg†L1834-L1916】
-  - [ ] Teach the emitter to format argument lists and return categories using the `{int, float, ptr, funcptr, void}` vocabulary (while preserving the internal `i/f/p/F/?` mapping) and to include positional source spans where available for better diagnostics.
+  - [x] Teach the emitter to format argument lists and return categories using the `{int, float, ptr, funcptr, void}` vocabulary (while preserving the internal `i/f/p/F/?` mapping) and to include positional source spans where available for better diagnostics.
     - [x] Format function signatures, call expectations, and global annotations using the shared vocabulary helpers and stable parameter ordering.
-    - [ ] Thread explicit source-span markers through the emitted comments so downstream tooling can cite the original Impala locations when reporting validation errors.
-      - [ ] Expose a stable `sourceName` option on the compiler entry points and store it alongside the existing `sourceCode`/`sourceOffset` metadata for declarations and call sites.
-      - [ ] Derive 1-based line/column coordinates from the stored offsets and stash a formatted origin string on each signature or call expectation.
-      - [ ] Extend the signature-formatting helpers to append `@ <origin>` tokens to inline and standalone comments when origin data exists.
+    - [x] Thread explicit source-span markers through the emitted comments so downstream tooling can cite the original Impala locations when reporting validation errors.
+      - [x] Expose a stable `sourceName` option on the compiler entry points and store it alongside the existing `sourceCode`/`sourceOffset` metadata for declarations and call sites.
+      - [x] Derive 1-based line/column coordinates from the stored offsets and stash a formatted origin string on each signature or call expectation.
+      - [x] Extend the signature-formatting helpers to append `@ <origin>` tokens to inline and standalone comments when origin data exists.
 - [ ] **Comment schema**
   - [x] Lock down the comment grammar (for example, `FUNC foo    ; signature func foo(int a, ptr b) -> int` and `CALL foo    ; expects foo(int, ptr) -> int`) and document it alongside the Impala assembly reference so downstream tooling knows how to parse it.
   - [x] Ensure comments never break layout-sensitive sections by routing them through the same helpers that already insert `;`-prefixed notes when `-g` is enabled today.
 - [ ] **Validator tool**
   - [x] Create `tools/gazl-validate.{js,cmd}` (mirroring existing script conventions) that parses the signature comments, performs the matching described above, and exits non-zero on fatal mismatches unless `--warn-only` is passed.【F:tools/gazl-validate.js†L1-L338】【F:tools/gazl-validate.js†L486-L679】
   - [x] Add integration to `build.sh` behind an environment toggle (`GAZL_VALIDATE=1`), letting CI enable it without slowing local builds immediately.【F:build.sh†L18-L33】【F:build.cmd†L27-L42】
-  - [ ] Parse optional `@ <origin>` markers so mismatch diagnostics can cite both the importer and exporter spans when metadata is available.
+  - [x] Parse optional `@ <origin>` markers so mismatch diagnostics can cite both the importer and exporter spans when metadata is available.
 - [x] **Documentation & onboarding**
   - [x] Update `docs/Impala.md` and add a quickstart snippet showing how to run the validator on two sample units.
   - [x] Document how implicit void returns (`?`) in the compiler map to the signature comment’s `void` category so users understand the translation.【F:impala/jspeg/impala.jspeg†L1489-L1524】

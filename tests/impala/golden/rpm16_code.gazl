@@ -1,26 +1,26 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int
-FALSE:	! DEFi #0	; signature const FALSE : int
-TRUE:	! DEFi #1	; signature const TRUE : int
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 18:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
 	DATA &.s_4d2 &.s_4d2 &.s_4d2 &.s_LEFTDE4d3 &.s_4d2 &.s_4d2
 	DATA &.s_4d2 &.s_RINGMO4d4
-; signature extern native abort() -> unknown
-; signature extern native trace() -> unknown
-; signature extern native yield() -> unknown
-; signature extern native write() -> unknown
-; signature extern native read() -> unknown
+; signature extern native abort() -> unknown @ 39:1
+; signature extern native trace() -> unknown @ 40:1
+; signature extern native yield() -> unknown @ 41:1
+; signature extern native write() -> unknown @ 42:1
+; signature extern native read() -> unknown @ 44:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown
+clock:	DATi #0	; signature global clock : int @ 80:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 81:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 82:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int
+instance:	DATi #0	; signature global instance : int @ 83:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int
-signal:	GLOB *2	; signature array signal[2] : unknown
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 86:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 88:1
 	CNST *1
 	! SHLi <A> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
@@ -31,32 +31,32 @@ signal:	GLOB *2	; signature array signal[2] : unknown
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #SWITCHES_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 111:1
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-init:	FUNC	; signature func init() -> void
+init:	FUNC	; signature func init() -> void @ 111:15
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-reset:	FUNC	; signature func reset() -> void
+reset:	FUNC	; signature func reset() -> void @ 121:16
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-update:	FUNC	; signature func update() -> void
+update:	FUNC	; signature func update() -> void @ 132:17
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-process:	FUNC	; signature func process() -> void
+process:	FUNC	; signature func process() -> void @ 151:18
 	$tmp:	LOCi
 	$clock:	LOCi
 	$samps:	LOCA *4
@@ -76,7 +76,7 @@ process:	FUNC	; signature func process() -> void
 		MOVi %1 $clock 	; read(clock, 1, samps)
 		MOVi %2 #1 
 		ADRL %3 $samps *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 160:24
 		SUBi $diff $diff #0x8000	; diff = diff - 0x8000
 		GEQi $diff #0 @.f2	; if (diff < 0) 
 		MOVi $diff #0 	; diff = 0
@@ -95,25 +95,25 @@ process:	FUNC	; signature func process() -> void
 		MOVi %1 $clock 	; write(clock, 1, samps)
 		MOVi %2 #1 
 		ADRL %3 $samps *0
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 167:25
 		ANDi %0 $clock #1	; if ((clock & 1) == 0) 
 		NEQi %0 #0 @.f3
 		DIVi %1 $clock #2	; read(clock / 2, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 169:37
 		GOTO @.e4  	; } else 
 	.f3:	DIVi %1 $clock #2	; read(clock / 2, 2, samps)
 		MOVi %2 #2 
 		ADRL %3 $samps *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 171:29
 		ADDi %0 $samps:0 $samps:2	; global signal[0] = ((int) samps[0] + (int) samps[2]) >> 1
 		SHRi %0 %0 #1
 		POKE &signal:0 %0 
 		ADDi %0 $samps:1 $samps:3	; global signal[1] = ((int) samps[1] + (int) samps[3]) >> 1
 		SHRi %0 %0 #1
 		POKE &signal:1 %0 
-	.e4:	CALL ^yield %0 *1	; expects function() -> unknown
+	.e4:	CALL ^yield %0 *1	; expects function() -> unknown @ 175:10
 		ADDi $clock $clock #1	; clock = clock + 1
 		GOTO @.l0  	; }
 		RETU   	; }

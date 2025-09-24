@@ -1,48 +1,48 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int
-FALSE:	! DEFi #0	; signature const FALSE : int
-TRUE:	! DEFi #1	; signature const TRUE : int
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 18:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
 	DATA &.s_116ste4d2 &.s_132ste4d3 &.s_Level64d4
 	DATA &.s_Leftst4d5 &.s_Gate4d6 &.s_LPF4d7 &.s_BPF4d8
 	DATA &.s_HPFAtt4d9
-; signature extern native abort() -> unknown
-; signature extern native trace() -> unknown
-; signature extern native yield() -> unknown
-; signature extern native write() -> unknown
-; signature extern native read() -> unknown
+; signature extern native abort() -> unknown @ 39:1
+; signature extern native trace() -> unknown @ 40:1
+; signature extern native yield() -> unknown @ 41:1
+; signature extern native write() -> unknown @ 42:1
+; signature extern native read() -> unknown @ 44:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown
+clock:	DATi #0	; signature global clock : int @ 80:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 81:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 82:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int
+instance:	DATi #0	; signature global instance : int @ 83:1
 	CNST *1
-clockFreqLimit:	DATi #176400	; signature readonly clockFreqLimit : int
-signal:	GLOB *2	; signature array signal[2] : unknown
-E:	! DEFf #2.71828182845904523536	; signature const E : float
-HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float
-PI:	! DEFf #3.14159265358979323846	; signature const PI : float
+clockFreqLimit:	DATi #176400	; signature readonly clockFreqLimit : int @ 86:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 97:1
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ 98:1
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 99:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 100:1
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float
-COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 101:1
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 103:1
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-error:	FUNC	; signature func error(ptr s) -> void
+error:	FUNC	; signature func error(ptr s) -> void @ 103:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown
-		CALL ^abort %0 *1	; expects function() -> unknown
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 105:10
+		CALL ^abort %0 *1	; expects function() -> unknown @ 106:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
 	$y:	OUTf
-trunc:	FUNC	; signature func trunc(float x) -> float
+trunc:	FUNC	; signature func trunc(float x) -> float @ 109:16
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -56,16 +56,16 @@ trunc:	FUNC	; signature func trunc(float x) -> float
 
 ;-----------------------------------------------------------------------------
 	$z:	OUTf
-fmod:	FUNC	; signature func fmod(float x, float y) -> float
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 116:15
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi4da 	; error("Division by zero")
-		CALL &error %0 *2	; expects error(ptr) -> void
+		CALL &error %0 *2	; expects error(ptr) -> void @ 119:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
-		CALL &trunc %0 *2	; expects trunc(float) -> float
+		CALL &trunc %0 *2	; expects trunc(float) -> float @ 120:35
 		MULf %0 %0 $y
 		SUBf $z $x %0
 	.e1:	RETU   	; }
@@ -73,7 +73,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float
 
 ;-----------------------------------------------------------------------------
 	$y:	OUTf
-exp:	FUNC	; signature func exp(float x) -> float
+exp:	FUNC	; signature func exp(float x) -> float @ 148:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -97,7 +97,7 @@ exp:	FUNC	; signature func exp(float x) -> float
 
 ;-----------------------------------------------------------------------------
 	$y:	OUTf
-cos:	FUNC	; signature func cos(float x) -> float
+cos:	FUNC	; signature func cos(float x) -> float @ 179:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -106,7 +106,7 @@ cos:	FUNC	; signature func cos(float x) -> float
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
 		MOVf %2 #TWICE_PI 
-		CALL &fmod %0 *3	; expects fmod(float, float) -> float
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 183:31
 		MOVf $m %0 
 		SUBf %0 #0.0 $m	; m = -m * m
 		MULf $m %0 $m
@@ -129,32 +129,32 @@ cos:	FUNC	; signature func cos(float x) -> float
 
 ;-----------------------------------------------------------------------------
 	$y:	OUTf
-sin:	FUNC	; signature func sin(float x) -> float
+sin:	FUNC	; signature func sin(float x) -> float @ 195:14
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
-		CALL &cos %0 *2	; expects cos(float) -> float
+		CALL &cos %0 *2	; expects cos(float) -> float @ 198:30
 		MOVf $y %0 
 		RETU   	; }
 
-BATCH_SIZE:	! DEFi #64	; signature const BATCH_SIZE : int
-FILTER_PARAM_TABLE_SIZE:	! DEFi #256	; signature const FILTER_PARAM_TABLE_SIZE : int
+BATCH_SIZE:	! DEFi #64	; signature const BATCH_SIZE : int @ 203:26
+FILTER_PARAM_TABLE_SIZE:	! DEFi #256	; signature const FILTER_PARAM_TABLE_SIZE : int @ 204:40
 	! SUBi <A> #FILTER_PARAM_TABLE_SIZE #1
 	! iTOf <A> <A> #1.0
-FILTER_PARAM_MAX:	! DEFf <A>	; signature const FILTER_PARAM_MAX : float
-LNRQ:	! DEFf #0.346574	; signature const LNRQ : float
-EPSILON:	! DEFf #0.000000001	; signature const EPSILON : float
-LOG1000:	! DEFf #6.9077552789821	; signature const LOG1000 : float
-LOG0_001:	! DEFf #-6.9077552789821	; signature const LOG0_001 : float
+FILTER_PARAM_MAX:	! DEFf <A>	; signature const FILTER_PARAM_MAX : float @ 205:65
+LNRQ:	! DEFf #0.346574	; signature const LNRQ : float @ 206:28
+EPSILON:	! DEFf #0.000000001	; signature const EPSILON : float @ 207:34
+LOG1000:	! DEFf #6.9077552789821	; signature const LOG1000 : float @ 208:38
+LOG0_001:	! DEFf #-6.9077552789821	; signature const LOG0_001 : float @ 209:40
 	GLOB *1
-doReset:	DATi #TRUE	; signature global doReset : int
+doReset:	DATi #TRUE	; signature global doReset : int @ 214:1
 	! MULi <A> #FILTER_PARAM_TABLE_SIZE #2
-filterParamTable:	GLOB *<A>	; signature array filterParamTable[<A>] : unknown
-rateTable:	GLOB *256	; signature array rateTable[256] : unknown
+filterParamTable:	GLOB *<A>	; signature array filterParamTable[<A>] : unknown @ 214:59
+rateTable:	GLOB *256	; signature array rateTable[256] : unknown @ 215:28
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-init:	FUNC	; signature func init() -> void
+init:	FUNC	; signature func init() -> void @ 224:15
 	$f:	LOCf
 	$k:	LOCf
 	$m:	LOCf
@@ -162,26 +162,26 @@ init:	FUNC	; signature func init() -> void
 	$x:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4db 	; trace("init")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 227:15
 		MOVi $i #0 	; for (i = 0 to FILTER_PARAM_TABLE_SIZE) 
 		GEQi #0 #FILTER_PARAM_TABLE_SIZE @.e0
 	.l1:	NOOP
 		! DIVf <A> #1.0 #FILTER_PARAM_MAX	; f = (float) exp(LOG1000 * (itof(i) * (1.0 / FILTER_PARAM_MAX))) / 2205.0
 		iTOf %1 $i <A>
 		MULf %1 #LOG1000 %1
-		CALL &exp %0 *2	; expects exp(float) -> float
+		CALL &exp %0 *2	; expects exp(float) -> float @ 229:67
 		DIVf $f %0 #2205.0
 		MULf %1 #4.0 $f	; m = (float) exp((1.0 - 4.0 * f * f) * LNRQ)
 		MULf %1 %1 $f
 		SUBf %1 #1.0 %1
 		MULf %1 %1 #LNRQ
-		CALL &exp %0 *2	; expects exp(float) -> float
+		CALL &exp %0 *2	; expects exp(float) -> float @ 230:46
 		MOVf $m %0 
 		MULf %1 #PI $f	; k = 2.0 * (float) sin(PI * f) - m * 0.5 * (1.0 - (float) cos(2.0 * PI * f))
-		CALL &sin %0 *2	; expects sin(float) -> float
+		CALL &sin %0 *2	; expects sin(float) -> float @ 231:33
 		! MULf <A> #2.0 #PI
 		MULf %2 <A> $f
-		CALL &cos %1 *2	; expects cos(float) -> float
+		CALL &cos %1 *2	; expects cos(float) -> float @ 231:77
 		MULf %2 $m #0.5
 		SUBf %1 #1.0 %1
 		MULf %0 #2.0 %0
@@ -199,7 +199,7 @@ init:	FUNC	; signature func init() -> void
 		! DIVf <A> #1.0 #255.0	; global rateTable[i] = (float) exp(LOG0_001 * (itof(i) * (1.0 / 255.0)))
 		iTOf %1 $i <A>
 		MULf %1 #LOG0_001 %1
-		CALL &exp %0 *2	; expects exp(float) -> float
+		CALL &exp %0 *2	; expects exp(float) -> float @ 236:74
 		POKE &rateTable $i %0
 		FORi $i #256 @.l3	; }
 	.e2:	RETU   	; }
@@ -207,17 +207,17 @@ init:	FUNC	; signature func init() -> void
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-reset:	FUNC	; signature func reset() -> void
+reset:	FUNC	; signature func reset() -> void @ 246:16
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4dc 	; trace("reset")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 248:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
 		PARA *1
-process:	FUNC	; signature func process() -> void
+process:	FUNC	; signature func process() -> void @ 267:18
 	$i:	LOCi
 	$clock:	LOCi
 	$clockDir:	LOCi
@@ -415,11 +415,11 @@ process:	FUNC	; signature func process() -> void
 	.l18:	MOVi %1 $clock 	; write(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 378:34
 		MOVi %1 $clock 	; read(clock, 1, inputSignal)
 		MOVi %2 #1 
 		ADRL %3 $inputSignal *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 379:31
 		! DIVf <A> #1.0 #2048.0	; l = itof((int) inputSignal[0]) * (1.0 / 2048.0) + nyquist
 		iTOf %0 $inputSignal:0 <A>
 		ADDf $l %0 $nyquist
@@ -460,7 +460,7 @@ process:	FUNC	; signature func process() -> void
 		POKE &signal:0 %0 
 		fTOi %0 $r #2048.0	; global signal[1] = ftoi(r * 2048.0)
 		POKE &signal:1 %0 
-		CALL ^yield %0 *1	; expects function() -> unknown
+		CALL ^yield %0 *1	; expects function() -> unknown @ 401:11
 		ADDi $clock $clock $clockDir	; clock = clock + clockDir
 		SUBf $nyquist #0.0 $nyquist	; nyquist = -nyquist
 		FORi $i #BATCH_SIZE @.l18	; }

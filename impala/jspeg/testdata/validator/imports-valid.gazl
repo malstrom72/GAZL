@@ -1,2 +1,2 @@
 ; signatures version=1
-CALL foo	; expects foo(int, ptr) -> int
+CALL foo	; expects foo(int, ptr) -> int @ imports-valid.gazl:2:1

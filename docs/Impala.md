@@ -193,16 +193,19 @@ The compiler can emit human-readable signature comments alongside the
 `.gazl` instructions it produces. Each definition, global, and call site
 is annotated with its expected `{int, float, ptr, funcptr, void}`
 categories so cross-unit mismatches can be caught after concatenating
-multiple files. Functions that omit an explicit `returns` clause map the
-compiler's implicit `?` type to `void` in the comment stream, keeping the
-metadata aligned with the language's behaviour.
+multiple files. When the compiler knows the original source location it
+appends `@ path:line:column` to the end of each comment, allowing the
+validator to cite precise spans in diagnostics. Functions that omit an
+explicit `returns` clause map the compiler's implicit `?` type to `void`
+in the comment stream, keeping the metadata aligned with the language's
+behaviour.
 
 ```gazl
 ; signatures version=1
-FUNC showoff         ; signature func showoff(ptr text) -> void
-LOC demoFloat        ; signature global demoFloat : float
-CALL showoff         ; expects showoff(ptr) -> void
-; signature extern func print(ptr message) -> void
+FUNC showoff         ; signature func showoff(ptr text) -> void @ ImpalaDemo.impala:42:1
+LOC demoFloat        ; signature global demoFloat : float @ ImpalaDemo.impala:9:1
+CALL showoff         ; expects showoff(ptr) -> void @ ImpalaDemo.impala:49:9
+; signature extern func print(ptr message) -> void @ ImpalaDemo.impala:3:1
 ```
 
 Run the validator to compare the expectations recorded by callers with

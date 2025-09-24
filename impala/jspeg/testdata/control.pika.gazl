@@ -4,15 +4,15 @@
  .s_ABCD2a:			CNST *5
  					DATs ABCD
  					DATi #0
- SOURCE:			! DEFp &.s_ABCD2a ; signature const SOURCE : ptr
+ SOURCE:			! DEFp &.s_ABCD2a ; signature const SOURCE : ptr @ 1:30
  .s_WXYZ2a:			CNST *5
  					DATs WXYZ
  					DATi #0
- TARGET:			! DEFp &.s_WXYZ2a ; signature const TARGET : ptr
+ TARGET:			! DEFp &.s_WXYZ2a ; signature const TARGET : ptr @ 2:30
 
  ;-----------------------------------------------------------------------------
  					$result:	OUTi
- controlSample:		FUNC		; signature func controlSample() -> int
+ controlSample:		FUNC		; signature func controlSample() -> int @ 4:24
  					$sum:		LOCi
  					$index:		LOCi
  					$src:		LOCp
