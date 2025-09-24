@@ -1,7 +1,9 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const Module = require('module');
+const vm = require('vm');
 
 const OUTPUT_TAB_WIDTH = 4;
 const INPUT_TAB_STOPS = [0, 20, 32, 64];
@@ -56,7 +58,7 @@ function compileWithJsImpala(source, options = {}) {
         compilerSource = patchCompilerRootHolder(compilerSource);
 
         const outputLines = [];
-        const context = {
+        const contextGlobals = {
                 module: { exports: {} },
                 exports: {},
                 console,
@@ -64,8 +66,24 @@ function compileWithJsImpala(source, options = {}) {
                 impalaRandomId: options.randomId ?? 12345678,
                 $$parser: {}
         };
-        vm.createContext(context);
+        const context = vm.createContext(contextGlobals);
         new vm.Script(compilerSource, { filename: path.basename(compilerPath) }).runInContext(context);
+
+        let compilerFn = context.module.exports;
+        if (compilerFn && typeof compilerFn === 'object') {
+                compilerFn = compilerFn.impalaCompiler || compilerFn.default || compilerFn.compile || compilerFn.compiler || compilerFn;
+        }
+        if (typeof compilerFn !== 'function') {
+                throw new Error('JSPEG impala compiler did not export a function');
+        }
+
+        const previousOutput = globalThis.output;
+        const hadOutput = Object.prototype.hasOwnProperty.call(globalThis, 'output');
+        const previousRandomId = globalThis.impalaRandomId;
+        const hadRandomId = Object.prototype.hasOwnProperty.call(globalThis, 'impalaRandomId');
+
+        globalThis.output = contextGlobals.output;
+        globalThis.impalaRandomId = contextGlobals.impalaRandomId;
 
         try {
                 const [ok, , index] = compilerFn(source);

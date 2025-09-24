@@ -107,16 +107,7 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                       }
                                                                                                       $b = $b.slice(3);
                                                                                                     } else if ($b.slice(0, 2) === '\x24\x24') {
-                                                                                                      // $$ → holder when used as a function argument (next is ',' or ')'),
-                                                                                                      // otherwise value ($._). Direct field access '$$.' stays '$'.
-                                                                                                      var nextCh = $b[2];
-                                                                                                      if (nextCh === '.') {
-                                                                                                        s += '$';
-                                                                                                      } else if (nextCh === ',' || nextCh === ')') {
-                                                                                                        s += '$';
-                                                                                                      } else {
-                                                                                                        s += '$._';
-                                                                                                      }
+                                                                                                      s += '$._';
                                                                                                       $b = $b.slice(2);
                                                                                                     } else {
                                                                                                       var m = $b.slice(1).match(/^[A-Za-z_]+/);
@@ -126,8 +117,7 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                       $b = $b.slice(e);
                                                                                                       if (!hasOwn($$.vr, id)) {
                                                                                                         $$.vr[id] = '';
-                                                                                                      } else if ($$.vr[id] !== '' && $b[0] !== '.' && $b[0] !== ')' && $b[0] !== ',') {
-                                                                                                        // Append '._' for value, except when used as a function argument (next is ',' or ')').
+                                                                                                      } else if ($$.vr[id] !== '' && $b[0] !== '.') {
                                                                                                         s += '._';
                                                                                                       }
                                                                                                     }
@@ -180,13 +170,13 @@ Suffix		<-	Primary ( QUESTION			{ $$ = '(' + $$ + ',true)' }
 
 Primary		<-	Identifier !LEFTARROW		{ $$ += '(' + $$.tag + ')' }
 				/ Literal					{
-												var l = ($$).length;
+												var l = ($$._).length;
 												if (l == 0) $$ = 'true';
-												else if (l == 1) $$ = '(_s[_i]===' + $$parser.dqEscape($$) + ')&&(++_i,true)';
-												else $$ = '(_s.substr(_i,' + l + ')===' + $$parser.dqEscape($$)
+												else if (l == 1) $$ = '(_s[_i]===' + $$parser.dqEscape($$._) + ')&&(++_i,true)';
+												else $$ = '(_s.substr(_i,' + l + ')===' + $$parser.dqEscape($$._)
 														+ ')&&(_i+=' + l + ',true)';
 											}
-				/ Class						{ $$ = '(!!_s[_i]&&' + $$parser.dqEscape($$) + '.indexOf(_s[_i])>=0)&&(++_i,true)' }
+				/ Class						{ $$ = '(!!_s[_i]&&' + $$parser.dqEscape($$._) + '.indexOf(_s[_i])>=0)&&(++_i,true)' }
 				/ DOT						{ $$ = '(!!_s[_i])&&(++_i,true)' }
 				/ OPEN Expression CLOSE
 
@@ -233,7 +223,7 @@ Class		<-								{ $$ = '' }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Range		<-	f:Char '-' t:Char			{ $$ = ''; for (var i = ($f).charCodeAt(0), e = ($t).charCodeAt(0); i <= e; ++i) $$ += String.fromCharCode(i); }
+Range		<-	f:Char '-' t:Char			{ $$ = ''; for (var i = ($f._).charCodeAt(0), e = ($t._).charCodeAt(0); i <= e; ++i) $$ += String.fromCharCode(i); }
 				/ $$:Char
 
 # ----------------------------------------------------------------------------------------------------------------------
