@@ -41,6 +41,110 @@ tabIndex += 1;
 return out;
 }
 
+function clampIndex(value, min, max) {
+if (!Number.isFinite(value)) {
+return min;
+}
+if (value < min) {
+return min;
+}
+if (value > max) {
+return max;
+}
+return Math.floor(value);
+}
+
+function findLineBounds(source, index) {
+const length = source.length;
+let line = 1;
+let position = 0;
+let lineStart = 0;
+while (position < index) {
+const code = source.charCodeAt(position);
+if (code === 0x0d) {
+const next = position + 1;
+position = (next < length && source.charCodeAt(next) === 0x0a) ? next + 1 : next;
+line += 1;
+lineStart = position;
+continue;
+}
+if (code === 0x0a) {
+position += 1;
+line += 1;
+lineStart = position;
+continue;
+}
+position += 1;
+}
+
+let lineEnd = length;
+for (let pos = index; pos < length; ++pos) {
+const code = source.charCodeAt(pos);
+if (code === 0x0a || code === 0x0d) {
+lineEnd = pos;
+break;
+}
+}
+
+return { line, lineStart, lineEnd };
+}
+
+function renderErrorContext(source, lineStart, lineEnd, pointerIndex) {
+let displayLine = '';
+let pointerLine = '';
+let runningColumn = 1;
+let pointerColumn = 1;
+
+for (let pos = lineStart; pos < lineEnd; ++pos) {
+const ch = source[pos];
+if (ch === '\t') {
+const spaces = OUTPUT_TAB_WIDTH - ((runningColumn - 1) % OUTPUT_TAB_WIDTH);
+displayLine += ' '.repeat(spaces);
+runningColumn += spaces;
+if (pos < pointerIndex) {
+pointerLine += ' '.repeat(spaces);
+pointerColumn += spaces;
+}
+continue;
+}
+const code = ch.charCodeAt(0);
+const safeChar = (code >= 0x20 && code !== 0x7f) ? ch : ' ';
+displayLine += safeChar;
+runningColumn += 1;
+if (pos < pointerIndex) {
+pointerLine += ' ';
+pointerColumn += 1;
+}
+}
+
+if (pointerIndex >= lineEnd) {
+pointerColumn = runningColumn;
+}
+
+pointerLine += '^';
+
+return {
+displayLine,
+pointerLine,
+column: pointerColumn
+};
+}
+
+function formatParseError(source, options, rawIndex) {
+const index = clampIndex(rawIndex, 0, source.length);
+const { line, lineStart, lineEnd } = findLineBounds(source, index);
+const context = renderErrorContext(source, lineStart, lineEnd, index);
+const locationLabel = options && options.sourceName ? ` ${options.sourceName}` : ' source';
+const locationDetails = `line ${line}, column ${context.column}, offset ${index}`;
+let message = `JSPEG impala compiler failed to compile${locationLabel} at ${locationDetails}.`;
+if (context.displayLine.length > 0 || lineEnd > lineStart) {
+message += `\n${context.displayLine}\n${context.pointerLine}`;
+} else {
+message += '\n^';
+}
+return message;
+}
+
 function patchCompilerSourceForMeta(source) {
 const metaSlotReplacement = `    function metaSlot(node) {\n        if (node == null || (typeof node !== 'object' && typeof node !== 'function')) {\n            return { operator: undefined, type: undefined,\n                     operands: [ undefined, undefined, undefined ] };\n        }\n        if (node.operands !== undefined) {\n            if (!Array.isArray(node.operands)) {\n                node.operands = [ undefined, undefined, undefined ];\n            } else {\n                while (node.operands.length < 3) {\n                    node.operands.push(undefined);\n                }\n            }\n            if (!Object.prototype.hasOwnProperty.call(node, 'operator')) {\n                node.operator = undefined;\n            }\n            if (!Object.prototype.hasOwnProperty.call(node, 'type')) {\n                node.type = undefined;\n            }\n            return node;\n        }\n\n        if (!Object.prototype.hasOwnProperty.call(node, '_')) {\n            if (node.operands === undefined) {\n                node.operands = [ undefined, undefined, undefined ];\n            }\n            if (!Object.prototype.hasOwnProperty.call(node, 'operator')) {\n                node.operator = undefined;\n            }\n            if (!Object.prototype.hasOwnProperty.call(node, 'type')) {\n                node.type = undefined;\n            }\n            return node;\n        }\n\n        var slot = node._;\n        if (!slot || slot.operands === undefined) {\n            slot = { operator: undefined, type: undefined,\n                     operands: [ undefined, undefined, undefined ] };\n            node._ = slot;\n        }\n        return slot;\n    }\n`;
 const metaSectionHeader = '    /* --------------------------------------------------------- *\n     *  Debug helpers & meta-record construction / destruction   *\n     * --------------------------------------------------------- */\n\n';
@@ -111,7 +215,7 @@ const compilerOptions = (options && Object.prototype.hasOwnProperty.call(options
 : undefined;
 const [ok, , index] = compilerFn(source, compilerOptions);
 if (!ok) {
-throw new Error('JSPEG impala compiler failed to compile source');
+throw new Error(formatParseError(source, options, index));
 }
 if (index !== source.length) {
 throw new Error(`JSPEG impala compiler stopped at ${index} of ${source.length}`);
