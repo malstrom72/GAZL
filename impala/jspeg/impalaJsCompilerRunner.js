@@ -40,34 +40,32 @@ function retabulate(line) {
         return out;
 }
 
-function loadCompiler(compilerPath, compilerSource) {
-        if (compilerSource !== undefined) {
-                const filename = path.resolve(compilerPath);
-                const mod = new Module(filename, module);
-                mod.filename = filename;
-                mod.paths = Module._nodeModulePaths(path.dirname(filename));
-                mod._compile(compilerSource, filename);
-                return mod.exports;
-        }
+// No meta-slot prototype shim. Patch only root holder to a plain object.
 
-        const resolvedPath = require.resolve(compilerPath);
-        delete require.cache[resolvedPath];
-        return require(resolvedPath);
+function patchCompilerRootHolder(source) {
+        const rootInitPattern = 'var _i=0,_im=0,_o={_:void 0},';
+        const rootInitObject = 'var _i=0,_im=0,_o={_: {}},';
+        return source.includes(rootInitPattern)
+                ? source.replace(rootInitPattern, rootInitObject)
+                : source;
 }
 
 function compileWithJsImpala(source, options = {}) {
         const compilerPath = options.compilerPath || path.join(__dirname, 'impalaCompiler.js');
-        const compilerSource = options.compilerSource;
+        let compilerSource = options.compilerSource || fs.readFileSync(compilerPath, 'utf8');
+        compilerSource = patchCompilerRootHolder(compilerSource);
 
         const outputLines = [];
-        const compilerFn = loadCompiler(compilerPath, compilerSource);
-
-        const previousOutput = globalThis.output;
-        const previousRandomId = globalThis.impalaRandomId;
-        const hadOutput = Object.prototype.hasOwnProperty.call(globalThis, 'output');
-        const hadRandomId = Object.prototype.hasOwnProperty.call(globalThis, 'impalaRandomId');
-        globalThis.output = (line) => outputLines.push(line);
-        globalThis.impalaRandomId = options.randomId ?? 12345678;
+        const context = {
+                module: { exports: {} },
+                exports: {},
+                console,
+                output: (line) => outputLines.push(line),
+                impalaRandomId: options.randomId ?? 12345678,
+                $$parser: {}
+        };
+        vm.createContext(context);
+        new vm.Script(compilerSource, { filename: path.basename(compilerPath) }).runInContext(context);
 
         try {
                 const [ok, , index] = compilerFn(source);
