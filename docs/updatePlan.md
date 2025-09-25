@@ -20,7 +20,7 @@ Compiling callers and callees in different units allows mismatched return types 
    Still inside `FuncDecl`, ensure `$$parser.resolveFunctionReturnType` (and the implicit-return path) populate `entry.signature.returns` with `'?'` for `void`/unknown while preserving `returnResolved` for later checks. The existing `$$parser.emitFunctionSignature` already appends `; signature func … -> TYPE` to each `FUNC` line—verify that it always has a concrete `returns` value (defaulting to `unknown`) so downstream tooling has a stable definition record.
 
 3. **Record expectations and definitions during validation**
-   Augment `parseSignatureComment` in `tools/gazl-validate.js` so it captures both call-site comments (`; expects function(...) -> TYPE`) and definition comments (`; signature func NAME(...) -> TYPE`, plus the analogous `; signature extern native …`). Expectations should be collected in a new `ctx.calls` map keyed by function name; definitions (including extern natives) should flow into a `ctx.definitions` map (or extend `ctx.exports.functions`) with `{ type, location, kind }` records. Reuse the existing `location()` helper so diagnostics cite both the `.gazl` file and any embedded origin.
+   Augment `parseSignatureComment` in `tools/gazl-validate.js` so it captures both call-site comments (`; expects function(...) -> TYPE`) and definition comments (`; signature func NAME(...) -> TYPE`, plus the analogous `; signature extern native …`). Expectations should be collected in a new `ctx.calls` map keyed by function name; definitions (including extern natives) should flow into a `ctx.definitions` map (or extend `ctx.exports.functions`) with `{ type, location, kind }` records. Reuse the existing `location()` helper so diagnostics cite both the `.gazl` file and any embedded origin. For native callbacks, load a simple manifest (see below) into memory before scanning files so that the validator treats those entries as pre-declared definitions.
 
 4. **Reconcile contracts across compilation units**  
    After `processFile` finishes scanning each file, walk the aggregated call expectations and ensure there is a compatible definition. Emit an error when multiple expectations disagree (`typesCompatible` is already available) or when a concrete expectation conflicts with a concrete definition. Add a dedicated diagnostic constructor so failures read like `xorShiftRandom expected float at caller.gazl:12 but returns int at callee.gazl:6`.
@@ -35,7 +35,7 @@ Compiling callers and callees in different units allows mismatched return types 
 - Decide how to represent “unknown” or “void” in the metadata so the validator can distinguish intentional omissions.
 - Confirm whether metadata should be optional (to avoid bloating `.gazl`) or always emitted when type inference runs.
 - Explore emitting similar metadata for argument categories once return types are stable.
-- Settle on a durable source of truth for native callback signatures (e.g., a curated manifest derived from the host registration tables) so validator checks cover `extern native` bindings as well.
+- Derive the native callback manifest from the existing host registration tables once the quick-stop solution below proves itself.
 
 ## Rollout Notes
 - Update the documentation to describe how cross-unit type mismatches are reported.
@@ -57,12 +57,31 @@ Compiling callers and callees in different units allows mismatched return types 
   - [ ] Adjust the implicit-return branch in `FuncDecl` so the `PARA *1` emission follows the `FUNC` declaration while keeping legacy semantics.
   - [ ] Document the rationale for the placeholder within `impala.jspeg` (and refresh `impalaCompiler.js`) to keep future contributors aligned.
 - [ ] Verify native callback coverage:
-  - [ ] Inventory the host-side registration tables (e.g., the `NATIVE_NAMES` arrays in `tools/GAZLCmd.cpp` and any runtime manifests) and extract their expected return categories into a machine-readable manifest.
-  - [ ] Extend `tools/gazl-validate.js` to look up `extern native` signatures against that manifest, emitting an error when the host advertises a different return type than the Impala call sites assume.
+  - [ ] Create `docs/nativeCallbackSignatures.json` containing `{ "name": string, "return": string }` entries seeded from today’s `NATIVE_NAMES` tables and any additional host registrations that ship with the repo.
+  - [ ] Extend `tools/gazl-validate.js` to load this JSON at startup (with graceful fallback when the file is missing) and to treat every manifest entry as a definition when reconciling `extern native` call expectations.
+  - [ ] Follow up by scripting a generator that rehydrates the JSON from the actual host registration tables so the manifest stays in sync without manual edits.
 
 ## Newly Observed Issues
 - The implicit-return branch inside `FuncDecl` currently calls `declare('PARA', 'locals', ...)` before `emitFunctionSignature`, which prints the placeholder row ahead of the `FUNC` declaration (showing up as `PARA *1` preceding the function label). Confirm whether GAZL technically allows this ordering and, if not, reorder the emissions so the `FUNC` symbol leads the block while keeping the placeholder available for callers that expect a one-word return slot.
 - The reason for emitting the dummy `PARA *1` sentinel is not documented in the JSPEG grammar, making it unclear why void functions still declare a return-sized slot.
+
+## Formatting Requirements
+- All JavaScript files in this repository must be formatted with Prettier using tab indentation (`useTabs: true`) and a 140-character print width.
+- Install Prettier locally when needed:
+  ```sh
+  npm install --no-save prettier
+  ```
+- Format sources before committing:
+  ```sh
+  npx prettier --write .
+  ```
+- Prettier should pick up the following configuration (store it in the project root as needed):
+  ```json
+  {
+	"useTabs": true,
+	"printWidth": 140
+  }
+  ```
 
 ## Additional Action Items
 - [ ] Rework the implicit-return path so the dummy `PARA *1` is declared after the `FUNC` line (or otherwise ensure assemblers see the `FUNC` declaration first) while preserving return-type inference bookkeeping.
