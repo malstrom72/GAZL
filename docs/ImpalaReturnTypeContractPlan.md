@@ -13,26 +13,23 @@ Compiling callers and callees in different units allows mismatched return types 
 - Introducing a full linker; validation should stay a metadata comparison step.
 
 ## Proposed Approach
-1. **Emit Call-Site Expectations**  
-   Extend the compiler to serialize return-type expectations into the generated `.gazl` whenever a call result flows into a typed context (assignment, argument, or expression). The metadata can stay in the comment channel we already use for signature notes, e.g. `; @call expect xorShiftRandom: float`.
+1. **Emit Call-Site Expectations**
+   Extend the signature helpers that already power `formatCallExpectationComment` inside `FuncCall` (see `impala/jspeg/impala.jspeg` around the call to `emit(';', undefined, callComment, ...)`) so they also emit a structured metadata row such as `; signature expect func xorShiftRandom() -> float @ file.impala:12:9` whenever `makeMeta` infers a concrete return type. The emitted row should reuse the existing `appendOrigin(...)` helper so file/offset data mirrors other signature comments.
 
-2. **Annotate Function Definitions**  
-   When lowering a function definition, add a matching metadata record describing the actual return type that the implementation produces (if any). This piggybacks on the existing signature helper infrastructure that records parameters.
+2. **Annotate Function Definitions**
+   Update the `FuncDecl` lowering (generated in both `impala.jspeg` and `impalaCompiler.js`) to guarantee that the `entry.signature` record contains `returnResolved` and `returns` whenever the body writes `return` metadata, then emit an explicit `; signature define func foo() -> int @ ...` comment immediately after `emitFunctionSignature($id._);`. This makes concrete return evidence available even if the implementation lacks an explicit `return` statement.
 
-3. **Collect Metadata During Validation**  
-   Teach `gazl-validate.js` to parse the new metadata from each `.gazl` input and build two maps: expected return types (from call sites) and actual return types (from function bodies).
+3. **Collect Metadata During Validation**
+   Teach `tools/gazl-validate.js` to recognize the new `signature expect` and `signature define` rows inside `parseSignatureComment`. Store expectations in `context.calls` keyed by function name, and store definitions in `context.exports.functions`. Each entry should record `{ type, origin }` so later diagnostics can pinpoint the mismatch source.
 
-4. **Cross-Check Across Units**  
-   During validation, compare the aggregated expectation map against the definition map. If a function has conflicting return categories, raise a descriptive error that names the symbol, the expected type(s), and where the evidence came from (caller vs. callee files).
+4. **Cross-Check Across Units**
+   After `scanFile` populates the context, add a reconciliation step that iterates over `context.calls` and `context.exports.functions`, compares concrete types, and raises a descriptive error (e.g., `xorShiftRandom expected float at caller.gazl:12:9 but returns int at callee.gazl:5:1`). Allow multiple agreeing expectations but fail on the first conflict unless `--warn-only` is set.
 
-5. **Fail Early When Evidence Exists**  
-   If a callee implementation is compiled in the same unit as a mismatched call-site expectation, the compiler already has enough information to throw immediately. Keep that fast-path so single-file errors remain crisp.
+5. **Fail Early When Evidence Exists**
+   When `resolveFunctionReturnType` (invoked during `FuncDecl`) sees a concrete return type that disagrees with `signature.expectedReturn`, emit a `typeError` immediately so single-source mismatches remain compile-time errors.
 
-6. **Regression Coverage**  
-   Add multi-unit test cases where:
-   - A caller expects `float` but the callee returns `int` (should fail).
-   - Multiple callers agree on a type and the implementation matches (should succeed).
-   - One caller never constrains the return type (should remain accepted until evidence appears).
+6. **Regression Coverage**
+   Extend `tests/impala/` and `impala/jspeg/testdata/` with paired fixtures: `externReturnMismatch` (caller vs. callee conflict -> expect validation failure), `externReturnAgreement` (multiple units agree -> expect success), and `externReturnUnknown` (no expectation -> expect success). Regenerate goldens via `tools/regen-jspeg-fixtures.sh` and wire a validator invocation into the test harness so mismatches surface in CI.
 
 ## Open Questions / Follow-Ups
 - Decide how to represent “unknown” or “void” in the metadata so the validator can distinguish intentional omissions.
@@ -42,3 +39,9 @@ Compiling callers and callees in different units allows mismatched return types 
 ## Rollout Notes
 - Update the documentation to describe how cross-unit type mismatches are reported.
 - Ensure fixture-regeneration scripts keep the metadata comments intact when retabulating.
+
+## Step-by-Step Implementation Plan
+- [ ] Extend the existing call-site path (`expectFunctionReturnType` → `formatCallExpectationComment` in `impala/jspeg/impala.jspeg` and the generated `impalaCompiler.js`) so, whenever a concrete expectation is recorded, we also emit a `signature expect` metadata row via a new `emitCallExpectationSignature` helper that relies on `appendOrigin` for file/offset data.
+- [ ] Emit explicit `signature define` comments after each function declaration by enhancing `emitFunctionSignature` to include the resolved return type (or `unknown` when unresolved).
+- [ ] Update `tools/gazl-validate.js` to parse the new `expect`/`define` comment kinds, accumulate expectations vs. definitions, and report descriptive diagnostics.
+- [ ] Add validator-driven regression fixtures covering matching, conflicting, and unconstrained extern return types; ensure the JSPEG regeneration scripts include the validator step so the goldens stay in sync.
