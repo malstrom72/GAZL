@@ -1,0 +1,9 @@
+extern function produceFloat;
+extern native printFloat;
+
+function main()
+locals float value
+{
+        value = produceFloat();
+        printFloat(value);
+}

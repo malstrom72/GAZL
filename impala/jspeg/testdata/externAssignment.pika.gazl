@@ -1,0 +1,17 @@
+ ; Compiled with Impala version 1.0
+
+ ; signatures version=1
+ ; signature extern func produceFloat() -> unknown @ 1:29
+ ; signature extern native printFloat() -> unknown @ 2:25
+
+ ;-----------------------------------------------------------------------------
+ 								PARA *1
+ main:				FUNC		; signature func main() -> void @ 4:15
+ 					$value:		LOCf
+ ;-----------------------------------------------------------------------------
+ 								CALL &produceFloat %0 *1		; expects produceFloat() -> unknown @ 7:31
+ 								MOVE $value %0 
+ 								MOVf %1 $value 					; printFloat(value)
+ 								CALL ^printFloat %0 *2			; expects function(float) -> unknown @ 8:26
+ 								RETU   							; }
+

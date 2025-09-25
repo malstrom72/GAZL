@@ -944,7 +944,7 @@ var impalaCompilerImpl = (function(_s) {
         var lop   = leftx.operator;
         var keep  = 2;          /* operand index to keep for r-value */
 
-        if (leftx.type !== '?' && leftx.type !== rightx.type) {
+        if (leftx.type !== '?' && rightx.type !== '?' && leftx.type !== rightx.type) {
             typeError(
                 'Incompatible types for assignment ({$type1} = {$type2})',
                 sourceCode, sourceOffset,
