@@ -26,8 +26,8 @@ xorMask:	DATi #0	; signature global xorMask : int @ 88:19
 subTerm:	DATi #0	; signature global subTerm : int @ 89:19
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 113:17
+		PARA *1
 	$x:	LOCi
 	$y:	LOCi
 ;-----------------------------------------------------------------------------

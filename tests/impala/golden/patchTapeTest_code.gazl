@@ -9,8 +9,8 @@ config:	GLOB *80	; signature array config[80] : unknown @ 9:1
 positions:	GLOB *2	; signature array positions[2] : unknown @ 11:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 11:15
+		PARA *1
 	$i:	LOCi
 	$p:	LOCp
 ;-----------------------------------------------------------------------------

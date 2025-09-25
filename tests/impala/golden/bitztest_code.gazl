@@ -23,8 +23,8 @@ clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 85:1
 signal:	GLOB *2	; signature array signal[2] : unknown @ 99:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 99:15
+		PARA *1
 	$i:	LOCi
 	$buf:	LOCA *256
 ;-----------------------------------------------------------------------------
@@ -32,15 +32,15 @@ init:	FUNC	; signature func init() -> void @ 99:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 108:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 116:17
+		PARA *1
 	$buf:	LOCA *256
 	$params:	LOCA *PARAM_COUNT
 ;-----------------------------------------------------------------------------
@@ -49,8 +49,8 @@ update:	FUNC	; signature func update() -> void @ 116:17
 f:	! DEFi #0x309977	; signature const f : int @ 121:23
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 138:18
+		PARA *1
 	$t:	LOCi
 	$u:	LOCi
 	$v:	LOCi

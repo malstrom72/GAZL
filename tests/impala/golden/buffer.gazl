@@ -32,8 +32,8 @@ LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ 70:1
 HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ 72:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 72:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -304,8 +304,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInt:	FUNC	; signature func traceInt(int i) -> void @ 259:19
+		PARA *1
 	$i:	INPi
 	! MULi <A> #8 #GAZL_WORD_SIZE
 	! ADDi <A> <A> #2
@@ -321,8 +321,8 @@ traceInt:	FUNC	; signature func traceInt(int i) -> void @ 259:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceFloat:	FUNC	; signature func traceFloat(float f) -> void @ 265:21
+		PARA *1
 	$f:	INPf
 	$buffer:	LOCA *32
 ;-----------------------------------------------------------------------------
@@ -356,8 +356,8 @@ buffer:	GLOB *<A>	; signature array buffer[<A>] : unknown @ 283:1
 bufferPointer:	DATp &buffer	; signature global bufferPointer : ptr @ 290:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 290:15
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4dd 	; trace("init")
 		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 292:15
@@ -365,8 +365,8 @@ init:	FUNC	; signature func init() -> void @ 290:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 299:16
+		PARA *1
 	$a:	LOCf
 	$lr:	LOCf
 	$rr:	LOCf
@@ -421,15 +421,15 @@ reset:	FUNC	; signature func reset() -> void @ 299:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 324:17
+		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 338:18
+		PARA *1
 	$nx:	LOCf
 	$lpx:	LOCf
 	$lpy:	LOCf

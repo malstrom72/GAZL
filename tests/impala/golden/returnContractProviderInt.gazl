@@ -1,0 +1,10 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+
+;-----------------------------------------------------------------------------
+	$value:	OUTi
+returnsNumber:	FUNC	; signature func returnsNumber() -> int @ 1:24
+;-----------------------------------------------------------------------------
+		MOVi $value #1 	; value = 1
+		RETU   	; }

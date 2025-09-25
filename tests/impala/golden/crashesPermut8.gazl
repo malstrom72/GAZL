@@ -311,8 +311,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 287:20
+		PARA *1
 	$text:	INPp
 	$n:	INPi
 	$ints:	INPp
@@ -349,8 +349,8 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 303:19
+		PARA *1
 	$text:	INPp
 	$i:	INPi
 	$ints:	LOCA *1
@@ -364,8 +364,8 @@ traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 303:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats) -> void @ 310:22
+		PARA *1
 	$text:	INPp
 	$n:	INPi
 	$floats:	INPp
@@ -400,8 +400,8 @@ traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats) -> v
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceFloat:	FUNC	; signature func traceFloat(ptr text, float f) -> void @ 326:21
+		PARA *1
 	$text:	INPp
 	$f:	INPf
 	$floats:	LOCA *1
@@ -416,8 +416,8 @@ traceFloat:	FUNC	; signature func traceFloat(ptr text, float f) -> void @ 326:21
 LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 335:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 335:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -475,8 +475,8 @@ rndSeedX:	DATi #123456789	; signature global rndSeedX : int @ 399:32
 rndSeedY:	DATi #362436069	; signature global rndSeedY : int @ 400:32
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 402:21
+		PARA *1
 	$seed:	INPi
 	$x:	LOCi
 ;-----------------------------------------------------------------------------
@@ -555,8 +555,8 @@ fxQuantize:	DATi #0xFFF	; signature global fxQuantize : int @ 462:30
 dirXor:	DATi #0x0	; signature global dirXor : int @ 463:24
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 473:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4de 	; trace("reset")
 		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 475:16
@@ -565,8 +565,8 @@ reset:	FUNC	; signature func reset() -> void @ 473:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 486:17
+		PARA *1
 	$i:	LOCi
 	$fx:	LOCi
 	$fxRnd:	LOCi
@@ -689,8 +689,8 @@ update:	FUNC	; signature func update() -> void @ 486:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 584:15
+		PARA *1
 	$i:	LOCi
 	$p:	LOCp
 	$fxRate:	LOCi
@@ -733,8 +733,8 @@ init:	FUNC	; signature func init() -> void @ 584:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 622:18
+		PARA *1
 	$i:	LOCi
 	$x:	LOCi
 	$mask:	LOCi

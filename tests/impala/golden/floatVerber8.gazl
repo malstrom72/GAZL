@@ -51,22 +51,22 @@ damping:	DATf #1.0	; signature global damping : float @ 107:1
 taps:	GLOB *TAPS_COUNT	; signature array taps[TAPS_COUNT] : unknown @ 112:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 112:15
+		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 120:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 128:17
+		PARA *1
 	$taps:	LOCA *TAPS_COUNT
 	$size:	LOCi
 	$predelay:	LOCi
@@ -108,8 +108,8 @@ update:	FUNC	; signature func update() -> void @ 128:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 169:18
+		PARA *1
 	$spinner:	LOCi
 	$in:	LOCf
 	$dI:	LOCf

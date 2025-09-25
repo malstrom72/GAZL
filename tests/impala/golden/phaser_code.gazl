@@ -271,8 +271,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 286:20
+		PARA *1
 	$text:	INPp
 	$n:	INPi
 	$ints:	INPp
@@ -309,8 +309,8 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 302:19
+		PARA *1
 	$text:	INPp
 	$i:	INPi
 	$ints:	LOCA *1
@@ -324,8 +324,8 @@ traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 302:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats) -> void @ 309:22
+		PARA *1
 	$text:	INPp
 	$n:	INPi
 	$floats:	INPp
@@ -360,8 +360,8 @@ traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats) -> v
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceFloat:	FUNC	; signature func traceFloat(ptr text, float f) -> void @ 325:21
+		PARA *1
 	$text:	INPp
 	$f:	INPf
 	$floats:	LOCA *1
@@ -375,8 +375,8 @@ traceFloat:	FUNC	; signature func traceFloat(ptr text, float f) -> void @ 325:21
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 332:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -524,8 +524,8 @@ doReset:	DATi #FALSE	; signature global doReset : int @ 456:1
 kTable:	GLOB *K_TABLE_SIZE	; signature array kTable[K_TABLE_SIZE] : unknown @ 456:34
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 465:15
+		PARA *1
 	$f:	LOCf
 	$k:	LOCf
 	$i:	LOCi
@@ -550,8 +550,8 @@ init:	FUNC	; signature func init() -> void @ 465:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 481:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4db 	; trace("reset")
 		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 483:16
@@ -560,8 +560,8 @@ reset:	FUNC	; signature func reset() -> void @ 481:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 495:17
+		PARA *1
 	$params:	LOCA *PARAM_COUNT
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4dc 	; trace("update")
@@ -579,8 +579,8 @@ AP12_PARAM_COUNT:	! DEFi #5	; signature const AP12_PARAM_COUNT : int @ 508:31
 AP12_STATE_SIZE:	! DEFi <A>	; signature const AP12_STATE_SIZE : int @ 509:48
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 setupAP12Params:	FUNC	; signature func setupAP12Params(float pitch, float rq, ptr params) -> void @ 511:26
+		PARA *1
 	$pitch:	INPf
 	$rq:	INPf
 	$params:	INPp
@@ -621,8 +621,8 @@ setupAP12Params:	FUNC	; signature func setupAP12Params(float pitch, float rq, pt
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 ap12StereoChain:	FUNC	; signature func ap12StereoChain(ptr state, int stageCount, float inLeft, float inRight, ptr paramsLeft, ptr paramsRight, ptr outLeft, ptr outRight) -> void @ 526:26
+		PARA *1
 	$state:	INPp
 	$stageCount:	INPi
 	$inLeft:	INPf
@@ -745,8 +745,8 @@ shaper:	FUNC	; signature func shaper(float x) -> float @ 580:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 605:18
+		PARA *1
 	$leftParams:	LOCA *AP12_PARAM_COUNT
 	$rightParams:	LOCA *AP12_PARAM_COUNT
 	$ap12State:	LOCA *AP12_STATE_SIZE

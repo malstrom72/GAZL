@@ -20,8 +20,8 @@ fib:	FUNC	; signature func fib(int y) -> int @ 3:14
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 13:15
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVi %2 #35 	; printInt(fib(35))
 		CALL &fib %1 *2	; expects fib(int) -> int @ 15:18

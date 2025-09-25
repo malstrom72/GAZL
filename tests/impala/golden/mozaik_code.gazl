@@ -33,8 +33,8 @@ updateMask:	DATi <A>	; signature readonly updateMask : int @ 119:1
 LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 121:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 121:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -181,8 +181,8 @@ minCycles:	GLOB *256	; signature array minCycles[256] : unknown @ 210:28
 thresDKs:	GLOB *256	; signature array thresDKs[256] : unknown @ 211:27
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 218:15
+		PARA *1
 	$i:	LOCi
 	$x:	LOCf
 	$minCycle:	LOCi
@@ -225,16 +225,16 @@ init:	FUNC	; signature func init() -> void @ 218:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 239:17
+		PARA *1
 ;-----------------------------------------------------------------------------
 		POKE &breakLoop #TRUE 	; global breakLoop = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 244:18
+		PARA *1
 	$inL:	LOCf
 	$inR:	LOCf
 	$yL:	LOCf

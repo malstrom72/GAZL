@@ -23,8 +23,8 @@ clockFreqLimit:	DATi #44100	; signature readonly clockFreqLimit : int @ 86:1
 signal:	GLOB *2	; signature array signal[2] : unknown @ 99:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 99:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -214,8 +214,8 @@ randomArray:	GLOB *FFT_SIZE_2	; signature array randomArray[FFT_SIZE_2] : unknow
 untangleParams:	GLOB *2	; signature array untangleParams[2] : unknown @ 229:31
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fftReIndex:	FUNC	; signature func fftReIndex(int n, ptr data) -> void @ 233:21
+		PARA *1
 	$n:	INPi
 	$data:	INPp
 	$nn:	LOCi
@@ -254,8 +254,8 @@ fftReIndex:	FUNC	; signature func fftReIndex(int n, ptr data) -> void @ 233:21
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fftPass4:	FUNC	; signature func fftPass4(int n, ptr data, int fftStep) -> void @ 255:19
+		PARA *1
 	$n:	INPi
 	$data:	INPp
 	$fftStep:	INPi
@@ -398,8 +398,8 @@ fftPass4:	FUNC	; signature func fftPass4(int n, ptr data, int fftStep) -> void @
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fftPass0:	FUNC	; signature func fftPass0(int n, ptr data) -> void @ 312:19
+		PARA *1
 	$n:	INPi
 	$data:	INPp
 	$i:	LOCi
@@ -436,8 +436,8 @@ fftPass0:	FUNC	; signature func fftPass0(int n, ptr data) -> void @ 312:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fftPass:	FUNC	; signature func fftPass(int n, ptr data, int fftStep) -> void @ 335:18
+		PARA *1
 	$n:	INPi
 	$data:	INPp
 	$fftStep:	INPi
@@ -505,8 +505,8 @@ fftPass:	FUNC	; signature func fftPass(int n, ptr data, int fftStep) -> void @ 3
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fftUntangleParams:	FUNC	; signature func fftUntangleParams(int n, ptr params) -> void @ 372:28
+		PARA *1
 	$n:	INPi
 	$params:	INPp
 	$wpRe:	LOCf
@@ -532,8 +532,8 @@ fftUntangleParams:	FUNC	; signature func fftUntangleParams(int n, ptr params) ->
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fftUntangle:	FUNC	; signature func fftUntangle(int n, ptr data, ptr params) -> void @ 382:22
+		PARA *1
 	$n:	INPi
 	$data:	INPp
 	$params:	INPp
@@ -627,8 +627,8 @@ fftUntangle:	FUNC	; signature func fftUntangle(int n, ptr data, ptr params) -> v
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 mixOutput:	FUNC	; signature func mixOutput(ptr fftBuffer, ptr mixBuffer, int mixBufferOffset, int channel) -> void @ 433:20
+		PARA *1
 	$fftBuffer:	INPp
 	$mixBuffer:	INPp
 	$mixBufferOffset:	INPi
@@ -666,8 +666,8 @@ mixOutput:	FUNC	; signature func mixOutput(ptr fftBuffer, ptr mixBuffer, int mix
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 453:15
+		PARA *1
 	$i:	LOCi
 	$theta:	LOCf
 	$wTemp:	LOCf
@@ -744,8 +744,8 @@ init:	FUNC	; signature func init() -> void @ 453:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 495:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4da 	; trace("reset")
 		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 497:16
@@ -754,8 +754,8 @@ reset:	FUNC	; signature func reset() -> void @ 495:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 508:17
+		PARA *1
 	$f:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4db 	; trace("update")
@@ -783,8 +783,8 @@ update:	FUNC	; signature func update() -> void @ 508:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 538:18
+		PARA *1
 	! MULi <A> #FFT_SIZE #2
 	$fftBuffer:	LOCA *FFT_SIZE
 	$inputBuffer:	LOCA *FFT_SIZE

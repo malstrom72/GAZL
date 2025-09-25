@@ -359,8 +359,8 @@ THROW:	! DEFi #17	; signature const THROW : int @ 267:21
 ; signature extern func score() -> unknown @ 269:22
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:15
+		PARA *1
 	$NUM:	INPi
 	$numString:	LOCA *3
 ;-----------------------------------------------------------------------------
@@ -415,8 +415,8 @@ fMPINIT_RUNS:	CNST *<A>	; signature array fMPINIT_RUNS[<A>] : unknown @ 348:36
 	DATA #126
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fMPINIT:	FUNC	; signature func fMPINIT() -> void @ 350:18
+		PARA *1
 	$FIRST:	LOCi
 	$I:	LOCi
 	$J:	LOCi
@@ -470,8 +470,8 @@ fMPINIT:	FUNC	; signature func fMPINIT() -> void @ 350:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fMAPLIN:	FUNC	; signature func fMAPLIN(int FIL) -> void @ 380:18
+		PARA *1
 	$FIL:	INPi
 	$I:	LOCi
 	$VAL:	LOCi
@@ -620,8 +620,8 @@ fMAKEWD:	FUNC	; signature func fMAKEWD(int LETTRS) -> int @ 486:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fSHFTXT:	FUNC	; signature func fSHFTXT(int FROM, int DELTA) -> void @ 510:18
+		PARA *1
 	$FROM:	INPi
 	$DELTA:	INPi
 	$I:	LOCi
@@ -651,8 +651,8 @@ fSHFTXT:	FUNC	; signature func fSHFTXT(int FROM, int DELTA) -> void @ 510:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fPUTTXT:	FUNC	; signature func fPUTTXT(int WORD, ptr sTATE, int CASE, int HASH) -> void @ 528:18
+		PARA *1
 	$WORD:	INPi
 	$sTATE:	INPp
 	$CASE:	INPi
@@ -730,8 +730,8 @@ fPUTTXT:	FUNC	; signature func fPUTTXT(int WORD, ptr sTATE, int CASE, int HASH) 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
+		PARA *1
 	$I:	LOCi
 	$VAL:	LOCi
 ;-----------------------------------------------------------------------------
@@ -763,8 +763,8 @@ fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fTYPE0:	FUNC	; signature func fTYPE0() -> void @ 590:17
+		PARA *1
 	$TEMP:	LOCi
 ;-----------------------------------------------------------------------------
 		PEEK $TEMP &LNLENG 	; TEMP=global LNLENG
@@ -775,8 +775,8 @@ fTYPE0:	FUNC	; signature func fTYPE0() -> void @ 590:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fSPEAK:	FUNC	; signature func fSPEAK(int N) -> void @ 602:17
+		PARA *1
 	$N:	INPi
 	$BLANK:	LOCi
 	$CASE:	LOCi
@@ -973,8 +973,8 @@ fSPEAK:	FUNC	; signature func fSPEAK(int N) -> void @ 602:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fPSPEAK:	FUNC	; signature func fPSPEAK(int MSG, int SKIP) -> void @ 715:18
+		PARA *1
 	$MSG:	INPi
 	$SKIP:	INPi
 	$I:	LOCi
@@ -997,8 +997,8 @@ fPSPEAK:	FUNC	; signature func fPSPEAK(int MSG, int SKIP) -> void @ 715:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fRSPEAK:	FUNC	; signature func fRSPEAK(int I) -> void @ 731:18
+		PARA *1
 	$I:	INPi
 ;-----------------------------------------------------------------------------
 		EQUi $I #0 @.f0	; if(I != 0)fSPEAK(global RTEXT[I])
@@ -1008,8 +1008,8 @@ fRSPEAK:	FUNC	; signature func fRSPEAK(int I) -> void @ 731:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fSETPRM:	FUNC	; signature func fSETPRM(int FIRST, int P1, int P2) -> void @ 737:18
+		PARA *1
 	$FIRST:	INPi
 	$P1:	INPi
 	$P2:	INPi
@@ -1024,8 +1024,8 @@ fSETPRM:	FUNC	; signature func fSETPRM(int FIRST, int P1, int P2) -> void @ 737:
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fGETIN:	FUNC	; signature func fGETIN(ptr wORD1, ptr wORD1X, ptr wORD2, ptr wORD2X) -> void @ 748:17
+		PARA *1
 	$wORD1:	INPp
 	$wORD1X:	INPp
 	$wORD2:	INPp
@@ -1138,8 +1138,8 @@ fYES:	FUNC	; signature func fYES(int X, int Y, int Z) -> int @ 779:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 score:	FUNC	; signature func score(int MODE) -> void @ 808:16
+		PARA *1
 	$MODE:	INPi
 	$I:	LOCi
 	$K:	LOCi
@@ -1378,8 +1378,8 @@ fVOCAB:	FUNC	; signature func fVOCAB(int ID, int INIT) -> int @ 924:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fCARRY:	FUNC	; signature func fCARRY(int OBJECT, int WHERE) -> void @ 955:17
+		PARA *1
 	$OBJECT:	INPi
 	$WHERE:	INPi
 	$TEMP:	LOCi
@@ -1408,8 +1408,8 @@ fCARRY:	FUNC	; signature func fCARRY(int OBJECT, int WHERE) -> void @ 955:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fDROP:	FUNC	; signature func fDROP(int OBJECT, int WHERE) -> void @ 979:16
+		PARA *1
 	$OBJECT:	INPi
 	$WHERE:	INPi
 ;-----------------------------------------------------------------------------
@@ -1431,8 +1431,8 @@ fDROP:	FUNC	; signature func fDROP(int OBJECT, int WHERE) -> void @ 979:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fMOVE:	FUNC	; signature func fMOVE(int OBJECT, int WHERE) -> void @ 995:16
+		PARA *1
 	$OBJECT:	INPi
 	$WHERE:	INPi
 	$FROM:	LOCi
@@ -1454,8 +1454,8 @@ fMOVE:	FUNC	; signature func fMOVE(int OBJECT, int WHERE) -> void @ 995:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fDSTROY:	FUNC	; signature func fDSTROY(int OBJECT) -> void @ 1011:18
+		PARA *1
 	$OBJECT:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi %1 $OBJECT 	; fMOVE(OBJECT,0)
@@ -1465,8 +1465,8 @@ fDSTROY:	FUNC	; signature func fDSTROY(int OBJECT) -> void @ 1011:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 fJUGGLE:	FUNC	; signature func fJUGGLE(int OBJECT) -> void @ 1017:18
+		PARA *1
 	$OBJECT:	INPi
 	$I:	LOCi
 	$J:	LOCi
@@ -1569,8 +1569,8 @@ fRNDVOC:	FUNC	; signature func fRNDVOC(int CHAR, int FORCE) -> int @ 1060:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 initialise:	FUNC	; signature func initialise() -> void @ 1100:21
+		PARA *1
 	$I:	LOCi
 	$K:	LOCi
 ;-----------------------------------------------------------------------------
@@ -3934,8 +3934,8 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ 1641:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 2207:15
+		PARA *1
 	$gotoChoice:	LOCi
 	$I:	LOCi
 	$J:	LOCi
