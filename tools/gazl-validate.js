@@ -558,6 +558,12 @@ function processFile(filePath, ctx) {
 }
 
 function compareExternSets(kind, externMap, exportMap, ctx, comparator, mismatchMessage, missingMessage) {
+    const missingFn = (typeof missingMessage === 'function')
+        ? missingMessage
+        : (typeof mismatchMessage === 'function')
+            ? mismatchMessage
+            : (() => 'Missing extern definition');
+
     for (const [name, entries] of externMap.entries()) {
         if (entries.length > 1) {
             for (let i = 0; i < entries.length; ++i) {
@@ -600,7 +606,7 @@ function compareExternSets(kind, externMap, exportMap, ctx, comparator, mismatch
         if (!skipMissing) {
             ctx.diagnostics.push({
                 severity: 'warning',
-                message: missingMessage(name),
+                message: missingFn(name),
                 locations: entries.map(entry => ({
                     label: 'extern declaration',
                     file: entry.location.file,

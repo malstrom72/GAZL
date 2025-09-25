@@ -207,6 +207,31 @@
         }
     }
 
+    function ensureFunctionSignature(name) {
+        if (!name) {
+            return undefined;
+        }
+
+        if (!$$parser.symbols || !$$parser.symbols.functions) {
+            return undefined;
+        }
+
+        var entry = $$parser.symbols.functions[name];
+        if (!entry) {
+            return undefined;
+        }
+
+        if (!entry.signature) {
+            entry.signature = {};
+        }
+
+        return entry.signature;
+    }
+
+    function isConcreteType(type) {
+        return type !== undefined && type !== '?';
+    }
+
     function renderParamList(params) {
         if (!params || params.length === 0) {
             return '';
@@ -334,6 +359,63 @@
 
         return appendOrigin('expects ' + label + '(' + paramsText + ') -> ' + returnType,
                             sourceName, sourceCode, sourceOffset);
+    };
+
+    $$parser.expectFunctionReturnType = function (name, expectedType, sourceCode, sourceOffset) {
+        if (!isConcreteType(expectedType)) {
+            return;
+        }
+
+        var signature = ensureFunctionSignature(name);
+        if (!signature) {
+            return;
+        }
+
+        if (signature.expectedReturn === undefined) {
+            signature.expectedReturn = expectedType;
+        } else if (signature.expectedReturn !== expectedType) {
+            $$parser.typeError(
+                'Conflicting return type expectations for ' + name + ' ({$type1} vs {$type2})',
+                sourceCode,
+                sourceOffset,
+                expectedType,
+                signature.expectedReturn
+            );
+        }
+
+        if (signature.returnResolved && isConcreteType(signature.returns)
+            && signature.returns !== expectedType) {
+
+            $$parser.typeError(
+                'Return type mismatch for ' + name + ' ({$type1} vs {$type2})',
+                sourceCode,
+                sourceOffset,
+                expectedType,
+                signature.returns
+            );
+        }
+    };
+
+    $$parser.resolveFunctionReturnType = function (name, actualType, sourceCode, sourceOffset) {
+        var signature = ensureFunctionSignature(name);
+        if (!signature) {
+            return;
+        }
+
+        signature.returnResolved = true;
+        signature.returns = actualType;
+
+        if (signature.expectedReturn !== undefined && isConcreteType(signature.expectedReturn)
+            && isConcreteType(actualType) && signature.expectedReturn !== actualType) {
+
+            $$parser.typeError(
+                'Return type for ' + name + ' does not match previous uses ({$type1} vs {$type2})',
+                sourceCode,
+                sourceOffset,
+                actualType,
+                signature.expectedReturn
+            );
+        }
     };
 
     $$parser.emitFunctionSignature = function (name) {
@@ -945,6 +1027,11 @@
 
         var lop   = leftx.operator;
         var keep  = 2;          /* operand index to keep for r-value */
+
+        if (leftx.type !== '?' && rightx.type === '?' && rightx.callInfo && rightx.callInfo.name) {
+            $$parser.expectFunctionReturnType(rightx.callInfo.name, leftx.type, sourceCode, sourceOffset);
+            rightx.type = leftx.type;
+        }
 
         if (leftx.type !== '?' && rightx.type !== '?' && leftx.type !== rightx.type) {
             $$parser.typeError(
@@ -1724,9 +1811,10 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                              entry.signature.sourceCode = $$s;
                                                                              entry.signature.sourceOffset = $$i;
                                                                              entry.signature.sourceName = $$parser.sourceName;
+                                                                             entry.signature.returnResolved = false;
                                                                          }
                                                                      }
-                inp:ArgsDecl ')'_ 
+                inp:ArgsDecl ')'_
                 (
                     RETURNS _ out:VarDecl                             {
                                                                          $$parser.declare(
@@ -1741,6 +1829,7 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                          if (entry && entry.signature) {
                                                                              entry.signature.returns = $out.type;
                                                                              entry.signature.returnName = $out.name;
+                                                                             $$parser.resolveFunctionReturnType($id, $out.type, $$s, $$i);
                                                                          }
                                                                      }
                   /
@@ -1756,6 +1845,7 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                          if (entry && entry.signature) {
                                                                              entry.signature.returns = '?';
                                                                              entry.signature.returnName = undefined;
+                                                                             $$parser.resolveFunctionReturnType($id, '?', $$s, $$i);
                                                                          }
                                                                      }
                 )                                                     {
@@ -1831,20 +1921,21 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              var signature = entry && entry.signature;
 
                                                                              if (entry) {
-                                                                                 if (!signature) {
-                                                                                     signature = entry.signature = {};
-                                                                                 }
-                                                                                 if (signature.sourceName === undefined) {
-                                                                                     signature.sourceName = $$parser.sourceName;
-                                                                                 }
-                                                                                 if (signature.sourceCode === undefined) {
-                                                                                     signature.sourceCode = $$s;
-                                                                                     signature.sourceOffset = $$i;
-                                                                                     signature.sourceName = $$parser.sourceName;
-                                                                                 }
-                                                                            }
+                                                                             if (!signature) {
+                                                                                 signature = entry.signature = {};
+                                                                             }
+                                                                             if (signature.sourceName === undefined) {
+                                                                                 signature.sourceName = $$parser.sourceName;
+                                                                             }
+                                                                             if (signature.sourceCode === undefined) {
+                                                                                 signature.sourceCode = $$s;
+                                                                                 signature.sourceOffset = $$i;
+                                                                                 signature.sourceName = $$parser.sourceName;
+                                                                             }
+                                                                             signature.returnResolved = false;
+                                                                        }
 
-                                                                            var role = ($$.type === 'N' ? 'extern native' : 'extern func');
+                                                                        var role = ($$.type === 'N' ? 'extern native' : 'extern func');
                                                                             var prototypeComment = $$parser.formatFunctionSignatureComment(
                                                                                 $$.name,
                                                                                 signature,
@@ -2198,7 +2289,12 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                }
                                                            }
 
-                                                           if (signature.returns !== undefined) {
+                                                           if (signature.returnResolved &&
+                                                               signature.returns !== undefined) {
+                                                               callResultType = signature.returns;
+                                                           } else if (signature.expectedReturn !== undefined) {
+                                                               callResultType = signature.expectedReturn;
+                                                           } else if (signature.returns !== undefined) {
                                                                callResultType = signature.returns;
                                                            }
                                                        }
@@ -2231,6 +2327,12 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                          undefined,
                                                                          '%' + $$.base,
                                                                          undefined);
+
+                                                       if (calleeName) {
+                                                           callee.callInfo = { name: calleeName };
+                                                       } else if (callee.callInfo) {
+                                                           callee.callInfo = undefined;
+                                                       }
                                                     } }
 
 Argument    <-  a:Expr                             { if (!$$parser.dry) {

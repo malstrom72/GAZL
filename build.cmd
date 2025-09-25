@@ -26,15 +26,11 @@ IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
 REM Run the Impala test suite from the source directory
-PUSHD impala
-..\output\PikaCmd runTests.pika
-IF ERRORLEVEL 1 EXIT /B 1
-PUSHD jspeg
+PUSHD impala\jspeg
 node jspegCompilerTests.js
 IF ERRORLEVEL 1 EXIT /B 1
 node runJspegTests.js
 IF ERRORLEVEL 1 EXIT /B 1
-POPD
 POPD
 
 REM Optionally validate emitted .gazl metadata when requested

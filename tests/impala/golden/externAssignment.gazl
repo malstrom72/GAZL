@@ -5,13 +5,12 @@
 ; signature extern native printFloat() -> unknown @ 2:25
 
 ;-----------------------------------------------------------------------------
-main:   FUNC    ; signature func main() -> void @ 4:15
-        PARA *1
-        $value: LOCf
+		PARA *1
+main:	FUNC	; signature func main() -> void @ 4:15
+	$value:	LOCf
 ;-----------------------------------------------------------------------------
-        CALL &produceFloat %0 *1        ; expects produceFloat() -> unknown @ 7:31
-        MOVE $value %0                  ; value = produceFloat()
-        MOVf %1 $value  ; printFloat(value)
-        CALL ^printFloat %0 *2          ; expects function(float) -> unknown @ 8:26
-        RETU    ; }
-
+		CALL &produceFloat %0 *1	; expects produceFloat() -> unknown @ 7:31
+		MOVf $value %0 
+		MOVf %1 $value 	; printFloat(value)
+		CALL ^printFloat %0 *2	; expects function(float) -> unknown @ 8:26
+		RETU   	; }

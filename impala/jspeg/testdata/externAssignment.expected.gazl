@@ -10,8 +10,9 @@
  					$value:		LOCf
  ;-----------------------------------------------------------------------------
  								CALL &produceFloat %0 *1		; expects produceFloat() -> unknown @ 7:31
- 								MOVE $value %0 
+ 								MOVf $value %0 
  								MOVf %1 $value 					; printFloat(value)
  								CALL ^printFloat %0 *2			; expects function(float) -> unknown @ 8:26
  								RETU   							; }
+
 

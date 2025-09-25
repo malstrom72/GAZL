@@ -16,7 +16,7 @@ cp output/GAZLCmd impala/GAZLCmd 2>/dev/null || cp output/GAZLCmd.exe impala/GAZ
 (cd tools && bash BuildImpala.sh)
 
 # Run the Impala test suite from the source directory
- (cd impala && ../output/PikaCmd runTests.pika && (cd jspeg && node jspegCompilerTests.js && node runJspegTests.js))
+(cd impala/jspeg && node jspegCompilerTests.js && node runJspegTests.js)
 
 # Optionally validate emitted .gazl metadata when requested
 if [[ "${GAZL_VALIDATE:-0}" != 0 ]]; then

@@ -183,11 +183,11 @@ const tagCaptureCases = [
 testGrammarEquivalence('tagCaptureTest.jspeg', 'tagCaptureTest.jspeg', tagCaptureCases);
 
 const parityFixtures = [
-        { name: 'smoke', source: 'smoke.impala', expected: 'smoke.pika.gazl', options: { randomId: 42, sourceName: 'smoke.impala' } },
-        { name: 'bool', source: 'bool.impala', expected: 'bool.pika.gazl', options: { randomId: 42, sourceName: 'bool.impala' } },
-        { name: 'control', source: 'control.impala', expected: 'control.pika.gazl', options: { randomId: 42, sourceName: 'control.impala' } },
-        { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.pika.gazl', options: { randomId: 42, sourceName: 'perfTest2.impala' } },
-        { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.pika.gazl', options: { randomId: 42, sourceName: 'inputTest.impala' } }
+        { name: 'smoke', source: 'smoke.impala', expected: 'smoke.expected.gazl', options: { randomId: 42, sourceName: 'smoke.impala' } },
+        { name: 'bool', source: 'bool.impala', expected: 'bool.expected.gazl', options: { randomId: 42, sourceName: 'bool.impala' } },
+        { name: 'control', source: 'control.impala', expected: 'control.expected.gazl', options: { randomId: 42, sourceName: 'control.impala' } },
+        { name: 'perfTest2', source: 'perfTest2.impala', expected: 'perfTest2.expected.gazl', options: { randomId: 42, sourceName: 'perfTest2.impala' } },
+        { name: 'inputTest', source: 'inputTest.impala', expected: 'inputTest.expected.gazl', options: { randomId: 42, sourceName: 'inputTest.impala' } }
 ];
 
 const legacySourceDir = path.join(dir, '..', '..', 'tests', 'impala', 'sources');
@@ -244,7 +244,7 @@ function runParityFixture(fixture) {
         const normalizedExpected = expected.trimEnd();
 
         if (normalizedActual !== normalizedExpected) {
-		console.error(`impala.jspeg compiler output diverges from PikaScript fixture: ${fixture.name}`);
+                console.error(`impala.jspeg compiler output diverges from recorded fixture: ${fixture.name}`);
                 process.exit(1);
         }
         console.log(`impala.jspeg compiler matches ${fixture.name} fixture output`);
@@ -358,7 +358,7 @@ if (!observedFailure) {
 }
 
 const smokeSource = fs.readFileSync(path.join(dir, 'testdata', 'smoke.impala'), IMPALA_ENCODING);
-const smokeExpected = fs.readFileSync(path.join(dir, 'testdata', 'smoke.pika.gazl'), IMPALA_ENCODING);
+const smokeExpected = fs.readFileSync(path.join(dir, 'testdata', 'smoke.expected.gazl'), IMPALA_ENCODING);
 const smokeOutputAfterFailure = compileWithJsImpala(smokeSource, { randomId: 42 });
 
 if (smokeOutputAfterFailure !== smokeExpected) {
@@ -366,5 +366,34 @@ if (smokeOutputAfterFailure !== smokeExpected) {
         process.exit(1);
 }
 console.log('impala.jspeg compiler recovers after aborted compile without leaking state');
+
+const mismatchedReturnSource = [
+        'extern function foreignFoo;',
+        'function main()',
+        'locals int value',
+        '{',
+        '        value = foreignFoo();',
+        '}',
+        '',
+        'function foreignFoo()',
+        'returns float result',
+        '{',
+        '        result = 0.0;',
+        '}',
+        ''
+].join('\n');
+
+let observedMismatch = false;
+try {
+        compileWithJsImpala(mismatchedReturnSource, { randomId: 42 });
+} catch (err) {
+        observedMismatch = (err && err.message && err.message.includes('Return type for foreignFoo'));
+}
+
+if (!observedMismatch) {
+        console.error('impala.jspeg compiler failed to report mismatched inferred return type');
+        process.exit(1);
+}
+console.log('impala.jspeg compiler enforces inferred return type expectations');
 
 console.log('JSPEG regression suite completed successfully');
