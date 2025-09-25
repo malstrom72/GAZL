@@ -1,0 +1,10 @@
+extern function returnsNumber;
+extern native printFloat;
+
+function main()
+locals float value
+{
+	value = returnsNumber();
+	returnsNumber();
+	printFloat(value);
+}

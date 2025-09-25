@@ -20,7 +20,8 @@ Compiling callers and callees in different units allows mismatched return types 
    Still inside `FuncDecl`, ensure `$$parser.resolveFunctionReturnType` (and the implicit-return path) populate `entry.signature.returns` with `'?'` for `void`/unknown while preserving `returnResolved` for later checks. The existing `$$parser.emitFunctionSignature` already appends `; signature func … -> TYPE` to each `FUNC` line—verify that it always has a concrete `returns` value (defaulting to `unknown`) so downstream tooling has a stable definition record.
 
 3. **Record expectations and definitions during validation**
-   Augment `parseSignatureComment` in `tools/gazl-validate.js` so it captures both call-site comments (`; expects function(...) -> TYPE`) and definition comments (`; signature func NAME(...) -> TYPE`, plus the analogous `; signature extern native …`). Expectations should be collected in a new `ctx.calls` map keyed by function name; definitions (including extern natives) should flow into a `ctx.definitions` map (or extend `ctx.exports.functions`) with `{ type, location, kind }` records. Reuse the existing `location()` helper so diagnostics cite both the `.gazl` file and any embedded origin. Native callbacks will be seeded from a hand-maintained signature listing that mirrors the `.gazl` comment format so the validator can reconcile Impala `extern native` sites against the host-supplied implementations.
+   Augment `parseSignatureComment` in `tools/gazl-validate.js` so it captures both call-site comments (`; expects function(...) -> TYPE`) and definition comments (`; signature func NAME(...) -> TYPE`, plus the analogous `; signature extern native …`). Expectations should be collected in a new `ctx.calls` map keyed by function name; definitions (including extern natives) should flow into a `ctx.definitions` map (or extend `ctx.exports.functions`) with `{ type, location, kind }` records. Reuse the existing `location()` helper so diagnostics cite both the `.gazl` file and any embedded origin. Native callbacks will be seeded from a hand-maintained signature listing that mirrors the `.gazl` comment format so the validator can reconcile Impala `extern native` sites against the host-supplied implementations. **Important:** the validator must also track whether a symbol is declared as `native` anywhere—calling a non-native implementation through a `native` extern (or vice versa) is illegal because native calls lower to different GAZL opcodes.
+   Explicitly treat mismatched native/non-native roles as fatal during reconciliation so no combination of manifests, externs, or call sites can disagree about the calling convention.
 
 4. **Reconcile contracts across compilation units**  
    After `processFile` finishes scanning each file, walk the aggregated call expectations and ensure there is a compatible definition. Emit an error when multiple expectations disagree (`typesCompatible` is already available) or when a concrete expectation conflicts with a concrete definition. Add a dedicated diagnostic constructor so failures read like `xorShiftRandom expected float at caller.gazl:12 but returns int at callee.gazl:6`.
@@ -42,24 +43,24 @@ Compiling callers and callees in different units allows mismatched return types 
 - Ensure fixture-regeneration scripts keep the metadata comments intact when retabulating.
 
 ## Step-by-Step Implementation Plan
-- [ ] Update `impala/jspeg/impala.jspeg`:
-  - [ ] Ensure the `FuncCall` lowering passes resolved return categories into `formatCallExpectationComment` so the emitted `; expects function(...) -> TYPE` row reflects inference instead of defaulting to `unknown`.
-  - [ ] Guarantee `$$parser.resolveFunctionReturnType` / `$$parser.emitFunctionSignature` always assign a concrete `returns` value (defaulting to `unknown`) before appending the existing `; signature func …` comment.
-  - [ ] Re-run `node impala/jspeg/updateJSPEG.js` so `impalaCompiler.js` matches the grammar changes.
-- [ ] Amend `tools/gazl-validate.js`:
-  - [ ] Teach `parseSignatureComment` to parse the call-site `; expects function(...) -> TYPE` rows alongside `; signature func …` and `; signature extern native …` definitions.
-  - [ ] Maintain new context maps (`ctx.calls`, `ctx.definitions`) to store `{ category, location, kind }` records.
-  - [ ] Add a reconciliation pass that compares each expected category with every discovered definition, reusing `typesCompatible` for the comparisons and issuing structured diagnostics on conflicts or missing definitions.
-- [ ] Expand the regression suite:
-  - [ ] Author the three `.impala` samples (agreement, mismatch, unknown) and regenerate their `.gazl` outputs under both `tests/impala/golden/` and `impala/jspeg/testdata/`.
+- [x] Update `impala/jspeg/impala.jspeg`:
+  - [x] Ensure the `FuncCall` lowering passes resolved return categories into `formatCallExpectationComment` so the emitted `; expects function(...) -> TYPE` row reflects inference instead of defaulting to `unknown`.
+  - [x] Guarantee `$$parser.resolveFunctionReturnType` / `$$parser.emitFunctionSignature` always assign a concrete `returns` value (defaulting to `unknown`) before appending the existing `; signature func …` comment.
+  - [x] Re-run `node impala/jspeg/updateJSPEG.js` so `impalaCompiler.js` matches the grammar changes.
+- [x] Amend `tools/gazl-validate.js`:
+  - [x] Teach `parseSignatureComment` to parse the call-site `; expects function(...) -> TYPE` rows alongside `; signature func …` and `; signature extern native …` definitions.
+  - [x] Maintain new context maps (`ctx.calls`, `ctx.definitions`) to store `{ category, location, kind, native }` records.
+  - [x] Add a reconciliation pass that compares each expected category with every discovered definition, reusing `typesCompatible` for the comparisons and issuing structured diagnostics on conflicts, missing definitions, or native/non-native mismatches.
+- [x] Expand the regression suite:
+  - [x] Author the three `.impala` samples (agreement, mismatch, unknown) and regenerate their `.gazl` outputs under both `tests/impala/golden/` and `impala/jspeg/testdata/`.
   - [ ] Wire `tools/regen-jspeg-fixtures.{sh,cmd}` to invoke `node tools/gazl-validate.js` on the freshly generated fixtures so signature mismatches fail regeneration.
 - [ ] Validate the dummy return-slot work:
   - [ ] Adjust the implicit-return branch in `FuncDecl` so the `PARA *1` emission follows the `FUNC` declaration while keeping legacy semantics.
-  - [ ] Document the rationale for the placeholder within `impala.jspeg` (and refresh `impalaCompiler.js`) to keep future contributors aligned.
+  - [x] Document the rationale for the placeholder within `impala.jspeg` (and refresh `impalaCompiler.js`) to keep future contributors aligned.
 - [ ] Verify native callback coverage:
   - [ ] Define a checked-in manifest file (e.g., `docs/nativeCallbackSignatures.gazl`) that lists each native callback as comment rows using the same syntax the compiler emits (`; signature extern native printInt(int value) -> void`). Provide header comments explaining the ordering and any optional metadata fields so contributors know how to extend the file.
   - [ ] Document how maintainers populate or update the manifest (for example, noting that each entry should mirror the signature comments inside `src/GAZL.cpp`/`tools/GAZLCmd.cpp` and keep the manual list in sync when adding new natives).
-  - [ ] Extend `tools/gazl-validate.js` to load this manifest at startup (with graceful fallback when the file is missing) and to treat every manifest entry as a definition when reconciling `extern native` call expectations.
+  - [ ] Extend `tools/gazl-validate.js` to load this manifest at startup (with graceful fallback when the file is missing) and to treat every manifest entry as a native definition when reconciling `extern native` call expectations, enforcing that the `native` bit matches between callers and implementors.
 
 ### Native callback manifest sketch
 
@@ -97,4 +98,4 @@ Each row uses the same `; signature extern native …` grammar the compiler alre
 
 ## Additional Action Items
 - [ ] Rework the implicit-return path so the dummy `PARA *1` is declared after the `FUNC` line (or otherwise ensure assemblers see the `FUNC` declaration first) while preserving return-type inference bookkeeping.
-- [ ] Add an explanatory comment in `impala/jspeg/impala.jspeg` (and regenerate the compiler) that spells out why void functions emit a placeholder `PARA *1`—namely, to give call sites a predictable one-word return area and to keep legacy PPEG output identical.
+- [x] Add an explanatory comment in `impala/jspeg/impala.jspeg` (and regenerate the compiler) that spells out why void functions emit a placeholder `PARA *1`—namely, to give call sites a predictable one-word return area and to keep legacy PPEG output identical.

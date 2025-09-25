@@ -347,16 +347,56 @@ var impalaCompilerImpl = (function(_s) {
             paramsText = renderTypeList(actualTypes);
         }
 
-        var returnCode;
-        if (signature && signature.returns !== undefined) {
-            returnCode = signature.returns;
-        } else {
-            returnCode = callResultType;
+        var returnCode = callResultType;
+        var known = false;
+        if (signature) {
+            if (signature.returnResolved && signature.returns !== undefined) {
+                returnCode = signature.returns;
+                known = true;
+            } else if (signature.expectedReturn !== undefined && signature.expectedReturn !== '?') {
+                returnCode = signature.expectedReturn;
+            } else if (signature.returns !== undefined) {
+                returnCode = signature.returns;
+                known = signature.returnResolved && signature.returns === '?';
+            }
         }
-        var returnType = signatureReturnCategory(returnCode, !!signature);
+        var returnType = signatureReturnCategory(returnCode, known);
 
         return appendOrigin('expects ' + label + '(' + paramsText + ') -> ' + returnType,
                             sourceName, sourceCode, sourceOffset);
+    };
+
+    updateCallExpectationComment = function (callInfo, callResultType) {
+        if (!callInfo || callInfo.commentIndex === undefined || callInfo.commentIndex < 0) {
+            return;
+        }
+        if (!metacode || callInfo.commentIndex >= metacode.length) {
+            return;
+        }
+
+        var args = callInfo.commentArgs;
+        if (!args) {
+            return;
+        }
+
+        var refreshed = formatCallExpectationComment(
+            args.name,
+            args.signature,
+            args.actualTypes,
+            callResultType,
+            args.sourceName,
+            args.sourceCode,
+            args.sourceOffset
+        );
+
+        if (!refreshed) {
+            return;
+        }
+
+        var entry = metacode[callInfo.commentIndex];
+        if (entry && entry.operator === ';') {
+            entry.operands[0] = refreshed;
+        }
     };
 
     expectFunctionReturnType = function (name, expectedType, sourceCode, sourceOffset) {
@@ -1029,6 +1069,7 @@ var impalaCompilerImpl = (function(_s) {
         if (leftx.type !== '?' && rightx.type === '?' && rightx.callInfo && rightx.callInfo.name) {
             expectFunctionReturnType(rightx.callInfo.name, leftx.type, sourceCode, sourceOffset);
             rightx.type = leftx.type;
+            updateCallExpectationComment(rightx.callInfo, leftx.type);
         }
 
         if (leftx.type !== '?' && rightx.type !== '?' && leftx.type !== rightx.type) {
@@ -1787,7 +1828,7 @@ function AddSub($){var $op={},$r={};return (function(){var _b=_i;return MulDiv($
 function MulDiv($){var $op={},$r={};return (function(){var _b=_i;return PrePost($)&&((function(){while((function(){var _b=_i;return MULDIV_OP($op)&&_($)&&PrePost($r)&&(function(){ if (!dry) mulDivOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function PrePost($){var $op={};return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) unaryOp($op._, $._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Subscript($){var $s={};return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) binaryOp('=[]', $._, $s._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; $.base  = borrowForCall(); $.types = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type ); } if (callee.operator === ':=' && callee.operands[1] && callee.operands[1][0] === '&') { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; if (entry && entry.kind === 'FUNC' && entry.signature) { signature = entry.signature; } } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i ); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { typeError( 'Argument type mismatch when calling ' + label + ' ({$type1} vs expected {$type2})', _s, _i, actual, expected ); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i ); if (callComment) { emit(';', undefined, callComment, undefined, undefined); } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.count + 1)); returnBack(func); while ($.count-- > 0) { returnBack('%' + ($.base + $.count + 1)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); if (calleeName) { callee.callInfo = { name: calleeName }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; $.base  = borrowForCall(); $.types = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type ); } if (callee.operator === ':=' && callee.operands[1] && callee.operands[1][0] === '&') { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; if (entry && entry.kind === 'FUNC' && entry.signature) { signature = entry.signature; } } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i ); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { typeError( 'Argument type mismatch when calling ' + label + ' ({$type1} vs expected {$type2})', _s, _i, actual, expected ); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.count + 1)); returnBack(func); while ($.count-- > 0) { returnBack('%' + ($.base + $.count + 1)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Argument($){var $a={};return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if ($.types) { $.types.push(meta.type); } makeArgValue($a._, $.base + $.count); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Group($){return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BoolGroup($){var $label;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ $label = undefined; ; return true})()&&And($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="||")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('t'); } emit('?->', true, $label, undefined, undefined); ; return true})()&&And($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if ($label !== undefined) { emit('<-?', true, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

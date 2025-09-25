@@ -1,0 +1,5 @@
+function returnsNumber()
+returns float value
+{
+	value = 1.5;
+}

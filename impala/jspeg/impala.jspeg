@@ -349,16 +349,56 @@
             paramsText = renderTypeList(actualTypes);
         }
 
-        var returnCode;
-        if (signature && signature.returns !== undefined) {
-            returnCode = signature.returns;
-        } else {
-            returnCode = callResultType;
+        var returnCode = callResultType;
+        var known = false;
+        if (signature) {
+            if (signature.returnResolved && signature.returns !== undefined) {
+                returnCode = signature.returns;
+                known = true;
+            } else if (signature.expectedReturn !== undefined && signature.expectedReturn !== '?') {
+                returnCode = signature.expectedReturn;
+            } else if (signature.returns !== undefined) {
+                returnCode = signature.returns;
+                known = signature.returnResolved && signature.returns === '?';
+            }
         }
-        var returnType = signatureReturnCategory(returnCode, !!signature);
+        var returnType = signatureReturnCategory(returnCode, known);
 
         return appendOrigin('expects ' + label + '(' + paramsText + ') -> ' + returnType,
                             sourceName, sourceCode, sourceOffset);
+    };
+
+    $$parser.updateCallExpectationComment = function (callInfo, callResultType) {
+        if (!callInfo || callInfo.commentIndex === undefined || callInfo.commentIndex < 0) {
+            return;
+        }
+        if (!$$parser.metacode || callInfo.commentIndex >= $$parser.metacode.length) {
+            return;
+        }
+
+        var args = callInfo.commentArgs;
+        if (!args) {
+            return;
+        }
+
+        var refreshed = $$parser.formatCallExpectationComment(
+            args.name,
+            args.signature,
+            args.actualTypes,
+            callResultType,
+            args.sourceName,
+            args.sourceCode,
+            args.sourceOffset
+        );
+
+        if (!refreshed) {
+            return;
+        }
+
+        var entry = $$parser.metacode[callInfo.commentIndex];
+        if (entry && entry.operator === ';') {
+            entry.operands[0] = refreshed;
+        }
     };
 
     $$parser.expectFunctionReturnType = function (name, expectedType, sourceCode, sourceOffset) {
@@ -1031,6 +1071,7 @@
         if (leftx.type !== '?' && rightx.type === '?' && rightx.callInfo && rightx.callInfo.name) {
             $$parser.expectFunctionReturnType(rightx.callInfo.name, leftx.type, sourceCode, sourceOffset);
             rightx.type = leftx.type;
+            $$parser.updateCallExpectationComment(rightx.callInfo, leftx.type);
         }
 
         if (leftx.type !== '?' && rightx.type !== '?' && leftx.type !== rightx.type) {
@@ -2311,8 +2352,11 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            $$s,
                                                            $$i
                                                        );
+                                                       var commentIndex = -1;
                                                        if (callComment) {
+                                                           commentIndex = $$parser.metacode.length;
                                                            $$parser.emit(';', undefined, callComment, undefined, undefined);
+                                                           commentIndex = $$parser.metacode.length - 1;
                                                        }
 
                                                        var func = $$parser.makeRValue(callee, '&^$%');
@@ -2332,7 +2376,18 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                          undefined);
 
                                                        if (calleeName) {
-                                                           callee.callInfo = { name: calleeName };
+                                                           callee.callInfo = {
+                                                               name: calleeName,
+                                                               commentIndex: commentIndex,
+                                                               commentArgs: {
+                                                                   name: calleeName,
+                                                                   signature: signature,
+                                                                   actualTypes: ($$.types ? $$.types.slice() : undefined),
+                                                                   sourceName: $$parser.sourceName,
+                                                                   sourceCode: $$s,
+                                                                   sourceOffset: $$i
+                                                               }
+                                                           };
                                                        } else if (callee.callInfo) {
                                                            callee.callInfo = undefined;
                                                        }
