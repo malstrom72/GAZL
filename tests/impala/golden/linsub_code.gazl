@@ -31,8 +31,8 @@ updateMask:	DATi <A>	; signature readonly updateMask : int @ 92:1
 subTerm:	DATi #0	; signature global subTerm : int @ 92:19
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 116:17
+		PARA *1
 	$x:	LOCi
 	$y:	LOCi
 ;-----------------------------------------------------------------------------

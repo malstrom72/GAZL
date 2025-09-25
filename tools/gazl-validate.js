@@ -4,6 +4,8 @@
 const fs = require("fs");
 const path = require("path");
 
+const DEFAULT_NATIVE_MANIFEST = path.resolve(__dirname, "../docs/nativeCallbackSignatures.gazl");
+
 function printUsage() {
 	const script = path.basename(process.argv[1] || "gazl-validate.js");
 	console.error(`Usage: ${script} [--warn-only] [--force] <file ...>`);
@@ -302,6 +304,46 @@ function detectCallInfo(line, commentIndex) {
 
 function location(file, line, originText) {
 	return { file, line, origin: parseOriginMarker(originText) };
+}
+
+function loadNativeManifest(ctx, manifestPath) {
+	if (!manifestPath) {
+		return;
+	}
+
+	let data;
+	try {
+		data = fs.readFileSync(manifestPath, "utf8");
+	} catch (err) {
+		if (err && err.code === "ENOENT") {
+			return;
+		}
+		console.error(`Failed to read native manifest ${manifestPath}: ${err.message || err}`);
+		ctx.hadReadError = true;
+		return;
+	}
+
+	const lines = data.split(/\r?\n/);
+	lines.forEach((line, index) => {
+		const trimmed = line.trim();
+		if (!trimmed.startsWith(";")) {
+			return;
+		}
+
+		const comment = trimmed.slice(1).trim();
+		if (!comment.toLowerCase().startsWith("signature ")) {
+			return;
+		}
+
+		const parsed = parseSignatureComment(comment);
+		if (!parsed || parsed.kind !== "function") {
+			return;
+		}
+
+		parsed.native = true;
+		const loc = location(manifestPath, index + 1, parsed.origin);
+		addDefinitionRecord(ctx, parsed, loc, "native manifest", true);
+	});
 }
 
 function addDefinitionRecord(ctx, parsed, loc, kind, nativeOverride) {
@@ -1107,6 +1149,7 @@ function reportDiagnostics(ctx) {
 (function main() {
 	const { options, files } = parseArgs(process.argv.slice(2));
 	const ctx = createContext(options);
+	loadNativeManifest(ctx, DEFAULT_NATIVE_MANIFEST);
 	files.forEach((file) => {
 		processFile(file, ctx);
 	});

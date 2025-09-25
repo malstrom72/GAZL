@@ -51,8 +51,8 @@ DRUM_PARAMS:	CNST *<A>	; signature array DRUM_PARAMS[<A>] : unknown @ 128:74
 stepSounds:	GLOB *16	; signature array stepSounds[16] : unknown @ 153:28
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 170:17
+		PARA *1
 	$operand1Bits:	LOCi
 	$operand2Bits:	LOCi
 	$drumSounds:	LOCA *DRUM_COUNT
@@ -96,8 +96,8 @@ update:	FUNC	; signature func update() -> void @ 170:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 201:18
+		PARA *1
 	$rnd:	LOCi
 	$rndXor:	LOCi
 	$rndAdd:	LOCi

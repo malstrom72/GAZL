@@ -79,8 +79,8 @@ TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 86:1
 COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 88:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 88:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -219,8 +219,8 @@ lastOp2:	DATi #-1	; signature global lastOp2 : int @ 180:1
 lastShaperBits:	DATi #-1	; signature global lastShaperBits : int @ 187:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 187:15
+		PARA *1
 	$i:	LOCi
 	$s:	LOCi
 ;-----------------------------------------------------------------------------
@@ -248,8 +248,8 @@ init:	FUNC	; signature func init() -> void @ 187:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 202:17
+		PARA *1
 	! ADDi <A> #CURVE_SIZE_PLUS_1 #3
 	$params:	LOCA *PARAM_COUNT
 	$quadPoints:	LOCA *<A>
@@ -418,8 +418,8 @@ update:	FUNC	; signature func update() -> void @ 202:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 296:18
+		PARA *1
 	$localSignal:	LOCA *2
 	$left:	LOCi
 	$right:	LOCi

@@ -53,14 +53,14 @@ Compiling callers and callees in different units allows mismatched return types 
   - [x] Add a reconciliation pass that compares each expected category with every discovered definition, reusing `typesCompatible` for the comparisons and issuing structured diagnostics on conflicts, missing definitions, or native/non-native mismatches.
 - [x] Expand the regression suite:
   - [x] Author the three `.impala` samples (agreement, mismatch, unknown) and regenerate their `.gazl` outputs under both `tests/impala/golden/` and `impala/jspeg/testdata/`.
-  - [ ] Wire `tools/regen-jspeg-fixtures.{sh,cmd}` to invoke `node tools/gazl-validate.js` on the freshly generated fixtures so signature mismatches fail regeneration.
-- [ ] Validate the dummy return-slot work:
-  - [ ] Adjust the implicit-return branch in `FuncDecl` so the `PARA *1` emission follows the `FUNC` declaration while keeping legacy semantics.
+- [x] Wire `tools/regen-jspeg-fixtures.{sh,cmd}` to invoke `node tools/gazl-validate.js` on the freshly generated fixtures so signature mismatches fail regeneration. (Both scripts now collect the regenerated `.expected.gazl` files and run the validator as a final gate.)
+- [x] Validate the dummy return-slot work:
+  - [x] Adjust the implicit-return branch in `FuncDecl` so the `PARA *1` emission follows the `FUNC` declaration while keeping legacy semantics.
   - [x] Document the rationale for the placeholder within `impala.jspeg` (and refresh `impalaCompiler.js`) to keep future contributors aligned.
-- [ ] Verify native callback coverage:
-  - [ ] Define a checked-in manifest file (e.g., `docs/nativeCallbackSignatures.gazl`) that lists each native callback as comment rows using the same syntax the compiler emits (`; signature extern native printInt(int value) -> void`). Provide header comments explaining the ordering and any optional metadata fields so contributors know how to extend the file.
-  - [ ] Document how maintainers populate or update the manifest (for example, noting that each entry should mirror the signature comments inside `src/GAZL.cpp`/`tools/GAZLCmd.cpp` and keep the manual list in sync when adding new natives).
-  - [ ] Extend `tools/gazl-validate.js` to load this manifest at startup (with graceful fallback when the file is missing) and to treat every manifest entry as a native definition when reconciling `extern native` call expectations, enforcing that the `native` bit matches between callers and implementors.
+- [x] Verify native callback coverage:
+  - [x] Define a checked-in manifest file (e.g., `docs/nativeCallbackSignatures.gazl`) that lists each native callback as comment rows using the same syntax the compiler emits (`; signature extern native printInt(int value) -> void`). Provide header comments explaining the ordering and any optional metadata fields so contributors know how to extend the file.
+  - [x] Document how maintainers populate or update the manifest (for example, noting that each entry should mirror the signature comments inside `src/GAZL.cpp`/`tools/GAZLCmd.cpp` and keep the manual list in sync when adding new natives). Documented directly in `docs/nativeCallbackSignatures.gazl` so contributors see the guidance alongside the entries.
+  - [x] Extend `tools/gazl-validate.js` to load this manifest at startup (with graceful fallback when the file is missing) and to treat every manifest entry as a native definition when reconciling `extern native` call expectations, enforcing that the `native` bit matches between callers and implementors.
 
 ### Native callback manifest sketch
 
@@ -97,5 +97,5 @@ Each row uses the same `; signature extern native …` grammar the compiler alre
   ```
 
 ## Additional Action Items
-- [ ] Rework the implicit-return path so the dummy `PARA *1` is declared after the `FUNC` line (or otherwise ensure assemblers see the `FUNC` declaration first) while preserving return-type inference bookkeeping.
+- [x] Rework the implicit-return path so the dummy `PARA *1` is declared after the `FUNC` line (or otherwise ensure assemblers see the `FUNC` declaration first) while preserving return-type inference bookkeeping.
 - [x] Add an explanatory comment in `impala/jspeg/impala.jspeg` (and regenerate the compiler) that spells out why void functions emit a placeholder `PARA *1`—namely, to give call sites a predictable one-word return area and to keep legacy PPEG output identical.

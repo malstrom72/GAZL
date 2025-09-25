@@ -23,8 +23,8 @@ PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 18:1
 ; signature extern native sqrt() -> unknown @ 23:19
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 25:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; printLF(s)
@@ -87,8 +87,8 @@ params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 58:1
 balls:	GLOB *<A>	; signature array balls[<A>] : unknown @ 60:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 60:15
+		PARA *1
 	$sampleFrames:	INPi
 	$sampleRate:	INPf
 	$rsr16:	LOCf
@@ -220,8 +220,8 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 136:15
+		PARA *1
 	$i:	LOCi
 	$o:	LOCi
 ;-----------------------------------------------------------------------------
@@ -248,8 +248,8 @@ init:	FUNC	; signature func init() -> void @ 136:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 151:15
+		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		CALL &init %0 *1	; expects init() -> void @ 154:8

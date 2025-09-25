@@ -51,8 +51,8 @@ eatWhite:	FUNC	; signature func eatWhite(ptr p) -> ptr @ 38:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 45:21
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; output(s)
@@ -162,8 +162,8 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 outputInt:	FUNC	; signature func outputInt(int i) -> void @ 108:20
+		PARA *1
 	$i:	INPi
 	! ADDi <A> #GAZL_WORD_SIZE #2
 	$buffer:	LOCA *<A>
@@ -220,8 +220,8 @@ parseInt:	FUNC	; signature func parseInt(ptr s, int defaultValue) -> int @ 114:1
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 parseXY:	FUNC	; signature func parseXY(ptr s, ptr x, ptr y) -> void @ 141:18
+		PARA *1
 	$s:	INPp
 	$x:	INPp
 	$y:	INPp
@@ -253,8 +253,8 @@ parseXY:	FUNC	; signature func parseXY(ptr s, ptr x, ptr y) -> void @ 141:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 help:	FUNC	; signature func help() -> void @ 158:15
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_fedcba4d3:31 	; outputLine("")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 160:16
@@ -278,8 +278,8 @@ help:	FUNC	; signature func help() -> void @ 158:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 run:	FUNC	; signature func run(int dimX, int dimY, ptr cells, int generations) -> void @ 171:14
+		PARA *1
 	$dimX:	INPi
 	$dimY:	INPi
 	$cells:	INPp
@@ -394,8 +394,8 @@ outputCellsAlive:	FUNC	; signature func outputCellsAlive(int dimX, int dimY, ptr
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 randomize:	FUNC	; signature func randomize(int dimX, int dimY, ptr cells, int percentage) -> void @ 231:20
+		PARA *1
 	$dimX:	INPi
 	$dimY:	INPi
 	$cells:	INPp
@@ -415,8 +415,8 @@ randomize:	FUNC	; signature func randomize(int dimX, int dimY, ptr cells, int pe
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 239:15
+		PARA *1
 	! MULi <A> #MAX_DIM_X #MAX_DIM_Y
 	$dimX:	LOCi
 	$dimY:	LOCi

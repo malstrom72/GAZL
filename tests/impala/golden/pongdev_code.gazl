@@ -271,8 +271,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 284:20
+		PARA *1
 	$text:	INPp
 	$n:	INPi
 	$ints:	INPp
@@ -309,8 +309,8 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats, int precision) -> void @ 300:22
+		PARA *1
 	$text:	INPp
 	$n:	INPi
 	$floats:	INPp
@@ -347,8 +347,8 @@ traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats, int 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 316:19
+		PARA *1
 	$text:	INPp
 	$i:	INPi
 	$ints:	LOCA *1
@@ -362,8 +362,8 @@ traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 316:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceFloat:	FUNC	; signature func traceFloat(ptr text, float f, int precision) -> void @ 323:21
+		PARA *1
 	$text:	INPp
 	$f:	INPf
 	$precision:	INPi
@@ -379,8 +379,8 @@ traceFloat:	FUNC	; signature func traceFloat(ptr text, float f, int precision) -
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 330:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -473,8 +473,8 @@ square:	FUNC	; signature func square(float x) -> float @ 383:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 complexFFT:	FUNC	; signature func complexFFT(int n, ptr data) -> void @ 389:21
+		PARA *1
 	$n:	INPi
 	$data:	INPp
 	$i:	LOCi
@@ -598,8 +598,8 @@ complexFFT:	FUNC	; signature func complexFFT(int n, ptr data) -> void @ 389:21
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 realFFT:	FUNC	; signature func realFFT(int n, ptr input, ptr output) -> void @ 450:18
+		PARA *1
 	$n:	INPi
 	$input:	INPp
 	$output:	INPp
@@ -867,8 +867,8 @@ tapCount:	DATi #0	; signature global tapCount : int @ 647:1
 tapData:	GLOB *<A>	; signature array tapData[<A>] : unknown @ 654:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 654:15
+		PARA *1
 	$i:	LOCi
 	$buf:	LOCA *256
 ;-----------------------------------------------------------------------------
@@ -884,8 +884,8 @@ init:	FUNC	; signature func init() -> void @ 654:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 665:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4e0 	; trace("reset")
 		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 667:16
@@ -909,8 +909,8 @@ maxi:	FUNC	; signature func maxi(int a, int b) -> int @ 672:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 calcGainsAndDelays:	FUNC	; signature func calcGainsAndDelays(int highBits, int lowBits, float initGain, float initDelay, ptr gains, ptr delays, ptr maxGain, ptr maxDelay, ptr endGain, ptr endDelay) -> void @ 679:29
+		PARA *1
 	$highBits:	INPi
 	$lowBits:	INPi
 	$initGain:	INPf
@@ -1067,8 +1067,8 @@ CHECK_PARAMS:	CNST *CHECK_PARAMS_COUNT	; signature array CHECK_PARAMS[CHECK_PARA
 	DATA #OPERAND_2_LOW_PARAM_INDEX
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 745:17
+		PARA *1
 	$localParams:	LOCA *PARAM_COUNT
 	$i:	LOCi
 	$v:	LOCi
@@ -1206,8 +1206,8 @@ temp:	GLOB *2	; signature array temp[2] : unknown @ 910:21
 buffer:	GLOB *<A>	; signature array buffer[<A>] : unknown @ 911:36
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 928:18
+		PARA *1
 	! MULi <A> #BATCH_SIZE #2
 	$tapData:	LOCA *TAP_STRUCT_SIZE
 	$tapped:	LOCA *2

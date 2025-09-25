@@ -24,8 +24,8 @@ myrand:	FUNC	; signature func myrand() -> int @ 7:17
 a:	GLOB *20000	; signature array a[20000] : unknown @ 17:22
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 19:15
+		PARA *1
 	$i:	LOCi
 	$j:	LOCi
 	$minj:	LOCi

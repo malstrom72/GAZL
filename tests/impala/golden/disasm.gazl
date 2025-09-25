@@ -61,8 +61,8 @@ strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr @ 58:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 71:21
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; output(s)
@@ -75,8 +75,8 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 71:21
 fileBuffer:	GLOB *<A>	; signature array fileBuffer[<A>] : unknown @ 79:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 79:15
+		PARA *1
 	$s:	LOCA *256
 	$type:	LOCi
 	$offset:	LOCi

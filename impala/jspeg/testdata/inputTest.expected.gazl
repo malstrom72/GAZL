@@ -7,8 +7,8 @@
  ; signature extern native printInt() -> unknown @ 4:23
 
  ;-----------------------------------------------------------------------------
- 								PARA *1
  main:				FUNC		; signature func main() -> void @ 6:15
+ 								PARA *1
  					$buffer:	LOCA *1024
  ;-----------------------------------------------------------------------------
  								MOVp %1 &.s_HEJ2a 				; print("HEJ")

@@ -66,8 +66,8 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 50:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 sortFiles:	FUNC	; signature func sortFiles() -> void @ 62:20
+		PARA *1
 	$i:	LOCi
 	$j:	LOCi
 	$minJ:	LOCi
@@ -111,8 +111,8 @@ sortFiles:	FUNC	; signature func sortFiles() -> void @ 62:20
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ 80:31
+		PARA *1
 	$index:	LOCi
 	$size:	LOCi
 	$filePointer:	LOCp
@@ -198,8 +198,8 @@ findFile:	FUNC	; signature func findFile(ptr s0) -> int @ 112:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 lower:	FUNC	; signature func lower(ptr s) -> void @ 122:16
+		PARA *1
 	$s:	INPp
 	$p:	LOCp
 	$c:	LOCi

@@ -5,8 +5,8 @@
  ; signature extern native printFloat() -> unknown @ 2:25
 
  ;-----------------------------------------------------------------------------
- 								PARA *1
  main:				FUNC		; signature func main() -> void @ 4:15
+ 								PARA *1
  					$value:		LOCf
  ;-----------------------------------------------------------------------------
  								CALL &returnsNumber %0 *1		; expects returnsNumber() -> float @ 7:25
