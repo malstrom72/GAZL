@@ -79,12 +79,13 @@ function compileCommand(args) {
 	}
 
 	let output;
-	try {
-		output = compileWithJsImpala(source, {
-			randomId,
-			retabulate: true,
-			trailingNewline: true
-		});
+        try {
+                output = compileWithJsImpala(source, {
+                        randomId,
+                        retabulate: true,
+                        trailingNewline: true,
+                        sourceName: inputPath || '<stdin>'
+                });
 	} catch (err) {
 		const message = (err && err.message) ? err.message : String(err);
 		if (inputPath) console.error(`Error compiling ${inputPath}: ${message}`);
@@ -130,8 +131,12 @@ function runCommand(args) {
 	}
 
 	let gazl;
-	try {
-		gazl = compileWithJsImpala(source, { retabulate: true, trailingNewline: true });
+        try {
+                gazl = compileWithJsImpala(source, {
+                        retabulate: true,
+                        trailingNewline: true,
+                        sourceName: inputPath || '<stdin>'
+                });
 	} catch (err) {
 		console.error((err && err.message) ? err.message : String(err));
 		process.exit(1);

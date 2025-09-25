@@ -1,47 +1,51 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1
-PANEL_TEXT_ROWS:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 8:1
+PANEL_TEXT_ROWS:	CNST *8	; signature array PANEL_TEXT_ROWS[8] : unknown @ 16:35
 	DATA &.s_ABC8884d2 &.s_ABC8884d2 &.s_RM4d3 &.s_AMRATE4d4
 	DATA &.s_notuse4d5 &.s_toollo4d6 &.s_74d7 &.s_ILOVEP4d8
+; signature extern native abort() -> unknown @ 28:1
+; signature extern native trace() -> unknown @ 29:1
+; signature extern native yield() -> unknown @ 31:1
 	GLOB *1
-left:	DATi #0
+left:	DATi #0	; signature global left : int @ 51:1
 	GLOB *1
-right:	DATi #0
+right:	DATi #0	; signature global right : int @ 52:1
 	GLOB *1
-clock:	DATi #0
-params:	GLOB *PARAM_COUNT
+clock:	DATi #0	; signature global clock : int @ 53:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 54:1
 	GLOB *1
-instance:	DATi #0
-LOG2:	! DEFf #0.69314718055994530942
-LOG2R:	! DEFf #1.44269504088896340736
-LOG10R:	! DEFf #0.43429448190325182765
-E:	! DEFf #2.71828182845904523536
-HALF_PI:	! DEFf #1.57079632679489661923
-PI:	! DEFf #3.14159265358979323846
+instance:	DATi #0	; signature global instance : int @ 58:1
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 59:1
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 60:1
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 61:1
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ 62:1
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 63:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 64:1
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>
-COS_EPSILON:	! DEFf #1.0e-6
-SQRT_2:	! DEFf #1.41421356237309504880
-EPSILON_FLOAT:	! DEFf #1.0e-45
-SMALL_FLOAT:	! DEFf #1.0e-5
-LARGE_FLOAT:	! DEFf #1.0e+10
-HUGE_FLOAT:	! DEFf #1.0e+38
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 65:1
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 66:1
+SQRT_2:	! DEFf #1.41421356237309504880	; signature const SQRT_2 : float @ 68:1
+EPSILON_FLOAT:	! DEFf #1.0e-45	; signature const EPSILON_FLOAT : float @ 69:1
+SMALL_FLOAT:	! DEFf #1.0e-5	; signature const SMALL_FLOAT : float @ 70:1
+LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ 71:1
+HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ 73:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC
+error:	FUNC	; signature func error(ptr s) -> void @ 73:16
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2
-		CALL ^abort %0 *1	; abort()
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 75:10
+		CALL ^abort %0 *1	; expects function() -> unknown @ 76:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC
 	$y:	OUTf
+trunc:	FUNC	; signature func trunc(float x) -> float @ 79:16
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -54,25 +58,25 @@ trunc:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC
 	$z:	OUTf
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 86:15
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi4d9 	; error("Division by zero")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 89:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
-		CALL &trunc %0 *2
+		CALL &trunc %0 *2	; expects trunc(float) -> float @ 90:36
 		MULf %0 %0 $y
 		SUBf $z $x %0
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC
 	$y:	OUTf
+cos:	FUNC	; signature func cos(float x) -> float @ 104:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -81,7 +85,7 @@ cos:	FUNC
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
 		MOVf %2 #TWICE_PI 
-		CALL &fmod %0 *3
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 108:31
 		MOVf $m %0 
 		SUBf %0 #0.0 $m	; m = -m * m
 		MULf $m %0 $m
@@ -103,19 +107,19 @@ cos:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-sin:	FUNC
 	$y:	OUTf
+sin:	FUNC	; signature func sin(float x) -> float @ 121:14
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 124:30
 		MOVf $y %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-intToString:	FUNC
 	$p:	OUTp
+intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 132:22
 	$i:	INPi
 	$radix:	INPi
 	$minLength:	INPi
@@ -161,8 +165,8 @@ intToString:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-floatToString:	FUNC
 	$p:	OUTp
+floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ 151:24
 	$f:	INPf
 	$precision:	INPi
 	$buffer:	INPp
@@ -298,7 +302,7 @@ floatToString:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-traceInt:	FUNC
+traceInt:	FUNC	; signature func traceInt(int i) -> void @ 260:19
 		PARA *1
 	$i:	INPi
 	! ADDi <A> #GAZL_WORD_SIZE #2
@@ -308,13 +312,13 @@ traceInt:	FUNC
 		MOVi %3 #10 
 		MOVi %4 #1 
 		ADRL %5 $buffer *0
-		CALL &intToString %1 *5
-		CALL ^trace %0 *2
+		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 263:37
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 263:38
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-traceFloat:	FUNC
+traceFloat:	FUNC	; signature func traceFloat(float f) -> void @ 266:21
 		PARA *1
 	$f:	INPf
 	$buffer:	LOCA *32
@@ -322,43 +326,43 @@ traceFloat:	FUNC
 		MOVf %2 $f 	; trace(floatToString(f, 6, buffer))
 		MOVi %3 #6 
 		ADRL %4 $buffer *0
-		CALL &floatToString %1 *4
-		CALL ^trace %0 *2
+		CALL &floatToString %1 *4	; expects floatToString(float, int, ptr) -> ptr @ 269:35
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 269:36
 		RETU   	; }
 
-BUFFER_SIZE:	! DEFi #256
+BUFFER_SIZE:	! DEFi #256	; signature const BUFFER_SIZE : int @ 275:1
 	GLOB *1
-lpx:	DATf #0.0
+lpx:	DATf #0.0	; signature global lpx : float @ 276:1
 	GLOB *1
-lpy:	DATf #0.0
+lpy:	DATf #0.0	; signature global lpy : float @ 277:1
 	GLOB *1
-rpx:	DATf #0.0
+rpx:	DATf #0.0	; signature global rpx : float @ 278:1
 	GLOB *1
-rpy:	DATf #0.0
+rpy:	DATf #0.0	; signature global rpy : float @ 279:1
 	GLOB *1
-lrx:	DATf #0.0
+lrx:	DATf #0.0	; signature global lrx : float @ 280:1
 	GLOB *1
-lry:	DATf #0.0
+lry:	DATf #0.0	; signature global lry : float @ 281:1
 	GLOB *1
-rrx:	DATf #0.0
+rrx:	DATf #0.0	; signature global rrx : float @ 282:1
 	GLOB *1
-rry:	DATf #0.0
+rry:	DATf #0.0	; signature global rry : float @ 283:1
 	GLOB *1
-bufferIndex:	DATi #BUFFER_SIZE
-lbuffer:	GLOB *4096
-rbuffer:	GLOB *4096
+bufferIndex:	DATi #BUFFER_SIZE	; signature global bufferIndex : int @ 284:1
+lbuffer:	GLOB *4096	; signature array lbuffer[4096] : unknown @ 285:1
+rbuffer:	GLOB *4096	; signature array rbuffer[4096] : unknown @ 292:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC
+init:	FUNC	; signature func init() -> void @ 292:15
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4dd 	; trace("init")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 294:15
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC
+reset:	FUNC	; signature func reset() -> void @ 301:16
 		PARA *1
 	$a:	LOCf
 	$lr:	LOCf
@@ -368,7 +372,7 @@ reset:	FUNC
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4de 	; trace("reset")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 304:16
 		MOVf $a #1024.0 	; a = 1024.0
 		! MULf <A> #TWICE_PI #440.0	; lr = TWICE_PI * 440.0 / 44100.0
 		! DIVf <A> <A> #44100.0
@@ -378,59 +382,59 @@ reset:	FUNC
 		MOVf $rr <A> 
 		MOVf $p0 #0.0 	; p0 = 0.0
 		MOVf %1 $p0 	; global lpx = (float) cos(p0) * a
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 309:31
 		MULf %0 %0 $a
 		POKE &lpx %0 
 		MOVf %1 $p0 	; global lpy = (float) sin(p0) * a
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 310:31
 		MULf %0 %0 $a
 		POKE &lpy %0 
 		MULf %1 $lr #0.5	; t = SQRT_2 * (float) sin(lr * 0.5)
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 311:36
 		MULf $t #SQRT_2 %0
 		MULf %0 $t $t	; global lrx = t * t
 		POKE &lrx %0 
 		MOVf %1 $lr 	; global lry = (float) sin(lr)
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 313:30
 		POKE &lry %0 
 		MOVf %1 $p0 	; global rpx = (float) cos(p0) * a
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 314:31
 		MULf %0 %0 $a
 		POKE &rpx %0 
 		MOVf %1 $p0 	; global rpy = (float) sin(p0) * a
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 315:31
 		MULf %0 %0 $a
 		POKE &rpy %0 
 		MULf %1 $rr #0.5	; t = SQRT_2 * (float) sin(rr * 0.5)
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 316:36
 		MULf $t #SQRT_2 %0
 		MULf %0 $t $t	; global rrx = t * t
 		POKE &rrx %0 
 		MOVf %1 $rr 	; global rry = (float) sin(rr)
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 318:30
 		POKE &rry %0 
 		POKE &bufferIndex #BUFFER_SIZE 	; global bufferIndex = BUFFER_SIZE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
+update:	FUNC	; signature func update() -> void @ 326:17
 		PARA *1
 	$buf:	LOCA *34
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4df 	; trace("update")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 329:17
 		PEEK %2 &params:OPERAND_2_PARAM_INDEX 	; trace(intToString(global params[OPERAND_2_PARAM_INDEX], 16, 1, buf))
 		MOVi %3 #16 
 		MOVi %4 #1 
 		ADRL %5 $buf *0
-		CALL &intToString %1 *5
-		CALL ^trace %0 *2
+		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 330:69
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 330:70
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC
+process:	FUNC	; signature func process() -> void @ 341:18
 		PARA *1
 	$nx:	LOCf
 	$lpx:	LOCf

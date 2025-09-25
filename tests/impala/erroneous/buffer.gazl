@@ -1,0 +1,544 @@
+; Compiled with Impala version 1.0
+
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1
+PANEL_TEXT_ROWS:	CNST *8
+	DATA &.s_ABC8884d2 &.s_ABC8884d2 &.s_RM4d3 &.s_AMRATE4d4
+	DATA &.s_notuse4d5 &.s_toollo4d6 &.s_74d7 &.s_ILOVEP4d8
+	GLOB *1
+left:	DATf #0.0
+	GLOB *1
+right:	DATf #0.0
+	GLOB *1
+clock:	DATi #0
+params:	GLOB *PARAM_COUNT
+	GLOB *1
+instance:	DATi #0
+LOG2:	! DEFf #0.69314718055994530942
+LOG2R:	! DEFf #1.44269504088896340736
+LOG10R:	! DEFf #0.43429448190325182765
+E:	! DEFf #2.71828182845904523536
+HALF_PI:	! DEFf #1.57079632679489661923
+PI:	! DEFf #3.14159265358979323846
+	! MULf <A> #PI #2.0
+TWICE_PI:	! DEFf <A>
+COS_EPSILON:	! DEFf #1.0e-6
+SQRT_2:	! DEFf #1.41421356237309504880
+EPSILON_FLOAT:	! DEFf #1.0e-45
+SMALL_FLOAT:	! DEFf #1.0e-5
+LARGE_FLOAT:	! DEFf #1.0e+10
+HUGE_FLOAT:	! DEFf #1.0e+38
+
+;-----------------------------------------------------------------------------
+error:	FUNC
+		PARA *1
+	$s:	INPp
+;-----------------------------------------------------------------------------
+		MOVp %1 $s 	; trace(s)
+		CALL ^trace %0 *2
+		CALL ^abort %0 *1	; abort()
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+trunc:	FUNC
+	$y:	OUTf
+	$x:	INPf
+;-----------------------------------------------------------------------------
+		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
+		SUBf %0 #0.0 $x	; y = -floor(-x)
+		FLOf %0 %0 
+		SUBf $y #0.0 %0
+		GOTO @.e1  
+	.f0:	FLOf $y $x 	; y = floor(x)
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fmod:	FUNC
+	$z:	OUTf
+	$x:	INPf
+	$y:	INPf
+;-----------------------------------------------------------------------------
+		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
+		MOVp %1 &.s_Divisi4d9 	; error("Division by zero")
+		CALL &error %0 *2
+		GOTO @.e1  
+	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
+		CALL &trunc %0 *2
+		MULf %0 %0 $y
+		SUBf $z $x %0
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+cos:	FUNC
+	$y:	OUTf
+	$x:	INPf
+	$a:	LOCf
+	$n:	LOCf
+	$m:	LOCf
+	$t:	LOCf
+;-----------------------------------------------------------------------------
+		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
+		MOVf %2 #TWICE_PI 
+		CALL &fmod %0 *3
+		MOVf $m %0 
+		SUBf %0 #0.0 $m	; m = -m * m
+		MULf $m %0 $m
+		MOVf $y #1.0 	; a = n = y = 1.0
+		MOVf $n #1.0 
+		MOVf $a #1.0 
+	.l0:	MOVf $t $y 	; t = y
+		MULf %0 $n $n	; a = a * m / (n * n + n)
+		MULf %1 $a $m
+		ADDf %0 %0 $n
+		DIVf $a %1 %0
+		ADDf $y $y $a	; y = y + a
+		ADDf $n $n #2.0	; n = n + 2.0
+		NEQf $y $t @.l0	; } while (y != t)
+		ABSf %1 $y 	; if (abs(y) < COS_EPSILON) y = 0.0
+		GEQf %1 #COS_EPSILON @.f1
+		MOVf $y #0.0 	; y = 0.0
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+sin:	FUNC
+	$y:	OUTf
+	$x:	INPf
+;-----------------------------------------------------------------------------
+		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
+		CALL &cos %0 *2
+		MOVf $y %0 
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+intToString:	FUNC
+	$p:	OUTp
+	$i:	INPi
+	$radix:	INPi
+	$minLength:	INPi
+	$buffer:	INPp
+	$e:	LOCp
+	$x:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(2 <= radix && radix <= 16)
+		GRTi #2 $radix @.f1
+		LEQi $radix #16 @.a0
+	.f1:	MOVp %1 &.a_2radix4d2 
+		CALL ^assertFail %0 *1
+	.a0:	NOOP
+		! EQUi #DEBUG #0 @.a2	; assert(0 <= minLength && minLength <= 8 * GAZL_WORD_SIZE)
+		GRTi #0 $minLength @.f3
+		! MULi <A> #8 #GAZL_WORD_SIZE
+		LEQi $minLength <A> @.a2
+	.f3:	MOVp %1 &.a_0minLe4d3 
+		CALL ^assertFail %0 *1
+	.a2:	NOOP
+		! MULi <A> #8 #GAZL_WORD_SIZE	; *(p = buffer + (8 * GAZL_WORD_SIZE + 1)) = 0
+		! ADDi <A> <A> #1
+		ADDp $p $buffer <A>
+		POKE $p #0 
+		SUBp $e $p $minLength	; e = p - minLength
+		MOVi $x $i 	; x = i
+	.l4:	GRTp $p $e @.t5	; while (p > e || x != 0) 
+		EQUi $x #0 @.e6
+	.t5:	NOOP
+		! EQUi #DEBUG #0 @.a7	; assert(p >= buffer + 2)
+		ADDp %0 $buffer #2
+		GEQp $p %0 @.a7
+		MOVp %1 &.a_pbuffe4d4 
+		CALL ^assertFail %0 *1
+	.a7:	SUBp $p $p #1	; *(p = p - 1) = ("fedcba9876543210123456789abcdef")[15 + x % radix]
+		MODi %0 $x $radix
+		ADDi %0 #15 %0
+		PEEK %0 &.s_fedcba4da %0
+		POKE $p %0 
+		DIVi $x $x $radix	; x = x / radix
+		GOTO @.l4  	; }
+	.e6:	GEQi $i #0 @.f8	; if (i < 0) *(p = p - 1) = '-'
+		SUBp $p $p #1	; *(p = p - 1) = '-'
+		POKE $p #'-' 
+	.f8:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+floatToString:	FUNC
+	$p:	OUTp
+	$f:	INPf
+	$precision:	INPi
+	$buffer:	INPp
+	$x:	LOCf
+	$y:	LOCf
+	$e:	LOCi
+	$g:	LOCf
+	$dp:	LOCp
+	$pp:	LOCp
+	$ep:	LOCp
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(1 <= precision && precision <= 24)
+		GRTi #1 $precision @.f1
+		LEQi $precision #24 @.a0
+	.f1:	MOVp %1 &.a_1preci4d5 
+		CALL ^assertFail %0 *1
+	.a0:	ABSf $y $f 	; y = abs(f)
+		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
+		MOVp $p &.s_04db 	; p = "0"
+		GOTO @.e3  
+	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
+		MOVp $p &.s_HUGE4dc 	; p = "HUGE"
+		GOTO @.e5  
+	.f4:	MOVi $e #0 	; e = 0
+		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
+		ADDp $ep %0 $precision
+	.l6:	ADDp $pp $buffer #3	; pp = buffer + 3
+		MOVf $x $y 	; x = y
+	.l7:	LSSf $x #10.0 @.e9	; while (x >= 10.0 && pp < ep) 
+		GEQp $pp $ep @.e9
+		ADDp $pp $pp #1	; pp = pp + 1
+		MULf $x $x #0.1	; x = x * 0.1
+		GOTO @.l7  	; }
+	.e9:	GEQp $pp $ep @.f11	; if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break
+		LEQf $y #SMALL_FLOAT @.f11
+		GEQf $y #LARGE_FLOAT @.f11
+		GOTO @break  	; goto break
+	.f11:	MOVf $g $y 	; g = y
+	.l12:	GEQf $y #1.0 @.e13	; while (y < 1.0) 
+		SUBi $e $e #1	; e = e - 1
+		MULf $y $y #10.0	; y = y * 10.0
+		GOTO @.l12  	; }
+	.e13:	NOOP
+	.l14:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
+		ADDi $e $e #1	; e = e + 1
+		MULf $y $y #0.1	; y = y * 0.1
+		GOTO @.l14  	; }
+		GOTO @.l6  	; }
+	break:	ADDp $dp $buffer #2	; break:
+	.l16:	GEQf $x #1.0 @.e18	; while (x < 1.0 && dp < buffer + 32) 
+		ADDp %0 $buffer #32
+		GEQp $dp %0 @.e18
+		POKE $dp #'0' 	; *dp = '0'
+		ADDp $dp $dp #1	; dp = dp + 1
+		NEQp $dp $pp @.f19	; if (dp == pp) 
+		POKE $dp #'9' 	; *dp = '9'
+		ADDp $dp $dp #1	; dp = dp + 1
+	.f19:	ADDp $ep $ep #1	; ep = ep + 1
+		MULf $x $x #10.0	; x = x * 10.0
+		GOTO @.l16  	; }
+	.e18:	NOOP
+	.l20:	GEQp $dp $ep @.e21	; while (dp < ep) 
+		fTOi $i $x #1.0	; i = ftoi(x)
+		ADDi %0 $i #'0'	; *dp = i + '0'
+		POKE $dp %0 
+		ADDp $dp $dp #1	; dp = dp + 1
+		NEQp $dp $pp @.f22	; if (dp == pp) 
+		POKE $dp #'9' 	; *dp = '9'
+		ADDp $dp $dp #1	; dp = dp + 1
+	.f22:	iTOf %0 $i #1.0	; x = (x - itof(i)) * 10.0
+		SUBf %0 $x %0
+		MULf $x %0 #10.0
+		GOTO @.l20  	; }
+	.e21:	ADDp $p $buffer #2	; p = buffer + 2
+		LSSf $x #5.0 @.f23	; if (x >= 5.0) 
+	.l24:	PEEK %0 $dp #-1	; while ((int)dp[-1] == '9') *(dp = dp - 1) = '0'
+		NEQi %0 #'9' @.e25
+		SUBp $dp $dp #1	; *(dp = dp - 1) = '0'
+		POKE $dp #'0' 
+		GOTO @.l24  
+	.e25:	NEQp $dp $p @.f26	; if (dp == p) *(p = p - 1) = '1'
+		SUBp $p $p #1	; *(p = p - 1) = '1'
+		POKE $p #'1' 
+		GOTO @.e27  
+	.f26:	PEEK %0 $dp #-1	; dp[-1] = (int)dp[-1] + 1
+		ADDi %0 %0 #1
+		POKE $dp #-1 %0
+	.e27:	PEEK %0 $dp #-1	; if ((int)dp[-1] == '1') ep = ep - 1
+		NEQi %0 #'1' @.f23
+		SUBp $ep $ep #1	; ep = ep - 1
+	.f23:	POKE $pp #'.' 	; *pp = '.'
+		LEQp $ep $pp @.f29	; if (ep > pp) while ((int)ep[-1] == '0') ep = ep - 1
+	.l30:	PEEK %0 $ep #-1	; while ((int)ep[-1] == '0') ep = ep - 1
+		NEQi %0 #'0' @.f29
+		SUBp $ep $ep #1	; ep = ep - 1
+		GOTO @.l30  
+	.f29:	SUBp %0 $ep #1	; if (ep - 1 == pp) ep = ep - 1
+		NEQp %0 $pp @.f32
+		SUBp $ep $ep #1	; ep = ep - 1
+	.f32:	EQUi $e #0 @.f33	; if (e != 0) 
+		POKE $ep #'e' 	; *ep = 'e'
+		MOVi $i #'+' 	; i = '+'
+		GEQi $e #0 @.f34	; if (e < 0) i = '-'
+		MOVi $i #'-' 	; i = '-'
+	.f34:	ADDp $ep $ep #1	; *(ep = ep + 1) = i
+		POKE $ep $i 
+		ABSi $i $e 	; i = abs(e)
+		LSSi $i #100 @.f35	; if (i >= 100) *(ep = ep + 1) = '0' + ((i / 100) % 10)
+		ADDp $ep $ep #1	; *(ep = ep + 1) = '0' + ((i / 100) % 10)
+		DIVi %0 $i #100
+		MODi %0 %0 #10
+		ADDi %0 #'0' %0
+		POKE $ep %0 
+	.f35:	LSSi $i #10 @.f36	; if (i >= 10) *(ep = ep + 1) = '0' + ((i / 10) % 10)
+		ADDp $ep $ep #1	; *(ep = ep + 1) = '0' + ((i / 10) % 10)
+		DIVi %0 $i #10
+		MODi %0 %0 #10
+		ADDi %0 #'0' %0
+		POKE $ep %0 
+	.f36:	ADDp $ep $ep #1	; *(ep = ep + 1) = '0' + (i % 10)
+		MODi %0 $i #10
+		ADDi %0 #'0' %0
+		POKE $ep %0 
+		ADDp $ep $ep #1	; ep = ep + 1
+	.f33:	POKE $ep #0 	; *ep = 0
+		GEQf $f #0.0 @.f37	; if (f < 0.0) *(p = p - 1) = '-'
+		SUBp $p $p #1	; *(p = p - 1) = '-'
+		POKE $p #'-' 
+	.f37:	NOOP
+	.e5:	NOOP
+	.e3:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+traceInt:	FUNC
+		PARA *1
+	$i:	INPi
+	! MULi <A> #8 #GAZL_WORD_SIZE
+	! ADDi <A> <A> #2
+	$buffer:	LOCA *<A>
+;-----------------------------------------------------------------------------
+		MOVi %2 $i 	; trace(intToString(i, 10, 1, buffer))
+		MOVi %3 #10 
+		MOVi %4 #1 
+		ADRL %5 $buffer *0
+		CALL &intToString %1 *5
+		CALL ^trace %0 *2
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+traceFloat:	FUNC
+		PARA *1
+	$f:	INPf
+	$buffer:	LOCA *32
+;-----------------------------------------------------------------------------
+		MOVf %2 $f 	; trace(floatToString(f, 6, buffer))
+		MOVi %3 #6 
+		ADRL %4 $buffer *0
+		CALL &floatToString %1 *4
+		CALL ^trace %0 *2
+		RETU   	; }
+
+BUFFER_SIZE:	! DEFi #256
+	GLOB *1
+lpx:	DATf #0.0
+	GLOB *1
+lpy:	DATf #0.0
+	GLOB *1
+rpx:	DATf #0.0
+	GLOB *1
+rpy:	DATf #0.0
+	GLOB *1
+lrx:	DATf #0.0
+	GLOB *1
+lry:	DATf #0.0
+	GLOB *1
+rrx:	DATf #0.0
+	GLOB *1
+rry:	DATf #0.0
+	! MULi <A> #2 #BUFFER_SIZE
+buffer:	GLOB *<A>
+	GLOB *1
+bufferPointer:	DATp &buffer
+
+;-----------------------------------------------------------------------------
+init:	FUNC
+		PARA *1
+;-----------------------------------------------------------------------------
+		MOVp %1 &.s_init4dd 	; trace("init")
+		CALL ^trace %0 *2
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+reset:	FUNC
+		PARA *1
+	$a:	LOCf
+	$lr:	LOCf
+	$rr:	LOCf
+	$p0:	LOCf
+	$t:	LOCf
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp %1 &.s_reset4de 	; trace("reset")
+		CALL ^trace %0 *2
+		MOVf $a #0.5 	; a = 0.5
+		! MULf <A> #TWICE_PI #440.0	; lr = TWICE_PI * 440.0 / 44100.0
+		! DIVf <A> <A> #44100.0
+		MOVf $lr <A> 
+		! MULf <A> #TWICE_PI #380.0	; rr = TWICE_PI * 380.0 / 44100.0
+		! DIVf <A> <A> #44100.0
+		MOVf $rr <A> 
+		MOVf $p0 #0.0 	; p0 = 0.0
+		MOVf %1 $p0 	; global lpx = (float) cos(p0) * a
+		CALL &cos %0 *2
+		MULf %0 %0 $a
+		POKE &lpx %0 
+		MOVf %1 $p0 	; global lpy = (float) sin(p0) * a
+		CALL &sin %0 *2
+		MULf %0 %0 $a
+		POKE &lpy %0 
+		MULf %1 $lr #0.5	; t = SQRT_2 * (float) sin(lr * 0.5)
+		CALL &sin %0 *2
+		MULf $t #SQRT_2 %0
+		MULf %0 $t $t	; global lrx = t * t
+		POKE &lrx %0 
+		MOVf %1 $lr 	; global lry = (float) sin(lr)
+		CALL &sin %0 *2
+		POKE &lry %0 
+		MOVf %1 $p0 	; global rpx = (float) cos(p0) * a
+		CALL &cos %0 *2
+		MULf %0 %0 $a
+		POKE &rpx %0 
+		MOVf %1 $p0 	; global rpy = (float) sin(p0) * a
+		CALL &sin %0 *2
+		MULf %0 %0 $a
+		POKE &rpy %0 
+		MULf %1 $rr #0.5	; t = SQRT_2 * (float) sin(rr * 0.5)
+		CALL &sin %0 *2
+		MULf $t #SQRT_2 %0
+		MULf %0 $t $t	; global rrx = t * t
+		POKE &rrx %0 
+		MOVf %1 $rr 	; global rry = (float) sin(rr)
+		CALL &sin %0 *2
+		POKE &rry %0 
+		POKE &bufferPointer &buffer 	; global bufferPointer = global buffer
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+update:	FUNC
+		PARA *1
+;-----------------------------------------------------------------------------
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+process:	FUNC
+		PARA *1
+	$nx:	LOCf
+	$lpx:	LOCf
+	$lpy:	LOCf
+	$rpx:	LOCf
+	$rpy:	LOCf
+	$lrx:	LOCf
+	$lry:	LOCf
+	$rrx:	LOCf
+	$rry:	LOCf
+	$i:	LOCi
+	$idx:	LOCi
+	$bp:	LOCp
+;-----------------------------------------------------------------------------
+		PEEK $bp &bufferPointer 	; bp = global bufferPointer
+		! MULi <A> #BUFFER_SIZE #2	; if (bp >= &global buffer[BUFFER_SIZE * 2]) 
+		LSSp $bp &buffer:<A> @.f0
+		ADRL %0 $lpx *0	; copy (8 from &global lpx to &lpx)
+		COPY %0 &lpx *8
+		MOVp $bp &buffer 	; for (bp = global buffer to &global buffer[BUFFER_SIZE * 2]) 
+		! MULi <A> #BUFFER_SIZE #2
+		GEQp &buffer &buffer:<A> @.e1
+	.l2:	MULf %0 $lpx $lrx	; nx = lpx - lpx * lrx - lpy * lry
+		SUBf %0 $lpx %0
+		MULf %1 $lpy $lry
+		SUBf $nx %0 %1
+		MULf %0 $lpx $lry	; lpy = lpx * lry + lpy - lpy * lrx
+		ADDf %0 %0 $lpy
+		MULf %1 $lpy $lrx
+		SUBf $lpy %0 %1
+		MOVf $lpx $nx 	; lpx = nx
+		MULf %0 $rpx $rrx	; nx = rpx - rpx * rrx - rpy * rry
+		SUBf %0 $rpx %0
+		MULf %1 $rpy $rry
+		SUBf $nx %0 %1
+		MULf %0 $rpx $rry	; rpy = rpx * rry + rpy - rpy * rrx
+		ADDf %0 %0 $rpy
+		MULf %1 $rpy $rrx
+		SUBf $rpy %0 %1
+		MOVf $rpx $nx 	; rpx = nx
+		POKE $bp $lpx 	; *bp = lpx
+		ADDp $bp $bp #1	; bp = bp + 1
+		POKE $bp $rpx 	; *bp = rpx
+		FORp $bp &buffer:<A> @.l2	; }
+	.e1:	ADRL %0 $lpx *0	; copy (4 from &lpx to &global lpx)
+		COPY &lpx %0 *4
+		MOVp $bp &buffer 	; bp = global buffer
+	.f0:	PEEK %0 $bp 	; global left = (float) *bp
+		POKE &left %0 
+		ADDp $bp $bp #1	; bp = bp + 1
+		PEEK %0 $bp 	; global right = (float) *bp
+		POKE &right %0 
+		ADDp $bp $bp #1	; bp = bp + 1
+		POKE &bufferPointer $bp 	; global bufferPointer = bp
+		RETU   	; }
+
+.s_ABC8884d2:	CNST *54
+	DATs ABC 888777666555444333222111 888777666555444333222111
+	DATi #0
+.s_RM4d3:	CNST *54
+	DATs RM
+	DATi #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #0
+.s_AMRATE4d4:	CNST *54
+	DATs AM
+	DATi #32 #32 #208 #208 #208 #208 #208 #208 #208 #208 #208 #32
+	DATs RATE
+	DATi #32 #208 #208 #208 #208 #208 #208 #208 #208 #208 #32
+	DATs _______ NADA YET _______
+	DATi #0
+.s_notuse4d5:	CNST *10
+	DATi #32
+	DATs not used
+	DATi #0
+.s_toollo4d6:	CNST *62
+	DATi #32 #32 #32
+	DATs too lloooooooooooooooooooooooooooooooooooooooooooooooooong
+	DATi #0
+.s_74d7:	CNST *2
+	DATs 7
+	DATi #0
+.s_ILOVEP4d8:	CNST *67
+	DATi #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32
+	DATs I LOVE PRAWNS                               8
+	DATi #0
+.s_Divisi4d9:	CNST *17
+	DATs Division by zero
+	DATi #0
+.s_fedcba4da:	CNST *32
+	DATs fedcba9876543210123456789abcdef
+	DATi #0
+.s_04db:	CNST *2
+	DATs 0
+	DATi #0
+.s_HUGE4dc:	CNST *5
+	DATs HUGE
+	DATi #0
+.s_init4dd:	CNST *5
+	DATs init
+	DATi #0
+.s_reset4de:	CNST *6
+	DATs reset
+	DATi #0
+	! EQUi #DEBUG #0 @.noAssertStrings
+.a_2radix4d2:	CNST *28
+	DATs (2 <= radix && radix <= 16)
+	DATi #0
+.a_0minLe4d3:	CNST *52
+	DATs (0 <= minLength && minLength <= 8 * GAZL_WORD_SIZE)
+	DATi #0
+.a_pbuffe4d4:	CNST *18
+	DATs (p >= buffer + 2)
+	DATi #0
+.a_1preci4d5:	CNST *36
+	DATs (1 <= precision && precision <= 24)
+	DATi #0
+.noAssertStrings:	!

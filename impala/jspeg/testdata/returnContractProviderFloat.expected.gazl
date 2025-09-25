@@ -1,10 +1,11 @@
  ; Compiled with Impala version 1.0
 
+ ; signatures version=1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC
- 					$result:	OUTi
+ 					$value:		OUTf
+ returnsNumber:		FUNC		; signature func returnsNumber() -> float @ 1:24
  ;-----------------------------------------------------------------------------
- 								MOVi $result #7 				; result = 7
+ 								MOVf $value #1.5 				; value = 1.5
  								RETU   							; }
 

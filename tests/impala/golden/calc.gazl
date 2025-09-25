@@ -1,36 +1,40 @@
 ; Compiled with Impala version 1.0
 
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-PARENTHESIS_PRECEDENCE:	! DEFi #0
-BITWISE_PRECEDENCE:	! DEFi #1
-ADD_SUB_PRECEDENCE:	! DEFi #2
-MUL_DIV_PRECEDENCE:	! DEFi #3
-PREFIX_PRECEDENCE:	! DEFi #4
-POW_PRECEDENCE:	! DEFi #5
-LOG2:	! DEFf #0.69314718055994530942
-LOG2R:	! DEFf #1.44269504088896340736
-LOG10R:	! DEFf #0.43429448190325182765
-E:	! DEFf #2.71828182845904523536
-HALF_PI:	! DEFf #1.57079632679489661923
-PI:	! DEFf #3.14159265358979323846
+; signatures version=1
+; signature extern native output() -> unknown @ 9:21
+; signature extern native input() -> unknown @ 10:20
+; signature extern native abort() -> unknown @ 11:20
+FALSE:	! DEFi #0	; signature const FALSE : int @ 13:20
+TRUE:	! DEFi #1	; signature const TRUE : int @ 14:19
+PARENTHESIS_PRECEDENCE:	! DEFi #0	; signature const PARENTHESIS_PRECEDENCE : int @ 16:37
+BITWISE_PRECEDENCE:	! DEFi #1	; signature const BITWISE_PRECEDENCE : int @ 17:33
+ADD_SUB_PRECEDENCE:	! DEFi #2	; signature const ADD_SUB_PRECEDENCE : int @ 18:33
+MUL_DIV_PRECEDENCE:	! DEFi #3	; signature const MUL_DIV_PRECEDENCE : int @ 19:33
+PREFIX_PRECEDENCE:	! DEFi #4	; signature const PREFIX_PRECEDENCE : int @ 20:32
+POW_PRECEDENCE:	! DEFi #5	; signature const POW_PRECEDENCE : int @ 21:29
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 22:42
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 23:43
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 24:44
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ 25:39
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 26:45
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 27:40
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>
-COS_EPSILON:	! DEFf #1.0e-6
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 28:32
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 29:33
 	GLOB *1
-lastError:	DATp &NULL
+lastError:	DATp &NULL	; signature global lastError : ptr @ 31:25
 	! SUBi <A> #'z' #'a'
 	! ADDi <A> <A> #1
-memoryUsed:	GLOB *<A>
+memoryUsed:	GLOB *<A>	; signature array memoryUsed[<A>] : unknown @ 33:39
 	! SUBi <A> #'z' #'a'
 	! ADDi <A> <A> #1
-memory:	GLOB *<A>
+memory:	GLOB *<A>	; signature array memory[<A>] : unknown @ 34:35
 	GLOB *1
-lastResult:	DATf #0.0
+lastResult:	DATf #0.0	; signature global lastResult : float @ 35:30
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC
 	$d:	OUTi
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 37:17
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -51,7 +55,7 @@ strcmp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-error:	FUNC
+error:	FUNC	; signature func error(ptr s) -> void @ 49:16
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
@@ -62,8 +66,8 @@ error:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-exp:	FUNC
 	$y:	OUTf
+exp:	FUNC	; signature func exp(float x) -> float @ 79:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -86,8 +90,8 @@ exp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-log:	FUNC
 	$y:	OUTf
+log:	FUNC	; signature func log(float x) -> float @ 112:14
 	$x:	INPf
 	$a:	LOCf
 	$b:	LOCf
@@ -98,7 +102,7 @@ log:	FUNC
 		LEQf $x #0.0 @.t0	; if (x <= 0.0 || x >= 1.0e38) error("Domain error")
 		LSSf $x #1.0e38 @.f1
 	.t0:	MOVp %1 &.s_Domain4d2 	; error("Domain error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 120:52
 		GOTO @.e2  
 	.f1:	MOVf $b #0.0 	; b = 0.0
 		MOVf $m $x 	; m = x
@@ -126,30 +130,30 @@ log:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-log2:	FUNC
 	$y:	OUTf
+log2:	FUNC	; signature func log2(float x) -> float @ 140:15
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; y = (float) log(x) * LOG2R
-		CALL &log %0 *2
+		CALL &log %0 *2	; expects log(float) -> float @ 143:21
 		MULf $y %0 #LOG2R
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-log10:	FUNC
 	$y:	OUTf
+log10:	FUNC	; signature func log10(float x) -> float @ 146:16
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; y = (float) log(x) * LOG10R
-		CALL &log %0 *2
+		CALL &log %0 *2	; expects log(float) -> float @ 149:21
 		MULf $y %0 #LOG10R
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC
 	$y:	OUTf
+trunc:	FUNC	; signature func trunc(float x) -> float @ 152:16
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -162,25 +166,25 @@ trunc:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC
 	$z:	OUTf
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 159:15
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi4d3 	; error("Division by zero")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 162:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
-		CALL &trunc %0 *2
+		CALL &trunc %0 *2	; expects trunc(float) -> float @ 163:36
 		MULf %0 %0 $y
 		SUBf $z $x %0
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC
 	$y:	OUTf
+cos:	FUNC	; signature func cos(float x) -> float @ 177:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -189,7 +193,7 @@ cos:	FUNC
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
 		MOVf %2 #TWICE_PI 
-		CALL &fmod %0 *3
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 184:31
 		MOVf $m %0 
 		SUBf %0 #0.0 $m	; m = -m * m
 		MULf $m %0 $m
@@ -211,39 +215,39 @@ cos:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-sin:	FUNC
 	$y:	OUTf
+sin:	FUNC	; signature func sin(float x) -> float @ 198:14
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 201:30
 		MOVf $y %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-tan:	FUNC
 	$y:	OUTf
+tan:	FUNC	; signature func tan(float x) -> float @ 204:14
 	$x:	INPf
 	$c:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVf $y #0.0 	; y = 0.0
 		MOVf %1 $x 	; c = (float) cos(x)
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 209:20
 		MOVf $c %0 
 		NEQf $c #0.0 @.f0	; if (c == 0.0) error("Domain error")
 		MOVp %1 &.s_Domain4d2 	; error("Domain error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 210:37
 		GOTO @.e1  
 	.f0:	MOVf %1 $x 	; y = (float) sin(x) / c
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 211:26
 		DIVf $y %0 $c
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-pow:	FUNC
 	$z:	OUTf
+pow:	FUNC	; signature func pow(float x, float y) -> float @ 214:14
 	$x:	INPf
 	$y:	INPf
 	$a:	LOCf
@@ -256,15 +260,15 @@ pow:	FUNC
 		SUBf $a #0.0 $a	; a = -a
 	.f1:	LEQf $a #0.0 @.f2	; if (a > 0.0) z = (float) exp((float) log(a) * y)
 		MOVf %2 $a 	; z = (float) exp((float) log(a) * y)
-		CALL &log %1 *2
+		CALL &log %1 *2	; expects log(float) -> float @ 221:46
 		MULf %1 %1 $y
-		CALL &exp %0 *2
+		CALL &exp %0 *2	; expects exp(float) -> float @ 221:50
 		MOVf $z %0 
 		GOTO @.e3  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
 	.t4:	MOVp %1 &.s_Domain4d2 	; error("Domain error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 222:53
 	.f5:	NOOP
 	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
 		MULf %0 $y #0.5
@@ -276,8 +280,8 @@ pow:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-floorFunc:	FUNC
 	$y:	OUTf
+floorFunc:	FUNC	; signature func floorFunc(float x) -> float @ 226:20
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		FLOf $y $x 	; y = floor(x)
@@ -285,8 +289,8 @@ floorFunc:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-ceilFunc:	FUNC
 	$y:	OUTf
+ceilFunc:	FUNC	; signature func ceilFunc(float x) -> float @ 232:19
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 #0.0 $x	; y = -floor(-x)
@@ -296,27 +300,27 @@ ceilFunc:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-sqrt:	FUNC
 	$y:	OUTf
+sqrt:	FUNC	; signature func sqrt(float x) -> float @ 238:15
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; y = (float) pow(x, 0.5)
 		MOVf %2 #0.5 
-		CALL &pow %0 *3
+		CALL &pow %0 *3	; expects pow(float, float) -> float @ 241:25
 		MOVf $y %0 
 		RETU   	; }
 
-FUNCTION_COUNT:	! DEFi #10
+FUNCTION_COUNT:	! DEFi #10	; signature const FUNCTION_COUNT : int @ 244:30
 	! MULi <A> #FUNCTION_COUNT #2
-FUNCTIONS:	CNST *<A>
+FUNCTIONS:	CNST *<A>	; signature array FUNCTIONS[<A>] : unknown @ 245:46
 	DATA &.s_ceil4d4 &ceilFunc &.s_exp4d5 &exp &.s_floor4d6
 	DATA &floorFunc &.s_log4d7 &log &.s_log24d8 &log2
 	DATA &.s_log104d9 &log10 &.s_sqrt4da &sqrt &.s_cos4db &cos
 	DATA &.s_sin4dc &sin &.s_tan4dd &tan
 
 ;-----------------------------------------------------------------------------
-isalpha:	FUNC
 	$b:	OUTi
+isalpha:	FUNC	; signature func isalpha(int c) -> int @ 258:18
 	$c:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $b #FALSE 	; b = FALSE
@@ -329,8 +333,8 @@ isalpha:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-lower:	FUNC
 	$l:	OUTi
+lower:	FUNC	; signature func lower(int c) -> int @ 265:16
 	$c:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $l $c 	; l = c
@@ -342,8 +346,8 @@ lower:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-eatWhite:	FUNC
 	$p:	OUTp
+eatWhite:	FUNC	; signature func eatWhite(ptr b) -> ptr @ 272:19
 	$b:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp $p $b 	; p = b
@@ -353,14 +357,14 @@ eatWhite:	FUNC
 		GOTO @.l0  
 	.e1:	RETU   	; }
 
-EPSILON_FLOAT:	! DEFf #1.0e-45
-SMALL_FLOAT:	! DEFf #1.0e-5
-LARGE_FLOAT:	! DEFf #1.0e+10
-HUGE_FLOAT:	! DEFf #1.0e+38
+EPSILON_FLOAT:	! DEFf #1.0e-45	; signature const EPSILON_FLOAT : float @ 280:1
+SMALL_FLOAT:	! DEFf #1.0e-5	; signature const SMALL_FLOAT : float @ 281:1
+LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ 282:1
+HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ 284:1
 
 ;-----------------------------------------------------------------------------
-hexToFloat:	FUNC
 	$p:	OUTp
+hexToFloat:	FUNC	; signature func hexToFloat(ptr b, ptr v) -> ptr @ 284:21
 	$b:	INPp
 	$v:	INPp
 	$i:	LOCi
@@ -394,8 +398,8 @@ hexToFloat:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-intToHex:	FUNC
 	$p:	OUTp
+intToHex:	FUNC	; signature func intToHex(int i, ptr buffer) -> ptr @ 301:19
 	$i:	INPi
 	$buffer:	INPp
 	$x:	LOCi
@@ -414,8 +418,8 @@ intToHex:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-stringToFloat:	FUNC
 	$p:	OUTp
+stringToFloat:	FUNC	; signature func stringToFloat(ptr b, ptr v) -> ptr @ 314:24
 	$b:	INPp
 	$v:	INPp
 	$f:	LOCf
@@ -484,8 +488,8 @@ stringToFloat:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-floatToString:	FUNC
 	$p:	OUTp
+floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ 356:24
 	$f:	INPf
 	$precision:	INPi
 	$buffer:	INPp
@@ -619,8 +623,8 @@ floatToString:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-evaluate:	FUNC
 	$p:	OUTp
+evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 461:19
 	$b:	INPp
 	$v:	INPp
 	$precedence:	INPi
@@ -631,17 +635,17 @@ evaluate:	FUNC
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 $b 	; p = (pointer) eatWhite(b)
-		CALL &eatWhite %0 *2
+		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 469:27
 		MOVp $p %0 
 		PEEK %0 $p 	; switch ((int) *p == 0 to 128) 
 		SWCH %0 *128 @.s0
 	.s0#0:	MOVp %1 &.s_Unexpe4e0 	; error("Unexpected end of line")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 472:48
 		GOTO @.e1  
 	.s0#'-':	ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, v, PREFIX_PRECEDENCE)
 		MOVp %2 $v 
 		MOVi %3 #PREFIX_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 474:55
 		MOVp $p %0 
 		PEEK %0 $v 	; *v = -(float) *v
 		SUBf %0 #0.0 %0
@@ -654,12 +658,12 @@ evaluate:	FUNC
 	.s0#'(':	ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, v, PARENTHESIS_PRECEDENCE)
 		MOVp %2 $v 
 		MOVi %3 #PARENTHESIS_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 482:60
 		MOVp $p %0 
 		PEEK %0 $p 	; if ((int) *p != ')') error("Expected ')'")
 		EQUi %0 #')' @.f2
 		MOVp %1 &.s_Expect4e1 	; error("Expected ')'")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 483:46
 	.f2:	ADDp $p $p #1	; p = p + 1
 		GOTO @.e1  	; }
 	.s0#'0':	NOOP
@@ -674,25 +678,25 @@ evaluate:	FUNC
 	.s0#'9':	PEEK %0 $p 	; if ((int) *p == '0' && (int) lower(p[1]) == 'x') q = (pointer) hexToFloat(p + 2, v)
 		NEQi %0 #'0' @.f4
 		PEEK %1 $p #1
-		CALL &lower %0 *2
+		CALL &lower %0 *2	; expects lower(int) -> int @ 487:45
 		NEQi %0 #'x' @.f4
 		ADDp %1 $p #2	; q = (pointer) hexToFloat(p + 2, v)
 		MOVp %2 $v 
-		CALL &hexToFloat %0 *3
+		CALL &hexToFloat %0 *3	; expects hexToFloat(ptr, ptr) -> ptr @ 487:87
 		MOVp $q %0 
 		GOTO @.e5  
 	.f4:	MOVp %1 $p 	; q = (pointer) stringToFloat(p, v)
 		MOVp %2 $v 
-		CALL &stringToFloat %0 *3
+		CALL &stringToFloat %0 *3	; expects stringToFloat(ptr, ptr) -> ptr @ 488:42
 		MOVp $q %0 
 	.e5:	NEQp $p $q @.f6	; if (p == q) error("Invalid number")
 		MOVp %1 &.s_Invali4e2 	; error("Invalid number")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 489:39
 	.f6:	MOVp $p $q 	; p = q
 		GOTO @.e1  	; }
 	.s0#'e':	NOOP
 	.s0#'E':	PEEK %1 $p #1	; if ((int) isalpha(p[1]) != FALSE) goto symbol
-		CALL &isalpha %0 *2
+		CALL &isalpha %0 *2	; expects isalpha(int) -> int @ 493:28
 		EQUi %0 #FALSE @.f7
 		GOTO @symbol  	; goto symbol
 	.f7:	ADDp $p $p #1	; p = p + 1
@@ -700,10 +704,10 @@ evaluate:	FUNC
 		GOTO @.e1  	; }
 	.s0#'p':	NOOP
 	.s0#'P':	PEEK %1 $p #1	; if ((int) lower(p[1]) != 'i' || (int) isalpha(p[2]) != FALSE) goto symbol
-		CALL &lower %0 *2
+		CALL &lower %0 *2	; expects lower(int) -> int @ 498:26
 		NEQi %0 #'i' @symbol
 		PEEK %1 $p #2
-		CALL &isalpha %0 *2
+		CALL &isalpha %0 *2	; expects isalpha(int) -> int @ 498:56
 		EQUi %0 #FALSE @.f9
 		GOTO @symbol  	; goto symbol
 	.f9:	ADDp $p $p #2	; p = p + 2
@@ -719,7 +723,7 @@ evaluate:	FUNC
 	.l12:	PEEK $c $s 	; while ((c = (int) *s) != 0 && (int) lower(*q) == c) 
 		EQUi $c #0 @.e14
 		PEEK %1 $q 
-		CALL &lower %0 *2
+		CALL &lower %0 *2	; expects lower(int) -> int @ 507:52
 		NEQi %0 $c @.e14
 		ADDp $s $s #1	; s = s + 1
 		ADDp $q $q #1	; q = q + 1
@@ -727,45 +731,45 @@ evaluate:	FUNC
 	.e14:	PEEK %0 $s 	; if ((int) *s == 0) 
 		NEQi %0 #0 @.f15
 		MOVp %1 $q 	; q = (pointer) eatWhite(q)
-		CALL &eatWhite %0 *2
+		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 512:32
 		MOVp $q %0 
 		PEEK %0 $q 	; if ((int) *q == '(') 
 		NEQi %0 #'(' @.f15
 		ADDp %1 $q #1	; p = (pointer) evaluate(q + 1, v, PARENTHESIS_PRECEDENCE)
 		MOVp %2 $v 
 		MOVi %3 #PARENTHESIS_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 514:64
 		MOVp $p %0 
 		PEEK %0 $p 	; if ((int) *p != ')') error("Expected ')'")
 		EQUi %0 #')' @.f17
 		MOVp %1 &.s_Expect4e1 	; error("Expected ')'")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 515:50
 	.f17:	ADDp $p $p #1	; p = p + 1
 		MULi %0 $i #2	; (float) *v = (float) ((funcptr)global FUNCTIONS[i * 2 + 1])((float) *v)
 		ADDi %0 %0 #1
 		PEEK %2 $v 
-		PEEK %0 &FUNCTIONS %0
+		PEEK %0 &FUNCTIONS %0	; expects function(float) -> unknown @ 517:79
 		CALL %0 %1 *2
 		POKE $v %1 
 		GOTO @wasFunction  	; goto wasFunction
 	.f15:	FORi $i #FUNCTION_COUNT @.l11	; }
 	.e10:	PEEK %1 $p 	; c = (int) lower(*p)
-		CALL &lower %0 *2
+		CALL &lower %0 *2	; expects lower(int) -> int @ 522:24
 		MOVi $c %0 
 		MOVi %1 $c 	; if ((int) isalpha(c) == FALSE || (int) isalpha(p[1]) == TRUE) error("Syntax error")
-		CALL &isalpha %0 *2
+		CALL &isalpha %0 *2	; expects isalpha(int) -> int @ 523:26
 		EQUi %0 #FALSE @.t18
 		PEEK %1 $p #1
-		CALL &isalpha %0 *2
+		CALL &isalpha %0 *2	; expects isalpha(int) -> int @ 523:58
 		NEQi %0 #TRUE @.f19
 	.t18:	MOVp %1 &.s_Syntax4e3 	; error("Syntax error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 523:88
 		GOTO @.e20  
 	.f19:	SUBi %0 $c #'a'	; if ((int) global memoryUsed[c - 'a'] == 0) error("Undefined variable")
 		PEEK %0 &memoryUsed %0
 		NEQi %0 #0 @.f21
 		MOVp %1 &.s_Undefi4e4 	; error("Undefined variable")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 524:80
 		GOTO @.e22  
 	.f21:	ADDp $p $p #1	; p = p + 1
 		SUBi %0 $c #'a'	; *v = (float) global memory[c - 'a']
@@ -776,7 +780,7 @@ evaluate:	FUNC
 	wasFunction:	NOOP
 	.e1:	NOOP
 	repeat:	MOVp %1 $p 	; p = (pointer) eatWhite(p)
-		CALL &eatWhite %0 *2
+		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 534:28
 		MOVp $p %0 
 		! ADDi <A> #'|' #1	; switch ((int) *p == '%' to ('|' + 1)) 
 		! SUBi <A> <A> #'%'
@@ -788,7 +792,7 @@ evaluate:	FUNC
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 539:59
 		MOVp $p %0 
 		PEEK %0 $v 	; *v = itof(ftoi((float) *v) | ftoi(f))
 		fTOi %0 %0 #1.0
@@ -803,7 +807,7 @@ evaluate:	FUNC
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 546:59
 		MOVp $p %0 
 		PEEK %0 $v 	; *v = itof(ftoi((float) *v) & ftoi(f))
 		fTOi %0 %0 #1.0
@@ -818,7 +822,7 @@ evaluate:	FUNC
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 553:59
 		MOVp $p %0 
 		PEEK %0 $v 	; *v = itof(ftoi((float) *v) ^ ftoi(f))
 		fTOi %0 %0 #1.0
@@ -835,7 +839,7 @@ evaluate:	FUNC
 		ADDp %1 $p #2	; p = (pointer) evaluate(p + 2, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 560:59
 		MOVp $p %0 
 		PEEK %0 $v 	; *v = itof(ftoi((float) *v) << ftoi(f))
 		fTOi %0 %0 #1.0
@@ -852,7 +856,7 @@ evaluate:	FUNC
 		ADDp %1 $p #2	; p = (pointer) evaluate(p + 2, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 567:59
 		MOVp $p %0 
 		PEEK %0 $v 	; *v = itof(ftoi((float) *v) >>> ftoi(f))
 		fTOi %0 %0 #1.0
@@ -867,7 +871,7 @@ evaluate:	FUNC
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #ADD_SUB_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 574:59
 		MOVp $p %0 
 		PEEK %0 $v 	; *v = (float) *v + f
 		ADDf %0 %0 $f
@@ -879,7 +883,7 @@ evaluate:	FUNC
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #ADD_SUB_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 581:59
 		MOVp $p %0 
 		PEEK %0 $v 	; *v = (float) *v - f
 		SUBf %0 %0 $f
@@ -893,11 +897,11 @@ evaluate:	FUNC
 		ADDp %1 $p #2	; p = (pointer) evaluate(p + 2, &f, POW_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #POW_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 589:56
 		MOVp $p %0 
 		PEEK %1 $v 	; *v = pow((float) *v, f)
 		MOVf %2 $f 
-		CALL &pow %0 *3
+		CALL &pow %0 *3	; expects pow(float, float) -> float @ 590:30
 		POKE $v %0 
 		GOTO @repeat  	; goto repeat
 		GOTO @.e24  	; } else 
@@ -905,7 +909,7 @@ evaluate:	FUNC
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #MUL_DIV_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 595:60
 		MOVp $p %0 
 		PEEK %0 $v 	; *v = (float) *v * f
 		MULf %0 %0 $f
@@ -917,11 +921,11 @@ evaluate:	FUNC
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #MUL_DIV_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 603:59
 		MOVp $p %0 
 		NEQf $f #0.0 @.f39	; if (f == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi4d3 	; error("Division by zero")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 604:45
 		GOTO @repeat  
 	.f39:	PEEK %0 $v 	; *v = (float) *v / f
 		DIVf %0 %0 $f
@@ -933,11 +937,11 @@ evaluate:	FUNC
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #MUL_DIV_PRECEDENCE 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 611:59
 		MOVp $p %0 
 		PEEK %1 $v 	; *v = fmod(*v, f)
 		MOVf %2 $f 
-		CALL &fmod %0 *3
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 612:22
 		POKE $v %0 
 		GOTO @repeat  	; goto repeat
 	.f41:	NOOP
@@ -946,7 +950,7 @@ evaluate:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
+main:	FUNC	; signature func main() -> void @ 620:15
 		PARA *1
 	$s:	LOCA *256
 	$p:	LOCp
@@ -958,83 +962,83 @@ main:	FUNC
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 	.l0:	MOVp %1 &.s_calc4e5 	; output("calc> ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 631:19
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
-		CALL ^input %0 *3
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 632:16
 		ADRL %1 $s *0	; p = (pointer) eatWhite(s)
-		CALL &eatWhite %0 *2
+		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 634:28
 		MOVp $p %0 
 		PEEK %0 $p 	; if ((int) *p == 0 || (int) strcmp(p, "quit") == 0) goto quit
 		EQUi %0 #0 @quit
 		MOVp %1 $p 
 		MOVp %2 &.s_quit4e6 
-		CALL &strcmp %0 *3
+		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 635:48
 		NEQi %0 #0 @.f2
 		GOTO @quit  	; goto quit
 	.f2:	MOVi $assignTo #-1 	; assignTo = -1
 		PEEK %1 $p 	; c = (int) lower(*p)
-		CALL &lower %0 *2
+		CALL &lower %0 *2	; expects lower(int) -> int @ 638:22
 		MOVi $c %0 
 		MOVi %1 $c 	; if ((int) isalpha(c) != FALSE && c != 'e') 
-		CALL &isalpha %0 *2
+		CALL &isalpha %0 *2	; expects isalpha(int) -> int @ 639:24
 		EQUi %0 #FALSE @.f4
 		EQUi $c #'e' @.f4
 		ADDp %1 $p #1	; q = (pointer) eatWhite(p + 1)
-		CALL &eatWhite %0 *2
+		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 640:33
 		MOVp $q %0 
 		PEEK %0 $q 	; if ((int) *q == '=') 
 		NEQi %0 #'=' @.f4
 		ADDp %1 $q #1	; p = (pointer) eatWhite(q + 1)
-		CALL &eatWhite %0 *2
+		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 642:34
 		MOVp $p %0 
 		SUBi $assignTo $c #'a'	; assignTo = c - 'a'
 	.f4:	POKE &lastError &NULL 	; global lastError = null
 		MOVp %1 $p 	; p = (pointer) evaluate(p, &f, 0)
 		ADRL %2 $f *0
 		MOVi %3 #0 
-		CALL &evaluate %0 *4
+		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 648:35
 		MOVp $p %0 
 		MOVp %1 $p 	; p = (pointer) eatWhite(p)
-		CALL &eatWhite %0 *2
+		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 649:28
 		MOVp $p %0 
 		PEEK %0 $p 	; if ((int) *p != 0) error("Syntax error")
 		EQUi %0 #0 @.f6
 		MOVp %1 &.s_Syntax4e3 	; error("Syntax error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 650:43
 	.f6:	PEEK $p &lastError 	; if ((p = global lastError) != null) output(p)
 		EQUp $p &NULL @.f7
 		MOVp %1 $p 	; output(p)
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 652:48
 		GOTO @.e8  
 	.f7:	POKE &lastResult $f 	; global lastResult = f
 		LSSi $assignTo #0 @.f9	; if (assignTo >= 0) 
 		ADDi $s:0 #'a' $assignTo	; s[0] = 'a' + assignTo
 		MOVi $s:1 #0 	; s[1] = 0
 		ADRL %1 $s *0	; output(s)
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 658:14
 	.f9:	MOVp %1 &.s_4e7 	; output(" = ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 660:17
 		MOVf %2 $f 	; output(floatToString(f, 6, buffer))
 		MOVi %3 #6 
 		ADRL %4 $buffer *0
-		CALL &floatToString %1 *4
-		CALL ^output %0 *2
+		CALL &floatToString %1 *4	; expects floatToString(float, int, ptr) -> ptr @ 661:38
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 661:39
 		fTOi $i $f #1.0	; if (itof(i = ftoi(f)) == f) 
 		iTOf %0 $i #1.0
 		NEQf %0 $f @.f10
 		MOVp %1 &.s_0x4e8 	; output("\n = 0x")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 663:22
 		MOVi %2 $i 	; output(intToHex(i, buffer))
 		ADRL %3 $buffer *0
-		CALL &intToHex %1 *3
-		CALL ^output %0 *2
+		CALL &intToHex %1 *3	; expects intToHex(int, ptr) -> ptr @ 664:31
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 664:32
 	.f10:	LSSi $assignTo #0 @.f11	; if (assignTo >= 0) 
 		POKE &memory $assignTo $f	; global memory[assignTo] = f
 		POKE &memoryUsed $assignTo #1	; global memoryUsed[assignTo] = 1
 	.f11:	NOOP
 	.e8:	MOVp %1 &.s_4e9 	; output("\n")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 671:15
 		GOTO @.l0  	; }
 	quit:	RETU   	; }
 

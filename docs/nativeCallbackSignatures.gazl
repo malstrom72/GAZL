@@ -1,0 +1,15 @@
+; native signature manifest for JSPEG/GAZL validation
+; Keep entries grouped in the same order as the host registration tables
+; (tools/GAZLCmd.cpp and src/GAZL.cpp) so additions are easy to diff.
+; Use the compiler's comment syntax verbatim to describe each callback.
+
+; signature extern native abort() -> void
+; signature extern native assertFail(ptr message) -> void
+; signature extern native printInt(int value) -> void
+; signature extern native printFloat(float value) -> void
+; signature extern native print(ptr text) -> void
+; signature extern native printLF() -> void
+; signature extern native input(int maxCount, ptr buffer) -> int
+; signature extern native atan2(float y, float x) -> float
+; signature extern native sqrt(float x) -> float
+; signature extern native log(float x) -> float

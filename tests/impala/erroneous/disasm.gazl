@@ -1,0 +1,210 @@
+; Compiled with Impala version 1.0
+
+FILE_BUFFER_SIZE:	! DEFi #8192
+TERMINAL_COLUMNS:	! DEFi #80
+TERMINAL_ROWS:	! DEFi #25
+TERMINAL_TAB_SIZE:	! DEFi #4
+FALSE:	! DEFi #0
+TRUE:	! DEFi #1
+
+;-----------------------------------------------------------------------------
+strlen:	FUNC
+	$l:	OUTi
+	$s:	INPp
+	$a:	LOCp
+;-----------------------------------------------------------------------------
+		MOVp $a $s 	; a = s
+	.l0:	PEEK %0 $a 	; while ((int)*a != 0) a = a + 1
+		EQUi %0 #0 @.e1
+		ADDp $a $a #1	; a = a + 1
+		GOTO @.l0  
+	.e1:	DIFp $l $a $s	; l = a - s
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+strcat:	FUNC
+	$r:	OUTp
+	$d:	INPp
+	$s:	INPp
+	$a:	LOCp
+	$b:	LOCp
+;-----------------------------------------------------------------------------
+		MOVp $a $d 	; r = a = d
+		MOVp $r $d 
+	.l0:	PEEK %0 $a 	; while ((int)*a != 0) a = a + 1
+		EQUi %0 #0 @.e1
+		ADDp $a $a #1	; a = a + 1
+		GOTO @.l0  
+	.e1:	MOVp $b $s 	; b = s
+	.l2:	PEEK %0 $b 	; while ((*a = (int)*b) != 0) 
+		POKE $a %0 
+		EQUi %0 #0 @.e3
+		ADDp $a $a #1	; a = a + 1
+		ADDp $b $b #1	; b = b + 1
+		GOTO @.l2  	; }
+	.e3:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+outputLine:	FUNC
+		PARA *1
+	$s:	INPp
+;-----------------------------------------------------------------------------
+		MOVp %1 $s 	; output(s)
+		CALL ^output %0 *2
+		MOVp %1 &.s_4d2 	; output("\n")
+		CALL ^output %0 *2
+		RETU   	; }
+
+	! ADDi <A> #FILE_BUFFER_SIZE #1
+fileBuffer:	GLOB *<A>
+
+;-----------------------------------------------------------------------------
+main:	FUNC
+		PARA *1
+	$s:	LOCA *256
+	$type:	LOCi
+	$offset:	LOCi
+	$readCount:	LOCi
+	$file:	LOCi
+	$p:	LOCp
+	$b:	LOCp
+	$e:	LOCp
+	$row:	LOCi
+	$col:	LOCi
+	$c:	LOCi
+	$i:	LOCi
+	$yn:	LOCA *64
+;-----------------------------------------------------------------------------
+		CALL &initFilesIfNecessary %0 *1	; initFilesIfNecessary()
+		MOVp %1 &.s_GAZLdi4d3 	; outputLine("GAZL disassembler v2.1.")
+		CALL &outputLine %0 *2
+		MOVp %1 &.s_Disass4d4 	; output("Disassemble file: ")
+		CALL ^output %0 *2
+		MOVi %1 #255 	; input(255, s)
+		ADRL %2 $s *0
+		CALL ^input %0 *3
+		EQUi $s:0 #0 @.f0	; if ((int)s[0] != 0) 
+		ADRL %1 $s *0	; lower(s)
+		CALL &lower %0 *2
+		ADRL %1 $s *0	; if ((file = (int)findFile(s)) < 0) outputLine("File not found")
+		CALL &findFile %0 *2
+		MOVi $file %0 
+		GEQi %0 #0 @.f1
+		MOVp %1 &.s_Fileno4d5 	; outputLine("File not found")
+		CALL &outputLine %0 *2
+		GOTO @.e2  
+	.f1:	MULi %0 $file #FILE_FIELD_COUNT	; if ((type = (int)global FILES[file * FILE_FIELD_COUNT + FILE_FIELD_TYPE]) != FILE_TYPE_EXE
+		ADDi %0 %0 #FILE_FIELD_TYPE
+		PEEK $type &FILES %0
+		EQUi $type #FILE_TYPE_EXE @.f4
+		EQUi $type #FILE_TYPE_SYS @.f4
+		EQUi $type #FILE_TYPE_BIN @.f4
+		MOVp %1 &.s_Fileis4d6 	; outputLine("File is not GAZL format")
+		CALL &outputLine %0 *2
+		GOTO @.e5  	; } else if ((int)strcmp(s, "permut8") == 0) 
+	.f4:	ADRL %1 $s *0	; if ((int)strcmp(s, "permut8") == 0) 
+		MOVp %2 &.s_permut4d7 
+		CALL &strcmp %0 *3
+		NEQi %0 #0 @.f6
+		MOVp %1 &.s_Protec4d8 	; outputLine("Protected file")
+		CALL &outputLine %0 *2
+		GOTO @.e7  	; } else 
+	.f6:	MOVp $p &.s_zl4d9 	; p = ".zl"
+		NEQi $type #FILE_TYPE_BIN @.f8	; if (type == FILE_TYPE_BIN) p = ".gazl"
+		MOVp $p &.s_gazl4da 	; p = ".gazl"
+	.f8:	ADRL %1 $s *0	; strcat(s, p)
+		MOVp %2 $p 
+		CALL &strcat %0 *3
+		MOVi $offset #0 	; offset = 0
+		MOVi $row #0 	; row = 0
+		MOVi $col #0 	; col = 0
+	.l9:	ADRL %1 $s *0	; readCount = (int)loadText(s, offset, FILE_BUFFER_SIZE, global fileBuffer)
+		MOVi %2 $offset 
+		MOVi %3 #FILE_BUFFER_SIZE 
+		MOVp %4 &fileBuffer 
+		CALL ^loadText %0 *5
+		MOVi $readCount %0 
+		GEQi $readCount #0 @.f10	; if (readCount < 0) 
+		MOVp %1 &.s_Reader4db 	; outputLine("Read error")
+		CALL &outputLine %0 *2
+		GOTO @stopIt  	; goto stopIt
+		GOTO @.e11  	; } else 
+	.f10:	MOVp $p &fileBuffer 	; p = global fileBuffer
+		MOVp $b $p 	; b = p
+		ADDp $e $p $readCount	; e = p + readCount
+	.l12:	GEQp $p $e @.e13	; while (p < e) 
+		PEEK $c $p 	; c = (int)*p
+		ADDp $p $p #1	; p = p + 1
+		MOVi $i #1 	; i = 1
+		NEQi $c #9 @.f14	; if (c == 9) i = TERMINAL_TAB_SIZE - col % TERMINAL_TAB_SIZE
+		MODi %0 $col #TERMINAL_TAB_SIZE	; i = TERMINAL_TAB_SIZE - col % TERMINAL_TAB_SIZE
+		SUBi $i #TERMINAL_TAB_SIZE %0
+	.f14:	EQUi $c #10 @.t15	; if (c == 10 || (col = col + i) >= TERMINAL_COLUMNS) 
+		ADDi $col $col $i
+		LSSi $col #TERMINAL_COLUMNS @.l12
+	.t15:	ADDi $row $row #1	; if ((row = row + 1) >= TERMINAL_ROWS) 
+		LSSi $row #TERMINAL_ROWS @.f17
+		PEEK $c $p 	; c = (int)*p
+		POKE $p #0 	; *p = 0
+		MOVp %1 $b 	; output(b)
+		CALL ^output %0 *2
+		POKE $p $c 	; (int)*p = c
+		MOVp $b $p 	; b = p
+		MOVp %1 &.s_Morey4dc 	; output("More (y)? ")
+		CALL ^output %0 *2
+		MOVi %1 #63 	; input(63, yn)
+		ADRL %2 $yn *0
+		CALL ^input %0 *3
+		EQUi $yn:0 #'n' @stopIt	; if ((int)yn[0] == 'n' || (int)yn[0] == 'N') goto stopIt
+		NEQi $yn:0 #'N' @.f19
+		GOTO @stopIt  	; goto stopIt
+	.f19:	MOVi $row #1 	; row = 1
+	.f17:	MOVi $col #0 	; col = 0
+		GOTO @.l12  	; }
+	.e13:	POKE $e #0 	; *e = 0
+		MOVp %1 $b 	; output(b)
+		CALL ^output %0 *2
+		ADDi $offset $offset $readCount	; offset = offset + readCount
+	.e11:	GRTi $readCount #0 @.l9	; } while (readCount > 0)
+		MOVp %1 &.s_Morey4dc:10 	; outputLine("")
+		CALL &outputLine %0 *2
+	.e7:	NOOP
+	.e5:	NOOP
+	.e2:	NOOP
+	.f0:	NOOP
+	stopIt:	RETU   	; }
+
+.s_4d2:	CNST *2
+	DATi #10 #0
+.s_GAZLdi4d3:	CNST *24
+	DATs GAZL disassembler v2.1.
+	DATi #0
+.s_Disass4d4:	CNST *19
+	DATs Disassemble file:
+	DATi #32 #0
+.s_Fileno4d5:	CNST *15
+	DATs File not found
+	DATi #0
+.s_Fileis4d6:	CNST *24
+	DATs File is not GAZL format
+	DATi #0
+.s_permut4d7:	CNST *8
+	DATs permut8
+	DATi #0
+.s_Protec4d8:	CNST *15
+	DATs Protected file
+	DATi #0
+.s_zl4d9:	CNST *4
+	DATs .zl
+	DATi #0
+.s_gazl4da:	CNST *6
+	DATs .gazl
+	DATi #0
+.s_Reader4db:	CNST *11
+	DATs Read error
+	DATi #0
+.s_Morey4dc:	CNST *11
+	DATs More (y)?
+	DATi #32 #0

@@ -1,0 +1,43 @@
+; Compiled with Impala version 1.0
+
+FALSE:	! DEFi #0
+TRUE:	! DEFi #1
+
+;-----------------------------------------------------------------------------
+fTSTBIT:	FUNC
+	$result:	OUTi
+	$mask:	INPi
+	$bit:	INPi
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $result #FALSE 	; result = FALSE
+		ADDi %0 #1 $bit	; i = ((((1+bit)+mask )))
+		ADDi $i %0 $mask
+		EQUi $i #0 @.f0	; if (i != 0) result = TRUE
+		MOVi $result #TRUE 	; result = TRUE
+	.f0:	NOOP
+		! EQUi #DEBUG #0 @.a1	; assert((((1+bit)+mask ) != 0))
+		ADDi %0 #1 $bit
+		ADDi %0 %0 $mask
+		NEQi %0 #0 @.a1
+		MOVp %1 &.a_1bitma4d2 
+		CALL ^assertFail %0 *1
+	.a1:	ADDi %0 #1 $bit	; if (1+bit+mask != 0) result = TRUE
+		ADDi %0 %0 $mask
+		EQUi %0 #0 @.f2
+		MOVi $result #TRUE 	; result = TRUE
+	.f2:	ADDi %0 $bit $mask	; if (((1+(bit+mask) != 0))) result = TRUE
+		ADDi %0 #1 %0
+		EQUi %0 #0 @.f3
+		MOVi $result #TRUE 	; result = TRUE
+	.f3:	ADDi %0 #1 $bit	; if ((1+bit)+mask != 0) result = TRUE
+		ADDi %0 %0 $mask
+		EQUi %0 #0 @.f4
+		MOVi $result #TRUE 	; result = TRUE
+	.f4:	RETU   	; }
+
+	! EQUi #DEBUG #0 @.noAssertStrings
+.a_1bitma4d2:	CNST *25
+	DATs ((((1+bit)+mask ) != 0))
+	DATi #0
+.noAssertStrings:	!

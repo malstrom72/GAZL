@@ -1,9 +1,10 @@
 ; Compiled with Impala version 1.0
 
-ga:	GLOB *100
+; signatures version=1
+ga:	GLOB *100	; signature array ga[100] : unknown @ 3:21
 
 ;-----------------------------------------------------------------------------
-test:	FUNC
+test:	FUNC	; signature func test() -> void @ 5:15
 		PARA *1
 	$i:	LOCi
 	$f:	LOCf
@@ -65,5 +66,5 @@ test:	FUNC
 		! fTOi <A> <A> #1.0
 		! iTOf <A> <A> #1.0
 		MOVf $f <A> 
-		CALL $fp %0 *1	; fp()
+		CALL $fp %0 *1	; expects function() -> unknown @ 39:6
 		RETU   	; }

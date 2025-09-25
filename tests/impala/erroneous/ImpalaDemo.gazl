@@ -1,0 +1,253 @@
+; Compiled with Impala version 1.0
+
+DEBUG:	! DEFi #1
+	GLOB *1
+uninited:	DATi #0
+	GLOB *1
+inited:	DATi #23
+	GLOB *1
+aFloat:	DATf #0.0
+	GLOB *1
+aPointer:	DATp &aFloat
+	GLOB *1
+aFuncPointer:	DATp &NULL
+defaultArray:	GLOB *100
+initedArray:	GLOB *10
+	DATA #1 #2.0 &defaultArray:0 #4
+	TEMP *1
+forgetMe:	DATi #0
+SOME_COUNT:	! DEFi #4
+SOME_CONSTS:	CNST *SOME_COUNT
+	DATA #100 #200 #300 #400
+.s_Welcom4d2:	CNST *20
+	DATs Welcome to Impala!
+	DATi #10 #0
+WELCOME:	! DEFp &.s_Welcom4d2
+VARIOUS_LITERALS:	CNST *15
+	DATA #123 #-393 #+494 #0xAA55 #-0x1F2E3C4D #'A' #-''
+	DATA #'ROFL' #34.0 #-123.0e10 #256.11E-10 &.s_string4d2
+	DATA &.s_allesc4d3 &NULL &NULL
+
+;-----------------------------------------------------------------------------
+abortOnZero:	FUNC
+		PARA *1
+	$v:	INPi
+;-----------------------------------------------------------------------------
+		NEQi $v #0 @.f0	; if (v == 0) abort()
+		CALL ^abort %0 *1	; abort()
+	.f0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fetchSomeConst:	FUNC
+	$fetched:	OUTi
+	$index:	INPi
+;-----------------------------------------------------------------------------
+		PEEK $fetched &SOME_CONSTS $index	; fetched = (int) global SOME_CONSTS[index]
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+findSmallest:	FUNC
+	$j:	OUTi
+	$n:	INPi
+	$vector:	INPp
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $j #0 	; j = 0
+		MOVi $i #1 	; for (i = 1 to n)       // This `for` statement iterates i from 1 up until n (exclusively).
+		GEQi #1 $n @.e0
+	.l1:	PEEK %0 $vector $i	; if ((int) vector[i] < (int) vector[j])
+		PEEK %1 $vector $j
+		GEQi %0 %1 @.f2
+		MOVi $j $i 	; j = i
+	.f2:	FORi $i $n @.l1
+	.e0:	RETU   	; }
+
+TEST_SIZE:	! DEFi #50
+
+;-----------------------------------------------------------------------------
+test:	FUNC
+		PARA *1
+	$i:	LOCi
+	$mydata:	LOCA *TEST_SIZE
+;-----------------------------------------------------------------------------
+		MOVi $i #0 	; for (i = 0 to TEST_SIZE)
+		GEQi #0 #TEST_SIZE @.e0
+	.l1:	CALL &myrand %0 *1	; mydata[i] = myrand()
+		SETL $mydata $i %0
+		FORi $i #TEST_SIZE @.l1
+	.e0:	MOVi $i #0 	; for (i = 0 to TEST_SIZE) 
+		GEQi #0 #TEST_SIZE @.e2
+	.l3:	GETL %1 $mydata $i	; printInt(mydata[i])
+		CALL ^printInt %0 *2
+		CALL ^printLF %0 *1	; printLF()
+		FORi $i #TEST_SIZE @.l3	; }
+	.e2:	MOVi %2 #TEST_SIZE 	; printInt(findSmallest(TEST_SIZE, mydata))
+		ADRL %3 $mydata *0
+		CALL &findSmallest %1 *3
+		CALL ^printInt %0 *2
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+showoff:	FUNC
+		PARA *1
+	$a:	LOCi
+	$b:	LOCi
+	$c:	LOCi
+	$d:	LOCi
+	$e:	LOCi
+	$ok:	LOCi
+	$p:	LOCp
+	$arr:	LOCA *100
+	$f:	LOCf
+;-----------------------------------------------------------------------------
+		MOVi $a #1 	; a = 1
+		MOVi $b #12345 	; b = 12345
+		MOVi $c #123 	; c = 123
+		MOVi $d #1234 	; d = 1234
+		MOVi $e #12 	; e = 12
+		ADDi $a $a #1	; a = a + 1
+		IORi %0 $a #250	; a = a | 250 & 120 ^ 60 << 3 >> 1
+		ANDi %0 %0 #120
+		XORi %0 %0 #60
+		SHLi %0 %0 #3
+		SHRi $a %0 #1
+		XORi %0 $a #-1	; a = ~a >>> 10
+		SHRu $a %0 #10
+		MULi %0 $b $c	; a = a + b * c % d / e
+		MODi %0 %0 $d
+		DIVi %0 %0 $e
+		ADDi $a $a %0
+		NEQi $a #4194354 @.f0	; if (a == 4194354) ok = 1
+		MOVi $ok #1 	; ok = 1
+		GOTO @.e1  
+	.f0:	MOVi $ok #0 	; ok = 0
+	.e1:	MOVi %1 $ok 	; printInt(ok)
+		CALL ^printInt %0 *2
+		CALL ^printLF %0 *1	; printLF()
+		MOVi $b #'xyz' 	; a = b = 'xyz'
+		MOVi $a #'xyz' 
+		! MULi <A> #345 #123	; a = b = 345 * 123
+		MOVi $b <A> 
+		MOVi $a <A> 
+		ADDi $b $c $d	; a = b = c + d
+		MOVi $a $b 
+		! ADDi <A> #1 #5	; for (a = 1+5 to 10*23) 
+		MOVi $a <A> 
+		! MULi <B> #10 #23
+		GEQi <A> <B> @.e2
+	.l3:	FORi $a <B> @.l3	; 
+	.e2:	PEEK $a &forgetMe 	; for (a = global forgetMe to 10*23) 
+		! MULi <B> #10 #23
+		GEQi $a <B> @.e4
+	.l5:	FORi $a <B> @.l5	; 
+	.e4:	MOVp $p &SOME_CONSTS 	; for (p = global SOME_CONSTS to &global SOME_CONSTS[0]) 
+		GEQp &SOME_CONSTS &SOME_CONSTS:0 @.e6
+	.l7:	MOVp %1 $p 	; printInt(p)
+		CALL ^printInt %0 *2
+		CALL ^printLF %0 *1	; printLF()
+		FORp $p &SOME_CONSTS:0 @.l7	; }
+	.e6:	PEEK $a &forgetMe 	; a = global forgetMe
+		MOVf $f #23.3 	; f = 23.3
+		! MULf <B> #2.3 #8.9	; a = ftoi(f * (2.3 * 8.9))
+		fTOi $a $f <B>
+		fTOi $a $f #2.3	; a = ftoi(2.3 * f)
+		! fTOi <B> #2.3 #8.9	; a = ftoi(2.3 * 8.9)
+		MOVi $a <B> 
+		! iTOf <B> #100 #1.0	; f = itof(a) * (1.0 / itof(100))
+		! DIVf <B> #1.0 <B>
+		iTOf $f $a <B>
+		! iTOf <B> #100 #1.0	; f = (1.0 / itof(100)) * itof(a)
+		! DIVf <B> #1.0 <B>
+		iTOf $f $a <B>
+		iTOf %0 $a #1.0	; f = itof(a) / 100.0
+		DIVf $f %0 #100.0
+		MOVi %1 $a 	; printInt(a)
+		CALL ^printInt %0 *2
+		CALL ^printLF %0 *1	; printLF()
+		MOVf %1 $f 	; printFloat(f)
+		CALL ^printFloat %0 *2
+		CALL ^printLF %0 *1	; printLF()
+		POKE &initedArray:2 &futureArray:4 	; global initedArray[2] = &global futureArray[4]
+		NEQi #1 #1 @.f8	; if (1 == 1) 
+		! EQUi #DEBUG #0 @.a9	; assert((pointer)global initedArray[2] == &global futureArray[4])
+		PEEK %0 &initedArray:2 
+		EQUp %0 &futureArray:4 @.e10
+		MOVp %1 &.a_pointe4d2 
+		CALL ^assertFail %0 *1
+	.a9:	GOTO @.e10  	; } else 
+	.f8:	NOOP
+		! EQUi #DEBUG #0 @.a11	; assert(0 == 1)
+		EQUi #0 #1 @.a11
+		MOVp %1 &.a_014d3 
+		CALL ^assertFail %0 *1
+	.a11:	NOOP
+	.e10:	POKE &aFuncPointer &showoff 	; global aFuncPointer = showoff
+		PEEK %0 &aFuncPointer 	; if (global aFuncPointer == nullfunc) global aFuncPointer()
+		NEQp %0 &NULL @.f12
+		PEEK %1 &aFuncPointer 	; global aFuncPointer()
+		CALL %1 %0 *1
+	.f12:	RETU   	; }
+
+	GLOB *1
+defineMeLaterPlease:	DATi #0
+futureArray:	GLOB *10
+	GLOB *1
+myrand_seed:	DATi #2463534242
+
+;-----------------------------------------------------------------------------
+myrand:	FUNC
+	$y:	OUTi
+;-----------------------------------------------------------------------------
+		PEEK $y &myrand_seed 	; y = global myrand_seed
+		SHLi %0 $y #13	; y = y ^ (y << 13)
+		XORi $y $y %0
+		SHRu %0 $y #17	; y = y ^ (y >>> 17)
+		XORi $y $y %0
+		SHLi %0 $y #5	; y = y ^ (y << 5)
+		XORi $y $y %0
+		POKE &myrand_seed $y 	; global myrand_seed = y
+		RETU   	; }
+
+anInt:	! DEFi #4
+
+;-----------------------------------------------------------------------------
+main:	FUNC
+		PARA *1
+	$myFloat:	LOCf
+;-----------------------------------------------------------------------------
+		MOVp %1 #WELCOME 	; print(WELCOME)
+		CALL ^print %0 *2
+		MOVf $myFloat #1000.0 	; myFloat = 1000.0
+		! SHLi <B> #1 #anInt	; printInt(ftoi(myFloat * (1.0 / itof(1 << anInt))))
+		! iTOf <B> <B> #1.0
+		! DIVf <B> #1.0 <B>
+		fTOi %1 $myFloat <B>
+		CALL ^printInt %0 *2
+		CALL ^printLF %0 *1	; printLF()
+		CALL &showoff %0 *1	; showoff()
+		MOVp %1 &.s_Bye4d4 	; print("Bye!\n")
+		CALL ^print %0 *2
+		RETU   	; }
+
+.s_string4d2:	CNST *8
+	DATs string1
+	DATi #0
+.s_allesc4d3:	CNST *22
+	DATs all escapes: \"
+	DATi #8 #12 #10 #13 #9
+	DATs ~
+	DATi #0
+.s_Bye4d4:	CNST *6
+	DATs Bye!
+	DATi #10 #0
+	! EQUi #DEBUG #0 @.noAssertStrings
+.a_pointe4d2:	CNST *59
+	DATs ((pointer)global initedArray[2] == &global futureArray[4])
+	DATi #0
+.a_014d3:	CNST *9
+	DATs (0 == 1)
+	DATi #0
+.noAssertStrings:	!

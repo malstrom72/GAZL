@@ -1,20 +1,26 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 18:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
 	DATA &.s_4d2 &.s_4d2 &.s_4d2 &.s_LEFTDE4d3 &.s_4d2 &.s_4d2
 	DATA &.s_4d2 &.s_RINGMO4d4
+; signature extern native abort() -> unknown @ 39:1
+; signature extern native trace() -> unknown @ 40:1
+; signature extern native yield() -> unknown @ 41:1
+; signature extern native write() -> unknown @ 42:1
+; signature extern native read() -> unknown @ 44:1
 	GLOB *1
-clock:	DATi #0
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int @ 80:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 81:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 82:1
 	GLOB *1
-instance:	DATi #0
+instance:	DATi #0	; signature global instance : int @ 83:1
 	CNST *1
-clockFreqLimit:	DATi #132300
-signal:	GLOB *2
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 86:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 88:1
 	CNST *1
 	! SHLi <A> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
@@ -25,8 +31,8 @@ signal:	GLOB *2
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #SWITCHES_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>
-EIGHT_BIT_EXP_TABLE:	CNST *256
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 95:1
+EIGHT_BIT_EXP_TABLE:	CNST *256	; signature array EIGHT_BIT_EXP_TABLE[256] : unknown @ 95:41
 	DATA #0x0 #0x1 #0x2 #0x3 #0x4 #0x5 #0x6 #0x7 #0x8 #0x9
 	DATA #0xa #0xb #0xc #0xd #0xe #0xf #0x10 #0x11 #0x12 #0x13
 	DATA #0x14 #0x15 #0x16 #0x17 #0x18 #0x19 #0x1a #0x1b #0x1c
@@ -61,19 +67,19 @@ EIGHT_BIT_EXP_TABLE:	CNST *256
 	DATA #0x7c00 #0x8000 #0x8800 #0x9000 #0x9800 #0xa000
 	DATA #0xa800 #0xb000 #0xb800 #0xc000 #0xc800 #0xd000
 	DATA #0xd800 #0xe000 #0xe800 #0xf000 #0xffff
-LOG2:	! DEFf #0.69314718055994530942
-LOG2R:	! DEFf #1.44269504088896340736
-LOG10R:	! DEFf #0.43429448190325182765
-E:	! DEFf #2.71828182845904523536
-HALF_PI:	! DEFf #1.57079632679489661923
-PI:	! DEFf #3.14159265358979323846
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 130:1
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 131:1
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 132:1
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ 133:1
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 134:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 135:1
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>
-COS_EPSILON:	! DEFf #1.0e-6
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 136:1
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 138:1
 
 ;-----------------------------------------------------------------------------
-stpcpy:	FUNC
 	$a:	OUTp
+stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 138:17
 	$d:	INPp
 	$s:	INPp
 	$b:	LOCp
@@ -90,8 +96,8 @@ stpcpy:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-intToString:	FUNC
 	$p:	OUTp
+intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 157:22
 	$i:	INPi
 	$radix:	INPi
 	$minLength:	INPi
@@ -137,7 +143,7 @@ intToString:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-traceInts:	FUNC
+traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 175:20
 		PARA *1
 	$text:	INPp
 	$n:	INPi
@@ -152,7 +158,7 @@ traceInts:	FUNC
 		EQUp $text &NULL @.f0	; if (text != null) p = (pointer) stpcpy(p, text)
 		MOVp %1 $p 	; p = (pointer) stpcpy(p, text)
 		MOVp %2 $text 
-		CALL &stpcpy %0 *3
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 182:49
 		MOVp $p %0 
 	.f0:	POKE $p #0 	; *p = 0
 		MOVi $i #0 	; for (i = 0 to n) 
@@ -165,17 +171,17 @@ traceInts:	FUNC
 		MOVi %4 #10 
 		MOVi %5 #1 
 		ADRL %6 $buffer *0
-		CALL &intToString %2 *5
-		CALL &stpcpy %0 *3
+		CALL &intToString %2 *5	; expects intToString(int, int, int, ptr) -> ptr @ 186:62
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 186:63
 		MOVp $p %0 
 		FORi $i $n @.l2	; }
 	.e1:	ADRL %1 $line *0	; trace(line)
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 188:13
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-traceInt:	FUNC
+traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 191:19
 		PARA *1
 	$text:	INPp
 	$i:	INPi
@@ -185,24 +191,24 @@ traceInt:	FUNC
 		MOVp %1 $text 	; traceInts(text, 1, ints)
 		MOVi %2 #1 
 		ADRL %3 $ints *0
-		CALL &traceInts %0 *4
+		CALL &traceInts %0 *4	; expects traceInts(ptr, int, ptr) -> void @ 195:26
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-error:	FUNC
+error:	FUNC	; signature func error(ptr s) -> void @ 198:16
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2
-		CALL ^abort %0 *1	; abort()
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 200:10
+		CALL ^abort %0 *1	; expects function() -> unknown @ 201:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC
 	$y:	OUTf
+trunc:	FUNC	; signature func trunc(float x) -> float @ 204:16
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -215,25 +221,25 @@ trunc:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC
 	$z:	OUTf
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 211:15
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi4d6 	; error("Division by zero")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 214:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
-		CALL &trunc %0 *2
+		CALL &trunc %0 *2	; expects trunc(float) -> float @ 215:35
 		MULf %0 %0 $y
 		SUBf $z $x %0
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC
 	$y:	OUTf
+cos:	FUNC	; signature func cos(float x) -> float @ 229:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -242,7 +248,7 @@ cos:	FUNC
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
 		MOVf %2 #TWICE_PI 
-		CALL &fmod %0 *3
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 233:31
 		MOVf $m %0 
 		SUBf %0 #0.0 $m	; m = -m * m
 		MULf $m %0 $m
@@ -264,8 +270,8 @@ cos:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-exp:	FUNC
 	$y:	OUTf
+exp:	FUNC	; signature func exp(float x) -> float @ 270:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -286,47 +292,47 @@ exp:	FUNC
 		DIVf $y #1.0 $y	; y = 1.0 / y
 	.f1:	RETU   	; }
 
-COS_TABLE_BITS:	! DEFi #12
+COS_TABLE_BITS:	! DEFi #12	; signature const COS_TABLE_BITS : int @ 293:1
 	! SHLi <A> #1 #COS_TABLE_BITS
-COS_TABLE_SIZE:	! DEFi <A>
-BATCH_SIZE:	! DEFi #77
+COS_TABLE_SIZE:	! DEFi <A>	; signature const COS_TABLE_SIZE : int @ 294:1
+BATCH_SIZE:	! DEFi #77	; signature const BATCH_SIZE : int @ 294:26
 	! ADDi <A> #COS_TABLE_SIZE #1
-cosTable:	GLOB *<A>
-pitchTable:	GLOB *32
+cosTable:	GLOB *<A>	; signature array cosTable[<A>] : unknown @ 299:1
+pitchTable:	GLOB *32	; signature array pitchTable[32] : unknown @ 299:28
 	GLOB *1
-doReset:	DATi #FALSE
+doReset:	DATi #FALSE	; signature global doReset : int @ 302:1
 	GLOB *1
-rate:	DATi #0
+rate:	DATi #0	; signature global rate : int @ 303:1
 	GLOB *1
-diff:	DATi #0
+diff:	DATi #0	; signature global diff : int @ 304:1
 	GLOB *1
-delayL:	DATi #0
+delayL:	DATi #0	; signature global delayL : int @ 305:1
 	GLOB *1
-delayR:	DATi #0
+delayR:	DATi #0	; signature global delayR : int @ 306:1
 	GLOB *1
-syncBit:	DATi #0
+syncBit:	DATi #0	; signature global syncBit : int @ 315:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC
+init:	FUNC	; signature func init() -> void @ 315:15
 		PARA *1
 	$i:	LOCi
 	$buf:	LOCA *256
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4d7 	; trace("init")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 318:15
 		PEEK %2 &instance 	; trace(intToString(global instance, 10, 1, buf))
 		MOVi %3 #10 
 		MOVi %4 #1 
 		ADRL %5 $buf *0
-		CALL &intToString %1 *5
-		CALL ^trace %0 *2
+		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 319:48
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 319:49
 		MOVi $i #0 	; for (i = 0 to COS_TABLE_SIZE) global cosTable[i] = ftoi((float) cos((TWICE_PI / itof(COS_TABLE_SIZE)) * itof(i)) * 2048.0)
 		GEQi #0 #COS_TABLE_SIZE @.e0
 	.l1:	NOOP
 		! iTOf <A> #COS_TABLE_SIZE #1.0	; global cosTable[i] = ftoi((float) cos((TWICE_PI / itof(COS_TABLE_SIZE)) * itof(i)) * 2048.0)
 		! DIVf <A> #TWICE_PI <A>
 		iTOf %1 $i <A>
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 320:115
 		fTOi %0 %0 #2048.0
 		POKE &cosTable $i %0
 		FORi $i #COS_TABLE_SIZE @.l1
@@ -338,7 +344,7 @@ init:	FUNC
 		! DIVf <A> #1.0 #12.0	; global pitchTable[i] = ftoi((float) exp(LOG2 * (itof(i) * (1.0 / 12.0))) * 1.011179191599226e+07)
 		iTOf %1 $i <A>
 		MULf %1 #LOG2 %1
-		CALL &exp %0 *2
+		CALL &exp %0 *2	; expects exp(float) -> float @ 324:76
 		fTOi %0 %0 #1.011179191599226e+07
 		POKE &pitchTable $i %0
 		FORi $i #32 @.l3	; }
@@ -346,23 +352,23 @@ init:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC
+reset:	FUNC	; signature func reset() -> void @ 334:16
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4d8 	; trace("reset")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 336:16
 		MOVp %1 &.s_params4d9 	; traceInts(" params: ", PARAM_COUNT, global params)
 		MOVi %2 #PARAM_COUNT 
 		MOVp %3 &params 
-		CALL &traceInts %0 *4
+		CALL &traceInts %0 *4	; expects traceInts(ptr, int, ptr) -> void @ 337:52
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-displayDelayValue:	FUNC
 	$y:	OUTi
-	$x:	LOCi
+displayDelayValue:	FUNC	; signature func displayDelayValue(int x) -> int @ 341:28
+	$x:	INPi
 ;-----------------------------------------------------------------------------
 		! SUBi <A> #8 #3	; y = 0x1 << (x >> (8 - 3))
 		SHRi %0 $x <A>
@@ -371,35 +377,35 @@ displayDelayValue:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
+update:	FUNC	; signature func update() -> void @ 354:17
 		PARA *1
 	$buf:	LOCA *256
 	$params:	LOCA *PARAM_COUNT
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4da 	; trace("update")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 357:17
 		MOVp %1 &.s_params4d9 	; traceInts(" params: ", PARAM_COUNT, global params)
 		MOVi %2 #PARAM_COUNT 
 		MOVp %3 &params 
-		CALL &traceInts %0 *4
+		CALL &traceInts %0 *4	; expects traceInts(ptr, int, ptr) -> void @ 358:52
 		ADRL %0 $params *0	; copy (PARAM_COUNT from global params to params)
 		COPY %0 &params *PARAM_COUNT
 		PEEK %0 &EIGHT_BIT_EXP_TABLE $params:OPERAND_1_HIGH_PARAM_INDEX	; global delayL = (int) global EIGHT_BIT_EXP_TABLE[(int) params[OPERAND_1_HIGH_PARAM_INDEX]]
 		POKE &delayL %0 
 		MOVi %1 $params:OPERAND_1_HIGH_PARAM_INDEX 	; global displayLEDs[0] = displayDelayValue((int) params[OPERAND_1_HIGH_PARAM_INDEX])
-		CALL &displayDelayValue %0 *2
+		CALL &displayDelayValue %0 *2	; expects displayDelayValue(int) -> int @ 361:85
 		POKE &displayLEDs:0 %0 
 		PEEK %0 &EIGHT_BIT_EXP_TABLE $params:OPERAND_1_LOW_PARAM_INDEX	; global delayR = (int) global EIGHT_BIT_EXP_TABLE[(int) params[OPERAND_1_LOW_PARAM_INDEX]]
 		POKE &delayR %0 
 		MOVi %1 $params:OPERAND_1_LOW_PARAM_INDEX 	; global displayLEDs[1] = displayDelayValue((int) params[OPERAND_1_LOW_PARAM_INDEX])
-		CALL &displayDelayValue %0 *2
+		CALL &displayDelayValue %0 *2	; expects displayDelayValue(int) -> int @ 363:84
 		POKE &displayLEDs:1 %0 
 		PEEK %0 &EIGHT_BIT_EXP_TABLE $params:OPERAND_2_HIGH_PARAM_INDEX	; global rate = (int) global EIGHT_BIT_EXP_TABLE[(int) params[OPERAND_2_HIGH_PARAM_INDEX]]
 		POKE &rate %0 
 		SHLi %0 $params:OPERAND_2_LOW_PARAM_INDEX #8	; global diff = (int) params[OPERAND_2_LOW_PARAM_INDEX] << 8
 		POKE &diff %0 
 		MOVi %1 $params:OPERAND_2_LOW_PARAM_INDEX 	; global displayLEDs[3] = displayDelayValue((int) params[OPERAND_2_LOW_PARAM_INDEX])
-		CALL &displayDelayValue %0 *2
+		CALL &displayDelayValue %0 *2	; expects displayDelayValue(int) -> int @ 366:84
 		POKE &displayLEDs:3 %0 
 		PEEK %0 &params:SWITCHES_PARAM_INDEX 	; global syncBit = (int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_SYNC_MASK
 		ANDi %0 %0 #SWITCHES_SYNC_MASK
@@ -408,7 +414,7 @@ update:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC
+process:	FUNC	; signature func process() -> void @ 385:18
 		PARA *1
 	$i:	LOCi
 	$s:	LOCi
@@ -444,7 +450,7 @@ process:	FUNC
 		POKE &signal:1 $s 	; global signal[1] = s
 		ADDi $i $i #1	; i = i + 1
 		ADDi $j $j #0x10000	; j = j + 0x10000
-		CALL ^yield %0 *1	; yield()
+		CALL ^yield %0 *1	; expects function() -> unknown @ 405:10
 		GOTO @.l0  	; }
 		RETU   	; }
 

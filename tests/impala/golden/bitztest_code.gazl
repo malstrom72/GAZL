@@ -1,23 +1,29 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 18:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
 	DATA &.s_Sillyr4d2 &.s_4d3 &.s_4d3 &.s_LEFTDE4d4 &.s_4d3
 	DATA &.s_4d3 &.s_4d3 &.s_RINGMO4d5
+; signature extern native abort() -> unknown @ 39:1
+; signature extern native trace() -> unknown @ 40:1
+; signature extern native yield() -> unknown @ 41:1
+; signature extern native write() -> unknown @ 42:1
+; signature extern native read() -> unknown @ 44:1
 	GLOB *1
-clock:	DATi #0
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int @ 80:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 81:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 82:1
 	GLOB *1
-instance:	DATi #0
+instance:	DATi #0	; signature global instance : int @ 83:1
 	CNST *1
-clockFreqLimit:	DATi #132300
-signal:	GLOB *2
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 85:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 99:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC
+init:	FUNC	; signature func init() -> void @ 99:15
 		PARA *1
 	$i:	LOCi
 	$buf:	LOCA *256
@@ -26,24 +32,24 @@ init:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC
+reset:	FUNC	; signature func reset() -> void @ 108:16
 		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
+update:	FUNC	; signature func update() -> void @ 116:17
 		PARA *1
 	$buf:	LOCA *256
 	$params:	LOCA *PARAM_COUNT
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
-f:	! DEFi #0x309977
+f:	! DEFi #0x309977	; signature const f : int @ 121:23
 
 ;-----------------------------------------------------------------------------
-process:	FUNC
+process:	FUNC	; signature func process() -> void @ 138:18
 		PARA *1
 	$t:	LOCi
 	$u:	LOCi
@@ -80,7 +86,7 @@ process:	FUNC
 	.e1:	SHRi $y $y #20	; global signal[0] = (y = y >> 20)
 		POKE &signal:0 $y 
 		POKE &signal:1 $y 	; global signal[1] = y
-		CALL ^yield %0 *1	; yield()
+		CALL ^yield %0 *1	; expects function() -> unknown @ 152:10
 		ADDi $t $t #1	; t = t + 1
 		GOTO @.l0  	; }
 		RETU   	; }

@@ -26,16 +26,30 @@ IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
 REM Run the Impala test suite from the source directory
-PUSHD impala
-..\output\PikaCmd runTests.pika
-IF ERRORLEVEL 1 EXIT /B 1
-PUSHD jspeg
+PUSHD impala\jspeg
 node jspegCompilerTests.js
 IF ERRORLEVEL 1 EXIT /B 1
 node runJspegTests.js
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
-POPD
+
+REM Optionally validate emitted .gazl metadata when requested
+IF NOT "%GAZL_VALIDATE%"=="" IF NOT "%GAZL_VALIDATE%"=="0" (
+  SET VALIDATOR_FILES=
+  IF NOT "%GAZL_VALIDATE_FILES%"=="" (
+    SET VALIDATOR_FILES=%GAZL_VALIDATE_FILES%
+  ) ELSE (
+    FOR %%F IN (impala\jspeg\testdata\*.gazl) DO (
+      SET VALIDATOR_FILES=!VALIDATOR_FILES! "%%F"
+    )
+  )
+  IF NOT "!VALIDATOR_FILES!"=="" (
+    CALL tools\gazl-validate.cmd !VALIDATOR_FILES!
+    IF ERRORLEVEL 1 EXIT /B 1
+  ) ELSE (
+    ECHO GAZL_VALIDATE enabled but no .gazl files were found for validation.
+  )
+)
 
 REM Verify the copied files by running the demo from the output directory
 PUSHD output

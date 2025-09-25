@@ -1,155 +1,179 @@
 ; Compiled with Impala version 1.0
 
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-GOTO2:	! DEFi #0
-GOTO8:	! DEFi #1
-GOTO2000:	! DEFi #2
-GOTO2009:	! DEFi #3
-GOTO2010:	! DEFi #4
-GOTO2011:	! DEFi #5
-GOTO2012:	! DEFi #6
-GOTO2600:	! DEFi #7
-GOTO2607:	! DEFi #8
-GOTO2630:	! DEFi #9
-GOTO2800:	! DEFi #10
-GOTO8000:	! DEFi #11
-GOTO18999:	! DEFi #12
-GOTO19000:	! DEFi #13
-CLSMAX:	! DEFi #12
-HNTSIZ:	! DEFi #20
-LINSIZ:	! DEFi #12500
-LOCSIZ:	! DEFi #185
-MESH:	! DEFi #123456789
-RTXSIZ:	! DEFi #277
-TRVSIZ:	! DEFi #885
-VRBSIZ:	! DEFi #35
-VRSION:	! DEFi #25
-TRNSIZ:	! DEFi #5
-MAXTRS:	! DEFi #79
-TABSIZ:	! DEFi #330
-CHLOC:	! DEFi #114
-CHLOC2:	! DEFi #142
+; signatures version=1
+; signature extern native output() -> unknown @ 9:21
+; signature extern native abort() -> unknown @ 10:20
+; signature extern native exit() -> unknown @ 11:19
+; signature extern native input() -> unknown @ 12:20
+; signature extern native inputEOF() -> unknown @ 13:23
+; signature extern native clock() -> unknown @ 14:20
+FALSE:	! DEFi #0	; signature const FALSE : int @ 16:20
+TRUE:	! DEFi #1	; signature const TRUE : int @ 17:19
+GOTO2:	! DEFi #0	; signature const GOTO2 : int @ 19:20
+GOTO8:	! DEFi #1	; signature const GOTO8 : int @ 20:20
+GOTO2000:	! DEFi #2	; signature const GOTO2000 : int @ 21:23
+GOTO2009:	! DEFi #3	; signature const GOTO2009 : int @ 22:23
+GOTO2010:	! DEFi #4	; signature const GOTO2010 : int @ 23:23
+GOTO2011:	! DEFi #5	; signature const GOTO2011 : int @ 24:23
+GOTO2012:	! DEFi #6	; signature const GOTO2012 : int @ 25:23
+GOTO2600:	! DEFi #7	; signature const GOTO2600 : int @ 26:23
+GOTO2607:	! DEFi #8	; signature const GOTO2607 : int @ 27:23
+GOTO2630:	! DEFi #9	; signature const GOTO2630 : int @ 28:23
+GOTO2800:	! DEFi #10	; signature const GOTO2800 : int @ 29:24
+GOTO8000:	! DEFi #11	; signature const GOTO8000 : int @ 30:24
+GOTO18999:	! DEFi #12	; signature const GOTO18999 : int @ 31:25
+GOTO19000:	! DEFi #13	; signature const GOTO19000 : int @ 32:25
+CLSMAX:	! DEFi #12	; signature const CLSMAX : int @ 34:22
+HNTSIZ:	! DEFi #20	; signature const HNTSIZ : int @ 35:22
+LINSIZ:	! DEFi #12500	; signature const LINSIZ : int @ 36:25
+LOCSIZ:	! DEFi #185	; signature const LOCSIZ : int @ 37:23
+MESH:	! DEFi #123456789	; signature const MESH : int @ 38:27
+RTXSIZ:	! DEFi #277	; signature const RTXSIZ : int @ 39:23
+TRVSIZ:	! DEFi #885	; signature const TRVSIZ : int @ 40:23
+VRBSIZ:	! DEFi #35	; signature const VRBSIZ : int @ 41:22
+VRSION:	! DEFi #25	; signature const VRSION : int @ 42:22
+TRNSIZ:	! DEFi #5	; signature const TRNSIZ : int @ 43:21
+MAXTRS:	! DEFi #79	; signature const MAXTRS : int @ 44:22
+TABSIZ:	! DEFi #330	; signature const TABSIZ : int @ 45:23
+CHLOC:	! DEFi #114	; signature const CHLOC : int @ 46:20
+CHLOC2:	! DEFi #142	; signature const CHLOC2 : int @ 47:21
 	! SHLi <A> #1 #11
-CONDS:	! DEFi <A>
-DALTLC:	! DEFi #18
-ABB:	GLOB *186
-ATLOC:	GLOB *186
-DLOC:	GLOB *7
-FIXED:	GLOB *101
-LINK:	GLOB *201
-PARMS:	GLOB *26
-PLACE:	GLOB *101
-INLINE:	GLOB *101
-MAP1:	GLOB *129
-MAP2:	GLOB *129
-DSEEN:	GLOB *7
-HINTED:	GLOB *21
-HINTLC:	GLOB *21
-ODLOC:	GLOB *7
-TK:	GLOB *21
-PROP:	GLOB *101
+CONDS:	! DEFi <A>	; signature const CONDS : int @ 48:28
+DALTLC:	! DEFi #18	; signature const DALTLC : int @ 49:22
+ABB:	GLOB *186	; signature array ABB[186] : unknown @ 51:22
+ATLOC:	GLOB *186	; signature array ATLOC[186] : unknown @ 52:24
+DLOC:	GLOB *7	; signature array DLOC[7] : unknown @ 53:21
+FIXED:	GLOB *101	; signature array FIXED[101] : unknown @ 54:24
+LINK:	GLOB *201	; signature array LINK[201] : unknown @ 55:23
+PARMS:	GLOB *26	; signature array PARMS[26] : unknown @ 56:23
+PLACE:	GLOB *101	; signature array PLACE[101] : unknown @ 57:24
+INLINE:	GLOB *101	; signature array INLINE[101] : unknown @ 59:25
+MAP1:	GLOB *129	; signature array MAP1[129] : unknown @ 60:23
+MAP2:	GLOB *129	; signature array MAP2[129] : unknown @ 61:23
+DSEEN:	GLOB *7	; signature array DSEEN[7] : unknown @ 63:22
+HINTED:	GLOB *21	; signature array HINTED[21] : unknown @ 64:24
+HINTLC:	GLOB *21	; signature array HINTLC[21] : unknown @ 65:24
+ODLOC:	GLOB *7	; signature array ODLOC[7] : unknown @ 66:22
+TK:	GLOB *21	; signature array TK[21] : unknown @ 67:20
+PROP:	GLOB *101	; signature array PROP[101] : unknown @ 68:23
 	GLOB *1
-BLKLIN:	DATi #TRUE
+BLKLIN:	DATi #TRUE	; signature global BLKLIN : int @ 70:25
 	GLOB *1
-HOLDNG:	DATi #0
+HOLDNG:	DATi #0	; signature global HOLDNG : int @ 71:22
 	GLOB *1
-ABBNUM:	DATi #5
+ABBNUM:	DATi #5	; signature global ABBNUM : int @ 72:22
 	GLOB *1
-TRNDEX:	DATi #1
+TRNDEX:	DATi #1	; signature global TRNDEX : int @ 73:22
 	GLOB *1
-TRNLUZ:	DATi #0
+TRNLUZ:	DATi #0	; signature global TRNLUZ : int @ 74:22
 	GLOB *1
-TURNS:	DATi #0
+TURNS:	DATi #0	; signature global TURNS : int @ 75:21
 	GLOB *1
-CLOSNG:	DATi #FALSE
+CLOSNG:	DATi #FALSE	; signature global CLOSNG : int @ 76:26
 	GLOB *1
-BONUS:	DATi #0
+BONUS:	DATi #0	; signature global BONUS : int @ 77:21
 	GLOB *1
-NOVICE:	DATi #FALSE
+NOVICE:	DATi #FALSE	; signature global NOVICE : int @ 78:26
 	GLOB *1
-CLSHNT:	DATi #FALSE
+CLSHNT:	DATi #FALSE	; signature global CLSHNT : int @ 79:26
 	GLOB *1
-CLOSED:	DATi #FALSE
+CLOSED:	DATi #FALSE	; signature global CLOSED : int @ 80:26
 	GLOB *1
-NUMDIE:	DATi #0
+NUMDIE:	DATi #0	; signature global NUMDIE : int @ 81:22
 	GLOB *1
-SAVED:	DATi #0
+SAVED:	DATi #0	; signature global SAVED : int @ 82:21
 	GLOB *1
-WZDARK:	DATi #FALSE
+WZDARK:	DATi #FALSE	; signature global WZDARK : int @ 83:26
 	GLOB *1
-LMWARN:	DATi #FALSE
+LMWARN:	DATi #FALSE	; signature global LMWARN : int @ 84:26
 	GLOB *1
-FOOBAR:	DATi #0
+FOOBAR:	DATi #0	; signature global FOOBAR : int @ 85:22
 	GLOB *1
-CLOCK1:	DATi #30
+CLOCK1:	DATi #30	; signature global CLOCK1 : int @ 86:23
 	GLOB *1
-CLOCK2:	DATi #50
+CLOCK2:	DATi #50	; signature global CLOCK2 : int @ 87:23
 	GLOB *1
-DETAIL:	DATi #0
+DETAIL:	DATi #0	; signature global DETAIL : int @ 88:22
 	GLOB *1
-DKILL:	DATi #0
+DKILL:	DATi #0	; signature global DKILL : int @ 89:21
 	GLOB *1
-IGO:	DATi #0
+IGO:	DATi #0	; signature global IGO : int @ 90:19
 	GLOB *1
-KNFLOC:	DATi #0
+KNFLOC:	DATi #0	; signature global KNFLOC : int @ 91:22
 	GLOB *1
-IWEST:	DATi #0
+IWEST:	DATi #0	; signature global IWEST : int @ 92:21
 	GLOB *1
-PANIC:	DATi #FALSE
+PANIC:	DATi #FALSE	; signature global PANIC : int @ 93:25
 	GLOB *1
-gK:	DATi #0
+gK:	DATi #0	; signature global gK : int @ 95:14
 	GLOB *1
-gOBJ:	DATi #0
+gOBJ:	DATi #0	; signature global gOBJ : int @ 96:16
 	GLOB *1
-gLOC:	DATi #0
+gLOC:	DATi #0	; signature global gLOC : int @ 97:16
 	GLOB *1
-DFLAG:	DATi #0
+DFLAG:	DATi #0	; signature global DFLAG : int @ 99:17
 	GLOB *1
-LNLENG:	DATi #0
+LNLENG:	DATi #0	; signature global LNLENG : int @ 100:18
 	GLOB *1
-LNPOSN:	DATi #0
+LNPOSN:	DATi #0	; signature global LNPOSN : int @ 101:18
 	GLOB *1
-VERB:	DATi #0
+VERB:	DATi #0	; signature global VERB : int @ 102:16
 	GLOB *1
-ZZWORD:	DATi #0
+ZZWORD:	DATi #0	; signature global ZZWORD : int @ 103:18
 	GLOB *1
-SCORE:	DATi #0
+SCORE:	DATi #0	; signature global SCORE : int @ 104:17
 	GLOB *1
-MAXDIE:	DATi #0
+MAXDIE:	DATi #0	; signature global MAXDIE : int @ 105:18
 	GLOB *1
-MXSCOR:	DATi #0
+MXSCOR:	DATi #0	; signature global MXSCOR : int @ 106:18
 	GLOB *1
-TALLY:	DATi #0
+TALLY:	DATi #0	; signature global TALLY : int @ 107:17
 	GLOB *1
-THRESH:	DATi #0
+THRESH:	DATi #0	; signature global THRESH : int @ 108:18
 	GLOB *1
-NEWLOC:	DATi #0
+NEWLOC:	DATi #0	; signature global NEWLOC : int @ 109:18
 	GLOB *1
-LIMIT:	DATi #0
+LIMIT:	DATi #0	; signature global LIMIT : int @ 110:17
 	GLOB *1
-OLDLC2:	DATi #0
+OLDLC2:	DATi #0	; signature global OLDLC2 : int @ 111:18
 	GLOB *1
-OLDLOC:	DATi #0
+OLDLOC:	DATi #0	; signature global OLDLOC : int @ 112:18
 	GLOB *1
-DTOTAL:	DATi #0
+DTOTAL:	DATi #0	; signature global DTOTAL : int @ 113:18
 	GLOB *1
-SPK:	DATi #0
+SPK:	DATi #0	; signature global SPK : int @ 114:15
 	GLOB *1
-WD1:	DATi #0
+WD1:	DATi #0	; signature global WD1 : int @ 115:15
 	GLOB *1
-WD1X:	DATi #0
+WD1X:	DATi #0	; signature global WD1X : int @ 116:16
 	GLOB *1
-WD2:	DATi #0
+WD2:	DATi #0	; signature global WD2 : int @ 117:15
 	GLOB *1
-WD2X:	DATi #0
-LINUSE:	! DEFi #12482
-TRVS:	! DEFi #879
-CLSSES:	! DEFi #10
-TRNVLS:	! DEFi #4
-TABNDX:	! DEFi #326
-HNTMAX:	! DEFi #10
-ATAB:	GLOB *331
+WD2X:	DATi #0	; signature global WD2X : int @ 118:16
+LINUSE:	! DEFi #12482	; signature const LINUSE : int @ 120:25
+TRVS:	! DEFi #879	; signature const TRVS : int @ 121:21
+CLSSES:	! DEFi #10	; signature const CLSSES : int @ 122:22
+TRNVLS:	! DEFi #4	; signature const TRNVLS : int @ 123:21
+TABNDX:	! DEFi #326	; signature const TABNDX : int @ 124:23
+HNTMAX:	! DEFi #10	; signature const HNTMAX : int @ 125:22
+; signature extern array PTEXT[] : unknown @ 127:19
+; signature extern array RTEXT[] : unknown @ 128:19
+; signature extern array CTEXT[] : unknown @ 129:19
+; signature extern array STEXT[] : unknown @ 130:19
+; signature extern array LTEXT[] : unknown @ 131:19
+; signature extern array KEY[] : unknown @ 132:17
+; signature extern array LOCSND[] : unknown @ 133:20
+; signature extern array LINES[] : unknown @ 134:19
+; signature extern array CVAL[] : unknown @ 135:18
+; signature extern array TTEXT[] : unknown @ 136:19
+; signature extern array TRNVAL[] : unknown @ 137:20
+; signature extern array TRAVEL[] : unknown @ 138:20
+; signature extern array KTAB[] : unknown @ 139:18
+; signature extern array PLAC[] : unknown @ 140:18
+; signature extern array FIXD[] : unknown @ 141:18
+; signature extern array ACTSPK[] : unknown @ 142:20
+; signature extern array HINTS[] : unknown @ 143:19
+ATAB:	GLOB *331	; signature array ATAB[331] : unknown @ 145:24
 	DATA #0 #576501649 #407342340 #358494005 #627590956
 	DATA #342272582 #375946497 #376088268 #325880787
 	DATA #527121725 #305669668 #575365029 #575505951
@@ -232,7 +256,7 @@ ATAB:	GLOB *331
 	DATA #540281369 #426091588 #644153937 #474943296
 	DATA #475114733 #645429828 #709109173 #741757328
 	DATA #557397993 #0 #0 #0 #0 #0
-COND:	GLOB *186
+COND:	GLOB *186	; signature array COND[186] : unknown @ 168:24
 	DATA #0 #5 #1 #5 #5 #1 #131089 #5 #1050625 #1 #1 #0 #0
 	DATA #4096 #0 #1048576 #0 #0 #0 #8192 #0 #0 #0 #0 #6 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #4 #0 #0 #0 #16400
@@ -250,115 +274,116 @@ COND:	GLOB *186
 	DATA #262161 #262161 #262161 #262161 #262161 #262161
 	DATA #262161 #1 #4 #4 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0
-OBJSND:	GLOB *101
+OBJSND:	GLOB *101	; signature array OBJSND[101] : unknown @ 182:26
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #3 #0 #0 #2 #0 #0 #1 #2 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #6 #0 #0 #0 #0 #0 #0 #4 #0 #3 #0 #0
 	DATA #0 #0 #0 #0 #0 #1 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
-OBJTXT:	GLOB *101
+OBJTXT:	GLOB *101	; signature array OBJTXT[101] : unknown @ 191:26
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #1 #0 #0 #1 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #1 #0 #1 #0 #0 #0 #0 #0 #0 #0 #0 #1 #1 #1 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
-AXE:	! DEFi #28
-BATTER:	! DEFi #39
-BEAR:	! DEFi #35
-BIRD:	! DEFi #8
-BLOOD:	! DEFi #44
-BOTTLE:	! DEFi #20
-CAGE:	! DEFi #4
-CAVITY:	! DEFi #43
-CHASM:	! DEFi #32
-CLAM:	! DEFi #14
-DOOR:	! DEFi #9
-DRAGON:	! DEFi #31
-DWARF:	! DEFi #17
-FISSUR:	! DEFi #12
-FOOD:	! DEFi #19
-GRATE:	! DEFi #3
-KEYS:	! DEFi #1
-KNIFE:	! DEFi #18
-LAMP:	! DEFi #2
-MAGZIN:	! DEFi #16
-MESSAG:	! DEFi #36
-MIRROR:	! DEFi #23
-OGRE:	! DEFi #41
-OIL:	! DEFi #22
-OYSTER:	! DEFi #15
-PILLOW:	! DEFi #10
-PLANT:	! DEFi #24
-PLANT2:	! DEFi #25
-RESER:	! DEFi #45
-ROD:	! DEFi #5
-ROD2:	! DEFi #6
-gSIGN:	! DEFi #49
-SNAKE:	! DEFi #11
-STEPS:	! DEFi #7
-TROLL:	! DEFi #33
-TROLL2:	! DEFi #34
-URN:	! DEFi #42
-VEND:	! DEFi #38
-VOLCAN:	! DEFi #37
-WATER:	! DEFi #21
-AMBER:	! DEFi #67
-CHAIN:	! DEFi #64
-CHEST:	! DEFi #55
-COINS:	! DEFi #54
-EGGS:	! DEFi #56
-EMRALD:	! DEFi #59
-JADE:	! DEFi #66
-NUGGET:	! DEFi #50
-PEARL:	! DEFi #61
-PYRAM:	! DEFi #60
-RUBY:	! DEFi #65
-RUG:	! DEFi #62
-SAPPH:	! DEFi #68
-TRIDNT:	! DEFi #57
-VASE:	! DEFi #58
-BACK:	! DEFi #8
-CAVE:	! DEFi #67
-DPRSSN:	! DEFi #63
-ENTER:	! DEFi #3
-ENTRNC:	! DEFi #64
-LOOK:	! DEFi #57
-NUL:	! DEFi #21
-STREAM:	! DEFi #14
-FIND:	! DEFi #19
-INVENT:	! DEFi #20
-LOCK:	! DEFi #6
-SAY:	! DEFi #3
-THROW:	! DEFi #17
+AXE:	! DEFi #28	; signature const AXE : int @ 200:19
+BATTER:	! DEFi #39	; signature const BATTER : int @ 201:22
+BEAR:	! DEFi #35	; signature const BEAR : int @ 202:20
+BIRD:	! DEFi #8	; signature const BIRD : int @ 203:19
+BLOOD:	! DEFi #44	; signature const BLOOD : int @ 204:21
+BOTTLE:	! DEFi #20	; signature const BOTTLE : int @ 205:22
+CAGE:	! DEFi #4	; signature const CAGE : int @ 206:19
+CAVITY:	! DEFi #43	; signature const CAVITY : int @ 207:22
+CHASM:	! DEFi #32	; signature const CHASM : int @ 208:21
+CLAM:	! DEFi #14	; signature const CLAM : int @ 209:20
+DOOR:	! DEFi #9	; signature const DOOR : int @ 210:19
+DRAGON:	! DEFi #31	; signature const DRAGON : int @ 211:22
+DWARF:	! DEFi #17	; signature const DWARF : int @ 212:21
+FISSUR:	! DEFi #12	; signature const FISSUR : int @ 213:22
+FOOD:	! DEFi #19	; signature const FOOD : int @ 214:20
+GRATE:	! DEFi #3	; signature const GRATE : int @ 215:20
+KEYS:	! DEFi #1	; signature const KEYS : int @ 216:19
+KNIFE:	! DEFi #18	; signature const KNIFE : int @ 217:21
+LAMP:	! DEFi #2	; signature const LAMP : int @ 218:19
+MAGZIN:	! DEFi #16	; signature const MAGZIN : int @ 219:22
+MESSAG:	! DEFi #36	; signature const MESSAG : int @ 220:22
+MIRROR:	! DEFi #23	; signature const MIRROR : int @ 221:22
+OGRE:	! DEFi #41	; signature const OGRE : int @ 222:20
+OIL:	! DEFi #22	; signature const OIL : int @ 223:19
+OYSTER:	! DEFi #15	; signature const OYSTER : int @ 224:22
+PILLOW:	! DEFi #10	; signature const PILLOW : int @ 225:22
+PLANT:	! DEFi #24	; signature const PLANT : int @ 226:21
+PLANT2:	! DEFi #25	; signature const PLANT2 : int @ 227:22
+RESER:	! DEFi #45	; signature const RESER : int @ 228:21
+ROD:	! DEFi #5	; signature const ROD : int @ 229:18
+ROD2:	! DEFi #6	; signature const ROD2 : int @ 230:19
+gSIGN:	! DEFi #49	; signature const gSIGN : int @ 231:21
+SNAKE:	! DEFi #11	; signature const SNAKE : int @ 232:21
+STEPS:	! DEFi #7	; signature const STEPS : int @ 233:20
+TROLL:	! DEFi #33	; signature const TROLL : int @ 234:21
+TROLL2:	! DEFi #34	; signature const TROLL2 : int @ 235:22
+URN:	! DEFi #42	; signature const URN : int @ 236:19
+VEND:	! DEFi #38	; signature const VEND : int @ 237:20
+VOLCAN:	! DEFi #37	; signature const VOLCAN : int @ 238:22
+WATER:	! DEFi #21	; signature const WATER : int @ 239:21
+AMBER:	! DEFi #67	; signature const AMBER : int @ 240:21
+CHAIN:	! DEFi #64	; signature const CHAIN : int @ 241:21
+CHEST:	! DEFi #55	; signature const CHEST : int @ 242:21
+COINS:	! DEFi #54	; signature const COINS : int @ 243:21
+EGGS:	! DEFi #56	; signature const EGGS : int @ 244:20
+EMRALD:	! DEFi #59	; signature const EMRALD : int @ 245:22
+JADE:	! DEFi #66	; signature const JADE : int @ 246:20
+NUGGET:	! DEFi #50	; signature const NUGGET : int @ 247:22
+PEARL:	! DEFi #61	; signature const PEARL : int @ 248:21
+PYRAM:	! DEFi #60	; signature const PYRAM : int @ 249:21
+RUBY:	! DEFi #65	; signature const RUBY : int @ 250:20
+RUG:	! DEFi #62	; signature const RUG : int @ 251:19
+SAPPH:	! DEFi #68	; signature const SAPPH : int @ 252:21
+TRIDNT:	! DEFi #57	; signature const TRIDNT : int @ 253:22
+VASE:	! DEFi #58	; signature const VASE : int @ 254:20
+BACK:	! DEFi #8	; signature const BACK : int @ 255:19
+CAVE:	! DEFi #67	; signature const CAVE : int @ 256:20
+DPRSSN:	! DEFi #63	; signature const DPRSSN : int @ 257:22
+ENTER:	! DEFi #3	; signature const ENTER : int @ 258:20
+ENTRNC:	! DEFi #64	; signature const ENTRNC : int @ 259:22
+LOOK:	! DEFi #57	; signature const LOOK : int @ 260:20
+NUL:	! DEFi #21	; signature const NUL : int @ 261:19
+STREAM:	! DEFi #14	; signature const STREAM : int @ 262:22
+FIND:	! DEFi #19	; signature const FIND : int @ 263:20
+INVENT:	! DEFi #20	; signature const INVENT : int @ 264:22
+LOCK:	! DEFi #6	; signature const LOCK : int @ 265:19
+SAY:	! DEFi #3	; signature const SAY : int @ 266:18
+THROW:	! DEFi #17	; signature const THROW : int @ 267:21
+; signature extern func score() -> unknown @ 269:22
 
 ;-----------------------------------------------------------------------------
-fBUG:	FUNC
+fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:15
 		PARA *1
 	$NUM:	INPi
 	$numString:	LOCA *3
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Fatale4d2 	; output("Fatal error ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 299:24
 		DIVi %0 $NUM #10	; numString[0] = '0' + NUM / 10
 		ADDi $numString:0 #'0' %0
 		MODi %0 $NUM #10	; numString[1] = '0' + NUM % 10
 		ADDi $numString:1 #'0' %0
 		MOVi $numString:2 #0 	; numString[2] = 0
 		ADRL %1 $numString *0	; output(numString)
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 303:19
 		MOVp %1 &.s_Seesou4d3 	; output(".  See source code for interpretation.\n")
-		CALL ^output %0 *2
-		CALL ^abort %0 *1	; abort()
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 304:52
+		CALL ^abort %0 *1	; expects function() -> unknown @ 305:9
 		RETU   	; }
 
 	GLOB *1
-fRAN_R:	DATi #0
+fRAN_R:	DATi #0	; signature global fRAN_R : int @ 308:22
 
 ;-----------------------------------------------------------------------------
-fRAN:	FUNC
 	$RAN:	OUTi
+fRAN:	FUNC	; signature func fRAN(int RANGE) -> int @ 310:15
 	$RANGE:	INPi
 	$D:	LOCi
 	$T:	LOCi
@@ -368,7 +393,7 @@ fRAN:	FUNC
 		EQUi %0 #0 @.f0
 		GEQi $RANGE #0 @.f1
 	.f0:	MOVi $D #1999 	; D=1999
-		CALL ^clock %0 *1	; T=(int)clock() & 0x7FFFFFFF
+		CALL ^clock %0 *1	; expects function() -> unknown @ 328:18
 		ANDi $T %0 #0x7FFFFFFF
 	.f1:	MOVi $T #1 	; for (T=1 to D+1) global fRAN_R=((global fRAN_R*1093+221587)%1048576)
 		ADDi %0 $D #1
@@ -385,12 +410,12 @@ fRAN:	FUNC
 		RETU   	; }
 
 	! MULi <A> #7 #2
-fMPINIT_RUNS:	CNST *<A>
+fMPINIT_RUNS:	CNST *<A>	; signature array fMPINIT_RUNS[<A>] : unknown @ 348:36
 	DATA #32 #34 #39 #46 #65 #90 #97 #122 #37 #37 #48 #57 #0
 	DATA #126
 
 ;-----------------------------------------------------------------------------
-fMPINIT:	FUNC
+fMPINIT:	FUNC	; signature func fMPINIT() -> void @ 350:18
 		PARA *1
 	$FIRST:	LOCi
 	$I:	LOCi
@@ -445,7 +470,7 @@ fMPINIT:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fMAPLIN:	FUNC
+fMAPLIN:	FUNC	; signature func fMAPLIN(int FIL) -> void @ 380:18
 		PARA *1
 	$FIL:	INPi
 	$I:	LOCi
@@ -453,18 +478,18 @@ fMAPLIN:	FUNC
 ;-----------------------------------------------------------------------------
 		PEEK %0 &MAP2:1 	; if((int)global MAP2[1] == 0)fMPINIT()
 		NEQi %0 #0 @.l1
-		CALL &fMPINIT %0 *1	; fMPINIT()
+		CALL &fMPINIT %0 *1	; expects fMPINIT() -> void @ 412:39
 	.l1:	NEQi $FIL #FALSE @.f2	; if(FIL==FALSE) 
 		MOVi %1 #99 	; input(99, global INLINE+1)
 		ADDp %2 &INLINE #1
-		CALL ^input %0 *3
-		CALL ^inputEOF %0 *1	; if ((int)inputEOF() != FALSE) score(1)
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 416:30
+		CALL ^inputEOF %0 *1	; expects function() -> unknown @ 417:24
 		EQUi %0 #FALSE @.e4
 		MOVi %1 #1 	; score(1)
-		CALL &score %0 *2
+		CALL &score %0 *2	; expects score(int) -> unknown @ 417:42
 		GOTO @.e4  	; } else 
 	.f2:	MOVi %1 #-1 	; fBUG(-1)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 419:12
 	.e4:	POKE &LNLENG #0 	; global LNLENG=0
 		MOVi $I #1 	; for (I=1 to 100+1) 
 		! ADDi <A> #100 #1
@@ -488,11 +513,11 @@ fMAPLIN:	FUNC
 	.f9:	RETU   	; }
 
 	GLOB *1
-fGETTXT_SPLITTING:	DATi #-1
+fGETTXT_SPLITTING:	DATi #-1	; signature global fGETTXT_SPLITTING : int @ 437:34
 
 ;-----------------------------------------------------------------------------
-fGETTXT:	FUNC
 	$GETTXT:	OUTi
+fGETTXT:	FUNC	; signature func fGETTXT(int SKIP, int ONEWRD, int UPPER, int HASH) -> int @ 439:18
 	$SKIP:	INPi
 	$ONEWRD:	INPi
 	$UPPER:	INPi
@@ -565,8 +590,8 @@ fGETTXT:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fMAKEWD:	FUNC
 	$MAKEWD:	OUTi
+fMAKEWD:	FUNC	; signature func fMAKEWD(int LETTRS) -> int @ 486:18
 	$LETTRS:	INPi
 	$I:	LOCi
 	$L:	LOCi
@@ -595,7 +620,7 @@ fMAKEWD:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fSHFTXT:	FUNC
+fSHFTXT:	FUNC	; signature func fSHFTXT(int FROM, int DELTA) -> void @ 510:18
 		PARA *1
 	$FROM:	INPi
 	$DELTA:	INPi
@@ -626,7 +651,7 @@ fSHFTXT:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fPUTTXT:	FUNC
+fPUTTXT:	FUNC	; signature func fPUTTXT(int WORD, ptr sTATE, int CASE, int HASH) -> void @ 528:18
 		PARA *1
 	$WORD:	INPi
 	$sTATE:	INPp
@@ -677,7 +702,7 @@ fPUTTXT:	FUNC
 		GOTO @.e8  	; } else 
 	.f7:	PEEK %1 &LNPOSN 	; fSHFTXT(global LNPOSN,1)
 		MOVi %2 #1 
-		CALL &fSHFTXT %0 *3
+		CALL &fSHFTXT %0 *3	; expects fSHFTXT(int, int) -> void @ 555:28
 		PEEK %0 $sTATE 	; (*sTATE)=(int)(*sTATE)+BYTE
 		ADDi %0 %0 $BYTE
 		POKE $sTATE %0 
@@ -705,7 +730,7 @@ fPUTTXT:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fTYPE:	FUNC
+fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
 		PARA *1
 	$I:	LOCi
 	$VAL:	LOCi
@@ -713,11 +738,11 @@ fTYPE:	FUNC
 		PEEK %1 &LNLENG 	; if(!(global LNLENG != 0)) 
 		NEQi %1 #0 @.f0
 		MOVp %1 &.s_Seesou4d3:38 	; output("\n")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 577:15
 		GOTO @return  	; goto return
 	.f0:	PEEK %0 &MAP2:1 	; if((int)global MAP2[1] == 0)fMPINIT()
 		NEQi %0 #0 @.f1
-		CALL &fMPINIT %0 *1	; fMPINIT()
+		CALL &fMPINIT %0 *1	; expects fMPINIT() -> void @ 580:39
 	.f1:	MOVi $I #1 	; for (I=1 to global LNLENG+1) 
 		PEEK %0 &LNLENG 
 		ADDi %0 %0 #1
@@ -731,26 +756,26 @@ fTYPE:	FUNC
 		ADDi %0 %0 #1
 		POKE &INLINE %0 #0
 		ADDp %1 &INLINE #1	; output(global INLINE+1)
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 586:25
 		MOVp %1 &.s_Seesou4d3:38 	; output("\n")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 586:39
 	return:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fTYPE0:	FUNC
+fTYPE0:	FUNC	; signature func fTYPE0() -> void @ 590:17
 		PARA *1
 	$TEMP:	LOCi
 ;-----------------------------------------------------------------------------
 		PEEK $TEMP &LNLENG 	; TEMP=global LNLENG
 		POKE &LNLENG #0 	; global LNLENG=0
-		CALL &fTYPE %0 *1	; fTYPE()
+		CALL &fTYPE %0 *1	; expects fTYPE() -> void @ 598:9
 		POKE &LNLENG $TEMP 	; global LNLENG=TEMP
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fSPEAK:	FUNC
+fSPEAK:	FUNC	; signature func fSPEAK(int N) -> void @ 602:17
 		PARA *1
 	$N:	INPi
 	$BLANK:	LOCi
@@ -783,7 +808,7 @@ fSPEAK:	FUNC
 		ADRL %3 $STATE *0
 		MOVi %4 #2 
 		MOVi %5 $I 
-		CALL &fPUTTXT %1 *5
+		CALL &fPUTTXT %1 *5	; expects fPUTTXT(int, ptr, int, int) -> void @ 620:38
 		FORi $I %0 @.l2	; } /* end loop */
 	.e1:	POKE &LNPOSN #0 	; global LNPOSN=0
 	L30:	PEEK %0 &LNPOSN 	; L30:
@@ -820,7 +845,7 @@ fSPEAK:	FUNC
 	.f12:	PEEK %1 &LNPOSN 	; fSHFTXT(global LNPOSN+2,PRMTYP-2)
 		ADDi %1 %1 #2
 		SUBi %2 $PRMTYP #2
-		CALL &fSHFTXT %0 *3
+		CALL &fSHFTXT %0 *3	; expects fSHFTXT(int, int) -> void @ 646:35
 		PEEK %0 &LNPOSN 	; global LNPOSN=global LNPOSN+PRMTYP
 		ADDi %0 %0 $PRMTYP
 		POKE &LNPOSN %0 
@@ -856,7 +881,7 @@ fSPEAK:	FUNC
 	L320:	PEEK %1 &LNPOSN 	; L320:
 		ADDi %1 %1 #2
 		MOVi %2 #-1 
-		CALL &fSHFTXT %0 *3
+		CALL &fSHFTXT %0 *3	; expects fSHFTXT(int, int) -> void @ 666:29
 		PEEK %0 &LNPOSN 	; global INLINE[global LNPOSN]=55
 		POKE &INLINE %0 #55
 		PEEK %0 &PARMS $NPARMS	; if((int)global PARMS[NPARMS] == 1)fSHFTXT(global LNPOSN+1,-1)
@@ -864,12 +889,12 @@ fSPEAK:	FUNC
 		PEEK %1 &LNPOSN 	; fSHFTXT(global LNPOSN+1,-1)
 		ADDi %1 %1 #1
 		MOVi %2 #-1 
-		CALL &fSHFTXT %0 *3
+		CALL &fSHFTXT %0 *3	; expects fSHFTXT(int, int) -> void @ 668:63
 		GOTO @L395  	; goto L395
 	L340:	PEEK %1 &LNPOSN 	; L340:
 		ADDi %1 %1 #2
 		MOVi %2 #-2 
-		CALL &fSHFTXT %0 *3
+		CALL &fSHFTXT %0 *3	; expects fSHFTXT(int, int) -> void @ 672:29
 		MOVi $STATE #0 	; STATE=0
 		MOVi $CASE #2 	; CASE=2
 	L345:	PEEK %0 &PARMS $NPARMS	; L345:
@@ -883,14 +908,14 @@ fSPEAK:	FUNC
 		ADRL %2 $STATE *0
 		MOVi %3 $CASE 
 		MOVi %4 #0 
-		CALL &fPUTTXT %0 *5
+		CALL &fPUTTXT %0 *5	; expects fPUTTXT(int, ptr, int, int) -> void @ 678:45
 		ADDi $NPARMS $NPARMS #1	; NPARMS=NPARMS+1
 		GOTO @L345  	; goto L345
 	L360:	PEEK $PRMTYP &PARMS $NPARMS	; L360:
 		PEEK %1 &LNPOSN 	; fSHFTXT(global LNPOSN+2,PRMTYP-2)
 		ADDi %1 %1 #2
 		SUBi %2 $PRMTYP #2
-		CALL &fSHFTXT %0 *3
+		CALL &fSHFTXT %0 *3	; expects fSHFTXT(int, int) -> void @ 684:35
 		NEQi $PRMTYP #0 @.f21	; if(PRMTYP == 0) goto L395
 		GOTO @L395  	; goto L395
 	.f21:	MOVi $I #1 	; for (I=1 to PRMTYP+1) 
@@ -906,7 +931,7 @@ fSPEAK:	FUNC
 	L380:	PEEK %1 &LNPOSN 	; L380:
 		ADDi %1 %1 #2
 		MOVi %2 #-2 
-		CALL &fSHFTXT %0 *3
+		CALL &fSHFTXT %0 *3	; expects fSHFTXT(int, int) -> void @ 693:29
 		MOVi $STATE #0 	; STATE=0
 		MOVi $CASE #-1 	; CASE= -1
 		NEQi $PRMTYP #31 @.f24	; if(PRMTYP == 31)CASE=1
@@ -918,13 +943,13 @@ fSPEAK:	FUNC
 		ADRL %2 $STATE *0
 		MOVi %3 $CASE 
 		MOVi %4 #0 
-		CALL &fPUTTXT %0 *5
+		CALL &fPUTTXT %0 *5	; expects fPUTTXT(int, ptr, int, int) -> void @ 699:45
 		ADDi %1 $NPARMS #1	; fPUTTXT(global PARMS[NPARMS+1],&STATE,CASE,0)
 		PEEK %1 &PARMS %1
 		ADRL %2 $STATE *0
 		MOVi %3 $CASE 
 		MOVi %4 #0 
-		CALL &fPUTTXT %0 *5
+		CALL &fPUTTXT %0 *5	; expects fPUTTXT(int, ptr, int, int) -> void @ 700:47
 		NEQi $PRMTYP #13 @.f27	; if(PRMTYP == 13 && (int)global INLINE[I] >= 37 && (int)global INLINE[I] <= 62)global INLINE[I]=(int)global INLINE[I]-26
 		PEEK %0 &INLINE $I
 		LSSi %0 #37 @.f27
@@ -936,9 +961,9 @@ fSPEAK:	FUNC
 	.f27:	ADDi $NPARMS $NPARMS #2	; NPARMS=NPARMS+2
 		GOTO @L32  	; goto L32
 	L40:	EQUi $BLANK #FALSE @.f28	; L40:
-		CALL &fTYPE0 %0 *1	; fTYPE0()
+		CALL &fTYPE0 %0 *1	; expects fTYPE0() -> void @ 706:28
 	.f28:	MOVi $BLANK #FALSE 	; BLANK=FALSE
-		CALL &fTYPE %0 *1	; fTYPE()
+		CALL &fTYPE %0 *1	; expects fTYPE() -> void @ 708:9
 		ADDi $K $L #1	; K=L+1
 		PEEK %0 &LINES $K	; if((int)global LINES[K] >= 0) goto L10
 		LSSi %0 #0 @.f29
@@ -948,7 +973,7 @@ fSPEAK:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fPSPEAK:	FUNC
+fPSPEAK:	FUNC	; signature func fPSPEAK(int MSG, int SKIP) -> void @ 715:18
 		PARA *1
 	$MSG:	INPi
 	$SKIP:	INPi
@@ -967,23 +992,23 @@ fPSPEAK:	FUNC
 		GEQi %1 #0 @.l3
 		FORi $I %0 @.l2	; } /* end loop */
 	.f0:	MOVi %1 $M 	; fSPEAK(M)
-		CALL &fSPEAK %0 *2
+		CALL &fSPEAK %0 *2	; expects fSPEAK(int) -> void @ 728:11
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fRSPEAK:	FUNC
+fRSPEAK:	FUNC	; signature func fRSPEAK(int I) -> void @ 731:18
 		PARA *1
 	$I:	INPi
 ;-----------------------------------------------------------------------------
 		EQUi $I #0 @.f0	; if(I != 0)fSPEAK(global RTEXT[I])
 		PEEK %1 &RTEXT $I	; fSPEAK(global RTEXT[I])
-		CALL &fSPEAK %0 *2
+		CALL &fSPEAK %0 *2	; expects fSPEAK(int) -> void @ 734:35
 	.f0:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fSETPRM:	FUNC
+fSETPRM:	FUNC	; signature func fSETPRM(int FIRST, int P1, int P2) -> void @ 737:18
 		PARA *1
 	$FIRST:	INPi
 	$P1:	INPi
@@ -991,7 +1016,7 @@ fSETPRM:	FUNC
 ;-----------------------------------------------------------------------------
 		LSSi $FIRST #25 @.f0	; if(FIRST >= 25)fBUG(29)
 		MOVi %1 #29 	; fBUG(29)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 741:25
 	.f0:	POKE &PARMS $FIRST $P1	; global PARMS[FIRST]=P1
 		ADDi %0 $FIRST #1	; global PARMS[FIRST + 1]=P2
 		POKE &PARMS %0 $P2
@@ -999,7 +1024,7 @@ fSETPRM:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fGETIN:	FUNC
+fGETIN:	FUNC	; signature func fGETIN(ptr wORD1, ptr wORD1X, ptr wORD2, ptr wORD2X) -> void @ 748:17
 		PARA *1
 	$wORD1:	INPp
 	$wORD1X:	INPp
@@ -1010,14 +1035,14 @@ fGETIN:	FUNC
 	L10:	NOOP
 	.l0:	PEEK %0 &BLKLIN 	; if(global BLKLIN != FALSE)fTYPE0()
 		EQUi %0 #FALSE @.f1
-		CALL &fTYPE0 %0 *1	; fTYPE0()
+		CALL &fTYPE0 %0 *1	; expects fTYPE0() -> void @ 760:37
 	.f1:	MOVi %1 #FALSE 	; fMAPLIN(FALSE)
-		CALL &fMAPLIN %0 *2
+		CALL &fMAPLIN %0 *2	; expects fMAPLIN(int) -> void @ 761:17
 		MOVi %1 #TRUE 	; (*wORD1)=fGETTXT(TRUE,TRUE,TRUE,0)
 		MOVi %2 #TRUE 
 		MOVi %3 #TRUE 
 		MOVi %4 #0 
-		CALL &fGETTXT %0 *5
+		CALL &fGETTXT %0 *5	; expects fGETTXT(int, int, int, int) -> int @ 762:37
 		POKE $wORD1 %0 
 		PEEK %0 &BLKLIN 	; } while (global BLKLIN != FALSE && (int)(*wORD1) < 0)
 		EQUi %0 #FALSE @.f2
@@ -1027,50 +1052,50 @@ fGETIN:	FUNC
 		MOVi %2 #TRUE 
 		MOVi %3 #TRUE 
 		MOVi %4 #0 
-		CALL &fGETTXT %0 *5
+		CALL &fGETTXT %0 *5	; expects fGETTXT(int, int, int, int) -> int @ 764:38
 		POKE $wORD1X %0 
 	.l3:	MOVi %1 #FALSE 	; JUNK=(int)fGETTXT(FALSE,TRUE,TRUE,0)
 		MOVi %2 #TRUE 
 		MOVi %3 #TRUE 
 		MOVi %4 #0 
-		CALL &fGETTXT %0 *5
+		CALL &fGETTXT %0 *5	; expects fGETTXT(int, int, int, int) -> int @ 766:39
 		MOVi $JUNK %0 
 		GRTi $JUNK #0 @.l3	; } while (JUNK > 0)
 		MOVi %1 #TRUE 	; (*wORD2)=fGETTXT(TRUE,TRUE,TRUE,0)
 		MOVi %2 #TRUE 
 		MOVi %3 #TRUE 
 		MOVi %4 #0 
-		CALL &fGETTXT %0 *5
+		CALL &fGETTXT %0 *5	; expects fGETTXT(int, int, int, int) -> int @ 768:36
 		POKE $wORD2 %0 
 		MOVi %1 #FALSE 	; (*wORD2X)=fGETTXT(FALSE,TRUE,TRUE,0)
 		MOVi %2 #TRUE 
 		MOVi %3 #TRUE 
 		MOVi %4 #0 
-		CALL &fGETTXT %0 *5
+		CALL &fGETTXT %0 *5	; expects fGETTXT(int, int, int, int) -> int @ 769:38
 		POKE $wORD2X %0 
 	.l4:	MOVi %1 #FALSE 	; JUNK=(int)fGETTXT(FALSE,TRUE,TRUE,0)
 		MOVi %2 #TRUE 
 		MOVi %3 #TRUE 
 		MOVi %4 #0 
-		CALL &fGETTXT %0 *5
+		CALL &fGETTXT %0 *5	; expects fGETTXT(int, int, int, int) -> int @ 771:39
 		MOVi $JUNK %0 
 		GRTi $JUNK #0 @.l4	; } while (JUNK > 0)
 		MOVi %1 #TRUE 	; if((int)fGETTXT(TRUE,TRUE,TRUE,0) <= 0)goto return
 		MOVi %2 #TRUE 
 		MOVi %3 #TRUE 
 		MOVi %4 #0 
-		CALL &fGETTXT %0 *5
+		CALL &fGETTXT %0 *5	; expects fGETTXT(int, int, int, int) -> int @ 773:36
 		GRTi %0 #0 @.f5
 		GOTO @return  	; goto return
 	.f5:	MOVi %1 #53 	; fRSPEAK(53)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 774:13
 		GOTO @L10  	; goto L10
 	return:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fYES:	FUNC
 	$YES:	OUTi
+fYES:	FUNC	; signature func fYES(int X, int Y, int Z) -> int @ 779:15
 	$X:	INPi
 	$Y:	INPi
 	$Z:	INPi
@@ -1080,40 +1105,40 @@ fYES:	FUNC
 	$JUNK3:	LOCi
 ;-----------------------------------------------------------------------------
 	L1:	MOVi %1 $X 	; L1:
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 787:12
 		ADRL %1 $REPLY *0	; fGETIN(&REPLY,&JUNK1,&JUNK2,&JUNK3)
 		ADRL %2 $JUNK1 *0
 		ADRL %3 $JUNK2 *0
 		ADRL %4 $JUNK3 *0
-		CALL &fGETIN %0 *5
+		CALL &fGETIN %0 *5	; expects fGETIN(ptr, ptr, ptr, ptr) -> void @ 788:37
 		MOVi %1 #250519 	; if(REPLY == (int)fMAKEWD(250519) || REPLY == (int)fMAKEWD(25)) 
-		CALL &fMAKEWD %0 *2
+		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ 789:35
 		EQUi $REPLY %0 @.t0
 		MOVi %1 #25 
-		CALL &fMAKEWD %0 *2
+		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ 789:63
 		NEQi $REPLY %0 @.f1
 	.t0:	MOVi $YES #TRUE 	; YES=TRUE
 		MOVi %1 $Y 	; fRSPEAK(Y)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 791:13
 		GOTO @return  	; goto return
 	.f1:	MOVi %1 #1415 	; if(REPLY == (int)fMAKEWD(1415) || REPLY == (int)fMAKEWD(14)) 
-		CALL &fMAKEWD %0 *2
+		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ 794:33
 		EQUi $REPLY %0 @.t2
 		MOVi %1 #14 
-		CALL &fMAKEWD %0 *2
+		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ 794:61
 		NEQi $REPLY %0 @.f3
 	.t2:	MOVi $YES #FALSE 	; YES=FALSE
 		MOVi %1 $Z 	; fRSPEAK(Z)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 796:13
 		GOTO @return  	; goto return
 	.f3:	MOVi %1 #185 	; fRSPEAK(185)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 799:14
 		GOTO @L1  	; goto L1
 	return:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-score:	FUNC
+score:	FUNC	; signature func score(int MODE) -> void @ 808:16
 		PARA *1
 	$MODE:	INPi
 	$I:	LOCi
@@ -1261,7 +1286,7 @@ score:	FUNC
 		PEEK %1 &TRNLUZ 
 		EQUi %1 #0 @.f24
 		MOVi %1 #242 	; fRSPEAK(242)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 897:85
 	.f24:	PEEK %0 &SCORE 	; if(global SCORE+global SAVED+1 >= global MXSCOR && global SAVED != 0)fRSPEAK(143)
 		PEEK %1 &SAVED 
 		ADDi %0 %0 %1
@@ -1271,17 +1296,17 @@ score:	FUNC
 		PEEK %0 &SAVED 
 		EQUi %0 #0 @.f26
 		MOVi %1 #143 	; fRSPEAK(143)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 898:83
 	.f26:	MOVi %1 #1 	; fSETPRM(1,global SCORE,global MXSCOR)
 		PEEK %2 &SCORE 
 		PEEK %3 &MXSCOR 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 899:39
 		MOVi %1 #3 	; fSETPRM(3,global TURNS,global TURNS)
 		PEEK %2 &TURNS 
 		PEEK %3 &TURNS 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 900:38
 		MOVi %1 #262 	; fRSPEAK(262)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 901:14
 		MOVi $I #1 	; for (I=1 to CLSSES+1) 
 		! ADDi <A> #CLSSES #1
 		GEQi #1 <A> @.e27
@@ -1289,7 +1314,7 @@ score:	FUNC
 		PEEK %1 &SCORE 
 		LSSi %0 %1 @.f29
 		PEEK %1 &CTEXT $I	; fSPEAK(global CTEXT[I])
-		CALL &fSPEAK %0 *2
+		CALL &fSPEAK %0 *2	; expects fSPEAK(int) -> void @ 904:27
 		POKE &SPK #264 	; global SPK=264
 		GEQi $I #CLSSES @.f30	; if(I < CLSSES) 
 		PEEK %0 &CVAL $I	; I=(int)global CVAL[I]+1-global SCORE
@@ -1299,24 +1324,24 @@ score:	FUNC
 		MOVi %1 #1 	; fSETPRM(1,I,I)
 		MOVi %2 $I 
 		MOVi %3 $I 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 908:19
 		POKE &SPK #263 	; global SPK=263
 	.f30:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 911:23
 		MOVi %1 #0 	; exit(0)
-		CALL ^exit %0 *2
+		CALL ^exit %0 *2	; expects function(int) -> unknown @ 912:11
 	.f29:	FORi $I <A> @.l28	; } /* end loop */
 	.e27:	POKE &SPK #265 	; global SPK=265
 		PEEK %1 &SPK 	; fRSPEAK(global SPK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 916:21
 		MOVi %1 #0 	; exit(0)
-		CALL ^exit %0 *2
+		CALL ^exit %0 *2	; expects function(int) -> unknown @ 917:9
 	return:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fVOCAB:	FUNC
 	$VOCAB:	OUTi
+fVOCAB:	FUNC	; signature func fVOCAB(int ID, int INIT) -> int @ 924:17
 	$ID:	INPi
 	$INIT:	INPi
 	$HASH:	LOCi
@@ -1332,7 +1357,7 @@ fVOCAB:	FUNC
 		GEQi $INIT #0 @.f3	; if(INIT < 0) goto return
 		GOTO @return  	; goto return
 	.f3:	MOVi %1 #5 	; fBUG(5)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 940:11
 	.f2:	ADDi $HASH $HASH #7	; HASH=HASH+7
 		LSSi $INIT #0 @.f4	; if(!(INIT >= 0 && (int)global KTAB[I]/1000 != INIT)) 
 		PEEK %0 &KTAB $I
@@ -1348,12 +1373,12 @@ fVOCAB:	FUNC
 		GOTO @return  	; goto return
 	.f5:	FORi $I <A> @.l1	; } /* end loop */
 	.e0:	MOVi %1 #21 	; fBUG(21)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 951:10
 	return:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fCARRY:	FUNC
+fCARRY:	FUNC	; signature func fCARRY(int OBJECT, int WHERE) -> void @ 955:17
 		PARA *1
 	$OBJECT:	INPi
 	$WHERE:	INPi
@@ -1383,7 +1408,7 @@ fCARRY:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fDROP:	FUNC
+fDROP:	FUNC	; signature func fDROP(int OBJECT, int WHERE) -> void @ 979:16
 		PARA *1
 	$OBJECT:	INPi
 	$WHERE:	INPi
@@ -1406,7 +1431,7 @@ fDROP:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fMOVE:	FUNC
+fMOVE:	FUNC	; signature func fMOVE(int OBJECT, int WHERE) -> void @ 995:16
 		PARA *1
 	$OBJECT:	INPi
 	$WHERE:	INPi
@@ -1421,26 +1446,26 @@ fMOVE:	FUNC
 		GRTi $FROM #300 @.f3
 		MOVi %1 $OBJECT 	; fCARRY(OBJECT,FROM)
 		MOVi %2 $FROM 
-		CALL &fCARRY %0 *3
+		CALL &fCARRY %0 *3	; expects fCARRY(int, int) -> void @ 1007:48
 	.f3:	MOVi %1 $OBJECT 	; fDROP(OBJECT,WHERE)
 		MOVi %2 $WHERE 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1008:21
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fDSTROY:	FUNC
+fDSTROY:	FUNC	; signature func fDSTROY(int OBJECT) -> void @ 1011:18
 		PARA *1
 	$OBJECT:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi %1 $OBJECT 	; fMOVE(OBJECT,0)
 		MOVi %2 #0 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1014:17
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fJUGGLE:	FUNC
+fJUGGLE:	FUNC	; signature func fJUGGLE(int OBJECT) -> void @ 1017:18
 		PARA *1
 	$OBJECT:	INPi
 	$I:	LOCi
@@ -1450,30 +1475,30 @@ fJUGGLE:	FUNC
 		PEEK $J &FIXED $OBJECT	; J=(int)global FIXED[OBJECT]
 		MOVi %1 $OBJECT 	; fMOVE(OBJECT,I)
 		MOVi %2 $I 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1025:17
 		ADDi %1 $OBJECT #100	; fMOVE(OBJECT+100,J)
 		MOVi %2 $J 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1026:21
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fPUT:	FUNC
 	$PUT:	OUTi
+fPUT:	FUNC	; signature func fPUT(int OBJECT, int WHERE, int PVAL) -> int @ 1029:15
 	$OBJECT:	INPi
 	$WHERE:	INPi
 	$PVAL:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi %1 $OBJECT 	; fMOVE(OBJECT,WHERE)
 		MOVi %2 $WHERE 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1035:21
 		SUBi $PUT #-1 $PVAL	; PUT=(-1)-PVAL
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fATDWRF:	FUNC
 	$ATDWRF:	OUTi
+fATDWRF:	FUNC	; signature func fATDWRF(int WHERE) -> int @ 1039:18
 	$WHERE:	INPi
 	$I:	LOCi
 ;-----------------------------------------------------------------------------
@@ -1498,8 +1523,8 @@ fATDWRF:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fRNDVOC:	FUNC
 	$RNDVOC:	OUTi
+fRNDVOC:	FUNC	; signature func fRNDVOC(int CHAR, int FORCE) -> int @ 1060:18
 	$CHAR:	INPi
 	$FORCE:	INPi
 	$DIV:	LOCi
@@ -1512,7 +1537,7 @@ fRNDVOC:	FUNC
 		! ADDi <A> #5 #1
 		GEQi #1 <A> @.f0
 	.l2:	MOVi %1 #26 	; J=11+(int)fRAN(26)
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 1072:22
 		ADDi $J #11 %0
 		NEQi $I #2 @.f3	; if(I == 2)J=CHAR
 		MOVi $J $CHAR 	; J=CHAR
@@ -1539,12 +1564,12 @@ fRNDVOC:	FUNC
 		GOTO @return  	; goto return
 	.f6:	FORi $I <A> @.l5	; } /* end loop */
 	.e4:	MOVi %1 #5 	; fBUG(5)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 1086:9
 	return:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-initialise:	FUNC
+initialise:	FUNC	; signature func initialise() -> void @ 1100:21
 		PARA *1
 	$I:	LOCi
 	$K:	LOCi
@@ -1582,10 +1607,10 @@ initialise:	FUNC
 		LEQi %0 #0 @.f9
 		ADDi %1 $K #100	; fDROP(K+100,global FIXD[K])
 		PEEK %2 &FIXD $K
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1129:31
 		MOVi %1 $K 	; fDROP(K,global PLAC[K])
 		PEEK %2 &PLAC $K
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1130:27
 	.f9:	FORi $I <A> @.l8	; } /* end loop */
 	.e7:	MOVi $I #1 	; for (I=1 to 100+1) 
 		! ADDi <A> #100 #1
@@ -1599,7 +1624,7 @@ initialise:	FUNC
 		GRTi %0 #0 @.f13
 		MOVi %1 $K 	; fDROP(K,global PLAC[K])
 		PEEK %2 &PLAC $K
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1137:82
 	.f13:	FORi $I <A> @.l11	; } /* end loop */
 	.e10:	POKE &TALLY #0 	; global TALLY=0
 		MOVi $I #50 	; for (I=50 to MAXTRS+1) 
@@ -1651,8 +1676,8 @@ initialise:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-TOTING:	FUNC
 	$r:	OUTi
+TOTING:	FUNC	; signature func TOTING(int OBJ) -> int @ 1218:17
 	$OBJ:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
@@ -1663,8 +1688,8 @@ TOTING:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-AT:	FUNC
 	$r:	OUTi
+AT:	FUNC	; signature func AT(int OBJ, int LOC) -> int @ 1219:13
 	$OBJ:	INPi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
@@ -1678,17 +1703,17 @@ AT:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-HERE:	FUNC
 	$r:	OUTi
+HERE:	FUNC	; signature func HERE(int OBJ, int LOC) -> int @ 1220:15
 	$OBJ:	INPi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
 		MOVi %1 $OBJ 	; if (((int)AT(OBJ, LOC) | (int)TOTING(OBJ)) != FALSE) r = TRUE
 		MOVi %2 $LOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1220:83
 		MOVi %2 $OBJ 
-		CALL &TOTING %1 *2
+		CALL &TOTING %1 *2	; expects TOTING(int) -> int @ 1220:101
 		IORi %0 %0 %1
 		EQUi %0 #FALSE @.f0
 		MOVi $r #TRUE 	; r = TRUE
@@ -1696,8 +1721,8 @@ HERE:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-LIQ2:	FUNC
 	$r:	OUTi
+LIQ2:	FUNC	; signature func LIQ2(int PBOTL) -> int @ 1221:15
 	$PBOTL:	INPi
 ;-----------------------------------------------------------------------------
 		SUBi %0 #1 $PBOTL	; r = ((1-(PBOTL))*WATER+((PBOTL)/2)*(WATER+OIL))
@@ -1710,8 +1735,8 @@ LIQ2:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-LIQ:	FUNC
 	$r:	OUTi
+LIQ:	FUNC	; signature func LIQ() -> int @ 1222:14
 ;-----------------------------------------------------------------------------
 		PEEK %0 &PROP:BOTTLE 	; if ((int)global PROP[BOTTLE]<0) r = -1-(int)global PROP[BOTTLE]
 		GEQi %0 #0 @.f0
@@ -1720,14 +1745,14 @@ LIQ:	FUNC
 		GOTO @.e1  
 	.f0:	PEEK $r &PROP:BOTTLE 	; r = (int)global PROP[BOTTLE]
 	.e1:	MOVi %1 $r 	; r = (int)LIQ2(r)
-		CALL &LIQ2 %0 *2
+		CALL &LIQ2 %0 *2	; expects LIQ2(int) -> int @ 1222:148
 		MOVi $r %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-LIQLOC:	FUNC
 	$r:	OUTi
+LIQLOC:	FUNC	; signature func LIQLOC(int LOC) -> int @ 1223:17
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		PEEK %1 &COND $LOC	; r = (int)LIQ2(((((int)global COND[LOC]/2*2)%8)-5)*(((int)global COND[LOC]/4)%2)+1)
@@ -1740,14 +1765,14 @@ LIQLOC:	FUNC
 		MODi %2 %2 #2
 		MULi %1 %1 %2
 		ADDi %1 %1 #1
-		CALL &LIQ2 %0 *2
+		CALL &LIQ2 %0 *2	; expects LIQ2(int) -> int @ 1223:124
 		MOVi $r %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-CNDBIT:	FUNC
 	$r:	OUTi
+CNDBIT:	FUNC	; signature func CNDBIT(int L, int N) -> int @ 1224:17
 	$L:	INPi
 	$N:	INPi
 ;-----------------------------------------------------------------------------
@@ -1761,28 +1786,28 @@ CNDBIT:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-DARK:	FUNC
 	$r:	OUTi
+DARK:	FUNC	; signature func DARK(int LOC) -> int @ 1225:15
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
 		MOVi %1 $LOC 	; if (((int)CNDBIT(LOC,0) == FALSE) && ((int)global PROP[LAMP] == 0 || (int)HERE(LAMP, LOC) == FALSE)) r = TRUE
 		MOVi %2 #0 
-		CALL &CNDBIT %0 *3
+		CALL &CNDBIT %0 *3	; expects CNDBIT(int, int) -> int @ 1225:75
 		NEQi %0 #FALSE @.f2
 		PEEK %0 &PROP:LAMP 
 		EQUi %0 #0 @.t1
 		MOVi %1 #LAMP 
 		MOVi %2 $LOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1225:141
 		NEQi %0 #FALSE @.f2
 	.t1:	MOVi $r #TRUE 	; r = TRUE
 	.f2:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-GSTONE:	FUNC
 	$r:	OUTi
+GSTONE:	FUNC	; signature func GSTONE(int OBJ) -> int @ 1226:17
 	$OBJ:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
@@ -1795,8 +1820,8 @@ GSTONE:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-FOREST:	FUNC
 	$r:	OUTi
+FOREST:	FUNC	; signature func FOREST(int LOC) -> int @ 1227:17
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
@@ -1807,14 +1832,14 @@ FOREST:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-OUTSID:	FUNC
 	$r:	OUTi
+OUTSID:	FUNC	; signature func OUTSID(int LOC) -> int @ 1235:17
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
 		LEQi $LOC #8 @.t0	; if ((LOC) <= 8 || (int)FOREST(LOC) != FALSE || (LOC) == (int)global PLAC[SAPPH] || (LOC) == 180 || (LOC) == 182) r = TRUE
 		MOVi %1 $LOC 
-		CALL &FOREST %0 *2
+		CALL &FOREST %0 *2	; expects FOREST(int) -> int @ 1235:88
 		NEQi %0 #FALSE @.t0
 		PEEK %0 &PLAC:SAPPH 
 		EQUi $LOC %0 @.t0
@@ -1825,14 +1850,14 @@ OUTSID:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-INDEEP:	FUNC
 	$r:	OUTi
+INDEEP:	FUNC	; signature func INDEEP(int LOC) -> int @ 1236:17
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
 		LSSi $LOC #15 @.f1	; if ((LOC) >= 15 && (int)OUTSID(LOC) == FALSE && (LOC) != 179) r = TRUE
 		MOVi %1 $LOC 
-		CALL &OUTSID %0 *2
+		CALL &OUTSID %0 *2	; expects OUTSID(int) -> int @ 1236:89
 		NEQi %0 #FALSE @.f1
 		EQUi $LOC #179 @.f1
 		MOVi $r #TRUE 	; r = TRUE
@@ -1840,8 +1865,8 @@ INDEEP:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-discard:	FUNC
 	$goValue:	OUTi
+discard:	FUNC	; signature func discard(int just_do_it) -> int @ 1242:18
 	$just_do_it:	INPi
 	$lK:	LOCi
 	$lLOC:	LOCi
@@ -1851,16 +1876,16 @@ discard:	FUNC
 		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
 		NEQi $just_do_it #FALSE @.f0	; if(just_do_it == FALSE) 
 		MOVi %1 #ROD2 	; if((int)TOTING(ROD2) != FALSE && lOBJ == ROD && (int)TOTING(ROD) == FALSE) 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1249:24
 		EQUi %0 #FALSE @.f2
 		NEQi $lOBJ #ROD @.f2
 		MOVi %1 #ROD 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1249:68
 		NEQi %0 #FALSE @.f2
 		MOVi $lOBJ #ROD2 	; lOBJ=ROD2
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f2:	MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) == FALSE) 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1250:24
 		NEQi %0 #FALSE @.f3
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -1868,34 +1893,34 @@ discard:	FUNC
 	.f3:	NEQi $lOBJ #BIRD @.f6	; if(!(lOBJ != BIRD || (int)HERE(SNAKE, lLOC) == FALSE)) 
 		MOVi %1 #SNAKE 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1251:52
 		EQUi %0 #FALSE @.f6
 		MOVi %1 #30 	; fRSPEAK(30)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1252:15
 		PEEK %0 &CLOSED 	; if(global CLOSED != FALSE) 
 		EQUi %0 #FALSE @.f7
 		MOVi $goValue #GOTO19000 	; goValue = GOTO19000
 		GOTO @return  	; goto return
 	.f7:	MOVi %1 #SNAKE 	; fDSTROY(SNAKE)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1254:18
 		POKE &PROP:SNAKE #1 	; global PROP[SNAKE]=1
 		GOTO @.e8  	; } else if(!(!((int)GSTONE(lOBJ) != FALSE && (int)AT(CAVITY, lLOC) != FALSE && (int)global PROP[CAVITY] != 0))) 
 	.f6:	MOVi %1 $lOBJ 	; if(!(!((int)GSTONE(lOBJ) != FALSE && (int)AT(CAVITY, lLOC) != FALSE && (int)global PROP[CAVITY] != 0))) 
-		CALL &GSTONE %0 *2
+		CALL &GSTONE %0 *2	; expects GSTONE(int) -> int @ 1257:35
 		EQUi %0 #FALSE @.f10
 		MOVi %1 #CAVITY 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1257:69
 		EQUi %0 #FALSE @.f10
 		PEEK %0 &PROP:CAVITY 
 		EQUi %0 #0 @.f10
 		MOVi %1 #218 	; fRSPEAK(218)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1258:16
 		POKE &PROP $lOBJ #1	; global PROP[lOBJ]=1
 		POKE &PROP:CAVITY #0 	; global PROP[CAVITY]=0
 		MOVi %1 #RUG 	; if(!((int)HERE(RUG, lLOC) == FALSE || !((lOBJ == EMRALD && (int)global PROP[RUG] != 2) || (lOBJ == RUBY && (int)global PROP[RUG] == 2)))) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1261:30
 		EQUi %0 #FALSE @.e20
 		NEQi $lOBJ #EMRALD @.f12
 		PEEK %0 &PROP:RUG 
@@ -1905,13 +1930,13 @@ discard:	FUNC
 		NEQi %0 #2 @.e20
 	.t13:	POKE &SPK #219 	; global SPK=219
 		MOVi %1 #RUG 	; if((int)TOTING(RUG) != FALSE)global SPK=220
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1263:25
 		EQUi %0 #FALSE @.f16
 		POKE &SPK #220 	; global SPK=220
 	.f16:	NEQi $lOBJ #RUBY @.f17	; if(lOBJ == RUBY)global SPK=221
 		POKE &SPK #221 	; global SPK=221
 	.f17:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1265:24
 		PEEK %0 &SPK 	; if(!(global SPK == 220)) 
 		EQUi %0 #220 @.e20
 		PEEK %0 &PROP:RUG 	; lK=2-(int)global PROP[RUG]
@@ -1921,35 +1946,35 @@ discard:	FUNC
 		PEEK $lK &PLAC:SAPPH 	; lK=(int)global PLAC[SAPPH]
 	.f19:	ADDi %1 #RUG #100	; fMOVE(RUG+100,lK)
 		MOVi %2 $lK 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1270:23
 		GOTO @.e20  	; } else if(!(lOBJ != COINS || (int)HERE(VEND, lLOC) == FALSE)) 
 	.f10:	NEQi $lOBJ #COINS @.f22	; if(!(lOBJ != COINS || (int)HERE(VEND, lLOC) == FALSE)) 
 		MOVi %1 #VEND 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1273:54
 		EQUi %0 #FALSE @.f22
 		MOVi %1 #COINS 	; fDSTROY(COINS)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1274:18
 		MOVi %1 #BATTER 	; fDROP(BATTER,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1275:22
 		MOVi %1 #BATTER 	; fPSPEAK(BATTER,0)
 		MOVi %2 #0 
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 1276:21
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 		GOTO @.e23  	; } else if(!(lOBJ != BIRD || (int)AT(DRAGON, lLOC) == FALSE || (int)global PROP[DRAGON] != 0)) 
 	.f22:	NEQi $lOBJ #BIRD @.f25	; if(!(lOBJ != BIRD || (int)AT(DRAGON, lLOC) == FALSE || (int)global PROP[DRAGON] != 0)) 
 		MOVi %1 #DRAGON 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1278:53
 		EQUi %0 #FALSE @.f25
 		PEEK %0 &PROP:DRAGON 
 		NEQi %0 #0 @.f25
 		MOVi %1 #154 	; fRSPEAK(154)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1279:16
 		MOVi %1 #BIRD 	; fDSTROY(BIRD)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1280:17
 		POKE &PROP:BIRD #0 	; global PROP[BIRD]=0
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
@@ -1957,42 +1982,42 @@ discard:	FUNC
 	.f25:	NEQi $lOBJ #BEAR @.f28	; if(!(lOBJ != BEAR || (int)AT(TROLL, lLOC) == FALSE)) 
 		MOVi %1 #TROLL 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1283:52
 		EQUi %0 #FALSE @.f28
 		MOVi %1 #163 	; fRSPEAK(163)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1284:16
 		MOVi %1 #TROLL 	; fMOVE(TROLL,0)
 		MOVi %2 #0 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1285:18
 		ADDi %1 #TROLL #100	; fMOVE(TROLL+100,0)
 		MOVi %2 #0 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1286:22
 		MOVi %1 #TROLL2 	; fMOVE(TROLL2,global PLAC[TROLL])
 		PEEK %2 &PLAC:TROLL 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1287:36
 		ADDi %1 #TROLL2 #100	; fMOVE(TROLL2+100,global FIXD[TROLL])
 		PEEK %2 &FIXD:TROLL 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1288:40
 		MOVi %1 #CHASM 	; fJUGGLE(CHASM)
-		CALL &fJUGGLE %0 *2
+		CALL &fJUGGLE %0 *2	; expects fJUGGLE(int) -> void @ 1289:18
 		POKE &PROP:TROLL #2 	; global PROP[TROLL]=2
 		GOTO @.e29  	; } else if(!(lOBJ == VASE && lLOC != (int)global PLAC[PILLOW])) 
 	.f28:	NEQi $lOBJ #VASE @.f30	; if(!(lOBJ == VASE && lLOC != (int)global PLAC[PILLOW])) 
 		PEEK %0 &PLAC:PILLOW 
 		NEQi $lLOC %0 @.f31
 	.f30:	MOVi %1 #54 	; fRSPEAK(54)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1292:15
 		GOTO @.e32  	; } else 
 	.f31:	POKE &PROP:VASE #2 	; global PROP[VASE]=2
 		MOVi %1 #PILLOW 	; if((int)AT(PILLOW, lLOC) != FALSE)global PROP[VASE]=0
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1295:29
 		EQUi %0 #FALSE @.f33
 		POKE &PROP:VASE #0 	; global PROP[VASE]=0
 	.f33:	MOVi %1 #VASE 	; fPSPEAK(VASE,(int)global PROP[VASE]+1)
 		PEEK %2 &PROP:VASE 
 		ADDi %2 %2 #1
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 1296:42
 		PEEK %0 &PROP:VASE 	; if((int)global PROP[VASE] != 0)global FIXED[VASE]= -1
 		EQUi %0 #0 @.f0
 		POKE &FIXED:VASE #-1 	; global FIXED[VASE]= -1
@@ -2003,7 +2028,7 @@ discard:	FUNC
 	.e20:	NOOP
 	.e8:	NOOP
 	.e4:	NOOP
-	.f0:	CALL &LIQ %0 *1	; lK=(int)LIQ()
+	.f0:	CALL &LIQ %0 *1	; expects LIQ() -> int @ 1301:15
 		MOVi $lK %0 
 		POKE &gK $lK 	; global gK = lK
 		NEQi $lK $lOBJ @.f35	; if(lK == lOBJ) 
@@ -2017,16 +2042,16 @@ discard:	FUNC
 		NEQi %0 #1 @.f39
 		MOVi %1 #BIRD 	; fDROP(BIRD,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1304:65
 	.f39:	MOVi %1 $lOBJ 	; fDROP(lOBJ,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1305:18
 		EQUi $lOBJ #BIRD @.f40	; if(lOBJ != BIRD) 
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 	.f40:	POKE &PROP:BIRD #0 	; global PROP[BIRD]=0
 		MOVi %1 $lLOC 	; if((int)FOREST(lLOC) != FALSE)global PROP[BIRD]=2
-		CALL &FOREST %0 *2
+		CALL &FOREST %0 *2	; expects FOREST(int) -> int @ 1308:23
 		EQUi %0 #FALSE @.f41
 		POKE &PROP:BIRD #2 	; global PROP[BIRD]=2
 	.f41:	MOVi $goValue #GOTO2012 	; goValue = GOTO2012
@@ -2035,8 +2060,8 @@ discard:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fill:	FUNC
 	$goValue:	OUTi
+fill:	FUNC	; signature func fill(int OBJ) -> int @ 1315:15
 	$OBJ:	INPi
 	$lK:	LOCi
 	$lLOC:	LOCi
@@ -2050,13 +2075,13 @@ fill:	FUNC
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f2:	POKE &SPK #144 	; global SPK=144
-		CALL &LIQ %0 *1	; lK=(int)LIQ()
+		CALL &LIQ %0 *1	; expects LIQ() -> int @ 1325:17
 		MOVi $lK %0 
 		POKE &gK $lK 	; global gK = lK
 		EQUi $lK #0 @.t3	; if(lK == 0 || (int)HERE(BOTTLE, lLOC) == FALSE) 
 		MOVi %1 #BOTTLE 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1326:42
 		NEQi %0 #FALSE @.f4
 	.t3:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -2076,23 +2101,23 @@ fill:	FUNC
 	.f7:	NEQi $OBJ #0 @.f9	; if(OBJ == 0 && (int)HERE(BOTTLE, lLOC) == FALSE) 
 		MOVi %1 #BOTTLE 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1334:42
 		NEQi %0 #FALSE @.f9
 		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		GOTO @return  	; goto return
 	.f9:	POKE &SPK #107 	; global SPK=107
 		MOVi %1 $lLOC 	; if((int)LIQLOC(lLOC) == 0)global SPK=106
-		CALL &LIQLOC %0 *2
+		CALL &LIQLOC %0 *2	; expects LIQLOC(int) -> int @ 1336:24
 		NEQi %0 #0 @.f10
 		POKE &SPK #106 	; global SPK=106
 	.f10:	MOVi %1 #URN 	; if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] != 0)global SPK=214
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1337:27
 		EQUi %0 #FALSE @.f12
 		PEEK %0 &PROP:URN 
 		EQUi %0 #0 @.f12
 		POKE &SPK #214 	; global SPK=214
-	.f12:	CALL &LIQ %0 *1	; if((int)LIQ() != 0)global SPK=105
+	.f12:	CALL &LIQ %0 *1	; expects LIQ() -> int @ 1338:17
 		EQUi %0 #0 @.f13
 		POKE &SPK #105 	; global SPK=105
 	.f13:	PEEK %0 &SPK 	; if(global SPK != 107) 
@@ -2104,11 +2129,11 @@ fill:	FUNC
 		DIVi %0 %0 #2
 		MULi %0 %0 #2
 		POKE &PROP:BOTTLE %0 
-		CALL &LIQ %0 *1	; lK=(int)LIQ()
+		CALL &LIQ %0 *1	; expects LIQ() -> int @ 1341:16
 		MOVi $lK %0 
 		POKE &gK $lK 	; global gK = lK
 		MOVi %1 #BOTTLE 	; if((int)TOTING(BOTTLE) != FALSE)global PLACE[lK]= -1
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1342:26
 		EQUi %0 #FALSE @.f15
 		POKE &PLACE $lK #-1	; global PLACE[lK]= -1
 	.f15:	NEQi $lK #OIL @.f16	; if(lK == OIL)global SPK=108
@@ -2118,23 +2143,23 @@ fill:	FUNC
 		GOTO @.e17  	; } else 
 	.f0:	POKE &SPK #29 	; global SPK=29
 		MOVi %1 $lLOC 	; if((int)LIQLOC(lLOC) == 0)global SPK=144
-		CALL &LIQLOC %0 *2
+		CALL &LIQLOC %0 *2	; expects LIQLOC(int) -> int @ 1347:24
 		NEQi %0 #0 @.f18
 		POKE &SPK #144 	; global SPK=144
 	.f18:	MOVi %1 $lLOC 	; if((int)LIQLOC(lLOC) == 0 || (int)TOTING(VASE) == FALSE) 
-		CALL &LIQLOC %0 *2
+		CALL &LIQLOC %0 *2	; expects LIQLOC(int) -> int @ 1348:24
 		EQUi %0 #0 @.t19
 		MOVi %1 #VASE 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1348:50
 		NEQi %0 #FALSE @.f20
 	.t19:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f20:	MOVi %1 #145 	; fRSPEAK(145)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1349:15
 		POKE &PROP:VASE #2 	; global PROP[VASE]=2
 		POKE &FIXED:VASE #-1 	; global FIXED[VASE]= -1
 		MOVi %1 #TRUE 	; goValue = (int)discard(TRUE)
-		CALL &discard %0 *2
+		CALL &discard %0 *2	; expects discard(int) -> int @ 1352:33
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 	.e17:	NOOP
@@ -2142,8 +2167,8 @@ fill:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-carry:	FUNC
 	$goValue:	OUTi
+carry:	FUNC	; signature func carry() -> int @ 1361:16
 	$lK:	LOCi
 	$lLOC:	LOCi
 	$lOBJ:	LOCi
@@ -2152,7 +2177,7 @@ carry:	FUNC
 		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
 		PEEK $lLOC &gLOC 	; lLOC = global gLOC
 		MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) != FALSE) 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1368:23
 		EQUi %0 #FALSE @.f0
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -2184,7 +2209,7 @@ carry:	FUNC
 	.f12:	NEQi $lOBJ #MESSAG @.f13	; if(lOBJ == MESSAG) 
 		POKE &SPK #190 	; global SPK=190
 		MOVi %1 #MESSAG 	; fDSTROY(MESSAG)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1380:18
 	.f13:	PEEK %0 &FIXED $lOBJ	; if((int)global FIXED[lOBJ] != 0) 
 		EQUi %0 #0 @.f14
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
@@ -2197,24 +2222,24 @@ carry:	FUNC
 		POKE &gOBJ #BOTTLE 	; global gOBJ = BOTTLE
 		MOVi %1 #BOTTLE 	; if(!((int)HERE(BOTTLE, lLOC) != FALSE && (int)LIQ() == lK)) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1386:32
 		EQUi %0 #FALSE @.f17
-		CALL &LIQ %0 *1
+		CALL &LIQ %0 *1	; expects LIQ() -> int @ 1386:55
 		EQUi %0 $lK @.f16
 	.f17:	MOVi %1 #BOTTLE 	; if((int)TOTING(BOTTLE) != FALSE && (int)global PROP[BOTTLE] == 1) 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1387:27
 		EQUi %0 #FALSE @.f20
 		PEEK %0 &PROP:BOTTLE 
 		NEQi %0 #1 @.f20
 		MOVi %1 $lOBJ 	; goValue = (int)fill(lOBJ)
-		CALL &fill %0 *2
+		CALL &fill %0 *2	; expects fill(int) -> int @ 1387:97
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 	.f20:	PEEK %0 &PROP:BOTTLE 	; if((int)global PROP[BOTTLE] != 1)global SPK=105
 		EQUi %0 #1 @.f21
 		POKE &SPK #105 	; global SPK=105
 	.f21:	MOVi %1 #BOTTLE 	; if((int)TOTING(BOTTLE) == FALSE)global SPK=104
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1389:27
 		NEQi %0 #FALSE @.f22
 		POKE &SPK #104 	; global SPK=104
 	.f22:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
@@ -2234,15 +2259,15 @@ carry:	FUNC
 		NEQi %0 #2 @.f26
 		POKE &SPK #238 	; global SPK=238
 		MOVi %1 #BIRD 	; fDSTROY(BIRD)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1398:17
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f26:	MOVi %1 #CAGE 	; if((int)TOTING(CAGE) == FALSE)global SPK=27
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1401:24
 		NEQi %0 #FALSE @.f27
 		POKE &SPK #27 	; global SPK=27
 	.f27:	MOVi %1 #ROD 	; if((int)TOTING(ROD) != FALSE)global SPK=26
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1402:23
 		EQUi %0 #FALSE @.f28
 		POKE &SPK #26 	; global SPK=26
 	.f28:	PEEK %0 &SPK 	; if(global SPK/2 == 13) 
@@ -2262,18 +2287,18 @@ carry:	FUNC
 		! ADDi <A> #BIRD #CAGE	; fCARRY(BIRD+CAGE-lOBJ,lLOC)
 		SUBi %1 <A> $lOBJ
 		MOVi %2 $lLOC 
-		CALL &fCARRY %0 *3
+		CALL &fCARRY %0 *3	; expects fCARRY(int, int) -> void @ 1406:130
 	.f33:	MOVi %1 $lOBJ 	; fCARRY(lOBJ,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fCARRY %0 *3
-		CALL &LIQ %0 *1	; lK=(int)LIQ()
+		CALL &fCARRY %0 *3	; expects fCARRY(int, int) -> void @ 1407:19
+		CALL &LIQ %0 *1	; expects LIQ() -> int @ 1408:15
 		MOVi $lK %0 
 		POKE &gK $lK 	; global gK = lK
 		NEQi $lOBJ #BOTTLE @.f35	; if(lOBJ == BOTTLE && lK != 0)global PLACE[lK]= -1
 		EQUi $lK #0 @.f35
 		POKE &PLACE $lK #-1	; global PLACE[lK]= -1
 	.f35:	MOVi %1 $lOBJ 	; if((int)GSTONE(lOBJ) == FALSE || (int)global PROP[lOBJ] == 0) 
-		CALL &GSTONE %0 *2
+		CALL &GSTONE %0 *2	; expects GSTONE(int) -> int @ 1410:23
 		EQUi %0 #FALSE @.t36
 		PEEK %0 &PROP $lOBJ
 		NEQi %0 #0 @.f37
@@ -2287,8 +2312,8 @@ carry:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-attack:	FUNC
 	$goValue:	OUTi
+attack:	FUNC	; signature func attack() -> int @ 1421:17
 	$I:	LOCi
 	$lK:	LOCi
 	$lLOC:	LOCi
@@ -2297,7 +2322,7 @@ attack:	FUNC
 		PEEK $lLOC &gLOC 	; lLOC = global gLOC
 		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
 		MOVi %1 $lLOC 	; I=(int)fATDWRF(lLOC)
-		CALL &fATDWRF %0 *2
+		CALL &fATDWRF %0 *2	; expects fATDWRF(int) -> int @ 1427:22
 		MOVi $I %0 
 		NEQi $lOBJ #0 @.f0	; if(lOBJ == 0) 
 		LEQi $I #0 @.f1	; if(I > 0) 
@@ -2305,14 +2330,14 @@ attack:	FUNC
 		POKE &gOBJ #DWARF 	; global gOBJ = DWARF
 	.f1:	MOVi %1 #SNAKE 	; if((int)HERE(SNAKE, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1430:29
 		EQUi %0 #FALSE @.f2
 		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+SNAKE
 		ADDi $lOBJ %0 #SNAKE
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f2:	MOVi %1 #DRAGON 	; if((int)AT(DRAGON, lLOC) != FALSE && (int)global PROP[DRAGON] == 0) 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1431:28
 		EQUi %0 #FALSE @.f4
 		PEEK %0 &PROP:DRAGON 
 		NEQi %0 #0 @.f4
@@ -2321,21 +2346,21 @@ attack:	FUNC
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f4:	MOVi %1 #TROLL 	; if((int)AT(TROLL, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1432:27
 		EQUi %0 #FALSE @.f5
 		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+TROLL
 		ADDi $lOBJ %0 #TROLL
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f5:	MOVi %1 #OGRE 	; if((int)AT(OGRE, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1433:26
 		EQUi %0 #FALSE @.f6
 		MULi %0 $lOBJ #100	; lOBJ=lOBJ*100+OGRE
 		ADDi $lOBJ %0 #OGRE
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f6:	MOVi %1 #BEAR 	; if((int)HERE(BEAR, lLOC) != FALSE && (int)global PROP[BEAR] == 0) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1434:28
 		EQUi %0 #FALSE @.f8
 		PEEK %0 &PROP:BEAR 
 		NEQi %0 #0 @.f8
@@ -2348,7 +2373,7 @@ attack:	FUNC
 	.f9:	NEQi $lOBJ #0 @.f0	; if(lOBJ == 0) 
 		MOVi %1 #BIRD 	; if((int)HERE(BIRD, lLOC) != FALSE && global VERB != THROW) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1438:29
 		EQUi %0 #FALSE @.f12
 		PEEK %0 &VERB 
 		EQUi %0 #THROW @.f12
@@ -2356,7 +2381,7 @@ attack:	FUNC
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f12:	MOVi %1 #VEND 	; if((int)HERE(VEND, lLOC) != FALSE && global VERB != THROW) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1439:29
 		EQUi %0 #FALSE @.f14
 		PEEK %0 &VERB 
 		EQUi %0 #THROW @.f14
@@ -2365,11 +2390,11 @@ attack:	FUNC
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f14:	MOVi %1 #CLAM 	; if((int)HERE(CLAM, lLOC) != FALSE || (int)HERE(OYSTER, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1441:29
 		NEQi %0 #FALSE @.t15
 		MOVi %1 #OYSTER 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1441:65
 		EQUi %0 #FALSE @.f16
 	.t15:	MULi %0 #100 $lOBJ	; lOBJ=100*lOBJ+CLAM
 		ADDi $lOBJ %0 #CLAM
@@ -2384,14 +2409,14 @@ attack:	FUNC
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f19:	MOVi %1 #BIRD 	; fDSTROY(BIRD)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1448:16
 		POKE &PROP:BIRD #0 	; global PROP[BIRD]=0
 		POKE &SPK #45 	; global SPK=45
 	.f18:	NEQi $lOBJ #VEND @.f20	; if(lOBJ == VEND) 
 		MOVi %1 #VEND 	; fPSPEAK(VEND,(int)global PROP[VEND]+2)
 		PEEK %2 &PROP:VEND 
 		ADDi %2 %2 #2
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 1453:41
 		PEEK %0 &PROP:VEND 	; global PROP[VEND]=3-(int)global PROP[VEND]
 		SUBi %0 #3 %0
 		POKE &PROP:VEND %0 
@@ -2431,7 +2456,7 @@ attack:	FUNC
 	.t34:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f35:	MOVi %1 #49 	; fRSPEAK(49)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1471:14
 		POKE &VERB #0 	; global VERB=0
 		MOVi $lOBJ #0 	; lOBJ=0
 		POKE &gOBJ #0 	; global gOBJ=0
@@ -2439,20 +2464,20 @@ attack:	FUNC
 		MOVp %2 &WD1X 
 		MOVp %3 &WD2 
 		MOVp %4 &WD2X 
-		CALL &fGETIN %0 *5
+		CALL &fGETIN %0 *5	; expects fGETIN(ptr, ptr, ptr, ptr) -> void @ 1474:60
 		MOVi %1 #25 	; if(global WD1 != (int)fMAKEWD(25) && global WD1 != (int)fMAKEWD(250519)) 
-		CALL &fMAKEWD %0 *2
+		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ 1475:37
 		PEEK %1 &WD1 
 		EQUi %1 %0 @.f37
 		MOVi %1 #250519 
-		CALL &fMAKEWD %0 *2
+		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ 1475:74
 		PEEK %1 &WD1 
 		EQUi %1 %0 @.f37
 		MOVi $goValue #GOTO2607 	; goValue = GOTO2607
 		GOTO @return  	; goto return
 	.f37:	MOVi %1 #DRAGON 	; fPSPEAK(DRAGON,3)
 		MOVi %2 #3 
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 1476:20
 		POKE &PROP:DRAGON #1 	; global PROP[DRAGON]=1
 		POKE &PROP:RUG #0 	; global PROP[RUG]=0
 		PEEK %0 &PLAC:DRAGON 	; lK=((int)global PLAC[DRAGON]+(int)global FIXD[DRAGON])/2
@@ -2461,19 +2486,19 @@ attack:	FUNC
 		DIVi $lK %0 #2
 		ADDi %1 #DRAGON #100	; fMOVE(DRAGON+100,-1)
 		MOVi %2 #-1 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1480:23
 		ADDi %1 #RUG #100	; fMOVE(RUG+100,0)
 		MOVi %2 #0 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1481:19
 		MOVi %1 #DRAGON 	; fMOVE(DRAGON,lK)
 		MOVi %2 $lK 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1482:19
 		MOVi %1 #RUG 	; fMOVE(RUG,lK)
 		MOVi %2 $lK 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1483:16
 		MOVi %1 #BLOOD 	; fDROP(BLOOD,lK)
 		MOVi %2 $lK 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1484:18
 		MOVi $lOBJ #1 	; for (lOBJ=1 to 100+1) 
 		! ADDi <A> #100 #1
 		GEQi #1 <A> @.e38
@@ -2485,7 +2510,7 @@ attack:	FUNC
 		NEQi %0 %1 @.f41
 	.t40:	MOVi %1 $lOBJ 	; fMOVE(lOBJ,lK)
 		MOVi %2 $lK 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1486:128
 	.f41:	FORi $lOBJ <A> @.l39	; }
 	.e38:	POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 		POKE &gLOC $lK 	; global gLOC=lK
@@ -2493,11 +2518,11 @@ attack:	FUNC
 		MOVi $goValue #GOTO8 	; goValue = GOTO8
 		GOTO @return  	; goto return
 	.f32:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1494:21
 		MOVi %1 #6 	; fRSPEAK(6)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1495:12
 		MOVi %1 #OGRE 	; fDSTROY(OGRE)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1496:15
 		MOVi $lK #0 	; lK=0
 		MOVi $I #1 	; for (I=1 to 5+1) 
 		! ADDi <A> #5 #1
@@ -2521,8 +2546,8 @@ attack:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-feed:	FUNC
 	$goValue:	OUTi
+feed:	FUNC	; signature func feed(int OBJ) -> int @ 1515:15
 	$OBJ:	INPi
 	$lLOC:	LOCi
 ;-----------------------------------------------------------------------------
@@ -2546,20 +2571,20 @@ feed:	FUNC
 		NEQi %0 #FALSE @.t6
 		MOVi %1 #BIRD 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1529:70
 		NEQi %0 #FALSE @.f7
 	.t6:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f7:	POKE &SPK #101 	; global SPK=101
 		MOVi %1 #BIRD 	; fDSTROY(BIRD)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1531:16
 		POKE &PROP:BIRD #0 	; global PROP[BIRD]=0
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f2:	NEQi $OBJ #DWARF @.f8	; if(OBJ == DWARF) 
 		MOVi %1 #FOOD 	; if((int)HERE(FOOD, lLOC) == FALSE) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1537:28
 		NEQi %0 #FALSE @.f9
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -2578,12 +2603,12 @@ feed:	FUNC
 		POKE &SPK #110 	; global SPK=110
 	.f12:	MOVi %1 #FOOD 	; if((int)HERE(FOOD, lLOC) == FALSE) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1546:28
 		NEQi %0 #FALSE @.f13
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f13:	MOVi %1 #FOOD 	; fDSTROY(FOOD)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1547:16
 		POKE &PROP:BEAR #1 	; global PROP[BEAR]=1
 		POKE &FIXED:AXE #0 	; global FIXED[AXE]=0
 		POKE &PROP:AXE #0 	; global PROP[AXE]=0
@@ -2593,7 +2618,7 @@ feed:	FUNC
 	.f10:	NEQi $OBJ #OGRE @.f14	; if(OBJ == OGRE) 
 		MOVi %1 #FOOD 	; if((int)HERE(FOOD, lLOC) != FALSE)global SPK=202
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1556:28
 		EQUi %0 #FALSE @.f15
 		POKE &SPK #202 	; global SPK=202
 	.f15:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
@@ -2605,8 +2630,8 @@ feed:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-doThrow:	FUNC
 	$goValue:	OUTi
+doThrow:	FUNC	; signature func doThrow() -> int @ 1570:18
 	$I:	LOCi
 	$lLOC:	LOCi
 	$lOBJ:	LOCi
@@ -2614,16 +2639,16 @@ doThrow:	FUNC
 		PEEK $lLOC &gLOC 	; lLOC = global gLOC
 		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
 		MOVi %1 #ROD2 	; if((int)TOTING(ROD2) != FALSE && lOBJ == ROD && (int)TOTING(ROD) == FALSE) 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1576:23
 		EQUi %0 #FALSE @.f1
 		NEQi $lOBJ #ROD @.f1
 		MOVi %1 #ROD 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1576:67
 		NEQi %0 #FALSE @.f1
 		MOVi $lOBJ #ROD2 	; lOBJ=ROD2
 		POKE &gOBJ #ROD2 	; global gOBJ = ROD2
 	.f1:	MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) == FALSE) 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1577:23
 		NEQi %0 #FALSE @.f2
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -2631,52 +2656,52 @@ doThrow:	FUNC
 		GRTi $lOBJ #MAXTRS @.f4
 		MOVi %1 #TROLL 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1578:58
 		EQUi %0 #FALSE @.f4
 		POKE &SPK #159 	; global SPK=159
 		MOVi %1 $lOBJ 	; fDROP(lOBJ,0)
 		MOVi %2 #0 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1581:16
 		MOVi %1 #TROLL 	; fMOVE(TROLL,0)
 		MOVi %2 #0 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1582:17
 		ADDi %1 #TROLL #100	; fMOVE(TROLL+100,0)
 		MOVi %2 #0 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1583:21
 		MOVi %1 #TROLL2 	; fDROP(TROLL2,global PLAC[TROLL])
 		PEEK %2 &PLAC:TROLL 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1584:35
 		ADDi %1 #TROLL2 #100	; fDROP(TROLL2+100,(int)global FIXD[TROLL])
 		PEEK %2 &FIXD:TROLL 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1585:44
 		MOVi %1 #CHASM 	; fJUGGLE(CHASM)
-		CALL &fJUGGLE %0 *2
+		CALL &fJUGGLE %0 *2	; expects fJUGGLE(int) -> void @ 1586:17
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f4:	NEQi $lOBJ #FOOD @.f6	; if(lOBJ == FOOD && (int)HERE(BEAR, lLOC) != FALSE) 
 		MOVi %1 #BEAR 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1589:43
 		EQUi %0 #FALSE @.f6
 		MOVi $lOBJ #BEAR 	; lOBJ=BEAR
 		POKE &gOBJ #BEAR 	; global gOBJ = BEAR
 		MOVi %1 $lOBJ 	; goValue = (int)feed(lOBJ)
-		CALL &feed %0 *2
+		CALL &feed %0 *2	; expects feed(int) -> int @ 1592:30
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 	.f6:	EQUi $lOBJ #AXE @.f7	; if(lOBJ != AXE) 
 		MOVi %1 #FALSE 	; goValue = (int)discard(FALSE)
-		CALL &discard %0 *2
+		CALL &discard %0 *2	; expects discard(int) -> int @ 1594:49
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 	.f7:	MOVi %1 $lLOC 	; I=(int)fATDWRF(lLOC)
-		CALL &fATDWRF %0 *2
+		CALL &fATDWRF %0 *2	; expects fATDWRF(int) -> int @ 1595:22
 		MOVi $I %0 
 		GRTi $I #0 @.f8	; if(I <= 0) 
 		POKE &SPK #152 	; global SPK=152
 		MOVi %1 #DRAGON 	; if((int)AT(DRAGON, lLOC) != FALSE && (int)global PROP[DRAGON] == 0) goto L9175
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1598:28
 		EQUi %0 #FALSE @.f10
 		PEEK %0 &PROP:DRAGON 
 		NEQi %0 #0 @.f10
@@ -2684,39 +2709,39 @@ doThrow:	FUNC
 	.f10:	POKE &SPK #158 	; global SPK=158
 		MOVi %1 #TROLL 	; if((int)AT(TROLL, lLOC) != FALSE) goto L9175
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1600:27
 		EQUi %0 #FALSE @.f11
 		GOTO @L9175  	; goto L9175
 	.f11:	POKE &SPK #203 	; global SPK=203
 		MOVi %1 #OGRE 	; if((int)AT(OGRE, lLOC) != FALSE) goto L9175
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1602:26
 		EQUi %0 #FALSE @.f12
 		GOTO @L9175  	; goto L9175
 	.f12:	MOVi %1 #BEAR 	; if((int)HERE(BEAR, lLOC) != FALSE && (int)global PROP[BEAR] == 0) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1603:28
 		EQUi %0 #FALSE @.f14
 		PEEK %0 &PROP:BEAR 
 		NEQi %0 #0 @.f14
 		POKE &SPK #164 	; global SPK=164
 		MOVi %1 #AXE 	; fDROP(AXE,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1606:19
 		POKE &FIXED:AXE #-1 	; global FIXED[AXE]= -1
 		POKE &PROP:AXE #1 	; global PROP[AXE]=1
 		MOVi %1 #BEAR 	; fJUGGLE(BEAR)
-		CALL &fJUGGLE %0 *2
+		CALL &fJUGGLE %0 *2	; expects fJUGGLE(int) -> void @ 1609:17
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f14:	MOVi $lOBJ #0 	; lOBJ=0
 		POKE &gOBJ #0 	; global gOBJ = 0
-		CALL &attack %0 *1	; goValue = (int)attack()
+		CALL &attack %0 *1	; expects attack() -> int @ 1613:28
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 	.f8:	POKE &SPK #48 	; global SPK=48
 		MOVi %1 #7 	; if((int)fRAN(7) >= global DFLAG) 
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 1616:18
 		PEEK %1 &DFLAG 
 		LSSi %0 %1 @.f15
 		POKE &DSEEN $I #FALSE	; global DSEEN[I]=FALSE
@@ -2730,10 +2755,10 @@ doThrow:	FUNC
 		POKE &SPK #149 	; global SPK=149
 	.f15:	NOOP
 	L9175:	PEEK %1 &SPK 	; L9175:
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1624:21
 		MOVi %1 #AXE 	; fDROP(AXE,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1625:17
 		POKE &gK #NUL 	; global gK = NUL
 		MOVi $goValue #GOTO8 	; goValue = GOTO8
 		GOTO @return  	; goto return
@@ -2741,8 +2766,8 @@ doThrow:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-action:	FUNC
 	$goValue:	OUTi
+action:	FUNC	; signature func action(int STARTAT) -> int @ 1641:17
 	$STARTAT:	INPi
 	$I:	LOCi
 	$lK:	LOCi
@@ -2778,13 +2803,13 @@ action:	FUNC
 		PEEK %0 &LINK %0
 		NEQi %0 #0 @.t8
 		MOVi %1 $lLOC 
-		CALL &fATDWRF %0 *2
+		CALL &fATDWRF %0 *2	; expects fATDWRF(int) -> int @ 1667:110
 		LEQi %0 #0 @.f9
 	.t8:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		GOTO @return  	; goto return
 	.f9:	PEEK $lOBJ &ATLOC $lLOC	; lOBJ=(int)global ATLOC[lLOC]
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
-		CALL &carry %0 *1	; goValue = (int)carry()
+		CALL &carry %0 *1	; expects carry() -> int @ 1672:30
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
@@ -2804,38 +2829,38 @@ action:	FUNC
 	.s6#5:	POKE &SPK #28 	; global SPK=28
 		MOVi %1 #CLAM 	; if((int)HERE(CLAM, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1679:31
 		EQUi %0 #FALSE @.f10
 		MOVi $lOBJ #CLAM 	; lOBJ=CLAM
 		POKE &gOBJ #CLAM 	; global gOBJ = CLAM
 	.f10:	MOVi %1 #OYSTER 	; if((int)HERE(OYSTER, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1680:33
 		EQUi %0 #FALSE @.f11
 		MOVi $lOBJ #OYSTER 	; lOBJ=OYSTER
 		POKE &gOBJ #OYSTER 	; global gOBJ = OYSTER
 	.f11:	MOVi %1 #DOOR 	; if((int)AT(DOOR, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1681:29
 		EQUi %0 #FALSE @.f12
 		MOVi $lOBJ #DOOR 	; lOBJ=DOOR
 		POKE &gOBJ #DOOR 	; global gOBJ = DOOR
 	.f12:	MOVi %1 #GRATE 	; if((int)AT(GRATE, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1682:30
 		EQUi %0 #FALSE @.f13
 		MOVi $lOBJ #GRATE 	; lOBJ=GRATE
 		POKE &gOBJ #GRATE 	; global gOBJ = GRATE
 	.f13:	EQUi $lOBJ #0 @.f15	; if(lOBJ != 0 && (int)HERE(CHAIN, lLOC) != FALSE) 
 		MOVi %1 #CHAIN 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1683:45
 		EQUi %0 #FALSE @.f15
 		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		GOTO @return  	; goto return
 	.f15:	MOVi %1 #CHAIN 	; if((int)HERE(CHAIN, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1684:32
 		EQUi %0 #FALSE @.f16
 		MOVi $lOBJ #CHAIN 	; lOBJ=CHAIN
 		POKE &gOBJ #CHAIN 	; global gOBJ = CHAIN
@@ -2862,7 +2887,7 @@ action:	FUNC
 		NEQi %0 #31 @.t27
 		MOVi %1 #KEYS 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1696:52
 		NEQi %0 #FALSE @.f28
 	.t27:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -2882,11 +2907,11 @@ action:	FUNC
 		GOTO @return  	; goto return
 	.f33:	POKE &PROP:CHAIN #2 	; global PROP[CHAIN]=2
 		MOVi %1 #CHAIN 	; if((int)TOTING(CHAIN) != FALSE)fDROP(CHAIN,lLOC)
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1705:31
 		EQUi %0 #FALSE @.f34
 		MOVi %1 #CHAIN 	; fDROP(CHAIN,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1705:57
 	.f34:	POKE &FIXED:CHAIN #-1 	; global FIXED[CHAIN]= -1
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -2942,12 +2967,12 @@ action:	FUNC
 	.f42:	ADDi %0 #124 $lK	; global SPK=124+lK
 		POKE &SPK %0 
 		MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) != FALSE)global SPK=120+lK
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1737:27
 		EQUi %0 #FALSE @.f43
 		ADDi %0 #120 $lK	; global SPK=120+lK
 		POKE &SPK %0 
 	.f43:	MOVi %1 #TRIDNT 	; if((int)TOTING(TRIDNT) == FALSE)global SPK=122+lK
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1738:29
 		NEQi %0 #FALSE @.f44
 		ADDi %0 #122 $lK	; global SPK=122+lK
 		POKE &SPK %0 
@@ -2959,13 +2984,13 @@ action:	FUNC
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f46:	MOVi %1 #CLAM 	; fDSTROY(CLAM)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1742:19
 		MOVi %1 #OYSTER 	; fDROP(OYSTER,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1743:24
 		MOVi %1 #PEARL 	; fDROP(PEARL,105)
 		MOVi %2 #105 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 1744:22
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
@@ -2974,7 +2999,7 @@ action:	FUNC
 		GOTO @.e7  	; }
 	.s6#6:	MOVi %1 #LAMP 	; if((int)HERE(LAMP, lLOC) != FALSE && (int)global PROP[LAMP] == 0 && global LIMIT >= 0) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1752:31
 		EQUi %0 #FALSE @.f48
 		PEEK %0 &PROP:LAMP 
 		NEQi %0 #0 @.f48
@@ -2984,7 +3009,7 @@ action:	FUNC
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f48:	MOVi %1 #URN 	; if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 1) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1753:30
 		EQUi %0 #FALSE @.f50
 		PEEK %0 &PROP:URN 
 		NEQi %0 #1 @.f50
@@ -3007,7 +3032,7 @@ action:	FUNC
 		GOTO @return  	; goto return
 	.f55:	POKE &PROP:LAMP #1 	; global PROP[LAMP]=1
 		MOVi %1 #39 	; fRSPEAK(39)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1762:18
 		PEEK %0 &WZDARK 	; if(global WZDARK != FALSE) 
 		EQUi %0 #FALSE @.f56
 		MOVi $goValue #GOTO2000 	; goValue = GOTO2000
@@ -3026,7 +3051,7 @@ action:	FUNC
 		GOTO @.e7  	; }
 	.s6#7:	MOVi %1 #LAMP 	; if((int)HERE(LAMP, lLOC) != FALSE && (int)global PROP[LAMP] == 1) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1776:31
 		EQUi %0 #FALSE @.f59
 		PEEK %0 &PROP:LAMP 
 		NEQi %0 #1 @.f59
@@ -3034,7 +3059,7 @@ action:	FUNC
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f59:	MOVi %1 #URN 	; if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 2) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1777:30
 		EQUi %0 #FALSE @.f61
 		PEEK %0 &PROP:URN 
 		NEQi %0 #2 @.f61
@@ -3050,12 +3075,12 @@ action:	FUNC
 		NEQi $lOBJ #LAMP @.f65	; if(lOBJ == LAMP) 
 		POKE &PROP:LAMP #0 	; global PROP[LAMP]=0
 		MOVi %1 #40 	; fRSPEAK(40)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1784:19
 		MOVi %1 $lLOC 	; if((int)DARK(lLOC) != FALSE)fRSPEAK(16)
-		CALL &DARK %0 *2
+		CALL &DARK %0 *2	; expects DARK(int) -> int @ 1785:27
 		EQUi %0 #FALSE @.f66
 		MOVi %1 #16 	; fRSPEAK(16)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1785:47
 	.f66:	MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 	.f65:	EQUi $lOBJ #DRAGON @.t67	; if(lOBJ == DRAGON || lOBJ == VOLCAN)global SPK=146
@@ -3073,21 +3098,21 @@ action:	FUNC
 	.s6#10:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
-	.s6#11:	CALL &attack %0 *1	; goValue = (int)attack()
+	.s6#11:	CALL &attack %0 *1	; expects attack() -> int @ 1797:39
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
 	.s6#12:	NOOP
 	L9130:	EQUi $lOBJ #BOTTLE @.t69	; L9130:
 		NEQi $lOBJ #0 @.f70
-	.t69:	CALL &LIQ %0 *1	; lOBJ=(int)LIQ()
+	.t69:	CALL &LIQ %0 *1	; expects LIQ() -> int @ 1803:52
 		MOVi $lOBJ %0 
 	.f70:	POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 		NEQi $lOBJ #0 @.f71	; if(lOBJ == 0) 
 		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		GOTO @return  	; goto return
 	.f71:	MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) == FALSE) 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1806:27
 		NEQi %0 #FALSE @.f72
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -3098,7 +3123,7 @@ action:	FUNC
 		GOTO @return  	; goto return
 	.f74:	MOVi %1 #URN 	; if(!((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 0)) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1809:32
 		EQUi %0 #FALSE @.f75
 		PEEK %0 &PROP:URN 
 		EQUi %0 #0 @.f76
@@ -3107,17 +3132,17 @@ action:	FUNC
 		POKE &SPK #77 	; global SPK=77
 		MOVi %1 #PLANT 	; if(!((int)AT(PLANT, lLOC) != FALSE || (int)AT(DOOR, lLOC) != FALSE)) 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1813:33
 		NEQi %0 #FALSE @.f78
 		MOVi %1 #DOOR 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1813:65
 		NEQi %0 #FALSE @.f78
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f78:	MOVi %1 #DOOR 	; if(!((int)AT(DOOR, lLOC) != FALSE)) 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 1815:32
 		NEQi %0 #FALSE @.f79
 		POKE &SPK #112 	; global SPK=112
 		EQUi $lOBJ #WATER @.f80	; if(lOBJ != WATER) 
@@ -3126,7 +3151,7 @@ action:	FUNC
 	.f80:	MOVi %1 #PLANT 	; fPSPEAK(PLANT,(int)global PROP[PLANT]+3)
 		PEEK %2 &PROP:PLANT 
 		ADDi %2 %2 #3
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 1818:48
 		PEEK %0 &PROP:PLANT 	; global PROP[PLANT]=(((int)global PROP[PLANT]+1)%3)
 		ADDi %0 %0 #1
 		MODi %0 %0 #3
@@ -3148,18 +3173,18 @@ action:	FUNC
 	.f76:	MOVi $lOBJ #URN 	; lOBJ=URN
 		POKE &gOBJ #URN 	; global gOBJ = URN
 		MOVi %1 $lOBJ 	; goValue = (int)fill(lOBJ)
-		CALL &fill %0 *2
+		CALL &fill %0 *2	; expects fill(int) -> int @ 1832:33
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
 	.s6#13:	MOVi %1 #FOOD 	; if((int)HERE(FOOD, lLOC) == FALSE) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1838:31
 		NEQi %0 #FALSE @.f82
 		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		GOTO @return  	; goto return
 	.f82:	MOVi %1 #FOOD 	; fDSTROY(FOOD)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1839:19
 		POKE &SPK #72 	; global SPK=72
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -3167,13 +3192,13 @@ action:	FUNC
 	.s6#14:	NOOP
 	L9150:	NEQi $lOBJ #0 @.f85	; L9150:
 		MOVi %1 $lLOC 
-		CALL &LIQLOC %0 *2
+		CALL &LIQLOC %0 *2	; expects LIQLOC(int) -> int @ 1848:40
 		EQUi %0 #WATER @.f85
-		CALL &LIQ %0 *1
+		CALL &LIQ %0 *1	; expects LIQ() -> int @ 1848:64
 		NEQi %0 #WATER @.t84
 		MOVi %1 #BOTTLE 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1848:100
 		NEQi %0 #FALSE @.f85
 	.t84:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		GOTO @return  	; goto return
@@ -3183,11 +3208,11 @@ action:	FUNC
 		POKE &SPK #110 	; global SPK=110
 	.f88:	PEEK %0 &SPK 	; if(global SPK == 110 || (int)LIQ() != WATER || (int)HERE(BOTTLE, lLOC) == FALSE) 
 		EQUi %0 #110 @.t89
-		CALL &LIQ %0 *1
+		CALL &LIQ %0 *1	; expects LIQ() -> int @ 1852:42
 		NEQi %0 #WATER @.t89
 		MOVi %1 #BOTTLE 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1852:78
 		NEQi %0 #FALSE @.f90
 	.t89:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -3197,7 +3222,7 @@ action:	FUNC
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f86:	MOVi %1 #BLOOD 	; fDSTROY(BLOOD)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 1859:20
 		POKE &PROP:DRAGON #2 	; global PROP[DRAGON]=2
 		PEEK %0 &OBJSND:BIRD 	; global OBJSND[BIRD]=(int)global OBJSND[BIRD]+3
 		ADDi %0 %0 #3
@@ -3209,10 +3234,10 @@ action:	FUNC
 	.s6#17:	MOVi %1 #22 	; if((int)fYES(22,54,54) != FALSE) score(1)
 		MOVi %2 #54 
 		MOVi %3 #54 
-		CALL &fYES %0 *4
+		CALL &fYES %0 *4	; expects fYES(int, int, int) -> int @ 1868:29
 		EQUi %0 #FALSE @.f91
 		MOVi %1 #1 	; score(1)
-		CALL &score %0 *2
+		CALL &score %0 *2	; expects score(int) -> void @ 1868:47
 	.f91:	MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
@@ -3222,28 +3247,28 @@ action:	FUNC
 		GEQi #1 <A> @.e92
 	.l93:	EQUi $I #BEAR @.f95	; if(!(I == BEAR || (int)TOTING(I) == FALSE)) 
 		MOVi %1 $I 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1876:40
 		EQUi %0 #FALSE @.f95
 		PEEK %0 &SPK 	; if(global SPK == 98)fRSPEAK(99)
 		NEQi %0 #98 @.f96
 		MOVi %1 #99 	; fRSPEAK(99)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1877:39
 	.f96:	POKE &BLKLIN #FALSE 	; global BLKLIN=FALSE
 		MOVi %1 $I 	; fPSPEAK(I,-1)
 		MOVi %2 #-1 
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 1879:21
 		POKE &BLKLIN #TRUE 	; global BLKLIN=TRUE
 		POKE &SPK #0 	; global SPK=0
 	.f95:	FORi $I <A> @.l93	; } /* end loop */
 	.e92:	MOVi %1 #BEAR 	; if((int)TOTING(BEAR) != FALSE)global SPK=141
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1884:27
 		EQUi %0 #FALSE @.f97
 		POKE &SPK #141 	; global SPK=141
 	.f97:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
 	.s6#21:	MOVi %1 $lOBJ 	; goValue = (int)fill(lOBJ)
-		CALL &fill %0 *2
+		CALL &fill %0 *2	; expects fill(int) -> int @ 1887:41
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
@@ -3259,32 +3284,32 @@ action:	FUNC
 		POKE &BONUS #134 	; global BONUS=134
 	.f100:	MOVi %1 #ROD2 	; if((int)HERE(ROD2, lLOC) != FALSE)global BONUS=135
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1895:31
 		EQUi %0 #FALSE @.f101
 		POKE &BONUS #135 	; global BONUS=135
 	.f101:	PEEK %1 &BONUS 	; fRSPEAK(global BONUS)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1896:27
 		MOVi %1 #0 	; score(0)
-		CALL &score %0 *2
+		CALL &score %0 *2	; expects score(int) -> void @ 1897:14
 		GOTO @.e7  	; }
 	.s6#23:	MOVi %1 #-1 	; score(-1)
-		CALL &score %0 *2
+		CALL &score %0 *2	; expects score(int) -> void @ 1902:15
 		MOVi %1 #1 	; fSETPRM(1,global SCORE,global MXSCOR)
 		PEEK %2 &SCORE 
 		PEEK %3 &MXSCOR 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 1903:43
 		MOVi %1 #3 	; fSETPRM(3,global TURNS,global TURNS)
 		PEEK %2 &TURNS 
 		PEEK %3 &TURNS 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 1904:42
 		MOVi %1 #259 	; fRSPEAK(259)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1905:18
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
 	.s6#24:	PEEK %1 &WD1 	; lK=(int)fVOCAB(global WD1,3)
 		MOVi %2 #3 
-		CALL &fVOCAB %0 *3
+		CALL &fVOCAB %0 *3	; expects fVOCAB(int, int) -> int @ 1913:34
 		MOVi $lK %0 
 		POKE &gK $lK 	; global gK = lK
 		POKE &SPK #42 	; global SPK=42
@@ -3305,7 +3330,7 @@ action:	FUNC
 		PEEK %1 &PLAC:EGGS 
 		EQUi %0 %1 @.t105
 		MOVi %1 #EGGS 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 1922:81
 		EQUi %0 #FALSE @.f107
 		PEEK %0 &PLAC:EGGS 
 		NEQi $lLOC %0 @.f107
@@ -3322,7 +3347,7 @@ action:	FUNC
 		POKE &gK #2 	; global gK = 2
 		MOVi %1 #EGGS 	; if((int)HERE(EGGS, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1926:31
 		EQUi %0 #FALSE @.f110
 		MOVi $lK #1 	; lK=1
 		POKE &gK #2 	; global gK = 2
@@ -3332,10 +3357,10 @@ action:	FUNC
 		POKE &gK #0 	; global gK = 0
 	.f111:	MOVi %1 #EGGS 	; fMOVE(EGGS,global PLAC[EGGS])
 		PEEK %2 &PLAC:EGGS 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 1928:35
 		MOVi %1 #EGGS 	; fPSPEAK(EGGS,lK)
 		MOVi %2 $lK 
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 1929:22
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
@@ -3350,7 +3375,7 @@ action:	FUNC
 		GEQi #1 <A> @.e112
 	.l113:	MOVi %1 $I 	; if((int)HERE(I, lLOC) != FALSE && (int)global OBJTXT[I] != 0 && (int)global PROP[I] >= 0) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1944:29
 		EQUi %0 #FALSE @.f115
 		PEEK %0 &OBJTXT $I
 		EQUi %0 #0 @.f115
@@ -3363,13 +3388,13 @@ action:	FUNC
 	.e112:	GRTi $lOBJ #100 @.t116	; if(lOBJ > 100 || lOBJ == 0 || (int)DARK(lLOC) != FALSE) 
 		EQUi $lOBJ #0 @.t116
 		MOVi %1 $lLOC 
-		CALL &DARK %0 *2
+		CALL &DARK %0 *2	; expects DARK(int) -> int @ 1946:52
 		EQUi %0 #FALSE @.f117
 	.t116:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		GOTO @return  	; goto return
 	.f117:	NOOP
 	L9270:	MOVi %1 $lLOC 	; L9270:
-		CALL &DARK %0 *2
+		CALL &DARK %0 *2	; expects DARK(int) -> int @ 1949:25
 		EQUi %0 #FALSE @.f118
 		GOTO @L5190  	; goto L5190
 	.f118:	PEEK %0 &OBJTXT $lOBJ	; if((int)global OBJTXT[lOBJ] == 0 || (int)global PROP[lOBJ] < 0) 
@@ -3385,20 +3410,20 @@ action:	FUNC
 		PEEK %2 &OBJTXT $lOBJ
 		PEEK %3 &PROP $lOBJ
 		ADDi %2 %2 %3
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 1952:68
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 	.f122:	MOVi %1 #192 	; global CLSHNT=(int)fYES(192,193,54)
 		MOVi %2 #193 
 		MOVi %3 #54 
-		CALL &fYES %0 *4
+		CALL &fYES %0 *4	; expects fYES(int, int, int) -> int @ 1956:41
 		POKE &CLSHNT %0 
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
 	.s6#29:	NOOP
 	.s6#30:	MOVp %1 &.s_SorryF4d4 	; output("Sorry. File operationrs are disabled.\n")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1960:55
 		POKE &gK #NUL 	; global gK = NUL
 		MOVi $goValue #GOTO8 	; goValue = GOTO8
 		GOTO @return  	; goto return
@@ -3408,7 +3433,7 @@ action:	FUNC
 		POKE &SPK #224 	; global SPK=224
 	.f123:	MOVi %1 #RUG 	; if((int)HERE(RUG, lLOC) == FALSE)global SPK=225
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1968:30
 		NEQi %0 #FALSE @.f124
 		POKE &SPK #225 	; global SPK=225
 	.f124:	PEEK %0 &SPK 	; if(global SPK/2 == 112) 
@@ -3439,7 +3464,7 @@ action:	FUNC
 		LSSi %0 #0 @.f128
 		POKE &SPK #227 	; global SPK=227
 	.f128:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1981:25
 		MOVi $goValue #GOTO2 	; goValue = GOTO2
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
@@ -3448,7 +3473,7 @@ action:	FUNC
 		POKE &gK $lK 	; global gK = lK
 		EQUi $lK #0 @.f129	; if(lK != 0) 
 		ABSi %1 $lK 	; fRSPEAK(abs(lK))
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 1990:23
 		GEQi $lK #0 @.f130	; if(lK < 0) 
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
@@ -3458,13 +3483,13 @@ action:	FUNC
 		! MULi <A> #MESH #2
 		SUBi %2 %2 <A>
 		MOVi %3 #0 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 1995:39
 		MOVi $I #1 	; for (I=1 to 100+1) 
 		! ADDi <A> #100 #1
 		GEQi #1 <A> @.e131
 	.l132:	MOVi %1 $I 	; if (!((int)HERE(I, lLOC) == FALSE || (int)global OBJSND[I] == 0 || (int)global PROP[I] < 0)) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 1997:32
 		EQUi %0 #FALSE @.f134
 		PEEK %0 &OBJSND $I
 		EQUi %0 #0 @.f134
@@ -3474,7 +3499,7 @@ action:	FUNC
 		PEEK %2 &OBJSND $I
 		PEEK %3 &PROP $I
 		ADDi %2 %2 %3
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 1998:60
 		POKE &SPK #0 	; global SPK=0
 		NEQi $I #BIRD @.f134	; if(I == BIRD && (int)global OBJSND[I]+(int)global PROP[I] == 8)fDSTROY(BIRD)
 		PEEK %0 &OBJSND $I
@@ -3482,7 +3507,7 @@ action:	FUNC
 		ADDi %0 %0 %1
 		NEQi %0 #8 @.f134
 		MOVi %1 #BIRD 	; fDSTROY(BIRD)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 2000:84
 	.f134:	FORi $I <A> @.l132	; } /* end loop */
 	.e131:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -3490,7 +3515,7 @@ action:	FUNC
 	.s6#33:	NOOP
 	L8340:	MOVi %1 #RESER 	; L8340:
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2010:30
 		NEQi %0 #FALSE @.f138
 		PEEK %0 &FIXED:RESER 
 		SUBi %0 %0 #1
@@ -3500,56 +3525,56 @@ action:	FUNC
 	.f138:	MOVi %1 #RESER 	; fPSPEAK(RESER,(int)global PROP[RESER]+1)
 		PEEK %2 &PROP:RESER 
 		ADDi %2 %2 #1
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 2011:46
 		PEEK %0 &PROP:RESER 	; global PROP[RESER]=1-(int)global PROP[RESER]
 		SUBi %0 #1 %0
 		POKE &PROP:RESER %0 
 		MOVi %1 #RESER 	; if((int)AT(RESER, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2013:30
 		EQUi %0 #FALSE @.f139
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 	.f139:	POKE &OLDLC2 $lLOC 	; global OLDLC2=lLOC
 		POKE &NEWLOC #0 	; global NEWLOC=0
 		MOVi %1 #241 	; fRSPEAK(241)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2016:18
 		MOVi $goValue #GOTO2 	; goValue = GOTO2
 		GOTO @return  	; goto return
 	.s6:	NOOP
 	.e7:	MOVi %1 #23 	; fBUG(23)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2020:12
 		GOTO @.e1  	; }
 	.s0#1:	NOOP
 	L4090:	PEEK %0 &VERB 	; L4090:
 		SUBi %0 %0 #1
 		SWCH %0 *34 @.s140
-	.s140#0:	CALL &carry %0 *1	; goValue = (int)carry()
+	.s140#0:	CALL &carry %0 *1	; expects carry() -> int @ 2031:37
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 		GOTO @.e141  	; }
 	.s140#1:	MOVi %1 #FALSE 	; goValue = (int)discard(FALSE)
-		CALL &discard %0 *2
+		CALL &discard %0 *2	; expects discard(int) -> int @ 2032:44
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 		GOTO @.e141  	; }
 	.s140#2:	MOVi %1 #1 	; fSETPRM(1,global WD2,global WD2X)
 		PEEK %2 &WD2 
 		PEEK %3 &WD2X 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2036:39
 		PEEK %0 &WD2 	; if(global WD2 <= 0)fSETPRM(1,global WD1,global WD1X)
 		GRTi %0 #0 @.f142
 		MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
 		PEEK %2 &WD1 
 		PEEK %3 &WD1X 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2037:58
 	.f142:	PEEK %0 &WD2 	; if(global WD2 > 0)global WD1=global WD2
 		LEQi %0 #0 @.f143
 		PEEK %0 &WD2 	; global WD1=global WD2
 		POKE &WD1 %0 
 	.f143:	PEEK %1 &WD1 	; I=(int)fVOCAB(global WD1,-1)
 		MOVi %2 #-1 
-		CALL &fVOCAB %0 *3
+		CALL &fVOCAB %0 *3	; expects fVOCAB(int, int) -> int @ 2039:34
 		MOVi $I %0 
 		EQUi $I #62 @.f145	; if(!(I == 62 || I == 65 || I == 71 || I == 2025 || I == 2034)) 
 		EQUi $I #65 @.f145
@@ -3557,7 +3582,7 @@ action:	FUNC
 		EQUi $I #2025 @.f145
 		EQUi $I #2034 @.f145
 		MOVi %1 #258 	; fRSPEAK(258)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2041:19
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 	.f145:	POKE &WD2 #0 	; global WD2=0
@@ -3577,32 +3602,32 @@ action:	FUNC
 	.s140#7:	GOTO @L9080  	; goto L9080
 		GOTO @.e141  
 	.s140#8:	MOVi %1 $lOBJ 	; if(((int)TOTING(lOBJ) == FALSE) && (lOBJ != ROD || (int)TOTING(ROD2) == FALSE))global SPK=29
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2057:28
 		NEQi %0 #FALSE @.f148
 		NEQi $lOBJ #ROD @.t147
 		MOVi %1 #ROD2 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2057:75
 		NEQi %0 #FALSE @.f148
 	.t147:	POKE &SPK #29 	; global SPK=29
 	.f148:	NEQi $lOBJ #ROD @.t149	; if(lOBJ != ROD || (int)TOTING(lOBJ) == FALSE || ((int)HERE(BIRD, lLOC) == FALSE && (global CLOSNG != FALSE || (int)AT(FISSUR, lLOC) == FALSE))) 
 		MOVi %1 $lOBJ 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2058:42
 		EQUi %0 #FALSE @.t149
 		MOVi %1 #BIRD 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2058:77
 		NEQi %0 #FALSE @.f152
 		PEEK %0 &CLOSNG 
 		NEQi %0 #FALSE @.t149
 		MOVi %1 #FISSUR 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2058:138
 		NEQi %0 #FALSE @.f152
 	.t149:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f152:	MOVi %1 #BIRD 	; if((int)HERE(BIRD, lLOC) != FALSE)global SPK=206+(((int)global PROP[BIRD])%2)
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2059:31
 		EQUi %0 #FALSE @.f153
 		PEEK %0 &PROP:BIRD 	; global SPK=206+(((int)global PROP[BIRD])%2)
 		MODi %0 %0 #2
@@ -3622,28 +3647,28 @@ action:	FUNC
 		NEQi %0 #FALSE @.t157
 		MOVi %1 #FISSUR 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2062:58
 		NEQi %0 #FALSE @.f158
 	.t157:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f158:	MOVi %1 #BIRD 	; if((int)HERE(BIRD, lLOC) != FALSE)fRSPEAK(global SPK)
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2063:32
 		EQUi %0 #FALSE @.f159
 		PEEK %1 &SPK 	; fRSPEAK(global SPK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2063:60
 	.f159:	PEEK %0 &PROP:FISSUR 	; global PROP[FISSUR]=1-(int)global PROP[FISSUR]
 		SUBi %0 #1 %0
 		POKE &PROP:FISSUR %0 
 		MOVi %1 #FISSUR 	; fPSPEAK(FISSUR,2-(int)global PROP[FISSUR])
 		PEEK %2 &PROP:FISSUR 
 		SUBi %2 #2 %2
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 2065:49
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 	.f155:	MOVi %1 #JADE 	; fDROP(JADE,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 2069:22
 		POKE &PROP:JADE #0 	; global PROP[JADE]=0
 		PEEK %0 &TALLY 	; global TALLY=global TALLY-1
 		SUBi %0 %0 #1
@@ -3663,7 +3688,7 @@ action:	FUNC
 	.s140#32:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 		GOTO @.e141  	; }
-	.s140#11:	CALL &attack %0 *1	; goValue = (int)attack()
+	.s140#11:	CALL &attack %0 *1	; expects attack() -> int @ 2077:39
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 		GOTO @.e141  	; }
@@ -3671,7 +3696,7 @@ action:	FUNC
 		GOTO @.e141  
 	.s140#13:	NEQi $lOBJ #FOOD @.f160	; if(lOBJ == FOOD) 
 		MOVi %1 #FOOD 	; fDSTROY(FOOD)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 2083:20
 		POKE &SPK #72 	; global SPK=72
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
@@ -3698,61 +3723,61 @@ action:	FUNC
 	.t164:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 	.f165:	MOVi %1 #URN 	; fDSTROY(URN)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 2099:18
 		MOVi %1 #AMBER 	; fDROP(AMBER,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 2100:23
 		POKE &PROP:AMBER #1 	; global PROP[AMBER]=1
 		PEEK %0 &TALLY 	; global TALLY=global TALLY-1
 		SUBi %0 %0 #1
 		POKE &TALLY %0 
 		MOVi %1 #CAVITY 	; fDROP(CAVITY,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 2103:24
 		POKE &SPK #216 	; global SPK=216
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 		GOTO @.e141  	; }
-	.s140#16:	CALL &doThrow %0 *1	; goValue = (int)doThrow()
+	.s140#16:	CALL &doThrow %0 *1	; expects doThrow() -> int @ 2108:40
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 		GOTO @.e141  	; }
 	.s140#18:	NOOP
 	.s140#19:	MOVi %1 $lOBJ 	; if((int)AT(lOBJ, lLOC) != FALSE || ((int)LIQ() == lOBJ && (int)AT(BOTTLE, lLOC) != FALSE) || lK == (int)LIQLOC(lLOC) || (lOBJ ==
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2112:29
 		NEQi %0 #FALSE @.t166
-		CALL &LIQ %0 *1
+		CALL &LIQ %0 *1	; expects LIQ() -> int @ 2112:53
 		NEQi %0 $lOBJ @.f167
 		MOVi %1 #BOTTLE 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2112:86
 		NEQi %0 #FALSE @.t166
 	.f167:	MOVi %1 $lLOC 
-		CALL &LIQLOC %0 *2
+		CALL &LIQLOC %0 *2	; expects LIQLOC(int) -> int @ 2112:123
 		EQUi $lK %0 @.t166
 		NEQi $lOBJ #DWARF @.f169
 		MOVi %1 $lLOC 
-		CALL &fATDWRF %0 *2
+		CALL &fATDWRF %0 *2	; expects fATDWRF(int) -> int @ 2113:35
 		LEQi %0 #0 @.f169
 	.t166:	POKE &SPK #94 	; global SPK=94
 	.f169:	PEEK %0 &CLOSED 	; if(global CLOSED != FALSE)global SPK=138
 		EQUi %0 #FALSE @.f170
 		POKE &SPK #138 	; global SPK=138
 	.f170:	MOVi %1 $lOBJ 	; if((int)TOTING(lOBJ) != FALSE)global SPK=24
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2115:27
 		EQUi %0 #FALSE @.f171
 		POKE &SPK #24 	; global SPK=24
 	.f171:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		GOTO @return  	; goto return
 		GOTO @.e141  	; }
 	.s140#20:	MOVi %1 $lOBJ 	; goValue = (int)feed(lOBJ)
-		CALL &feed %0 *2
+		CALL &feed %0 *2	; expects feed(int) -> int @ 2118:41
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 		GOTO @.e141  	; }
 	.s140#21:	MOVi %1 $lOBJ 	; goValue = (int)fill(lOBJ)
-		CALL &fill %0 *2
+		CALL &fill %0 *2	; expects fill(int) -> int @ 2119:41
 		MOVi $goValue %0 
 		GOTO @return  	; goto return
 		GOTO @.e141  	; }
@@ -3775,11 +3800,11 @@ action:	FUNC
 		GOTO @return  	; goto return
 	.f174:	POKE &SPK #198 	; global SPK=198
 		MOVi %1 #VASE 	; if((int)TOTING(VASE) != FALSE)fDROP(VASE,lLOC)
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2133:27
 		EQUi %0 #FALSE @.f177
 		MOVi %1 #VASE 	; fDROP(VASE,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 2133:52
 	.f177:	POKE &PROP:VASE #2 	; global PROP[VASE]=2
 		POKE &FIXED:VASE #-1 	; global FIXED[VASE]= -1
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
@@ -3799,13 +3824,13 @@ action:	FUNC
 	.s140#33:	GOTO @L8340  	; goto L8340
 	.s140:	NOOP
 	.e141:	MOVi %1 #24 	; fBUG(24)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2148:12
 		GOTO @.e1  	; }
 	.s0#2:	MOVi $lOBJ $lK 	; lOBJ=lK
 		POKE &gOBJ $lK 	; global gOBJ = lK
 		MOVi %1 $lK 	; if((int)HERE(lK, lLOC) != FALSE) 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2159:27
 		EQUi %0 #FALSE @.f180
 	L5010:	PEEK %0 &WD2 	; L5010:
 		LEQi %0 #0 @.f181
@@ -3817,9 +3842,9 @@ action:	FUNC
 	.f182:	MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
 		PEEK %2 &WD1 
 		PEEK %3 &WD1X 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2163:38
 		MOVi %1 #255 	; fRSPEAK(255)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2164:17
 		MOVi $goValue #GOTO2600 	; goValue = GOTO2600
 		GOTO @return  	; goto return
 	.f180:	NEQi $lK #GRATE @.f183	; if(lK == GRATE) 
@@ -3837,23 +3862,23 @@ action:	FUNC
 		GOTO @return  	; goto return
 	.f183:	NEQi $lK #DWARF @.f190	; if(lK == DWARF && (int)fATDWRF(lLOC) > 0) goto L5010
 		MOVi %1 $lLOC 
-		CALL &fATDWRF %0 *2
+		CALL &fATDWRF %0 *2	; expects fATDWRF(int) -> int @ 2173:41
 		LEQi %0 #0 @.f190
 		GOTO @L5010  	; goto L5010
-	.f190:	CALL &LIQ %0 *1	; if(((int)LIQ() == lK && (int)HERE(BOTTLE, lLOC) != FALSE) || lK == (int)LIQLOC(lLOC)) goto L5010
+	.f190:	CALL &LIQ %0 *1	; expects LIQ() -> int @ 2174:19
 		NEQi %0 $lK @.f191
 		MOVi %1 #BOTTLE 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2174:52
 		NEQi %0 #FALSE @L5010
 	.f191:	MOVi %1 $lLOC 
-		CALL &LIQLOC %0 *2
+		CALL &LIQLOC %0 *2	; expects LIQLOC(int) -> int @ 2174:88
 		NEQi $lK %0 @.f193
 		GOTO @L5010  	; goto L5010
 	.f193:	NEQi $lOBJ #OIL @.f195	; if(!(lOBJ != OIL || (int)HERE(URN, lLOC) == FALSE || (int)global PROP[URN] == 0)) 
 		MOVi %1 #URN 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2175:45
 		EQUi %0 #FALSE @.f195
 		PEEK %0 &PROP:URN 
 		EQUi %0 #0 @.f195
@@ -3863,7 +3888,7 @@ action:	FUNC
 	.f195:	NEQi $lOBJ #PLANT @.f197	; if(!(lOBJ != PLANT || (int)AT(PLANT2, lLOC) == FALSE || (int)global PROP[PLANT2] == 0)) 
 		MOVi %1 #PLANT2 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2179:48
 		EQUi %0 #FALSE @.f197
 		PEEK %0 &PROP:PLANT2 
 		EQUi %0 #0 @.f197
@@ -3880,7 +3905,7 @@ action:	FUNC
 	.f199:	NEQi $lOBJ #ROD @L5190	; if(lOBJ != ROD || (int)HERE(ROD2, lLOC) == FALSE) goto L5190
 		MOVi %1 #ROD2 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2188:44
 		NEQi %0 #FALSE @.f201
 		GOTO @L5190  	; goto L5190
 	.f201:	MOVi $lOBJ #ROD2 	; lOBJ=ROD2
@@ -3896,20 +3921,20 @@ action:	FUNC
 	.f204:	MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
 		PEEK %2 &WD1 
 		PEEK %3 &WD1X 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2193:37
 		MOVi %1 #256 	; fRSPEAK(256)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2194:16
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		GOTO @return  	; goto return
 	.s0:	NOOP
 	.e1:	MOVi %1 #99 	; fBUG(99)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2198:10
 		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 	return:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
+main:	FUNC	; signature func main() -> void @ 2207:15
 		PARA *1
 	$gotoChoice:	LOCi
 	$I:	LOCi
@@ -3934,20 +3959,20 @@ main:	FUNC
 		MOVi $STICK #0 	; STICK = 0
 		MOVi $ATTACK #0 	; ATTACK = 0
 		POKE &MAP2:1 #0 	; global MAP2[1] = 0
-		CALL &initialise %0 *1	; initialise()
+		CALL &initialise %0 *1	; expects initialise() -> void @ 2238:14
 		MOVi %1 #-1 	; I=(int)fRAN(-1)
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2242:17
 		MOVi $I %0 
 		MOVi %1 #3 	; global ZZWORD=(int)fRNDVOC(3,0)+MESH*2
 		MOVi %2 #0 
-		CALL &fRNDVOC %0 *3
+		CALL &fRNDVOC %0 *3	; expects fRNDVOC(int, int) -> int @ 2243:33
 		! MULi <A> #MESH #2
 		ADDi %0 %0 <A>
 		POKE &ZZWORD %0 
 		MOVi %1 #65 	; global NOVICE=(int)fYES(65,1,0)
 		MOVi %2 #1 
 		MOVi %3 #0 
-		CALL &fYES %0 *4
+		CALL &fYES %0 *4	; expects fYES(int, int, int) -> int @ 2244:33
 		POKE &NOVICE %0 
 		POKE &NEWLOC #1 	; global NEWLOC=1
 		MOVi $lLOC #1 	; lLOC=1
@@ -3957,14 +3982,14 @@ main:	FUNC
 		POKE &LIMIT #1000 	; global LIMIT=1000
 	.f0:	NOOP
 	L2:	PEEK %1 &NEWLOC 	; L2:
-		CALL &OUTSID %0 *2
+		CALL &OUTSID %0 *2	; expects OUTSID(int) -> int @ 2253:34
 		EQUi %0 #FALSE @.f2
 		PEEK %0 &NEWLOC 
 		EQUi %0 #0 @.f2
 		PEEK %0 &CLOSNG 
 		EQUi %0 #FALSE @.f2
 		MOVi %1 #130 	; fRSPEAK(130)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2254:15
 		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
 		PEEK %0 &PANIC 	; if(global PANIC == FALSE)global CLOCK2=15
 		NEQi %0 #FALSE @.f3
@@ -3976,7 +4001,7 @@ main:	FUNC
 		EQUi %0 #2 @.f5
 		MOVi %1 $lLOC 
 		MOVi %2 #3 
-		CALL &CNDBIT %0 *3
+		CALL &CNDBIT %0 *3	; expects CNDBIT(int, int) -> int @ 2264:85
 		NEQi %0 #FALSE @.f5
 		MOVi $I #1 	; for (I=1 to 5+1) 
 		! ADDi <A> #5 #1
@@ -3988,7 +4013,7 @@ main:	FUNC
 		EQUi %0 #FALSE @.f9
 		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
 		MOVi %1 #2 	; fRSPEAK(2)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2268:15
 		GOTO @break1  	; goto break1
 	.f9:	FORi $I <A> @.l7	; } /* end loop */
 	break1:	NOOP
@@ -3998,30 +4023,30 @@ main:	FUNC
 		EQUi %0 #2 @L2000
 		PEEK %1 &NEWLOC 
 		MOVi %2 #3 
-		CALL &CNDBIT %0 *3
+		CALL &CNDBIT %0 *3	; expects CNDBIT(int, int) -> int @ 2287:80
 		EQUi %0 #FALSE @.f11
 		GOTO @L2000  	; goto L2000
 	.f11:	PEEK %0 &DFLAG 	; if(global DFLAG == 0) 
 		NEQi %0 #0 @.f12
 		MOVi %1 $lLOC 	; if((int)INDEEP(lLOC) != FALSE)global DFLAG=1
-		CALL &INDEEP %0 *2
+		CALL &INDEEP %0 *2	; expects INDEEP(int) -> int @ 2289:24
 		EQUi %0 #FALSE @L2000
 		POKE &DFLAG #1 	; global DFLAG=1
 		GOTO @L2000  	; goto L2000
 	.f12:	PEEK %0 &DFLAG 	; if(global DFLAG == 1) 
 		NEQi %0 #1 @.f14
 		MOVi %1 $lLOC 	; if((int)INDEEP(lLOC) == FALSE || (((int)fRAN(100) < (95)) && ((int)CNDBIT(lLOC,4) == FALSE || ((int)fRAN(100) < (85))))) goto L2000
-		CALL &INDEEP %0 *2
+		CALL &INDEEP %0 *2	; expects INDEEP(int) -> int @ 2297:24
 		EQUi %0 #FALSE @L2000
 		MOVi %1 #100 
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2297:53
 		GEQi %0 #95 @.f18
 		MOVi %1 $lLOC 
 		MOVi %2 #4 
-		CALL &CNDBIT %0 *3
+		CALL &CNDBIT %0 *3	; expects CNDBIT(int, int) -> int @ 2297:85
 		EQUi %0 #FALSE @L2000
 		MOVi %1 #100 
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2297:113
 		GEQi %0 #85 @.f18
 		GOTO @L2000  	; goto L2000
 	.f18:	POKE &DFLAG #2 	; global DFLAG=2
@@ -4029,10 +4054,10 @@ main:	FUNC
 		! ADDi <A> #2 #1
 		GEQi #1 <A> @.e19
 	.l20:	MOVi %1 #5 	; J=1+(int)fRAN(5)
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2300:20
 		ADDi $J #1 %0
 		MOVi %1 #100 	; if(((int)fRAN(100) < (50)))global DLOC[J]=0
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2301:23
 		GEQi %0 #50 @.f21
 		POKE &DLOC $J #0	; global DLOC[J]=0
 	.f21:	FORi $I <A> @.l20	; } /* end loop */
@@ -4046,10 +4071,10 @@ main:	FUNC
 		POKE &ODLOC $I %0
 		FORi $I <A> @.l23	; } /* end loop */
 	.e22:	MOVi %1 #3 	; fRSPEAK(3)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2307:13
 		MOVi %1 #AXE 	; fDROP(AXE,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 2308:18
 		GOTO @L2000  	; goto L2000
 	.f14:	POKE &DTOTAL #0 	; global DTOTAL=0
 		MOVi $ATTACK #0 	; ATTACK=0
@@ -4071,7 +4096,7 @@ main:	FUNC
 		PEEK %0 &NEWLOC 	; if(!(global NEWLOC > 300 || (int)INDEEP(global NEWLOC) == FALSE
 		GRTi %0 #300 @.f33
 		PEEK %1 &NEWLOC 
-		CALL &INDEEP %0 *2
+		CALL &INDEEP %0 *2	; expects INDEEP(int) -> int @ 2330:61
 		EQUi %0 #FALSE @.f33
 		PEEK %0 &NEWLOC 
 		PEEK %1 &ODLOC $I
@@ -4091,7 +4116,7 @@ main:	FUNC
 		NEQi $I #6 @.f32
 		PEEK %1 &NEWLOC 
 		MOVi %2 #3 
-		CALL &CNDBIT %0 *3
+		CALL &CNDBIT %0 *3	; expects CNDBIT(int, int) -> int @ 2333:51
 		NEQi %0 #FALSE @.f33
 	.f32:	PEEK %0 &TRAVEL $KK
 		ABSi %0 %0 
@@ -4109,7 +4134,7 @@ main:	FUNC
 		LSSi $J #2 @.f34	; if(J >= 2)J=J-1
 		SUBi $J $J #1	; J=J-1
 	.f34:	MOVi %1 $J 	; J=1+(int)fRAN(J)
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2342:20
 		ADDi $J #1 %0
 		PEEK %0 &DLOC $I	; global ODLOC[I]=global DLOC[I]
 		POKE &ODLOC $I %0
@@ -4118,7 +4143,7 @@ main:	FUNC
 		PEEK %0 &DSEEN $I	; if (((int)global DSEEN[I] != FALSE && (int)INDEEP(lLOC) != FALSE) || ((int)global DLOC[I] == lLOC || (int)global ODLOC[I] == lLOC)) 
 		EQUi %0 #FALSE @.f35
 		MOVi %1 $lLOC 
-		CALL &INDEEP %0 *2
+		CALL &INDEEP %0 *2	; expects INDEEP(int) -> int @ 2345:60
 		NEQi %0 #FALSE @.t36
 	.f35:	PEEK %0 &DLOC $I
 		EQUi %0 $lLOC @.t36
@@ -4138,7 +4163,7 @@ main:	FUNC
 		LSSi %0 #0 @.f41
 		POKE &KNFLOC $lLOC 	; global KNFLOC=lLOC
 	.f41:	MOVi %1 #1000 	; if((int)fRAN(1000) < 95*(global DFLAG-2))STICK=STICK+1
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2355:26
 		PEEK %1 &DFLAG 
 		SUBi %1 %1 #2
 		MULi %1 #95 %1
@@ -4158,18 +4183,18 @@ main:	FUNC
 		PEEK %0 &PLAC:EMRALD 
 		EQUi $lLOC %0 @.f50
 	.f48:	MOVi %1 $J 	; if((int)TOTING(J) != FALSE) 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2367:26
 		EQUi %0 #FALSE @.f50
 		PEEK %0 &PLACE:CHEST 	; if((int)global PLACE[CHEST] == 0) 
 		NEQi %0 #0 @.f52
 		MOVi %1 #CHEST 	; fMOVE(CHEST,CHLOC)
 		MOVi %2 #CHLOC 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 2370:28
 		MOVi %1 #MESSAG 	; fMOVE(MESSAG,CHLOC2)
 		MOVi %2 #CHLOC2 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 2371:30
 	.f52:	MOVi %1 #128 	; fRSPEAK(128)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2373:21
 		MOVi $J #50 	; for (J=50 to MAXTRS+1) 
 		! ADDi <C> #MAXTRS #1
 		GEQi #50 <C> @.e53
@@ -4180,19 +4205,19 @@ main:	FUNC
 		EQUi $lLOC %0 @.f57
 	.f55:	MOVi %1 $J 	; if((int)AT(J, lLOC) != FALSE && (int)global FIXED[J] == 0)fCARRY(J,lLOC)
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2376:31
 		EQUi %0 #FALSE @.f59
 		PEEK %0 &FIXED $J
 		NEQi %0 #0 @.f59
 		MOVi %1 $J 	; fCARRY(J,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fCARRY %0 *3
+		CALL &fCARRY %0 *3	; expects fCARRY(int, int) -> void @ 2376:83
 	.f59:	MOVi %1 $J 	; if((int)TOTING(J) != FALSE)fDROP(J,CHLOC)
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2377:29
 		EQUi %0 #FALSE @.f57
 		MOVi %1 $J 	; fDROP(J,CHLOC)
 		MOVi %2 #CHLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 2377:52
 	.f57:	FORi $J <C> @.l54	; }
 	.e53:	POKE &DLOC:6 #CHLOC 	; global DLOC[6]=CHLOC
 		POKE &ODLOC:6 #CHLOC 	; global ODLOC[6]=CHLOC
@@ -4200,7 +4225,7 @@ main:	FUNC
 		GOTO @L6030  	; goto L6030
 	.f50:	MOVi %1 $J 	; if((int)HERE(J, lLOC) != FALSE)lK=1
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2386:29
 		EQUi %0 #FALSE @.f61
 		MOVi $lK #1 	; lK=1
 	.f61:	FORi $J <B> @.l47	; } /* end loop */
@@ -4211,21 +4236,21 @@ main:	FUNC
 		NEQi %0 #0 @.f64
 		MOVi %1 #LAMP 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2388:95
 		NEQi %0 #FALSE @.t63
 		MOVi %1 #LAMP 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2388:125
 		EQUi %0 #FALSE @.f64
 	.t63:	PEEK %0 &PROP:LAMP 
 		NEQi %0 #1 @.f64
 		MOVi %1 #186 	; fRSPEAK(186)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2389:19
 		MOVi %1 #CHEST 	; fMOVE(CHEST,CHLOC)
 		MOVi %2 #CHLOC 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 2390:25
 		MOVi %1 #MESSAG 	; fMOVE(MESSAG,CHLOC2)
 		MOVi %2 #CHLOC2 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 2391:27
 		POKE &DLOC:6 #CHLOC 	; global DLOC[6]=CHLOC
 		POKE &ODLOC:6 #CHLOC 	; global ODLOC[6]=CHLOC
 		POKE &DSEEN:6 #FALSE 	; global DSEEN[6]=FALSE
@@ -4234,10 +4259,10 @@ main:	FUNC
 		PEEK %1 &DLOC:6 
 		EQUi %0 %1 @.e68
 		MOVi %1 #100 
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2396:73
 		GEQi %0 #20 @.e68
 		MOVi %1 #127 	; fRSPEAK(127)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2396:93
 	.e65:	NOOP
 	.e43:	GOTO @.e68  	; } else 
 	.f38:	POKE &DSEEN $I #FALSE	; global DSEEN[I]=FALSE
@@ -4249,11 +4274,11 @@ main:	FUNC
 		MOVi %1 #1 	; fSETPRM(1,global DTOTAL,0)
 		PEEK %2 &DTOTAL 
 		MOVi %3 #0 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2411:29
 		PEEK %1 &DTOTAL 	; fRSPEAK(4+1/global DTOTAL)
 		DIVi %1 #1 %1
 		ADDi %1 #4 %1
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2412:29
 		EQUi $ATTACK #0 @.f69	; if(ATTACK != 0) 
 		PEEK %0 &DFLAG 	; if(global DFLAG == 2)global DFLAG=3
 		NEQi %0 #2 @.f71
@@ -4261,21 +4286,21 @@ main:	FUNC
 	.f71:	MOVi %1 #1 	; fSETPRM(1,ATTACK,0)
 		MOVi %2 $ATTACK 
 		MOVi %3 #0 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2415:23
 		MOVi $lK #6 	; lK=6
 		LEQi $ATTACK #1 @.f72	; if(ATTACK > 1)lK=250
 		MOVi $lK #250 	; lK=250
 	.f72:	MOVi %1 $lK 	; fRSPEAK(lK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2418:15
 		MOVi %1 #1 	; fSETPRM(1,STICK,0)
 		MOVi %2 $STICK 
 		MOVi %3 #0 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2419:22
 		ADDi %1 #1 $STICK	; fRSPEAK(lK+1+2/(1+STICK))
 		ADDi %2 $lK #1
 		DIVi %1 #2 %1
 		ADDi %1 %2 %1
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2420:29
 		EQUi $STICK #0 @.f69	; if(STICK != 0) 
 		POKE &OLDLC2 $lLOC 	; global OLDLC2=lLOC
 		GOTO @L99  	; goto L99
@@ -4292,36 +4317,36 @@ main:	FUNC
 	.f76:	PEEK %0 &COND $lLOC	; if(!(((int)global COND[lLOC] == 2) || (int)DARK(lLOC) == FALSE)) 
 		EQUi %0 #2 @.f78
 		MOVi %1 $lLOC 
-		CALL &DARK %0 *2
+		CALL &DARK %0 *2	; expects DARK(int) -> int @ 2437:56
 		EQUi %0 #FALSE @.f78
 		PEEK %0 &WZDARK 	; if(global WZDARK != FALSE && ((int)fRAN(100) < (35))) goto L90
 		EQUi %0 #FALSE @.f80
 		MOVi %1 #100 
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2438:48
 		GEQi %0 #35 @.f80
 		GOTO @L90  	; goto L90
 	.f80:	PEEK $KK &RTEXT:16 	; KK=(int)global RTEXT[16]
 	.f78:	MOVi %1 #BEAR 	; if((int)TOTING(BEAR) != FALSE)fRSPEAK(141)
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2442:23
 		EQUi %0 #FALSE @.f81
 		MOVi %1 #141 	; fRSPEAK(141)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2442:44
 	.f81:	MOVi %1 $KK 	; fSPEAK(KK)
-		CALL &fSPEAK %0 *2
+		CALL &fSPEAK %0 *2	; expects fSPEAK(int) -> void @ 2443:12
 		MOVi $lK #1 	; lK=1
 		PEEK %0 &COND $lLOC	; if(((int)global COND[lLOC] == 2)) goto L8
 		NEQi %0 #2 @.f82
 		GOTO @L8  	; goto L8
 	.f82:	NEQi $lLOC #33 @.f84	; if(lLOC == 33 && ((int)fRAN(100) < (25)) && global CLOSNG == FALSE)fRSPEAK(7)
 		MOVi %1 #100 
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2446:35
 		GEQi %0 #25 @.f84
 		PEEK %0 &CLOSNG 
 		NEQi %0 #FALSE @.f84
 		MOVi %1 #7 	; fRSPEAK(7)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2446:79
 	.f84:	MOVi %1 $lLOC 	; if((int)DARK(lLOC) != FALSE) goto L2012
-		CALL &DARK %0 *2
+		CALL &DARK %0 *2	; expects DARK(int) -> int @ 2454:21
 		EQUi %0 #FALSE @.f85
 		GOTO @L2012  	; goto L2012
 	.f85:	PEEK %0 &ABB $lLOC	; global ABB[lLOC]=(int)global ABB[lLOC]+1
@@ -4335,7 +4360,7 @@ main:	FUNC
 		SUBi $lOBJ $lOBJ #100	; lOBJ=lOBJ-100
 	.f87:	NEQi $lOBJ #STEPS @.f88	; if(!(lOBJ == STEPS && (int)TOTING(NUGGET) != FALSE)) 
 		MOVi %1 #NUGGET 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2461:44
 		NEQi %0 #FALSE @.f89
 	.f88:	PEEK %0 &CLOSED 	; if(global CLOSED == FALSE || (int)global PROP[lOBJ] >= 0) 
 		EQUi %0 #FALSE @.t90
@@ -4359,13 +4384,13 @@ main:	FUNC
 		MOVi $KK #1 	; KK=1
 	.f97:	MOVi %1 $lOBJ 	; fPSPEAK(lOBJ,KK)
 		MOVi %2 $KK 
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 2481:20
 	.f89:	PEEK $I &LINK $I	; I=(int)global LINK[I]
 		GOTO @L2004  	; goto L2004
 	L2009:	MOVi $lK #54 	; L2009:
 	L2010:	POKE &SPK $lK 	; L2010:
 	L2011:	PEEK %1 &SPK 	; L2011:
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2493:21
 	L2012:	POKE &VERB #0 	; L2012:
 		MOVi $OLDOBJ $lOBJ 	; OLDOBJ=lOBJ
 		MOVi $lOBJ #0 	; lOBJ=0
@@ -4378,7 +4403,7 @@ main:	FUNC
 		NEQi %0 #FALSE @.f101
 		MOVi %1 $lLOC 	; if((int)CNDBIT(lLOC,HINT+10) == FALSE)global HINTLC[HINT]= -1
 		ADDi %2 $HINT #10
-		CALL &CNDBIT %0 *3
+		CALL &CNDBIT %0 *3	; expects CNDBIT(int, int) -> int @ 2509:34
 		NEQi %0 #FALSE @.f102
 		POKE &HINTLC $HINT #-1	; global HINTLC[HINT]= -1
 	.f102:	PEEK %0 &HINTLC $HINT	; global HINTLC[HINT]=(int)global HINTLC[HINT]+1
@@ -4395,28 +4420,28 @@ main:	FUNC
 		NEQi %1 #0 @L40020
 		MOVi %1 #KEYS 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2526:67
 		NEQi %0 #FALSE @L40020
 		MOVi %1 #KEYS 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2526:97
 		EQUi %0 #FALSE @.e105
 		GOTO @L40020  	; goto L40020
 		GOTO @.e105  	; }
 	.s104#1:	PEEK %0 &PLACE:BIRD 	; if(!((int)global PLACE[BIRD] == lLOC && (int)TOTING(ROD) != FALSE && OLDOBJ == BIRD)) goto L2602
 		NEQi %0 $lLOC @L2602
 		MOVi %1 #ROD 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2530:65
 		EQUi %0 #FALSE @L2602
 		EQUi $OLDOBJ #BIRD @.e105
 		GOTO @L2602  	; goto L2602
 		GOTO @.e105  	; }
 	.s104#2:	MOVi %1 #SNAKE 	; if(!((int)HERE(SNAKE, lLOC) != FALSE && (int)HERE(BIRD, lLOC) == FALSE)) goto L40020
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2534:36
 		EQUi %0 #FALSE @L40020
 		MOVi %1 #BIRD 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2534:70
 		EQUi %0 #FALSE @.e105
 		GOTO @L40020  	; goto L40020
 		GOTO @.e105  	; }
@@ -4454,13 +4479,13 @@ main:	FUNC
 		GOTO @L2602  	; goto L2602
 		GOTO @.e105  	; }
 	.s104#8:	MOVi %1 $lLOC 	; I=(int)fATDWRF(lLOC)
-		CALL &fATDWRF %0 *2
+		CALL &fATDWRF %0 *2	; expects fATDWRF(int) -> int @ 2557:28
 		MOVi $I %0 
 		GEQi $I #0 @.f120	; if(I < 0) goto L40020
 		GOTO @L40020  	; goto L40020
 	.f120:	MOVi %1 #OGRE 	; if(!((int)HERE(OGRE, lLOC) != FALSE && I == 0)) goto L2602
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2559:35
 		EQUi %0 #FALSE @L2602
 		EQUi $I #0 @.e105
 		GOTO @L2602  	; goto L2602
@@ -4472,13 +4497,13 @@ main:	FUNC
 		GOTO @L40020  	; goto L40020
 		GOTO @.e105  	; }
 	.s104:	MOVi %1 #27 	; fBUG(27)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2566:24
 	.e105:	MULi %1 $HINT #5	; if((int)fYES(global HINTS[HINT * 5 + 3],0,54) != FALSE) 
 		ADDi %1 %1 #3
 		PEEK %1 &HINTS %1
 		MOVi %2 #0 
 		MOVi %3 #54 
-		CALL &fYES %0 *4
+		CALL &fYES %0 *4	; expects fYES(int, int, int) -> int @ 2569:52
 		EQUi %0 #FALSE @.f125
 		MOVi %1 #1 	; fSETPRM(1,global HINTS[HINT * 5 + 2],global HINTS[HINT * 5 + 2])
 		MULi %2 $HINT #5
@@ -4487,15 +4512,15 @@ main:	FUNC
 		MULi %3 $HINT #5
 		ADDi %3 %3 #2
 		PEEK %3 &HINTS %3
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2570:71
 		MOVi %1 #261 	; fRSPEAK(261)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2571:19
 		MOVi %1 #175 	; global HINTED[HINT]=(int)fYES(175,global HINTS[HINT * 5 + 4],54)
 		MULi %2 $HINT #5
 		ADDi %2 %2 #4
 		PEEK %2 &HINTS %2
 		MOVi %3 #54 
-		CALL &fYES %0 *4
+		CALL &fYES %0 *4	; expects fYES(int, int, int) -> int @ 2572:71
 		POKE &HINTED $HINT %0
 		PEEK %0 &HINTED $HINT	; if((int)global HINTED[HINT] != FALSE && global LIMIT > 30)global LIMIT=global LIMIT+30*(int)global HINTS[HINT * 5 + 2]
 		EQUi %0 #FALSE @.f125
@@ -4517,16 +4542,16 @@ main:	FUNC
 		PEEK %1 &PROP:OYSTER 	; if((int)global PROP[OYSTER] < 0 && (int)TOTING(OYSTER) != FALSE)fPSPEAK(OYSTER,1)
 		GEQi %1 #0 @.f130
 		MOVi %1 #OYSTER 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2591:58
 		EQUi %0 #FALSE @.f130
 		MOVi %1 #OYSTER 	; fPSPEAK(OYSTER,1)
 		MOVi %2 #1 
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 2591:84
 	.f130:	MOVi $I #1 	; for (I=1 to 100+1) 
 		! ADDi <A> #100 #1
 		GEQi #1 <A> @.f128
 	.l132:	MOVi %1 $I 	; if((int)TOTING(I) != FALSE && (int)global PROP[I] < 0)global PROP[I]= -1-(int)global PROP[I]
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2593:22
 		EQUi %0 #FALSE @.f134
 		PEEK %0 &PROP $I
 		GEQi %0 #0 @.f134
@@ -4535,7 +4560,7 @@ main:	FUNC
 		POKE &PROP $I %0
 	.f134:	FORi $I <A> @.l132	; } /* end loop */
 	.f128:	MOVi %1 $lLOC 	; global WZDARK=(int)DARK(lLOC)
-		CALL &DARK %0 *2
+		CALL &DARK %0 *2	; expects DARK(int) -> int @ 2597:31
 		POKE &WZDARK %0 
 		PEEK %0 &KNFLOC 	; if(global KNFLOC > 0 && global KNFLOC != lLOC)global KNFLOC=0
 		LEQi %0 #0 @.f136
@@ -4543,13 +4568,13 @@ main:	FUNC
 		EQUi %0 $lLOC @.f136
 		POKE &KNFLOC #0 	; global KNFLOC=0
 	.f136:	MOVi %1 #1 	; I=(int)fRAN(1)
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2599:16
 		MOVi $I %0 
 		MOVp %1 &WD1 	; fGETIN(&global WD1,&global WD1X,&global WD2,&global WD2X)
 		MOVp %2 &WD1X 
 		MOVp %3 &WD2 
 		MOVp %4 &WD2X 
-		CALL &fGETIN %0 *5
+		CALL &fGETIN %0 *5	; expects fGETIN(ptr, ptr, ptr, ptr) -> void @ 2600:59
 	L2607:	PEEK %0 &FOOBAR 	; L2607:
 		LEQi %0 #0 @.f137
 		PEEK %0 &FOOBAR 	; global FOOBAR=-global FOOBAR
@@ -4565,7 +4590,7 @@ main:	FUNC
 		NEQi %0 %1 @.f139
 		PEEK %1 &TRNDEX 	; fSPEAK(global TTEXT[global TRNDEX])
 		PEEK %1 &TTEXT %1
-		CALL &fSPEAK %0 *2
+		CALL &fSPEAK %0 *2	; expects fSPEAK(int) -> void @ 2610:38
 		PEEK %0 &TRNDEX 	; global TRNLUZ=global TRNLUZ+(int)global TRNVAL[global TRNDEX]/100000
 		PEEK %0 &TRNVAL %0
 		PEEK %1 &TRNLUZ 
@@ -4595,7 +4620,7 @@ main:	FUNC
 	.f143:	PEEK %1 &TALLY 	; if(global TALLY == 0 && (int)INDEEP(lLOC) != FALSE && lLOC != 33) 
 		NEQi %1 #0 @.f145
 		MOVi %1 $lLOC 
-		CALL &INDEEP %0 *2
+		CALL &INDEEP %0 *2	; expects INDEEP(int) -> int @ 2622:44
 		EQUi %0 #FALSE @.f145
 		EQUi $lLOC #33 @.f145
 		PEEK %0 &CLOCK1 	; global CLOCK1=global CLOCK1-1
@@ -4613,28 +4638,28 @@ main:	FUNC
 		FORi $I <A> @.l148	; } /* end loop */
 	.e147:	MOVi %1 #TROLL 	; fMOVE(TROLL,0)
 		MOVi %2 #0 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 2664:17
 		ADDi %1 #TROLL #100	; fMOVE(TROLL+100,0)
 		MOVi %2 #0 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 2665:21
 		MOVi %1 #TROLL2 	; fMOVE(TROLL2,global PLAC[TROLL])
 		PEEK %2 &PLAC:TROLL 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 2666:35
 		ADDi %1 #TROLL2 #100	; fMOVE(TROLL2+100,global FIXD[TROLL])
 		PEEK %2 &FIXD:TROLL 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 2667:39
 		MOVi %1 #CHASM 	; fJUGGLE(CHASM)
-		CALL &fJUGGLE %0 *2
+		CALL &fJUGGLE %0 *2	; expects fJUGGLE(int) -> void @ 2668:17
 		PEEK %0 &PROP:BEAR 	; if((int)global PROP[BEAR] != 3)fDSTROY(BEAR)
 		EQUi %0 #3 @.f149
 		MOVi %1 #BEAR 	; fDSTROY(BEAR)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 2669:47
 	.f149:	POKE &PROP:CHAIN #0 	; global PROP[CHAIN]=0
 		POKE &FIXED:CHAIN #0 	; global FIXED[CHAIN]=0
 		POKE &PROP:AXE #0 	; global PROP[AXE]=0
 		POKE &FIXED:AXE #0 	; global FIXED[AXE]=0
 		MOVi %1 #129 	; fRSPEAK(129)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2674:15
 		POKE &CLOCK1 #-1 	; global CLOCK1= -1
 		POKE &CLOSNG #TRUE 	; global CLOSNG=TRUE
 		GOTO @.e150  	; } else 
@@ -4648,33 +4673,33 @@ main:	FUNC
 		MOVi %1 #BOTTLE 	; global PROP[BOTTLE]=(int)fPUT(BOTTLE,115,1)
 		MOVi %2 #115 
 		MOVi %3 #1 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2692:47
 		POKE &PROP:BOTTLE %0 
 		MOVi %1 #PLANT 	; global PROP[PLANT]=(int)fPUT(PLANT,115,0)
 		MOVi %2 #115 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2693:45
 		POKE &PROP:PLANT %0 
 		MOVi %1 #OYSTER 	; global PROP[OYSTER]=(int)fPUT(OYSTER,115,0)
 		MOVi %2 #115 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2694:47
 		POKE &PROP:OYSTER %0 
 		POKE &OBJTXT:OYSTER #3 	; global OBJTXT[OYSTER]=3
 		MOVi %1 #LAMP 	; global PROP[LAMP]=(int)fPUT(LAMP,115,0)
 		MOVi %2 #115 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2696:43
 		POKE &PROP:LAMP %0 
 		MOVi %1 #ROD 	; global PROP[ROD]=(int)fPUT(ROD,115,0)
 		MOVi %2 #115 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2697:41
 		POKE &PROP:ROD %0 
 		MOVi %1 #DWARF 	; global PROP[DWARF]=(int)fPUT(DWARF,115,0)
 		MOVi %2 #115 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2698:45
 		POKE &PROP:DWARF %0 
 		MOVi $lLOC #115 	; lLOC=115
 		POKE &OLDLOC #115 	; global OLDLOC=115
@@ -4682,12 +4707,12 @@ main:	FUNC
 		MOVi %1 #GRATE 	; I=(int)fPUT(GRATE,116,0)
 		MOVi %2 #116 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2705:28
 		MOVi $I %0 
 		MOVi %1 #gSIGN 	; I=(int)fPUT(gSIGN,116,0)
 		MOVi %2 #116 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2706:28
 		MOVi $I %0 
 		PEEK %0 &OBJTXT:gSIGN 	; global OBJTXT[gSIGN]=(int)global OBJTXT[gSIGN]+1
 		ADDi %0 %0 #1
@@ -4695,45 +4720,45 @@ main:	FUNC
 		MOVi %1 #SNAKE 	; global PROP[SNAKE]=(int)fPUT(SNAKE,116,1)
 		MOVi %2 #116 
 		MOVi %3 #1 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2708:45
 		POKE &PROP:SNAKE %0 
 		MOVi %1 #BIRD 	; global PROP[BIRD]=(int)fPUT(BIRD,116,1)
 		MOVi %2 #116 
 		MOVi %3 #1 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2709:43
 		POKE &PROP:BIRD %0 
 		MOVi %1 #CAGE 	; global PROP[CAGE]=(int)fPUT(CAGE,116,0)
 		MOVi %2 #116 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2710:43
 		POKE &PROP:CAGE %0 
 		MOVi %1 #ROD2 	; global PROP[ROD2]=(int)fPUT(ROD2,116,0)
 		MOVi %2 #116 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2711:43
 		POKE &PROP:ROD2 %0 
 		MOVi %1 #PILLOW 	; global PROP[PILLOW]=(int)fPUT(PILLOW,116,0)
 		MOVi %2 #116 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2712:47
 		POKE &PROP:PILLOW %0 
 		MOVi %1 #MIRROR 	; global PROP[MIRROR]=(int)fPUT(MIRROR,115,0)
 		MOVi %2 #115 
 		MOVi %3 #0 
-		CALL &fPUT %0 *4
+		CALL &fPUT %0 *4	; expects fPUT(int, int, int) -> int @ 2714:47
 		POKE &PROP:MIRROR %0 
 		POKE &FIXED:MIRROR #116 	; global FIXED[MIRROR]=116
 		MOVi $I #1 	; for (I=1 to 100+1) 
 		! ADDi <A> #100 #1
 		GEQi #1 <A> @.e153
 	.l154:	MOVi %1 $I 	; if((int)TOTING(I) != FALSE)fDSTROY(I)
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2718:23
 		EQUi %0 #FALSE @.f155
 		MOVi %1 $I 	; fDSTROY(I)
-		CALL &fDSTROY %0 *2
+		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ 2718:42
 	.f155:	FORi $I <A> @.l154	; } /* end loop */
 	.e153:	MOVi %1 #132 	; fRSPEAK(132)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2721:16
 		POKE &CLOSED #TRUE 	; global CLOSED=TRUE
 		GOTO @L2  	; goto L2
 	.f152:	PEEK %0 &PROP:LAMP 	; if((int)global PROP[LAMP] == 1)global LIMIT=global LIMIT-1
@@ -4745,23 +4770,23 @@ main:	FUNC
 		GRTi %0 #30 @.f158
 		MOVi %1 #BATTER 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2726:52
 		EQUi %0 #FALSE @.f158
 		PEEK %0 &PROP:BATTER 
 		NEQi %0 #0 @.f158
 		MOVi %1 #LAMP 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2726:119
 		EQUi %0 #FALSE @.f158
 		MOVi %1 #188 	; fRSPEAK(188)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2733:16
 		POKE &PROP:BATTER #1 	; global PROP[BATTER]=1
 		MOVi %1 #BATTER 	; if((int)TOTING(BATTER) != FALSE)fDROP(BATTER,lLOC)
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2735:27
 		EQUi %0 #FALSE @.f159
 		MOVi %1 #BATTER 	; fDROP(BATTER,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 2735:54
 	.f159:	PEEK %0 &LIMIT 	; global LIMIT=global LIMIT+2500
 		ADDi %0 %0 #2500
 		POKE &LIMIT %0 
@@ -4773,10 +4798,10 @@ main:	FUNC
 		POKE &PROP:LAMP #0 	; global PROP[LAMP]=0
 		MOVi %1 #LAMP 	; if((int)HERE(LAMP, lLOC) != FALSE)fRSPEAK(184)
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2741:29
 		EQUi %0 #FALSE @.e163
 		MOVi %1 #184 	; fRSPEAK(184)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2741:50
 		GOTO @.e163  	; } else if(global LIMIT <= 30) 
 	.f161:	PEEK %0 &LIMIT 	; if(global LIMIT <= 30) 
 		GRTi %0 #30 @.f164
@@ -4784,7 +4809,7 @@ main:	FUNC
 		NEQi %0 #FALSE @.f164
 		MOVi %1 #LAMP 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2743:57
 		EQUi %0 #FALSE @.f164
 		POKE &LMWARN #TRUE 	; global LMWARN=TRUE
 		POKE &SPK #187 	; global SPK=187
@@ -4795,22 +4820,22 @@ main:	FUNC
 		NEQi %0 #1 @.f168
 		POKE &SPK #189 	; global SPK=189
 	.f168:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2748:24
 	.f164:	NOOP
 	.e163:	NOOP
 	.e160:	NOOP
 	.e150:	MOVi $lK #43 	; lK=43
 		MOVi %1 $lLOC 	; if((int)LIQLOC(lLOC) == WATER)lK=70
-		CALL &LIQLOC %0 *2
+		CALL &LIQLOC %0 *2	; expects LIQLOC(int) -> int @ 2754:23
 		NEQi %0 #WATER @.f169
 		MOVi $lK #70 	; lK=70
 	.f169:	PEEK %1 &WD1 	; V1=(int)fVOCAB(global WD1,-1)
 		MOVi %2 #-1 
-		CALL &fVOCAB %0 *3
+		CALL &fVOCAB %0 *3	; expects fVOCAB(int, int) -> int @ 2755:31
 		MOVi $V1 %0 
 		PEEK %1 &WD2 	; V2=(int)fVOCAB(global WD2,-1)
 		MOVi %2 #-1 
-		CALL &fVOCAB %0 *3
+		CALL &fVOCAB %0 *3	; expects fVOCAB(int, int) -> int @ 2756:31
 		MOVi $V2 %0 
 		NEQi $V1 #ENTER @.f172	; if(V1 == ENTER && (V2 == STREAM || V2 == 1000+WATER)) goto L2010
 		EQUi $V2 #STREAM @L2010
@@ -4833,10 +4858,10 @@ main:	FUNC
 		NEQi $V2 <A> @.f178
 	.f177:	SUBi %1 $V2 #1000	; if((int)AT(V2-1000, lLOC) != FALSE)global WD2=(int)fMAKEWD(16152118)
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2760:29
 		EQUi %0 #FALSE @.f178
 		MOVi %1 #16152118 	; global WD2=(int)fMAKEWD(16152118)
-		CALL &fMAKEWD %0 *2
+		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ 2760:71
 		POKE &WD2 %0 
 	.f178:	NOOP
 		! ADDi <A> #1000 #CAGE	; if(V1 == 1000+CAGE && V2 == 1000+BIRD && (int)HERE(CAGE, lLOC) != FALSE && (int)HERE(BIRD, lLOC) != FALSE)global WD1=(int)fMAKEWD(301200308)
@@ -4845,18 +4870,18 @@ main:	FUNC
 		NEQi $V2 <A> @.f181
 		MOVi %1 #CAGE 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2762:65
 		EQUi %0 #FALSE @.f181
 		MOVi %1 #BIRD 
 		MOVi %2 $lLOC 
-		CALL &HERE %0 *3
+		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ 2762:99
 		EQUi %0 #FALSE @.f181
 		MOVi %1 #301200308 	; global WD1=(int)fMAKEWD(301200308)
-		CALL &fMAKEWD %0 *2
+		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ 2762:142
 		POKE &WD1 %0 
 	.f181:	NOOP
 	L2620:	MOVi %1 #23051920 	; L2620:
-		CALL &fMAKEWD %0 *2
+		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ 2764:41
 		PEEK %1 &WD1 
 		NEQi %1 %0 @.f182
 		PEEK %1 &IWEST 	; global IWEST=global IWEST+1
@@ -4865,9 +4890,9 @@ main:	FUNC
 		PEEK %1 &IWEST 	; if(global IWEST == 10)fRSPEAK(17)
 		NEQi %1 #10 @.f182
 		MOVi %1 #17 	; fRSPEAK(17)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2766:36
 	.f182:	MOVi %1 #715 	; if(!(global WD1 != (int)fMAKEWD( 715) || global WD2 == 0)) 
-		CALL &fMAKEWD %0 *2
+		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ 2768:40
 		PEEK %1 &WD1 
 		NEQi %1 %0 @.f185
 		PEEK %1 &WD2 
@@ -4878,19 +4903,19 @@ main:	FUNC
 		PEEK %1 &IGO 	; if(global IGO == 10)fRSPEAK(276)
 		NEQi %1 #10 @.f185
 		MOVi %1 #276 	; fRSPEAK(276)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2770:35
 	.f185:	NOOP
 	L2630:	PEEK %1 &WD1 	; L2630:
 		MOVi %2 #-1 
-		CALL &fVOCAB %0 *3
+		CALL &fVOCAB %0 *3	; expects fVOCAB(int, int) -> int @ 2773:30
 		MOVi $I %0 
 		NEQi $I #-1 @.f187	; if(I == -1) 
 		MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
 		PEEK %2 &WD1 
 		PEEK %3 &WD1X 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2777:36
 		MOVi %1 #254 	; fRSPEAK(254)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2778:15
 		GOTO @L2600  	; goto L2600
 	.f187:	MODi $lK $I #1000	; lK=((I)%1000)
 		DIVi %0 $I #1000	; KQ=I/1000+1
@@ -4908,7 +4933,7 @@ main:	FUNC
 	.s188#3:	GOTO @L2010  	; goto L2010
 	.s188:	NOOP
 	.e189:	MOVi %1 #22 	; fBUG(22)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2789:10
 	L2800:	PEEK %0 &WD2 	; L2800:
 		POKE &WD1 %0 
 		PEEK %0 &WD2X 	; global WD1X=global WD2X
@@ -4919,7 +4944,7 @@ main:	FUNC
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 		POKE &gLOC $lLOC 	; global gLOC = lLOC
 		MOVi %1 $I 	; gotoChoice = (int)action(I)
-		CALL &action %0 *2
+		CALL &action %0 *2	; expects action(int) -> int @ 2806:30
 		MOVi $gotoChoice %0 
 		PEEK $lK &gK 	; lK = global gK
 		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
@@ -4965,35 +4990,35 @@ main:	FUNC
 	.s190#<A>:	MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
 		PEEK %2 &WD1 
 		PEEK %3 &WD1X 
-		CALL &fSETPRM %0 *4
+		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2825:38
 		MOVi %1 #257 	; fRSPEAK(257)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2826:17
 		MOVi $lOBJ #0 	; lOBJ=0
 		GOTO @L2600  	; goto L2600
 		GOTO @.e191  	; }
 		! SUBi <A> #GOTO18999 #GOTO2	; case GOTO18999
 	.s190#<A>:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2834:24
 		MOVi %1 #136 	; fRSPEAK(136)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2835:17
 		MOVi %1 #0 	; score(0)
-		CALL &score %0 *2
+		CALL &score %0 *2	; expects score(int) -> void @ 2836:13
 		GOTO @.e191  	; }
 		! SUBi <A> #GOTO19000 #GOTO2	; case GOTO19000
 	.s190#<A>:	MOVi %1 #136 	; fRSPEAK(136)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2840:17
 		MOVi %1 #0 	; score(0)
-		CALL &score %0 *2
+		CALL &score %0 *2	; expects score(int) -> void @ 2841:13
 		GOTO @.e191  	; }
 	.s190:	MOVi %1 #-1 	; fBUG(-1)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2843:23
 	.e191:	MOVi %1 #99 	; fBUG(99)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2846:10
 	L8:	PEEK $KK &KEY $lLOC	; L8:
 		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
 		NEQi $KK #0 @.f192	; if(KK == 0)fBUG(26)
 		MOVi %1 #26 	; fBUG(26)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2859:21
 	.f192:	NEQi $lK #NUL @.f193	; if(lK == NUL) goto L2
 		GOTO @L2  	; goto L2
 	.f193:	NEQi $lK #BACK @.f194	; if(lK == BACK) 
@@ -5009,7 +5034,7 @@ main:	FUNC
 		MOVi $K2 #91 	; K2=91
 	.f196:	MOVi %1 $lLOC 	; if((int)CNDBIT(lLOC,4) != FALSE)K2=274
 		MOVi %2 #4 
-		CALL &CNDBIT %0 *3
+		CALL &CNDBIT %0 *3	; expects CNDBIT(int, int) -> int @ 2872:26
 		EQUi %0 #FALSE @.f197
 		MOVi $K2 #274 	; K2=274
 	.f197:	NEQi $K2 #0 @.f198	; if(K2 == 0) 
@@ -5039,18 +5064,18 @@ main:	FUNC
 		EQUi $KK #0 @.f204	; if(KK != 0) goto L25
 		GOTO @L25  	; goto L25
 	.f204:	MOVi %1 #140 	; fRSPEAK(140)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2889:17
 		GOTO @L2  	; goto L2
 	.f203:	ADDi $KK $KK #1	; KK=KK+1
 		GOTO @L21  	; goto L21
 	.f198:	MOVi %1 $K2 	; fRSPEAK(K2)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2895:14
 		GOTO @L2  	; goto L2
 	.f194:	NEQi $lK #LOOK @.f205	; if(lK == LOOK) 
 		PEEK %0 &DETAIL 	; if(global DETAIL < 3)fRSPEAK(15)
 		GEQi %0 #3 @.f206
 		MOVi %1 #15 	; fRSPEAK(15)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2902:35
 	.f206:	PEEK %0 &DETAIL 	; global DETAIL=global DETAIL+1
 		ADDi %0 %0 #1
 		POKE &DETAIL %0 
@@ -5060,12 +5085,12 @@ main:	FUNC
 	.f205:	NEQi $lK #CAVE @.f207	; if(lK == CAVE) 
 		MOVi $lK #58 	; lK=58
 		MOVi %1 $lLOC 	; if((int)OUTSID(lLOC) != FALSE && lLOC != 8)lK=57
-		CALL &OUTSID %0 *2
+		CALL &OUTSID %0 *2	; expects OUTSID(int) -> int @ 2912:24
 		EQUi %0 #FALSE @.f209
 		EQUi $lLOC #8 @.f209
 		MOVi $lK #57 	; lK=57
 	.f209:	MOVi %1 $lK 	; fRSPEAK(lK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2913:14
 		GOTO @L2  	; goto L2
 	.f207:	PEEK %0 &OLDLOC 	; global OLDLC2=global OLDLOC
 		POKE &OLDLC2 %0 
@@ -5103,7 +5128,7 @@ main:	FUNC
 	.f224:	NEQi $lK #17 @.f225	; if(lK == 17)global SPK=80
 		POKE &SPK #80 	; global SPK=80
 	.f225:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2934:23
 		GOTO @L2  	; goto L2
 	.f212:	ADDi $KK $KK #1	; KK=KK+1
 		GOTO @L9  	; goto L9
@@ -5124,7 +5149,7 @@ main:	FUNC
 	.l228:	PEEK %1 &TRAVEL $KK	; if((int)global TRAVEL[KK] < 0)fBUG(25)
 		GEQi %1 #0 @.f229
 		MOVi %1 #25 	; fBUG(25)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2948:42
 	.f229:	ADDi $KK $KK #1	; KK=KK+1
 		PEEK %0 &TRAVEL $KK	; global NEWLOC=abs((int)global TRAVEL[KK])/1000
 		ABSi %0 %0 
@@ -5137,20 +5162,20 @@ main:	FUNC
 	.f226:	PEEK %0 &NEWLOC 	; if(global NEWLOC > 100) 
 		LEQi %0 #100 @.f230
 		MOVi %1 $lK 	; if((int)TOTING(lK) != FALSE || (global NEWLOC > 200 && (int)AT(lK, lLOC) != FALSE)) goto L16
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2957:22
 		NEQi %0 #FALSE @L16
 		PEEK %0 &NEWLOC 
 		LEQi %0 #200 @L12
 		MOVi %1 $lK 
 		MOVi %2 $lLOC 
-		CALL &AT %0 *3
+		CALL &AT %0 *3	; expects AT(int, int) -> int @ 2957:76
 		EQUi %0 #FALSE @L12
 		GOTO @L16  	; goto L16
 		GOTO @L12  	; goto L12
 	.f230:	PEEK %0 &NEWLOC 	; if(global NEWLOC != 0 && !((int)fRAN(100) < (global NEWLOC))) goto L12
 		EQUi %0 #0 @.f235
 		MOVi %1 #100 
-		CALL &fRAN %0 *2
+		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2961:44
 		PEEK %1 &NEWLOC 
 		LSSi %0 %1 @.f235
 		GOTO @L12  	; goto L12
@@ -5164,7 +5189,7 @@ main:	FUNC
 		LEQi %0 #500 @.f237
 		PEEK %1 &NEWLOC 	; fRSPEAK(global NEWLOC-500)
 		SUBi %1 %1 #500
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2966:29
 		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
 		GOTO @L2  	; goto L2
 	.f237:	PEEK %0 &NEWLOC 	; global NEWLOC=global NEWLOC-300
@@ -5182,17 +5207,17 @@ main:	FUNC
 		PEEK %0 &HOLDNG 
 		NEQi %0 #1 @.f242
 		MOVi %1 #EMRALD 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2982:72
 		EQUi %0 #FALSE @.f242
 		GOTO @L2  	; goto L2
 	.f242:	POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
 		MOVi %1 #117 	; fRSPEAK(117)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2984:16
 		GOTO @L2  	; goto L2
 		GOTO @.e239  	; }
 	.s238#1:	MOVi %1 #EMRALD 	; fDROP(EMRALD,lLOC)
 		MOVi %2 $lLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 2993:22
 		GOTO @L12  	; goto L12
 		GOTO @.e239  	; }
 	.s238#2:	PEEK %0 &PROP:TROLL 	; if((int)global PROP[TROLL] != 1) 
@@ -5206,16 +5231,16 @@ main:	FUNC
 		NEQi %0 #0 @.f244
 		POKE &PROP:TROLL #1 	; global PROP[TROLL]=1
 	.f244:	MOVi %1 #BEAR 	; if((int)TOTING(BEAR) == FALSE) goto L2
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 3007:26
 		NEQi %0 #FALSE @.f245
 		GOTO @L2  	; goto L2
 	.f245:	MOVi %1 #162 	; fRSPEAK(162)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 3008:17
 		POKE &PROP:CHASM #1 	; global PROP[CHASM]=1
 		POKE &PROP:TROLL #2 	; global PROP[TROLL]=2
 		MOVi %1 #BEAR 	; fDROP(BEAR,global NEWLOC)
 		PEEK %2 &NEWLOC 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 3011:30
 		POKE &FIXED:BEAR #-1 	; global FIXED[BEAR]= -1
 		POKE &PROP:BEAR #3 	; global PROP[BEAR]=3
 		PEEK %0 &NEWLOC 	; global OLDLC2=global NEWLOC
@@ -5223,39 +5248,39 @@ main:	FUNC
 		GOTO @L99  	; goto L99
 	.f243:	MOVi %1 #TROLL 	; fPSPEAK(TROLL,1)
 		MOVi %2 #1 
-		CALL &fPSPEAK %0 *3
+		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 3018:20
 		POKE &PROP:TROLL #0 	; global PROP[TROLL]=0
 		MOVi %1 #TROLL2 	; fMOVE(TROLL2,0)
 		MOVi %2 #0 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 3020:19
 		ADDi %1 #TROLL2 #100	; fMOVE(TROLL2+100,0)
 		MOVi %2 #0 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 3021:23
 		MOVi %1 #TROLL 	; fMOVE(TROLL,global PLAC[TROLL])
 		PEEK %2 &PLAC:TROLL 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 3022:35
 		ADDi %1 #TROLL #100	; fMOVE(TROLL+100,global FIXD[TROLL])
 		PEEK %2 &FIXD:TROLL 
-		CALL &fMOVE %0 *3
+		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ 3023:39
 		MOVi %1 #CHASM 	; fJUGGLE(CHASM)
-		CALL &fJUGGLE %0 *2
+		CALL &fJUGGLE %0 *2	; expects fJUGGLE(int) -> void @ 3024:18
 		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
 		GOTO @L2  	; goto L2
 	.s238:	NOOP
 	.e239:	MOVi %1 #20 	; fBUG(20)
-		CALL &fBUG %0 *2
+		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 3029:10
 	L90:	MOVi %1 #23 	; L90:
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 3053:13
 		POKE &OLDLC2 $lLOC 	; global OLDLC2=lLOC
 	L99:	PEEK %0 &CLOSNG 	; L99:
 		EQUi %0 #FALSE @.f246
 		MOVi %1 #131 	; fRSPEAK(131)
-		CALL &fRSPEAK %0 *2
+		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 3061:15
 		PEEK %0 &NUMDIE 	; global NUMDIE=global NUMDIE+1
 		ADDi %0 %0 #1
 		POKE &NUMDIE %0 
 		MOVi %1 #0 	; score(0)
-		CALL &score %0 *2
+		CALL &score %0 *2	; expects score(int) -> void @ 3063:11
 	.f246:	PEEK %0 &NUMDIE 	; global NUMDIE=global NUMDIE+1
 		ADDi %0 %0 #1
 		POKE &NUMDIE %0 
@@ -5266,19 +5291,19 @@ main:	FUNC
 		MULi %2 %2 #2
 		ADDi %2 #80 %2
 		MOVi %3 #54 
-		CALL &fYES %0 *4
+		CALL &fYES %0 *4	; expects fYES(int, int, int) -> int @ 3066:57
 		NEQi %0 #FALSE @.f247
 		MOVi %1 #0 	; score(0)
-		CALL &score %0 *2
+		CALL &score %0 *2	; expects score(int) -> void @ 3066:75
 	.f247:	PEEK %0 &NUMDIE 	; if(global NUMDIE == global MAXDIE) score(0)
 		PEEK %1 &MAXDIE 
 		NEQi %0 %1 @.f248
 		MOVi %1 #0 	; score(0)
-		CALL &score %0 *2
+		CALL &score %0 *2	; expects score(int) -> void @ 3067:45
 	.f248:	POKE &PLACE:WATER #0 	; global PLACE[WATER]=0
 		POKE &PLACE:OIL #0 	; global PLACE[OIL]=0
 		MOVi %1 #LAMP 	; if((int)TOTING(LAMP) != FALSE)global PROP[LAMP]=0
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 3070:23
 		EQUi %0 #FALSE @.f249
 		POKE &PROP:LAMP #0 	; global PROP[LAMP]=0
 	.f249:	MOVi $J #1 	; for (J=1 to 100+1) 
@@ -5286,14 +5311,14 @@ main:	FUNC
 		GEQi #1 <A> @.e250
 	.l251:	SUBi $I #101 $J	; I=101-J
 		MOVi %1 $I 	; if((int)TOTING(I) != FALSE) 
-		CALL &TOTING %0 *2
+		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 3073:21
 		EQUi %0 #FALSE @.f252
 		PEEK $lK &OLDLC2 	; lK=global OLDLC2
 		NEQi $I #LAMP @.f253	; if(I == LAMP)lK=1
 		MOVi $lK #1 	; lK=1
 	.f253:	MOVi %1 $I 	; fDROP(I,lK)
 		MOVi %2 $lK 
-		CALL &fDROP %0 *3
+		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 3076:15
 	.f252:	FORi $J <A> @.l251	; } /* end loop */
 	.e250:	MOVi $lLOC #3 	; lLOC=3
 		POKE &OLDLOC $lLOC 	; global OLDLOC=lLOC

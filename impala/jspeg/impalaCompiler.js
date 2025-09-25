@@ -1,6 +1,6 @@
-var impalaCompiler = (function(_s) {
+var $$parser = {};
+var impalaCompilerImpl = (function(_s) {
 {
-    'use strict';
     /**
      * map(target, k1, v1, k2, v2, …)
      *   assigns target[k1]=v1, etc.
@@ -128,41 +128,24 @@ var impalaCompiler = (function(_s) {
 
     /* 1  constants & simple flags */
     var IMPALA_VERSION = '1.0';
-    IMPALA_VERSION = IMPALA_VERSION;
-    var dry = false;
-    dry = dry;
+    var dry            = false;
 
     /* 2  make sure the buckets exist */
-    var META_TO_GAZL = {};
-    META_TO_GAZL = META_TO_GAZL;
-    var SUPPORTED_OPS = {};
-    SUPPORTED_OPS = SUPPORTED_OPS;
+    var META_TO_GAZL   = {};
+    var SUPPORTED_OPS  = {};
     var CASTS_TO_TYPES = {};
-    CASTS_TO_TYPES = CASTS_TO_TYPES;
     var ZEROES = {};
-    ZEROES = ZEROES;
-    var TYPE_SUFFIXES = {};
-    TYPE_SUFFIXES = TYPE_SUFFIXES;
-    var VERBOSE_TYPES = {};
-    VERBOSE_TYPES = VERBOSE_TYPES;
+    var TYPE_SUFFIXES  = {};
+    var VERBOSE_TYPES  = {};
+    var sourceName = undefined;
     var metacode = [];
-    metacode = metacode;
     var strings = { s:[], a:[] };
-    strings = strings;
     var labelCounter = 0;
-    labelCounter = labelCounter;
     var stock = { '%': [], '<': [] };
-    stock = stock;
     var counters = { '%': 0,  '<': 0  };
-    counters = counters;
-    var randomId = 0;
-    randomId = randomId;
     var symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
-    symbols = symbols;
     var switchStack = [];
-    switchStack = switchStack;
     var noForward = false;
-    noForward = noForward;
 
     /* 3  bulk-fill the lookup tables */
     map(META_TO_GAZL,
@@ -201,42 +184,377 @@ var impalaCompiler = (function(_s) {
     map(VERBOSE_TYPES,  'i','int','f','float','p','pointer','F','funcptr',
                                  'U','function','N','native','A','array','?','untyped');
 
+    function signatureParamCategory(type) {
+        switch (type) {
+            case 'i': return 'int';
+            case 'f': return 'float';
+            case 'p': return 'ptr';
+            case 'F': return 'funcptr';
+            default:  return 'unknown';
+        }
+    }
+
+    function signatureReturnCategory(type, known) {
+        switch (type) {
+            case 'i': return 'int';
+            case 'f': return 'float';
+            case 'p': return 'ptr';
+            case 'F': return 'funcptr';
+            case '?': return (known ? 'void' : 'unknown');
+            default:  return 'unknown';
+        }
+    }
+
+    function ensureFunctionSignature(name) {
+        if (!name) {
+            return undefined;
+        }
+
+        if (!symbols || !symbols.functions) {
+            return undefined;
+        }
+
+        var entry = symbols.functions[name];
+        if (!entry) {
+            return undefined;
+        }
+
+        if (!entry.signature) {
+            entry.signature = {};
+        }
+
+        return entry.signature;
+    }
+
+    function isConcreteType(type) {
+        return type !== undefined && type !== '?';
+    }
+
+    function renderParamList(params) {
+        if (!params || params.length === 0) {
+            return '';
+        }
+
+        var parts = [];
+        for (var idx = 0; idx < params.length; ++idx) {
+            var param = params[idx] || {};
+            var typeName = signatureParamCategory(param.type);
+            var name = param.name;
+            if (!name) {
+                name = 'arg' + idx;
+            }
+            parts.push(typeName + ' ' + name);
+        }
+        return parts.join(', ');
+    }
+
+    function renderTypeList(typeCodes) {
+        if (!typeCodes || typeCodes.length === 0) {
+            return '';
+        }
+
+        var parts = [];
+        for (var i = 0; i < typeCodes.length; ++i) {
+            parts.push(signatureParamCategory(typeCodes[i]));
+        }
+        return parts.join(', ');
+    }
+
+    function computeOrigin(sourceName, sourceCode, sourceOffset) {
+        if (!sourceCode || sourceOffset == null) {
+            return undefined;
+        }
+
+        var offset = sourceOffset;
+        if (offset < 0) {
+            return undefined;
+        }
+        if (offset > sourceCode.length) {
+            offset = sourceCode.length;
+        }
+
+        var line = 1;
+        var column = 1;
+        for (var idx = 0; idx < offset; ++idx) {
+            var ch = sourceCode.charAt(idx);
+            if (ch === '\r') {
+                if (idx + 1 < sourceCode.length && sourceCode.charAt(idx + 1) === '\n') {
+                    idx += 1;
+                }
+                line += 1;
+                column = 1;
+                continue;
+            }
+            if (ch === '\n') {
+                line += 1;
+                column = 1;
+                continue;
+            }
+            column += 1;
+        }
+
+        var origin = line + ':' + column;
+        if (sourceName) {
+            origin = sourceName + ':' + origin;
+        }
+        return origin;
+    }
+
+    function appendOrigin(comment, sourceName, sourceCode, sourceOffset) {
+        if (!comment) {
+            return comment;
+        }
+
+        var origin = computeOrigin(sourceName, sourceCode, sourceOffset);
+        if (origin) {
+            return comment + ' @ ' + origin;
+        }
+        return comment;
+    }
+
+    formatFunctionSignatureComment = function (name, signature, role,
+                                                         sourceName, sourceCode, sourceOffset) {
+        if (!signature) {
+            return undefined;
+        }
+
+        var paramsText = renderParamList(signature.params);
+        var hasReturn = (signature && signature.returns !== undefined);
+        var returnType = signatureReturnCategory(signature.returns, hasReturn);
+        var kind = (role ? role : 'func');
+
+        var originName = (sourceName !== undefined ? sourceName : (signature ? signature.sourceName : undefined));
+        var originCode = (sourceCode !== undefined ? sourceCode : (signature ? signature.sourceCode : undefined));
+        var originOffset = (sourceOffset !== undefined ? sourceOffset : (signature ? signature.sourceOffset : undefined));
+
+        return appendOrigin('signature ' + kind + ' ' + name + '(' + paramsText + ') -> ' + returnType,
+                            originName, originCode, originOffset);
+    };
+
+    formatCallExpectationComment = function (name, signature, actualTypes, callResultType,
+                                                      sourceName, sourceCode, sourceOffset) {
+        var label = (name || 'function');
+        var paramsText;
+        var hasSignature = !!(signature && signature.params);
+
+        if (hasSignature) {
+            var extracted = [];
+            for (var i = 0; i < signature.params.length; ++i) {
+                extracted.push(signatureParamCategory(signature.params[i].type));
+            }
+            paramsText = extracted.join(', ');
+        } else {
+            paramsText = renderTypeList(actualTypes);
+        }
+
+        var returnCode = callResultType;
+        var known = false;
+        if (signature) {
+            if (signature.returnResolved && signature.returns !== undefined) {
+                returnCode = signature.returns;
+                known = true;
+            } else if (signature.expectedReturn !== undefined && signature.expectedReturn !== '?') {
+                returnCode = signature.expectedReturn;
+            } else if (signature.returns !== undefined) {
+                returnCode = signature.returns;
+                known = signature.returnResolved && signature.returns === '?';
+            }
+        }
+        var returnType = signatureReturnCategory(returnCode, known);
+
+        return appendOrigin('expects ' + label + '(' + paramsText + ') -> ' + returnType,
+                            sourceName, sourceCode, sourceOffset);
+    };
+
+    updateCallExpectationComment = function (callInfo, callResultType) {
+        if (!callInfo || callInfo.commentIndex === undefined || callInfo.commentIndex < 0) {
+            return;
+        }
+        if (!metacode || callInfo.commentIndex >= metacode.length) {
+            return;
+        }
+
+        var args = callInfo.commentArgs;
+        if (!args) {
+            return;
+        }
+
+        var refreshed = formatCallExpectationComment(
+            args.name,
+            args.signature,
+            args.actualTypes,
+            callResultType,
+            args.sourceName,
+            args.sourceCode,
+            args.sourceOffset
+        );
+
+        if (!refreshed) {
+            return;
+        }
+
+        var entry = metacode[callInfo.commentIndex];
+        if (entry && entry.operator === ';') {
+            entry.operands[0] = refreshed;
+        }
+    };
+
+    expectFunctionReturnType = function (name, expectedType, sourceCode, sourceOffset) {
+        if (!isConcreteType(expectedType)) {
+            return;
+        }
+
+        var signature = ensureFunctionSignature(name);
+        if (!signature) {
+            return;
+        }
+
+        if (signature.expectedReturn === undefined) {
+            signature.expectedReturn = expectedType;
+        } else if (signature.expectedReturn !== expectedType) {
+            typeError(
+                'Conflicting return type expectations for ' + name + ' ({$type1} vs {$type2})',
+                sourceCode,
+                sourceOffset,
+                expectedType,
+                signature.expectedReturn
+            );
+        }
+
+        if (signature.returnResolved && isConcreteType(signature.returns)
+            && signature.returns !== expectedType) {
+
+            typeError(
+                'Return type mismatch for ' + name + ' ({$type1} vs {$type2})',
+                sourceCode,
+                sourceOffset,
+                expectedType,
+                signature.returns
+            );
+        }
+    };
+
+    resolveFunctionReturnType = function (name, actualType, sourceCode, sourceOffset) {
+        var signature = ensureFunctionSignature(name);
+        if (!signature) {
+            return;
+        }
+
+        signature.returnResolved = true;
+        signature.returns = actualType;
+
+        if (signature.expectedReturn !== undefined && isConcreteType(signature.expectedReturn)
+            && isConcreteType(actualType) && signature.expectedReturn !== actualType) {
+
+            typeError(
+                'Return type for ' + name + ' does not match previous uses ({$type1} vs {$type2})',
+                sourceCode,
+                sourceOffset,
+                actualType,
+                signature.expectedReturn
+            );
+        }
+    };
+
+    emitFunctionSignature = function (name) {
+        var entry = symbols.functions[name];
+        if (!entry || entry.kind === 'FUNC') {
+            return;
+        }
+
+        var comment = formatFunctionSignatureComment(name, entry.signature);
+
+        var entryType = (entry.type !== undefined ? entry.type : 'U');
+
+        declare('FUNC',
+                         'functions',
+                         name,
+                         entryType,
+                         true,
+                         undefined,
+                         entry.sourceCode,
+                         entry.sourceOffset,
+                         comment);
+    };
+
+    function signatureRoleForSection(section) {
+        switch (section) {
+            case 'CNST': return 'readonly';
+            case 'TEMP': return 'temporary';
+            default:     return 'global';
+        }
+    }
+
+    formatGlobalSignatureComment = function (section, name, type, size, flavor,
+                                                      sourceName, sourceCode, sourceOffset) {
+        if (!name) {
+            return undefined;
+        }
+
+        var prefix = (flavor ? flavor + ' ' : '');
+
+        if (type === 'A') {
+            var extent = (size !== undefined ? '[' + size + ']' : '[]');
+            return appendOrigin('signature ' + prefix + 'array ' + name + extent + ' : unknown',
+                                sourceName, sourceCode, sourceOffset);
+        }
+
+        return appendOrigin('signature ' + prefix + signatureRoleForSection(section) + ' ' +
+                            name + ' : ' + signatureParamCategory(type),
+                            sourceName, sourceCode, sourceOffset);
+    };
+
+    function emitStandaloneSignatureComment(comment) {
+        if (!comment) {
+            return;
+        }
+
+        if (typeof output === 'function') {
+            output('; ' + comment);
+        }
+    }
+
+    formatConstSignatureComment = function (name, type, sourceName, sourceCode, sourceOffset) {
+        if (!name) {
+            return undefined;
+        }
+
+        return appendOrigin('signature const ' + name + ' : ' + signatureParamCategory(type),
+                            sourceName, sourceCode, sourceOffset);
+    };
+
     /* 4  label & metacode helpers */
-    var newLabel = function (prefix) {
+    newLabel = function (prefix) {
         var tag = (prefix === undefined ? '' : String(prefix));
         return '@.' + tag + (labelCounter++);
     };
-    newLabel = newLabel;
 
     /* push a deep-cloned record into metacode */
-    var emitMeta = function (rec) {
+    emitMeta = function (rec) {
         metacode.push(clone(metaSlot(rec)));
     };
-    emitMeta = emitMeta;
 
     /* allocate new (empty) meta record, fill via makeMeta, then push */
-    var emit = function (op, type, op0, op1, op2) {
+    emit = function (op, type, op0, op1, op2) {
         var slot = {};                // fresh object
-        slot = makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
+        makeMeta(slot, op, type, op0, op1, op2);  // user-supplied helper
         metacode.push(slot);
     };
-    emit = emit;
 
     /* 5  portable replacement for ppeg.fail */
-    var fail = function (error, source, offset) {
+    fail = function (error, source, offset) {
         function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
         throw bake(error) + ' : ' +
               oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +
               oneLine(source.substr(offset, 40));
     };
-    fail = fail;
 
 
 
     /* ---------------------------------------------------------
      *  Short-circuit / branch processing
      * --------------------------------------------------------- */
-    var processBranches = function () {
+    processBranches = function () {
         var target      = { false: null, true: null }; // last FALSE / TRUE dest labels
         var targetCond  = null;                        // current branch condition (true / false)
         var currentGoto = null;                        // last unconditional goto
@@ -321,14 +639,13 @@ var impalaCompiler = (function(_s) {
             }
         }
     };
-    processBranches = processBranches;
 
     /* ---------------------------------------------------------
      *  Pool / stock handling for transients    (‘%’, ‘<…>’)
      * --------------------------------------------------------- */
 
     /* assure no duplicates exist in a stock bucket */
-    var validateStock = function (cls) {
+    validateStock = function (cls) {
         var seen = {};
         var stk  = stock[cls];
         for (var i = 0; i < stk.length; ++i) {
@@ -338,10 +655,9 @@ var impalaCompiler = (function(_s) {
         }
         return true;
     };
-    validateStock = validateStock;
 
     /* borrow one token from a stock bucket (or create a new one) */
-    var borrow = function (cls) {
+    borrow = function (cls) {
         assert(validateStock(cls));
 
         var stk = stock[cls];
@@ -359,10 +675,9 @@ var impalaCompiler = (function(_s) {
         }
         throw new Error("unknown stock class " + cls);
     };
-    borrow = borrow;
 
     /* smart borrow for CALL args – first free id in last consecutive run */
-    var borrowForCall = function () {
+    borrowForCall = function () {
         /* same safety check the original did */
         assert(validateStock('%'));
 
@@ -402,10 +717,9 @@ var impalaCompiler = (function(_s) {
         assert(validateStock('%'));
         return chosen;
     };
-    borrowForCall = borrowForCall;
 
     /* put a token back into its stock bucket */
-    var returnBack = function (op) {
+    returnBack = function (op) {
         if (op == null) {
             return;
         }
@@ -424,17 +738,17 @@ var impalaCompiler = (function(_s) {
             returnBack(op.substr(op.length - 3));
         }
     };
-    returnBack = returnBack;
 
     /* Align with the original PPEG helper while avoiding the reserved
        `return` identifier in generated JavaScript. */
+    $$parser["return"] = returnBack;
 
     /* --------------------------------------------------------- *
      *  Debug helpers & meta-record construction / destruction   *
      * --------------------------------------------------------- */
 
     /* pretty-print one meta-instruction (only when it has op) */
-    var debugPrintMeta = function (m) {
+    debugPrintMeta = function (m) {
         m = metaSlot(m);
         if (m && m.operator != null) {
             console.log(
@@ -444,43 +758,36 @@ var impalaCompiler = (function(_s) {
             );
         }
     };
-    debugPrintMeta = debugPrintMeta;
 
     /* lazily materialise a meta-record for any parse node */
     function metaSlot(node) {
         if (node == null) {
             return { operator: undefined, type: undefined,
-                     operands: [ undefined, undefined, undefined ],
-                     __meta: true };
+                     operands: [ undefined, undefined, undefined ] };
         }
-        if (node.__meta) {
+        if (node.operands !== undefined) {
+            return node;
+        }
+
+        if (!Object.prototype.hasOwnProperty.call(node, '_')) {
             if (node.operands === undefined) {
                 node.operands = [ undefined, undefined, undefined ];
+            }
+            if (!Object.prototype.hasOwnProperty.call(node, 'operator')) {
+                node.operator = undefined;
+            }
+            if (!Object.prototype.hasOwnProperty.call(node, 'type')) {
+                node.type = undefined;
             }
             return node;
         }
 
         var slot = node._;
-        if (!slot || !slot.__meta) {
-            var operands = (node.operands instanceof Array
-                            ? node.operands
-                            : [ undefined, undefined, undefined ]);
-            slot = {
-                operator: node.operator,
-                type: node.type,
-                operands: operands,
-                __meta: true
-            };
+        if (!slot || slot.operands === undefined) {
+            slot = { operator: undefined, type: undefined,
+                     operands: [ undefined, undefined, undefined ] };
             node._ = slot;
         }
-
-        if (slot.operands === undefined) {
-            slot.operands = [ undefined, undefined, undefined ];
-        }
-
-        node.operator = slot.operator;
-        node.type     = slot.type;
-        node.operands = slot.operands;
         return slot;
     }
 
@@ -489,7 +796,7 @@ var impalaCompiler = (function(_s) {
         return value === null ? undefined : value;
     }
 
-    var makeMeta = function (rec, op, type, op0, op1, op2) {
+    makeMeta = function (rec, op, type, op0, op1, op2) {
         rec = metaSlot(rec);
         rec.operator  = normaliseVoid(op);
         rec.type      = normaliseVoid(type);
@@ -500,16 +807,14 @@ var impalaCompiler = (function(_s) {
         ];
         return rec;
     };
-    makeMeta = makeMeta;
 
     /* release all three operands contained in a meta-record */
-    var releaseMeta = function (meta) {
+    releaseMeta = function (meta) {
         meta = metaSlot(meta);
         for (var i = 2; i >= 0; --i) {
             returnBack(meta.operands[i]);
         }
     };
-    releaseMeta = releaseMeta;
 
     /* --------------------------------------------------------- *
      *  R-value helpers                                          *
@@ -519,7 +824,7 @@ var impalaCompiler = (function(_s) {
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
-    var makeRValue = function (expr, classes) {
+    makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
@@ -554,13 +859,12 @@ var impalaCompiler = (function(_s) {
         emitMeta(expr);
         return tmp;
     };
-    makeRValue = makeRValue;
 
     /**
      * Ensure an expression’s value ends up in the given
      * transient “%<number>”.
      */
-    var makeArgValue = function (expr, number) {
+    makeArgValue = function (expr, number) {
         expr = metaSlot(expr);
 
         var op   = expr.operator;
@@ -592,27 +896,25 @@ var impalaCompiler = (function(_s) {
         expr.operands[0] = tgt;
         emitMeta(expr);
     };
-    makeArgValue = makeArgValue;
 
     /* --------------------------------------------------------- *
      *  Typed error helper                                       *
      * --------------------------------------------------------- */
 
-    var typeError = function (desc, source, offset, type1, type2) {
-        var message = replace(desc, '{$type1}', VERBOSE_TYPES[type1]);
+    typeError = function (desc, source, offset, type1, type2) {
+        var message = replace(desc, '{$type1}',
+                              VERBOSE_TYPES[type1]);
         if (type2 !== undefined) {
-            message = replace(message, '{$type2}', VERBOSE_TYPES[type2]);
-        } else {
-            message = replace(message, '{$type2}', '');
+            message = replace(message, '{$type2}',
+                               VERBOSE_TYPES[type2]);
         }
         fail(message, source, offset);
     };
-    typeError = typeError;
 
     /* --------------------------------------------------------- *
      *  Binary operations ( + – * / [] etc. )                    *
      * --------------------------------------------------------- */
-    var binaryOp = function (operator, leftx, rightx,
+    binaryOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
@@ -685,13 +987,12 @@ var impalaCompiler = (function(_s) {
             );
         }
     };
-    binaryOp = binaryOp;
 
 
     /* --------------------------------------------------------- *
      *  Multiplication / division with special int-to-float case *
      * --------------------------------------------------------- */
-    var mulDivOp = function (operator, leftx, rightx,
+    mulDivOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
 
         leftx  = metaSlot(leftx);
@@ -750,13 +1051,12 @@ var impalaCompiler = (function(_s) {
             makeRValue(rightx)
         );
     };
-    mulDivOp = mulDivOp;
 
 
     /* --------------------------------------------------------- *
      *  Assignment helper                                        *
      * --------------------------------------------------------- */
-    var assign = function (x, leftx, rightx,
+    assign = function (x, leftx, rightx,
                                 sourceCode, sourceOffset) {
 
         x      = metaSlot(x);
@@ -766,7 +1066,13 @@ var impalaCompiler = (function(_s) {
         var lop   = leftx.operator;
         var keep  = 2;          /* operand index to keep for r-value */
 
-        if (leftx.type !== '?' && leftx.type !== rightx.type) {
+        if (leftx.type !== '?' && rightx.type === '?' && rightx.callInfo && rightx.callInfo.name) {
+            expectFunctionReturnType(rightx.callInfo.name, leftx.type, sourceCode, sourceOffset);
+            rightx.type = leftx.type;
+            updateCallExpectationComment(rightx.callInfo, leftx.type);
+        }
+
+        if (leftx.type !== '?' && rightx.type !== '?' && leftx.type !== rightx.type) {
             typeError(
                 'Incompatible types for assignment ({$type1} = {$type2})',
                 sourceCode, sourceOffset,
@@ -851,7 +1157,6 @@ var impalaCompiler = (function(_s) {
             null
         );
     };
-    assign = assign;
 
     /* -----------------------------------------------------------
      *  Unary helpers  (dereference, reference, -, ~, abs/floor,
@@ -859,7 +1164,7 @@ var impalaCompiler = (function(_s) {
      * -------------------------------------------------------- */
 
     /* *expr  or  [] dereference handling */
-    var dereference = function (operator, expr, sourceCode, sourceOffset) {
+    dereference = function (operator, expr, sourceCode, sourceOffset) {
         expr = metaSlot(expr);
         if (expr.operator === '+') {
             /*  &a + i   →   PEEK (&a , i)  */
@@ -880,10 +1185,9 @@ var impalaCompiler = (function(_s) {
             );
         }
     };
-    dereference = dereference;
 
     /* & (address-of) operator handling */
-    var reference = function (operator, expr, sourceCode, sourceOffset) {
+    reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -916,10 +1220,9 @@ var impalaCompiler = (function(_s) {
             fail("Invalid lvalue", sourceCode, sourceOffset);
         }
     };
-    reference = reference;
 
     /* unary minus (integer/float) */
-    var minus = function (operator, expr/*, src, off*/) {
+    minus = function (operator, expr/*, src, off*/) {
         expr = metaSlot(expr);
         makeMeta(
             expr, '-', undefined,
@@ -928,10 +1231,9 @@ var impalaCompiler = (function(_s) {
             makeRValue(expr)
         );
     };
-    minus = minus;
 
     /* bit-wise NOT / logical NOT  (~expr) */
-    var not = function (operator, expr) {
+    not = function (operator, expr) {
         expr = metaSlot(expr);
         makeMeta(
             expr, '^', undefined,
@@ -940,10 +1242,9 @@ var impalaCompiler = (function(_s) {
             '#-1'                                    // XOR with –1
         );
     };
-    not = not;
 
     /* ABS or FLOOR (unary) – operator is already '=abs' or '=floor' */
-    var absFloor = function (operator, expr) {
+    absFloor = function (operator, expr) {
         expr = metaSlot(expr);
         makeMeta(
             expr, operator, undefined,
@@ -952,10 +1253,9 @@ var impalaCompiler = (function(_s) {
             undefined
         );
     };
-    absFloor = absFloor;
 
     /* int → float */
-    var intToFloatConvert = function (operator, expr) {
+    intToFloatConvert = function (operator, expr) {
         expr = metaSlot(expr);
         makeMeta(
             expr, '=itof', undefined,
@@ -964,10 +1264,9 @@ var impalaCompiler = (function(_s) {
             '#1.0'
         );
     };
-    intToFloatConvert = intToFloatConvert;
 
     /* float → int, with constant-fold special-case */
-    var floatToIntConvert = function (operator, expr) {
+    floatToIntConvert = function (operator, expr) {
 
         expr = metaSlot(expr);
 
@@ -990,15 +1289,13 @@ var impalaCompiler = (function(_s) {
             );
         }
     };
-    floatToIntConvert = floatToIntConvert;
 
     /* -----------------------------------------------------------
      *  UNARY_OPS dispatch table
      * -------------------------------------------------------- */
 
-    var UNARY_OPS = {};          /* will hold “=xxx” → handler */
+    UNARY_OPS = {};          /* will hold “=xxx” → handler */
 
-    UNARY_OPS = UNARY_OPS;
     /* no-op casts */
     function noop() {}
 
@@ -1022,7 +1319,7 @@ var impalaCompiler = (function(_s) {
     /* -----------------------------------------------------------
      *  Generic unary operator
      * -------------------------------------------------------- */
-    var unaryOp = function (operator, expr, sourceCode, sourceOffset) {
+    unaryOp = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
 
@@ -1045,13 +1342,12 @@ var impalaCompiler = (function(_s) {
         /* update resulting type */
         expr.type = rTyp;
     };
-    unaryOp = unaryOp;
 
     /* -----------------------------------------------------------
      *  Symbol declaration helper
      * -------------------------------------------------------- */
 
-    function declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset) {
+    function declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment) {
         /* emit data / flush pending code */
         if (kind !== undefined) {
             flushMetaCode('');
@@ -1063,6 +1359,7 @@ var impalaCompiler = (function(_s) {
                 line += '\t' +
                         replace(kind, '?', TYPE_SUFFIXES[type] || '');
                 if (value !== undefined) line += ' ' + value;
+                if (comment)             line += '\t; ' + comment;
 
                 output( line );
             }
@@ -1093,14 +1390,23 @@ var impalaCompiler = (function(_s) {
 
             /* store / update */
             if (!table) symbols[scope] = table = {};
-            table[name] = { type:type, readonly:!!readonly, kind:kind };
+            table[name] = {
+                type: type,
+                readonly: !!readonly,
+                kind: kind,
+                signature: prev && prev.signature,
+                sourceCode: sourceCode,
+                sourceOffset: sourceOffset,
+                sourceName: (sourceName !== undefined ? sourceName
+                                                               : (prev ? prev.sourceName : undefined))
+            };
         }
     };
 
     /* -----------------------------------------------------------
      *  Flush all queued meta-code into final text output
      * -------------------------------------------------------- */
-    var flushMetaCode = function (prefix) {
+    flushMetaCode = function (prefix) {
 
         prefix = prefix || '';
         var TABstr = (typeof TAB !== 'undefined') ? TAB : '\t';
@@ -1185,12 +1491,11 @@ var impalaCompiler = (function(_s) {
         /* reset queue */
         metacode.length = 0;
     };
-    flushMetaCode = flushMetaCode;
 
     /* -----------------------------------------------------------
      *  Identifier lookup helper
      * -------------------------------------------------------- */
-    var lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
+    lookup = function (x, name, isGlobal, sourceCode, sourceOffset) {
 
         var sym = symbols;
         var p   = null;
@@ -1253,12 +1558,11 @@ var impalaCompiler = (function(_s) {
         fail('Undeclared identifier: ' + name,
                       sourceCode, sourceOffset);
     };
-    lookup = lookup;
 
     /* -----------------------------------------------------------
      *  Ensure expression resolves to a compile-time constant
      * -------------------------------------------------------- */
-    var makeConstant = function (x, wantType,
+    makeConstant = function (x, wantType,
                                       sourceCode, sourceOffset) {
 
         var r = makeRValue(x, '#<&');
@@ -1273,12 +1577,11 @@ var impalaCompiler = (function(_s) {
         }
         return r;
     };
-    makeConstant = makeConstant;
 
     /* -----------------------------------------------------------
      *  Constant subtraction helper
      * -------------------------------------------------------- */
-    var subConstInt = function (opL, opR) {
+    subConstInt = function (opL, opR) {
 
         assert(span(opR[0], '#<') === 1,
                "rhs must be const");
@@ -1309,17 +1612,14 @@ var impalaCompiler = (function(_s) {
         }
         return tmp;
     };
-    subConstInt = subConstInt;
 
     /* drop leading “#” helper */
-    var dropHash = function (s) {
+    dropHash = function (s) {
         return (s[0] === '#') ? s.substr(1) : s;
     };
-    dropHash = dropHash;
 
     /* printable ASCII table (33–126) */
-    var printable = '';
-    printable = printable;
+    printable = '';
     for (var i = 33; i < 127; ++i) {
         printable += char(i);
     }
@@ -1327,7 +1627,7 @@ var impalaCompiler = (function(_s) {
     /* -----------------------------------------------------------
      *  Dump a string constant into assembly
      * -------------------------------------------------------- */
-    var dumpString = function (label, str) {
+    dumpString = function (label, str) {
 
         var len = str.length;
         declare('CNST', 'globals', label, '?',
@@ -1360,12 +1660,11 @@ var impalaCompiler = (function(_s) {
             }
         }
     };
-    dumpString = dumpString;
 
     /* -----------------------------------------------------------
      *  Manage / share string literals
      * -------------------------------------------------------- */
-    var makeString = function (prefix, x, s,
+    makeString = function (prefix, x, s,
                                     sourceCode, sourceOffset) {
 
         s += char(0);       // NUL-terminate
@@ -1409,7 +1708,6 @@ var impalaCompiler = (function(_s) {
         makeMeta(x, ':=', 'p',
                           undefined, '&' + entry, undefined);
     };
-    makeString = makeString;
 
     /* -----------------------------------------------------------
      *  Tiny utilities still missing from the toolbox
@@ -1438,7 +1736,7 @@ var impalaCompiler = (function(_s) {
      *  Compiler start / end hooks
      * -------------------------------------------------------- */
 
-    var start = function () {
+    start = function () {
 
         /* reset per-compilation state */
         if (!stock) stock = { '%': [], '<': [] };
@@ -1489,10 +1787,10 @@ var impalaCompiler = (function(_s) {
         var LF = '\n';
         output('; Compiled with Impala version ' +
                IMPALA_VERSION + LF);
+        output('; signatures version=1');
     };
-    start = start;
 
-    var end = function () {
+    end = function () {
 
         /* dump deferred string literals */
         iterate(strings.s, function (rec) {
@@ -1511,51 +1809,44 @@ var impalaCompiler = (function(_s) {
             output('.noAssertStrings:\t!');
         }
     };
-    end = end;
 };function root($){return (function(){var _b=_i;return _($)&&(function(){ start(); ; return true})()&&((function(){while((function(){var _b=_i;return FuncDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExternDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ConstDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GlobalDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _l=_i,_x=(!!_s[_i])&&(++_i,true);_i=_l;return !_x})()&&(function(){ end(); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function FuncDecl($){var $id={},$inp={},$out={},$,$loc={};return (function(){var _b=_i;return FUNCTION($)&&_($)&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ assert(validateStock('%')); assert(validateStock('<')); output(''); output(';-----------------------------------------------------------------------------'); /* declare the function symbol */ declare( 'FUNC',           // kind
-                                                                             'functions',      // scope
-                                                                             $id._,              // name
-                                                                             'U',              // type
-                                                                             true,             // read-only
-                                                                             undefined,        // no init
-                                                                             _s, _i ); ; return true})()&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ declare( 'OUT?', 'locals', '$' + $out.name, $out.type, false, ($out.size !== undefined ? '*' + $out.size : undefined), _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* implicit 1-word return */ declare( 'PARA', 'locals', undefined, '?', false, '*1', _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ /* declare input parameters */ iterate($inp._, function (p) { declare( 'INP?', 'locals', '$' + p.name, p.type, true, (p.size !== undefined ? '*' + p.size : undefined), _s, _i ); }); ; return true})()&&((function(){var _b=_i;return LOCALS($)&&_($)&&LocalsDecl($loc)&&(function(){ iterate($loc._, function (v) { declare( 'LOC?', 'locals', '$' + v.name, v.type, false, (v.size !== undefined ? '*' + v.size : undefined), _s, _i ); }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ output(';-----------------------------------------------------------------------------'); ; return true})()&&Block($)&&(function(){ /* wrap-up body */ processBranches(); emit('--^', undefined, undefined, undefined, undefined); flushMetaCode('\t'); prune(symbols.locals); labelCounter = 0; output(''); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function FuncDecl($){var $id={},$inp={},$out={},$,$loc={};return (function(){var _b=_i;return FUNCTION($)&&_($)&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ assert(validateStock('%')); assert(validateStock('<')); output(''); output(';-----------------------------------------------------------------------------'); /* declare the function symbol */ declare( undefined, 'functions', $id._, 'U', true, undefined, _s, _i ); var entry = symbols.functions[$id._]; if (entry) { if (!entry.signature) { entry.signature = {}; } entry.signature.params = []; entry.signature.returns = '?'; entry.signature.returnName = undefined; entry.signature.sourceCode = _s; entry.signature.sourceOffset = _i; entry.signature.sourceName = sourceName; entry.signature.returnResolved = false; entry.pendingReturnPlaceholder = undefined; } ; return true})()&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ declare( 'OUT?', 'locals', '$' + $out.name, $out.type, false, ($out.size !== undefined ? '*' + $out.size : undefined), _s, _i ); var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.returns = $out.type; entry.signature.returnName = $out.name; resolveFunctionReturnType($id._, $out.type, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* implicit 1-word return: even void functions expose a single-word PARA so legacy call sites keep a deterministic return slot and the JSPEG output matches the historical PPEG layout. */ var entry = symbols.functions[$id._]; if (entry) { entry.pendingReturnPlaceholder = { sourceCode: _s, sourceOffset: _i }; } if (entry && entry.signature) { entry.signature.returns = '?'; entry.signature.returnName = undefined; resolveFunctionReturnType($id._, '?', _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ /* declare input parameters */ var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.params = []; for (var idx = 0; idx < $inp.n; ++idx) { var param = $inp._[idx]; entry.signature.params.push({ type: param.type, name: param.name, size: param.size }); } } emitFunctionSignature($id._); if (entry && entry.pendingReturnPlaceholder) { var placeholder = entry.pendingReturnPlaceholder; declare( 'PARA', 'locals', undefined, '?', false, '*1', placeholder.sourceCode, placeholder.sourceOffset ); entry.pendingReturnPlaceholder = undefined; } iterate($inp._, function (p) { declare( 'INP?', 'locals', '$' + p.name, p.type, true, (p.size !== undefined ? '*' + p.size : undefined), _s, _i ); }); ; return true})()&&((function(){var _b=_i;return LOCALS($)&&_($)&&LocalsDecl($loc)&&(function(){ iterate($loc._, function (v) { declare( 'LOC?', 'locals', '$' + v.name, v.type, false, (v.size !== undefined ? '*' + v.size : undefined), _s, _i ); }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ output(';-----------------------------------------------------------------------------'); ; return true})()&&Block($)&&(function(){ /* wrap-up body */ processBranches(); emit('--^', undefined, undefined, undefined, undefined); flushMetaCode('\t'); prune(symbols.locals); labelCounter = 0; output(''); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ExternDecl($){var $id={};return (function(){var _b=_i;return EXTERN($)&&_($)&&(function(){ $.scope = 'globals'; ; return true})()&&(function(){var _b=_i;return (function(){var _b=_i;return FUNCTION($)&&(function(){ $.type  = 'U';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NATIVE($)&&(function(){ $.type  = 'N';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ARRAY($)&&(function(){ $.type  = 'A'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&Identifier($id)&&(function(){ $.name  = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ declare( undefined,                 // no section for extern
                                                                              $.scope, $.name, $.type, false,                     // not readonly
-                                                                             '?', _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function ConstDecl($){var $type={},$t,$nf,$id={},$x={};return (function(){var _b=_i;return CONST($)&&_($)&&BASE_TYPE($type)&&_($)&&(function(){ $t  = CASTS_TO_TYPES[$type._]; $nf = noForward; noForward = true; ; return true})()&&Identifier($id)&&(function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ declare( '! DEF?', 'defines', $id._, $t, true, makeConstant($x._, $t, _s, _i), _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ declare( undefined, 'defines', $id._, $t, true, undefined, _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ noForward = $nf; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function GlobalDecl($){var $section,$v={},$init,$x={},$a={},$d={};return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), '*' + $a.size, _s, _i ); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&InitList($d)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+                                                                             '?', _s, _i ); if ($.scope === 'functions') { var entry = symbols.functions[$.name]; var signature = entry && entry.signature; if (entry) { if (!signature) { signature = entry.signature = {}; } if (signature.sourceName === undefined) { signature.sourceName = sourceName; } if (signature.sourceCode === undefined) { signature.sourceCode = _s; signature.sourceOffset = _i; signature.sourceName = sourceName; } signature.returnResolved = false; } var role = ($.type === 'N' ? 'extern native' : 'extern func'); var prototypeComment = formatFunctionSignatureComment( $.name, signature, role, sourceName, _s, _i ); if (!prototypeComment) { prototypeComment = formatFunctionSignatureComment( $.name, { params: [], returns: undefined }, role, sourceName, _s, _i ); } emitStandaloneSignatureComment(prototypeComment); } else if ($.scope === 'globals') { emitStandaloneSignatureComment( formatGlobalSignatureComment( 'GLOB', $.name, $.type, $.size, 'extern', sourceName, _s, _i ) ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function ConstDecl($){var $type={},$t,$nf,$id={},$x={};return (function(){var _b=_i;return CONST($)&&_($)&&BASE_TYPE($type)&&_($)&&(function(){ $t  = CASTS_TO_TYPES[$type._]; $nf = noForward; noForward = true; ; return true})()&&Identifier($id)&&(function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ declare( '! DEF?', 'defines', $id._, $t, true, makeConstant($x._, $t, _s, _i), _s, _i, formatConstSignatureComment( $id._, $t, sourceName, _s, _i ) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ declare( undefined, 'defines', $id._, $t, true, undefined, _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ noForward = $nf; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function GlobalDecl($){var $section,$v={},$init,$x={},$a={},$d={};return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i, formatGlobalSignatureComment( $section, $v.name, $v.type, undefined, undefined, sourceName, _s, _i ) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), '*' + $a.size, _s, _i, formatGlobalSignatureComment( $section, $a.name, 'A', $a.size, undefined, sourceName, _s, _i ) ); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&InitList($d)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function InitList($){var $d,$type,$x={};return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ $d = ' '; $type = undefined; ; return true})()&&((function(){var _b=_i;return Expr($x)&&(function(){ var xMeta = metaSlot($x._); $type = xMeta.type; $d += makeConstant(xMeta, $type, _s, _i); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ var xMeta = metaSlot($x._); var xType = xMeta.type; var constant = makeConstant(xMeta, xType, _s, _i); /* decide if we need to flush DATA */ if (  constant[0] === '<' || $d[1] === '<' || ($d + ' ' + constant).length >= 55) { declare( 'DATA', 'globals', undefined, xType, true, $d.substr(1), _s, _i ); $d = ''; } $d += ' ' + constant; $type = xType; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ if ($d.substr(1) !== '') { declare( 'DATA', 'globals', undefined, $type, true, $d.substr(1), _s, _i ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ArgsDecl($){var $v={};return (function(){var _b=_i;return (function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return VarDecl($v)&&(function(){ var entry = {}; entry.type = $v.type; entry.name = $v.name; entry.size = $v.size; $._[$.n++] = entry; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&VarDecl($v)&&(function(){ var entry = {}; entry.type = $v.type; entry.name = $v.name; entry.size = $v.size; $._[$.n++] = entry; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function LocalsDecl($){var $v={};return (function(){var _b=_i;return (function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return (function(){var _b=_i;return VarDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ var entry = {}; entry.type = $v.type; entry.name = $v.name; entry.size = $v.size; $._[$.n++] = entry; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&(function(){var _b=_i;return VarDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ var entry = {}; entry.type = $v.type; entry.name = $v.name; entry.size = $v.size; $._[$.n++] = entry; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function VarDecl($){var $type={},$id={};return (function(){var _b=_i;return BASE_TYPE($type)&&_($)&&Identifier($id)&&(function(){ $.type = CASTS_TO_TYPES[$type._]; $.name = $id._; $.size = undefined; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ArrayDecl($){var $id={},$x={},$size;return (function(){var _b=_i;return ARRAY($)&&_($)&&Identifier($id)&&(_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($x)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ $size = makeConstant($x._, 'i', _s, _i); $.type = 'A'; $.name = $id._; $.size = dropHash($size); returnBack($size); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Statement($){var $label={};return (function(){var _b=_i;return (function(){ var snippet = _s.substr(_i); var cut     = find(snippet, "{;\r\n"); var txt     = (cut >= 0 ? snippet.substr(0, cut) : snippet); emitMeta({ operator:';', type:undefined, operands:[ txt, undefined, undefined ] }); ; return true})()&&((function(){while((function(){var _b=_i;return Identifier($label)&&(_s[_i]===":")&&(++_i,true)&&_($)&&(function(){ emitMeta({ operator:'<--', type:undefined, operands:[ '@' + $label._, undefined, undefined ] }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _b=_i;return (_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Assert($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Block($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Copy($)||(_im=(_i>_im?_i:_im),_i=_b,false)||DoWhile($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Loop($)||(_im=(_i>_im?_i:_im),_i=_b,false)||For($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Goto($)||(_im=(_i>_im?_i:_im),_i=_b,false)||If($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Switch($)||(_im=(_i>_im?_i:_im),_i=_b,false)||While($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($)&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ releaseMeta($); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Expr($){var $r={};return (function(){var _b=_i;return Bitwise($)&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($r)&&(function(){ if (!dry) assign($, $, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Bitwise($){var $op={},$r={};return (function(){var _b=_i;return AddSub($)&&((function(){while((function(){var _b=_i;return BITWISE_OP($op)&&_($)&&AddSub($r)&&(function(){ if (!dry) binaryOp($op._, $, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function AddSub($){var $op={},$r={};return (function(){var _b=_i;return MulDiv($)&&((function(){while((function(){var _b=_i;return ADDSUB_OP($op)&&_($)&&MulDiv($r)&&(function(){ if (!dry) binaryOp($op._, $, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function MulDiv($){var $op={},$r={};return (function(){var _b=_i;return PrePost($)&&((function(){while((function(){var _b=_i;return MULDIV_OP($op)&&_($)&&PrePost($r)&&(function(){ if (!dry) mulDivOp($op._, $, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function PrePost($){var $op={};return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) unaryOp($op._, $, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Subscript($){var $s={};return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) binaryOp('=[]', $, $s._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function FuncCall($){var $,$type;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; $.base  = borrowForCall(); } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { /* ensure holder has value slot for $._ before metaSlot */ if ($._ === void 0) $._ = {}; var callee = metaSlot($._); if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type ); } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.count + 1)); returnBack(func); while ($.count-- > 0) { returnBack('%' + ($.base + $.count + 1)); } makeMeta(callee, ':=', '?', undefined, '%' + $.base, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Argument($){var $a={};return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; makeArgValue($a._, $.base + $.count); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Statement($){var $label={};return (function(){var _b=_i;return (function(){ var snippet = _s.substr(_i); var cut     = find(snippet, "{;\r\n"); var txt     = (cut >= 0 ? snippet.substr(0, cut) : snippet); emitMeta({ operator:';', type:undefined, operands:[ txt, undefined, undefined ] }); ; return true})()&&((function(){while((function(){var _b=_i;return Identifier($label)&&(_s[_i]===":")&&(++_i,true)&&_($)&&(function(){ emitMeta({ operator:'<--', type:undefined, operands:[ '@' + $label._, undefined, undefined ] }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _b=_i;return (_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Assert($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Block($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Copy($)||(_im=(_i>_im?_i:_im),_i=_b,false)||DoWhile($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Loop($)||(_im=(_i>_im?_i:_im),_i=_b,false)||For($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Goto($)||(_im=(_i>_im?_i:_im),_i=_b,false)||If($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Switch($)||(_im=(_i>_im?_i:_im),_i=_b,false)||While($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($)&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ releaseMeta($._); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Expr($){var $r={};return (function(){var _b=_i;return Bitwise($)&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($r)&&(function(){ if (!dry) assign($._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Bitwise($){var $op={},$r={};return (function(){var _b=_i;return AddSub($)&&((function(){while((function(){var _b=_i;return BITWISE_OP($op)&&_($)&&AddSub($r)&&(function(){ if (!dry) binaryOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function AddSub($){var $op={},$r={};return (function(){var _b=_i;return MulDiv($)&&((function(){while((function(){var _b=_i;return ADDSUB_OP($op)&&_($)&&MulDiv($r)&&(function(){ if (!dry) binaryOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function MulDiv($){var $op={},$r={};return (function(){var _b=_i;return PrePost($)&&((function(){while((function(){var _b=_i;return MULDIV_OP($op)&&_($)&&PrePost($r)&&(function(){ if (!dry) mulDivOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function PrePost($){var $op={};return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) unaryOp($op._, $._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Subscript($){var $s={};return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) binaryOp('=[]', $._, $s._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; $.base  = borrowForCall(); $.types = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type ); } if (callee.operator === ':=' && callee.operands[1] && callee.operands[1][0] === '&') { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; if (entry && entry.kind === 'FUNC' && entry.signature) { signature = entry.signature; } } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i ); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { typeError( 'Argument type mismatch when calling ' + label + ' ({$type1} vs expected {$type2})', _s, _i, actual, expected ); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.count + 1)); returnBack(func); while ($.count-- > 0) { returnBack('%' + ($.base + $.count + 1)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Argument($){var $a={};return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if ($.types) { $.types.push(meta.type); } makeArgValue($a._, $.base + $.count); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Group($){return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BoolGroup($){var $label;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ $label = undefined; ; return true})()&&And($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="||")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('t'); } emit('?->', true, $label, undefined, undefined); ; return true})()&&And($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if ($label !== undefined) { emit('<-?', true, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function And($){var $label;return (function(){var _b=_i;return (function(){ $label = undefined; ; return true})()&&Comp($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="&&")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('f'); } emit('?->', false, $label, undefined, undefined); ; return true})()&&Comp($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ if ($label !== undefined) { emit('<-?', false, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Comp($){var $op={},$r={};return (function(){var _b=_i;return (_s[_i]==="!")&&(++_i,true)&&_($)&&Comp($)&&(function(){ emit('!', undefined, undefined, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ dry = true; ; return true})()&&(function(){var _l=_i,_x=Group($);_i=_l;return !_x})()&&(function(){ dry = false; ; return true})()&&BoolGroup($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ dry = false; ; return true})()&&Expr($)&&COMP_OP($op)&&_($)&&Expr($r)&&(function(){ binaryOp($op._, $._, $r._, _s, _i); emitMeta($._); releaseMeta($); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Comp($){var $op={},$r={};return (function(){var _b=_i;return (_s[_i]==="!")&&(++_i,true)&&_($)&&Comp($)&&(function(){ emit('!', undefined, undefined, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ dry = true; ; return true})()&&(function(){var _l=_i,_x=Group($);_i=_l;return !_x})()&&(function(){ dry = false; ; return true})()&&BoolGroup($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ dry = false; ; return true})()&&Expr($)&&COMP_OP($op)&&_($)&&Expr($r)&&(function(){ binaryOp($op._, $._, $r._, _s, _i); emitMeta($._); releaseMeta($._); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Assert($){var $okLabel,$start,$exprText,$str={},$;return (function(){var _b=_i;return ASSERT($)&&_($)&&(function(){ $okLabel = newLabel('a'); emit('<> ==', 'i', '#DEBUG', '#0', $okLabel); $start    = _i; $exprText = ''; ; return true})()&&BoolGroup($str)&&(function(){ $exprText = _s.substring($start, _i); $exprText = $exprText.replace(/[ \t\r\n]+$/, ''); ; return true})()&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ emit('?->', true, $okLabel, undefined, undefined); var r = borrowForCall(); /* store the assert-string constant */ makeString('a', $str._, $exprText, _s, _i); /* argument goes into %<r+1> */ makeArgValue($str._, r + 1); /* call the failure handler */ emit('()', '?', '^assertFail', '%' + r, '*1'); /* tidy temporaries */ returnBack('%' + (r + 1)); returnBack('%' +  r); /* continue after OK-label */ emit('<-?', true, $okLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Block($){return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while(Statement($));})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Goto($){var $label={};return (function(){var _b=_i;return GOTO($)&&_($)&&Identifier($label)&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ emit('-->', undefined, '@' + $label._, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function If($){var $dontLabel,$doneLabel;return (function(){var _b=_i;return IF($)&&_($)&&BoolGroup($)&&(function(){ $dontLabel = newLabel('f'); emit('?->', false, $dontLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){var _b=_i;return ELSE($)&&_($)&&(function(){ $doneLabel = newLabel('e'); emit('-->', undefined, $doneLabel, undefined, undefined); emit('<-?',  false, $dontLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('<--', undefined, $doneLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ emit('<-?', false, $dontLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function DoWhile($){var $loopLabel;return (function(){var _b=_i;return DO($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<-?', false, $loopLabel, undefined, undefined); ; return true})()&&Statement($)&&WHILE($)&&_($)&&BoolGroup($)&&(function(){ emit('?->', true, $loopLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Loop($){var $loopLabel;return (function(){var _b=_i;return LOOP($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function For($){var $var={},$gotInit,$init={},$toExpr={},$type,$to,$noLoopLabel,$loopLabel,$body={};return (function(){var _b=_i;return FOR($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Variable($var)&&(function(){ /* ensure holder has value slot */ if ($var._ === void 0) $var._ = {}; /* loop-variable must be local, modifiable int / pointer */ var varMeta = metaSlot($var._); if (varMeta.operator !== '=' || span(varMeta.type, "ip") === 0) { fail( 'For variable must be a local modifiable int or pointer variable', _s, _i ); } $gotInit = false;            /* flag to detect an explicit start value */ ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($init)&&(function(){ /* ensure holder has value slot */ if ($init._ === void 0) $init._ = {}; assign($init._, $var._, $init._, _s, _i); $gotInit = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&TO($)&&_($)&&Expr($toExpr)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ /* ensure holder has value slot */ if ($toExpr._ === void 0) $toExpr._ = {}; var varMeta  = metaSlot($var._); var toMeta   = metaSlot($toExpr._); if (toMeta.type !== varMeta.type) { typeError( 'Incompatible types ({$type1} and {$type2})', _s, _i, varMeta.type, toMeta.type ); } /* constant upper bound */ $to = makeRValue(toMeta); /* initial comparison  (var < to)                         */ emit( '<', toMeta.type, undefined, $gotInit ? metaSlot($init._).operands[1]     /* start value from “var = expr” */ : varMeta.operands[1],            /* or the original variable */ $to ); if ($gotInit) { releaseMeta($init._); } /* branch-out   and  loop label */ $noLoopLabel = newLabel('e'); emit('?->', false, $noLoopLabel, undefined, undefined); $loopLabel   = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($body)&&(function(){ var varMeta = metaSlot($var._); /* increment + jump back */ emit( '...', varMeta.type, varMeta.operands[1],        /* address of loop variable */ $to, $loopLabel ); emit('<-?', false, $noLoopLabel, undefined, undefined); returnBack($to); releaseMeta(varMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Copy($){var $l={},$f={},$t={},$length,$type,$;return (function(){var _b=_i;return COPY($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($l)&&FROM($)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ /* ensure holders have value slots */ if ($l._ === void 0) $l._ = {}; if ($f._ === void 0) $f._ = {}; if ($t._ === void 0) $t._ = {}; var fromMeta = metaSlot($f._); var toMeta   = metaSlot($t._); $length = makeConstant($l._, 'i', _s, _i); var lengthHash = dropHash($length); if (fromMeta.type + toMeta.type !== 'pp') { returnBack($length); typeError( 'Invalid types ({$type1} and {$type2})', _s, _i, fromMeta.type, toMeta.type ); } var copyMeta = metaSlot($l._); makeMeta( copyMeta, 'copy', '?', makeRValue(toMeta, '&$%'), makeRValue(fromMeta, '&$%'), '*' + lengthHash ); emitMeta(copyMeta); returnBack($length); releaseMeta(copyMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Switch($){var $f={},$t={},$,$size,$switcher,$switchExit,$progress,$stmt={};return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ /* ensure holder has value slot for $._ before metaSlot */ if ($._ === void 0) $._ = {}; var switchMeta = metaSlot($._); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups → fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case …” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ /* ensure holder has value slot for $._ before metaSlot */ if ($._ === void 0) $._ = {}; var ctx = switchStack.pop() || metaSlot($._); /* no explicit “default” → hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function CaseExpr($){var $,$n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) – switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; /* ensure holder has value slot for $._ before metaSlot */ if ($._ === void 0) $._ = {}; var caseMeta = metaSlot($._); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); $n = subConstInt( makeConstant(caseMeta, 'i', _s, _i), baseFrom ); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function For($){var $var={},$gotInit,$init={},$toExpr={},$type,$to,$noLoopLabel,$loopLabel,$body={};return (function(){var _b=_i;return FOR($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Variable($var)&&(function(){ /* loop-variable must be local, modifiable int / pointer */ var varMeta = metaSlot($var._); if (varMeta.operator !== '=' || span(varMeta.type, "ip") === 0) { fail( 'For variable must be a local modifiable int or pointer variable', _s, _i ); } $gotInit = false;            /* flag to detect an explicit start value */ ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($init)&&(function(){ assign($init._, $var._, $init._, _s, _i); $gotInit = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&TO($)&&_($)&&Expr($toExpr)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ var varMeta  = metaSlot($var._); var toMeta   = metaSlot($toExpr._); if (toMeta.type !== varMeta.type) { typeError( 'Incompatible types ({$type1} and {$type2})', _s, _i, varMeta.type, toMeta.type ); } /* constant upper bound */ $to = makeRValue(toMeta); /* initial comparison  (var < to)                         */ emit( '<', toMeta.type, undefined, $gotInit ? metaSlot($init._).operands[1]     /* start value from “var = expr” */ : varMeta.operands[1],            /* or the original variable */ $to ); if ($gotInit) { releaseMeta($init._); } /* branch-out   and  loop label */ $noLoopLabel = newLabel('e'); emit('?->', false, $noLoopLabel, undefined, undefined); $loopLabel   = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($body)&&(function(){ var varMeta = metaSlot($var._); /* increment + jump back */ emit( '...', varMeta.type, varMeta.operands[1],        /* address of loop variable */ $to, $loopLabel ); emit('<-?', false, $noLoopLabel, undefined, undefined); returnBack($to); releaseMeta(varMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Copy($){var $l={},$f={},$t={},$length,$type,$;return (function(){var _b=_i;return COPY($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($l)&&FROM($)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ var fromMeta = metaSlot($f._); var toMeta   = metaSlot($t._); $length = makeConstant($l._, 'i', _s, _i); var lengthHash = dropHash($length); if (fromMeta.type + toMeta.type !== 'pp') { returnBack($length); typeError( 'Invalid types ({$type1} and {$type2})', _s, _i, fromMeta.type, toMeta.type ); } var copyMeta = metaSlot($l._); makeMeta( copyMeta, 'copy', '?', makeRValue(toMeta, '&$%'), makeRValue(fromMeta, '&$%'), '*' + lengthHash ); emitMeta(copyMeta); returnBack($length); releaseMeta(copyMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Switch($){var $f={},$t={},$size,$switcher,$,$switchExit,$progress,$stmt={};return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($._); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups → fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case …” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = switchStack.pop() || metaSlot($._); /* no explicit “default” → hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) – switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot($._); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); $n = subConstInt( makeConstant(caseMeta, 'i', _s, _i), baseFrom ); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function While($){var $loopLabel,$exitLabel;return (function(){var _b=_i;return WHILE($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&BoolGroup($)&&(function(){ $exitLabel = newLabel('e'); emit('?->', false, $exitLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); emit('<-?', false, $exitLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Value($){var $f={},$i={},$s={};return (function(){var _b=_i;return Group($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FloatLiteral($f)&&(function(){ if (!dry) { makeMeta($, ':=', 'f', undefined, '#' + $f._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||IntegerLiteral($i)&&(function(){ if (!dry) { makeMeta($, ':=', 'i', undefined, '#' + $i._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||StringLiteral($s)&&(function(){ if (!dry) { makeString('s', $, evaluate($s._), _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)&&_($)&&(function(){ if (!dry) { makeMeta($, ':=', 'p', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)&&_($)&&(function(){ if (!dry) { makeMeta($, ':=', 'F', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Variable($){var $global,$id={};return (function(){var _b=_i;return (function(){ $global = false; ; return true})()&&((function(){var _b=_i;return GLOBAL($)&&_($)&&(function(){ $global = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Identifier($id)&&(function(){ if (!dry) { lookup($, $id._, $global, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Value($){var $f={},$i={},$s={};return (function(){var _b=_i;return Group($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FloatLiteral($f)&&(function(){ if (!dry) { makeMeta($._, ':=', 'f', undefined, '#' + $f._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||IntegerLiteral($i)&&(function(){ if (!dry) { makeMeta($._, ':=', 'i', undefined, '#' + $i._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||StringLiteral($s)&&(function(){ if (!dry) { makeString('s', $._, evaluate($s._), _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'p', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'F', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Variable($){var $global,$id={};return (function(){var _b=_i;return (function(){ $global = false; ; return true})()&&((function(){var _b=_i;return GLOBAL($)&&_($)&&(function(){ $global = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Identifier($id)&&(function(){ if (!dry) { lookup($._, $id._, $global, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Identifier($){return (function(){var _b=_i;return (function(){var _l=_i,_x=KEYWORD($);_i=_l;return !_x})()&&(function(){var _m=_i;return (function(){var _b=_i;return (!!_s[_i]&&"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$".indexOf(_s[_i])>=0)&&(++_i,true)&&((function(){while(SYMBOL_CHAR($));})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FloatLiteral($){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())&&(_s[_i]===".")&&(++_i,true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())&&((function(){var _b=_i;return (function(){var _b=_i;return (_s[_i]==="E")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="e")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function IntegerLiteral($){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&(function(){var _b=_i;return (_s.substr(_i,2)==="0x")&&(_i+=2,true)&&((function(){for(var _n=0;HEX($);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="'")&&(++_i,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_x=(_s[_i]==="'")&&(++_i,true);_i=_l;return !_x})()&&ASCII($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="'")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
@@ -1611,8 +1902,23 @@ function COMMENT($){return (function(){var _b=_i;return (_s.substr(_i,2)==="/*")
 var _i=0,_im=0,_o={_:void 0},_b=root(_o);
 return [_b,_o._,(_b?_i:_im)];
 });
+function impalaCompiler(source, options) {
+	var sourceName;
+	if (typeof options === 'string') {
+		sourceName = options;
+	} else if (options && Object.prototype.hasOwnProperty.call(options, 'sourceName')) {
+		sourceName = options.sourceName;
+	} else if (options && options.sourceName !== undefined) {
+		sourceName = options.sourceName;
+	} else {
+		sourceName = undefined;
+	}
+	$$parser.sourceName = sourceName;
+	return impalaCompilerImpl(source);
+}
 if (typeof module !== 'undefined' && module.exports) {
 	module.exports = impalaCompiler;
 	module.exports.impalaCompiler = impalaCompiler;
 	module.exports.default = impalaCompiler;
+	module.exports.raw = impalaCompilerImpl;
 }

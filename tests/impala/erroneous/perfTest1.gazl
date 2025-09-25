@@ -1,0 +1,56 @@
+; Compiled with Impala version 1.0
+
+	GLOB *1
+seed:	DATi #2463534242
+
+;-----------------------------------------------------------------------------
+myrand:	FUNC
+	$y:	OUTi
+;-----------------------------------------------------------------------------
+		PEEK $y &seed 	; y = global seed
+		SHLi %0 $y #13	; y = y ^ (y << 13)
+		XORi $y $y %0
+		SHRu %0 $y #17	; y = y ^ (y >>> 17)
+		XORi $y $y %0
+		SHLi %0 $y #5	; y = y ^ (y << 5)
+		XORi $y $y %0
+		POKE &seed $y 	; global seed = y
+		RETU   	; }
+
+a:	GLOB *20000
+
+;-----------------------------------------------------------------------------
+main:	FUNC
+		PARA *1
+	$i:	LOCi
+	$j:	LOCi
+	$minj:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $i #0 	; for (i = 0 to 20000) global a[i] = (int) myrand()
+		GEQi #0 #20000 @.e0
+	.l1:	CALL &myrand %0 *1	; global a[i] = (int) myrand()
+		POKE &a $i %0
+		FORi $i #20000 @.l1
+	.e0:	MOVi $i #0 	; for (i = 0 to 2000) 
+		GEQi #0 #2000 @.e2
+	.l3:	MOVi $minj #0 	; minj = 0
+		MOVi $j #1 	; for (j = 1 to 20000) 
+		GEQi #1 #20000 @.e4
+	.l5:	PEEK %0 &a $j	; if ((int) global a[j] < (int) global a[minj]) minj = j
+		PEEK %1 &a $minj
+		GEQi %0 %1 @.f6
+		MOVi $minj $j 	; minj = j
+	.f6:	FORi $j #20000 @.l5	; }
+	.e4:	FORi $i #2000 @.l3	; }
+	.e2:	MOVi %1 $minj 	; printInt(minj)
+		CALL ^printInt %0 *2
+		MOVp %1 &.s_4d2 	; print(": ")
+		CALL ^print %0 *2
+		PEEK %1 &a $minj	; printInt(global a[minj])
+		CALL ^printInt %0 *2
+		CALL ^printLF %0 *1	; printLF()
+		RETU   	; }
+
+.s_4d2:	CNST *3
+	DATs :
+	DATi #32 #0

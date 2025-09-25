@@ -1,44 +1,50 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 18:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
 	DATA &.s_4d2 &.s_4d2 &.s_THRESH4d3 &.s_00FFlo4d4 &.s_4d2
 	DATA &.s_4d2 &.s_DECAYP4d5 &.s_00FFx14d6
+; signature extern native abort() -> unknown @ 39:1
+; signature extern native trace() -> unknown @ 40:1
+; signature extern native yield() -> unknown @ 41:1
+; signature extern native write() -> unknown @ 42:1
+; signature extern native read() -> unknown @ 44:1
 	GLOB *1
-clock:	DATi #0
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int @ 80:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 81:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 82:1
 	GLOB *1
-instance:	DATi #0
+instance:	DATi #0	; signature global instance : int @ 83:1
 	CNST *1
-clockFreqLimit:	DATi #44100
-signal:	GLOB *2
+clockFreqLimit:	DATi #44100	; signature readonly clockFreqLimit : int @ 86:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 99:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC
+error:	FUNC	; signature func error(ptr s) -> void @ 99:16
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2
-		CALL ^abort %0 *1	; abort()
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 101:10
+		CALL ^abort %0 *1	; expects function() -> unknown @ 102:9
 		RETU   	; }
 
-LOG2:	! DEFf #0.69314718055994530942
-LOG2R:	! DEFf #1.44269504088896340736
-LOG10R:	! DEFf #0.43429448190325182765
-E:	! DEFf #2.71828182845904523536
-HALF_PI:	! DEFf #1.57079632679489661923
-PI:	! DEFf #3.14159265358979323846
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 108:1
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 109:1
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 110:1
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ 111:1
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 112:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 113:1
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>
-COS_EPSILON:	! DEFf #1.0e-6
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 114:1
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 116:1
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC
 	$y:	OUTf
+trunc:	FUNC	; signature func trunc(float x) -> float @ 116:16
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -51,25 +57,25 @@ trunc:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC
 	$z:	OUTf
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 123:15
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi4d7 	; error("Division by zero")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 126:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
-		CALL &trunc %0 *2
+		CALL &trunc %0 *2	; expects trunc(float) -> float @ 127:36
 		MULf %0 %0 $y
 		SUBf $z $x %0
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC
 	$y:	OUTf
+cos:	FUNC	; signature func cos(float x) -> float @ 141:14
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -78,7 +84,7 @@ cos:	FUNC
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
 		MOVf %2 #TWICE_PI 
-		CALL &fmod %0 *3
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 148:31
 		MOVf $m %0 
 		SUBf %0 #0.0 $m	; m = -m * m
 		MULf $m %0 $m
@@ -100,25 +106,25 @@ cos:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-sin:	FUNC
 	$y:	OUTf
+sin:	FUNC	; signature func sin(float x) -> float @ 162:14
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 165:30
 		MOVf $y %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-sqrt:	FUNC
 	$y:	OUTf
+sqrt:	FUNC	; signature func sqrt(float x) -> float @ 168:15
 	$x:	INPf
 	$t:	LOCf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) error("Domain error")
 		MOVp %1 &.s_Domain4d8 	; error("Domain error")
-		CALL &error %0 *2
+		CALL &error %0 *2	; expects error(ptr) -> void @ 172:36
 	.f0:	MOVf $y $x 	; y = x
 		MOVf $t #0.0 	; t = 0.0
 	.l1:	EQUf $y $t @.e2	; while (y != t) 
@@ -129,86 +135,86 @@ sqrt:	FUNC
 		GOTO @.l1  	; }
 	.e2:	RETU   	; }
 
-FFT_POWER:	! DEFi #12
+FFT_POWER:	! DEFi #12	; signature const FFT_POWER : int @ 184:25
 	! SHLi <A> #1 #FFT_POWER
-FFT_SIZE:	! DEFi <A>
+FFT_SIZE:	! DEFi <A>	; signature const FFT_SIZE : int @ 185:38
 	! DIVi <A> #FFT_SIZE #2
-FFT_SIZE_2:	! DEFi <A>
-PROCESS_SPREAD_FACTOR:	! DEFi #5
+FFT_SIZE_2:	! DEFi <A>	; signature const FFT_SIZE_2 : int @ 186:36
+PROCESS_SPREAD_FACTOR:	! DEFi #5	; signature const PROCESS_SPREAD_FACTOR : int @ 187:36
 	! iTOf <A> #FFT_SIZE #1.0
 	! DIVf <A> #2.0 <A>
-IFFT_SCALE:	! DEFf <A>
-ANTI_DENORMAL_CONSTANT:	! DEFf #1.0e-10
-PERFORM_RESET:	! DEFi #0
+IFFT_SCALE:	! DEFf <A>	; signature const IFFT_SCALE : float @ 188:48
+ANTI_DENORMAL_CONSTANT:	! DEFf #1.0e-10	; signature const ANTI_DENORMAL_CONSTANT : float @ 189:45
+PERFORM_RESET:	! DEFi #0	; signature const PERFORM_RESET : int @ 190:28
 	! ADDi <A> #PERFORM_RESET #1
-ANALYSIS_WINDOW:	! DEFi <A>
+ANALYSIS_WINDOW:	! DEFi <A>	; signature const ANALYSIS_WINDOW : int @ 191:46
 	! ADDi <A> #ANALYSIS_WINDOW #1
-ANALYSIS_REINDEX:	! DEFi <A>
+ANALYSIS_REINDEX:	! DEFi <A>	; signature const ANALYSIS_REINDEX : int @ 192:49
 	! ADDi <A> #ANALYSIS_REINDEX #1
-ANALYSIS_FFT_2:	! DEFi <A>
+ANALYSIS_FFT_2:	! DEFi <A>	; signature const ANALYSIS_FFT_2 : int @ 193:48
 	! ADDi <A> #ANALYSIS_FFT_2 #FFT_POWER
 	! SUBi <A> <A> #1
-ANALYSIS_UNTANGLE:	! DEFi <A>
+ANALYSIS_UNTANGLE:	! DEFi <A>	; signature const ANALYSIS_UNTANGLE : int @ 194:61
 	! ADDi <A> #ANALYSIS_UNTANGLE #1
-PROCESS_FIND_MAX:	! DEFi <A>
+PROCESS_FIND_MAX:	! DEFi <A>	; signature const PROCESS_FIND_MAX : int @ 195:51
 	! ADDi <A> #PROCESS_FIND_MAX #1
-PROCESS_FEEDBACK:	! DEFi <A>
+PROCESS_FEEDBACK:	! DEFi <A>	; signature const PROCESS_FEEDBACK : int @ 196:50
 	! ADDi <A> #PROCESS_FEEDBACK #1
-PROCESS_PARTIAL_1:	! DEFi <A>
+PROCESS_PARTIAL_1:	! DEFi <A>	; signature const PROCESS_PARTIAL_1 : int @ 197:51
 	! ADDi <A> #PROCESS_PARTIAL_1 #8
-SYNTHESIS_SMEAR_LEFT:	! DEFi <A>
+SYNTHESIS_SMEAR_LEFT:	! DEFi <A>	; signature const SYNTHESIS_SMEAR_LEFT : int @ 198:55
 	! ADDi <A> #SYNTHESIS_SMEAR_LEFT #1
-SYNTHESIS_UNTANGLE_LEFT:	! DEFi <A>
+SYNTHESIS_UNTANGLE_LEFT:	! DEFi <A>	; signature const SYNTHESIS_UNTANGLE_LEFT : int @ 199:61
 	! ADDi <A> #SYNTHESIS_UNTANGLE_LEFT #1
-SYNTHESIS_REINDEX_LEFT:	! DEFi <A>
+SYNTHESIS_REINDEX_LEFT:	! DEFi <A>	; signature const SYNTHESIS_REINDEX_LEFT : int @ 200:63
 	! ADDi <A> #SYNTHESIS_REINDEX_LEFT #1
-SYNTHESIS_FFT_LEFT_2:	! DEFi <A>
+SYNTHESIS_FFT_LEFT_2:	! DEFi <A>	; signature const SYNTHESIS_FFT_LEFT_2 : int @ 201:60
 	! ADDi <A> #SYNTHESIS_FFT_LEFT_2 #FFT_POWER
 	! SUBi <A> <A> #1
-SYNTHESIS_MIX_LEFT:	! DEFi <A>
+SYNTHESIS_MIX_LEFT:	! DEFi <A>	; signature const SYNTHESIS_MIX_LEFT : int @ 202:68
 	! ADDi <A> #SYNTHESIS_MIX_LEFT #1
-SYNTHESIS_SMEAR_RIGHT:	! DEFi <A>
+SYNTHESIS_SMEAR_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_SMEAR_RIGHT : int @ 203:57
 	! ADDi <A> #SYNTHESIS_SMEAR_RIGHT #1
-SYNTHESIS_UNTANGLE_RIGHT:	! DEFi <A>
+SYNTHESIS_UNTANGLE_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_UNTANGLE_RIGHT : int @ 204:63
 	! ADDi <A> #SYNTHESIS_UNTANGLE_RIGHT #1
-SYNTHESIS_REINDEX_RIGHT:	! DEFi <A>
+SYNTHESIS_REINDEX_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_REINDEX_RIGHT : int @ 205:65
 	! ADDi <A> #SYNTHESIS_REINDEX_RIGHT #1
-SYNTHESIS_FFT_RIGHT_2:	! DEFi <A>
+SYNTHESIS_FFT_RIGHT_2:	! DEFi <A>	; signature const SYNTHESIS_FFT_RIGHT_2 : int @ 206:62
 	! ADDi <A> #SYNTHESIS_FFT_RIGHT_2 #FFT_POWER
 	! SUBi <A> <A> #1
-SYNTHESIS_MIX_RIGHT:	! DEFi <A>
+SYNTHESIS_MIX_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_MIX_RIGHT : int @ 207:70
 	! ADDi <A> #SYNTHESIS_MIX_RIGHT #1
-PROCESS_STEPS:	! DEFi <A>
-THRESHOLD_PARAM:	! DEFi #OPERAND_1_HIGH_PARAM_INDEX
-BAND_PARAM:	! DEFi #OPERAND_1_LOW_PARAM_INDEX
-DECAY_PARAM:	! DEFi #OPERAND_2_HIGH_PARAM_INDEX
-PARTIALS_PARAM:	! DEFi #OPERAND_2_LOW_PARAM_INDEX
+PROCESS_STEPS:	! DEFi <A>	; signature const PROCESS_STEPS : int @ 208:50
+THRESHOLD_PARAM:	! DEFi #OPERAND_1_HIGH_PARAM_INDEX	; signature const THRESHOLD_PARAM : int @ 210:1
+BAND_PARAM:	! DEFi #OPERAND_1_LOW_PARAM_INDEX	; signature const BAND_PARAM : int @ 210:49
+DECAY_PARAM:	! DEFi #OPERAND_2_HIGH_PARAM_INDEX	; signature const DECAY_PARAM : int @ 212:1
+PARTIALS_PARAM:	! DEFi #OPERAND_2_LOW_PARAM_INDEX	; signature const PARTIALS_PARAM : int @ 212:53
 	CNST *1
 	! SHLi <A> #1 #THRESHOLD_PARAM
 	! SHLi <B> #1 #DECAY_PARAM
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 214:46
 	GLOB *1
-doReset:	DATi #TRUE
-window:	GLOB *FFT_SIZE_2
-cRotateRe:	GLOB *256
-cRotateIm:	GLOB *256
-partialGains:	GLOB *8
+doReset:	DATi #TRUE	; signature global doReset : int @ 219:1
+window:	GLOB *FFT_SIZE_2	; signature array window[FFT_SIZE_2] : unknown @ 219:32
+cRotateRe:	GLOB *256	; signature array cRotateRe[256] : unknown @ 220:28
+cRotateIm:	GLOB *256	; signature array cRotateIm[256] : unknown @ 221:28
+partialGains:	GLOB *8	; signature array partialGains[8] : unknown @ 222:29
 	! SUBi <A> #FFT_POWER #1
-fftWPRe:	GLOB *<A>
+fftWPRe:	GLOB *<A>	; signature array fftWPRe[<A>] : unknown @ 223:36
 	! SUBi <A> #FFT_POWER #1
-fftWPIm:	GLOB *<A>
+fftWPIm:	GLOB *<A>	; signature array fftWPIm[<A>] : unknown @ 224:36
 	GLOB *1
-threshold:	DATf #0.0
+threshold:	DATf #0.0	; signature global threshold : float @ 225:23
 	GLOB *1
-decayConstant:	DATf #0.0
+decayConstant:	DATf #0.0	; signature global decayConstant : float @ 226:27
 	GLOB *1
-outputGain:	DATf #0.0
-randomArray:	GLOB *FFT_SIZE_2
-untangleParams:	GLOB *2
+outputGain:	DATf #0.0	; signature global outputGain : float @ 227:24
+randomArray:	GLOB *FFT_SIZE_2	; signature array randomArray[FFT_SIZE_2] : unknown @ 228:37
+untangleParams:	GLOB *2	; signature array untangleParams[2] : unknown @ 229:31
 
 ;-----------------------------------------------------------------------------
-fftReIndex:	FUNC
+fftReIndex:	FUNC	; signature func fftReIndex(int n, ptr data) -> void @ 233:21
 		PARA *1
 	$n:	INPi
 	$data:	INPp
@@ -248,7 +254,7 @@ fftReIndex:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fftPass4:	FUNC
+fftPass4:	FUNC	; signature func fftPass4(int n, ptr data, int fftStep) -> void @ 255:19
 		PARA *1
 	$n:	INPi
 	$data:	INPp
@@ -392,7 +398,7 @@ fftPass4:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fftPass0:	FUNC
+fftPass0:	FUNC	; signature func fftPass0(int n, ptr data) -> void @ 312:19
 		PARA *1
 	$n:	INPi
 	$data:	INPp
@@ -430,7 +436,7 @@ fftPass0:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fftPass:	FUNC
+fftPass:	FUNC	; signature func fftPass(int n, ptr data, int fftStep) -> void @ 335:18
 		PARA *1
 	$n:	INPi
 	$data:	INPp
@@ -499,7 +505,7 @@ fftPass:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fftUntangleParams:	FUNC
+fftUntangleParams:	FUNC	; signature func fftUntangleParams(int n, ptr params) -> void @ 372:28
 		PARA *1
 	$n:	INPi
 	$params:	INPp
@@ -507,18 +513,18 @@ fftUntangleParams:	FUNC
 	$wpIm:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVf %1 #2.0 	; wpRe = (float) sqrt(2.0) * (float) sin(2.0 * PI * 0.5 / itof(n))
-		CALL &sqrt %0 *2
+		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ 375:27
 		! MULf <A> #2.0 #PI
 		! MULf <A> <A> #0.5
 		iTOf %2 $n #1.0
 		DIVf %2 <A> %2
-		CALL &sin %1 *2
+		CALL &sin %1 *2	; expects sin(float) -> float @ 375:66
 		MULf $wpRe %0 %1
 		MULf $wpRe $wpRe $wpRe	; wpRe = wpRe * wpRe
 		! MULf <A> #2.0 #PI	; wpIm = (float) sin(2.0 * PI / itof(n))
 		iTOf %1 $n #1.0
 		DIVf %1 <A> %1
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 377:40
 		MOVf $wpIm %0 
 		POKE $params #0 $wpRe	; params[0] = wpRe
 		POKE $params #1 $wpIm	; params[1] = wpIm
@@ -526,7 +532,7 @@ fftUntangleParams:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-fftUntangle:	FUNC
+fftUntangle:	FUNC	; signature func fftUntangle(int n, ptr data, ptr params) -> void @ 382:22
 		PARA *1
 	$n:	INPi
 	$data:	INPp
@@ -621,7 +627,7 @@ fftUntangle:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-mixOutput:	FUNC
+mixOutput:	FUNC	; signature func mixOutput(ptr fftBuffer, ptr mixBuffer, int mixBufferOffset, int channel) -> void @ 433:20
 		PARA *1
 	$fftBuffer:	INPp
 	$mixBuffer:	INPp
@@ -660,7 +666,7 @@ mixOutput:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-init:	FUNC
+init:	FUNC	; signature func init() -> void @ 453:15
 		PARA *1
 	$i:	LOCi
 	$theta:	LOCf
@@ -668,14 +674,14 @@ init:	FUNC
 	$prng:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4d9 	; trace("init")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 456:15
 		MOVi $i #0 	; for (i = 0 to FFT_SIZE_2) 
 		GEQi #0 #FFT_SIZE_2 @.e0
 	.l1:	NOOP
 		! iTOf <A> #FFT_SIZE #1.0	; global window[i] = (float) sin(PI / itof(FFT_SIZE) * itof(i))
 		! DIVf <A> #PI <A>
 		iTOf %1 $i <A>
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 459:64
 		POKE &window $i %0
 		FORi $i #FFT_SIZE_2 @.l1	; }
 	.e0:	MOVi $i #0 	; for (i = 0 to 256) 
@@ -685,17 +691,17 @@ init:	FUNC
 		! DIVf <A> <A> #256.0
 		iTOf $theta $i <A>
 		MOVf %1 $theta 	; global cRotateRe[i] = (float) cos(theta)
-		CALL &cos %0 *2
+		CALL &cos %0 *2	; expects cos(float) -> float @ 464:43
 		POKE &cRotateRe $i %0
 		MOVf %1 $theta 	; global cRotateIm[i] = (float) sin(theta)
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 465:43
 		POKE &cRotateIm $i %0
 		FORi $i #256 @.l3	; }
 	.e2:	MOVi $i #0 	; for (i = 0 to 8) 
 		GEQi #0 #8 @.e4
 	.l5:	ADDi %1 $i #1	; global partialGains[i] = IFFT_SCALE / (float) sqrt(itof(i + 1))
 		iTOf %1 %1 #1.0
-		CALL &sqrt %0 *2
+		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ 469:66
 		DIVf %0 #IFFT_SCALE %0
 		POKE &partialGains $i %0
 		FORi $i #8 @.l5	; }
@@ -708,13 +714,13 @@ init:	FUNC
 		DIVf %0 <B> %0
 		SUBf $theta #0.0 %0
 		MULf %1 #0.5 $theta	; wTemp = (float) sin(0.5 * theta)
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 474:38
 		MOVf $wTemp %0 
 		MULf %0 #-2.0 $wTemp	; global fftWPRe[i] = -2.0 * wTemp * wTemp
 		MULf %0 %0 $wTemp
 		POKE &fftWPRe $i %0
 		MOVf %1 $theta 	; global fftWPIm[i] = (float) sin(theta)
-		CALL &sin %0 *2
+		CALL &sin %0 *2	; expects sin(float) -> float @ 476:44
 		POKE &fftWPIm $i %0
 		FORi $i <A> @.l7	; }
 	.e6:	PEEK %0 &instance 	; prng = 2463534242 ^ (global instance << 13)
@@ -733,27 +739,27 @@ init:	FUNC
 		FORi $i #FFT_SIZE_2 @.l9	; }
 	.e8:	MOVi %1 #FFT_SIZE 	; fftUntangleParams(FFT_SIZE, global untangleParams)
 		MOVp %2 &untangleParams 
-		CALL &fftUntangleParams %0 *3
+		CALL &fftUntangleParams %0 *3	; expects fftUntangleParams(int, ptr) -> void @ 486:52
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC
+reset:	FUNC	; signature func reset() -> void @ 495:16
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4da 	; trace("reset")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 497:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
+update:	FUNC	; signature func update() -> void @ 508:17
 		PARA *1
 	$f:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4db 	; trace("update")
-		CALL ^trace %0 *2
+		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 511:17
 		PEEK %0 &params:THRESHOLD_PARAM 	; f = itof((int) global params[THRESHOLD_PARAM]) * (1.0 / 255.0)
 		! DIVf <A> #1.0 #255.0
 		iTOf $f %0 <A>
@@ -770,14 +776,14 @@ update:	FUNC
 		POKE &decayConstant %0 
 		PEEK %2 &decayConstant 	; global outputGain = (float) sqrt((float) sqrt(1.0 - global decayConstant))
 		SUBf %2 #1.0 %2
-		CALL &sqrt %1 *2
-		CALL &sqrt %0 *2
+		CALL &sqrt %1 *2	; expects sqrt(float) -> float @ 519:75
+		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ 519:76
 		POKE &outputGain %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC
+process:	FUNC	; signature func process() -> void @ 538:18
 		PARA *1
 	! MULi <A> #FFT_SIZE #2
 	$fftBuffer:	LOCA *FFT_SIZE
@@ -886,11 +892,11 @@ process:	FUNC
 	.s7#SYNTHESIS_REINDEX_LEFT:	NOOP
 	.s7#SYNTHESIS_REINDEX_RIGHT:	MOVi %1 #FFT_SIZE 	; fftReIndex(FFT_SIZE, fftBuffer)
 		ADRL %2 $fftBuffer *0
-		CALL &fftReIndex %0 *3
+		CALL &fftReIndex %0 *3	; expects fftReIndex(int, ptr) -> void @ 591:37
 		GOTO @.e8  	; }
 	.s7#ANALYSIS_FFT_2:	MOVi %1 #FFT_SIZE 	; fftPass0(FFT_SIZE, fftBuffer)
 		ADRL %2 $fftBuffer *0
-		CALL &fftPass0 %0 *3
+		CALL &fftPass0 %0 *3	; expects fftPass0(int, ptr) -> void @ 595:35
 		GOTO @.e8  	; }
 		! ADDi <A> #ANALYSIS_FFT_2 #1	; case ANALYSIS_FFT_2 + 1, ANALYSIS_FFT_2 + 2, ANALYSIS_FFT_2 + 3
 	.s7#<A>:	NOOP
@@ -914,14 +920,14 @@ process:	FUNC
 	.s7#<A>:	MOVi %1 #FFT_SIZE 	; fftPass(FFT_SIZE, fftBuffer, processStep - ANALYSIS_FFT_2)
 		ADRL %2 $fftBuffer *0
 		SUBi %3 $processStep #ANALYSIS_FFT_2
-		CALL &fftPass %0 *4
+		CALL &fftPass %0 *4	; expects fftPass(int, ptr, int) -> void @ 600:64
 		GOTO @.e8  	; }
 	.s7#ANALYSIS_UNTANGLE:	NOOP
 	.s7#SYNTHESIS_UNTANGLE_LEFT:	NOOP
 	.s7#SYNTHESIS_UNTANGLE_RIGHT:	MOVi %1 #FFT_SIZE 	; fftUntangle(FFT_SIZE, fftBuffer, global untangleParams)
 		ADRL %2 $fftBuffer *0
 		MOVp %3 &untangleParams 
-		CALL &fftUntangle %0 *4
+		CALL &fftUntangle %0 *4	; expects fftUntangle(int, ptr, ptr) -> void @ 604:61
 		GOTO @.e8  	; }
 	.s7#PROCESS_FIND_MAX:	MOVf $useThreshold #0.0 	; useThreshold = 0.0
 		PEEK $bandBits &params:BAND_PARAM 	; bandBits = (int) global params[BAND_PARAM]
@@ -1062,7 +1068,7 @@ process:	FUNC
 		GOTO @.e8  	; }
 	.s7#SYNTHESIS_FFT_LEFT_2:	MOVi %1 #FFT_SIZE 	; fftPass0(FFT_SIZE, fftBuffer)
 		ADRL %2 $fftBuffer *0
-		CALL &fftPass0 %0 *3
+		CALL &fftPass0 %0 *3	; expects fftPass0(int, ptr) -> void @ 691:35
 		GOTO @.e8  	; }
 		! ADDi <A> #SYNTHESIS_FFT_LEFT_2 #1	; case SYNTHESIS_FFT_LEFT_2 + 1, SYNTHESIS_FFT_LEFT_2 + 2, SYNTHESIS_FFT_LEFT_2 + 3
 	.s7#<A>:	NOOP
@@ -1086,11 +1092,11 @@ process:	FUNC
 	.s7#<A>:	MOVi %1 #FFT_SIZE 	; fftPass(FFT_SIZE, fftBuffer, processStep - SYNTHESIS_FFT_LEFT_2)
 		ADRL %2 $fftBuffer *0
 		SUBi %3 $processStep #SYNTHESIS_FFT_LEFT_2
-		CALL &fftPass %0 *4
+		CALL &fftPass %0 *4	; expects fftPass(int, ptr, int) -> void @ 697:70
 		GOTO @.e8  	; }
 	.s7#SYNTHESIS_FFT_RIGHT_2:	MOVi %1 #FFT_SIZE 	; fftPass0(FFT_SIZE, fftBuffer)
 		ADRL %2 $fftBuffer *0
-		CALL &fftPass0 %0 *3
+		CALL &fftPass0 %0 *3	; expects fftPass0(int, ptr) -> void @ 701:35
 		GOTO @.e8  	; }
 		! ADDi <A> #SYNTHESIS_FFT_RIGHT_2 #1	; case SYNTHESIS_FFT_RIGHT_2 + 1, SYNTHESIS_FFT_RIGHT_2 + 2, SYNTHESIS_FFT_RIGHT_2 + 3
 	.s7#<A>:	NOOP
@@ -1114,19 +1120,19 @@ process:	FUNC
 	.s7#<A>:	MOVi %1 #FFT_SIZE 	; fftPass(FFT_SIZE, fftBuffer, processStep - SYNTHESIS_FFT_RIGHT_2)
 		ADRL %2 $fftBuffer *0
 		SUBi %3 $processStep #SYNTHESIS_FFT_RIGHT_2
-		CALL &fftPass %0 *4
+		CALL &fftPass %0 *4	; expects fftPass(int, ptr, int) -> void @ 707:71
 		GOTO @.e8  	; }
 	.s7#SYNTHESIS_MIX_LEFT:	ADRL %1 $fftBuffer *0	; mixOutput(fftBuffer, mixBuffer, mixBufferOffset, 0)
 		ADRL %2 $mixBuffer *0
 		MOVi %3 $mixBufferOffset 
 		MOVi %4 #0 
-		CALL &mixOutput %0 *5
+		CALL &mixOutput %0 *5	; expects mixOutput(ptr, ptr, int, int) -> void @ 711:57
 		GOTO @.e8  	; }
 	.s7#SYNTHESIS_MIX_RIGHT:	ADRL %1 $fftBuffer *0	; mixOutput(fftBuffer, mixBuffer, mixBufferOffset, 1)
 		ADRL %2 $mixBuffer *0
 		MOVi %3 $mixBufferOffset 
 		MOVi %4 #1 
-		CALL &mixOutput %0 *5
+		CALL &mixOutput %0 *5	; expects mixOutput(ptr, ptr, int, int) -> void @ 715:57
 		! SUBi <A> #FFT_SIZE_2 #1	; write((clock & ~(FFT_SIZE_2 - 1)) + (PROCESS_STEPS << PROCESS_SPREAD_FACTOR), FFT_SIZE_2, mixBuffer + mixBufferOffset)
 		! XORi <A> <A> #-1
 		ANDi %1 $clock <A>
@@ -1135,7 +1141,7 @@ process:	FUNC
 		MOVi %2 #FFT_SIZE_2 
 		ADRL %3 $mixBuffer *0
 		ADDp %3 %3 $mixBufferOffset
-		CALL ^write %0 *4
+		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 716:124
 		SUBi $mixBufferOffset #FFT_SIZE $mixBufferOffset	; mixBufferOffset = FFT_SIZE - mixBufferOffset
 	.s7:	NOOP
 	.e8:	NOOP
@@ -1152,8 +1158,8 @@ process:	FUNC
 		MOVi %1 $clock 	; read(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^read %0 *4
-		CALL ^yield %0 *1	; yield()
+		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 723:32
+		CALL ^yield %0 *1	; expects function() -> unknown @ 725:10
 		GOTO @.l4  	; }
 		RETU   	; }
 

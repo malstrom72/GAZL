@@ -1,18 +1,24 @@
 ; Compiled with Impala version 1.0
 
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-MAX_DIM_X:	! DEFi #76
-MAX_DIM_Y:	! DEFi #23
-MAX_GENERATIONS:	! DEFi #1000
+; signatures version=1
+; signature extern native output() -> unknown @ 9:21
+; signature extern native abort() -> unknown @ 10:20
+; signature extern native input() -> unknown @ 11:20
+; signature extern native inputEOF() -> unknown @ 12:23
+; signature extern native launch() -> unknown @ 13:21
+FALSE:	! DEFi #0	; signature const FALSE : int @ 15:20
+TRUE:	! DEFi #1	; signature const TRUE : int @ 16:19
+MAX_DIM_X:	! DEFi #76	; signature const MAX_DIM_X : int @ 18:25
+MAX_DIM_Y:	! DEFi #23	; signature const MAX_DIM_Y : int @ 19:25
+MAX_GENERATIONS:	! DEFi #1000	; signature const MAX_GENERATIONS : int @ 20:33
 	GLOB *1
-xorShiftRandomSeedX:	DATi #123456789
+xorShiftRandomSeedX:	DATi #123456789	; signature global xorShiftRandomSeedX : int @ 22:43
 	GLOB *1
-xorShiftRandomSeedY:	DATi #362436069
+xorShiftRandomSeedY:	DATi #362436069	; signature global xorShiftRandomSeedY : int @ 23:43
 
 ;-----------------------------------------------------------------------------
-xorShiftRandom:	FUNC
 	$y:	OUTi
+xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ 24:25
 	$x:	LOCi
 	$t:	LOCi
 ;-----------------------------------------------------------------------------
@@ -32,8 +38,8 @@ xorShiftRandom:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-eatWhite:	FUNC
 	$q:	OUTp
+eatWhite:	FUNC	; signature func eatWhite(ptr p) -> ptr @ 38:19
 	$p:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp $q $p 	; q = p
@@ -45,20 +51,20 @@ eatWhite:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-outputLine:	FUNC
+outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 45:21
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; output(s)
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 47:11
 		MOVp %1 &.s_4d2 	; output("\n")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 48:14
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC
 	$d:	OUTi
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 51:17
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -79,8 +85,8 @@ strcmp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-strncmp:	FUNC
 	$d:	OUTi
+strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 65:18
 	$s0:	INPp
 	$s1:	INPp
 	$n:	INPi
@@ -109,8 +115,8 @@ strncmp:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-intToString:	FUNC
 	$p:	OUTp
+intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 90:22
 	$i:	INPi
 	$radix:	INPi
 	$minLength:	INPi
@@ -156,7 +162,7 @@ intToString:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-outputInt:	FUNC
+outputInt:	FUNC	; signature func outputInt(int i) -> void @ 108:20
 		PARA *1
 	$i:	INPi
 	! ADDi <A> #GAZL_WORD_SIZE #2
@@ -166,14 +172,14 @@ outputInt:	FUNC
 		MOVi %3 #10 
 		MOVi %4 #1 
 		ADRL %5 $buffer *0
-		CALL &intToString %1 *5
-		CALL ^output %0 *2
+		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 111:38
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 111:39
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-parseInt:	FUNC
 	$i:	OUTi
+parseInt:	FUNC	; signature func parseInt(ptr s, int defaultValue) -> int @ 114:19
 	$s:	INPp
 	$defaultValue:	INPi
 	$p:	LOCp
@@ -183,7 +189,7 @@ parseInt:	FUNC
 		MOVi $i #0 	; i = 0
 		MOVi $sign #1 	; sign = 1
 		MOVp %1 $s 	; p = (pointer)eatWhite(s)
-		CALL &eatWhite %0 *2
+		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 123:26
 		MOVp $p %0 
 		PEEK $c $p 	; if ((c = (int)*p) == '+') p = p + 1
 		NEQi $c #'+' @.f0
@@ -203,7 +209,7 @@ parseInt:	FUNC
 		ADDp $p $p #1	; p = p + 1
 		GOTO @.l3  	; }
 	.e5:	MOVp %1 $p 	; p = (pointer)eatWhite(p)
-		CALL &eatWhite %0 *2
+		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 135:26
 		MOVp $p %0 
 		PEEK %0 $p 	; if ((int)*p != 0) i = defaultValue
 		EQUi %0 #0 @.f6
@@ -214,7 +220,7 @@ parseInt:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-parseXY:	FUNC
+parseXY:	FUNC	; signature func parseXY(ptr s, ptr x, ptr y) -> void @ 141:18
 		PARA *1
 	$s:	INPp
 	$x:	INPp
@@ -237,42 +243,42 @@ parseXY:	FUNC
 		ADDp $yp $yp #1	; yp = yp + 1
 		MOVp %1 $s 	; *x = parseInt(s, -1)
 		MOVi %2 #-1 
-		CALL &parseInt %0 *3
+		CALL &parseInt %0 *3	; expects parseInt(ptr, int) -> int @ 153:23
 		POKE $x %0 
 		MOVp %1 $yp 	; *y = parseInt(yp, -1)
 		MOVi %2 #-1 
-		CALL &parseInt %0 *3
+		CALL &parseInt %0 *3	; expects parseInt(ptr, int) -> int @ 154:24
 		POKE $y %0 
 	.f3:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-help:	FUNC
+help:	FUNC	; signature func help() -> void @ 158:15
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_fedcba4d3:31 	; outputLine("")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 160:16
 		MOVp %1 &.s_Comman4d4 	; outputLine("Commands are:")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 161:29
 		MOVp %1 &.s_xytogg4d5 	; outputLine("    <x>,<y> (toggle cell)")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 162:41
 		MOVp %1 &.s_nrunng4d6 	; outputLine("    <n> (run <n> generations)")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 163:45
 		MOVp %1 &.s_enterd4d7 	; outputLine("    enter (draw grid)")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 164:37
 		MOVp %1 &.s_clear4d8 	; outputLine("    'clear'")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 165:27
 		MOVp %1 &.s_randis4d9 	; outputLine("    'rand %' (% is likelihood of setting a cell from 0 to 100 %)")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 166:80
 		MOVp %1 &.s_quit4da 	; outputLine("    'quit'")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 167:27
 		MOVp %1 &.s_quit4da:10 	; outputLine("")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 168:16
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-run:	FUNC
+run:	FUNC	; signature func run(int dimX, int dimY, ptr cells, int generations) -> void @ 171:14
 		PARA *1
 	$dimX:	INPi
 	$dimY:	INPi
@@ -363,8 +369,8 @@ run:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-outputCellsAlive:	FUNC
 	$n:	OUTi
+outputCellsAlive:	FUNC	; signature func outputCellsAlive(int dimX, int dimY, ptr cells) -> int @ 222:27
 	$dimX:	INPi
 	$dimY:	INPi
 	$cells:	INPp
@@ -379,16 +385,16 @@ outputCellsAlive:	FUNC
 		ADDi $n $n #1	; n = n + 1
 	.f2:	FORi $i %0 @.l1
 	.e0:	MOVp %1 &.s_4db 	; output("(")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 228:13
 		MOVi %1 $n 	; outputInt(n)
-		CALL &outputInt %0 *2
+		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 228:27
 		MOVp %1 &.s_cellsa4dc 	; outputLine(" cells alive)")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 228:56
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-randomize:	FUNC
+randomize:	FUNC	; signature func randomize(int dimX, int dimY, ptr cells, int percentage) -> void @ 231:20
 		PARA *1
 	$dimX:	INPi
 	$dimY:	INPi
@@ -399,7 +405,7 @@ randomize:	FUNC
 		MOVi $i #0 	; for (i = 0 to dimX * dimY) 
 		MULi %0 $dimX $dimY
 		GEQi #0 %0 @.e0
-	.l1:	CALL &xorShiftRandom %1 *1	; if (((int)xorShiftRandom() & 0x7FFFFFFF) % 100 <= percentage) cells[i] = 1
+	.l1:	CALL &xorShiftRandom %1 *1	; expects xorShiftRandom() -> int @ 235:30
 		ANDi %1 %1 #0x7FFFFFFF
 		MODi %1 %1 #100
 		GRTi %1 $percentage @.f2
@@ -409,7 +415,7 @@ randomize:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
+main:	FUNC	; signature func main() -> void @ 239:15
 		PARA *1
 	! MULi <A> #MAX_DIM_X #MAX_DIM_Y
 	$dimX:	LOCi
@@ -427,31 +433,31 @@ main:	FUNC
 	$redraw:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Enterd4dd 	; output("Enter dimensions (X,Y): ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 254:36
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
-		CALL ^input %0 *3
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 255:15
 		ADRL %1 $s *0	; parseXY(s, &dimX, &dimY)
 		ADRL %2 $dimX *0
 		ADRL %3 $dimY *0
-		CALL &parseXY %0 *4
+		CALL &parseXY %0 *4	; expects parseXY(ptr, ptr, ptr) -> void @ 256:26
 		LEQi $dimX #0 @.t0	; if (dimX <= 0 || dimY <= 0) outputLine("Invalid dimensions. Bye!")
 		GRTi $dimY #0 @.f1
 	.t0:	MOVp %1 &.s_Invali4de 	; outputLine("Invalid dimensions. Bye!")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 257:68
 		GOTO @.e2  
 	.f1:	GRTi $dimX #MAX_DIM_X @.t3	; if (dimX > MAX_DIM_X || dimY > MAX_DIM_Y) 
 		LEQi $dimY #MAX_DIM_Y @.f4
 	.t3:	MOVp %1 &.s_Toolar4df 	; output("Too large. Max dimensions are ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 259:43
 		MOVi %1 #MAX_DIM_X 	; outputInt(MAX_DIM_X)
-		CALL &outputInt %0 *2
+		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 260:23
 		MOVp %1 &.s_4e0 	; output(",")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 261:14
 		MOVi %1 #MAX_DIM_Y 	; outputInt(MAX_DIM_Y)
-		CALL &outputInt %0 *2
+		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 262:23
 		MOVp %1 &.s_4e1 	; outputLine(".")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 263:18
 		GOTO @.e5  	; } else 
 	.f4:	MOVi $i #0 	; for (i = 0 to (dimX * dimY)) cells[i] = 0
 		MULi %0 $dimX $dimY
@@ -463,7 +469,7 @@ main:	FUNC
 	.l8:	MOVi $s:0 #12 	; s[0] = 12
 		MOVi $s:1 #0 	; s[1] = 0
 		ADRL %1 $s *0	; output(s)
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 272:13
 		MOVi $i #0 	; for (i = 0 to 3) s[i] = ' '
 		GEQi #0 #3 @.e9
 	.l10:	SETL $s $i #' '	; s[i] = ' '
@@ -481,7 +487,7 @@ main:	FUNC
 	.e11:	ADDi %1 $dimX #3	; s[dimX + 3] = 0
 		SETL $s %1 #0
 		ADRL %1 $s *0	; outputLine(s)
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 280:17
 		MOVi $i #0 	; for (i = 0 to dimX) s[i + 3] = '0' + i % 10
 		GEQi #0 $dimX @.e14
 	.l15:	ADDi %0 $i #3	; s[i + 3] = '0' + i % 10
@@ -490,7 +496,7 @@ main:	FUNC
 		SETL $s %0 %1
 		FORi $i $dimX @.l15
 	.e14:	ADRL %1 $s *0	; outputLine(s)
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 283:17
 		MOVi $i #0 	; for (i = 0 to dimY) 
 		GEQi #0 $dimY @.e16
 	.l17:	LSSi $i #10 @.f18	; if (i >= 10) s[0] = '0' + i / 10
@@ -512,20 +518,20 @@ main:	FUNC
 	.e19:	ADDi %0 $j #3	; s[j + 3] = 0
 		SETL $s %0 #0
 		ADRL %1 $s *0	; outputLine(s)
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 294:18
 		FORi $i $dimY @.l17	; }
 	.e16:	EQUi $firstTime #FALSE @.f22	; if (firstTime != FALSE) 
-		CALL &help %0 *1	; help()
+		CALL &help %0 *1	; expects help() -> void @ 298:11
 		MOVi $firstTime #FALSE 	; firstTime = FALSE
 	.f22:	MOVi $redraw #FALSE 	; redraw = FALSE
 	.l23:	MOVp %1 &.s_life4e2 	; output("life> ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 304:21
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
-		CALL ^input %0 *3
+		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 305:18
 		ADRL %1 $s *0	; if ((int)strcmp(s, "quit") == 0) 
 		MOVp %2 &.s_quit4e3 
-		CALL &strcmp %0 *3
+		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 306:32
 		NEQi %0 #0 @.f24
 		MOVi $quit #TRUE 	; quit = TRUE
 		GOTO @.e25  	; } else if ((int)s[0] == 0) 
@@ -534,7 +540,7 @@ main:	FUNC
 		GOTO @.e27  	; } else if ((int)strcmp(s, "clear") == 0) 
 	.f26:	ADRL %1 $s *0	; if ((int)strcmp(s, "clear") == 0) 
 		MOVp %2 &.s_clear4e4 
-		CALL &strcmp %0 *3
+		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 310:40
 		NEQi %0 #0 @.f28
 		MOVi $i #0 	; for (i = 0 to dimX * dimY) cells[i] = 0
 		MULi %0 $dimX $dimY
@@ -542,40 +548,40 @@ main:	FUNC
 	.l30:	SETL $cells $i #0	; cells[i] = 0
 		FORi $i %0 @.l30
 	.e29:	MOVp %1 &.s_Cleare4e5 	; outputLine("Cleared all cells.")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 312:38
 		GOTO @.e31  	; } else if ((int)strncmp(s, "rand ", 5) == 0) 
 	.f28:	ADRL %1 $s *0	; if ((int)strncmp(s, "rand ", 5) == 0) 
 		MOVp %2 &.s_rand4e6 
 		MOVi %3 #5 
-		CALL &strncmp %0 *4
+		CALL &strncmp %0 *4	; expects strncmp(ptr, ptr, int) -> int @ 313:44
 		NEQi %0 #0 @.f32
 		ADRL %1 $s:5 *0	; i = (int)parseInt(&s[5], -10000)
 		MOVi %2 #-10000 
-		CALL &parseInt %0 *3
+		CALL &parseInt %0 *3	; expects parseInt(ptr, int) -> int @ 314:38
 		MOVi $i %0 
 		LSSi $i #0 @.t33	; if (i < 0 || i > 100) help()
 		LEQi $i #100 @.f34
-	.t33:	CALL &help %0 *1	; help()
+	.t33:	CALL &help %0 *1	; expects help() -> void @ 315:34
 		GOTO @.e36  
 	.f34:	MOVi %1 $dimX 	; randomize(dimX, dimY, cells, i)
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0
 		MOVi %4 $i 
-		CALL &randomize %0 *5
+		CALL &randomize %0 *5	; expects randomize(int, int, ptr, int) -> void @ 317:38
 		MOVp %1 &.s_Random4e7 	; output("Randomized with ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 318:33
 		MOVi %1 $i 	; outputInt(i)
-		CALL &outputInt %0 *2
+		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 319:19
 		MOVp %1 &.s_4e8 	; output(" %. ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 320:21
 		MOVi %1 $dimX 	; outputCellsAlive(dimX, dimY, cells)
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0
-		CALL &outputCellsAlive %0 *4
+		CALL &outputCellsAlive %0 *4	; expects outputCellsAlive(int, int, ptr) -> int @ 321:42
 	.e35:	GOTO @.e36  	; } else 
 	.f32:	ADRL %1 $s *0	; i = (int)parseInt(s, -10000)
 		MOVi %2 #-10000 
-		CALL &parseInt %0 *3
+		CALL &parseInt %0 *3	; expects parseInt(ptr, int) -> int @ 324:34
 		MOVi $i %0 
 		LSSi $i #0 @.f37	; if (i >= 0) 
 		GRTi $i #MAX_GENERATIONS @.f38	; if (i <= MAX_GENERATIONS) 
@@ -583,29 +589,29 @@ main:	FUNC
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0
 		MOVi %4 $i 
-		CALL &run %0 *5
+		CALL &run %0 *5	; expects run(int, int, ptr, int) -> void @ 327:33
 		MOVp %1 &.s_Ran4e9 	; output("Ran ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 328:22
 		MOVi %1 $i 	; outputInt(i)
-		CALL &outputInt %0 *2
+		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 329:20
 		MOVp %1 &.s_genera4ea 	; output(" generations. ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 330:32
 		MOVi %1 $dimX 	; outputCellsAlive(dimX, dimY, cells)
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0
-		CALL &outputCellsAlive %0 *4
+		CALL &outputCellsAlive %0 *4	; expects outputCellsAlive(int, int, ptr) -> int @ 331:43
 		GOTO @.e40  	; } else 
 	.f38:	MOVp %1 &.s_Maxgen4eb 	; output("Max generations is ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 333:37
 		MOVi %1 #MAX_GENERATIONS 	; outputInt(MAX_GENERATIONS)
-		CALL &outputInt %0 *2
+		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 334:34
 		MOVp %1 &.s_Cleare4e5:17 	; outputLine(".")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 335:23
 	.e39:	GOTO @.e40  	; } else 
 	.f37:	ADRL %1 $s *0	; parseXY(s, &x, &y)
 		ADRL %2 $x *0
 		ADRL %3 $y *0
-		CALL &parseXY %0 *4
+		CALL &parseXY %0 *4	; expects parseXY(ptr, ptr, ptr) -> void @ 338:25
 		LSSi $x #0 @.f42	; if (x >= 0 && y >= 0) 
 		LSSi $y #0 @.f42
 		GEQi $x $dimX @.f44	; if (x < dimX && y < dimY) 
@@ -617,29 +623,29 @@ main:	FUNC
 		SETL $cells $i $c	; cells[i] = c
 		EQUi $c #0 @.f45	; if (c != 0) output("Set ")
 		MOVp %1 &.s_Set4ec 	; output("Set ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 344:35
 		GOTO @.e46  
 	.f45:	MOVp %1 &.s_Reset4ed 	; output("Reset ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 345:30
 	.e46:	MOVp %1 &.s_cell4ee 	; output("cell ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 346:24
 		MOVi %1 $x 	; outputInt(x)
-		CALL &outputInt %0 *2
+		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 347:21
 		MOVp %1 &.s_4e0 	; output(",")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 348:20
 		MOVi %1 $y 	; outputInt(y)
-		CALL &outputInt %0 *2
+		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 349:21
 		MOVp %1 &.s_genera4ea:12 	; output(". ")
-		CALL ^output %0 *2
+		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 350:21
 		MOVi %1 $dimX 	; outputCellsAlive(dimX, dimY, cells)
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0
-		CALL &outputCellsAlive %0 *4
+		CALL &outputCellsAlive %0 *4	; expects outputCellsAlive(int, int, ptr) -> int @ 351:44
 		GOTO @.e48  	; } else 
 	.f44:	MOVp %1 &.s_Invali4ef 	; outputLine("Invalid coordinates.")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 353:43
 	.e47:	GOTO @.e48  	; } else 
-	.f42:	CALL &help %0 *1	; help()
+	.f42:	CALL &help %0 *1	; expects help() -> void @ 356:14
 	.e48:	NOOP
 	.e40:	NOOP
 	.e36:	NOOP
@@ -649,11 +655,11 @@ main:	FUNC
 		EQUi $quit #FALSE @.l23
 	.f49:	EQUi $quit #FALSE @.l8	; } while (quit == FALSE)
 		MOVp %1 &.s_Invali4ef:20 	; outputLine("")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 363:17
 		MOVp %1 &.s_Byebye4f0 	; outputLine("Bye bye!")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 364:25
 		MOVp %1 &.s_Byebye4f0:8 	; outputLine("")
-		CALL &outputLine %0 *2
+		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 365:17
 	.e5:	NOOP
 	.e2:	RETU   	; }
 

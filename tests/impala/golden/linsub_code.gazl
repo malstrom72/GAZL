@@ -1,31 +1,37 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
-panelTextRows:	CNST *8
+; signatures version=1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 18:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
 	DATA &.s_4d2 &.s_SUB16B4d3 &.s_SUB16B4d3:53
 	DATA &.s_SUB16B4d3:53 &.s_SUB16B4d3:53 &.s_SUB16B4d3:53
 	DATA &.s_SUB16B4d3:53 &.s_SUB16B4d3:53
+; signature extern native abort() -> unknown @ 39:1
+; signature extern native trace() -> unknown @ 40:1
+; signature extern native yield() -> unknown @ 41:1
+; signature extern native write() -> unknown @ 42:1
+; signature extern native read() -> unknown @ 44:1
 	GLOB *1
-clock:	DATi #0
-params:	GLOB *PARAM_COUNT
-displayLEDs:	GLOB *4
+clock:	DATi #0	; signature global clock : int @ 80:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 81:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 82:1
 	GLOB *1
-instance:	DATi #0
-positions:	GLOB *2
+instance:	DATi #0	; signature global instance : int @ 86:1
+positions:	GLOB *2	; signature array positions[2] : unknown @ 87:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 92:1
 	GLOB *1
-subTerm:	DATi #0
+subTerm:	DATi #0	; signature global subTerm : int @ 92:19
 
 ;-----------------------------------------------------------------------------
-update:	FUNC
+update:	FUNC	; signature func update() -> void @ 116:17
 		PARA *1
 	$x:	LOCi
 	$y:	LOCi
@@ -48,8 +54,8 @@ update:	FUNC
 
 
 ;-----------------------------------------------------------------------------
-operate1:	FUNC
 	$r:	OUTi
+operate1:	FUNC	; signature func operate1(int a) -> int @ 136:19
 	$a:	INPi
 	$x:	LOCi
 ;-----------------------------------------------------------------------------

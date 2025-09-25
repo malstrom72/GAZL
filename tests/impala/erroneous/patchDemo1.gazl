@@ -1,0 +1,161 @@
+; Compiled with Impala version 1.0
+
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1
+PI:	! DEFf #3.14159265358979323846
+FALSE:	! DEFi #0
+TRUE:	! DEFi #1
+
+;-----------------------------------------------------------------------------
+main:	FUNC
+		PARA *1
+	$r:	LOCf
+	$k:	LOCf
+	$g0:	LOCf
+	$fpi:	LOCf
+	$rq:	LOCf
+	$dxL:	LOCf
+	$d0L:	LOCf
+	$d1L:	LOCf
+	$d2L:	LOCf
+	$d3L:	LOCf
+	$gL:	LOCf
+	$dxR:	LOCf
+	$d0R:	LOCf
+	$d1R:	LOCf
+	$d2R:	LOCf
+	$d3R:	LOCf
+	$gR:	LOCf
+	$dxzL:	LOCf
+	$d0zL:	LOCf
+	$d1zL:	LOCf
+	$d2zL:	LOCf
+	$d3zL:	LOCf
+	$dxzR:	LOCf
+	$d0zR:	LOCf
+	$d1zR:	LOCf
+	$d2zR:	LOCf
+	$d3zR:	LOCf
+	$left:	LOCf
+	$right:	LOCf
+	$params:	LOCA *PARAM_COUNT
+;-----------------------------------------------------------------------------
+		MOVf $d3zL #0.0 	; dxzL = d0zL = d1zL = d2zL = d3zL = 0.0
+		MOVf $d2zL #0.0 
+		MOVf $d1zL #0.0 
+		MOVf $d0zL #0.0 
+		MOVf $dxzL #0.0 
+		MOVf $d3zR #0.0 	; dxzR = d0zR = d1zR = d2zR = d3zR = 0.0
+		MOVf $d2zR #0.0 
+		MOVf $d1zR #0.0 
+		MOVf $d0zR #0.0 
+		MOVf $dxzR #0.0 
+	.l0:	ADRL %1 $params *0	; if ((int)updateParameters(params) != FALSE) 
+		CALL ^updateParameters %0 *2
+		EQUi %0 #FALSE @.f1
+		! DIVf <A> #1.0 #255.0	; rq = itof((int)params[OPERAND_1_HIGH_PARAM_INDEX]) * (1.0 / 255.0 * 2.0)
+		! MULf <A> <A> #2.0
+		iTOf $rq $params:OPERAND_1_HIGH_PARAM_INDEX <A>
+		! DIVf <A> #1.0 #256.0	; fpi = itof((int)params[OPERAND_1_LOW_PARAM_INDEX]) * (1.0 / 256.0 * 0.5 * PI)
+		! MULf <A> <A> #0.5
+		! MULf <A> <A> #PI
+		iTOf $fpi $params:OPERAND_1_LOW_PARAM_INDEX <A>
+		SUBf %0 #4.0 $rq	; r = (4.0 - rq) / (1.0 + rq)
+		ADDf %1 #1.0 $rq
+		DIVf $r %0 %1
+		MOVf %1 $fpi 	; k = ((float) sin(fpi)) / ((float) cos(fpi) + (float) sin(fpi))
+		CALL ^sin %0 *2
+		MOVf %2 $fpi 
+		CALL ^cos %1 *2
+		MOVf %3 $fpi 
+		CALL ^sin %2 *2
+		ADDf %1 %1 %2
+		DIVf $k %0 %1
+		MULf %0 $r $k	; g0 = r / (1.0 + r * k * k * k * k)
+		MULf %0 %0 $k
+		MULf %0 %0 $k
+		MULf %0 %0 $k
+		ADDf %0 #1.0 %0
+		DIVf $g0 $r %0
+		ADDf $r #1.0 $r	; r = (1.0 + r)
+	.f1:	ADRL %1 $left *0	; getFrame(&left, &right)
+		ADRL %2 $right *0
+		CALL ^getFrame %0 *3
+		MULf %0 $left $r	; dxL = 0.5 * (dxzL + left * r)
+		ADDf %0 $dxzL %0
+		MULf $dxL #0.5 %0
+		SUBf %0 $dxL $d0zL	; d0L = d0zL + k * (dxL - d0zL)
+		MULf %0 $k %0
+		ADDf $d0L $d0zL %0
+		SUBf %0 $d0L $d1zL	; d1L = d1zL + k * (d0L - d1zL)
+		MULf %0 $k %0
+		ADDf $d1L $d1zL %0
+		SUBf %0 $d1L $d2zL	; d2L = d2zL + k * (d1L - d2zL)
+		MULf %0 $k %0
+		ADDf $d2L $d2zL %0
+		SUBf %0 $d2L $d3zL	; d3L = d3zL + k * (d2L - d3zL)
+		MULf %0 $k %0
+		ADDf $d3L $d3zL %0
+		ADDf %0 $d3L $d3L	; gL = g0 * (d3L + d3L - d3zL)
+		SUBf %0 %0 $d3zL
+		MULf $gL $g0 %0
+		ADDf %0 $dxL $dxL	; dxzL = dxL + dxL - dxzL - gL
+		SUBf %0 %0 $dxzL
+		SUBf $dxzL %0 $gL
+		MULf $gL $gL $k	; gL = gL * k
+		ADDf %0 $d0L $d0L	; d0zL = d0L + d0L - d0zL - gL
+		SUBf %0 %0 $d0zL
+		SUBf $d0zL %0 $gL
+		MULf $gL $gL $k	; gL = gL * k
+		ADDf %0 $d1L $d1L	; d1zL = d1L + d1L - d1zL - gL
+		SUBf %0 %0 $d1zL
+		SUBf $d1zL %0 $gL
+		MULf $gL $gL $k	; gL = gL * k
+		ADDf %0 $d2L $d2L	; d2zL = d2L + d2L - d2zL - gL
+		SUBf %0 %0 $d2zL
+		SUBf $d2zL %0 $gL
+		MULf $gL $gL $k	; gL = gL * k
+		ADDf %0 $d3L $d3L	; d3zL = d3L + d3L - d3zL - gL
+		SUBf %0 %0 $d3zL
+		SUBf $d3zL %0 $gL
+		MULf %0 $right $r	; dxR = 0.5 * (dxzR + right * r)
+		ADDf %0 $dxzR %0
+		MULf $dxR #0.5 %0
+		SUBf %0 $dxR $d0zR	; d0R = d0zR + k * (dxR - d0zR)
+		MULf %0 $k %0
+		ADDf $d0R $d0zR %0
+		SUBf %0 $d0R $d1zR	; d1R = d1zR + k * (d0R - d1zR)
+		MULf %0 $k %0
+		ADDf $d1R $d1zR %0
+		SUBf %0 $d1R $d2zR	; d2R = d2zR + k * (d1R - d2zR)
+		MULf %0 $k %0
+		ADDf $d2R $d2zR %0
+		SUBf %0 $d2R $d3zR	; d3R = d3zR + k * (d2R - d3zR)
+		MULf %0 $k %0
+		ADDf $d3R $d3zR %0
+		ADDf %0 $d3R $d3R	; gR = g0 * (d3R + d3R - d3zR)
+		SUBf %0 %0 $d3zR
+		MULf $gR $g0 %0
+		ADDf %0 $dxR $dxR	; dxzR = dxR + dxR - dxzR - gR
+		SUBf %0 %0 $dxzR
+		SUBf $dxzR %0 $gR
+		MULf $gR $gR $k	; gR = gR * k
+		ADDf %0 $d0R $d0R	; d0zR = d0R + d0R - d0zR - gR
+		SUBf %0 %0 $d0zR
+		SUBf $d0zR %0 $gR
+		MULf $gR $gR $k	; gR = gR * k
+		ADDf %0 $d1R $d1R	; d1zR = d1R + d1R - d1zR - gR
+		SUBf %0 %0 $d1zR
+		SUBf $d1zR %0 $gR
+		MULf $gR $gR $k	; gR = gR * k
+		ADDf %0 $d2R $d2R	; d2zR = d2R + d2R - d2zR - gR
+		SUBf %0 %0 $d2zR
+		SUBf $d2zR %0 $gR
+		MULf $gR $gR $k	; gR = gR * k
+		ADDf %0 $d3R $d3R	; d3zR = d3R + d3R - d3zR - gR
+		SUBf %0 %0 $d3zR
+		SUBf $d3zR %0 $gR
+		MOVf %1 $d3zL 	; putFrame(d3zL, d3zR)
+		MOVf %2 $d3zR 
+		CALL ^putFrame %0 *3
+		GOTO @.l0  	; }
+		RETU   	; }

@@ -1,12 +1,31 @@
 ; Compiled with Impala version 1.0
 
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1
-PI:	! DEFf #3.14159265358979323846
-FALSE:	! DEFi #0
-TRUE:	! DEFi #1
+; signatures version=1
+; signature extern native sin() -> unknown @ 1:18
+; signature extern native cos() -> unknown @ 2:18
+; signature extern native tan() -> unknown @ 3:18
+; signature extern native asin() -> unknown @ 4:19
+; signature extern native acos() -> unknown @ 5:19
+; signature extern native atan() -> unknown @ 6:19
+; signature extern native exp() -> unknown @ 7:18
+; signature extern native log() -> unknown @ 8:18
+; signature extern native pow() -> unknown @ 9:18
+; signature extern native sqrt() -> unknown @ 10:19
+; signature extern native fillArray() -> unknown @ 11:24
+; signature extern native multiplyArray() -> unknown @ 12:28
+; signature extern native multiplyArrays() -> unknown @ 13:29
+; signature extern native addArray() -> unknown @ 14:23
+; signature extern native addArrays() -> unknown @ 15:24
+; signature extern native updateParameters() -> unknown @ 16:31
+; signature extern native getFrame() -> unknown @ 17:23
+; signature extern native putFrame() -> unknown @ 18:23
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 20:42
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 42:40
+FALSE:	! DEFi #0	; signature const FALSE : int @ 44:20
+TRUE:	! DEFi #1	; signature const TRUE : int @ 45:19
 
 ;-----------------------------------------------------------------------------
-main:	FUNC
+main:	FUNC	; signature func main() -> void @ 47:15
 		PARA *1
 	$r:	LOCf
 	$k:	LOCf
@@ -50,7 +69,7 @@ main:	FUNC
 		MOVf $d0zR #0.0 
 		MOVf $dxzR #0.0 
 	.l0:	ADRL %1 $params *0	; if ((int)updateParameters(params) != FALSE) 
-		CALL ^updateParameters %0 *2
+		CALL ^updateParameters %0 *2	; expects function(ptr) -> unknown @ 60:37
 		EQUi %0 #FALSE @.f1
 		! DIVf <A> #1.0 #255.0	; rq = itof((int)params[OPERAND_1_HIGH_PARAM_INDEX]) * (1.0 / 255.0 * 2.0)
 		! MULf <A> <A> #2.0
@@ -63,11 +82,11 @@ main:	FUNC
 		ADDf %1 #1.0 $rq
 		DIVf $r %0 %1
 		MOVf %1 $fpi 	; k = ((float) sin(fpi)) / ((float) cos(fpi) + (float) sin(fpi))
-		CALL ^sin %0 *2
+		CALL ^sin %0 *2	; expects function(float) -> unknown @ 64:25
 		MOVf %2 $fpi 
-		CALL ^cos %1 *2
+		CALL ^cos %1 *2	; expects function(float) -> unknown @ 64:47
 		MOVf %3 $fpi 
-		CALL ^sin %2 *2
+		CALL ^sin %2 *2	; expects function(float) -> unknown @ 64:65
 		ADDf %1 %1 %2
 		DIVf $k %0 %1
 		MULf %0 $r $k	; g0 = r / (1.0 + r * k * k * k * k)
@@ -79,7 +98,7 @@ main:	FUNC
 		ADDf $r #1.0 $r	; r = (1.0 + r)
 	.f1:	ADRL %1 $left *0	; getFrame(&left, &right)
 		ADRL %2 $right *0
-		CALL ^getFrame %0 *3
+		CALL ^getFrame %0 *3	; expects function(ptr, ptr) -> unknown @ 69:26
 		MULf %0 $left $r	; dxL = 0.5 * (dxzL + left * r)
 		ADDf %0 $dxzL %0
 		MULf $dxL #0.5 %0
@@ -156,6 +175,6 @@ main:	FUNC
 		SUBf $d3zR %0 $gR
 		MOVf %1 $d3zL 	; putFrame(d3zL, d3zR)
 		MOVf %2 $d3zR 
-		CALL ^putFrame %0 *3
+		CALL ^putFrame %0 *3	; expects function(float, float) -> unknown @ 93:23
 		GOTO @.l0  	; }
 		RETU   	; }
