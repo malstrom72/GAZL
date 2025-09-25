@@ -1832,13 +1832,16 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                              $$parser.resolveFunctionReturnType($id, $out.type, $$s, $$i);
                                                                          }
                                                                      }
-                  /
-                                                                     {
-                                                                         /* implicit 1-word return */
-                                                                         $$parser.declare(
-                                                                             'PARA', 'locals',
-                                                                             undefined, '?',
-                                                                             false, '*1',
+                    /
+                                                                    {
+                                                                        /* implicit 1-word return: even void functions expose
+                                                                           a single-word PARA so legacy call sites keep a
+                                                                           deterministic return slot and the JSPEG output
+                                                                           matches the historical PPEG layout. */
+                                                                        $$parser.declare(
+                                                                            'PARA', 'locals',
+                                                                            undefined, '?',
+                                                                            false, '*1',
                                                                              $$s, $$i
                                                                          );
                                                                          var entry = $$parser.symbols.functions[$id];

@@ -45,3 +45,11 @@ Compiling callers and callees in different units allows mismatched return types 
 - [ ] Emit explicit `signature define` comments after each function declaration by enhancing `emitFunctionSignature` to include the resolved return type (or `unknown` when unresolved).
 - [ ] Update `tools/gazl-validate.js` to parse the new `expect`/`define` comment kinds, accumulate expectations vs. definitions, and report descriptive diagnostics.
 - [ ] Add validator-driven regression fixtures covering matching, conflicting, and unconstrained extern return types; ensure the JSPEG regeneration scripts include the validator step so the goldens stay in sync.
+
+## Newly Observed Issues
+- The implicit-return branch inside `FuncDecl` currently calls `declare('PARA', 'locals', ...)` before `emitFunctionSignature`, which prints the placeholder row ahead of the `FUNC` declaration (showing up as `PARA *1` preceding the function label). Confirm whether GAZL technically allows this ordering and, if not, reorder the emissions so the `FUNC` symbol leads the block while keeping the placeholder available for callers that expect a one-word return slot.
+- The reason for emitting the dummy `PARA *1` sentinel is not documented in the JSPEG grammar, making it unclear why void functions still declare a return-sized slot.
+
+## Additional Action Items
+- [ ] Rework the implicit-return path so the dummy `PARA *1` is declared after the `FUNC` line (or otherwise ensure assemblers see the `FUNC` declaration first) while preserving return-type inference bookkeeping.
+- [ ] Add an explanatory comment in `impala/jspeg/impala.jspeg` (and regenerate the compiler) that spells out why void functions emit a placeholder `PARA *1`—namely, to give call sites a predictable one-word return area and to keep legacy PPEG output identical.
