@@ -20,12 +20,12 @@ Compiling callers and callees in different units allows mismatched return types 
    Still inside `FuncDecl`, ensure `$$parser.resolveFunctionReturnType` (and the implicit-return path) populate `entry.signature.returns` with `'?'` for `void`/unknown while preserving `returnResolved` for later checks. The existing `$$parser.emitFunctionSignature` already appends `; signature func … -> TYPE` to each `FUNC` line—verify that it always has a concrete `returns` value (defaulting to `unknown`) so downstream tooling has a stable definition record.
 
 3. **Record expectations and definitions during validation**
-   Augment `parseSignatureComment` in `tools/gazl-validate.js` so it captures both call-site comments (`; expects function(...) -> TYPE`) and definition comments (`; signature func NAME(...) -> TYPE`, plus the analogous `; signature extern native …`). Expectations should be collected in a new `ctx.calls` map keyed by function name; definitions (including extern natives) should flow into a `ctx.definitions` map (or extend `ctx.exports.functions`) with `{ type, location, kind }` records. Reuse the existing `location()` helper so diagnostics cite both the `.gazl` file and any embedded origin. For native callbacks, load the manifest described in Step 5 (`docs/nativeCallbackSignatures.json`) before scanning files so that the validator treats those entries as pre-declared definitions.
+   Augment `parseSignatureComment` in `tools/gazl-validate.js` so it captures both call-site comments (`; expects function(...) -> TYPE`) and definition comments (`; signature func NAME(...) -> TYPE`, plus the analogous `; signature extern native …`). Expectations should be collected in a new `ctx.calls` map keyed by function name; definitions (including extern natives) should flow into a `ctx.definitions` map (or extend `ctx.exports.functions`) with `{ type, location, kind }` records. Reuse the existing `location()` helper so diagnostics cite both the `.gazl` file and any embedded origin. Native callbacks will be seeded from the generated manifest described in the implementation checklist so the validator can reconcile Impala `extern native` sites against the host-supplied implementations.
 
 4. **Reconcile contracts across compilation units**  
    After `processFile` finishes scanning each file, walk the aggregated call expectations and ensure there is a compatible definition. Emit an error when multiple expectations disagree (`typesCompatible` is already available) or when a concrete expectation conflicts with a concrete definition. Add a dedicated diagnostic constructor so failures read like `xorShiftRandom expected float at caller.gazl:12 but returns int at callee.gazl:6`.
 
-5. **Tighten compile-time feedback**  
+5. **Tighten compile-time feedback**
    In `$$parser.resolveFunctionReturnType` and `$$parser.expectFunctionReturnType`, keep today’s single-unit safeguards but update the messages to reference “previous expectation from signature metadata” when applicable. This ensures forward declarations inside the same translation unit still produce immediate errors.
 
 6. **Regression coverage and tooling hooks**
@@ -57,9 +57,9 @@ Compiling callers and callees in different units allows mismatched return types 
   - [ ] Adjust the implicit-return branch in `FuncDecl` so the `PARA *1` emission follows the `FUNC` declaration while keeping legacy semantics.
   - [ ] Document the rationale for the placeholder within `impala.jspeg` (and refresh `impalaCompiler.js`) to keep future contributors aligned.
 - [ ] Verify native callback coverage:
-  - [ ] Create `docs/nativeCallbackSignatures.json` containing `{ "name": string, "return": string }` entries seeded from today’s `NATIVE_NAMES` tables and any additional host registrations that ship with the repo.
-  - [ ] Extend `tools/gazl-validate.js` to load this JSON at startup (with graceful fallback when the file is missing) and to treat every manifest entry as a definition when reconciling `extern native` call expectations.
-  - [ ] Follow up by scripting a generator that rehydrates the JSON from the actual host registration tables so the manifest stays in sync without manual edits.
+  - [ ] Build a lightweight extractor (e.g., `tools/generate-native-manifest.js`) that parses `tools/GAZLCmd.cpp` and `src/GAZL.cpp` for the `NATIVE_TABLE`/`NATIVE_NAMES` arrays and inspects each implementation (`printInt`, `input`, `gazlSqrt`, etc.) to determine its return category based on how it writes to `params[0]`.
+  - [ ] Emit the captured data to `tools/nativeCallbackManifest.json` (checked into the repo) and document the generation command in the README.
+  - [ ] Extend `tools/gazl-validate.js` to load this manifest at startup (with graceful fallback when the file is missing) and to treat every manifest entry as a definition when reconciling `extern native` call expectations.
 
 ## Newly Observed Issues
 - The implicit-return branch inside `FuncDecl` currently calls `declare('PARA', 'locals', ...)` before `emitFunctionSignature`, which prints the placeholder row ahead of the `FUNC` declaration (showing up as `PARA *1` preceding the function label). Confirm whether GAZL technically allows this ordering and, if not, reorder the emissions so the `FUNC` symbol leads the block while keeping the placeholder available for callers that expect a one-word return slot.
