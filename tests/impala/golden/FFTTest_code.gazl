@@ -130,8 +130,8 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 171:20
+		PARA *1
 	$text:	INPp
 	$n:	INPi
 	$ints:	INPp
@@ -168,8 +168,8 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 187:19
+		PARA *1
 	$text:	INPp
 	$i:	INPi
 	$ints:	LOCA *1
@@ -183,8 +183,8 @@ traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 187:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 194:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -277,8 +277,8 @@ square:	FUNC	; signature func square(float x) -> float @ 247:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 complexFFT:	FUNC	; signature func complexFFT(int n, ptr data) -> void @ 253:21
+		PARA *1
 	$n:	INPi
 	$data:	INPp
 	$i:	LOCi
@@ -402,8 +402,8 @@ complexFFT:	FUNC	; signature func complexFFT(int n, ptr data) -> void @ 253:21
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 realFFT:	FUNC	; signature func realFFT(int n, ptr input, ptr output) -> void @ 314:18
+		PARA *1
 	$n:	INPi
 	$input:	INPp
 	$output:	INPp
@@ -616,8 +616,8 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 452:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 467:15
+		PARA *1
 	$i:	LOCi
 	$buf:	LOCA *256
 ;-----------------------------------------------------------------------------
@@ -633,8 +633,8 @@ init:	FUNC	; signature func init() -> void @ 467:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 478:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4da 	; trace("reset")
 		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 480:16
@@ -646,8 +646,8 @@ reset:	FUNC	; signature func reset() -> void @ 478:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 489:17
+		PARA *1
 	$buf:	LOCA *256
 	$params:	LOCA *PARAM_COUNT
 ;-----------------------------------------------------------------------------
@@ -655,8 +655,8 @@ update:	FUNC	; signature func update() -> void @ 489:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 509:18
+		PARA *1
 	$idx:	LOCi
 	$maxI:	LOCi
 	$i:	LOCi

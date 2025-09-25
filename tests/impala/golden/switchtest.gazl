@@ -3,8 +3,8 @@
 ; signatures version=1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 x:	FUNC	; signature func x() -> void @ 1:12
+		PARA *1
 	$i:	LOCi
 	$j:	LOCi
 	$k:	LOCi
@@ -26,8 +26,8 @@ x:	FUNC	; signature func x() -> void @ 1:12
 CONSTANT:	! DEFi #2949	; signature const CONSTANT : int @ 10:26
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 y:	FUNC	; signature func y() -> void @ 11:12
+		PARA *1
 	$i:	LOCi
 	$a:	LOCA *5
 ;-----------------------------------------------------------------------------
@@ -77,8 +77,8 @@ MINUS_FIVE:	! DEFi #-5	; signature const MINUS_FIVE : int @ 20:26
 gx:	GLOB *10	; signature array gx[10] : unknown @ 21:20
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 test:	FUNC	; signature func test(int a, int b) -> void @ 23:15
+		PARA *1
 	$a:	INPi
 	$b:	INPi
 ;-----------------------------------------------------------------------------
@@ -90,8 +90,8 @@ test:	FUNC	; signature func test(int a, int b) -> void @ 23:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 28:15
+		PARA *1
 	$i:	LOCi
 	$a:	LOCi
 	$b:	LOCi

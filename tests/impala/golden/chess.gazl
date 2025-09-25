@@ -280,8 +280,8 @@ nextRandom:	FUNC	; signature func nextRandom() -> int @ 162:21
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 initGlobals:	FUNC	; signature func initGlobals() -> void @ 177:22
+		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $i #0 	; for (i = 0 to 64 * BOARD_SIZE) 
@@ -612,8 +612,8 @@ checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 258:25
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 putPiece:	FUNC	; signature func putPiece(int square, int piece) -> void @ 314:19
+		PARA *1
 	$square:	INPi
 	$piece:	INPi
 	$c:	LOCi
@@ -656,8 +656,8 @@ putPiece:	FUNC	; signature func putPiece(int square, int piece) -> void @ 314:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 liftPiece:	FUNC	; signature func liftPiece(int square) -> void @ 331:20
+		PARA *1
 	$square:	INPi
 	$piece:	LOCi
 	$n:	LOCi
@@ -690,8 +690,8 @@ liftPiece:	FUNC	; signature func liftPiece(int square) -> void @ 331:20
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 movePiece:	FUNC	; signature func movePiece(int frm, int t, int newPiece) -> void @ 346:20
+		PARA *1
 	$frm:	INPi
 	$t:	INPi
 	$newPiece:	INPi
@@ -760,8 +760,8 @@ movePiece:	FUNC	; signature func movePiece(int frm, int t, int newPiece) -> void
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 restart:	FUNC	; signature func restart() -> void @ 368:18
+		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		POKE &prevPiece:WHITE #WHITE 	; global nextPiece[WHITE] = (int) global prevPiece[WHITE] = WHITE
@@ -1084,8 +1084,8 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> void @ 603:19
+		PARA *1
 	$frm:	INPi
 	$t:	INPi
 	$oldPiece:	INPi
@@ -2170,8 +2170,8 @@ getUserMove:	FUNC	; signature func getUserMove() -> int @ 1171:22
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:21
+		PARA *1
 	$frm:	INPi
 	$t:	INPi
 	$y:	LOCi
@@ -2252,8 +2252,8 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:21
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 registerMove:	FUNC	; signature func registerMove(int move, int piece, int captured, int xCapture) -> void @ 1252:23
+		PARA *1
 	$move:	INPi
 	$piece:	INPi
 	$captured:	INPi
@@ -2327,8 +2327,8 @@ takeBackMove:	FUNC	; signature func takeBackMove() -> int @ 1269:23
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 setLevel:	FUNC	; signature func setLevel(int level) -> void @ 1285:19
+		PARA *1
 	$level:	INPi
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
@@ -2343,8 +2343,8 @@ setLevel:	FUNC	; signature func setLevel(int level) -> void @ 1285:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 1292:15
+		PARA *1
 	$lastFrom:	LOCi
 	$lastTo:	LOCi
 	$lastPiece:	LOCi

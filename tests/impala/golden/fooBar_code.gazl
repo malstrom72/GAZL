@@ -41,8 +41,8 @@ rndSeedX:	DATi #1	; signature global rndSeedX : int @ 98:24
 rndSeedY:	DATi #1	; signature global rndSeedY : int @ 99:24
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 101:21
+		PARA *1
 	$seed:	INPi
 	$x:	LOCi
 ;-----------------------------------------------------------------------------
@@ -121,8 +121,8 @@ fxQuantize:	DATi #0xFFF	; signature global fxQuantize : int @ 160:30
 dirXor:	DATi #0x0	; signature global dirXor : int @ 161:24
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 171:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4da 	; trace("reset")
 		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 173:16
@@ -131,8 +131,8 @@ reset:	FUNC	; signature func reset() -> void @ 171:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 184:17
+		PARA *1
 	$i:	LOCi
 	$fx:	LOCi
 	$fxRnd:	LOCi
@@ -236,8 +236,8 @@ update:	FUNC	; signature func update() -> void @ 184:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 273:15
+		PARA *1
 	$i:	LOCi
 	$p:	LOCp
 	$fxRate:	LOCi
@@ -280,8 +280,8 @@ init:	FUNC	; signature func init() -> void @ 273:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 311:18
+		PARA *1
 	$i:	LOCi
 	$x:	LOCi
 	$mask:	LOCi

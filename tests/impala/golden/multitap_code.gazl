@@ -31,8 +31,8 @@ TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 65:1
 COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 67:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 67:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -116,22 +116,22 @@ sin:	FUNC	; signature func sin(float x) -> float @ 114:14
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 130:15
+		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 138:17
+		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 142:18
+		PARA *1
 	$tapped:	LOCA *2
 	$mix:	LOCA *2
 	$localClock:	LOCi

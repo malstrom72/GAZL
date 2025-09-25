@@ -61,8 +61,8 @@ stopRate:	DATi #0	; signature global stopRate : int @ 104:1
 currentGain:	DATi #0	; signature global currentGain : int @ 108:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 108:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		POKE &lastInStep #-1 	; global lastInStep = -1
 		POKE &currentGain #0x10000 	; global currentGain = 0x10000
@@ -70,8 +70,8 @@ reset:	FUNC	; signature func reset() -> void @ 108:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 114:17
+		PARA *1
 	$topOperator:	LOCi
 	$bottomOperator:	LOCi
 	$topBits:	LOCi
@@ -173,8 +173,8 @@ update:	FUNC	; signature func update() -> void @ 114:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 178:18
+		PARA *1
 	$localClock:	LOCi
 	$inStep:	LOCi
 	$outStep:	LOCi

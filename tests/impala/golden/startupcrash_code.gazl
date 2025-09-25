@@ -132,8 +132,8 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 171:20
+		PARA *1
 	$text:	INPp
 	$n:	INPi
 	$ints:	INPp
@@ -170,8 +170,8 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 187:19
+		PARA *1
 	$text:	INPp
 	$i:	INPi
 	$ints:	LOCA *1
@@ -185,8 +185,8 @@ traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 187:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 194:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -277,8 +277,8 @@ delayR:	DATi #0	; signature global delayR : int @ 256:1
 syncBit:	DATi #0	; signature global syncBit : int @ 263:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 263:15
+		PARA *1
 	$i:	LOCi
 	$buf:	LOCA *256
 	$p:	LOCp
@@ -314,8 +314,8 @@ init:	FUNC	; signature func init() -> void @ 263:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 283:16
+		PARA *1
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4da 	; trace("reset")
@@ -342,8 +342,8 @@ displayDelayValue:	FUNC	; signature func displayDelayValue(int x) -> int @ 291:2
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 301:17
+		PARA *1
 	$buf:	LOCA *256
 	$params:	LOCA *PARAM_COUNT
 ;-----------------------------------------------------------------------------
@@ -379,8 +379,8 @@ update:	FUNC	; signature func update() -> void @ 301:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 332:18
+		PARA *1
 	$i:	LOCi
 	$p:	LOCp
 ;-----------------------------------------------------------------------------

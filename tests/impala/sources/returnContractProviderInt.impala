@@ -1,0 +1,5 @@
+function returnsNumber()
+returns int value
+{
+	value = 1;
+}

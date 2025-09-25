@@ -1341,8 +1341,8 @@ timetable:	CNST *<A>	; signature array timetable[<A>] : unknown @ 1300:33
 	DATA #59 #0 #0 #200 #0 #0 #54 #55 #199 #0 #0 #54 #54
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 outputSample:	FUNC	; signature func outputSample(int delayIndex, int sample) -> void @ 1308:23
+		PARA *1
 	$delayIndex:	INPi
 	$sample:	INPi
 	$delay:	LOCi
@@ -1382,8 +1382,8 @@ outputSample:	FUNC	; signature func outputSample(int delayIndex, int sample) -> 
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 SAMInit:	FUNC	; signature func SAMInit() -> void @ 1324:18
+		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $i #0 	; for (i = 0 to 256) 
@@ -1477,8 +1477,8 @@ Parser1:	FUNC	; signature func Parser1() -> int @ 1352:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 Insert:	FUNC	; signature func Insert(int position, int mem60, int mem59, int mem58) -> void @ 1411:17
+		PARA *1
 	$position:	INPi
 	$mem60:	INPi
 	$mem59:	INPi
@@ -1504,8 +1504,8 @@ Insert:	FUNC	; signature func Insert(int position, int mem60, int mem59, int mem
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 Parser2:	FUNC	; signature func Parser2() -> void @ 1427:18
+		PARA *1
 	$pos:	LOCi
 	$mem58:	LOCi
 	$X:	LOCi
@@ -1709,8 +1709,8 @@ Parser2:	FUNC	; signature func Parser2() -> void @ 1427:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 Code41883:	FUNC	; signature func Code41883() -> void @ 1589:20
+		PARA *1
 	$pos:	LOCi
 	$Y:	LOCi
 ;-----------------------------------------------------------------------------
@@ -1739,8 +1739,8 @@ Code41883:	FUNC	; signature func Code41883() -> void @ 1589:20
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 Code48619:	FUNC	; signature func Code48619() -> void @ 1606:20
+		PARA *1
 	$X:	LOCi
 	$A:	LOCi
 	$index:	LOCi
@@ -1899,8 +1899,8 @@ Code48619:	FUNC	; signature func Code48619() -> void @ 1606:20
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 SetPhonemeLength:	FUNC	; signature func SetPhonemeLength() -> void @ 1709:27
+		PARA *1
 	$A:	LOCi
 	$position:	LOCi
 	$table:	LOCp
@@ -2128,8 +2128,8 @@ trans:	FUNC	; signature func trans(int a, int b) -> int @ 1836:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 SetMouthThroat:	FUNC	; signature func SetMouthThroat(int mouth, int throat) -> void @ 1866:25
+		PARA *1
 	$mouth:	INPi
 	$throat:	INPi
 	$b:	LOCi
@@ -2280,8 +2280,8 @@ GenerateNoise:	FUNC	; signature func GenerateNoise(int Y0, int mem39, ptr mem44,
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ 1964:24
+		PARA *1
 	$phase1:	LOCi
 	$phase2:	LOCi
 	$phase3:	LOCi
@@ -2585,8 +2585,8 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ 1964:24
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 Play:	FUNC	; signature func Play() -> void @ 2163:15
+		PARA *1
 	$A:	LOCi
 	$X:	LOCi
 	$Y:	LOCi
@@ -2630,8 +2630,8 @@ Play:	FUNC	; signature func Play() -> void @ 2163:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 2195:15
+		PARA *1
 	$buffer:	LOCA *256
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
@@ -2704,8 +2704,8 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 2234:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		POKE &lastClock #0x7FFFFFFF 	; global lastClock = 0x7FFFFFFF
 		POKE &pleaseBreak #TRUE 	; global pleaseBreak = TRUE
@@ -2713,8 +2713,8 @@ reset:	FUNC	; signature func reset() -> void @ 2234:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 2240:17
+		PARA *1
 	$localParams:	LOCA *PARAM_COUNT
 	$newSpeed:	LOCi
 	$newPitch:	LOCi
@@ -2750,8 +2750,8 @@ update:	FUNC	; signature func update() -> void @ 2240:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 2310:18
+		PARA *1
 	$c:	LOCi
 ;-----------------------------------------------------------------------------
 	.l0:	NOOP

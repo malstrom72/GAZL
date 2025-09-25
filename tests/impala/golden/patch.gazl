@@ -100,8 +100,8 @@ stricmp:	FUNC	; signature func stricmp(ptr s0, ptr s1) -> int @ 55:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 upper:	FUNC	; signature func upper(ptr s) -> void @ 74:16
+		PARA *1
 	$s:	INPp
 	$p:	LOCp
 	$c:	LOCi
@@ -120,8 +120,8 @@ upper:	FUNC	; signature func upper(ptr s) -> void @ 74:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 outputLF:	FUNC	; signature func outputLF() -> void @ 84:19
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_4d2 	; output("\n")
 		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 86:14
@@ -129,8 +129,8 @@ outputLF:	FUNC	; signature func outputLF() -> void @ 84:19
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 89:21
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; output(s)
@@ -140,8 +140,8 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 89:21
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 help:	FUNC	; signature func help() -> void @ 95:15
+		PARA *1
 ;-----------------------------------------------------------------------------
 		CALL &outputLF %0 *1	; expects outputLF() -> void @ 97:12
 		MOVp %1 &.s_Typeli4d3 	; outputLine("Type \"list\" to list available firmware patches.")
@@ -159,8 +159,8 @@ help:	FUNC	; signature func help() -> void @ 95:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 refreshPatchList:	FUNC	; signature func refreshPatchList() -> void @ 106:27
+		PARA *1
 	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
 	! ADDi <A> #8 #1
 	$p:	LOCp
@@ -191,8 +191,8 @@ refreshPatchList:	FUNC	; signature func refreshPatchList() -> void @ 106:27
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 list:	FUNC	; signature func list() -> void @ 119:15
+		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		CALL &refreshPatchList %0 *1	; expects refreshPatchList() -> void @ 122:20
@@ -215,8 +215,8 @@ list:	FUNC	; signature func list() -> void @ 119:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 restore:	FUNC	; signature func restore() -> void @ 132:18
+		PARA *1
 	$error:	LOCA *256
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Restor4d9 	; outputLine("Restoring factory firmware. Do not power off...")
@@ -246,8 +246,8 @@ restore:	FUNC	; signature func restore() -> void @ 132:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
+		PARA *1
 	$name:	INPp
 	$config:	INPp
 	$buffer1:	LOCA *256
@@ -337,8 +337,8 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 repatch:	FUNC	; signature func repatch() -> void @ 195:18
+		PARA *1
 ;-----------------------------------------------------------------------------
 		PEEK %0 &lastPatch:0 	; if ((int)global lastPatch[0] == 0) help()
 		NEQi %0 #0 @.f0
@@ -351,8 +351,8 @@ repatch:	FUNC	; signature func repatch() -> void @ 195:18
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 201:15
+		PARA *1
 	$s:	LOCA *256
 	$p:	LOCp
 	$c:	LOCi

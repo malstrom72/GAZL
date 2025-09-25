@@ -440,7 +440,7 @@ c=$c;assert(>$$parser.validateStock(c));
         args(@$x, @$leftx, @$rightx, @$sourceCode, @$sourceOffset);
         $lop = [$leftx].operator;
         $keep = 2;
-        if ([$leftx].type != '?' && [$leftx].type != [$rightx].type)
+        if ([$leftx].type != '?' && [$rightx].type != '?' && [$leftx].type != [$rightx].type)
             $$parser.typeError('Incompatible types for assignment ({$type1} = {$type2})', $sourceCode, $sourceOffset, [$leftx].type, [$rightx].type);
 
         // Notice special handling of constant expressions which will make the resulting rvalue of the assignment constant too.

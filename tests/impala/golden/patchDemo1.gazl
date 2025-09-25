@@ -25,8 +25,8 @@ FALSE:	! DEFi #0	; signature const FALSE : int @ 44:20
 TRUE:	! DEFi #1	; signature const TRUE : int @ 45:19
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 47:15
+		PARA *1
 	$r:	LOCf
 	$k:	LOCf
 	$g0:	LOCf

@@ -17,8 +17,8 @@ FALSE:	! DEFi #0	; signature const FALSE : int @ 15:20
 TRUE:	! DEFi #1	; signature const TRUE : int @ 16:19
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 18:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		EQUp $s &NULL @.f0	; if (s != null) 
@@ -269,8 +269,8 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 205:15
 gGlobalState:	GLOB *14	; signature array gGlobalState[14] : unknown @ 211:30
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 213:15
+		PARA *1
 	$fpi:	LOCf
 	$rq:	LOCf
 	$dxL:	LOCf

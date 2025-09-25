@@ -30,8 +30,8 @@ updateMask:	DATi <A>	; signature readonly updateMask : int @ 90:1
 mask:	DATi #0	; signature global mask : int @ 90:16
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 114:17
+		PARA *1
 	$x:	LOCi
 	$y:	LOCi
 ;-----------------------------------------------------------------------------

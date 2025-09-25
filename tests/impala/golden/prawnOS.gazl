@@ -34,8 +34,8 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 9:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 22:15
+		PARA *1
 	$inp:	LOCA *256
 ;-----------------------------------------------------------------------------
 	mainLoop:	MOVp %1 &.s_4d2 	; mainLoop:

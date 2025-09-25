@@ -34,8 +34,8 @@ updateMask:	DATi <A>	; signature readonly updateMask : int @ 97:1
 LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 99:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 99:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -93,8 +93,8 @@ rndSeedX:	DATi #123456789	; signature global rndSeedX : int @ 163:32
 rndSeedY:	DATi #362436069	; signature global rndSeedY : int @ 164:32
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 166:21
+		PARA *1
 	$seed:	INPi
 	$x:	LOCi
 ;-----------------------------------------------------------------------------
@@ -165,8 +165,8 @@ doReset:	DATi #TRUE	; signature global doReset : int @ 222:1
 updateBits:	DATi #TRUE	; signature global updateBits : int @ 231:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 231:15
+		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4db 	; trace("init")
@@ -193,8 +193,8 @@ init:	FUNC	; signature func init() -> void @ 231:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 251:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4dc 	; trace("reset")
 		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 253:16
@@ -203,8 +203,8 @@ reset:	FUNC	; signature func reset() -> void @ 251:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 264:17
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4dd 	; trace("update")
 		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 266:17
@@ -213,8 +213,8 @@ update:	FUNC	; signature func update() -> void @ 264:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 285:18
+		PARA *1
 	$i:	LOCi
 	$j:	LOCi
 	$l:	LOCi

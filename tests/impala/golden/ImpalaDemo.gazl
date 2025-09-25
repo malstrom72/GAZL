@@ -34,8 +34,8 @@ VARIOUS_LITERALS:	CNST *15	; signature array VARIOUS_LITERALS[15] : unknown @ 11
 	DATA &.s_allesc4d3 &NULL &NULL
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void @ 138:22
+		PARA *1
 	$v:	INPi
 ;-----------------------------------------------------------------------------
 		NEQi $v #0 @.f0	; if (v == 0) abort()
@@ -75,8 +75,8 @@ TEST_SIZE:	! DEFi #50	; signature const TEST_SIZE : int @ 166:25
 ; signature extern native printLF() -> unknown @ 169:22
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 test:	FUNC	; signature func test() -> void @ 171:15
+		PARA *1
 	$i:	LOCi
 	$mydata:	LOCA *TEST_SIZE
 ;-----------------------------------------------------------------------------
@@ -100,8 +100,8 @@ test:	FUNC	; signature func test() -> void @ 171:15
 ; signature extern native printFloat() -> unknown @ 191:25
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 showoff:	FUNC	; signature func showoff() -> void @ 193:18
+		PARA *1
 	$a:	LOCi
 	$b:	LOCi
 	$c:	LOCi
@@ -224,8 +224,8 @@ anInt:	! DEFi #4	; signature const anInt : int @ 280:20
 ; signature extern native print() -> unknown @ 282:20
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 main:	FUNC	; signature func main() -> void @ 283:15
+		PARA *1
 	$myFloat:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 #WELCOME 	; print(WELCOME)

@@ -87,15 +87,15 @@ tapCount:	DATi #0	; signature global tapCount : int @ 135:1
 tapData:	GLOB *<A>	; signature array tapData[<A>] : unknown @ 142:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 142:15
+		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 150:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
@@ -113,8 +113,8 @@ maxi:	FUNC	; signature func maxi(int a, int b) -> int @ 154:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 calcGainsAndDelays:	FUNC	; signature func calcGainsAndDelays(int configBits, int stepBits, float initGain, float initDelay, ptr gains, ptr delays, ptr maxGain, ptr maxDelay, ptr endGain, ptr endDelay) -> void @ 161:29
+		PARA *1
 	$configBits:	INPi
 	$stepBits:	INPi
 	$initGain:	INPf
@@ -246,8 +246,8 @@ addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, flo
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 216:17
+		PARA *1
 	$localParams:	LOCA *PARAM_COUNT
 	$i:	LOCi
 	$v:	LOCi
@@ -374,8 +374,8 @@ temp:	GLOB *2	; signature array temp[2] : unknown @ 258:21
 buffer:	GLOB *<A>	; signature array buffer[<A>] : unknown @ 259:36
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 276:18
+		PARA *1
 	! MULi <A> #BATCH_SIZE #2
 	$tapData:	LOCA *TAP_STRUCT_SIZE
 	$i:	LOCi

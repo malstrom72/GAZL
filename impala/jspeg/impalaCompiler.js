@@ -205,6 +205,31 @@ var impalaCompilerImpl = (function(_s) {
         }
     }
 
+    function ensureFunctionSignature(name) {
+        if (!name) {
+            return undefined;
+        }
+
+        if (!symbols || !symbols.functions) {
+            return undefined;
+        }
+
+        var entry = symbols.functions[name];
+        if (!entry) {
+            return undefined;
+        }
+
+        if (!entry.signature) {
+            entry.signature = {};
+        }
+
+        return entry.signature;
+    }
+
+    function isConcreteType(type) {
+        return type !== undefined && type !== '?';
+    }
+
     function renderParamList(params) {
         if (!params || params.length === 0) {
             return '';
@@ -322,16 +347,113 @@ var impalaCompilerImpl = (function(_s) {
             paramsText = renderTypeList(actualTypes);
         }
 
-        var returnCode;
-        if (signature && signature.returns !== undefined) {
-            returnCode = signature.returns;
-        } else {
-            returnCode = callResultType;
+        var returnCode = callResultType;
+        var known = false;
+        if (signature) {
+            if (signature.returnResolved && signature.returns !== undefined) {
+                returnCode = signature.returns;
+                known = true;
+            } else if (signature.expectedReturn !== undefined && signature.expectedReturn !== '?') {
+                returnCode = signature.expectedReturn;
+            } else if (signature.returns !== undefined) {
+                returnCode = signature.returns;
+                known = signature.returnResolved && signature.returns === '?';
+            }
         }
-        var returnType = signatureReturnCategory(returnCode, !!signature);
+        var returnType = signatureReturnCategory(returnCode, known);
 
         return appendOrigin('expects ' + label + '(' + paramsText + ') -> ' + returnType,
                             sourceName, sourceCode, sourceOffset);
+    };
+
+    updateCallExpectationComment = function (callInfo, callResultType) {
+        if (!callInfo || callInfo.commentIndex === undefined || callInfo.commentIndex < 0) {
+            return;
+        }
+        if (!metacode || callInfo.commentIndex >= metacode.length) {
+            return;
+        }
+
+        var args = callInfo.commentArgs;
+        if (!args) {
+            return;
+        }
+
+        var refreshed = formatCallExpectationComment(
+            args.name,
+            args.signature,
+            args.actualTypes,
+            callResultType,
+            args.sourceName,
+            args.sourceCode,
+            args.sourceOffset
+        );
+
+        if (!refreshed) {
+            return;
+        }
+
+        var entry = metacode[callInfo.commentIndex];
+        if (entry && entry.operator === ';') {
+            entry.operands[0] = refreshed;
+        }
+    };
+
+    expectFunctionReturnType = function (name, expectedType, sourceCode, sourceOffset) {
+        if (!isConcreteType(expectedType)) {
+            return;
+        }
+
+        var signature = ensureFunctionSignature(name);
+        if (!signature) {
+            return;
+        }
+
+        if (signature.expectedReturn === undefined) {
+            signature.expectedReturn = expectedType;
+        } else if (signature.expectedReturn !== expectedType) {
+            typeError(
+                'Conflicting return type expectations for ' + name + ' ({$type1} vs {$type2})',
+                sourceCode,
+                sourceOffset,
+                expectedType,
+                signature.expectedReturn
+            );
+        }
+
+        if (signature.returnResolved && isConcreteType(signature.returns)
+            && signature.returns !== expectedType) {
+
+            typeError(
+                'Return type mismatch for ' + name + ' ({$type1} vs {$type2})',
+                sourceCode,
+                sourceOffset,
+                expectedType,
+                signature.returns
+            );
+        }
+    };
+
+    resolveFunctionReturnType = function (name, actualType, sourceCode, sourceOffset) {
+        var signature = ensureFunctionSignature(name);
+        if (!signature) {
+            return;
+        }
+
+        signature.returnResolved = true;
+        signature.returns = actualType;
+
+        if (signature.expectedReturn !== undefined && isConcreteType(signature.expectedReturn)
+            && isConcreteType(actualType) && signature.expectedReturn !== actualType) {
+
+            typeError(
+                'Return type for ' + name + ' does not match previous uses ({$type1} vs {$type2})',
+                sourceCode,
+                sourceOffset,
+                actualType,
+                signature.expectedReturn
+            );
+        }
     };
 
     emitFunctionSignature = function (name) {
@@ -944,7 +1066,13 @@ var impalaCompilerImpl = (function(_s) {
         var lop   = leftx.operator;
         var keep  = 2;          /* operand index to keep for r-value */
 
-        if (leftx.type !== '?' && leftx.type !== rightx.type) {
+        if (leftx.type !== '?' && rightx.type === '?' && rightx.callInfo && rightx.callInfo.name) {
+            expectFunctionReturnType(rightx.callInfo.name, leftx.type, sourceCode, sourceOffset);
+            rightx.type = leftx.type;
+            updateCallExpectationComment(rightx.callInfo, leftx.type);
+        }
+
+        if (leftx.type !== '?' && rightx.type !== '?' && leftx.type !== rightx.type) {
             typeError(
                 'Incompatible types for assignment ({$type1} = {$type2})',
                 sourceCode, sourceOffset,
@@ -1682,10 +1810,10 @@ var impalaCompilerImpl = (function(_s) {
         }
     };
 };function root($){return (function(){var _b=_i;return _($)&&(function(){ start(); ; return true})()&&((function(){while((function(){var _b=_i;return FuncDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExternDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ConstDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GlobalDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _l=_i,_x=(!!_s[_i])&&(++_i,true);_i=_l;return !_x})()&&(function(){ end(); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function FuncDecl($){var $id={},$inp={},$out={},$,$loc={};return (function(){var _b=_i;return FUNCTION($)&&_($)&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ assert(validateStock('%')); assert(validateStock('<')); output(''); output(';-----------------------------------------------------------------------------'); /* declare the function symbol */ declare( undefined, 'functions', $id._, 'U', true, undefined, _s, _i ); var entry = symbols.functions[$id._]; if (entry) { if (!entry.signature) { entry.signature = {}; } entry.signature.params = []; entry.signature.returns = '?'; entry.signature.returnName = undefined; entry.signature.sourceCode = _s; entry.signature.sourceOffset = _i; entry.signature.sourceName = sourceName; } ; return true})()&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ declare( 'OUT?', 'locals', '$' + $out.name, $out.type, false, ($out.size !== undefined ? '*' + $out.size : undefined), _s, _i ); var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.returns = $out.type; entry.signature.returnName = $out.name; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* implicit 1-word return */ declare( 'PARA', 'locals', undefined, '?', false, '*1', _s, _i ); var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.returns = '?'; entry.signature.returnName = undefined; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ /* declare input parameters */ var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.params = []; for (var idx = 0; idx < $inp.n; ++idx) { var param = $inp._[idx]; entry.signature.params.push({ type: param.type, name: param.name, size: param.size }); } } emitFunctionSignature($id._); iterate($inp._, function (p) { declare( 'INP?', 'locals', '$' + p.name, p.type, true, (p.size !== undefined ? '*' + p.size : undefined), _s, _i ); }); ; return true})()&&((function(){var _b=_i;return LOCALS($)&&_($)&&LocalsDecl($loc)&&(function(){ iterate($loc._, function (v) { declare( 'LOC?', 'locals', '$' + v.name, v.type, false, (v.size !== undefined ? '*' + v.size : undefined), _s, _i ); }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ output(';-----------------------------------------------------------------------------'); ; return true})()&&Block($)&&(function(){ /* wrap-up body */ processBranches(); emit('--^', undefined, undefined, undefined, undefined); flushMetaCode('\t'); prune(symbols.locals); labelCounter = 0; output(''); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function FuncDecl($){var $id={},$inp={},$out={},$,$loc={};return (function(){var _b=_i;return FUNCTION($)&&_($)&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ assert(validateStock('%')); assert(validateStock('<')); output(''); output(';-----------------------------------------------------------------------------'); /* declare the function symbol */ declare( undefined, 'functions', $id._, 'U', true, undefined, _s, _i ); var entry = symbols.functions[$id._]; if (entry) { if (!entry.signature) { entry.signature = {}; } entry.signature.params = []; entry.signature.returns = '?'; entry.signature.returnName = undefined; entry.signature.sourceCode = _s; entry.signature.sourceOffset = _i; entry.signature.sourceName = sourceName; entry.signature.returnResolved = false; entry.pendingReturnPlaceholder = undefined; } ; return true})()&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ declare( 'OUT?', 'locals', '$' + $out.name, $out.type, false, ($out.size !== undefined ? '*' + $out.size : undefined), _s, _i ); var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.returns = $out.type; entry.signature.returnName = $out.name; resolveFunctionReturnType($id._, $out.type, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* implicit 1-word return: even void functions expose a single-word PARA so legacy call sites keep a deterministic return slot and the JSPEG output matches the historical PPEG layout. */ var entry = symbols.functions[$id._]; if (entry) { entry.pendingReturnPlaceholder = { sourceCode: _s, sourceOffset: _i }; } if (entry && entry.signature) { entry.signature.returns = '?'; entry.signature.returnName = undefined; resolveFunctionReturnType($id._, '?', _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ /* declare input parameters */ var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.params = []; for (var idx = 0; idx < $inp.n; ++idx) { var param = $inp._[idx]; entry.signature.params.push({ type: param.type, name: param.name, size: param.size }); } } emitFunctionSignature($id._); if (entry && entry.pendingReturnPlaceholder) { var placeholder = entry.pendingReturnPlaceholder; declare( 'PARA', 'locals', undefined, '?', false, '*1', placeholder.sourceCode, placeholder.sourceOffset ); entry.pendingReturnPlaceholder = undefined; } iterate($inp._, function (p) { declare( 'INP?', 'locals', '$' + p.name, p.type, true, (p.size !== undefined ? '*' + p.size : undefined), _s, _i ); }); ; return true})()&&((function(){var _b=_i;return LOCALS($)&&_($)&&LocalsDecl($loc)&&(function(){ iterate($loc._, function (v) { declare( 'LOC?', 'locals', '$' + v.name, v.type, false, (v.size !== undefined ? '*' + v.size : undefined), _s, _i ); }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ output(';-----------------------------------------------------------------------------'); ; return true})()&&Block($)&&(function(){ /* wrap-up body */ processBranches(); emit('--^', undefined, undefined, undefined, undefined); flushMetaCode('\t'); prune(symbols.locals); labelCounter = 0; output(''); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ExternDecl($){var $id={};return (function(){var _b=_i;return EXTERN($)&&_($)&&(function(){ $.scope = 'globals'; ; return true})()&&(function(){var _b=_i;return (function(){var _b=_i;return FUNCTION($)&&(function(){ $.type  = 'U';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NATIVE($)&&(function(){ $.type  = 'N';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ARRAY($)&&(function(){ $.type  = 'A'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&Identifier($id)&&(function(){ $.name  = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ declare( undefined,                 // no section for extern
                                                                              $.scope, $.name, $.type, false,                     // not readonly
-                                                                             '?', _s, _i ); if ($.scope === 'functions') { var entry = symbols.functions[$.name]; var signature = entry && entry.signature; if (entry) { if (!signature) { signature = entry.signature = {}; } if (signature.sourceName === undefined) { signature.sourceName = sourceName; } if (signature.sourceCode === undefined) { signature.sourceCode = _s; signature.sourceOffset = _i; signature.sourceName = sourceName; } } var role = ($.type === 'N' ? 'extern native' : 'extern func'); var prototypeComment = formatFunctionSignatureComment( $.name, signature, role, sourceName, _s, _i ); if (!prototypeComment) { prototypeComment = formatFunctionSignatureComment( $.name, { params: [], returns: undefined }, role, sourceName, _s, _i ); } emitStandaloneSignatureComment(prototypeComment); } else if ($.scope === 'globals') { emitStandaloneSignatureComment( formatGlobalSignatureComment( 'GLOB', $.name, $.type, $.size, 'extern', sourceName, _s, _i ) ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+                                                                             '?', _s, _i ); if ($.scope === 'functions') { var entry = symbols.functions[$.name]; var signature = entry && entry.signature; if (entry) { if (!signature) { signature = entry.signature = {}; } if (signature.sourceName === undefined) { signature.sourceName = sourceName; } if (signature.sourceCode === undefined) { signature.sourceCode = _s; signature.sourceOffset = _i; signature.sourceName = sourceName; } signature.returnResolved = false; } var role = ($.type === 'N' ? 'extern native' : 'extern func'); var prototypeComment = formatFunctionSignatureComment( $.name, signature, role, sourceName, _s, _i ); if (!prototypeComment) { prototypeComment = formatFunctionSignatureComment( $.name, { params: [], returns: undefined }, role, sourceName, _s, _i ); } emitStandaloneSignatureComment(prototypeComment); } else if ($.scope === 'globals') { emitStandaloneSignatureComment( formatGlobalSignatureComment( 'GLOB', $.name, $.type, $.size, 'extern', sourceName, _s, _i ) ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ConstDecl($){var $type={},$t,$nf,$id={},$x={};return (function(){var _b=_i;return CONST($)&&_($)&&BASE_TYPE($type)&&_($)&&(function(){ $t  = CASTS_TO_TYPES[$type._]; $nf = noForward; noForward = true; ; return true})()&&Identifier($id)&&(function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ declare( '! DEF?', 'defines', $id._, $t, true, makeConstant($x._, $t, _s, _i), _s, _i, formatConstSignatureComment( $id._, $t, sourceName, _s, _i ) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ declare( undefined, 'defines', $id._, $t, true, undefined, _s, _i ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ noForward = $nf; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function GlobalDecl($){var $section,$v={},$init,$x={},$a={},$d={};return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i, formatGlobalSignatureComment( $section, $v.name, $v.type, undefined, undefined, sourceName, _s, _i ) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), '*' + $a.size, _s, _i, formatGlobalSignatureComment( $section, $a.name, 'A', $a.size, undefined, sourceName, _s, _i ) ); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&InitList($d)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function InitList($){var $d,$type,$x={};return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ $d = ' '; $type = undefined; ; return true})()&&((function(){var _b=_i;return Expr($x)&&(function(){ var xMeta = metaSlot($x._); $type = xMeta.type; $d += makeConstant(xMeta, $type, _s, _i); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ var xMeta = metaSlot($x._); var xType = xMeta.type; var constant = makeConstant(xMeta, xType, _s, _i); /* decide if we need to flush DATA */ if (  constant[0] === '<' || $d[1] === '<' || ($d + ' ' + constant).length >= 55) { declare( 'DATA', 'globals', undefined, xType, true, $d.substr(1), _s, _i ); $d = ''; } $d += ' ' + constant; $type = xType; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ if ($d.substr(1) !== '') { declare( 'DATA', 'globals', undefined, $type, true, $d.substr(1), _s, _i ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
@@ -1700,7 +1828,7 @@ function AddSub($){var $op={},$r={};return (function(){var _b=_i;return MulDiv($
 function MulDiv($){var $op={},$r={};return (function(){var _b=_i;return PrePost($)&&((function(){while((function(){var _b=_i;return MULDIV_OP($op)&&_($)&&PrePost($r)&&(function(){ if (!dry) mulDivOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function PrePost($){var $op={};return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) unaryOp($op._, $._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Subscript($){var $s={};return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) binaryOp('=[]', $._, $s._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; $.base  = borrowForCall(); $.types = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type ); } if (callee.operator === ':=' && callee.operands[1] && callee.operands[1][0] === '&') { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; if (entry && entry.kind === 'FUNC' && entry.signature) { signature = entry.signature; } } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i ); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { typeError( 'Argument type mismatch when calling ' + label + ' ({$type1} vs expected {$type2})', _s, _i, actual, expected ); } } if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i ); if (callComment) { emit(';', undefined, callComment, undefined, undefined); } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.count + 1)); returnBack(func); while ($.count-- > 0) { returnBack('%' + ($.base + $.count + 1)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; $.base  = borrowForCall(); $.types = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type ); } if (callee.operator === ':=' && callee.operands[1] && callee.operands[1][0] === '&') { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; if (entry && entry.kind === 'FUNC' && entry.signature) { signature = entry.signature; } } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i ); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { typeError( 'Argument type mismatch when calling ' + label + ' ({$type1} vs expected {$type2})', _s, _i, actual, expected ); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.count + 1)); returnBack(func); while ($.count-- > 0) { returnBack('%' + ($.base + $.count + 1)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Argument($){var $a={};return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if ($.types) { $.types.push(meta.type); } makeArgValue($a._, $.base + $.count); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Group($){return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BoolGroup($){var $label;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ $label = undefined; ; return true})()&&And($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="||")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('t'); } emit('?->', true, $label, undefined, undefined); ; return true})()&&And($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if ($label !== undefined) { emit('<-?', true, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

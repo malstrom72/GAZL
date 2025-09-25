@@ -30,8 +30,8 @@ TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 101:1
 COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 103:1
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 error:	FUNC	; signature func error(ptr s) -> void @ 103:16
+		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
@@ -153,8 +153,8 @@ filterParamTable:	GLOB *<A>	; signature array filterParamTable[<A>] : unknown @ 
 rateTable:	GLOB *256	; signature array rateTable[256] : unknown @ 215:28
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 init:	FUNC	; signature func init() -> void @ 224:15
+		PARA *1
 	$f:	LOCf
 	$k:	LOCf
 	$m:	LOCf
@@ -206,8 +206,8 @@ init:	FUNC	; signature func init() -> void @ 224:15
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 reset:	FUNC	; signature func reset() -> void @ 246:16
+		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4dc 	; trace("reset")
 		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 248:16
@@ -216,8 +216,8 @@ reset:	FUNC	; signature func reset() -> void @ 246:16
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 267:18
+		PARA *1
 	$i:	LOCi
 	$clock:	LOCi
 	$clockDir:	LOCi

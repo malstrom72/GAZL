@@ -63,8 +63,8 @@ displayBarValue:	FUNC	; signature func displayBarValue(int x) -> int @ 106:26
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 update:	FUNC	; signature func update() -> void @ 116:17
+		PARA *1
 	$params:	LOCA *PARAM_COUNT
 	$taps:	LOCA *TAPS_COUNT
 	$size:	LOCi
@@ -120,8 +120,8 @@ update:	FUNC	; signature func update() -> void @ 116:17
 
 
 ;-----------------------------------------------------------------------------
-		PARA *1
 process:	FUNC	; signature func process() -> void @ 163:18
+		PARA *1
 	! MULi <A> #BATCH_SIZE_2 #TAPS_COUNT
 	$offset:	LOCi
 	$i:	LOCi
