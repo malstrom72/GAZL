@@ -43,37 +43,25 @@ function main() {
 		]);
 		const importFile = writeFixture(tempDir, "moduleB.gazl", ["; signatures version=1", "CALL foo\t; expects foo(int, ptr) -> int"]);
 
-                const success = runValidator([exportFile, importFile]);
-                assertCondition(success.status === 0, "validator should exit cleanly for matching fixtures");
-                assertCondition(success.stderr.trim().length === 0, "validator reported diagnostics for matching fixtures");
+		const success = runValidator([exportFile, importFile]);
+		assertCondition(success.status === 0, "validator should exit cleanly for matching fixtures");
+		assertCondition(success.stderr.trim().length === 0, "validator reported diagnostics for matching fixtures");
 
-                const externOnly = writeFixture(tempDir, "externStub.gazl", [
-                        "; signatures version=1",
-                        "; signature extern func add() -> unknown",
-                ]);
-                const externDefinition = writeFixture(tempDir, "externDef.gazl", [
-                        "; signatures version=1",
-                        "FUNC add\t; signature func add(int, int) -> int",
-                        "\tRETU",
-                ]);
-                const externCall = writeFixture(tempDir, "externCall.gazl", [
-                        "; signatures version=1",
-                        "CALL add\t; expects add(int, int) -> int",
-                ]);
-                const externResult = runValidator([externOnly, externDefinition, externCall]);
-                assertCondition(
-                        externResult.status === 0,
-                        "bare extern metadata should merge with later definitions",
-                );
-                assertCondition(
-                        externResult.stderr.trim().length === 0,
-                        "validator should remain silent when extern placeholders match definitions",
-                );
+		const externOnly = writeFixture(tempDir, "externStub.gazl", ["; signatures version=1", "; signature extern func add() -> unknown"]);
+		const externDefinition = writeFixture(tempDir, "externDef.gazl", [
+			"; signatures version=1",
+			"FUNC add\t; signature func add(int, int) -> int",
+			"\tRETU",
+		]);
+		const externCall = writeFixture(tempDir, "externCall.gazl", ["; signatures version=1", "CALL add\t; expects add(int, int) -> int"]);
+		const externResult = runValidator([externOnly, externDefinition, externCall]);
+		assertCondition(externResult.status === 0, "bare extern metadata should merge with later definitions");
+		assertCondition(externResult.stderr.trim().length === 0, "validator should remain silent when extern placeholders match definitions");
 
-                const warningFile = writeFixture(tempDir, "moduleWarning.gazl", [
-                        "; signatures version=1",
-                        "CALL missing\t; expects missing(int) -> void",
-                ]);
+		const warningFile = writeFixture(tempDir, "moduleWarning.gazl", [
+			"; signatures version=1",
+			"CALL missing\t; expects missing(int) -> void",
+		]);
 		const warning = runValidator([warningFile]);
 		assertCondition(warning.status === 0, "validator warnings should not trigger non-zero exit");
 		assertCondition(/WARNING:/.test(warning.stderr), "validator did not emit expected warning for missing metadata");
@@ -84,7 +72,7 @@ function main() {
 		]);
 		const failure = runValidator([exportFile, mismatchFile]);
 		assertCondition(failure.status === 1, "validator should exit with failure for mismatched fixtures");
-		assertCondition(/Signature mismatch for foo/.test(failure.stderr), "validator did not report expected mismatch error");
+		assertCondition(/Signature mismatch for "foo"/.test(failure.stderr), "validator did not report expected mismatch error");
 
 		console.log("gazl-validator unit tests passed");
 	} finally {

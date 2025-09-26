@@ -356,7 +356,7 @@ parityFixtures.forEach(runParityFixture);
 legacyParityFixtures.forEach(runParityFixture);
 
 runValidatorCase("matching metadata fixtures", ["exports.gazl", "imports-valid.gazl"], 0);
-runValidatorCase("mismatched metadata fixtures", ["exports.gazl", "imports-mismatch.gazl"], 1, "Signature mismatch for foo");
+runValidatorCase("mismatched metadata fixtures", ["exports.gazl", "imports-mismatch.gazl"], 1, 'Signature mismatch for "foo"');
 
 const validatorUnitTestScript = path.join(dir, "..", "..", "tests", "gazl-validator-tests.js");
 const validatorUnitResult = childProcess.spawnSync(process.execPath, [validatorUnitTestScript], {

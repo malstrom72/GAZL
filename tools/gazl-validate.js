@@ -119,6 +119,23 @@ function parseParamTypes(paramText) {
 	return result;
 }
 
+function normalizeParamDisplay(paramText) {
+	if (!paramText) {
+		return "";
+	}
+
+	const pieces = paramText.split(",");
+	const normalized = [];
+	for (let idx = 0; idx < pieces.length; ++idx) {
+		const trimmed = pieces[idx].trim();
+		if (!trimmed) {
+			continue;
+		}
+		normalized.push(trimmed.replace(/\s+/g, " "));
+	}
+	return normalized.join(", ");
+}
+
 function splitOrigin(text) {
 	const trimmed = text.trim();
 	if (trimmed.length === 0) {
@@ -194,27 +211,25 @@ function parseSignatureComment(comment) {
 	const payload = comment.substr("signature ".length).trim();
 	const split = splitOrigin(payload);
 
-        const funcMatch = split.body.match(/^(.*?)\s+([^\s(]+)\s*\(([^)]*)\)\s*->\s*(\S+)\s*$/);
-        if (funcMatch) {
-                const roleInfo = classifyRole(funcMatch[1]);
-                const params = parseParamTypes(funcMatch[3]);
-                const returns = funcMatch[4].toLowerCase();
-                const wildcard =
-                        roleInfo.extern &&
-                        !roleInfo.native &&
-                        params.length === 0 &&
-                        returns === "unknown";
-                return {
-                        kind: "function",
-                        name: funcMatch[2],
-                        params,
-                        returns,
-                        wildcard,
-                        extern: roleInfo.extern,
-                        native: roleInfo.native,
-                        origin: split.origin,
-                };
-        }
+	const funcMatch = split.body.match(/^(.*?)\s+([^\s(]+)\s*\(([^)]*)\)\s*->\s*(\S+)\s*$/);
+	if (funcMatch) {
+		const roleInfo = classifyRole(funcMatch[1]);
+		const params = parseParamTypes(funcMatch[3]);
+		const paramDisplay = normalizeParamDisplay(funcMatch[3]);
+		const returns = funcMatch[4].toLowerCase();
+		const wildcard = roleInfo.extern && !roleInfo.native && params.length === 0 && returns === "unknown";
+		return {
+			kind: "function",
+			name: funcMatch[2],
+			params,
+			paramDisplay,
+			returns,
+			wildcard,
+			extern: roleInfo.extern,
+			native: roleInfo.native,
+			origin: split.origin,
+		};
+	}
 
 	const valueMatch = split.body.match(/^(.*?)\s+([^:]+?)\s*:\s*(\S+)\s*$/);
 	if (valueMatch) {
@@ -275,6 +290,7 @@ function parseExpectsComment(comment) {
 	return {
 		name: match[1],
 		params: parseParamTypes(match[2]),
+		paramDisplay: normalizeParamDisplay(match[2]),
 		returns: match[3].toLowerCase(),
 		origin: split.origin,
 	};
@@ -363,17 +379,27 @@ function addDefinitionRecord(ctx, parsed, loc, kind, nativeOverride) {
 	if (!ctx.definitions.has(parsed.name)) {
 		ctx.definitions.set(parsed.name, []);
 	}
-        ctx.definitions.get(parsed.name).push({
-                signature: { params: parsed.params, returns: parsed.returns, wildcard: parsed.wildcard },
-                location: loc,
-                kind,
-                native: !!native,
-        });
+	ctx.definitions.get(parsed.name).push({
+		signature: {
+			params: parsed.params,
+			returns: parsed.returns,
+			wildcard: parsed.wildcard,
+			paramDisplay: parsed.paramDisplay,
+		},
+		location: loc,
+		kind,
+		native: !!native,
+	});
 }
 
 function addFunctionExport(ctx, parsed, loc) {
-        const signature = { params: parsed.params, returns: parsed.returns, wildcard: parsed.wildcard };
-        const existing = ctx.exports.functions.get(parsed.name);
+	const signature = {
+		params: parsed.params,
+		returns: parsed.returns,
+		wildcard: parsed.wildcard,
+		paramDisplay: parsed.paramDisplay,
+	};
+	const existing = ctx.exports.functions.get(parsed.name);
 	if (!existing) {
 		ctx.exports.functions.set(parsed.name, {
 			signature,
@@ -434,12 +460,17 @@ function addFunctionExport(ctx, parsed, loc) {
 }
 
 function addFunctionImport(ctx, parsed, loc) {
-        const record = {
-                signature: { params: parsed.params, returns: parsed.returns, wildcard: parsed.wildcard },
-                location: loc,
-                native: parsed.native,
-                kind: parsed.native ? "extern native" : "extern",
-        };
+	const record = {
+		signature: {
+			params: parsed.params,
+			returns: parsed.returns,
+			wildcard: parsed.wildcard,
+			paramDisplay: parsed.paramDisplay,
+		},
+		location: loc,
+		native: parsed.native,
+		kind: parsed.native ? "extern native" : "extern",
+	};
 	if (!ctx.externs.functions.has(parsed.name)) {
 		ctx.externs.functions.set(parsed.name, []);
 	}
@@ -607,7 +638,7 @@ function addCallExpectation(ctx, parsed, loc, callInfo) {
 		ctx.calls.set(parsed.name, []);
 	}
 	ctx.calls.get(parsed.name).push({
-		signature: { params: parsed.params, returns: parsed.returns },
+		signature: { params: parsed.params, returns: parsed.returns, paramDisplay: parsed.paramDisplay },
 		location: loc,
 		native: callInfo ? callInfo.native : null,
 	});
@@ -624,15 +655,15 @@ function typesCompatible(a, b) {
 }
 
 function functionSignaturesCompatible(a, b) {
-        if (!a || !b) {
-                return true;
-        }
-        if (a.wildcard || b.wildcard) {
-                return true;
-        }
-        if (a.params && b.params && a.params.length !== b.params.length) {
-                return false;
-        }
+	if (!a || !b) {
+		return true;
+	}
+	if (a.wildcard || b.wildcard) {
+		return true;
+	}
+	if (a.params && b.params && a.params.length !== b.params.length) {
+		return false;
+	}
 	const paramCount = Math.max(a.params ? a.params.length : 0, b.params ? b.params.length : 0);
 	for (let i = 0; i < paramCount; ++i) {
 		const left = a.params ? a.params[i] : undefined;
@@ -876,13 +907,19 @@ function comparatorWrapper(entryA, entryB, fn) {
 	return fn(entryA.signature, entryB.signature);
 }
 
-function formatSignatureForMessage(signature) {
+function formatSignatureForMessage(name, signature) {
+	const fnName = name || "unknown";
 	if (!signature) {
-		return "unknown()";
+		return `${fnName}() -> unknown`;
 	}
 	const returns = signature.returns || "unknown";
-	const params = signature.params && signature.params.length > 0 ? signature.params.join(", ") : "";
-	return `${returns}(${params})`;
+	let params = "";
+	if (signature.paramDisplay) {
+		params = signature.paramDisplay;
+	} else if (signature.params && signature.params.length > 0) {
+		params = signature.params.join(", ");
+	}
+	return `${fnName}(${params}) -> ${returns}`;
 }
 
 function isNativeCompatible(callNative, recordNative) {
@@ -905,7 +942,7 @@ function validateCalls(ctx) {
 					const rightReturn = callEntries[j].signature.returns || "unknown";
 					ctx.diagnostics.push({
 						severity: "error",
-						message: `Conflicting return type expectations for ${name} (${leftReturn} vs ${rightReturn})`,
+						message: `Conflicting return type expectations for "${name}" (${leftReturn} vs ${rightReturn})`,
 						locations: [
 							{
 								label: "call site",
@@ -964,7 +1001,7 @@ function validateCalls(ctx) {
 				const mismatch = definitionRecords[0];
 				ctx.diagnostics.push({
 					severity: "error",
-					message: `Signature mismatch for ${name}: call expects ${formatSignatureForMessage(call.signature)} but definition provides ${formatSignatureForMessage(mismatch.signature)}`,
+					message: `Signature mismatch for "${name}": call expects "${formatSignatureForMessage(name, call.signature)}" but definition provides "${formatSignatureForMessage(name, mismatch.signature)}"`,
 					locations: [
 						{
 							label: "definition",
