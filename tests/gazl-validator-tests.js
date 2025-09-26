@@ -47,6 +47,17 @@ function main() {
 		assertCondition(success.status === 0, "validator should exit cleanly for matching fixtures");
 		assertCondition(success.stderr.trim().length === 0, "validator reported diagnostics for matching fixtures");
 
+		const externOnly = writeFixture(tempDir, "externStub.gazl", ["; signatures version=1", "; signature extern func add() -> unknown"]);
+		const externDefinition = writeFixture(tempDir, "externDef.gazl", [
+			"; signatures version=1",
+			"FUNC add\t; signature func add(int, int) -> int",
+			"\tRETU",
+		]);
+		const externCall = writeFixture(tempDir, "externCall.gazl", ["; signatures version=1", "CALL add\t; expects add(int, int) -> int"]);
+		const externResult = runValidator([externOnly, externDefinition, externCall]);
+		assertCondition(externResult.status === 0, "bare extern metadata should merge with later definitions");
+		assertCondition(externResult.stderr.trim().length === 0, "validator should remain silent when extern placeholders match definitions");
+
 		const warningFile = writeFixture(tempDir, "moduleWarning.gazl", [
 			"; signatures version=1",
 			"CALL missing\t; expects missing(int) -> void",
@@ -61,7 +72,7 @@ function main() {
 		]);
 		const failure = runValidator([exportFile, mismatchFile]);
 		assertCondition(failure.status === 1, "validator should exit with failure for mismatched fixtures");
-		assertCondition(/Signature mismatch for foo/.test(failure.stderr), "validator did not report expected mismatch error");
+		assertCondition(/Signature mismatch for "foo"/.test(failure.stderr), "validator did not report expected mismatch error");
 
 		console.log("gazl-validator unit tests passed");
 	} finally {

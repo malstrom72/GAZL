@@ -1992,27 +1992,23 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                         }
 
                                                                         var role = ($$.type === 'N' ? 'extern native' : 'extern func');
-                                                                            var prototypeComment = $$parser.formatFunctionSignatureComment(
+                                                                        var placeholderSignature = {
+                                                                            params: [],
+                                                                            returns: undefined,
+                                                                            sourceName: $$parser.sourceName,
+                                                                            sourceCode: $$s,
+                                                                            sourceOffset: $$i,
+                                                                        };
+                                                                        emitStandaloneSignatureComment(
+                                                                            $$parser.formatFunctionSignatureComment(
                                                                                 $$.name,
-                                                                                signature,
+                                                                                placeholderSignature,
                                                                                 role,
                                                                                 $$parser.sourceName,
                                                                                 $$s,
                                                                                 $$i
-                                                                            );
-
-                                                                            if (!prototypeComment) {
-                                                                                prototypeComment = $$parser.formatFunctionSignatureComment(
-                                                                                    $$.name,
-                                                                                    { params: [], returns: undefined },
-                                                                                    role,
-                                                                                    $$parser.sourceName,
-                                                                                    $$s,
-                                                                                    $$i
-                                                                                );
-                                                                            }
-
-                                                                             emitStandaloneSignatureComment(prototypeComment);
+                                                                            )
+                                                                        );
                                                                          } else if ($$.scope === 'globals') {
                                                                             emitStandaloneSignatureComment(
                                                                                 $$parser.formatGlobalSignatureComment(
