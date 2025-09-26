@@ -194,19 +194,27 @@ function parseSignatureComment(comment) {
 	const payload = comment.substr("signature ".length).trim();
 	const split = splitOrigin(payload);
 
-	const funcMatch = split.body.match(/^(.*?)\s+([^\s(]+)\s*\(([^)]*)\)\s*->\s*(\S+)\s*$/);
-	if (funcMatch) {
-		const roleInfo = classifyRole(funcMatch[1]);
-		return {
-			kind: "function",
-			name: funcMatch[2],
-			params: parseParamTypes(funcMatch[3]),
-			returns: funcMatch[4].toLowerCase(),
-			extern: roleInfo.extern,
-			native: roleInfo.native,
-			origin: split.origin,
-		};
-	}
+        const funcMatch = split.body.match(/^(.*?)\s+([^\s(]+)\s*\(([^)]*)\)\s*->\s*(\S+)\s*$/);
+        if (funcMatch) {
+                const roleInfo = classifyRole(funcMatch[1]);
+                const params = parseParamTypes(funcMatch[3]);
+                const returns = funcMatch[4].toLowerCase();
+                const wildcard =
+                        roleInfo.extern &&
+                        !roleInfo.native &&
+                        params.length === 0 &&
+                        returns === "unknown";
+                return {
+                        kind: "function",
+                        name: funcMatch[2],
+                        params,
+                        returns,
+                        wildcard,
+                        extern: roleInfo.extern,
+                        native: roleInfo.native,
+                        origin: split.origin,
+                };
+        }
 
 	const valueMatch = split.body.match(/^(.*?)\s+([^:]+?)\s*:\s*(\S+)\s*$/);
 	if (valueMatch) {
@@ -355,17 +363,17 @@ function addDefinitionRecord(ctx, parsed, loc, kind, nativeOverride) {
 	if (!ctx.definitions.has(parsed.name)) {
 		ctx.definitions.set(parsed.name, []);
 	}
-	ctx.definitions.get(parsed.name).push({
-		signature: { params: parsed.params, returns: parsed.returns },
-		location: loc,
-		kind,
-		native: !!native,
-	});
+        ctx.definitions.get(parsed.name).push({
+                signature: { params: parsed.params, returns: parsed.returns, wildcard: parsed.wildcard },
+                location: loc,
+                kind,
+                native: !!native,
+        });
 }
 
 function addFunctionExport(ctx, parsed, loc) {
-	const signature = { params: parsed.params, returns: parsed.returns };
-	const existing = ctx.exports.functions.get(parsed.name);
+        const signature = { params: parsed.params, returns: parsed.returns, wildcard: parsed.wildcard };
+        const existing = ctx.exports.functions.get(parsed.name);
 	if (!existing) {
 		ctx.exports.functions.set(parsed.name, {
 			signature,
@@ -426,12 +434,12 @@ function addFunctionExport(ctx, parsed, loc) {
 }
 
 function addFunctionImport(ctx, parsed, loc) {
-	const record = {
-		signature: { params: parsed.params, returns: parsed.returns },
-		location: loc,
-		native: parsed.native,
-		kind: parsed.native ? "extern native" : "extern",
-	};
+        const record = {
+                signature: { params: parsed.params, returns: parsed.returns, wildcard: parsed.wildcard },
+                location: loc,
+                native: parsed.native,
+                kind: parsed.native ? "extern native" : "extern",
+        };
 	if (!ctx.externs.functions.has(parsed.name)) {
 		ctx.externs.functions.set(parsed.name, []);
 	}
@@ -616,12 +624,15 @@ function typesCompatible(a, b) {
 }
 
 function functionSignaturesCompatible(a, b) {
-	if (!a || !b) {
-		return true;
-	}
-	if (a.params && b.params && a.params.length !== b.params.length) {
-		return false;
-	}
+        if (!a || !b) {
+                return true;
+        }
+        if (a.wildcard || b.wildcard) {
+                return true;
+        }
+        if (a.params && b.params && a.params.length !== b.params.length) {
+                return false;
+        }
 	const paramCount = Math.max(a.params ? a.params.length : 0, b.params ? b.params.length : 0);
 	for (let i = 0; i < paramCount; ++i) {
 		const left = a.params ? a.params[i] : undefined;

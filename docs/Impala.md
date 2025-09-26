@@ -200,6 +200,19 @@ explicit `returns` clause map the compiler's implicit `?` type to `void`
 in the comment stream, keeping the metadata aligned with the language's
 behaviour.
 
+The validator merges those comments into a single contract per symbol. An
+`extern function add;` declaration contains no argument or return
+information, so the metadata line emitted for it becomes `; signature
+extern func add() -> unknown`. Rather than locking that in as a concrete
+signature, `gazl-validate` treats the zero-argument/`unknown` pair as a
+placeholder and waits for a definition to provide the real types. When
+another unit defines `function add(int x, int y) returns int z`, its
+comment advertises `; signature func add(int arg0, int arg1) -> int`, and
+the validator reconciles the two entries before comparing them with the
+call sites. This keeps the Impala surface unchanged—bare extern
+declarations remain valid while still enabling cross-unit type checking
+through the assembler comments.
+
 ```gazl
 ; signatures version=1
 FUNC showoff         ; signature func showoff(ptr text) -> void @ ImpalaDemo.impala:42:1
