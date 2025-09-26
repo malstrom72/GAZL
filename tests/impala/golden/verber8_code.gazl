@@ -51,8 +51,8 @@ damping:	DATi #0	; signature global damping : int @ 102:1
 taps:	GLOB *TAPS_COUNT	; signature array taps[TAPS_COUNT] : unknown @ 106:1
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTi
 displayBarValue:	FUNC	; signature func displayBarValue(int x) -> int @ 106:26
+	$y:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
 		! SUBi <A> #8 #3	; y = ~(0x7F >> (x >> (8 - 3)))

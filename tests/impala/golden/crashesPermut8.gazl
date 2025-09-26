@@ -41,8 +41,8 @@ LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ 101:1
 HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ 103:1
 
 ;-----------------------------------------------------------------------------
-	$a:	OUTp
 stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 103:17
+	$a:	OUTp
 	$d:	INPp
 	$s:	INPp
 	$b:	LOCp
@@ -59,8 +59,8 @@ stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 103:17
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 122:22
+	$p:	OUTp
 	$i:	INPi
 	$radix:	INPi
 	$minLength:	INPi
@@ -106,8 +106,8 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 stringToFloat:	FUNC	; signature func stringToFloat(ptr b, ptr v) -> ptr @ 140:24
+	$p:	OUTp
 	$b:	INPp
 	$v:	INPp
 	$f:	LOCf
@@ -176,8 +176,8 @@ stringToFloat:	FUNC	; signature func stringToFloat(ptr b, ptr v) -> ptr @ 140:24
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ 182:24
+	$p:	OUTp
 	$f:	INPf
 	$precision:	INPi
 	$buffer:	INPp
@@ -427,8 +427,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 335:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 exp:	FUNC	; signature func exp(float x) -> float @ 366:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -451,8 +451,8 @@ exp:	FUNC	; signature func exp(float x) -> float @ 366:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 sqrt:	FUNC	; signature func sqrt(float x) -> float @ 386:15
+	$y:	OUTf
 	$x:	INPf
 	$t:	LOCf
 ;-----------------------------------------------------------------------------
@@ -494,8 +494,8 @@ seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 402:21
 
 
 ;-----------------------------------------------------------------------------
-	$f:	OUTf
 randomFloat:	FUNC	; signature func randomFloat() -> float @ 413:22
+	$f:	OUTf
 	$x:	LOCi
 	$y:	LOCi
 	$t:	LOCi

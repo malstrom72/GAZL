@@ -29,8 +29,8 @@ _rd2z:	DATf #0.0	; signature temporary _rd2z : float @ 17:22
 _rd3z:	DATf #0.0	; signature temporary _rd3z : float @ 18:22
 
 ;-----------------------------------------------------------------------------
-	$hasSoundOut:	OUTi
 filter:	FUNC	; signature func filter(int hasSoundIn, ptr left, ptr right) -> int @ 20:17
+	$hasSoundOut:	OUTi
 	$hasSoundIn:	INPi
 	$left:	INPp
 	$right:	INPp

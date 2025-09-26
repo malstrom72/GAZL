@@ -44,8 +44,8 @@ FILE_DATES:	GLOB *<A>	; signature array FILE_DATES[<A>] : unknown @ 46:44
 filesAreInited:	DATi #0	; signature global filesAreInited : int @ 48:30
 
 ;-----------------------------------------------------------------------------
-	$d:	OUTi
 strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 50:17
+	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -177,8 +177,8 @@ initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ 80:
 
 
 ;-----------------------------------------------------------------------------
-	$file:	OUTi
 findFile:	FUNC	; signature func findFile(ptr s0) -> int @ 112:19
+	$file:	OUTi
 	$s0:	INPp
 ;-----------------------------------------------------------------------------
 		CALL &initFilesIfNecessary %0 *1	; expects initFilesIfNecessary() -> void @ 115:24

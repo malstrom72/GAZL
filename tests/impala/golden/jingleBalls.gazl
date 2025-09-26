@@ -34,8 +34,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 25:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 cube:	FUNC	; signature func cube(float x) -> float @ 31:15
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		MULf %0 $x $x	; y = x * x * x
@@ -44,8 +44,8 @@ cube:	FUNC	; signature func cube(float x) -> float @ 31:15
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 clamp:	FUNC	; signature func clamp(float x, float min, float max) -> float @ 37:16
+	$y:	OUTf
 	$x:	INPf
 	$min:	INPf
 	$max:	INPf
@@ -61,8 +61,8 @@ clamp:	FUNC	; signature func clamp(float x, float min, float max) -> float @ 37:
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTf
 floorMod:	FUNC	; signature func floorMod(float a, float n) -> float @ 45:19
+	$r:	OUTf
 	$a:	INPf
 	$n:	INPf
 ;-----------------------------------------------------------------------------
@@ -74,8 +74,8 @@ floorMod:	FUNC	; signature func floorMod(float a, float n) -> float @ 45:19
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 round:	FUNC	; signature func round(float x) -> float @ 51:16
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		ADDf %0 $x #0.5	; y = floor(x + 0.5)

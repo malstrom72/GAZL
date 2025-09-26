@@ -10,8 +10,8 @@
 ; signature extern native launch() -> unknown @ 7:21
 
 ;-----------------------------------------------------------------------------
-	$d:	OUTi
 strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 9:17
+	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp

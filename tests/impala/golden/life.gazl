@@ -17,8 +17,8 @@ xorShiftRandomSeedX:	DATi #123456789	; signature global xorShiftRandomSeedX : in
 xorShiftRandomSeedY:	DATi #362436069	; signature global xorShiftRandomSeedY : int @ 23:43
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTi
 xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ 24:25
+	$y:	OUTi
 	$x:	LOCi
 	$t:	LOCi
 ;-----------------------------------------------------------------------------
@@ -38,8 +38,8 @@ xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ 24:25
 
 
 ;-----------------------------------------------------------------------------
-	$q:	OUTp
 eatWhite:	FUNC	; signature func eatWhite(ptr p) -> ptr @ 38:19
+	$q:	OUTp
 	$p:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp $q $p 	; q = p
@@ -63,8 +63,8 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 45:21
 
 
 ;-----------------------------------------------------------------------------
-	$d:	OUTi
 strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 51:17
+	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -85,8 +85,8 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 51:17
 
 
 ;-----------------------------------------------------------------------------
-	$d:	OUTi
 strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 65:18
+	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
 	$n:	INPi
@@ -115,8 +115,8 @@ strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 65:18
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 90:22
+	$p:	OUTp
 	$i:	INPi
 	$radix:	INPi
 	$minLength:	INPi
@@ -178,8 +178,8 @@ outputInt:	FUNC	; signature func outputInt(int i) -> void @ 108:20
 
 
 ;-----------------------------------------------------------------------------
-	$i:	OUTi
 parseInt:	FUNC	; signature func parseInt(ptr s, int defaultValue) -> int @ 114:19
+	$i:	OUTi
 	$s:	INPp
 	$defaultValue:	INPi
 	$p:	LOCp
@@ -369,8 +369,8 @@ run:	FUNC	; signature func run(int dimX, int dimY, ptr cells, int generations) -
 
 
 ;-----------------------------------------------------------------------------
-	$n:	OUTi
 outputCellsAlive:	FUNC	; signature func outputCellsAlive(int dimX, int dimY, ptr cells) -> int @ 222:27
+	$n:	OUTi
 	$dimX:	INPi
 	$dimY:	INPi
 	$cells:	INPp

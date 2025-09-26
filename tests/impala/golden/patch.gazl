@@ -26,8 +26,8 @@ displayedPatchingInfo:	DATi #FALSE	; signature global displayedPatchingInfo : in
 fileMemory:	GLOB *FILE_MEMORY_SIZE	; signature array fileMemory[FILE_MEMORY_SIZE] : unknown @ 31:1
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTp
 strcpy:	FUNC	; signature func strcpy(ptr d, ptr s) -> ptr @ 31:17
+	$r:	OUTp
 	$d:	INPp
 	$s:	INPp
 	$a:	LOCp
@@ -46,8 +46,8 @@ strcpy:	FUNC	; signature func strcpy(ptr d, ptr s) -> ptr @ 31:17
 
 
 ;-----------------------------------------------------------------------------
-	$d:	OUTi
 strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 43:17
+	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -68,8 +68,8 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 43:17
 
 
 ;-----------------------------------------------------------------------------
-	$d:	OUTi
 stricmp:	FUNC	; signature func stricmp(ptr s0, ptr s1) -> int @ 55:18
+	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp

@@ -257,8 +257,8 @@ randPX:	DATi #123456789	; signature global randPX : int @ 121:30
 randPY:	DATi #362436069	; signature global randPY : int @ 122:30
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTi
 nextRandom:	FUNC	; signature func nextRandom() -> int @ 124:21
+	$y:	OUTi
 	$x:	LOCi
 	$t:	LOCi
 ;-----------------------------------------------------------------------------
@@ -301,8 +301,8 @@ initGlobals:	FUNC	; signature func initGlobals() -> void @ 139:22
 
 
 ;-----------------------------------------------------------------------------
-	$b:	OUTi
 isOnBoard:	FUNC	; signature func isOnBoard(int square) -> int @ 157:20
+	$b:	OUTi
 	$square:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $b #FALSE 	; b = FALSE
@@ -315,8 +315,8 @@ isOnBoard:	FUNC	; signature func isOnBoard(int square) -> int @ 157:20
 
 
 ;-----------------------------------------------------------------------------
-	$b:	OUTi
 isValidColor:	FUNC	; signature func isValidColor(int color) -> int @ 166:23
+	$b:	OUTi
 	$color:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $b #FALSE 	; b = FALSE
@@ -327,8 +327,8 @@ isValidColor:	FUNC	; signature func isValidColor(int color) -> int @ 166:23
 
 
 ;-----------------------------------------------------------------------------
-	$b:	OUTi
 isValidMove:	FUNC	; signature func isValidMove(int move) -> int @ 175:22
+	$b:	OUTi
 	$move:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $b #FALSE 	; b = FALSE
@@ -346,8 +346,8 @@ isValidMove:	FUNC	; signature func isValidMove(int move) -> int @ 175:22
 
 
 ;-----------------------------------------------------------------------------
-	$b:	OUTi
 isValidPiece:	FUNC	; signature func isValidPiece(int piece) -> int @ 184:23
+	$b:	OUTi
 	$piece:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $b #FALSE 	; b = FALSE
@@ -365,8 +365,8 @@ isValidPiece:	FUNC	; signature func isValidPiece(int piece) -> int @ 184:23
 
 
 ;-----------------------------------------------------------------------------
-	$f:	OUTi
 moveFrom:	FUNC	; signature func moveFrom(int move) -> int @ 194:19
+	$f:	OUTi
 	$move:	INPi
 ;-----------------------------------------------------------------------------
 		! EQUi #DEBUG #0 @.a0	; assert((int) isValidMove(move) != FALSE)
@@ -380,8 +380,8 @@ moveFrom:	FUNC	; signature func moveFrom(int move) -> int @ 194:19
 
 
 ;-----------------------------------------------------------------------------
-	$t:	OUTi
 moveTo:	FUNC	; signature func moveTo(int move) -> int @ 201:17
+	$t:	OUTi
 	$move:	INPi
 ;-----------------------------------------------------------------------------
 		! EQUi #DEBUG #0 @.a0	; assert((int) isValidMove(move) != FALSE)
@@ -395,8 +395,8 @@ moveTo:	FUNC	; signature func moveTo(int move) -> int @ 201:17
 
 
 ;-----------------------------------------------------------------------------
-	$m:	OUTi
 makeMove:	FUNC	; signature func makeMove(int fromCol, int fromRow, int toCol, int toRow) -> int @ 208:19
+	$m:	OUTi
 	$fromCol:	INPi
 	$fromRow:	INPi
 	$toCol:	INPi
@@ -416,8 +416,8 @@ makeMove:	FUNC	; signature func makeMove(int fromCol, int fromRow, int toCol, in
 
 
 ;-----------------------------------------------------------------------------
-	$c:	OUTi
 switchColor:	FUNC	; signature func switchColor(int color) -> int @ 214:22
+	$c:	OUTi
 	$color:	INPi
 ;-----------------------------------------------------------------------------
 		XORi $c $color #COLOR_SWITCH_XOR	; c = (color ^ COLOR_SWITCH_XOR)
@@ -425,8 +425,8 @@ switchColor:	FUNC	; signature func switchColor(int color) -> int @ 214:22
 
 
 ;-----------------------------------------------------------------------------
-	$b:	OUTi
 checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 220:25
+	$b:	OUTi
 	! IORi <B> #BLACK #WHITE
 	! ADDi <B> <B> #1
 	! IORi <B> #BLACK #WHITE
@@ -797,8 +797,8 @@ restart:	FUNC	; signature func restart() -> void @ 330:18
 
 
 ;-----------------------------------------------------------------------------
-	$b:	OUTi
 squareCapturesCastlingKing:	FUNC	; signature func squareCapturesCastlingKing(int square) -> int @ 353:37
+	$b:	OUTi
 	$square:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $b #FALSE 	; b = FALSE
@@ -815,8 +815,8 @@ squareCapturesCastlingKing:	FUNC	; signature func squareCapturesCastlingKing(int
 
 
 ;-----------------------------------------------------------------------------
-	$b:	OUTi
 squareCapturesKing:	FUNC	; signature func squareCapturesKing(int square) -> int @ 369:29
+	$b:	OUTi
 	$square:	INPi
 ;-----------------------------------------------------------------------------
 		! EQUi #DEBUG #0 @.a0	; assert((int) isOnBoard(square) != FALSE)
@@ -837,8 +837,8 @@ squareCapturesKing:	FUNC	; signature func squareCapturesKing(int square) -> int 
 
 
 ;-----------------------------------------------------------------------------
-	$score:	OUTi
 doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> int @ 394:17
+	$score:	OUTi
 	$frm:	INPi
 	$t:	INPi
 	$oldPiece:	INPi
@@ -1215,8 +1215,8 @@ undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captu
 
 
 ;-----------------------------------------------------------------------------
-	$newToCount:	OUTi
 traceRBQ:	FUNC	; signature func traceRBQ(int color, int frm, int toCount, ptr tos, int start, int step) -> int @ 643:19
+	$newToCount:	OUTi
 	$color:	INPi
 	$frm:	INPi
 	$toCount:	INPi
@@ -1259,8 +1259,8 @@ traceRBQ:	FUNC	; signature func traceRBQ(int color, int frm, int toCount, ptr to
 
 
 ;-----------------------------------------------------------------------------
-	$toCount:	OUTi
 listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @ 670:20
+	$toCount:	OUTi
 	$color:	INPi
 	$frm:	INPi
 	$tos:	INPp
@@ -1421,8 +1421,8 @@ listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @
 
 
 ;-----------------------------------------------------------------------------
-	$b:	OUTi
 canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 757:25
+	$b:	OUTi
 	$color:	INPi
 	$tos:	LOCA *MAX_TARGET_SQUARES
 	$frm:	LOCi
@@ -1459,8 +1459,8 @@ canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 757:25
 ; signature extern func search() -> unknown @ 777:23
 
 ;-----------------------------------------------------------------------------
-	$bestMove:	OUTi
 findBestMove:	FUNC	; signature func findBestMove(int lowestScore, int alpha, int beta, int depth, int score, int movesCount, ptr moves) -> int @ 779:23
+	$bestMove:	OUTi
 	$lowestScore:	INPi
 	$alpha:	INPi
 	$beta:	INPi
@@ -1536,8 +1536,8 @@ findBestMove:	FUNC	; signature func findBestMove(int lowestScore, int alpha, int
 
 
 ;-----------------------------------------------------------------------------
-	$bestMove:	OUTi
 searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int depth, int score, int firstMove) -> int @ 819:25
+	$bestMove:	OUTi
 	$alpha:	INPi
 	$beta:	INPi
 	$depth:	INPi
@@ -1627,8 +1627,8 @@ searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int de
 
 
 ;-----------------------------------------------------------------------------
-	$bestMove:	OUTi
 searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int score, int firstMove) -> int @ 867:20
+	$bestMove:	OUTi
 	$alpha:	INPi
 	$beta:	INPi
 	$depth:	INPi
@@ -1735,8 +1735,8 @@ searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int s
 
 
 ;-----------------------------------------------------------------------------
-	$result:	OUTi
 search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, int capturesOnly) -> int @ 934:17
+	$result:	OUTi
 	$alpha:	INPi
 	$beta:	INPi
 	$depth:	INPi
@@ -1845,8 +1845,8 @@ search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, 
 
 
 ;-----------------------------------------------------------------------------
-	$status:	OUTi
 executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1015:22
+	$status:	OUTi
 	$move:	INPi
 	$tos:	LOCA *MAX_TARGET_SQUARES
 	$frm:	LOCi
@@ -1944,8 +1944,8 @@ executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1015:22
 ; signature extern native input() -> unknown @ 1056:20
 
 ;-----------------------------------------------------------------------------
-	$move:	OUTi
 getComputerMove:	FUNC	; signature func getComputerMove() -> int @ 1061:26
+	$move:	OUTi
 	$d:	LOCi
 	$m:	LOCi
 	$printedThinking:	LOCi
@@ -2001,8 +2001,8 @@ SET_MAXIMUM_LEVEL:	! DEFi #-93	; signature const SET_MAXIMUM_LEVEL : int @ 1094:
 SET_MINIMUM_LEVEL:	! DEFi #-101	; signature const SET_MINIMUM_LEVEL : int @ 1096:1
 
 ;-----------------------------------------------------------------------------
-	$d:	OUTi
 strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 1096:17
+	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -2023,8 +2023,8 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 1096:17
 
 
 ;-----------------------------------------------------------------------------
-	$d:	OUTi
 strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 1108:18
+	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
 	$n:	INPi
@@ -2053,8 +2053,8 @@ strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 1108:18
 
 
 ;-----------------------------------------------------------------------------
-	$u:	OUTi
 toupper:	FUNC	; signature func toupper(int c) -> int @ 1128:18
+	$u:	OUTi
 	$c:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $u $c 	; u = c
@@ -2066,8 +2066,8 @@ toupper:	FUNC	; signature func toupper(int c) -> int @ 1128:18
 
 
 ;-----------------------------------------------------------------------------
-	$result:	OUTi
 getUserMove:	FUNC	; signature func getUserMove() -> int @ 1137:22
+	$result:	OUTi
 	$level:	LOCi
 	$s:	LOCA *256
 	$l:	LOCi
@@ -2286,8 +2286,8 @@ registerMove:	FUNC	; signature func registerMove(int move, int piece, int captur
 
 
 ;-----------------------------------------------------------------------------
-	$move:	OUTi
 takeBackMove:	FUNC	; signature func takeBackMove() -> int @ 1233:23
+	$move:	OUTi
 	$i:	LOCi
 	$frm:	LOCi
 	$t:	LOCi

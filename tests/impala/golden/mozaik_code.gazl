@@ -44,8 +44,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 121:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 exp:	FUNC	; signature func exp(float x) -> float @ 127:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -68,8 +68,8 @@ exp:	FUNC	; signature func exp(float x) -> float @ 127:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 log:	FUNC	; signature func log(float x) -> float @ 147:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$b:	LOCf
@@ -108,8 +108,8 @@ log:	FUNC	; signature func log(float x) -> float @ 147:14
 
 
 ;-----------------------------------------------------------------------------
-	$z:	OUTf
 pow:	FUNC	; signature func pow(float x, float y) -> float @ 175:14
+	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
 	$a:	LOCf
@@ -142,8 +142,8 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ 175:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 logScale:	FUNC	; signature func logScale(float x, float outFrom, float outTo) -> float @ 187:19
+	$y:	OUTf
 	$x:	INPf
 	$outFrom:	INPf
 	$outTo:	INPf
@@ -156,8 +156,8 @@ logScale:	FUNC	; signature func logScale(float x, float outFrom, float outTo) ->
 
 
 ;-----------------------------------------------------------------------------
-	$factor:	OUTf
 decayConstant:	FUNC	; signature func decayConstant(float time, float reach) -> float @ 193:24
+	$factor:	OUTf
 	$time:	INPf
 	$reach:	INPf
 ;-----------------------------------------------------------------------------

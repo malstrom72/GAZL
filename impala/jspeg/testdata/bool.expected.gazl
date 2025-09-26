@@ -3,8 +3,8 @@
  ; signatures version=1
 
  ;-----------------------------------------------------------------------------
- 					$value:		OUTi
  main:				FUNC		; signature func main() -> int @ 1:15
+ 					$value:		OUTi
  ;-----------------------------------------------------------------------------
  								MOVi $value #0 					; value = 0
  								NEQi $value #0 @.f0				; if (value == 0)
