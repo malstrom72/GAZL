@@ -8,8 +8,8 @@
 seed:	DATi #2463534242	; signature global seed : int @ 5:29
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTi
 myrand:	FUNC	; signature func myrand() -> int @ 7:17
+	$y:	OUTi
 ;-----------------------------------------------------------------------------
 		PEEK $y &seed 	; y = global seed
 		SHLi %0 $y #13	; y = y ^ (y << 13)

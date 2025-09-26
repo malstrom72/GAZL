@@ -45,8 +45,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 99:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 exp:	FUNC	; signature func exp(float x) -> float @ 130:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -69,8 +69,8 @@ exp:	FUNC	; signature func exp(float x) -> float @ 130:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 sqrt:	FUNC	; signature func sqrt(float x) -> float @ 150:15
+	$y:	OUTf
 	$x:	INPf
 	$t:	LOCf
 ;-----------------------------------------------------------------------------
@@ -112,8 +112,8 @@ seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 166:21
 
 
 ;-----------------------------------------------------------------------------
-	$f:	OUTf
 randomFloat:	FUNC	; signature func randomFloat() -> float @ 177:22
+	$f:	OUTf
 	$x:	LOCi
 	$y:	LOCi
 	$t:	LOCi

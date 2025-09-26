@@ -1850,24 +1850,26 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                              entry.signature.returns = '?';
                                                                              entry.signature.returnName = undefined;
                                                                              entry.signature.sourceCode = $$s;
- entry.signature.sourceOffset = $$i;
- entry.signature.sourceName = $$parser.sourceName;
- entry.signature.returnResolved = false;
- entry.pendingReturnPlaceholder = undefined;
- }
- }
+                                                                             entry.signature.sourceOffset = $$i;
+                                                                             entry.signature.sourceName = $$parser.sourceName;
+                                                                             entry.signature.returnResolved = false;
+                                                                             entry.pendingReturnPlaceholder = undefined;
+                                                                             entry.pendingReturnDeclaration = undefined;
+                                                                         }
+                                                                     }
 inp:ArgsDecl ')'_
 (
                     RETURNS _ out:VarDecl                             {
-                                                                         $$parser.declare(
-                                                                             'OUT?', 'locals',
-                                                                             '$' + $out.name,
-                                                                             $out.type,
-                                                                             false,
-                                                                             ($out.size !== undefined ? '*' + $out.size : undefined),
-                                                                             $$s, $$i
-                                                                         );
                                                                          var entry = $$parser.symbols.functions[$id];
+                                                                         if (entry) {
+                                                                             entry.pendingReturnDeclaration = {
+                                                                                 name: '$' + $out.name,
+                                                                                 type: $out.type,
+                                                                                 size: ($out.size !== undefined ? '*' + $out.size : undefined),
+                                                                                 sourceCode: $$s,
+                                                                                 sourceOffset: $$i
+                                                                             };
+                                                                         }
                                                                          if (entry && entry.signature) {
                                                                              entry.signature.returns = $out.type;
                                                                              entry.signature.returnName = $out.name;
@@ -1907,18 +1909,32 @@ inp:ArgsDecl ')'_
                                                                                  });
                                                                              }
                                                                          }
-								$$parser.emitFunctionSignature($id);
-								if (entry && entry.pendingReturnPlaceholder) {
-									var placeholder = entry.pendingReturnPlaceholder;
-									$$parser.declare(
-										'PARA', 'locals',
-										undefined, '?',
-										false, '*1',
-										placeholder.sourceCode,
-										placeholder.sourceOffset
-									);
-									entry.pendingReturnPlaceholder = undefined;
-								}
+                                                                $$parser.emitFunctionSignature($id);
+                                                                if (entry) {
+                                                                        if (entry.pendingReturnDeclaration) {
+                                                                                var ret = entry.pendingReturnDeclaration;
+                                                                                $$parser.declare(
+                                                                                        'OUT?', 'locals',
+                                                                                        ret.name,
+                                                                                        ret.type,
+                                                                                        false,
+                                                                                        ret.size,
+                                                                                        ret.sourceCode,
+                                                                                        ret.sourceOffset
+                                                                                );
+                                                                                entry.pendingReturnDeclaration = undefined;
+                                                                        } else if (entry.pendingReturnPlaceholder) {
+                                                                                var placeholder = entry.pendingReturnPlaceholder;
+                                                                                $$parser.declare(
+                                                                                        'PARA', 'locals',
+                                                                                        undefined, '?',
+                                                                                        false, '*1',
+                                                                                        placeholder.sourceCode,
+                                                                                        placeholder.sourceOffset
+                                                                                );
+                                                                                entry.pendingReturnPlaceholder = undefined;
+                                                                        }
+                                                                }
                                                                          iterate($inp, function (p) {
                                                                              $$parser.declare(
                                                                                  'INP?', 'locals',

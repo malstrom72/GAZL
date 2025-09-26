@@ -382,8 +382,8 @@ fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:15
 fRAN_R:	DATi #0	; signature global fRAN_R : int @ 308:22
 
 ;-----------------------------------------------------------------------------
-	$RAN:	OUTi
 fRAN:	FUNC	; signature func fRAN(int RANGE) -> int @ 310:15
+	$RAN:	OUTi
 	$RANGE:	INPi
 	$D:	LOCi
 	$T:	LOCi
@@ -516,8 +516,8 @@ fMAPLIN:	FUNC	; signature func fMAPLIN(int FIL) -> void @ 380:18
 fGETTXT_SPLITTING:	DATi #-1	; signature global fGETTXT_SPLITTING : int @ 437:34
 
 ;-----------------------------------------------------------------------------
-	$GETTXT:	OUTi
 fGETTXT:	FUNC	; signature func fGETTXT(int SKIP, int ONEWRD, int UPPER, int HASH) -> int @ 439:18
+	$GETTXT:	OUTi
 	$SKIP:	INPi
 	$ONEWRD:	INPi
 	$UPPER:	INPi
@@ -590,8 +590,8 @@ fGETTXT:	FUNC	; signature func fGETTXT(int SKIP, int ONEWRD, int UPPER, int HASH
 
 
 ;-----------------------------------------------------------------------------
-	$MAKEWD:	OUTi
 fMAKEWD:	FUNC	; signature func fMAKEWD(int LETTRS) -> int @ 486:18
+	$MAKEWD:	OUTi
 	$LETTRS:	INPi
 	$I:	LOCi
 	$L:	LOCi
@@ -1094,8 +1094,8 @@ fGETIN:	FUNC	; signature func fGETIN(ptr wORD1, ptr wORD1X, ptr wORD2, ptr wORD2
 
 
 ;-----------------------------------------------------------------------------
-	$YES:	OUTi
 fYES:	FUNC	; signature func fYES(int X, int Y, int Z) -> int @ 779:15
+	$YES:	OUTi
 	$X:	INPi
 	$Y:	INPi
 	$Z:	INPi
@@ -1340,8 +1340,8 @@ score:	FUNC	; signature func score(int MODE) -> void @ 808:16
 
 
 ;-----------------------------------------------------------------------------
-	$VOCAB:	OUTi
 fVOCAB:	FUNC	; signature func fVOCAB(int ID, int INIT) -> int @ 924:17
+	$VOCAB:	OUTi
 	$ID:	INPi
 	$INIT:	INPi
 	$HASH:	LOCi
@@ -1483,8 +1483,8 @@ fJUGGLE:	FUNC	; signature func fJUGGLE(int OBJECT) -> void @ 1017:18
 
 
 ;-----------------------------------------------------------------------------
-	$PUT:	OUTi
 fPUT:	FUNC	; signature func fPUT(int OBJECT, int WHERE, int PVAL) -> int @ 1029:15
+	$PUT:	OUTi
 	$OBJECT:	INPi
 	$WHERE:	INPi
 	$PVAL:	INPi
@@ -1497,8 +1497,8 @@ fPUT:	FUNC	; signature func fPUT(int OBJECT, int WHERE, int PVAL) -> int @ 1029:
 
 
 ;-----------------------------------------------------------------------------
-	$ATDWRF:	OUTi
 fATDWRF:	FUNC	; signature func fATDWRF(int WHERE) -> int @ 1039:18
+	$ATDWRF:	OUTi
 	$WHERE:	INPi
 	$I:	LOCi
 ;-----------------------------------------------------------------------------
@@ -1523,8 +1523,8 @@ fATDWRF:	FUNC	; signature func fATDWRF(int WHERE) -> int @ 1039:18
 
 
 ;-----------------------------------------------------------------------------
-	$RNDVOC:	OUTi
 fRNDVOC:	FUNC	; signature func fRNDVOC(int CHAR, int FORCE) -> int @ 1060:18
+	$RNDVOC:	OUTi
 	$CHAR:	INPi
 	$FORCE:	INPi
 	$DIV:	LOCi
@@ -1676,8 +1676,8 @@ initialise:	FUNC	; signature func initialise() -> void @ 1100:21
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 TOTING:	FUNC	; signature func TOTING(int OBJ) -> int @ 1218:17
+	$r:	OUTi
 	$OBJ:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
@@ -1688,8 +1688,8 @@ TOTING:	FUNC	; signature func TOTING(int OBJ) -> int @ 1218:17
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 AT:	FUNC	; signature func AT(int OBJ, int LOC) -> int @ 1219:13
+	$r:	OUTi
 	$OBJ:	INPi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
@@ -1703,8 +1703,8 @@ AT:	FUNC	; signature func AT(int OBJ, int LOC) -> int @ 1219:13
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 HERE:	FUNC	; signature func HERE(int OBJ, int LOC) -> int @ 1220:15
+	$r:	OUTi
 	$OBJ:	INPi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
@@ -1721,8 +1721,8 @@ HERE:	FUNC	; signature func HERE(int OBJ, int LOC) -> int @ 1220:15
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 LIQ2:	FUNC	; signature func LIQ2(int PBOTL) -> int @ 1221:15
+	$r:	OUTi
 	$PBOTL:	INPi
 ;-----------------------------------------------------------------------------
 		SUBi %0 #1 $PBOTL	; r = ((1-(PBOTL))*WATER+((PBOTL)/2)*(WATER+OIL))
@@ -1735,8 +1735,8 @@ LIQ2:	FUNC	; signature func LIQ2(int PBOTL) -> int @ 1221:15
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 LIQ:	FUNC	; signature func LIQ() -> int @ 1222:14
+	$r:	OUTi
 ;-----------------------------------------------------------------------------
 		PEEK %0 &PROP:BOTTLE 	; if ((int)global PROP[BOTTLE]<0) r = -1-(int)global PROP[BOTTLE]
 		GEQi %0 #0 @.f0
@@ -1751,8 +1751,8 @@ LIQ:	FUNC	; signature func LIQ() -> int @ 1222:14
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 LIQLOC:	FUNC	; signature func LIQLOC(int LOC) -> int @ 1223:17
+	$r:	OUTi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		PEEK %1 &COND $LOC	; r = (int)LIQ2(((((int)global COND[LOC]/2*2)%8)-5)*(((int)global COND[LOC]/4)%2)+1)
@@ -1771,8 +1771,8 @@ LIQLOC:	FUNC	; signature func LIQLOC(int LOC) -> int @ 1223:17
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 CNDBIT:	FUNC	; signature func CNDBIT(int L, int N) -> int @ 1224:17
+	$r:	OUTi
 	$L:	INPi
 	$N:	INPi
 ;-----------------------------------------------------------------------------
@@ -1786,8 +1786,8 @@ CNDBIT:	FUNC	; signature func CNDBIT(int L, int N) -> int @ 1224:17
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 DARK:	FUNC	; signature func DARK(int LOC) -> int @ 1225:15
+	$r:	OUTi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
@@ -1806,8 +1806,8 @@ DARK:	FUNC	; signature func DARK(int LOC) -> int @ 1225:15
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 GSTONE:	FUNC	; signature func GSTONE(int OBJ) -> int @ 1226:17
+	$r:	OUTi
 	$OBJ:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
@@ -1820,8 +1820,8 @@ GSTONE:	FUNC	; signature func GSTONE(int OBJ) -> int @ 1226:17
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 FOREST:	FUNC	; signature func FOREST(int LOC) -> int @ 1227:17
+	$r:	OUTi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
@@ -1832,8 +1832,8 @@ FOREST:	FUNC	; signature func FOREST(int LOC) -> int @ 1227:17
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 OUTSID:	FUNC	; signature func OUTSID(int LOC) -> int @ 1235:17
+	$r:	OUTi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
@@ -1850,8 +1850,8 @@ OUTSID:	FUNC	; signature func OUTSID(int LOC) -> int @ 1235:17
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 INDEEP:	FUNC	; signature func INDEEP(int LOC) -> int @ 1236:17
+	$r:	OUTi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #FALSE 	; r = FALSE
@@ -1865,8 +1865,8 @@ INDEEP:	FUNC	; signature func INDEEP(int LOC) -> int @ 1236:17
 
 
 ;-----------------------------------------------------------------------------
-	$goValue:	OUTi
 discard:	FUNC	; signature func discard(int just_do_it) -> int @ 1242:18
+	$goValue:	OUTi
 	$just_do_it:	INPi
 	$lK:	LOCi
 	$lLOC:	LOCi
@@ -2060,8 +2060,8 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ 1242:18
 
 
 ;-----------------------------------------------------------------------------
-	$goValue:	OUTi
 fill:	FUNC	; signature func fill(int OBJ) -> int @ 1315:15
+	$goValue:	OUTi
 	$OBJ:	INPi
 	$lK:	LOCi
 	$lLOC:	LOCi
@@ -2167,8 +2167,8 @@ fill:	FUNC	; signature func fill(int OBJ) -> int @ 1315:15
 
 
 ;-----------------------------------------------------------------------------
-	$goValue:	OUTi
 carry:	FUNC	; signature func carry() -> int @ 1361:16
+	$goValue:	OUTi
 	$lK:	LOCi
 	$lLOC:	LOCi
 	$lOBJ:	LOCi
@@ -2312,8 +2312,8 @@ carry:	FUNC	; signature func carry() -> int @ 1361:16
 
 
 ;-----------------------------------------------------------------------------
-	$goValue:	OUTi
 attack:	FUNC	; signature func attack() -> int @ 1421:17
+	$goValue:	OUTi
 	$I:	LOCi
 	$lK:	LOCi
 	$lLOC:	LOCi
@@ -2546,8 +2546,8 @@ attack:	FUNC	; signature func attack() -> int @ 1421:17
 
 
 ;-----------------------------------------------------------------------------
-	$goValue:	OUTi
 feed:	FUNC	; signature func feed(int OBJ) -> int @ 1515:15
+	$goValue:	OUTi
 	$OBJ:	INPi
 	$lLOC:	LOCi
 ;-----------------------------------------------------------------------------
@@ -2630,8 +2630,8 @@ feed:	FUNC	; signature func feed(int OBJ) -> int @ 1515:15
 
 
 ;-----------------------------------------------------------------------------
-	$goValue:	OUTi
 doThrow:	FUNC	; signature func doThrow() -> int @ 1570:18
+	$goValue:	OUTi
 	$I:	LOCi
 	$lLOC:	LOCi
 	$lOBJ:	LOCi
@@ -2766,8 +2766,8 @@ doThrow:	FUNC	; signature func doThrow() -> int @ 1570:18
 
 
 ;-----------------------------------------------------------------------------
-	$goValue:	OUTi
 action:	FUNC	; signature func action(int STARTAT) -> int @ 1641:17
+	$goValue:	OUTi
 	$STARTAT:	INPi
 	$I:	LOCi
 	$lK:	LOCi

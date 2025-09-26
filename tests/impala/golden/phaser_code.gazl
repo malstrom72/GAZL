@@ -71,8 +71,8 @@ LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ 140:1
 HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ 142:1
 
 ;-----------------------------------------------------------------------------
-	$a:	OUTp
 stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 142:17
+	$a:	OUTp
 	$d:	INPp
 	$s:	INPp
 	$b:	LOCp
@@ -89,8 +89,8 @@ stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 142:17
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 161:22
+	$p:	OUTp
 	$i:	INPi
 	$radix:	INPi
 	$minLength:	INPi
@@ -136,8 +136,8 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ 181:24
+	$p:	OUTp
 	$f:	INPf
 	$precision:	INPi
 	$buffer:	INPp
@@ -386,8 +386,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 332:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 trunc:	FUNC	; signature func trunc(float x) -> float @ 338:16
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -400,8 +400,8 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 338:16
 
 
 ;-----------------------------------------------------------------------------
-	$z:	OUTf
 fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 345:15
+	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
@@ -417,8 +417,8 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 345:15
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 exp:	FUNC	; signature func exp(float x) -> float @ 377:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -441,8 +441,8 @@ exp:	FUNC	; signature func exp(float x) -> float @ 377:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 cos:	FUNC	; signature func cos(float x) -> float @ 408:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -473,8 +473,8 @@ cos:	FUNC	; signature func cos(float x) -> float @ 408:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 sin:	FUNC	; signature func sin(float x) -> float @ 424:14
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
@@ -484,8 +484,8 @@ sin:	FUNC	; signature func sin(float x) -> float @ 424:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 tan:	FUNC	; signature func tan(float x) -> float @ 430:14
+	$y:	OUTf
 	$x:	INPf
 	$c:	LOCf
 ;-----------------------------------------------------------------------------
@@ -504,8 +504,8 @@ tan:	FUNC	; signature func tan(float x) -> float @ 430:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 lerp:	FUNC	; signature func lerp(float a, float b, float x) -> float @ 440:15
+	$y:	OUTf
 	$a:	INPf
 	$b:	INPf
 	$x:	INPf
@@ -726,8 +726,8 @@ ap12StereoChain:	FUNC	; signature func ap12StereoChain(ptr state, int stageCount
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 shaper:	FUNC	; signature func shaper(float x) -> float @ 580:17
+	$y:	OUTf
 	$x:	INPf
 	$cx:	LOCf
 ;-----------------------------------------------------------------------------

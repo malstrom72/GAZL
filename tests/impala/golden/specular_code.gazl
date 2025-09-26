@@ -43,8 +43,8 @@ TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 114:1
 COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 116:1
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 trunc:	FUNC	; signature func trunc(float x) -> float @ 116:16
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -57,8 +57,8 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 116:16
 
 
 ;-----------------------------------------------------------------------------
-	$z:	OUTf
 fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 123:15
+	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
@@ -74,8 +74,8 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 123:15
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 cos:	FUNC	; signature func cos(float x) -> float @ 141:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -106,8 +106,8 @@ cos:	FUNC	; signature func cos(float x) -> float @ 141:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 sin:	FUNC	; signature func sin(float x) -> float @ 162:14
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
@@ -117,8 +117,8 @@ sin:	FUNC	; signature func sin(float x) -> float @ 162:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 sqrt:	FUNC	; signature func sqrt(float x) -> float @ 168:15
+	$y:	OUTf
 	$x:	INPf
 	$t:	LOCf
 ;-----------------------------------------------------------------------------

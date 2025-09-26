@@ -44,8 +44,8 @@ abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void @ 138:22
 
 
 ;-----------------------------------------------------------------------------
-	$fetched:	OUTi
 fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int @ 143:25
+	$fetched:	OUTi
 	$index:	INPi
 ;-----------------------------------------------------------------------------
 		PEEK $fetched &SOME_CONSTS $index	; fetched = (int) global SOME_CONSTS[index]
@@ -53,8 +53,8 @@ fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int @ 143:25
 
 
 ;-----------------------------------------------------------------------------
-	$j:	OUTi
 findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int @ 156:23
+	$j:	OUTi
 	$n:	INPi
 	$vector:	INPp
 	$i:	LOCi
@@ -207,8 +207,8 @@ futureArray:	GLOB *10	; signature array futureArray[10] : unknown @ 267:29
 myrand_seed:	DATi #2463534242	; signature global myrand_seed : int @ 269:36
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTi
 myrand:	FUNC	; signature func myrand() -> int @ 270:17
+	$y:	OUTi
 ;-----------------------------------------------------------------------------
 		PEEK $y &myrand_seed 	; y = global myrand_seed
 		SHLi %0 $y #13	; y = y ^ (y << 13)

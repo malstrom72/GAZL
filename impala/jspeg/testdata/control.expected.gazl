@@ -11,8 +11,8 @@
  TARGET:			! DEFp &.s_WXYZ2a ; signature const TARGET : ptr @ 2:30
 
  ;-----------------------------------------------------------------------------
- 					$result:	OUTi
  controlSample:		FUNC		; signature func controlSample() -> int @ 4:24
+ 					$result:	OUTi
  					$sum:		LOCi
  					$index:		LOCi
  					$src:		LOCp

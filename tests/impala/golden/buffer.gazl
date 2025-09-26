@@ -43,8 +43,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 72:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 trunc:	FUNC	; signature func trunc(float x) -> float @ 78:16
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -57,8 +57,8 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 78:16
 
 
 ;-----------------------------------------------------------------------------
-	$z:	OUTf
 fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 85:15
+	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
@@ -74,8 +74,8 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 85:15
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 cos:	FUNC	; signature func cos(float x) -> float @ 103:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -106,8 +106,8 @@ cos:	FUNC	; signature func cos(float x) -> float @ 103:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 sin:	FUNC	; signature func sin(float x) -> float @ 120:14
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
@@ -117,8 +117,8 @@ sin:	FUNC	; signature func sin(float x) -> float @ 120:14
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 131:22
+	$p:	OUTp
 	$i:	INPi
 	$radix:	INPi
 	$minLength:	INPi
@@ -167,8 +167,8 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ 150:24
+	$p:	OUTp
 	$f:	INPf
 	$precision:	INPi
 	$buffer:	INPp

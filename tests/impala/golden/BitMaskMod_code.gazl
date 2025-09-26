@@ -51,8 +51,8 @@ update:	FUNC	; signature func update() -> void @ 114:17
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 operate2:	FUNC	; signature func operate2() -> int @ 134:19
+	$r:	OUTi
 	$l:	LOCi
 	$x:	LOCi
 	$y:	LOCi

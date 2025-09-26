@@ -22,8 +22,8 @@ FALSE:	! DEFi #0	; signature const FALSE : int @ 47:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 49:1
 
 ;-----------------------------------------------------------------------------
-	$l:	OUTi
 strlen:	FUNC	; signature func strlen(ptr s) -> int @ 49:17
+	$l:	OUTi
 	$s:	INPp
 	$a:	LOCp
 ;-----------------------------------------------------------------------------
@@ -37,8 +37,8 @@ strlen:	FUNC	; signature func strlen(ptr s) -> int @ 49:17
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTp
 strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr @ 58:17
+	$r:	OUTp
 	$d:	INPp
 	$s:	INPp
 	$a:	LOCp

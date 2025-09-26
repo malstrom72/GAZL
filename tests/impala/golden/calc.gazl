@@ -33,8 +33,8 @@ memory:	GLOB *<A>	; signature array memory[<A>] : unknown @ 34:35
 lastResult:	DATf #0.0	; signature global lastResult : float @ 35:30
 
 ;-----------------------------------------------------------------------------
-	$d:	OUTi
 strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 37:17
+	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
 	$a:	LOCp
@@ -66,8 +66,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 49:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 exp:	FUNC	; signature func exp(float x) -> float @ 79:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -90,8 +90,8 @@ exp:	FUNC	; signature func exp(float x) -> float @ 79:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 log:	FUNC	; signature func log(float x) -> float @ 112:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$b:	LOCf
@@ -130,8 +130,8 @@ log:	FUNC	; signature func log(float x) -> float @ 112:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 log2:	FUNC	; signature func log2(float x) -> float @ 140:15
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; y = (float) log(x) * LOG2R
@@ -141,8 +141,8 @@ log2:	FUNC	; signature func log2(float x) -> float @ 140:15
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 log10:	FUNC	; signature func log10(float x) -> float @ 146:16
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; y = (float) log(x) * LOG10R
@@ -152,8 +152,8 @@ log10:	FUNC	; signature func log10(float x) -> float @ 146:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 trunc:	FUNC	; signature func trunc(float x) -> float @ 152:16
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -166,8 +166,8 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 152:16
 
 
 ;-----------------------------------------------------------------------------
-	$z:	OUTf
 fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 159:15
+	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
@@ -183,8 +183,8 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 159:15
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 cos:	FUNC	; signature func cos(float x) -> float @ 177:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -215,8 +215,8 @@ cos:	FUNC	; signature func cos(float x) -> float @ 177:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 sin:	FUNC	; signature func sin(float x) -> float @ 198:14
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
@@ -226,8 +226,8 @@ sin:	FUNC	; signature func sin(float x) -> float @ 198:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 tan:	FUNC	; signature func tan(float x) -> float @ 204:14
+	$y:	OUTf
 	$x:	INPf
 	$c:	LOCf
 ;-----------------------------------------------------------------------------
@@ -246,8 +246,8 @@ tan:	FUNC	; signature func tan(float x) -> float @ 204:14
 
 
 ;-----------------------------------------------------------------------------
-	$z:	OUTf
 pow:	FUNC	; signature func pow(float x, float y) -> float @ 214:14
+	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
 	$a:	LOCf
@@ -280,8 +280,8 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ 214:14
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 floorFunc:	FUNC	; signature func floorFunc(float x) -> float @ 226:20
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		FLOf $y $x 	; y = floor(x)
@@ -289,8 +289,8 @@ floorFunc:	FUNC	; signature func floorFunc(float x) -> float @ 226:20
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 ceilFunc:	FUNC	; signature func ceilFunc(float x) -> float @ 232:19
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 #0.0 $x	; y = -floor(-x)
@@ -300,8 +300,8 @@ ceilFunc:	FUNC	; signature func ceilFunc(float x) -> float @ 232:19
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 sqrt:	FUNC	; signature func sqrt(float x) -> float @ 238:15
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; y = (float) pow(x, 0.5)
@@ -319,8 +319,8 @@ FUNCTIONS:	CNST *<A>	; signature array FUNCTIONS[<A>] : unknown @ 245:46
 	DATA &.s_sin4dc &sin &.s_tan4dd &tan
 
 ;-----------------------------------------------------------------------------
-	$b:	OUTi
 isalpha:	FUNC	; signature func isalpha(int c) -> int @ 258:18
+	$b:	OUTi
 	$c:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $b #FALSE 	; b = FALSE
@@ -333,8 +333,8 @@ isalpha:	FUNC	; signature func isalpha(int c) -> int @ 258:18
 
 
 ;-----------------------------------------------------------------------------
-	$l:	OUTi
 lower:	FUNC	; signature func lower(int c) -> int @ 265:16
+	$l:	OUTi
 	$c:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $l $c 	; l = c
@@ -346,8 +346,8 @@ lower:	FUNC	; signature func lower(int c) -> int @ 265:16
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 eatWhite:	FUNC	; signature func eatWhite(ptr b) -> ptr @ 272:19
+	$p:	OUTp
 	$b:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp $p $b 	; p = b
@@ -363,8 +363,8 @@ LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ 282:1
 HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ 284:1
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 hexToFloat:	FUNC	; signature func hexToFloat(ptr b, ptr v) -> ptr @ 284:21
+	$p:	OUTp
 	$b:	INPp
 	$v:	INPp
 	$i:	LOCi
@@ -398,8 +398,8 @@ hexToFloat:	FUNC	; signature func hexToFloat(ptr b, ptr v) -> ptr @ 284:21
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 intToHex:	FUNC	; signature func intToHex(int i, ptr buffer) -> ptr @ 301:19
+	$p:	OUTp
 	$i:	INPi
 	$buffer:	INPp
 	$x:	LOCi
@@ -418,8 +418,8 @@ intToHex:	FUNC	; signature func intToHex(int i, ptr buffer) -> ptr @ 301:19
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 stringToFloat:	FUNC	; signature func stringToFloat(ptr b, ptr v) -> ptr @ 314:24
+	$p:	OUTp
 	$b:	INPp
 	$v:	INPp
 	$f:	LOCf
@@ -488,8 +488,8 @@ stringToFloat:	FUNC	; signature func stringToFloat(ptr b, ptr v) -> ptr @ 314:24
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ 356:24
+	$p:	OUTp
 	$f:	INPf
 	$precision:	INPi
 	$buffer:	INPp
@@ -623,8 +623,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 461:19
+	$p:	OUTp
 	$b:	INPp
 	$v:	INPp
 	$precedence:	INPi

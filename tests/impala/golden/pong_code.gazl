@@ -42,8 +42,8 @@ xorShiftRandomSeedX:	DATi #123456789	; signature global xorShiftRandomSeedX : in
 xorShiftRandomSeedY:	DATi #362436069	; signature global xorShiftRandomSeedY : int @ 91:1
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTi
 xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ 91:25
+	$y:	OUTi
 	$x:	LOCi
 	$t:	LOCi
 ;-----------------------------------------------------------------------------
@@ -101,8 +101,8 @@ reset:	FUNC	; signature func reset() -> void @ 150:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTi
 maxi:	FUNC	; signature func maxi(int a, int b) -> int @ 154:15
+	$y:	OUTi
 	$a:	INPi
 	$b:	INPi
 ;-----------------------------------------------------------------------------
@@ -170,8 +170,8 @@ calcGainsAndDelays:	FUNC	; signature func calcGainsAndDelays(int configBits, int
 
 
 ;-----------------------------------------------------------------------------
-	$o:	OUTf
 addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, float offset, ptr gains, ptr delays, float gainScale, float delayScale, int firstStep) -> float @ 183:18
+	$o:	OUTf
 	$op:	INPi
 	$configBits:	INPi
 	$stepBits:	INPi

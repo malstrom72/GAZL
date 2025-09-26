@@ -67,8 +67,8 @@ TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 132:1
 COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 134:1
 
 ;-----------------------------------------------------------------------------
-	$a:	OUTp
 stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 134:17
+	$a:	OUTp
 	$d:	INPp
 	$s:	INPp
 	$b:	LOCp
@@ -85,8 +85,8 @@ stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 134:17
 
 
 ;-----------------------------------------------------------------------------
-	$p:	OUTp
 intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 153:22
+	$p:	OUTp
 	$i:	INPi
 	$radix:	INPi
 	$minLength:	INPi
@@ -196,8 +196,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 194:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 trunc:	FUNC	; signature func trunc(float x) -> float @ 200:16
+	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) y = -floor(-x)
@@ -210,8 +210,8 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 200:16
 
 
 ;-----------------------------------------------------------------------------
-	$z:	OUTf
 fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 207:15
+	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
@@ -227,8 +227,8 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 207:15
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTf
 cos:	FUNC	; signature func cos(float x) -> float @ 225:14
+	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
 	$n:	LOCf
@@ -320,8 +320,8 @@ reset:	FUNC	; signature func reset() -> void @ 276:16
 
 
 ;-----------------------------------------------------------------------------
-	$y:	OUTi
 displayDelayValue:	FUNC	; signature func displayDelayValue(int x) -> int @ 283:28
+	$y:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
 		! SUBi <A> #8 #3	; y = 0x1 << (x >> (8 - 3))

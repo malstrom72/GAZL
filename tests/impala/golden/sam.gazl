@@ -55,8 +55,8 @@ useScale:	DATi #25	; signature global useScale : int @ 78:25
 scale:	DATi #25	; signature global scale : int @ 79:22
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTp
 strcpy:	FUNC	; signature func strcpy(ptr d, ptr s) -> ptr @ 81:17
+	$r:	OUTp
 	$d:	INPp
 	$s:	INPp
 	$a:	LOCp
@@ -75,8 +75,8 @@ strcpy:	FUNC	; signature func strcpy(ptr d, ptr s) -> ptr @ 81:17
 
 
 ;-----------------------------------------------------------------------------
-	$a:	OUTp
 stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 93:17
+	$a:	OUTp
 	$d:	INPp
 	$s:	INPp
 	$b:	LOCp
@@ -93,8 +93,8 @@ stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 93:17
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTp
 strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr @ 105:17
+	$r:	OUTp
 	$d:	INPp
 	$s:	INPp
 	$a:	LOCp
@@ -602,8 +602,8 @@ rulesOffsets:	CNST *26	; signature array rulesOffsets[26] : unknown @ 329:33
 	DATA #3117 #3495 #3638 #3667 #3886 #3911 #4058
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ 333:25
+	$r:	OUTi
 	$input:	INPp
 	$inputCopy:	LOCA *256
 	$p:	LOCp
@@ -1412,8 +1412,8 @@ tables:	CNST *7	; signature array tables[7] : unknown @ 1347:26
 	DATA &amplitude1 &amplitude2 &amplitude3
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 Parser1:	FUNC	; signature func Parser1() -> int @ 1352:18
+	$r:	OUTi
 	$i:	LOCi
 	$sign1:	LOCi
 	$sign2:	LOCi
@@ -1923,8 +1923,8 @@ SetPhonemeLength:	FUNC	; signature func SetPhonemeLength() -> void @ 1709:27
 
 
 ;-----------------------------------------------------------------------------
-	$X:	OUTi
 Code41240:	FUNC	; signature func Code41240() -> int @ 1723:20
+	$X:	OUTi
 	$pos:	LOCi
 	$A:	LOCi
 	$index:	LOCi
@@ -1987,8 +1987,8 @@ Code41240:	FUNC	; signature func Code41240() -> int @ 1723:20
 
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 InitPlayback:	FUNC	; signature func InitPlayback() -> int @ 1760:23
+	$r:	OUTi
 	$A:	LOCi
 	$X:	LOCi
 	$mem54:	LOCi
@@ -2075,8 +2075,8 @@ tab39206:	CNST *6	; signature array tab39206[6] : unknown @ 1833:28
 	DATA #72 #39 #31 #43 #30 #34
 
 ;-----------------------------------------------------------------------------
-	$r:	OUTi
 trans:	FUNC	; signature func trans(int a, int b) -> int @ 1836:16
+	$r:	OUTi
 	$a:	INPi
 	$b:	INPi
 	$carry:	LOCi
@@ -2175,8 +2175,8 @@ SetMouthThroat:	FUNC	; signature func SetMouthThroat(int mouth, int throat) -> v
 
 
 ;-----------------------------------------------------------------------------
-	$i:	OUTi
 Special1:	FUNC	; signature func Special1(int mem48, int X) -> int @ 1891:19
+	$i:	OUTi
 	$mem48:	INPi
 	$X:	INPi
 	$A:	LOCi
@@ -2204,8 +2204,8 @@ Special1:	FUNC	; signature func Special1(int mem48, int X) -> int @ 1891:19
 
 
 ;-----------------------------------------------------------------------------
-	$Y:	OUTi
 GenerateNoise:	FUNC	; signature func GenerateNoise(int Y0, int mem39, ptr mem44, ptr mem66) -> int @ 1912:24
+	$Y:	OUTi
 	$Y0:	INPi
 	$mem39:	INPi
 	$mem44:	INPp
