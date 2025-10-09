@@ -546,9 +546,20 @@
     /* 5  portable replacement for ppeg.fail */
     $$parser.fail = function (error, source, offset) {
         function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
-        throw bake(error) + ' : ' +
-              oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +
-              oneLine(source.substr(offset, 40));
+        var message = bake(error);
+        var hasSource = typeof source === 'string';
+        var snippetSource = hasSource ? source : '';
+        var snippetOffset = Number.isFinite(offset) ? offset : 0;
+        var before = oneLine(snippetSource.substr(snippetOffset - 8, 8));
+        var after = oneLine(snippetSource.substr(snippetOffset, 40));
+        var err = new Error(message + ' : ' + before + ' <!!!!> ' + after);
+        err.impalaMessage = message;
+        if (Number.isFinite(offset)) {
+            err.impalaOffset = offset;
+        }
+        err.impalaSnippetBefore = before;
+        err.impalaSnippetAfter = after;
+        throw err;
     };
 
 
@@ -763,11 +774,24 @@
 
     /* lazily materialise a meta-record for any parse node */
     function metaSlot(node) {
-        if (node == null) {
+        if (node == null || (typeof node !== 'object' && typeof node !== 'function')) {
             return { operator: undefined, type: undefined,
                      operands: [ undefined, undefined, undefined ] };
         }
         if (node.operands !== undefined) {
+            if (!Array.isArray(node.operands)) {
+                node.operands = [ undefined, undefined, undefined ];
+            } else {
+                while (node.operands.length < 3) {
+                    node.operands.push(undefined);
+                }
+            }
+            if (!Object.prototype.hasOwnProperty.call(node, 'operator')) {
+                node.operator = undefined;
+            }
+            if (!Object.prototype.hasOwnProperty.call(node, 'type')) {
+                node.type = undefined;
+            }
             return node;
         }
 
@@ -791,6 +815,41 @@
             node._ = slot;
         }
         return slot;
+    }
+
+    $$parser.createParserContext = function () {
+        var holder = {};
+        Object.defineProperty(holder, '__metaSlot', {
+                value: { operator: undefined, type: undefined,
+                         operands: [ undefined, undefined, undefined ] },
+                writable: true,
+                configurable: true
+        });
+        Object.defineProperty(holder, '_', {
+                configurable: true,
+                get: function () {
+                        if (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {
+                                Object.defineProperty(this, '__metaSlot', {
+                                        value: { operator: undefined, type: undefined,
+                                                 operands: [ undefined, undefined, undefined ] },
+                                        writable: true,
+                                        configurable: true
+                                });
+                        }
+                        return this.__metaSlot;
+                },
+                set: function (value) {
+                        Object.defineProperty(this, '__metaSlot', {
+                                value: value,
+                                writable: true,
+                                configurable: true
+                        });
+                }
+        });
+        return holder;
+    };
+    if (typeof globalThis !== 'undefined' && typeof globalThis.createParserContext !== 'function') {
+        globalThis.createParserContext = $$parser.createParserContext;
     }
 
     /* overwrite the fields of an existing meta object */
@@ -1064,6 +1123,10 @@
         x      = metaSlot(x);
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
+
+        if (!leftx || leftx.operator === undefined) {
+            throw new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));
+        }
 
         var lop   = leftx.operator;
         var keep  = 2;          /* operand index to keep for r-value */
