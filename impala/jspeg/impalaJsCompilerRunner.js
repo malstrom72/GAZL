@@ -13,140 +13,99 @@ function retabulate(line) {
 		return "";
 	}
 
-	let outPosition = 0;
-	let tabIndex = 0;
-	let lastIndex = 0;
 	let result = "";
+	let column = 0;
+	let tabIndex = 0;
 
-	const advanceToReach = () => {
-		const stop = INPUT_TAB_STOPS[tabIndex];
-		const reach = Math.max(stop !== undefined ? stop : -Infinity, outPosition + 1);
-		let next;
-		while ((next = outPosition + OUTPUT_TAB_WIDTH - (outPosition % OUTPUT_TAB_WIDTH)) <= reach) {
+	const align = (target) => {
+		while (column < target) {
+			const remainder = column % OUTPUT_TAB_WIDTH;
+			const next = column + (remainder === 0 ? OUTPUT_TAB_WIDTH : OUTPUT_TAB_WIDTH - remainder);
+			if (next > target) {
+				break;
+			}
 			result += "\t";
-			outPosition = next;
+			column = next;
 		}
-		const spaces = reach - outPosition;
-		if (spaces > 0) {
-			result += " ".repeat(spaces);
-			outPosition = reach;
+		if (column < target) {
+			result += " ".repeat(target - column);
+			column = target;
 		}
-		tabIndex += 1;
 	};
 
-	advanceToReach();
-
-	line.replace(/\t/g, (_match, offset) => {
-		const segment = line.slice(lastIndex, offset);
-		if (segment.length > 0) {
-			result += segment;
-			outPosition += segment.length;
-		}
-		advanceToReach();
-		lastIndex = offset + 1;
-		return "";
-	});
-
-	const tail = line.slice(lastIndex);
-	if (tail.length > 0) {
-		result += tail;
-		outPosition += tail.length;
+	for (const segment of line.split("\t")) {
+		const stop = INPUT_TAB_STOPS[tabIndex] ?? -Infinity;
+		align(Math.max(stop, column + 1));
+		tabIndex += 1;
+		result += segment;
+		column += segment.length;
 	}
 
 	return result;
 }
 
 function clampIndex(value, min, max) {
-	if (!Number.isFinite(value)) {
-		return min;
-	}
-	if (value < min) {
-		return min;
-	}
-	if (value > max) {
-		return max;
-	}
-	return Math.floor(value);
+	return Number.isFinite(value) ? Math.min(Math.max(Math.floor(value), min), max) : min;
 }
 
 function getLineInfo(source, rawIndex) {
 	const index = clampIndex(rawIndex, 0, source.length);
-	const before = source.slice(0, index);
-	const lineParts = before.split(LINE_BREAK_PATTERN);
-	const line = lineParts.length;
-	const lastSegment = lineParts[lineParts.length - 1] ?? "";
-	const lineStart = index - lastSegment.length;
-	const rest = source.slice(index);
-	const match = rest.match(LINE_BREAK_PATTERN);
+	const head = source.slice(0, index);
+	const segments = head.split(LINE_BREAK_PATTERN);
+	const last = segments[segments.length - 1] ?? "";
+	const lineStart = index - last.length;
+	const match = source.slice(index).match(LINE_BREAK_PATTERN);
 	const lineEnd = match ? index + match.index : source.length;
-	const lineText = source.slice(lineStart, lineEnd);
-	return { index, line, lineStart, lineEnd, lineText };
-}
-
-function findLineBounds(source, index) {
-	const { line, lineStart, lineEnd } = getLineInfo(source, index);
-	return { line, lineStart, lineEnd };
+	return {
+		index,
+		line: segments.length,
+		lineStart,
+		lineEnd,
+		lineText: source.slice(lineStart, lineEnd),
+	};
 }
 
 function renderErrorContext(lineText, pointerOffset) {
 	let displayLine = "";
-	let pointerLine = "";
-	let runningColumn = 1;
-	let pointerColumn = 1;
+	let pointerColumn = 0;
+	let column = 0;
 
-	for (let pos = 0; pos < lineText.length; ++pos) {
-		const ch = lineText[pos];
+	for (let i = 0; i < lineText.length; i += 1) {
+		const ch = lineText[i];
 		if (ch === "\t") {
-			const spaces = OUTPUT_TAB_WIDTH - ((runningColumn - 1) % OUTPUT_TAB_WIDTH);
+			const spaces = ((column + OUTPUT_TAB_WIDTH) & ~(OUTPUT_TAB_WIDTH - 1)) - column;
 			displayLine += " ".repeat(spaces);
-			runningColumn += spaces;
-			if (pos < pointerOffset) {
-				pointerLine += " ".repeat(spaces);
+			if (i < pointerOffset) {
 				pointerColumn += spaces;
 			}
+			column += spaces;
 			continue;
 		}
 		const code = ch.charCodeAt(0);
-		const safeChar = code >= 0x20 && code !== 0x7f ? ch : " ";
-		displayLine += safeChar;
-		runningColumn += 1;
-		if (pos < pointerOffset) {
-			pointerLine += " ";
+		displayLine += code >= 0x20 && code !== 0x7f ? ch : " ";
+		if (i < pointerOffset) {
 			pointerColumn += 1;
 		}
+		column += 1;
 	}
 
 	if (pointerOffset >= lineText.length) {
-		pointerColumn = runningColumn;
+		pointerColumn = column;
 	}
-
-	pointerLine += "^";
 
 	return {
 		displayLine,
-		pointerLine,
-		column: pointerColumn,
+		pointerLine: `${" ".repeat(pointerColumn)}^`,
+		column: pointerColumn + 1,
 	};
 }
 
 function formatErrorWithLocation(source, options, rawIndex, baseMessage, explicitLocationLabel) {
 	const { index, line, lineStart, lineEnd, lineText } = getLineInfo(source, rawIndex);
 	const context = renderErrorContext(lineText, index - lineStart);
-	let locationLabel;
-	if (explicitLocationLabel !== undefined) {
-		locationLabel = explicitLocationLabel;
-	} else if (options && options.sourceName) {
-		locationLabel = ` ${options.sourceName}`;
-	} else {
-		locationLabel = " source";
-	}
-	let message = `${baseMessage}${locationLabel} at line ${line}, column ${context.column}, offset ${index}.`;
-	if (context.displayLine.length > 0 || lineEnd > lineStart) {
-		message += `\n${context.displayLine}\n${context.pointerLine}`;
-	} else {
-		message += "\n^";
-	}
-	return message;
+	const locationLabel = explicitLocationLabel ?? (options && options.sourceName ? ` ${options.sourceName}` : " source");
+	const detail = context.displayLine.length > 0 || lineEnd > lineStart ? `\n${context.displayLine}\n${context.pointerLine}` : "\n^";
+	return `${baseMessage}${locationLabel} at line ${line}, column ${context.column}, offset ${index}.${detail}`;
 }
 
 function formatThrownCompilerError(err, source, options) {
@@ -234,9 +193,7 @@ function compileWithJsImpala(source, options = {}) {
 		randomId = 12345678,
 	} = options;
 
-	const compilerPath = compilerPathOption
-		? path.resolve(compilerPathOption)
-		: path.join(__dirname, "impalaCompiler.js");
+	const compilerPath = compilerPathOption ? path.resolve(compilerPathOption) : path.join(__dirname, "impalaCompiler.js");
 	const compilerText = compilerSource ?? fs.readFileSync(compilerPath, "utf8");
 
 	const outputLines = [];
