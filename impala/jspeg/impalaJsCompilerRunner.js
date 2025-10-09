@@ -6,149 +6,106 @@ const Module = require("module");
 
 const OUTPUT_TAB_WIDTH = 4;
 const INPUT_TAB_STOPS = [0, 20, 32, 64];
+const LINE_BREAK_PATTERN = /\r\n|\r|\n/;
 
 function retabulate(line) {
 	if (line.length === 0) {
 		return "";
 	}
 
-	let out = "";
+	let result = "";
+	let column = 0;
 	let tabIndex = 0;
-	let outPosition = 0;
-	const segments = line.split("\t");
 
-	for (const segment of segments) {
-		const stop = INPUT_TAB_STOPS[tabIndex];
-		const reach = Math.max(stop !== undefined ? stop : -Infinity, outPosition + 1);
-
-		let next;
-		while ((next = outPosition + OUTPUT_TAB_WIDTH - (outPosition % OUTPUT_TAB_WIDTH)) <= reach) {
-			out += "\t";
-			outPosition = next;
+	const align = (target) => {
+		while (column < target) {
+			const remainder = column % OUTPUT_TAB_WIDTH;
+			const next = column + (remainder === 0 ? OUTPUT_TAB_WIDTH : OUTPUT_TAB_WIDTH - remainder);
+			if (next > target) {
+				break;
+			}
+			result += "\t";
+			column = next;
 		}
-
-		const spaces = reach - outPosition;
-		if (spaces > 0) {
-			out += " ".repeat(spaces);
-			outPosition = reach;
+		if (column < target) {
+			result += " ".repeat(target - column);
+			column = target;
 		}
+	};
 
-		out += segment;
-		outPosition += segment.length;
+	for (const segment of line.split("\t")) {
+		const stop = INPUT_TAB_STOPS[tabIndex] ?? -Infinity;
+		align(Math.max(stop, column + 1));
 		tabIndex += 1;
+		result += segment;
+		column += segment.length;
 	}
 
-	return out;
+	return result;
 }
 
 function clampIndex(value, min, max) {
-	if (!Number.isFinite(value)) {
-		return min;
-	}
-	if (value < min) {
-		return min;
-	}
-	if (value > max) {
-		return max;
-	}
-	return Math.floor(value);
+	return Number.isFinite(value) ? Math.min(Math.max(Math.floor(value), min), max) : min;
 }
 
-function findLineBounds(source, index) {
-	const length = source.length;
-	let line = 1;
-	let position = 0;
-	let lineStart = 0;
-	while (position < index) {
-		const code = source.charCodeAt(position);
-		if (code === 0x0d) {
-			const next = position + 1;
-			position = next < length && source.charCodeAt(next) === 0x0a ? next + 1 : next;
-			line += 1;
-			lineStart = position;
-			continue;
-		}
-		if (code === 0x0a) {
-			position += 1;
-			line += 1;
-			lineStart = position;
-			continue;
-		}
-		position += 1;
-	}
-
-	let lineEnd = length;
-	for (let pos = index; pos < length; ++pos) {
-		const code = source.charCodeAt(pos);
-		if (code === 0x0a || code === 0x0d) {
-			lineEnd = pos;
-			break;
-		}
-	}
-
-	return { line, lineStart, lineEnd };
+function getLineInfo(source, rawIndex) {
+	const index = clampIndex(rawIndex, 0, source.length);
+	const head = source.slice(0, index);
+	const segments = head.split(LINE_BREAK_PATTERN);
+	const last = segments[segments.length - 1] ?? "";
+	const lineStart = index - last.length;
+	const match = source.slice(index).match(LINE_BREAK_PATTERN);
+	const lineEnd = match ? index + match.index : source.length;
+	return {
+		index,
+		line: segments.length,
+		lineStart,
+		lineEnd,
+		lineText: source.slice(lineStart, lineEnd),
+	};
 }
 
-function renderErrorContext(source, lineStart, lineEnd, pointerIndex) {
+function renderErrorContext(lineText, pointerOffset) {
 	let displayLine = "";
-	let pointerLine = "";
-	let runningColumn = 1;
-	let pointerColumn = 1;
+	let pointerColumn = 0;
+	let column = 0;
 
-	for (let pos = lineStart; pos < lineEnd; ++pos) {
-		const ch = source[pos];
+	for (let i = 0; i < lineText.length; i += 1) {
+		const ch = lineText[i];
 		if (ch === "\t") {
-			const spaces = OUTPUT_TAB_WIDTH - ((runningColumn - 1) % OUTPUT_TAB_WIDTH);
+			const spaces = ((column + OUTPUT_TAB_WIDTH) & ~(OUTPUT_TAB_WIDTH - 1)) - column;
 			displayLine += " ".repeat(spaces);
-			runningColumn += spaces;
-			if (pos < pointerIndex) {
-				pointerLine += " ".repeat(spaces);
+			if (i < pointerOffset) {
 				pointerColumn += spaces;
 			}
+			column += spaces;
 			continue;
 		}
 		const code = ch.charCodeAt(0);
-		const safeChar = code >= 0x20 && code !== 0x7f ? ch : " ";
-		displayLine += safeChar;
-		runningColumn += 1;
-		if (pos < pointerIndex) {
-			pointerLine += " ";
+		displayLine += code >= 0x20 && code !== 0x7f ? ch : " ";
+		if (i < pointerOffset) {
 			pointerColumn += 1;
 		}
+		column += 1;
 	}
 
-	if (pointerIndex >= lineEnd) {
-		pointerColumn = runningColumn;
+	if (pointerOffset >= lineText.length) {
+		pointerColumn = column;
 	}
-
-	pointerLine += "^";
 
 	return {
 		displayLine,
-		pointerLine,
-		column: pointerColumn,
+		pointerLine: `${" ".repeat(pointerColumn)}^`,
+		column: pointerColumn + 1,
 	};
 }
 
 function formatErrorWithLocation(source, options, rawIndex, baseMessage, explicitLocationLabel) {
-	const index = clampIndex(rawIndex, 0, source.length);
-	const { line, lineStart, lineEnd } = findLineBounds(source, index);
-	const context = renderErrorContext(source, lineStart, lineEnd, index);
-	let locationLabel;
-	if (explicitLocationLabel !== undefined) {
-		locationLabel = explicitLocationLabel;
-	} else if (options && options.sourceName) {
-		locationLabel = ` ${options.sourceName}`;
-	} else {
-		locationLabel = " source";
-	}
-	let message = `${baseMessage}${locationLabel} at line ${line}, column ${context.column}, offset ${index}.`;
-	if (context.displayLine.length > 0 || lineEnd > lineStart) {
-		message += `\n${context.displayLine}\n${context.pointerLine}`;
-	} else {
-		message += "\n^";
-	}
-	return message;
+	const { index, line, lineStart, lineEnd, lineText } = getLineInfo(source, rawIndex);
+	const context = renderErrorContext(lineText, index - lineStart);
+	const locationLabel = explicitLocationLabel ?? (options && options.sourceName ? ` ${options.sourceName}` : " source");
+	const detail = context.displayLine.length > 0 || lineEnd > lineStart ? `\n${context.displayLine}\n${context.pointerLine}` : "\n^";
+	return `${baseMessage}${locationLabel} at line ${line}, column ${context.column}, offset ${index}.${detail}`;
 }
 
 function formatThrownCompilerError(err, source, options) {
@@ -181,13 +138,13 @@ function resolveCompilerExport(candidate) {
 const GLOBAL_SENTINEL = Symbol("missing");
 
 function withGlobalBindings(bindings, fn, preserve = []) {
-	const snapshot = new Map();
-	const keys = new Set([...Object.keys(bindings), ...preserve]);
+	const keys = Array.from(new Set([...Object.keys(bindings), ...preserve]));
+	const snapshot = {};
 	for (const key of keys) {
 		if (Object.prototype.hasOwnProperty.call(globalThis, key)) {
-			snapshot.set(key, globalThis[key]);
+			snapshot[key] = globalThis[key];
 		} else {
-			snapshot.set(key, GLOBAL_SENTINEL);
+			snapshot[key] = GLOBAL_SENTINEL;
 		}
 	}
 	try {
@@ -200,7 +157,8 @@ function withGlobalBindings(bindings, fn, preserve = []) {
 		}
 		return fn();
 	} finally {
-		for (const [key, value] of snapshot.entries()) {
+		for (const key of keys) {
+			const value = snapshot[key];
 			if (value === GLOBAL_SENTINEL) {
 				delete globalThis[key];
 			} else {
@@ -226,22 +184,30 @@ function loadCompilerModule(compilerSource, compilerFilename) {
 }
 
 function compileWithJsImpala(source, options = {}) {
-	const compilerPath = options.compilerPath ? path.resolve(options.compilerPath) : path.join(__dirname, "impalaCompiler.js");
-	const compilerSource = options.compilerSource ?? fs.readFileSync(compilerPath, "utf8");
+	const {
+		compilerPath: compilerPathOption,
+		compilerSource,
+		sourceName,
+		retabulate: shouldRetabulate = true,
+		trailingNewline,
+		randomId = 12345678,
+	} = options;
+
+	const compilerPath = compilerPathOption ? path.resolve(compilerPathOption) : path.join(__dirname, "impalaCompiler.js");
+	const compilerText = compilerSource ?? fs.readFileSync(compilerPath, "utf8");
 
 	const outputLines = [];
-	const compilerExports = loadCompilerModule(compilerSource, compilerPath);
+	const compilerExports = loadCompilerModule(compilerText, compilerPath);
 	const compilerFn = resolveCompilerExport(compilerExports);
 	if (typeof compilerFn !== "function") {
 		throw new Error("JSPEG impala compiler did not export a function");
 	}
 
-	const compilerOptions =
-		options && Object.prototype.hasOwnProperty.call(options, "sourceName") ? { sourceName: options.sourceName } : undefined;
+	const compilerOptions = sourceName !== undefined ? { sourceName } : undefined;
 	const compileResult = withGlobalBindings(
 		{
 			output: (line) => outputLines.push(line),
-			impalaRandomId: options.randomId ?? 12345678,
+			impalaRandomId: randomId,
 		},
 		() => {
 			try {
@@ -264,14 +230,12 @@ function compileWithJsImpala(source, options = {}) {
 		return "";
 	}
 
-	const shouldRetabulate = options.retabulate !== false;
 	const formatted = shouldRetabulate ? outputLines.map(retabulate) : outputLines;
 	let outputText = formatted.join("\n");
 
-	const trailingNewlineOption = options.trailingNewline;
-	if (trailingNewlineOption === true || (trailingNewlineOption === undefined && shouldRetabulate)) {
+	if (trailingNewline === true || (trailingNewline === undefined && shouldRetabulate)) {
 		outputText += "\n";
-	} else if (!shouldRetabulate && trailingNewlineOption !== true) {
+	} else if (!shouldRetabulate && trailingNewline !== true) {
 		while (outputText.endsWith("\n")) {
 			outputText = outputText.slice(0, -1);
 		}
