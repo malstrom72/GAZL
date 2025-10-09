@@ -3,189 +3,187 @@
 
 const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
+const Module = require("module");
 const child_process = require("child_process");
 
 const root = __dirname;
 
 function applyImpalaHardening(source) {
-let patched = source;
-const metaSectionHeader =
-"\t/* --------------------------------------------------------- *\n" +
-"\t *  Debug helpers & meta-record construction / destruction   *\n" +
-"\t * --------------------------------------------------------- */\n\n";
-const createContextHelper =
-"\tcreateParserContext = function () {\n" +
-"\t\tvar holder = {};\n" +
-"\t\tObject.defineProperty(holder, '__metaSlot', {\n" +
-"\t\t\tvalue: { operator: undefined, type: undefined,\n" +
-"\t\t\t\t\t operands: [ undefined, undefined, undefined ] },\n" +
-"\t\t\twritable: true,\n" +
-"\t\t\tconfigurable: true\n" +
-"\t\t});\n" +
-"\t\tObject.defineProperty(holder, '_', {\n" +
-"\t\t\tconfigurable: true,\n" +
-"\t\t\tget: function () {\n" +
-"\t\t\t\tif (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {\n" +
-"\t\t\t\t\tObject.defineProperty(this, '__metaSlot', {\n" +
-"\t\t\t\t\t\tvalue: { operator: undefined, type: undefined,\n" +
-"\t\t\t\t\t\t\t operands: [ undefined, undefined, undefined ] },\n" +
-"\t\t\t\t\t\twritable: true,\n" +
-"\t\t\t\t\t\tconfigurable: true\n" +
-"\t\t\t\t\t});\n" +
-"\t\t\t\t}\n" +
-"\t\t\t\treturn this.__metaSlot;\n" +
-"\t\t\t},\n" +
-"\t\t\tset: function (value) {\n" +
-"\t\t\t\tObject.defineProperty(this, '__metaSlot', {\n" +
-"\t\t\t\t\tvalue: value,\n" +
-"\t\t\t\t\twritable: true,\n" +
-"\t\t\t\t\tconfigurable: true\n" +
-"\t\t\t\t});\n" +
-"\t\t\t}\n" +
-"\t\t});\n" +
-"\t\treturn holder;\n" +
-"\t};\n" +
-"\tif (typeof globalThis !== 'undefined' && typeof globalThis.createParserContext !== 'function') {\n" +
-"\t\tglobalThis.createParserContext = createParserContext;\n" +
-"\t}\n\n";
-if (!patched.includes("createParserContext = function ()")) {
-patched = patched.replace(metaSectionHeader, createContextHelper + metaSectionHeader);
-}
+	let patched = source;
+	const metaSectionHeader =
+		"\t/* --------------------------------------------------------- *\n" +
+		"\t *  Debug helpers & meta-record construction / destruction   *\n" +
+		"\t * --------------------------------------------------------- */\n\n";
+	const createContextHelper =
+		"\tcreateParserContext = function () {\n" +
+		"\t\tvar holder = {};\n" +
+		"\t\tObject.defineProperty(holder, '__metaSlot', {\n" +
+		"\t\t\tvalue: { operator: undefined, type: undefined,\n" +
+		"\t\t\t\t\t operands: [ undefined, undefined, undefined ] },\n" +
+		"\t\t\twritable: true,\n" +
+		"\t\t\tconfigurable: true\n" +
+		"\t\t});\n" +
+		"\t\tObject.defineProperty(holder, '_', {\n" +
+		"\t\t\tconfigurable: true,\n" +
+		"\t\t\tget: function () {\n" +
+		"\t\t\t\tif (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {\n" +
+		"\t\t\t\t\tObject.defineProperty(this, '__metaSlot', {\n" +
+		"\t\t\t\t\t\tvalue: { operator: undefined, type: undefined,\n" +
+		"\t\t\t\t\t\t\t operands: [ undefined, undefined, undefined ] },\n" +
+		"\t\t\t\t\t\twritable: true,\n" +
+		"\t\t\t\t\t\tconfigurable: true\n" +
+		"\t\t\t\t\t});\n" +
+		"\t\t\t\t}\n" +
+		"\t\t\t\treturn this.__metaSlot;\n" +
+		"\t\t\t},\n" +
+		"\t\t\tset: function (value) {\n" +
+		"\t\t\t\tObject.defineProperty(this, '__metaSlot', {\n" +
+		"\t\t\t\t\tvalue: value,\n" +
+		"\t\t\t\t\twritable: true,\n" +
+		"\t\t\t\t\tconfigurable: true\n" +
+		"\t\t\t\t});\n" +
+		"\t\t\t}\n" +
+		"\t\t});\n" +
+		"\t\treturn holder;\n" +
+		"\t};\n" +
+		"\tif (typeof globalThis !== 'undefined' && typeof globalThis.createParserContext !== 'function') {\n" +
+		"\t\tglobalThis.createParserContext = createParserContext;\n" +
+		"\t}\n\n";
+	if (!patched.includes("createParserContext = function ()")) {
+		patched = patched.replace(metaSectionHeader, createContextHelper + metaSectionHeader);
+	}
 
-const metaSlotRegex = /\tfunction metaSlot\(node\) \{[\s\S]*?\t\}\n\n/;
-const metaSlotReplacement =
-"\tfunction metaSlot(node) {\n" +
-"\t\tif (node == null || (typeof node !== 'object' && typeof node !== 'function')) {\n" +
-"\t\t\treturn { operator: undefined, type: undefined,\n" +
-"\t\t\t\t\t operands: [ undefined, undefined, undefined ] };\n" +
-"\t\t}\n" +
-"\t\tif (node.operands !== undefined) {\n" +
-"\t\t\tif (!Array.isArray(node.operands)) {\n" +
-"\t\t\t\tnode.operands = [ undefined, undefined, undefined ];\n" +
-"\t\t\t} else {\n" +
-"\t\t\t\twhile (node.operands.length < 3) {\n" +
-"\t\t\t\t\tnode.operands.push(undefined);\n" +
-"\t\t\t\t}\n" +
-"\t\t\t}\n" +
-"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'operator')) {\n" +
-"\t\t\t\tnode.operator = undefined;\n" +
-"\t\t\t}\n" +
-"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'type')) {\n" +
-"\t\t\t\tnode.type = undefined;\n" +
-"\t\t\t}\n" +
-"\t\t\treturn node;\n" +
-"\t\t}\n\n" +
-"\t\tif (!Object.prototype.hasOwnProperty.call(node, '_')) {\n" +
-"\t\t\tif (node.operands === undefined) {\n" +
-"\t\t\t\tnode.operands = [ undefined, undefined, undefined ];\n" +
-"\t\t\t}\n" +
-"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'operator')) {\n" +
-"\t\t\t\tnode.operator = undefined;\n" +
-"\t\t\t}\n" +
-"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'type')) {\n" +
-"\t\t\t\tnode.type = undefined;\n" +
-"\t\t\t}\n" +
-"\t\t\treturn node;\n" +
-"\t\t}\n\n" +
-"\t\tvar slot = node._;\n" +
-"\t\tif (!slot || slot.operands === undefined) {\n" +
-"\t\t\tslot = { operator: undefined, type: undefined,\n" +
-"\t\t\t\t\t operands: [ undefined, undefined, undefined ] };\n" +
-"\t\t\tnode._ = slot;\n" +
-"\t\t}\n" +
-"\t\treturn slot;\n" +
-"\t}\n\n";
-patched = patched.replace(metaSlotRegex, metaSlotReplacement);
+	const metaSlotRegex = /\tfunction metaSlot\(node\) \{[\s\S]*?\t\}\n\n/;
+	const metaSlotReplacement =
+		"\tfunction metaSlot(node) {\n" +
+		"\t\tif (node == null || (typeof node !== 'object' && typeof node !== 'function')) {\n" +
+		"\t\t\treturn { operator: undefined, type: undefined,\n" +
+		"\t\t\t\t\t operands: [ undefined, undefined, undefined ] };\n" +
+		"\t\t}\n" +
+		"\t\tif (node.operands !== undefined) {\n" +
+		"\t\t\tif (!Array.isArray(node.operands)) {\n" +
+		"\t\t\t\tnode.operands = [ undefined, undefined, undefined ];\n" +
+		"\t\t\t} else {\n" +
+		"\t\t\t\twhile (node.operands.length < 3) {\n" +
+		"\t\t\t\t\tnode.operands.push(undefined);\n" +
+		"\t\t\t\t}\n" +
+		"\t\t\t}\n" +
+		"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'operator')) {\n" +
+		"\t\t\t\tnode.operator = undefined;\n" +
+		"\t\t\t}\n" +
+		"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'type')) {\n" +
+		"\t\t\t\tnode.type = undefined;\n" +
+		"\t\t\t}\n" +
+		"\t\t\treturn node;\n" +
+		"\t\t}\n\n" +
+		"\t\tif (!Object.prototype.hasOwnProperty.call(node, '_')) {\n" +
+		"\t\t\tif (node.operands === undefined) {\n" +
+		"\t\t\t\tnode.operands = [ undefined, undefined, undefined ];\n" +
+		"\t\t\t}\n" +
+		"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'operator')) {\n" +
+		"\t\t\t\tnode.operator = undefined;\n" +
+		"\t\t\t}\n" +
+		"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'type')) {\n" +
+		"\t\t\t\tnode.type = undefined;\n" +
+		"\t\t\t}\n" +
+		"\t\t\treturn node;\n" +
+		"\t\t}\n\n" +
+		"\t\tvar slot = node._;\n" +
+		"\t\tif (!slot || slot.operands === undefined) {\n" +
+		"\t\t\tslot = { operator: undefined, type: undefined,\n" +
+		"\t\t\t\t\t operands: [ undefined, undefined, undefined ] };\n" +
+		"\t\t\tnode._ = slot;\n" +
+		"\t\t}\n" +
+		"\t\treturn slot;\n" +
+		"\t}\n\n";
+	patched = patched.replace(metaSlotRegex, metaSlotReplacement);
 
-patched = patched.replace(/\$[A-Za-z0-9_]*=\{\}/g, (match) => match.replace('={}', '=createParserContext()'));
+	patched = patched.replace(/\$[A-Za-z0-9_]*=\{\}/g, (match) => match.replace("={}", "=createParserContext()"));
 
-const failFunctionPattern =
-"\tfail = function (error, source, offset) {\n" +
-"\t\tfunction oneLine(s) { return replace(replace(replace(s,\"\\t\",' '),\"\\r\",' '),\"\\n\",' '); }\n" +
-"\t\tthrow bake(error) + ' : ' +\n" +
-"\t\t      oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +\n" +
-"\t\t      oneLine(source.substr(offset, 40));\n" +
-"\t};\n";
-const failFunctionReplacement =
-"\tfail = function (error, source, offset) {\n" +
-"\t\tfunction oneLine(s) { return replace(replace(replace(s,\"\\t\",' '),\"\\r\",' '),\"\\n\",' '); }\n" +
-"\t\tvar message = bake(error);\n" +
-"\t\tvar hasSource = typeof source === 'string';\n" +
-"\t\tvar snippetSource = hasSource ? source : '';\n" +
-"\t\tvar snippetOffset = Number.isFinite(offset) ? offset : 0;\n" +
-"\t\tvar before = oneLine(snippetSource.substr(snippetOffset - 8, 8));\n" +
-"\t\tvar after = oneLine(snippetSource.substr(snippetOffset, 40));\n" +
-"\t\tvar err = new Error(message + ' : ' + before + ' <!!!!> ' + after);\n" +
-"\t\terr.impalaMessage = message;\n" +
-"\t\tif (Number.isFinite(offset)) {\n" +
-"\t\t\terr.impalaOffset = offset;\n" +
-"\t\t}\n" +
-"\t\terr.impalaSnippetBefore = before;\n" +
-"\t\terr.impalaSnippetAfter = after;\n" +
-"\t\tthrow err;\n" +
-"\t};\n";
-patched = patched.includes("err.impalaMessage = message;")
-? patched
-: patched.replace(failFunctionPattern, failFunctionReplacement);
+	const failFunctionPattern =
+		"\tfail = function (error, source, offset) {\n" +
+		"\t\tfunction oneLine(s) { return replace(replace(replace(s,\"\\t\",' '),\"\\r\",' '),\"\\n\",' '); }\n" +
+		"\t\tthrow bake(error) + ' : ' +\n" +
+		"\t\t      oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +\n" +
+		"\t\t      oneLine(source.substr(offset, 40));\n" +
+		"\t};\n";
+	const failFunctionReplacement =
+		"\tfail = function (error, source, offset) {\n" +
+		"\t\tfunction oneLine(s) { return replace(replace(replace(s,\"\\t\",' '),\"\\r\",' '),\"\\n\",' '); }\n" +
+		"\t\tvar message = bake(error);\n" +
+		"\t\tvar hasSource = typeof source === 'string';\n" +
+		"\t\tvar snippetSource = hasSource ? source : '';\n" +
+		"\t\tvar snippetOffset = Number.isFinite(offset) ? offset : 0;\n" +
+		"\t\tvar before = oneLine(snippetSource.substr(snippetOffset - 8, 8));\n" +
+		"\t\tvar after = oneLine(snippetSource.substr(snippetOffset, 40));\n" +
+		"\t\tvar err = new Error(message + ' : ' + before + ' <!!!!> ' + after);\n" +
+		"\t\terr.impalaMessage = message;\n" +
+		"\t\tif (Number.isFinite(offset)) {\n" +
+		"\t\t\terr.impalaOffset = offset;\n" +
+		"\t\t}\n" +
+		"\t\terr.impalaSnippetBefore = before;\n" +
+		"\t\terr.impalaSnippetAfter = after;\n" +
+		"\t\tthrow err;\n" +
+		"\t};\n";
+	patched = patched.includes("err.impalaMessage = message;") ? patched : patched.replace(failFunctionPattern, failFunctionReplacement);
 
-const makeMetaMarker = "\tmakeMeta = function (rec, op, type, op0, op1, op2) {";
-if (!patched.includes("rec = metaSlot(rec);")) {
-patched = patched.replace(makeMetaMarker, `${makeMetaMarker}\n\t\trec = metaSlot(rec);`);
-}
+	const makeMetaMarker = "\tmakeMeta = function (rec, op, type, op0, op1, op2) {";
+	if (!patched.includes("rec = metaSlot(rec);")) {
+		patched = patched.replace(makeMetaMarker, `${makeMetaMarker}\n\t\trec = metaSlot(rec);`);
+	}
 
-const assignRegex = /\tassign = function \(x, leftx, rightx,\n[ \t]+sourceCode, sourceOffset\) \{/;
-const assignGuard =
-"\n\t\tif (!leftx || leftx.operator === undefined) {\n" +
-"\t\t\tthrow new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));\n" +
-"\t\t}";
-patched = assignRegex.test(patched)
-? patched.replace(assignRegex, (match) => (match.includes('JSPEG meta missing') ? match : `${match}${assignGuard}`))
-: patched;
+	const assignRegex = /\tassign = function \(x, leftx, rightx,\n[ \t]+sourceCode, sourceOffset\) \{/;
+	const assignGuard =
+		"\n\t\tif (!leftx || leftx.operator === undefined) {\n" +
+		"\t\t\tthrow new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));\n" +
+		"\t\t}";
+	patched = assignRegex.test(patched)
+		? patched.replace(assignRegex, (match) => (match.includes("JSPEG meta missing") ? match : `${match}${assignGuard}`))
+		: patched;
 
-const rootInitPattern = "var _i=0,_im=0,_o={_:void 0},";
-const hardenedRootInit = "var _i=0,_im=0,_o=createParserContext(),";
-if (!patched.includes(hardenedRootInit)) {
-patched = patched.replace(rootInitPattern, hardenedRootInit);
-}
-if (!patched.includes("function createParserContext() {")) {
-const globalHelper =
-"function createParserContext() {\n" +
-"        var holder = {};\n" +
-"        Object.defineProperty(holder, '__metaSlot', {\n" +
-"                value: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] },\n" +
-"                writable: true,\n" +
-"                configurable: true\n" +
-"        });\n" +
-"        Object.defineProperty(holder, '_', {\n" +
-"                configurable: true,\n" +
-"                get: function () {\n" +
-"                        if (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {\n" +
-"                                Object.defineProperty(this, '__metaSlot', {\n" +
-"                                        value: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] },\n" +
-"                                        writable: true,\n" +
-"                                        configurable: true\n" +
-"                                });\n" +
-"                        }\n" +
-"                        return this.__metaSlot;\n" +
-"                },\n" +
-"                set: function (value) {\n" +
-"                        Object.defineProperty(this, '__metaSlot', {\n" +
-"                                value: value,\n" +
-"                                writable: true,\n" +
-"                                configurable: true\n" +
-"                        });\n" +
-"                }\n" +
-"        });\n" +
-"        return holder;\n" +
-"}\n" +
-"if (typeof globalThis !== 'undefined' && typeof globalThis.createParserContext !== 'function') {\n" +
-"        globalThis.createParserContext = createParserContext;\n" +
-"}\n";
-patched = patched.replace(hardenedRootInit, `${globalHelper}${hardenedRootInit}`);
-}
+	const rootInitPattern = "var _i=0,_im=0,_o={_:void 0},";
+	const hardenedRootInit = "var _i=0,_im=0,_o=createParserContext(),";
+	if (!patched.includes(hardenedRootInit)) {
+		patched = patched.replace(rootInitPattern, hardenedRootInit);
+	}
+	if (!patched.includes("function createParserContext() {")) {
+		const globalHelper =
+			"function createParserContext() {\n" +
+			"        var holder = {};\n" +
+			"        Object.defineProperty(holder, '__metaSlot', {\n" +
+			"                value: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] },\n" +
+			"                writable: true,\n" +
+			"                configurable: true\n" +
+			"        });\n" +
+			"        Object.defineProperty(holder, '_', {\n" +
+			"                configurable: true,\n" +
+			"                get: function () {\n" +
+			"                        if (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {\n" +
+			"                                Object.defineProperty(this, '__metaSlot', {\n" +
+			"                                        value: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] },\n" +
+			"                                        writable: true,\n" +
+			"                                        configurable: true\n" +
+			"                                });\n" +
+			"                        }\n" +
+			"                        return this.__metaSlot;\n" +
+			"                },\n" +
+			"                set: function (value) {\n" +
+			"                        Object.defineProperty(this, '__metaSlot', {\n" +
+			"                                value: value,\n" +
+			"                                writable: true,\n" +
+			"                                configurable: true\n" +
+			"                        });\n" +
+			"                }\n" +
+			"        });\n" +
+			"        return holder;\n" +
+			"}\n" +
+			"if (typeof globalThis !== 'undefined' && typeof globalThis.createParserContext !== 'function') {\n" +
+			"        globalThis.createParserContext = createParserContext;\n" +
+			"}\n";
+		patched = patched.replace(hardenedRootInit, `${globalHelper}${hardenedRootInit}`);
+	}
 
-return patched;
+	return patched;
 }
 
 function resolve(file) {
@@ -253,24 +251,68 @@ function wrapCompilerSource(exportName, generated, options = {}) {
 	return lines.join("\n");
 }
 
-function loadCompiler(source, description) {
-	const context = {
-		console,
-		module: { exports: {} },
-		exports: {},
-	};
-	vm.createContext(context);
-	const script = new vm.Script(source, { filename: description });
-	script.runInContext(context);
+const GLOBAL_SENTINEL = Symbol("missing");
 
-	if (typeof context.module.exports === "function") {
-		return context.module.exports;
+function withGlobalBindings(bindings, fn, preserve = []) {
+	const snapshot = new Map();
+	const keys = new Set([...Object.keys(bindings), ...preserve]);
+	for (const key of keys) {
+		if (Object.prototype.hasOwnProperty.call(globalThis, key)) {
+			snapshot.set(key, globalThis[key]);
+		} else {
+			snapshot.set(key, GLOBAL_SENTINEL);
+		}
 	}
-	if (typeof context.exports === "function") {
-		return context.exports;
+	try {
+		for (const [key, value] of Object.entries(bindings)) {
+			if (value === undefined) {
+				delete globalThis[key];
+			} else {
+				globalThis[key] = value;
+			}
+		}
+		return fn();
+	} finally {
+		for (const [key, value] of snapshot.entries()) {
+			if (value === GLOBAL_SENTINEL) {
+				delete globalThis[key];
+			} else {
+				globalThis[key] = value;
+			}
+		}
 	}
-	if (typeof context.compileJSPEG === "function") {
-		return context.compileJSPEG;
+}
+
+function sanitizeFilename(label) {
+	const safe = label.replace(/[^A-Za-z0-9_.-]+/g, "_");
+	return safe.endsWith(".js") ? safe : `${safe}.js`;
+}
+
+function loadCompiler(source, description) {
+	const filename = path.join(root, sanitizeFilename(description));
+	const exports = withGlobalBindings(
+		{},
+		() => {
+			const compilerModule = new Module(filename, module);
+			compilerModule.filename = filename;
+			compilerModule.paths = Module._nodeModulePaths(path.dirname(filename));
+			compilerModule.require = Module.createRequire(filename);
+			compilerModule._compile(source, filename);
+			return compilerModule.exports;
+		},
+		["createParserContext"],
+	);
+
+	if (typeof exports === "function") {
+		return exports;
+	}
+	if (exports && typeof exports === "object") {
+		if (typeof exports.compileJSPEG === "function") {
+			return exports.compileJSPEG;
+		}
+		if (typeof exports.default === "function") {
+			return exports.default;
+		}
 	}
 
 	throw new Error(`${description} did not define a compiler function`);

@@ -58,7 +58,7 @@ const gazl = compileWithJsImpala(sourceText, {
 
 Details:
 
-- Runs the generated compiler in a Node `vm` context and provides the required `output` callback; no process‑global pollution.
+- Loads the generated compiler through Node's module system, temporarily installing the required globals (`output`, `impalaRandomId`) while compilation runs and then restoring the process state.
 - `retabulate: false` preserves the original alignment tabs for byte-for-byte comparisons.
 
 ## Regenerating the compiler

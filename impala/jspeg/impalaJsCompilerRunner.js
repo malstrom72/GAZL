@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
+const Module = require("module");
 
 const OUTPUT_TAB_WIDTH = 4;
 const INPUT_TAB_STOPS = [0, 20, 32, 64];
@@ -178,36 +178,80 @@ function resolveCompilerExport(candidate) {
 	return undefined;
 }
 
+const GLOBAL_SENTINEL = Symbol("missing");
+
+function withGlobalBindings(bindings, fn, preserve = []) {
+	const snapshot = new Map();
+	const keys = new Set([...Object.keys(bindings), ...preserve]);
+	for (const key of keys) {
+		if (Object.prototype.hasOwnProperty.call(globalThis, key)) {
+			snapshot.set(key, globalThis[key]);
+		} else {
+			snapshot.set(key, GLOBAL_SENTINEL);
+		}
+	}
+	try {
+		for (const [key, value] of Object.entries(bindings)) {
+			if (value === undefined) {
+				delete globalThis[key];
+			} else {
+				globalThis[key] = value;
+			}
+		}
+		return fn();
+	} finally {
+		for (const [key, value] of snapshot.entries()) {
+			if (value === GLOBAL_SENTINEL) {
+				delete globalThis[key];
+			} else {
+				globalThis[key] = value;
+			}
+		}
+	}
+}
+
+function loadCompilerModule(compilerSource, compilerFilename) {
+	return withGlobalBindings(
+		{},
+		() => {
+			const compilerModule = new Module(compilerFilename, module);
+			compilerModule.filename = compilerFilename;
+			compilerModule.paths = Module._nodeModulePaths(path.dirname(compilerFilename));
+			compilerModule.require = Module.createRequire(compilerFilename);
+			compilerModule._compile(compilerSource, compilerFilename);
+			return compilerModule.exports;
+		},
+		["createParserContext"],
+	);
+}
+
 function compileWithJsImpala(source, options = {}) {
-	const compilerPath = options.compilerPath || path.join(__dirname, "impalaCompiler.js");
+	const compilerPath = options.compilerPath ? path.resolve(options.compilerPath) : path.join(__dirname, "impalaCompiler.js");
 	const compilerSource = options.compilerSource ?? fs.readFileSync(compilerPath, "utf8");
 
 	const outputLines = [];
-	const context = {
-		module: { exports: {} },
-		exports: {},
-		console,
-		output: (line) => outputLines.push(line),
-		impalaRandomId: options.randomId ?? 12345678,
-		$$parser: {},
-	};
-	vm.createContext(context);
-
-	new vm.Script(compilerSource, { filename: path.basename(compilerPath) }).runInContext(context);
-
-	const compilerFn = resolveCompilerExport(context.module.exports);
+	const compilerExports = loadCompilerModule(compilerSource, compilerPath);
+	const compilerFn = resolveCompilerExport(compilerExports);
 	if (typeof compilerFn !== "function") {
 		throw new Error("JSPEG impala compiler did not export a function");
 	}
 
 	const compilerOptions =
 		options && Object.prototype.hasOwnProperty.call(options, "sourceName") ? { sourceName: options.sourceName } : undefined;
-	let compileResult;
-	try {
-		compileResult = compilerFn(source, compilerOptions);
-	} catch (err) {
-		throw new Error(formatThrownCompilerError(err, source, options));
-	}
+	const compileResult = withGlobalBindings(
+		{
+			output: (line) => outputLines.push(line),
+			impalaRandomId: options.randomId ?? 12345678,
+		},
+		() => {
+			try {
+				return compilerFn(source, compilerOptions);
+			} catch (err) {
+				throw new Error(formatThrownCompilerError(err, source, options));
+			}
+		},
+		["createParserContext"],
+	);
 	const [ok, , index] = compileResult;
 	if (!ok) {
 		throw new Error(formatErrorWithLocation(source, options, index, "JSPEG impala compiler failed to compile"));

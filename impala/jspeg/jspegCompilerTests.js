@@ -63,10 +63,10 @@ if (impalaIndex !== impalaGrammar.length) {
 }
 const impalaExisting = fs.readFileSync(path.join(dir, "impalaCompiler.js"), "utf8");
 const impalaExpected = applyImpalaHardening(
-        wrapCompilerSource("impalaCompiler", impalaGenerated, {
-                prelude: "var $$parser = {};",
-                exposeSourceNameOption: true,
-        }),
+	wrapCompilerSource("impalaCompiler", impalaGenerated, {
+		prelude: "var $$parser = {};",
+		exposeSourceNameOption: true,
+	}),
 ).trim();
 if (impalaExpected !== impalaExisting.trim()) {
 	console.error("Generated compiler differs from impalaCompiler.js");
@@ -84,18 +84,18 @@ if (impalaSelfIndex !== impalaGrammar.length) {
 	process.exit(1);
 }
 if (impalaGenerated.trim() !== impalaSelfGenerated.trim()) {
-        console.error("impala.jspeg output diverged between recorded and self-hosted compilers");
-        process.exit(1);
+	console.error("impala.jspeg output diverged between recorded and self-hosted compilers");
+	process.exit(1);
 }
 const impalaSelfExpected = applyImpalaHardening(
-        wrapCompilerSource("impalaCompiler", impalaSelfGenerated, {
-                prelude: "var $$parser = {};",
-                exposeSourceNameOption: true,
-        }),
+	wrapCompilerSource("impalaCompiler", impalaSelfGenerated, {
+		prelude: "var $$parser = {};",
+		exposeSourceNameOption: true,
+	}),
 ).trim();
 if (impalaSelfExpected !== impalaExisting.trim()) {
-        console.error("Self-hosted impalaCompiler.js differs from recorded output after hardening");
-        process.exit(1);
+	console.error("Self-hosted impalaCompiler.js differs from recorded output after hardening");
+	process.exit(1);
 }
 console.log("impala.jspeg compiles identically under self-hosted compiler");
 
