@@ -1,8 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const childProcess = require("child_process");
+const vm = require("vm");
 
-const { wrapCompilerSource } = require("./updateJSPEG.js");
+const { wrapCompilerSource, applyImpalaHardening } = require("./updateJSPEG.js");
 const { compileWithJsImpala } = require("./impalaJsCompilerRunner");
 
 const dir = __dirname;
@@ -61,12 +62,13 @@ if (impalaIndex !== impalaGrammar.length) {
 	process.exit(1);
 }
 const impalaExisting = fs.readFileSync(path.join(dir, "impalaCompiler.js"), "utf8");
-if (
-	wrapCompilerSource("impalaCompiler", impalaGenerated, {
-		prelude: "var $$parser = {};",
-		exposeSourceNameOption: true,
-	}).trim() !== impalaExisting.trim()
-) {
+const impalaExpected = applyImpalaHardening(
+        wrapCompilerSource("impalaCompiler", impalaGenerated, {
+                prelude: "var $$parser = {};",
+                exposeSourceNameOption: true,
+        }),
+).trim();
+if (impalaExpected !== impalaExisting.trim()) {
 	console.error("Generated compiler differs from impalaCompiler.js");
 	process.exit(1);
 }
@@ -82,10 +84,93 @@ if (impalaSelfIndex !== impalaGrammar.length) {
 	process.exit(1);
 }
 if (impalaGenerated.trim() !== impalaSelfGenerated.trim()) {
-	console.error("impala.jspeg output diverged between recorded and self-hosted compilers");
-	process.exit(1);
+        console.error("impala.jspeg output diverged between recorded and self-hosted compilers");
+        process.exit(1);
+}
+const impalaSelfExpected = applyImpalaHardening(
+        wrapCompilerSource("impalaCompiler", impalaSelfGenerated, {
+                prelude: "var $$parser = {};",
+                exposeSourceNameOption: true,
+        }),
+).trim();
+if (impalaSelfExpected !== impalaExisting.trim()) {
+        console.error("Self-hosted impalaCompiler.js differs from recorded output after hardening");
+        process.exit(1);
 }
 console.log("impala.jspeg compiles identically under self-hosted compiler");
+
+const compilerContext = loadImpalaCompilerForTests();
+const makeMetaHelper = compilerContext.makeMeta;
+const assignHelper = compilerContext.assign;
+const failHelper = compilerContext.fail;
+
+assert(typeof compilerContext.createParserContext === "function", "impala compiler must expose createParserContext helper");
+assert(typeof makeMetaHelper === "function", "makeMeta helper must be callable");
+assert(typeof assignHelper === "function", "assign helper must be callable");
+assert(typeof failHelper === "function", "fail helper must be callable");
+
+const primitiveMeta = makeMetaHelper(42, "test", "i", "#1", "#2", "#3");
+assert(primitiveMeta && primitiveMeta.operator === "test", "makeMeta must return a record with assigned operator");
+assert(Array.isArray(primitiveMeta.operands) && primitiveMeta.operands.length === 3, "makeMeta must normalise operand array length");
+
+const nullMeta = makeMetaHelper(null, undefined, undefined, undefined, undefined, undefined);
+assert(Array.isArray(nullMeta.operands) && nullMeta.operands.length === 3, "makeMeta must create placeholder records for null");
+
+const malformedHolder = { operands: "oops", type: "f" };
+makeMetaHelper(malformedHolder, "=", "f", "%0", "%1", undefined);
+assert(
+	Array.isArray(malformedHolder.operands) && malformedHolder.operands.length === 3,
+	"metaSlot must coerce non-array operands to fixed arity",
+);
+assert(Object.prototype.hasOwnProperty.call(malformedHolder, "operator"), "metaSlot must stamp operator property on plain objects");
+
+let observedMissingMetaGuard = false;
+try {
+	assignHelper(
+		{},
+		{ operands: [undefined, "%L0", undefined], type: "i" },
+		{ operator: ":=", type: "i", operands: [undefined, "%R0", undefined] },
+		"missing meta",
+		0,
+	);
+} catch (err) {
+	observedMissingMetaGuard = err && err.message && err.message.includes("JSPEG meta missing for assignment");
+}
+assert(observedMissingMetaGuard, "assign must reject l-values without operator metadata");
+
+let capturedFailError;
+try {
+	failHelper("boom", "0123456789abcdefghij", 10);
+} catch (err) {
+	capturedFailError = err;
+}
+const isErrorObject =
+	capturedFailError &&
+	typeof capturedFailError === "object" &&
+	(capturedFailError instanceof Error || (capturedFailError.constructor && capturedFailError.constructor.name === "Error"));
+assert(isErrorObject, "fail must throw Error instances");
+assert(capturedFailError.impalaMessage === "boom", "fail must record original error message");
+assert(capturedFailError.impalaOffset === 10, "fail must capture numeric offsets");
+assert(capturedFailError.impalaSnippetBefore === "23456789", "fail must store snippet before cursor");
+assert(capturedFailError.impalaSnippetAfter.startsWith("abcdefgh"), "fail must store snippet after cursor");
+
+const rootContext = compilerContext.createParserContext();
+const initialSlot = rootContext._;
+assert(
+	initialSlot && Array.isArray(initialSlot.operands) && initialSlot.operands.length === 3,
+	"createParserContext must lazily materialise meta records",
+);
+
+const replacementSlot = { operator: "noop", type: "?", operands: ["a", "b", "c"] };
+rootContext._ = replacementSlot;
+assert(rootContext._ === replacementSlot, "createParserContext getter/setter must proxy through to stored slot");
+
+delete rootContext.__metaSlot;
+const regeneratedSlot = rootContext._;
+assert(
+	regeneratedSlot && Array.isArray(regeneratedSlot.operands) && regeneratedSlot.operands.length === 3,
+	"createParserContext getter must recreate missing slots on demand",
+);
 
 function compileAndEval(compilerFn, source, label) {
 	const [ok, generated, endIndex] = compilerFn(source);
@@ -110,6 +195,13 @@ function compileAndEval(compilerFn, source, label) {
 
 function jsonEqual(a, b) {
 	return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function assert(condition, message) {
+	if (!condition) {
+		console.error(message);
+		process.exit(1);
+	}
 }
 
 function runParserCase(label, parser, input) {
@@ -171,6 +263,42 @@ function testGrammarEquivalence(filename, label, cases) {
 
 	compareParserOutputs(label, cases, baseline.parser, selfHosted.parser);
 	console.log(`${label} parser matches across baseline and self-hosted compilers`);
+}
+
+function loadImpalaCompilerForTests() {
+	const compilerPath = path.join(dir, "impalaCompiler.js");
+	const compilerSource = fs.readFileSync(compilerPath, "utf8");
+	const context = {
+		console,
+		module: { exports: {} },
+		exports: {},
+		output: () => {},
+		impalaRandomId: 0xabcdef,
+	};
+
+	vm.createContext(context);
+	const script = new vm.Script(compilerSource, { filename: "impalaCompiler.js" });
+	script.runInContext(context);
+
+	if (typeof context.module.exports !== "function") {
+		console.error("impalaCompiler.js did not export a compiler function");
+		process.exit(1);
+	}
+
+	if (!context.$$parser || typeof context.$$parser !== "object") {
+		console.error("impalaCompiler.js did not initialise $$parser helpers");
+		process.exit(1);
+	}
+
+	try {
+		context.module.exports("function main()\nlocals int x\n{\n}\n", { sourceName: "test" });
+	} catch (err) {
+		console.error("impalaCompiler.js self-test compile failed");
+		console.error(err && err.stack ? err.stack : err);
+		process.exit(1);
+	}
+
+	return context;
 }
 
 const arithmeticCases = [

@@ -37,6 +37,7 @@ node impala/jspeg/impala.node.js run path/to/source.impala
 ```
 
 Notes:
+
 - I/O uses Latin‑1 to match existing fixtures.
 - With no input path, the CLI reads from stdin. With output `-` or omitted, it writes to stdout.
 - Output formatting matches the PikaScript CLI (alignment tabs retabulated to a standard 4-space grid, trailing newline by default).
@@ -46,20 +47,26 @@ Notes:
 Use `compileWithJsImpala(source, options)` from `impalaJsCompilerRunner.js` for programmatic compilation with deterministic output:
 
 ```js
-const { compileWithJsImpala } = require('./impala/jspeg/impalaJsCompilerRunner');
+const { compileWithJsImpala } = require("./impala/jspeg/impalaJsCompilerRunner");
 
 const gazl = compileWithJsImpala(sourceText, {
-        randomId: 0x4d2,      // seed for deterministic IDs
-        retabulate: true,     // expand alignment tabs to 4-space tab stops
-        trailingNewline: true // add trailing newline (default when retabulate === true)
+	randomId: 0x4d2, // seed for deterministic IDs
+	retabulate: true, // expand alignment tabs to 4-space tab stops
+	trailingNewline: true, // add trailing newline (default when retabulate === true)
 });
 ```
 
 Details:
+
 - Runs the generated compiler in a Node `vm` context and provides the required `output` callback; no process‑global pollution.
 - `retabulate: false` preserves the original alignment tabs for byte-for-byte comparisons.
 
- 
+## Regenerating the compiler
+
+- Run `node impala/jspeg/updateJSPEG.js` to rebuild both `jspegCompiler.js` and `impalaCompiler.js`.
+- Hardened helpers (`metaSlot`, `makeMeta`, `assign`, `fail`, and `createParserContext`) now live inside `impala/jspeg/impala.jspeg`. `updateJSPEG.js` applies `applyImpalaHardening` so the generated Impala bundle adopts them even while `jspeg.jspeg` still emits legacy parser contexts.
+- `impalaCompiler.js` bootstraps its root context via `$$parser.createParserContext()` and exposes the helper on `globalThis` for test harnesses. The JSPEG self-host grammar will follow once we settle on the safety helper design.
+- `impalaJsCompilerRunner.js` can load `impalaCompiler.js` verbatim because the grammar emits the hardened helpers directly; no runtime patching remains.
 
 ## Tests (Impala parity)
 
