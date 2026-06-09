@@ -2,7 +2,7 @@
 SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
 IF "%CPP_TARGET%"=="" SET CPP_TARGET=release
-IF "%CPP_MODEL%"=="" SET CPP_MODEL=x64
+IF "%CPP_MODEL%"=="" SET CPP_MODEL=native
 
 IF "%~1"=="debug" (
 	SET CPP_TARGET=debug
@@ -24,6 +24,9 @@ IF "%~1"=="x86" (
 ) ELSE IF "%~1"=="arm64" (
 	SET CPP_MODEL=arm64
 	SHIFT
+) ELSE IF "%~1"=="native" (
+	SET CPP_MODEL=native
+	SHIFT
 )
 
 IF "%CPP_TARGET%"=="debug" (
@@ -37,11 +40,20 @@ IF "%CPP_TARGET%"=="debug" (
 	EXIT /B 1
 )
 
-IF "%CPP_MODEL%"=="arm64" (
+SET CPP_EFFECTIVE_MODEL=%CPP_MODEL%
+IF "%CPP_MODEL%"=="native" (
+	IF /I "%PROCESSOR_ARCHITEW6432%"=="ARM64" ( SET CPP_EFFECTIVE_MODEL=arm64
+	) ELSE IF /I "%PROCESSOR_ARCHITECTURE%"=="ARM64" ( SET CPP_EFFECTIVE_MODEL=arm64
+	) ELSE IF /I "%PROCESSOR_ARCHITEW6432%"=="AMD64" ( SET CPP_EFFECTIVE_MODEL=x64
+	) ELSE IF /I "%PROCESSOR_ARCHITECTURE%"=="AMD64" ( SET CPP_EFFECTIVE_MODEL=x64
+	) ELSE ( SET CPP_EFFECTIVE_MODEL=x86 )
+)
+
+IF "%CPP_EFFECTIVE_MODEL%"=="arm64" (
 	SET vcvarsConfig=arm64
-) ELSE IF "%CPP_MODEL%"=="x64" (
+) ELSE IF "%CPP_EFFECTIVE_MODEL%"=="x64" (
 	SET vcvarsConfig=amd64
-) ELSE IF "%CPP_MODEL%"=="x86" (
+) ELSE IF "%CPP_EFFECTIVE_MODEL%"=="x86" (
 	SET CPP_OPTIONS=/arch:SSE2 %CPP_OPTIONS%
 	SET vcvarsConfig=x86
 ) ELSE (
@@ -56,7 +68,7 @@ SHIFT
 SET CPP_OPTIONS=/W3 /EHsc /D "WIN32" /D "_CONSOLE" /D "_CRT_SECURE_NO_WARNINGS" /D "_SCL_SECURE_NO_WARNINGS" %CPP_OPTIONS%
 
 IF "%name%"=="" (
-	ECHO BuildCpp [debug^|beta^|release] [x86^|x64^|arm64] ^<output.exe^> ^<source files and other compiler arguments^>
+	ECHO BuildCpp [debug^|beta^|release] [x86^|x64^|arm64^|native] ^<output.exe^> ^<source files and other compiler arguments^>
 	ECHO You can also use the environment variables: CPP_MSVC_VERSION, CPP_TARGET, CPP_MODEL and CPP_OPTIONS
 	EXIT /B 1
 )
@@ -113,7 +125,7 @@ IF NOT DEFINED VCINSTALLDIR (
 
 SET temppath=%TEMP:"=%\%name%_%RANDOM%
 MKDIR "%temppath%" >NUL 2>&1
-ECHO Compiling %name% %CPP_TARGET% %CPP_MODEL% using %VCINSTALLDIR%
+ECHO Compiling %name% %CPP_TARGET% %CPP_EFFECTIVE_MODEL% using %VCINSTALLDIR%
 ECHO %CPP_OPTIONS% /Fe%args%
 ECHO.
 cl %CPP_OPTIONS% /errorReport:queue /Fo"%temppath%\\" /Fe%args% >"%temppath%\buildlog.txt"
