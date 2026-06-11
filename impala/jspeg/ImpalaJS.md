@@ -9,7 +9,7 @@ All files live under `impala/jspeg/`:
 - `impala.jspeg` – Impala grammar with JavaScript actions.
 - `impalaCompiler.js` – generated Impala compiler (CommonJS export) produced by JSPEG.
 - `impala.node.js` – simple Node CLI for compiling/running Impala programs using the JS compiler.
-- `impalaJsCompilerRunner.js` – programmatic adapter that runs `impalaCompiler.js` in a sandboxed VM and formats output.
+- `impalaJsCompilerRunner.js` – programmatic adapter that loads `impalaCompiler.js` through Node's module system and formats output.
 - `runJspegTests.js` – Impala parity runner (compares compiled output to golden `.gazl`).
 - `testdata/` – small fixtures for parity checks.
 

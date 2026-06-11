@@ -238,6 +238,10 @@ The validator reports mismatched signatures as errors by default. Pass
 set `GAZL_VALIDATE=1` in the environment before invoking `build.sh` to
 run the check automatically during the normal build.
 
+There is also a JavaScript port of the PEG compiler and Impala compiler.
+See [Impala JSPEG](../impala/jspeg/ImpalaJS.md) for the CLI, regeneration flow,
+and parity test commands.
+
 ## Compiling and running
 
 After running `bash build.sh` the `output/` folder contains `PikaCmd` and
@@ -259,4 +263,3 @@ For convenience you can compile and run in one step:
 ```bash
 ./PikaCmd impala.pika run ../impala/ImpalaDemo.impala
 ```
-
