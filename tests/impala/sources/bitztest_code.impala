@@ -76,7 +76,7 @@ const int PARAM_COUNT							// Param count can be changed in the future if more 
 const int POSITION_INT_BITS						// Number of integer bits of position (should be 16) (for "mod patches")
 const int POSITION_FRACT_BITS					// Number of fraction bits of position (should be 4) (for "mod patches")
 
-global int clock								// `clock` increments between every `process()` (or decrements in reverse mode) and has a cycle size of 16-bit (from 0 to 65536). If tempo sync is enabled, `clock` will be the absolute position within the chosen time division. (Optional.)
+global int clock								// `clock` increments between every `process()` (or decrements in reverse mode) and has a cycle size of 16-bit (from 0 to 65535). If tempo sync is enabled, `clock` will be the absolute position within the chosen time division. (Optional.)
 global array params[PARAM_COUNT]				// `params` (all ints) are updated by Permute8 whenever any exposed parameter is updated. If there is a defined `update()` function it is called on this occasion. (Optional.)
 global array displayLEDs[4]						// Four 8-bit masks for the visualizer LEDs under the operand switches. Order: operand 1 high & low, operand 2 high & low.
 global int instance								// A session unique number for the plug-in. Always valid and won't change after init. You can use this to initialize random seeds. (Optional.)
