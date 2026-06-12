@@ -21,6 +21,14 @@ function readImpalaFile(filePath) {
         return fs.readFileSync(filePath, IMPALA_ENCODING);
 }
 
+function canonicalizeNewlines(contents) {
+        return contents.replace(/\r\n?/g, '\n');
+}
+
+function readImpalaSource(filePath) {
+        return canonicalizeNewlines(readImpalaFile(filePath));
+}
+
 function writeImpalaFile(filePath, contents) {
         fs.writeFileSync(filePath, contents, IMPALA_ENCODING);
 }
@@ -62,7 +70,7 @@ function main() {
 
                 let source;
                 try {
-                        source = readImpalaFile(sourcePath);
+                        source = readImpalaSource(sourcePath);
                 } catch (err) {
                         console.error('<<< Error reading source >>>');
                         console.error(formatError(err));
@@ -100,7 +108,7 @@ function main() {
                         continue;
                 }
 
-                if (expected !== output) {
+                if (canonicalizeNewlines(expected) !== canonicalizeNewlines(output)) {
                         console.error('<<< Output differs! >>>');
                         ensureErroneousDir();
                         const erroneousPath = path.join(erroneousDir, `${name}.gazl`);

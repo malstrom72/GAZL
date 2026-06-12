@@ -11,6 +11,18 @@ const IMPALA_ENCODING = "latin1";
 const validatorScript = path.join(dir, "..", "..", "tools", "gazl-validate.js");
 const validatorFixturesDir = path.join(dir, "testdata", "validator");
 
+function canonicalizeNewlines(source) {
+	return source.replace(/\r\n?/g, "\n");
+}
+
+function canonicalizeTrimmed(source) {
+	return canonicalizeNewlines(source).trim();
+}
+
+function canonicalizeTrimEnd(source) {
+	return canonicalizeNewlines(source).trimEnd();
+}
+
 const jspegSource = fs.readFileSync(path.join(dir, "jspegCompiler.js"), "utf8");
 const compileJSPEG = require(path.join(dir, "jspegCompiler.js"));
 if (typeof compileJSPEG !== "function") {
@@ -29,7 +41,7 @@ if (compilerIndex !== jspegGrammar.length) {
 	process.exit(1);
 }
 const expectedJspegSource = wrapCompilerSource("compileJSPEG", compilerGenerated);
-if (expectedJspegSource.trim() !== jspegSource.trim()) {
+if (canonicalizeTrimmed(expectedJspegSource) !== canonicalizeTrimmed(jspegSource)) {
 	console.error("jspegCompiler.js is out of date with jspeg.jspeg");
 	process.exit(1);
 }
@@ -45,7 +57,7 @@ if (selfHostIndex !== jspegGrammar.length) {
 	console.error(`Self-hosted compile stopped at ${selfHostIndex} of ${jspegGrammar.length}`);
 	process.exit(1);
 }
-if (wrapCompilerSource("compileJSPEG", selfHostGenerated).trim() !== jspegSource.trim()) {
+if (canonicalizeTrimmed(wrapCompilerSource("compileJSPEG", selfHostGenerated)) !== canonicalizeTrimmed(jspegSource)) {
 	console.error("Self-hosted compiler drifted from recorded jspegCompiler.js output");
 	process.exit(1);
 }
@@ -68,7 +80,7 @@ const impalaExpected = applyImpalaHardening(
 		exposeSourceNameOption: true,
 	}),
 ).trim();
-if (impalaExpected !== impalaExisting.trim()) {
+if (canonicalizeTrimmed(impalaExpected) !== canonicalizeTrimmed(impalaExisting)) {
 	console.error("Generated compiler differs from impalaCompiler.js");
 	process.exit(1);
 }
@@ -83,7 +95,7 @@ if (impalaSelfIndex !== impalaGrammar.length) {
 	console.error(`Self-hosted impala.jspeg compile stopped at ${impalaSelfIndex} of ${impalaGrammar.length}`);
 	process.exit(1);
 }
-if (impalaGenerated.trim() !== impalaSelfGenerated.trim()) {
+if (canonicalizeTrimmed(impalaGenerated) !== canonicalizeTrimmed(impalaSelfGenerated)) {
 	console.error("impala.jspeg output diverged between recorded and self-hosted compilers");
 	process.exit(1);
 }
@@ -93,7 +105,7 @@ const impalaSelfExpected = applyImpalaHardening(
 		exposeSourceNameOption: true,
 	}),
 ).trim();
-if (impalaSelfExpected !== impalaExisting.trim()) {
+if (canonicalizeTrimmed(impalaSelfExpected) !== canonicalizeTrimmed(impalaExisting)) {
 	console.error("Self-hosted impalaCompiler.js differs from recorded output after hardening");
 	process.exit(1);
 }
@@ -256,7 +268,7 @@ function testGrammarEquivalence(filename, label, cases) {
 	const baseline = compileAndEval(compileJSPEG, source, `${label} via baseline compiler`);
 	const selfHosted = compileAndEval(compileJSPEGSelfHosted, source, `${label} via self-hosted compiler`);
 
-	if (baseline.code.trim() !== selfHosted.code.trim()) {
+	if (canonicalizeTrimmed(baseline.code) !== canonicalizeTrimmed(selfHosted.code)) {
 		console.error(`${label} generated code diverges between baseline and self-hosted compilers`);
 		process.exit(1);
 	}
@@ -398,7 +410,7 @@ function resolveFixturePath(fixture, key, defaultDir) {
 function runParityFixture(fixture) {
 	const sourcePath = resolveFixturePath(fixture, "source", path.join(dir, "testdata"));
 	const expectedPath = resolveFixturePath(fixture, "expected", path.join(dir, "testdata"));
-	const source = fs.readFileSync(sourcePath, IMPALA_ENCODING);
+	const source = canonicalizeNewlines(fs.readFileSync(sourcePath, IMPALA_ENCODING));
 	const expected = fs.readFileSync(expectedPath, IMPALA_ENCODING);
 	let actual;
 	try {
@@ -419,8 +431,8 @@ function runParityFixture(fixture) {
 		process.exit(1);
 	}
 
-	const normalizedActual = actual.trimEnd();
-	const normalizedExpected = expected.trimEnd();
+	const normalizedActual = canonicalizeTrimEnd(actual);
+	const normalizedExpected = canonicalizeTrimEnd(expected);
 
 	if (normalizedActual !== normalizedExpected) {
 		console.error(`impala.jspeg compiler output diverges from recorded fixture: ${fixture.name}`);
@@ -524,13 +536,13 @@ if (!observedFailure) {
 	process.exit(1);
 }
 
-const smokeSource = fs.readFileSync(path.join(dir, "testdata", "smoke.impala"), IMPALA_ENCODING);
+const smokeSource = canonicalizeNewlines(fs.readFileSync(path.join(dir, "testdata", "smoke.impala"), IMPALA_ENCODING));
 const smokeExpected = fs.readFileSync(path.join(dir, "testdata", "smoke.expected.gazl"), IMPALA_ENCODING);
 const smokeOutputAfterFailure = compileWithJsImpala(smokeSource, {
 	randomId: 42,
 });
 
-if (smokeOutputAfterFailure !== smokeExpected) {
+if (canonicalizeTrimEnd(smokeOutputAfterFailure) !== canonicalizeTrimEnd(smokeExpected)) {
 	console.error("impala.jspeg compiler leaked state after aborted compile");
 	process.exit(1);
 }
