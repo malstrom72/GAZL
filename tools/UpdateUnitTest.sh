@@ -3,7 +3,6 @@ set -e -o pipefail -u
 cd "$(dirname "$0")"
 
 cd ../externals/PikaCmd
-chmod +x BuildCpp.sh
 bash BuildPikaCmd.sh
 if [ $? -ne 0 ]; then
 	exit 1
