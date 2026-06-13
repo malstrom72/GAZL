@@ -135,52 +135,13 @@ function resolveCompilerExport(candidate) {
 	return undefined;
 }
 
-const GLOBAL_SENTINEL = Symbol("missing");
-
-function withGlobalBindings(bindings, fn, preserve = []) {
-	const keys = Array.from(new Set([...Object.keys(bindings), ...preserve]));
-	const snapshot = {};
-	for (const key of keys) {
-		if (Object.prototype.hasOwnProperty.call(globalThis, key)) {
-			snapshot[key] = globalThis[key];
-		} else {
-			snapshot[key] = GLOBAL_SENTINEL;
-		}
-	}
-	try {
-		for (const [key, value] of Object.entries(bindings)) {
-			if (value === undefined) {
-				delete globalThis[key];
-			} else {
-				globalThis[key] = value;
-			}
-		}
-		return fn();
-	} finally {
-		for (const key of keys) {
-			const value = snapshot[key];
-			if (value === GLOBAL_SENTINEL) {
-				delete globalThis[key];
-			} else {
-				globalThis[key] = value;
-			}
-		}
-	}
-}
-
 function loadCompilerModule(compilerSource, compilerFilename) {
-	return withGlobalBindings(
-		{},
-		() => {
-			const compilerModule = new Module(compilerFilename, module);
-			compilerModule.filename = compilerFilename;
-			compilerModule.paths = Module._nodeModulePaths(path.dirname(compilerFilename));
-			compilerModule.require = Module.createRequire(compilerFilename);
-			compilerModule._compile(compilerSource, compilerFilename);
-			return compilerModule.exports;
-		},
-		["createParserContext"],
-	);
+	const compilerModule = new Module(compilerFilename, module);
+	compilerModule.filename = compilerFilename;
+	compilerModule.paths = Module._nodeModulePaths(path.dirname(compilerFilename));
+	compilerModule.require = Module.createRequire(compilerFilename);
+	compilerModule._compile(compilerSource, compilerFilename);
+	return compilerModule.exports;
 }
 
 function compileWithJsImpala(source, options = {}) {
@@ -203,21 +164,19 @@ function compileWithJsImpala(source, options = {}) {
 		throw new Error("JSPEG impala compiler did not export a function");
 	}
 
-	const compilerOptions = sourceName !== undefined ? { sourceName } : undefined;
-	const compileResult = withGlobalBindings(
-		{
-			output: (line) => outputLines.push(line),
-			impalaRandomId: randomId,
-		},
-		() => {
-			try {
-				return compilerFn(source, compilerOptions);
-			} catch (err) {
-				throw new Error(formatThrownCompilerError(err, source, options));
-			}
-		},
-		["createParserContext"],
-	);
+	const compilerOptions = {
+		output: (line) => outputLines.push(line),
+		randomId,
+	};
+	if (sourceName !== undefined) {
+		compilerOptions.sourceName = sourceName;
+	}
+	let compileResult;
+	try {
+		compileResult = compilerFn(source, compilerOptions);
+	} catch (err) {
+		throw new Error(formatThrownCompilerError(err, source, options));
+	}
 	const [ok, , index] = compileResult;
 	if (!ok) {
 		throw new Error(formatErrorWithLocation(source, options, index, "JSPEG impala compiler failed to compile"));

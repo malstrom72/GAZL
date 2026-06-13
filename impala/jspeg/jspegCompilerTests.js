@@ -116,7 +116,10 @@ const makeMetaHelper = compilerContext.makeMeta;
 const assignHelper = compilerContext.assign;
 const failHelper = compilerContext.fail;
 
-assert(typeof compilerContext.createParserContext === "function", "impala compiler must expose createParserContext helper");
+assert(
+	!Object.prototype.hasOwnProperty.call(compilerContext, "createParserContext"),
+	"impala compiler must keep createParserContext private",
+);
 assert(typeof makeMetaHelper === "function", "makeMeta helper must be callable");
 assert(typeof assignHelper === "function", "assign helper must be callable");
 assert(typeof failHelper === "function", "fail helper must be callable");
@@ -165,24 +168,6 @@ assert(capturedFailError.impalaMessage === "boom", "fail must record original er
 assert(capturedFailError.impalaOffset === 10, "fail must capture numeric offsets");
 assert(capturedFailError.impalaSnippetBefore === "23456789", "fail must store snippet before cursor");
 assert(capturedFailError.impalaSnippetAfter.startsWith("abcdefgh"), "fail must store snippet after cursor");
-
-const rootContext = compilerContext.createParserContext();
-const initialSlot = rootContext._;
-assert(
-	initialSlot && Array.isArray(initialSlot.operands) && initialSlot.operands.length === 3,
-	"createParserContext must lazily materialise meta records",
-);
-
-const replacementSlot = { operator: "noop", type: "?", operands: ["a", "b", "c"] };
-rootContext._ = replacementSlot;
-assert(rootContext._ === replacementSlot, "createParserContext getter/setter must proxy through to stored slot");
-
-delete rootContext.__metaSlot;
-const regeneratedSlot = rootContext._;
-assert(
-	regeneratedSlot && Array.isArray(regeneratedSlot.operands) && regeneratedSlot.operands.length === 3,
-	"createParserContext getter must recreate missing slots on demand",
-);
 
 function compileAndEval(compilerFn, source, label) {
 	const [ok, generated, endIndex] = compilerFn(source);
@@ -284,8 +269,6 @@ function loadImpalaCompilerForTests() {
 		console,
 		module: { exports: {} },
 		exports: {},
-		output: () => {},
-		impalaRandomId: 0xabcdef,
 	};
 
 	vm.createContext(context);
@@ -303,10 +286,23 @@ function loadImpalaCompilerForTests() {
 	}
 
 	try {
-		context.module.exports("function main()\nlocals int x\n{\n}\n", { sourceName: "test" });
+		context.module.exports("function main()\nlocals int x\n{\n}\n", {
+			sourceName: "test",
+			output: () => {},
+			randomId: 0xabcdef,
+		});
 	} catch (err) {
 		console.error("impalaCompiler.js self-test compile failed");
 		console.error(err && err.stack ? err.stack : err);
+		process.exit(1);
+	}
+
+	if (
+		Object.prototype.hasOwnProperty.call(context, "output") ||
+		Object.prototype.hasOwnProperty.call(context, "impalaRandomId") ||
+		Object.prototype.hasOwnProperty.call(context, "createParserContext")
+	) {
+		console.error("impalaCompiler.js leaked host bindings into the global context");
 		process.exit(1);
 	}
 

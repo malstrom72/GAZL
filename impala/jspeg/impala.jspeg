@@ -848,9 +848,6 @@
         });
         return holder;
     };
-    if (typeof globalThis !== 'undefined' && typeof globalThis.createParserContext !== 'function') {
-        globalThis.createParserContext = $$parser.createParserContext;
-    }
 
     /* overwrite the fields of an existing meta object */
     function normaliseVoid(value) {
@@ -1417,7 +1414,7 @@
         if (kind !== undefined) {
             $$parser.flushMetaCode('');
 
-            if (typeof output === 'function') {       // ‘output’ assumed global
+            if (typeof output === 'function') {
                 var line = '';
                 if (scope === 'locals') line += (typeof TAB !== 'undefined' ? TAB : '\t');
                 if (name != null)       line += name + ':';
@@ -1839,8 +1836,8 @@
         $$parser.noForward = false;
 
         /* random-id seeding */
-        if (typeof impalaRandomId !== 'undefined') {
-            $$parser.randomId = impalaRandomId;
+        if (typeof hostRandomId !== 'undefined') {
+            $$parser.randomId = hostRandomId;
         } else {
             for (var i = 0; i < 1000; ++i) {
                 $$parser.randomId =

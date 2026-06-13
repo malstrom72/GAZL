@@ -45,12 +45,27 @@ function applyImpalaHardening(source) {
 		"\t\t\t}\n" +
 		"\t\t});\n" +
 		"\t\treturn holder;\n" +
-		"\t};\n" +
-		"\tif (typeof globalThis !== 'undefined' && typeof globalThis.createParserContext !== 'function') {\n" +
-		"\t\tglobalThis.createParserContext = createParserContext;\n" +
-		"\t}\n\n";
+		"\t};\n\n";
 	if (!patched.includes("createParserContext = function ()")) {
 		patched = patched.replace(metaSectionHeader, createContextHelper + metaSectionHeader);
+	}
+
+	const impalaImplSignature = "var impalaCompilerImpl = (function(_s) {";
+	if (patched.includes(impalaImplSignature)) {
+		patched = patched.replace(
+			impalaImplSignature,
+			() => [
+				"var impalaCompilerImpl = (function(_s, _options) {",
+				"var _hostOptions = _options || {};",
+				"var output = (typeof _hostOptions.output === 'function') ? _hostOptions.output : function () {};",
+				"var hostRandomId = Object.prototype.hasOwnProperty.call(_hostOptions, 'randomId')",
+				"\t? _hostOptions.randomId",
+				"\t: undefined;",
+				"$$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'sourceName')",
+				"\t? _hostOptions.sourceName",
+				"\t: undefined;",
+			].join("\n"),
+		);
 	}
 
 	const metaSlotRegex = /\tfunction metaSlot\(node\) \{[\s\S]*?\t\}\n\n/;
@@ -141,8 +156,8 @@ function applyImpalaHardening(source) {
 		? patched.replace(assignRegex, (match) => (match.includes("JSPEG meta missing") ? match : `${match}${assignGuard}`))
 		: patched;
 
-	const rootInitPattern = "var _i=0,_im=0,_o={_:void 0},";
-	const hardenedRootInit = "var _i=0,_im=0,_o=createParserContext(),";
+	const rootInitPattern = "var _i=0,_im=0,_o={_:void 0},_b=root(_o);";
+	const hardenedRootInit = "var _i=0,_im=0,_o=createParserContext();\n_o.options=_hostOptions;\nvar _b=root(_o);";
 	if (!patched.includes(hardenedRootInit)) {
 		patched = patched.replace(rootInitPattern, hardenedRootInit);
 	}
@@ -151,7 +166,8 @@ function applyImpalaHardening(source) {
 			"function createParserContext() {\n" +
 			"        var holder = {};\n" +
 			"        Object.defineProperty(holder, '__metaSlot', {\n" +
-			"                value: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] },\n" +
+			"                value: { operator: undefined, type: undefined, " +
+			"operands: [ undefined, undefined, undefined ] },\n" +
 			"                writable: true,\n" +
 			"                configurable: true\n" +
 			"        });\n" +
@@ -160,7 +176,8 @@ function applyImpalaHardening(source) {
 			"                get: function () {\n" +
 			"                        if (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {\n" +
 			"                                Object.defineProperty(this, '__metaSlot', {\n" +
-			"                                        value: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] },\n" +
+			"                                        value: { operator: undefined, type: undefined, " +
+			"operands: [ undefined, undefined, undefined ] },\n" +
 			"                                        writable: true,\n" +
 			"                                        configurable: true\n" +
 			"                                });\n" +
@@ -176,9 +193,6 @@ function applyImpalaHardening(source) {
 			"                }\n" +
 			"        });\n" +
 			"        return holder;\n" +
-			"}\n" +
-			"if (typeof globalThis !== 'undefined' && typeof globalThis.createParserContext !== 'function') {\n" +
-			"        globalThis.createParserContext = createParserContext;\n" +
 			"}\n";
 		patched = patched.replace(hardenedRootInit, `${globalHelper}${hardenedRootInit}`);
 	}
@@ -214,18 +228,15 @@ function wrapCompilerSource(exportName, generated, options = {}) {
 		lines.push(`var ${implName} = ${body};`);
 		lines.push(
 			`function ${exportName}(source, options) {`,
-			"\tvar sourceName;",
+			"\tvar compilerOptions;",
 			"\tif (typeof options === 'string') {",
-			"\t\tsourceName = options;",
-			"\t} else if (options && Object.prototype.hasOwnProperty.call(options, 'sourceName')) {",
-			"\t\tsourceName = options.sourceName;",
-			"\t} else if (options && options.sourceName !== undefined) {",
-			"\t\tsourceName = options.sourceName;",
+			"\t\tcompilerOptions = { sourceName: options };",
+			"\t} else if (options) {",
+			"\t\tcompilerOptions = options;",
 			"\t} else {",
-			"\t\tsourceName = undefined;",
+			"\t\tcompilerOptions = {};",
 			"\t}",
-			"\t$$parser.sourceName = sourceName;",
-			`\treturn ${implName}(source);`,
+			`\treturn ${implName}(source, compilerOptions);`,
 			"}",
 		);
 		lines.push(
@@ -251,38 +262,6 @@ function wrapCompilerSource(exportName, generated, options = {}) {
 	return lines.join("\n");
 }
 
-const GLOBAL_SENTINEL = Symbol("missing");
-
-function withGlobalBindings(bindings, fn, preserve = []) {
-	const snapshot = new Map();
-	const keys = new Set([...Object.keys(bindings), ...preserve]);
-	for (const key of keys) {
-		if (Object.prototype.hasOwnProperty.call(globalThis, key)) {
-			snapshot.set(key, globalThis[key]);
-		} else {
-			snapshot.set(key, GLOBAL_SENTINEL);
-		}
-	}
-	try {
-		for (const [key, value] of Object.entries(bindings)) {
-			if (value === undefined) {
-				delete globalThis[key];
-			} else {
-				globalThis[key] = value;
-			}
-		}
-		return fn();
-	} finally {
-		for (const [key, value] of snapshot.entries()) {
-			if (value === GLOBAL_SENTINEL) {
-				delete globalThis[key];
-			} else {
-				globalThis[key] = value;
-			}
-		}
-	}
-}
-
 function sanitizeFilename(label) {
 	const safe = label.replace(/[^A-Za-z0-9_.-]+/g, "_");
 	return safe.endsWith(".js") ? safe : `${safe}.js`;
@@ -290,18 +269,12 @@ function sanitizeFilename(label) {
 
 function loadCompiler(source, description) {
 	const filename = path.join(root, sanitizeFilename(description));
-	const exports = withGlobalBindings(
-		{},
-		() => {
-			const compilerModule = new Module(filename, module);
-			compilerModule.filename = filename;
-			compilerModule.paths = Module._nodeModulePaths(path.dirname(filename));
-			compilerModule.require = Module.createRequire(filename);
-			compilerModule._compile(source, filename);
-			return compilerModule.exports;
-		},
-		["createParserContext"],
-	);
+	const compilerModule = new Module(filename, module);
+	compilerModule.filename = filename;
+	compilerModule.paths = Module._nodeModulePaths(path.dirname(filename));
+	compilerModule.require = Module.createRequire(filename);
+	compilerModule._compile(source, filename);
+	const exports = compilerModule.exports;
 
 	if (typeof exports === "function") {
 		return exports;

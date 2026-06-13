@@ -1,5 +1,13 @@
 var $$parser = {};
-var impalaCompilerImpl = (function(_s) {
+var impalaCompilerImpl = (function(_s, _options) {
+var _hostOptions = _options || {};
+var output = (typeof _hostOptions.output === 'function') ? _hostOptions.output : function () {};
+var hostRandomId = Object.prototype.hasOwnProperty.call(_hostOptions, 'randomId')
+	? _hostOptions.randomId
+	: undefined;
+$$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'sourceName')
+	? _hostOptions.sourceName
+	: undefined;
 {
     /**
      * map(target, k1, v1, k2, v2, …)
@@ -846,9 +854,6 @@ var impalaCompilerImpl = (function(_s) {
         });
         return holder;
     };
-    if (typeof globalThis !== 'undefined' && typeof globalThis.createParserContext !== 'function') {
-        globalThis.createParserContext = createParserContext;
-    }
 
     /* overwrite the fields of an existing meta object */
     function normaliseVoid(value) {
@@ -1415,7 +1420,7 @@ var impalaCompilerImpl = (function(_s) {
         if (kind !== undefined) {
             flushMetaCode('');
 
-            if (typeof output === 'function') {       // ‘output’ assumed global
+            if (typeof output === 'function') {
                 var line = '';
                 if (scope === 'locals') line += (typeof TAB !== 'undefined' ? TAB : '\t');
                 if (name != null)       line += name + ':';
@@ -1837,8 +1842,8 @@ var impalaCompilerImpl = (function(_s) {
         noForward = false;
 
         /* random-id seeding */
-        if (typeof impalaRandomId !== 'undefined') {
-            randomId = impalaRandomId;
+        if (typeof hostRandomId !== 'undefined') {
+            randomId = hostRandomId;
         } else {
             for (var i = 0; i < 1000; ++i) {
                 randomId =
@@ -1991,25 +1996,21 @@ function createParserContext() {
         });
         return holder;
 }
-if (typeof globalThis !== 'undefined' && typeof globalThis.createParserContext !== 'function') {
-        globalThis.createParserContext = createParserContext;
-}
-var _i=0,_im=0,_o=createParserContext(),_b=root(_o);
+var _i=0,_im=0,_o=createParserContext();
+_o.options=_hostOptions;
+var _b=root(_o);
 return [_b,_o._,(_b?_i:_im)];
 });
 function impalaCompiler(source, options) {
-	var sourceName;
+	var compilerOptions;
 	if (typeof options === 'string') {
-		sourceName = options;
-	} else if (options && Object.prototype.hasOwnProperty.call(options, 'sourceName')) {
-		sourceName = options.sourceName;
-	} else if (options && options.sourceName !== undefined) {
-		sourceName = options.sourceName;
+		compilerOptions = { sourceName: options };
+	} else if (options) {
+		compilerOptions = options;
 	} else {
-		sourceName = undefined;
+		compilerOptions = {};
 	}
-	$$parser.sourceName = sourceName;
-	return impalaCompilerImpl(source);
+	return impalaCompilerImpl(source, compilerOptions);
 }
 if (typeof module !== 'undefined' && module.exports) {
 	module.exports = impalaCompiler;
