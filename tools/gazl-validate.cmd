@@ -1,5 +1,5 @@
 @ECHO OFF
 SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
-CD /D "%~dp0"
-node gazl-validate.js %*
+CD /D "%~dp0\.."
+node tools\gazl-validate.js %*
 EXIT /b %ERRORLEVEL%
