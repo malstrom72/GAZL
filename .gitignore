@@ -11,3 +11,4 @@ externals/PikaScript/**/*.dSYM/
 externals/PikaScript/**/xcuserdata/
 externals/PikaScript/tools/PikaCmd/PikaCmd
 externals/PikaScript/tools/PikaCmd/SourceDistribution/PikaCmd
+*.pdb
