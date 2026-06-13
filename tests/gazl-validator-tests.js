@@ -47,6 +47,20 @@ function main() {
 		assertCondition(success.status === 0, "validator should exit cleanly for matching fixtures");
 		assertCondition(success.stderr.trim().length === 0, "validator reported diagnostics for matching fixtures");
 
+		const typedExportFile = writeFixture(tempDir, "typedExport.gazl", [
+			"; signatures version=1",
+			"FUNC typedFoo\t; signature func typedFoo(int, float, ptr, funcptr) -> float",
+			"\tRETU",
+		]);
+		const typedImportFile = writeFixture(tempDir, "typedImport.gazl", [
+			"; signatures version=1",
+			"CALL typedFoo\t; expects typedFoo(int, float, ptr, funcptr) -> float",
+		]);
+
+		const typedSuccess = runValidator([typedExportFile, typedImportFile]);
+		assertCondition(typedSuccess.status === 0, "validator should accept matching call parameter and return types");
+		assertCondition(typedSuccess.stderr.trim().length === 0, "validator reported diagnostics for matching call types");
+
 		const externOnly = writeFixture(tempDir, "externStub.gazl", ["; signatures version=1", "; signature extern func add() -> unknown"]);
 		const externDefinition = writeFixture(tempDir, "externDef.gazl", [
 			"; signatures version=1",
@@ -73,6 +87,22 @@ function main() {
 		const failure = runValidator([exportFile, mismatchFile]);
 		assertCondition(failure.status === 1, "validator should exit with failure for mismatched fixtures");
 		assertCondition(/Signature mismatch for "foo"/.test(failure.stderr), "validator did not report expected mismatch error");
+
+		const arityMismatchFile = writeFixture(tempDir, "arityMismatch.gazl", [
+			"; signatures version=1",
+			"CALL foo\t; expects foo(int) -> int",
+		]);
+		const arityFailure = runValidator([exportFile, arityMismatchFile]);
+		assertCondition(arityFailure.status === 1, "validator should reject calls with the wrong parameter count");
+		assertCondition(/Signature mismatch for "foo"/.test(arityFailure.stderr), "validator did not report expected arity mismatch error");
+
+		const returnMismatchFile = writeFixture(tempDir, "returnMismatch.gazl", [
+			"; signatures version=1",
+			"CALL typedFoo\t; expects typedFoo(int, float, ptr, funcptr) -> int",
+		]);
+		const returnFailure = runValidator([typedExportFile, returnMismatchFile]);
+		assertCondition(returnFailure.status === 1, "validator should reject calls with the wrong return type");
+		assertCondition(/Signature mismatch for "typedFoo"/.test(returnFailure.stderr), "validator did not report expected return mismatch error");
 
 		console.log("gazl-validator unit tests passed");
 	} finally {
