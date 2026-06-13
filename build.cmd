@@ -33,27 +33,18 @@ node runJspegTests.js
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
-REM Optionally validate emitted .gazl metadata when requested
-IF NOT "%GAZL_VALIDATE%"=="" IF NOT "%GAZL_VALIDATE%"=="0" (
-  SET VALIDATOR_FILES=
-  IF NOT "%GAZL_VALIDATE_FILES%"=="" (
-    SET VALIDATOR_FILES=%GAZL_VALIDATE_FILES%
-  ) ELSE (
-    FOR %%F IN (impala\jspeg\testdata\*.gazl) DO (
-      SET VALIDATOR_FILES=!VALIDATOR_FILES! "%%F"
-    )
-  )
-  IF NOT "!VALIDATOR_FILES!"=="" (
-    CALL tools\gazl-validate.cmd !VALIDATOR_FILES!
+REM Validate generated .gazl metadata for the JSPEG fixtures.
+FOR %%F IN (impala\jspeg\testdata\*.expected.gazl) DO (
+  IF /I NOT "%%~nxF"=="externAssignment.expected.gazl" IF /I NOT "%%~nxF"=="returnContractCaller.expected.gazl" (
+    CALL tools\gazl-validate.cmd "%%F"
     IF ERRORLEVEL 1 EXIT /B 1
-  ) ELSE (
-    ECHO GAZL_VALIDATE enabled but no .gazl files were found for validation.
   )
 )
+CALL tools\gazl-validate.cmd impala\jspeg\testdata\returnContractCaller.expected.gazl impala\jspeg\testdata\returnContractProviderFloat.expected.gazl
+IF ERRORLEVEL 1 EXIT /B 1
 
 REM Verify the copied files by running the demo from the output directory
 PUSHD output
 PikaCmd impala.pika run ..\impala\ImpalaDemo.impala
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
-

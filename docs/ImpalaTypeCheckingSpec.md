@@ -123,7 +123,7 @@ However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCal
   - [x] Ensure comments never break layout-sensitive sections by routing them through the same helpers that already insert `;`-prefixed notes when `-g` is enabled today.
 - [x] **Validator tool**
   - [x] Create `tools/gazl-validate.{js,cmd}` (mirroring existing script conventions) that parses the signature comments, performs the matching described above, and exits non-zero on fatal mismatches unless `--warn-only` is passed.【F:tools/gazl-validate.js†L1-L338】【F:tools/gazl-validate.js†L486-L679】
-  - [x] Add integration to `build.sh` behind an environment toggle (`GAZL_VALIDATE=1`), letting CI enable it without slowing local builds immediately.【F:build.sh†L18-L33】【F:build.cmd†L27-L42】
+  - [x] Run `tools/gazl-validate.js` from the default build on explicit JSPEG fixture file sets, while keeping arbitrary linked-unit validation as a direct command.
   - [x] Parse optional `@ <origin>` markers so mismatch diagnostics can cite both the importer and exporter spans when metadata is available.
 - [x] **Documentation & onboarding**
   - [x] Update `docs/Impala.md` and add a quickstart snippet showing how to run the validator on two sample units.
@@ -135,7 +135,7 @@ However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCal
 ## Adoption Strategy
 
 * Ship the compiler changes with signature comment emission gated behind `--emit-metadata`. Enable it by default after a release or two once downstream tools have caught up.
-* Encourage early adopters to enable `GAZL_VALIDATE=1` in CI to catch cross-unit mismatches before runtime. Provide sample scripts for concatenating units while running the validator.
+* Encourage early adopters to run `tools/gazl-validate.js` explicitly in CI on the exact `.gazl` units that will be concatenated or loaded together.
 * Monitor feedback from teams using large legacy codebases. If the comment stream causes unacceptable noise, offer targeted suppression (per-symbol opt-outs or an `@opaque` annotation similar to today’s `extern array` escape hatch).
 
 ## Risks and Mitigations

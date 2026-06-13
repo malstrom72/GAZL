@@ -18,22 +18,18 @@ cp output/GAZLCmd impala/GAZLCmd 2>/dev/null || cp output/GAZLCmd.exe impala/GAZ
 # Run the Impala test suite from the source directory
 (cd impala/jspeg && node jspegCompilerTests.js && node runJspegTests.js)
 
-# Optionally validate emitted .gazl metadata when requested
-if [[ "${GAZL_VALIDATE:-0}" != 0 ]]; then
-	declare -a gazl_files
-	if [[ -n "${GAZL_VALIDATE_FILES:-}" ]]; then
-		# shellcheck disable=SC2206  # word splitting is intentional for caller-supplied args
-		gazl_files=( ${GAZL_VALIDATE_FILES} )
-	else
-		mapfile -t gazl_files < <(find impala/jspeg/testdata -type f -name '*.gazl' -print)
-	fi
-	if [[ ${#gazl_files[@]} -gt 0 ]]; then
-		node tools/gazl-validate.js "${gazl_files[@]}"
-	else
-		echo "GAZL_VALIDATE enabled but no .gazl files were found for validation."
-	fi
-fi
+# Validate generated .gazl metadata for the JSPEG fixtures.
+for gazl_file in impala/jspeg/testdata/*.expected.gazl; do
+	case "$gazl_file" in
+		impala/jspeg/testdata/externAssignment.expected.gazl|impala/jspeg/testdata/returnContractCaller.expected.gazl)
+			continue
+			;;
+	esac
+	node tools/gazl-validate.js "$gazl_file"
+done
+node tools/gazl-validate.js \
+	impala/jspeg/testdata/returnContractCaller.expected.gazl \
+	impala/jspeg/testdata/returnContractProviderFloat.expected.gazl
 
 # Verify the copied files by running the demo from the output directory
 (cd output && ./PikaCmd impala.pika run ../impala/ImpalaDemo.impala)
-

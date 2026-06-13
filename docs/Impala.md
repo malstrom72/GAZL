@@ -454,15 +454,17 @@ required files to `output/` for convenient use.
 
 ### Signature metadata and validation
 
-The compiler can emit human-readable signature comments alongside the
+The compiler emits human-readable signature comments alongside the
 `.gazl` instructions it produces. Each definition, global, and call site
 is annotated with its expected `{int, float, ptr, funcptr, void}`
-categories so cross-unit mismatches can be caught after concatenating
-multiple files. When the compiler knows the original source location it
-appends `@ path:line:column` to the end of each comment, allowing the
-validator to cite precise spans in diagnostics. Functions that omit an
-explicit `returns` clause map the compiler's implicit `?` type to `void`
-in the comment stream, keeping the metadata aligned with the language's
+categories so mismatches can be caught after compiling one or more units.
+This matters both for separately compiled modules and for calls made
+before a later definition has supplied its real signature. When the
+compiler knows the original source location it appends
+`@ path:line:column` to the end of each comment, allowing the validator
+to cite precise spans in diagnostics. Functions that omit an explicit
+`returns` clause map the compiler's implicit `?` type to `void` in the
+comment stream, keeping the metadata aligned with the language's
 behaviour.
 
 The validator merges those comments into a single contract per symbol. An
@@ -486,10 +488,11 @@ CALL showoff         ; expects showoff(ptr) -> void @ ImpalaDemo.impala:49:9
 ; signature extern func print(ptr message) -> void @ ImpalaDemo.impala:3:1
 ```
 
-Run the validator to compare the expectations recorded by callers with
-the definitions supplied by other units. After building the toolchain
-(`bash build.sh`) you can compile two sample sources and validate them
-without leaving the `output/` directory:
+Run the validator on every `.gazl` unit that will be concatenated or
+loaded together. It compares the expectations recorded by callers with
+the definitions supplied by the same file or by other units. After
+building the toolchain (`bash build.sh`) you can compile two sample
+sources and validate them without leaving the `output/` directory:
 
 ```bash
 cd output
@@ -498,10 +501,20 @@ cd output
 node ../tools/gazl-validate.js calc.gazl multitap.gazl
 ```
 
+From the repository root, run the validator directly on any already
+compiled files:
+
+```bash
+node tools/gazl-validate.js output/calc.gazl output/multitap.gazl
+```
+
 The validator reports mismatched signatures as errors by default. Pass
 `--warn-only` to downgrade them while you migrate existing modules, or
-set `GAZL_VALIDATE=1` in the environment before invoking `build.sh` to
-run the check automatically during the normal build.
+`--force` to turn missing-definition warnings into errors. The normal
+`build.sh` path runs the validator's regression tests and validates the
+generated JSPEG fixture metadata with explicit file sets. For other
+programs, run `tools/gazl-validate.js` directly on the exact `.gazl`
+units that will be linked together.
 
 There is also a JavaScript port of the PEG compiler and Impala compiler.
 See [Impala JSPEG](../impala/jspeg/ImpalaJS.md) for the CLI, regeneration flow,
