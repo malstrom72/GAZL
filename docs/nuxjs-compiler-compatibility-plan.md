@@ -32,13 +32,12 @@ features that NuXJS does not implement, especially getter/setter descriptors in 
 
 **Tasks**
 
-- [ ] Scan the generated compiler for `require`, `process`, `Buffer`, `globalThis`, `module.exports`, `console`, and
+- [x] Scan the generated compiler for `require`, `process`, `Buffer`, `globalThis`, `module.exports`, `console`, and
       accessor-style `Object.defineProperty`.
-- [ ] Treat `Array.isArray`, `JSON.parse`, `JSON.stringify`, and string indexing as allowed NuXJS APIs.
-- [ ] Confirm whether the guarded `module.exports` block parses and executes harmlessly in NuXJS when `module` is
+- [x] Treat `Array.isArray`, `JSON.parse`, `JSON.stringify`, and string indexing as allowed NuXJS APIs.
+- [x] Confirm whether the guarded `module.exports` block parses and executes harmlessly in NuXJS when `module` is
       undefined.
-- [ ] Confirm whether NuXJS accepts accessor descriptors. If not, mark `createParserContext` as the first required
-      rewrite.
+- [x] Remove the accessor descriptor dependency from `createParserContext`.
 
 **Validation.** Add or update a test that loads the compiler in a minimal context without Node globals and verifies that
 the only failing assumptions are the ones listed in this phase.
@@ -55,13 +54,13 @@ the only failing assumptions are the ones listed in this phase.
 
 **Tasks**
 
-- [ ] Replace the accessor-descriptor `createParserContext` implementation with a NuXJS-compatible implementation.
-- [ ] Preserve lazy/default meta-record behaviour:
-  - [ ] missing metadata normalises to a record with `operator`, `type`, and three `operands`
-  - [ ] assignments to `$._` still pass through the same normalisation path
-  - [ ] operand arrays are still normalised to exactly three slots
-- [ ] Regenerate `impalaCompiler.js` from the grammar and hardening script.
-- [ ] Keep the helper private to the generated compiler; do not reintroduce `globalThis.createParserContext`.
+- [x] Replace the accessor-descriptor `createParserContext` implementation with a NuXJS-compatible implementation.
+- [x] Preserve lazy/default meta-record behaviour:
+  - [x] missing metadata normalises to a record with `operator`, `type`, and three `operands`
+  - [x] assignments to `$._` still pass through the same normalisation path
+  - [x] operand arrays are still normalised to exactly three slots
+- [x] Regenerate `impalaCompiler.js` from the grammar and hardening script.
+- [x] Keep the helper private to the generated compiler; do not reintroduce `globalThis.createParserContext`.
 
 **Validation.** Existing meta-slot, assignment, and root-context tests in `impala/jspeg/jspegCompilerTests.js` must still
 pass after the rewrite.
@@ -72,13 +71,15 @@ pass after the rewrite.
 
 **Tasks**
 
-- [ ] Keep `impalaCompiler(source, options)` as the public entry point.
-- [ ] Continue passing these services through `options`:
-  - [ ] `output`
-  - [ ] `randomId`
-  - [ ] `sourceName`
-- [ ] Ensure normal compilation does not read ambient `output`, `impalaRandomId`, or parser context globals.
-- [ ] Decide whether to keep the guarded CommonJS export in the default artefact or emit a separate NuXJS/plain wrapper.
+- [x] Keep `impalaCompiler(source, options)` as the public entry point.
+- [x] Continue passing these services through `options`:
+  - [x] `output`
+  - [x] `randomId`
+  - [x] `sourceName`
+- [x] Ensure normal compilation does not read ambient `output`, `impalaRandomId`, or parser context globals.
+- [x] Keep the guarded CommonJS export in the default artefact because it is harmless when `module` is undefined.
+- [x] Replace the generated `KEYWORD` alternation with an equivalent loop so NuXJS can compile the generated compiler
+      without hitting its internal complexity limit.
 
 **Validation.** Add a regression test that compiles through `impalaCompiler(source, options)` in a context with no
 ambient host globals.
@@ -90,15 +91,15 @@ available.
 
 **Tasks**
 
-- [ ] Add a small smoke script that combines:
-  - [ ] `impalaCompiler.js`
-  - [ ] a tiny Impala source string
-  - [ ] host-provided `output`, `randomId`, and `sourceName`
-  - [ ] an assertion/reporting footer
-- [ ] Add a wrapper script that locates NuXJS through a simple variable such as `NUXJS`.
-- [ ] Make the smoke script skip clearly when NuXJS is unavailable, unless build policy later requires NuXJS.
-- [ ] Keep the script portable and runnable from any directory if it becomes user-facing.
-- [ ] Add a matching `.cmd` script if the smoke path becomes part of the documented workflow.
+- [x] Add a small smoke script that combines:
+  - [x] `impalaCompiler.js`
+  - [x] a tiny Impala source string
+  - [x] host-provided `output`, `randomId`, and `sourceName`
+  - [x] an assertion/reporting footer
+- [x] Add a wrapper script that locates NuXJS through a simple variable such as `NUXJS`.
+- [x] Make the smoke script skip clearly when NuXJS is unavailable, unless build policy later requires NuXJS.
+- [x] Keep the script portable and runnable from any directory if it becomes user-facing.
+- [x] Add a matching `.cmd` script if the smoke path becomes part of the documented workflow.
 
 **Validation.** The smoke harness should fail if `impalaCompiler.js` requires Node globals or unsupported descriptor
 features.
@@ -109,27 +110,30 @@ features.
 
 **Tasks**
 
-- [ ] Update `impala/jspeg/ImpalaJS.md` to state that:
-  - [ ] generator and build scripts use Node
-  - [ ] the generated compiler is intended to be host-neutral
-  - [ ] NuXJS hosts must supply source text and host services explicitly
-  - [ ] file I/O is a host responsibility because NuXJS is sandboxed
-- [ ] Document the NuXJS smoke command and the `NUXJS` executable variable if added.
-- [ ] Document that `Array.isArray` and `JSON.parse` are allowed for NuXJS compatibility.
+- [x] Update `impala/jspeg/ImpalaJS.md` to state that:
+  - [x] generator and build scripts use Node
+  - [x] the generated compiler is intended to be host-neutral
+  - [x] NuXJS hosts must supply source text and host services explicitly
+  - [x] file I/O is a host responsibility because NuXJS is sandboxed
+- [x] Document the NuXJS smoke command and the `NUXJS` executable variable if added.
+- [x] Document that `Array.isArray` and `JSON.parse` are allowed for NuXJS compatibility.
 
 ## Phase 6 - Verification
 
 Run the full verification sequence after implementation:
 
-- [ ] `node impala/jspeg/updateJSPEG.js`
-- [ ] NuXJS compatibility smoke test, if `NUXJS` is available
-- [ ] `timeout 180 ./build.sh`
+- [x] `node impala/jspeg/updateJSPEG.js`
+- [x] NuXJS compatibility smoke test, if `NUXJS` is available. The wrapper was run and skipped cleanly because no NuXJS
+      executable is configured in this checkout.
+- [x] `timeout 180 ./build.sh`
 
 ## Deliverables checklist
 
-- [ ] NuXJS blocker audit captured in tests or docs.
-- [ ] NuXJS-compatible parser context implementation.
-- [ ] Generated `impalaCompiler.js` regenerated and checked in.
-- [ ] Explicit-host-service regression coverage.
-- [ ] Optional NuXJS smoke harness.
-- [ ] Documentation explaining the Node tooling / host-neutral compiler split.
+- [x] NuXJS blocker audit captured in tests or docs.
+- [x] NuXJS-compatible parser context implementation.
+- [x] Generated `impalaCompiler.js` regenerated and checked in.
+- [x] Explicit-host-service regression coverage.
+- [x] Optional NuXJS smoke harness.
+- [x] NuXJS command-line compiler script using global `arguments`; `arguments[0]` supplies the script path used to locate
+      `impalaCompiler.js` in the same directory.
+- [x] Documentation explaining the Node tooling / host-neutral compiler split.

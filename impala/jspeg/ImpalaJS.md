@@ -65,6 +65,49 @@ Details:
   object.
 - `retabulate: false` preserves the original alignment tabs for byte-for-byte comparisons.
 
+## Host-neutral compiler
+
+The generated `impalaCompiler.js` is intended to run as plain JavaScript when a
+host provides the source text and services explicitly:
+
+```js
+var result = impalaCompiler(sourceText, {
+	output: outputLine,
+	randomId: 0x4d2,
+	sourceName: "source.impala",
+});
+```
+
+Node is required for the repository generator and CLI tooling, but normal
+execution of the generated compiler must not depend on Node globals such as
+`require`, `process`, `Buffer`, ambient `output`, or ambient `impalaRandomId`.
+NuXJS hosts are expected to provide any file I/O outside the compiler because
+NuXJS runtimes are sandboxed. `Array.isArray`, `JSON.parse`, and string indexing
+are allowed in the generated compiler for NuXJS compatibility.
+
+An optional smoke test can run the generated compiler through the NuXJS REPL:
+
+```bash
+bash tools/run-nuxjs-impala-smoke.sh
+```
+
+The script uses `$NUXJS` when set, otherwise it tries `output/NuXJS` and then
+`NuXJS` on `PATH`. It skips cleanly when no NuXJS executable is available. The
+Windows equivalent is `tools\run-nuxjs-impala-smoke.cmd`.
+
+To compile an Impala file directly with the NuXJS command-line REPL, use the
+NuXJS command-line argument support:
+
+```bash
+NuXJS -s impala/jspeg/impala.nuxjs.js source.impala 0x4d2 source.impala impala/jspeg/impalaCompiler.js > output.gazl
+```
+
+Arguments after `impala.nuxjs.js` are `source.impala`, optional `randomId`,
+optional `sourceName`, and optional compiler path. NuXJS exposes the script path
+as `arguments[0]`, and the script uses that path to find `impalaCompiler.js` in
+the same directory by default. This works both from the repository root and from
+`impala/jspeg`.
+
 ## Regenerating the compiler
 
 - Run `node impala/jspeg/updateJSPEG.js` to rebuild both `jspegCompiler.js` and `impalaCompiler.js`.

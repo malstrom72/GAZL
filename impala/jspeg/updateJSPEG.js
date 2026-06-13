@@ -16,35 +16,10 @@ function applyImpalaHardening(source) {
 		"\t * --------------------------------------------------------- */\n\n";
 	const createContextHelper =
 		"\tcreateParserContext = function () {\n" +
-		"\t\tvar holder = {};\n" +
-		"\t\tObject.defineProperty(holder, '__metaSlot', {\n" +
-		"\t\t\tvalue: { operator: undefined, type: undefined,\n" +
-		"\t\t\t\t\t operands: [ undefined, undefined, undefined ] },\n" +
-		"\t\t\twritable: true,\n" +
-		"\t\t\tconfigurable: true\n" +
-		"\t\t});\n" +
-		"\t\tObject.defineProperty(holder, '_', {\n" +
-		"\t\t\tconfigurable: true,\n" +
-		"\t\t\tget: function () {\n" +
-		"\t\t\t\tif (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {\n" +
-		"\t\t\t\t\tObject.defineProperty(this, '__metaSlot', {\n" +
-		"\t\t\t\t\t\tvalue: { operator: undefined, type: undefined,\n" +
-		"\t\t\t\t\t\t\t operands: [ undefined, undefined, undefined ] },\n" +
-		"\t\t\t\t\t\twritable: true,\n" +
-		"\t\t\t\t\t\tconfigurable: true\n" +
-		"\t\t\t\t\t});\n" +
-		"\t\t\t\t}\n" +
-		"\t\t\t\treturn this.__metaSlot;\n" +
-		"\t\t\t},\n" +
-		"\t\t\tset: function (value) {\n" +
-		"\t\t\t\tObject.defineProperty(this, '__metaSlot', {\n" +
-		"\t\t\t\t\tvalue: value,\n" +
-		"\t\t\t\t\twritable: true,\n" +
-		"\t\t\t\t\tconfigurable: true\n" +
-		"\t\t\t\t});\n" +
-		"\t\t\t}\n" +
-		"\t\t});\n" +
-		"\t\treturn holder;\n" +
+		"\t\treturn {\n" +
+		"\t\t\t_: { operator: undefined, type: undefined,\n" +
+		"\t\t\t\t operands: [ undefined, undefined, undefined ] }\n" +
+		"\t\t};\n" +
 		"\t};\n\n";
 	if (!patched.includes("createParserContext = function ()")) {
 		patched = patched.replace(metaSectionHeader, createContextHelper + metaSectionHeader);
@@ -115,6 +90,35 @@ function applyImpalaHardening(source) {
 
 	patched = patched.replace(/\$[A-Za-z0-9_]*=\{\}/g, (match) => match.replace("={}", "=createParserContext()"));
 
+	const keywordFunctionRegex = /function KEYWORD\(\$\)\{[^\n]*\n/;
+	const keywordFunctionReplacement =
+		"function KEYWORD($){var _b=_i,_words=KEYWORD_WORDS,_word,_end,_x;" +
+		"for(var _k=0;_k<_words.length;++_k){" +
+		"_word=_words[_k];" +
+		"if(_s.substr(_i,_word.length)===_word){" +
+		"_i+=_word.length;" +
+		"_end=_i;" +
+		"_x=SYMBOL_CHAR($);" +
+		"_i=_end;" +
+		"if(!_x)return true;" +
+		"_i=_b;" +
+		"}}_im=(_i>_im?_i:_im);_i=_b;return false}\n";
+	if (keywordFunctionRegex.test(patched) && !patched.includes("KEYWORD_WORDS")) {
+		patched = patched.replace(
+			"var _hostOptions = _options || {};",
+			[
+				"var _hostOptions = _options || {};",
+				"var KEYWORD_WORDS = [",
+				"\t'abs', 'array', 'assert', 'case', 'const', 'copy', 'default', 'do', 'else', 'extern',",
+				"\t'float', 'floor', 'for', 'from', 'ftoi', 'funcptr', 'function', 'global', 'goto', 'if',",
+				"\t'int', 'itof', 'locals', 'loop', 'native', 'null', 'nullfunc', 'pointer', 'readonly',",
+				"\t'returns', 'switch', 'temporary', 'to', 'while'",
+				"];",
+			].join("\n"),
+		);
+		patched = patched.replace(keywordFunctionRegex, keywordFunctionReplacement);
+	}
+
 	const failFunctionPattern =
 		"\tfail = function (error, source, offset) {\n" +
 		"\t\tfunction oneLine(s) { return replace(replace(replace(s,\"\\t\",' '),\"\\r\",' '),\"\\n\",' '); }\n" +
@@ -164,35 +168,9 @@ function applyImpalaHardening(source) {
 	if (!patched.includes("function createParserContext() {")) {
 		const globalHelper =
 			"function createParserContext() {\n" +
-			"        var holder = {};\n" +
-			"        Object.defineProperty(holder, '__metaSlot', {\n" +
-			"                value: { operator: undefined, type: undefined, " +
-			"operands: [ undefined, undefined, undefined ] },\n" +
-			"                writable: true,\n" +
-			"                configurable: true\n" +
-			"        });\n" +
-			"        Object.defineProperty(holder, '_', {\n" +
-			"                configurable: true,\n" +
-			"                get: function () {\n" +
-			"                        if (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {\n" +
-			"                                Object.defineProperty(this, '__metaSlot', {\n" +
-			"                                        value: { operator: undefined, type: undefined, " +
-			"operands: [ undefined, undefined, undefined ] },\n" +
-			"                                        writable: true,\n" +
-			"                                        configurable: true\n" +
-			"                                });\n" +
-			"                        }\n" +
-			"                        return this.__metaSlot;\n" +
-			"                },\n" +
-			"                set: function (value) {\n" +
-			"                        Object.defineProperty(this, '__metaSlot', {\n" +
-			"                                value: value,\n" +
-			"                                writable: true,\n" +
-			"                                configurable: true\n" +
-			"                        });\n" +
-			"                }\n" +
-			"        });\n" +
-			"        return holder;\n" +
+			"        return {\n" +
+			"                _: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] }\n" +
+			"        };\n" +
 			"}\n";
 		patched = patched.replace(hardenedRootInit, `${globalHelper}${hardenedRootInit}`);
 	}

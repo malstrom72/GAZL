@@ -732,6 +732,15 @@
     };
 
     /* put a token back into its stock bucket */
+    function stockContains(stk, op) {
+        for (var i = stk.length - 1; i >= 0; --i) {
+            if (stk[i] === op) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     $$parser.returnBack = function (op) {
         if (op == null) {
             return;
@@ -741,7 +750,7 @@
         /* ordinary transients / compile-time vars */
         if (c === '%' || c === '<') {
             var stk = $$parser.stock[c];
-            if (stk.indexOf(op) === -1) stk.push(op);   // avoid dupes
+            if (!stockContains(stk, op)) stk.push(op);   // avoid dupes
         }
         /* special case “…:<” suffix ---------------------------------
            original test:  op{len-4 : 2} == ':<'
@@ -818,35 +827,10 @@
     }
 
     $$parser.createParserContext = function () {
-        var holder = {};
-        Object.defineProperty(holder, '__metaSlot', {
-                value: { operator: undefined, type: undefined,
-                         operands: [ undefined, undefined, undefined ] },
-                writable: true,
-                configurable: true
-        });
-        Object.defineProperty(holder, '_', {
-                configurable: true,
-                get: function () {
-                        if (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {
-                                Object.defineProperty(this, '__metaSlot', {
-                                        value: { operator: undefined, type: undefined,
-                                                 operands: [ undefined, undefined, undefined ] },
-                                        writable: true,
-                                        configurable: true
-                                });
-                        }
-                        return this.__metaSlot;
-                },
-                set: function (value) {
-                        Object.defineProperty(this, '__metaSlot', {
-                                value: value,
-                                writable: true,
-                                configurable: true
-                        });
-                }
-        });
-        return holder;
+        return {
+            _: { operator: undefined, type: undefined,
+                 operands: [ undefined, undefined, undefined ] }
+        };
     };
 
     /* overwrite the fields of an existing meta object */

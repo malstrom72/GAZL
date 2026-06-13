@@ -111,6 +111,8 @@ if (canonicalizeTrimmed(impalaSelfExpected) !== canonicalizeTrimmed(impalaExisti
 }
 console.log("impala.jspeg compiles identically under self-hosted compiler");
 
+assert(!impalaExisting.includes("Object.defineProperty"), "impalaCompiler.js must not require descriptor support for parser context");
+
 const compilerContext = loadImpalaCompilerForTests();
 const makeMetaHelper = compilerContext.makeMeta;
 const assignHelper = compilerContext.assign;
@@ -168,6 +170,9 @@ assert(capturedFailError.impalaMessage === "boom", "fail must record original er
 assert(capturedFailError.impalaOffset === 10, "fail must capture numeric offsets");
 assert(capturedFailError.impalaSnippetBefore === "23456789", "fail must store snippet before cursor");
 assert(capturedFailError.impalaSnippetAfter.startsWith("abcdefgh"), "fail must store snippet after cursor");
+
+testPlainHostImpalaCompiler(impalaExisting);
+testNuXJSCommandCompilerScript(impalaExisting);
 
 function compileAndEval(compilerFn, source, label) {
 	const [ok, generated, endIndex] = compilerFn(source);
@@ -307,6 +312,84 @@ function loadImpalaCompilerForTests() {
 	}
 
 	return context;
+}
+
+function testPlainHostImpalaCompiler(compilerSource) {
+	const context = {};
+	vm.createContext(context);
+	const script = new vm.Script(compilerSource, { filename: "impalaCompiler.plain.js" });
+	script.runInContext(context);
+
+	assert(typeof context.impalaCompiler === "function", "plain host context must expose impalaCompiler as a script global");
+	assert(!Object.prototype.hasOwnProperty.call(context, "module"), "plain host context must not need CommonJS module");
+	assert(!Object.prototype.hasOwnProperty.call(context, "output"), "plain host context must not need ambient output");
+	assert(!Object.prototype.hasOwnProperty.call(context, "impalaRandomId"), "plain host context must not need ambient impalaRandomId");
+	assert(!Object.prototype.hasOwnProperty.call(context, "globalThis"), "plain host context must not need injected globalThis");
+
+	const outputLines = [];
+	try {
+		context.impalaCompiler("function main()\nlocals int x\n{\n}\n", {
+			sourceName: "plain-host-test.impala",
+			output: (line) => outputLines.push(line),
+			randomId: 0xabcdef,
+		});
+	} catch (err) {
+		console.error("impalaCompiler.js failed in plain host context");
+		console.error(err && err.stack ? err.stack : err);
+		process.exit(1);
+	}
+
+	assert(outputLines.length > 0, "plain host compile must emit output through options.output");
+	console.log("impalaCompiler.js runs in a plain host context without Node globals");
+}
+
+function testNuXJSCommandCompilerScript(compilerSource) {
+	const scriptSource = fs.readFileSync(path.join(dir, "impala.nuxjs.js"), "utf8");
+	const sourcePath = "smoke.impala";
+	const sourceText = fs.readFileSync(path.join(dir, "testdata", "smoke.impala"), IMPALA_ENCODING);
+
+	function runCase(label, args, acceptedCompilerPaths) {
+		const outputLines = [];
+		let loaded = false;
+		const context = {
+			arguments: args,
+			print: (line) => outputLines.push(String(line)),
+			read: (file) => {
+				if (file === sourcePath) {
+					return sourceText;
+				}
+				throw new Error(`Unexpected read path for ${label}: ${file}`);
+			},
+			load: (file) => {
+				if (!acceptedCompilerPaths[file]) {
+					throw new Error(`Unexpected load path for ${label}: ${file}`);
+				}
+				if (loaded) {
+					throw new Error(`Compiler loaded more than once for ${label}`);
+				}
+				loaded = true;
+				new vm.Script(compilerSource, { filename: file }).runInContext(context);
+			},
+		};
+		vm.createContext(context);
+		new vm.Script(scriptSource, { filename: "impala.nuxjs.js" }).runInContext(context);
+
+		assert(outputLines.length > 0, `NuXJS command compiler script must emit compiled GAZL for ${label}`);
+		assert(
+			outputLines.some((line) => line.indexOf("main:") !== -1 && line.indexOf("FUNC") !== -1),
+			`NuXJS command compiler script output must include compiled main function for ${label}`,
+		);
+	}
+
+	runCase("explicit compiler path", ["impala.nuxjs.js", sourcePath, "42", sourcePath, "customCompiler.js"], {
+		customCompiler: "ok",
+		"customCompiler.js": "ok",
+	});
+	runCase("repo-root script path", ["impala/jspeg/impala.nuxjs.js", sourcePath, "42", sourcePath], {
+		"impala/jspeg/impalaCompiler.js": "ok",
+	});
+	runCase("local script path", ["impala.nuxjs.js", sourcePath, "42", sourcePath], { "impalaCompiler.js": "ok" });
+	console.log("impala.nuxjs.js compiles an Impala source through NuXJS-style command arguments");
 }
 
 const arithmeticCases = [

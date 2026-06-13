@@ -1,6 +1,12 @@
 var $$parser = {};
 var impalaCompilerImpl = (function(_s, _options) {
 var _hostOptions = _options || {};
+var KEYWORD_WORDS = [
+	'abs', 'array', 'assert', 'case', 'const', 'copy', 'default', 'do', 'else', 'extern',
+	'float', 'floor', 'for', 'from', 'ftoi', 'funcptr', 'function', 'global', 'goto', 'if',
+	'int', 'itof', 'locals', 'loop', 'native', 'null', 'nullfunc', 'pointer', 'readonly',
+	'returns', 'switch', 'temporary', 'to', 'while'
+];
 var output = (typeof _hostOptions.output === 'function') ? _hostOptions.output : function () {};
 var hostRandomId = Object.prototype.hasOwnProperty.call(_hostOptions, 'randomId')
 	? _hostOptions.randomId
@@ -738,6 +744,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     };
 
     /* put a token back into its stock bucket */
+    function stockContains(stk, op) {
+        for (var i = stk.length - 1; i >= 0; --i) {
+            if (stk[i] === op) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     returnBack = function (op) {
         if (op == null) {
             return;
@@ -747,7 +762,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         /* ordinary transients / compile-time vars */
         if (c === '%' || c === '<') {
             var stk = stock[c];
-            if (stk.indexOf(op) === -1) stk.push(op);   // avoid dupes
+            if (!stockContains(stk, op)) stk.push(op);   // avoid dupes
         }
         /* special case “…:<” suffix ---------------------------------
            original test:  op{len-4 : 2} == ':<'
@@ -824,35 +839,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     }
 
     createParserContext = function () {
-        var holder = {};
-        Object.defineProperty(holder, '__metaSlot', {
-                value: { operator: undefined, type: undefined,
-                         operands: [ undefined, undefined, undefined ] },
-                writable: true,
-                configurable: true
-        });
-        Object.defineProperty(holder, '_', {
-                configurable: true,
-                get: function () {
-                        if (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {
-                                Object.defineProperty(this, '__metaSlot', {
-                                        value: { operator: undefined, type: undefined,
-                                                 operands: [ undefined, undefined, undefined ] },
-                                        writable: true,
-                                        configurable: true
-                                });
-                        }
-                        return this.__metaSlot;
-                },
-                set: function (value) {
-                        Object.defineProperty(this, '__metaSlot', {
-                                value: value,
-                                writable: true,
-                                configurable: true
-                        });
-                }
-        });
-        return holder;
+        return {
+            _: { operator: undefined, type: undefined,
+                 operands: [ undefined, undefined, undefined ] }
+        };
     };
 
     /* overwrite the fields of an existing meta object */
@@ -1919,7 +1909,7 @@ function Identifier($){return (function(){var _b=_i;return (function(){var _l=_i
 function FloatLiteral($){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())&&(_s[_i]===".")&&(++_i,true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())&&((function(){var _b=_i;return (function(){var _b=_i;return (_s[_i]==="E")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="e")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function IntegerLiteral($){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&(function(){var _b=_i;return (_s.substr(_i,2)==="0x")&&(_i+=2,true)&&((function(){for(var _n=0;HEX($);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="'")&&(++_i,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_x=(_s[_i]==="'")&&(++_i,true);_i=_l;return !_x})()&&ASCII($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="'")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function StringLiteral($){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return (_s[_i]==="\"")&&(++_i,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_x=(!!_s[_i]&&"\"\\\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f".indexOf(_s[_i])>=0)&&(++_i,true);_i=_l;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="\\")&&(++_i,true)&&(function(){var _b=_i;return (!!_s[_i]&&"\"\\bfnrt".indexOf(_s[_i])>=0)&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="u")&&(++_i,true)&&HEX($)&&HEX($)&&HEX($)&&HEX($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="\"")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function KEYWORD($){return (function(){var _b=_i;return ABS($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ARRAY($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ASSERT($)||(_im=(_i>_im?_i:_im),_i=_b,false)||CASE($)||(_im=(_i>_im?_i:_im),_i=_b,false)||CONST($)||(_im=(_i>_im?_i:_im),_i=_b,false)||COPY($)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)||(_im=(_i>_im?_i:_im),_i=_b,false)||DO($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ELSE($)||(_im=(_i>_im?_i:_im),_i=_b,false)||EXTERN($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FLOAT($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FLOOR($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FOR($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FROM($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FTOI($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FUNCPTR($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FUNCTION($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GLOBAL($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GOTO($)||(_im=(_i>_im?_i:_im),_i=_b,false)||IF($)||(_im=(_i>_im?_i:_im),_i=_b,false)||INT($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ITOF($)||(_im=(_i>_im?_i:_im),_i=_b,false)||LOCALS($)||(_im=(_i>_im?_i:_im),_i=_b,false)||LOOP($)||(_im=(_i>_im?_i:_im),_i=_b,false)||NATIVE($)||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)||(_im=(_i>_im?_i:_im),_i=_b,false)||POINTER($)||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)||(_im=(_i>_im?_i:_im),_i=_b,false)||RETURNS($)||(_im=(_i>_im?_i:_im),_i=_b,false)||SWITCH($)||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)||(_im=(_i>_im?_i:_im),_i=_b,false)||TO($)||(_im=(_i>_im?_i:_im),_i=_b,false)||WHILE($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function KEYWORD($){var _b=_i,_words=KEYWORD_WORDS,_word,_end,_x;for(var _k=0;_k<_words.length;++_k){_word=_words[_k];if(_s.substr(_i,_word.length)===_word){_i+=_word.length;_end=_i;_x=SYMBOL_CHAR($);_i=_end;if(!_x)return true;_i=_b;}}_im=(_i>_im?_i:_im);_i=_b;return false}
 function ABS($){return (function(){var _b=_i;return (_s.substr(_i,3)==="abs")&&(_i+=3,true)&&(function(){var _l=_i,_x=SYMBOL_CHAR($);_i=_l;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ARRAY($){return (function(){var _b=_i;return (_s.substr(_i,5)==="array")&&(_i+=5,true)&&(function(){var _l=_i,_x=SYMBOL_CHAR($);_i=_l;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ASSERT($){return (function(){var _b=_i;return (_s.substr(_i,6)==="assert")&&(_i+=6,true)&&(function(){var _l=_i,_x=SYMBOL_CHAR($);_i=_l;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
@@ -1968,33 +1958,9 @@ function ASCII($){return (function(){var _b=_i;return (function(){var _l=_i,_x=(
 function _($){return (function(){var _b=_i;return ((function(){while((function(){var _b=_i;return ((function(){for(var _n=0;(!!_s[_i]&&" \t\r\n".indexOf(_s[_i])>=0)&&(++_i,true);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)||COMMENT($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function COMMENT($){return (function(){var _b=_i;return (_s.substr(_i,2)==="/*")&&(_i+=2,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_x=(_s.substr(_i,2)==="*/")&&(_i+=2,true);_i=_l;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s.substr(_i,2)==="*/")&&(_i+=2,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s.substr(_i,2)==="//")&&(_i+=2,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_x=(!!_s[_i]&&"\r\n".indexOf(_s[_i])>=0)&&(++_i,true);_i=_l;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function createParserContext() {
-        var holder = {};
-        Object.defineProperty(holder, '__metaSlot', {
-                value: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] },
-                writable: true,
-                configurable: true
-        });
-        Object.defineProperty(holder, '_', {
-                configurable: true,
-                get: function () {
-                        if (!Object.prototype.hasOwnProperty.call(this, '__metaSlot')) {
-                                Object.defineProperty(this, '__metaSlot', {
-                                        value: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] },
-                                        writable: true,
-                                        configurable: true
-                                });
-                        }
-                        return this.__metaSlot;
-                },
-                set: function (value) {
-                        Object.defineProperty(this, '__metaSlot', {
-                                value: value,
-                                writable: true,
-                                configurable: true
-                        });
-                }
-        });
-        return holder;
+        return {
+                _: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] }
+        };
 }
 var _i=0,_im=0,_o=createParserContext();
 _o.options=_hostOptions;
