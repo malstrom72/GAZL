@@ -31,6 +31,6 @@ node tools/gazl-validate.js \
 	impala/testdata/returnContractProviderFloat.expected.gazl
 
 # Verify the staged Impala compiler by compiling with NuXJS and running with GAZLCmd.
-./output/NuXJS -s output/impala.nuxjs.js \
+./output/NuXJS output/impala.nuxjs.js \
 	impala/ImpalaDemo.impala 0x4d2 impala/ImpalaDemo.impala > output/ImpalaDemo.gazl
 ./output/GAZLCmd output/ImpalaDemo.gazl main

@@ -46,7 +46,7 @@ Both the **beta** and **release** targets are compiled with optimizations enable
    ```
 2. Run the demo from the `output/` directory:
    ```
-   ./output/NuXJS -s output/impala.nuxjs.js \
+   ./output/NuXJS output/impala.nuxjs.js \
    	impala/ImpalaDemo.impala 0x4d2 impala/ImpalaDemo.impala > output/demo.gazl
    ./output/GAZLCmd output/demo.gazl main
    ```

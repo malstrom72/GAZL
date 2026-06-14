@@ -160,4 +160,4 @@ Goal: make the final holder/value model clear to future grammar authors.
 - Update `impala/ImpalaJS.md` only if user-facing compiler behavior changed.
 
 Exit criteria: docs describe the final action style without mentioning obsolete
-PikaScript files or the removed `impala/jspeg/` layout.
+compiler files or the removed `impala/jspeg/` layout.

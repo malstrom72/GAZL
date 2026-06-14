@@ -1,6 +1,0 @@
-			<-	_ expr
-expr		<-	$$:product ( op=[-+] _ r:product { if (op == '+') $$ += r else $$ -= r } ) *
-product		<-	$$:group ( op=[*/] _ r:group { if (op == '*') $$ *= r else $$ /= r } ) *
-group		<-	number _ / '(' _ expr ')' _
-number		<-	$$=[0-9]+
-_			<-	[ \t\r\n]*

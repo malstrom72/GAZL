@@ -127,4 +127,4 @@ Impala parity tests and the Impala CLI are documented in `ImpalaJS.md`.
 JSPEG began as a direct translation of the old PPEG grammar into JavaScript. The
 JavaScript action library embedded in `impala.jspeg` mirrors the legacy helper
 set so grammar actions keep the established semantics without keeping the old
-PikaScript implementation in the active tree.
+implementation in the active tree.

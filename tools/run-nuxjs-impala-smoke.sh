@@ -17,7 +17,7 @@ fi
 output_file="$(mktemp "${TMPDIR:-/tmp}/gazl-nuxjs-smoke.XXXXXX")"
 trap 'rm -f "$output_file"' EXIT
 
-"$nuxjs" -s \
+"$nuxjs" \
 	"$(pwd)/impala/impala.nuxjs.js" \
 	"$(pwd)/impala/testdata/smoke.impala" \
 	42 \

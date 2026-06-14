@@ -16,8 +16,11 @@ The `Variable` rule recognises both `$$.` and bare `$$`. The former now rewrites
 ### Parser Entry Point
 The top-level `root` rule emits the generated parser wrapper. It materialises the shared container `_o={_:void 0}` and returns `_o._` as the semantic value, hiding the holder from callers entirely. Any future attempt to expose the container needs to adjust this wrapper in tandem with the `$$` rewrites. 【F:impala/impala.jspeg†L19-L27】
 
-## Limitations Compared to PPEG
-The PPEG runtime allows host code to pass a container by reference (`@result`) when invoking a generated parser, which means grammars and callers can cooperate on the complete structure behind `$$`. 【legacy PPEG docs��L53-L66】 JSPEG’s new `$$.` escape restores that in-grammar access, but the generated wrapper still hides the holder by returning only `_o._`, so callers cannot yet supply or retrieve the container the way PPEG does. 【F:impala/impala.jspeg†L19-L27】
+## Limitations Compared to Legacy PPEG
+The old PPEG runtime allowed host code to pass a container by reference (`@result`) when invoking a generated parser,
+which meant grammars and callers could cooperate on the complete structure behind `$$`. JSPEG's `$$.` escape restores
+that in-grammar access, but the generated wrapper still hides the holder by returning only `_o._`, so callers cannot
+yet supply or retrieve the container the way PPEG did. 【F:impala/impala.jspeg†L19-L27】
 
 ## Architecture Adjustment Ideas
 

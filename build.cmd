@@ -41,7 +41,7 @@ CALL tools\gazl-validate.cmd impala\testdata\returnContractCaller.expected.gazl 
 IF ERRORLEVEL 1 EXIT /B 1
 
 REM Verify the staged Impala compiler by compiling with NuXJS and running with GAZLCmd.
-output\NuXJS.exe -s output\impala.nuxjs.js ^
+output\NuXJS.exe output\impala.nuxjs.js ^
 	impala\ImpalaDemo.impala 0x4d2 impala\ImpalaDemo.impala > output\ImpalaDemo.gazl
 IF ERRORLEVEL 1 EXIT /B 1
 output\GAZLCmd.exe output\ImpalaDemo.gazl main
