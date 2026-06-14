@@ -20,10 +20,8 @@ POPD
 COPY /Y output\GAZLCmd.exe impala\GAZLCmd.exe >NUL
 
 REM Build Impala
-PUSHD tools
-CALL BuildImpala.cmd
+CALL tools\BuildImpala.cmd
 IF ERRORLEVEL 1 EXIT /B 1
-POPD
 
 REM Run the Impala test suite from the source directory
 PUSHD impala\jspeg
@@ -43,8 +41,9 @@ FOR %%F IN (impala\jspeg\testdata\*.expected.gazl) DO (
 CALL tools\gazl-validate.cmd impala\jspeg\testdata\returnContractCaller.expected.gazl impala\jspeg\testdata\returnContractProviderFloat.expected.gazl
 IF ERRORLEVEL 1 EXIT /B 1
 
-REM Verify the copied files by running the demo from the output directory
-PUSHD output
-PikaCmd impala.pika run ..\impala\ImpalaDemo.impala
+REM Verify the staged Impala compiler by compiling with NuXJS and running with GAZLCmd.
+output\NuXJS.exe -s output\impala.nuxjs.js ^
+	impala\ImpalaDemo.impala 0x4d2 impala\ImpalaDemo.impala > output\ImpalaDemo.gazl
 IF ERRORLEVEL 1 EXIT /B 1
-POPD
+output\GAZLCmd.exe output\ImpalaDemo.gazl main
+IF ERRORLEVEL 1 EXIT /B 1

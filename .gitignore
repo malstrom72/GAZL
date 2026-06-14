@@ -7,8 +7,11 @@ externals/PikaCmd/PikaCmd.exe
 /projects/build
 tests/impala/erroneous/
 externals/PikaScript/output/
+externals/NuXJS/output/
 externals/PikaScript/**/*.dSYM/
+externals/NuXJS/**/*.dSYM/
 externals/PikaScript/**/xcuserdata/
+externals/NuXJS/**/xcuserdata/
 externals/PikaScript/tools/PikaCmd/PikaCmd
 externals/PikaScript/tools/PikaCmd/SourceDistribution/PikaCmd
 *.pdb

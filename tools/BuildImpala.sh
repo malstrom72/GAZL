@@ -1,33 +1,15 @@
 #!/usr/bin/env bash
 set -e -o pipefail -u
-cd "$(dirname "$0")"
+cd "$(dirname "$0")"/..
 
-# Build PikaCmd
-(cd ../externals/PikaCmd && bash BuildPikaCmd.sh)
-
-# Copy PikaCmd to output so Impala can run from there
-if [ -f ../externals/PikaCmd/PikaCmd ]; then
-        cp ../externals/PikaCmd/PikaCmd ../output/PikaCmd
-elif [ -f ../externals/PikaCmd/PikaCmd.exe ]; then
-        cp ../externals/PikaCmd/PikaCmd.exe ../output/PikaCmd.exe
-fi
-
-outdir=../output
+outdir=output
 mkdir -p "$outdir"
 
-# Rebuild impala compiler using the local PikaCmd
-if [ -f ../output/PikaCmd ]; then
-	pkcmd=../output/PikaCmd
-else
-	pkcmd=../output/PikaCmd.exe
-fi
-(cd ../impala && "$pkcmd" impala.pika rebuild)
+# Build the NuXJS command-line runtime used to execute the generated compiler.
+bash tools/BuildNuXJS.sh release native "$outdir/NuXJS"
 
-# Copy the compiler sources needed to run Impala
-	cp ../impala/impala.pika ../impala/impalaCompiler.pika \
-    ../impala/initPPEG.pika ../impala/systools.pika "$outdir"
+# Copy the compiler sources needed to run Impala through NuXJS.
+cp impala/jspeg/impala.nuxjs.js impala/jspeg/impalaCompiler.js "$outdir"
 
-# Copy helper script
-cp ../impala/impala.cmd "$outdir"/ 2>/dev/null || true
-
+echo "Impala staged in $outdir using NuXJS."
 

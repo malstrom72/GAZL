@@ -1,6 +1,7 @@
 # Usage Example: Hello Impala
 
-This short tutorial shows how to compile and run a tiny Impala program using the tools staged in the `output/` directory after running `build.sh`.
+This short tutorial shows how to compile and run a tiny Impala program using the
+tools staged in the `output/` directory after running `build.sh`.
 
 ## 1. Write a program
 
@@ -17,10 +18,11 @@ function main()
 
 ## 2. Compile and run
 
-Use the staged `PikaCmd` executable to compile the file and immediately run it via `GAZLCmd`:
+Use the staged NuXJS executable to compile the file, then run it via `GAZLCmd`:
 
 ```bash
-./output/PikaCmd impala.pika run hello.impala
+./output/NuXJS -s output/impala.nuxjs.js hello.impala 0x4d2 hello.impala > hello.gazl
+./output/GAZLCmd hello.gazl main
 ```
 
 The command prints:
@@ -34,7 +36,7 @@ Hello, world!
 You can also keep the generated assembly and invoke the VM yourself:
 
 ```bash
-./output/PikaCmd impala.pika compile hello.impala hello.gazl
+./output/NuXJS -s output/impala.nuxjs.js hello.impala 0x4d2 hello.impala > hello.gazl
 ./output/GAZLCmd hello.gazl main
 ```
 

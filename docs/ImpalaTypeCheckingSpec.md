@@ -32,7 +32,9 @@ However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCal
 
 * The compiler already records accurate type codes during parsing; the missing piece is exporting that knowledge. Hooking the metadata capture into `$$parser.declare`, `ArgsDecl`, and `FuncDecl` avoids duplicating logic and stays aligned with the self-hosted compiler.【F:impala/jspeg/impala.jspeg†L1006-L1070】【F:impala/jspeg/impala.jspeg†L1466-L1546】
 * `.gazl` text is intentionally order-independent. We must embed metadata in a way that survives plain-text concatenation, hence the signature comments ride directly alongside the existing instructions.
-* Build automation (`build.sh`) already runs `PikaCmd runTests.pika` and the JSPEG regression harness. Any additional validation step must fit into that ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
+* Build automation (`build.sh`) runs the JSPEG regression harness and validates
+generated `.gazl` metadata. Any additional validation step must fit into that
+ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
 * Native entry points declared with `extern native` have type `N` and typically follow VM-defined signatures. The validator should recognise `N` as opaque so host applications can continue providing implementations without extra signature metadata.【F:impala/jspeg/impala.jspeg†L1554-L1563】【F:impala/jspeg/impala.jspeg†L1128-L1157】
 
 ## Proposed Approach
