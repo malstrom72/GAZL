@@ -132,12 +132,12 @@ function applyImpalaHardening(source) {
 		"\t\tvar message = bake(error);\n" +
 		"\t\tvar hasSource = typeof source === 'string';\n" +
 		"\t\tvar snippetSource = hasSource ? source : '';\n" +
-		"\t\tvar snippetOffset = Number.isFinite(offset) ? offset : 0;\n" +
+		"\t\tvar snippetOffset = isFinite(offset) ? offset : 0;\n" +
 		"\t\tvar before = oneLine(snippetSource.substr(snippetOffset - 8, 8));\n" +
 		"\t\tvar after = oneLine(snippetSource.substr(snippetOffset, 40));\n" +
 		"\t\tvar err = new Error(message + ' : ' + before + ' <!!!!> ' + after);\n" +
 		"\t\terr.impalaMessage = message;\n" +
-		"\t\tif (Number.isFinite(offset)) {\n" +
+		"\t\tif (isFinite(offset)) {\n" +
 		"\t\t\terr.impalaOffset = offset;\n" +
 		"\t\t}\n" +
 		"\t\terr.impalaSnippetBefore = before;\n" +

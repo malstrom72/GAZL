@@ -549,12 +549,12 @@
         var message = bake(error);
         var hasSource = typeof source === 'string';
         var snippetSource = hasSource ? source : '';
-        var snippetOffset = Number.isFinite(offset) ? offset : 0;
+        var snippetOffset = isFinite(offset) ? offset : 0;
         var before = oneLine(snippetSource.substr(snippetOffset - 8, 8));
         var after = oneLine(snippetSource.substr(snippetOffset, 40));
         var err = new Error(message + ' : ' + before + ' <!!!!> ' + after);
         err.impalaMessage = message;
-        if (Number.isFinite(offset)) {
+        if (isFinite(offset)) {
             err.impalaOffset = offset;
         }
         err.impalaSnippetBefore = before;

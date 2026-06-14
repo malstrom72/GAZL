@@ -62,7 +62,7 @@ Replacing the patch gives us diffable, reviewable source while keeping the harde
 - [x] Replace the grammar’s `$$parser.fail` with the runtime logic:
   - [x] Call `bake(error)` into a `message` string.
   - [x] Capture `before` and `after` snippets via the `oneLine` helper.
-  - [x] Create a new `Error(message + ' : ' + before + ' <!!!!> ' + after)` and annotate it with `impalaMessage`, `impalaOffset`, `impalaSnippetBefore`, and `impalaSnippetAfter` (guard `impalaOffset` behind `Number.isFinite`).
+  - [x] Create a new `Error(message + ' : ' + before + ' <!!!!> ' + after)` and annotate it with `impalaMessage`, `impalaOffset`, `impalaSnippetBefore`, and `impalaSnippetAfter` (guard `impalaOffset` behind global `isFinite` for NuXJS compatibility).
 - [x] Ensure the helper tolerates missing `source`/`offset` by falling back to sane defaults, mirroring the runtime patch exactly so the new tests pass without modification. (Grammar now constructs enriched errors directly without build-time rewriting.)
 
 **Motivation** – `formatThrownCompilerError` (lines 141–162 in `impalaJsCompilerRunner.js`) expects these enriched properties. Baking them into the grammar prevents future regressions.

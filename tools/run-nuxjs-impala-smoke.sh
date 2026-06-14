@@ -15,7 +15,9 @@ else
 fi
 
 output_file="$(mktemp "${TMPDIR:-/tmp}/gazl-nuxjs-smoke.XXXXXX")"
-trap 'rm -f "$output_file"' EXIT
+invalid_source="$(mktemp "${TMPDIR:-/tmp}/gazl-nuxjs-invalid.XXXXXX.impala")"
+error_log="$(mktemp "${TMPDIR:-/tmp}/gazl-nuxjs-error.XXXXXX")"
+trap 'rm -f "$output_file" "$invalid_source" "$error_log"' EXIT
 
 "$nuxjs" \
 	"$(pwd)/impala/impala.nuxjs.js" \
@@ -27,6 +29,22 @@ trap 'rm -f "$output_file"' EXIT
 
 if [ ! -s "$output_file" ]; then
 	echo "NuXJS smoke test produced no output." >&2
+	exit 1
+fi
+
+printf 'function main()\nlocals int x\n{\n\tx();\n}\n' > "$invalid_source"
+if "$nuxjs" "$(pwd)/impala/impala.nuxjs.js" "$invalid_source" - >"$error_log" 2>&1; then
+	echo "NuXJS smoke test expected invalid Impala source to fail." >&2
+	exit 1
+fi
+if ! grep -q "Invalid type for function call" "$error_log"; then
+	echo "NuXJS smoke test did not preserve the Impala diagnostic." >&2
+	cat "$error_log" >&2
+	exit 1
+fi
+if grep -q "isFinite is not a function" "$error_log"; then
+	echo "NuXJS smoke test hit an incompatible Number.isFinite diagnostic path." >&2
+	cat "$error_log" >&2
 	exit 1
 fi
 

@@ -21,11 +21,15 @@ IF NOT DEFINED NUXJS_EXE (
 )
 
 SET "OUTPUT=%TEMP%\gazl-nuxjs-smoke-%RANDOM%-%RANDOM%.gazl"
+SET "INVALID_SOURCE=%TEMP%\gazl-nuxjs-invalid-%RANDOM%-%RANDOM%.impala"
+SET "ERROR_LOG=%TEMP%\gazl-nuxjs-error-%RANDOM%-%RANDOM%.log"
 
 CALL "%NUXJS_EXE%" "%CD%\impala\impala.nuxjs.js" "%CD%\impala\testdata\smoke.impala" "%OUTPUT%" 42 smoke.impala "%CD%\impala\impalaCompiler.js"
 SET "STATUS=%ERRORLEVEL%"
 IF NOT "%STATUS%"=="0" (
   DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
   EXIT /b %STATUS%
 )
 
@@ -34,8 +38,50 @@ DEL "%OUTPUT%" >NUL 2>NUL
 
 IF "%OUTPUT_SIZE%"=="0" (
   ECHO NuXJS smoke test produced no output.
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
   EXIT /b 1
 )
+
+(
+  ECHO function main^()
+  ECHO locals int x
+  ECHO {
+  ECHO 	x^(^);
+  ECHO }
+) > "%INVALID_SOURCE%"
+
+CALL "%NUXJS_EXE%" "%CD%\impala\impala.nuxjs.js" "%INVALID_SOURCE%" - > "%ERROR_LOG%" 2>&1
+IF "%ERRORLEVEL%"=="0" (
+  ECHO NuXJS smoke test expected invalid Impala source to fail.
+  DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
+  EXIT /b 1
+)
+
+FINDSTR /C:"Invalid type for function call" "%ERROR_LOG%" >NUL
+IF ERRORLEVEL 1 (
+  ECHO NuXJS smoke test did not preserve the Impala diagnostic.
+  TYPE "%ERROR_LOG%"
+  DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
+  EXIT /b 1
+)
+FINDSTR /C:"isFinite is not a function" "%ERROR_LOG%" >NUL
+IF NOT ERRORLEVEL 1 (
+  ECHO NuXJS smoke test hit an incompatible Number.isFinite diagnostic path.
+  TYPE "%ERROR_LOG%"
+  DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
+  EXIT /b 1
+)
+
+DEL "%OUTPUT%" >NUL 2>NUL
+DEL "%INVALID_SOURCE%" >NUL 2>NUL
+DEL "%ERROR_LOG%" >NUL 2>NUL
 
 ECHO NuXJS Impala compiler smoke test passed.
 EXIT /b 0
