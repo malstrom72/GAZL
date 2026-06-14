@@ -2,8 +2,8 @@
 
 // Simple Impala CLI using the JSPEG-generated compiler.
 // Usage:
-//   node impala/jspeg/impala.node.js compile [<input.impala>] [<output.gazl>|-] [<random id>]
-//   node impala/jspeg/impala.node.js run [<input.impala>]
+//   node impala/impala.node.js compile [<input.impala>] [<output.gazl>|-] [<random id>]
+//   node impala/impala.node.js run [<input.impala>]
 
 const fs = require('fs');
 const os = require('os');
@@ -40,8 +40,8 @@ function readStdinLatin1Sync() {
 
 function usageAndExit() {
 	console.error('Usage:');
-	console.error('  node impala/jspeg/impala.node.js compile [<input.impala>] [<output.gazl>|-] [<random id>]');
-	console.error('  node impala/jspeg/impala.node.js run [<input.impala>]');
+	console.error('  node impala/impala.node.js compile [<input.impala>] [<output.gazl>|-] [<random id>]');
+	console.error('  node impala/impala.node.js run [<input.impala>]');
 	process.exit(1);
 }
 
@@ -133,7 +133,7 @@ function runCommand(args) {
 		process.exit(1);
 	}
 
-	const repoRoot = path.resolve(__dirname, '..', '..');
+	const repoRoot = path.resolve(__dirname, '..');
 	const gazlCmd = process.platform === 'win32'
 		? path.join(repoRoot, 'output', 'GAZLCmd.exe')
 		: path.join(repoRoot, 'output', 'GAZLCmd');
@@ -168,4 +168,3 @@ function main() {
 }
 
 main();
-

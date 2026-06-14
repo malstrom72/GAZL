@@ -11,7 +11,7 @@ const makeGold = args.some((arg) => arg === 'makegold' || arg === '--makegold');
 const IMPALA_ENCODING = 'latin1';
 const RANDOM_ID = 0x4d2;
 
-const repoRoot = path.resolve(__dirname, '..', '..');
+const repoRoot = path.resolve(__dirname, '..');
 const testsDir = path.join(repoRoot, 'tests', 'impala');
 const sourcesDir = path.join(testsDir, 'sources');
 const goldenDir = path.join(testsDir, 'golden');

@@ -1,17 +1,17 @@
 @ECHO OFF
 SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
-REM Regenerate impala\jspeg\testdata\*.expected.gazl from their .impala sources
+REM Regenerate impala\testdata\*.expected.gazl from their .impala sources
 REM using the JSPEG Impala compiler.
 
 CD /D "%~dp0\.."
 
-SET COMPILER=impala\jspeg\impala.node.js
+SET COMPILER=impala\impala.node.js
 IF NOT EXIST "%COMPILER%" (
-  ECHO Missing %COMPILER%. Run "node impala\jspeg\updateJSPEG.js" first.
+  ECHO Missing %COMPILER%. Run "node impala\updateJSPEG.js" first.
   EXIT /b 1
 )
 
-SET TESTDIR=impala\jspeg\testdata
+SET TESTDIR=impala\testdata
 SET SEED=42
 SET FOUND=0
 

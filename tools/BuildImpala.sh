@@ -9,7 +9,7 @@ mkdir -p "$outdir"
 bash tools/BuildNuXJS.sh release native "$outdir/NuXJS"
 
 # Copy the compiler sources needed to run Impala through NuXJS.
-cp impala/jspeg/impala.nuxjs.js impala/jspeg/impalaCompiler.js "$outdir"
+cp impala/impala.nuxjs.js impala/impalaCompiler.js "$outdir"
 
 echo "Impala staged in $outdir using NuXJS."
 

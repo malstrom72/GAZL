@@ -1,7 +1,5 @@
 .DS_Store
 /output
-impala/GAZLCmd
-impala/GAZLCmd.exe
 externals/PikaCmd/PikaCmd
 externals/PikaCmd/PikaCmd.exe
 /projects/build

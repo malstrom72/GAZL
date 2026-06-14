@@ -1,7 +1,7 @@
 /* Command-line Impala compiler for the NuXJS REPL.
 
    Usage:
-     NuXJS -s impala/jspeg/impala.nuxjs.js source.impala [randomId] [sourceName] [compiler.js] > output.gazl
+     NuXJS -s impala/impala.nuxjs.js source.impala [randomId] [sourceName] [compiler.js] > output.gazl
 
    NuXJS exposes global `arguments` as [script.js, arguments...]. This script emits
    compiled GAZL to stdout; redirect stdout to write a file.
@@ -10,7 +10,7 @@
 var impalaNuxArgs = arguments;
 
 function usage() {
-	print("Usage: NuXJS -s impala/jspeg/impala.nuxjs.js source.impala [randomId] [sourceName] [compiler.js] > output.gazl");
+	print("Usage: NuXJS -s impala/impala.nuxjs.js source.impala [randomId] [sourceName] [compiler.js] > output.gazl");
 }
 
 function fail(message) {

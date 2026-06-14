@@ -87,7 +87,7 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 - [Impala Language Reference](docs/Impala.md) – the language and toolchain
 - [Instruction Set](docs/InstructionSet.md) – extracted opcode descriptions
 - [Usage Example](docs/UsageExample.md) – compile and run a simple program
-- [JSPEG Port](impala/jspeg/JSPEG.md) – status and usage of the JavaScript PEG compiler
+- [JSPEG Port](impala/JSPEG.md) – status and usage of the JavaScript PEG compiler
 
 More technical notes are embedded in the Impala source files.
 

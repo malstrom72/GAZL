@@ -18,11 +18,11 @@ output_file="$(mktemp "${TMPDIR:-/tmp}/gazl-nuxjs-smoke.XXXXXX")"
 trap 'rm -f "$output_file"' EXIT
 
 "$nuxjs" -s \
-	"$(pwd)/impala/jspeg/impala.nuxjs.js" \
-	"$(pwd)/impala/jspeg/testdata/smoke.impala" \
+	"$(pwd)/impala/impala.nuxjs.js" \
+	"$(pwd)/impala/testdata/smoke.impala" \
 	42 \
 	smoke.impala \
-	"$(pwd)/impala/jspeg/impalaCompiler.js" > "$output_file"
+	"$(pwd)/impala/impalaCompiler.js" > "$output_file"
 
 if [ ! -s "$output_file" ]; then
 	echo "NuXJS smoke test produced no output." >&2

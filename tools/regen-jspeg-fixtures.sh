@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 set -e -o pipefail -u
 
-# Regenerate impala/jspeg/testdata/*.expected.gazl from their .impala sources
+# Regenerate impala/testdata/*.expected.gazl from their .impala sources
 # using the JSPEG Impala compiler.
 
 # Move to repo root regardless of invocation directory
 cd "$(dirname "$0")"/..
 
-compiler_script="impala/jspeg/impala.node.js"
-testdir="impala/jspeg/testdata"
+compiler_script="impala/impala.node.js"
+testdir="impala/testdata"
 seed=42 # match jspegCompilerTests.js
 
 if [ ! -f "$compiler_script" ]; then
-    echo "Missing $compiler_script. Run 'node impala/jspeg/updateJSPEG.js' first." >&2
+    echo "Missing $compiler_script. Run 'node impala/updateJSPEG.js' first." >&2
     exit 1
 fi
 

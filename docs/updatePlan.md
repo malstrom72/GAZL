@@ -14,7 +14,7 @@ Compiling callers and callees in different units allows mismatched return types 
 
 ## Proposed Approach
 1. **Persist call expectations in `.gazl`**
-   In `impala/jspeg/impala.jspeg`, the `FuncCall` lowering already emits `; expects function(...) -> …` comments through `formatCallExpectationComment` and records the inferred return category on the caller via `makeMeta`. Tighten the call path so whenever `callResultType` is concrete (e.g., inferred from the assignment target or a prior definition), that comment renders the resolved category instead of falling back to `unknown`. Regenerate `impala/jspeg/impalaCompiler.js` so the runtime compiler shares the same behavior.
+   In `impala/impala.jspeg`, the `FuncCall` lowering already emits `; expects function(...) -> …` comments through `formatCallExpectationComment` and records the inferred return category on the caller via `makeMeta`. Tighten the call path so whenever `callResultType` is concrete (e.g., inferred from the assignment target or a prior definition), that comment renders the resolved category instead of falling back to `unknown`. Regenerate `impala/impalaCompiler.js` so the runtime compiler shares the same behavior.
 
 2. **Guarantee definition-side metadata**
    Still inside `FuncDecl`, ensure `$$parser.resolveFunctionReturnType` (and the implicit-return path) populate `entry.signature.returns` with `'?'` for `void`/unknown while preserving `returnResolved` for later checks. The existing `$$parser.emitFunctionSignature` already appends `; signature func … -> TYPE` to each `FUNC` line—verify that it always has a concrete `returns` value (defaulting to `unknown`) so downstream tooling has a stable definition record.
@@ -30,7 +30,7 @@ Compiling callers and callees in different units allows mismatched return types 
    In `$$parser.resolveFunctionReturnType` and `$$parser.expectFunctionReturnType`, keep today’s single-unit safeguards but update the messages to reference “previous expectation from signature metadata” when applicable. This ensures forward declarations inside the same translation unit still produce immediate errors.
 
 6. **Regression coverage and tooling hooks**
-   Add three Impala samples under `tests/impala/sources/` (agreement, mismatch, unknown) plus their `tests/impala/golden/` counterparts. Mirror each sample in `impala/jspeg/testdata/` for the JSPEG unit tests. Update `tools/regen-jspeg-fixtures.sh`/`.cmd` to call `node tools/gazl-validate.js` on the regenerated `.gazl` pairs so fixture drift immediately surfaces.
+   Add three Impala samples under `tests/impala/sources/` (agreement, mismatch, unknown) plus their `tests/impala/golden/` counterparts. Mirror each sample in `impala/testdata/` for the JSPEG unit tests. Update `tools/regen-jspeg-fixtures.sh`/`.cmd` to call `node tools/gazl-validate.js` on the regenerated `.gazl` pairs so fixture drift immediately surfaces.
 
 ## Open Questions / Follow-Ups
 - Decide how to represent “unknown” or “void” in the metadata so the validator can distinguish intentional omissions.
@@ -43,16 +43,16 @@ Compiling callers and callees in different units allows mismatched return types 
 - Ensure fixture-regeneration scripts keep the metadata comments intact when retabulating.
 
 ## Step-by-Step Implementation Plan
-- [x] Update `impala/jspeg/impala.jspeg`:
+- [x] Update `impala/impala.jspeg`:
   - [x] Ensure the `FuncCall` lowering passes resolved return categories into `formatCallExpectationComment` so the emitted `; expects function(...) -> TYPE` row reflects inference instead of defaulting to `unknown`.
   - [x] Guarantee `$$parser.resolveFunctionReturnType` / `$$parser.emitFunctionSignature` always assign a concrete `returns` value (defaulting to `unknown`) before appending the existing `; signature func …` comment.
-  - [x] Re-run `node impala/jspeg/updateJSPEG.js` so `impalaCompiler.js` matches the grammar changes.
+  - [x] Re-run `node impala/updateJSPEG.js` so `impalaCompiler.js` matches the grammar changes.
 - [x] Amend `tools/gazl-validate.js`:
   - [x] Teach `parseSignatureComment` to parse the call-site `; expects function(...) -> TYPE` rows alongside `; signature func …` and `; signature extern native …` definitions.
   - [x] Maintain new context maps (`ctx.calls`, `ctx.definitions`) to store `{ category, location, kind, native }` records.
   - [x] Add a reconciliation pass that compares each expected category with every discovered definition, reusing `typesCompatible` for the comparisons and issuing structured diagnostics on conflicts, missing definitions, or native/non-native mismatches.
 - [x] Expand the regression suite:
-  - [x] Author the three `.impala` samples (agreement, mismatch, unknown) and regenerate their `.gazl` outputs under both `tests/impala/golden/` and `impala/jspeg/testdata/`.
+  - [x] Author the three `.impala` samples (agreement, mismatch, unknown) and regenerate their `.gazl` outputs under both `tests/impala/golden/` and `impala/testdata/`.
 - [x] Wire `tools/regen-jspeg-fixtures.{sh,cmd}` to invoke `node tools/gazl-validate.js` on the freshly generated fixtures so signature mismatches fail regeneration. (Both scripts now collect the regenerated `.expected.gazl` files and run the validator as a final gate.)
 - [x] Validate the dummy return-slot work:
   - [x] Adjust the implicit-return branch in `FuncDecl` so the `PARA *1` emission follows the `FUNC` declaration while keeping legacy semantics.
@@ -98,4 +98,4 @@ Each row uses the same `; signature extern native …` grammar the compiler alre
 
 ## Additional Action Items
 - [x] Rework the implicit-return path so the dummy `PARA *1` is declared after the `FUNC` line (or otherwise ensure assemblers see the `FUNC` declaration first) while preserving return-type inference bookkeeping.
-- [x] Add an explanatory comment in `impala/jspeg/impala.jspeg` (and regenerate the compiler) that spells out why void functions emit a placeholder `PARA *1`—namely, to give call sites a predictable one-word return area and to keep legacy PPEG output identical.
+- [x] Add an explanatory comment in `impala/impala.jspeg` (and regenerate the compiler) that spells out why void functions emit a placeholder `PARA *1`—namely, to give call sites a predictable one-word return area and to keep legacy PPEG output identical.

@@ -8,7 +8,7 @@ const { compileWithJsImpala } = require("./impalaJsCompilerRunner");
 
 const dir = __dirname;
 const IMPALA_ENCODING = "latin1";
-const validatorScript = path.join(dir, "..", "..", "tools", "gazl-validate.js");
+const validatorScript = path.join(dir, "..", "tools", "gazl-validate.js");
 const validatorFixturesDir = path.join(dir, "testdata", "validator");
 
 function canonicalizeNewlines(source) {
@@ -385,8 +385,8 @@ function testNuXJSCommandCompilerScript(compilerSource) {
 		customCompiler: "ok",
 		"customCompiler.js": "ok",
 	});
-	runCase("repo-root script path", ["impala/jspeg/impala.nuxjs.js", sourcePath, "42", sourcePath], {
-		"impala/jspeg/impalaCompiler.js": "ok",
+	runCase("repo-root script path", ["impala/impala.nuxjs.js", sourcePath, "42", sourcePath], {
+		"impala/impalaCompiler.js": "ok",
 	});
 	runCase("local script path", ["impala.nuxjs.js", sourcePath, "42", sourcePath], { "impalaCompiler.js": "ok" });
 	console.log("impala.nuxjs.js compiles an Impala source through NuXJS-style command arguments");
@@ -456,8 +456,8 @@ const parityFixtures = [
 	},
 ];
 
-const legacySourceDir = path.join(dir, "..", "..", "tests", "impala", "sources");
-const legacyExpectedDir = path.join(dir, "..", "..", "tests", "impala", "golden");
+const legacySourceDir = path.join(dir, "..", "tests", "impala", "sources");
+const legacyExpectedDir = path.join(dir, "..", "tests", "impala", "golden");
 const LEGACY_RANDOM_ID = 0x4d2;
 const legacyParityFixtures = fs
 	.readdirSync(legacySourceDir)
@@ -577,7 +577,7 @@ legacyParityFixtures.forEach(runParityFixture);
 runValidatorCase("matching metadata fixtures", ["exports.gazl", "imports-valid.gazl"], 0);
 runValidatorCase("mismatched metadata fixtures", ["exports.gazl", "imports-mismatch.gazl"], 1, 'Signature mismatch for "foo"');
 
-const validatorUnitTestScript = path.join(dir, "..", "..", "tests", "gazl-validator-tests.js");
+const validatorUnitTestScript = path.join(dir, "..", "tests", "gazl-validator-tests.js");
 const validatorUnitResult = childProcess.spawnSync(process.execPath, [validatorUnitTestScript], {
 	encoding: "utf8",
 });

@@ -17,14 +17,13 @@ PUSHD tools
 CALL buildGAZLCmd.cmd release
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
-COPY /Y output\GAZLCmd.exe impala\GAZLCmd.exe >NUL
 
 REM Build Impala
 CALL tools\BuildImpala.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 
 REM Run the Impala test suite from the source directory
-PUSHD impala\jspeg
+PUSHD impala
 node jspegCompilerTests.js
 IF ERRORLEVEL 1 EXIT /B 1
 node runJspegTests.js
@@ -32,13 +31,13 @@ IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
 REM Validate generated .gazl metadata for the JSPEG fixtures.
-FOR %%F IN (impala\jspeg\testdata\*.expected.gazl) DO (
+FOR %%F IN (impala\testdata\*.expected.gazl) DO (
   IF /I NOT "%%~nxF"=="externAssignment.expected.gazl" IF /I NOT "%%~nxF"=="returnContractCaller.expected.gazl" (
     CALL tools\gazl-validate.cmd "%%F"
     IF ERRORLEVEL 1 EXIT /B 1
   )
 )
-CALL tools\gazl-validate.cmd impala\jspeg\testdata\returnContractCaller.expected.gazl impala\jspeg\testdata\returnContractProviderFloat.expected.gazl
+CALL tools\gazl-validate.cmd impala\testdata\returnContractCaller.expected.gazl impala\testdata\returnContractProviderFloat.expected.gazl
 IF ERRORLEVEL 1 EXIT /B 1
 
 REM Verify the staged Impala compiler by compiling with NuXJS and running with GAZLCmd.

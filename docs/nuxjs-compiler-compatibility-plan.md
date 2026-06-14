@@ -6,7 +6,7 @@ target is the generated compiler artefact, not the generator or developer toolin
 
 ## Target runtime contract
 
-`impala/jspeg/impalaCompiler.js` should be runnable as plain JavaScript in a NuXJS runtime after the host supplies the
+`impala/impalaCompiler.js` should be runnable as plain JavaScript in a NuXJS runtime after the host supplies the
 source text and host services explicitly. Normal compilation must not depend on `require`, `process`, `Buffer`,
 `globalThis`, ambient `output`, or ambient `impalaRandomId`.
 
@@ -26,9 +26,9 @@ features that NuXJS does not implement, especially getter/setter descriptors in 
 
 **Primary files**
 
-- `impala/jspeg/impalaCompiler.js`
-- `impala/jspeg/impala.jspeg`
-- `impala/jspeg/updateJSPEG.js`
+- `impala/impalaCompiler.js`
+- `impala/impala.jspeg`
+- `impala/updateJSPEG.js`
 
 **Tasks**
 
@@ -48,9 +48,9 @@ the only failing assumptions are the ones listed in this phase.
 
 **Primary files**
 
-- `impala/jspeg/impala.jspeg`
-- `impala/jspeg/updateJSPEG.js`
-- `impala/jspeg/impalaCompiler.js`
+- `impala/impala.jspeg`
+- `impala/updateJSPEG.js`
+- `impala/impalaCompiler.js`
 
 **Tasks**
 
@@ -62,7 +62,7 @@ the only failing assumptions are the ones listed in this phase.
 - [x] Regenerate `impalaCompiler.js` from the grammar and hardening script.
 - [x] Keep the helper private to the generated compiler; do not reintroduce `globalThis.createParserContext`.
 
-**Validation.** Existing meta-slot, assignment, and root-context tests in `impala/jspeg/jspegCompilerTests.js` must still
+**Validation.** Existing meta-slot, assignment, and root-context tests in `impalaCompilerTests.js` must still
 pass after the rewrite.
 
 ## Phase 3 - Keep host services explicit
@@ -110,7 +110,7 @@ features.
 
 **Tasks**
 
-- [x] Update `impala/jspeg/ImpalaJS.md` to state that:
+- [x] Update `impala/ImpalaJS.md` to state that:
   - [x] generator and build scripts use Node
   - [x] the generated compiler is intended to be host-neutral
   - [x] NuXJS hosts must supply source text and host services explicitly
@@ -122,7 +122,7 @@ features.
 
 Run the full verification sequence after implementation:
 
-- [x] `node impala/jspeg/updateJSPEG.js`
+- [x] `node impala/updateJSPEG.js`
 - [x] NuXJS compatibility smoke test, if `NUXJS` is available. The wrapper was run and skipped cleanly because no NuXJS
       executable is configured in this checkout.
 - [x] `timeout 180 ./build.sh`
