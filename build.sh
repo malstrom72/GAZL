@@ -32,5 +32,5 @@ node tools/gazl-validate.js \
 
 # Verify the staged Impala compiler by compiling with NuXJS and running with GAZLCmd.
 ./output/NuXJS output/impala.nuxjs.js \
-	impala/ImpalaDemo.impala 0x4d2 impala/ImpalaDemo.impala > output/ImpalaDemo.gazl
+	impala/ImpalaDemo.impala output/ImpalaDemo.gazl 0x4d2 impala/ImpalaDemo.impala
 ./output/GAZLCmd output/ImpalaDemo.gazl main

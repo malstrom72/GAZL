@@ -21,7 +21,7 @@ function main()
 Use the staged NuXJS executable to compile the file, then run it via `GAZLCmd`:
 
 ```bash
-./output/NuXJS output/impala.nuxjs.js hello.impala 0x4d2 hello.impala > hello.gazl
+./output/NuXJS output/impala.nuxjs.js hello.impala hello.gazl 0x4d2 hello.impala
 ./output/GAZLCmd hello.gazl main
 ```
 
@@ -36,7 +36,7 @@ Hello, world!
 You can also keep the generated assembly and invoke the VM yourself:
 
 ```bash
-./output/NuXJS output/impala.nuxjs.js hello.impala 0x4d2 hello.impala > hello.gazl
+./output/NuXJS output/impala.nuxjs.js hello.impala hello.gazl 0x4d2 hello.impala
 ./output/GAZLCmd hello.gazl main
 ```
 

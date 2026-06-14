@@ -494,8 +494,8 @@ sources and validate them without leaving the `output/` directory:
 
 ```bash
 cd output
-./NuXJS impala.nuxjs.js ../tests/impala/sources/calc.impala 0x4d2 calc.impala > calc.gazl
-./NuXJS impala.nuxjs.js ../tests/impala/sources/multitap_code.impala 0x4d2 multitap_code.impala > multitap.gazl
+./NuXJS impala.nuxjs.js ../tests/impala/sources/calc.impala calc.gazl 0x4d2 calc.impala
+./NuXJS impala.nuxjs.js ../tests/impala/sources/multitap_code.impala multitap.gazl 0x4d2 multitap_code.impala
 node ../tools/gazl-validate.js calc.gazl multitap.gazl
 ```
 
@@ -525,7 +525,7 @@ Compile an Impala source file like so:
 
 ```bash
 cd output
-./NuXJS impala.nuxjs.js ../impala/ImpalaDemo.impala 0x4d2 ImpalaDemo.impala > demo.gazl
+./NuXJS impala.nuxjs.js ../impala/ImpalaDemo.impala demo.gazl 0x4d2 ImpalaDemo.impala
 ```
 
 Execute the resulting program with the VM:
@@ -537,6 +537,6 @@ Execute the resulting program with the VM:
 From the repository root, the same flow is:
 
 ```bash
-./output/NuXJS output/impala.nuxjs.js impala/ImpalaDemo.impala 0x4d2 impala/ImpalaDemo.impala > output/demo.gazl
+./output/NuXJS output/impala.nuxjs.js impala/ImpalaDemo.impala output/demo.gazl 0x4d2 impala/ImpalaDemo.impala
 ./output/GAZLCmd output/demo.gazl main
 ```

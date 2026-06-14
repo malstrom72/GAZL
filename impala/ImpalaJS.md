@@ -101,14 +101,15 @@ Windows equivalent is `tools\run-nuxjs-impala-smoke.cmd`.
 After `bash build.sh`, compile an Impala file with the staged NuXJS runtime:
 
 ```bash
-./output/NuXJS output/impala.nuxjs.js source.impala 0x4d2 source.impala > output.gazl
+./output/NuXJS output/impala.nuxjs.js source.impala output.gazl 0x4d2 source.impala
 ```
 
-Arguments after `impala.nuxjs.js` are `source.impala`, optional `randomId`,
-optional `sourceName`, and optional compiler path. NuXJS exposes the script path
-as `arguments[0]`, and the script uses that path to find `impalaCompiler.js` in
-the same directory by default. This works both from the repository root and from
-`impala`; the build stages both files together in `output/`.
+Arguments after `impala.nuxjs.js` are `source.impala`, optional `output.gazl`
+or `-` for stdout, optional `randomId`, optional `sourceName`, and optional
+compiler path. NuXJS exposes the script path as `arguments[0]`, and the script
+uses that path to find `impalaCompiler.js` in the same directory by default.
+This works both from the repository root and from `impala`; the build stages
+both files together in `output/`.
 
 ## Regenerating the compiler
 

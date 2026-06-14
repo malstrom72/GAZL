@@ -350,10 +350,14 @@ function testNuXJSCommandCompilerScript(compilerSource) {
 
 	function runCase(label, args, acceptedCompilerPaths) {
 		const outputLines = [];
+		const writtenFiles = {};
 		let loaded = false;
 		const context = {
 			arguments: args,
 			print: (line) => outputLines.push(String(line)),
+			write: (file, contents) => {
+				writtenFiles[file] = String(contents);
+			},
 			read: (file) => {
 				if (file === sourcePath) {
 					return sourceText;
@@ -374,11 +378,19 @@ function testNuXJSCommandCompilerScript(compilerSource) {
 		vm.createContext(context);
 		new vm.Script(scriptSource, { filename: "impala.nuxjs.js" }).runInContext(context);
 
-		assert(outputLines.length > 0, `NuXJS command compiler script must emit compiled GAZL for ${label}`);
-		assert(
-			outputLines.some((line) => line.indexOf("main:") !== -1 && line.indexOf("FUNC") !== -1),
-			`NuXJS command compiler script output must include compiled main function for ${label}`,
-		);
+		if (args[2] && !/^(0x[0-9a-fA-F]+|[0-9]+)$/.test(args[2]) && args[2] !== "-") {
+			assert(writtenFiles[args[2]], `NuXJS command compiler script must write compiled GAZL for ${label}`);
+			assert(
+				writtenFiles[args[2]].indexOf("main:") !== -1 && writtenFiles[args[2]].indexOf("FUNC") !== -1,
+				`NuXJS command compiler script file output must include compiled main function for ${label}`,
+			);
+		} else {
+			assert(outputLines.length > 0, `NuXJS command compiler script must emit compiled GAZL for ${label}`);
+			assert(
+				outputLines.some((line) => line.indexOf("main:") !== -1 && line.indexOf("FUNC") !== -1),
+				`NuXJS command compiler script output must include compiled main function for ${label}`,
+			);
+		}
 	}
 
 	runCase("explicit compiler path", ["impala.nuxjs.js", sourcePath, "42", sourcePath, "customCompiler.js"], {
@@ -389,6 +401,10 @@ function testNuXJSCommandCompilerScript(compilerSource) {
 		"impala/impalaCompiler.js": "ok",
 	});
 	runCase("local script path", ["impala.nuxjs.js", sourcePath, "42", sourcePath], { "impalaCompiler.js": "ok" });
+	runCase("direct output path", ["impala.nuxjs.js", sourcePath, "out.gazl", "42", sourcePath, "customCompiler.js"], {
+		customCompiler: "ok",
+		"customCompiler.js": "ok",
+	});
 	console.log("impala.nuxjs.js compiles an Impala source through NuXJS-style command arguments");
 }
 

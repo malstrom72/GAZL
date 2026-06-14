@@ -22,7 +22,7 @@ IF NOT DEFINED NUXJS_EXE (
 
 SET "OUTPUT=%TEMP%\gazl-nuxjs-smoke-%RANDOM%-%RANDOM%.gazl"
 
-CALL "%NUXJS_EXE%" "%CD%\impala\impala.nuxjs.js" "%CD%\impala\testdata\smoke.impala" 42 smoke.impala "%CD%\impala\impalaCompiler.js" > "%OUTPUT%"
+CALL "%NUXJS_EXE%" "%CD%\impala\impala.nuxjs.js" "%CD%\impala\testdata\smoke.impala" "%OUTPUT%" 42 smoke.impala "%CD%\impala\impalaCompiler.js"
 SET "STATUS=%ERRORLEVEL%"
 IF NOT "%STATUS%"=="0" (
   DEL "%OUTPUT%" >NUL 2>NUL

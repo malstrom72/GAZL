@@ -20,9 +20,10 @@ trap 'rm -f "$output_file"' EXIT
 "$nuxjs" \
 	"$(pwd)/impala/impala.nuxjs.js" \
 	"$(pwd)/impala/testdata/smoke.impala" \
+	"$output_file" \
 	42 \
 	smoke.impala \
-	"$(pwd)/impala/impalaCompiler.js" > "$output_file"
+	"$(pwd)/impala/impalaCompiler.js"
 
 if [ ! -s "$output_file" ]; then
 	echo "NuXJS smoke test produced no output." >&2
