@@ -1,7 +1,7 @@
 /* Command-line Impala compiler for the NuXJS REPL.
 
    Usage:
-     NuXJS impala/impala.nuxjs.js source.impala [[output.gazl|-] [randomId] [sourceName] [compiler.js]]
+     NuXJS impala/impala.nuxjs.js source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
 
    NuXJS exposes global `arguments` as [script.js, arguments...]. With no output
    path, or output path `-`, this script emits compiled GAZL to stdout.
@@ -10,7 +10,7 @@
 var impalaNuxArgs = arguments;
 
 function usage() {
-	print("Usage: NuXJS impala/impala.nuxjs.js source.impala [[output.gazl|-] [randomId] [sourceName] [compiler.js]]");
+	print("Usage: NuXJS impala/impala.nuxjs.js source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
 }
 
 function fail(message) {
@@ -40,11 +40,6 @@ function repeatSpaces(count) {
 		text += " ";
 	}
 	return text;
-}
-
-function isRandomIdArg(arg) {
-	var text = "" + arg;
-	return /^0x[0-9a-fA-F]+$/.test(text) || /^[0-9]+$/.test(text);
 }
 
 function emitCompiledOutput(lines, outputPath) {
@@ -115,35 +110,26 @@ if (!impalaNuxArgs || impalaNuxArgs.length < 2) {
 
 var impalaNuxScriptPath = "" + impalaNuxArgs[0];
 var impalaNuxSourcePath = "" + impalaNuxArgs[1];
-var impalaNuxOutputPath;
-var impalaNuxRandomId = 0x4d2;
-var impalaNuxSourceName = impalaNuxSourcePath;
-var impalaNuxCompilerPath;
-var impalaNuxArgIndex = 2;
-
-if (impalaNuxArgs.length > impalaNuxArgIndex && !isRandomIdArg(impalaNuxArgs[impalaNuxArgIndex])) {
-	impalaNuxOutputPath = "" + impalaNuxArgs[impalaNuxArgIndex++];
-}
-if (impalaNuxArgs.length > impalaNuxArgIndex) {
-	impalaNuxRandomId = +impalaNuxArgs[impalaNuxArgIndex++];
-}
-if (impalaNuxArgs.length > impalaNuxArgIndex) {
-	impalaNuxSourceName = "" + impalaNuxArgs[impalaNuxArgIndex++];
-}
-impalaNuxCompilerPath =
-	impalaNuxArgs.length > impalaNuxArgIndex ? "" + impalaNuxArgs[impalaNuxArgIndex] : dirname(impalaNuxScriptPath) + "impalaCompiler.js";
+var impalaNuxOutputPath = impalaNuxArgs.length >= 3 ? "" + impalaNuxArgs[2] : undefined;
+var impalaNuxHasRandomId = impalaNuxArgs.length >= 4;
+var impalaNuxRandomId = impalaNuxHasRandomId ? +impalaNuxArgs[3] : undefined;
+var impalaNuxSourceName = impalaNuxArgs.length >= 5 ? "" + impalaNuxArgs[4] : impalaNuxSourcePath;
+var impalaNuxCompilerPath = impalaNuxArgs.length >= 6 ? "" + impalaNuxArgs[5] : dirname(impalaNuxScriptPath) + "impalaCompiler.js";
 
 loadCompilerPath(impalaNuxCompilerPath);
 
 var impalaNuxSource = read(impalaNuxSourcePath);
 var impalaNuxLines = [];
-var impalaNuxResult = impalaCompiler(impalaNuxSource, {
+var impalaNuxCompilerOptions = {
 	output: function (line) {
 		impalaNuxLines[impalaNuxLines.length] = line;
 	},
-	randomId: impalaNuxRandomId,
 	sourceName: impalaNuxSourceName,
-});
+};
+if (impalaNuxHasRandomId) {
+	impalaNuxCompilerOptions.randomId = impalaNuxRandomId;
+}
+var impalaNuxResult = impalaCompiler(impalaNuxSource, impalaNuxCompilerOptions);
 
 if (!impalaNuxResult || !impalaNuxResult[0]) {
 	throw new Error("Impala compilation failed");

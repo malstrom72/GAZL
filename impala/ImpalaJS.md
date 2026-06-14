@@ -111,6 +111,11 @@ uses that path to find `impalaCompiler.js` in the same directory by default.
 This works both from the repository root and from `impala`; the build stages
 both files together in `output/`.
 
+Use `-` as the output argument when you want stdout and also need to pass a
+later argument such as `randomId`. If `randomId` is omitted, the compiler
+generates a fresh seed internally; pass an explicit value only when deterministic
+labels are required.
+
 ## Regenerating the compiler
 
 - Run `node impala/updateJSPEG.js` to rebuild both `jspegCompiler.js` and `impalaCompiler.js`.

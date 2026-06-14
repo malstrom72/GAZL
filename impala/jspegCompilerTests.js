@@ -172,6 +172,8 @@ assert(capturedFailError.impalaSnippetBefore === "23456789", "fail must store sn
 assert(capturedFailError.impalaSnippetAfter.startsWith("abcdefgh"), "fail must store snippet after cursor");
 
 testPlainHostImpalaCompiler(impalaExisting);
+testCompilerRunnerOmitsDefaultRandomId();
+testCompilerRunnerRandomIdSeeding();
 testNuXJSCommandCompilerScript(impalaExisting);
 
 function compileAndEval(compilerFn, source, label) {
@@ -343,14 +345,58 @@ function testPlainHostImpalaCompiler(compilerSource) {
 	console.log("impalaCompiler.js runs in a plain host context without Node globals");
 }
 
+function testCompilerRunnerOmitsDefaultRandomId() {
+	const output = compileWithJsImpala("", {
+		compilerSource: `
+			module.exports = function (source, options) {
+				if (Object.prototype.hasOwnProperty.call(options, "randomId")) {
+					throw new Error("randomId should be omitted when no seed is supplied");
+				}
+				options.output("OK");
+				return [true, "", source.length];
+			};
+		`,
+		retabulate: false,
+		trailingNewline: false,
+	});
+
+	assert(output === "OK", "compileWithJsImpala must run without injecting a default randomId");
+	console.log("compileWithJsImpala omits randomId when no seed is supplied");
+}
+
+function testCompilerRunnerRandomIdSeeding() {
+	const source = fs.readFileSync(path.join(dir, "..", "tests", "impala", "sources", "calc.impala"), IMPALA_ENCODING);
+	const originalRandom = Math.random;
+	let randomValue = 0.125;
+
+	try {
+		Math.random = () => randomValue;
+		const unseededA = compileWithJsImpala(source, { retabulate: false, trailingNewline: false });
+		randomValue = 0.875;
+		const unseededB = compileWithJsImpala(source, { retabulate: false, trailingNewline: false });
+		assert(unseededA !== unseededB, "compileWithJsImpala must generate different labels when no randomId is supplied");
+
+		randomValue = 0.125;
+		const seededA = compileWithJsImpala(source, { randomId: 42, retabulate: false, trailingNewline: false });
+		randomValue = 0.875;
+		const seededB = compileWithJsImpala(source, { randomId: 42, retabulate: false, trailingNewline: false });
+		assert(seededA === seededB, "compileWithJsImpala must generate deterministic labels when randomId is supplied");
+	} finally {
+		Math.random = originalRandom;
+	}
+
+	console.log("compileWithJsImpala randomizes omitted seeds and honors explicit seeds");
+}
+
 function testNuXJSCommandCompilerScript(compilerSource) {
 	const scriptSource = fs.readFileSync(path.join(dir, "impala.nuxjs.js"), "utf8");
 	const sourcePath = "smoke.impala";
 	const sourceText = fs.readFileSync(path.join(dir, "testdata", "smoke.impala"), IMPALA_ENCODING);
 
-	function runCase(label, args, acceptedCompilerPaths) {
+	function runCase(label, args, acceptedCompilerPaths, expectedHasRandomId) {
 		const outputLines = [];
 		const writtenFiles = {};
+		let capturedOptions;
 		let loaded = false;
 		const context = {
 			arguments: args,
@@ -373,12 +419,23 @@ function testNuXJSCommandCompilerScript(compilerSource) {
 				}
 				loaded = true;
 				new vm.Script(compilerSource, { filename: file }).runInContext(context);
+				const loadedCompiler = context.impalaCompiler;
+				context.impalaCompiler = (source, options) => {
+					capturedOptions = options;
+					return loadedCompiler(source, options);
+				};
 			},
 		};
 		vm.createContext(context);
 		new vm.Script(scriptSource, { filename: "impala.nuxjs.js" }).runInContext(context);
 
-		if (args[2] && !/^(0x[0-9a-fA-F]+|[0-9]+)$/.test(args[2]) && args[2] !== "-") {
+		if (expectedHasRandomId !== undefined) {
+			assert(
+				Object.prototype.hasOwnProperty.call(capturedOptions, "randomId") === expectedHasRandomId,
+				`NuXJS command compiler script randomId presence mismatch for ${label}`,
+			);
+		}
+		if (args[2] && args[2] !== "-") {
 			assert(writtenFiles[args[2]], `NuXJS command compiler script must write compiled GAZL for ${label}`);
 			assert(
 				writtenFiles[args[2]].indexOf("main:") !== -1 && writtenFiles[args[2]].indexOf("FUNC") !== -1,
@@ -393,18 +450,34 @@ function testNuXJSCommandCompilerScript(compilerSource) {
 		}
 	}
 
-	runCase("explicit compiler path", ["impala.nuxjs.js", sourcePath, "42", sourcePath, "customCompiler.js"], {
-		customCompiler: "ok",
-		"customCompiler.js": "ok",
-	});
-	runCase("repo-root script path", ["impala/impala.nuxjs.js", sourcePath, "42", sourcePath], {
-		"impala/impalaCompiler.js": "ok",
-	});
-	runCase("local script path", ["impala.nuxjs.js", sourcePath, "42", sourcePath], { "impalaCompiler.js": "ok" });
-	runCase("direct output path", ["impala.nuxjs.js", sourcePath, "out.gazl", "42", sourcePath, "customCompiler.js"], {
-		customCompiler: "ok",
-		"customCompiler.js": "ok",
-	});
+	runCase(
+		"stdout with explicit compiler path",
+		["impala.nuxjs.js", sourcePath, "-", "42", sourcePath, "customCompiler.js"],
+		{
+			customCompiler: "ok",
+			"customCompiler.js": "ok",
+		},
+		true,
+	);
+	runCase(
+		"repo-root script path",
+		["impala/impala.nuxjs.js", sourcePath, "-", "42", sourcePath],
+		{
+			"impala/impalaCompiler.js": "ok",
+		},
+		true,
+	);
+	runCase("local script path with defaults", ["impala.nuxjs.js", sourcePath], { "impalaCompiler.js": "ok" }, false);
+	runCase(
+		"direct output path",
+		["impala.nuxjs.js", sourcePath, "out.gazl", "42", sourcePath, "customCompiler.js"],
+		{
+			customCompiler: "ok",
+			"customCompiler.js": "ok",
+		},
+		true,
+	);
+	runCase("numeric output path", ["impala.nuxjs.js", sourcePath, "42"], { "impalaCompiler.js": "ok" }, false);
 	console.log("impala.nuxjs.js compiles an Impala source through NuXJS-style command arguments");
 }
 

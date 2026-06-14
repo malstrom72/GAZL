@@ -151,7 +151,7 @@ function compileWithJsImpala(source, options = {}) {
 		sourceName,
 		retabulate: shouldRetabulate = true,
 		trailingNewline,
-		randomId = 12345678,
+		randomId,
 	} = options;
 
 	const compilerPath = compilerPathOption ? path.resolve(compilerPathOption) : path.join(__dirname, "impalaCompiler.js");
@@ -166,8 +166,10 @@ function compileWithJsImpala(source, options = {}) {
 
 	const compilerOptions = {
 		output: (line) => outputLines.push(line),
-		randomId,
 	};
+	if (randomId !== undefined) {
+		compilerOptions.randomId = randomId;
+	}
 	if (sourceName !== undefined) {
 		compilerOptions.sourceName = sourceName;
 	}
