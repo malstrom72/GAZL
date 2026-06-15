@@ -265,7 +265,7 @@ function parseSignatureComment(comment) {
 		var params = parseParamTypes(funcMatch[3]);
 		var paramDisplay = normalizeParamDisplay(funcMatch[3]);
 		var returns = funcMatch[4].toLowerCase();
-		var wildcard = roleInfo.extern && !roleInfo.native && params.length === 0 && returns === "unknown";
+		var wildcard = roleInfo.extern && params.length === 0 && returns === "unknown";
 		return {
 			kind: "function",
 			name: funcMatch[2],
@@ -995,10 +995,14 @@ function validateCalls(ctx) {
 		}
 
 		var definitionRecords = ctx.definitions.get(name) || [];
+		var concreteDefinitionRecords = definitionRecords.filter(function (def) {
+			return !(def.signature && def.signature.wildcard);
+		});
+		var checkedDefinitionRecords = concreteDefinitionRecords.length > 0 ? concreteDefinitionRecords : definitionRecords;
 		var externRecords = (ctx.externs.functions.get(name) || []).filter(function (entry) { return !entry.native; });
 
 		callEntries.forEach(function (call) {
-			var matchingDefinitions = definitionRecords.filter(function (def) { return functionSignaturesCompatible(def.signature, call.signature); });
+			var matchingDefinitions = checkedDefinitionRecords.filter(function (def) { return functionSignaturesCompatible(def.signature, call.signature); });
 			var matchingExterns = externRecords.filter(function (entry) { return functionSignaturesCompatible(entry.signature, call.signature); });
 
 			if (matchingDefinitions.length > 0) {
@@ -1029,8 +1033,8 @@ function validateCalls(ctx) {
 				return;
 			}
 
-			if (definitionRecords.length > 0) {
-				var mismatch = definitionRecords[0];
+			if (checkedDefinitionRecords.length > 0) {
+				var mismatch = checkedDefinitionRecords[0];
 				ctx.diagnostics.push({
 					severity: "error",
 					message: "Signature mismatch for \"" + name + "\": call expects \"" + formatSignatureForMessage(name, call.signature) + "\" but definition provides \"" + formatSignatureForMessage(name, mismatch.signature) + "\"",

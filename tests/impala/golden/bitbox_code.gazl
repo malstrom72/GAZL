@@ -200,8 +200,8 @@ process:	FUNC	; signature func process() -> void @ 201:18
 		PEEK %1 &clock 	; write(global clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 252:41
-		CALL ^yield %0 *1	; expects function() -> unknown @ 253:11
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 252:41
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 253:11
 		PEEK %0 &signal:0 	; global signal[0] = (((int) global signal[0] * pump) >> 12) + y
 		MULi %0 %0 $pump
 		SHRi %0 %0 #12
@@ -215,8 +215,8 @@ process:	FUNC	; signature func process() -> void @ 201:18
 		PEEK %1 &clock 	; write(global clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 256:41
-		CALL ^yield %0 *1	; expects function() -> unknown @ 257:11
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 256:41
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 257:11
 		ADDi $pump $pump #0x2	; pump = pump + 0x2
 		LEQi $pump #0x1000 @.f10	; if (pump > 0x1000) pump = 0x1000
 		MOVi $pump #0x1000 	; pump = 0x1000

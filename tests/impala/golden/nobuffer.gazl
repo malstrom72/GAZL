@@ -38,8 +38,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 73:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 75:10
-		CALL ^abort %0 *1	; expects function() -> unknown @ 76:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 75:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 76:9
 		RETU   	; }
 
 
@@ -313,7 +313,7 @@ traceInt:	FUNC	; signature func traceInt(int i) -> void @ 260:19
 		MOVi %4 #1 
 		ADRL %5 $buffer *0
 		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 263:37
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 263:38
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 263:38
 		RETU   	; }
 
 
@@ -327,7 +327,7 @@ traceFloat:	FUNC	; signature func traceFloat(float f) -> void @ 266:21
 		MOVi %3 #6 
 		ADRL %4 $buffer *0
 		CALL &floatToString %1 *4	; expects floatToString(float, int, ptr) -> ptr @ 269:35
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 269:36
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 269:36
 		RETU   	; }
 
 BUFFER_SIZE:	! DEFi #256	; signature const BUFFER_SIZE : int @ 275:1
@@ -357,7 +357,7 @@ init:	FUNC	; signature func init() -> void @ 292:15
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4dd 	; trace("init")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 294:15
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 294:15
 		RETU   	; }
 
 
@@ -372,7 +372,7 @@ reset:	FUNC	; signature func reset() -> void @ 301:16
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4de 	; trace("reset")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 304:16
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 304:16
 		MOVf $a #1024.0 	; a = 1024.0
 		! MULf <A> #TWICE_PI #440.0	; lr = TWICE_PI * 440.0 / 44100.0
 		! DIVf <A> <A> #44100.0
@@ -423,13 +423,13 @@ update:	FUNC	; signature func update() -> void @ 326:17
 	$buf:	LOCA *34
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4df 	; trace("update")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 329:17
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 329:17
 		PEEK %2 &params:OPERAND_2_PARAM_INDEX 	; trace(intToString(global params[OPERAND_2_PARAM_INDEX], 16, 1, buf))
 		MOVi %3 #16 
 		MOVi %4 #1 
 		ADRL %5 $buf *0
 		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 330:69
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 330:70
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 330:70
 		RETU   	; }
 
 

@@ -136,7 +136,7 @@ initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ 80:
 		MOVp %3 $namePointer 
 		ADRL %4 $size *0
 		MOVp %5 $datePointer 
-		CALL ^findFirmwarePatch %0 *6	; expects function(int, int, ptr, ptr, ptr) -> unknown @ 89:78
+		CALL ^findFirmwarePatch %0 *6	; expects findFirmwarePatch(int, int, ptr, ptr, ptr) -> unknown @ 89:78
 		NEQi %0 #1 @.e3
 		GEQi $index #MAX_FILE_COUNT @.l2	; if (index < MAX_FILE_COUNT) 
 		POKE $filePointer #FILE_FIELD_NAME $namePointer	; filePointer[FILE_FIELD_NAME] = namePointer

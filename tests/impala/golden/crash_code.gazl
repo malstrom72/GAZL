@@ -165,7 +165,7 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 		MOVp $p %0 
 		FORi $i $n @.l2	; }
 	.e1:	ADRL %1 $line *0	; trace(line)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 184:13
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 184:13
 		RETU   	; }
 
 
@@ -190,8 +190,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 194:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 196:10
-		CALL ^abort %0 *1	; expects function() -> unknown @ 197:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 196:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 197:9
 		RETU   	; }
 
 
@@ -283,13 +283,13 @@ init:	FUNC	; signature func init() -> void @ 263:15
 	$buf:	LOCA *256
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4d8 	; trace("init")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 266:15
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 266:15
 		PEEK %2 &instance 	; trace(intToString(global instance, 10, 1, buf))
 		MOVi %3 #10 
 		MOVi %4 #1 
 		ADRL %5 $buf *0
 		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 267:48
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 267:49
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 267:49
 		MOVi $i #0 	; for (i = 0 to COS_TABLE_SIZE) global cosTable[i] = ftoi((float) cos((TWICE_PI / itof(COS_TABLE_SIZE)) * itof(i)) * 2048.0)
 		GEQi #0 #COS_TABLE_SIZE @.e0
 	.l1:	NOOP
@@ -310,7 +310,7 @@ reset:	FUNC	; signature func reset() -> void @ 276:16
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4d9 	; trace("reset")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 278:16
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 278:16
 		MOVp %1 &.s_params4da 	; traceInts(" params: ", PARAM_COUNT, global params)
 		MOVi %2 #PARAM_COUNT 
 		MOVp %3 &params 
@@ -337,7 +337,7 @@ update:	FUNC	; signature func update() -> void @ 293:17
 	$params:	LOCA *PARAM_COUNT
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4db 	; trace("update")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 296:17
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 296:17
 		MOVp %1 &.s_params4da 	; traceInts(" params: ", PARAM_COUNT, global params)
 		MOVi %2 #PARAM_COUNT 
 		MOVp %3 &params 
@@ -375,7 +375,7 @@ process:	FUNC	; signature func process() -> void @ 324:18
 ;-----------------------------------------------------------------------------
 		MOVi $i #0 	; for (i = 0 to 1000000) yield()
 		GEQi #0 #1000000 @.e0
-	.l1:	CALL ^yield %0 *1	; expects function() -> unknown @ 327:32
+	.l1:	CALL ^yield %0 *1	; expects yield() -> unknown @ 327:32
 		FORi $i #1000000 @.l1
 	.e0:	MOVp $p &NULL 	; p = null
 		POKE $p #0 	; *p = 0

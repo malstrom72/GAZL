@@ -28,8 +28,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 25:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; printLF(s)
-		CALL ^printLF %0 *2	; expects function(ptr) -> unknown @ 27:12
-		CALL ^abort %0 *1	; expects function() -> unknown @ 28:9
+		CALL ^printLF %0 *2	; expects printLF(ptr) -> unknown @ 27:12
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 28:9
 		RETU   	; }
 
 
@@ -161,17 +161,17 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 		DIVf $ballParams:BALL_DY_PARAM %1 $d
 		MOVf %1 $ballParams:BALL_Y_PARAM 	; a = (float) atan2((float) ballParams[BALL_Y_PARAM], (float) ballParams[BALL_X_PARAM])
 		MOVf %2 $ballParams:BALL_X_PARAM 
-		CALL ^atan2 %0 *3	; expects function(float, float) -> unknown @ 86:91
+		CALL ^atan2 %0 *3	; expects atan2(float, float) -> unknown @ 86:91
 		MOVf $a %0 
 		MULf %1 $ballParams:BALL_DX_PARAM $ballParams:BALL_DX_PARAM	; v = (float) sqrt((float) ballParams[BALL_DX_PARAM] * (float) ballParams[BALL_DX_PARAM] + (float) ballParams[BALL_DY_PARAM] * (float) ballParams[BALL_DY_PARAM])
 		MULf %2 $ballParams:BALL_DY_PARAM $ballParams:BALL_DY_PARAM
 		ADDf %1 %1 %2
-		CALL ^sqrt %0 *2	; expects function(float) -> unknown @ 87:165
+		CALL ^sqrt %0 *2	; expects sqrt(float) -> unknown @ 87:165
 		MOVf $v %0 
 		MOVi $midiVel #0 	; midiVel = 0
 		LEQf $v #0.00001 @.f7	; if (v > 0.00001) midiVel = ftoi((float) clamp((float) round(50.0 * (float) log(v) + 127.0), 0.0, 127.0))
 		MOVf %3 $v 	; midiVel = ftoi((float) clamp((float) round(50.0 * (float) log(v) + 127.0), 0.0, 127.0))
-		CALL ^log %2 *2	; expects function(float) -> unknown @ 89:88
+		CALL ^log %2 *2	; expects log(float) -> unknown @ 89:88
 		MULf %2 #50.0 %2
 		ADDf %2 %2 #127.0
 		CALL &round %1 *2	; expects round(float) -> float @ 89:96

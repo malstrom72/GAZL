@@ -76,7 +76,7 @@ process:	FUNC	; signature func process() -> void @ 151:18
 		MOVi %1 $clock 	; read(clock, 1, samps)
 		MOVi %2 #1 
 		ADRL %3 $samps *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 160:24
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 160:24
 		SUBi $diff $diff #0x8000	; diff = diff - 0x8000
 		GEQi $diff #0 @.f2	; if (diff < 0) 
 		MOVi $diff #0 	; diff = 0
@@ -95,25 +95,25 @@ process:	FUNC	; signature func process() -> void @ 151:18
 		MOVi %1 $clock 	; write(clock, 1, samps)
 		MOVi %2 #1 
 		ADRL %3 $samps *0
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 167:25
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 167:25
 		ANDi %0 $clock #1	; if ((clock & 1) == 0) 
 		NEQi %0 #0 @.f3
 		DIVi %1 $clock #2	; read(clock / 2, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 169:37
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 169:37
 		GOTO @.e4  	; } else 
 	.f3:	DIVi %1 $clock #2	; read(clock / 2, 2, samps)
 		MOVi %2 #2 
 		ADRL %3 $samps *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 171:29
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 171:29
 		ADDi %0 $samps:0 $samps:2	; global signal[0] = ((int) samps[0] + (int) samps[2]) >> 1
 		SHRi %0 %0 #1
 		POKE &signal:0 %0 
 		ADDi %0 $samps:1 $samps:3	; global signal[1] = ((int) samps[1] + (int) samps[3]) >> 1
 		SHRi %0 %0 #1
 		POKE &signal:1 %0 
-	.e4:	CALL ^yield %0 *1	; expects function() -> unknown @ 175:10
+	.e4:	CALL ^yield %0 *1	; expects yield() -> unknown @ 175:10
 		ADDi $clock $clock #1	; clock = clock + 1
 		GOTO @.l0  	; }
 		RETU   	; }

@@ -23,10 +23,10 @@ error:	FUNC	; signature func error(ptr s) -> void @ 18:16
 ;-----------------------------------------------------------------------------
 		EQUp $s &NULL @.f0	; if (s != null) 
 		MOVp %1 &.s_Error4d2 	; print("Error: ")
-		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 21:19
+		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 21:19
 		MOVp %1 $s 	; print(s)
-		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 22:11
-		CALL ^abort %0 *1	; expects function() -> unknown @ 23:10
+		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 22:11
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 23:10
 	.f0:	RETU   	; }
 
 

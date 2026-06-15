@@ -36,8 +36,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 67:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 69:10
-		CALL ^abort %0 *1	; expects function() -> unknown @ 70:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 69:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 70:9
 		RETU   	; }
 
 
@@ -151,7 +151,7 @@ process:	FUNC	; signature func process() -> void @ 142:18
 		MOVi %1 $localClock 	; write(localClock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 148:37
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 148:37
 		MOVf $mix:0 #0.0 	; mix[0] = 0.0
 		MOVf $mix:1 #0.0 	; mix[1] = 0.0
 		MOVi $i #0 	; for (i = 0 to 16) 
@@ -163,7 +163,7 @@ process:	FUNC	; signature func process() -> void @ 142:18
 		SUBi %1 $localClock %1
 		MOVi %2 #1 
 		ADRL %3 $tapped *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 153:44
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 153:44
 		! DIVf <A> #1.0 #2048.0	; tapped[0] = itof((int) tapped[0]) * (1.0 / 2048.0)
 		iTOf $tapped:0 $tapped:0 <A>
 		ADDf $mix:0 $mix:0 $tapped:0	; mix[0] = (float) mix[0] + (float) tapped[0]
@@ -174,7 +174,7 @@ process:	FUNC	; signature func process() -> void @ 142:18
 		SUBi %1 $localClock %1
 		MOVi %2 #1 
 		ADRL %3 $tapped *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 158:44
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 158:44
 		! DIVf <A> #1.0 #2048.0	; tapped[1] = itof((int) tapped[1]) * (1.0 / 2048.0)
 		iTOf $tapped:1 $tapped:1 <A>
 		ADDf $mix:1 $mix:1 $tapped:1	; mix[1] = (float) mix[1] + (float) tapped[1]

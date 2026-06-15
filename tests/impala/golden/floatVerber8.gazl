@@ -134,7 +134,7 @@ process:	FUNC	; signature func process() -> void @ 169:18
 		SUBi $index $spinner %0
 		MOVi %1 $index 	; t[i] = itof((int) read(index, 0))
 		MOVi %2 #0 
-		CALL ^read %0 *3	; expects function(int, int) -> unknown @ 190:37
+		CALL ^read %0 *3	; expects read(int, int) -> unknown @ 190:37
 		iTOf %0 %0 #1.0
 		SETL $t $i %0
 		SETL $o $i $index	; o[i] = index
@@ -169,14 +169,14 @@ process:	FUNC	; signature func process() -> void @ 169:18
 		MOVi %2 #0 
 		GETL %3 $t $i
 		fTOi %3 %3 #1.0
-		CALL ^write %0 *4	; expects function(int, int, int) -> unknown @ 216:68
+		CALL ^write %0 *4	; expects write(int, int, int) -> unknown @ 216:68
 		FORi $i <A> @.l6
 	.e5:	SUBf %0 $t:TL1 $t:TL2	; global left = ftoi(((float) t[TL1] - (float) t[TL2]) * 0.75)
 		fTOi %0 %0 #0.75
 		POKE &left %0 
 		fTOi %0 $t:TR #1.0	; global right = ftoi((float) t[TR])
 		POKE &right %0 
-		CALL ^yield %0 *1	; expects function() -> unknown @ 225:10
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 225:10
 		GOTO @.l0  	; }
 		RETU   	; }
 

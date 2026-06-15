@@ -25,5 +25,5 @@ main:	FUNC	; signature func main() -> void @ 13:15
 ;-----------------------------------------------------------------------------
 		MOVi %2 #35 	; printInt(fib(35))
 		CALL &fib %1 *2	; expects fib(int) -> int @ 15:18
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 15:19
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 15:19
 		RETU   	; }

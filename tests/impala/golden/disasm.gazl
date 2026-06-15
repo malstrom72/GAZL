@@ -66,9 +66,9 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 71:21
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; output(s)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 73:11
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 73:11
 		MOVp %1 &.s_4d2 	; output("\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 74:14
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 74:14
 		RETU   	; }
 
 	! ADDi <A> #FILE_BUFFER_SIZE #1
@@ -95,10 +95,10 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		MOVp %1 &.s_GAZLdi4d3 	; outputLine("GAZL disassembler v2.1.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 84:39
 		MOVp %1 &.s_Disass4d4 	; output("Disassemble file: ")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 85:30
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 85:30
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
-		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 86:15
+		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 86:15
 		EQUi $s:0 #0 @.f0	; if ((int)s[0] != 0) 
 		ADRL %1 $s *0	; lower(s)
 		CALL &lower %0 *2	; expects lower(ptr) -> unknown @ 88:11
@@ -138,7 +138,7 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		MOVi %2 $offset 
 		MOVi %3 #FILE_BUFFER_SIZE 
 		MOVp %4 &fileBuffer 
-		CALL ^loadText %0 *5	; expects function(ptr, int, int, ptr) -> unknown @ 104:79
+		CALL ^loadText %0 *5	; expects loadText(ptr, int, int, ptr) -> unknown @ 104:79
 		MOVi $readCount %0 
 		GEQi $readCount #0 @.f10	; if (readCount < 0) 
 		MOVp %1 &.s_Reader4db 	; outputLine("Read error")
@@ -163,14 +163,14 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		PEEK $c $p 	; c = (int)*p
 		POKE $p #0 	; *p = 0
 		MOVp %1 $b 	; output(b)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 121:19
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 121:19
 		POKE $p $c 	; (int)*p = c
 		MOVp $b $p 	; b = p
 		MOVp %1 &.s_Morey4dc 	; output("More (y)? ")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 124:30
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 124:30
 		MOVi %1 #63 	; input(63, yn)
 		ADRL %2 $yn *0
-		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 125:23
+		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 125:23
 		EQUi $yn:0 #'n' @stopIt	; if ((int)yn[0] == 'n' || (int)yn[0] == 'N') goto stopIt
 		NEQi $yn:0 #'N' @.f19
 		GOTO @stopIt  	; goto stopIt
@@ -179,7 +179,7 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		GOTO @.l12  	; }
 	.e13:	POKE $e #0 	; *e = 0
 		MOVp %1 $b 	; output(b)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 133:16
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 133:16
 		ADDi $offset $offset $readCount	; offset = offset + readCount
 	.e11:	GRTi $readCount #0 @.l9	; } while (readCount > 0)
 		MOVp %1 &.s_Morey4dc:10 	; outputLine("")

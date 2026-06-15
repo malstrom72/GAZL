@@ -26,7 +26,7 @@ function writeFixture(dir, name, lines) {
 
 function runValidator(args) {
 	const result = spawnSync(nuxjsExe, [validatorScript].concat(args), {
-		encoding: "utf8",
+		encoding: "utf8"
 	});
 	if (result.error) {
 		throw result.error;
@@ -40,7 +40,7 @@ function main() {
 		const exportFile = writeFixture(tempDir, "moduleA.gazl", [
 			"; signatures version=1",
 			"FUNC foo\t; signature func foo(int, ptr) -> int",
-			"\tRETU",
+			"\tRETU"
 		]);
 		const importFile = writeFixture(tempDir, "moduleB.gazl", ["; signatures version=1", "CALL foo\t; expects foo(int, ptr) -> int"]);
 
@@ -51,11 +51,11 @@ function main() {
 		const typedExportFile = writeFixture(tempDir, "typedExport.gazl", [
 			"; signatures version=1",
 			"FUNC typedFoo\t; signature func typedFoo(int, float, ptr, funcptr) -> float",
-			"\tRETU",
+			"\tRETU"
 		]);
 		const typedImportFile = writeFixture(tempDir, "typedImport.gazl", [
 			"; signatures version=1",
-			"CALL typedFoo\t; expects typedFoo(int, float, ptr, funcptr) -> float",
+			"CALL typedFoo\t; expects typedFoo(int, float, ptr, funcptr) -> float"
 		]);
 
 		const typedSuccess = runValidator([typedExportFile, typedImportFile]);
@@ -66,7 +66,7 @@ function main() {
 		const externDefinition = writeFixture(tempDir, "externDef.gazl", [
 			"; signatures version=1",
 			"FUNC add\t; signature func add(int, int) -> int",
-			"\tRETU",
+			"\tRETU"
 		]);
 		const externCall = writeFixture(tempDir, "externCall.gazl", ["; signatures version=1", "CALL add\t; expects add(int, int) -> int"]);
 		const externResult = runValidator([externOnly, externDefinition, externCall]);
@@ -75,7 +75,7 @@ function main() {
 
 		const warningFile = writeFixture(tempDir, "moduleWarning.gazl", [
 			"; signatures version=1",
-			"CALL missing\t; expects missing(int) -> void",
+			"CALL missing\t; expects missing(int) -> void"
 		]);
 		const warning = runValidator([warningFile]);
 		assertCondition(warning.status === 0, "validator warnings should not trigger non-zero exit");
@@ -83,7 +83,7 @@ function main() {
 
 		const mismatchFile = writeFixture(tempDir, "moduleMismatch.gazl", [
 			"; signatures version=1",
-			"CALL foo\t; expects foo(ptr, ptr) -> int",
+			"CALL foo\t; expects foo(ptr, ptr) -> int"
 		]);
 		const failure = runValidator([exportFile, mismatchFile]);
 		assertCondition(failure.status === 1, "validator should exit with failure for mismatched fixtures");
@@ -91,7 +91,7 @@ function main() {
 
 		const arityMismatchFile = writeFixture(tempDir, "arityMismatch.gazl", [
 			"; signatures version=1",
-			"CALL foo\t; expects foo(int) -> int",
+			"CALL foo\t; expects foo(int) -> int"
 		]);
 		const arityFailure = runValidator([exportFile, arityMismatchFile]);
 		assertCondition(arityFailure.status === 1, "validator should reject calls with the wrong parameter count");
@@ -99,13 +99,47 @@ function main() {
 
 		const returnMismatchFile = writeFixture(tempDir, "returnMismatch.gazl", [
 			"; signatures version=1",
-			"CALL typedFoo\t; expects typedFoo(int, float, ptr, funcptr) -> int",
+			"CALL typedFoo\t; expects typedFoo(int, float, ptr, funcptr) -> int"
 		]);
 		const returnFailure = runValidator([typedExportFile, returnMismatchFile]);
 		assertCondition(returnFailure.status === 1, "validator should reject calls with the wrong return type");
 		assertCondition(
 			/Signature mismatch for "typedFoo"/.test(returnFailure.stdout),
-			"validator did not report expected return mismatch error",
+			"validator did not report expected return mismatch error"
+		);
+
+		const nativeValidFile = writeFixture(tempDir, "nativeValid.gazl", [
+			"; signatures version=1",
+			"CALL ^printInt\t; expects printInt(int) -> unknown"
+		]);
+		const nativeSuccess = runValidator([nativeValidFile]);
+		assertCondition(nativeSuccess.status === 0, "validator should accept native calls matching the manifest");
+		assertCondition(nativeSuccess.stdout.trim().length === 0, "validator reported diagnostics for matching native call");
+
+		const nativeArityMismatchFile = writeFixture(tempDir, "nativeArityMismatch.gazl", [
+			"; signatures version=1",
+			"CALL ^printInt\t; expects printInt() -> unknown"
+		]);
+		const nativeArityFailure = runValidator([nativeArityMismatchFile]);
+		assertCondition(nativeArityFailure.status === 1, "validator should reject native calls with the wrong parameter count");
+		assertCondition(
+			/Signature mismatch for "printInt"/.test(nativeArityFailure.stdout),
+			"validator did not report expected native arity mismatch error"
+		);
+
+		const nativeExternPlaceholderMismatchFile = writeFixture(tempDir, "nativeExternPlaceholderMismatch.gazl", [
+			"; signatures version=1",
+			"; signature extern native printInt() -> unknown",
+			"CALL ^printInt\t; expects printInt() -> unknown"
+		]);
+		const nativeExternPlaceholderFailure = runValidator([nativeExternPlaceholderMismatchFile]);
+		assertCondition(
+			nativeExternPlaceholderFailure.status === 1,
+			"validator should not let bare native extern placeholders mask manifest arity"
+		);
+		assertCondition(
+			/Signature mismatch for "printInt"/.test(nativeExternPlaceholderFailure.stdout),
+			"validator did not report expected native placeholder arity mismatch error"
 		);
 
 		console.log("gazl-validator unit tests passed");

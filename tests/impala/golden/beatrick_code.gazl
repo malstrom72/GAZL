@@ -199,7 +199,7 @@ process:	FUNC	; signature func process() -> void @ 178:18
 		MOVi %1 $localClock 	; write(localClock, 1, localSignal)
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 189:36
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 189:36
 	.f0:	PEEK %0 &lastInStep 	; if (global lastInStep != inStep) 
 		EQUi %0 $inStep @.f1
 		PEEK %0 &steps $inStep	; global currentOutStep = (int) global steps[inStep]
@@ -216,7 +216,7 @@ process:	FUNC	; signature func process() -> void @ 178:18
 		IORi %1 $i %1
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 199:49
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 199:49
 		GOTO @.e3  	; } else 
 	.f2:	PEEK %0 &bottomOperator 	; switch (global bottomOperator == 0 to 5) 
 		SWCH %0 *5 @.s4
@@ -225,13 +225,13 @@ process:	FUNC	; signature func process() -> void @ 178:18
 		ADDi %1 $i %1
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 202:80
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 202:80
 		GOTO @.e5  
 	.s4#STUTTER:	ANDi %1 $localClock #0x3FF	; read(i | (localClock & 0x3FF), 1, localSignal)
 		IORi %1 $i %1
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 203:64
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 203:64
 		GOTO @.e5  
 	.s4#TAPE_STOP:	MOVi $si #0x0 	; si = 0x0
 		MOVi $sr #0x10000 	; sr = 0x10000
@@ -243,7 +243,7 @@ process:	FUNC	; signature func process() -> void @ 178:18
 		IORi %1 $i %1
 		MOVi %2 #2 
 		ADRL %3 $localSignal *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 211:41
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 211:41
 		ANDi $f $si #0xFFFF	; f = si & 0xFFFF
 		SUBi %0 $localSignal:2 $localSignal:0	; localSignal[0] = (int) localSignal[0] + (((int) localSignal[2] - (int) localSignal[0]) * f >> 16)
 		MULi %0 %0 $f

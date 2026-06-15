@@ -1960,10 +1960,10 @@ getComputerMove:	FUNC	; signature func getComputerMove() -> int @ 1094:26
 		LEQi %0 #10000 @.f3
 		NEQi $printedThinking #FALSE @.f4	; if (printedThinking == FALSE) 
 		MOVp %1 &.s_Thinki4d8 	; output("Thinking...")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1105:26
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1105:26
 		MOVi $printedThinking #TRUE 	; printedThinking = TRUE
 	.f4:	MOVp %1 &.s_Thinki4d8:10 	; output(".")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1108:15
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1108:15
 	.f3:	MOVi %1 #MIN_SCORE 	; m = (int) search(MIN_SCORE, MAX_SCORE, d, 0, FALSE)
 		MOVi %2 #MAX_SCORE 
 		MOVi %3 $d 
@@ -1975,7 +1975,7 @@ getComputerMove:	FUNC	; signature func getComputerMove() -> int @ 1094:26
 		GOTO @.l0  	; }
 	.e2:	EQUi $printedThinking #FALSE @.f5	; if (printedThinking != FALSE) 
 		MOVp %1 &.s_4d9 	; output("\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1114:15
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1114:15
 	.f5:	NOOP
 		! EQUi #DEBUG #0 @.a6	; assert((m & MOVE_MASK) == CHECKMATE || (m & MOVE_MASK) == STALEMATE || (int) isValidMove(m & MOVE_MASK) != FALSE)
 		ANDi %0 $m #MOVE_MASK
@@ -2079,10 +2079,10 @@ getUserMove:	FUNC	; signature func getUserMove() -> int @ 1171:22
 ;-----------------------------------------------------------------------------
 	.l0:	MOVi $result #SYNTAX_ERROR 	; result = SYNTAX_ERROR
 		MOVp %1 &.s_4da 	; output(">")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1177:14
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1177:14
 		MOVi %1 #1023 	; l = (int) input(1023, s)
 		ADRL %2 $s *0
-		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 1178:27
+		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 1178:27
 		MOVi $l %0 
 		LEQi $l #0 @.f2	; if (l > 0 && (int) s[l - 1] == '\n') 
 		SUBi %0 $l #1
@@ -2158,7 +2158,7 @@ getUserMove:	FUNC	; signature func getUserMove() -> int @ 1171:22
 		MOVi $result %0 
 		GOTO @.e19  	; } else 
 	.f18:	MOVp %1 &.s_Enterm4e0 	; output("Enter moves like 'd2d4' or:\n'level 1-5' to set computer level (default is 3).\n'go' to switch color and let the computer play.\n'back' to take back a step.\n'new' to start a new game.\n'quit' to exit.\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1205:218
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1205:218
 	.e19:	NOOP
 	.e15:	NOOP
 	.e13:	NOOP
@@ -2184,16 +2184,16 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:21
 		MOVi $buffer:1 #0 	; buffer[1] = 0
 		MOVi $lastI #-1 	; lastI = -1
 		MOVp %1 &.s_ABCDEF4e1 	; output("    A B C D E F G H\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1216:33
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1216:33
 		MOVp %1 &.s_4e2 	; output("  +-----------------+\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1217:35
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1217:35
 		MOVi $y #0 	; for (y = 0 to 8) 
 		GEQi #0 #8 @.e0
 	.l1:	SUBi $buffer:0 #'8' $y	; buffer[0] = '8' - y
 		ADRL %1 $buffer *0	; output(buffer)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1220:17
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1220:17
 		MOVp %1 &.s_4e3 	; output(" |")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1221:15
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1221:15
 		MOVi $x #0 	; for (x = 0 to 8) 
 		GEQi #0 #8 @.e2
 	.l3:	SUBi %0 #9 $y	; i = (9 - y) * STRIDE + (x + 1)
@@ -2213,7 +2213,7 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:21
 	.e9:	NOOP
 	.f7:	MOVi $buffer:0 $c 	; buffer[0] = c
 		ADRL %1 $buffer *0	; output(buffer)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1231:18
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1231:18
 		PEEK %0 &board $i	; c = (int) global PIECE_CHARS[(int) global board[i] & (PIECE_MASK | BLACK)]
 		! IORi <B> #PIECE_MASK #BLACK
 		ANDi %0 %0 <B>
@@ -2225,7 +2225,7 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:21
 		MOVi $c #'.' 	; c = '.'
 	.f11:	MOVi $buffer:0 $c 	; buffer[0] = c
 		ADRL %1 $buffer *0	; output(buffer)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1235:18
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1235:18
 		MOVi $lastI $i 	; lastI = i
 		FORi $x #8 @.l3	; }
 	.e2:	MOVi $c #' ' 	; c = ' '
@@ -2234,20 +2234,20 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:21
 	.t12:	MOVi $c #')' 	; c = ')'
 	.f13:	MOVi $buffer:0 $c 	; buffer[0] = c
 		ADRL %1 $buffer *0	; output(buffer)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1241:17
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1241:17
 		MOVp %1 &.s_4e4 	; output("| ")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1242:15
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1242:15
 		SUBi $buffer:0 #'8' $y	; buffer[0] = '8' - y
 		ADRL %1 $buffer *0	; output(buffer)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1244:17
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1244:17
 		MOVp %1 &.s_4e2:21 	; output("\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1245:15
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1245:15
 		MOVi $lastI #-1 	; lastI = -1
 		FORi $y #8 @.l1	; }
 	.e0:	MOVp %1 &.s_4e2 	; output("  +-----------------+\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1248:35
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1248:35
 		MOVp %1 &.s_ABCDEF4e5 	; output("    A B C D E F G H\n\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1249:35
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1249:35
 		RETU   	; }
 
 
@@ -2361,18 +2361,18 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 ;-----------------------------------------------------------------------------
 		CALL &initGlobals %0 *1	; expects initGlobals() -> void @ 1296:15
 		MOVp %1 &.s_ec4e6 	; output("        ,....,\n      ,::::::<\n     ,::/^\\\"``.\n    ,::/, `   e`.\n   ,::
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1298:344
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1298:344
 		MOVp %1 &.s_PRIYOM4e7 	; output("PRIYOME CHESS COMPUTER\n\n         V1.0\n\n(C) Magnus Lidstroem\n\nPress enter to continue")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1299:102
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1299:102
 		MOVi %1 #1 	; input(1, buffer)
 		ADRL %2 $buffer *0
-		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 1300:18
+		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 1300:18
 		MOVi $i #0 	; for (i = 0 to 30) output("\n")
 		GEQi #0 #30 @.e0
 	.l1:	MOVp %1 &.s_ec4e6:300 	; output("\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1301:32
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1301:32
 		FORi $i #30 @.l1
-	.e0:	CALL ^clock %0 *1	; expects function() -> unknown @ 1303:47
+	.e0:	CALL ^clock %0 *1	; expects clock() -> unknown @ 1303:47
 		PEEK %1 &randPX 
 		XORi %1 %1 %0
 		POKE &randPX %1 
@@ -2393,7 +2393,7 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 		NEQi %0 #WHITE @.f4
 		MOVp $p &.s_Whites4e9 	; p = "White's turn.\n"
 	.f4:	MOVp %1 $p 	; output(p)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1319:14
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1319:14
 	.f3:	MOVp $action &.s_Lastmo4ea 	; action = "Last move:"
 		NEQi $isComputersTurn #FALSE @.f5	; if (isComputersTurn == FALSE) 
 		CALL &getUserMove %0 *1	; expects getUserMove() -> int @ 1324:35
@@ -2424,7 +2424,7 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 		MOVp $action &.s_Tookba4eb 	; action = "Took back move:"
 		GOTO @.e7  	; } else 
 	.f8:	MOVp %1 &.s_Nomove4ec 	; output("No move to take back.\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1342:41
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1342:41
 		MOVi $lastMove #-1 	; lastMove = -1
 	.e9:	GOTO @.e7  	; }
 		! SUBi <B> #NEW_GAME #NEW_GAME	; case NEW_GAME
@@ -2439,14 +2439,14 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 		MOVi %1 $level 	; setLevel(level)
 		CALL &setLevel %0 *2	; expects setLevel(int) -> void @ 1357:23
 		MOVp %1 &.s_Setcom4ed 	; output("Set computer level to ")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1358:40
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1358:40
 		ADDi %0 $level #1	; buffer[0] = level + 1 + '0'
 		ADDi $buffer:0 %0 #'0'
 		MOVi $buffer:1 #0 	; buffer[1] = 0
 		ADRL %1 $buffer *0	; output(buffer)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1361:22
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1361:22
 		MOVp %1 &.s_Nomove4ec:20 	; output(".\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1362:21
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1362:21
 		MOVi $lastMove #-1 	; lastMove = -1
 	.e7:	NOOP
 	.f5:	EQUi $isComputersTurn #FALSE @.f12	; if (isComputersTurn != FALSE) 
@@ -2492,31 +2492,31 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 	.e19:	GOTO @.e17  	; }
 		! SUBi <B> #IN_CHECK #VALID_MOVE	; case IN_CHECK
 	.s16#<B>:	MOVp %1 &.s_Kingin4ee 	; output("King in check.\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1397:33
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1397:33
 		MOVi $lastMove #-1 	; lastMove = -1
 		GOTO @.e17  	; }
 	.s16:	NEQi $moveResult #INVALID_MOVE @.f15	; if (moveResult == INVALID_MOVE) 
 		MOVp %1 &.s_Invali4ef 	; output("Invalid move.\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1403:33
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1403:33
 		MOVi $lastMove #-1 	; lastMove = -1
 	.e17:	NOOP
 	.f15:	LSSi $lastMove #0 @.f21	; if (lastMove >= 0) 
 		MOVp %1 &.s_Invali4ef:13 	; output("\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1411:17
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1411:17
 		MOVi %1 $lastFrom 	; printBoard(lastFrom, lastTo)
 		MOVi %2 $lastTo 
 		CALL &printBoard %0 *3	; expects printBoard(int, int) -> void @ 1412:33
 		EQUi $lastFrom #0 @.f21	; if (lastFrom != 0 && lastTo != 0) 
 		EQUi $lastTo #0 @.f21
 		MOVp %1 $action 	; output(action)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1414:20
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1414:20
 		MOVp %1 &.s_Setcom4ed:21 	; output(" ")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1415:17
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1415:17
 		ANDi %1 $lastPiece #PIECE_MASK	; output(global PIECE_NAMES[lastPiece & PIECE_MASK])
 		PEEK %1 &PIECE_NAMES %1
-		CALL ^output %0 *2	; expects function(unknown) -> unknown @ 1416:56
+		CALL ^output %0 *2	; expects output(unknown) -> unknown @ 1416:56
 		MOVp %1 &.s_Setcom4ed:21 	; output(" ")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1417:17
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1417:17
 		MODi %0 $lastFrom #STRIDE	; buffer[0] = ('A' + (lastFrom % STRIDE - 1))
 		SUBi %0 %0 #1
 		ADDi $buffer:0 #'A' %0
@@ -2525,9 +2525,9 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 		ADDi $buffer:1 #'1' %0
 		MOVi $buffer:2 #0 	; buffer[2] = 0
 		ADRL %1 $buffer *0	; output(buffer)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1421:20
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1421:20
 		MOVp %1 &.s_Setcom4ed:18 	; output(" to ")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1422:20
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1422:20
 		MODi %0 $lastTo #STRIDE	; buffer[0] = ('A' + (lastTo % STRIDE - 1))
 		SUBi %0 %0 #1
 		ADDi $buffer:0 #'A' %0
@@ -2535,21 +2535,21 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 		SUBi %0 %0 #2
 		ADDi $buffer:1 #'1' %0
 		ADRL %1 $buffer *0	; output(buffer)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1425:20
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1425:20
 		MOVp %1 &.s_4f0 	; output(".\n\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1426:21
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1426:21
 	.f21:	NEQi $moveResult #CHECKMATE @.f24	; if (moveResult == CHECKMATE) 
 		MOVp $p &.s_Checkm4f1 	; p = "Checkmate! White wins.\n"
 		PEEK %0 &turnColor 	; if (global turnColor == WHITE) p = "Checkmate! Black wins.\n"
 		NEQi %0 #WHITE @.f25
 		MOVp $p &.s_Checkm4f2 	; p = "Checkmate! Black wins.\n"
 	.f25:	MOVp %1 $p 	; output(p)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1433:14
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1433:14
 		MOVi $lastMove #MATE 	; lastMove = MATE
 		GOTO @.e26  	; } else if (moveResult == STALEMATE) 
 	.f24:	NEQi $moveResult #STALEMATE @.f27	; if (moveResult == STALEMATE) 
 		MOVp %1 &.s_Stalem4f3 	; output("Stalemate!\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1436:27
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1436:27
 		MOVi $lastMove #MATE 	; lastMove = MATE
 	.f27:	NOOP
 	.e26:	NEQi $lastMove #QUIT @.l2	; } while (lastMove != QUIT)

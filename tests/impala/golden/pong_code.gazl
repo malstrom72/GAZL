@@ -406,14 +406,14 @@ process:	FUNC	; signature func process() -> void @ 276:18
 		COPY &signal $bp *2	; copy (2 from bp to global signal)
 		COPY $bp &temp *2	; copy (2 from global temp to bp)
 		ADDp $bp $bp $dir	; bp = bp + dir
-		CALL ^yield %0 *1	; expects function() -> unknown @ 295:11
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 295:11
 		FORi $bi #BATCH_SIZE @.l3	; }
 	.e2:	PEEK %0 &clock 	; clock = global clock - BATCH_SIZE
 		SUBi $clock %0 #BATCH_SIZE
 		MOVi %1 $clock 	; write(clock, BATCH_SIZE, global buffer)
 		MOVi %2 #BATCH_SIZE 
 		MOVp %3 &buffer 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 299:42
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 299:42
 		MOVp $bp &buffer 	; for (bp = global buffer to global buffer + BATCH_SIZE * 2) *bp = 0
 		! MULi <A> #BATCH_SIZE #2
 		ADDp %0 &buffer <A>
@@ -430,7 +430,7 @@ process:	FUNC	; signature func process() -> void @ 276:18
 		SUBi %2 $clock $tapData:TAP_DELAY	; read(clock - (int) tapData[TAP_DELAY], BATCH_SIZE, tapped)
 		MOVi %3 #BATCH_SIZE 
 		ADRL %4 $tapped *0
-		CALL ^read %1 *4	; expects function(int, int, ptr) -> unknown @ 306:62
+		CALL ^read %1 *4	; expects read(int, int, ptr) -> unknown @ 306:62
 		! SHLi <A> #1 #RECTIFIER_BIT	; if (((int) tapData[TAP_BITS] & (1 << RECTIFIER_BIT)) != 0) 
 		ANDi %1 $tapData:TAP_BITS <A>
 		EQUi %1 #0 @.f8

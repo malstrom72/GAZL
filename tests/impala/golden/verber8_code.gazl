@@ -173,7 +173,7 @@ process:	FUNC	; signature func process() -> void @ 163:18
 		SUBi %1 $offset %1
 		MOVi %2 #BATCH_SIZE 
 		MOVp %3 $p 
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 192:47
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 192:47
 		ADDp $p $p #BATCH_SIZE_2	; p = p + BATCH_SIZE_2
 		FORi $i <A> @.l4	; }
 	.e3:	MOVi $bi #0 	; for (bi = 0 to BATCH_SIZE) 
@@ -236,7 +236,7 @@ process:	FUNC	; signature func process() -> void @ 163:18
 		SUBi %0 %0 %1
 		POKE &signal:0 %0 
 		POKE &signal:1 $tr 	; global signal[1] = (int) tr
-		CALL ^yield %0 *1	; expects function() -> unknown @ 226:11
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 226:11
 		! MULi <A> #T0 #BATCH_SIZE_2	; b[T0 * BATCH_SIZE_2] = t0
 		POKE $b <A> $t0
 		! MULi <A> #T3 #BATCH_SIZE_2	; b[T3 * BATCH_SIZE_2] = t3
@@ -261,7 +261,7 @@ process:	FUNC	; signature func process() -> void @ 163:18
 		SUBi %1 $offset %1
 		MOVi %2 #BATCH_SIZE 
 		MOVp %3 $p 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 240:48
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 240:48
 		ADDp $p $p #BATCH_SIZE_2	; p = p + BATCH_SIZE_2
 		FORi $i <A> @.l8	; }
 		GOTO @.l0  	; }

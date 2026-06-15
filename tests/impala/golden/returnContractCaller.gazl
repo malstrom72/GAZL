@@ -13,5 +13,5 @@ main:	FUNC	; signature func main() -> void @ 4:15
 		MOVf $value %0 
 		CALL &returnsNumber %0 *1	; expects returnsNumber() -> unknown @ 8:17
 		MOVf %1 $value 	; printFloat(value)
-		CALL ^printFloat %0 *2	; expects function(float) -> unknown @ 9:19
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 9:19
 		RETU   	; }

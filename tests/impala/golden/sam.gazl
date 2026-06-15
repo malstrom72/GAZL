@@ -1372,7 +1372,7 @@ outputSample:	FUNC	; signature func outputSample(int delayIndex, int sample) -> 
 		GEQi #0 %0 @.e2
 	.l3:	POKE &signal:1 $s 	; global signal[0] = global signal[1] = s
 		POKE &signal:0 $s 
-		CALL ^yield %1 *1	; expects function() -> unknown @ 1318:10
+		CALL ^yield %1 *1	; expects yield() -> unknown @ 1318:10
 		FORi $i %0 @.l3	; }
 	.e2:	POKE &writepos $bufferposScaled 	; global writepos = bufferposScaled
 		SHLi %0 $sample #7	; global lastSample = (sample << 7) - 1024
@@ -2639,8 +2639,8 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		PEEK %0 $p 	; if ((int) *p == 0) 
 		NEQi %0 #0 @.f0
 		MOVp %1 &.s_Thisfi4da 	; trace("This firmware requires a configuration string. E.g. \"reciter HI THERE!\"")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 2200:85
-		CALL ^abort %0 *1	; expects function() -> unknown @ 2201:10
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 2200:85
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 2201:10
 	.f0:	MOVp %1 &dynamicPanelTextRow 	; strcpy(global dynamicPanelTextRow, global panelTextRows[4])
 		PEEK %2 &panelTextRows:4 
 		CALL &strcpy %0 *3	; expects strcpy(ptr, ptr) -> ptr @ 2203:61
@@ -2667,7 +2667,7 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		MOVp %1 &input 	; if ((int) TextToPhonemes(global input) == 0) abort()
 		CALL &TextToPhonemes %0 *2	; expects TextToPhonemes(ptr) -> int @ 2216:42
 		NEQi %0 #0 @.f4
-		CALL ^abort %0 *1	; expects function() -> unknown @ 2216:55
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 2216:55
 	.f4:	ADRL %1 $buffer *0	; p = (pointer) stpcpy(buffer, "Phonetic: %")
 		MOVp %2 &.s_Phonet4db 
 		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 2217:46
@@ -2688,7 +2688,7 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		PEEK %0 $p 
 		EQUi %0 #' ' @.l7
 	.f6:	ADRL %1 $buffer *0	; trace(buffer)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 2224:16
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 2224:16
 	.e3:	MOVp %1 &input 	; strcat(global input, "\u009b")
 		MOVp %2 &.s_4dc 
 		CALL &strcat %0 *3	; expects strcat(ptr, ptr) -> ptr @ 2226:32
@@ -2698,8 +2698,8 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		CALL &InitPlayback %0 *1	; expects InitPlayback() -> int @ 2228:27
 		NEQi %0 #0 @.f9
 		MOVp %1 &.s_Couldn4de 	; trace("Couldn't initialize playback. Invalid input?")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 2229:56
-		CALL ^abort %0 *1	; expects function() -> unknown @ 2230:10
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 2229:56
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 2230:10
 	.f9:	RETU   	; }
 
 
@@ -2762,7 +2762,7 @@ process:	FUNC	; signature func process() -> void @ 2310:18
 		POKE &lastClock $c 	; global lastClock = c
 		POKE &signal:1 #0 	; global signal[0] = global signal[1] = 0
 		POKE &signal:0 #0 
-		CALL ^yield %0 *1	; expects function() -> unknown @ 2320:12
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 2320:12
 		GOTO @.l2  	; }
 	.e3:	POKE &pleaseBreak #FALSE 	; global pleaseBreak = FALSE
 		CALL &Play %0 *1	; expects Play() -> void @ 2325:10
@@ -2776,7 +2776,7 @@ process:	FUNC	; signature func process() -> void @ 2310:18
 		GEQi %0 #2 @.l1
 		PEEK %0 &abortWhenDone 	; if (global abortWhenDone != FALSE) exit()
 		EQUi %0 #FALSE @.f6
-		CALL ^exit %0 *1	; expects function() -> unknown @ 2331:44
+		CALL ^exit %0 *1	; expects exit() -> unknown @ 2331:44
 		GOTO @.l0  
 	.f6:	NOOP
 	.l8:	PEEK %0 &pleaseBreak 	; while (global pleaseBreak == FALSE && (int) global params[OPERATOR_2_PARAM_INDEX] < 2) 
@@ -2785,7 +2785,7 @@ process:	FUNC	; signature func process() -> void @ 2310:18
 		GEQi %0 #2 @.l0
 		POKE &signal:1 #0 	; global signal[0] = global signal[1] = 0
 		POKE &signal:0 #0 
-		CALL ^yield %0 *1	; expects function() -> unknown @ 2335:12
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 2335:12
 		GOTO @.l8  	; }
 	.e7:	GOTO @.l0  	; }
 		RETU   	; }

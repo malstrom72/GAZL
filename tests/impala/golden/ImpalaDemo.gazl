@@ -39,7 +39,7 @@ abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void @ 138:22
 	$v:	INPi
 ;-----------------------------------------------------------------------------
 		NEQi $v #0 @.f0	; if (v == 0) abort()
-		CALL ^abort %0 *1	; expects function() -> unknown @ 140:21
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 140:21
 	.f0:	RETU   	; }
 
 
@@ -88,13 +88,13 @@ test:	FUNC	; signature func test() -> void @ 171:15
 	.e0:	MOVi $i #0 	; for (i = 0 to TEST_SIZE) 
 		GEQi #0 #TEST_SIZE @.e2
 	.l3:	GETL %1 $mydata $i	; printInt(mydata[i])
-		CALL ^printInt %0 *2	; expects function(unknown) -> unknown @ 178:22
-		CALL ^printLF %0 *1	; expects function() -> unknown @ 179:12
+		CALL ^printInt %0 *2	; expects printInt(unknown) -> unknown @ 178:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 179:12
 		FORi $i #TEST_SIZE @.l3	; }
 	.e2:	MOVi %2 #TEST_SIZE 	; printInt(findSmallest(TEST_SIZE, mydata))
 		ADRL %3 $mydata *0
 		CALL &findSmallest %1 *3	; expects findSmallest(int, ptr) -> int @ 181:42
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 181:43
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 181:43
 		RETU   	; }
 
 ; signature extern native printFloat() -> unknown @ 191:25
@@ -134,8 +134,8 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:18
 		GOTO @.e1  
 	.f0:	MOVi $ok #0 	; ok = 0
 	.e1:	MOVi %1 $ok 	; printInt(ok)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 223:14
-		CALL ^printLF %0 *1	; expects function() -> unknown @ 224:11
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 223:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 224:11
 		MOVi $b #'xyz' 	; a = b = 'xyz'
 		MOVi $a #'xyz' 
 		! MULi <A> #345 #123	; a = b = 345 * 123
@@ -155,8 +155,8 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:18
 	.e4:	MOVp $p &SOME_CONSTS 	; for (p = global SOME_CONSTS to &global SOME_CONSTS[0]) 
 		GEQp &SOME_CONSTS &SOME_CONSTS:0 @.e6
 	.l7:	MOVp %1 $p 	; printInt(p)
-		CALL ^printInt %0 *2	; expects function(ptr) -> unknown @ 233:69
-		CALL ^printLF %0 *1	; expects function() -> unknown @ 233:80
+		CALL ^printInt %0 *2	; expects printInt(ptr) -> unknown @ 233:69
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 233:80
 		FORp $p &SOME_CONSTS:0 @.l7	; }
 	.e6:	PEEK $a &forgetMe 	; a = global forgetMe
 		MOVf $f #23.3 	; f = 23.3
@@ -174,11 +174,11 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:18
 		iTOf %0 $a #1.0	; f = itof(a) / 100.0
 		DIVf $f %0 #100.0
 		MOVi %1 $a 	; printInt(a)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 242:12
-		CALL ^printLF %0 *1	; expects function() -> unknown @ 242:22
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 242:12
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 242:22
 		MOVf %1 $f 	; printFloat(f)
-		CALL ^printFloat %0 *2	; expects function(float) -> unknown @ 243:14
-		CALL ^printLF %0 *1	; expects function() -> unknown @ 243:24
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 243:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 243:24
 		POKE &initedArray:2 &futureArray:4 	; global initedArray[2] = &global futureArray[4]
 		NEQi #1 #1 @.f8	; if (1 == 1) 
 		! EQUi #DEBUG #0 @.a9	; assert((pointer)global initedArray[2] == &global futureArray[4])
@@ -229,17 +229,17 @@ main:	FUNC	; signature func main() -> void @ 283:15
 	$myFloat:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 #WELCOME 	; print(WELCOME)
-		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 286:16
+		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 286:16
 		MOVf $myFloat #1000.0 	; myFloat = 1000.0
 		! SHLi <B> #1 #anInt	; printInt(ftoi(myFloat * (1.0 / itof(1 << anInt))))
 		! iTOf <B> <B> #1.0
 		! DIVf <B> #1.0 <B>
 		fTOi %1 $myFloat <B>
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 288:52
-		CALL ^printLF %0 *1	; expects function() -> unknown @ 288:63
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 288:52
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 288:63
 		CALL &showoff %0 *1	; expects showoff() -> void @ 289:11
 		MOVp %1 &.s_Bye4d4 	; print("Bye!\n")
-		CALL ^print %0 *2	; expects function(ptr) -> unknown @ 290:17
+		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 290:17
 		RETU   	; }
 
 .s_string4d2:	CNST *8

@@ -83,9 +83,9 @@ test:	FUNC	; signature func test(int a, int b) -> void @ 23:15
 	$b:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi %1 $a 	; printInt(a)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 24:13
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 24:13
 		MOVi %1 $b 	; printInt(b)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 25:13
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 25:13
 		RETU   	; }
 
 
@@ -137,33 +137,33 @@ main:	FUNC	; signature func main() -> void @ 28:15
 		SWCH %0 *<B> @.s2
 		! SUBi <B> #-2 <A>	; case -2
 	.s2#<B>:	MOVi %1 #-2 	; printInt(-2)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 41:25
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:25
 		GOTO @.e3  
 		! SUBi <B> #11 #1	; case 11-1
 		! SUBi <B> <B> <A>
 	.s2#<B>:	MOVi %1 #10 	; printInt(10)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 42:27
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 42:27
 		GOTO @.e3  
 		! SUBi <B> #'a' #'a'	; case 'a'-'a'
 		! SUBi <B> <B> <A>
 	.s2#<B>:	MOVi %1 #0 	; printInt(0)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 43:29
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 43:29
 		GOTO @.e3  
 	.s2:	MULi %0 $i #2	; switch (i * 2 == 0 to 6) 
 		SWCH %0 *6 @.s4
 	.s4:	MOVi %1 #-1000 	; printInt(-1000)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 46:34
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 46:34
 		GOTO @.e3  
 	.s4#2:	MOVi %1 #11111 	; printInt(11111)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 47:30
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:30
 		GOTO @.e3  
 	.s4#5:	NEQi #1 #1 @.e3	; if (1 == 1) printInt(5555)
 		MOVi %1 #5555 	; printInt(5555)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 48:41
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 48:41
 	.e5:	GOTO @.e3  	; }
 		! SUBi <B> #5 <A>	; case 5
 	.s2#<B>:	MOVi %1 #5 	; printInt(5)
-		CALL ^printInt %0 *2	; expects function(int) -> unknown @ 52:23
-	.e3:	CALL ^printLF %0 *1	; expects function() -> unknown @ 54:12
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 52:23
+	.e3:	CALL ^printLF %0 *1	; expects printLF() -> unknown @ 54:12
 		FORi $i #20 @.l1	; }
 	.e0:	RETU   	; }

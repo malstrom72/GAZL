@@ -962,10 +962,10 @@ main:	FUNC	; signature func main() -> void @ 620:15
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 	.l0:	MOVp %1 &.s_calc4e5 	; output("calc> ")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 631:19
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 631:19
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
-		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 632:16
+		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 632:16
 		ADRL %1 $s *0	; p = (pointer) eatWhite(s)
 		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 634:28
 		MOVp $p %0 
@@ -1009,36 +1009,36 @@ main:	FUNC	; signature func main() -> void @ 620:15
 	.f6:	PEEK $p &lastError 	; if ((p = global lastError) != null) output(p)
 		EQUp $p &NULL @.f7
 		MOVp %1 $p 	; output(p)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 652:48
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 652:48
 		GOTO @.e8  
 	.f7:	POKE &lastResult $f 	; global lastResult = f
 		LSSi $assignTo #0 @.f9	; if (assignTo >= 0) 
 		ADDi $s:0 #'a' $assignTo	; s[0] = 'a' + assignTo
 		MOVi $s:1 #0 	; s[1] = 0
 		ADRL %1 $s *0	; output(s)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 658:14
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 658:14
 	.f9:	MOVp %1 &.s_4e7 	; output(" = ")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 660:17
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 660:17
 		MOVf %2 $f 	; output(floatToString(f, 6, buffer))
 		MOVi %3 #6 
 		ADRL %4 $buffer *0
 		CALL &floatToString %1 *4	; expects floatToString(float, int, ptr) -> ptr @ 661:38
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 661:39
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 661:39
 		fTOi $i $f #1.0	; if (itof(i = ftoi(f)) == f) 
 		iTOf %0 $i #1.0
 		NEQf %0 $f @.f10
 		MOVp %1 &.s_0x4e8 	; output("\n = 0x")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 663:22
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 663:22
 		MOVi %2 $i 	; output(intToHex(i, buffer))
 		ADRL %3 $buffer *0
 		CALL &intToHex %1 *3	; expects intToHex(int, ptr) -> ptr @ 664:31
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 664:32
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 664:32
 	.f10:	LSSi $assignTo #0 @.f11	; if (assignTo >= 0) 
 		POKE &memory $assignTo $f	; global memory[assignTo] = f
 		POKE &memoryUsed $assignTo #1	; global memoryUsed[assignTo] = 1
 	.f11:	NOOP
 	.e8:	MOVp %1 &.s_4e9 	; output("\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 671:15
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 671:15
 		GOTO @.l0  	; }
 	quit:	RETU   	; }
 

@@ -2359,7 +2359,8 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
 
                                                        if (callee.operator === ':=' &&
                                                            callee.operands[1] &&
-                                                           callee.operands[1][0] === '&') {
+                                                           (callee.operands[1][0] === '&' ||
+                                                            callee.operands[1][0] === '^')) {
                                                            calleeName = callee.operands[1].substr(1);
                                                            var entry = $$parser.symbols.functions[calleeName];
                                                            if (entry && entry.kind === 'FUNC' && entry.signature) {

@@ -69,7 +69,7 @@ main:	FUNC	; signature func main() -> void @ 47:15
 		MOVf $d0zR #0.0 
 		MOVf $dxzR #0.0 
 	.l0:	ADRL %1 $params *0	; if ((int)updateParameters(params) != FALSE) 
-		CALL ^updateParameters %0 *2	; expects function(ptr) -> unknown @ 60:37
+		CALL ^updateParameters %0 *2	; expects updateParameters(ptr) -> unknown @ 60:37
 		EQUi %0 #FALSE @.f1
 		! DIVf <A> #1.0 #255.0	; rq = itof((int)params[OPERAND_1_HIGH_PARAM_INDEX]) * (1.0 / 255.0 * 2.0)
 		! MULf <A> <A> #2.0
@@ -82,11 +82,11 @@ main:	FUNC	; signature func main() -> void @ 47:15
 		ADDf %1 #1.0 $rq
 		DIVf $r %0 %1
 		MOVf %1 $fpi 	; k = ((float) sin(fpi)) / ((float) cos(fpi) + (float) sin(fpi))
-		CALL ^sin %0 *2	; expects function(float) -> unknown @ 64:25
+		CALL ^sin %0 *2	; expects sin(float) -> unknown @ 64:25
 		MOVf %2 $fpi 
-		CALL ^cos %1 *2	; expects function(float) -> unknown @ 64:47
+		CALL ^cos %1 *2	; expects cos(float) -> unknown @ 64:47
 		MOVf %3 $fpi 
-		CALL ^sin %2 *2	; expects function(float) -> unknown @ 64:65
+		CALL ^sin %2 *2	; expects sin(float) -> unknown @ 64:65
 		ADDf %1 %1 %2
 		DIVf $k %0 %1
 		MULf %0 $r $k	; g0 = r / (1.0 + r * k * k * k * k)
@@ -98,7 +98,7 @@ main:	FUNC	; signature func main() -> void @ 47:15
 		ADDf $r #1.0 $r	; r = (1.0 + r)
 	.f1:	ADRL %1 $left *0	; getFrame(&left, &right)
 		ADRL %2 $right *0
-		CALL ^getFrame %0 *3	; expects function(ptr, ptr) -> unknown @ 69:26
+		CALL ^getFrame %0 *3	; expects getFrame(ptr, ptr) -> unknown @ 69:26
 		MULf %0 $left $r	; dxL = 0.5 * (dxzL + left * r)
 		ADDf %0 $dxzL %0
 		MULf $dxL #0.5 %0
@@ -175,6 +175,6 @@ main:	FUNC	; signature func main() -> void @ 47:15
 		SUBf $d3zR %0 $gR
 		MOVf %1 $d3zL 	; putFrame(d3zL, d3zR)
 		MOVf %2 $d3zR 
-		CALL ^putFrame %0 *3	; expects function(float, float) -> unknown @ 93:23
+		CALL ^putFrame %0 *3	; expects putFrame(float, float) -> unknown @ 93:23
 		GOTO @.l0  	; }
 		RETU   	; }

@@ -304,7 +304,7 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 		MOVp $p %0 
 		FORi $i $n @.l2	; }
 	.e1:	ADRL %1 $line *0	; trace(line)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 297:13
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 297:13
 		RETU   	; }
 
 
@@ -342,7 +342,7 @@ traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats, int 
 		MOVp $p %0 
 		FORi $i $n @.l2	; }
 	.e1:	ADRL %1 $line *0	; trace(line)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 313:13
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 313:13
 		RETU   	; }
 
 
@@ -384,8 +384,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 330:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 332:10
-		CALL ^abort %0 *1	; expects function() -> unknown @ 333:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 332:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 333:9
 		RETU   	; }
 
 
@@ -873,13 +873,13 @@ init:	FUNC	; signature func init() -> void @ 654:15
 	$buf:	LOCA *256
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4df 	; trace("init")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 657:15
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 657:15
 		PEEK %2 &instance 	; trace(intToString(global instance, 10, 1, buf))
 		MOVi %3 #10 
 		MOVi %4 #1 
 		ADRL %5 $buf *0
 		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 658:48
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 658:49
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 658:49
 		RETU   	; }
 
 
@@ -888,7 +888,7 @@ reset:	FUNC	; signature func reset() -> void @ 665:16
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4e0 	; trace("reset")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 667:16
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 667:16
 		MOVp %1 &.s_params4e1 	; traceInts(" params: ", PARAM_COUNT, global params)
 		MOVi %2 #PARAM_COUNT 
 		MOVp %3 &params 
@@ -1098,7 +1098,7 @@ update:	FUNC	; signature func update() -> void @ 745:17
 	.f2:	FORi $i #CHECK_PARAMS_COUNT @.l1	; }
 	.e0:	EQUi $rebuild #FALSE @.f3	; if (rebuild != FALSE) 
 		MOVp %1 &.s_rebuil4e5 	; trace("rebuilding")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 760:22
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 760:22
 		POKE &tapCount #0 	; global tapCount = 0
 		POKE &xorShiftRandomSeedX #123456789 	; global xorShiftRandomSeedX = 123456789
 		POKE &xorShiftRandomSeedY #362436069 	; global xorShiftRandomSeedY = 362436069
@@ -1231,7 +1231,7 @@ process:	FUNC	; signature func process() -> void @ 928:18
 		MOVi %1 $clock 	; write(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 942:33
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 942:33
 		MOVp $p &tapData 	; p = global tapData
 		MOVi $i #0 	; for (i = 0 to global tapCount) 
 		PEEK %0 &tapCount 
@@ -1241,7 +1241,7 @@ process:	FUNC	; signature func process() -> void @ 928:18
 		SUBi %2 $clock $tapData:TAP_DELAY	; read(clock - (int) tapData[TAP_DELAY], 1, tapped)
 		MOVi %3 #1 
 		ADRL %4 $tapped *0
-		CALL ^read %1 *4	; expects function(int, int, ptr) -> unknown @ 946:53
+		CALL ^read %1 *4	; expects read(int, int, ptr) -> unknown @ 946:53
 		! SHLi <A> #1 #RECTIFIER_BIT	; if (((int) tapData[TAP_BITS] & (1 << RECTIFIER_BIT)) != 0) 
 		ANDi %1 $tapData:TAP_BITS <A>
 		EQUi %1 #0 @.f4
@@ -1261,7 +1261,7 @@ process:	FUNC	; signature func process() -> void @ 928:18
 		POKE &signal:0 %0 
 		SHRi %0 $mixR #8	; global signal[1] = mixR >> 8
 		POKE &signal:1 %0 
-		CALL ^yield %0 *1	; expects function() -> unknown @ 959:10
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 959:10
 		GOTO @.l1  	; }
 		GOTO @.e5  	; } else 
 	.f0:	NOOP
@@ -1273,14 +1273,14 @@ process:	FUNC	; signature func process() -> void @ 928:18
 		COPY &signal $bp *2	; copy (2 from bp to global signal)
 		COPY $bp &temp *2	; copy (2 from global temp to bp)
 		ADDp $bp $bp #2	; bp = bp + 2
-		CALL ^yield %0 *1	; expects function() -> unknown @ 971:11
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 971:11
 		FORi $bi #BATCH_SIZE @.l8	; }
 	.e7:	PEEK %0 &clock 	; clock = global clock - BATCH_SIZE
 		SUBi $clock %0 #BATCH_SIZE
 		MOVi %1 $clock 	; write(clock, BATCH_SIZE, global buffer)
 		MOVi %2 #BATCH_SIZE 
 		MOVp %3 &buffer 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 975:42
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 975:42
 		MOVp $bp &buffer 	; for (bp = global buffer to global buffer + BATCH_SIZE * 2) *bp = 0
 		! MULi <A> #BATCH_SIZE #2
 		ADDp %0 &buffer <A>
@@ -1297,7 +1297,7 @@ process:	FUNC	; signature func process() -> void @ 928:18
 		SUBi %2 $clock $tapData:TAP_DELAY	; read(clock - (int) tapData[TAP_DELAY], BATCH_SIZE, _tapped)
 		MOVi %3 #BATCH_SIZE 
 		ADRL %4 $_tapped *0
-		CALL ^read %1 *4	; expects function(int, int, ptr) -> unknown @ 982:63
+		CALL ^read %1 *4	; expects read(int, int, ptr) -> unknown @ 982:63
 		! SHLi <A> #1 #RECTIFIER_BIT	; if (((int) tapData[TAP_BITS] & (1 << RECTIFIER_BIT)) != 0) 
 		ANDi %1 $tapData:TAP_BITS <A>
 		EQUi %1 #0 @.f13

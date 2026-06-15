@@ -125,7 +125,7 @@ reset:	FUNC	; signature func reset() -> void @ 171:16
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4da 	; trace("reset")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 173:16
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 173:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
@@ -145,7 +145,7 @@ update:	FUNC	; signature func update() -> void @ 184:17
 	$fxCountFloat:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update4db 	; trace("update")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 196:17
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 196:17
 		POKE &dirXor #0 	; global dirXor = 0
 		PEEK %0 &params:SWITCHES_PARAM_INDEX 	; if (((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_REVERSE_MASK) != 0) 
 		ANDi %0 %0 #SWITCHES_REVERSE_MASK
@@ -245,7 +245,7 @@ init:	FUNC	; signature func init() -> void @ 273:15
 	$t:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4dc 	; trace("init")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 276:15
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 276:15
 		CALL &update %0 *1	; expects update() -> void @ 277:10
 		MOVp $p &FX_PARAMS 	; p = global FX_PARAMS
 		MOVi $i #0 	; for (i = 0 to 3) 
@@ -352,11 +352,11 @@ process:	FUNC	; signature func process() -> void @ 311:18
 	.f3:	MOVi %1 $clock 	; write(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 368:33
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 368:33
 		MOVi %1 $clock 	; read(clock, 1, inp)
 		MOVi %2 #1 
 		ADRL %3 $inp *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 369:22
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 369:22
 		SWCH $held *8 @.s7	; switch (held == 0 to 8) 
 	.s7#REVERSE_FX:	EQUi $trig #FALSE @.f9	; if (trig != FALSE) 
 		MOVi $pos $clock 	; pos = clock
@@ -364,7 +364,7 @@ process:	FUNC	; signature func process() -> void @ 311:18
 		MOVi %1 $pos 	; read(pos, 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 377:23
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 377:23
 		GOTO @.e8  	; }
 	.s7#TAPE_STOP_FX:	EQUi $trig #FALSE @.f10	; if (trig != FALSE) 
 		SHLi $pos $clock #16	; pos = clock << 16
@@ -373,7 +373,7 @@ process:	FUNC	; signature func process() -> void @ 311:18
 		SHRi %1 $pos #16	; read(pos >> 16, 2, samples)
 		MOVi %2 #2 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 386:32
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 386:32
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> 16)
 		MULi %0 %0 $x
 		SHRi %0 %0 #16
@@ -392,7 +392,7 @@ process:	FUNC	; signature func process() -> void @ 311:18
 	.f12:	SHRi %1 $pos #1	; read(pos >> 1, 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 400:28
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 400:28
 		ADDi $pos $pos #1	; pos = pos + 1
 		GOTO @.e8  	; }
 	.s7#TRANCE_GATE_EFFECT:	SHRi %0 $clock $fxParams:FX_PARAM_TRANCE_GATE_RATE	; x = (clock >> (int) fxParams[FX_PARAM_TRANCE_GATE_RATE]) & 0x7FF
@@ -420,7 +420,7 @@ process:	FUNC	; signature func process() -> void @ 311:18
 	.s7#BIT_CRUSH_EFFECT:	ANDi %1 $clock $fxParams:FX_PARAM_BIT_CRUSH_MASK	; read(clock & (int) fxParams[FX_PARAM_BIT_CRUSH_MASK], 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 420:67
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 420:67
 		! XORi <A> #0x7F #-1	; outp[0] = (int) outp[0] & ~0x7F
 		ANDi $outp:0 $outp:0 <A>
 		! XORi <A> #0x7F #-1	; outp[1] = (int) outp[1] & ~0x7F
@@ -434,7 +434,7 @@ process:	FUNC	; signature func process() -> void @ 311:18
 		MOVi %1 $pos 	; read(pos, 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 429:26
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 429:26
 		ANDi %0 $clock $fxParams:FX_PARAM_REPEAT_OFF_3	; if ((clock & (int) fxParams[FX_PARAM_REPEAT_OFF_3]) == (int) fxParams[FX_PARAM_REPEAT_OFF_3]) 
 		NEQi %0 $fxParams:FX_PARAM_REPEAT_OFF_3 @.f19
 		ADDi $pos $pos $fxParams:FX_PARAM_REPEAT_OFF_3	; pos = pos + (int) fxParams[FX_PARAM_REPEAT_OFF_3]
@@ -452,7 +452,7 @@ process:	FUNC	; signature func process() -> void @ 311:18
 	.e22:	MOVi %1 $pos 	; read(pos, 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 441:30
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 441:30
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_10])
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_10
@@ -467,11 +467,11 @@ process:	FUNC	; signature func process() -> void @ 311:18
 	.f24:	MOVi %1 $pos 	; read(pos, 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 450:26
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 450:26
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_9	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_9], 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 451:68
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 451:68
 		ANDi $x $clock $fxParams:FX_PARAM_MASK_10	; x = clock & (int) fxParams[FX_PARAM_MASK_10]
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_10])
 		MULi %0 %0 $x
@@ -495,11 +495,11 @@ process:	FUNC	; signature func process() -> void @ 311:18
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_9	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_9], 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 464:64
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 464:64
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_10	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_10], 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 465:69
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 465:69
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_9])
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_9
@@ -528,7 +528,7 @@ process:	FUNC	; signature func process() -> void @ 311:18
 		SHRi %0 %0 #15
 		ADDi %0 $inp:1 %0
 		POKE &signal:1 %0 
-		CALL ^yield %0 *1	; expects function() -> unknown @ 485:10
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 485:10
 		ADDi $clock $clock #1	; clock = clock + 1
 		GOTO @.l0  	; }
 		RETU   	; }

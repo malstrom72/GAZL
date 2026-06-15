@@ -365,17 +365,17 @@ fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:15
 	$numString:	LOCA *3
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Fatale4d2 	; output("Fatal error ")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 299:24
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 299:24
 		DIVi %0 $NUM #10	; numString[0] = '0' + NUM / 10
 		ADDi $numString:0 #'0' %0
 		MODi %0 $NUM #10	; numString[1] = '0' + NUM % 10
 		ADDi $numString:1 #'0' %0
 		MOVi $numString:2 #0 	; numString[2] = 0
 		ADRL %1 $numString *0	; output(numString)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 303:19
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 303:19
 		MOVp %1 &.s_Seesou4d3 	; output(".  See source code for interpretation.\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 304:52
-		CALL ^abort %0 *1	; expects function() -> unknown @ 305:9
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 304:52
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 305:9
 		RETU   	; }
 
 	GLOB *1
@@ -393,7 +393,7 @@ fRAN:	FUNC	; signature func fRAN(int RANGE) -> int @ 310:15
 		EQUi %0 #0 @.f0
 		GEQi $RANGE #0 @.f1
 	.f0:	MOVi $D #1999 	; D=1999
-		CALL ^clock %0 *1	; expects function() -> unknown @ 328:18
+		CALL ^clock %0 *1	; expects clock() -> unknown @ 328:18
 		ANDi $T %0 #0x7FFFFFFF
 	.f1:	MOVi $T #1 	; for (T=1 to D+1) global fRAN_R=((global fRAN_R*1093+221587)%1048576)
 		ADDi %0 $D #1
@@ -482,8 +482,8 @@ fMAPLIN:	FUNC	; signature func fMAPLIN(int FIL) -> void @ 380:18
 	.l1:	NEQi $FIL #FALSE @.f2	; if(FIL==FALSE) 
 		MOVi %1 #99 	; input(99, global INLINE+1)
 		ADDp %2 &INLINE #1
-		CALL ^input %0 *3	; expects function(int, ptr) -> unknown @ 416:30
-		CALL ^inputEOF %0 *1	; expects function() -> unknown @ 417:24
+		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 416:30
+		CALL ^inputEOF %0 *1	; expects inputEOF() -> unknown @ 417:24
 		EQUi %0 #FALSE @.e4
 		MOVi %1 #1 	; score(1)
 		CALL &score %0 *2	; expects score(int) -> unknown @ 417:42
@@ -738,7 +738,7 @@ fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
 		PEEK %1 &LNLENG 	; if(!(global LNLENG != 0)) 
 		NEQi %1 #0 @.f0
 		MOVp %1 &.s_Seesou4d3:38 	; output("\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 577:15
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 577:15
 		GOTO @return  	; goto return
 	.f0:	PEEK %0 &MAP2:1 	; if((int)global MAP2[1] == 0)fMPINIT()
 		NEQi %0 #0 @.f1
@@ -756,9 +756,9 @@ fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
 		ADDi %0 %0 #1
 		POKE &INLINE %0 #0
 		ADDp %1 &INLINE #1	; output(global INLINE+1)
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 586:25
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 586:25
 		MOVp %1 &.s_Seesou4d3:38 	; output("\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 586:39
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 586:39
 	return:	RETU   	; }
 
 
@@ -1329,13 +1329,13 @@ score:	FUNC	; signature func score(int MODE) -> void @ 808:16
 	.f30:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 911:23
 		MOVi %1 #0 	; exit(0)
-		CALL ^exit %0 *2	; expects function(int) -> unknown @ 912:11
+		CALL ^exit %0 *2	; expects exit(int) -> unknown @ 912:11
 	.f29:	FORi $I <A> @.l28	; } /* end loop */
 	.e27:	POKE &SPK #265 	; global SPK=265
 		PEEK %1 &SPK 	; fRSPEAK(global SPK)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 916:21
 		MOVi %1 #0 	; exit(0)
-		CALL ^exit %0 *2	; expects function(int) -> unknown @ 917:9
+		CALL ^exit %0 *2	; expects exit(int) -> unknown @ 917:9
 	return:	RETU   	; }
 
 
@@ -3423,7 +3423,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ 1641:17
 		GOTO @.e7  	; }
 	.s6#29:	NOOP
 	.s6#30:	MOVp %1 &.s_SorryF4d4 	; output("Sorry. File operationrs are disabled.\n")
-		CALL ^output %0 *2	; expects function(ptr) -> unknown @ 1960:55
+		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1960:55
 		POKE &gK #NUL 	; global gK = NUL
 		MOVi $goValue #GOTO8 	; goValue = GOTO8
 		GOTO @return  	; goto return

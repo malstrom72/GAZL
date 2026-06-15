@@ -86,7 +86,7 @@ process:	FUNC	; signature func process() -> void @ 138:18
 	.e1:	SHRi $y $y #20	; global signal[0] = (y = y >> 20)
 		POKE &signal:0 $y 
 		POKE &signal:1 $y 	; global signal[1] = y
-		CALL ^yield %0 *1	; expects function() -> unknown @ 152:10
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 152:10
 		ADDi $t $t #1	; t = t + 1
 		GOTO @.l0  	; }
 		RETU   	; }

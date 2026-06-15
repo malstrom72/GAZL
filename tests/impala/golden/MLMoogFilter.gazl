@@ -69,11 +69,11 @@ filter:	FUNC	; signature func filter(int hasSoundIn, ptr left, ptr right) -> int
 		! MULf <A> #f #PI	; fpi = f * PI
 		MOVf $fpi <A> 
 		MOVf %1 $fpi 	; k = ((float) sin(fpi)) / ((float) cos(fpi) + (float) sin(fpi))
-		CALL ^sin %0 *2	; expects function(float) -> unknown @ 32:23
+		CALL ^sin %0 *2	; expects sin(float) -> unknown @ 32:23
 		MOVf %2 $fpi 
-		CALL ^cos %1 *2	; expects function(float) -> unknown @ 32:45
+		CALL ^cos %1 *2	; expects cos(float) -> unknown @ 32:45
 		MOVf %3 $fpi 
-		CALL ^sin %2 *2	; expects function(float) -> unknown @ 32:63
+		CALL ^sin %2 *2	; expects sin(float) -> unknown @ 32:63
 		ADDf %1 %1 %2
 		DIVf $k %0 %1
 		MULf %0 $r $k	; g0 = r / (1.0 + r * k * k * k * k)

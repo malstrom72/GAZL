@@ -84,8 +84,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 88:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 90:10
-		CALL ^abort %0 *1	; expects function() -> unknown @ 91:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 90:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 91:9
 		RETU   	; }
 
 
@@ -513,11 +513,11 @@ process:	FUNC	; signature func process() -> void @ 296:18
 		MOVi %1 $localClock 	; write(localClock, 1, localSignal)
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
-		CALL ^write %0 *4	; expects function(int, int, ptr) -> unknown @ 347:37
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 347:37
 		SUBi %1 $localClock $localDelayR	; read(localClock - localDelayR, 1, localSignal)
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 348:50
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 348:50
 		MOVi $left $localSignal:0 	; left = (int) localSignal[0]
 		MOVi $right $localSignal:1 	; right = (int) localSignal[1]
 		SWCH $localOp1 *5 @.s7	; switch (localOp1 == 0 to 5) 
@@ -558,7 +558,7 @@ process:	FUNC	; signature func process() -> void @ 296:18
 	.s7#STEREO_DELAY:	SUBi %1 $localClock $localDelayL	; read(localClock - localDelayL, 1, localSignal)
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
-		CALL ^read %0 *4	; expects function(int, int, ptr) -> unknown @ 373:52
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 373:52
 		MOVi $left $localSignal:0 	; left = (int) localSignal[0]
 	.s7:	NOOP
 	.e8:	LEQi $left $peak @.f9	; if (left > peak) peak = left
@@ -621,7 +621,7 @@ process:	FUNC	; signature func process() -> void @ 296:18
 	.s13:	NOOP
 	.e14:	POKE &signal:0 $left 	; global signal[0] = left
 		POKE &signal:1 $right 	; global signal[1] = right
-		CALL ^yield %0 *1	; expects function() -> unknown @ 407:11
+		CALL ^yield %0 *1	; expects yield() -> unknown @ 407:11
 		ADDi %0 $localClock $clockDir	; localClock = (localClock + clockDir) & 0xFFFF
 		ANDi $localClock %0 #0xFFFF
 		FORi $innerLoopIndex #64 @.l6	; }

@@ -37,8 +37,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 72:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 74:10
-		CALL ^abort %0 *1	; expects function() -> unknown @ 75:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 74:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 75:9
 		RETU   	; }
 
 
@@ -316,7 +316,7 @@ traceInt:	FUNC	; signature func traceInt(int i) -> void @ 259:19
 		MOVi %4 #1 
 		ADRL %5 $buffer *0
 		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 262:37
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 262:38
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 262:38
 		RETU   	; }
 
 
@@ -330,7 +330,7 @@ traceFloat:	FUNC	; signature func traceFloat(float f) -> void @ 265:21
 		MOVi %3 #6 
 		ADRL %4 $buffer *0
 		CALL &floatToString %1 *4	; expects floatToString(float, int, ptr) -> ptr @ 268:35
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 268:36
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 268:36
 		RETU   	; }
 
 BUFFER_SIZE:	! DEFi #256	; signature const BUFFER_SIZE : int @ 274:1
@@ -360,7 +360,7 @@ init:	FUNC	; signature func init() -> void @ 290:15
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4dd 	; trace("init")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 292:15
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 292:15
 		RETU   	; }
 
 
@@ -375,7 +375,7 @@ reset:	FUNC	; signature func reset() -> void @ 299:16
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4de 	; trace("reset")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 302:16
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 302:16
 		MOVf $a #0.5 	; a = 0.5
 		! MULf <A> #TWICE_PI #440.0	; lr = TWICE_PI * 440.0 / 44100.0
 		! DIVf <A> <A> #44100.0

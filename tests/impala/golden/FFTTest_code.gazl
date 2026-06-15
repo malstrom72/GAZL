@@ -163,7 +163,7 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 		MOVp $p %0 
 		FORi $i $n @.l2	; }
 	.e1:	ADRL %1 $line *0	; trace(line)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 184:13
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 184:13
 		RETU   	; }
 
 
@@ -188,8 +188,8 @@ error:	FUNC	; signature func error(ptr s) -> void @ 194:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 196:10
-		CALL ^abort %0 *1	; expects function() -> unknown @ 197:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 196:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ 197:9
 		RETU   	; }
 
 
@@ -622,13 +622,13 @@ init:	FUNC	; signature func init() -> void @ 467:15
 	$buf:	LOCA *256
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init4d9 	; trace("init")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 470:15
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 470:15
 		PEEK %2 &instance 	; trace(intToString(global instance, 10, 1, buf))
 		MOVi %3 #10 
 		MOVi %4 #1 
 		ADRL %5 $buf *0
 		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 471:48
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 471:49
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 471:49
 		RETU   	; }
 
 
@@ -637,7 +637,7 @@ reset:	FUNC	; signature func reset() -> void @ 478:16
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset4da 	; trace("reset")
-		CALL ^trace %0 *2	; expects function(ptr) -> unknown @ 480:16
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 480:16
 		MOVp %1 &.s_params4db 	; traceInts(" params: ", PARAM_COUNT, global params)
 		MOVi %2 #PARAM_COUNT 
 		MOVp %3 &params 
@@ -727,7 +727,7 @@ process:	FUNC	; signature func process() -> void @ 509:18
 		DIVf %1 $maxY #512.0	; targetA = (float) sqrt(maxY / 512.0)
 		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ 543:41
 		MOVf $targetA %0 
-	.f9:	CALL ^yield %0 *1	; expects function() -> unknown @ 545:11
+	.f9:	CALL ^yield %0 *1	; expects yield() -> unknown @ 545:11
 		FORi $idx #512 @.l2	; }
 	.e1:	MOVi %1 #512 	; realFFT(512, fftInput, fftOutput)
 		ADRL %2 $fftInput *0
