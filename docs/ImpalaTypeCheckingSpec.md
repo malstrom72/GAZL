@@ -93,7 +93,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
   * Native (`N`) exports satisfy any matching import but are never type-checked, deferring to host integration.
 * When mismatches are found, emit actionable diagnostics that cite both the importer and exporter source locations. The validator should parse the optional `@ <origin>` suffix on each comment and, when absent, fall back to the legacy `$$s`/`$$i` offsets that are already threaded through declarations for this purpose.【F:impala/impala.jspeg†L1466-L1546】
 * Provide `--warn-only` and `--force` flags so teams can adopt strictness gradually.
-* `tools/gazl-validate.js` (with a Windows shim in `tools/gazl-validate.cmd`) accepts `.gazl` files or directories, downgrades errors to warnings when `--warn-only` is supplied, and promotes missing-definition warnings to hard failures when `--force` is used.【F:tools/gazl-validate.js†L1-L71】【F:tools/gazl-validate.js†L636-L668】
+* `tools/gazl-validate.sh` / `tools\gazl-validate.cmd` accept `.gazl` files, downgrade errors to warnings when `--warn-only` is supplied, and promote missing-definition warnings to hard failures when `--force` is used.【F:tools/gazl-validate.js†L1-L71】【F:tools/gazl-validate.js†L636-L668】
 
 ### 3. Surface Metadata to Developers
 
@@ -124,8 +124,8 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
   - [x] Lock down the comment grammar (for example, `FUNC foo    ; signature func foo(int a, ptr b) -> int` and `CALL foo    ; expects foo(int, ptr) -> int`) and document it alongside the Impala assembly reference so downstream tooling knows how to parse it.
   - [x] Ensure comments never break layout-sensitive sections by routing them through the same helpers that already insert `;`-prefixed notes when `-g` is enabled today.
 - [x] **Validator tool**
-  - [x] Create `tools/gazl-validate.{js,cmd}` (mirroring existing script conventions) that parses the signature comments, performs the matching described above, and exits non-zero on fatal mismatches unless `--warn-only` is passed.【F:tools/gazl-validate.js†L1-L338】【F:tools/gazl-validate.js†L486-L679】
-  - [x] Run `tools/gazl-validate.js` from the default build on explicit JSPEG fixture file sets, while keeping arbitrary linked-unit validation as a direct command.
+  - [x] Create `tools/gazl-validate.{js,sh,cmd}` for NuXJS that parses the signature comments, performs the matching described above, and exits non-zero on fatal mismatches unless `--warn-only` is passed.【F:tools/gazl-validate.js†L1-L338】【F:tools/gazl-validate.js†L486-L679】
+  - [x] Run `tools/gazl-validate.sh` from the default build on explicit JSPEG fixture file sets, while keeping arbitrary linked-unit validation as a direct command.
   - [x] Parse optional `@ <origin>` markers so mismatch diagnostics can cite both the importer and exporter spans when metadata is available.
 - [x] **Documentation & onboarding**
   - [x] Update `docs/Impala.md` and add a quickstart snippet showing how to run the validator on two sample units.
@@ -137,7 +137,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
 ## Adoption Strategy
 
 * Ship the compiler changes with signature comment emission gated behind `--emit-metadata`. Enable it by default after a release or two once downstream tools have caught up.
-* Encourage early adopters to run `tools/gazl-validate.js` explicitly in CI on the exact `.gazl` units that will be concatenated or loaded together.
+* Encourage early adopters to run `tools/gazl-validate.sh` / `tools\gazl-validate.cmd` explicitly in CI on the exact `.gazl` units that will be concatenated or loaded together.
 * Monitor feedback from teams using large legacy codebases. If the comment stream causes unacceptable noise, offer targeted suppression (per-symbol opt-outs or an `@opaque` annotation similar to today’s `extern array` escape hatch).
 
 ## Risks and Mitigations

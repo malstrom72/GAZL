@@ -36,6 +36,6 @@ if [ ${#gazl_files[@]} -eq 0 ]; then
     exit 1
 fi
 
-node ./tools/gazl-validate.js "${gazl_files[@]}"
+bash ./tools/gazl-validate.sh "${gazl_files[@]}"
 
 exit 0

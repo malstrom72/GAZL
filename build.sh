@@ -24,9 +24,9 @@ for gazl_file in impala/testdata/*.expected.gazl; do
 			continue
 			;;
 	esac
-	node tools/gazl-validate.js "$gazl_file"
+	bash tools/gazl-validate.sh "$gazl_file"
 done
-node tools/gazl-validate.js \
+bash tools/gazl-validate.sh \
 	impala/testdata/returnContractCaller.expected.gazl \
 	impala/testdata/returnContractProviderFloat.expected.gazl
 

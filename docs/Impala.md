@@ -496,14 +496,14 @@ sources and validate them without leaving the `output/` directory:
 cd output
 ./NuXJS impala.nuxjs.js ../tests/impala/sources/calc.impala calc.gazl 0x4d2 calc.impala
 ./NuXJS impala.nuxjs.js ../tests/impala/sources/multitap_code.impala multitap.gazl 0x4d2 multitap_code.impala
-node ../tools/gazl-validate.js calc.gazl multitap.gazl
+bash ../tools/gazl-validate.sh calc.gazl multitap.gazl
 ```
 
 From the repository root, run the validator directly on any already
 compiled files:
 
 ```bash
-node tools/gazl-validate.js output/calc.gazl output/multitap.gazl
+bash tools/gazl-validate.sh output/calc.gazl output/multitap.gazl
 ```
 
 The validator reports mismatched signatures as errors by default. Pass
@@ -511,8 +511,8 @@ The validator reports mismatched signatures as errors by default. Pass
 `--force` to turn missing-definition warnings into errors. The normal
 `build.sh` path runs the validator's regression tests and validates the
 generated JSPEG fixture metadata with explicit file sets. For other
-programs, run `tools/gazl-validate.js` directly on the exact `.gazl`
-units that will be linked together.
+programs, run `tools/gazl-validate.sh` or `tools\gazl-validate.cmd`
+directly on the exact `.gazl` units that will be linked together.
 
 See [Impala JSPEG](../impala/ImpalaJS.md) for the CLI, regeneration flow, and
 parity test commands.

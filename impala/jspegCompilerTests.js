@@ -9,6 +9,7 @@ const { compileWithJsImpala } = require("./impalaJsCompilerRunner");
 const dir = __dirname;
 const IMPALA_ENCODING = "latin1";
 const validatorScript = path.join(dir, "..", "tools", "gazl-validate.js");
+const nuxjsExe = path.join(dir, "..", "output", process.platform === "win32" ? "NuXJS.exe" : "NuXJS");
 const validatorFixturesDir = path.join(dir, "testdata", "validator");
 
 function canonicalizeNewlines(source) {
@@ -615,7 +616,7 @@ function resolveValidatorFixture(name) {
 
 function runValidatorCase(label, fixtureNames, expectedExitCode, expectedMessageSubstring) {
 	const files = fixtureNames.map(resolveValidatorFixture);
-	const result = childProcess.spawnSync(process.execPath, [validatorScript].concat(files), {
+	const result = childProcess.spawnSync(nuxjsExe, [validatorScript].concat(files), {
 		encoding: "utf8",
 	});
 
@@ -638,18 +639,18 @@ function runValidatorCase(label, fixtureNames, expectedExitCode, expectedMessage
 		process.exit(1);
 	}
 
-	const stderr = result.stderr || "";
+	const validatorOutput = result.stdout || "";
 	if (expectedMessageSubstring) {
-		if (!stderr.includes(expectedMessageSubstring)) {
+		if (!validatorOutput.includes(expectedMessageSubstring)) {
 			console.error(`gazl-validate output for ${label} did not include expected message: ${expectedMessageSubstring}`);
-			console.error("stderr:");
-			console.error(stderr);
+			console.error("output:");
+			console.error(validatorOutput);
 			process.exit(1);
 		}
-	} else if (stderr.trim().length !== 0) {
+	} else if (validatorOutput.trim().length !== 0) {
 		console.error(`gazl-validate produced unexpected diagnostics for ${label}`);
-		console.error("stderr:");
-		console.error(stderr);
+		console.error("output:");
+		console.error(validatorOutput);
 		process.exit(1);
 	}
 

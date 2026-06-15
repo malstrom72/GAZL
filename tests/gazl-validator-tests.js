@@ -8,6 +8,7 @@ const { spawnSync } = require("child_process");
 
 const repoRoot = path.resolve(__dirname, "..");
 const validatorScript = path.join(repoRoot, "tools", "gazl-validate.js");
+const nuxjsExe = path.join(repoRoot, "output", process.platform === "win32" ? "NuXJS.exe" : "NuXJS");
 
 function assertCondition(condition, message) {
 	if (!condition) {
@@ -24,7 +25,7 @@ function writeFixture(dir, name, lines) {
 }
 
 function runValidator(args) {
-	const result = spawnSync(process.execPath, [validatorScript].concat(args), {
+	const result = spawnSync(nuxjsExe, [validatorScript].concat(args), {
 		encoding: "utf8",
 	});
 	if (result.error) {
@@ -45,7 +46,7 @@ function main() {
 
 		const success = runValidator([exportFile, importFile]);
 		assertCondition(success.status === 0, "validator should exit cleanly for matching fixtures");
-		assertCondition(success.stderr.trim().length === 0, "validator reported diagnostics for matching fixtures");
+		assertCondition(success.stdout.trim().length === 0, "validator reported diagnostics for matching fixtures");
 
 		const typedExportFile = writeFixture(tempDir, "typedExport.gazl", [
 			"; signatures version=1",
@@ -59,7 +60,7 @@ function main() {
 
 		const typedSuccess = runValidator([typedExportFile, typedImportFile]);
 		assertCondition(typedSuccess.status === 0, "validator should accept matching call parameter and return types");
-		assertCondition(typedSuccess.stderr.trim().length === 0, "validator reported diagnostics for matching call types");
+		assertCondition(typedSuccess.stdout.trim().length === 0, "validator reported diagnostics for matching call types");
 
 		const externOnly = writeFixture(tempDir, "externStub.gazl", ["; signatures version=1", "; signature extern func add() -> unknown"]);
 		const externDefinition = writeFixture(tempDir, "externDef.gazl", [
@@ -70,7 +71,7 @@ function main() {
 		const externCall = writeFixture(tempDir, "externCall.gazl", ["; signatures version=1", "CALL add\t; expects add(int, int) -> int"]);
 		const externResult = runValidator([externOnly, externDefinition, externCall]);
 		assertCondition(externResult.status === 0, "bare extern metadata should merge with later definitions");
-		assertCondition(externResult.stderr.trim().length === 0, "validator should remain silent when extern placeholders match definitions");
+		assertCondition(externResult.stdout.trim().length === 0, "validator should remain silent when extern placeholders match definitions");
 
 		const warningFile = writeFixture(tempDir, "moduleWarning.gazl", [
 			"; signatures version=1",
@@ -78,7 +79,7 @@ function main() {
 		]);
 		const warning = runValidator([warningFile]);
 		assertCondition(warning.status === 0, "validator warnings should not trigger non-zero exit");
-		assertCondition(/WARNING:/.test(warning.stderr), "validator did not emit expected warning for missing metadata");
+		assertCondition(/WARNING:/.test(warning.stdout), "validator did not emit expected warning for missing metadata");
 
 		const mismatchFile = writeFixture(tempDir, "moduleMismatch.gazl", [
 			"; signatures version=1",
@@ -86,7 +87,7 @@ function main() {
 		]);
 		const failure = runValidator([exportFile, mismatchFile]);
 		assertCondition(failure.status === 1, "validator should exit with failure for mismatched fixtures");
-		assertCondition(/Signature mismatch for "foo"/.test(failure.stderr), "validator did not report expected mismatch error");
+		assertCondition(/Signature mismatch for "foo"/.test(failure.stdout), "validator did not report expected mismatch error");
 
 		const arityMismatchFile = writeFixture(tempDir, "arityMismatch.gazl", [
 			"; signatures version=1",
@@ -94,7 +95,7 @@ function main() {
 		]);
 		const arityFailure = runValidator([exportFile, arityMismatchFile]);
 		assertCondition(arityFailure.status === 1, "validator should reject calls with the wrong parameter count");
-		assertCondition(/Signature mismatch for "foo"/.test(arityFailure.stderr), "validator did not report expected arity mismatch error");
+		assertCondition(/Signature mismatch for "foo"/.test(arityFailure.stdout), "validator did not report expected arity mismatch error");
 
 		const returnMismatchFile = writeFixture(tempDir, "returnMismatch.gazl", [
 			"; signatures version=1",
@@ -102,7 +103,10 @@ function main() {
 		]);
 		const returnFailure = runValidator([typedExportFile, returnMismatchFile]);
 		assertCondition(returnFailure.status === 1, "validator should reject calls with the wrong return type");
-		assertCondition(/Signature mismatch for "typedFoo"/.test(returnFailure.stderr), "validator did not report expected return mismatch error");
+		assertCondition(
+			/Signature mismatch for "typedFoo"/.test(returnFailure.stdout),
+			"validator did not report expected return mismatch error",
+		);
 
 		console.log("gazl-validator unit tests passed");
 	} finally {

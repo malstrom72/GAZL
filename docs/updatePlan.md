@@ -30,7 +30,7 @@ Compiling callers and callees in different units allows mismatched return types 
    In `$$parser.resolveFunctionReturnType` and `$$parser.expectFunctionReturnType`, keep today’s single-unit safeguards but update the messages to reference “previous expectation from signature metadata” when applicable. This ensures forward declarations inside the same translation unit still produce immediate errors.
 
 6. **Regression coverage and tooling hooks**
-   Add three Impala samples under `tests/impala/sources/` (agreement, mismatch, unknown) plus their `tests/impala/golden/` counterparts. Mirror each sample in `impala/testdata/` for the JSPEG unit tests. Update `tools/regen-jspeg-fixtures.sh`/`.cmd` to call `node tools/gazl-validate.js` on the regenerated `.gazl` pairs so fixture drift immediately surfaces.
+   Add three Impala samples under `tests/impala/sources/` (agreement, mismatch, unknown) plus their `tests/impala/golden/` counterparts. Mirror each sample in `impala/testdata/` for the JSPEG unit tests. Update `tools/regen-jspeg-fixtures.sh`/`.cmd` to call `tools/gazl-validate.sh` / `.cmd` on the regenerated `.gazl` pairs so fixture drift immediately surfaces.
 
 ## Open Questions / Follow-Ups
 - Decide how to represent “unknown” or “void” in the metadata so the validator can distinguish intentional omissions.
@@ -53,7 +53,7 @@ Compiling callers and callees in different units allows mismatched return types 
   - [x] Add a reconciliation pass that compares each expected category with every discovered definition, reusing `typesCompatible` for the comparisons and issuing structured diagnostics on conflicts, missing definitions, or native/non-native mismatches.
 - [x] Expand the regression suite:
   - [x] Author the three `.impala` samples (agreement, mismatch, unknown) and regenerate their `.gazl` outputs under both `tests/impala/golden/` and `impala/testdata/`.
-- [x] Wire `tools/regen-jspeg-fixtures.{sh,cmd}` to invoke `node tools/gazl-validate.js` on the freshly generated fixtures so signature mismatches fail regeneration. (Both scripts now collect the regenerated `.expected.gazl` files and run the validator as a final gate.)
+- [x] Wire `tools/regen-jspeg-fixtures.{sh,cmd}` to invoke `tools/gazl-validate.sh` / `.cmd` on the freshly generated fixtures so signature mismatches fail regeneration. (Both scripts now collect the regenerated `.expected.gazl` files and run the validator as a final gate.)
 - [x] Validate the dummy return-slot work:
   - [x] Adjust the implicit-return branch in `FuncDecl` so the `PARA *1` emission follows the `FUNC` declaration while keeping legacy semantics.
   - [x] Document the rationale for the placeholder within `impala.jspeg` (and refresh `impalaCompiler.js`) to keep future contributors aligned.

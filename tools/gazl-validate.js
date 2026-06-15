@@ -1,42 +1,90 @@
-#!/usr/bin/env node
-"use strict";
+/* GAZL signature validator for NuXJS. */
 
-const fs = require("fs");
-const path = require("path");
+var hostScriptPath = arguments && arguments.length > 0 ? "" + arguments[0] : "gazl-validate.js";
+var hostArgs = [];
+for (var hostArgIndex = 1; arguments && hostArgIndex < arguments.length; ++hostArgIndex) {
+	hostArgs.push("" + arguments[hostArgIndex]);
+}
 
-const DEFAULT_NATIVE_MANIFEST = path.resolve(__dirname, "../docs/nativeCallbackSignatures.gazl");
+function hostError(message) {
+	print("" + message);
+}
+function hostRead(filePath) {
+	return read(filePath);
+}
+function hostBasename(path) {
+	var slash = path.lastIndexOf("/");
+	var backslash = path.lastIndexOf("\\");
+	var index = Math.max(slash, backslash);
+	return index >= 0 ? path.substr(index + 1) : path;
+}
+function dirname(path) {
+	var slash = path.lastIndexOf("/");
+	var backslash = path.lastIndexOf("\\");
+	var index = Math.max(slash, backslash);
+	return index >= 0 ? path.substr(0, index + 1) : "";
+}
+var DEFAULT_NATIVE_MANIFEST = dirname(hostScriptPath) + "../docs/nativeCallbackSignatures.gazl";
+
+function startsWith(text, prefix) {
+	return text.substr(0, prefix.length) === prefix;
+}
+if (!String.prototype.trim) {
+	String.prototype.trim = function () { return this.replace(/^\s+|\s+$/g, ""); };
+}
+if (!Array.prototype.forEach) {
+	Array.prototype.forEach = function (fn) { for (var i = 0; i < this.length; ++i) if (i in this) fn(this[i], i, this); };
+}
+if (!Array.prototype.map) {
+	Array.prototype.map = function (fn) { var r = []; for (var i = 0; i < this.length; ++i) if (i in this) r.push(fn(this[i], i, this)); return r; };
+}
+if (!Array.prototype.filter) {
+	Array.prototype.filter = function (fn) { var r = []; for (var i = 0; i < this.length; ++i) if (i in this && fn(this[i], i, this)) r.push(this[i]); return r; };
+}
+if (!Array.prototype.every) {
+	Array.prototype.every = function (fn) { for (var i = 0; i < this.length; ++i) if (i in this && !fn(this[i], i, this)) return false; return true; };
+}
+if (!Array.prototype.find) {
+	Array.prototype.find = function (fn) { for (var i = 0; i < this.length; ++i) if (i in this && fn(this[i], i, this)) return this[i]; return undefined; };
+}
+function SimpleMap() { this.items = []; }
+SimpleMap.prototype._indexOf = function (key) { for (var i = 0; i < this.items.length; ++i) if (this.items[i][0] === key) return i; return -1; };
+SimpleMap.prototype.has = function (key) { return this._indexOf(key) >= 0; };
+SimpleMap.prototype.get = function (key) { var i = this._indexOf(key); return i >= 0 ? this.items[i][1] : undefined; };
+SimpleMap.prototype.set = function (key, value) { var i = this._indexOf(key); if (i >= 0) this.items[i][1] = value; else this.items.push([key, value]); return this; };
+SimpleMap.prototype.entries = function () { return this.items.slice(0); };
 
 function printUsage() {
-	const script = path.basename(process.argv[1] || "gazl-validate.js");
-	console.error(`Usage: ${script} [--warn-only] [--force] <file ...>`);
-	console.error("Scan one or more .gazl files for signature metadata conflicts.");
+	var script = hostBasename(hostScriptPath);
+	hostError("Usage: " + script + " [--warn-only] [--force] <file ...>");
+	hostError("Scan one or more .gazl files for signature metadata conflicts.");
 }
 
 function parseArgs(argv) {
-	const options = { warnOnly: false, force: false };
-	const files = [];
-	let parsingOptions = true;
+	var options = { warnOnly: false, force: false };
+	var files = [];
+	var parsingOptions = true;
 
-	for (let i = 0; i < argv.length; ++i) {
-		const arg = argv[i];
+	for (var i = 0; i < argv.length; ++i) {
+		var arg = argv[i];
 
 		if (parsingOptions && arg === "--") {
 			parsingOptions = false;
 			continue;
 		}
 
-		if (parsingOptions && arg.startsWith("-")) {
+		if (parsingOptions && startsWith(arg, "-")) {
 			if (arg === "--warn-only") {
 				options.warnOnly = true;
 			} else if (arg === "--force") {
 				options.force = true;
 			} else if (arg === "--help" || arg === "-h") {
 				printUsage();
-				process.exit(0);
+				throw { exitCode: 0 };
 			} else {
-				console.error(`Unknown option: ${arg}`);
+				hostError("Unknown option: " + arg);
 				printUsage();
-				process.exit(1);
+				throw { exitCode: 1 };
 			}
 			continue;
 		}
@@ -46,74 +94,74 @@ function parseArgs(argv) {
 
 	if (files.length === 0) {
 		printUsage();
-		process.exit(1);
+		throw { exitCode: 1 };
 	}
 
-	return { options, files };
+	return { options: options, files: files };
 }
 
 function createContext(options) {
 	return {
-		options,
+		options: options,
 		exports: {
-			functions: new Map(),
-			globals: new Map(),
-			consts: new Map(),
-			arrays: new Map(),
+			functions: new SimpleMap(),
+			globals: new SimpleMap(),
+			consts: new SimpleMap(),
+			arrays: new SimpleMap()
 		},
 		externs: {
-			functions: new Map(),
-			globals: new Map(),
-			consts: new Map(),
-			arrays: new Map(),
+			functions: new SimpleMap(),
+			globals: new SimpleMap(),
+			consts: new SimpleMap(),
+			arrays: new SimpleMap()
 		},
-		calls: new Map(),
-		definitions: new Map(),
+		calls: new SimpleMap(),
+		definitions: new SimpleMap(),
 		diagnostics: [],
-		hadReadError: false,
+		hadReadError: false
 	};
 }
 
 function readFileLines(filePath) {
-	const data = fs.readFileSync(filePath, "utf8");
-	const lines = data.split(/\r?\n/);
+	var data = hostRead(filePath);
+	var lines = data.split(/\r?\n/);
 	return lines;
 }
 
 function classifyRole(role) {
-	const parts = role.trim().split(/\s+/).filter(Boolean);
-	let extern = false;
+	var parts = role.trim().split(/\s+/).filter(Boolean);
+	var extern = false;
 	if (parts[0] === "extern") {
 		extern = true;
 		parts.shift();
 	}
 
-	let native = false;
+	var native = false;
 	if (parts[0] === "native") {
 		native = true;
 	}
 
 	return {
-		extern,
-		native,
-		role: parts.join(" "),
+		extern: extern,
+		native: native,
+		role: parts.join(" ")
 	};
 }
 
 function parseParamTypes(paramText) {
-	const result = [];
+	var result = [];
 	if (!paramText) {
 		return result;
 	}
 
-	const pieces = paramText.split(",");
-	for (let idx = 0; idx < pieces.length; ++idx) {
-		const raw = pieces[idx].trim();
+	var pieces = paramText.split(",");
+	for (var idx = 0; idx < pieces.length; ++idx) {
+		var raw = pieces[idx].trim();
 		if (!raw) {
 			continue;
 		}
-		const match = raw.match(/^[A-Za-z?][A-Za-z0-9?]*/);
-		const token = match ? match[0] : raw;
+		var match = raw.match(/^[A-Za-z?][A-Za-z0-9?]*/);
+		var token = match ? match[0] : raw;
 		result.push(token.toLowerCase());
 	}
 	return result;
@@ -124,10 +172,10 @@ function normalizeParamDisplay(paramText) {
 		return "";
 	}
 
-	const pieces = paramText.split(",");
-	const normalized = [];
-	for (let idx = 0; idx < pieces.length; ++idx) {
-		const trimmed = pieces[idx].trim();
+	var pieces = paramText.split(",");
+	var normalized = [];
+	for (var idx = 0; idx < pieces.length; ++idx) {
+		var trimmed = pieces[idx].trim();
 		if (!trimmed) {
 			continue;
 		}
@@ -137,12 +185,12 @@ function normalizeParamDisplay(paramText) {
 }
 
 function splitOrigin(text) {
-	const trimmed = text.trim();
+	var trimmed = text.trim();
 	if (trimmed.length === 0) {
 		return { body: trimmed, origin: null };
 	}
 
-	const match = trimmed.match(/^(.*\S)\s+@\s+(.+)\s*$/);
+	var match = trimmed.match(/^(.*\S)\s+@\s+(.+)\s*$/);
 	if (!match) {
 		return { body: trimmed, origin: null };
 	}
@@ -155,18 +203,18 @@ function parseOriginMarker(originText) {
 		return null;
 	}
 
-	const trimmed = originText.trim();
+	var trimmed = originText.trim();
 	if (trimmed.length === 0) {
 		return null;
 	}
 
-	let match = trimmed.match(/^(.*):([0-9]+):([0-9]+)$/);
+	var match = trimmed.match(/^(.*):([0-9]+):([0-9]+)$/);
 	if (match) {
 		return {
 			raw: trimmed,
 			file: match[1],
 			line: parseInt(match[2], 10),
-			column: parseInt(match[3], 10),
+			column: parseInt(match[3], 10)
 		};
 	}
 
@@ -176,7 +224,7 @@ function parseOriginMarker(originText) {
 			raw: trimmed,
 			file: null,
 			line: parseInt(match[1], 10),
-			column: parseInt(match[2], 10),
+			column: parseInt(match[2], 10)
 		};
 	}
 
@@ -186,7 +234,7 @@ function parseOriginMarker(originText) {
 			raw: trimmed,
 			file: match[1],
 			line: parseInt(match[2], 10),
-			column: null,
+			column: null
 		};
 	}
 
@@ -196,7 +244,7 @@ function parseOriginMarker(originText) {
 			raw: trimmed,
 			file: null,
 			line: parseInt(match[1], 10),
-			column: null,
+			column: null
 		};
 	}
 
@@ -204,41 +252,41 @@ function parseOriginMarker(originText) {
 }
 
 function parseSignatureComment(comment) {
-	if (!comment.startsWith("signature ")) {
+	if (!startsWith(comment, "signature ")) {
 		return null;
 	}
 
-	const payload = comment.substr("signature ".length).trim();
-	const split = splitOrigin(payload);
+	var payload = comment.substr("signature ".length).trim();
+	var split = splitOrigin(payload);
 
-	const funcMatch = split.body.match(/^(.*?)\s+([^\s(]+)\s*\(([^)]*)\)\s*->\s*(\S+)\s*$/);
+	var funcMatch = split.body.match(/^(.*?)\s+([^\s(]+)\s*\(([^)]*)\)\s*->\s*(\S+)\s*$/);
 	if (funcMatch) {
-		const roleInfo = classifyRole(funcMatch[1]);
-		const params = parseParamTypes(funcMatch[3]);
-		const paramDisplay = normalizeParamDisplay(funcMatch[3]);
-		const returns = funcMatch[4].toLowerCase();
-		const wildcard = roleInfo.extern && !roleInfo.native && params.length === 0 && returns === "unknown";
+		var roleInfo = classifyRole(funcMatch[1]);
+		var params = parseParamTypes(funcMatch[3]);
+		var paramDisplay = normalizeParamDisplay(funcMatch[3]);
+		var returns = funcMatch[4].toLowerCase();
+		var wildcard = roleInfo.extern && !roleInfo.native && params.length === 0 && returns === "unknown";
 		return {
 			kind: "function",
 			name: funcMatch[2],
-			params,
-			paramDisplay,
-			returns,
-			wildcard,
+			params: params,
+			paramDisplay: paramDisplay,
+			returns: returns,
+			wildcard: wildcard,
 			extern: roleInfo.extern,
 			native: roleInfo.native,
-			origin: split.origin,
+			origin: split.origin
 		};
 	}
 
-	const valueMatch = split.body.match(/^(.*?)\s+([^:]+?)\s*:\s*(\S+)\s*$/);
+	var valueMatch = split.body.match(/^(.*?)\s+([^:]+?)\s*:\s*(\S+)\s*$/);
 	if (valueMatch) {
-		const roleInfo = classifyRole(valueMatch[1]);
-		const type = valueMatch[3].toLowerCase();
-		const nameSpec = valueMatch[2].trim();
-		const arrayMatch = nameSpec.match(/^([^\[]+)\[(.*)\]$/);
+		var roleInfo = classifyRole(valueMatch[1]);
+		var type = valueMatch[3].toLowerCase();
+		var nameSpec = valueMatch[2].trim();
+		var arrayMatch = nameSpec.match(/^([^\[]+)\[(.*)\]$/);
 		if (arrayMatch) {
-			const sizeText = arrayMatch[2].trim();
+			var sizeText = arrayMatch[2].trim();
 			return {
 				kind: "array",
 				name: arrayMatch[1].trim(),
@@ -246,29 +294,29 @@ function parseSignatureComment(comment) {
 				category: type,
 				extern: roleInfo.extern,
 				role: roleInfo.role,
-				origin: split.origin,
+				origin: split.origin
 			};
 		}
 
-		const role = roleInfo.role || "global";
-		const name = nameSpec;
+		var role = roleInfo.role || "global";
+		var name = nameSpec;
 		if (role === "const") {
 			return {
 				kind: "const",
-				name,
+				name: name,
 				category: type,
 				extern: roleInfo.extern,
-				role,
-				origin: split.origin,
+				role: role,
+				origin: split.origin
 			};
 		}
 		return {
 			kind: "global",
-			name,
+			name: name,
 			category: type,
 			extern: roleInfo.extern,
-			role,
-			origin: split.origin,
+			role: role,
+			origin: split.origin
 		};
 	}
 
@@ -276,13 +324,13 @@ function parseSignatureComment(comment) {
 }
 
 function parseExpectsComment(comment) {
-	if (!comment.startsWith("expects ")) {
+	if (!startsWith(comment, "expects ")) {
 		return null;
 	}
 
-	const payload = comment.substr("expects ".length).trim();
-	const split = splitOrigin(payload);
-	const match = split.body.match(/^([^\s(]+)\s*\(([^)]*)\)\s*->\s*(\S+)\s*$/);
+	var payload = comment.substr("expects ".length).trim();
+	var split = splitOrigin(payload);
+	var match = split.body.match(/^([^\s(]+)\s*\(([^)]*)\)\s*->\s*(\S+)\s*$/);
 	if (!match) {
 		return null;
 	}
@@ -292,19 +340,19 @@ function parseExpectsComment(comment) {
 		params: parseParamTypes(match[2]),
 		paramDisplay: normalizeParamDisplay(match[2]),
 		returns: match[3].toLowerCase(),
-		origin: split.origin,
+		origin: split.origin
 	};
 }
 
 function detectCallInfo(line, commentIndex) {
-	const prefix = commentIndex >= 0 ? line.slice(0, commentIndex) : line;
-	const upper = prefix.toUpperCase();
-	const callIndex = upper.lastIndexOf("CALL");
+	var prefix = commentIndex >= 0 ? line.slice(0, commentIndex) : line;
+	var upper = prefix.toUpperCase();
+	var callIndex = upper.lastIndexOf("CALL");
 	if (callIndex === -1) {
 		return { native: null };
 	}
 
-	let cursor = callIndex + 4;
+	var cursor = callIndex + 4;
 	while (cursor < prefix.length && /\s/.test(prefix[cursor])) {
 		cursor += 1;
 	}
@@ -312,14 +360,14 @@ function detectCallInfo(line, commentIndex) {
 		return { native: null };
 	}
 
-	const remainder = prefix.slice(cursor);
-	const match = remainder.match(/^([^\s]+)/);
+	var remainder = prefix.slice(cursor);
+	var match = remainder.match(/^([^\s]+)/);
 	if (!match) {
 		return { native: null };
 	}
 
-	const token = match[1];
-	if (token.startsWith("^")) {
+	var token = match[1];
+	if (startsWith(token, "^")) {
 		return { native: true };
 	}
 
@@ -327,7 +375,7 @@ function detectCallInfo(line, commentIndex) {
 }
 
 function location(file, line, originText) {
-	return { file, line, origin: parseOriginMarker(originText) };
+	return { file: file, line: line, origin: parseOriginMarker(originText) };
 }
 
 function loadNativeManifest(ctx, manifestPath) {
@@ -335,37 +383,37 @@ function loadNativeManifest(ctx, manifestPath) {
 		return;
 	}
 
-	let data;
+	var data;
 	try {
-		data = fs.readFileSync(manifestPath, "utf8");
+		data = hostRead(manifestPath);
 	} catch (err) {
-		if (err && err.code === "ENOENT") {
+		if ((err && err.code === "ENOENT") || manifestPath === DEFAULT_NATIVE_MANIFEST) {
 			return;
 		}
-		console.error(`Failed to read native manifest ${manifestPath}: ${err.message || err}`);
+		hostError("Failed to read native manifest " + manifestPath + ": " + (err.message || err));
 		ctx.hadReadError = true;
 		return;
 	}
 
-	const lines = data.split(/\r?\n/);
-	lines.forEach((line, index) => {
-		const trimmed = line.trim();
-		if (!trimmed.startsWith(";")) {
+	var lines = data.split(/\r?\n/);
+	lines.forEach(function (line, index) {
+		var trimmed = line.trim();
+		if (!startsWith(trimmed, ";")) {
 			return;
 		}
 
-		const comment = trimmed.slice(1).trim();
-		if (!comment.toLowerCase().startsWith("signature ")) {
+		var comment = trimmed.slice(1).trim();
+		if (!startsWith(comment.toLowerCase(), "signature ")) {
 			return;
 		}
 
-		const parsed = parseSignatureComment(comment);
+		var parsed = parseSignatureComment(comment);
 		if (!parsed || parsed.kind !== "function") {
 			return;
 		}
 
 		parsed.native = true;
-		const loc = location(manifestPath, index + 1, parsed.origin);
+		var loc = location(manifestPath, index + 1, parsed.origin);
 		addDefinitionRecord(ctx, parsed, loc, "native manifest", true);
 	});
 }
@@ -375,7 +423,7 @@ function addDefinitionRecord(ctx, parsed, loc, kind, nativeOverride) {
 		return;
 	}
 
-	const native = nativeOverride != null ? nativeOverride : parsed.native;
+	var native = nativeOverride != null ? nativeOverride : parsed.native;
 	if (!ctx.definitions.has(parsed.name)) {
 		ctx.definitions.set(parsed.name, []);
 	}
@@ -384,27 +432,27 @@ function addDefinitionRecord(ctx, parsed, loc, kind, nativeOverride) {
 			params: parsed.params,
 			returns: parsed.returns,
 			wildcard: parsed.wildcard,
-			paramDisplay: parsed.paramDisplay,
+			paramDisplay: parsed.paramDisplay
 		},
 		location: loc,
-		kind,
-		native: !!native,
+		kind: kind,
+		native: !!native
 	});
 }
 
 function addFunctionExport(ctx, parsed, loc) {
-	const signature = {
+	var signature = {
 		params: parsed.params,
 		returns: parsed.returns,
 		wildcard: parsed.wildcard,
-		paramDisplay: parsed.paramDisplay,
+		paramDisplay: parsed.paramDisplay
 	};
-	const existing = ctx.exports.functions.get(parsed.name);
+	var existing = ctx.exports.functions.get(parsed.name);
 	if (!existing) {
 		ctx.exports.functions.set(parsed.name, {
-			signature,
+			signature: signature,
 			locations: [loc],
-			native: !!parsed.native,
+			native: !!parsed.native
 		});
 		addDefinitionRecord(ctx, parsed, loc, "definition");
 		return;
@@ -413,21 +461,21 @@ function addFunctionExport(ctx, parsed, loc) {
 	if (!functionSignaturesCompatible(existing.signature, signature)) {
 		ctx.diagnostics.push({
 			severity: "error",
-			message: `Conflicting definitions for function ${parsed.name}`,
+			message: "Conflicting definitions for function " + parsed.name,
 			locations: [
 				{
 					label: "previous definition",
 					file: existing.locations[0].file,
 					line: existing.locations[0].line,
-					origin: existing.locations[0].origin,
+					origin: existing.locations[0].origin
 				},
 				{
 					label: "redefinition",
 					file: loc.file,
 					line: loc.line,
-					origin: loc.origin,
-				},
-			],
+					origin: loc.origin
+				}
+			]
 		});
 		return;
 	}
@@ -435,21 +483,21 @@ function addFunctionExport(ctx, parsed, loc) {
 	if (existing.native !== undefined && existing.native !== !!parsed.native) {
 		ctx.diagnostics.push({
 			severity: "error",
-			message: `Conflicting native declarations for function ${parsed.name}`,
+			message: "Conflicting native declarations for function " + parsed.name,
 			locations: [
 				{
 					label: "previous definition",
 					file: existing.locations[0].file,
 					line: existing.locations[0].line,
-					origin: existing.locations[0].origin,
+					origin: existing.locations[0].origin
 				},
 				{
 					label: "redefinition",
 					file: loc.file,
 					line: loc.line,
-					origin: loc.origin,
-				},
-			],
+					origin: loc.origin
+				}
+			]
 		});
 		return;
 	}
@@ -460,16 +508,16 @@ function addFunctionExport(ctx, parsed, loc) {
 }
 
 function addFunctionImport(ctx, parsed, loc) {
-	const record = {
+	var record = {
 		signature: {
 			params: parsed.params,
 			returns: parsed.returns,
 			wildcard: parsed.wildcard,
-			paramDisplay: parsed.paramDisplay,
+			paramDisplay: parsed.paramDisplay
 		},
 		location: loc,
 		native: parsed.native,
-		kind: parsed.native ? "extern native" : "extern",
+		kind: parsed.native ? "extern native" : "extern"
 	};
 	if (!ctx.externs.functions.has(parsed.name)) {
 		ctx.externs.functions.set(parsed.name, []);
@@ -482,16 +530,16 @@ function addFunctionImport(ctx, parsed, loc) {
 }
 
 function addGlobalExport(ctx, parsed, loc) {
-	const record = {
+	var record = {
 		category: parsed.category,
 		role: parsed.role,
-		location: loc,
+		location: loc
 	};
-	const existing = ctx.exports.globals.get(parsed.name);
+	var existing = ctx.exports.globals.get(parsed.name);
 	if (!existing) {
 		ctx.exports.globals.set(parsed.name, {
 			signature: record,
-			locations: [loc],
+			locations: [loc]
 		});
 		return;
 	}
@@ -499,21 +547,21 @@ function addGlobalExport(ctx, parsed, loc) {
 	if (!typesCompatible(existing.signature.category, record.category)) {
 		ctx.diagnostics.push({
 			severity: "error",
-			message: `Conflicting definitions for global ${parsed.name}`,
+			message: "Conflicting definitions for global " + parsed.name,
 			locations: [
 				{
 					label: "previous definition",
 					file: existing.locations[0].file,
 					line: existing.locations[0].line,
-					origin: existing.locations[0].origin,
+					origin: existing.locations[0].origin
 				},
 				{
 					label: "redefinition",
 					file: loc.file,
 					line: loc.line,
-					origin: loc.origin,
-				},
-			],
+					origin: loc.origin
+				}
+			]
 		});
 		return;
 	}
@@ -522,7 +570,7 @@ function addGlobalExport(ctx, parsed, loc) {
 }
 
 function addGlobalImport(ctx, parsed, loc) {
-	const record = { category: parsed.category, role: parsed.role };
+	var record = { category: parsed.category, role: parsed.role };
 	if (!ctx.externs.globals.has(parsed.name)) {
 		ctx.externs.globals.set(parsed.name, []);
 	}
@@ -530,16 +578,16 @@ function addGlobalImport(ctx, parsed, loc) {
 }
 
 function addConstExport(ctx, parsed, loc) {
-	const record = {
+	var record = {
 		category: parsed.category,
 		role: parsed.role,
-		location: loc,
+		location: loc
 	};
-	const existing = ctx.exports.consts.get(parsed.name);
+	var existing = ctx.exports.consts.get(parsed.name);
 	if (!existing) {
 		ctx.exports.consts.set(parsed.name, {
 			signature: record,
-			locations: [loc],
+			locations: [loc]
 		});
 		return;
 	}
@@ -547,21 +595,21 @@ function addConstExport(ctx, parsed, loc) {
 	if (!typesCompatible(existing.signature.category, record.category)) {
 		ctx.diagnostics.push({
 			severity: "error",
-			message: `Conflicting definitions for const ${parsed.name}`,
+			message: "Conflicting definitions for const " + parsed.name,
 			locations: [
 				{
 					label: "previous definition",
 					file: existing.locations[0].file,
 					line: existing.locations[0].line,
-					origin: existing.locations[0].origin,
+					origin: existing.locations[0].origin
 				},
 				{
 					label: "redefinition",
 					file: loc.file,
 					line: loc.line,
-					origin: loc.origin,
-				},
-			],
+					origin: loc.origin
+				}
+			]
 		});
 		return;
 	}
@@ -570,7 +618,7 @@ function addConstExport(ctx, parsed, loc) {
 }
 
 function addConstImport(ctx, parsed, loc) {
-	const record = { category: parsed.category, role: parsed.role };
+	var record = { category: parsed.category, role: parsed.role };
 	if (!ctx.externs.consts.has(parsed.name)) {
 		ctx.externs.consts.set(parsed.name, []);
 	}
@@ -578,17 +626,17 @@ function addConstImport(ctx, parsed, loc) {
 }
 
 function addArrayExport(ctx, parsed, loc) {
-	const record = {
+	var record = {
 		category: parsed.category,
 		size: parsed.size,
 		role: parsed.role,
-		location: loc,
+		location: loc
 	};
-	const existing = ctx.exports.arrays.get(parsed.name);
+	var existing = ctx.exports.arrays.get(parsed.name);
 	if (!existing) {
 		ctx.exports.arrays.set(parsed.name, {
 			signature: record,
-			locations: [loc],
+			locations: [loc]
 		});
 		return;
 	}
@@ -596,21 +644,21 @@ function addArrayExport(ctx, parsed, loc) {
 	if (!arraySignaturesCompatible(existing.signature, record)) {
 		ctx.diagnostics.push({
 			severity: "error",
-			message: `Conflicting definitions for array ${parsed.name}`,
+			message: "Conflicting definitions for array " + parsed.name,
 			locations: [
 				{
 					label: "previous definition",
 					file: existing.locations[0].file,
 					line: existing.locations[0].line,
-					origin: existing.locations[0].origin,
+					origin: existing.locations[0].origin
 				},
 				{
 					label: "redefinition",
 					file: loc.file,
 					line: loc.line,
-					origin: loc.origin,
-				},
-			],
+					origin: loc.origin
+				}
+			]
 		});
 		return;
 	}
@@ -619,10 +667,10 @@ function addArrayExport(ctx, parsed, loc) {
 }
 
 function addArrayImport(ctx, parsed, loc) {
-	const record = {
+	var record = {
 		category: parsed.category,
 		size: parsed.size,
-		role: parsed.role,
+		role: parsed.role
 	};
 	if (!ctx.externs.arrays.has(parsed.name)) {
 		ctx.externs.arrays.set(parsed.name, []);
@@ -640,7 +688,7 @@ function addCallExpectation(ctx, parsed, loc, callInfo) {
 	ctx.calls.get(parsed.name).push({
 		signature: { params: parsed.params, returns: parsed.returns, paramDisplay: parsed.paramDisplay },
 		location: loc,
-		native: callInfo ? callInfo.native : null,
+		native: callInfo ? callInfo.native : null
 	});
 }
 
@@ -664,10 +712,10 @@ function functionSignaturesCompatible(a, b) {
 	if (a.params && b.params && a.params.length !== b.params.length) {
 		return false;
 	}
-	const paramCount = Math.max(a.params ? a.params.length : 0, b.params ? b.params.length : 0);
-	for (let i = 0; i < paramCount; ++i) {
-		const left = a.params ? a.params[i] : undefined;
-		const right = b.params ? b.params[i] : undefined;
+	var paramCount = Math.max(a.params ? a.params.length : 0, b.params ? b.params.length : 0);
+	for (var i = 0; i < paramCount; ++i) {
+		var left = a.params ? a.params[i] : undefined;
+		var right = b.params ? b.params[i] : undefined;
 		if (!typesCompatible(left || "unknown", right || "unknown")) {
 			return false;
 		}
@@ -724,56 +772,34 @@ function recordSignature(ctx, parsed, loc) {
 }
 
 function processFile(filePath, ctx) {
-	let stats;
-	try {
-		stats = fs.statSync(filePath);
-	} catch (err) {
-		console.error(`Unable to read ${filePath}: ${err.message}`);
-		ctx.hadReadError = true;
-		return;
-	}
-
-	if (stats.isDirectory()) {
-		const entries = fs.readdirSync(filePath);
-		entries.forEach((entry) => {
-			const child = path.join(filePath, entry);
-			processFile(child, ctx);
-		});
-		return;
-	}
-
-	if (!stats.isFile()) {
-		return;
-	}
-
-	let lines;
+	var lines;
 	try {
 		lines = readFileLines(filePath);
 	} catch (err) {
-		console.error(`Unable to read ${filePath}: ${err.message}`);
+		hostError("Unable to read " + filePath + ": " + err.message);
 		ctx.hadReadError = true;
 		return;
 	}
 
-	for (let idx = 0; idx < lines.length; ++idx) {
-		const line = lines[idx];
-		const lineNumber = idx + 1;
+	for (var idx = 0; idx < lines.length; ++idx) {
+		var line = lines[idx];
+		var lineNumber = idx + 1;
 
-		const sigIdx = line.indexOf("; signature");
+		var sigIdx = line.indexOf("; signature");
 		if (sigIdx !== -1) {
-			const comment = line.substr(sigIdx + 1).trim();
-			const parsed = parseSignatureComment(comment);
+			var comment = line.substr(sigIdx + 1).trim();
+			var parsed = parseSignatureComment(comment);
 			if (parsed) {
 				recordSignature(ctx, parsed, location(filePath, lineNumber, parsed.origin));
 			}
 		}
 
-		const expectsIdx = line.indexOf("; expects");
+		var expectsIdx = line.indexOf("; expects");
 		if (expectsIdx !== -1) {
-			const comment = line.substr(expectsIdx + 1).trim();
-			const parsed = parseExpectsComment(comment);
+			var comment = line.substr(expectsIdx + 1).trim();
+			var parsed = parseExpectsComment(comment);
 			if (parsed) {
-				const callInfo = detectCallInfo(line, expectsIdx);
+				var callInfo = detectCallInfo(line, expectsIdx);
 				addCallExpectation(ctx, parsed, location(filePath, lineNumber, parsed.origin), callInfo);
 			}
 		}
@@ -781,123 +807,126 @@ function processFile(filePath, ctx) {
 }
 
 function compareExternSets(kind, externMap, exportMap, ctx, comparator, mismatchMessage, missingMessage) {
-	const missingFn =
+	var missingFn =
 		typeof missingMessage === "function"
 			? missingMessage
 			: typeof mismatchMessage === "function"
 				? mismatchMessage
-				: () => "Missing extern definition";
+				: function () { return "Missing extern definition"; };
 
-	for (const [name, entries] of externMap.entries()) {
+	var __externEntries = externMap.entries();
+	for (var __externIndex = 0; __externIndex < __externEntries.length; ++__externIndex) {
+		var name = __externEntries[__externIndex][0];
+		var entries = __externEntries[__externIndex][1];
 		if (entries.length > 1) {
-			for (let i = 0; i < entries.length; ++i) {
-				for (let j = i + 1; j < entries.length; ++j) {
-					const hasNativeA = Object.prototype.hasOwnProperty.call(entries[i], "native");
-					const hasNativeB = Object.prototype.hasOwnProperty.call(entries[j], "native");
+			for (var i = 0; i < entries.length; ++i) {
+				for (var j = i + 1; j < entries.length; ++j) {
+					var hasNativeA = Object.prototype.hasOwnProperty.call(entries[i], "native");
+					var hasNativeB = Object.prototype.hasOwnProperty.call(entries[j], "native");
 					if (hasNativeA && hasNativeB && entries[i].native !== entries[j].native) {
 						ctx.diagnostics.push({
 							severity: "error",
-							message: `${kind} ${name} has conflicting native declarations`,
+							message: kind + " " + name + " has conflicting native declarations",
 							locations: [
 								{
 									label: "first declaration",
 									file: entries[i].location.file,
 									line: entries[i].location.line,
-									origin: entries[i].location.origin,
+									origin: entries[i].location.origin
 								},
 								{
 									label: "second declaration",
 									file: entries[j].location.file,
 									line: entries[j].location.line,
-									origin: entries[j].location.origin,
-								},
-							],
+									origin: entries[j].location.origin
+								}
+							]
 						});
 						continue;
 					}
 					if (!comparator(entries[i], entries[j])) {
 						ctx.diagnostics.push({
 							severity: "error",
-							message: `${kind} ${name} has conflicting extern declarations`,
+							message: kind + " " + name + " has conflicting extern declarations",
 							locations: [
 								{
 									label: "first declaration",
 									file: entries[i].location.file,
 									line: entries[i].location.line,
-									origin: entries[i].location.origin,
+									origin: entries[i].location.origin
 								},
 								{
 									label: "second declaration",
 									file: entries[j].location.file,
 									line: entries[j].location.line,
-									origin: entries[j].location.origin,
-								},
-							],
+									origin: entries[j].location.origin
+								}
+							]
 						});
 					}
 				}
 			}
 		}
 
-		const exportEntry = exportMap.get(name);
+		var exportEntry = exportMap.get(name);
 		if (exportEntry) {
-			entries.forEach((entry) => {
+			entries.forEach(function (entry) {
 				if (entry.native) {
 					ctx.diagnostics.push({
 						severity: "error",
-						message: `${kind} ${name} is declared native but defined in Impala`,
+						message: kind + " " + name + " is declared native but defined in Impala",
 						locations: [
 							{
 								label: "definition",
 								file: exportEntry.locations[0].file,
 								line: exportEntry.locations[0].line,
-								origin: exportEntry.locations[0].origin,
+								origin: exportEntry.locations[0].origin
 							},
 							{
 								label: "extern declaration",
 								file: entry.location.file,
 								line: entry.location.line,
-								origin: entry.location.origin,
-							},
-						],
+								origin: entry.location.origin
+							}
+						]
 					});
 					return;
 				}
 				if (!comparator({ signature: exportEntry.signature }, { signature: entry.signature })) {
 					ctx.diagnostics.push({
 						severity: "error",
-						message: `${kind} ${name} does not match its definition`,
+						message: kind + " " + name + " does not match its definition",
 						locations: [
 							{
 								label: "definition",
 								file: exportEntry.locations[0].file,
 								line: exportEntry.locations[0].line,
-								origin: exportEntry.locations[0].origin,
+								origin: exportEntry.locations[0].origin
 							},
 							{
 								label: "extern declaration",
 								file: entry.location.file,
 								line: entry.location.line,
-								origin: entry.location.origin,
-							},
-						],
+								origin: entry.location.origin
+							}
+						]
 					});
 				}
 			});
 			continue;
 		}
 
-		const skipMissing = entries.every((entry) => entry.native);
+		var skipMissing = entries.every(function (entry) { return entry.native; });
 		if (!skipMissing) {
 			ctx.diagnostics.push({
 				severity: "warning",
 				message: missingFn(name),
-				locations: entries.map((entry) => ({
+				locations: entries.map(function (entry) { return {
 					label: "extern declaration",
 					file: entry.location.file,
 					line: entry.location.line,
-					origin: entry.location.origin,
-				})),
+					origin: entry.location.origin
+				}; })
 			});
 		}
 	}
@@ -908,18 +937,18 @@ function comparatorWrapper(entryA, entryB, fn) {
 }
 
 function formatSignatureForMessage(name, signature) {
-	const fnName = name || "unknown";
+	var fnName = name || "unknown";
 	if (!signature) {
-		return `${fnName}() -> unknown`;
+		return fnName + "() -> unknown";
 	}
-	const returns = signature.returns || "unknown";
-	let params = "";
+	var returns = signature.returns || "unknown";
+	var params = "";
 	if (signature.paramDisplay) {
 		params = signature.paramDisplay;
 	} else if (signature.params && signature.params.length > 0) {
 		params = signature.params.join(", ");
 	}
-	return `${fnName}(${params}) -> ${returns}`;
+	return fnName + "(" + params + ") -> " + returns;
 }
 
 function isNativeCompatible(callNative, recordNative) {
@@ -930,159 +959,162 @@ function isNativeCompatible(callNative, recordNative) {
 }
 
 function validateCalls(ctx) {
-	for (const [name, callEntries] of ctx.calls.entries()) {
+	var __callEntries = ctx.calls.entries();
+	for (var __callIndex = 0; __callIndex < __callEntries.length; ++__callIndex) {
+		var name = __callEntries[__callIndex][0];
+		var callEntries = __callEntries[__callIndex][1];
 		if (!callEntries || callEntries.length === 0) {
 			continue;
 		}
 
-		for (let i = 0; i < callEntries.length; ++i) {
-			for (let j = i + 1; j < callEntries.length; ++j) {
+		for (var i = 0; i < callEntries.length; ++i) {
+			for (var j = i + 1; j < callEntries.length; ++j) {
 				if (!functionSignaturesCompatible(callEntries[i].signature, callEntries[j].signature)) {
-					const leftReturn = callEntries[i].signature.returns || "unknown";
-					const rightReturn = callEntries[j].signature.returns || "unknown";
+					var leftReturn = callEntries[i].signature.returns || "unknown";
+					var rightReturn = callEntries[j].signature.returns || "unknown";
 					ctx.diagnostics.push({
 						severity: "error",
-						message: `Conflicting return type expectations for "${name}" (${leftReturn} vs ${rightReturn})`,
+						message: "Conflicting return type expectations for \"" + name + "\" (" + leftReturn + " vs " + rightReturn + ")",
 						locations: [
 							{
 								label: "call site",
 								file: callEntries[i].location.file,
 								line: callEntries[i].location.line,
-								origin: callEntries[i].location.origin,
+								origin: callEntries[i].location.origin
 							},
 							{
 								label: "call site",
 								file: callEntries[j].location.file,
 								line: callEntries[j].location.line,
-								origin: callEntries[j].location.origin,
-							},
-						],
+								origin: callEntries[j].location.origin
+							}
+						]
 					});
 				}
 			}
 		}
 
-		const definitionRecords = ctx.definitions.get(name) || [];
-		const externRecords = (ctx.externs.functions.get(name) || []).filter((entry) => !entry.native);
+		var definitionRecords = ctx.definitions.get(name) || [];
+		var externRecords = (ctx.externs.functions.get(name) || []).filter(function (entry) { return !entry.native; });
 
-		callEntries.forEach((call) => {
-			const matchingDefinitions = definitionRecords.filter((def) => functionSignaturesCompatible(def.signature, call.signature));
-			const matchingExterns = externRecords.filter((entry) => functionSignaturesCompatible(entry.signature, call.signature));
+		callEntries.forEach(function (call) {
+			var matchingDefinitions = definitionRecords.filter(function (def) { return functionSignaturesCompatible(def.signature, call.signature); });
+			var matchingExterns = externRecords.filter(function (entry) { return functionSignaturesCompatible(entry.signature, call.signature); });
 
 			if (matchingDefinitions.length > 0) {
-				const nativeMatch = matchingDefinitions.find((def) => isNativeCompatible(call.native, def.native));
+				var nativeMatch = matchingDefinitions.find(function (def) { return isNativeCompatible(call.native, def.native); });
 				if (!nativeMatch) {
-					const mismatch = matchingDefinitions[0];
-					const expected = call.native ? "native" : "non-native";
-					const actual = mismatch.native ? "native" : "non-native";
+					var mismatch = matchingDefinitions[0];
+					var expected = call.native ? "native" : "non-native";
+					var actual = mismatch.native ? "native" : "non-native";
 					ctx.diagnostics.push({
 						severity: "error",
-						message: `Call to ${name} uses ${expected} calling convention but definition is ${actual}`,
+						message: "Call to " + name + " uses " + expected + " calling convention but definition is " + actual,
 						locations: [
 							{
 								label: "definition",
 								file: mismatch.location.file,
 								line: mismatch.location.line,
-								origin: mismatch.location.origin,
+								origin: mismatch.location.origin
 							},
 							{
 								label: "call site",
 								file: call.location.file,
 								line: call.location.line,
-								origin: call.location.origin,
-							},
-						],
+								origin: call.location.origin
+							}
+						]
 					});
 				}
 				return;
 			}
 
 			if (definitionRecords.length > 0) {
-				const mismatch = definitionRecords[0];
+				var mismatch = definitionRecords[0];
 				ctx.diagnostics.push({
 					severity: "error",
-					message: `Signature mismatch for "${name}": call expects "${formatSignatureForMessage(name, call.signature)}" but definition provides "${formatSignatureForMessage(name, mismatch.signature)}"`,
+					message: "Signature mismatch for \"" + name + "\": call expects \"" + formatSignatureForMessage(name, call.signature) + "\" but definition provides \"" + formatSignatureForMessage(name, mismatch.signature) + "\"",
 					locations: [
 						{
 							label: "definition",
 							file: mismatch.location.file,
 							line: mismatch.location.line,
-							origin: mismatch.location.origin,
+							origin: mismatch.location.origin
 						},
 						{
 							label: "call site",
 							file: call.location.file,
 							line: call.location.line,
-							origin: call.location.origin,
-						},
-					],
+							origin: call.location.origin
+						}
+					]
 				});
 				return;
 			}
 
 			if (matchingExterns.length > 0) {
-				const nativeMatch = matchingExterns.find((entry) => isNativeCompatible(call.native, entry.native));
+				var nativeMatch = matchingExterns.find(function (entry) { return isNativeCompatible(call.native, entry.native); });
 				if (!nativeMatch) {
-					const mismatch = matchingExterns[0];
-					const expected = call.native ? "native" : "non-native";
-					const actual = mismatch.native ? "native" : "non-native";
+					var mismatch = matchingExterns[0];
+					var expected = call.native ? "native" : "non-native";
+					var actual = mismatch.native ? "native" : "non-native";
 					ctx.diagnostics.push({
 						severity: "error",
-						message: `Call to ${name} uses ${expected} calling convention but extern declaration is ${actual}`,
+						message: "Call to " + name + " uses " + expected + " calling convention but extern declaration is " + actual,
 						locations: [
 							{
 								label: "extern declaration",
 								file: mismatch.location.file,
 								line: mismatch.location.line,
-								origin: mismatch.location.origin,
+								origin: mismatch.location.origin
 							},
 							{
 								label: "call site",
 								file: call.location.file,
 								line: call.location.line,
-								origin: call.location.origin,
-							},
-						],
+								origin: call.location.origin
+							}
+						]
 					});
 					return;
 				}
 				return;
 			}
 
-			const externEntries = ctx.externs.functions.get(name);
+			var externEntries = ctx.externs.functions.get(name);
 			if (externEntries && externEntries.length > 0) {
 				ctx.diagnostics.push({
 					severity: "error",
-					message: `Call to ${name} does not match extern declaration`,
+					message: "Call to " + name + " does not match extern declaration",
 					locations: [
 						{
 							label: "extern declaration",
 							file: externEntries[0].location.file,
 							line: externEntries[0].location.line,
-							origin: externEntries[0].location.origin,
+							origin: externEntries[0].location.origin
 						},
 						{
 							label: "call site",
 							file: call.location.file,
 							line: call.location.line,
-							origin: call.location.origin,
-						},
-					],
+							origin: call.location.origin
+						}
+					]
 				});
 				return;
 			}
 
 			ctx.diagnostics.push({
 				severity: "warning",
-				message: `No signature metadata found for function ${name}`,
+				message: "No signature metadata found for function " + name,
 				locations: [
 					{
 						label: "call site",
 						file: call.location.file,
 						line: call.location.line,
-						origin: call.location.origin,
-					},
-				],
+						origin: call.location.origin
+					}
+				]
 			});
 		});
 	}
@@ -1094,8 +1126,8 @@ function validateContext(ctx) {
 		ctx.externs.functions,
 		ctx.exports.functions,
 		ctx,
-		(a, b) => comparatorWrapper(a, b, functionSignaturesCompatible),
-		(name) => `No definition found for extern function ${name}`,
+		function (a, b) { return comparatorWrapper(a, b, functionSignaturesCompatible); },
+		function (name) { return "No definition found for extern function " + name; }
 	);
 
 	compareExternSets(
@@ -1103,8 +1135,8 @@ function validateContext(ctx) {
 		ctx.externs.globals,
 		ctx.exports.globals,
 		ctx,
-		(a, b) => comparatorWrapper(a, b, (left, right) => typesCompatible(left.category || "unknown", right.category || "unknown")),
-		(name) => `No definition found for extern global ${name}`,
+		function (a, b) { return comparatorWrapper(a, b, function (left, right) { return typesCompatible(left.category || "unknown", right.category || "unknown"); }); },
+		function (name) { return "No definition found for extern global " + name; }
 	);
 
 	compareExternSets(
@@ -1112,8 +1144,8 @@ function validateContext(ctx) {
 		ctx.externs.consts,
 		ctx.exports.consts,
 		ctx,
-		(a, b) => comparatorWrapper(a, b, (left, right) => typesCompatible(left.category || "unknown", right.category || "unknown")),
-		(name) => `No definition found for extern const ${name}`,
+		function (a, b) { return comparatorWrapper(a, b, function (left, right) { return typesCompatible(left.category || "unknown", right.category || "unknown"); }); },
+		function (name) { return "No definition found for extern const " + name; }
 	);
 
 	compareExternSets(
@@ -1121,8 +1153,8 @@ function validateContext(ctx) {
 		ctx.externs.arrays,
 		ctx.exports.arrays,
 		ctx,
-		(a, b) => comparatorWrapper(a, b, arraySignaturesCompatible),
-		(name) => `No definition found for extern array ${name}`,
+		function (a, b) { return comparatorWrapper(a, b, arraySignaturesCompatible); },
+		function (name) { return "No definition found for extern array " + name; }
 	);
 
 	validateCalls(ctx);
@@ -1133,7 +1165,7 @@ function formatOriginText(origin) {
 		return null;
 	}
 
-	const parts = [];
+	var parts = [];
 	if (origin.file) {
 		parts.push(origin.file);
 	}
@@ -1152,10 +1184,10 @@ function formatOriginText(origin) {
 }
 
 function formatLocation(loc) {
-	const base = `${loc.file}:${loc.line}`;
-	const originText = formatOriginText(loc.origin);
+	var base = loc.file + ":" + loc.line;
+	var originText = formatOriginText(loc.origin);
 	if (originText) {
-		return `${base} (origin ${originText})`;
+		return base + " (origin " + originText + ")";
 	}
 	return base;
 }
@@ -1165,21 +1197,21 @@ function reportDiagnostics(ctx) {
 		return 1;
 	}
 
-	let hadError = false;
-	ctx.diagnostics.forEach((diag) => {
-		let severity = diag.severity;
+	var hadError = false;
+	ctx.diagnostics.forEach(function (diag) {
+		var severity = diag.severity;
 		if (severity === "warning" && ctx.options.force) {
 			severity = "error";
 		} else if (severity === "error" && ctx.options.warnOnly) {
 			severity = "warning";
 		}
 
-		const label = severity.toUpperCase();
-		console.error(`${label}: ${diag.message}`);
+		var label = severity.toUpperCase();
+		hostError(label + ": " + diag.message);
 		if (diag.locations) {
-			diag.locations.forEach((loc) => {
-				const prefix = loc.label ? `  ${loc.label}:` : "  at";
-				console.error(`${prefix} ${formatLocation(loc)}`);
+			diag.locations.forEach(function (loc) {
+				var prefix = loc.label ? "  " + loc.label + ":" : "  at";
+				hostError(prefix + " " + formatLocation(loc));
 			});
 		}
 
@@ -1194,14 +1226,31 @@ function reportDiagnostics(ctx) {
 	return 0;
 }
 
-(function main() {
-	const { options, files } = parseArgs(process.argv.slice(2));
-	const ctx = createContext(options);
+function main() {
+	var parsedArgs = parseArgs(hostArgs);
+	var options = parsedArgs.options;
+	var files = parsedArgs.files;
+	var ctx = createContext(options);
 	loadNativeManifest(ctx, DEFAULT_NATIVE_MANIFEST);
-	files.forEach((file) => {
+	files.forEach(function (file) {
 		processFile(file, ctx);
 	});
 	validateContext(ctx);
-	const exitCode = reportDiagnostics(ctx);
-	process.exit(exitCode);
-})();
+	var exitCode = reportDiagnostics(ctx);
+	return exitCode;
+}
+
+var __gazlValidateExitCode = 1;
+try {
+	__gazlValidateExitCode = main();
+} catch (__gazlValidateError) {
+	if (__gazlValidateError && typeof __gazlValidateError.exitCode === "number") {
+		__gazlValidateExitCode = __gazlValidateError.exitCode;
+	} else {
+		hostError(__gazlValidateError && __gazlValidateError.message ? __gazlValidateError.message : __gazlValidateError);
+		__gazlValidateExitCode = 1;
+	}
+}
+if (__gazlValidateExitCode !== 0) {
+	throw new Error("gazl-validate failed with exit code " + __gazlValidateExitCode);
+}
