@@ -486,6 +486,39 @@ CALL showoff         ; expects showoff(ptr) -> void @ ImpalaDemo.impala:49:9
 ; signature extern func print(ptr message) -> void @ ImpalaDemo.impala:3:1
 ```
 
+The signature comment grammar is intentionally small:
+
+- Each metadata-capable unit starts with `; signatures version=<n>`.
+- Function definitions use `; signature func name(<params>) -> <return>`.
+- Extern declarations use `; signature extern func name(<params>) -> <return>` or
+  `; signature extern native name(<params>) -> <return>`.
+- Call sites use `; expects name(<arg-types>) -> <return>`.
+- Value and array metadata rows use
+  `; signature <role> name : <type>` or `; signature array name[size] : <type>`.
+
+Function parameter entries may include names (`int value`) or only types
+(`int`). Call-site expectations always list the argument types seen by the
+caller. Any metadata line may end with `@ <origin>`, where the origin is either
+`path:line:column` or just `line:column` when no source filename was supplied.
+
+Native callbacks are checked against the manifest in
+`docs/nativeCallbackSignatures.gazl`. Keep that manifest in sync with the host
+registration tables in `tools/GAZLCmd.cpp` and `src/GAZL.cpp` whenever adding or
+changing a native callback. Bare native extern placeholders such as
+`; signature extern native printInt() -> unknown` do not override the manifest;
+native calls must still match the manifest's arity, argument types, return type,
+and native calling convention.
+
+For non-function symbols, the validator checks the metadata contract rather than
+the runtime contents. Extern globals and constants must agree with their
+definitions on primitive category, duplicate definitions of the same value name
+must agree on primitive category, and arrays must agree on category and on size
+when both sides provide a size. `unknown` remains a wildcard. The validator does
+not compare constant values, distinguish `readonly` from writable storage during
+matching, or assign per-slot types to arrays. Impala arrays do not currently
+have element types, so array rows normally use `: unknown`; that field is
+reserved for future metadata rather than a promise about the array contents.
+
 Run the validator on every `.gazl` unit that will be concatenated or
 loaded together. It compares the expectations recorded by callers with
 the definitions supplied by the same file or by other units. After
@@ -508,11 +541,13 @@ bash tools/gazl-validate.sh output/calc.gazl output/multitap.gazl
 
 The validator reports mismatched signatures as errors by default. Pass
 `--warn-only` to downgrade them while you migrate existing modules, or
-`--force` to turn missing-definition warnings into errors. The normal
-`build.sh` path runs the validator's regression tests and validates the
-generated JSPEG fixture metadata with explicit file sets. For other
-programs, run `tools/gazl-validate.sh` or `tools\gazl-validate.cmd`
-directly on the exact `.gazl` units that will be linked together.
+`--force` to turn missing-definition warnings into errors. Missing metadata and
+missing definitions remain warnings by default and do not make the validator exit
+with failure unless `--force` is used. The normal `build.sh` path runs the
+validator's regression tests and validates the generated JSPEG fixture metadata
+with explicit file sets. For other programs, run `tools/gazl-validate.sh` or
+`tools\gazl-validate.cmd` directly on the exact `.gazl` units that will be
+linked together.
 
 See [Impala JSPEG](../impala/ImpalaJS.md) for the CLI, regeneration flow, and
 parity test commands.

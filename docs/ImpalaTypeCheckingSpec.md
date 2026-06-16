@@ -2,6 +2,10 @@
 
 Impala developers enjoy being able to compile individual sources to textual `.gazl` units and then assemble a program by concatenating those files. The goal of this specification is to tighten cross-unit type checking—primarily around ints, floats, pointers, function pointers, and void returns—without disturbing that lightweight workflow.
 
+This document records the design and implementation plan. For current user-facing
+syntax and validator usage, see the "Signature metadata and validation" section
+in `docs/Impala.md`.
+
 ## Background
 
 The shipping Impala compiler is generated from `impala/impala.jspeg` and mirrors the original PPEG grammar in JavaScript. During a compile it builds meta-instructions, tracks transient pools, and flushes them to GAZL text via helpers such as `$$parser.emitMeta` and `$$parser.flushMetaCode`. Types are already tracked per expression and declaration using single-character codes (`i`, `f`, `p`, `F`, `N`, `A`, `?`) that drive code generation and validation.
@@ -35,7 +39,9 @@ However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCal
 * Build automation (`build.sh`) runs the JSPEG regression harness and validates
 generated `.gazl` metadata. Any additional validation step must fit into that
 ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
-* Native entry points declared with `extern native` have type `N` and typically follow VM-defined signatures. The validator should recognise `N` as opaque so host applications can continue providing implementations without extra signature metadata.【F:impala/impala.jspeg†L1554-L1563】【F:impala/impala.jspeg†L1128-L1157】
+* Native entry points declared with `extern native` have type `N` and typically follow VM-defined signatures. The validator loads
+  `docs/nativeCallbackSignatures.gazl` and checks native calls against that manifest, while still verifying that native and non-native
+  calling conventions are not mixed.【F:impala/impala.jspeg†L1554-L1563】【F:impala/impala.jspeg†L1128-L1157】
 
 ## Proposed Approach
 
@@ -88,9 +94,14 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
 * Build a small Node or C++ tool that accepts a list of `.gazl` files, scans for the signature comments, and resolves imports against exports.
 * Matching rules:
   * Functions must agree on argument count and return type. All arguments must match within the `{int, float, ptr, funcptr, void}` set (mapped back to the compiler’s `i/f/p/F/?` codes). Caller annotations that mention symbols lacking a matching callee annotation in the concatenated stream produce warnings (upgradeable to errors).
-  * Globals/constants must align on category (`int`, `float`, `ptr`, `array`, encoded as `i/f/p/A`). Array sizes must also match.
+  * Globals/constants must align on category (`int`, `float`, `ptr`, encoded as `i/f/p`). Array sizes must match when both sides
+    provide concrete metadata. Arrays do not currently carry element types, so their category is normally `unknown`; that field is
+    reserved for future metadata. The validator does not compare constant values or treat `readonly`/`temporary` roles as separate
+    compatibility dimensions.
   * Function pointers (`F`) can bind to `extern function` exports by erasing the pointer level, mirroring how `lookup` rewrites function declarations into address expressions today.【F:impala/impala.jspeg†L1128-L1157】
-  * Native (`N`) exports satisfy any matching import but are never type-checked, deferring to host integration.
+  * Native (`N`) exports are matched against `docs/nativeCallbackSignatures.gazl`. Bare `extern native` placeholders such as
+    `name() -> unknown` do not mask manifest arity or type mismatches, and calls must agree with the native/non-native calling
+    convention recorded by the metadata.
 * When mismatches are found, emit actionable diagnostics that cite both the importer and exporter source locations. The validator should parse the optional `@ <origin>` suffix on each comment and, when absent, fall back to the legacy `$$s`/`$$i` offsets that are already threaded through declarations for this purpose.【F:impala/impala.jspeg†L1466-L1546】
 * Provide `--warn-only` and `--force` flags so teams can adopt strictness gradually.
 * `tools/gazl-validate.sh` / `tools\gazl-validate.cmd` accept `.gazl` files, downgrade errors to warnings when `--warn-only` is supplied, and promote missing-definition warnings to hard failures when `--force` is used.【F:tools/gazl-validate.js†L1-L71】【F:tools/gazl-validate.js†L636-L668】
@@ -103,7 +114,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
 
 ### 4. Preserve Backward Compatibility
 
-* Units without signature comments are treated as having all exports/imports in the `unknown` category. The validator warns but does not fail unless `--strict` is enabled.
+* Units without signature comments are treated as having all exports/imports in the `unknown` category. The validator warns but does not fail unless `--force` is enabled.
 * When reading concatenated `.gazl`, the validator should tolerate signature comments appearing anywhere—multiple concatenated blocks simply append to the same stream.
 * Version the signature comment schema from the start via the file header (`; signatures version=1`). Future expansions (e.g., distinguishing pointer depth or struct shapes) can bump the header while older validators fall back to permissive behaviour.
 
