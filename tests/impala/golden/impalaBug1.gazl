@@ -21,7 +21,7 @@ fTSTBIT:	FUNC	; signature func fTSTBIT(int mask, int bit) -> int @ 4:18
 		ADDi %0 #1 $bit
 		ADDi %0 %0 $mask
 		NEQi %0 #0 @.a1
-		MOVp %1 &.a_1bitma4d2 
+		MOVp %1 &.a_1bitma_4d2 
 		CALL ^assertFail %0 *1
 	.a1:	ADDi %0 #1 $bit	; if (1+bit+mask != 0) result = TRUE
 		ADDi %0 %0 $mask
@@ -38,7 +38,7 @@ fTSTBIT:	FUNC	; signature func fTSTBIT(int mask, int bit) -> int @ 4:18
 	.f4:	RETU   	; }
 
 	! EQUi #DEBUG #0 @.noAssertStrings
-.a_1bitma4d2:	CNST *25
+.a_1bitma_4d2:	CNST *25
 	DATs ((((1+bit)+mask ) != 0))
 	DATi #0
 .noAssertStrings:	!

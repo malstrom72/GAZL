@@ -3,8 +3,9 @@
 ; signatures version=1
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 8:1
 PANEL_TEXT_ROWS:	CNST *8	; signature array PANEL_TEXT_ROWS[8] : unknown @ 16:35
-	DATA &.s_ABC8884d2 &.s_ABC8884d2 &.s_RM4d3 &.s_AMRATE4d4
-	DATA &.s_notuse4d5 &.s_toollo4d6 &.s_74d7 &.s_ILOVEP4d8
+	DATA &.s_ABC888_4d2 &.s_ABC888_4d2 &.s_RM_4d3
+	DATA &.s_AMRATE_4d4 &.s_notuse_4d5 &.s_toollo_4d6
+	DATA &.s_7_4d7 &.s_ILOVEP_4d8
 ; signature extern native abort() -> unknown @ 28:1
 ; signature extern native trace() -> unknown @ 29:1
 ; signature extern native yield() -> unknown @ 31:1
@@ -64,7 +65,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 86:15
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
-		MOVp %1 &.s_Divisi4d9 	; error("Division by zero")
+		MOVp %1 &.s_Divisi_4d9 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 89:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
@@ -130,13 +131,13 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 		! EQUi #DEBUG #0 @.a0	; assert(2 <= radix && radix <= 16)
 		GRTi #2 $radix @.f1
 		LEQi $radix #16 @.a0
-	.f1:	MOVp %1 &.a_2radix4d2 
+	.f1:	MOVp %1 &.a_2radix_4d2 
 		CALL ^assertFail %0 *1
 	.a0:	NOOP
 		! EQUi #DEBUG #0 @.a2	; assert(0 <= minLength && minLength <= GAZL_WORD_SIZE)
 		GRTi #0 $minLength @.f3
 		LEQi $minLength #GAZL_WORD_SIZE @.a2
-	.f3:	MOVp %1 &.a_0minLe4d3 
+	.f3:	MOVp %1 &.a_0minLe_4d3 
 		CALL ^assertFail %0 *1
 	.a2:	ADDp %0 $buffer #GAZL_WORD_SIZE	; *(p = buffer + GAZL_WORD_SIZE + 1) = 0
 		ADDp $p %0 #1
@@ -149,12 +150,12 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 		! EQUi #DEBUG #0 @.a7	; assert(p >= buffer + 2)
 		ADDp %0 $buffer #2
 		GEQp $p %0 @.a7
-		MOVp %1 &.a_pbuffe4d4 
+		MOVp %1 &.a_pbuffe_4d4 
 		CALL ^assertFail %0 *1
 	.a7:	SUBp $p $p #1	; *(p = p - 1) = ("fedcba9876543210123456789abcdef")[15 + x % radix]
 		MODi %0 $x $radix
 		ADDi %0 #15 %0
-		PEEK %0 &.s_fedcba4da %0
+		PEEK %0 &.s_fedcba_4da %0
 		POKE $p %0 
 		DIVi $x $x $radix	; x = x / radix
 		GOTO @.l4  	; }
@@ -182,14 +183,14 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		! EQUi #DEBUG #0 @.a0	; assert(1 <= precision && precision <= 24)
 		GRTi #1 $precision @.f1
 		LEQi $precision #24 @.a0
-	.f1:	MOVp %1 &.a_1preci4d5 
+	.f1:	MOVp %1 &.a_1preci_4d5 
 		CALL ^assertFail %0 *1
 	.a0:	ABSf $y $f 	; y = abs(f)
 		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
-		MOVp $p &.s_04db 	; p = "0"
+		MOVp $p &.s_0_4db 	; p = "0"
 		GOTO @.e3  
 	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
-		MOVp $p &.s_HUGE4dc 	; p = "HUGE"
+		MOVp $p &.s_HUGE_4dc 	; p = "HUGE"
 		GOTO @.e5  
 	.f4:	MOVi $e #0 	; e = 0
 		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
@@ -356,7 +357,7 @@ rbuffer:	GLOB *4096	; signature array rbuffer[4096] : unknown @ 292:1
 init:	FUNC	; signature func init() -> void @ 292:15
 		PARA *1
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_init4dd 	; trace("init")
+		MOVp %1 &.s_init_4dd 	; trace("init")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 294:15
 		RETU   	; }
 
@@ -371,7 +372,7 @@ reset:	FUNC	; signature func reset() -> void @ 301:16
 	$t:	LOCf
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_reset4de 	; trace("reset")
+		MOVp %1 &.s_reset_4de 	; trace("reset")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 304:16
 		MOVf $a #1024.0 	; a = 1024.0
 		! MULf <A> #TWICE_PI #440.0	; lr = TWICE_PI * 440.0 / 44100.0
@@ -422,7 +423,7 @@ update:	FUNC	; signature func update() -> void @ 326:17
 		PARA *1
 	$buf:	LOCA *34
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_update4df 	; trace("update")
+		MOVp %1 &.s_update_4df 	; trace("update")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 329:17
 		PEEK %2 &params:OPERAND_2_PARAM_INDEX 	; trace(intToString(global params[OPERAND_2_PARAM_INDEX], 16, 1, buf))
 		MOVi %3 #16 
@@ -476,66 +477,66 @@ process:	FUNC	; signature func process() -> void @ 341:18
 		COPY &lpx %0 *4
 		RETU   	; }
 
-.s_ABC8884d2:	CNST *54
+.s_ABC888_4d2:	CNST *54
 	DATs ABC 888777666555444333222111 888777666555444333222111
 	DATi #0
-.s_RM4d3:	CNST *54
+.s_RM_4d3:	CNST *54
 	DATs RM
 	DATi #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #0
-.s_AMRATE4d4:	CNST *54
+.s_AMRATE_4d4:	CNST *54
 	DATs AM
 	DATi #32 #32 #208 #208 #208 #208 #208 #208 #208 #208 #208 #32
 	DATs RATE
 	DATi #32 #208 #208 #208 #208 #208 #208 #208 #208 #208 #32
 	DATs _______ NADA YET _______
 	DATi #0
-.s_notuse4d5:	CNST *10
+.s_notuse_4d5:	CNST *10
 	DATi #32
 	DATs not used
 	DATi #0
-.s_toollo4d6:	CNST *62
+.s_toollo_4d6:	CNST *62
 	DATi #32 #32 #32
 	DATs too lloooooooooooooooooooooooooooooooooooooooooooooooooong
 	DATi #0
-.s_74d7:	CNST *2
+.s_7_4d7:	CNST *2
 	DATs 7
 	DATi #0
-.s_ILOVEP4d8:	CNST *67
+.s_ILOVEP_4d8:	CNST *67
 	DATi #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32
 	DATs I LOVE PRAWNS                               8
 	DATi #0
-.s_Divisi4d9:	CNST *17
+.s_Divisi_4d9:	CNST *17
 	DATs Division by zero
 	DATi #0
-.s_fedcba4da:	CNST *32
+.s_fedcba_4da:	CNST *32
 	DATs fedcba9876543210123456789abcdef
 	DATi #0
-.s_04db:	CNST *2
+.s_0_4db:	CNST *2
 	DATs 0
 	DATi #0
-.s_HUGE4dc:	CNST *5
+.s_HUGE_4dc:	CNST *5
 	DATs HUGE
 	DATi #0
-.s_init4dd:	CNST *5
+.s_init_4dd:	CNST *5
 	DATs init
 	DATi #0
-.s_reset4de:	CNST *6
+.s_reset_4de:	CNST *6
 	DATs reset
 	DATi #0
-.s_update4df:	CNST *7
+.s_update_4df:	CNST *7
 	DATs update
 	DATi #0
 	! EQUi #DEBUG #0 @.noAssertStrings
-.a_2radix4d2:	CNST *28
+.a_2radix_4d2:	CNST *28
 	DATs (2 <= radix && radix <= 16)
 	DATi #0
-.a_0minLe4d3:	CNST *48
+.a_0minLe_4d3:	CNST *48
 	DATs (0 <= minLength && minLength <= GAZL_WORD_SIZE)
 	DATi #0
-.a_pbuffe4d4:	CNST *18
+.a_pbuffe_4d4:	CNST *18
 	DATs (p >= buffer + 2)
 	DATi #0
-.a_1preci4d5:	CNST *36
+.a_1preci_4d5:	CNST *36
 	DATs (1 <= precision && precision <= 24)
 	DATi #0
 .noAssertStrings:	!

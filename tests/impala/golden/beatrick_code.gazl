@@ -5,9 +5,9 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 21:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 29:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 29:33
-	DATA &.s_MUTEst4d2 &.s_REPEAT4d3 &.s_SKIPst4d4
-	DATA &.s_HOLDst4d5 &.s_ACCENT4d6 &.s_STUTTE4d7
-	DATA &.s_REVERS4d8 &.s_TAPEST4d9
+	DATA &.s_MUTEst_4d2 &.s_REPEAT_4d3 &.s_SKIPst_4d4
+	DATA &.s_HOLDst_4d5 &.s_ACCENT_4d6 &.s_STUTTE_4d7
+	DATA &.s_REVERS_4d8 &.s_TAPEST_4d9
 ; signature extern native abort() -> unknown @ 41:1
 ; signature extern native trace() -> unknown @ 42:1
 ; signature extern native yield() -> unknown @ 43:1
@@ -279,27 +279,27 @@ process:	FUNC	; signature func process() -> void @ 178:18
 		COPY &signal %0 *2
 		RETU   	; }
 
-.s_MUTEst4d2:	CNST *24
+.s_MUTEst_4d2:	CNST *24
 	DATs MUTE steps that are off
 	DATi #0
-.s_REPEAT4d3:	CNST *36
+.s_REPEAT_4d3:	CNST *36
 	DATs REPEAT steps that are on before off
 	DATi #0
-.s_SKIPst4d4:	CNST *24
+.s_SKIPst_4d4:	CNST *24
 	DATs SKIP steps that are off
 	DATi #0
-.s_HOLDst4d5:	CNST *53
+.s_HOLDst_4d5:	CNST *53
 	DATs HOLD steps that are on, turn on WRITE PROT when done
 	DATi #0
-.s_ACCENT4d6:	CNST *14
+.s_ACCENT_4d6:	CNST *14
 	DATs ACCENT effect
 	DATi #0
-.s_STUTTE4d7:	CNST *15
+.s_STUTTE_4d7:	CNST *15
 	DATs STUTTER effect
 	DATi #0
-.s_REVERS4d8:	CNST *15
+.s_REVERS_4d8:	CNST *15
 	DATs REVERSE effect
 	DATi #0
-.s_TAPEST4d9:	CNST *17
+.s_TAPEST_4d9:	CNST *17
 	DATs TAPE STOP effect
 	DATi #0

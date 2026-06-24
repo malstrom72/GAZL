@@ -22,7 +22,7 @@ error:	FUNC	; signature func error(ptr s) -> void @ 18:16
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		EQUp $s &NULL @.f0	; if (s != null) 
-		MOVp %1 &.s_Error4d2 	; print("Error: ")
+		MOVp %1 &.s_Error_4d2 	; print("Error: ")
 		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 21:19
 		MOVp %1 $s 	; print(s)
 		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 22:11
@@ -66,7 +66,7 @@ log:	FUNC	; signature func log(float x) -> float @ 85:14
 ;-----------------------------------------------------------------------------
 		LEQf $x #0.0 @.t0	; if (x <= 0.0 || x >= 1.0e38) error("Domain error")
 		LSSf $x #1.0e38 @.f1
-	.t0:	MOVp %1 &.s_Domain4d3 	; error("Domain error")
+	.t0:	MOVp %1 &.s_Domain_4d3 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 93:52
 		GOTO @.e2  
 	.f1:	MOVf $b #0.0 	; b = 0.0
@@ -137,7 +137,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 132:15
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
-		MOVp %1 &.s_Divisi4d4 	; error("Division by zero")
+		MOVp %1 &.s_Divisi_4d4 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 135:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
@@ -201,7 +201,7 @@ tan:	FUNC	; signature func tan(float x) -> float @ 177:14
 		CALL &cos %0 *2	; expects cos(float) -> float @ 182:19
 		MOVf $c %0 
 		NEQf $c #0.0 @.f0	; if (c == 0.0) error("Domain error")
-		MOVp %1 &.s_Domain4d3 	; error("Domain error")
+		MOVp %1 &.s_Domain_4d3 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 183:37
 		GOTO @.e1  
 	.f0:	MOVf %1 $x 	; y = (float)sin(x) / c
@@ -232,7 +232,7 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ 187:14
 		GOTO @.e3  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
-	.t4:	MOVp %1 &.s_Domain4d3 	; error("Domain error")
+	.t4:	MOVp %1 &.s_Domain_4d3 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 195:53
 	.f5:	NOOP
 	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
@@ -424,12 +424,12 @@ main:	FUNC	; signature func main() -> void @ 213:15
 		FORi $i #44100 @.l1	; }
 	.e0:	RETU   	; }
 
-.s_Error4d2:	CNST *8
+.s_Error_4d2:	CNST *8
 	DATs Error:
 	DATi #32 #0
-.s_Domain4d3:	CNST *13
+.s_Domain_4d3:	CNST *13
 	DATs Domain error
 	DATi #0
-.s_Divisi4d4:	CNST *17
+.s_Divisi_4d4:	CNST *17
 	DATs Division by zero
 	DATi #0

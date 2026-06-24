@@ -15,9 +15,10 @@ else
 fi
 
 output_file="$(mktemp "${TMPDIR:-/tmp}/gazl-nuxjs-smoke.XXXXXX")"
+label_source="$(mktemp "${TMPDIR:-/tmp}/gazl-nuxjs-label.XXXXXX.impala")"
 invalid_source="$(mktemp "${TMPDIR:-/tmp}/gazl-nuxjs-invalid.XXXXXX.impala")"
 error_log="$(mktemp "${TMPDIR:-/tmp}/gazl-nuxjs-error.XXXXXX")"
-trap 'rm -f "$output_file" "$invalid_source" "$error_log"' EXIT
+trap 'rm -f "$output_file" "$label_source" "$invalid_source" "$error_log"' EXIT
 
 "$nuxjs" \
 	"$(pwd)/impala/impala.nuxjs.js" \
@@ -29,6 +30,31 @@ trap 'rm -f "$output_file" "$invalid_source" "$error_log"' EXIT
 
 if [ ! -s "$output_file" ]; then
 	echo "NuXJS smoke test produced no output." >&2
+	exit 1
+fi
+
+cat > "$label_source" <<'EOF'
+readonly array panelTextRows[1] = {
+	"GRBLEN"
+}
+
+function main()
+{
+}
+EOF
+"$nuxjs" \
+	"$(pwd)/impala/impala.nuxjs.js" \
+	"$label_source" \
+	"$output_file" \
+	-845775591 \
+	evighet_code.impala \
+	"$(pwd)/impala/impalaCompiler.js"
+if ! grep -q '\.s_GRBLEN_cd967d19' "$output_file"; then
+	echo "NuXJS smoke test did not emit an unsigned hex string label." >&2
+	exit 1
+fi
+if grep -q '\.s_GRBLEN[^[:space:]:]*-' "$output_file"; then
+	echo "NuXJS smoke test emitted a string label containing '-' (invalid GAZL identifier character)." >&2
 	exit 1
 fi
 

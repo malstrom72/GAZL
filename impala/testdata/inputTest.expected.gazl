@@ -11,7 +11,7 @@
  								PARA *1
  					$buffer:	LOCA *1024
  ;-----------------------------------------------------------------------------
- 								MOVp %1 &.s_HEJ2a 				; print("HEJ")
+ 								MOVp %1 &.s_HEJ_2a 				; print("HEJ")
  								CALL ^print %0 *2				; expects print(ptr) -> unknown @ 9:14
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ 9:25
  								MOVi %2 #10 					; printInt((int) input(10, buffer))
@@ -24,6 +24,6 @@
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ 11:26
  								RETU   							; }
 
- .s_HEJ2a:			CNST *4
+ .s_HEJ_2a:			CNST *4
  					DATs HEJ
  					DATi #0

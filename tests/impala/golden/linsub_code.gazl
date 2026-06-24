@@ -5,9 +5,9 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
-	DATA &.s_4d2 &.s_SUB16B4d3 &.s_SUB16B4d3:53
-	DATA &.s_SUB16B4d3:53 &.s_SUB16B4d3:53 &.s_SUB16B4d3:53
-	DATA &.s_SUB16B4d3:53 &.s_SUB16B4d3:53
+	DATA &.s__4d2 &.s_SUB16B_4d3 &.s_SUB16B_4d3:53
+	DATA &.s_SUB16B_4d3:53 &.s_SUB16B_4d3:53 &.s_SUB16B_4d3:53
+	DATA &.s_SUB16B_4d3:53 &.s_SUB16B_4d3:53
 ; signature extern native abort() -> unknown @ 39:1
 ; signature extern native trace() -> unknown @ 40:1
 ; signature extern native yield() -> unknown @ 41:1
@@ -72,8 +72,8 @@ operate1:	FUNC	; signature func operate1(int a) -> int @ 136:19
 		MOVi $r #1 	; r = 1
 	.f0:	RETU   	; }
 
-.s_4d2:	CNST *1
+.s__4d2:	CNST *1
 	DATi #0
-.s_SUB16B4d3:	CNST *54
+.s_SUB16B_4d3:	CNST *54
 	DATs SUB |-------- 16-BIT LINEAR SUBTRACT AMOUNT --------|
 	DATi #0

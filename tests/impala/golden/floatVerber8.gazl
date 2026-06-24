@@ -5,9 +5,9 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 12:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 22:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 22:33
-	DATA &.s_sillyr4d2 &.s_sillyr4d2:51 &.s_sillyr4d2:51
-	DATA &.s_ROOMSI4d3 &.s_ROOMSI4d3:53 &.s_ROOMSI4d3:53
-	DATA &.s_ROOMSI4d3:53 &.s_FEEDBA4d4
+	DATA &.s_sillyr_4d2 &.s_sillyr_4d2:51 &.s_sillyr_4d2:51
+	DATA &.s_ROOMSI_4d3 &.s_ROOMSI_4d3:53 &.s_ROOMSI_4d3:53
+	DATA &.s_ROOMSI_4d3:53 &.s_FEEDBA_4d4
 ; signature extern native abort() -> unknown @ 34:1
 ; signature extern native trace() -> unknown @ 35:1
 ; signature extern native yield() -> unknown @ 36:1
@@ -180,15 +180,15 @@ process:	FUNC	; signature func process() -> void @ 169:18
 		GOTO @.l0  	; }
 		RETU   	; }
 
-.s_sillyr4d2:	CNST *52
+.s_sillyr_4d2:	CNST *52
 	DATi #32 #32 #32
 	DATs silly ring-modulator firmware demo by M Lidstrom
 	DATi #0
-.s_ROOMSI4d3:	CNST *54
+.s_ROOMSI_4d3:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs ______ ROOM SIZE _______ _______ PRE-DELAY ______
 	DATi #0
-.s_FEEDBA4d4:	CNST *54
+.s_FEEDBA_4d4:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs _______ FEEDBACK _______ ________ DAMPING _______
 	DATi #0

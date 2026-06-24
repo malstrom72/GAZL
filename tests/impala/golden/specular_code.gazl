@@ -5,8 +5,8 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
-	DATA &.s_4d2 &.s_4d2 &.s_THRESH4d3 &.s_00FFlo4d4 &.s_4d2
-	DATA &.s_4d2 &.s_DECAYP4d5 &.s_00FFx14d6
+	DATA &.s__4d2 &.s__4d2 &.s_THRESH_4d3 &.s_00FFlo_4d4
+	DATA &.s__4d2 &.s__4d2 &.s_DECAYP_4d5 &.s_00FFx1_4d6
 ; signature extern native abort() -> unknown @ 39:1
 ; signature extern native trace() -> unknown @ 40:1
 ; signature extern native yield() -> unknown @ 41:1
@@ -63,7 +63,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 123:15
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
-		MOVp %1 &.s_Divisi4d7 	; error("Division by zero")
+		MOVp %1 &.s_Divisi_4d7 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 126:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
@@ -123,7 +123,7 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 168:15
 	$t:	LOCf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) error("Domain error")
-		MOVp %1 &.s_Domain4d8 	; error("Domain error")
+		MOVp %1 &.s_Domain_4d8 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 172:36
 	.f0:	MOVf $y $x 	; y = x
 		MOVf $t #0.0 	; t = 0.0
@@ -673,7 +673,7 @@ init:	FUNC	; signature func init() -> void @ 453:15
 	$wTemp:	LOCf
 	$prng:	LOCi
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_init4d9 	; trace("init")
+		MOVp %1 &.s_init_4d9 	; trace("init")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 456:15
 		MOVi $i #0 	; for (i = 0 to FFT_SIZE_2) 
 		GEQi #0 #FFT_SIZE_2 @.e0
@@ -747,7 +747,7 @@ init:	FUNC	; signature func init() -> void @ 453:15
 reset:	FUNC	; signature func reset() -> void @ 495:16
 		PARA *1
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_reset4da 	; trace("reset")
+		MOVp %1 &.s_reset_4da 	; trace("reset")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 497:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
@@ -758,7 +758,7 @@ update:	FUNC	; signature func update() -> void @ 508:17
 		PARA *1
 	$f:	LOCf
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_update4db 	; trace("update")
+		MOVp %1 &.s_update_4db 	; trace("update")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 511:17
 		PEEK %0 &params:THRESHOLD_PARAM 	; f = itof((int) global params[THRESHOLD_PARAM]) * (1.0 / 255.0)
 		! DIVf <A> #1.0 #255.0
@@ -1163,36 +1163,36 @@ process:	FUNC	; signature func process() -> void @ 538:18
 		GOTO @.l4  	; }
 		RETU   	; }
 
-.s_4d2:	CNST *2
+.s__4d2:	CNST *2
 	DATi #32 #0
-.s_THRESH4d3:	CNST *53
+.s_THRESH_4d3:	CNST *53
 	DATi #32 #32 #32 #32 #32
 	DATs _____ THRESHOLD ______   _______ BANDS ________
 	DATi #0
-.s_00FFlo4d4:	CNST *53
+.s_00FFlo_4d4:	CNST *53
 	DATi #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32
 	DATs 00 -> FF           low      mid      high
 	DATi #0
-.s_DECAYP4d5:	CNST *53
+.s_DECAYP_4d5:	CNST *53
 	DATi #32 #32 #32 #32 #32
 	DATs ________ DECAY _______   ______ PARTIALS ______
 	DATi #0
-.s_00FFx14d6:	CNST *53
+.s_00FFx1_4d6:	CNST *53
 	DATi #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32
 	DATs 00 -> FF         x1 x2 x3 x4 x5 x6 x7 x8
 	DATi #0
-.s_Divisi4d7:	CNST *17
+.s_Divisi_4d7:	CNST *17
 	DATs Division by zero
 	DATi #0
-.s_Domain4d8:	CNST *13
+.s_Domain_4d8:	CNST *13
 	DATs Domain error
 	DATi #0
-.s_init4d9:	CNST *5
+.s_init_4d9:	CNST *5
 	DATs init
 	DATi #0
-.s_reset4da:	CNST *6
+.s_reset_4da:	CNST *6
 	DATs reset
 	DATi #0
-.s_update4db:	CNST *7
+.s_update_4db:	CNST *7
 	DATs update
 	DATi #0

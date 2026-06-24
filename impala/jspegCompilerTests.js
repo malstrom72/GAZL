@@ -175,6 +175,7 @@ assert(capturedFailError.impalaSnippetAfter.startsWith("abcdefgh"), "fail must s
 testPlainHostImpalaCompiler(impalaExisting);
 testCompilerRunnerOmitsDefaultRandomId();
 testCompilerRunnerRandomIdSeeding();
+testStringLabelFloatLiteralCollision();
 testNuXJSCommandCompilerScript(impalaExisting);
 
 function compileAndEval(compilerFn, source, label) {
@@ -387,6 +388,34 @@ function testCompilerRunnerRandomIdSeeding() {
 	}
 
 	console.log("compileWithJsImpala randomizes omitted seeds and honors explicit seeds");
+}
+
+function testStringLabelFloatLiteralCollision() {
+	const source = [
+		"readonly array panelTextRows[1] = {",
+		'\t"GRBLEN"',
+		"}",
+		"",
+		"function main()",
+		"{",
+		"}",
+		"",
+	].join("\n");
+	// A negative randomId is the real trigger: (negative).toString(16) starts with '-',
+	// which is not a valid GAZL identifier character. Force the value unsigned first.
+	const output = compileWithJsImpala(source, {
+		randomId: -0x326982e7,
+		sourceName: "evighet_code.impala",
+		retabulate: false,
+		trailingNewline: false,
+	});
+
+	assert(
+		output.includes(".s_GRBLEN_cd967d19"),
+		"string labels must emit the hex id as an unsigned 32-bit value",
+	);
+	assert(!/\.s_GRBLEN[^\s:]*-/.test(output), "string labels must never contain '-' (invalid GAZL identifier character)");
+	console.log("compileWithJsImpala emits string labels with valid GAZL identifier characters");
 }
 
 function testNuXJSCommandCompilerScript(compilerSource) {

@@ -67,7 +67,7 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 71:21
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; output(s)
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 73:11
-		MOVp %1 &.s_4d2 	; output("\n")
+		MOVp %1 &.s__4d2 	; output("\n")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 74:14
 		RETU   	; }
 
@@ -92,9 +92,9 @@ main:	FUNC	; signature func main() -> void @ 79:15
 	$yn:	LOCA *64
 ;-----------------------------------------------------------------------------
 		CALL &initFilesIfNecessary %0 *1	; expects initFilesIfNecessary() -> unknown @ 83:24
-		MOVp %1 &.s_GAZLdi4d3 	; outputLine("GAZL disassembler v2.1.")
+		MOVp %1 &.s_GAZLdi_4d3 	; outputLine("GAZL disassembler v2.1.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 84:39
-		MOVp %1 &.s_Disass4d4 	; output("Disassemble file: ")
+		MOVp %1 &.s_Disass_4d4 	; output("Disassemble file: ")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 85:30
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
@@ -106,7 +106,7 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		CALL &findFile %0 *2	; expects findFile(ptr) -> unknown @ 89:31
 		MOVi $file %0 
 		GEQi %0 #0 @.f1
-		MOVp %1 &.s_Fileno4d5 	; outputLine("File not found")
+		MOVp %1 &.s_Fileno_4d5 	; outputLine("File not found")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 89:66
 		GOTO @.e2  
 	.f1:	MULi %0 $file #FILE_FIELD_COUNT	; if ((type = (int)global FILES[file * FILE_FIELD_COUNT + FILE_FIELD_TYPE]) != FILE_TYPE_EXE
@@ -115,19 +115,19 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		EQUi $type #FILE_TYPE_EXE @.f4
 		EQUi $type #FILE_TYPE_SYS @.f4
 		EQUi $type #FILE_TYPE_BIN @.f4
-		MOVp %1 &.s_Fileis4d6 	; outputLine("File is not GAZL format")
+		MOVp %1 &.s_Fileis_4d6 	; outputLine("File is not GAZL format")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 93:42
 		GOTO @.e5  	; } else if ((int)strcmp(s, "permut8") == 0) 
 	.f4:	ADRL %1 $s *0	; if ((int)strcmp(s, "permut8") == 0) 
-		MOVp %2 &.s_permut4d7 
+		MOVp %2 &.s_permut_4d7 
 		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> unknown @ 94:41
 		NEQi %0 #0 @.f6
-		MOVp %1 &.s_Protec4d8 	; outputLine("Protected file")
+		MOVp %1 &.s_Protec_4d8 	; outputLine("Protected file")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 95:33
 		GOTO @.e7  	; } else 
-	.f6:	MOVp $p &.s_zl4d9 	; p = ".zl"
+	.f6:	MOVp $p &.s_zl_4d9 	; p = ".zl"
 		NEQi $type #FILE_TYPE_BIN @.f8	; if (type == FILE_TYPE_BIN) p = ".gazl"
-		MOVp $p &.s_gazl4da 	; p = ".gazl"
+		MOVp $p &.s_gazl_4da 	; p = ".gazl"
 	.f8:	ADRL %1 $s *0	; strcat(s, p)
 		MOVp %2 $p 
 		CALL &strcat %0 *3	; expects strcat(ptr, ptr) -> ptr @ 99:17
@@ -141,7 +141,7 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		CALL ^loadText %0 *5	; expects loadText(ptr, int, int, ptr) -> unknown @ 104:79
 		MOVi $readCount %0 
 		GEQi $readCount #0 @.f10	; if (readCount < 0) 
-		MOVp %1 &.s_Reader4db 	; outputLine("Read error")
+		MOVp %1 &.s_Reader_4db 	; outputLine("Read error")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 106:31
 		GOTO @stopIt  	; goto stopIt
 		GOTO @.e11  	; } else 
@@ -166,7 +166,7 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 121:19
 		POKE $p $c 	; (int)*p = c
 		MOVp $b $p 	; b = p
-		MOVp %1 &.s_Morey4dc 	; output("More (y)? ")
+		MOVp %1 &.s_Morey_4dc 	; output("More (y)? ")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 124:30
 		MOVi %1 #63 	; input(63, yn)
 		ADRL %2 $yn *0
@@ -182,7 +182,7 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 133:16
 		ADDi $offset $offset $readCount	; offset = offset + readCount
 	.e11:	GRTi $readCount #0 @.l9	; } while (readCount > 0)
-		MOVp %1 &.s_Morey4dc:10 	; outputLine("")
+		MOVp %1 &.s_Morey_4dc:10 	; outputLine("")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 137:19
 	.e7:	NOOP
 	.e5:	NOOP
@@ -190,35 +190,35 @@ main:	FUNC	; signature func main() -> void @ 79:15
 	.f0:	NOOP
 	stopIt:	RETU   	; }
 
-.s_4d2:	CNST *2
+.s__4d2:	CNST *2
 	DATi #10 #0
-.s_GAZLdi4d3:	CNST *24
+.s_GAZLdi_4d3:	CNST *24
 	DATs GAZL disassembler v2.1.
 	DATi #0
-.s_Disass4d4:	CNST *19
+.s_Disass_4d4:	CNST *19
 	DATs Disassemble file:
 	DATi #32 #0
-.s_Fileno4d5:	CNST *15
+.s_Fileno_4d5:	CNST *15
 	DATs File not found
 	DATi #0
-.s_Fileis4d6:	CNST *24
+.s_Fileis_4d6:	CNST *24
 	DATs File is not GAZL format
 	DATi #0
-.s_permut4d7:	CNST *8
+.s_permut_4d7:	CNST *8
 	DATs permut8
 	DATi #0
-.s_Protec4d8:	CNST *15
+.s_Protec_4d8:	CNST *15
 	DATs Protected file
 	DATi #0
-.s_zl4d9:	CNST *4
+.s_zl_4d9:	CNST *4
 	DATs .zl
 	DATi #0
-.s_gazl4da:	CNST *6
+.s_gazl_4da:	CNST *6
 	DATs .gazl
 	DATi #0
-.s_Reader4db:	CNST *11
+.s_Reader_4db:	CNST *11
 	DATs Read error
 	DATi #0
-.s_Morey4dc:	CNST *11
+.s_Morey_4dc:	CNST *11
 	DATs More (y)?
 	DATi #32 #0

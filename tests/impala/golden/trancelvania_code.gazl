@@ -5,9 +5,9 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
-	DATA &.s_116ste4d2 &.s_132ste4d3 &.s_Level64d4
-	DATA &.s_Leftst4d5 &.s_Gate4d6 &.s_LPF4d7 &.s_BPF4d8
-	DATA &.s_HPFAtt4d9
+	DATA &.s_116ste_4d2 &.s_132ste_4d3 &.s_Level6_4d4
+	DATA &.s_Leftst_4d5 &.s_Gate_4d6 &.s_LPF_4d7 &.s_BPF_4d8
+	DATA &.s_HPFAtt_4d9
 ; signature extern native abort() -> unknown @ 39:1
 ; signature extern native trace() -> unknown @ 40:1
 ; signature extern native yield() -> unknown @ 41:1
@@ -61,7 +61,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 116:15
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
-		MOVp %1 &.s_Divisi4da 	; error("Division by zero")
+		MOVp %1 &.s_Divisi_4da 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 119:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
@@ -161,7 +161,7 @@ init:	FUNC	; signature func init() -> void @ 224:15
 	$i:	LOCi
 	$x:	LOCf
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_init4db 	; trace("init")
+		MOVp %1 &.s_init_4db 	; trace("init")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 227:15
 		MOVi $i #0 	; for (i = 0 to FILTER_PARAM_TABLE_SIZE) 
 		GEQi #0 #FILTER_PARAM_TABLE_SIZE @.e0
@@ -209,7 +209,7 @@ init:	FUNC	; signature func init() -> void @ 224:15
 reset:	FUNC	; signature func reset() -> void @ 246:16
 		PARA *1
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_reset4dc 	; trace("reset")
+		MOVp %1 &.s_reset_4dc 	; trace("reset")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 248:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
@@ -469,36 +469,36 @@ process:	FUNC	; signature func process() -> void @ 267:18
 		GOTO @.l0  	; }
 		RETU   	; }
 
-.s_116ste4d2:	CNST *54
+.s_116ste_4d2:	CNST *54
 	DATs --- [ 1/16 steps                                    ]
 	DATi #0
-.s_132ste4d3:	CNST *54
+.s_132ste_4d3:	CNST *54
 	DATs --- [ 1/32 steps                                    ]
 	DATi #0
-.s_Level64d4:	CNST *54
+.s_Level6_4d4:	CNST *54
 	DATs --- [ Level: 67%           ]+[ Level: 33%           ]
 	DATi #0
-.s_Leftst4d5:	CNST *54
+.s_Leftst_4d5:	CNST *54
 	DATs --- [ Left steps           ] [ Right steps          ]
 	DATi #0
-.s_Gate4d6:	CNST *5
+.s_Gate_4d6:	CNST *5
 	DATs Gate
 	DATi #0
-.s_LPF4d7:	CNST *4
+.s_LPF_4d7:	CNST *4
 	DATs LPF
 	DATi #0
-.s_BPF4d8:	CNST *53
+.s_BPF_4d8:	CNST *53
 	DATs BPF  _______________________________________________
 	DATi #0
-.s_HPFAtt4d9:	CNST *54
+.s_HPFAtt_4d9:	CNST *54
 	DATs HPF /        Attack        ||        Release        \
 	DATi #0
-.s_Divisi4da:	CNST *17
+.s_Divisi_4da:	CNST *17
 	DATs Division by zero
 	DATi #0
-.s_init4db:	CNST *5
+.s_init_4db:	CNST *5
 	DATs init
 	DATi #0
-.s_reset4dc:	CNST *6
+.s_reset_4dc:	CNST *6
 	DATs reset
 	DATi #0

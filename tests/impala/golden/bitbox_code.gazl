@@ -5,8 +5,8 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 13:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:33
-	DATA &.s_A4d2 &.s_BBASSD4d3 &.s_C4d4 &.s_D4d5 &.s_A4d2
-	DATA &.s_BHIHAT4d6 &.s_CSNARE4d7 &.s_D4d5
+	DATA &.s_A_4d2 &.s_BBASSD_4d3 &.s_C_4d4 &.s_D_4d5
+	DATA &.s_A_4d2 &.s_BHIHAT_4d6 &.s_CSNARE_4d7 &.s_D_4d5
 ; signature extern native abort() -> unknown @ 25:1
 ; signature extern native trace() -> unknown @ 26:1
 ; signature extern native yield() -> unknown @ 27:1
@@ -224,21 +224,21 @@ process:	FUNC	; signature func process() -> void @ 201:18
 		GOTO @.l0  	; }
 		RETU   	; }
 
-.s_A4d2:	CNST *2
+.s_A_4d2:	CNST *2
 	DATs A
 	DATi #0
-.s_BBASSD4d3:	CNST *17
+.s_BBASSD_4d3:	CNST *17
 	DATs B      BASS DRUM
 	DATi #0
-.s_C4d4:	CNST *2
+.s_C_4d4:	CNST *2
 	DATs C
 	DATi #0
-.s_D4d5:	CNST *2
+.s_D_4d5:	CNST *2
 	DATs D
 	DATi #0
-.s_BHIHAT4d6:	CNST *47
+.s_BHIHAT_4d6:	CNST *47
 	DATs B      HI-HAT                      + BASS DRUM
 	DATi #0
-.s_CSNARE4d7:	CNST *48
+.s_CSNARE_4d7:	CNST *48
 	DATs C                                  = SNARE DRUM
 	DATi #0

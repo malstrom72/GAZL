@@ -5,9 +5,9 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
-	DATA &.s_18PPVV4d2 &.s_116AAO4d3 &.s_132NNL4d4
-	DATA &.s_164vDT4d5 &.s_1PPVVT4d6 &.s_2AAOOI4d7
-	DATA &.s_12NNLL4d8 &.s_contvD4d9
+	DATA &.s_18PPVV_4d2 &.s_116AAO_4d3 &.s_132NNL_4d4
+	DATA &.s_164vDT_4d5 &.s_1PPVVT_4d6 &.s_2AAOOI_4d7
+	DATA &.s_12NNLL_4d8 &.s_contvD_4d9
 ; signature extern native abort() -> unknown @ 39:1
 ; signature extern native trace() -> unknown @ 40:1
 ; signature extern native yield() -> unknown @ 41:1
@@ -101,13 +101,13 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 		! EQUi #DEBUG #0 @.a0	; assert(2 <= radix && radix <= 16)
 		GRTi #2 $radix @.f1
 		LEQi $radix #16 @.a0
-	.f1:	MOVp %1 &.a_2radix4d2 
+	.f1:	MOVp %1 &.a_2radix_4d2 
 		CALL ^assertFail %0 *1
 	.a0:	NOOP
 		! EQUi #DEBUG #0 @.a2	; assert(0 <= minLength && minLength <= GAZL_WORD_SIZE)
 		GRTi #0 $minLength @.f3
 		LEQi $minLength #GAZL_WORD_SIZE @.a2
-	.f3:	MOVp %1 &.a_0minLe4d3 
+	.f3:	MOVp %1 &.a_0minLe_4d3 
 		CALL ^assertFail %0 *1
 	.a2:	ADDp %0 $buffer #GAZL_WORD_SIZE	; *(p = buffer + GAZL_WORD_SIZE + 1) = 0
 		ADDp $p %0 #1
@@ -120,12 +120,12 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 		! EQUi #DEBUG #0 @.a7	; assert(p >= buffer + 2)
 		ADDp %0 $buffer #2
 		GEQp $p %0 @.a7
-		MOVp %1 &.a_pbuffe4d4 
+		MOVp %1 &.a_pbuffe_4d4 
 		CALL ^assertFail %0 *1
 	.a7:	SUBp $p $p #1	; *(p = p - 1) = ("fedcba9876543210123456789abcdef")[15 + x % radix]
 		MODi %0 $x $radix
 		ADDi %0 #15 %0
-		PEEK %0 &.s_fedcba4da %0
+		PEEK %0 &.s_fedcba_4da %0
 		POKE $p %0 
 		DIVi $x $x $radix	; x = x / radix
 		GOTO @.l4  	; }
@@ -153,14 +153,14 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		! EQUi #DEBUG #0 @.a0	; assert(1 <= precision && precision <= 24)
 		GRTi #1 $precision @.f1
 		LEQi $precision #24 @.a0
-	.f1:	MOVp %1 &.a_1preci4d5 
+	.f1:	MOVp %1 &.a_1preci_4d5 
 		CALL ^assertFail %0 *1
 	.a0:	ABSf $y $f 	; y = abs(f)
 		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
-		MOVp $p &.s_04db 	; p = "0"
+		MOVp $p &.s_0_4db 	; p = "0"
 		GOTO @.e3  
 	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
-		MOVp $p &.s_HUGE4dc 	; p = "HUGE"
+		MOVp $p &.s_HUGE_4dc 	; p = "HUGE"
 		GOTO @.e5  
 	.f4:	MOVi $e #0 	; e = 0
 		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
@@ -410,7 +410,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 343:15
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
-		MOVp %1 &.s_Divisi4dd 	; error("Division by zero")
+		MOVp %1 &.s_Divisi_4dd 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 346:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
@@ -497,7 +497,7 @@ complexFFT:	FUNC	; signature func complexFFT(int n, ptr data) -> void @ 389:21
 		SUBi %0 $n #1
 		ANDi %0 $n %0
 		EQUi %0 #0 @.a0
-	.f1:	MOVp %1 &.a_n2nn104d6 
+	.f1:	MOVp %1 &.a_n2nn10_4d6 
 		CALL ^assertFail %0 *1
 	.a0:	MOVi $j #1 	; j = 1
 		MOVi $i #1 	; i = 1
@@ -622,12 +622,12 @@ realFFT:	FUNC	; signature func realFFT(int n, ptr input, ptr output) -> void @ 4
 		SUBi %0 $n #1
 		ANDi %0 $n %0
 		EQUi %0 #0 @.a0
-	.f1:	MOVp %1 &.a_n2nn104d6 
+	.f1:	MOVp %1 &.a_n2nn10_4d6 
 		CALL ^assertFail %0 *1
 	.a0:	NOOP
 		! EQUi #DEBUG #0 @.a2	; assert(output != input)
 		NEQp $output $input @.a2
-		MOVp %1 &.a_output4d7 
+		MOVp %1 &.a_output_4d7 
 		CALL ^assertFail %0 *1
 	.a2:	MOVi %1 $n 	; complexFFT(n, input)
 		MOVp %2 $input 
@@ -737,7 +737,7 @@ log:	FUNC	; signature func log(float x) -> float @ 548:14
 ;-----------------------------------------------------------------------------
 		LEQf $x #0.0 @.t0	; if (x <= 0.0 || x >= 1.0e38) error("Domain error")
 		LSSf $x #1.0e38 @.f1
-	.t0:	MOVp %1 &.s_Domain4de 	; error("Domain error")
+	.t0:	MOVp %1 &.s_Domain_4de 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 556:52
 		GOTO @.e2  
 	.f1:	MOVf $b #0.0 	; b = 0.0
@@ -787,7 +787,7 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ 576:14
 		GOTO @.e3  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
-	.t4:	MOVp %1 &.s_Domain4de 	; error("Domain error")
+	.t4:	MOVp %1 &.s_Domain_4de 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 584:53
 	.f5:	NOOP
 	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
@@ -872,7 +872,7 @@ init:	FUNC	; signature func init() -> void @ 654:15
 	$i:	LOCi
 	$buf:	LOCA *256
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_init4df 	; trace("init")
+		MOVp %1 &.s_init_4df 	; trace("init")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 657:15
 		PEEK %2 &instance 	; trace(intToString(global instance, 10, 1, buf))
 		MOVi %3 #10 
@@ -887,9 +887,9 @@ init:	FUNC	; signature func init() -> void @ 654:15
 reset:	FUNC	; signature func reset() -> void @ 665:16
 		PARA *1
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_reset4e0 	; trace("reset")
+		MOVp %1 &.s_reset_4e0 	; trace("reset")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 667:16
-		MOVp %1 &.s_params4e1 	; traceInts(" params: ", PARAM_COUNT, global params)
+		MOVp %1 &.s_params_4e1 	; traceInts(" params: ", PARAM_COUNT, global params)
 		MOVi %2 #PARAM_COUNT 
 		MOVp %3 &params 
 		CALL &traceInts %0 *4	; expects traceInts(ptr, int, ptr) -> void @ 668:52
@@ -960,21 +960,21 @@ calcGainsAndDelays:	FUNC	; signature func calcGainsAndDelays(int highBits, int l
 	.f8:	POKE $gains $i $g	; gains[i] = g
 		POKE $delays $i $d	; delays[i] = d
 		FORi $i #8 @.l1	; }
-	.e0:	MOVp %1 &.s_gains4e2 	; traceFloats("gains: ", 8, gains, 8)
+	.e0:	MOVp %1 &.s_gains_4e2 	; traceFloats("gains: ", 8, gains, 8)
 		MOVi %2 #8 
 		MOVp %3 $gains 
 		MOVi %4 #8 
 		CALL &traceFloats %0 *5	; expects traceFloats(ptr, int, ptr, int) -> void @ 697:37
-		MOVp %1 &.s_max4e3 	; traceFloat("max: ", (float) *maxGain, 8)
+		MOVp %1 &.s_max_4e3 	; traceFloat("max: ", (float) *maxGain, 8)
 		PEEK %2 $maxGain 
 		MOVi %3 #8 
 		CALL &traceFloat %0 *4	; expects traceFloat(ptr, float, int) -> void @ 698:42
-		MOVp %1 &.s_delays4e4 	; traceFloats("delays: ", 8, delays, 8)
+		MOVp %1 &.s_delays_4e4 	; traceFloats("delays: ", 8, delays, 8)
 		MOVi %2 #8 
 		MOVp %3 $delays 
 		MOVi %4 #8 
 		CALL &traceFloats %0 *5	; expects traceFloats(ptr, int, ptr, int) -> void @ 699:39
-		MOVp %1 &.s_max4e3 	; traceFloat("max: ", (float) *maxDelay, 8)
+		MOVp %1 &.s_max_4e3 	; traceFloat("max: ", (float) *maxDelay, 8)
 		PEEK %2 $maxDelay 
 		MOVi %3 #8 
 		CALL &traceFloat %0 *4	; expects traceFloat(ptr, float, int) -> void @ 700:43
@@ -1097,7 +1097,7 @@ update:	FUNC	; signature func update() -> void @ 745:17
 		MOVi $rebuild #TRUE 	; rebuild = TRUE
 	.f2:	FORi $i #CHECK_PARAMS_COUNT @.l1	; }
 	.e0:	EQUi $rebuild #FALSE @.f3	; if (rebuild != FALSE) 
-		MOVp %1 &.s_rebuil4e5 	; trace("rebuilding")
+		MOVp %1 &.s_rebuil_4e5 	; trace("rebuilding")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 760:22
 		POKE &tapCount #0 	; global tapCount = 0
 		POKE &xorShiftRandomSeedX #123456789 	; global xorShiftRandomSeedX = 123456789
@@ -1381,84 +1381,84 @@ process:	FUNC	; signature func process() -> void @ 928:18
 		GOTO @.l6  	; }
 	.e5:	RETU   	; }
 
-.s_18PPVV4d2:	CNST *29
+.s_18PPVV_4d2:	CNST *29
 	DATs 1/8  P  P  V  V  T  T  R  R
 	DATi #32 #0
-.s_116AAO4d3:	CNST *29
+.s_116AAO_4d3:	CNST *29
 	DATs 1/16 A  A  O  O  I  I  A  E
 	DATi #32 #0
-.s_132NNL4d4:	CNST *29
+.s_132NNL_4d4:	CNST *29
 	DATs 1/32 N  N  L  L  M  M  N  C
 	DATi #32 #0
-.s_164vDT4d5:	CNST *54
+.s_164vDT_4d5:	CNST *54
 	DATs 1/64 <  >  v  ^  <  >  D  T  |-------- TAPS --------|
 	DATi #0
-.s_1PPVVT4d6:	CNST *29
+.s_1PPVVT_4d6:	CNST *29
 	DATs /1   P  P  V  V  T  T  R  R
 	DATi #32 #0
-.s_2AAOOI4d7:	CNST *29
+.s_2AAOOI_4d7:	CNST *29
 	DATs /2   A  A  O  O  I  I  A  E
 	DATi #32 #0
-.s_12NNLL4d8:	CNST *29
+.s_12NNLL_4d8:	CNST *29
 	DATs +1/2 N  N  L  L  M  M  N  C
 	DATi #32 #0
-.s_contvD4d9:	CNST *54
+.s_contvD_4d9:	CNST *54
 	DATs cont <  >  v  ^  <  >  D  T  |-------- TAPS --------|
 	DATi #0
-.s_fedcba4da:	CNST *32
+.s_fedcba_4da:	CNST *32
 	DATs fedcba9876543210123456789abcdef
 	DATi #0
-.s_04db:	CNST *2
+.s_0_4db:	CNST *2
 	DATs 0
 	DATi #0
-.s_HUGE4dc:	CNST *5
+.s_HUGE_4dc:	CNST *5
 	DATs HUGE
 	DATi #0
-.s_Divisi4dd:	CNST *17
+.s_Divisi_4dd:	CNST *17
 	DATs Division by zero
 	DATi #0
-.s_Domain4de:	CNST *13
+.s_Domain_4de:	CNST *13
 	DATs Domain error
 	DATi #0
-.s_init4df:	CNST *5
+.s_init_4df:	CNST *5
 	DATs init
 	DATi #0
-.s_reset4e0:	CNST *6
+.s_reset_4e0:	CNST *6
 	DATs reset
 	DATi #0
-.s_params4e1:	CNST *10
+.s_params_4e1:	CNST *10
 	DATi #32
 	DATs params:
 	DATi #32 #0
-.s_gains4e2:	CNST *8
+.s_gains_4e2:	CNST *8
 	DATs gains:
 	DATi #32 #0
-.s_max4e3:	CNST *6
+.s_max_4e3:	CNST *6
 	DATs max:
 	DATi #32 #0
-.s_delays4e4:	CNST *9
+.s_delays_4e4:	CNST *9
 	DATs delays:
 	DATi #32 #0
-.s_rebuil4e5:	CNST *11
+.s_rebuil_4e5:	CNST *11
 	DATs rebuilding
 	DATi #0
 	! EQUi #DEBUG #0 @.noAssertStrings
-.a_2radix4d2:	CNST *28
+.a_2radix_4d2:	CNST *28
 	DATs (2 <= radix && radix <= 16)
 	DATi #0
-.a_0minLe4d3:	CNST *48
+.a_0minLe_4d3:	CNST *48
 	DATs (0 <= minLength && minLength <= GAZL_WORD_SIZE)
 	DATi #0
-.a_pbuffe4d4:	CNST *18
+.a_pbuffe_4d4:	CNST *18
 	DATs (p >= buffer + 2)
 	DATi #0
-.a_1preci4d5:	CNST *36
+.a_1preci_4d5:	CNST *36
 	DATs (1 <= precision && precision <= 24)
 	DATi #0
-.a_n2nn104d6:	CNST *31
+.a_n2nn10_4d6:	CNST *31
 	DATs (n >= 2 && (n & (n - 1)) == 0)
 	DATi #0
-.a_output4d7:	CNST *18
+.a_output_4d7:	CNST *18
 	DATs (output != input)
 	DATi #0
 .noAssertStrings:	!

@@ -5,8 +5,8 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 13:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:33
-	DATA &.s_4d2 &.s_4d2 &.s_CRUSH4d3 &.s_BLOCKR4d4 &.s_4d2
-	DATA &.s_4d2 &.s_4d5 &.s_BLOCKS4d6
+	DATA &.s__4d2 &.s__4d2 &.s_CRUSH_4d3 &.s_BLOCKR_4d4
+	DATA &.s__4d2 &.s__4d2 &.s__4d5 &.s_BLOCKS_4d6
 ; signature extern native abort() -> unknown @ 25:1
 ; signature extern native trace() -> unknown @ 26:1
 ; signature extern native yield() -> unknown @ 27:1
@@ -79,7 +79,7 @@ log:	FUNC	; signature func log(float x) -> float @ 147:14
 ;-----------------------------------------------------------------------------
 		LEQf $x #0.0 @.t0	; if (x <= 0.0 || x >= 1.0e38) error("Domain error")
 		LSSf $x #1.0e38 @.f1
-	.t0:	MOVp %1 &.s_Domain4d7 	; error("Domain error")
+	.t0:	MOVp %1 &.s_Domain_4d7 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 155:52
 		GOTO @.e2  
 	.f1:	MOVf $b #0.0 	; b = 0.0
@@ -129,7 +129,7 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ 175:14
 		GOTO @.e3  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
-	.t4:	MOVp %1 &.s_Domain4d7 	; error("Domain error")
+	.t4:	MOVp %1 &.s_Domain_4d7 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 183:53
 	.f5:	NOOP
 	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
@@ -459,24 +459,24 @@ process:	FUNC	; signature func process() -> void @ 244:18
 		GOTO @.l0  	; }
 		RETU   	; }
 
-.s_4d2:	CNST *2
+.s__4d2:	CNST *2
 	DATi #32 #0
-.s_CRUSH4d3:	CNST *54
+.s_CRUSH_4d3:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs ________________________ _________CRUSH__________
 	DATi #0
-.s_BLOCKR4d4:	CNST *54
+.s_BLOCKR_4d4:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs |      BLOCK RATE      | |   BITS   ||   RATE   |
 	DATi #0
-.s_4d5:	CNST *54
+.s__4d5:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs ________________________ ________________________
 	DATi #0
-.s_BLOCKS4d6:	CNST *54
+.s_BLOCKS_4d6:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs |      BLOCK SIZE      | |     PITCH SHIFT      |
 	DATi #0
-.s_Domain4d7:	CNST *13
+.s_Domain_4d7:	CNST *13
 	DATs Domain error
 	DATi #0

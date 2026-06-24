@@ -364,7 +364,7 @@ fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:15
 	$NUM:	INPi
 	$numString:	LOCA *3
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_Fatale4d2 	; output("Fatal error ")
+		MOVp %1 &.s_Fatale_4d2 	; output("Fatal error ")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 299:24
 		DIVi %0 $NUM #10	; numString[0] = '0' + NUM / 10
 		ADDi $numString:0 #'0' %0
@@ -373,7 +373,7 @@ fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:15
 		MOVi $numString:2 #0 	; numString[2] = 0
 		ADRL %1 $numString *0	; output(numString)
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 303:19
-		MOVp %1 &.s_Seesou4d3 	; output(".  See source code for interpretation.\n")
+		MOVp %1 &.s_Seesou_4d3 	; output(".  See source code for interpretation.\n")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 304:52
 		CALL ^abort %0 *1	; expects abort() -> unknown @ 305:9
 		RETU   	; }
@@ -737,7 +737,7 @@ fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
 ;-----------------------------------------------------------------------------
 		PEEK %1 &LNLENG 	; if(!(global LNLENG != 0)) 
 		NEQi %1 #0 @.f0
-		MOVp %1 &.s_Seesou4d3:38 	; output("\n")
+		MOVp %1 &.s_Seesou_4d3:38 	; output("\n")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 577:15
 		GOTO @return  	; goto return
 	.f0:	PEEK %0 &MAP2:1 	; if((int)global MAP2[1] == 0)fMPINIT()
@@ -757,7 +757,7 @@ fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
 		POKE &INLINE %0 #0
 		ADDp %1 &INLINE #1	; output(global INLINE+1)
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 586:25
-		MOVp %1 &.s_Seesou4d3:38 	; output("\n")
+		MOVp %1 &.s_Seesou_4d3:38 	; output("\n")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 586:39
 	return:	RETU   	; }
 
@@ -3422,7 +3422,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ 1641:17
 		GOTO @return  	; goto return
 		GOTO @.e7  	; }
 	.s6#29:	NOOP
-	.s6#30:	MOVp %1 &.s_SorryF4d4 	; output("Sorry. File operationrs are disabled.\n")
+	.s6#30:	MOVp %1 &.s_SorryF_4d4 	; output("Sorry. File operationrs are disabled.\n")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1960:55
 		POKE &gK #NUL 	; global gK = NUL
 		MOVi $goValue #GOTO8 	; goValue = GOTO8
@@ -5325,12 +5325,12 @@ main:	FUNC	; signature func main() -> void @ 2207:15
 		GOTO @L2000  	; goto L2000
 		RETU   	; }
 
-.s_Fatale4d2:	CNST *13
+.s_Fatale_4d2:	CNST *13
 	DATs Fatal error
 	DATi #32 #0
-.s_Seesou4d3:	CNST *40
+.s_Seesou_4d3:	CNST *40
 	DATs .  See source code for interpretation.
 	DATi #10 #0
-.s_SorryF4d4:	CNST *39
+.s_SorryF_4d4:	CNST *39
 	DATs Sorry. File operationrs are disabled.
 	DATi #10 #0

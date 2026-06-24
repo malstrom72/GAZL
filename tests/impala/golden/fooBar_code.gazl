@@ -5,9 +5,9 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
-	DATA &.s_stdREV4d2 &.s_fastCR4d3 &.s_slowCH4d4
-	DATA &.s_rndAK44d5 &.s_16164d6 &.s_32164d7 &.s_884d8
-	DATA &.s_168Gat4d9
+	DATA &.s_stdREV_4d2 &.s_fastCR_4d3 &.s_slowCH_4d4
+	DATA &.s_rndAK4_4d5 &.s_1616_4d6 &.s_3216_4d7 &.s_88_4d8
+	DATA &.s_168Gat_4d9
 ; signature extern native abort() -> unknown @ 40:1
 ; signature extern native trace() -> unknown @ 41:1
 ; signature extern native yield() -> unknown @ 42:1
@@ -124,7 +124,7 @@ dirXor:	DATi #0x0	; signature global dirXor : int @ 161:24
 reset:	FUNC	; signature func reset() -> void @ 171:16
 		PARA *1
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_reset4da 	; trace("reset")
+		MOVp %1 &.s_reset_4da 	; trace("reset")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 173:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
@@ -144,7 +144,7 @@ update:	FUNC	; signature func update() -> void @ 184:17
 	$fxs:	LOCA *8
 	$fxCountFloat:	LOCf
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_update4db 	; trace("update")
+		MOVp %1 &.s_update_4db 	; trace("update")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 196:17
 		POKE &dirXor #0 	; global dirXor = 0
 		PEEK %0 &params:SWITCHES_PARAM_INDEX 	; if (((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_REVERSE_MASK) != 0) 
@@ -244,7 +244,7 @@ init:	FUNC	; signature func init() -> void @ 273:15
 	$s:	LOCi
 	$t:	LOCi
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_init4dc 	; trace("init")
+		MOVp %1 &.s_init_4dc 	; trace("init")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 276:15
 		CALL &update %0 *1	; expects update() -> void @ 277:10
 		MOVp $p &FX_PARAMS 	; p = global FX_PARAMS
@@ -533,36 +533,36 @@ process:	FUNC	; signature func process() -> void @ 311:18
 		GOTO @.l0  	; }
 		RETU   	; }
 
-.s_stdREV4d2:	CNST *25
+.s_stdREV_4d2:	CNST *25
 	DATs std  REVERSE     STRETCH
 	DATi #0
-.s_fastCR4d3:	CNST *50
+.s_fastCR_4d3:	CNST *50
 	DATs fast |  CRUSH    |  PITCH    <--- Enabled Effects
 	DATi #0
-.s_slowCH4d4:	CNST *53
+.s_slowCH_4d4:	CNST *53
 	DATs slow |  |  CHOP  |  |  SLOW    _____________________
 	DATi #0
-.s_rndAK44d5:	CNST *54
+.s_rndAK4_4d5:	CNST *54
 	DATs rnd  |  |  | AK47|  |  | STOP /  Random Order Seed  \
 	DATi #0
-.s_16164d6:	CNST *6
+.s_1616_4d6:	CNST *6
 	DATs 16/16
 	DATi #0
-.s_32164d7:	CNST *6
+.s_3216_4d7:	CNST *6
 	DATs 32/16
 	DATi #0
-.s_884d8:	CNST *53
+.s_88_4d8:	CNST *53
 	DATs 8/8   ______________________________________________
 	DATi #0
-.s_168Gat4d9:	CNST *54
+.s_168Gat_4d9:	CNST *54
 	DATs 16/8 /  Gates (prev step off = trigger new effect)  \
 	DATi #0
-.s_reset4da:	CNST *6
+.s_reset_4da:	CNST *6
 	DATs reset
 	DATi #0
-.s_update4db:	CNST *7
+.s_update_4db:	CNST *7
 	DATs update
 	DATi #0
-.s_init4dc:	CNST *5
+.s_init_4dc:	CNST *5
 	DATs init
 	DATi #0

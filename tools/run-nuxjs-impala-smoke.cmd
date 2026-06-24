@@ -21,6 +21,7 @@ IF NOT DEFINED NUXJS_EXE (
 )
 
 SET "OUTPUT=%TEMP%\gazl-nuxjs-smoke-%RANDOM%-%RANDOM%.gazl"
+SET "LABEL_SOURCE=%TEMP%\gazl-nuxjs-label-%RANDOM%-%RANDOM%.impala"
 SET "INVALID_SOURCE=%TEMP%\gazl-nuxjs-invalid-%RANDOM%-%RANDOM%.impala"
 SET "ERROR_LOG=%TEMP%\gazl-nuxjs-error-%RANDOM%-%RANDOM%.log"
 
@@ -28,6 +29,7 @@ CALL "%NUXJS_EXE%" "%CD%\impala\impala.nuxjs.js" "%CD%\impala\testdata\smoke.imp
 SET "STATUS=%ERRORLEVEL%"
 IF NOT "%STATUS%"=="0" (
   DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
   DEL "%INVALID_SOURCE%" >NUL 2>NUL
   DEL "%ERROR_LOG%" >NUL 2>NUL
   EXIT /b %STATUS%
@@ -38,6 +40,46 @@ DEL "%OUTPUT%" >NUL 2>NUL
 
 IF "%OUTPUT_SIZE%"=="0" (
   ECHO NuXJS smoke test produced no output.
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
+  EXIT /b 1
+)
+
+(
+  ECHO readonly array panelTextRows[1] = {
+  ECHO 	"GRBLEN"
+  ECHO }
+  ECHO.
+  ECHO function main^(^)
+  ECHO {
+  ECHO }
+) > "%LABEL_SOURCE%"
+
+CALL "%NUXJS_EXE%" "%CD%\impala\impala.nuxjs.js" "%LABEL_SOURCE%" "%OUTPUT%" -845775591 evighet_code.impala "%CD%\impala\impalaCompiler.js"
+SET "STATUS=%ERRORLEVEL%"
+IF NOT "%STATUS%"=="0" (
+  DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
+  EXIT /b %STATUS%
+)
+
+FINDSTR /C:".s_GRBLEN_cd967d19" "%OUTPUT%" >NUL
+IF ERRORLEVEL 1 (
+  ECHO NuXJS smoke test did not emit an unsigned hex string label.
+  DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
+  EXIT /b 1
+)
+FINDSTR /R /C:"\.s_GRBLEN.*-" "%OUTPUT%" >NUL
+IF NOT ERRORLEVEL 1 (
+  ECHO NuXJS smoke test emitted a string label containing '-' (invalid GAZL identifier character).
+  DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
   DEL "%INVALID_SOURCE%" >NUL 2>NUL
   DEL "%ERROR_LOG%" >NUL 2>NUL
   EXIT /b 1
@@ -55,6 +97,7 @@ CALL "%NUXJS_EXE%" "%CD%\impala\impala.nuxjs.js" "%INVALID_SOURCE%" - > "%ERROR_
 IF "%ERRORLEVEL%"=="0" (
   ECHO NuXJS smoke test expected invalid Impala source to fail.
   DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
   DEL "%INVALID_SOURCE%" >NUL 2>NUL
   DEL "%ERROR_LOG%" >NUL 2>NUL
   EXIT /b 1
@@ -65,6 +108,7 @@ IF ERRORLEVEL 1 (
   ECHO NuXJS smoke test did not preserve the Impala diagnostic.
   TYPE "%ERROR_LOG%"
   DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
   DEL "%INVALID_SOURCE%" >NUL 2>NUL
   DEL "%ERROR_LOG%" >NUL 2>NUL
   EXIT /b 1
@@ -74,12 +118,14 @@ IF NOT ERRORLEVEL 1 (
   ECHO NuXJS smoke test hit an incompatible Number.isFinite diagnostic path.
   TYPE "%ERROR_LOG%"
   DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
   DEL "%INVALID_SOURCE%" >NUL 2>NUL
   DEL "%ERROR_LOG%" >NUL 2>NUL
   EXIT /b 1
 )
 
 DEL "%OUTPUT%" >NUL 2>NUL
+DEL "%LABEL_SOURCE%" >NUL 2>NUL
 DEL "%INVALID_SOURCE%" >NUL 2>NUL
 DEL "%ERROR_LOG%" >NUL 2>NUL
 

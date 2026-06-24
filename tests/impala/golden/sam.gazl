@@ -5,9 +5,9 @@ FALSE:	! DEFi #0	; signature const FALSE : int @ 9:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 10:1
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 12:1
 panelTextRows:	GLOB *8	; signature array panelTextRows[8] : unknown @ 40:31
-	DATA &.s_5Khz4d2 &.s_114d3 &.s_224d4 &.s_44SPEE4d5
-	DATA &.s_ONCE4d6 &.s_LOOPcl4d7 &.s_LOOPcl4d7:52
-	DATA &.s_MOUTHT4d8
+	DATA &.s_5Khz_4d2 &.s_11_4d3 &.s_22_4d4 &.s_44SPEE_4d5
+	DATA &.s_ONCE_4d6 &.s_LOOPcl_4d7 &.s_LOOPcl_4d7:52
+	DATA &.s_MOUTHT_4d8
 params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 53:1
 CONFIG_STRING_MAX_SIZE:	! DEFi #100	; signature const CONFIG_STRING_MAX_SIZE : int @ 53:39
 	GLOB *1
@@ -15,7 +15,7 @@ clock:	DATi #0	; signature global clock : int @ 55:17
 signal:	GLOB *2	; signature array signal[2] : unknown @ 56:23
 config:	GLOB *CONFIG_STRING_MAX_SIZE	; signature array config[CONFIG_STRING_MAX_SIZE] : unknown @ 57:44
 	GLOB *1
-configText:	DATp &.s_Enters4d9	; signature global configText : ptr @ 58:88
+configText:	DATp &.s_Enters_4d9	; signature global configText : ptr @ 58:88
 	! ADDi <A> #CONFIG_STRING_MAX_SIZE #20
 dynamicPanelTextRow:	GLOB *<A>	; signature array dynamicPanelTextRow[<A>] : unknown @ 59:62
 	CNST *1
@@ -682,7 +682,7 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ 333:25
 		GRTi #65 $currentChar @.f14
 		! ADDi <A> #65 #26
 		LSSi $currentChar <A> @.a13
-	.f14:	MOVp %1 &.a_65curr4d2 
+	.f14:	MOVp %1 &.a_65curr_4d2 
 		CALL ^assertFail %0 *1
 	.a13:	SUBi %0 $currentChar #65	; p = &global rules[(int)global rulesOffsets[currentChar - 65]]
 		PEEK %0 &rulesOffsets %0
@@ -1353,7 +1353,7 @@ outputSample:	FUNC	; signature func outputSample(int delayIndex, int sample) -> 
 		! EQUi #DEBUG #0 @.a0	; assert(0 <= sample && sample < 16)
 		GRTi #0 $sample @.f1
 		LSSi $sample #16 @.a0
-	.f1:	MOVp %1 &.a_0sampl4d3 
+	.f1:	MOVp %1 &.a_0sampl_4d3 
 		CALL ^assertFail %0 *1
 	.a0:	PEEK %0 &oldtimetableindex 	; delay = (int)global timetable[global oldtimetableindex * 5 + delayIndex]
 		MULi %0 %0 #5
@@ -1782,7 +1782,7 @@ Code48619:	FUNC	; signature func Code48619() -> void @ 1606:20
 		! EQUi #DEBUG #0 @.a10	; assert(0 <= A && A <= 255)
 		GRTi #0 $A @.f11
 		LEQi $A #255 @.a10
-	.f11:	MOVp %1 &.a_0AA2554d4 
+	.f11:	MOVp %1 &.a_0AA255_4d4 
 		CALL ^assertFail %0 *1
 	.a10:	POKE &phonemeLength $X $A	; (int)global phonemeLength[X] = A
 	.f7:	ADDi $X $X #1	; X = X + 1
@@ -1841,7 +1841,7 @@ Code48619:	FUNC	; signature func Code48619() -> void @ 1606:20
 		SUBi %1 $X #1
 		PEEK %1 &phonemeLength %1
 		LEQi %1 #255 @.e26
-	.f25:	MOVp %1 &.a_0intgl4d5 
+	.f25:	MOVp %1 &.a_0intgl_4d5 
 		CALL ^assertFail %0 *1
 	.a24:	NOOP
 	.e23:	NOOP
@@ -2100,7 +2100,7 @@ trans:	FUNC	; signature func trans(int a, int b) -> int @ 1836:16
 		! EQUi #DEBUG #0 @.a3	; assert(carry == 0 || carry == 1)
 		EQUi $carry #0 @.a3
 		EQUi $carry #1 @.a3
-		MOVp %1 &.a_carry04d6 
+		MOVp %1 &.a_carry0_4d6 
 		CALL ^assertFail %0 *1
 	.a3:	SHRi %0 $r #1	; r = (r >> 1) | (carry << 7)
 		SHLi %1 $carry #7
@@ -2111,7 +2111,7 @@ trans:	FUNC	; signature func trans(int a, int b) -> int @ 1836:16
 		! EQUi #DEBUG #0 @.a5	; assert(carry == 0 || carry == 1)
 		EQUi $carry #0 @.a5
 		EQUi $carry #1 @.a5
-		MOVp %1 &.a_carry04d6 
+		MOVp %1 &.a_carry0_4d6 
 		CALL ^assertFail %0 *1
 	.a5:	SHLi %0 $d #1	; d = (d << 1) | carry
 		IORi $d %0 $carry
@@ -2120,7 +2120,7 @@ trans:	FUNC	; signature func trans(int a, int b) -> int @ 1836:16
 		! EQUi #DEBUG #0 @.a7	; assert(carry == 0 || carry == 1)
 		EQUi $carry #0 @.a7
 		EQUi $carry #1 @.a7
-		MOVp %1 &.a_carry04d6 
+		MOVp %1 &.a_carry0_4d6 
 		CALL ^assertFail %0 *1
 	.a7:	SHLi %0 $r #1	; r = (r << 1) | carry
 		IORi $r %0 $carry
@@ -2396,7 +2396,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ 1964:24
 		! EQUi #DEBUG #0 @.a15	; assert(0 <= A && A <= 255)
 		GRTi #0 $A @.f16
 		LEQi $A #255 @.a15
-	.f16:	MOVp %1 &.a_0AA2554d4 
+	.f16:	MOVp %1 &.a_0AA255_4d4 
 		CALL ^assertFail %0 *1
 	.a15:	MOVi $speedcounter $A 	; speedcounter = A
 		SUBi $phase3 $mem49 $phase1	; phase3 = mem49 - phase1
@@ -2427,7 +2427,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ 1964:24
 		! EQUi #DEBUG #0 @.a22	; assert(0 <= Y && Y <= 255)
 		GRTi #0 $Y @.f23
 		LEQi $Y #255 @.a22
-	.f23:	MOVp %2 &.a_0YY2554d7 
+	.f23:	MOVp %2 &.a_0YY255_4d7 
 		CALL ^assertFail %1 *1
 	.a22:	PEEK %1 $p 	; mem53 = (int)(((pointer)*p)[speedcounter]) - (int)(((pointer)*p)[phase3])
 		PEEK %2 $p 
@@ -2466,7 +2466,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ 1964:24
 		! EQUi #DEBUG #0 @.a31	; assert(0 <= Y && Y <= 255)
 		GRTi #0 $Y @.f32
 		LEQi $Y #255 @.a31
-	.f32:	MOVp %2 &.a_0YY2554d7 
+	.f32:	MOVp %2 &.a_0YY255_4d7 
 		CALL ^assertFail %1 *1
 	.a31:	PEEK %1 $p 	; ((pointer)*p)[Y] = mem48
 		POKE %1 $Y $mem48
@@ -2638,7 +2638,7 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		MOVp $p &config 	; p = global config
 		PEEK %0 $p 	; if ((int) *p == 0) 
 		NEQi %0 #0 @.f0
-		MOVp %1 &.s_Thisfi4da 	; trace("This firmware requires a configuration string. E.g. \"reciter HI THERE!\"")
+		MOVp %1 &.s_Thisfi_4da 	; trace("This firmware requires a configuration string. E.g. \"reciter HI THERE!\"")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 2200:85
 		CALL ^abort %0 *1	; expects abort() -> unknown @ 2201:10
 	.f0:	MOVp %1 &dynamicPanelTextRow 	; strcpy(global dynamicPanelTextRow, global panelTextRows[4])
@@ -2648,7 +2648,7 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		MOVp %2 &config 
 		CALL &strcpy %0 *3	; expects strcpy(ptr, ptr) -> ptr @ 2204:55
 		MOVp %1 &dynamicPanelTextRow:6 	; strcat(&global dynamicPanelTextRow[6], "\"")
-		MOVp %2 &.s_Thisfi4da:70 
+		MOVp %2 &.s_Thisfi_4da:70 
 		CALL &strcat %0 *3	; expects strcat(ptr, ptr) -> ptr @ 2205:46
 		POKE &panelTextRows:4 &dynamicPanelTextRow 	; global panelTextRows[4] = global dynamicPanelTextRow
 		PEEK %0 $p 	; if ((int) *p == '!') 
@@ -2669,7 +2669,7 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		NEQi %0 #0 @.f4
 		CALL ^abort %0 *1	; expects abort() -> unknown @ 2216:55
 	.f4:	ADRL %1 $buffer *0	; p = (pointer) stpcpy(buffer, "Phonetic: %")
-		MOVp %2 &.s_Phonet4db 
+		MOVp %2 &.s_Phonet_4db 
 		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 2217:46
 		MOVp $p %0 
 		MOVp %1 $p 	; p = (pointer) stpcpy(p, global input)
@@ -2690,14 +2690,14 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 	.f6:	ADRL %1 $buffer *0	; trace(buffer)
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 2224:16
 	.e3:	MOVp %1 &input 	; strcat(global input, "\u009b")
-		MOVp %2 &.s_4dc 
+		MOVp %2 &.s__4dc 
 		CALL &strcat %0 *3	; expects strcat(ptr, ptr) -> ptr @ 2226:32
 		MOVp %1 &input 	; strcat(global input, "?")
-		MOVp %2 &.s_4dd 
+		MOVp %2 &.s__4dd 
 		CALL &strcat %0 *3	; expects strcat(ptr, ptr) -> ptr @ 2227:27
 		CALL &InitPlayback %0 *1	; expects InitPlayback() -> int @ 2228:27
 		NEQi %0 #0 @.f9
-		MOVp %1 &.s_Couldn4de 	; trace("Couldn't initialize playback. Invalid input?")
+		MOVp %1 &.s_Couldn_4de 	; trace("Couldn't initialize playback. Invalid input?")
 		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 2229:56
 		CALL ^abort %0 *1	; expects abort() -> unknown @ 2230:10
 	.f9:	RETU   	; }
@@ -2790,62 +2790,62 @@ process:	FUNC	; signature func process() -> void @ 2310:18
 	.e7:	GOTO @.l0  	; }
 		RETU   	; }
 
-.s_5Khz4d2:	CNST *5
+.s_5Khz_4d2:	CNST *5
 	DATs 5Khz
 	DATi #0
-.s_114d3:	CNST *3
+.s_11_4d3:	CNST *3
 	DATs 11
 	DATi #0
-.s_224d4:	CNST *3
+.s_22_4d4:	CNST *3
 	DATs 22
 	DATi #0
-.s_44SPEE4d5:	CNST *54
+.s_44SPEE_4d5:	CNST *54
 	DATs 44  |------- SPEED --------| |------- PITCH --------|
 	DATi #0
-.s_ONCE4d6:	CNST *54
+.s_ONCE_4d6:	CNST *54
 	DATs ONCE "
 	DATi #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #32 #0
-.s_LOOPcl4d7:	CNST *54
+.s_LOOPcl_4d7:	CNST *54
 	DATs LOOP      (click here to change speech phrase)
 	DATi #32 #32 #32 #32 #32 #32 #32 #0
-.s_MOUTHT4d8:	CNST *54
+.s_MOUTHT_4d8:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs |------- MOUTH --------| |------- THROAT -------|
 	DATi #0
-.s_Enters4d9:	CNST *58
+.s_Enters_4d9:	CNST *58
 	DATs Enter speech phrase. Begin with % to enter phonetic text.
 	DATi #0
-.s_Thisfi4da:	CNST *72
+.s_Thisfi_4da:	CNST *72
 	DATs This firmware requires a configuration string. E.g. "reciter HI THERE!"
 	DATi #0
-.s_Phonet4db:	CNST *12
+.s_Phonet_4db:	CNST *12
 	DATs Phonetic: %
 	DATi #0
-.s_4dc:	CNST *2
+.s__4dc:	CNST *2
 	DATi #155 #0
-.s_4dd:	CNST *2
+.s__4dd:	CNST *2
 	DATs ?
 	DATi #0
-.s_Couldn4de:	CNST *45
+.s_Couldn_4de:	CNST *45
 	DATs Couldn't initialize playback. Invalid input?
 	DATi #0
 	! EQUi #DEBUG #0 @.noAssertStrings
-.a_65curr4d2:	CNST *45
+.a_65curr_4d2:	CNST *45
 	DATs (65 <= currentChar && currentChar < 65 + 26)
 	DATi #0
-.a_0sampl4d3:	CNST *29
+.a_0sampl_4d3:	CNST *29
 	DATs (0 <= sample && sample < 16)
 	DATi #0
-.a_0AA2554d4:	CNST *21
+.a_0AA255_4d4:	CNST *21
 	DATs (0 <= A && A <= 255)
 	DATi #0
-.a_0intgl4d5:	CNST *79
+.a_0intgl_4d5:	CNST *79
 	DATs (0 <= (int)global phonemeLength[X-1] && (int)global phonemeLength[X-1] <= 255)
 	DATi #0
-.a_carry04d6:	CNST *27
+.a_carry0_4d6:	CNST *27
 	DATs (carry == 0 || carry == 1)
 	DATi #0
-.a_0YY2554d7:	CNST *21
+.a_0YY255_4d7:	CNST *21
 	DATs (0 <= Y && Y <= 255)
 	DATi #0
 .noAssertStrings:	!

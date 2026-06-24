@@ -5,8 +5,8 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 12:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 20:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 20:33
-	DATA &.s_4d2 &.s_4d2 &.s_4d2 &.s_ROOMSI4d3 &.s_4d2 &.s_4d2
-	DATA &.s_4d2 &.s_FEEDBA4d4
+	DATA &.s__4d2 &.s__4d2 &.s__4d2 &.s_ROOMSI_4d3 &.s__4d2
+	DATA &.s__4d2 &.s__4d2 &.s_FEEDBA_4d4
 ; signature extern native abort() -> unknown @ 32:1
 ; signature extern native trace() -> unknown @ 33:1
 ; signature extern native yield() -> unknown @ 34:1
@@ -267,13 +267,13 @@ process:	FUNC	; signature func process() -> void @ 163:18
 		GOTO @.l0  	; }
 		RETU   	; }
 
-.s_4d2:	CNST *2
+.s__4d2:	CNST *2
 	DATi #32 #0
-.s_ROOMSI4d3:	CNST *54
+.s_ROOMSI_4d3:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs |----- ROOM SIZE ------| |----- PRE-DELAY ------|
 	DATi #0
-.s_FEEDBA4d4:	CNST *54
+.s_FEEDBA_4d4:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs |------ FEEDBACK ------| |------ DAMPING -------|
 	DATi #0

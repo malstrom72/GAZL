@@ -123,7 +123,7 @@ upper:	FUNC	; signature func upper(ptr s) -> void @ 74:16
 outputLF:	FUNC	; signature func outputLF() -> void @ 84:19
 		PARA *1
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_4d2 	; output("\n")
+		MOVp %1 &.s__4d2 	; output("\n")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 86:14
 		RETU   	; }
 
@@ -144,15 +144,15 @@ help:	FUNC	; signature func help() -> void @ 95:15
 		PARA *1
 ;-----------------------------------------------------------------------------
 		CALL &outputLF %0 *1	; expects outputLF() -> void @ 97:12
-		MOVp %1 &.s_Typeli4d3 	; outputLine("Type \"list\" to list available firmware patches.")
+		MOVp %1 &.s_Typeli_4d3 	; outputLine("Type \"list\" to list available firmware patches.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 98:65
-		MOVp %1 &.s_Enterp4d4 	; outputLine("Enter patch name to begin firmware patching.")
+		MOVp %1 &.s_Enterp_4d4 	; outputLine("Enter patch name to begin firmware patching.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 99:60
-		MOVp %1 &.s_Presse4d5 	; outputLine("Press enter only to retry last patching.")
+		MOVp %1 &.s_Presse_4d5 	; outputLine("Press enter only to retry last patching.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 100:56
-		MOVp %1 &.s_Typere4d6 	; outputLine("Type \"restore\" to restore factory firmware.")
+		MOVp %1 &.s_Typere_4d6 	; outputLine("Type \"restore\" to restore factory firmware.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 101:61
-		MOVp %1 &.s_Typequ4d7 	; outputLine("Type \"quit\" to quit.")
+		MOVp %1 &.s_Typequ_4d7 	; outputLine("Type \"quit\" to quit.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 102:38
 		CALL &outputLF %0 *1	; expects outputLF() -> void @ 103:12
 		RETU   	; }
@@ -196,7 +196,7 @@ list:	FUNC	; signature func list() -> void @ 119:15
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		CALL &refreshPatchList %0 *1	; expects refreshPatchList() -> void @ 122:20
-		MOVp %1 &.s_Availa4d8 	; output("Available firmwares: ")
+		MOVp %1 &.s_Availa_4d8 	; output("Available firmwares: ")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 123:33
 		MOVi $i #0 	; for (i = 0 to global patchCount) 
 		PEEK %0 &patchCount 
@@ -206,7 +206,7 @@ list:	FUNC	; signature func list() -> void @ 119:15
 		MULi %2 $i <A>
 		ADDp %2 &patchNames %2
 		CALL ^output %1 *2	; expects output(ptr) -> unknown @ 125:62
-		MOVp %2 &.s_Availa4d8:20 	; output(" ")
+		MOVp %2 &.s_Availa_4d8:20 	; output(" ")
 		CALL ^output %1 *2	; expects output(ptr) -> unknown @ 126:14
 		FORi $i %0 @.l1	; }
 	.e0:	CALL &outputLF %0 *1	; expects outputLF() -> void @ 128:12
@@ -219,7 +219,7 @@ restore:	FUNC	; signature func restore() -> void @ 132:18
 		PARA *1
 	$error:	LOCA *256
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_Restor4d9 	; outputLine("Restoring factory firmware. Do not power off...")
+		MOVp %1 &.s_Restor_4d9 	; outputLine("Restoring factory firmware. Do not power off...")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 135:63
 		MOVp %1 &NULL 	; if ((int)patchFirmware(null, null, 255, error) != 0) 
 		MOVp %2 &NULL 
@@ -229,17 +229,17 @@ restore:	FUNC	; signature func restore() -> void @ 132:18
 		EQUi %0 #0 @.f0
 		MOVi %1 #500 	; sleep(500)
 		CALL ^sleep %0 *2	; expects sleep(int) -> unknown @ 138:13
-		MOVp %1 &.s_Patchi4da 	; outputLine("Patching failed.")
+		MOVp %1 &.s_Patchi_4da 	; outputLine("Patching failed.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 139:33
 		ADRL %1 $error *0	; outputLine(error)
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 140:20
 		GOTO @.e1  	; } else 
 	.f0:	MOVi %1 #500 	; sleep(500)
 		CALL ^sleep %0 *2	; expects sleep(int) -> unknown @ 142:13
-		MOVp %1 &.s_Restor4db 	; outputLine("Restore successful.")
+		MOVp %1 &.s_Restor_4db 	; outputLine("Restore successful.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 143:36
-		MOVp %1 &.s_aboutd4dc 	; writeGUIVariable("about.displayedCRC", "0")
-		MOVp %2 &.s_04dd 
+		MOVp %1 &.s_aboutd_4dc 	; writeGUIVariable("about.displayedCRC", "0")
+		MOVp %2 &.s_0_4dd 
 		CALL ^writeGUIVariable %0 *3	; expects writeGUIVariable(ptr, ptr) -> unknown @ 144:46
 	.e1:	CALL &outputLF %0 *1	; expects outputLF() -> void @ 146:12
 		RETU   	; }
@@ -269,7 +269,7 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
 		MOVp %3 $p 
 		CALL &stricmp %1 *3	; expects stricmp(ptr, ptr) -> int @ 156:29
 		NEQi %1 #0 @.f3
-		MOVp %2 &.s_Patchi4de 	; outputLine("Patching firmware. Do not power off...")
+		MOVp %2 &.s_Patchi_4de 	; outputLine("Patching firmware. Do not power off...")
 		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void @ 157:56
 		MOVp %2 $p 	; if ((int)patchFirmware(p, config, 255, buffer1) != 0) 
 		MOVp %3 $config 
@@ -279,7 +279,7 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
 		EQUi %1 #0 @.f4
 		MOVi %2 #500 	; sleep(500)
 		CALL ^sleep %1 *2	; expects sleep(int) -> unknown @ 159:15
-		MOVp %2 &.s_Patchi4df 	; output("Patching failed: ")
+		MOVp %2 &.s_Patchi_4df 	; output("Patching failed: ")
 		CALL ^output %1 *2	; expects output(ptr) -> unknown @ 160:32
 		ADRL %2 $buffer1 *0	; outputLine(buffer1)
 		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void @ 161:24
@@ -287,14 +287,14 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
 		GOTO @.e5  	; } else 
 	.f4:	MOVi %2 #500 	; sleep(500)
 		CALL ^sleep %1 *2	; expects sleep(int) -> unknown @ 164:15
-		MOVp %2 &.s_Patchi4e0 	; outputLine("Patching successful.")
+		MOVp %2 &.s_Patchi_4e0 	; outputLine("Patching successful.")
 		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void @ 165:39
 		CALL &outputLF %1 *1	; expects outputLF() -> void @ 166:15
-		MOVp %2 &.s_firmwa4e1 	; readGUIVariable("firmware.aboutCRC", 255, buffer1)
+		MOVp %2 &.s_firmwa_4e1 	; readGUIVariable("firmware.aboutCRC", 255, buffer1)
 		MOVi %3 #255 
 		ADRL %4 $buffer1 *0
 		CALL ^readGUIVariable %1 *4	; expects readGUIVariable(ptr, int, ptr) -> unknown @ 167:55
-		MOVp %2 &.s_aboutd4dc 	; readGUIVariable("about.displayedCRC", 255, buffer2)
+		MOVp %2 &.s_aboutd_4dc 	; readGUIVariable("about.displayedCRC", 255, buffer2)
 		MOVi %3 #255 
 		ADRL %4 $buffer2 *0
 		CALL ^readGUIVariable %1 *4	; expects readGUIVariable(ptr, int, ptr) -> unknown @ 168:56
@@ -302,10 +302,10 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
 		ADRL %3 $buffer2 *0
 		CALL &strcmp %1 *3	; expects strcmp(ptr, ptr) -> int @ 169:40
 		EQUi %1 #0 @.f6
-		MOVp %2 &.s_aboutd4dc 	; writeGUIVariable("about.displayedCRC", buffer1)
+		MOVp %2 &.s_aboutd_4dc 	; writeGUIVariable("about.displayedCRC", buffer1)
 		ADRL %3 $buffer1 *0
 		CALL ^writeGUIVariable %1 *3	; expects writeGUIVariable(ptr, ptr) -> unknown @ 170:53
-		MOVp %2 &.s_firmwa4e2 	; readGUIVariable("firmware.about", FILE_MEMORY_SIZE - 1, global fileMemory)
+		MOVp %2 &.s_firmwa_4e2 	; readGUIVariable("firmware.about", FILE_MEMORY_SIZE - 1, global fileMemory)
 		SUBi %3 #FILE_MEMORY_SIZE #1
 		MOVp %4 &fileMemory 
 		CALL ^readGUIVariable %1 *4	; expects readGUIVariable(ptr, int, ptr) -> unknown @ 171:80
@@ -317,9 +317,9 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
 	.f6:	PEEK %1 &displayedPatchingInfo 	; if (global displayedPatchingInfo == FALSE) 
 		NEQi %1 #FALSE @.f8
 		POKE &displayedPatchingInfo #TRUE 	; global displayedPatchingInfo = TRUE
-		MOVp %2 &.s_Ifyous4e3 	; outputLine("If you save the Permut8 Program Bank this firmware code will be included.")
+		MOVp %2 &.s_Ifyous_4e3 	; outputLine("If you save the Permut8 Program Bank this firmware code will be included.")
 		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void @ 179:93
-		MOVp %2 &.s_Ifyoum4e4 	; outputLine("If you modify the .gazl file, the firmware will auto-update until GUI is closed.")
+		MOVp %2 &.s_Ifyoum_4e4 	; outputLine("If you modify the .gazl file, the firmware will auto-update until GUI is closed.")
 		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void @ 180:100
 	.f8:	NOOP
 	.e5:	MOVp %2 &lastPatch 	; strcpy(global lastPatch, p)
@@ -330,7 +330,7 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
 		CALL &strcpy %1 *3	; expects strcpy(ptr, ptr) -> ptr @ 184:37
 		GOTO @found  	; goto found
 	.f3:	FORi $i %0 @.l2	; }
-	.e1:	MOVp %1 &.s_Firmwa4e5 	; outputLine("Firmware not found.")
+	.e1:	MOVp %1 &.s_Firmwa_4e5 	; outputLine("Firmware not found.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 189:35
 		CALL &list %0 *1	; expects list() -> void @ 190:8
 	found:	RETU   	; }
@@ -357,27 +357,27 @@ main:	FUNC	; signature func main() -> void @ 201:15
 	$p:	LOCp
 	$c:	LOCi
 ;-----------------------------------------------------------------------------
-		MOVp %1 &.s_Permut4e6 	; output("\nPermut8 firmware patch utility v1.0.\n\n")
+		MOVp %1 &.s_Permut_4e6 	; output("\nPermut8 firmware patch utility v1.0.\n\n")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 204:54
-	.l0:	MOVp %1 &.s_patch4e7 	; output("patch> ")
+	.l0:	MOVp %1 &.s_patch_4e7 	; output("patch> ")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 207:20
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
 		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 208:16
 		ADRL %1 $s *0	; if ((int)stricmp(s, "QUIT") == 0) goto quit
-		MOVp %2 &.s_QUIT4e8 
+		MOVp %2 &.s_QUIT_4e8 
 		CALL &stricmp %0 *3	; expects stricmp(ptr, ptr) -> int @ 209:31
 		NEQi %0 #0 @.f1
 		GOTO @quit  	; goto quit
 		GOTO @.l0  
 	.f1:	ADRL %1 $s *0	; if ((int)stricmp(s, "LIST") == 0) list()
-		MOVp %2 &.s_LIST4e9 
+		MOVp %2 &.s_LIST_4e9 
 		CALL &stricmp %0 *3	; expects stricmp(ptr, ptr) -> int @ 210:36
 		NEQi %0 #0 @.f3
 		CALL &list %0 *1	; expects list() -> void @ 210:48
 		GOTO @.l0  
 	.f3:	ADRL %1 $s *0	; if ((int)stricmp(s, "RESTORE") == 0) restore()
-		MOVp %2 &.s_RESTOR4ea 
+		MOVp %2 &.s_RESTOR_4ea 
 		CALL &stricmp %0 *3	; expects stricmp(ptr, ptr) -> int @ 211:39
 		NEQi %0 #0 @.f5
 		CALL &restore %0 *1	; expects restore() -> void @ 211:54
@@ -386,7 +386,7 @@ main:	FUNC	; signature func main() -> void @ 201:15
 		CALL &repatch %0 *1	; expects repatch() -> void @ 212:37
 		GOTO @.l0  
 	.f7:	ADRL %1 $s *0	; if ((int)stricmp(s, "HELP") == 0) help()
-		MOVp %2 &.s_HELP4eb 
+		MOVp %2 &.s_HELP_4eb 
 		CALL &stricmp %0 *3	; expects stricmp(ptr, ptr) -> int @ 213:36
 		NEQi %0 #0 @.f9
 		CALL &help %0 *1	; expects help() -> void @ 213:48
@@ -413,81 +413,81 @@ main:	FUNC	; signature func main() -> void @ 201:15
 	.e2:	GOTO @.l0  	; }
 	quit:	RETU   	; }
 
-.s_4d2:	CNST *2
+.s__4d2:	CNST *2
 	DATi #10 #0
-.s_Typeli4d3:	CNST *48
+.s_Typeli_4d3:	CNST *48
 	DATs Type "list" to list available firmware patches.
 	DATi #0
-.s_Enterp4d4:	CNST *45
+.s_Enterp_4d4:	CNST *45
 	DATs Enter patch name to begin firmware patching.
 	DATi #0
-.s_Presse4d5:	CNST *41
+.s_Presse_4d5:	CNST *41
 	DATs Press enter only to retry last patching.
 	DATi #0
-.s_Typere4d6:	CNST *44
+.s_Typere_4d6:	CNST *44
 	DATs Type "restore" to restore factory firmware.
 	DATi #0
-.s_Typequ4d7:	CNST *21
+.s_Typequ_4d7:	CNST *21
 	DATs Type "quit" to quit.
 	DATi #0
-.s_Availa4d8:	CNST *22
+.s_Availa_4d8:	CNST *22
 	DATs Available firmwares:
 	DATi #32 #0
-.s_Restor4d9:	CNST *48
+.s_Restor_4d9:	CNST *48
 	DATs Restoring factory firmware. Do not power off...
 	DATi #0
-.s_Patchi4da:	CNST *17
+.s_Patchi_4da:	CNST *17
 	DATs Patching failed.
 	DATi #0
-.s_Restor4db:	CNST *20
+.s_Restor_4db:	CNST *20
 	DATs Restore successful.
 	DATi #0
-.s_aboutd4dc:	CNST *19
+.s_aboutd_4dc:	CNST *19
 	DATs about.displayedCRC
 	DATi #0
-.s_04dd:	CNST *2
+.s_0_4dd:	CNST *2
 	DATs 0
 	DATi #0
-.s_Patchi4de:	CNST *39
+.s_Patchi_4de:	CNST *39
 	DATs Patching firmware. Do not power off...
 	DATi #0
-.s_Patchi4df:	CNST *18
+.s_Patchi_4df:	CNST *18
 	DATs Patching failed:
 	DATi #32 #0
-.s_Patchi4e0:	CNST *21
+.s_Patchi_4e0:	CNST *21
 	DATs Patching successful.
 	DATi #0
-.s_firmwa4e1:	CNST *18
+.s_firmwa_4e1:	CNST *18
 	DATs firmware.aboutCRC
 	DATi #0
-.s_firmwa4e2:	CNST *15
+.s_firmwa_4e2:	CNST *15
 	DATs firmware.about
 	DATi #0
-.s_Ifyous4e3:	CNST *74
+.s_Ifyous_4e3:	CNST *74
 	DATs If you save the Permut8 Program Bank this firmware code will be included.
 	DATi #0
-.s_Ifyoum4e4:	CNST *81
+.s_Ifyoum_4e4:	CNST *81
 	DATs If you modify the .gazl file, the firmware will auto-update until GUI is closed.
 	DATi #0
-.s_Firmwa4e5:	CNST *20
+.s_Firmwa_4e5:	CNST *20
 	DATs Firmware not found.
 	DATi #0
-.s_Permut4e6:	CNST *40
+.s_Permut_4e6:	CNST *40
 	DATi #10
 	DATs Permut8 firmware patch utility v1.0.
 	DATi #10 #10 #0
-.s_patch4e7:	CNST *8
+.s_patch_4e7:	CNST *8
 	DATs patch>
 	DATi #32 #0
-.s_QUIT4e8:	CNST *5
+.s_QUIT_4e8:	CNST *5
 	DATs QUIT
 	DATi #0
-.s_LIST4e9:	CNST *5
+.s_LIST_4e9:	CNST *5
 	DATs LIST
 	DATi #0
-.s_RESTOR4ea:	CNST *8
+.s_RESTOR_4ea:	CNST *8
 	DATs RESTORE
 	DATi #0
-.s_HELP4eb:	CNST *5
+.s_HELP_4eb:	CNST *5
 	DATs HELP
 	DATi #0

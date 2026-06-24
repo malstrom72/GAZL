@@ -1746,7 +1746,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             var name = '.' + prefix + '_' +
                        (s.replace(/[^0-9a-zA-Z]/g, '')
                           .substr(0, 6)) +
-                       ( (randomId + tbl.length)
+                       '_' +
+                       ( ((randomId + tbl.length) >>> 0)
                          .toString(16) );
 
             if (noForward) {

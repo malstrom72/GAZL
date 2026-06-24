@@ -8,7 +8,7 @@ FILE_TYPE_SYS:	! DEFi #1	; signature const FILE_TYPE_SYS : int @ 12:1
 FILE_TYPE_TXT:	! DEFi #2	; signature const FILE_TYPE_TXT : int @ 13:1
 FILE_TYPE_BIN:	! DEFi #3	; signature const FILE_TYPE_BIN : int @ 14:1
 FILE_TYPE_STRINGS:	CNST *FILE_TYPE_COUNT	; signature array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] : unknown @ 14:51
-	DATA &.s_exe4d2 &.s_sys4d3 &.s_txt4d4 &.s_bin4d5
+	DATA &.s_exe_4d2 &.s_sys_4d3 &.s_txt_4d4 &.s_bin_4d5
 FILE_FIELD_NAME:	! DEFi #0	; signature const FILE_FIELD_NAME : int @ 19:1
 FILE_FIELD_TYPE:	! DEFi #1	; signature const FILE_FIELD_TYPE : int @ 20:1
 FILE_FIELD_SIZE:	! DEFi #2	; signature const FILE_FIELD_SIZE : int @ 21:1
@@ -21,20 +21,20 @@ BUILT_IN_FILE_COUNT:	! DEFi #14	; signature const BUILT_IN_FILE_COUNT : int @ 27
 fileCount:	DATi #BUILT_IN_FILE_COUNT	; signature global fileCount : int @ 29:1
 	! MULi <A> #MAX_FILE_COUNT #FILE_FIELD_COUNT
 FILES:	GLOB *<A>	; signature array FILES[<A>] : unknown @ 29:55
-	DATA &.s_about4d6 #FILE_TYPE_TXT #2 &.s_1113844d7
-	DATA &.s_advent4d8 #FILE_TYPE_EXE #91 &.s_221784d9
-	DATA &.s_blupri4da #FILE_TYPE_TXT #2 &.s_65794db
-	DATA &.s_calc4dc #FILE_TYPE_EXE #7 &.s_1125774dd
-	DATA &.s_chess4de #FILE_TYPE_EXE #16 &.s_36844df
-	DATA &.s_disasm4e0 #FILE_TYPE_EXE #4 &.s_1125774dd
-	DATA &.s_fredri4e1 #FILE_TYPE_TXT #5 &.s_714844e2
-	DATA &.s_life4e3 #FILE_TYPE_EXE #5 &.s_312794e4
-	DATA &.s_magnus4e5 #FILE_TYPE_TXT #5 &.s_622844e6
-	DATA &.s_patch4e7 #FILE_TYPE_EXE #3 &.s_218844e8
-	DATA &.s_permut4e9 #FILE_TYPE_SYS #82 &.s_31834ea
-	DATA &.s_prawno4eb #FILE_TYPE_SYS #58 &.s_1011844ec
-	DATA &.s_readme4ed #FILE_TYPE_TXT #2 &.s_1214794ee
-	DATA &.s_versio4ef #FILE_TYPE_TXT #1 &.s_1113844d7
+	DATA &.s_about_4d6 #FILE_TYPE_TXT #2 &.s_111384_4d7
+	DATA &.s_advent_4d8 #FILE_TYPE_EXE #91 &.s_22178_4d9
+	DATA &.s_blupri_4da #FILE_TYPE_TXT #2 &.s_6579_4db
+	DATA &.s_calc_4dc #FILE_TYPE_EXE #7 &.s_112577_4dd
+	DATA &.s_chess_4de #FILE_TYPE_EXE #16 &.s_3684_4df
+	DATA &.s_disasm_4e0 #FILE_TYPE_EXE #4 &.s_112577_4dd
+	DATA &.s_fredri_4e1 #FILE_TYPE_TXT #5 &.s_71484_4e2
+	DATA &.s_life_4e3 #FILE_TYPE_EXE #5 &.s_31279_4e4
+	DATA &.s_magnus_4e5 #FILE_TYPE_TXT #5 &.s_62284_4e6
+	DATA &.s_patch_4e7 #FILE_TYPE_EXE #3 &.s_21884_4e8
+	DATA &.s_permut_4e9 #FILE_TYPE_SYS #82 &.s_3183_4ea
+	DATA &.s_prawno_4eb #FILE_TYPE_SYS #58 &.s_101184_4ec
+	DATA &.s_readme_4ed #FILE_TYPE_TXT #2 &.s_121479_4ee
+	DATA &.s_versio_4ef #FILE_TYPE_TXT #1 &.s_111384_4d7
 	! ADDi <A> #MAX_FILE_NAME_LENGTH #1
 	! MULi <A> #MAX_FILE_COUNT <A>
 FILE_NAMES:	GLOB *<A>	; signature array FILE_NAMES[<A>] : unknown @ 45:69
@@ -124,7 +124,7 @@ initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ 80:
 		! EQUi #DEBUG #0 @.a1	; assert(global fileCount == BUILT_IN_FILE_COUNT)
 		PEEK %0 &fileCount 
 		EQUi %0 #BUILT_IN_FILE_COUNT @.a1
-		MOVp %1 &.a_global4d2 
+		MOVp %1 &.a_global_4d2 
 		CALL ^assertFail %0 *1
 	.a1:	MOVi $index #0 	; index = 0
 		! MULi <A> #BUILT_IN_FILE_COUNT #FILE_FIELD_COUNT	; filePointer = &global FILES[BUILT_IN_FILE_COUNT * FILE_FIELD_COUNT]
@@ -153,20 +153,20 @@ initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ 80:
 		! EQUi #DEBUG #0 @.a5	; assert(filePointer < &global FILES[MAX_FILE_COUNT * FILE_FIELD_COUNT])
 		! MULi <A> #MAX_FILE_COUNT #FILE_FIELD_COUNT
 		LSSp $filePointer &FILES:<A> @.a5
-		MOVp %1 &.a_filePo4d3 
+		MOVp %1 &.a_filePo_4d3 
 		CALL ^assertFail %0 *1
 	.a5:	NOOP
 		! EQUi #DEBUG #0 @.a6	; assert(namePointer < &global FILE_NAMES[MAX_FILE_COUNT * (MAX_FILE_NAME_LENGTH + 1)])
 		! ADDi <A> #MAX_FILE_NAME_LENGTH #1
 		! MULi <A> #MAX_FILE_COUNT <A>
 		LSSp $namePointer &FILE_NAMES:<A> @.a6
-		MOVp %1 &.a_namePo4d4 
+		MOVp %1 &.a_namePo_4d4 
 		CALL ^assertFail %0 *1
 	.a6:	NOOP
 		! EQUi #DEBUG #0 @.a7	; assert(datePointer < &global FILE_DATES[MAX_FILE_COUNT * 9])
 		! MULi <A> #MAX_FILE_COUNT #9
 		LSSp $datePointer &FILE_DATES:<A> @.l2
-		MOVp %1 &.a_datePo4d5 
+		MOVp %1 &.a_datePo_4d5 
 		CALL ^assertFail %0 *1
 	.a7:	GOTO @.l2  	; }
 	.e3:	ADDi %0 #BUILT_IN_FILE_COUNT $index	; global fileCount = BUILT_IN_FILE_COUNT + index
@@ -216,115 +216,115 @@ lower:	FUNC	; signature func lower(ptr s) -> void @ 122:16
 		GOTO @.l0  	; }
 	.e1:	RETU   	; }
 
-.s_exe4d2:	CNST *4
+.s_exe_4d2:	CNST *4
 	DATs exe
 	DATi #0
-.s_sys4d3:	CNST *4
+.s_sys_4d3:	CNST *4
 	DATs sys
 	DATi #0
-.s_txt4d4:	CNST *4
+.s_txt_4d4:	CNST *4
 	DATs txt
 	DATi #0
-.s_bin4d5:	CNST *4
+.s_bin_4d5:	CNST *4
 	DATs bin
 	DATi #0
-.s_about4d6:	CNST *6
+.s_about_4d6:	CNST *6
 	DATs about
 	DATi #0
-.s_1113844d7:	CNST *9
+.s_111384_4d7:	CNST *9
 	DATs 11/13/84
 	DATi #0
-.s_advent4d8:	CNST *7
+.s_advent_4d8:	CNST *7
 	DATs advent
 	DATi #0
-.s_221784d9:	CNST *9
+.s_22178_4d9:	CNST *9
 	DATi #32
 	DATs 2/21/78
 	DATi #0
-.s_blupri4da:	CNST *9
+.s_blupri_4da:	CNST *9
 	DATs bluprint
 	DATi #0
-.s_65794db:	CNST *9
+.s_6579_4db:	CNST *9
 	DATi #32
 	DATs 6/ 5/79
 	DATi #0
-.s_calc4dc:	CNST *5
+.s_calc_4dc:	CNST *5
 	DATs calc
 	DATi #0
-.s_1125774dd:	CNST *9
+.s_112577_4dd:	CNST *9
 	DATs 11/25/77
 	DATi #0
-.s_chess4de:	CNST *6
+.s_chess_4de:	CNST *6
 	DATs chess
 	DATi #0
-.s_36844df:	CNST *9
+.s_3684_4df:	CNST *9
 	DATi #32
 	DATs 3/ 6/84
 	DATi #0
-.s_disasm4e0:	CNST *7
+.s_disasm_4e0:	CNST *7
 	DATs disasm
 	DATi #0
-.s_fredri4e1:	CNST *8
+.s_fredri_4e1:	CNST *8
 	DATs fredrik
 	DATi #0
-.s_714844e2:	CNST *9
+.s_71484_4e2:	CNST *9
 	DATi #32
 	DATs 7/14/84
 	DATi #0
-.s_life4e3:	CNST *5
+.s_life_4e3:	CNST *5
 	DATs life
 	DATi #0
-.s_312794e4:	CNST *9
+.s_31279_4e4:	CNST *9
 	DATi #32
 	DATs 3/12/79
 	DATi #0
-.s_magnus4e5:	CNST *7
+.s_magnus_4e5:	CNST *7
 	DATs magnus
 	DATi #0
-.s_622844e6:	CNST *9
+.s_62284_4e6:	CNST *9
 	DATi #32
 	DATs 6/22/84
 	DATi #0
-.s_patch4e7:	CNST *6
+.s_patch_4e7:	CNST *6
 	DATs patch
 	DATi #0
-.s_218844e8:	CNST *9
+.s_21884_4e8:	CNST *9
 	DATi #32
 	DATs 2/18/84
 	DATi #0
-.s_permut4e9:	CNST *8
+.s_permut_4e9:	CNST *8
 	DATs permut8
 	DATi #0
-.s_31834ea:	CNST *9
+.s_3183_4ea:	CNST *9
 	DATi #32
 	DATs 3/ 1/83
 	DATi #0
-.s_prawno4eb:	CNST *8
+.s_prawno_4eb:	CNST *8
 	DATs prawnos
 	DATi #0
-.s_1011844ec:	CNST *9
+.s_101184_4ec:	CNST *9
 	DATs 10/11/84
 	DATi #0
-.s_readme4ed:	CNST *7
+.s_readme_4ed:	CNST *7
 	DATs readme
 	DATi #0
-.s_1214794ee:	CNST *9
+.s_121479_4ee:	CNST *9
 	DATs 12/14/79
 	DATi #0
-.s_versio4ef:	CNST *8
+.s_versio_4ef:	CNST *8
 	DATs version
 	DATi #0
 	! EQUi #DEBUG #0 @.noAssertStrings
-.a_global4d2:	CNST *42
+.a_global_4d2:	CNST *42
 	DATs (global fileCount == BUILT_IN_FILE_COUNT)
 	DATi #0
-.a_filePo4d3:	CNST *65
+.a_filePo_4d3:	CNST *65
 	DATs (filePointer < &global FILES[MAX_FILE_COUNT * FILE_FIELD_COUNT])
 	DATi #0
-.a_namePo4d4:	CNST *80
+.a_namePo_4d4:	CNST *80
 	DATs (namePointer < &global FILE_NAMES[MAX_FILE_COUNT * (MAX_FILE_NAME_LENGTH + 1)])
 	DATi #0
-.a_datePo4d5:	CNST *55
+.a_datePo_4d5:	CNST *55
 	DATs (datePointer < &global FILE_DATES[MAX_FILE_COUNT * 9])
 	DATi #0
 .noAssertStrings:	!

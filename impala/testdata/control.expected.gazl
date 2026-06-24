@@ -1,14 +1,14 @@
  ; Compiled with Impala version 1.0
 
  ; signatures version=1
- .s_ABCD2a:			CNST *5
+ .s_ABCD_2a:		CNST *5
  					DATs ABCD
  					DATi #0
- SOURCE:			! DEFp &.s_ABCD2a ; signature const SOURCE : ptr @ 1:30
- .s_WXYZ2a:			CNST *5
+ SOURCE:			! DEFp &.s_ABCD_2a ; signature const SOURCE : ptr @ 1:30
+ .s_WXYZ_2a:		CNST *5
  					DATs WXYZ
  					DATi #0
- TARGET:			! DEFp &.s_WXYZ2a ; signature const TARGET : ptr @ 2:30
+ TARGET:			! DEFp &.s_WXYZ_2a ; signature const TARGET : ptr @ 2:30
 
  ;-----------------------------------------------------------------------------
  controlSample:		FUNC		; signature func controlSample() -> int @ 4:24

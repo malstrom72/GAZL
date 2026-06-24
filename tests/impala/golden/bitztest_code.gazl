@@ -5,8 +5,8 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
-	DATA &.s_Sillyr4d2 &.s_4d3 &.s_4d3 &.s_LEFTDE4d4 &.s_4d3
-	DATA &.s_4d3 &.s_4d3 &.s_RINGMO4d5
+	DATA &.s_Sillyr_4d2 &.s__4d3 &.s__4d3 &.s_LEFTDE_4d4
+	DATA &.s__4d3 &.s__4d3 &.s__4d3 &.s_RINGMO_4d5
 ; signature extern native abort() -> unknown @ 39:1
 ; signature extern native trace() -> unknown @ 40:1
 ; signature extern native yield() -> unknown @ 41:1
@@ -91,17 +91,17 @@ process:	FUNC	; signature func process() -> void @ 138:18
 		GOTO @.l0  	; }
 		RETU   	; }
 
-.s_Sillyr4d2:	CNST *52
+.s_Sillyr_4d2:	CNST *52
 	DATi #32 #32 #32
 	DATs Silly ring-modulator firmware demo by M Lidstrom
 	DATi #0
-.s_4d3:	CNST *2
+.s__4d3:	CNST *2
 	DATi #32 #0
-.s_LEFTDE4d4:	CNST *54
+.s_LEFTDE_4d4:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs |----- LEFT DELAY -----| |----- RIGHT DELAY ----|
 	DATi #0
-.s_RINGMO4d5:	CNST *54
+.s_RINGMO_4d5:	CNST *54
 	DATi #32 #32 #32 #32
 	DATs |--- RING MOD RATE ----| |---- STEREO PHASE ----|
 	DATi #0

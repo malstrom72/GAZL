@@ -24,14 +24,14 @@ SOME_CONSTS:	CNST *SOME_COUNT	; signature array SOME_CONSTS[SOME_COUNT] : unknow
 ; signature extern array futureArray[] : unknown @ 101:25
 ; signature extern func thisFunctionInAnotherSource() -> unknown @ 103:44
 ; signature extern native abort() -> unknown @ 107:20
-.s_Welcom4d2:	CNST *20
+.s_Welcom_4d2:	CNST *20
 	DATs Welcome to Impala!
 	DATi #10 #0
-WELCOME:	! DEFp &.s_Welcom4d2	; signature const WELCOME : ptr @ 116:1
+WELCOME:	! DEFp &.s_Welcom_4d2	; signature const WELCOME : ptr @ 116:1
 VARIOUS_LITERALS:	CNST *15	; signature array VARIOUS_LITERALS[15] : unknown @ 116:37
 	DATA #123 #-393 #+494 #0xAA55 #-0x1F2E3C4D #'A' #-''
-	DATA #'ROFL' #34.0 #-123.0e10 #256.11E-10 &.s_string4d2
-	DATA &.s_allesc4d3 &NULL &NULL
+	DATA #'ROFL' #34.0 #-123.0e10 #256.11E-10 &.s_string_4d2
+	DATA &.s_allesc_4d3 &NULL &NULL
 
 ;-----------------------------------------------------------------------------
 abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void @ 138:22
@@ -184,13 +184,13 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:18
 		! EQUi #DEBUG #0 @.a9	; assert((pointer)global initedArray[2] == &global futureArray[4])
 		PEEK %0 &initedArray:2 
 		EQUp %0 &futureArray:4 @.e10
-		MOVp %1 &.a_pointe4d2 
+		MOVp %1 &.a_pointe_4d2 
 		CALL ^assertFail %0 *1
 	.a9:	GOTO @.e10  	; } else 
 	.f8:	NOOP
 		! EQUi #DEBUG #0 @.a11	; assert(0 == 1)
 		EQUi #0 #1 @.a11
-		MOVp %1 &.a_014d3 
+		MOVp %1 &.a_01_4d3 
 		CALL ^assertFail %0 *1
 	.a11:	NOOP
 	.e10:	POKE &aFuncPointer &showoff 	; global aFuncPointer = showoff
@@ -238,26 +238,26 @@ main:	FUNC	; signature func main() -> void @ 283:15
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 288:52
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 288:63
 		CALL &showoff %0 *1	; expects showoff() -> void @ 289:11
-		MOVp %1 &.s_Bye4d4 	; print("Bye!\n")
+		MOVp %1 &.s_Bye_4d4 	; print("Bye!\n")
 		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 290:17
 		RETU   	; }
 
-.s_string4d2:	CNST *8
+.s_string_4d2:	CNST *8
 	DATs string1
 	DATi #0
-.s_allesc4d3:	CNST *22
+.s_allesc_4d3:	CNST *22
 	DATs all escapes: \"
 	DATi #8 #12 #10 #13 #9
 	DATs ~
 	DATi #0
-.s_Bye4d4:	CNST *6
+.s_Bye_4d4:	CNST *6
 	DATs Bye!
 	DATi #10 #0
 	! EQUi #DEBUG #0 @.noAssertStrings
-.a_pointe4d2:	CNST *59
+.a_pointe_4d2:	CNST *59
 	DATs ((pointer)global initedArray[2] == &global futureArray[4])
 	DATi #0
-.a_014d3:	CNST *9
+.a_01_4d3:	CNST *9
 	DATs (0 == 1)
 	DATi #0
 .noAssertStrings:	!

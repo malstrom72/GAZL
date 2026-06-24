@@ -101,7 +101,7 @@ log:	FUNC	; signature func log(float x) -> float @ 112:14
 ;-----------------------------------------------------------------------------
 		LEQf $x #0.0 @.t0	; if (x <= 0.0 || x >= 1.0e38) error("Domain error")
 		LSSf $x #1.0e38 @.f1
-	.t0:	MOVp %1 &.s_Domain4d2 	; error("Domain error")
+	.t0:	MOVp %1 &.s_Domain_4d2 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 120:52
 		GOTO @.e2  
 	.f1:	MOVf $b #0.0 	; b = 0.0
@@ -172,7 +172,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 159:15
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
-		MOVp %1 &.s_Divisi4d3 	; error("Division by zero")
+		MOVp %1 &.s_Divisi_4d3 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 162:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
@@ -236,7 +236,7 @@ tan:	FUNC	; signature func tan(float x) -> float @ 204:14
 		CALL &cos %0 *2	; expects cos(float) -> float @ 209:20
 		MOVf $c %0 
 		NEQf $c #0.0 @.f0	; if (c == 0.0) error("Domain error")
-		MOVp %1 &.s_Domain4d2 	; error("Domain error")
+		MOVp %1 &.s_Domain_4d2 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 210:37
 		GOTO @.e1  
 	.f0:	MOVf %1 $x 	; y = (float) sin(x) / c
@@ -267,7 +267,7 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ 214:14
 		GOTO @.e3  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
-	.t4:	MOVp %1 &.s_Domain4d2 	; error("Domain error")
+	.t4:	MOVp %1 &.s_Domain_4d2 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 222:53
 	.f5:	NOOP
 	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
@@ -313,10 +313,10 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 238:15
 FUNCTION_COUNT:	! DEFi #10	; signature const FUNCTION_COUNT : int @ 244:30
 	! MULi <A> #FUNCTION_COUNT #2
 FUNCTIONS:	CNST *<A>	; signature array FUNCTIONS[<A>] : unknown @ 245:46
-	DATA &.s_ceil4d4 &ceilFunc &.s_exp4d5 &exp &.s_floor4d6
-	DATA &floorFunc &.s_log4d7 &log &.s_log24d8 &log2
-	DATA &.s_log104d9 &log10 &.s_sqrt4da &sqrt &.s_cos4db &cos
-	DATA &.s_sin4dc &sin &.s_tan4dd &tan
+	DATA &.s_ceil_4d4 &ceilFunc &.s_exp_4d5 &exp &.s_floor_4d6
+	DATA &floorFunc &.s_log_4d7 &log &.s_log2_4d8 &log2
+	DATA &.s_log10_4d9 &log10 &.s_sqrt_4da &sqrt &.s_cos_4db
+	DATA &cos &.s_sin_4dc &sin &.s_tan_4dd &tan
 
 ;-----------------------------------------------------------------------------
 isalpha:	FUNC	; signature func isalpha(int c) -> int @ 258:18
@@ -410,7 +410,7 @@ intToHex:	FUNC	; signature func intToHex(int i, ptr buffer) -> ptr @ 301:19
 	.l0:	SUBp $p $p #1	; *(p = p - 1) = ("FEDCBA9876543210123456789ABCDEF")[15 + (x & 0xF)]
 		ANDi %0 $x #0xF
 		ADDi %0 #15 %0
-		PEEK %0 &.s_FEDCBA4de %0
+		PEEK %0 &.s_FEDCBA_4de %0
 		POKE $p %0 
 		SHRu $x $x #4	; x = x >>> 4
 		NEQi $x #0 @.l0	; } while (x != 0)
@@ -505,14 +505,14 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		! EQUi #DEBUG #0 @.a0	; assert(1 <= precision && precision <= 24)
 		GRTi #1 $precision @.f1
 		LEQi $precision #24 @.a0
-	.f1:	MOVp %1 &.a_1preci4d2 
+	.f1:	MOVp %1 &.a_1preci_4d2 
 		CALL ^assertFail %0 *1
 	.a0:	ABSf $y $f 	; y = abs(f)
 		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
-		MOVp $p &.s_log104d9:4 	; p = "0"
+		MOVp $p &.s_log10_4d9:4 	; p = "0"
 		GOTO @.e3  
 	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
-		MOVp $p &.s_HUGE4df 	; p = "HUGE"
+		MOVp $p &.s_HUGE_4df 	; p = "HUGE"
 		GOTO @.e5  
 	.f4:	MOVi $e #0 	; e = 0
 		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
@@ -639,7 +639,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		MOVp $p %0 
 		PEEK %0 $p 	; switch ((int) *p == 0 to 128) 
 		SWCH %0 *128 @.s0
-	.s0#0:	MOVp %1 &.s_Unexpe4e0 	; error("Unexpected end of line")
+	.s0#0:	MOVp %1 &.s_Unexpe_4e0 	; error("Unexpected end of line")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 472:48
 		GOTO @.e1  
 	.s0#'-':	ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, v, PREFIX_PRECEDENCE)
@@ -662,7 +662,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		MOVp $p %0 
 		PEEK %0 $p 	; if ((int) *p != ')') error("Expected ')'")
 		EQUi %0 #')' @.f2
-		MOVp %1 &.s_Expect4e1 	; error("Expected ')'")
+		MOVp %1 &.s_Expect_4e1 	; error("Expected ')'")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 483:46
 	.f2:	ADDp $p $p #1	; p = p + 1
 		GOTO @.e1  	; }
@@ -690,7 +690,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		CALL &stringToFloat %0 *3	; expects stringToFloat(ptr, ptr) -> ptr @ 488:42
 		MOVp $q %0 
 	.e5:	NEQp $p $q @.f6	; if (p == q) error("Invalid number")
-		MOVp %1 &.s_Invali4e2 	; error("Invalid number")
+		MOVp %1 &.s_Invali_4e2 	; error("Invalid number")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 489:39
 	.f6:	MOVp $p $q 	; p = q
 		GOTO @.e1  	; }
@@ -742,7 +742,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		MOVp $p %0 
 		PEEK %0 $p 	; if ((int) *p != ')') error("Expected ')'")
 		EQUi %0 #')' @.f17
-		MOVp %1 &.s_Expect4e1 	; error("Expected ')'")
+		MOVp %1 &.s_Expect_4e1 	; error("Expected ')'")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 515:50
 	.f17:	ADDp $p $p #1	; p = p + 1
 		MULi %0 $i #2	; (float) *v = (float) ((funcptr)global FUNCTIONS[i * 2 + 1])((float) *v)
@@ -762,13 +762,13 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		PEEK %1 $p #1
 		CALL &isalpha %0 *2	; expects isalpha(int) -> int @ 523:58
 		NEQi %0 #TRUE @.f19
-	.t18:	MOVp %1 &.s_Syntax4e3 	; error("Syntax error")
+	.t18:	MOVp %1 &.s_Syntax_4e3 	; error("Syntax error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 523:88
 		GOTO @.e20  
 	.f19:	SUBi %0 $c #'a'	; if ((int) global memoryUsed[c - 'a'] == 0) error("Undefined variable")
 		PEEK %0 &memoryUsed %0
 		NEQi %0 #0 @.f21
-		MOVp %1 &.s_Undefi4e4 	; error("Undefined variable")
+		MOVp %1 &.s_Undefi_4e4 	; error("Undefined variable")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 524:80
 		GOTO @.e22  
 	.f21:	ADDp $p $p #1	; p = p + 1
@@ -924,7 +924,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 603:59
 		MOVp $p %0 
 		NEQf $f #0.0 @.f39	; if (f == 0.0) error("Division by zero")
-		MOVp %1 &.s_Divisi4d3 	; error("Division by zero")
+		MOVp %1 &.s_Divisi_4d3 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 604:45
 		GOTO @repeat  
 	.f39:	PEEK %0 $v 	; *v = (float) *v / f
@@ -961,7 +961,7 @@ main:	FUNC	; signature func main() -> void @ 620:15
 	$buffer:	LOCA *32
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
-	.l0:	MOVp %1 &.s_calc4e5 	; output("calc> ")
+	.l0:	MOVp %1 &.s_calc_4e5 	; output("calc> ")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 631:19
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
@@ -972,7 +972,7 @@ main:	FUNC	; signature func main() -> void @ 620:15
 		PEEK %0 $p 	; if ((int) *p == 0 || (int) strcmp(p, "quit") == 0) goto quit
 		EQUi %0 #0 @quit
 		MOVp %1 $p 
-		MOVp %2 &.s_quit4e6 
+		MOVp %2 &.s_quit_4e6 
 		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 635:48
 		NEQi %0 #0 @.f2
 		GOTO @quit  	; goto quit
@@ -1004,7 +1004,7 @@ main:	FUNC	; signature func main() -> void @ 620:15
 		MOVp $p %0 
 		PEEK %0 $p 	; if ((int) *p != 0) error("Syntax error")
 		EQUi %0 #0 @.f6
-		MOVp %1 &.s_Syntax4e3 	; error("Syntax error")
+		MOVp %1 &.s_Syntax_4e3 	; error("Syntax error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 650:43
 	.f6:	PEEK $p &lastError 	; if ((p = global lastError) != null) output(p)
 		EQUp $p &NULL @.f7
@@ -1017,7 +1017,7 @@ main:	FUNC	; signature func main() -> void @ 620:15
 		MOVi $s:1 #0 	; s[1] = 0
 		ADRL %1 $s *0	; output(s)
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 658:14
-	.f9:	MOVp %1 &.s_4e7 	; output(" = ")
+	.f9:	MOVp %1 &.s__4e7 	; output(" = ")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 660:17
 		MOVf %2 $f 	; output(floatToString(f, 6, buffer))
 		MOVi %3 #6 
@@ -1027,7 +1027,7 @@ main:	FUNC	; signature func main() -> void @ 620:15
 		fTOi $i $f #1.0	; if (itof(i = ftoi(f)) == f) 
 		iTOf %0 $i #1.0
 		NEQf %0 $f @.f10
-		MOVp %1 &.s_0x4e8 	; output("\n = 0x")
+		MOVp %1 &.s_0x_4e8 	; output("\n = 0x")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 663:22
 		MOVi %2 $i 	; output(intToHex(i, buffer))
 		ADRL %3 $buffer *0
@@ -1037,86 +1037,86 @@ main:	FUNC	; signature func main() -> void @ 620:15
 		POKE &memory $assignTo $f	; global memory[assignTo] = f
 		POKE &memoryUsed $assignTo #1	; global memoryUsed[assignTo] = 1
 	.f11:	NOOP
-	.e8:	MOVp %1 &.s_4e9 	; output("\n")
+	.e8:	MOVp %1 &.s__4e9 	; output("\n")
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 671:15
 		GOTO @.l0  	; }
 	quit:	RETU   	; }
 
-.s_Domain4d2:	CNST *13
+.s_Domain_4d2:	CNST *13
 	DATs Domain error
 	DATi #0
-.s_Divisi4d3:	CNST *17
+.s_Divisi_4d3:	CNST *17
 	DATs Division by zero
 	DATi #0
-.s_ceil4d4:	CNST *5
+.s_ceil_4d4:	CNST *5
 	DATs ceil
 	DATi #0
-.s_exp4d5:	CNST *4
+.s_exp_4d5:	CNST *4
 	DATs exp
 	DATi #0
-.s_floor4d6:	CNST *6
+.s_floor_4d6:	CNST *6
 	DATs floor
 	DATi #0
-.s_log4d7:	CNST *4
+.s_log_4d7:	CNST *4
 	DATs log
 	DATi #0
-.s_log24d8:	CNST *5
+.s_log2_4d8:	CNST *5
 	DATs log2
 	DATi #0
-.s_log104d9:	CNST *6
+.s_log10_4d9:	CNST *6
 	DATs log10
 	DATi #0
-.s_sqrt4da:	CNST *5
+.s_sqrt_4da:	CNST *5
 	DATs sqrt
 	DATi #0
-.s_cos4db:	CNST *4
+.s_cos_4db:	CNST *4
 	DATs cos
 	DATi #0
-.s_sin4dc:	CNST *4
+.s_sin_4dc:	CNST *4
 	DATs sin
 	DATi #0
-.s_tan4dd:	CNST *4
+.s_tan_4dd:	CNST *4
 	DATs tan
 	DATi #0
-.s_FEDCBA4de:	CNST *32
+.s_FEDCBA_4de:	CNST *32
 	DATs FEDCBA9876543210123456789ABCDEF
 	DATi #0
-.s_HUGE4df:	CNST *5
+.s_HUGE_4df:	CNST *5
 	DATs HUGE
 	DATi #0
-.s_Unexpe4e0:	CNST *23
+.s_Unexpe_4e0:	CNST *23
 	DATs Unexpected end of line
 	DATi #0
-.s_Expect4e1:	CNST *13
+.s_Expect_4e1:	CNST *13
 	DATs Expected ')'
 	DATi #0
-.s_Invali4e2:	CNST *15
+.s_Invali_4e2:	CNST *15
 	DATs Invalid number
 	DATi #0
-.s_Syntax4e3:	CNST *13
+.s_Syntax_4e3:	CNST *13
 	DATs Syntax error
 	DATi #0
-.s_Undefi4e4:	CNST *19
+.s_Undefi_4e4:	CNST *19
 	DATs Undefined variable
 	DATi #0
-.s_calc4e5:	CNST *7
+.s_calc_4e5:	CNST *7
 	DATs calc>
 	DATi #32 #0
-.s_quit4e6:	CNST *5
+.s_quit_4e6:	CNST *5
 	DATs quit
 	DATi #0
-.s_4e7:	CNST *4
+.s__4e7:	CNST *4
 	DATi #32
 	DATs =
 	DATi #32 #0
-.s_0x4e8:	CNST *7
+.s_0x_4e8:	CNST *7
 	DATi #10 #32
 	DATs = 0x
 	DATi #0
-.s_4e9:	CNST *2
+.s__4e9:	CNST *2
 	DATi #10 #0
 	! EQUi #DEBUG #0 @.noAssertStrings
-.a_1preci4d2:	CNST *36
+.a_1preci_4d2:	CNST *36
 	DATs (1 <= precision && precision <= 24)
 	DATi #0
 .noAssertStrings:	!

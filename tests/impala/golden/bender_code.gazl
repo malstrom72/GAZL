@@ -5,9 +5,9 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 13:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:33
-	DATA &.s_BITSCL4d2 &.s_SINSAM4d3 &.s_ROTSRA4d4
-	DATA &.s_DLYLEF4d5 &.s_SHARPS4d6 &.s_SHARPF4d7
-	DATA &.s_SMOOTH4d8 &.s_SMOOTH4d9
+	DATA &.s_BITSCL_4d2 &.s_SINSAM_4d3 &.s_ROTSRA_4d4
+	DATA &.s_DLYLEF_4d5 &.s_SHARPS_4d6 &.s_SHARPF_4d7
+	DATA &.s_SMOOTH_4d8 &.s_SMOOTH_4d9
 ; signature extern native abort() -> unknown @ 25:1
 ; signature extern native trace() -> unknown @ 26:1
 ; signature extern native yield() -> unknown @ 27:1
@@ -110,7 +110,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 101:15
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
-		MOVp %1 &.s_Divisi4da 	; error("Division by zero")
+		MOVp %1 &.s_Divisi_4da 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 104:41
 		GOTO @.e1  
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
@@ -628,30 +628,30 @@ process:	FUNC	; signature func process() -> void @ 296:18
 		GOTO @.l0  	; }
 		RETU   	; }
 
-.s_BITSCL4d2:	CNST *54
+.s_BITSCL_4d2:	CNST *54
 	DATs BIT (S)|--- CLEAR BITS ----| |-------- DELAY -------|
 	DATi #0
-.s_SINSAM4d3:	CNST *54
+.s_SINSAM_4d3:	CNST *54
 	DATs SIN (S)|----- AMOUNT ------| |-------- DELAY -------|
 	DATi #0
-.s_ROTSRA4d4:	CNST *54
+.s_ROTSRA_4d4:	CNST *54
 	DATs ROT (S)|------ RATE -------| |-------- DELAY -------|
 	DATi #0
-.s_DLYLEF4d5:	CNST *54
+.s_DLYLEF_4d5:	CNST *54
 	DATs DLY |----- LEFT DELAY -----| |----- RIGHT DELAY ----|
 	DATi #0
-.s_SHARPS4d6:	CNST *24
+.s_SHARPS_4d6:	CNST *24
 	DATs SHARP SHELF  _/  ON = _
 	DATi #0
-.s_SHARPF4d7:	CNST *24
+.s_SHARPF_4d7:	CNST *24
 	DATs SHARP FOLD   \/  ON = \
 	DATi #0
-.s_SMOOTH4d8:	CNST *24
+.s_SMOOTH_4d8:	CNST *24
 	DATs SMOOTH SHELF _/  ON = _
 	DATi #0
-.s_SMOOTH4d9:	CNST *24
+.s_SMOOTH_4d9:	CNST *24
 	DATs SMOOTH FOLD  \/  ON = \
 	DATi #0
-.s_Divisi4da:	CNST *17
+.s_Divisi_4da:	CNST *17
 	DATs Division by zero
 	DATi #0

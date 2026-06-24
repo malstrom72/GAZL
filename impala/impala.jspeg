@@ -1734,7 +1734,8 @@
             var name = '.' + prefix + '_' +
                        (s.replace(/[^0-9a-zA-Z]/g, '')
                           .substr(0, 6)) +
-                       ( ($$parser.randomId + tbl.length)
+                       '_' +
+                       ( (($$parser.randomId + tbl.length) >>> 0)
                          .toString(16) );
 
             if ($$parser.noForward) {

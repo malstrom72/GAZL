@@ -5,9 +5,9 @@ PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FO
 FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
 panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 19:33
-	DATA &.s_18PPVV4d2 &.s_116AAO4d3 &.s_132NNL4d4
-	DATA &.s_164TAP4d5 &.s_1PPVVT4d6 &.s_2AAOOI4d7
-	DATA &.s_12NNLL4d8 &.s_contTA4d9
+	DATA &.s_18PPVV_4d2 &.s_116AAO_4d3 &.s_132NNL_4d4
+	DATA &.s_164TAP_4d5 &.s_1PPVVT_4d6 &.s_2AAOOI_4d7
+	DATA &.s_12NNLL_4d8 &.s_contTA_4d9
 ; signature extern native abort() -> unknown @ 31:1
 ; signature extern native trace() -> unknown @ 32:1
 ; signature extern native yield() -> unknown @ 33:1
@@ -514,27 +514,27 @@ process:	FUNC	; signature func process() -> void @ 276:18
 		GOTO @.l0  	; }
 		RETU   	; }
 
-.s_18PPVV4d2:	CNST *55
+.s_18PPVV_4d2:	CNST *55
 	DATs 1/8                           P  P  V  V  T  T  R  R
 	DATi #32 #32 #0
-.s_116AAO4d3:	CNST *55
+.s_116AAO_4d3:	CNST *55
 	DATs 1/16                          A  A  O  O  I  I  A  E
 	DATi #32 #32 #0
-.s_132NNL4d4:	CNST *55
+.s_132NNL_4d4:	CNST *55
 	DATs 1/32                          N  N  L  L  M  M  N  C
 	DATi #32 #32 #0
-.s_164TAP4d5:	CNST *55
+.s_164TAP_4d5:	CNST *55
 	DATs 1/64 |-------- TAPS --------| <  >  v  ^  <  >  D  T
 	DATi #32 #32 #0
-.s_1PPVVT4d6:	CNST *55
+.s_1PPVVT_4d6:	CNST *55
 	DATs /1                            P  P  V  V  T  T  R  R
 	DATi #32 #32 #0
-.s_2AAOOI4d7:	CNST *55
+.s_2AAOOI_4d7:	CNST *55
 	DATs /2                            A  A  O  O  I  I  A  E
 	DATi #32 #32 #0
-.s_12NNLL4d8:	CNST *55
+.s_12NNLL_4d8:	CNST *55
 	DATs +1/2                          N  N  L  L  M  M  N  C
 	DATi #32 #32 #0
-.s_contTA4d9:	CNST *55
+.s_contTA_4d9:	CNST *55
 	DATs cont |-------- TAPS --------| <  >  v  ^  <  >  D  T
 	DATi #32 #32 #0

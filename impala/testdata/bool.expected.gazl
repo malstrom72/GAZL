@@ -15,12 +15,12 @@
  								! EQUi #DEBUG #0 @.a2			; assert(value == 1 || value == 2)
  								EQUi $value #1 @.a2
  								EQUi $value #2 @.a2
- 								MOVp %1 &.a_value12a 
+ 								MOVp %1 &.a_value1_2a 
  								CALL ^assertFail %0 *1
  					.a2:		RETU   							; }
 
  					! EQUi #DEBUG #0 @.noAssertStrings
- .a_value12a:		CNST *27
+ .a_value1_2a:		CNST *27
  					DATs (value == 1 || value == 2)
  					DATi #0
  .noAssertStrings:	!
