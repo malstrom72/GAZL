@@ -288,8 +288,9 @@ Recorded so they are not re-litigated:
 - **Unsigned pointer/address wraparound.** `ADDp`/`SUBp`/`DIFp` and the bounds checks operate on `UInt`/`Pointer`
   (`Pointer` is `unsigned`, `GAZL.h:81`); unsigned overflow is well-defined, and the `- MEMORY_OFFSET` unbias before the
   unsigned range compare (`GAZL.cpp:1636`) correctly catches under/overflow in one comparison. Sound as written.
-- **Float division by zero.** Guarded to a runtime error by default (`GAZL_CHECK_FLOAT_DIVS_BY_ZERO`, `GAZL.h:73`); a
-  deliberate, documented design choice, not UB.
+- **Float division by zero.** Always guarded to a runtime error (`CHECK_FLOAT_DIV_BY_ZERO` in `GAZL.cpp`); a deliberate,
+  documented design choice, not UB. (The former `GAZL_CHECK_FLOAT_DIVS_BY_ZERO` compile-time toggle was removed; the
+  check is now unconditional.)
 - **`COPY` overlap.** Already *correctly* specified as undefined on overlap (`InstructionSet.md`) — a deliberate choice,
   exactly like C `memcpy` vs `memmove`. The implementation is a plain forward copy (`GAZL.cpp:1721`–`1728`), identical on
   every platform (no UB, no crash, no cross-arch divergence), so it is well-defined for the non-overlapping and

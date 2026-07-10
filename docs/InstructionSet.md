@@ -198,6 +198,14 @@ Floor of float. Notice that there is no ceil instruction, but ceil is equivalent
 
 Increment `int(d)` and branch to `@label` if it is less than `#int` / `int`
 
+## fTOi
+- `int(d)          #float          #float`
+- `int(d)          float           #float`
+
+Convert float to int. The float is first scaled with the third operand before it is converted to int. The conversion
+truncates toward zero; out-of-range values saturate to INT_MAX / INT_MIN and NaN converts to 0 (see the Floating-point
+environment note near the top).
+
 ## FORp
 - `ptr(d)          &address        @label`
 - `ptr(d)          ptr             @label`
@@ -304,6 +312,12 @@ Declare a local read-only pointer parameter
 - `int(d)          int             int`
 
 Bitwise (inclusive) OR ints
+
+## iTOf
+- `float(d)        #int            #float`
+- `float(d)        int             #float`
+
+Convert int to float. The float is scaled with the third operand after it has been converted from int.
 
 ## LEQf
 - `#float          #float          @label`
