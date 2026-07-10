@@ -687,14 +687,44 @@ unless it can finish), a block whose weight exceeded the host's per‑`process()
 `maxBlockWeight` must sit well below that grant, and the host must grant at least `maxBlockWeight` per resume.
 
 ### 5.6 Compilation pipeline
-1. **Off‑thread, at load:** for each `FUNC`, split into basic blocks (edges are already explicit: relative branches,
-   `FORi`/`FORp`, `SWCH`, fallthrough, `RETU`). Single linear pass emits code + records a **safepoint side table**
-   (GAZL ip → native offset, live‑slot mask) for resume/suspend and lockstep. Resolve intra‑function branches (all local,
-   `GAZL.cpp:1176`) with a second fixup pass over recorded label offsets. Fill the per‑module **entry table**
-   (`code index → native entry`, 0 elsewhere).
-2. **Publish** (§6.2): make pages executable + i‑cache maintenance.
-3. **Runtime:** `enterCall`→ trampoline → JIT entry. On any trap/timeout/native‑suspend, return `Status`; `run()` behaves
-   as today. `--no-jit` or probe‑failure → interpreter unchanged.
+
+**What compiling a module produces.** At patch load, off the audio thread, the JIT walks the finalized `Instruction[]`
+(§5.0) once per `FUNC` and emits native code. GAZL‑world (instruction indices, frame slots) and native‑world (machine
+addresses, registers) are two coordinate systems; besides the code, the JIT emits two small tables that translate
+between them at the only moments it matters — calls, suspends, and traps:
+
+- **Entry table** — `code index → native entry address` (`0` where the index isn't a `FUNC`). Read by the dispatcher's
+  `resolve()` to enter a function, and by indirect `CALL_VVC` as the runtime call‑target check (nonzero ⇔ a real
+  `FUNC`, mirroring `GAZL.cpp:1609`).
+- **Safepoint side table** — `GAZL ip ↔ native offset`, one entry per safepoint (block leaders, call sites). It is a
+  *reverse* map, read only when **re‑entering** native code (see below). No live‑register mask is needed: memory is
+  fully synced at every safepoint (§5.7.5), so resume is "reload the pinned registers, jump to the native offset."
+
+**Two directions — do not conflate them.** Leaving JIT code and re‑entering it are opposite halves of a round trip, and
+each needs the *other* coordinate. This is the source of the common confusion about per‑site exit stubs:
+
+- **Outbound** (a block's cold timeout/trap stub, §5.4/§5.5): you hold a native PC and must record a GAZL ip to resume
+  from, so you **materialize this block's GAZL ip as an immediate** into `Processor.ip`, then jump to the shared exit
+  tail. That immediate is unavoidable — the outbound path is *producing* the resume key — and it is inherently per‑block
+  (each block has its own leader ip and fuel weight). Only the tail (store fuel/dsp/ipsp, set status, return to the
+  dispatcher) is shared per function.
+- **Inbound** (`resolve()` in the dispatcher): you hold a GAZL ip (from `Processor.ip` on resume, or popped off
+  `ipStack` on `RETU`) and **look it up in the side table to get the native offset** to jump to. This is where the table
+  earns its keep — it consumes the ip the outbound path produced. It therefore does *not* remove the outbound immediate;
+  the two operate in opposite directions.
+
+**The passes.**
+1. **Emit** — walk each `FUNC`'s instructions once (basic‑block edges are already explicit: relative branches,
+   `FORi`/`FORp`, `SWCH`, fallthrough, `RETU`). Emit code; record each instruction's native offset, a safepoint entry
+   per block leader / call site, and the function's entry address.
+2. **Fixup** — patch forward branch displacements now that all native offsets are known. Branches are intra‑function and
+   already relative (`GAZL.cpp:1176`), so this is purely local — no cross‑function linking.
+3. **Fill the entry table**, then **publish** (§6.2): flip pages to executable and run the i‑cache/barrier sequence.
+   Nothing executes the new code before this.
+
+**Runtime.** `enterCall` / resume → dispatcher → `resolve()` → native segment (§5.4). Segments run until one hits the
+shared EXIT with a `Status` (`OK`, `TIME_OUT`, a trap code); `run()` behaves exactly as today. `--no-jit` or a failed
+executable‑memory probe feeds the same `Instruction[]` to the interpreter — no other difference.
 
 ### 5.7 v2 register allocation — the committed two‑tier design (fixed now so v1 cannot paint us into a corner)
 
@@ -884,7 +914,7 @@ rewrite. Checkable in review:
 
 ---
 
-### 5.7 Worked example — one loop, compiled two ways
+### 5.8 Worked example — one loop, compiled two ways
 
 A tiny end‑to‑end illustration of the register/ABI convention (§5.3), fuel checks (§5.5), and the safepoint/trap model
 (§5.4), plus the v1‑vs‑v2 register story (§1.1). The assembly is **schematic** — register choices and slot offsets are
