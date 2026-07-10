@@ -12,6 +12,14 @@ opcodes around `GAZL.cpp:1225`–`1263` and `calcConstant`). If a fix changes ru
 path, a constant-folded expression (`fTOi x #BIG`) will silently disagree with the same computation on run-time values
 (`fTOi x bigVar`). **Every fix below must be applied to both paths**, and a regression test should assert they match.
 
+> **Status update.** Items **1–4** and **7** are now **implemented** on `main`: shared `inline` helpers
+> (`idiv`/`imod`/`iadd`/`isub`/`imul`/`ishl`/`ashr`/`lshr`/`ftoi`, and the fixed `absolute(int)`) near `GAZL.cpp:89`,
+> routed through **both** `Processor::run()` and `calcConstant()`, with `UnitTest.gazl` cases asserting the run-time and
+> constant-folded paths agree. Verified green on arm64 (M1, M4 / clang) and x86-64 (MSVC). A new **item 8**
+> (float-literal parser divergence) was found and fixed during that work. Item **5** (denormal FP-env contract) remains
+> an open specification decision — see the Summary. (An earlier item 6, the `GETL`/`SETL`/`ADRL` local-access spec, was
+> dropped from this audit: it is forward-looking JIT work with no current-interpreter bug, tracked on `jit-compiler`.)
+
 ## Severity legend
 
 | Tag | Meaning |
@@ -24,15 +32,15 @@ path, a constant-folded expression (`fTOi x #BIG`) will silently disagree with t
 
 ## Summary
 
-| # | Issue | Tags | Location(s) | One-line fix |
-|--:|---|---|---|---|
-| 1 | `INT_MIN / -1` and `INT_MIN % -1` trap (`#DE`→SIGFPE) on x86 | **SAFETY** **DIVERGENCE** | `GAZL.cpp:1662`–`1667`, `:1663`, compile-time `DIVI_CCC`/`MODI_CCC` | Guard; define `INT_MIN/-1 = INT_MIN`, `INT_MIN%-1 = 0` |
-| 2 | `FTOI` on NaN / out-of-range diverges x86 vs ARM | **DIVERGENCE** **UB** | `GAZL.cpp:1713` (run), `:1262` (compile) | Define saturating + `NaN→0`; implement explicitly on both paths |
-| 3 | Signed integer overflow in `ADDi`/`SUBi`/`MULi`/`ABSi` | **UB** | `:1649`–`1661`, `absolute()` `:89` | Define two's-complement wrap; use unsigned math or build `-fwrapv` |
-| 4 | Shift count ≥ 32 or negative is UB; `SHRi` of negative impl-defined pre-C++20 | **UB** | `:1674`–`1682` | Define "count mod 32"; mask `& 31`; guarantee arithmetic `>>` |
-| 5 | Denormal handling follows host FTZ/DAZ | **FP-ENV** | (no MXCSR/FPCR control; `:35`–`50`) | Document as host-defined; optional strict mode |
-| 6 | `GETL`/`SETL`/`ADRL` cross-local access is defined-by-accident | **SPEC** | `:1642`–`1645` | Adopt the *provenance-bounded* rule (defined within `[deriv, frame.dsp)`, incl. cross-local; unspecified beyond). **Not** "distinct locals don't alias" — that's unsound |
-| 7 | `DIVi`/`MODi` truncation-toward-zero flagged as an *assumption* | **SPEC** (resolved) | `UnitTest.gazl` / `InstructionSet.md` notes | Retire the caveat — C++11 guarantees it |
+| # | Issue | Tags | Location(s) | One-line fix | Status |
+|--:|---|---|---|---|---|
+| 1 | `INT_MIN / -1` and `INT_MIN % -1` trap (`#DE`→SIGFPE) on x86 | **SAFETY** **DIVERGENCE** | `GAZL.cpp:1662`–`1667`, `:1663`, compile-time `DIVI_CCC`/`MODI_CCC` | Guard; define `INT_MIN/-1 = INT_MIN`, `INT_MIN%-1 = 0` | ✅ Fixed (`idiv`/`imod`) |
+| 2 | `FTOI` on NaN / out-of-range diverges x86 vs ARM | **DIVERGENCE** **UB** | `GAZL.cpp:1713` (run), `:1262` (compile) | Define saturating + `NaN→0`; implement explicitly on both paths | ✅ Fixed (`ftoi`, bit-pattern) |
+| 3 | Signed integer overflow in `ADDi`/`SUBi`/`MULi`/`ABSi` | **UB** | `:1649`–`1661`, `absolute()` `:89` | Define two's-complement wrap; use unsigned math or build `-fwrapv` | ✅ Fixed (`iadd`/`isub`/`imul`/`absolute`) |
+| 4 | Shift count ≥ 32 or negative is UB; `SHRi` of negative impl-defined pre-C++20 | **UB** | `:1674`–`1682` | Define "count mod 32"; mask `& 31`; guarantee arithmetic `>>` | ✅ Fixed (`ishl`/`ashr`/`lshr`) |
+| 5 | Denormal handling follows host FTZ/DAZ | **FP-ENV** | (no MXCSR/FPCR control; `:35`–`50`) | Document as host-defined; optional strict mode | ✅ Documented (InstructionSet.md preamble); host owns the FP-env scope (see §5) |
+| 7 | `DIVi`/`MODi` truncation-toward-zero flagged as an *assumption* | **SPEC** (resolved) | `UnitTest.gazl` / `InstructionSet.md` notes | Retire the caveat — C++11 guarantees it | ✅ Done in `UnitTest.gazl` (InstructionSet.md TODO) |
+| 8 | Float-literal parser diverges MSVC vs clang (`stringToFloat`) | **DIVERGENCE** | `GAZL.cpp:166` (`stringToFloat`) | Accumulate in `double`, one closing `double→float` cast | ✅ Fixed |
 
 (`COPY` overlap is *correctly* specified as undefined already — see [Examined and found OK](#examined-and-found-ok).)
 
@@ -71,6 +79,9 @@ V0.i = (b == -1) ? 0 : a % b;
 ```
 
 Keep the divide-by-zero error as-is. Add golden cases for `INT_MIN/-1`, `INT_MIN%-1`, `-1/-1`, `0/-1`.
+
+**✅ Resolved.** Shipped as shared `idiv`/`imod` helpers, called from both `run()` and `calcConstant()`; div/mod-by-zero
+errors unchanged; golden cases added.
 
 ---
 
@@ -111,6 +122,13 @@ static inline Int ftoi(Float v) {           // v already scaled
 and `cvttss2si` + clamp on x86.) `ITOF` is exact and needs no change. Update the `FTOI` spec text to state the defined
 result for out-of-range/NaN.
 
+**✅ Resolved — with a refinement.** Shipped as `ftoi()` on both paths, but implemented via **integer bit-pattern
+classification** (exponent test) rather than the float comparisons sketched above. The comparison form is correct under
+strict FP but **rots under `/fp:fast` / `-ffast-math`**: finite-math-only lets the compiler delete the `v != v` NaN test
+and the range checks, reintroducing the out-of-range-cast UB (measured: `NaN → INT_MIN` under `-ffast-math`). The
+bit-pattern version uses no float compares, so it survives fast-math — and benchmarked *faster* than the original plain
+cast. Out-of-range boundary tests avoid an exact-`2^31` literal (see item 8).
+
 ---
 
 ## 3. Signed integer overflow in `ADDi` / `SUBi` / `MULi` / `ABSi` (UB)
@@ -149,6 +167,10 @@ Belt-and-suspenders: also add `-fwrapv` (GCC/Clang) / `/d2UndefIntOverflow-`-equ
 *compile-time* folder (which uses the same `+`/`-`/`*`) is covered too, or route the folder through the same unsigned
 helpers. This touches every integer arithmetic mode (`_VVV`/`_VVC`/`_VCV`/`_CCC`) — do them uniformly.
 
+**✅ Resolved.** `iadd`/`isub`/`imul` (unsigned math) and the rewritten `absolute(int)`, on both paths. `-fwrapv` was
+**not** added — `BuildCpp.sh` is shared/synced and left untouched; routing the folder through the same unsigned helpers
+covers the compile-time path instead. Disassembly confirmed each lowers to a single native instruction (zero cost).
+
 ---
 
 ## 4. Shift count ≥ 32 or negative (UB); arithmetic right shift (impl-defined pre-C++20)
@@ -183,6 +205,11 @@ case SHRI_VVV: { unsigned n = V2.i & 31;                               // arithm
 (If you are comfortable requiring C++20, `V1.i >> (V2.i & 31)` is sufficient for `SHRi`.) Document "count mod 32" in the
 `SHLi`/`SHRi`/`SHRu` spec. Apply to `_VVC`/`_VCV`/`_CCC` variants identically.
 
+**✅ Resolved.** `ishl`/`ashr`/`lshr`, count masked `& 31`, on both paths (`ashr` uses signed `>>`, which the required
+modern toolchain guarantees arithmetic). Disassembly confirmed the mask folds into the native shift's implicit masking
+(single `lsl`/`asr`/`lsr` on arm64, `shl`/`sar`/`shr` on x86). Note the assembler already rejects a *constant* negative
+shift count, so the folded path can't see one — only the run-time (variable-count) path exercises the mask.
+
 ---
 
 ## 5. Denormals depend on the host floating-point environment (FP-ENV)
@@ -201,35 +228,17 @@ control word on entry to `run()`, sets round-to-nearest + denormals-on, and rest
 that the default (per-callback save/restore has a cost and would surprise host authors who deliberately set FTZ). Note
 this must be a conscious choice, identical for interpreter and any future JIT.
 
----
-
-## 6. `GETL` / `SETL` / `ADRL` cross-local access is defined only by accident (SPEC)
-
-**Current behavior.** Dynamic local indexing bounds-checks against the *remaining data stack*, not the target array, so
-a wild index (or an `ADRL`-derived pointer plus `ADDp`/`POKE`) can read/write *other* named locals — memory-safely, but
-with a result that is an artifact of frame layout (`GAZL.cpp:1642`–`1645`). It is not UB and not cross-arch divergent
-today, but it is **unspecified** at the language level.
-
-**Recommended resolution — the *provenance-bounded* local-access rule** ([JitCompilerResearch.md §1.1](JitCompilerResearch.md)).
-> ⚠️ An earlier draft of this item (and of §1.1) proposed "reaching a different named local is unspecified; a JIT may
-> assume distinct locals do not alias." **That is unsound — do not add it to the spec or tests.** Real compiled
-> programs (`perfTest.gazl`, `buffer.gazl`, `nobuffer.gazl`) deliberately `ADRL` one local and `COPY` a block spanning
-> a whole run of adjacent named locals (bulk load/store of a global-state struct into a bank of register-like scalars),
-> and the observed output depends on that cross-local write. Every `ADRL` in the corpus carries `*0`, so "within its
-> declared `*size`" is not even a real bound.
-
-The adopted rule instead draws the defined/unspecified line by **provenance span**: a pointer derived from `ADRL var`
-in frame `F` (through any `ADDp`/`SUBp`/`COPY`/arg-passing chain) is **defined** across `[&var, F.dsp)` — the target
-*upward through the end of `F`'s locals* — and a dynamic `GETL`/`SETL` index is defined across `[base, F.dsp)`.
-**Crossing into adjacent named locals *within* that span is defined behavior**: frame layout (declaration order, sizes,
-offsets) is ABI, reproduced bit-for-bit. **Outside** the span (below the derivation point, past the owning frame's
-`dsp`, or into a younger frame) the access is memory-safe but **unspecified**; a global-derived pointer is defined only
-within its own section. The sandbox guarantee is unchanged (`BAD_PEEK`/`BAD_POKE` still fire at the true edges), and
-**no interpreter change is required** — today's contiguous-memory behavior is the conforming instance. This is the
-weakest rule that (a) keeps the bank idiom defined and (b) still lets a JIT register-cache the *private* slots below
-the escape floor (JitCompilerResearch.md §5.7). Add this wording — not the retracted version — to the
-`GETL`/`SETL`/`ADRL`/`ADDp`/`SUBp` entries in `src/UnitTest.gazl` and `docs/InstructionSet.md`, and add golden `.gazl`
-cases that *rely* on the defined span (a bank `COPY`, a by-ref out-param).
+**Update (decision — still open, but settled in principle).** `run()` stays **FP-env-neutral**: GAZL enforces only what
+is free and side-effect-free (the integer/FTOI items) and does **not** clobber `MXCSR`/`FPCR`. Float rounding + denormals
+are **host-controlled and documented**, not imposed by GAZL — an embeddable VM shouldn't mutate process-global FP state
+as a hidden side effect, and flush-vs-no-flush is genuinely the application's tradeoff. So the *contract* lives in GAZL
+docs; the FP-env *scope* lives in the host (Permut8 wraps execution in FTZ). Two subtleties that fell out:
+> - **Constant parsing must stay mode-agnostic.** `stringToFloat` must not bake a flush decision into stored bits (the
+>   assembler can't know the runtime mode). Under an FTZ host, the closing `double→float` cast already flushes denormal
+>   literals to 0 consistently with execution; no special-casing needed. (See item 8 for the *rounding* determinism fix.)
+> - **arm64 FP-env scopes need the FPCR `FZ` bit set explicitly.** The common `FE_DFL_DISABLE_SSE_DENORMS_ENV` path is
+>   x86/SSE-only and silently no-ops on Apple Silicon, so a host "flush" scope that relies on it does *not* flush (and
+>   doesn't force round-to-nearest) on M-series — a live gap in denormal *and* rounding determinism there.
 
 ---
 
@@ -241,6 +250,31 @@ truncates toward zero and `a%b` has the sign of `a` (`[expr.mul]`). GAZL already
 
 **Recommended resolution.** Retire the caveat text (keep a regression test for `-7/2 == -3`, `-7%2 == -1`). No code
 change. Bundle this with the item 1 div/mod fixes since they touch the same opcodes.
+
+**✅ Done.** Caveat removed from both `UnitTest.gazl` (truncation test kept; `INT_MIN/-1` and `INT_MIN%-1` cases added)
+and `docs/InstructionSet.md` (`DIVi`/`MODi` entries now state the C++11-guaranteed truncation and the defined
+`INT_MIN/-1 = INT_MIN` / `INT_MIN%-1 = 0`).
+
+---
+
+## 8. Float-literal parser diverges MSVC vs clang (`stringToFloat`) (DIVERGENCE) — resolved
+
+**Was.** `stringToFloat` (`GAZL.cpp:166`) accumulated the mantissa in `float32` (`d = d*10 + digit`). Near the float
+range limit each step rounds, and `d*10 + digit` is a multiply-add that clang contracts to a single-rounded `fmadd`
+while MSVC emits `mul`+`add` (two roundings). Same source, different constant: `2147483647.0` assembled to `2^31` under
+clang but `2^31-128` (`0x7FFFFF80`) under MSVC — so an identical `.gazl` produced a **different constant pool per
+compiler**. Found while writing the item-2 `FTOI` boundary tests.
+
+**✅ Resolved.** Accumulate in `double` (any ≤15-digit integer is exact there, so contraction can't change it), then one
+correctly-rounded `double→float` conversion at the end — deterministic and matching the true IEEE value. Normal literals
+are unaffected (no existing constant regressed). Regression test added: compile-time `EQUf` pinning `2147483647.0 == 2^31`
+and `16777217.0 == 2^24`. Verified identical on arm64 and x86-64.
+
+> Aside: Numbstrict's `parseReal` is a stronger, correctly-rounded double-double parser (and pins the FP env). For GAZL
+> its extra machinery buys little: GAZL is **float-only**, and under a host FTZ mode denormals collapse to 0 — the two
+> regimes where double-double pays off (correctly-rounded `double`, exact denormals) don't apply. The `double`-accumulate
+> fix is effectively correctly-rounded for `float`. Only reach for `parseReal` if bit-exact rounding on pathological
+> many-digit literals ever matters.
 
 ---
 
@@ -267,14 +301,16 @@ Recorded so they are not re-litigated:
 
 ## Suggested fix order
 
+**Done:** items **1-4**, **7**, and **8** are implemented and verified on arm64 + x86-64, and item **5**'s FP-env contract
+is now stated in `InstructionSet.md`. The only remaining piece is host-side: setting the FP environment (incl. the arm64
+`FZ` bit) around execution, which belongs in the host, not GAZL. The historical ordering below is kept for the record.
+
 1. **Item 1** (`INT_MIN/-1` trap) — it is an outright crash / sandbox escape on x86. Highest priority regardless of JIT.
 2. **Item 3** (signed-overflow UB) and **Item 4** (shift UB) — remove the latent UB and add `-fwrapv`; cheap, protects
    against future compiler/CPU changes.
 3. **Item 2** (`FTOI`) — fix the existing cross-arch divergence and lock the semantics.
-4. **Items 5–7** — specification/documentation decisions (denormals, local aliasing, div truncation note), plus the
-   matching golden `.gazl` tests. These align with Phase 0 / Phase −1 B1 of the JIT plan but stand on their own.
-   **Item 6 must ship the provenance-bounded wording, with tests that *rely* on the defined cross-local span** — a bank
-   `COPY` and a by-ref out-param — so a later "distinct locals don't alias" optimization can never regress it.
+4. **Items 5 & 7** — specification/documentation decisions (denormals, div-truncation note). Item 7 is done; item 5 is
+   settled in principle (see §5) and needs only the `InstructionSet.md` wording.
 
 Every code fix should be mirrored in the **compile-time constant folder** and covered by a test asserting the run-time
 and compile-time results agree.

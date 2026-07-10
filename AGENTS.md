@@ -17,8 +17,6 @@ The project uses a consistent folder structure. Build output is written to `outp
 - `externals/` - projects and source code from other repositories (only touch this content when explicitly asked to).
 - `src/` – C++ source code for the library. The library is distributed as source rather than prebuilt binaries.
 - `tests/` – regression tests.
-- `examples/` – small sample programs.
-- `benchmarks/` – JavaScript performance tests.
 - `output/` – contains only build artifacts (and any runtime dependencies), no source files.
 
 Root-level `build.sh` and `build.cmd` (mirrored implementations) should build and test both the beta and release targets.

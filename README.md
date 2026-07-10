@@ -58,7 +58,7 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 - `tools/buildGAZLCmd.sh` / `.cmd` – build just `GAZLCmd` (VM executable)
 - `tools/BuildNuXJS.sh` / `.cmd` – build the NuXJS command-line JavaScript runtime
 - `tools/BuildImpala.sh` / `.cmd` – build NuXJS and stage the JSPEG Impala compiler into `output/`
-- `tools/buildGazlFuzz.sh` / `.cmd` – build libFuzzer harness for `GAZLCmd`
+- `tools/buildGazlFuzz.sh` – build libFuzzer harness for `GAZLCmd` (shell only; no `.cmd`)
 
 ## Building the fuzz target
 

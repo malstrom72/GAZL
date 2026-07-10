@@ -118,7 +118,7 @@ For using the JavaScript Impala compiler (CLI, API, and tests), see `impala/Impa
 
 ## Running the JSPEG Tests
 
-- `node impalaCompilerTests.js` – verifies `jspegCompiler.js` matches `jspeg.jspeg`, and that a self-hosted compile reproduces identical output.
+- `node jspegCompilerTests.js` – verifies `jspegCompiler.js` matches `jspeg.jspeg`, and that a self-hosted compile reproduces identical output.
 
 Impala parity tests and the Impala CLI are documented in `ImpalaJS.md`.
 
