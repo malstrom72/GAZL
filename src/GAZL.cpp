@@ -86,9 +86,35 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , EXPECTED_CONSTANT							*/	, "Expected constant"
 };
 
-inline int absolute(int i) { int x = i >> (sizeof (Int) * 8 - 1); return (i ^ x) - x; }
+// --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
+// run-time and constant-folded paths can never diverge. These are the chosen normative results
+// (two's-complement wrap / count-mod-32 shifts / saturating FTOI -- the AArch64 & WebAssembly
+// choices), identical on every target. add/sub/mul and the shifts lower to a single native
+// instruction; idiv/imod/ftoi keep a real edge-case branch on purpose (see docs/PortabilityAudit.md).
+inline int absolute(int i) { Int x = i >> (Int)(sizeof (Int) * 8 - 1); return (Int)(((UInt)i ^ (UInt)x) - (UInt)x); } // INT_MIN -> INT_MIN
 inline float absolute(float f) { return fabsf(f); }
 inline double absolute(double f) { return fabs(f); }
+inline Int idiv(Int a, Int b) { return (b == -1) ? (Int)(0u - (UInt)a) : a / b; }	// caller guarantees b != 0; INT_MIN / -1 -> INT_MIN
+inline Int imod(Int a, Int b) { return (b == -1) ? 0 : a % b; }						// caller guarantees b != 0; INT_MIN % -1 -> 0
+inline Int iadd(Int a, Int b) { return (Int)((UInt)a + (UInt)b); }					// two's-complement wrap
+inline Int isub(Int a, Int b) { return (Int)((UInt)a - (UInt)b); }					// two's-complement wrap
+inline Int imul(Int a, Int b) { return (Int)((UInt)a * (UInt)b); }					// two's-complement wrap
+inline Int ishl(Int a, Int n) { return (Int)((UInt)a << (n & 31)); }				// count mod 32; no neg-shift / overflow UB
+inline Int ashr(Int a, Int n) { return a >> (n & 31); }								// count mod 32; arithmetic (sign-extending)
+inline Int lshr(Int a, Int n) { return (Int)((UInt)a >> (n & 31)); }				// count mod 32; logical (zero-fill)
+inline Int ftoi(Float v) {															// v is the ALREADY-SCALED float
+	// Bit-pattern classification (no float comparisons) so the saturation/NaN handling survives
+	// /fp:fast & -ffast-math -- those imply finite-math-only, under which a `v != v` / `v >= 2^31`
+	// test is assumed unreachable and deleted, letting the out-of-range cast UB reappear.
+	UInt b;
+	memcpy(&b, &v, sizeof b);
+	const UInt e = (b >> 23) & 0xFF;											// biased exponent
+	if (e >= 158) {																// |v| >= 2^31 (exp 158), or inf/NaN (exp 255)
+		if (e == 255 && (b & 0x7FFFFF) != 0) return 0;							// NaN
+		return (b >> 31) != 0 ? (Int)(-2147483647 - 1) : 2147483647;			// sign -> INT_MIN / INT_MAX (+/-inf too)
+	}
+	return (Int)v;																// |v| < 2^31: cast is in range and defined
+}
 template<typename T> inline T minimum(T a, T b) { return (a < b) ? a : b; }
 template<typename T> inline T maximum(T a, T b) { return (a < b) ? b : a; }
 
@@ -138,22 +164,36 @@ template<class F> F pow10(F x) { return pow(10, x); }
 static float pow10(float x) { return powf(10.0f, x); }
 
 static Float stringToFloat(const Char* &p, const Char* e) {
-	Float d = 0;
-	Float sign = 1;
+	/*
+		Accumulate in double, convert to Float once at the end. Accumulating directly in float32
+		diverges across compilers: `d * 10 + digit` loses precision at each step near the float
+		range limit, and clang contracts it to a single-rounded fmadd while MSVC emits mul+add
+		(two roundings) -- so e.g. "2147483647.0" parsed to 2^31 on one and 2^31-128 on the other.
+		A <=15-digit integer is exact in double (so contraction cannot change it), and the single
+		closing double->float conversion is correctly rounded and identical on every target.
+	*/
+	double d = 0;
+	double sign = 1;
 	switch (p < e ? *p : 0) {
 		case '+': ++p; sign = 1; break;
 		case '-': ++p; sign = -1; break;
 	}
 	if (p < e && *p >= '0' && *p <= '9') {
-		do { d = d * 10 + (*p - '0'); } while (++p < e && *p >= '0' && *p <= '9');
+		do {
+			d = d * 10 + (*p - '0');
+		} while (++p < e && *p >= '0' && *p <= '9');
 		if (p + 1 < e && *p == '.' && p[1] >= '0' && p[1] <= '9') {
 			++p;
-			Float f = 1;
-			do { d += (*p - '0') * (f *= (Float)(0.1)); } while (++p < e && *p >= '0' && *p <= '9');
+			double f = 1;
+			do {
+				d += (*p - '0') * (f *= 0.1);
+			} while (++p < e && *p >= '0' && *p <= '9');
 		}
-		if (p + 1 < e && (*p == 'E' || *p == 'e')) d *= pow10((Float)(stringToInt(++p, e)));
+		if (p + 1 < e && (*p == 'E' || *p == 'e')) {
+			d *= pow10((double)(stringToInt(++p, e)));
+		}
 	}
-	return d * sign;
+	return static_cast<Float>(d * sign);
 }
 
 static Char* int2string(Int i, int radix, int minLength, Char buffer[33]) {
@@ -1224,17 +1264,17 @@ Value Assembler::calcConstant(const Operator* op, const Char* op1Begin, const Ch
 	#if (SUPPORT_ABS)
 		case ABSI_CC_: v1.i = absolute(v1.i); break;
 	#endif
-		case ADDI_CCC: v1.i += v2.i; break;
-		case SUBI_CCC: v1.i -= v2.i; break;
-		case MULI_CCC: v1.i *= v2.i; break;
-		case DIVI_CCC: if (v2.i == 0) throw Exception(CONSTANT_DIVISION_BY_ZERO); v1.i /= v2.i; break;
-		case MODI_CCC: if (v2.i == 0) throw Exception(CONSTANT_DIVISION_BY_ZERO); v1.i %= v2.i; break;
+		case ADDI_CCC: v1.i = iadd(v1.i, v2.i); break;
+		case SUBI_CCC: v1.i = isub(v1.i, v2.i); break;
+		case MULI_CCC: v1.i = imul(v1.i, v2.i); break;
+		case DIVI_CCC: if (v2.i == 0) throw Exception(CONSTANT_DIVISION_BY_ZERO); v1.i = idiv(v1.i, v2.i); break;
+		case MODI_CCC: if (v2.i == 0) throw Exception(CONSTANT_DIVISION_BY_ZERO); v1.i = imod(v1.i, v2.i); break;
 		case ANDI_CCC: v1.i &= v2.i; break;
 		case IORI_CCC: v1.i |= v2.i; break;
 		case XORI_CCC: v1.i ^= v2.i; break;
-		case SHLI_CCC: v1.i <<= v2.i; break;
-		case SHRI_CCC: v1.i >>= v2.i; break;
-		case SHRU_CCC: v1.i = (UInt)(v1.i) >> v2.i; break;
+		case SHLI_CCC: v1.i = ishl(v1.i, v2.i); break;
+		case SHRI_CCC: v1.i = ashr(v1.i, v2.i); break;
+		case SHRU_CCC: v1.i = lshr(v1.i, v2.i); break;
 	#if (SUPPORT_MIN_MAX)
 		case MAXI_CCC: v1.i = maximum(v1.i, v2.i); break;
 		case MINI_CCC: v1.i = minimum(v1.i, v2.i); break;
@@ -1259,7 +1299,7 @@ Value Assembler::calcConstant(const Operator* op, const Char* op1Begin, const Ch
 		case MAXF_CCC: v1.f = maximum(v1.f, v2.f); break;
 		case MINF_CCC: v1.f = minimum(v1.f, v2.f); break;
 	#endif
-		case FTOI_CCC: v1.i = (Int)(v1.f * v2.f); break;
+		case FTOI_CCC: v1.i = ftoi(v1.f * v2.f); break;
 		case ITOF_CCC: v1.f = (Float)(v1.i) * v2.f; break;
 		default: assert(0);
 	}
@@ -1646,40 +1686,40 @@ Int Processor::run() {
 		#if (SUPPORT_ABS)
 			case ABSI_VV_:	V0.i = absolute(V1.i); break;
 		#endif
-			case ADDI_VVV:	V0.i = V1.i + V2.i; break;
-			case ADDI_VVC:	V0.i = V1.i + C2.i; break;
-			case SUBI_VVV:	V0.i = V1.i - V2.i; break;
-			case SUBI_VVC:	V0.i = V1.i - C2.i; break;
-			case SUBI_VCV:	V0.i = C1.i - V2.i; break;
+			case ADDI_VVV:	V0.i = iadd(V1.i, V2.i); break;
+			case ADDI_VVC:	V0.i = iadd(V1.i, C2.i); break;
+			case SUBI_VVV:	V0.i = isub(V1.i, V2.i); break;
+			case SUBI_VVC:	V0.i = isub(V1.i, C2.i); break;
+			case SUBI_VCV:	V0.i = isub(C1.i, V2.i); break;
 		#if (SUPPORT_MIN_MAX)
 			case MAXI_VVV:	V0.i = maximum(V1.i, V2.i); break;
 			case MAXI_VVC:	V0.i = maximum(V1.i, C2.i); break;
 			case MINI_VVV:	V0.i = minimum(V1.i, V2.i); break;
 			case MINI_VVC:	V0.i = minimum(V1.i, C2.i); break;
 		#endif
-			case MULI_VVV:	V0.i = V1.i * V2.i; break;
-			case MULI_VVC:	V0.i = V1.i * C2.i; break;
-			case DIVI_VVV:	CHECK_INT_DIV_BY_ZERO(V2.i); V0.i = V1.i / V2.i; break;
-			case DIVI_VVC:	V0.i = V1.i / C2.i; break;
-			case DIVI_VCV:	CHECK_INT_DIV_BY_ZERO(V2.i); V0.i = C1.i / V2.i; break;
-			case MODI_VVV:	CHECK_INT_DIV_BY_ZERO(V2.i); V0.i = V1.i % V2.i; break;
-			case MODI_VVC:	V0.i = V1.i % C2.i; break;
-			case MODI_VCV:	CHECK_INT_DIV_BY_ZERO(V2.i); V0.i = C1.i % V2.i; break;
+			case MULI_VVV:	V0.i = imul(V1.i, V2.i); break;
+			case MULI_VVC:	V0.i = imul(V1.i, C2.i); break;
+			case DIVI_VVV:	CHECK_INT_DIV_BY_ZERO(V2.i); V0.i = idiv(V1.i, V2.i); break;
+			case DIVI_VVC:	V0.i = idiv(V1.i, C2.i); break;
+			case DIVI_VCV:	CHECK_INT_DIV_BY_ZERO(V2.i); V0.i = idiv(C1.i, V2.i); break;
+			case MODI_VVV:	CHECK_INT_DIV_BY_ZERO(V2.i); V0.i = imod(V1.i, V2.i); break;
+			case MODI_VVC:	V0.i = imod(V1.i, C2.i); break;
+			case MODI_VCV:	CHECK_INT_DIV_BY_ZERO(V2.i); V0.i = imod(C1.i, V2.i); break;
 			case ANDI_VVV:	V0.i = V1.i & V2.i; break;
 			case ANDI_VVC:	V0.i = V1.i & C2.i; break;
 			case IORI_VVV:	V0.i = V1.i | V2.i; break;
 			case IORI_VVC:	V0.i = V1.i | C2.i; break;
 			case XORI_VVV:	V0.i = V1.i ^ V2.i; break;
 			case XORI_VVC:	V0.i = V1.i ^ C2.i; break;
-			case SHLI_VVV:	V0.i = V1.i << V2.i; break;
-			case SHLI_VVC:	V0.i = V1.i << C2.i; break;
-			case SHLI_VCV:	V0.i = C1.i << V2.i; break;
-			case SHRI_VVV:	V0.i = V1.i >> V2.i; break;
-			case SHRI_VVC:	V0.i = V1.i >> C2.i; break;
-			case SHRI_VCV:	V0.i = C1.i >> V2.i; break;
-			case SHRU_VVV:	V0.i = (UInt)(V1.i) >> V2.i; break;
-			case SHRU_VVC:	V0.i = (UInt)(V1.i) >> C2.i; break;
-			case SHRU_VCV:	V0.i = (UInt)(C1.i) >> V2.i; break;
+			case SHLI_VVV:	V0.i = ishl(V1.i, V2.i); break;
+			case SHLI_VVC:	V0.i = ishl(V1.i, C2.i); break;
+			case SHLI_VCV:	V0.i = ishl(C1.i, V2.i); break;
+			case SHRI_VVV:	V0.i = ashr(V1.i, V2.i); break;
+			case SHRI_VVC:	V0.i = ashr(V1.i, C2.i); break;
+			case SHRI_VCV:	V0.i = ashr(C1.i, V2.i); break;
+			case SHRU_VVV:	V0.i = lshr(V1.i, V2.i); break;
+			case SHRU_VVC:	V0.i = lshr(V1.i, C2.i); break;
+			case SHRU_VCV:	V0.i = lshr(C1.i, V2.i); break;
 		#if (SUPPORT_ABS)
 			case ABSF_VV_:	V0.f = absolute(V1.f); break;
 		#endif
@@ -1710,7 +1750,7 @@ Int Processor::run() {
 			case MODF_VVC:	V0.f = fmodf(V1.f, C2.f); break;
 			case MODF_VCV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = fmodf(C1.f, V2.f); break;
 		#endif
-			case FTOI_VVC:	V0.i = (Int)(V1.f * C2.f); break;
+			case FTOI_VVC:	V0.i = ftoi(V1.f * C2.f); break;
 			case ITOF_VVC:	V0.f = (Float)(V1.i) * C2.f; break;
 		#if (SUPPORT_COPY)
 			// FIX : all constant addresses here should be checked compile-time, but then we would need to parse operand 2 first and have an option for forward linking where the size is added to the check.

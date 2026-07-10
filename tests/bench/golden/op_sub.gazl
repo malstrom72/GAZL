@@ -1,0 +1,59 @@
+ ; Compiled with Impala version 1.0
+
+ ; signatures version=1
+ ; signature extern native printInt() -> unknown @ 3:23
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC		; signature func main() -> void @ 5:15
+ 								PARA *1
+ 					$i:			LOCi
+ 					$acc:		LOCi
+ 					$a:			LOCi
+ 					$b:			LOCi
+ 					$s:			LOCi
+ 					$f:			LOCf
+ ;-----------------------------------------------------------------------------
+ 								MOVi $a #123456789 				; a = 123456789
+ 								MOVi $b #3 						; b = 3
+ 								MOVi $s #1 						; s = 1
+ 								MOVf $f #123.5 					; f = 123.5
+ 								MOVi $acc $a 					; acc = a
+ 								MOVi $i #0 						; for (i = 0 to 4000000) 
+ 								GEQi #0 #4000000 @.e0
+ 					.l1:		SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								SUBi $acc $acc $a				; acc = acc - a
+ 								FORi $i #4000000 @.l1			; }
+ 					.e0:		MOVi %1 $acc 					; printInt(acc)
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 43:15
+ 								RETU   							; }
+
