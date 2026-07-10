@@ -216,57 +216,22 @@ const Char* GAZL_VERSION_STRING = STR("GAZL_VERSION");
 const Char* GAZL_WORD_SIZE_STRING = STR("GAZL_WORD_SIZE");
 const Char* GAZL_MEMORY_SIZE_STRING = STR("GAZL_MEMORY_SIZE");
 
-// FIX : decide once and for all
-#define SUPPORT_ABS 1				// diff here is 0.88 (branching) -> 0.5 (opcode)
-#define SUPPORT_MIN_MAX 0			// preliminary tests show that min max in the tightest possible loop (iterating over n elements) is only 10% faster than writing the same code with a branch
-#define SUPPORT_FLOOR 1				// diff here is 1.57 (func call) -> 0.9 (opcode)
-#define SUPPORT_CEIL 0				// diff here is 1.57 (func call) -> 0.9 (opcode)
-#define SUPPORT_FMOD 0				// diff here is about 10%, lets skip it
-#define SUPPORT_COPY 1
-#define SUPPORT_REV_COMP_ALIASES 1
-#define SUPPORT_NOT_COMP_ALIASES 0
-#define SUPPORT_ALL_PERMUTATIONS 1
-#define SUPPORT_ALL_CONST_OPS 1
-#define SUPPORT_ALL_CONST_COMPS 1
-#define SUPPORT_OPTIONAL_OPS 1
-#define SUPPORT_COMPILE_TIME_POINTER_COMPS 0
-
 enum Opcode {
 	FUNC_CC_ = FIRST_OPCODE_VALUE, CALL_VVC, CALL_CVC, CALL_NVC, RETU_C__
 	, MOVE_VV_, MOVE_VC_
 	, PEEK_VC_, POKE_CV_, POKE_CC_
 	, PEEK_VVV, PEEK_VCV, POKE_VVV, POKE_CVV, POKE_VVC, POKE_CVC
 	, GETL_VVV, SETL_VVV, SETL_VVC, ADRL_VV_
-#if (SUPPORT_ABS)
 	, ABSI_VV_
-#endif
 	, ADDI_VVV, ADDI_VVC, SUBI_VVV, SUBI_VVC, SUBI_VCV
 	, MULI_VVV, MULI_VVC, DIVI_VVV, DIVI_VVC, DIVI_VCV, MODI_VVV, MODI_VVC, MODI_VCV
-#if (SUPPORT_MIN_MAX)
-	, MAXI_VVV, MAXI_VVC, MINI_VVV, MINI_VVC
-#endif
 	, ANDI_VVV, ANDI_VVC, IORI_VVV, IORI_VVC, XORI_VVV, XORI_VVC
 	, SHLI_VVV, SHLI_VVC, SHLI_VCV, SHRI_VVV, SHRI_VVC, SHRI_VCV, SHRU_VVV, SHRU_VVC, SHRU_VCV
-#if (SUPPORT_ABS)
 	, ABSF_VV_
-#endif
-#if (SUPPORT_FLOOR)
 	, FLOF_VV_
-#endif
-#if (SUPPORT_CEIL)
-	, CEIF_VV_
-#endif
 	, ADDF_VVV, ADDF_VVC, SUBF_VVV, SUBF_VVC, SUBF_VCV, MULF_VVV, MULF_VVC, DIVF_VVV, DIVF_VVC, DIVF_VCV
-#if (SUPPORT_FMOD)
-	, MODF_VVV, MODF_VVC, MODF_VCV
-#endif
-#if (SUPPORT_MIN_MAX)
-	, MAXF_VVV, MAXF_VVC, MINF_VVV, MINF_VVC
-#endif
 	, FTOI_VVC, ITOF_VVC
-#if (SUPPORT_COPY)
 	, COPY_VVC, COPY_VCC, COPY_CVC, COPY_CCC
-#endif
 	, FORi_VVB, FORi_VCB
 	, LSSI_VVB, LSSI_VCB, LSSI_CVB, EQUI_VVB, EQUI_VCB
 	, NLSI_VVB, NLSI_VCB, NLSI_CVB, NEQI_VVB, NEQI_VCB
@@ -277,29 +242,11 @@ enum Opcode {
 	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____
 	
 	, MOVE_CC_
-#if (SUPPORT_ABS)
 	, ABSI_CC_
-#endif
 	, ADDI_CCC, SUBI_CCC, MULI_CCC, DIVI_CCC, MODI_CCC, ANDI_CCC, IORI_CCC, XORI_CCC, SHLI_CCC, SHRI_CCC, SHRU_CCC
-#if (SUPPORT_MIN_MAX)
-	, MAXI_CCC, MINI_CCC
-#endif
-#if (SUPPORT_ABS)
 	, ABSF_CC_
-#endif
-#if (SUPPORT_FLOOR)
 	, FLOF_CC_
-#endif
-#if (SUPPORT_CEIL)
-	, CEIF_CC_
-#endif
 	, ADDF_CCC, SUBF_CCC, MULF_CCC, DIVF_CCC
-#if (SUPPORT_FMOD)
-	, MODF_CCC
-#endif
-#if (SUPPORT_MIN_MAX)
-	, MAXF_CCC, MINF_CCC
-#endif
 	, FTOI_CCC, ITOF_CCC
 	, LSSI_CCB, EQUI_CCB, NLSI_CCB, NEQI_CCB
 	, LSSF_CCB, EQUF_CCB, NLSF_CCB, NEQF_CCB
@@ -364,285 +311,137 @@ struct Operator {
 };
 
 static const Operator OPERATORS[] = {
-#if (SUPPORT_ABS)
-#if (SUPPORT_ALL_CONST_OPS)
 	  { " ABSf_vc_", ABSF_CC_,	{ VAR_FLOAT_W	, CONST_FLOAT	, 0				}		, YIELDS_CONST	, CONST_FLOAT	} ,
-#endif
 	  { " ABSf_vv_", ABSF_VV_,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, 0				}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " ABSi_vc_", ABSI_CC_,	{ VAR_INT_W		, CONST_INT		, 0				}		, YIELDS_CONST	, CONST_INT		}
-#endif
 	, { " ABSi_vv_", ABSI_VV_,	{ VAR_INT_W		, VAR_INT_R		, 0				}		, 0				, 0				} ,
-#endif
-#if (SUPPORT_ALL_CONST_OPS)
 	  { " ADDf_vcc", ADDF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	} ,
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	  { " ADDf_vcv", ADDF_VVC,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, SWAP_1_AND_2	, 0				} ,
-#endif
 	  { " ADDf_vvc", ADDF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
 	, { " ADDf_vvv", ADDF_VVV,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, VAR_FLOAT_R	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " ADDi_vcc", ADDI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " ADDi_vcv", ADDI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
-#endif
 	, { " ADDi_vvc", ADDI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
 	, { " ADDi_vvv", ADDI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " ADDp_vcc", ADDI_CCC,	{ VAR_PTR_W		, FREE_ADDRESS	, CONST_INT		}		, YIELDS_CONST	, FREE_ADDRESS		}
-#endif
 	, { " ADDp_vcv", ADDI_VVC,	{ VAR_PTR_W		, FWD_FREE		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
 	, { " ADDp_vvc", ADDI_VVC,	{ VAR_PTR_W		, VAR_PTR_R		, CONST_INT		}		, 0				, 0				}
 	, { " ADDp_vvv", ADDI_VVV,	{ VAR_PTR_W		, VAR_PTR_R		, VAR_INT_R		}		, 0				, 0				}
 	, { " ADRL_vvs", ADRL_VV_,	{ VAR_PTR_W		, ANY_VAR_FREE	, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " ANDi_vcc", ANDI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " ANDi_vcv", ANDI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
-#endif
 	, { " ANDi_vvc", ANDI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
 	, { " ANDi_vvv", ANDI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_OPTIONAL_OPS)
 	, { " CALL_c__", CALL_CVC,	{ FUNC | FORWARD, 0				, 0				}		, 0				, 0				}
-#endif
 	, { " CALL_cvs", CALL_CVC,	{ FUNC | FORWARD, TRANSIENT		, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
-#if (SUPPORT_OPTIONAL_OPS)
 	, { " CALL_n__", CALL_NVC,	{ NATIVE|FORWARD, 0			, 0				}		, 0				, 0				}
-#endif
 	, { " CALL_nvs", CALL_NVC,	{ NATIVE|FORWARD, TRANSIENT	, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
-#if (SUPPORT_OPTIONAL_OPS)
 	, { " CALL_v__", CALL_VVC,	{ VAR_PTR_R		, 0				, 0				}		, 0				, 0				}
-#endif
 	, { " CALL_vvs", CALL_VVC,	{ VAR_PTR_R		, TRANSIENT		, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
-#if (SUPPORT_CEIL)
-#if (SUPPORT_ALL_CONST_OPS)
-	, { " CEIf_vc_", CEIF_CC_,	{ VAR_FLOAT_W	, CONST_FLOAT	, 0				}		, YIELDS_CONST	, CONST_FLOAT	}
-#endif
-	, { " CEIf_vv_", CEIF_VV_,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, 0				}		, 0				, 0				}
-#endif
 	, { " CNST_s__", CNST____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ADDRESS_R		}
-#if (SUPPORT_COPY)
 	, { " COPY_ccs", COPY_CCC,	{ FWD_ADDRESS_W	, FWD_ADDRESS_R	, CONST_INT_P	}		, 0				, 0				}
 	, { " COPY_cvs", COPY_CVC,	{ FWD_ADDRESS_W	, VAR_PTR_R		, CONST_INT_P	}		, 0				, 0				}
 	, { " COPY_vcs", COPY_VCC,	{ VAR_PTR_R		, FWD_ADDRESS_R	, CONST_INT_P	}		, 0				, 0				}
 	, { " COPY_vvs", COPY_VVC,	{ VAR_PTR_R		, VAR_PTR_R		, CONST_INT_P	}		, 0				, 0				}
-#endif
 	, { " DATA_c__", DATA____,	{ KONST			, 0				, 0				}		, 0				, 0				}
 	, { " DATf_c__", DATA____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, 0				}
 	, { " DATi_c__", DATA____,	{ CONST_INT		, 0				, 0				}		, 0				, 0				}
 	, { " DATp_c__", DATA____,	{ ANY_FWD_FREE	, 0				, 0				}		, 0				, 0				}
 	, { " DATs____", DATA____,	{ 0				, 0				, 0				}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " DIFp_vcc", SUBI_CCC,	{ VAR_INT_W		, FREE_ADDRESS		, FREE_ADDRESS		}		, YIELDS_CONST	, CONST_INT		}
-#endif
 	, { " DIFp_vcv", SUBI_VCV,	{ VAR_INT_W		, FWD_FREE		, VAR_PTR_R		}		, 0				, 0				}
 	, { " DIFp_vvc", SUBI_VVC,	{ VAR_INT_W		, VAR_PTR_R		, FWD_FREE		}		, 0				, 0				}
 	, { " DIFp_vvv", SUBI_VVV,	{ VAR_INT_W		, VAR_PTR_R		, VAR_PTR_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " DIVf_vcc", DIVF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_FLOAT }
-#endif
 	, { " DIVf_vcv", DIVF_VCV,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, 0				, 0				}
 	, { " DIVf_vvc", DIVF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, CHECK_DIV_BY_0, 0				}
 	, { " DIVf_vvv", DIVF_VVV,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, VAR_FLOAT_R	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " DIVi_vcc", DIVI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_INT }
-#endif
 	, { " DIVi_vcv", DIVI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " DIVi_vvc", DIVI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, CHECK_DIV_BY_0, 0				}
 	, { " DIVi_vvv", DIVI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " EQUf_ccb", EQUF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " EQUf_cvb", EQUF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#endif
 	, { " EQUf_vcb", EQUF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
 	, { " EQUf_vvb", EQUF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " EQUi_ccb", EQUI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " EQUi_cvb", EQUI_VCB,	{ CONST_INT		, VAR_INT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#endif
 	, { " EQUi_vcb", EQUI_VCB,	{ VAR_INT_R		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
 	, { " EQUi_vvb", EQUI_VVB,	{ VAR_INT_R		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " EQUp_ccb", EQUI_CCB,	{ ANY_FREE		, ANY_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " EQUp_cvb", EQUI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#endif
 	, { " EQUp_vcb", EQUI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " EQUp_vvb", EQUI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_FLOOR)
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " FLOf_vc_", FLOF_CC_,	{ VAR_FLOAT_W	, CONST_FLOAT	, 0				}		, YIELDS_CONST	, CONST_FLOAT	}
-#endif
 	, { " FLOf_vv_", FLOF_VV_,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, 0				}		, 0				, 0				}
-#endif
 	, { " FORi_vcb", FORi_VCB,	{ VAR_INT_W		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
 	, { " FORi_vvb", FORi_VVB,	{ VAR_INT_W		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " FORp_vcb", FORi_VCB,	{ VAR_PTR_W		, FWD_FREE		, FWD_BRANCH	}		, 0				, 0				}
 	, { " FORp_vvb", FORi_VVB,	{ VAR_PTR_W		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " FUNC____", FUNC_CC_,	{ 0				, 0				, 0				}		, 0				, FUNC			}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " GEQf_ccb", NLSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
 	, { " GEQf_cvb", NLSF_CVB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQf_vcb", NLSF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQf_vvb", NLSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " GEQi_ccb", NLSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
 	, { " GEQi_cvb", NLSI_CVB,	{ CONST_INT		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQi_vcb", NLSI_VCB,	{ VAR_INT_R		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQi_vvb", NLSI_VVB,	{ VAR_INT_R		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " GEQp_ccb", NLSI_CCB,	{ ANY_FREE		, ANY_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
 	, { " GEQp_cvb", NLSI_CVB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQp_vcb", NLSI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQp_vvb", NLSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " GETL_vvv", GETL_VVV,	{ ANY_VAR_W		, ANY_VAR_FREE_R, VAR_INT_R		}		, 0				, 0				}
 	, { " GLOB_s__", GLOB____,	{ CONST_INT_P	, 0				, 0				}		, 0				, FREE_ADDRESS	}
 	, { " GOTO_b__", GOTO_B__,	{ FWD_BRANCH	, 0				, 0				}		, 0				, 0				}
-#if (SUPPORT_REV_COMP_ALIASES)
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " GRTf_ccb", LSSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
-#endif
 	, { " GRTf_cvb", LSSF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTf_vcb", LSSF_CVB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTf_vvb", LSSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " GRTi_ccb", LSSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
-#endif
 	, { " GRTi_cvb", LSSI_VCB,	{ CONST_INT		, VAR_INT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTi_vcb", LSSI_CVB,	{ VAR_INT_R		, CONST_INT		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTi_vvb", LSSI_VVB,	{ VAR_INT_R		, VAR_INT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " GRTp_ccb", LSSI_CCB,	{ ANY_FREE		, ANY_FREE		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
-#endif
 	, { " GRTp_cvb", LSSI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTp_vcb", LSSI_CVB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTp_vvb", LSSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#endif
 	, { " INPf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_FLOAT_R & ~TRANSIENT }
 	, { " INPi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_INT_R & ~TRANSIENT }
 	, { " INPp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_PTR_R & ~TRANSIENT }
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " IORi_vcc", IORI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " IORi_vcv", IORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
-#endif
 	, { " IORi_vvc", IORI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
 	, { " IORi_vvv", IORI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_REV_COMP_ALIASES)
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " LEQf_ccb", NLSI_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
-#endif
 	, { " LEQf_cvb", NLSF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQf_vcb", NLSF_CVB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQf_vvb", NLSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " LEQi_ccb", NLSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
-#endif
 	, { " LEQi_cvb", NLSI_VCB,	{ CONST_INT		, VAR_INT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQi_vcb", NLSI_CVB,	{ VAR_INT_R		, CONST_INT		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQi_vvb", NLSI_VVB,	{ VAR_INT_R		, VAR_INT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " LEQp_ccb", NLSI_CCB,	{ ANY_FREE		, ANY_FREE		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
-#endif
 	, { " LEQp_cvb", NLSI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQp_vcb", NLSI_CVB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQp_vvb", NLSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#endif
 	, { " LOCA_s__", LOCA____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ANY_VAR & ~TRANSIENT }
 	, { " LOCf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_FLOAT_R | VAR_FLOAT_W) & ~TRANSIENT }
 	, { " LOCi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_INT_R | VAR_INT_W) & ~TRANSIENT }
 	, { " LOCp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_PTR_R | VAR_PTR_W) & ~TRANSIENT }
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " LSSf_ccb", LSSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
 	, { " LSSf_cvb", LSSF_CVB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSf_vcb", LSSF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSf_vvb", LSSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " LSSi_ccb", LSSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
 	, { " LSSi_cvb", LSSI_CVB,	{ CONST_INT		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSi_vcb", LSSI_VCB,	{ VAR_INT_R		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSi_vvb", LSSI_VVB,	{ VAR_INT_R		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " LSSp_ccb", LSSI_CCB,	{ ANY_FREE		, ANY_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
 	, { " LSSp_cvb", LSSI_CVB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSp_vcb", LSSI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSp_vvb", LSSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_MIN_MAX)
-#if (SUPPORT_ALL_CONST_OPS)
-	, { " MAXf_vcc", MAXF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
-	, { " MAXf_vcv", MAXF_VVC,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, SWAP_1_AND_2	, 0				}
-#endif
-	, { " MAXf_vvc", MAXF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
-	, { " MAXf_vvv", MAXF_VVV,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, VAR_FLOAT_R	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
-	, { " MAXi_vcc", MAXI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
-	, { " MAXi_vcv", MAXI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
-#endif
-	, { " MAXi_vvc", MAXI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
-	, { " MAXi_vvv", MAXI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
-	, { " MAXp_vcc", MAXI_CCC,	{ VAR_PTR_W		, ANY_FREE		, ANY_FREE		}		, YIELDS_CONST	, ANY_FREE	 }
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
-	, { " MAXp_vcv", MAXI_VVC,	{ VAR_PTR_W		, ANY_FWD_FREE	, VAR_PTR_R		}		, SWAP_1_AND_2	, 0				}
-#endif
-	, { " MAXp_vvc", MAXI_VVC,	{ VAR_PTR_W		, VAR_PTR_R		, ANY_FWD_FREE	}		, 0				, 0				}
-	, { " MAXp_vvv", MAXI_VVV,	{ VAR_PTR_W		, VAR_PTR_R		, VAR_PTR_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
-	, { " MINf_vcc", MINF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
-	, { " MINf_vcv", MINF_VVC,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, SWAP_1_AND_2	, 0				}
-#endif
-	, { " MINf_vvc", MINF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
-	, { " MINf_vvv", MINF_VVV,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, VAR_FLOAT_R	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
-	, { " MINi_vcc", MINI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
-	, { " MINi_vcv", MINI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
-#endif
-	, { " MINi_vvc", MINI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
-	, { " MINi_vvv", MINI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
-	, { " MINp_vcc", MINI_CCC,	{ VAR_PTR_W		, ANY_FREE		, ANY_FREE		}		, YIELDS_CONST	, ANY_FREE	 }
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
-	, { " MINp_vcv", MINI_VVC,	{ VAR_PTR_W		, ANY_FWD_FREE	, VAR_PTR_R		}		, SWAP_1_AND_2	, 0				}
-#endif
-	, { " MINp_vvc", MINI_VVC,	{ VAR_PTR_W		, VAR_PTR_R		, ANY_FWD_FREE	}		, 0				, 0				}
-	, { " MINp_vvv", MINI_VVV,	{ VAR_PTR_W		, VAR_PTR_R		, VAR_PTR_R		}		, 0				, 0				}
-#endif
-#if (SUPPORT_FMOD)
-#if (SUPPORT_ALL_CONST_OPS)
-	, { " MODf_vcc", MODF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_FLOAT }
-#endif
-	, { " MODf_vcv", MODF_VCV,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, 0				, 0				}
-	, { " MODf_vvc", MODF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, CHECK_DIV_BY_0, 0				}
-	, { " MODf_vvv", MODF_VVV,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, VAR_FLOAT_R	}		, 0				, 0				}
-#endif
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " MODi_vcc", MODI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_INT }
-#endif
 	, { " MODi_vcv", MODI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " MODi_vvc", MODI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, CHECK_DIV_BY_0, 0				}
 	, { " MODi_vvv", MODI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
@@ -653,120 +452,26 @@ static const Operator OPERATORS[] = {
 	, { " MOVi_vv_", MOVE_VV_,	{ VAR_INT_W		, VAR_INT_R		, 0				}		, 0				, 0				}
 	, { " MOVp_vc_", MOVE_VC_,	{ VAR_PTR_W		, ANY_FWD_FREE	, 0				}		, 0				, 0				}
 	, { " MOVp_vv_", MOVE_VV_,	{ VAR_PTR_W		, VAR_PTR_R		, 0				}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " MULf_vcc", MULF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " MULf_vcv", MULF_VVC,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, SWAP_1_AND_2	, 0				}
-#endif
 	, { " MULf_vvc", MULF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
 	, { " MULf_vvv", MULF_VVV,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, VAR_FLOAT_R	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " MULi_vcc", MULI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_FLOAT	}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " MULi_vcv", MULI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
-#endif
 	, { " MULi_vvc", MULI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
 	, { " MULi_vvv", MULI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " NEQf_ccb", NEQF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " NEQf_cvb", NEQF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#endif
 	, { " NEQf_vcb", NEQF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
 	, { " NEQf_vvb", NEQF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " NEQi_ccb", NEQI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " NEQi_cvb", NEQI_VCB,	{ CONST_INT		, VAR_INT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#endif
 	, { " NEQi_vcb", NEQI_VCB,	{ VAR_INT_R		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
 	, { " NEQi_vvb", NEQI_VVB,	{ VAR_INT_R		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
 	, { " NEQp_ccb", NEQI_CCB,	{ ANY_FREE		, ANY_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " NEQp_cvb", NEQI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#endif
 	, { " NEQp_vcb", NEQI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " NEQp_vvb", NEQI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_NOT_COMP_ALIASES)
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NGEf_ccb", LSSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-	, { " NGEf_cvb", LSSF_CVB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
-	, { " NGEf_vcb", LSSF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
-	, { " NGEf_vvb", LSSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NGEi_ccb", LSSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-	, { " NGEi_cvb", LSSI_CVB,	{ CONST_INT		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
-	, { " NGEi_vcb", LSSI_VCB,	{ VAR_INT_R		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
-	, { " NGEi_vvb", LSSI_VVB,	{ VAR_INT_R		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NGEp_ccb", LSSI_CCB,	{ ANY_FREE		, ANY_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-	, { " NGEp_cvb", LSSI_CVB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-	, { " NGEp_vcb", LSSI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
-	, { " NGEp_vvb", LSSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NGRf_ccb", NLSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0 }
-#endif
-	, { " NGRf_cvb", NLSF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NGRf_vcb", NLSF_CVB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NGRf_vvb", NLSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NGRi_ccb", NLSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0 }
-#endif
-	, { " NGRi_cvb", NLSI_VCB,	{ CONST_INT		, VAR_INT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NGRi_vcb", NLSI_CVB,	{ VAR_INT_R		, CONST_INT		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NGRi_vvb", NLSI_VVB,	{ VAR_INT_R		, VAR_INT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NGRp_ccb", NLSI_CCB,	{ ANY_FREE		, ANY_FREE		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0 }
-#endif
-	, { " NGRp_cvb", NLSI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NGRp_vcb", NLSI_CVB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NGRp_vvb", NLSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NLEf_ccb", LSSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0 }
-#endif
-	, { " NLEf_cvb", LSSF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NLEf_vcb", LSSF_CVB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NLEf_vvb", LSSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NLEi_ccb", LSSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0 }
-#endif
-	, { " NLEi_cvb", LSSI_VCB,	{ CONST_INT		, VAR_INT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NLEi_vcb", LSSI_CVB,	{ VAR_INT_R		, CONST_INT		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NLEi_vvb", LSSI_VVB,	{ VAR_INT_R		, VAR_INT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NLEp_ccb", LSSI_CCB,	{ ANY_FREE		, ANY_FREE		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0 }
-#endif
-	, { " NLEp_cvb", LSSI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NLEp_vcb", LSSI_CVB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NLEp_vvb", LSSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NLSf_ccb", NLSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-	, { " NLSf_cvb", NLSF_CVB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
-	, { " NLSf_vcb", NLSF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
-	, { " NLSf_vvb", NLSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NLSi_ccb", NLSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-	, { " NLSi_cvb", NLSI_CVB,	{ CONST_INT		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
-	, { " NLSi_vcb", NLSI_VCB,	{ VAR_INT_R		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
-	, { " NLSi_vvb", NLSI_VVB,	{ VAR_INT_R		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_COMPS)
-	, { " NLSp_ccb", NLSI_CCB,	{ ANY_FREE		, ANY_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-#endif
-	, { " NLSp_cvb", NLSI_CVB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-	, { " NLSp_vcb", NLSI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
-	, { " NLSp_vvb", NLSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-#endif
 	, { " NOOP____", NOOP____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " OUTf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_FLOAT_R | VAR_FLOAT_W) & ~TRANSIENT }
 	, { " OUTi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_INT_R | VAR_INT_W) & ~TRANSIENT }
@@ -790,72 +495,47 @@ static const Operator OPERATORS[] = {
 	, { " RETU____", RETU_C__,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " SETL_vvc", SETL_VVC,	{ ANY_VAR_FREE_W, VAR_INT_R		, KONST			}		, 0				, 0				}
 	, { " SETL_vvv", SETL_VVV,	{ ANY_VAR_FREE_W, VAR_INT_R		, ANY_VAR_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " SHLi_vcc", SHLI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT_P	}		, YIELDS_CONST	, CONST_INT		}
-#endif
 	, { " SHLi_vcv", SHLI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " SHLi_vvc", SHLI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT_P	}		, 0				, 0				}
 	, { " SHLi_vvv", SHLI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " SHRi_vcc", SHRI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
-#endif
 	, { " SHRi_vcv", SHRI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " SHRi_vvc", SHRI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT_P	}		, 0				, 0				}
 	, { " SHRi_vvv", SHRI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " SHRu_vcc", SHRU_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT_P	}		, YIELDS_CONST	, CONST_INT_P	}
-#endif
 	, { " SHRu_vcv", SHRU_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " SHRu_vvc", SHRU_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT_P	}		, 0				, 0				}
 	, { " SHRu_vvv", SHRU_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " SUBf_vcc", SUBF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
-#endif
 	, { " SUBf_vcv", SUBF_VCV,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, 0				, 0				}
 	, { " SUBf_vvc", SUBF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
 	, { " SUBf_vvv", SUBF_VVV,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, VAR_FLOAT_R	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " SUBi_vcc", SUBI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
-#endif
 	, { " SUBi_vcv", SUBI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " SUBi_vvc", SUBI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
 	, { " SUBi_vvv", SUBI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " SUBp_vcc", SUBI_CCC,	{ VAR_PTR_W		, FREE_ADDRESS	, CONST_INT		}		, YIELDS_CONST	, FREE_ADDRESS		}
-#endif
 	, { " SUBp_vcv", SUBI_VCV,	{ VAR_PTR_W		, FWD_FREE		, VAR_INT_R		}		, 0				, 0				}
 	, { " SUBp_vvc", SUBI_VVC,	{ VAR_PTR_W		, VAR_PTR_R		, CONST_INT		}		, 0				, 0				}
 	, { " SUBp_vvv", SUBI_VVV,	{ VAR_PTR_W		, VAR_PTR_R		, VAR_INT_R		}		, 0				, 0				}
 	, { " SWCH_vsb", SWCH_VCC,	{ VAR_INT_R		, CONST_INT_P	, FWD_BRANCH	}		, 0				, 0				}
 	, { " TEMP_s__", GLOB____,	{ CONST_INT_P	, 0				, 0				}		, 0				, FREE_ADDRESS | TEMPORARY }
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " XORi_vcc", XORI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
-#endif
-#if (SUPPORT_ALL_PERMUTATIONS)
 	, { " XORi_vcv", XORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
-#endif
 	, { " XORi_vvc", XORI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
 	, { " XORi_vvv", XORI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " fTOi_vcc", FTOI_CCC,	{ VAR_INT_W		, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_INT		}
-#endif
 	, { " fTOi_vvc", FTOI_VVC,	{ VAR_INT_W		, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
-#if (SUPPORT_ALL_CONST_OPS)
 	, { " iTOf_vcc", ITOF_CCC,	{ VAR_FLOAT_W	, CONST_INT		, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
-#endif
 	, { " iTOf_vvc", ITOF_VVC,	{ VAR_FLOAT_W	, VAR_INT_R		, CONST_FLOAT	}		, 0				, 0				}
 
-#if (SUPPORT_ABS)
 	, { "!ABSf_cc_", ABSF_CC_,	{ COMPILE_TIME	, CONST_FLOAT	, 0				}		, 0				, CONST_FLOAT	}
 	, { "!ABSi_cc_", ABSI_CC_,	{ COMPILE_TIME	, CONST_INT		, 0				}		, 0				, CONST_INT_P	}
-#endif
 	, { "!ADDf_ccc", ADDF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
 	, { "!ADDi_ccc", ADDI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
 	, { "!ADDp_ccc", ADDI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, CONST_INT		}		, 0				, FREE_ADDRESS		}
 	, { "!ANDi_ccc", ANDI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
-#if (SUPPORT_CEIL)
-	, { "!CEIf_cc_", CEIF_CC_,	{ COMPILE_TIME	, CONST_FLOAT	, 0				}		, 0				, CONST_FLOAT	}
-#endif
 	, { "!DEFf_c__", DEFI____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, CONST_FLOAT	}
 	, { "!DEFi_c__", DEFI____,	{ CONST_INT		, 0				, 0				}		, 0				, CONST_INT		}
 	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS		, 0			, 0				}		, 0				, FREE_ADDRESS		}
@@ -863,49 +543,17 @@ static const Operator OPERATORS[] = {
 	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, CHECK_DIV_BY_0, CONST_FLOAT	}
 	, { "!DIVi_ccc", DIVI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, CHECK_DIV_BY_0, CONST_INT		}
 	, { "!EQUi_ccb", EQUI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_COMPILE_TIME_POINTER_COMPS)
-	, { "!EQUp_ccb", EQUI_CCB,	{ FREE_ADDRESS	, FREE_ADDRESS	, FWD_BRANCH	}		, 0				, 0				}
-#endif
-#if (SUPPORT_FLOOR)
 	, { "!FLOf_cc_", FLOF_CC_,	{ COMPILE_TIME	, CONST_FLOAT	, 0				}		, 0				, CONST_FLOAT	}
-#endif
 	, { "!GEQi_ccb", NLSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_COMPILE_TIME_POINTER_COMPS)
-	, { "!GEQp_ccb", NLSI_CCB,	{ FREE_ADDRESS	, FREE_ADDRESS	, FWD_BRANCH	}		, 0				, 0				}
-#endif
 	, { "!GOTO_b__", SKIP_B__,	{ FWD_BRANCH	, 0				, 0				}		, 0				, 0				}
 	, { "!GRTi_ccb", LSSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_COMPILE_TIME_POINTER_COMPS)
-	, { "!GRTp_ccb", LSSI_CCB,	{ FREE_ADDRESS	, FREE_ADDRESS	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#endif
 	, { "!IFDF_cb_", IFDF_CB_,	{ KONST			, FWD_BRANCH	, 0				}		, 0				, 0				}
 	, { "!IFDF_nb_", IFDF_CB_,	{ NATIVE		, FWD_BRANCH	, 0				}		, 0				, 0				}
 	, { "!IFND_cb_", IFND_CB_,	{ KONST			, FWD_BRANCH	, 0				}		, 0				, 0				}
 	, { "!IFND_nb_", IFND_CB_,	{ NATIVE		, FWD_BRANCH	, 0				}		, 0				, 0				}
 	, { "!IORi_ccc", IORI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
 	, { "!LEQi_ccb", NLSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#if (SUPPORT_COMPILE_TIME_POINTER_COMPS)
-	, { "!LEQp_ccb", NLSI_CCB,	{ FREE_ADDRESS	, FREE_ADDRESS	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-#endif
 	, { "!LSSi_ccb", LSSI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_COMPILE_TIME_POINTER_COMPS)
-	, { "!LSSp_ccb", LSSI_CCB,	{ FREE_ADDRESS	, FREE_ADDRESS	, FWD_BRANCH	}		, 0				, 0				}
-#endif
-#if (SUPPORT_MIN_MAX)
-	, { "!MAXf_ccc", MAXF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
-	, { "!MAXi_ccc", MAXI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
-#if (SUPPORT_COMPILE_TIME_POINTER_COMPS)
-	, { "!MAXp_ccc", MAXI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, FREE_ADDRESS	}		, 0			, FREE_ADDRESS		}
-#endif
-	, { "!MINf_ccc", MINF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
-	, { "!MINi_ccc", MINI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
-#if (SUPPORT_COMPILE_TIME_POINTER_COMPS)
-	, { "!MINp_ccc", MINI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, FREE_ADDRESS	}		, 0			, FREE_ADDRESS		}
-#endif
-#endif
-#if (SUPPORT_FMOD)
-	, { "!MODf_ccc", MODF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, CHECK_DIV_BY_0, CONST_FLOAT	}
-#endif
 	, { "!MODi_ccc", MODI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, CHECK_DIV_BY_0, CONST_INT		}
 	, { "!MOVf_cc_", MOVE_CC_,	{ COMPILE_TIME	, CONST_FLOAT	, 0				}		, 0				, CONST_FLOAT	}
 	, { "!MOVi_cc_", MOVE_CC_,	{ COMPILE_TIME	, CONST_INT		, 0				}		, 0				, CONST_INT		}
@@ -913,9 +561,6 @@ static const Operator OPERATORS[] = {
 	, { "!MULf_ccc", MULF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
 	, { "!MULi_ccc", MULI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
 	, { "!NEQi_ccb", NEQI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
-#if (SUPPORT_COMPILE_TIME_POINTER_COMPS)
-	, { "!NEQp_ccb", NEQI_CCB,	{ FREE_ADDRESS	, FREE_ADDRESS	, FWD_BRANCH	}		, 0				, 0				}
-#endif
 	, { "!SHLi_ccc", SHLI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
 	, { "!SHRi_ccc", SHRI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
 	, { "!SHRu_ccc", SHRU_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT_P	}
@@ -1261,9 +906,7 @@ Value Assembler::calcConstant(const Operator* op, const Char* op1Begin, const Ch
 	parseOperand(op2Begin, op2End, op->accepts[2], &v2);
 	switch (op->opcode) {
 		case MOVE_CC_: break;
-	#if (SUPPORT_ABS)
 		case ABSI_CC_: v1.i = absolute(v1.i); break;
-	#endif
 		case ADDI_CCC: v1.i = iadd(v1.i, v2.i); break;
 		case SUBI_CCC: v1.i = isub(v1.i, v2.i); break;
 		case MULI_CCC: v1.i = imul(v1.i, v2.i); break;
@@ -1275,30 +918,12 @@ Value Assembler::calcConstant(const Operator* op, const Char* op1Begin, const Ch
 		case SHLI_CCC: v1.i = ishl(v1.i, v2.i); break;
 		case SHRI_CCC: v1.i = ashr(v1.i, v2.i); break;
 		case SHRU_CCC: v1.i = lshr(v1.i, v2.i); break;
-	#if (SUPPORT_MIN_MAX)
-		case MAXI_CCC: v1.i = maximum(v1.i, v2.i); break;
-		case MINI_CCC: v1.i = minimum(v1.i, v2.i); break;
-	#endif
-	#if (SUPPORT_ABS)
 		case ABSF_CC_: v1.f = absolute(v1.f); break;
-	#endif
-	#if (SUPPORT_FLOOR)
 		case FLOF_CC_: v1.f = floorf(v1.f); break;
-	#endif
-	#if (SUPPORT_CEIL)
-		case CEIF_CC_: v1.f = ceilf(v1.f); break;
-	#endif
 		case ADDF_CCC: v1.f += v2.f; break;
 		case SUBF_CCC: v1.f -= v2.f; break;
 		case MULF_CCC: v1.f *= v2.f; break;
 		case DIVF_CCC: if (v2.f == 0) throw Exception(CONSTANT_DIVISION_BY_ZERO); v1.f /= v2.f; break;
-	#if (SUPPORT_FMOD)
-		case MODF_CCC: if (v2.f == 0) throw Exception(CONSTANT_DIVISION_BY_ZERO); v1.f = fmodf(v1.f, v2.f); break;
-	#endif
-	#if (SUPPORT_MIN_MAX)
-		case MAXF_CCC: v1.f = maximum(v1.f, v2.f); break;
-		case MINF_CCC: v1.f = minimum(v1.f, v2.f); break;
-	#endif
 		case FTOI_CCC: v1.i = ftoi(v1.f * v2.f); break;
 		case ITOF_CCC: v1.f = (Float)(v1.i) * v2.f; break;
 		default: assert(0);
@@ -1615,16 +1240,8 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt memorySize, Va
 #define C0 (ip->p0)
 #define C1 (ip->p1)
 #define C2 (ip->p2)
-#if (GAZL_CHECK_INT_DIVS_BY_ZERO)
 	#define CHECK_INT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
-#else
-	#define CHECK_INT_DIV_BY_ZERO(v)
-#endif
-#if (GAZL_CHECK_FLOAT_DIVS_BY_ZERO)
 	#define CHECK_FLOAT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
-#else
-	#define CHECK_FLOAT_DIV_BY_ZERO(v)
-#endif
 
 Int Processor::run() {
 	assert(codeBase != 0);
@@ -1683,20 +1300,12 @@ Int Processor::run() {
 			case SETL_VVV:	if ((ui = V1.i) < (UInt)(dataStackEnd - dsp - C0.i)) { (dsp + C0.i)[ui] = V2; break; } else { err = BAD_POKE; goto ret; };
 			case SETL_VVC:	if ((ui = V1.i) < (UInt)(dataStackEnd - dsp - C0.i)) { (dsp + C0.i)[ui] = C2; break; } else { err = BAD_POKE; goto ret; };
 			case ADRL_VV_:	V0.p = Pointer(&dsp[C1.i] - mb); break;
-		#if (SUPPORT_ABS)
 			case ABSI_VV_:	V0.i = absolute(V1.i); break;
-		#endif
 			case ADDI_VVV:	V0.i = iadd(V1.i, V2.i); break;
 			case ADDI_VVC:	V0.i = iadd(V1.i, C2.i); break;
 			case SUBI_VVV:	V0.i = isub(V1.i, V2.i); break;
 			case SUBI_VVC:	V0.i = isub(V1.i, C2.i); break;
 			case SUBI_VCV:	V0.i = isub(C1.i, V2.i); break;
-		#if (SUPPORT_MIN_MAX)
-			case MAXI_VVV:	V0.i = maximum(V1.i, V2.i); break;
-			case MAXI_VVC:	V0.i = maximum(V1.i, C2.i); break;
-			case MINI_VVV:	V0.i = minimum(V1.i, V2.i); break;
-			case MINI_VVC:	V0.i = minimum(V1.i, C2.i); break;
-		#endif
 			case MULI_VVV:	V0.i = imul(V1.i, V2.i); break;
 			case MULI_VVC:	V0.i = imul(V1.i, C2.i); break;
 			case DIVI_VVV:	CHECK_INT_DIV_BY_ZERO(V2.i); V0.i = idiv(V1.i, V2.i); break;
@@ -1720,39 +1329,20 @@ Int Processor::run() {
 			case SHRU_VVV:	V0.i = lshr(V1.i, V2.i); break;
 			case SHRU_VVC:	V0.i = lshr(V1.i, C2.i); break;
 			case SHRU_VCV:	V0.i = lshr(C1.i, V2.i); break;
-		#if (SUPPORT_ABS)
 			case ABSF_VV_:	V0.f = absolute(V1.f); break;
-		#endif
-		#if (SUPPORT_FLOOR)
 			case FLOF_VV_:	V0.f = floorf(V1.f); break;
-		#endif
-		#if (SUPPORT_CEIL)
-			case CEIF_VV_:	V0.f = ceilf(V1.f); break;
-		#endif
 			case ADDF_VVV:	V0.f = V1.f + V2.f; break;
 			case ADDF_VVC:	V0.f = V1.f + C2.f; break;
 			case SUBF_VVV:	V0.f = V1.f - V2.f; break;
 			case SUBF_VVC:	V0.f = V1.f - C2.f; break;
 			case SUBF_VCV:	V0.f = C1.f - V2.f; break;
-		#if (SUPPORT_MIN_MAX)
-			case MAXF_VVV:	V0.f = maximum(V1.f, V2.f); break;
-			case MAXF_VVC:	V0.f = maximum(V1.f, C2.f); break;
-			case MINF_VVV:	V0.f = minimum(V1.f, V2.f); break;
-			case MINF_VVC:	V0.f = minimum(V1.f, C2.f); break;
-		#endif
 			case MULF_VVV:	V0.f = V1.f * V2.f; break;
 			case MULF_VVC:	V0.f = V1.f * C2.f; break;
 			case DIVF_VVV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = V1.f / V2.f; break;
 			case DIVF_VVC:	V0.f = V1.f / C2.f; break;
 			case DIVF_VCV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = C1.f / V2.f; break;
-		#if (SUPPORT_FMOD)
-			case MODF_VVV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = fmodf(V1.f, V2.f); break;
-			case MODF_VVC:	V0.f = fmodf(V1.f, C2.f); break;
-			case MODF_VCV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = fmodf(C1.f, V2.f); break;
-		#endif
 			case FTOI_VVC:	V0.i = ftoi(V1.f * C2.f); break;
 			case ITOF_VVC:	V0.f = (Float)(V1.i) * C2.f; break;
-		#if (SUPPORT_COPY)
 			// FIX : all constant addresses here should be checked compile-time, but then we would need to parse operand 2 first and have an option for forward linking where the size is added to the check.
 			case COPY_VVC:	ui = V0.i - MEMORY_OFFSET; ui2 = V1.i - MEMORY_OFFSET; goto copy;
 			case COPY_VCC:	ui = V0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
@@ -1770,7 +1360,6 @@ Int Processor::run() {
 								err = ACCESS_VIOLATION;
 								goto ret;
 							}
-		#endif
 			case FORi_VVB:	if (++V0.i < V1.i) { ip += C2.i; continue; }; break;
 			case FORi_VCB:	if (++V0.i < C1.i) { ip += C2.i; continue; }; break;
 			case LSSI_VVB:	if (V0.i < V1.i) { ip += C2.i; continue; }; break;

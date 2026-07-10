@@ -66,14 +66,6 @@
 
 namespace GAZL {
 
-#if !defined(GAZL_CHECK_INT_DIVS_BY_ZERO)
-	#define GAZL_CHECK_INT_DIVS_BY_ZERO 1
-#endif
-
-#if !defined(GAZL_CHECK_FLOAT_DIVS_BY_ZERO)
-	#define GAZL_CHECK_FLOAT_DIVS_BY_ZERO 1
-#endif
-
 // TODO : support unicode source
 typedef char Char;
 typedef int Int;
