@@ -469,9 +469,9 @@ checkZeroLoop: NOOP
 ;
 ; Divide ints
 ;
-; Note: this test assumes truncation towards zero (also for negative numbers) although this is not guaranteed by all
-; C/C++ compilers. In case this test fails (for example `i3` turns out #760) the C/C++ compiler that built the VM uses
-; an unusual truncation mode and that would be a bad thing that would have to be fixed in an upgrade of GAZL.
+; Note: division truncates towards zero (also for negative numbers). This is guaranteed by C++11 and is part of GAZL's
+; normative semantics (see docs/PortabilityAudit.md). `INT_MIN / -1` is defined to yield `INT_MIN` and `INT_MIN % -1`
+; to yield `0`; see the "Defined UB / overflow semantics" block near the end of this unit for those edge cases.
 ;
 ; Division by 0 is considered illegal and should generate a run-time error (or compile-time error if 0 is a constant).
 ;
@@ -1930,6 +1930,106 @@ DEFINED_POINTER: ! DEFp    &gArray:3
 ; ! GOTO    @compileTimeFail
 ;ctOK25: !
 ;
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+; Defined UB / overflow semantics (see docs/PortabilityAudit.md)
+;
+; Each case is exercised twice: once with a variable operand (hits the run-time interpreter in Processor::run) and once
+; all-constant (hits the compile-time constant folder in calcConstant). Both must agree with the normative result.
+; INT_MIN is written as #0x80000000, INT_MAX as #0x7FFFFFFF.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+; --- div / mod by -1 (pre-fix: INT_MIN / -1 faulted on x86 and crashed the assembler when folded) ---
+ MOVi      i0              #0x80000000     ; INT_MIN
+ MOVi      i1              #-1
+ DIVi      i2              i0              i1              ; run-time  INT_MIN / -1
+ NEQi      i2              #0x80000000     @fail
+ DIVi      i3              #0x80000000     #-1             ; folded    INT_MIN / -1
+ NEQi      i3              #0x80000000     @fail
+ MODi      i2              i0              i1              ; run-time  INT_MIN % -1
+ NEQi      i2              #0              @fail
+ MODi      i3              #0x80000000     #-1             ; folded    INT_MIN % -1
+ NEQi      i3              #0              @fail
+ MOVi      i0              #-1
+ DIVi      i2              i0              i1              ; -1 / -1
+ NEQi      i2              #1              @fail
+ MOVi      i0              #0
+ DIVi      i2              i0              i1              ; 0 / -1
+ NEQi      i2              #0              @fail
+
+; --- add / sub / mul overflow: two's-complement wrap ---
+ MOVi      i0              #0x7FFFFFFF     ; INT_MAX
+ MOVi      i1              #1
+ ADDi      i2              i0              i1              ; INT_MAX + 1 -> INT_MIN
+ NEQi      i2              #0x80000000     @fail
+ ADDi      i3              #0x7FFFFFFF     #1
+ NEQi      i3              #0x80000000     @fail
+ MOVi      i0              #0x80000000     ; INT_MIN
+ SUBi      i2              i0              i1              ; INT_MIN - 1 -> INT_MAX
+ NEQi      i2              #0x7FFFFFFF     @fail
+ SUBi      i3              #0x80000000     #1
+ NEQi      i3              #0x7FFFFFFF     @fail
+ MOVi      i1              #-1
+ MULi      i2              i0              i1              ; INT_MIN * -1 -> INT_MIN
+ NEQi      i2              #0x80000000     @fail
+ MULi      i3              #0x80000000     #-1
+ NEQi      i3              #0x80000000     @fail
+
+; --- ABSi(INT_MIN) -> INT_MIN ---
+ ABSi      i2              i0                              ; run-time
+ NEQi      i2              #0x80000000     @fail
+ ABSi      i3              #0x80000000                     ; folded
+ NEQi      i3              #0x80000000     @fail
+
+; --- shifts: count mod 32; SHRi sign-extends, SHRu zero-fills ---
+ MOVi      i0              #1
+ MOVi      i1              #32
+ SHLi      i2              i0              i1              ; 1 << 32 -> 1 (32 & 31 = 0)
+ NEQi      i2              #1              @fail
+ SHLi      i3              #1              #32
+ NEQi      i3              #1              @fail
+ MOVi      i1              #33
+ SHLi      i2              i0              i1              ; 1 << 33 -> 2
+ NEQi      i2              #2              @fail
+ SHLi      i3              #1              #33
+ NEQi      i3              #2              @fail
+ MOVi      i1              #-1
+ SHLi      i2              i0              i1              ; 1 << -1 -> INT_MIN (-1 & 31 = 31; run-time only --
+ NEQi      i2              #0x80000000     @fail          ; the assembler rejects a negative constant shift count)
+ MOVi      i0              #-8
+ MOVi      i1              #1
+ SHRi      i2              i0              i1              ; -8 >> 1 -> -4 (arithmetic)
+ NEQi      i2              #-4             @fail
+ SHRi      i3              #-8             #1
+ NEQi      i3              #-4             @fail
+ SHRu      i2              i0              i1              ; -8 >>> 1 -> 0x7FFFFFFC (logical)
+ NEQi      i2              #0x7FFFFFFC     @fail
+ SHRu      i3              #-8             #1
+ NEQi      i3              #0x7FFFFFFC     @fail
+
+; --- fTOi saturation: out-of-range -> INT_MAX / INT_MIN (scale 1.0) ---
+ MOVf      f0              #1.0e30
+ fTOi      i2              f0              #1.0            ; +big -> INT_MAX
+ NEQi      i2              #0x7FFFFFFF     @fail
+ fTOi      i3              #1.0e30         #1.0
+ NEQi      i3              #0x7FFFFFFF     @fail
+ MOVf      f0              #-1.0e30
+ fTOi      i2              f0              #1.0            ; -big -> INT_MIN
+ NEQi      i2              #0x80000000     @fail
+ fTOi      i3              #-1.0e30        #1.0
+ NEQi      i3              #0x80000000     @fail
+ MOVf      f0              #2.5e9                          ; just over 2^31 (~2.147e9) -> INT_MAX. NOTE: a literal
+ fTOi      i2              f0              #1.0            ; right at 2^31 (e.g. 2147483647.0) is avoided on purpose --
+ NEQi      i2              #0x7FFFFFFF     @fail          ; the assembler's float-literal parser rounds it to a
+ fTOi      i3              #2.5e9          #1.0           ; different float32 under MSVC vs clang (a separate parser
+ NEQi      i3              #0x7FFFFFFF     @fail          ; portability bug), which would mask what this case tests.
+ MOVf      f0              #-2.5e9                         ; just under -2^31 -> INT_MIN
+ fTOi      i2              f0              #1.0
+ NEQi      i2              #0x80000000     @fail
+ fTOi      i3              #-2.5e9         #1.0
+ NEQi      i3              #0x80000000     @fail
 
     done:               POKE &global.pointer &consts.done
                         RETU
