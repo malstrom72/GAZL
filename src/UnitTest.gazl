@@ -2020,16 +2020,35 @@ DEFINED_POINTER: ! DEFp    &gArray:3
  NEQi      i2              #0x80000000     @fail
  fTOi      i3              #-1.0e30        #1.0
  NEQi      i3              #0x80000000     @fail
- MOVf      f0              #2.5e9                          ; just over 2^31 (~2.147e9) -> INT_MAX. NOTE: a literal
- fTOi      i2              f0              #1.0            ; right at 2^31 (e.g. 2147483647.0) is avoided on purpose --
- NEQi      i2              #0x7FFFFFFF     @fail          ; the assembler's float-literal parser rounds it to a
- fTOi      i3              #2.5e9          #1.0           ; different float32 under MSVC vs clang (a separate parser
- NEQi      i3              #0x7FFFFFFF     @fail          ; portability bug), which would mask what this case tests.
- MOVf      f0              #-2.5e9                         ; just under -2^31 -> INT_MIN
+ MOVf      f0              #2.5e9                          ; well over 2^31 (~2.147e9) -> INT_MAX
+ fTOi      i2              f0              #1.0
+ NEQi      i2              #0x7FFFFFFF     @fail
+ fTOi      i3              #2.5e9          #1.0
+ NEQi      i3              #0x7FFFFFFF     @fail
+ MOVf      f0              #-2.5e9                         ; well under -2^31 -> INT_MIN
  fTOi      i2              f0              #1.0
  NEQi      i2              #0x80000000     @fail
  fTOi      i3              #-2.5e9         #1.0
  NEQi      i3              #0x80000000     @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+; Float literal parsing: correctly rounded and identical on every compiler
+;
+; stringToFloat must round the decimal literal to the nearest float (it accumulates in double, then converts once),
+; NOT accumulate directly in float32 -- the latter diverged across compilers (clang contracts `d*10+digit` to a
+; single-rounded fmadd, MSVC emits mul+add), e.g. 2147483647.0 parsed to 2^31 on one and 2^31-128 on the other.
+; These compile-time comparisons pin the correctly-rounded result: each literal is not exactly representable and
+; must round to the neighbouring power of two.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ EQUf      #2147483647.0    #2147483648.0    @okFParse0     ; 2^31-1 not representable -> rounds up to 2^31
+ GOTO      @fail
+okFParse0: NOOP
+ EQUf      #16777217.0      #16777216.0      @okFParse1     ; 2^24+1 not representable -> rounds (to even) to 2^24
+ GOTO      @fail
+okFParse1: NOOP
 
     done:               POKE &global.pointer &consts.done
                         RETU

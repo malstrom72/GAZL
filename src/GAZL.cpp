@@ -164,22 +164,36 @@ template<class F> F pow10(F x) { return pow(10, x); }
 static float pow10(float x) { return powf(10.0f, x); }
 
 static Float stringToFloat(const Char* &p, const Char* e) {
-	Float d = 0;
-	Float sign = 1;
+	/*
+		Accumulate in double, convert to Float once at the end. Accumulating directly in float32
+		diverges across compilers: `d * 10 + digit` loses precision at each step near the float
+		range limit, and clang contracts it to a single-rounded fmadd while MSVC emits mul+add
+		(two roundings) -- so e.g. "2147483647.0" parsed to 2^31 on one and 2^31-128 on the other.
+		A <=15-digit integer is exact in double (so contraction cannot change it), and the single
+		closing double->float conversion is correctly rounded and identical on every target.
+	*/
+	double d = 0;
+	double sign = 1;
 	switch (p < e ? *p : 0) {
 		case '+': ++p; sign = 1; break;
 		case '-': ++p; sign = -1; break;
 	}
 	if (p < e && *p >= '0' && *p <= '9') {
-		do { d = d * 10 + (*p - '0'); } while (++p < e && *p >= '0' && *p <= '9');
+		do {
+			d = d * 10 + (*p - '0');
+		} while (++p < e && *p >= '0' && *p <= '9');
 		if (p + 1 < e && *p == '.' && p[1] >= '0' && p[1] <= '9') {
 			++p;
-			Float f = 1;
-			do { d += (*p - '0') * (f *= (Float)(0.1)); } while (++p < e && *p >= '0' && *p <= '9');
+			double f = 1;
+			do {
+				d += (*p - '0') * (f *= 0.1);
+			} while (++p < e && *p >= '0' && *p <= '9');
 		}
-		if (p + 1 < e && (*p == 'E' || *p == 'e')) d *= pow10((Float)(stringToInt(++p, e)));
+		if (p + 1 < e && (*p == 'E' || *p == 'e')) {
+			d *= pow10((double)(stringToInt(++p, e)));
+		}
 	}
-	return d * sign;
+	return static_cast<Float>(d * sign);
 }
 
 static Char* int2string(Int i, int radix, int minLength, Char buffer[33]) {
