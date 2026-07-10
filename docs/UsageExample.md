@@ -31,12 +31,12 @@ The command prints:
 Hello, world!
 ```
 
-## 3. Run the compiled code directly (optional)
+## 3. Re-run without recompiling (optional)
 
-You can also keep the generated assembly and invoke the VM yourself:
+`hello.gazl` is a self-contained assembly file, so once it is compiled you can run it again at any
+time with just `GAZLCmd` — no need to invoke the compiler:
 
 ```bash
-./output/NuXJS output/impala.nuxjs.js hello.impala hello.gazl 0x4d2 hello.impala
 ./output/GAZLCmd hello.gazl main
 ```
 

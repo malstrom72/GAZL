@@ -70,7 +70,7 @@ The virtual machine and assembler are implemented in standard C++ in a single he
 
 ## Using from C++
 
-Use the `Assembler` class to parse assembly source and the `Processor` class to execute code. An example is found in `lab/GAZLTest.cpp`:
+Use the `Assembler` class to parse assembly source and the `Processor` class to execute code. An example is found in `tools/GAZLCmd.cpp`:
 
 ```cpp
 Assembler assem(100000, codeMemory, 100000, dataMemory, globals);
@@ -90,7 +90,7 @@ Status result = vm.run();
 
 The processor exposes helpers to access memory and parameters (`accessMemory`, `accessParams`). Writing your own native functions involves the `Processor*` interface; see the unit tests for examples.
 
-For a smaller example, inspect the comments around the `Assembler` and `Processor` usage in `lab/GAZLTest.cpp`.
+For a smaller example, inspect the comments around the `Assembler` and `Processor` usage in `tools/GAZLCmd.cpp`.
 
 ## Textual Representation and Compile‑Time Constants
 

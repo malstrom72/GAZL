@@ -2,6 +2,14 @@
 
 Descriptions extracted from [`src/UnitTest.gazl`](../src/UnitTest.gazl).
 
+**Floating-point environment.** Integer and `FTOi` results are identical on every target (two's-complement wrap,
+count-mod-32 shifts, saturating `FTOi`; see the individual opcodes). Float arithmetic (`ADDf`, `SUBf`, `MULf`, `DIVf`,
+`FLOf`, and so on) is IEEE-754 single precision, but its rounding mode and denormal handling (FTZ/DAZ) follow the host's
+current floating-point environment. GAZL does not set or restore it. Results that involve denormals are therefore
+host-defined and can differ between callers (for example an audio thread with flush-to-zero enabled versus a default
+thread) or between platforms. For bit-reproducible float results, run GAZL under a fixed FP environment (round-to-nearest
+plus a deliberate FTZ/DAZ choice) around `run()`.
+
 ## ABSf
 - `float(d)        #float`
 - `float(d)        float`
@@ -150,10 +158,9 @@ constant).
 - `int(d)          int             #int`
 - `int(d)          int             int`
 
-Divide ints Note: this test assumes truncation towards zero (also for negative numbers) although this is not guaranteed
-by all C/C++ compilers. In case this test fails (for example `i3` turns out #760) the C/C++ compiler that built the VM
-uses an unusual truncation mode and that would be a bad thing that would have to be fixed in an upgrade of GAZL.
-Division by 0 is considered illegal and should generate a run-time error (or compile-time error if 0 is a constant).
+Divide ints. Division truncates towards zero (also for negative numbers); this is guaranteed by C++11, which GAZL
+requires. `INT_MIN / -1` is defined to yield `INT_MIN` (no trap). Division by 0 is considered illegal and generates a
+run-time error (or compile-time error if 0 is a constant).
 
 ## EQUf
 - `#float          #float          @label`
@@ -370,10 +377,9 @@ Branch on less pointer
 - `int(d)          int             #int`
 - `int(d)          int             int`
 
-Modulus two ints Note: this test assumes truncation towards zero (also for negative numbers) although this is not
-guaranteed by all C/C++ compilers. In case this test fails the C/C++ compiler that built the VM uses an unusual
-truncation mode and that would be a bad thing that would have to be fixed in an upgrade of GAZL. Modulus by 0 is
-considered illegal and should generate a run-time error (or compile-time error if 0 is a constant).
+Modulus two ints. The remainder takes the sign of the dividend (truncation towards zero); this is guaranteed by C++11,
+which GAZL requires. `INT_MIN % -1` is defined to yield `0` (no trap). Modulus by 0 is considered illegal and generates a
+run-time error (or compile-time error if 0 is a constant).
 
 ## MOVE
 - `var(d)          var`
