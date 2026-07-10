@@ -884,6 +884,184 @@ rewrite. Checkable in review:
 
 ---
 
+### 5.7 Worked example — one loop, compiled two ways
+
+A tiny end‑to‑end illustration of the register/ABI convention (§5.3), fuel checks (§5.5), and the safepoint/trap model
+(§5.4), plus the v1‑vs‑v2 register story (§1.1). The assembly is **schematic** — register choices and slot offsets are
+made up for readability, not the output of a real assembler.
+
+**GAZL source.** `sumTo(n)` → `0 + 1 + … + (n−1)`:
+
+```gazl
+FUNC                          ; sumTo
+    INPi n                    ; input param
+    OUTi result               ; output param (caller reads it back from the frame)
+    LOCi i                    ; local
+    MOVi result #0
+    MOVi i      #0
+@loop
+    ADDi result result i      ; result += i
+    FORi i n @loop            ; ++i ; if (i < n) goto @loop
+    RETU
+```
+
+**What the JIT consumes** — the finalized `Instruction[]` (one 16‑byte record each; §5.0):
+
+```
+[0] FUNC_CC_   localsSize, paramsSize
+[1] MOVi_VC_   result, #0
+[2] MOVi_VC_   i,      #0
+[3] ADDI_VVV   result, result, i        ← @loop  (basic-block head)
+[4] FORi_VVB   i, n, →[3]               ← back-edge (fused ++, compare, branch)
+[5] RETU_C__
+```
+
+The loop body is one basic block, instructions `[3]`+`[4]` → **block weight = 2**.
+
+**Pinned‑register convention** (callee‑saved so calls don't clobber VM state):
+
+| Role | ARM64 | x64 |
+|---|---|---|
+| `ctx` (`Processor*`) | `x19` | `rbx` |
+| `dsp` (frame base) | `x20` | `r15` |
+| `membase` (unused here — no `PEEK`/`POKE`) | `x21` | `r14` |
+| `fuel` (`clockCyclesLeft`) | `w22` | `r13d` |
+
+Frame slots (schematic byte offsets off `dsp`): `n=[+0]`, `result=[+4]`, `i=[+8]`. Omitted for focus: the `FUNC`
+stack‑overflow check and a function‑entry fuel charge for the straight‑line prologue — the loop‑header check is the
+interesting one.
+
+#### v1 — locals memory‑resident (no register allocation)
+Every operand is loaded from / stored to its frame slot, mirroring the interpreter exactly. Correct by construction.
+
+ARM64:
+```asm
+sumTo:
+        str     wzr, [x20, #4]         ; [1] result = 0
+        str     wzr, [x20, #8]         ; [2] i = 0
+.Lloop:                                ; [3] @loop
+        subs    w22, w22, #2           ; fuel -= blockWeight(2)
+        b.mi    .Ltimeout              ;   if fuel < 0 → safepoint
+        ldr     w0, [x20, #4]          ; [3] ADDi: w0 = result
+        ldr     w1, [x20, #8]          ;          w1 = i
+        add     w0, w0, w1
+        str     w0, [x20, #4]          ;          result = w0
+        ldr     w0, [x20, #8]          ; [4] FORi: w0 = i
+        add     w0, w0, #1             ;          ++i
+        str     w0, [x20, #8]          ;          i = w0
+        ldr     w1, [x20, #0]          ;          w1 = n
+        cmp     w0, w1
+        b.lt    .Lloop                 ;          if i < n → loop
+        ret                            ; [5] RETU
+.Ltimeout:
+        mov     w0, #IP_loop           ; resume ip = &code[@loop]
+        str     w0,  [x19, #IP_OFF]    ; Processor.ip
+        str     w22, [x19, #FUEL_OFF]  ; Processor.clockCyclesLeft
+        mov     w0, #-1                ; TIME_OUT
+        ret
+```
+
+x64:
+```asm
+sumTo:
+        mov     dword [r15+4], 0        ; [1] result = 0
+        mov     dword [r15+8], 0        ; [2] i = 0
+.Lloop:                                 ; [3] @loop
+        sub     r13d, 2                 ; fuel -= 2
+        js      .Ltimeout               ;   if negative → safepoint
+        mov     eax, [r15+4]            ; [3] ADDi
+        add     eax, [r15+8]
+        mov     [r15+4], eax
+        mov     eax, [r15+8]            ; [4] FORi
+        inc     eax
+        mov     [r15+8], eax
+        cmp     eax, [r15+0]            ;   i vs n
+        jl      .Lloop
+        ret                             ; [5] RETU
+.Ltimeout:
+        mov     dword [rbx+IP_OFF], IP_loop
+        mov     [rbx+FUEL_OFF], r13d
+        mov     eax, -1                 ; TIME_OUT
+        ret
+```
+
+Loop body ≈ **10 instructions** (6 memory ops).
+
+#### v2 — locals in registers (escape analysis, §1.1)
+`result`, `i`, `n` are non‑escaping scalars (no `ADRL`/`GETL`/`SETL` touches them), so they live in registers for the
+whole function. Load `n` once; keep `result`/`i` in regs; **spill back only at the epilogue and the timeout safepoint**
+so the suspended state stays byte‑identical to the interpreter's. Caller‑saved scratch is fine — the loop makes no calls,
+so no prologue save.
+
+ARM64 (`w9=result`, `w10=i`, `w11=n`):
+```asm
+sumTo:
+        ldr     w11, [x20, #0]         ; n loaded once
+        mov     w9,  #0                ; result = 0
+        mov     w10, #0                ; i = 0
+.Lloop:
+        subs    w22, w22, #2           ; fuel -= 2
+        b.mi    .Ltimeout
+        add     w9, w9, w10            ; [3] result += i
+        add     w10, w10, #1           ; [4] ++i
+        cmp     w10, w11               ;     i < n ?
+        b.lt    .Lloop
+        str     w9,  [x20, #4]         ; epilogue: write OUT param back
+        str     w10, [x20, #8]         ;   (i: only if observable)
+        ret
+.Ltimeout:                             ; safepoint = spill live regs first
+        str     w9,  [x20, #4]
+        str     w10, [x20, #8]
+        mov     w0, #IP_loop
+        str     w0,  [x19, #IP_OFF]
+        str     w22, [x19, #FUEL_OFF]
+        mov     w0, #-1
+        ret
+```
+
+x64 (`r8d=result`, `r9d=i`, `r10d=n`):
+```asm
+sumTo:
+        mov     r10d, [r15+0]          ; n once
+        xor     r8d, r8d               ; result = 0
+        xor     r9d, r9d               ; i = 0
+.Lloop:
+        sub     r13d, 2                ; fuel -= 2
+        js      .Ltimeout
+        add     r8d, r9d               ; [3] result += i
+        inc     r9d                    ; [4] ++i
+        cmp     r9d, r10d              ;     i < n ?
+        jl      .Lloop
+        mov     [r15+4], r8d           ; epilogue: spill OUT
+        mov     [r15+8], r9d
+        ret
+.Ltimeout:
+        mov     [r15+4], r8d
+        mov     [r15+8], r9d
+        mov     dword [rbx+IP_OFF], IP_loop
+        mov     [rbx+FUEL_OFF], r13d
+        mov     eax, -1
+        ret
+```
+
+Loop body = **4 instructions**, zero memory traffic.
+
+#### What the machinery is doing
+- **Fuel check** = one `subs`/`sub` + conditional branch at the loop head, charging the whole block at once (`−2`). The
+  interpreter charged 1/instruction and could stop mid‑block; the JIT stops at block granularity. Because the check sits
+  *before* the block's work, on timeout nothing in the block has executed yet, so resuming at `@loop` re‑runs it cleanly
+  — no double `+= i`.
+- **The timeout stub is a safepoint.** It records the resume ip (`&code[@loop]`) and fuel into the `Processor`, and in v2
+  first **spills live registers** to their frame slots — that's what makes the suspended state identical to the
+  interpreter's, so the host can resume in *either* engine. Any trap (bad `POKE`, div‑by‑zero) branches to a similar stub
+  with a different status code — no signals, just a `ret` with a `Status` (§5.4).
+- **v1 vs v2:** identical semantics, fuel accounting, and safepoint contract — only operand storage differs. The loop
+  shrinks from ~10 instructions (6 memory ops) to 4 register ops. On real hardware v1 is not 2.5× slower (store‑to‑load
+  forwarding hides most reloads), but v2 still wins by removing the memory µops and shortening the dependency chain — and
+  this is exactly the case (tight scalar loop, no address‑taken locals) where the escape analysis lets v2 apply.
+
+---
+
 ## 6. Per‑ISA codegen specifics & determinism
 
 GAZL promises portable, reproducible results. The JIT must match the interpreter *and* the interpreter across ISAs. Some
