@@ -31,7 +31,7 @@ path, a constant-folded expression (`fTOi x #BIG`) will silently disagree with t
 | 3 | Signed integer overflow in `ADDi`/`SUBi`/`MULi`/`ABSi` | **UB** | `:1649`–`1661`, `absolute()` `:89` | Define two's-complement wrap; use unsigned math or build `-fwrapv` |
 | 4 | Shift count ≥ 32 or negative is UB; `SHRi` of negative impl-defined pre-C++20 | **UB** | `:1674`–`1682` | Define "count mod 32"; mask `& 31`; guarantee arithmetic `>>` |
 | 5 | Denormal handling follows host FTZ/DAZ | **FP-ENV** | (no MXCSR/FPCR control; `:35`–`50`) | Document as host-defined; optional strict mode |
-| 6 | `GETL`/`SETL`/`ADRL` cross-local access is defined-by-accident | **SPEC** | `:1642`–`1645` | Adopt the "local-access bounds rule" (unspecified-but-safe) |
+| 6 | `GETL`/`SETL`/`ADRL` cross-local access is defined-by-accident | **SPEC** | `:1642`–`1645` | Adopt the *provenance-bounded* rule (defined within `[deriv, frame.dsp)`, incl. cross-local; unspecified beyond). **Not** "distinct locals don't alias" — that's unsound |
 | 7 | `DIVi`/`MODi` truncation-toward-zero flagged as an *assumption* | **SPEC** (resolved) | `UnitTest.gazl` / `InstructionSet.md` notes | Retire the caveat — C++11 guarantees it |
 
 (`COPY` overlap is *correctly* specified as undefined already — see [Examined and found OK](#examined-and-found-ok).)
@@ -210,13 +210,26 @@ a wild index (or an `ADRL`-derived pointer plus `ADDp`/`POKE`) can read/write *o
 with a result that is an artifact of frame layout (`GAZL.cpp:1642`–`1645`). It is not UB and not cross-arch divergent
 today, but it is **unspecified** at the language level.
 
-**Recommended resolution.** Adopt the **local-access bounds rule** already worked out in
-[JitCompilerResearch.md §1.1](JitCompilerResearch.md): *a dynamic local index and an `ADRL`-derived pointer are defined
-only for accessing the named variable/array within its declared `*size`; reaching a different named local is
-memory-safe but yields an **unspecified** value.* This preserves the sandbox guarantee (still cannot leave the data
-stack; `BAD_PEEK`/`BAD_POKE` still fire for true out-of-stack), requires **no interpreter change** (today's specific
-behavior is a valid instance of "unspecified"), and lets an optimizer/JIT assume distinct locals do not alias. Add the
-wording to the `GETL`/`SETL`/`ADRL`/`ADDp`/`SUBp` entries in `src/UnitTest.gazl` and `docs/InstructionSet.md`.
+**Recommended resolution — the *provenance-bounded* local-access rule** ([JitCompilerResearch.md §1.1](JitCompilerResearch.md)).
+> ⚠️ An earlier draft of this item (and of §1.1) proposed "reaching a different named local is unspecified; a JIT may
+> assume distinct locals do not alias." **That is unsound — do not add it to the spec or tests.** Real compiled
+> programs (`perfTest.gazl`, `buffer.gazl`, `nobuffer.gazl`) deliberately `ADRL` one local and `COPY` a block spanning
+> a whole run of adjacent named locals (bulk load/store of a global-state struct into a bank of register-like scalars),
+> and the observed output depends on that cross-local write. Every `ADRL` in the corpus carries `*0`, so "within its
+> declared `*size`" is not even a real bound.
+
+The adopted rule instead draws the defined/unspecified line by **provenance span**: a pointer derived from `ADRL var`
+in frame `F` (through any `ADDp`/`SUBp`/`COPY`/arg-passing chain) is **defined** across `[&var, F.dsp)` — the target
+*upward through the end of `F`'s locals* — and a dynamic `GETL`/`SETL` index is defined across `[base, F.dsp)`.
+**Crossing into adjacent named locals *within* that span is defined behavior**: frame layout (declaration order, sizes,
+offsets) is ABI, reproduced bit-for-bit. **Outside** the span (below the derivation point, past the owning frame's
+`dsp`, or into a younger frame) the access is memory-safe but **unspecified**; a global-derived pointer is defined only
+within its own section. The sandbox guarantee is unchanged (`BAD_PEEK`/`BAD_POKE` still fire at the true edges), and
+**no interpreter change is required** — today's contiguous-memory behavior is the conforming instance. This is the
+weakest rule that (a) keeps the bank idiom defined and (b) still lets a JIT register-cache the *private* slots below
+the escape floor (JitCompilerResearch.md §5.7). Add this wording — not the retracted version — to the
+`GETL`/`SETL`/`ADRL`/`ADDp`/`SUBp` entries in `src/UnitTest.gazl` and `docs/InstructionSet.md`, and add golden `.gazl`
+cases that *rely* on the defined span (a bank `COPY`, a by-ref out-param).
 
 ---
 
@@ -260,6 +273,8 @@ Recorded so they are not re-litigated:
 3. **Item 2** (`FTOI`) — fix the existing cross-arch divergence and lock the semantics.
 4. **Items 5–7** — specification/documentation decisions (denormals, local aliasing, div truncation note), plus the
    matching golden `.gazl` tests. These align with Phase 0 / Phase −1 B1 of the JIT plan but stand on their own.
+   **Item 6 must ship the provenance-bounded wording, with tests that *rely* on the defined cross-local span** — a bank
+   `COPY` and a by-ref out-param — so a later "distinct locals don't alias" optimization can never regress it.
 
 Every code fix should be mirrored in the **compile-time constant folder** and covered by a test asserting the run-time
 and compile-time results agree.
