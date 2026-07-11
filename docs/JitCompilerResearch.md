@@ -177,11 +177,12 @@ Then:
 
 - **v1:** ignore all of this — every local is memory‑resident, so the JIT does exactly what the interpreter does and is
   bit‑identical by construction. `GETL`/`SETL`/`ADRL` lower to the same checked memory ops the interpreter runs.
-- **v2:** register‑cache **private** slots; keep **aliasable** slots and arrays memory‑resident. Pointer‑borne reads
-  and writes then need *no barriers at all* in the baseline design, because everything they can legally touch is
-  already memory‑resident. The 15 zero‑escape kernels (`perfTest1`/`perfTest2`/`MLMoogFilter`/…) have no floor, so
-  every scalar is private; even `perfTest.main` (the 13‑slot bank) keeps its 14 pre‑bank scalars register‑resident.
-  The full allocator design is **§5.7**.
+- **v2:** registers become a **write‑back cache of the frame** (§5.7): every slot — aliasable or not — is cacheable
+  within a basic block, with conservative flushes around pointer memory ops (v2.0, sound with no aliasing rule at all);
+  **private** slots additionally get fixed whole‑function *bound* registers exempt from those flushes (v2.1 — this is
+  what the escape floor and the §1.1 rule are for). The 15 zero‑escape kernels (`perfTest1`/`perfTest2`/
+  `MLMoogFilter`/…) have no floor, so every scalar is bound‑eligible; even `perfTest.main` (the 13‑slot bank) keeps its
+  14 pre‑bank scalars bound. The full allocator design is **§5.7**.
 
 **Spec decision — two iterations.** A first draft proposed "distinct named locals never alias" (any cross‑local access
 = unspecified). **Retracted as unsound**: `perfTest.gazl`, `buffer.gazl`, and `nobuffer.gazl` deliberately `ADRL` one
@@ -549,10 +550,11 @@ function‑by‑function (`FUNC` marks each start), never mutates it, and emits 
 - **Tier 1 — Load‑time baseline JIT (new).** Compiles the *whole loaded program* once, off the audio thread, at patch
   load. No profiling, no tiering, no OSR, no deopt. Produces one native function per GAZL `FUNC`.
 
-- **Tier 2 — register‑allocating JIT (v2, committed — §5.7).** Same lowering + two‑tier register allocation. Not built
-  first, but **designed up front**: v1 must satisfy the compatibility contract in §5.7.7 so v2 is an additive change.
-  Still no speculation and no deopt — GAZL has no dynamic types to speculate on, so the machinery that causes most JIT
-  CVEs never enters the design.
+- **Tier 2 — register‑allocating JIT (v2, committed — §5.7).** Same lowering + registers treated as a write‑back
+  cache of the frame, staged v2.0 (block‑local floating cache, no aliasing‑spec dependence) → v2.1 (bound registers for
+  hot private scalars) → v2.2 (optional provenance‑scoped flushing). Not built first, but **designed up front**: v1 must
+  satisfy the compatibility contract in §5.7.7 so v2 is an additive change. Still no speculation and no deopt — GAZL
+  has no dynamic types to speculate on, so the machinery that causes most JIT CVEs never enters the design.
 
 ### 5.2 The invariant that makes everything safe and testable
 > **At every safepoint, JIT program‑observable state is byte‑identical to the interpreter's at the same GAZL ip:** all
@@ -726,7 +728,7 @@ each needs the *other* coordinate. This is the source of the common confusion ab
 shared EXIT with a `Status` (`OK`, `TIME_OUT`, a trap code); `run()` behaves exactly as today. `--no-jit` or a failed
 executable‑memory probe feeds the same `Instruction[]` to the interpreter — no other difference.
 
-### 5.7 v2 register allocation — the committed two‑tier design (fixed now so v1 cannot paint us into a corner)
+### 5.7 v2 register allocation — registers as a write‑back cache of the frame (committed, staged)
 
 v2 is not optional polish. Measured on the golden corpus: **48 % of executable instructions reference a transient**,
 and transient def→use distance is almost always 1 (in `MLMoogFilter`, 44 of 51 transient uses consume the value on the
@@ -734,154 +736,232 @@ very next instruction) — so under v1, roughly half of all dataflow round‑tri
 is three memory ops for one `fadd`). This section fixes the v2 design in near‑pseudo‑code so that every v1 structure it
 relies on is a stated contract (§5.7.7), not a lucky accident.
 
-**Corpus facts it builds on (§1.1):** locals sit at negative dsp‑relative offsets in declaration order, transients at
-`[0, paramsSize)`; frame layout is ABI; every `ADRL` carries `*0`; ~18 % of `ADRL` targets are scalars; the
-contiguous‑bank bulk `COPY` through one `ADRL` is load‑bearing; 15/57 programs contain no `ADRL`/`GETL`/`SETL` at all.
+**The model.** The allocator is a **write‑back cache of frame slots**, with host registers as the cache lines and the
+data‑stack frame as backing store. Every design question becomes a cache‑coherence question against three observers:
+*memory operations* (a pointer‑borne read must see pending writes; a pointer‑borne write makes cached copies stale),
+*safepoints* (calls, back‑edge fuel checks, returns — memory must be interpreter‑identical, §5.2), and *control‑flow
+joins* (a label's predecessors must agree on cache state). Two kinds of line:
 
-#### 5.7.1 The spec rule v2 stands on, and the escape floor
+- **Floating lines** — any slot (transient or local), filled on first read, allocated dirty on write (no store at the
+  def), LRU‑evicted under pressure, **flushed‑dirty and cleared at every basic‑block boundary**. Because floating state
+  never crosses a label, joins are trivially consistent, resume needs no register reconstruction, and the §8 machine‑
+  code verifier can check each block in isolation.
+- **Bound lines** (v2.1) — a few hot *private* scalars given one fixed register for the whole function. Because the
+  binding is the same everywhere, a bound line is join‑consistent by construction and survives labels — which is
+  exactly what floating lines give up. ("Bound", not "pinned", to avoid colliding with §5.3's pinned VM‑state
+  registers.)
 
-The **provenance‑bounded local‑access rule** (§1.1, normative, Phase 0) is what makes *any* caching sound. Without it,
-a variable‑pointer `POKE` may legally hit every slot of every active frame (the interpreter checks only
-`rwMemorySize`), so nothing could ever live in a register. With it, defined pointer access is confined to
-`[derivation point, owning frame's dsp)`, which yields a one‑scan partition of each function's frame:
+**The stages — each independently sound, each measured** (`benchmarks/jit/JitBenchA3`, hand‑written models of the
+emitted code, Apple Silicon, integer kernels; speedups vs the interpreter):
+
+| Stage | Mechanism | Needs the §1.1 aliasing spec? | Arith kernel | Seq‑memory kernel |
+|---|---|---|--:|--:|
+| v1 | all slots memory‑resident | no | 2.8× | ~3× (est.) |
+| **v2.0** | floating lines only; **conservative flush around every pointer memory op** | **no — sound with no aliasing rule at all** | 3.9× | 5.2–5.5× |
+| **v2.1** | + bound lines for hot private scalars (escape floor) | **yes — this is what the spec is for** | 6.1× | 12.4–13.6× |
+| v2.2 | + provenance‑scoped flushing (taint frame‑born pointers) | yes (already required by v2.1) | — | 5.7–6.4× without bound lines; ~10–20 % over v2.0 |
+
+The measured surprise that set this staging: **the block‑boundary clear is the expensive part, not the pointer
+flushes.** Conservative flushing costs only ~10–20 % over provenance‑scoped flushing (store‑to‑load forwarding makes
+the flush/reload traffic nearly free, at least on Apple Silicon — expect somewhat more on small x64 cores), while bound
+lines roughly **double** throughput on both kernels. So the aliasing spec's real customer is v2.1's bound lines, and
+v2.0 ships with no spec dependence whatsoever.
+
+**Corpus facts the design builds on (§1.1):** locals sit at negative dsp‑relative offsets in declaration order,
+transients at `[0, paramsSize)`; frame layout is ABI; every `ADRL` carries `*0`; ~18 % of `ADRL` targets are scalars;
+the contiguous‑bank bulk `COPY` through one `ADRL` is load‑bearing; 15/57 programs contain no `ADRL`/`GETL`/`SETL` at
+all; and the per‑function measurement (`benchmarks/jit/JitEscapeAnalysis`) shows the escape floor alone would leave
+real firmware `process()` functions with **all** scalars aliasable purely because Impala declares buffers first — which
+is why aliasable slots must be *cacheable between flushes* (v2.0 floating lines) rather than permanently
+memory‑resident.
+
+#### 5.7.1 v2.0 — the floating cache and its coherence events
+
+All slots — transients and locals alike — are handled by one mechanism. Transients are **typeless** (`%1` legitimately
+holds ptr, int, and float in successive defs), so a line's register class is chosen **per definition**; spills are raw
+64‑bit word stores (bit‑pattern‑preserving, the same `Value`‑union semantics the interpreter has). Register class
+matters for operations, never for the memory image.
+
+```
+cache : slot -> { reg, class, dirty }                // floating lines; meaningful only within one basic block
+```
+
+A def claims a register and records `dirty` — **no store at the def**. A use reads the mapped register — **no load on a
+hit**. On pool exhaustion, evict the least‑recently‑used line (store if dirty, drop). The coherence events:
+
+| Event | Action on floating lines | Why |
+|---|---|---|
+| read of a slot | hit → reg; miss → load, fill clean | |
+| `PEEK`/`COPY`‑source via pointer, `GETL` | **flush dirty before** (lines stay valid) | the read must see pending writes |
+| `POKE`/`COPY`‑dest via pointer, `SETL` | **flush dirty before + invalidate all after** | pending writes must land first (the pointer may miss them); after the write any cached copy may be stale |
+| `PEEK`/`POKE` at a **constant address** | none | assembler‑validated global access; cannot touch the frame (§5.3) |
+| label / block boundary | flush dirty, clear | predecessors need no agreement; resume/verifier stay block‑local |
+| back‑edge | flush **before** the fuel check (§5.5) | a timeout suspends with memory interpreter‑identical |
+| `CALL` (GAZL or native) | flush all | arg transients materialize here for free; no host reg survives the dispatcher (§5.4) |
+| `RETU` | flush all | OUT params land in memory |
+
+That is the whole of v2.0. Note what is *absent*: no aliasing analysis, no taint tracking, no escape floor, **no
+dependence on the §1.1 local‑access rule** — a wild `SETL`, an `ADRL`‑derived pointer walking the frame, anything the
+interpreter permits is handled correctly, because memory is current at every pointer op and every block boundary.
+Correctness never rests on the clever part. Measured: 3.9× (arithmetic) / 5.2–5.5× (bounds‑checked memory loop) vs the
+interpreter — already 1.4–1.9× over v1.
+
+#### 5.7.2 v2.1 — bound lines for hot private scalars (the 2× lever)
+
+The remaining cost in v2.0 is the block‑boundary clear: a single‑block loop (GAZL's dominant shape, thanks to fused
+`FORi`) reloads every hot scalar at the top of each iteration and stores the dirty ones at the bottom. Bound lines
+remove exactly that: a few long‑lived named values (`$acc`, loop counters) get one host register for the whole
+function. No live ranges, no interference graph — the binding is a flat table, and because it is identical in every
+block, a bound line **survives labels and back‑edges** (store‑when‑dirty at block ends, never reloaded except at call
+returns and resume points).
+
+Bound lines are **exempt from all pointer‑op flushes** — and that exemption is only sound for slots no defined pointer
+access can reach. This is where the **provenance‑bounded local‑access rule** (§1.1, normative, Phase 0) enters, via the
+escape floor:
 
 ```
 escapeFloor = +INF                                   // a layout offset; locals < 0 < transients
 for ins in func:
-    if ins.op == ADRL:          escapeFloor = min(escapeFloor, layoutOff(ins.target))
+    if ins.op == ADRL:          escapeFloor = min(escapeFloor, layoutOff(base of ins.target))
     if ins.op in {GETL, SETL}:  escapeFloor = min(escapeFloor, layoutOff(ins.base))
 
 private(s)   = s.layoutOff < escapeFloor             // unreachable by any defined pointer access
                or s.kind == TRANSIENT                 // above dsp: outside every defined span
-aliasable(s) = otherwise                              // stays memory-resident in baseline v2
-```
+aliasable(s) = otherwise                              // floating lines only (v2.0 treatment)
 
-Consequences that make the rest of the design fall out:
-
-- **Private slots can be cached with no barriers anywhere** — no pointer‑borne read or write can touch them (defined
-  behavior), and cross‑frame stomps are impossible because a frame's private slots lie outside every other frame's
-  defined spans.
-- **Aliasable slots and arrays stay memory‑resident**, so `PEEK`/`POKE`/`COPY`/`GETL`/`SETL` lower exactly as v1 with
-  **zero barrier code** in the baseline.
-- `perfTest.main` shows the precision: `escapeFloor = $r`, so the 14 scalars declared before the bank
-  (`$fpi`…`$gR`) are private and register‑bindable even though the function bulk‑copies a 13‑slot bank every iteration.
-  In the 15 escape‑free kernels the floor is `+INF`: *every* scalar is private.
-
-#### 5.7.2 Tier 1 — private scalar locals: fixed whole‑function binding
-
-Long‑lived named values (`$acc`, `$stepLength`, loop counters) get one host register for the whole function. No live
-ranges, no interference graph — binding is a flat table.
-
-```
-eligible = { s : s.kind == LOCAL_SCALAR and private(s) }        // params (PARA scalars) included
+eligible  = { s : s.kind == LOCAL_SCALAR and private(s) }       // params (PARA scalars) included
 weight(s) = Σ over references of s:  10 ^ loopDepth(block)
-tier1GPR  = top KG of eligible with class GPR (LOCi/LOCp), by weight
-tier1FPR  = top KF of eligible with class FPR (LOCf),      by weight
-tier1     : slot -> hostReg                                     // fixed; consulted at every operand access
+boundGPR  = top KG of eligible with class GPR (LOCi/LOCp), by weight
+boundFPR  = top KF of eligible with class FPR (LOCf),      by weight
 ```
 
-Register pools: because GAZL calls are dispatcher transfers (§5.4) and everything is resynced around them, tier 1 may
-use **any** host register not pinned by §5.3 — caller‑saved included; the host ABI constrains only the dispatcher
-prologue and `CALL_NVC` sites, which are full sync points anyway. That is ≈20 GPR + ≈28 FP/SIMD on AArch64 and ≈9 GPR +
-≈14 XMM on x64. Cap KG/KF (initially ~8/8) to keep scratch headroom; slots beyond K simply stay memory‑resident.
+(`base of` — the floor anchors at the named object's **base**, not the `:offset` derivation point, so reverse iteration
+through an interior/end pointer stays defined; measured on the corpus this changes no function's floor. §1.1's rule
+text should be amended to match.) Register pools: because GAZL calls are dispatcher transfers (§5.4) and everything is
+resynced around them, bound lines may use **any** host register not pinned by §5.3 — caller‑saved included. That is
+≈20 GPR + ≈28 FP/SIMD on AArch64 and ≈9 GPR + ≈14 XMM on x64. Cap KG/KF (initially ~8/8) to keep scratch headroom;
+eligible slots beyond K simply stay floating.
 
-#### 5.7.3 Tier 2 — transients: block‑local value forwarding
+Measured effect: 6.1× (arithmetic) / 12.4–13.6× (memory loop) — bound lines roughly double v2.0, the single biggest
+post‑v1 lever. Two notes from the per‑function corpus measurement: `perfTest.main`'s floor sits at the 13‑slot bank, so
+its 14 pre‑bank scalars are bound‑eligible even though the function bulk‑copies the bank every iteration; and in the
+`pong`‑pattern `process()` functions the floor is poisoned by a *first‑declared* buffer, so v2.1's value there depends
+on the floor‑raising refinements in §5.7.6 (Impala declaring arrays last; `GETL`/`SETL` spans tightened to the named
+array) — until then those functions still enjoy full v2.0 floating‑cache treatment.
 
-Transients are the opposite profile — **typeless** slots (`%1` legitimately holds ptr, int, and float in successive
-defs within one function) with lifetimes of a few instructions. So: no fixed binding, no cross‑block state. Just a
-per‑block map from transient slot to the register currently holding its value, class chosen **per definition**:
+#### 5.7.3 v2.2 — provenance‑scoped flushing (optional knob)
 
-```
-t2 : transient -> { reg, class, dirty }              // meaningful only within one basic block
-```
-
-A def claims a scratch register and records `dirty` — **no store is emitted at the def**. A use reads the mapped
-register — **no load is emitted**. Spills, when they happen, are raw 64‑bit word stores (bit‑pattern‑preserving, the
-same `Value`‑union semantics the interpreter has); register class matters for operations, never for the memory image.
+v2.0 flushes floating lines around *every* pointer memory op. The refinement: track a one‑bit taint — "derived from an
+`ADRL` in this function" — through `MOVp`/`ADDp`/`SUBp`; only **tainted** pointer ops (plus `GETL`/`SETL`) flush, since
+global‑born and param‑born pointers cannot reach this frame's slots (§1.1; a tainted pointer that round‑trips through
+memory loses its guarantee, so the taint pass stays single‑pass). Measured: worth only ~10–20 % over conservative
+flushing on Apple Silicon (store‑to‑load forwarding), likely more on small x64 cores. **Build only if profiling on x64
+demands it** — it needs no new spec (v2.1 already requires §1.1) but adds the only genuinely subtle analysis in the
+allocator, so it must earn its place with numbers.
 
 #### 5.7.4 Codegen skeleton
 
-One pass per basic block; the whole allocator state is `t2`, a tier‑1 dirty bitset, and a scratch free list.
+One pass per basic block; the whole allocator state is the floating‑line map, a bound‑line dirty bitset (v2.1), and a
+scratch free list. In v2.0 the `bound` table is simply empty — same code path.
 
 ```
 emitBlock(b):
-    t2 = {}; dirty1 = {}
+    cache = {}; dirtyB = {}
     for ins in b:
         case ARITH(op, dst, s1, s2):
             r1 = read(s1, classOf(op));  r2 = read(s2, classOf(op))
             emit op  defReg(dst, classOf(op)), r1, r2
         case PEEK/POKE, constant address:          // globals: direct MEMBASE+disp (§5.3)
-            lower as v1                            // cannot touch the frame → no interaction
-        case PEEK/POKE/COPY via pointer, GETL, SETL:
-            lower as v1 (checked memory op)        // NO barrier: everything it may legally touch
-                                                   // is memory-resident (§5.7.1)
+            lower as v1                            // cannot touch the frame → no cache interaction
+        case PEEK/COPY-src via pointer, GETL:      // pointer READ
+            flushFloating(dirtyOnly: true)         //   memory must hold pending writes; lines stay valid
+            lower as v1 (checked memory op)        //   (v2.2: only if the pointer is tainted)
+        case POKE/COPY-dst via pointer, SETL:      // pointer WRITE
+            flushFloating(dirtyOnly: true)
+            lower as v1 (checked memory op)
+            invalidateFloating()                   //   any cached copy may now be stale
         case CALL (GAZL or native):                // always terminates a block (contract C4)
-            flushAll()                             // arg transients %t.. are dirty t2 entries → stored here
+            flushAll()                             //   arg transients are dirty floating lines → stored here
             <v1 call sequence, §5.4>
           resumePoint:                             // side-table entry
-            emit reload of every tier1 reg         // callee may have legally written aliasable/arg slots;
-            t2 = {}                                //   and no host reg survived the dispatcher anyway
+            emit reload of every bound reg         //   callee may have legally written aliasable/arg slots;
+            cache = {}                             //   and no host reg survived the dispatcher anyway
         case backEdge:
             flushAll()                             // sync BEFORE the fuel check: a timeout suspends
             emit fuel check (§5.5)                 //   with memory already interpreter-identical
         case RETU:
             flushAll()                             // OUT params land in memory here
             <v1 return sequence, §5.4>
-    flushAll()                                     // block boundary: memory synced, t2 dropped,
-                                                   // tier1 regs stay VALID across the boundary
+    flushAll()                                     // block boundary: memory synced, floating cleared,
+                                                   //   bound regs stay VALID across the boundary
 
 read(s, cls):
-    if s in tier1:   return tier1[s]
-    if s in t2:      return t2[s].reg              // forwarding hit: load elided
+    if s in bound:   return bound[s]               // v2.1; join-safe: binding identical in every block
+    if s in cache:   return cache[s].reg           // floating hit: load elided
     r = takeScratch(cls);  emit load r, [DSP + off(s)]
-    if s.kind == TRANSIENT:  t2[s] = {r, cls, dirty: false}
+    cache[s] = {r, cls, dirty: false}
     return r
 
 defReg(s, cls):
-    if s in tier1:            dirty1 += s;  return tier1[s]
-    if s.kind == TRANSIENT:   r = takeScratch(cls);  t2[s] = {r, cls, dirty: true};  return r
-    else:                     r = takeScratch(cls);  emit store [DSP + off(s)], r after the op;  return r
-                              // arrays and aliasable scalars: written through immediately
+    if s in bound:   dirtyB += s;  return bound[s]
+    r = takeScratch(cls);  cache[s] = {r, cls, dirty: true};  return r      // no store at the def
+    // arrays: written through immediately, never cached (they are the backing store)
+
+flushFloating(dirtyOnly):
+    for s in cache if dirty:  emit store [DSP + off(s)], cache[s].reg      // raw 64-bit, class-agnostic
+    mark all clean
+
+invalidateFloating():  cache = {}
 
 flushAll():
-    for s in dirty1:          emit store [DSP + off(s)], tier1[s]
-    for s in t2 if dirty:     emit store [DSP + off(s)], t2[s].reg      // raw 64-bit, class-agnostic
-    dirty1 = {};  t2 = {}
+    flushFloating();  invalidateFloating()
+    for s in dirtyB:  emit store [DSP + off(s)], bound[s];  dirtyB = {}
 ```
 
-`takeScratch` never spills tier‑1: on pool exhaustion it evicts the oldest t2 entry (store it if dirty, then drop).
-Straight‑line GAZL rarely has more than a handful of live scratch values, so eviction is rare.
+`takeScratch` never evicts a bound line: on pool exhaustion it evicts the least‑recently‑used floating line (store if
+dirty, then drop). Straight‑line GAZL rarely has more than a handful of live values, so eviction is rare.
 
 Two properties carry the correctness argument:
 
 - **Stores are coalesced, never eliminated.** Within a block each slot is stored once with its *final* value instead of
-  once per def — but every dirty slot **is** stored at every block end. Since a safepoint can never occur mid‑block,
-  the interpreter's memory at any block boundary also holds exactly each slot's last‑written value → the two engines
-  are **byte‑identical in observable state at every safepoint**, and the §5.2 lockstep `memcmp` oracle stays exact. Dead‑store elimination
-  is therefore *forbidden by design*: it would trade oracle precision for a few stores. Not worth it.
-- **Loads are elided on every tier‑1 or t2 hit.** With def→use ≈ 1, transient memory traffic essentially vanishes; with
-  tier‑1 persistence across blocks (only *dirty* is block‑local — the binding and the value survive), named hot scalars
+  once per def — but every dirty slot **is** stored at every block end (dead slots included: no liveness analysis, and
+  the measured cost of those extra stores is small). Since a safepoint can never occur mid‑block, the interpreter's
+  memory at any block boundary also holds exactly each slot's last‑written value → the two engines are **byte‑identical
+  in observable state at every safepoint**, and the §5.2 lockstep `memcmp` oracle stays exact. Dead‑store elimination is
+  therefore *forbidden by design*: it would trade oracle precision for a few stores. Not worth it.
+- **Loads are elided on every cache hit.** With def→use ≈ 1, transient memory traffic essentially vanishes even in
+  v2.0; with v2.1's bound lines (only *dirty* is block‑local — the binding and the value survive), named hot scalars
   are read from memory once per function (plus once per call return).
 
 Net effect on an `MLMoogFilter`‑style inner loop (one block, no calls): v1 spends ~3 memory ops per arithmetic
-instruction; v2 spends **zero loads** after first touch, **zero transient stores**, and one store per *modified* tier‑1
-slot per iteration at the block‑end flush. That is the bulk of the remaining gap to native.
+instruction; v2.0 spends one load + one store per *slot* per iteration (the block‑boundary clear); v2.1 spends **zero
+loads** after first touch and one store per *modified* bound slot per iteration. Those steps are the measured
+2.8× → 3.9× → 6.1× on the arithmetic kernel.
 
 #### 5.7.5 Resume and the side table
 
-Memory is fully synced at every block boundary and safepoint, so **resume never needs register state**: the resume
-stub for any safepoint is "reload every tier‑1 bound register, `t2 = {}`, jump to the native offset." The side table
-stays `GAZL ip ↔ native offset` (as in v1) — a per‑slot live mask is *not required*; the field stays reserved for a
-future variant that syncs less. Suspend anywhere, resume in either engine, exactly as v1.
+Memory is fully synced at every block boundary and safepoint, so **resume never needs register state**: the resume stub
+for any safepoint is "reload every bound register (none in v2.0), floating cache = `{}`, jump to the native offset."
+The side table stays `GAZL ip ↔ native offset` (as in v1) — a per‑slot live mask is *not required*; the field stays
+reserved for a future variant that syncs less. Suspend anywhere, resume in either engine, exactly as v1.
 
-#### 5.7.6 Explicitly out of scope for v2
+#### 5.7.6 Explicitly out of scope, and deferred refinements
 
-No graph coloring, no linear scan, no live‑range splitting; no cross‑block t2 values, no SSA/φ; no dead‑store
-elimination (see §5.7.4); no rematerialization; no instruction scheduling. Deferred **v2.1 candidates**, in rough value
-order: (a) dirty‑bit dataflow across blocks to hoist tier‑1 stores out of single‑block loops; (b) caching *aliasable*
-scalars between pointer ops — needs a barrier matrix (pointer‑read → flush dirty aliasable; pointer‑write → flush +
-invalidate aliasable); (c) exact spans for constant‑count `COPY` through a pristine `ADRL`, narrowing the escape floor
-to a range; (d) callee signature metadata (§1.1 front‑end ideas) to keep tier‑1 values live across GAZL calls.
+No graph coloring, no linear scan, no live‑range splitting; no cross‑block floating state, no SSA/φ; no liveness / no
+dead‑store elimination (see §5.7.4); no rematerialization; no instruction scheduling. Deferred refinements, in rough
+value order — the first two raise the escape floor (more bound‑eligible scalars in `process()`‑pattern functions), the
+rest shave flush traffic:
+
+- **(a) Impala declares arrays after scalars.** The `pong` pattern (buffer declared first) poisons the floor for every
+  scalar behind it; emitting `LOCA`/banks last fixes it in the front end at zero JIT cost (benefits recompiled
+  firmwares only; frame layout stays per‑program ABI).
+- **(b) Tighten `GETL`/`SETL` spans to the named array's declared size** (spec refinement): unlike `ADRL` pointers, the
+  assembler knows the `LOCA` extent; corpus sites are genuine subscripts, and the cross‑local bank idiom uses
+  `ADRL`+`COPY`, never `SETL`. Removes `GETL`/`SETL` from floor computation entirely.
+- **(c) Dirty‑bit dataflow across blocks** to hoist bound‑line stores out of single‑block loops (closes most of the
+  remaining gap to the C ceiling).
+- **(d) Exact spans for constant‑count `COPY` through a pristine `ADRL`**, narrowing the floor to a range.
+- **(e) Callee signature metadata** (§1.1 front‑end ideas) to keep bound values live across GAZL calls.
 
 #### 5.7.7 The v1 compatibility contract (the point of this section)
 
@@ -907,10 +987,12 @@ rewrite. Checkable in review:
   with the interpreter.
 - **C8 — a per‑function engine switch** in the test harness (interpret / v1 / v2), so v2 lands and bisects
   function‑by‑function against two oracles.
-- **C9 — the provenance‑bounded local‑access rule ships in Phase 0** (§1.1), with golden tests that *rely* on
-  defined‑span behavior (banks, out‑params, cross‑local `COPY`) and a fuzzer policy: generated programs stay within
-  defined spans; deliberately‑UB inputs are checked for memory‑safety only, not value equality. Retrofitting the spec
-  after v1 ships would churn the corpus.
+- **C9 — the provenance‑bounded local‑access rule ships in Phase 0** (§1.1, amended to anchor spans at the named
+  object's *base*, §5.7.2), with golden tests that *rely* on defined‑span behavior (banks, out‑params, cross‑local
+  `COPY`, reverse iteration) and a fuzzer policy: generated programs stay within defined spans; deliberately‑UB inputs
+  are checked for memory‑safety only, not value equality. Retrofitting the spec after v1 ships would churn the corpus.
+  Soft‑landing note: only **v2.1** (bound lines) depends on this rule — if the spec work slips, v2.0 still ships, since
+  its conservative flushing is sound with no aliasing rule at all.
 
 ---
 
@@ -1017,7 +1099,7 @@ sumTo:
 
 Loop body ≈ **10 instructions** (6 memory ops).
 
-#### v2 — locals in registers (escape analysis, §1.1)
+#### v2 — locals in registers (v2.1 bound lines, §5.7.2; `result`/`i`/`n` are private per §1.1)
 `result`, `i`, `n` are non‑escaping scalars (no `ADRL`/`GETL`/`SETL` touches them), so they live in registers for the
 whole function. Load `n` once; keep `result`/`i` in regs; **spill back only at the epilogue and the timeout safepoint**
 so the suspended state stays byte‑identical to the interpreter's. Caller‑saved scratch is fine — the loop makes no calls,
@@ -1328,7 +1410,7 @@ not starting from zero. None of this code is kept.
 | **4. Calls, indirect calls, natives, traps, fuel, suspend/resume** | Full ABI: dispatcher‑threaded calls + trap exit stubs (§5.4); block fuel; safepoint side table | Suspend/resume fuzzer (random fuel slices + engine switch) green |
 | **5. Hardening** | Static verifier over emitted code; CI matrix (native ARM+x64, QEMU, Rosetta); extend `GAZLFuzz` to dual‑engine | Verifier passes on full corpus; sustained fuzzing finds nothing |
 | **6. Ship opportunistically** | JIT on where probe succeeds; interpreter elsewhere; telemetry on JIT‑on rate across hosts | Real‑world A/B shows perf win + zero correctness regressions |
-| **v2 (committed)** | Two‑tier register allocation per §5.7: tier 1 fixed binding of private scalars (escape floor, §1.1), tier 2 block‑local transient value forwarding; store coalescing, block‑boundary sync; requires the v1 contract §5.7.7 | Three‑way lockstep (interp/v1/v2) byte‑identical on corpus + fuzzer; measured 2nd win |
+| **v2 (committed, staged)** | Registers as a write‑back frame cache per §5.7: **v2.0** block‑local floating cache with conservative pointer flushes (no aliasing‑spec dependence; measured ~4–5.5×), **v2.1** bound registers for hot private scalars (escape floor, §1.1; measured ~6–13.6×), **v2.2** optional provenance‑scoped flushing (~10–20 %); store coalescing, block‑boundary sync; requires the v1 contract §5.7.7 | Three‑way lockstep (interp/v1/v2) byte‑identical on corpus + fuzzer; each stage lands separately behind the C8 engine switch |
 | **AOT (parallel)** | GAZL→C++ transpiler reusing the lowering, for iOS/first‑party | Bit‑identical to interpreter on the test corpus |
 
 ---
