@@ -6,3 +6,4 @@ externals/NuXJS/output/
 externals/NuXJS/**/*.dSYM/
 externals/NuXJS/**/xcuserdata/
 *.pdb
+/spike/jit-probe/.build
