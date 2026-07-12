@@ -516,7 +516,7 @@ GAZL text ──Assembler.feed()/finalize()──▶ Instruction[]  (finalized V
                              ▼                                     ▼
                     Processor::run()                        JitCompiler  (NEW)
                     interpreter — tier 0                    Instruction[] → native (x64 / AArch64)
-                    reference + fallback                    + per‑module entry table
+                    reference + fallback                    + per‑module ordinal function table
                                                                    │
                                                             run via trampoline; on trap/timeout/
                                                             native‑suspend, return Status exactly
@@ -532,9 +532,9 @@ Why this boundary (compile to VM IR first, *then* IR → native):
   assembler‑validated constant addresses). Re‑parsing text in a second path would duplicate ~1000 lines and risk the
   two paths diverging.
 - **It keeps the interpreter as a zero‑duplication reference and fallback.** Both engines consume byte‑for‑byte the
-  same IR, which is exactly what makes their states comparable (the §5.2 invariant) and what lets a JIT'd function and
-  an interpreted function call each other — they key off the same `IP_OFFSET`‑biased code indices and the same
-  frame/stack layout.
+  same IR and share the frame/stack layout and the ordinal function table, which is exactly what makes their states
+  comparable (the §5.2 invariant) and the differential oracle a plain `memcmp`. (The engine is chosen once at load,
+  §2 — the two don't interleave at runtime; the shared shape is for testing and fallback, not mid‑run mixing.)
 - **It respects the "assembler format stays backwards‑compatible" goal** (`GAZL.h`): the JIT is purely *additive* — a
   new consumer of an existing artifact, alongside `Processor::run()`. `--no-jit` or a failed executable‑memory probe
   simply routes to `run()` on the same `Instruction[]`.
@@ -542,7 +542,8 @@ Why this boundary (compile to VM IR first, *then* IR → native):
   moment (run off the audio thread), turning the per‑module IR into native code once.
 
 So: **compile to VM first, then convert the VM code to ARM/x64.** The JIT walks the finalized `Instruction[]`
-function‑by‑function (`FUNC` marks each start), never mutates it, and emits native code + an entry table beside it.
+function‑by‑function (`FUNC` marks each start), never mutates it, and emits native code + an ordinal function table
+beside it.
 
 ### 5.1 Tiers
 - **Tier 0 — Interpreter (exists).** The semantic reference and universal fallback. Every JIT decision is validated
@@ -557,8 +558,10 @@ function‑by‑function (`FUNC` marks each start), never mutates it, and emits 
   has no dynamic types to speculate on, so the machinery that causes most JIT CVEs never enters the design.
 
 ### 5.2 The invariant that makes everything safe and testable
-> **At every safepoint, JIT program‑observable state is byte‑identical to the interpreter's at the same GAZL ip:** all
-> frame slots written back to the data stack, `dsp`/`ipsp` in the `Processor`, and the GAZL ip materializable.
+> **At every safepoint, JIT program‑observable state is byte‑identical to the interpreter's at the same GAZL program
+> point:** all frame slots written back to the data stack, `dsp`/`ipsp` in the `Processor`. (The program point is
+> identifiable for the test oracle via a debug‑only map; it is not a runtime field — resume uses a native continuation,
+> §5.7.5.)
 
 **`clockCyclesLeft` is deliberately *excluded* from that equality** — it is bookkeeping, not observable semantics.
 Timeout in GAZL is a *suspend*, not a program event (the program computes the same result whether or not it is paused,
@@ -573,12 +576,13 @@ Safepoints = function entry, every call (GAZL and native), loop back‑edges (fu
 syncs memory at every basic‑block boundary (§5.7), which makes them a superset. Between safepoints the JIT may hold
 values in registers freely. This invariant delivers, for free:
 
-- **Suspend/resume** (fuel timeout, native‑suspend): stop at a safepoint, state is already interpreter‑shaped, resume by
-  re‑entering — into JIT *or* interpreter, interchangeably. Correctness is defined by *final result equals an
-  uninterrupted run*, not by where the suspend landed.
-- **Lockstep differential testing** (§8): align both engines at a chosen GAZL ip (driven by ip, never by cycle count)
-  and `memcmp` the observable state (memory + `dsp` + `ipsp`), excluding `clockCyclesLeft`.
-- **Mixed execution**: a JIT'd function can call an un‑JIT'd one (or vice versa) through the same call ABI.
+- **Suspend/resume** (fuel timeout, native‑suspend): stop at a safepoint, memory is already interpreter‑shaped, resume
+  via the `RESUME` continuation (§5.7.5). Correctness is defined by *final result equals an uninterrupted run*, not by
+  where the suspend landed. (Engine is chosen once at load, §2 — resume is not a per‑stop JIT‑vs‑interpreter choice.)
+- **Lockstep differential testing** (§8): align two *separate* runs (interpreter and JIT) at a chosen GAZL program point
+  (by program point, never by cycle count) and `memcmp` the observable state (memory + `dsp` + `ipsp`), excluding
+  `clockCyclesLeft`. Because the JIT is only observable when stopped, and stopping syncs memory, the compare is always a
+  plain `memcmp`.
 
 ### 5.3 Register & memory plan (v1)
 Pinned registers (both ABIs have enough callee‑saved regs): `CTX` (`Processor*`), `DSP` (data‑stack pointer, mirrors
@@ -607,43 +611,44 @@ memory table the assembler built (`GAZL.cpp:965`).
 ### 5.4 Calls, traps, and stack discipline (no signals, no longjmp, no nested host frames)
 
 **Decision — GAZL calls are never host calls.** A GAZL call chain must be suspendable at any depth (fuel timeout,
-native suspend) and resumable later — possibly by the *interpreter* (§5.2). A chain of nested host frames cannot be
-reconstructed at resume time (after the unwind they are gone), so JIT'd code never nests host frames. One
-**dispatcher** owns the single native frame; compiled functions are **segments** it threads between:
+native suspend) and resumable later. A chain of nested host frames cannot be reconstructed at resume time (after the
+unwind they are gone), so JIT'd code never nests host frames. One **dispatcher** owns the single native frame and
+enters compiled code through the `RESUME` continuation (§5.7.5); compiled functions are **segments** it threads between:
 
 ```
 run / enterCall / resume:
     save host callee‑saved regs; load pinned regs (CTX, DSP, MEMBASE, FUEL, size regs)
-    next = resolve(ctx)                      // entryTable[fn], or side table lookup when resuming mid‑function
-    while next != EXIT:
-        next = call next                     // segment executes; comes back with a continuation
+    br  ctx->RESUME              // enterCall set RESUME = functionTable[ordinal]; a suspend set it to a continuation
+    ...segments transfer among themselves; a stub eventually sets STATUS and reaches EXIT...
+EXIT:
     restore host regs; return ctx->status
 ```
 
-- **Direct call** (`CALL_CVC`): `ipStack` overflow check; push interpreter‑shaped `{ip, dsp}` (`GAZL.cpp:1614`);
-  `dsp += C1` for the arg window; transfer to the callee's entry. The **GAZL return ip** is what's pushed — not a
-  native address — so the pushed state is exactly the interpreter's (§5.2) and either engine can continue from it. The
-  native resume offset is recovered through the safepoint side table (per‑module array `code index → native offset`,
-  O(1)).
-- **Indirect call** (`CALL_VVC`): `idx = ptr − IP_OFFSET`; trap `BAD_CALL` unless `idx < codeSize` and
-  `entryTable[idx] != 0` (nonzero only where `code[idx].opcode == FUNC_CC_` — mirrors the interpreter's two checks,
-  `GAZL.cpp:1609`); then as direct.
-- **Return** (`RETU`): pop `{ip, dsp}`; transfer to `resolve(ip)` — the dispatcher decides whether the continuation is
-  a JIT segment or the interpreter, so **mixed execution falls out of the design** rather than being a feature.
-- **Native call** (`CALL_NVC`): full safepoint write‑back, then a genuine host `call natives[idx](CTX)` — this one *is*
-  a host call, because a native returns before GAZL continues, and if it suspends it does so by returning a `Status`.
-  Nonzero `Status` → the exit path. Reentrancy (`enterCall` from inside a native) works because state is
-  interpreter‑shaped at the boundary.
-- **Traps** (bad peek/poke/call, div0, stack/ip overflow, fuel timeout): trap sites branch to a per‑function exit stub
-  that stores `{status, GAZL ip of the faulting instruction, dsp, ipsp, cycles}` into the `Processor` and transfers to
-  the dispatcher's EXIT — behaviorally identical to the interpreter's "leave `run()` with `ip` at the faulting
-  instruction" (`GAZL.cpp:1762`). **No signals, no `longjmp`, no unwinding**; Hardened‑Runtime‑ and CET‑safe.
+- **Direct call** (`CALL_CVC`): `ipStack` overflow check; push the return continuation `{nativeReturnAddr, dsp}`;
+  `dsp += C1` for the arg window; direct native branch to the callee's entry (target known at compile time). The pushed
+  return address is an **internal native continuation** (engine‑private), not a GAZL ip — memory is the observable
+  state (§5.2), the continuation is just control.
+- **Indirect call** (`CALL_VVC`): target is a function **ordinal**; trap `BAD_CALL` unless `ordinal < functionCount`,
+  then `call functionTable[ordinal]`. One bounds check indexing a table of legitimate entries — stronger and cheaper
+  CFI than the old `IP_OFFSET`/`opcode == FUNC_CC_` pair (§5.6).
+- **Return** (`RETU`): pop `{nativeReturnAddr, dsp}`; branch to it. (Engine is fixed at load, §2, so the continuation
+  is always the JIT's; the interpreter is a whole‑program fallback, not a per‑return choice.)
+- **Native call** (`CALL_NVC`): full safepoint sync, publish the param window / `FUEL` to the `Processor`, then a
+  genuine host `call functionTable_native[ordinal](CTX)`. This one *is* a host call — a native returns before GAZL
+  continues, and suspends by returning a nonzero `Status`. Nonzero → the exit path with `RESUME` = the call site, so
+  resume re‑issues it (blocking retry, §5.7.5). Reentrancy (`enterCall` from inside a native) works because state is
+  interpreter‑shaped at the boundary and stacks a fresh `RESUME` through the ipStack.
+- **Traps** (bad peek/poke/call, div0, stack/ip overflow, fuel timeout): trap sites branch to a cold exit stub that
+  syncs live registers to memory, sets `RESUME` (the faulting/continuation point) and `STATUS`, and transfers to EXIT —
+  behaviorally identical to the interpreter's "leave `run()` with `ip` at the faulting instruction" (`GAZL.cpp:1762`),
+  and structurally one instance of the unified suspend shape (§5.7.5). **No signals, no `longjmp`, no unwinding**;
+  Hardened‑Runtime‑ and CET‑safe.
 
-Segment‑to‑segment transfer has two viable encodings: **(a)** return‑to‑dispatcher (`ret` into the loop above —
-simplest, trivially shadow‑stack‑balanced) and **(b)** direct‑threaded tail `jmp` between segments (one branch cheaper
-per transfer; needs `ENDBR64`/`BTI` landing pads on IBT/BTI hosts). Start with (a); switching to (b) later is invisible
-to everything else. Either way the cost is one indirect transfer per GAZL call/return — noise next to the interpreter's
-per‑instruction dispatch, and irrelevant in the hot kernels, which don't call.
+Segment‑to‑segment transfer has two viable encodings: **(a)** return‑to‑dispatcher (`ret`, simplest, trivially
+shadow‑stack‑balanced) and **(b)** direct‑threaded tail `jmp` between segments (one branch cheaper per transfer; needs
+`ENDBR64`/`BTI` landing pads on IBT/BTI hosts). Start with (a); switching to (b) later is invisible to everything else.
+Either way the cost is one indirect transfer per GAZL call/return — noise next to the interpreter's per‑instruction
+dispatch, and irrelevant in the hot kernels, which don't call.
 
 **Superseded alternative.** An earlier draft made GAZL call = native `call` with per‑frame status propagation, with the
 dispatcher as the fallback. **Rejected**: nested host frames break the engine's async suspend/resume contract (resume
@@ -666,9 +671,10 @@ predicted‑not‑taken branch:
 ```
     subs  FUEL, FUEL, #W          ; AArch64 (x64: sub FUEL,W ; js …)
     b.mi  Ltimeout_<block>
-Ltimeout_<block>:                 ; cold, shared with the §5.4 trap exit
-    add   FUEL, #W                ; un‑charge: this block did not run → resume re‑enters it exactly
-    ; store {block‑leader ip, dsp, ipsp, FUEL} → Processor ; status = TIME_OUT ; → dispatcher EXIT
+Ltimeout_<block>:                 ; cold; one instance of the unified suspend shape (§5.7.5)
+    <sync live regs to slots>    ; memory now interpreter-identical
+    add   FUEL, #W               ; un‑charge: this block did not run → resume re‑enters it exactly
+    ; RESUME = this block's reload prologue ; STATUS = TIME_OUT ; store FUEL → Processor ; → dispatcher EXIT
 ```
 
 Charge = the block's static instruction count. Checks go at **every block leader** (simple, bounds straight‑line
@@ -691,42 +697,33 @@ unless it can finish), a block whose weight exceeded the host's per‑`process()
 ### 5.6 Compilation pipeline
 
 **What compiling a module produces.** At patch load, off the audio thread, the JIT walks the finalized `Instruction[]`
-(§5.0) once per `FUNC` and emits native code. GAZL‑world (instruction indices, frame slots) and native‑world (machine
-addresses, registers) are two coordinate systems; besides the code, the JIT emits two small tables that translate
-between them at the only moments it matters — calls, suspends, and traps:
+(§5.0) once per `FUNC` and emits native code plus **one** persistent table:
 
-- **Entry table** — `code index → native entry address` (`0` where the index isn't a `FUNC`). Read by the dispatcher's
-  `resolve()` to enter a function, and by indirect `CALL_VVC` as the runtime call‑target check (nonzero ⇔ a real
-  `FUNC`, mirroring `GAZL.cpp:1609`).
-- **Safepoint side table** — `GAZL ip ↔ native offset`, one entry per safepoint (block leaders, call sites). It is a
-  *reverse* map, read only when **re‑entering** native code (see below). No live‑register mask is needed: memory is
-  fully synced at every safepoint (§5.7.5), so resume is "reload the pinned registers, jump to the native offset."
+- **Function table** — `ordinal → native entry address`, one slot per `FUNC`. GAZL function pointers are **ordinals**
+  (function numbers), not code addresses — the interpreter and JIT both resolve them through this table (a fork decision;
+  it decouples persistent data holding function pointers from the private, swappable code representation). It is read
+  by `enterCall(ordinal)` and by indirect `CALL_VVC`, whose runtime check becomes a plain `ordinal < functionCount`
+  bounds check indexing a table of legitimate entries only — cheaper *and* stronger CFI than the old
+  `code[ui].opcode == FUNC_CC_` guard (`GAZL.cpp:1609`), since a forged pointer can't land inside a function. Direct
+  calls (`CALL_CVC`) know their target at compile time and emit a direct native branch — no table lookup.
 
-**Two directions — do not conflate them.** Leaving JIT code and re‑entering it are opposite halves of a round trip, and
-each needs the *other* coordinate. This is the source of the common confusion about per‑site exit stubs:
-
-- **Outbound** (a block's cold timeout/trap stub, §5.4/§5.5): you hold a native PC and must record a GAZL ip to resume
-  from, so you **materialize this block's GAZL ip as an immediate** into `Processor.ip`, then jump to the shared exit
-  tail. That immediate is unavoidable — the outbound path is *producing* the resume key — and it is inherently per‑block
-  (each block has its own leader ip and fuel weight). Only the tail (store fuel/dsp/ipsp, set status, return to the
-  dispatcher) is shared per function.
-- **Inbound** (`resolve()` in the dispatcher): you hold a GAZL ip (from `Processor.ip` on resume, or popped off
-  `ipStack` on `RETU`) and **look it up in the side table to get the native offset** to jump to. This is where the table
-  earns its keep — it consumes the ip the outbound path produced. It therefore does *not* remove the outbound immediate;
-  the two operate in opposite directions.
+**No resume side table.** Suspend/resume does not translate GAZL ips to native offsets; it stores a native continuation
+address in the `Processor`'s `RESUME` field and the dispatcher jumps to it (§5.7.5). Resume is one field and one jump —
+memory is the state hand‑off, `RESUME` is the control hand‑off. The only `ordinal → native` translation is the function
+table above, for calls.
 
 **The passes.**
 1. **Emit** — walk each `FUNC`'s instructions once (basic‑block edges are already explicit: relative branches,
-   `FORi`/`FORp`, `SWCH`, fallthrough, `RETU`). Emit code; record each instruction's native offset, a safepoint entry
-   per block leader / call site, and the function's entry address.
+   `FORi`/`FORp`, `SWCH`, fallthrough, `RETU`). Emit code; record each function's ordinal → native entry, and the
+   resume prologues for its safepoint blocks (§5.7.5).
 2. **Fixup** — patch forward branch displacements now that all native offsets are known. Branches are intra‑function and
    already relative (`GAZL.cpp:1176`), so this is purely local — no cross‑function linking.
-3. **Fill the entry table**, then **publish** (§6.2): flip pages to executable and run the i‑cache/barrier sequence.
+3. **Fill the function table**, then **publish** (§6.2): flip pages to executable and run the i‑cache/barrier sequence.
    Nothing executes the new code before this.
 
-**Runtime.** `enterCall` / resume → dispatcher → `resolve()` → native segment (§5.4). Segments run until one hits the
-shared EXIT with a `Status` (`OK`, `TIME_OUT`, a trap code); `run()` behaves exactly as today. `--no-jit` or a failed
-executable‑memory probe feeds the same `Instruction[]` to the interpreter — no other difference.
+**Runtime.** `enterCall` / resume → dispatcher → `br RESUME` → native code (§5.4, §5.7.5). It runs until a stub sets
+`STATUS` and returns through the shared EXIT (`OK`, `TIME_OUT`, a trap code); `run()` behaves exactly as today.
+`--no-jit` or a failed executable‑memory probe feeds the same `Instruction[]` to the interpreter — no other difference.
 
 ### 5.7 v2 register allocation — registers as a write‑back cache of the frame (committed, staged)
 
@@ -938,12 +935,61 @@ instruction; v2.0 spends one load + one store per *slot* per iteration (the bloc
 loads** after first touch and one store per *modified* bound slot per iteration. Those steps are the measured
 2.8× → 3.9× → 6.1× on the arithmetic kernel.
 
-#### 5.7.5 Resume and the side table
+#### 5.7.5 Suspend and resume — the unified continuation model
 
-Memory is fully synced at every block boundary and safepoint, so **resume never needs register state**: the resume stub
-for any safepoint is "reload every bound register (none in v2.0), floating cache = `{}`, jump to the native offset."
-The side table stays `GAZL ip ↔ native offset` (as in v1) — a per‑slot live mask is *not required*; the field stays
-reserved for a future variant that syncs less. Suspend anywhere, resume in either engine, exactly as v1.
+Suspend/resume is **one shape**, parameterised by a continuation — not per‑cause machinery. The `Processor` carries a
+single `RESUME` field: an *internal native continuation address* (not a GAZL ip — function *pointers* are ordinals per
+§5.6, but a resume point is private to the running engine). Every suspend writes three things and leaves; every resume
+is one jump:
+
+```
+; ---- SUSPEND (every cause) ----
+    <sync: store dirty cached slots to their frame words>    ; memory now interpreter-identical
+    str   FUEL, [CTX,#FUEL_]
+    adr   x9, <resume_label> ;  str x9,[CTX,#RESUME]         ; where to continue
+    mov   w9, #<status>      ;  str w9,[CTX,#STATUS]         ; TIME_OUT / native's value / trap code
+    b     EXIT
+
+; ---- DISPATCHER: run() / resume / enterCall all enter here ----
+dispatcher:
+    <load CTX, DSP, MEMBASE, FUEL, size regs from the Processor>
+    ldr   x9,[CTX,#RESUME] ; br x9      ; enterCall pre-set RESUME = functionTable[ordinal];
+EXIT:                                   ;   a suspend pre-set it to a continuation
+    <store FUEL etc. back> ; ret ctx->status
+```
+
+`enterCall(ordinal)` is just "`RESUME = functionTable[ordinal]`, call the dispatcher" (§5.6), so a **fresh call and a
+resume are the same operation** — only who last wrote `RESUME` differs. There is no GAZL‑ip side table and no reverse
+lookup: resume is one field and one jump.
+
+The suspend *causes* differ only in the continuation and status they write:
+
+| Cause | `RESUME` → | `STATUS` | on resume |
+|---|---|---|---|
+| fuel timeout (block leader / back‑edge) | that block's reload prologue | `TIME_OUT` | re‑enters the block, runs forward |
+| native returns non‑zero | **the call site itself** | native's value | re‑issues the native (blocking retry) |
+| native `resetTimeOut(0)` | — (no code) | — | the **next** block's fuel check yields it (`CALL` ends a block, C4) |
+| trap (bad peek/poke/call, div0, overflow) | faulting site (or unset) | trap code | host normally does not resume |
+| terminal (`TERMINATED`, host status) | the call site | that value | host chooses not to resume |
+
+Three consequences worth keeping:
+
+- **`resetTimeOut(0)` needs zero dedicated code.** A `CALL` terminates a block, so the instruction after a native call
+  is a fresh block leader with its own fuel check; a native that zeroed the fuel is caught there like any timeout.
+  "Retry" (resume at the call) and "yield‑after" (resume at the next block) differ only by which `RESUME` is written —
+  and yield‑after writes itself, through the ordinary next‑block check.
+- **Retry vs terminate is host policy, not a VM branch.** Both take the identical exit with `RESUME` = the call site;
+  the host reads `STATUS` and either re‑enters the dispatcher (retry) or doesn't. One VM behaviour, policy in the host.
+- **Register state never crosses a suspend.** The sync stores live values to memory, so a `RESUME` label is just a small
+  **reload prologue** — reload this block's live‑in registers from their now‑synced slots, then fall into the hot
+  mainline. The hot back‑edge targets the mainline directly, skipping the prologue, so steady‑state iterations pay
+  nothing (§5.8). The suspend's memory‑sync (cold timeout stub) and the resume's reload (cold resume prologue) are
+  mirror images generated from the same compile‑time register map, and sit adjacent in the cold section.
+
+The interpreter is a *load‑time* fallback, never a mid‑run switch (the executable‑memory probe decides once, §2), so a
+program that JITs stays JIT'd and `RESUME` being an engine‑private native address is fine. Cross‑engine alignment exists
+only for the **test** oracle (§8), which lines up two *separate* runs by GAZL instruction via a debug‑only map and
+reaches comparable (memory‑synced) states by forcing suspends — no runtime GAZL‑ip field is needed.
 
 #### 5.7.6 Explicitly out of scope, and deferred refinements
 
@@ -972,8 +1018,10 @@ rewrite. Checkable in review:
   retrofitting host‑frame calls away later would rewrite the call/trap/resume machinery.
 - **C2 — every operand access in the emitter goes through `read(slot)` / `defReg(slot)` helpers.** v1 implements them
   as naive `[DSP+off]` loads/stores; v2 swaps the implementation. No opcode lowering may hand‑roll a frame access.
-- **C3 — the safepoint side table exists in v1** (`ip ↔ native offset`, plus a reserved live‑mask field), covering
-  entry, call returns, and back‑edges.
+- **C3 — the `RESUME` continuation field and the ordinal function table exist in v1** (§5.6, §5.7.5): suspend/resume
+  writes a native continuation to `RESUME`; calls resolve function ordinals through `functionTable`. No GAZL‑ip side
+  table. v1 already routes every suspend/resume and call through these, so v2 changes only what gets spilled, not the
+  control plumbing.
 - **C4 — basic‑block structure is first‑class** (§5.6 already splits blocks for fuel): a `CALL` terminates a block, and
   per‑block **loop depth** is computed and stored (v2's weights need it; v1 ignores it).
 - **C5 — pinned registers stay minimal and enumerated** (§5.3). Everything unpinned is by definition v2's pool; v1
@@ -1407,7 +1455,7 @@ not starting from zero. None of this code is kept.
 | **1. Scaffolding** | Runtime capability probe (macOS `MAP_JIT`, Win `VirtualAlloc`, Linux `mprotect`) + W^X page manager + `--no-jit` + fallback plumbing | Probe correctly detects entitled/un‑entitled hosts; fallback never crashes |
 | **2. Emitter** | Hand‑rolled x64 + AArch64 encoder behind one interface (decision: own encoders, no library); disassembler‑diff test of every encoded form | Round‑trip encode↔disassemble matches reference for all forms used |
 | **3. Baseline JIT (arithmetic + memory + branches, no calls)** | Compile leaf functions; explicit bounds checks; safepoints; per‑opcode differential tests | #2 (per‑opcode) + #3 (leaf‑program fuzz) green on both arches |
-| **4. Calls, indirect calls, natives, traps, fuel, suspend/resume** | Full ABI: dispatcher‑threaded calls + trap exit stubs (§5.4); block fuel; safepoint side table | Suspend/resume fuzzer (random fuel slices + engine switch) green |
+| **4. Calls, indirect calls, natives, traps, fuel, suspend/resume** | Full ABI: dispatcher + `RESUME` continuation + ordinal function table (§5.4, §5.6, §5.7.5); trap/timeout exit stubs; block fuel | Suspend/resume fuzzer (random fuel slices, native‑retry, `resetTimeOut(0)`) green |
 | **5. Hardening** | Static verifier over emitted code; CI matrix (native ARM+x64, QEMU, Rosetta); extend `GAZLFuzz` to dual‑engine | Verifier passes on full corpus; sustained fuzzing finds nothing |
 | **6. Ship opportunistically** | JIT on where probe succeeds; interpreter elsewhere; telemetry on JIT‑on rate across hosts | Real‑world A/B shows perf win + zero correctness regressions |
 | **v2 (committed, staged)** | Registers as a write‑back frame cache per §5.7: **v2.0** block‑local floating cache with conservative pointer flushes (no aliasing‑spec dependence; measured ~4–5.5×), **v2.1** bound registers for hot private scalars (escape floor, §1.1; measured ~6–13.6×), **v2.2** optional provenance‑scoped flushing (~10–20 %); store coalescing, block‑boundary sync; requires the v1 contract §5.7.7 | Three‑way lockstep (interp/v1/v2) byte‑identical on corpus + fuzzer; each stage lands separately behind the C8 engine switch |
