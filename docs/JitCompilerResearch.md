@@ -164,7 +164,7 @@ instructions total):
 - **`GETL`/`SETL` are array subscripting with a runtime index** — `counts[color]`, `moves[capturesCount]`,
   `fftInput[idx]`, `mydata[i]`. They only appear alongside arrays that are already memory‑resident.
 - **15 of 57 programs contain *zero* `ADRL`/`GETL`/`SETL`** — and they include the compute‑bound numeric kernels where a
-  JIT wins most: `MLMoogFilter`, `perfTest1`, `perfTest2`, `BitMaskMod`, `ModTest`, `linsub`. In those, every local is a
+  JIT wins most: `LadderFilter`, `perfTest1`, `perfTest2`, `BitMaskMod`, `ModTest`, `linsub`. In those, every local is a
   scalar with no address exposure → **fully register‑allocatable across the whole function.**
 
 **Consequence for register allocation — the escape *floor*.** A one‑pass scan cannot mark escaping slots by "is this
@@ -181,7 +181,7 @@ Then:
   within a basic block, with conservative flushes around pointer memory ops (v2.0, sound with no aliasing rule at all);
   **private** slots additionally get fixed whole‑function *bound* registers exempt from those flushes (v2.1 — this is
   what the escape floor and the §1.1 rule are for). The 15 zero‑escape kernels (`perfTest1`/`perfTest2`/
-  `MLMoogFilter`/…) have no floor, so every scalar is bound‑eligible; even `perfTest.main` (the 13‑slot bank) keeps its
+  `LadderFilter`/…) have no floor, so every scalar is bound‑eligible; even `perfTest.main` (the 13‑slot bank) keeps its
   14 pre‑bank scalars bound. The full allocator design is **§5.7**.
 
 **Spec decision — two iterations.** A first draft proposed "distinct named locals never alias" (any cross‑local access
@@ -628,9 +628,12 @@ EXIT:
   `dsp += C1` for the arg window; direct native branch to the callee's entry (target known at compile time). The pushed
   return address is an **internal native continuation** (engine‑private), not a GAZL ip — memory is the observable
   state (§5.2), the continuation is just control.
-- **Indirect call** (`CALL_VVC`): target is a function **ordinal**; trap `BAD_CALL` unless `ordinal < functionCount`,
-  then `call functionTable[ordinal]`. One bounds check indexing a table of legitimate entries — stronger and cheaper
-  CFI than the old `IP_OFFSET`/`opcode == FUNC_CC_` pair (§5.6).
+- **Indirect call** (`CALL_VVC`): the pointer value is `IP_OFFSET + ordinal` (`GAZL.cpp:1120`); unbias and trap
+  `BAD_CALL` unless `ordinal < functionCount`, then `call functionTable[ordinal]` — exactly the interpreter's new path
+  (`GAZL.cpp:1274`), where the JIT's `functionTable` maps `ordinal → native entry` instead of `→ code offset`. One
+  bounds check indexing a table of legitimate entries — stronger and cheaper CFI than the old `opcode == FUNC_CC_`
+  guard. (Direct `CALL_CVC`: the ordinal is a compile‑time constant, so the JIT resolves it to a **direct branch**; the
+  interpreter still indexes `functionTable`, `GAZL.cpp:1279`.)
 - **Return** (`RETU`): pop `{nativeReturnAddr, dsp}`; branch to it. (Engine is fixed at load, §2, so the continuation
   is always the JIT's; the interpreter is a whole‑program fallback, not a per‑return choice.)
 - **Native call** (`CALL_NVC`): full safepoint sync, publish the param window / `FUEL` to the `Processor`, then a
@@ -699,12 +702,13 @@ unless it can finish), a block whose weight exceeded the host's per‑`process()
 **What compiling a module produces.** At patch load, off the audio thread, the JIT walks the finalized `Instruction[]`
 (§5.0) once per `FUNC` and emits native code plus **one** persistent table:
 
-- **Function table** — `ordinal → native entry address`, one slot per `FUNC`. GAZL function pointers are **ordinals**
-  (function numbers), not code addresses — the interpreter and JIT both resolve them through this table (a fork decision;
-  it decouples persistent data holding function pointers from the private, swappable code representation). It is read
-  by `enterCall(ordinal)` and by indirect `CALL_VVC`, whose runtime check becomes a plain `ordinal < functionCount`
-  bounds check indexing a table of legitimate entries only — cheaper *and* stronger CFI than the old
-  `code[ui].opcode == FUNC_CC_` guard (`GAZL.cpp:1609`), since a forged pointer can't land inside a function. Direct
+- **Function table** — `ordinal → native entry address`, one slot per `FUNC`. GAZL function pointers are **stable
+  declaration‑order ordinals** — the value is `IP_OFFSET + ordinal` (`GAZL.cpp:1120`), and both engines resolve it
+  through a table (interpreter: `ordinal → code offset`; JIT: `ordinal → native entry`). This is now the shipping VM
+  (merged from a fork), and it decouples persistent/frozen data holding function pointers from the private, swappable
+  code representation. It is read by `enterCall` and by indirect `CALL_VVC`, whose runtime check is now a plain
+  `(ptr − IP_OFFSET) < functionCount` bounds check indexing a table of legitimate entries only — cheaper *and* stronger
+  CFI than the old `code[ui].opcode == FUNC_CC_` guard, since a forged pointer can't land inside a function. Direct
   calls (`CALL_CVC`) know their target at compile time and emit a direct native branch — no table lookup.
 
 **No resume side table.** Suspend/resume does not translate GAZL ips to native offsets; it stores a native continuation
@@ -728,7 +732,7 @@ table above, for calls.
 ### 5.7 v2 register allocation — registers as a write‑back cache of the frame (committed, staged)
 
 v2 is not optional polish. Measured on the golden corpus: **48 % of executable instructions reference a transient**,
-and transient def→use distance is almost always 1 (in `MLMoogFilter`, 44 of 51 transient uses consume the value on the
+and transient def→use distance is almost always 1 (in `LadderFilter`, 44 of 51 transient uses consume the value on the
 very next instruction) — so under v1, roughly half of all dataflow round‑trips through memory (§5.3's `ADDF` lowering
 is three memory ops for one `fadd`). This section fixes the v2 design in near‑pseudo‑code so that every v1 structure it
 relies on is a stated contract (§5.7.7), not a lucky accident.
@@ -930,7 +934,7 @@ Two properties carry the correctness argument:
   v2.0; with v2.1's bound lines (only *dirty* is block‑local — the binding and the value survive), named hot scalars
   are read from memory once per function (plus once per call return).
 
-Net effect on an `MLMoogFilter`‑style inner loop (one block, no calls): v1 spends ~3 memory ops per arithmetic
+Net effect on an `LadderFilter`‑style inner loop (one block, no calls): v1 spends ~3 memory ops per arithmetic
 instruction; v2.0 spends one load + one store per *slot* per iteration (the block‑boundary clear); v2.1 spends **zero
 loads** after first touch and one store per *modified* bound slot per iteration. Those steps are the measured
 2.8× → 3.9× → 6.1× on the arithmetic kernel.
@@ -1440,7 +1444,7 @@ not starting from zero. None of this code is kept.
 |---|---|---|---|
 | **A1. Exec‑memory in real hosts** | §2.1 — entitlement belongs to the *host*; Logic unknown | Stub AU/VST that on load walks the probe ladder (`MAP_JIT`+toggle → `mmap`+`mprotect` → fail) and logs the winner; load into the surveyed DAWs, esp. `allow-unsigned`‑only ones on Apple Silicon + Logic | Per host, known which strategy succeeds; at least one works everywhere targeted |
 | **A2. ARM64 cross‑thread publication** | §6.2#2 / §12#1 — the top correctness unknown | Thread A writes a trivial fn + barrier/i‑cache seq + release flag; thread B spins then executes, millions of iters on real M‑series + Win‑ARM under memory pressure; *also* run with barriers removed to prove the test bites | Survives millions of runs; harness demonstrably detects a bad sequence |
-| **A3. Speedup + compile‑latency reality check** | §9 — ROI of the whole project | Hand‑compile one zero‑escape hot kernel (`MLMoogFilter`/`perfTest`) for one arch; measure loop speedup vs interpreter and load‑time compile cost/KB | Speedup in the 3–10× ballpark (not ~1.5×); compile latency sub‑ms‑class off‑thread |
+| **A3. Speedup + compile‑latency reality check** | §9 — ROI of the whole project | Hand‑compile one zero‑escape hot kernel (`LadderFilter`/`perfTest`) for one arch; measure loop speedup vs interpreter and load‑time compile cost/KB | Speedup in the 3–10× ballpark (not ~1.5×); compile latency sub‑ms‑class off‑thread |
 | **B1. Interpreter cross‑arch determinism diff + spec lock** | §6 — JIT must match a *defined* oracle, not a buggy one | Run today's interpreter on x64 + ARM64 over the 57‑program corpus + edge cases; diff. Surfaces `FTOI`/`idiv`/shift/FTZ‑DAZ divergences; forces the §6 + §1.1 spec decisions | Interpreter bit‑identical across arches, or every divergence deliberately defined + documented |
 | **C1. Compiler‑as‑oracle probe set** | §3.2.1 — validate the "what to emit" methodology | C probes (const operands) for a float arith, int arith w/ div guard, bounds‑checked `PEEK`, saturating `FTOI`, a branch, a `CALL`; disassemble both arches | A canonical target‑sequence table per arch; 1:1 mapping confirmed, no frame surprises |
 | **C2. Emitter + disassembler‑diff harness** | §3.2 — "encoding bugs are on us" | `Emitter` for ~10 instructions + round‑trip test (emit → disassemble → assert intended decode) | Harness reliably catches a deliberately‑corrupted encoding |
