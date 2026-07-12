@@ -553,9 +553,30 @@ beside it.
 
 - **Tier 2 — register‑allocating JIT (v2, committed — §5.7).** Same lowering + registers treated as a write‑back
   cache of the frame, staged v2.0 (block‑local floating cache, no aliasing‑spec dependence) → v2.1 (bound registers for
-  hot private scalars) → v2.2 (optional provenance‑scoped flushing). Not built first, but **designed up front**: v1 must
+  hot private scalars) → v2.2 (Liftoff‑style cross‑block join reconciliation) → v2.3 (optional provenance‑scoped
+  flushing). Not built first, but **designed up front**: v1 must
   satisfy the compatibility contract in §5.7.7 so v2 is an additive change. Still no speculation and no deopt — GAZL
   has no dynamic types to speculate on, so the machinery that causes most JIT CVEs never enters the design.
+
+**Engine factoring — base `Processor` + interpreter / JIT subclasses (decided).** The interpreter and the JIT are two
+concrete engines over one shared machine state, *not* a retrofit of the interpreter with JIT‑mode flags:
+
+- **Base `Processor`** (keep the name): the shared machine state — `memory`, data stack + `dsp`, `ipStack` + `ipsp`,
+  `natives`, sizes, `clockCyclesLeft`, `userData`, the `Instruction[]` — plus the **non‑virtual** host/native‑facing API
+  (`accessMemory`/`accessParams`/`accessConstMemory`/`getUserData`/`resetTimeOut`/`getClockCyclesLeft`). `run()` and
+  `enterCall()` are the **only virtual methods** (per‑block / per‑call, so vtable cost is nil). Virtual destructor.
+- **Two subclasses:** the interpreter (today's switch loop + its `Instruction*` ip) and the JIT engine (its `RESUME`
+  native continuation + native `functionTable` + compiled code). Engine is chosen once at load by the exec‑memory probe.
+- **Native code and host call sites are unchanged.** A native takes `Processor*` and uses the non‑virtual accessors +
+  virtual `run`/`enterCall`; verified against the real host `SonicCharge/SCLib/MidiGAZL` — its natives and call sites
+  need **no change**. The *only* host edit is that `processor = Processor(...)` reassignment (a fresh‑value assign after
+  each `assemble()`, `MidiGAZL.cpp:422`) becomes polymorphic construction (`unique_ptr<Processor>` / in‑place reset).
+- **Copyability was the only thing given up, and it wasn't load‑bearing.** In the real host, `Processor` copy is used
+  *only* for fresh‑value reassignment, never to clone a live execution; serialization (`serializeState`, and the new
+  `freeze`/`thaw`) walks globals by name through `accessMemory`, not through copy. So the base carrying a vtable costs
+  nothing real. (Related field notes from that host: fuel is used as a **watchdog** — `TIME_OUT` → deactivate, never
+  resumed — so block‑granular JIT fuel is safe and the `maxBlockWeight` liveness bound is trivially met; and
+  `getClockCyclesLeft()` is read for *stats* only, which simply become block‑granular under the JIT.)
 
 ### 5.2 The invariant that makes everything safe and testable
 > **At every safepoint, JIT program‑observable state is byte‑identical to the interpreter's at the same GAZL program
@@ -759,8 +780,9 @@ emitted code, Apple Silicon, integer kernels; speedups vs the interpreter):
 |---|---|---|--:|--:|
 | v1 | all slots memory‑resident | no | 2.8× | ~3× (est.) |
 | **v2.0** | floating lines only; **conservative flush around every pointer memory op** | **no — sound with no aliasing rule at all** | 3.9× | 5.2–5.5× |
-| **v2.1** | + bound lines for hot private scalars (escape floor) | **yes — this is what the spec is for** | 6.1× | 12.4–13.6× |
-| v2.2 | + provenance‑scoped flushing (taint frame‑born pointers) | yes (already required by v2.1) | — | 5.7–6.4× without bound lines; ~10–20 % over v2.0 |
+| **v2.1** | + bound lines (fixed‑map cross‑block, §5.7.6) for hot private scalars (escape floor) | **yes — this is what the spec is for** | 6.1× | 12.4–13.6× |
+| **v2.2** | + **Liftoff‑style join reconciliation** (varying per‑block maps; the general cross‑block form, §5.7.6) | yes (same spec as v2.1) | (gains on multi‑join call‑free loops) | — |
+| v2.3 | + provenance‑scoped flushing (taint frame‑born pointers) | yes (already required by v2.1) | — | 5.7–6.4× without bound lines; ~10–20 % over v2.0 |
 
 The measured surprise that set this staging: **the block‑boundary clear is the expensive part, not the pointer
 flushes.** Conservative flushing costs only ~10–20 % over provenance‑scoped flushing (store‑to‑load forwarding makes
@@ -814,7 +836,10 @@ The remaining cost in v2.0 is the block‑boundary clear: a single‑block loop 
 remove exactly that: a few long‑lived named values (`$acc`, loop counters) get one host register for the whole
 function. No live ranges, no interference graph — the binding is a flat table, and because it is identical in every
 block, a bound line **survives labels and back‑edges** (store‑when‑dirty at block ends, never reloaded except at call
-returns and resume points).
+returns and resume points). Bound lines are the **fixed‑map instance of the committed cross‑block (Liftoff‑style)
+allocator** (§5.7.6): a constant map means joins need no reconciliation. The general varying‑map form with join shuffle
+is the next committed stage; this fixed‑map form is deliberately first because it already captures the measured 2× on
+the dominant single‑block loops.
 
 Bound lines are **exempt from all pointer‑op flushes** — and that exemption is only sound for slots no defined pointer
 access can reach. This is where the **provenance‑bounded local‑access rule** (§1.1, normative, Phase 0) enters, via the
@@ -850,7 +875,7 @@ its 14 pre‑bank scalars are bound‑eligible even though the function bulk‑c
 on the floor‑raising refinements in §5.7.6 (Impala declaring arrays last; `GETL`/`SETL` spans tightened to the named
 array) — until then those functions still enjoy full v2.0 floating‑cache treatment.
 
-#### 5.7.3 v2.2 — provenance‑scoped flushing (optional knob)
+#### 5.7.3 v2.3 — provenance‑scoped flushing (optional knob)
 
 v2.0 flushes floating lines around *every* pointer memory op. The refinement: track a one‑bit taint — "derived from an
 `ADRL` in this function" — through `MOVp`/`ADDp`/`SUBp`; only **tainted** pointer ops (plus `GETL`/`SETL`) flush, since
@@ -876,7 +901,7 @@ emitBlock(b):
             lower as v1                            // cannot touch the frame → no cache interaction
         case PEEK/COPY-src via pointer, GETL:      // pointer READ
             flushFloating(dirtyOnly: true)         //   memory must hold pending writes; lines stay valid
-            lower as v1 (checked memory op)        //   (v2.2: only if the pointer is tainted)
+            lower as v1 (checked memory op)        //   (v2.3: only if the pointer is tainted)
         case POKE/COPY-dst via pointer, SETL:      // pointer WRITE
             flushFloating(dirtyOnly: true)
             lower as v1 (checked memory op)
@@ -995,23 +1020,37 @@ program that JITs stays JIT'd and `RESUME` being an engine‑private native addr
 only for the **test** oracle (§8), which lines up two *separate* runs by GAZL instruction via a debug‑only map and
 reaches comparable (memory‑synced) states by forcing suspends — no runtime GAZL‑ip field is needed.
 
-#### 5.7.6 Explicitly out of scope, and deferred refinements
+#### 5.7.6 Cross‑block reconciliation (Liftoff‑style, committed) — and what stays out of scope
 
-No graph coloring, no linear scan, no live‑range splitting; no cross‑block floating state, no SSA/φ; no liveness / no
-dead‑store elimination (see §5.7.4); no rematerialization; no instruction scheduling. Deferred refinements, in rough
-value order — the first two raise the escape floor (more bound‑eligible scalars in `process()`‑pattern functions), the
-rest shave flush traffic:
+**The cross‑block allocator is committed, staged from fixed‑map to reconciled.** v2.1's bound lines (§5.7.2) are the
+**fixed‑map instance** of a cross‑block register allocator: the slot→register binding is constant across the whole
+function, so control‑flow joins are trivially consistent and no shuffle code is ever needed. The general form —
+**register maps that vary per block, reconciled at joins** — is the committed next stage (V8's *Liftoff* model, and the
+shape Magnus sketched):
 
-- **(a) Impala declares arrays after scalars.** The `pong` pattern (buffer declared first) poisons the floor for every
-  scalar behind it; emitting `LOCA`/banks last fixes it in the front end at zero JIT cost (benefits recompiled
-  firmwares only; frame layout stays per‑program ABI).
-- **(b) Tighten `GETL`/`SETL` spans to the named array's declared size** (spec refinement): unlike `ADRL` pointers, the
-  assembler knows the `LOCA` extent; corpus sites are genuine subscripts, and the cross‑local bank idiom uses
-  `ADRL`+`COPY`, never `SETL`. Removes `GETL`/`SETL` from floor computation entirely.
-- **(c) Dirty‑bit dataflow across blocks** to hoist bound‑line stores out of single‑block loops (closes most of the
-  remaining gap to the C ceiling).
+- Each label carries a register map; each incoming edge emits **shuffle code** (moves / spills / reloads, resolving
+  register‑permutation cycles through a temp) so every predecessor agrees on where each live value sits at the label.
+- The **sync‑less back‑edge** (§5.7.5) — loop‑carried values stay in registers across iterations, spilled only in the
+  cold timeout stub — is part of this, and it subsumes the old "hoist bound‑line stores out of the loop" idea for free.
+- It needs the **same aliasing spec** as bound lines (a cross‑block cached value must be unaliasable), so it is a
+  *register‑flow* mechanism, not a new spec dependency.
+
+Why staged, not big‑bang: the fixed‑map form is dead simple (a flat table, no shuffle) and already captures the measured
+2× on GAZL's dominant single‑block `FORi` loops. Full reconciliation adds the multi‑join, call‑free cases (fewer in the
+corpus) at the cost of the shuffle machinery — which is the classic register‑allocator bug surface (regalloc2 ships a
+symbolic checker for exactly this). So: build the fixed‑map form first, lean hard on the §8 differential fuzzer +
+block‑local verifier when reconciliation lands, and let measurement size the last increment.
+
+**Genuinely out of scope for v2 (any stage):** graph coloring, general linear scan with live‑range splitting, SSA/φ,
+deopt, rematerialization, instruction scheduling.
+
+**Deferred refinements** (raise the escape floor / shave flush traffic):
+- **(a) Impala declares arrays after scalars** — the `pong` pattern (buffer declared first) poisons the floor for every
+  scalar behind it; emitting `LOCA`/banks last fixes it in the front end at zero JIT cost (recompiled firmwares only).
+- **(b) Tighten `GETL`/`SETL` spans to the named array's declared size** (spec refinement): the assembler knows the
+  `LOCA` extent; the bank idiom uses `ADRL`+`COPY`, never `SETL`. Removes `GETL`/`SETL` from floor computation entirely.
 - **(d) Exact spans for constant‑count `COPY` through a pristine `ADRL`**, narrowing the floor to a range.
-- **(e) Callee signature metadata** (§1.1 front‑end ideas) to keep bound values live across GAZL calls.
+- **(e) Callee signature metadata** (§1.1 front‑end ideas) to keep bound/reconciled values live across GAZL calls.
 
 #### 5.7.7 The v1 compatibility contract (the point of this section)
 
@@ -1250,13 +1289,29 @@ Writing instructions to data memory does not make them fetchable — the sequenc
 1. After writing code, for the range: `dc cvau` (clean D‑cache to PoU), `dsb ish`, `ic ivau` (invalidate I‑cache to PoU),
    `dsb ish`, `isb`. Use `__builtin___clear_cache(begin,end)` / `sys_icache_invalidate` (macOS) /
    `FlushInstructionCache` (Windows) — never hand‑roll unless you must.
-2. **Cross‑thread execution** (compile on loader thread, first run on audio thread): the executing core needs a context
-   sync (`isb`). We rely on the audio thread hitting an `isb` naturally, but to be safe the publish step should ensure a
-   barrier is observed on the executing core before first entry. Real engines handle this variously (V8/OpenJDK use
-   IPIs/`membarrier`‑style broadcasts on some OSes); for us, because publication happens *once at load* and the audio
-   thread only enters JIT code *after* the atomic "jit ready" flag is set (with acquire/release), a `dmb ish` on publish
-   + the natural `isb` on the far side is sufficient in practice — but **verify on real M‑series hardware under load**,
-   this is a classic source of "works 999/1000 times" bugs.
+2. **Cross‑thread execution** (compile on loader thread, first run on audio thread) — **this is a solved problem with
+   an authoritative protocol** ([ARM, *Caches and Self‑Modifying Code: Working with Threads*](https://developer.arm.com/community/arm-community-blogs/b/architectures-and-processors-blog/posts/caches-self-modifying-code-working-with-threads)).
+   The writer‑side cache maintenance in (1) is **broadcast** across cores, but the final `isb` is **not** — it only
+   resyncs the pipeline of the core that runs it, so the writer cannot sync the reader. The sanctioned fix is that **the
+   executing thread does its own `isb` before entering possibly‑new code**: *"execute an `isb` before entering any
+   function that may have been recompiled."*
+   - **For us this is nearly free and fully deterministic.** The audio thread enters JIT code through exactly one place —
+     the dispatcher (`br RESUME`, §5.4). So the entire reader‑side requirement is **one `isb` at the dispatcher entry,
+     right after the acquire‑load of the "JIT ready" flag** — once per `run()` entry, not per call. No `membarrier`, no
+     IPI, no OS‑specific broadcast, because we *own* the reader's entry point.
+   - **GAZL is in the easy regime by construction.** Code is immutable after publish (§1), so we only ever
+     *publish‑then‑first‑execute*, never *modify‑while‑executing* (page recycling on patch reload is a fresh generation,
+     not concurrent modification). We therefore never touch the hard concurrent‑modification rules (only `B`/`BL`/`NOP`/
+     `ISB`/`BRK` may be atomically swapped under a running core), which matter only for lazy call‑patching / tiering —
+     which we don't do.
+   - **The fallback we don't need:** `membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE)` (Linux) is the "broadcast
+     ISB" for when you *can't* insert an ISB into the reader (uncontrolled pre‑existing threads); Firefox uses it for
+     tiering. macOS has no equivalent — irrelevant here precisely because we control the audio thread's entry.
+   - **Windows‑ARM64 is the easy platform:** `FlushInstructionCache` is documented to handle cross‑processor sync itself.
+   - The remaining spike work (A2) is therefore *confirmation*, not discovery: implement this exact sequence and
+     stress‑test it on real M‑series hardware, with a **deliberately‑broken variant** (omit the reader `isb`) to prove
+     the test has teeth. The failure mode is real if you skip it — Mozilla [bug 1529933](https://bugzilla.mozilla.org/show_bug.cgi?id=1529933)
+     is a shipped use‑after‑free from non‑synchronized icaches on the recycled‑page path.
 3. **W^X on Apple Silicon:** `mmap(MAP_JIT)`, `pthread_jit_write_protect_np(0)`, write, `pthread_jit_write_protect_np(1)`,
    `sys_icache_invalidate`. The toggle is *per thread*, so compile+publish must happen on **one** thread.
 4. **Branch range:** ±128 MB for `b`/`bl`, ±1 MB for conditional `b.cond`/`cbz`. Our per‑module code is KB‑scale, so
@@ -1443,7 +1498,7 @@ not starting from zero. None of this code is kept.
 | Spike | Retires (risk) | Build (minimal) | Gate |
 |---|---|---|---|
 | **A1. Exec‑memory in real hosts** | §2.1 — entitlement belongs to the *host*; Logic unknown | Stub AU/VST that on load walks the probe ladder (`MAP_JIT`+toggle → `mmap`+`mprotect` → fail) and logs the winner; load into the surveyed DAWs, esp. `allow-unsigned`‑only ones on Apple Silicon + Logic | Per host, known which strategy succeeds; at least one works everywhere targeted |
-| **A2. ARM64 cross‑thread publication** | §6.2#2 / §12#1 — the top correctness unknown | Thread A writes a trivial fn + barrier/i‑cache seq + release flag; thread B spins then executes, millions of iters on real M‑series + Win‑ARM under memory pressure; *also* run with barriers removed to prove the test bites | Survives millions of runs; harness demonstrably detects a bad sequence |
+| **A2. ARM64 cross‑thread publication** | §6.2#2 — *confirm the ARM‑sanctioned protocol* (was the top unknown, now design‑resolved) | Implement writer `sys_icache_invalidate`/`FlushInstructionCache` + **reader `isb` at dispatcher entry after the acquire‑load**; thread A writes/publishes a rotating fn, thread B (other core, pre‑touched page) executes, millions of iters on real M‑series + Win‑ARM under pressure; *also* run with the reader `isb` removed to prove the test bites | Survives millions of runs; broken variant demonstrably fails |
 | **A3. Speedup + compile‑latency reality check** | §9 — ROI of the whole project | Hand‑compile one zero‑escape hot kernel (`LadderFilter`/`perfTest`) for one arch; measure loop speedup vs interpreter and load‑time compile cost/KB | Speedup in the 3–10× ballpark (not ~1.5×); compile latency sub‑ms‑class off‑thread |
 | **B1. Interpreter cross‑arch determinism diff + spec lock** | §6 — JIT must match a *defined* oracle, not a buggy one | Run today's interpreter on x64 + ARM64 over the 57‑program corpus + edge cases; diff. Surfaces `FTOI`/`idiv`/shift/FTZ‑DAZ divergences; forces the §6 + §1.1 spec decisions | Interpreter bit‑identical across arches, or every divergence deliberately defined + documented |
 | **C1. Compiler‑as‑oracle probe set** | §3.2.1 — validate the "what to emit" methodology | C probes (const operands) for a float arith, int arith w/ div guard, bounds‑checked `PEEK`, saturating `FTOI`, a branch, a `CALL`; disassemble both arches | A canonical target‑sequence table per arch; 1:1 mapping confirmed, no frame surprises |
@@ -1462,16 +1517,20 @@ not starting from zero. None of this code is kept.
 | **4. Calls, indirect calls, natives, traps, fuel, suspend/resume** | Full ABI: dispatcher + `RESUME` continuation + ordinal function table (§5.4, §5.6, §5.7.5); trap/timeout exit stubs; block fuel | Suspend/resume fuzzer (random fuel slices, native‑retry, `resetTimeOut(0)`) green |
 | **5. Hardening** | Static verifier over emitted code; CI matrix (native ARM+x64, QEMU, Rosetta); extend `GAZLFuzz` to dual‑engine | Verifier passes on full corpus; sustained fuzzing finds nothing |
 | **6. Ship opportunistically** | JIT on where probe succeeds; interpreter elsewhere; telemetry on JIT‑on rate across hosts | Real‑world A/B shows perf win + zero correctness regressions |
-| **v2 (committed, staged)** | Registers as a write‑back frame cache per §5.7: **v2.0** block‑local floating cache with conservative pointer flushes (no aliasing‑spec dependence; measured ~4–5.5×), **v2.1** bound registers for hot private scalars (escape floor, §1.1; measured ~6–13.6×), **v2.2** optional provenance‑scoped flushing (~10–20 %); store coalescing, block‑boundary sync; requires the v1 contract §5.7.7 | Three‑way lockstep (interp/v1/v2) byte‑identical on corpus + fuzzer; each stage lands separately behind the C8 engine switch |
+| **v2 (committed, staged)** | Registers as a write‑back frame cache per §5.7: **v2.0** block‑local floating cache with conservative pointer flushes (no aliasing‑spec dependence; measured ~4–5.5×), **v2.1** bound registers = fixed‑map cross‑block for hot private scalars (escape floor, §1.1; measured ~6–13.6×), **v2.2** Liftoff‑style join reconciliation (general cross‑block), **v2.3** optional provenance‑scoped flushing (~10–20 %); requires the v1 contract §5.7.7 | Three‑way lockstep (interp/v1/v2) byte‑identical on corpus + fuzzer; each stage lands separately behind the C8 engine switch |
 | **AOT (parallel)** | GAZL→C++ transpiler reusing the lowering, for iOS/first‑party | Bit‑identical to interpreter on the test corpus |
 
 ---
 
 ## 12. Open questions & risks
 
-1. **ARM64 cross‑thread publication** (§6.2#2): the "compile on loader thread, first execute on audio thread" barrier
-   story must be validated on real Apple‑Silicon and Windows‑ARM hardware under load. This is the highest‑risk
-   *correctness* unknown. Mitigation: publish‑once + acquire/release "ready" flag + explicit barriers; stress test.
+1. **ARM64 cross‑thread publication** (§6.2#2): *design‑resolved — was the top unknown, now a known protocol to
+   confirm.* ARM's authoritative guidance is: writer does the (broadcast) `dc cvau`/`ic ivau`/`dsb` maintenance; the
+   **executing thread does its own `isb` before entering possibly‑new code**. For GAZL that is one `isb` at the
+   dispatcher entry after the acquire‑load of the "ready" flag, and our immutable‑after‑publish code keeps us in the
+   easy publish‑then‑execute regime (never concurrent modification). Remaining work is confirmation on real
+   Apple‑Silicon / Windows‑ARM with a deliberately‑broken variant to prove the test bites (spike A2), not open design
+   risk. `membarrier(SYNC_CORE)` is the Linux fallback for uncontrolled reader threads — not needed here.
 2. **DAW entitlement reality** (§2.1): *now measured* (see table). Result: every current third‑party host tested can run
    a JIT via `allow-jit` (MAP_JIT) or at least `allow-unsigned-executable-memory` (`mprotect` path); the only unknowns
    are **Logic Pro** (non‑hardened Apple binary, no entitlements — must be tested empirically, and its out‑of‑process AU
@@ -1538,9 +1597,16 @@ not starting from zero. None of this code is kept.
 [Outflank, *macOS JIT Memory*](https://www.outflank.nl/blog/2026/02/19/macos-jit-memory/) ·
 [LuaJIT #1072 (iOS JIT)](https://github.com/LuaJIT/LuaJIT/issues/1072).
 
+**ARM64 code publication / cross‑thread icache:** [ARM, *Caches and Self‑Modifying Code: Working with Threads*](https://developer.arm.com/community/arm-community-blogs/b/architectures-and-processors-blog/posts/caches-self-modifying-code-working-with-threads) (authoritative) ·
+[Mozilla bug 1529933 (icache use‑after‑free)](https://bugzilla.mozilla.org/show_bug.cgi?id=1529933) ·
+[DynamoRIO: far fragments on AArch64](https://dynamorio.org/page_aarch64_far.html) ·
+[*JIT on ARM: Call‑Site Code Consistency* (ACM)](https://dl.acm.org/doi/fullHtml/10.1145/3546568) ·
+[sys_icache_invalidate(3)](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/sys_icache_invalidate.3.html).
+
 **SFI / verification:** Wahbe, Lucco, Anderson & Graham, *Efficient Software‑Based Fault Isolation* (SOSP'93) ·
 Google Native Client (NaCl) · [VeriWasm](https://cseweb.ucsd.edu/~dstefan/pubs/johnson:2021:veriwasm.pdf).
 
 *Uncertainty flags:* CPython JIT speedup figures and Winch/Cmajor status are version‑dependent (2025–2026 snapshot);
-the DAW‑entitlement claim is community‑sourced, not an authoritative table (see risk #2); the ARM64 cross‑thread barrier
-sufficiency (§6.2#2) is stated from engine practice but must be hardware‑validated for GAZL's exact publish model.
+the DAW‑entitlement claim is community‑sourced, not an authoritative table (see risk #2); the ARM64 cross‑thread publish
+protocol (§6.2#2) is now backed by ARM's authoritative guidance (reader‑side `isb`), with hardware stress‑confirmation
+the only remaining step (spike A2).
