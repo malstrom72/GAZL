@@ -231,8 +231,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 		}
 
 		{
-			Processor pmachine(codeSize, code, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE
-					, callStack, NATIVE_TABLE, functionTable, functionCount, 0);
+			Processor pmachine(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory, globalsSize
+					, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 			Pointer mainFunction = globals.findFunction("main");
 			if (mainFunction != 0) {
 				Status status = pmachine.enterCall(mainFunction);
@@ -386,8 +386,8 @@ int main(int argc, const char* argv[]) {
 		}
 		
 		{
-			Processor pmachine(codeSize, code, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE
-					, callStack, NATIVE_TABLE, functionTable, functionCount, 0);
+			Processor pmachine(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory, globalsSize
+					, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 			const char* mainFunctionName = pos.size() >= 3 ? pos[2] : "main";
 			Pointer mainFunction = globals.findFunction(mainFunctionName);
 			if (mainFunction == 0) throw CmdException(std::string("Could not locate function: ") + mainFunctionName);

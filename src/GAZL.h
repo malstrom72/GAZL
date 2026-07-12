@@ -233,8 +233,8 @@ class Assembler {
 	protected:	void finalizeFunction();
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;
-	protected:	UInt* const functionTable;			// Maps function ordinal -> code offset (index into `codeBase`).
 	protected:	const UInt maxFunctionCount;
+	protected:	UInt* const functionTable;			// Maps function ordinal -> code offset (index into `codeBase`).
 	protected:	Value* const memoryBase;
 	protected:	Value* const memoryEnd;
 	protected:	Instruction* ip;
@@ -332,13 +332,12 @@ enum {
 */
 class Processor {
 	public:		Processor(); 																							// Default-initialized processor. It's illegal to call any methods on a default constructed processor.
-	public:		Processor(UInt codeSize, const Instruction* code, UInt memorySize, Value* memory, UInt globalsSize
-						, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
-						, const UInt* functionTable, UInt functionCount, void* userData = 0);							// higher level routine, data stack is full space between globals and constants
-	public:		Processor(UInt codeSize, const Instruction* code, UInt memorySize, Value* memory, UInt rwMemorySize
-						, UInt dataStackOffset, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack
-						, NativeFunc const* natives, const UInt* functionTable, UInt functionCount
-						, void* userData = 0);																			// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack
+	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
+						, UInt memorySize, Value* memory, UInt globalsSize, UInt constsSize, UInt ipStackSize
+						, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);						// higher level routine, data stack is full space between globals and constants
+	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
+						, UInt memorySize, Value* memory, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
+						, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);	// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack
 	public:		void resetTimeOut(Int clockCycles); 																	// It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing it's next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
 	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; 										// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`
@@ -351,6 +350,8 @@ class Processor {
 	
 	protected:	UInt codeSize;
 	protected:	const Instruction* codeBase;
+	protected:	UInt functionCount;
+	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `IP_OFFSET + ordinal`.
 	protected:	UInt memorySize;
 	protected:	Value* memoryBase;
 	protected:	UInt rwMemorySize;
@@ -359,8 +360,6 @@ class Processor {
 	protected:	CallStackEntry* ipStackBase;
 	protected:	CallStackEntry* ipStackEnd;
 	protected:	NativeFunc const* natives;
-	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `IP_OFFSET + ordinal`.
-	protected:	UInt functionCount;
 	protected:	Int clockCyclesLeft;
 	protected:	const Instruction* ip;
 	protected:	Value* dsp;

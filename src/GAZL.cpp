@@ -730,8 +730,8 @@ const char* Symbols::getGlobalInfo(const Iterator& iterator, bool& isTemp, Point
 
 Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable
 		, UInt maxMemorySize, Value* memoryBase, Symbols& globals)
-		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), functionTable(functionTable)
-		, maxFunctionCount(maxFunctionCount), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
+		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
+		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
 		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
@@ -1209,19 +1209,19 @@ const Char* Assembler::feed(const Char* line) {
 	return eatEOL(e);
 }
 
-Processor::Processor() : codeSize(0), codeBase(0), memorySize(0), memoryBase(0), rwMemorySize(0), dataStackBase(0)
-		, dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0), functionTable(0), functionCount(0), ip(0), dsp(0)
+Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
+		, rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0), ip(0), dsp(0)
 		, ipsp(0), userData(0), clockCyclesLeft(0) {
 }
 
-Processor::Processor(UInt codeSize, const Instruction* code, UInt memorySize, Value* memory, UInt rwMemorySize
-		, UInt dataStackOffset, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
-		, const UInt* functionTable, UInt functionCount, void* userData)
-		: codeSize(codeSize), codeBase(code), memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(rwMemorySize)
+Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
+		, UInt memorySize, Value* memory, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize, UInt ipStackSize
+		, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
+		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
+		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(rwMemorySize)
 		, dataStackBase(memory + dataStackOffset), dataStackEnd(memory + dataStackOffset + dataStackSize)
-		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), functionTable(functionTable)
-		, functionCount(functionCount), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase), userData(userData)
-		, clockCyclesLeft(0x7FFFFFFFU) {
+		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase)
+		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
 	assert(rwMemorySize <= memorySize);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(code != 0);
@@ -1229,14 +1229,14 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt memorySize, Va
 	assert(ipStack != 0);
 }
 
-Processor::Processor(UInt codeSize, const Instruction* code, UInt memorySize, Value* memory, UInt globalsSize
-		, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
-		, const UInt* functionTable, UInt functionCount, void* userData)
-		: codeSize(codeSize), codeBase(code), memorySize(memorySize - 1), memoryBase(memory)
-		, rwMemorySize(memorySize - constsSize), dataStackBase(memory + globalsSize)
-		, dataStackEnd(memory + memorySize - constsSize), ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize)
-		, natives(natives), functionTable(functionTable), functionCount(functionCount), ip(codeBase), dsp(dataStackBase)
-		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
+Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
+		, UInt memorySize, Value* memory, UInt globalsSize, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack
+		, NativeFunc const* natives, void* userData)
+		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
+		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(memorySize - constsSize)
+		, dataStackBase(memory + globalsSize), dataStackEnd(memory + memorySize - constsSize), ipStackBase(ipStack)
+		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
+		, userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
 	assert(globalsSize + constsSize <= memorySize);
 	assert(code != 0);
 	assert(memory != 0);
@@ -1696,8 +1696,8 @@ bool unitTest() {
 
 		std::vector<unsigned char> memoryBlob;
 		{
-			Processor pmachine(codySize, cody, MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack
-					, nativeTable, functionTable, functionCount, &callbackData);
+			Processor pmachine(codySize, cody, functionCount, functionTable, MEMORY_SIZE, memory, globalsSize, constsSize
+					, CALL_STACK_SIZE, callStack, nativeTable, &callbackData);
 			Pointer funcy = globals.findFunction("test");
 			assert(funcy != 0);
 			Status status = pmachine.enterCall(funcy);
@@ -1747,8 +1747,8 @@ bool unitTest() {
 				}
 			}
 
-			Processor pmachine2(codySize2, &cody2[0], MEMORY_SIZE, &memory2[0], globalsSize2, constsSize2, CALL_STACK_SIZE
-					, &callStack2[0], nativeTable, &functionTable2[0], functionCount2, &callbackData);
+			Processor pmachine2(codySize2, &cody2[0], functionCount2, &functionTable2[0], MEMORY_SIZE, &memory2[0]
+					, globalsSize2, constsSize2, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
 			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
 			assert(loaded == MEMORY_OK);
 
