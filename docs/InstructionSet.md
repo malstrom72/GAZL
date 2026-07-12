@@ -74,6 +74,11 @@ number of parameters (counting both input and output parameters). In GAZL 1.0 th
 types and number of parameters passed to a function. The size operand is merely a hint that might be used to optimize
 stack frame sizes or for bounds checking etc.
 
+A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function declaration
+order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defined operations on a function pointer;
+ordering (`LSSp`, `GEQp` etc.) and arithmetic (`ADDp`, `SUBp`, `DIFp`) applied to a function pointer yield an
+unspecified (but memory-safe) result.
+
 ## CNST
 - `*size`
 
