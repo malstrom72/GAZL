@@ -392,24 +392,24 @@ inline Value* Processor::accessParams(UInt count) const {
 inline void* Processor::getUserData() const { return userData; }
 
 /*
-	State serialization ("freeze" / "thaw"). Persists a Processor's mutable, non-TEMP global memory so it can be
+	Memory serialization ("freeze" / "thaw"). Persists a Processor's mutable, non-TEMP global memory so it can be
 	reconstructed later. Source text and compile-time constants are the caller's responsibility: to thaw, first
 	re-assemble the same source (which deterministically rebuilds identical code, layout and function ordinals), then
-	call `thawState`. Function pointers stored in globals survive re-assembly because they are stable ordinals.
+	call `thawMemory`. Function pointers stored in globals survive re-assembly because they are stable ordinals.
 	Call only at a quiescent boundary (between `run()` calls, with no active GAZL call).
 */
-enum StateLoad {
-	STATE_OK = 0				// Restored successfully.
-	, STATE_BAD_MAGIC = 1		// Not a GAZL state blob.
-	, STATE_BAD_VERSION = 2		// Incompatible state-format or GAZL version.
-	, STATE_BAD_WORDSIZE = 3	// Word size differs from this build.
-	, STATE_BAD_CANARY = 4		// Endianness or float bit-layout differs from this build.
-	, STATE_TRUNCATED = 5		// Blob ended unexpectedly.
+enum MemoryLoad {
+	MEMORY_OK = 0				// Restored successfully.
+	, MEMORY_BAD_MAGIC = 1		// Not a GAZL memory blob.
+	, MEMORY_BAD_VERSION = 2	// Incompatible memory-format or GAZL version.
+	, MEMORY_BAD_WORDSIZE = 3	// Word size differs from this build.
+	, MEMORY_BAD_CANARY = 4		// Endianness or float bit-layout differs from this build.
+	, MEMORY_TRUNCATED = 5		// Blob ended unexpectedly.
 };
 
-UInt freezeStateSize(const Processor& processor, const Symbols& symbols);								// Exact byte count a freeze will occupy.
-UInt freezeState(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);	// Writes the blob; returns the size (writes nothing and returns the needed size if `bufferSize` is too small).
-StateLoad thawState(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize);	// Restores non-TEMP globals by name into an already-assembled Processor.
+UInt freezeMemorySize(const Processor& processor, const Symbols& symbols);								// Exact byte count a freeze will occupy.
+UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);	// Writes the blob; returns the size (writes nothing and returns the needed size if `bufferSize` is too small).
+MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize);	// Restores non-TEMP globals by name into an already-assembled Processor.
 
 #if !defined(NDEBUG)
 bool unitTest();

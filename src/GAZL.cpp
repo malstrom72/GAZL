@@ -1435,7 +1435,7 @@ Status Processor::enterCall(Pointer functionPointer) {
 }
  
 /*
-	--- State serialization ("freeze" / "thaw") ---
+	--- Memory serialization ("freeze" / "thaw") ---
 
 	Persists the mutable global memory of a Processor so it can be reconstructed later. Only the writable, non-TEMP
 	globals are stored; source text and compile-time constants are the host's responsibility (thaw re-assembles them,
@@ -1446,47 +1446,59 @@ Status Processor::enterCall(Pointer functionPointer) {
 	The caller must freeze/thaw at a quiescent boundary (between `run()` calls, with no active GAZL call), so that the
 	data stack, call stack and instruction pointer hold nothing that needs saving.
 */
-const UInt STATE_FORMAT_VERSION = 1;
-const UInt STATE_INT_CANARY = 0x01020304;						// Detects endianness / format bugs on thaw.
-static const char STATE_MAGIC[4] = { 'G', 'Z', 'S', 'T' };
+const UInt MEMORY_FORMAT_VERSION = 1;
+const UInt MEMORY_INT_CANARY = 0x01020304;						// Detects endianness / format bugs on thaw.
+const UInt MEMORY_HEADER_SIZE = 4 + 6 * 4;						// Magic + { format version, GAZL version, word size, int canary, float canary, global count }.
+static const char MEMORY_MAGIC[4] = { 'G', 'Z', 'M', 'M' };
 
-/*
-	Serializes the header + non-TEMP globals into a byte cursor, or (when `out` has a null buffer) merely counts the
-	bytes. The single count-or-write path guarantees `freezeStateSize` and `freezeState` can never disagree.
-*/
-namespace {
-	struct StateCursor {
-		unsigned char* p;									// Null while only counting.
-		const unsigned char* end;
-		UInt count;
-		StateCursor(void* buffer, UInt bufferSize) : p(static_cast<unsigned char*>(buffer))
-				, end(buffer != 0 ? static_cast<unsigned char*>(buffer) + bufferSize : 0), count(0) { }
-		void putBytes(const void* data, UInt n) {
-			if (p != 0) { assert(p + n <= end); memcpy(p, data, n); p += n; }
-			count += n;
-		}
-		void putWord(UInt v) {
-			const unsigned char bytes[4] = { static_cast<unsigned char>(v), static_cast<unsigned char>(v >> 8)
-					, static_cast<unsigned char>(v >> 16), static_cast<unsigned char>(v >> 24) };
-			putBytes(bytes, 4);
-		}
-	};
+static unsigned char* putMemoryWord(unsigned char* p, UInt v) {	// Writes a 32-bit little-endian word.
+	p[0] = static_cast<unsigned char>(v);
+	p[1] = static_cast<unsigned char>(v >> 8);
+	p[2] = static_cast<unsigned char>(v >> 16);
+	p[3] = static_cast<unsigned char>(v >> 24);
+	return p + 4;
 }
 
-static void serializeState(const Processor& processor, const Symbols& symbols, StateCursor& out) {
-	UInt globalCount = 0;
+static const unsigned char* getMemoryWord(const unsigned char* p, const unsigned char* end, UInt& value, bool& ok) {
+	if (p + 4 > end) { ok = false; value = 0; return p; }		// Truncated: stop reading, leave `ok` false.
+	value = (UInt)p[0] | ((UInt)p[1] << 8) | ((UInt)p[2] << 16) | ((UInt)p[3] << 24);
+	return p + 4;
+}
+
+UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
+	(void)processor;
+	UInt size = MEMORY_HEADER_SIZE;
 	Symbols::Iterator it;
+	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) {
+		bool isTemp;
+		Pointer address;
+		UInt globalSize;
+		const char* name = symbols.getGlobalInfo(it, isTemp, address, globalSize);
+		size += 4 + (UInt)strlen(name) + 4 + globalSize * 4;	// name length + name + size + words
+	}
+	return size;
+}
+
+UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize) {
+	const UInt needed = freezeMemorySize(processor, symbols);
+	if (buffer == 0 || bufferSize < needed) return needed;	// Too small: write nothing, tell the caller the required size.
+
+	unsigned char* const start = static_cast<unsigned char*>(buffer);
+	unsigned char* p = start;
+	Symbols::Iterator it;
+	UInt globalCount = 0;
 	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) ++globalCount;
 
-	out.putBytes(STATE_MAGIC, 4);
-	out.putWord(STATE_FORMAT_VERSION);
-	out.putWord((UInt)VERSION);
-	out.putWord((UInt)WORD_SIZE);
-	out.putWord(STATE_INT_CANARY);
+	memcpy(p, MEMORY_MAGIC, 4);
+	p += 4;
 	Value floatCanary;
-	floatCanary.f = 1.0f;
-	out.putWord(floatCanary.p);								// Detects a divergent float bit-layout on thaw.
-	out.putWord(globalCount);
+	floatCanary.f = 1.0f;										// Detects a divergent float bit-layout on thaw.
+	p = putMemoryWord(p, MEMORY_FORMAT_VERSION);
+	p = putMemoryWord(p, (UInt)VERSION);
+	p = putMemoryWord(p, (UInt)WORD_SIZE);
+	p = putMemoryWord(p, MEMORY_INT_CANARY);
+	p = putMemoryWord(p, floatCanary.p);
+	p = putMemoryWord(p, globalCount);
 
 	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) {
 		bool isTemp;
@@ -1495,75 +1507,58 @@ static void serializeState(const Processor& processor, const Symbols& symbols, S
 		const char* name = symbols.getGlobalInfo(it, isTemp, address, size);
 		assert(!isTemp);
 		const UInt nameLength = (UInt)strlen(name);
-		out.putWord(nameLength);
-		out.putBytes(name, nameLength);
-		out.putWord(size);
+		p = putMemoryWord(p, nameLength);
+		memcpy(p, name, nameLength);
+		p += nameLength;
+		p = putMemoryWord(p, size);
 		const Value* source = processor.accessConstMemory(address, size);
 		assert(source != 0);
-		for (UInt i = 0; i < size; ++i) out.putWord(source[i].p);
+		for (UInt i = 0; i < size; ++i) p = putMemoryWord(p, source[i].p);
 	}
-}
-
-UInt freezeStateSize(const Processor& processor, const Symbols& symbols) {
-	StateCursor counter(0, 0);
-	serializeState(processor, symbols, counter);
-	return counter.count;
-}
-
-UInt freezeState(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize) {
-	const UInt needed = freezeStateSize(processor, symbols);
-	if (buffer == 0 || bufferSize < needed) return needed;	// Too small: write nothing, tell the caller the required size.
-	StateCursor writer(buffer, bufferSize);
-	serializeState(processor, symbols, writer);
-	assert(writer.count == needed);
+	assert((UInt)(p - start) == needed);					// Byte count must match freezeMemorySize exactly.
 	return needed;
 }
 
-StateLoad thawState(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize) {
+MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize) {
 	const unsigned char* p = static_cast<const unsigned char*>(buffer);
 	const unsigned char* const end = p + bufferSize;
+	bool ok = true;
 
-	// A tiny reader that never reads past `end`; on truncation it stops and reports STATE_TRUNCATED.
-	struct Reader {
-		const unsigned char* p;
-		const unsigned char* end;
-		bool ok;
-		UInt getWord() {
-			if (p + 4 > end) { ok = false; return 0; }
-			UInt v = (UInt)p[0] | ((UInt)p[1] << 8) | ((UInt)p[2] << 16) | ((UInt)p[3] << 24);
-			p += 4;
-			return v;
-		}
-	} reader = { p, end, true };
+	if (bufferSize < 4 || memcmp(p, MEMORY_MAGIC, 4) != 0) return MEMORY_BAD_MAGIC;
+	p += 4;
+	UInt formatVersion, gazlVersion, wordSize, intCanary, floatCanary, globalCount;
+	p = getMemoryWord(p, end, formatVersion, ok);
+	p = getMemoryWord(p, end, gazlVersion, ok);
+	p = getMemoryWord(p, end, wordSize, ok);
+	p = getMemoryWord(p, end, intCanary, ok);
+	p = getMemoryWord(p, end, floatCanary, ok);
+	p = getMemoryWord(p, end, globalCount, ok);
+	if (!ok) return MEMORY_TRUNCATED;
+	if (formatVersion != MEMORY_FORMAT_VERSION || gazlVersion != (UInt)VERSION) return MEMORY_BAD_VERSION;
+	if (wordSize != (UInt)WORD_SIZE) return MEMORY_BAD_WORDSIZE;
+	Value expectedFloat;
+	expectedFloat.f = 1.0f;
+	if (intCanary != MEMORY_INT_CANARY || floatCanary != expectedFloat.p) return MEMORY_BAD_CANARY;
 
-	if (bufferSize < 4 || memcmp(p, STATE_MAGIC, 4) != 0) return STATE_BAD_MAGIC;
-	reader.p += 4;
-	if (reader.getWord() != STATE_FORMAT_VERSION) return STATE_BAD_VERSION;
-	if (reader.getWord() != (UInt)VERSION) return STATE_BAD_VERSION;
-	if (reader.getWord() != (UInt)WORD_SIZE) return STATE_BAD_WORDSIZE;
-	if (reader.getWord() != STATE_INT_CANARY) return STATE_BAD_CANARY;
-	Value floatCanary;
-	floatCanary.f = 1.0f;
-	if (reader.getWord() != floatCanary.p) return STATE_BAD_CANARY;
-	if (!reader.ok) return STATE_TRUNCATED;
-
-	const UInt globalCount = reader.getWord();
-	for (UInt g = 0; g < globalCount && reader.ok; ++g) {
-		const UInt nameLength = reader.getWord();
-		if (!reader.ok || reader.p + nameLength > reader.end) { reader.ok = false; break; }
-		std::string name(reinterpret_cast<const char*>(reader.p), nameLength);
-		reader.p += nameLength;
-		const UInt size = reader.getWord();
+	for (UInt g = 0; g < globalCount && ok; ++g) {
+		UInt nameLength;
+		p = getMemoryWord(p, end, nameLength, ok);
+		if (!ok || p + nameLength > end) { ok = false; break; }
+		std::string name(reinterpret_cast<const char*>(p), nameLength);
+		p += nameLength;
+		UInt size;
+		p = getMemoryWord(p, end, size, ok);
 
 		UInt declaredSize = 0;
 		const Pointer address = symbols.findGlobal(name.c_str(), declaredSize);
 		Value* destination = (address != NULL_POINTER && declaredSize == size) ? processor.accessMemory(address, size) : 0;
-		for (UInt i = 0; i < size && reader.ok; ++i) {
-			const UInt word = reader.getWord();
-			if (destination != 0) destination[i].i = (Int)word;
+		for (UInt i = 0; i < size && ok; ++i) {
+			UInt word;
+			p = getMemoryWord(p, end, word, ok);
+			if (ok && destination != 0) destination[i].i = (Int)word;
 		}
 	}
-	return reader.ok ? STATE_OK : STATE_TRUNCATED;
+	return ok ? MEMORY_OK : MEMORY_TRUNCATED;
 }
 
 #if !defined(NDEBUG)
@@ -1699,7 +1694,7 @@ bool unitTest() {
 		callbackData.callBack = globals.findFunction("CallBack");
 		assert(callbackData.callBack != 0);
 
-		std::vector<unsigned char> stateBlob;
+		std::vector<unsigned char> memoryBlob;
 		{
 			Processor pmachine(codySize, cody, MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack
 					, nativeTable, functionTable, functionCount, &callbackData);
@@ -1720,9 +1715,9 @@ bool unitTest() {
 			Value* globalPointer = pmachine.accessMemory(callbackData.globalPointer, 1);
 			assert(globalPointer != 0);
 			globalPointer->p = globals.findFunction("CallBack");
-			stateBlob.resize(freezeStateSize(pmachine, globals));
-			UInt written = freezeState(pmachine, globals, stateBlob.empty() ? 0 : &stateBlob[0], (UInt)stateBlob.size());
-			assert(written == stateBlob.size());
+			memoryBlob.resize(freezeMemorySize(pmachine, globals));
+			UInt written = freezeMemory(pmachine, globals, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
+			assert(written == memoryBlob.size());
 		}
 
 		// Thaw into a freshly re-assembled machine and verify every non-TEMP global round-trips -- including the
@@ -1754,8 +1749,8 @@ bool unitTest() {
 
 			Processor pmachine2(codySize2, &cody2[0], MEMORY_SIZE, &memory2[0], globalsSize2, constsSize2, CALL_STACK_SIZE
 					, &callStack2[0], nativeTable, &functionTable2[0], functionCount2, &callbackData);
-			StateLoad loaded = thawState(pmachine2, globals2, stateBlob.empty() ? 0 : &stateBlob[0], (UInt)stateBlob.size());
-			assert(loaded == STATE_OK);
+			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
+			assert(loaded == MEMORY_OK);
 
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).
 			Symbols::Iterator it;
