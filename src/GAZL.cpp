@@ -84,6 +84,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , UNKNOWN_NATIVE_FUNCTION					*/	, "Unknown native function"
 	/* , CONSTANT_DIVISION_BY_ZERO					*/	, "Constant zero divisor or modulus"
 	/* , EXPECTED_CONSTANT							*/	, "Expected constant"
+	/* , NOT_ENOUGH_FUNCTION_SPACE					*/	, "Not enough space for function table"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -727,9 +728,11 @@ const char* Symbols::getGlobalInfo(const Iterator& iterator, bool& isTemp, Point
 	return iterator->first.c_str();
 }
 
-Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxMemorySize, Value* memoryBase, Symbols& globals)
-		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
-		, ip(codeBase), functionStart(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
+Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable
+		, UInt maxMemorySize, Value* memoryBase, Symbols& globals)
+		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), functionTable(functionTable)
+		, maxFunctionCount(maxFunctionCount), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
+		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
 		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
@@ -862,13 +865,14 @@ void Assembler::finalizeFunction() {
 	locals.clear();
 }
 
-void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize) {
+void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount) {
 	newUnit(0);
 	if (dataPointer != 0) memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 	globals.resolveForwardRefs();
 	codeSize = (UInt)(ip - codeBase);
 	globalsSize = (UInt)(globalsPointer - memoryBase);
 	constsSize = (UInt)(memoryEnd - constantsPointer);
+	functionCount = this->functionCount;
 }
 
 void Assembler::newUnit(const Char* unitName) { // FIX : use unitName (or not?)
@@ -1112,7 +1116,10 @@ const Char* Assembler::feed(const Char* line) {
 							declare(globals, labelBegin, labelEnd, op->declareTypes, v, size);
 							break;
 					
-			case FUNC_CC_:	v.p = (Int)(ip - codeBase + IP_OFFSET);														// FUNC
+			case FUNC_CC_:	if (functionCount >= maxFunctionCount) throw Exception(NOT_ENOUGH_FUNCTION_SPACE);			// FUNC
+							v.p = (Int)(IP_OFFSET + functionCount);		// A function pointer is its stable declaration-order ordinal (not a code offset), resolved through `functionTable` at call time.
+							functionTable[functionCount] = (UInt)(ip - codeBase);
+							++functionCount;
 							declare(globals, labelBegin, labelEnd, op->declareTypes, v);
 							if (functionStart != 0) finalizeFunction();
 							if (ip >= codeEnd) throw Exception(NOT_ENOUGH_CODE_SPACE);
@@ -1203,17 +1210,18 @@ const Char* Assembler::feed(const Char* line) {
 }
 
 Processor::Processor() : codeSize(0), codeBase(0), memorySize(0), memoryBase(0), rwMemorySize(0), dataStackBase(0)
-		, dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0), ip(0), dsp(0), ipsp(0), userData(0)
-		, clockCyclesLeft(0) {
+		, dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0), functionTable(0), functionCount(0), ip(0), dsp(0)
+		, ipsp(0), userData(0), clockCyclesLeft(0) {
 }
 
 Processor::Processor(UInt codeSize, const Instruction* code, UInt memorySize, Value* memory, UInt rwMemorySize
 		, UInt dataStackOffset, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
-		, void* userData)
+		, const UInt* functionTable, UInt functionCount, void* userData)
 		: codeSize(codeSize), codeBase(code), memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(rwMemorySize)
 		, dataStackBase(memory + dataStackOffset), dataStackEnd(memory + dataStackOffset + dataStackSize)
-		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase)
-		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
+		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), functionTable(functionTable)
+		, functionCount(functionCount), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase), userData(userData)
+		, clockCyclesLeft(0x7FFFFFFFU) {
 	assert(rwMemorySize <= memorySize);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(code != 0);
@@ -1222,12 +1230,13 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt memorySize, Va
 }
 
 Processor::Processor(UInt codeSize, const Instruction* code, UInt memorySize, Value* memory, UInt globalsSize
-		, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
+		, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
+		, const UInt* functionTable, UInt functionCount, void* userData)
 		: codeSize(codeSize), codeBase(code), memorySize(memorySize - 1), memoryBase(memory)
 		, rwMemorySize(memorySize - constsSize), dataStackBase(memory + globalsSize)
 		, dataStackEnd(memory + memorySize - constsSize), ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize)
-		, natives(natives), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase), userData(userData)
-		, clockCyclesLeft(0x7FFFFFFFU) {
+		, natives(natives), functionTable(functionTable), functionCount(functionCount), ip(codeBase), dsp(dataStackBase)
+		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
 	assert(globalsSize + constsSize <= memorySize);
 	assert(code != 0);
 	assert(memory != 0);
@@ -1262,11 +1271,15 @@ Int Processor::run() {
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
 			case FUNC_CC_:	if ((dsp += (UInt)(C0.i)) + C1.i > dataStackEnd) { err = DATA_STACK_OVERFLOW; goto ret; } break;
-			case CALL_VVC:	ui = V0.p - IP_OFFSET;
-							if (ui >= codeSize || (codeBase + ui)->opcode != FUNC_CC_) { err = BAD_CALL; goto ret; }
+			case CALL_VVC:	ui = V0.p - IP_OFFSET;						// ui = function ordinal
+							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
+							ui = functionTable[ui];						// ui = code offset
+							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
-			case CALL_CVC:	ui = C0.p - IP_OFFSET;
-							assert(!(ui >= codeSize || (codeBase + ui)->opcode != FUNC_CC_));
+			case CALL_CVC:	ui = C0.p - IP_OFFSET;						// ui = function ordinal (constant, validated at assembly)
+							assert(ui < functionCount);
+							ui = functionTable[ui];						// ui = code offset
+							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
 			call:			if (ipsp >= ipStackEnd) { err = IP_STACK_OVERFLOW; goto ret; }
 							ipsp->ip = ip;
@@ -1408,8 +1421,10 @@ ret:
 
 Status Processor::enterCall(Pointer functionPointer) {
 	assert(codeBase != 0);
-	UInt ui = functionPointer - IP_OFFSET;
-	if (ui >= codeSize || (codeBase + ui)->opcode != FUNC_CC_) return BAD_CALL;
+	UInt ui = functionPointer - IP_OFFSET;						// ui = function ordinal
+	if (ui >= functionCount) return BAD_CALL;
+	ui = functionTable[ui];										// ui = code offset
+	assert((codeBase + ui)->opcode == FUNC_CC_);
 	if (ipsp + 2 > ipStackEnd) return IP_STACK_OVERFLOW;
 	ipsp->ip = this->ip;
 	ipsp++->dsp = this->dsp;
@@ -1417,6 +1432,138 @@ Status Processor::enterCall(Pointer functionPointer) {
 	ipsp++->dsp = 0;			// Mark return to native caller.
 	this->ip = codeBase + ui;
 	return OK;
+}
+ 
+/*
+	--- State serialization ("freeze" / "thaw") ---
+
+	Persists the mutable global memory of a Processor so it can be reconstructed later. Only the writable, non-TEMP
+	globals are stored; source text and compile-time constants are the host's responsibility (thaw re-assembles them,
+	which deterministically rebuilds identical code, layout and function ordinals). The blob is engine-agnostic and
+	designed to survive compiler changes: function pointers stored in globals are stable ordinals (see FUNC), so they
+	resolve correctly through the re-assembled function table regardless of code layout.
+
+	The caller must freeze/thaw at a quiescent boundary (between `run()` calls, with no active GAZL call), so that the
+	data stack, call stack and instruction pointer hold nothing that needs saving.
+*/
+const UInt STATE_FORMAT_VERSION = 1;
+const UInt STATE_INT_CANARY = 0x01020304;						// Detects endianness / format bugs on thaw.
+static const char STATE_MAGIC[4] = { 'G', 'Z', 'S', 'T' };
+
+/*
+	Serializes the header + non-TEMP globals into a byte cursor, or (when `out` has a null buffer) merely counts the
+	bytes. The single count-or-write path guarantees `freezeStateSize` and `freezeState` can never disagree.
+*/
+namespace {
+	struct StateCursor {
+		unsigned char* p;									// Null while only counting.
+		const unsigned char* end;
+		UInt count;
+		StateCursor(void* buffer, UInt bufferSize) : p(static_cast<unsigned char*>(buffer))
+				, end(buffer != 0 ? static_cast<unsigned char*>(buffer) + bufferSize : 0), count(0) { }
+		void putBytes(const void* data, UInt n) {
+			if (p != 0) { assert(p + n <= end); memcpy(p, data, n); p += n; }
+			count += n;
+		}
+		void putWord(UInt v) {
+			const unsigned char bytes[4] = { static_cast<unsigned char>(v), static_cast<unsigned char>(v >> 8)
+					, static_cast<unsigned char>(v >> 16), static_cast<unsigned char>(v >> 24) };
+			putBytes(bytes, 4);
+		}
+	};
+}
+
+static void serializeState(const Processor& processor, const Symbols& symbols, StateCursor& out) {
+	UInt globalCount = 0;
+	Symbols::Iterator it;
+	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) ++globalCount;
+
+	out.putBytes(STATE_MAGIC, 4);
+	out.putWord(STATE_FORMAT_VERSION);
+	out.putWord((UInt)VERSION);
+	out.putWord((UInt)WORD_SIZE);
+	out.putWord(STATE_INT_CANARY);
+	Value floatCanary;
+	floatCanary.f = 1.0f;
+	out.putWord(floatCanary.p);								// Detects a divergent float bit-layout on thaw.
+	out.putWord(globalCount);
+
+	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) {
+		bool isTemp;
+		Pointer address;
+		UInt size;
+		const char* name = symbols.getGlobalInfo(it, isTemp, address, size);
+		assert(!isTemp);
+		const UInt nameLength = (UInt)strlen(name);
+		out.putWord(nameLength);
+		out.putBytes(name, nameLength);
+		out.putWord(size);
+		const Value* source = processor.accessConstMemory(address, size);
+		assert(source != 0);
+		for (UInt i = 0; i < size; ++i) out.putWord(source[i].p);
+	}
+}
+
+UInt freezeStateSize(const Processor& processor, const Symbols& symbols) {
+	StateCursor counter(0, 0);
+	serializeState(processor, symbols, counter);
+	return counter.count;
+}
+
+UInt freezeState(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize) {
+	const UInt needed = freezeStateSize(processor, symbols);
+	if (buffer == 0 || bufferSize < needed) return needed;	// Too small: write nothing, tell the caller the required size.
+	StateCursor writer(buffer, bufferSize);
+	serializeState(processor, symbols, writer);
+	assert(writer.count == needed);
+	return needed;
+}
+
+StateLoad thawState(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize) {
+	const unsigned char* p = static_cast<const unsigned char*>(buffer);
+	const unsigned char* const end = p + bufferSize;
+
+	// A tiny reader that never reads past `end`; on truncation it stops and reports STATE_TRUNCATED.
+	struct Reader {
+		const unsigned char* p;
+		const unsigned char* end;
+		bool ok;
+		UInt getWord() {
+			if (p + 4 > end) { ok = false; return 0; }
+			UInt v = (UInt)p[0] | ((UInt)p[1] << 8) | ((UInt)p[2] << 16) | ((UInt)p[3] << 24);
+			p += 4;
+			return v;
+		}
+	} reader = { p, end, true };
+
+	if (bufferSize < 4 || memcmp(p, STATE_MAGIC, 4) != 0) return STATE_BAD_MAGIC;
+	reader.p += 4;
+	if (reader.getWord() != STATE_FORMAT_VERSION) return STATE_BAD_VERSION;
+	if (reader.getWord() != (UInt)VERSION) return STATE_BAD_VERSION;
+	if (reader.getWord() != (UInt)WORD_SIZE) return STATE_BAD_WORDSIZE;
+	if (reader.getWord() != STATE_INT_CANARY) return STATE_BAD_CANARY;
+	Value floatCanary;
+	floatCanary.f = 1.0f;
+	if (reader.getWord() != floatCanary.p) return STATE_BAD_CANARY;
+	if (!reader.ok) return STATE_TRUNCATED;
+
+	const UInt globalCount = reader.getWord();
+	for (UInt g = 0; g < globalCount && reader.ok; ++g) {
+		const UInt nameLength = reader.getWord();
+		if (!reader.ok || reader.p + nameLength > reader.end) { reader.ok = false; break; }
+		std::string name(reinterpret_cast<const char*>(reader.p), nameLength);
+		reader.p += nameLength;
+		const UInt size = reader.getWord();
+
+		UInt declaredSize = 0;
+		const Pointer address = symbols.findGlobal(name.c_str(), declaredSize);
+		Value* destination = (address != NULL_POINTER && declaredSize == size) ? processor.accessMemory(address, size) : 0;
+		for (UInt i = 0; i < size && reader.ok; ++i) {
+			const UInt word = reader.getWord();
+			if (destination != 0) destination[i].i = (Int)word;
+		}
+	}
+	return reader.ok ? STATE_OK : STATE_TRUNCATED;
 }
 
 #if !defined(NDEBUG)
@@ -1496,6 +1643,7 @@ bool unitTest() {
 	
 	Value* memory = 0;
 	Instruction* cody = 0;
+	UInt* functionTable = 0;
 	CallStackEntry* callStack = 0;
 
 	static const NativeFunc nativeTable[] = {
@@ -1504,12 +1652,14 @@ bool unitTest() {
 	
 	try {
 		const int MAX_CODE_SIZE = 1000;
+		const int MAX_FUNCTION_COUNT = MAX_CODE_SIZE;	// A function is at least one instruction, so this can never overflow.
 		const int MEMORY_SIZE = 2000;
 		const int CATCH_ZONE_SIZE = MEMORY_SIZE;
 		const int CALL_STACK_SIZE = 100;
-		
+
 		memory = new Value[MEMORY_SIZE + CATCH_ZONE_SIZE];
 		cody = new Instruction[MAX_CODE_SIZE];
+		functionTable = new UInt[MAX_FUNCTION_COUNT];
 		callStack = new CallStackEntry[CALL_STACK_SIZE];
 
 		Value v;
@@ -1524,14 +1674,15 @@ bool unitTest() {
 		UInt codySize = 0;
 		UInt globalsSize = 0;
 		UInt constsSize;
+		UInt functionCount = 0;
 		{
-			Assembler assem(MAX_CODE_SIZE, cody, MEMORY_SIZE, memory, globals);
+			Assembler assem(MAX_CODE_SIZE, cody, MAX_FUNCTION_COUNT, functionTable, MEMORY_SIZE, memory, globals);
 			assem.newUnit("UnitTest");
 			const Char* cp = UNITTEST;
 			while (*cp != 0) {
 				try {
 					cp = assem.feed(cp);
-					if (*cp == 0) assem.finalize(codySize, globalsSize, constsSize);
+					if (*cp == 0) assem.finalize(codySize, globalsSize, constsSize, functionCount);
 				}
 				catch (const Exception& e) {
 					(void)e;
@@ -1547,10 +1698,11 @@ bool unitTest() {
 		assert(callbackData.globalPointer != 0);
 		callbackData.callBack = globals.findFunction("CallBack");
 		assert(callbackData.callBack != 0);
-		
+
+		std::vector<unsigned char> stateBlob;
 		{
 			Processor pmachine(codySize, cody, MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack
-					, nativeTable, &callbackData);
+					, nativeTable, functionTable, functionCount, &callbackData);
 			Pointer funcy = globals.findFunction("test");
 			assert(funcy != 0);
 			Status status = pmachine.enterCall(funcy);
@@ -1563,16 +1715,77 @@ bool unitTest() {
 			memory = pmachine.accessConstMemory(memory->p, 4);
 			assert(memory != 0);
 			assert(memory[0].i == 'd' && memory[1].i == 'o' && memory[2].i == 'n' && memory[3].i == 'e');
+
+			// Store a function pointer into a global so the freeze must round-trip an ordinal, then freeze.
+			Value* globalPointer = pmachine.accessMemory(callbackData.globalPointer, 1);
+			assert(globalPointer != 0);
+			globalPointer->p = globals.findFunction("CallBack");
+			stateBlob.resize(freezeStateSize(pmachine, globals));
+			UInt written = freezeState(pmachine, globals, stateBlob.empty() ? 0 : &stateBlob[0], (UInt)stateBlob.size());
+			assert(written == stateBlob.size());
 		}
-		
+
+		// Thaw into a freshly re-assembled machine and verify every non-TEMP global round-trips -- including the
+		// function pointer, which must resolve to the same function through the fresh function table.
+		{
+			std::vector<Value> memory2(MEMORY_SIZE);
+			std::vector<Instruction> cody2(MAX_CODE_SIZE);
+			std::vector<UInt> functionTable2(MAX_FUNCTION_COUNT);
+			std::vector<CallStackEntry> callStack2(CALL_STACK_SIZE);
+			Symbols globals2;
+			globals2.registerNative("assertFail", 0);
+			globals2.registerNative("testMul", 1);
+			globals2.registerNative("testCallback", 2);
+
+			UInt codySize2 = 0;
+			UInt globalsSize2 = 0;
+			UInt constsSize2 = 0;
+			UInt functionCount2 = 0;
+			{
+				Assembler assem(MAX_CODE_SIZE, &cody2[0], MAX_FUNCTION_COUNT, &functionTable2[0], MEMORY_SIZE, &memory2[0]
+						, globals2);
+				assem.newUnit("UnitTest");
+				const Char* cp = UNITTEST;
+				while (*cp != 0) {
+					cp = assem.feed(cp);
+					if (*cp == 0) assem.finalize(codySize2, globalsSize2, constsSize2, functionCount2);
+				}
+			}
+
+			Processor pmachine2(codySize2, &cody2[0], MEMORY_SIZE, &memory2[0], globalsSize2, constsSize2, CALL_STACK_SIZE
+					, &callStack2[0], nativeTable, &functionTable2[0], functionCount2, &callbackData);
+			StateLoad loaded = thawState(pmachine2, globals2, stateBlob.empty() ? 0 : &stateBlob[0], (UInt)stateBlob.size());
+			assert(loaded == STATE_OK);
+
+			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).
+			Symbols::Iterator it;
+			for (bool ok = globals.findFirstGlobal(it, false); ok; ok = globals.findNextGlobal(it, false)) {
+				bool isTemp;
+				Pointer address;
+				UInt size;
+				globals.getGlobalInfo(it, isTemp, address, size);
+				const UInt index = address - MEMORY_OFFSET;
+				for (UInt i = 0; i < size; ++i) assert(memory2[index + i].i == memory[index + i].i);
+			}
+			// The restored function pointer resolves to CallBack in the fresh assembly (and equals the original ordinal).
+			UInt gpSize;
+			const Pointer gp = globals2.findGlobal("global.pointer", gpSize);
+			const Value* restored = pmachine2.accessConstMemory(gp, 1);
+			assert(restored != 0);
+			assert(restored->p == globals2.findFunction("CallBack"));
+			assert(restored->p == globals.findFunction("CallBack"));
+		}
+
 		for (int i = MEMORY_SIZE; i < MEMORY_SIZE + CATCH_ZONE_SIZE; ++i) assert(memory[i].i == static_cast<Int>(0xAACC5599));
 	}
 	catch (...) {
 		delete [] memory;
 		delete [] cody;
+		delete [] functionTable;
 		delete [] callStack;
 		memory = 0;
 		cody = 0;
+		functionTable = 0;
 		callStack = 0;
 
 		assert(0);
@@ -1580,6 +1793,7 @@ bool unitTest() {
 
 	delete [] memory;
 	delete [] cody;
+	delete [] functionTable;
 	delete [] callStack;
 
 	return true;

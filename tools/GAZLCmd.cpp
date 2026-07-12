@@ -156,6 +156,7 @@ Status gazlAtan2(Processor* vpu) {
 
 const int DATA_MEMORY_SIZE = 128 * 1024;
 const int CODE_MEMORY_SIZE = 128 * 1024;
+const int FUNCTION_TABLE_SIZE = CODE_MEMORY_SIZE;	// A function is at least one instruction, so this can never overflow.
 const int CALL_STACK_SIZE = 2048;
 
 static const NativeFunc NATIVE_TABLE[] = {
@@ -168,6 +169,7 @@ static const char* NATIVE_NAMES[] = {
 
 static Value memory[DATA_MEMORY_SIZE];
 static Instruction code[CODE_MEMORY_SIZE];
+static UInt functionTable[FUNCTION_TABLE_SIZE];
 static CallStackEntry callStack[CALL_STACK_SIZE];
 
 #if defined(LIBFUZZ) || defined(LIBFUZZ_STANDALONE)
@@ -212,24 +214,25 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 		UInt codeSize;
 		UInt globalsSize;
 		UInt constsSize;
-			
+		UInt functionCount = 0;
+
 		{
-			std::istringstream gazlStream(std::string(reinterpret_cast<const char*>(Data), reinterpret_cast<const char*>(Data) + Size));			
+			std::istringstream gazlStream(std::string(reinterpret_cast<const char*>(Data), reinterpret_cast<const char*>(Data) + Size));
 			{
-				Assembler assem(CODE_MEMORY_SIZE, code, DATA_MEMORY_SIZE, memory, globals);
+				Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable, DATA_MEMORY_SIZE, memory, globals);
 				assem.newUnit("string");
 				while (!gazlStream.eof()) {
 					std::string line;
 					getline(gazlStream, line);
 					assem.feed(line.c_str());
 				}
-				assem.finalize(codeSize, globalsSize, constsSize);
+				assem.finalize(codeSize, globalsSize, constsSize, functionCount);
 			}
 		}
-		
+
 		{
 			Processor pmachine(codeSize, code, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE
-					, callStack, NATIVE_TABLE, 0);
+					, callStack, NATIVE_TABLE, functionTable, functionCount, 0);
 			Pointer mainFunction = globals.findFunction("main");
 			if (mainFunction != 0) {
 				Status status = pmachine.enterCall(mainFunction);
@@ -344,14 +347,15 @@ int main(int argc, const char* argv[]) {
 		UInt codeSize;
 		UInt globalsSize;
 		UInt constsSize;
-			
+		UInt functionCount = 0;
+
 		{
 			std::ifstream gazlStream(pos[1], std::ifstream::binary);
 			if (!gazlStream.good()) throw CmdException("Could not open input file");
 			gazlStream.exceptions(std::ios_base::badbit);
 
 			{
-				Assembler assem(CODE_MEMORY_SIZE, code, DATA_MEMORY_SIZE, memory, globals);
+				Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable, DATA_MEMORY_SIZE, memory, globals);
 				assem.newUnit(pos[1]);
 				
 				int lineCounter = 1;
@@ -370,10 +374,10 @@ int main(int argc, const char* argv[]) {
 				}
 				if (gazlStream.bad()) throw CmdException("Problem with input stream");
 
-				assem.finalize(codeSize, globalsSize, constsSize);
-				
+				assem.finalize(codeSize, globalsSize, constsSize, functionCount);
+
 				std::cerr << "Code size: " << codeSize << ", globals size: " << globalsSize << ", consts size: "
-						<< constsSize << std::endl;
+						<< constsSize << ", functions: " << functionCount << std::endl;
 				std::cerr << "--------------------------------------------------------------------------------"
 						<< std::endl;
 			}
@@ -383,7 +387,7 @@ int main(int argc, const char* argv[]) {
 		
 		{
 			Processor pmachine(codeSize, code, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE
-					, callStack, NATIVE_TABLE, 0);
+					, callStack, NATIVE_TABLE, functionTable, functionCount, 0);
 			const char* mainFunctionName = pos.size() >= 3 ? pos[2] : "main";
 			Pointer mainFunction = globals.findFunction(mainFunctionName);
 			if (mainFunction == 0) throw CmdException(std::string("Could not locate function: ") + mainFunctionName);
