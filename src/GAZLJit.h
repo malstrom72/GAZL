@@ -27,8 +27,8 @@
 	  - `Emitter` (namespace `GAZL`): a tiny AArch64 machine-code assembler — one method per instruction, one canonical
 	    encoding form per operation — with no dependency on the interpreter (it only produces bytes; the Emitter-only
 	    diff test links without `GAZL.cpp`). Verified against a clang-assembled oracle.
-	  - the v1 lowering pass + `JitEngine` + native dispatcher: compiles a function's finalized
-	    `Instruction[]` to native code and runs it. `JitEngine` is a `Processor` subclass (§5.1) that overrides the virtual
+	  - the v1 lowering pass + `JitProcessor` + native dispatcher: compiles a function's finalized
+	    `Instruction[]` to native code and runs it. `JitProcessor` is a `Processor` subclass (§5.1) that overrides the virtual
 	    `run()`/`enterCall()`, so it is a polymorphic drop-in for the interpreter — the host loop is identical
 	    (`enterCall(); do { resetTimeOut(N); } while (run() == TIME_OUT)`). This half depends on `GAZL.h`. Only these two
 	    virtual overrides stay inline (they are tiny and must not pull the vtable into GAZLJit.o); every heavy body —
@@ -257,34 +257,45 @@ struct Offsets {
 };
 
 /*
-	The JIT engine: a `Processor` subclass sharing the base machine state (§5.1). Being a subclass, it reaches the
-	protected state (dsp/ip/ipsp/clockCyclesLeft/memoryBase/natives/sizes) with no edit to src/GAZL.*, and adds the
-	RESUME continuation + a few dispatch scratch fields.
+	The compiled artifact — the JIT's analogue of the interpreter's {code[], functionTable[]}: an executable page's
+	dispatcher entry plus the ordinal→native-entry table. Immutable and shareable, so one module can back many
+	JitProcessors, on many threads (§5.6). Produced by JitCompiler, consumed by JitProcessor's constructor.
+	(The page is process-lifetime today; a RAII owner/free is the §5.6.1 follow-up.)
 */
-class JitEngine : public Processor {
+struct JitModule {
+	void* dispatch;						// native dispatcher trampoline entry
+	void** nativeEntries;				// ordinal -> native function entry (enterCall / indirect CALL_VVC)
+	size_t codeWords;					// emitted 32-bit words (for --jit-stats)
+	JitModule() : dispatch(0), nativeEntries(0), codeWords(0) { }
+	bool ok() const { return dispatch != 0; }		// false if a function used an opcode the backend can't lower
+};
+
+/*
+	The JIT engine — mirrors `Processor`: a `Processor` subclass over the shared machine state (§5.1), constructed FROM a
+	JitModule (as `Processor` is from `code`/`functionTable`) plus the same run state. It overrides the virtual
+	run()/enterCall(), so it is a polymorphic drop-in — the host loop is identical to the interpreter's.
+*/
+class JitProcessor : public Processor {
 	public:		Value* savedDsp;					// dsp saved across a native call (the C1 window is transient)
 				void* nativeFn;						// resolved native fn pointer, blr'd by the native dispatcher
 				void* nativeAfter;					// after-call continuation (dispatcher sets RESUME to it on native OK)
-				void** funcEntries;					// ordinal -> JIT-compiled GAZL-function entry (indirect calls)
-				void* jitDispatch;					// the native dispatcher trampoline (compiled once with the code)
+				void** funcEntries;					// ordinal -> native entry (bound from the JitModule)
+				void* jitDispatch;					// the native dispatcher trampoline (bound from the JitModule)
 
-		JitEngine(UInt codeSize, const Instruction* code, UInt fnCount, const UInt* fnTable, UInt memSize, Value* mem
-					, UInt globalsSize, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* nat)
+		JitProcessor(const JitModule& module, UInt codeSize, const Instruction* code, UInt fnCount, const UInt* fnTable
+					, UInt memSize, Value* mem, UInt globalsSize, UInt constsSize, UInt ipStackSize
+					, CallStackEntry* ipStack, NativeFunc const* nat)
 			: Processor(codeSize, code, fnCount, fnTable, memSize, mem, globalsSize, constsSize, ipStackSize, ipStack
-				, nat, 0), savedDsp(0), nativeFn(0), nativeAfter(0), funcEntries(0), jitDispatch(0) { }
+				, nat, 0), savedDsp(0), nativeFn(0), nativeAfter(0)
+				, funcEntries(module.nativeEntries), jitDispatch(module.dispatch) { }
 
-		// Bind the compiled artifacts (dispatcher trampoline + ordinal→entry table) produced by lowerProgram().
-		void setCompiled(void* dispatchAddr, void** entries) { jitDispatch = dispatchAddr; funcEntries = entries; }
+		// The field ABI JitCompiler bakes into the machine code (byte offsets of dsp/memoryBase/... in a JitProcessor).
+		// Static: the layout is instance-independent (single inheritance, fixed struct), so no engine is needed (see .cpp).
+		static Offsets layout();
 
-		// The memory image (globals/consts/data) — the lowering reads finalize-time constant tables from it (e.g. SWCH).
-		const Value* memoryImage() const { return memoryBase; }
-
-		Offsets offsets() const;			// gather the byte offsets of the machine-state fields (setup-time, see .cpp)
-
-		// Polymorphic drop-in for the base Processor (§5.1). enterCall sets up the call stack (base logic) and seeds the
-		// RESUME continuation with the callee's compiled entry; run() is one trip through the native dispatcher (mid-run
-		// GAZL/native calls stay inside it), returning to the host only to suspend (TIME_OUT / BLOCK_RETRY) or finish.
-		// The host loop is identical to the interpreter's: enterCall(); do { resetTimeOut(N); } while (run()==TIME_OUT).
+		// Polymorphic drop-in for the base Processor (§5.1). enterCall seeds the RESUME continuation with the callee's
+		// compiled entry; run() is one trip through the native dispatcher (mid-run GAZL/native calls stay inside it).
+		// Host loop, identical to the interpreter's: enterCall(); do { resetTimeOut(N); } while (run()==TIME_OUT).
 		virtual Status enterCall(Pointer functionPointer) {
 			const Status s = Processor::enterCall(functionPointer);
 			if (s != OK) { return s; }
@@ -292,12 +303,9 @@ class JitEngine : public Processor {
 			return OK;
 		}
 		virtual Status run() {
-			typedef int (*Disp)(JitEngine*);
+			typedef int (*Disp)(JitProcessor*);
 			return static_cast<Status>(reinterpret_cast<Disp>(jitDispatch)(this));
 		}
-	private:	template<class T> uint32_t off(T* p) const {
-					return static_cast<uint32_t>(reinterpret_cast<const char*>(p) - reinterpret_cast<const char*>(this));
-				}
 };
 
 // --- lowering + dispatcher (heavy bodies live in GAZLJit.cpp) ---
@@ -312,20 +320,25 @@ bool lowerFunction(Emitter& e, const Instruction* code, const Value* memory, UIn
 		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount);
 
 /*
-	Emit the native dispatcher trampoline (§5.4 encoding (a)). `int dispatch(JitEngine* ctx)`: park CTX in a callee-saved
+	Emit the native dispatcher trampoline (§5.4 encoding (a)). `int dispatch(JitProcessor* ctx)`: park CTX in a callee-saved
 	reg, jump to RESUME, loop on TRANSFER (GAZL call/return — no host round-trip), make the one host call on NATIVE_CALL,
 	and return to the host only to suspend (TIME_OUT) or finish. Returns the trampoline's word offset in the buffer.
 */
 size_t emitDispatcher(Emitter& e, const Offsets& o);
 
 /*
-	Whole-program driver (GAZLJitCompile.cpp): lower every function, emit the dispatcher, publish an executable page, and
-	bind it to `engine` via setCompiled(). Returns false if any function hits an opcode the backend can't lower yet (the
-	caller should then fall back to the interpreter). arm64 only. If `outCodeWords` is non-null it receives the number of
-	emitted 32-bit machine words on success (for --jit-stats: code_bytes = words * 4).
+	The JIT compiler — mirrors `Assembler`: lowers a whole finalized program to native code and returns a JitModule. It
+	takes the program (the `Instruction[]` + functionTable + the const memory image, read only for SWCH jump tables) —
+	never a processor. Bind the result by constructing a JitProcessor from it. Returns a module with ok()==false if any
+	function hits an opcode the backend can't lower yet (caller falls back to the interpreter). arm64 only.
+
+	Lives in GAZLJitCompiler.cpp (not GAZLJit.cpp) because it pulls in makeExecutable(): keeping the Emitter + lowering
+	substrate free of a memory backend is what lets the Emitter-only diff test link without one.
 */
-bool compile(JitEngine& engine, const Instruction* code, const UInt* functionTable, UInt functionCount,
-		size_t* outCodeWords = 0);
+class JitCompiler {
+	public:		JitModule compile(const Instruction* code, UInt functionCount, const UInt* functionTable
+						, const Value* memory);
+};
 
 } // namespace GAZL
 

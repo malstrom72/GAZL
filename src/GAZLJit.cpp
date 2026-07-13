@@ -392,20 +392,33 @@ void Emitter::finalize() {
 // ============================================================================================================
 // JIT lowering, engine, and native dispatcher (declarations in GAZLJit.h). Depends on GAZL.h; the Emitter above
 // does not — so the emit helpers here are file-local (`static`) and only lowerFunction/emitDispatcher (and the
-// JitEngine methods) are external. None of this references a Processor symbol, so GAZLJit.o still links into the
+// JitProcessor methods) are external. None of this references a Processor symbol, so GAZLJit.o still links into the
 // Emitter-only diff test without GAZL.cpp. (makeExecutable lives in the per-platform GAZLJitMem*.cpp backends.)
 // ============================================================================================================
 
 namespace GAZL {
 
-// The JitEngine's field-offset gatherer (setup-time; non-virtual, so defining it here pulls no vtable into GAZLJit.o).
-Offsets JitEngine::offsets() const {
+// The field ABI JitCompiler bakes into the machine code — byte offsets of the run-state fields within a JitProcessor.
+// Static / instance-independent: computed with offsetof, so no engine is needed. offsetof on this polymorphic type is
+// universally correct (single inheritance, fixed layout); the one -Winvalid-offsetof is silenced locally. Non-virtual,
+// so defining it here pulls no vtable into GAZLJit.o.
+Offsets JitProcessor::layout() {
 	Offsets o;
-	o.dsp = off(&dsp); o.mb = off(&memoryBase); o.fuel = off(&clockCyclesLeft); o.ipsp = off(&ipsp);
-	o.resume = off(&resume); o.saveddsp = off(&savedDsp); o.natives = off(&natives);
-	o.nativefn = off(&nativeFn); o.funcentries = off(&funcEntries);
-	o.memsize = off(&memorySize); o.rwmemsize = off(&rwMemorySize); o.dsend = off(&dataStackEnd);
-	o.ipsend = off(&ipStackEnd); o.nativeafter = off(&nativeAfter);
+#if defined(__GNUC__)
+#	pragma GCC diagnostic push
+#	pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
+	o.dsp = offsetof(JitProcessor, dsp); o.mb = offsetof(JitProcessor, memoryBase);
+	o.fuel = offsetof(JitProcessor, clockCyclesLeft); o.ipsp = offsetof(JitProcessor, ipsp);
+	o.resume = offsetof(JitProcessor, resume); o.saveddsp = offsetof(JitProcessor, savedDsp);
+	o.natives = offsetof(JitProcessor, natives); o.nativefn = offsetof(JitProcessor, nativeFn);
+	o.funcentries = offsetof(JitProcessor, funcEntries);
+	o.memsize = offsetof(JitProcessor, memorySize); o.rwmemsize = offsetof(JitProcessor, rwMemorySize);
+	o.dsend = offsetof(JitProcessor, dataStackEnd); o.ipsend = offsetof(JitProcessor, ipStackEnd);
+	o.nativeafter = offsetof(JitProcessor, nativeAfter);
+#if defined(__GNUC__)
+#	pragma GCC diagnostic pop
+#endif
 	return o;
 }
 
@@ -880,7 +893,7 @@ bool lowerFunction(Emitter& e, const Instruction* code, const Value* memory, UIn
 }
 
 /*
-	Emit the native dispatcher trampoline (§5.4 encoding (a)). `int dispatch(JitEngine* ctx)`: park CTX in a callee-saved
+	Emit the native dispatcher trampoline (§5.4 encoding (a)). `int dispatch(JitProcessor* ctx)`: park CTX in a callee-saved
 	reg, jump to RESUME, loop on TRANSFER (GAZL call/return — no host round-trip), make the one host call on NATIVE_CALL,
 	and return to the host only to suspend (TIME_OUT) or finish. Returns the trampoline's word offset in the buffer.
 */

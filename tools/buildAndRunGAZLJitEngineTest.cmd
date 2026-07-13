@@ -1,5 +1,5 @@
 @ECHO OFF
-REM Builds and runs the GAZLJit C3-full/C4 engine prototype (tools\GAZLJitEngineTest.cpp). A JitEngine subclass drives
+REM Builds and runs the GAZLJit C3-full/C4 engine prototype (tools\GAZLJitEngineTest.cpp). A ProtoEngine subclass drives
 REM Emitter-produced native code over shared VM state and is checked against the interpreter (macOS / Linux AArch64
 REM only); the Windows lowering and its executable-memory path are future work. See docs\JitEmitterHandoff.md.
 

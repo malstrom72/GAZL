@@ -22,9 +22,11 @@
 */
 
 /*
-	Whole-program compile driver: lower every function, emit the shared dispatcher, publish one executable page, and bind
-	it to a JitEngine. Kept in its own translation unit because it pulls in makeExecutable() (a platform GAZLJitMem*.cpp
-	backend) — GAZLJit.cpp deliberately does not, so the Emitter-only diff test still links without a memory backend.
+	JitCompiler — the JIT's counterpart of `Assembler`: it lowers a whole finalized program (the `Instruction[]`) to
+	native code and returns a `JitModule` (the executable page's dispatcher + ordinal→native-entry table). It targets the
+	static `JitProcessor::layout()` ABI and never touches a processor instance. Kept in its own translation unit because
+	it pulls in makeExecutable() (a platform GAZLJitMem*.cpp backend) — GAZLJit.cpp (the Emitter + lowering substrate)
+	deliberately does not, so the Emitter-only diff test still links without a memory backend.
 */
 
 #include "GAZLJit.h"
@@ -33,31 +35,33 @@
 
 namespace GAZL {
 
-bool compile(JitEngine& engine, const Instruction* code, const UInt* functionTable, UInt functionCount,
-		size_t* outCodeWords) {
-	const Offsets o = engine.offsets();					// field offsets are instance-independent — any engine will do
+JitModule JitCompiler::compile(const Instruction* code, UInt functionCount, const UInt* functionTable,
+		const Value* memory) {
+	JitModule module;								// ok() == false until fully built (invalid on any lowering gap)
+	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
 	Emitter e;
 	std::vector<Label> entryLabels(functionCount);
 	std::vector<size_t> entryOffset(functionCount, 0);
 	for (UInt k = 0; k < functionCount; ++k) { entryLabels[k] = e.newLabel(); }
 	for (UInt ord = 0; ord < functionCount; ++ord) {
-		if (!lowerFunction(e, code, engine.memoryImage(), functionTable[ord], o, entryLabels, entryOffset, ord, functionCount)) {
-			return false;								// unsupported opcode → caller should fall back to the interpreter
+		if (!lowerFunction(e, code, memory, functionTable[ord], o, entryLabels, entryOffset, ord, functionCount)) {
+			return module;							// unsupported opcode → caller should fall back to the interpreter
 		}
 	}
 	const size_t dispatchOffset = emitDispatcher(e, o);
 	e.finalize();
 	void* page = makeExecutable(e.code(), e.wordCount());
-	if (page == 0) { return false; }
-	if (outCodeWords != 0) { *outCodeWords = e.wordCount(); }
+	if (page == 0) { return module; }
 
-	// The page and the ordinal->entry table live for the process (compile-once model; nothing frees them).
-	void** funcEntries = new void*[functionCount];
+	// The page and the ordinal→entry table live for the process (compile-once model; nothing frees them yet — §5.6.1).
+	void** entries = new void*[functionCount];
 	for (UInt ord = 0; ord < functionCount; ++ord) {
-		funcEntries[ord] = reinterpret_cast<char*>(page) + entryOffset[ord] * 4;
+		entries[ord] = reinterpret_cast<char*>(page) + entryOffset[ord] * 4;
 	}
-	engine.setCompiled(reinterpret_cast<char*>(page) + dispatchOffset * 4, funcEntries);
-	return true;
+	module.dispatch = reinterpret_cast<char*>(page) + dispatchOffset * 4;
+	module.nativeEntries = entries;
+	module.codeWords = e.wordCount();
+	return module;
 }
 
 } // namespace GAZL

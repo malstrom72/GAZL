@@ -2,7 +2,7 @@
 set -e -o pipefail -u
 
 # Builds and runs the GAZLJit v1 lowering-pass test (tools/GAZLJitLowerTest.cpp): compiles GAZL functions straight from
-# their finalized Instruction[] to arm64 via the Emitter, runs them through JitEngine, and checks each against the
+# their finalized Instruction[] to arm64 via the Emitter, runs them through JitProcessor, and checks each against the
 # interpreter (whole memory image). AArch64 only. Links the shipped VM (src/GAZL.cpp) READ-ONLY.
 #
 # Standalone by design (not wired into build.sh). clang++ direct, like the benchmarks/jit/ scripts. Override the

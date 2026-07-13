@@ -133,9 +133,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	}
 	const UInt mainOrd = mainPtr - IP_OFFSET;
 
-	JitEngine probe(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
-			CALL_STACK_SIZE, gCallStack, gNativeTable);
-	const Offsets o = probe.offsets();
+	const Offsets o = JitProcessor::layout();		// static ABI — no engine needed to compile
 
 	Emitter e;
 	std::vector<Label> entryLabels(gFunctionCount);
@@ -155,6 +153,10 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	for (UInt ord = 0; ord < gFunctionCount; ++ord) {
 		funcEntries[ord] = reinterpret_cast<char*>(code) + entryOffset[ord] * 4;
 	}
+	JitModule module;								// wrap the hand-lowered artifacts (this test drives the substrate directly)
+	module.dispatch = dispatchAddr;
+	module.nativeEntries = funcEntries.data();
+	module.codeWords = e.wordCount();
 	std::printf("  lowered %zu native words for %u function(s); dispatcher @ word %zu\n",
 			e.wordCount(), gFunctionCount, dispatchOffset);
 
@@ -166,9 +168,8 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 		for (int pass = 0; pass < 2; ++pass) {
 			const int fuel = (pass == 0) ? 0x7FFFFFFF : 6;
 			restoreClean();
-			JitEngine eng(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize,
-					gConstsSize, CALL_STACK_SIZE, gCallStack, gNativeTable);
-			eng.setCompiled(dispatchAddr, funcEntries.data());
+			JitProcessor eng(module, CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory,
+					gGlobalsSize, gConstsSize, CALL_STACK_SIZE, gCallStack, gNativeTable);
 			eng.accessMemory(gInPtr, 1)->i = n;
 			gNativeCallCount = 0;
 			// Drive the JIT through the polymorphic base interface — the exact host loop the interpreter uses (§5.1).

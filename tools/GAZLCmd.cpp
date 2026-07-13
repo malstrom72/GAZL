@@ -36,7 +36,7 @@
 #include <memory>
 #include "../src/GAZL.h"
 #ifdef GAZL_JIT
-	#include "../src/GAZLJit.h"		// JitEngine + compile() — arm64 only; enabled by the build on AArch64 hosts
+	#include "../src/GAZLJit.h"		// JitProcessor + JitCompiler — arm64 only; enabled by the build on AArch64 hosts
 #endif
 
 using namespace GAZL;
@@ -412,21 +412,20 @@ int main(int argc, const char* argv[]) {
 			std::unique_ptr<Processor> proc;
 		#ifdef GAZL_JIT
 			if (useJit) {
-				std::unique_ptr<JitEngine> eng(new JitEngine(codeSize, code, functionCount, functionTable
-						, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
-				size_t codeWords = 0;
+				JitCompiler jc;						// produce the machine code — mirrors Assembler; no engine involved
 				const auto t0 = std::chrono::steady_clock::now();
-				const bool compiled = compile(*eng, code, functionTable, functionCount, &codeWords);
+				const JitModule module = jc.compile(code, functionCount, functionTable, memory);
 				const auto t1 = std::chrono::steady_clock::now();
-				if (compiled) {
+				if (module.ok()) {
 					if (jitStats) {						// machine-readable line for the benchmark harness
 						const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (codeWords * 4)
+						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords * 4)
 								<< " funcs=" << functionCount << std::endl;
 					} else {
 						std::cerr << "JIT: compiled " << functionCount << " function(s) to native arm64." << std::endl;
 					}
-					proc = std::move(eng);
+					proc.reset(new JitProcessor(module, codeSize, code, functionCount, functionTable
+							, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
 				} else {
 					std::cerr << "JIT: a function used an opcode the backend can't lower; using the interpreter."
 							<< std::endl;

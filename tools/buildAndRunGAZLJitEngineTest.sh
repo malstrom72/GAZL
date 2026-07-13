@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e -o pipefail -u
 
-# Builds and runs the GAZLJit C3-full/C4 engine prototype (tools/GAZLJitEngineTest.cpp): a JitEngine subclass of the VM
+# Builds and runs the GAZLJit C3-full/C4 engine prototype (tools/GAZLJitEngineTest.cpp): a ProtoEngine subclass of the VM
 # Processor drives Emitter-produced native code over shared machine state, and the test checks full-run equivalence,
 # suspend-in-JIT/resume-in-interpreter, and trap-as-status against the interpreter. AArch64 only.
 #
