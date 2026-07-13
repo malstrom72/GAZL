@@ -46,7 +46,9 @@ extern "C" {
 	extern const uint32_t ref_lsl, ref_lsr, ref_asr;
 	extern const uint32_t ref_ldr, ref_str, ref_str_zr, ref_ldr_reg, ref_str_reg;
 	extern const uint32_t ref_fadd, ref_fmul, ref_fsub, ref_fcvtzs, ref_scvtf, ref_ldr_s, ref_str_s;
-	extern const uint32_t ref_b, ref_bcond_lt, ref_bcond_mi, ref_cbz, ref_cbnz, ref_ret;
+	extern const uint32_t ref_ldur, ref_stur, ref_ldr_x, ref_str_x, ref_ldr_xr, ref_adr;
+	extern const uint32_t ref_add_immx, ref_sub_immx, ref_cbnz_x;
+	extern const uint32_t ref_b, ref_bcond_lt, ref_bcond_mi, ref_cbz, ref_cbnz, ref_ret, ref_br, ref_blr;
 	extern const uint32_t ref_bench_v2;
 	extern const uint32_t ref_bench_v2_end;
 }
@@ -139,6 +141,16 @@ int main() {
 	check("ldr(s)",    one([](Emitter& e) { e.ldrS(S0, X2, 8); }),          ref_ldr_s);
 	check("str(s)",    one([](Emitter& e) { e.strS(S0, X2, 8); }),          ref_str_s);
 
+	check("ldur",      one([](Emitter& e) { e.ldurW(W3, X2, -4); }),        ref_ldur);
+	check("stur",      one([](Emitter& e) { e.sturW(W3, X2, -4); }),        ref_stur);
+	check("ldr(x)",    one([](Emitter& e) { e.ldrX(X3, X2, 8); }),          ref_ldr_x);
+	check("str(x)",    one([](Emitter& e) { e.strX(X3, X2, 8); }),          ref_str_x);
+	check("ldr(xr)",   one([](Emitter& e) { e.ldrXr(X9, X10, W9); }),       ref_ldr_xr);
+	check("adr",       one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.adr(X0, l); }),  ref_adr);
+	check("add(immx)", one([](Emitter& e) { e.addImmX(X1, X1, 16); }),      ref_add_immx);
+	check("sub(immx)", one([](Emitter& e) { e.subImmX(X4, X4, 16); }),      ref_sub_immx);
+	check("cbnz(x)",   one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.cbnzX(X0, l); }), ref_cbnz_x);
+
 	// Self-referential branches (displacement 0): isolates the opcode/cond/register fields from the displacement.
 	check("b",         one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.b(l); }),          ref_b);
 	check("b.lt",      one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.bcond(LT, l); }),  ref_bcond_lt);
@@ -146,6 +158,8 @@ int main() {
 	check("cbz",       one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.cbz(W0, l); }),    ref_cbz);
 	check("cbnz",      one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.cbnz(W0, l); }),   ref_cbnz);
 	check("ret",       one([](Emitter& e) { e.ret(); }),                    ref_ret);
+	check("br",        one([](Emitter& e) { e.br(X9); }),                   ref_br);
+	check("blr",       one([](Emitter& e) { e.blr(X9); }),                  ref_blr);
 
 	// Cross-check the whole kernel: proves the Label/fixup pass, not just individual instructions.
 	std::printf("\nbench_v2 kernel cross-check (Label/fixup pass):\n");

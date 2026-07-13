@@ -89,6 +89,25 @@ ENTRY(ref_ldr_s)	ldr s0, [x2, #8]
 		GLOBL(ref_str_s)
 ENTRY(ref_str_s)	str s0, [x2, #8]
 
+		GLOBL(ref_ldur)
+ENTRY(ref_ldur)		ldur w3, [x2, #-4]
+		GLOBL(ref_stur)
+ENTRY(ref_stur)		stur w3, [x2, #-4]
+		GLOBL(ref_ldr_x)
+ENTRY(ref_ldr_x)	ldr x3, [x2, #8]
+		GLOBL(ref_str_x)
+ENTRY(ref_str_x)	str x3, [x2, #8]
+		GLOBL(ref_ldr_xr)
+ENTRY(ref_ldr_xr)	ldr x9, [x10, w9, uxtw #3]
+		GLOBL(ref_adr)
+ENTRY(ref_adr)		adr x0, .
+		GLOBL(ref_add_immx)
+ENTRY(ref_add_immx)	add x1, x1, #16
+		GLOBL(ref_sub_immx)
+ENTRY(ref_sub_immx)	sub x4, x4, #16
+		GLOBL(ref_cbnz_x)
+ENTRY(ref_cbnz_x)	cbnz x0, .
+
 // Self-referential branches (displacement 0) isolate the opcode+condition/register fields from the displacement.
 		GLOBL(ref_b)
 ENTRY(ref_b)		b .
@@ -102,6 +121,10 @@ ENTRY(ref_cbz)		cbz w0, .
 ENTRY(ref_cbnz)		cbnz w0, .
 		GLOBL(ref_ret)
 ENTRY(ref_ret)		ret
+		GLOBL(ref_br)
+ENTRY(ref_br)		br x9
+		GLOBL(ref_blr)
+ENTRY(ref_blr)		blr x9
 
 // ---------------------------------------------------------------------------
 // Byte-for-byte copy of bench_v2 (benchmarks/jit/JitBenchA3.arm64.S). Bracketed

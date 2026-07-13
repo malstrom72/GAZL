@@ -154,6 +154,53 @@ void Emitter::strWx(Reg wt, Reg xn, Reg wm) {
 	emit(0xB8205800u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(xn) << 5) | wt);
 }
 
+void Emitter::ldurW(Reg wt, Reg xn, int simm9) {
+	assert(simm9 >= -256 && simm9 <= 255);							// unscaled signed 9-bit byte offset
+	emit(0xB8400000u | ((static_cast<uint32_t>(simm9) & 0x1FFu) << 12) | (static_cast<uint32_t>(xn) << 5) | wt);
+}
+
+void Emitter::sturW(Reg wt, Reg xn, int simm9) {
+	assert(simm9 >= -256 && simm9 <= 255);
+	emit(0xB8000000u | ((static_cast<uint32_t>(simm9) & 0x1FFu) << 12) | (static_cast<uint32_t>(xn) << 5) | wt);
+}
+
+// --- doubleword loads / stores (64-bit) ---
+
+void Emitter::ldrX(Reg xt, Reg xn, uint32_t byteOffset) {
+	assert((byteOffset & 7u) == 0 && (byteOffset >> 3) < 0x1000);	// unsigned offset, scaled by 8
+	emit(0xF9400000u | ((byteOffset >> 3) << 10) | (static_cast<uint32_t>(xn) << 5) | xt);
+}
+
+void Emitter::strX(Reg xt, Reg xn, uint32_t byteOffset) {
+	assert((byteOffset & 7u) == 0 && (byteOffset >> 3) < 0x1000);
+	emit(0xF9000000u | ((byteOffset >> 3) << 10) | (static_cast<uint32_t>(xn) << 5) | xt);
+}
+
+void Emitter::ldrXr(Reg xt, Reg xn, Reg wm) {
+	// `ldr xt, [xn, wm, uxtw #3]`: option=uxtw(010), S=1 (scale by 8 for a doubleword), 64-bit register offset.
+	emit(0xF8605800u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(xn) << 5) | xt);
+}
+
+void Emitter::adr(Reg xd, Label target) {
+	branch(0x10000000u | xd, target.id, FIXUP_ADR);					// PC-relative; displacement patched by finalize()
+}
+
+// --- 64-bit address arithmetic / test ---
+
+void Emitter::addImmX(Reg xd, Reg xn, uint32_t imm12) {
+	assert(imm12 < 0x1000);
+	emit(0x91000000u | (imm12 << 10) | (static_cast<uint32_t>(xn) << 5) | xd);
+}
+
+void Emitter::subImmX(Reg xd, Reg xn, uint32_t imm12) {
+	assert(imm12 < 0x1000);
+	emit(0xD1000000u | (imm12 << 10) | (static_cast<uint32_t>(xn) << 5) | xd);
+}
+
+void Emitter::cbnzX(Reg xt, Label target) {
+	branch(0xB5000000u | xt, target.id, FIXUP_IMM19);
+}
+
 // --- float scalar (single precision) ---
 
 void Emitter::faddS(Reg sd, Reg sn, Reg sm) {
@@ -217,6 +264,14 @@ void Emitter::ret(Reg xn) {
 	emit(0xD65F0000u | (static_cast<uint32_t>(xn) << 5));
 }
 
+void Emitter::br(Reg xn) {
+	emit(0xD61F0000u | (static_cast<uint32_t>(xn) << 5));
+}
+
+void Emitter::blr(Reg xn) {
+	emit(0xD63F0000u | (static_cast<uint32_t>(xn) << 5));
+}
+
 // --- labels / fixups ---
 
 Label Emitter::newLabel() {
@@ -240,8 +295,11 @@ void Emitter::finalize() {
 		const ptrdiff_t disp = target - static_cast<ptrdiff_t>(f.site);	// PC-relative, in instruction words
 		if (f.kind == FIXUP_IMM26) {
 			words[f.site] |= (static_cast<uint32_t>(disp) & 0x03FFFFFFu);
-		} else {
+		} else if (f.kind == FIXUP_IMM19) {
 			words[f.site] |= ((static_cast<uint32_t>(disp) & 0x0007FFFFu) << 5);
+		} else {														// FIXUP_ADR: 21-bit byte displacement, split lo/hi
+			const uint32_t immBytes = static_cast<uint32_t>(disp * 4) & 0x001FFFFFu;
+			words[f.site] |= ((immBytes & 0x3u) << 29) | (((immBytes >> 2) & 0x0007FFFFu) << 5);
 		}
 	}
 	fixups.clear();

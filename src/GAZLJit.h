@@ -55,9 +55,10 @@ enum Reg {
 };
 
 constexpr Reg X0 = static_cast<Reg>(0),   X1 = static_cast<Reg>(1),   X2 = static_cast<Reg>(2);
-constexpr Reg X3 = static_cast<Reg>(3),   X4 = static_cast<Reg>(4),   X19 = static_cast<Reg>(19);
-constexpr Reg X20 = static_cast<Reg>(20), X21 = static_cast<Reg>(21), X30 = static_cast<Reg>(30);
-constexpr Reg XZR = static_cast<Reg>(31), SP = static_cast<Reg>(31);
+constexpr Reg X3 = static_cast<Reg>(3),   X4 = static_cast<Reg>(4),   X9 = static_cast<Reg>(9);
+constexpr Reg X10 = static_cast<Reg>(10), X11 = static_cast<Reg>(11), X12 = static_cast<Reg>(12);
+constexpr Reg X19 = static_cast<Reg>(19), X20 = static_cast<Reg>(20), X21 = static_cast<Reg>(21);
+constexpr Reg X30 = static_cast<Reg>(30), XZR = static_cast<Reg>(31), SP = static_cast<Reg>(31);
 
 constexpr Reg S0 = static_cast<Reg>(0), S1 = static_cast<Reg>(1), S2 = static_cast<Reg>(2), S3 = static_cast<Reg>(3);
 
@@ -117,6 +118,19 @@ class Emitter {
 		void strW(Reg wt, Reg xn, uint32_t byteOffset);			/// `str wt, [xn, #byteOffset]`
 		void ldrWx(Reg wt, Reg xn, Reg wm);						/// `ldr wt, [xn, wm, uxtw #2]`
 		void strWx(Reg wt, Reg xn, Reg wm);						/// `str wt, [xn, wm, uxtw #2]`
+		void ldurW(Reg wt, Reg xn, int simm9);					/// `ldur wt, [xn, #simm9]` (signed byte offset, -256..255)
+		void sturW(Reg wt, Reg xn, int simm9);					/// `stur wt, [xn, #simm9]`
+
+		// --- doubleword loads / stores (64-bit; for pointer-sized context fields) ---
+		void ldrX(Reg xt, Reg xn, uint32_t byteOffset);			/// `ldr xt, [xn, #byteOffset]` (offset scaled by 8)
+		void strX(Reg xt, Reg xn, uint32_t byteOffset);			/// `str xt, [xn, #byteOffset]`
+		void ldrXr(Reg xt, Reg xn, Reg wm);						/// `ldr xt, [xn, wm, uxtw #3]` (8-byte-scaled table index)
+		void adr(Reg xd, Label target);							/// `adr xd, target` (PC-relative address, ±1 MiB)
+
+		// --- 64-bit address arithmetic / test (for the pinned dsp / ipsp pointers) ---
+		void addImmX(Reg xd, Reg xn, uint32_t imm12);			/// `add xd, xn, #imm12` (64-bit)
+		void subImmX(Reg xd, Reg xn, uint32_t imm12);			/// `sub xd, xn, #imm12` (64-bit)
+		void cbnzX(Reg xt, Label target);						/// `cbnz xt, target` (64-bit)
 
 		// --- float scalar (single precision) ---
 		void faddS(Reg sd, Reg sn, Reg sm);						/// `fadd sd, sn, sm`
@@ -133,6 +147,8 @@ class Emitter {
 		void cbz(Reg wt, Label target);							/// `cbz wt, target`
 		void cbnz(Reg wt, Label target);						/// `cbnz wt, target`
 		void ret(Reg xn = X30);									/// `ret {xn}`
+		void br(Reg xn);										/// `br xn` (branch to register)
+		void blr(Reg xn);										/// `blr xn` (branch-with-link to register)
 
 		// --- labels / fixups ---
 		Label newLabel();										/// allocate an unbound label
@@ -144,7 +160,7 @@ class Emitter {
 		size_t wordCount() const { return words.size(); }		/// number of 32-bit instruction words emitted
 
 	private:
-		enum FixupKind { FIXUP_IMM26, FIXUP_IMM19 };			// `b` uses imm26; `b.cond`/`cbz`/`cbnz` use imm19
+		enum FixupKind { FIXUP_IMM26, FIXUP_IMM19, FIXUP_ADR };	// `b`→imm26; `b.cond`/`cbz`/`cbnz`→imm19; `adr`→imm21
 		struct Fixup {
 			size_t site;										// index (in words) of the branch instruction to patch
 			int labelId;										// which label it targets
