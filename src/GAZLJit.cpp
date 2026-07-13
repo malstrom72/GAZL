@@ -529,7 +529,7 @@ static bool branchTarget(const Instruction* code, UInt j, UInt& target) {
 	are pre-created (for direct calls); `entryOffset[selfOrdinal]` is set to this function's native word offset. Returns
 	false on an unsupported opcode.
 */
-bool lowerFunction(Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
+static bool lowerFunction(Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
 		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount) {
 	UInt retIndex = funcIndex;
 	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
@@ -897,7 +897,7 @@ bool lowerFunction(Emitter& e, const Instruction* code, const Value* memory, UIn
 	reg, jump to RESUME, loop on TRANSFER (GAZL call/return — no host round-trip), make the one host call on NATIVE_CALL,
 	and return to the host only to suspend (TIME_OUT) or finish. Returns the trampoline's word offset in the buffer.
 */
-size_t emitDispatcher(Emitter& e, const Offsets& o) {
+static size_t emitDispatcher(Emitter& e, const Offsets& o) {
 	const size_t entry = e.wordCount();
 	Label loop = e.newLabel(), done = e.newLabel();
 	e.subImmX(SP, SP, 16); e.strX(X19, SP, 0); e.strX(X30, SP, 8);	// save CTX (x19) + return addr (x30)

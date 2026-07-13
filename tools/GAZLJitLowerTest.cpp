@@ -131,34 +131,13 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	if (mainPtr == NULL_POINTER || gInPtr == NULL_POINTER || gOutPtr == NULL_POINTER) {
 		std::printf("  symbol lookup failed\n"); ++failures; return;
 	}
-	const UInt mainOrd = mainPtr - IP_OFFSET;
-
-	const Offsets o = JitProcessor::layout();		// static ABI — no engine needed to compile
-
-	Emitter e;
-	std::vector<Label> entryLabels(gFunctionCount);
-	std::vector<size_t> entryOffset(gFunctionCount, 0);
-	for (UInt k = 0; k < gFunctionCount; ++k) { entryLabels[k] = e.newLabel(); }
-	bool ok = true;
-	for (UInt ord = 0; ord < gFunctionCount; ++ord) {
-		ok = ok && lowerFunction(e, gCode, gMemory, gFunctionTable[ord], o, entryLabels, entryOffset, ord, gFunctionCount);
-	}
-	if (!ok) { std::printf("  lowering failed (unsupported opcode)\n"); ++failures; return; }
-	const size_t dispatchOffset = emitDispatcher(e, o);
-	e.finalize();
-	void* code = makeExecutable(e.code(), e.wordCount());
-	if (code == nullptr) { std::printf("  W^X alloc failed\n"); ++failures; return; }
-	void* const dispatchAddr = reinterpret_cast<char*>(code) + dispatchOffset * 4;
-	std::vector<void*> funcEntries(gFunctionCount);
-	for (UInt ord = 0; ord < gFunctionCount; ++ord) {
-		funcEntries[ord] = reinterpret_cast<char*>(code) + entryOffset[ord] * 4;
-	}
-	JitModule module;								// wrap the hand-lowered artifacts (this test drives the substrate directly)
-	module.dispatch = dispatchAddr;
-	module.nativeEntries = funcEntries.data();
-	module.codeWords = e.wordCount();
-	std::printf("  lowered %zu native words for %u function(s); dispatcher @ word %zu\n",
-			e.wordCount(), gFunctionCount, dispatchOffset);
+	// Compile the whole program once through the facade; the returned module owns the page (freed at scope exit) and
+	// backs every JitProcessor constructed below.
+	JitCompiler jc;
+	JitModule module;
+	jc.compile(gCode, gFunctionCount, gFunctionTable, gMemory, module);
+	if (!module.ok()) { std::printf("  compile failed (unsupported opcode / W^X alloc)\n"); ++failures; return; }
+	std::printf("  compiled %zu native words for %u function(s)\n", module.codeWords, gFunctionCount);
 
 	for (size_t k = 0; k < nInputs; ++k) {
 		const int n = inputs[k];
@@ -190,7 +169,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 			if (!good) { std::printf("    want status=%d, diff word=%d\n", wantStatus, diff); ++failures; }
 		}
 	}
-	::munmap(code, e.wordCount() * sizeof(uint32_t));
+	// `module` frees its executable page here as it goes out of scope (RAII).
 	std::printf("\n");
 }
 

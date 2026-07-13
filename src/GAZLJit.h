@@ -327,23 +327,8 @@ class JitProcessor : public Processor {
 		}
 };
 
-// --- lowering + dispatcher (heavy bodies live in GAZLJit.cpp) ---
-
-/*
-	Lower one function at `funcIndex` into `e` (appended). Emits an entry reload + FUNC prologue, a mainline per block,
-	cold reload trampolines + §5.7.5 suspend stubs for loop heads, and the §5.4 call/return transfers. `entryLabels[ord]`
-	are pre-created (for direct calls); `entryOffset[selfOrdinal]` is set to this function's native word offset. Returns
-	false on an unsupported opcode.
-*/
-bool lowerFunction(Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
-		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount);
-
-/*
-	Emit the native dispatcher trampoline (§5.4 encoding (a)). `int dispatch(JitProcessor* ctx)`: park CTX in a callee-saved
-	reg, jump to RESUME, loop on TRANSFER (GAZL call/return — no host round-trip), make the one host call on NATIVE_CALL,
-	and return to the host only to suspend (TIME_OUT) or finish. Returns the trampoline's word offset in the buffer.
-*/
-size_t emitDispatcher(Emitter& e, const Offsets& o);
+// The lowering pass (lowerFunction) and dispatcher emitter (emitDispatcher) are internal to GAZLJit.cpp (file-static),
+// used only by JitCompiler::compile below.
 
 /*
 	The JIT compiler — mirrors `Assembler`: lowers a whole finalized program to native code and fills a JitModule. It
