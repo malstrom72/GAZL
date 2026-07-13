@@ -37,9 +37,11 @@
 
 namespace GAZL {
 
-// Copy `wordCount` machine words into a fresh page, make it executable (honoring W^X), flush the i-cache, and return
-// the entry pointer — or null on failure. The returned page is leaked for the process lifetime (fine for the JIT's
-// compile-once model; add an unmap counterpart when code is ever discarded).
+/*
+	Copy `wordCount` machine words into a fresh page, make it executable (honoring W^X), flush the i-cache, and return
+	the entry pointer — or null on failure. The returned page is leaked for the process lifetime (fine for the JIT's
+	compile-once model; add an unmap counterpart when code is ever discarded).
+*/
 void* makeExecutable(const uint32_t* words, size_t wordCount);
 
 } // namespace GAZL
