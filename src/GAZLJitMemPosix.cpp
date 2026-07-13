@@ -36,10 +36,10 @@ namespace GAZL {
 
 void* makeExecutable(const uint32_t* words, size_t wordCount) {
 	const size_t bytes = wordCount * sizeof(uint32_t);
-	void* p = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	if (p == MAP_FAILED) { return nullptr; }
+	void* p = ::mmap(0, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (p == MAP_FAILED) { return 0; }
 	std::memcpy(p, words, bytes);
-	if (::mprotect(p, bytes, PROT_READ | PROT_EXEC) != 0) { ::munmap(p, bytes); return nullptr; }
+	if (::mprotect(p, bytes, PROT_READ | PROT_EXEC) != 0) { ::munmap(p, bytes); return 0; }
 	__builtin___clear_cache(reinterpret_cast<char*>(p), reinterpret_cast<char*>(p) + bytes);
 	return p;
 }

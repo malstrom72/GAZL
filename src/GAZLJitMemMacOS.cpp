@@ -39,8 +39,8 @@ namespace GAZL {
 
 void* makeExecutable(const uint32_t* words, size_t wordCount) {
 	const size_t bytes = wordCount * sizeof(uint32_t);
-	void* p = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
-	if (p == MAP_FAILED) { return nullptr; }
+	void* p = ::mmap(0, bytes, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
+	if (p == MAP_FAILED) { return 0; }
 	const bool toggle = (pthread_jit_write_protect_supported_np() != 0);
 	if (toggle) { pthread_jit_write_protect_np(0); }
 	std::memcpy(p, words, bytes);

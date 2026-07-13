@@ -48,7 +48,7 @@ bool compile(JitEngine& engine, const Instruction* code, const UInt* functionTab
 	const size_t dispatchOffset = emitDispatcher(e, o);
 	e.finalize();
 	void* page = makeExecutable(e.code(), e.wordCount());
-	if (page == nullptr) { return false; }
+	if (page == 0) { return false; }
 	if (outCodeWords != 0) { *outCodeWords = e.wordCount(); }
 
 	// The page and the ordinal->entry table live for the process (compile-once model; nothing frees them).

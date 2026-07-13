@@ -26,7 +26,7 @@ jitmem=src/GAZLJitMemPosix.cpp
 [ "$(uname -s)" = "Darwin" ] && jitmem=src/GAZLJitMemMacOS.cpp
 
 mkdir -p output
-"$CPP" $opt -std=c++17 -I src \
+"$CPP" $opt -std=c++11 -I src \
 	src/GAZL.cpp \
 	src/GAZLJit.cpp \
 	"$jitmem" \

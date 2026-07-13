@@ -40,7 +40,7 @@
 #ifndef GAZLJit_h
 #define GAZLJit_h
 
-#include <cstdint>
+#include <stdint.h>
 #include <cstddef>
 #include <vector>
 #include "GAZL.h"
@@ -59,13 +59,13 @@ enum Reg {
 	W16, W17, W18, W19, W20, W21, W22, W23, W24, W25, W26, W27, W28, W29, W30, WZR = 31
 };
 
-constexpr Reg X0 = static_cast<Reg>(0),   X1 = static_cast<Reg>(1),   X2 = static_cast<Reg>(2);
-constexpr Reg X3 = static_cast<Reg>(3),   X4 = static_cast<Reg>(4),   X9 = static_cast<Reg>(9);
-constexpr Reg X10 = static_cast<Reg>(10), X11 = static_cast<Reg>(11), X12 = static_cast<Reg>(12);
-constexpr Reg X19 = static_cast<Reg>(19), X20 = static_cast<Reg>(20), X21 = static_cast<Reg>(21);
-constexpr Reg X30 = static_cast<Reg>(30), XZR = static_cast<Reg>(31), SP = static_cast<Reg>(31);
+const Reg X0 = static_cast<Reg>(0),   X1 = static_cast<Reg>(1),   X2 = static_cast<Reg>(2);
+const Reg X3 = static_cast<Reg>(3),   X4 = static_cast<Reg>(4),   X9 = static_cast<Reg>(9);
+const Reg X10 = static_cast<Reg>(10), X11 = static_cast<Reg>(11), X12 = static_cast<Reg>(12);
+const Reg X19 = static_cast<Reg>(19), X20 = static_cast<Reg>(20), X21 = static_cast<Reg>(21);
+const Reg X30 = static_cast<Reg>(30), XZR = static_cast<Reg>(31), SP = static_cast<Reg>(31);
 
-constexpr Reg S0 = static_cast<Reg>(0), S1 = static_cast<Reg>(1), S2 = static_cast<Reg>(2), S3 = static_cast<Reg>(3);
+const Reg S0 = static_cast<Reg>(0), S1 = static_cast<Reg>(1), S2 = static_cast<Reg>(2), S3 = static_cast<Reg>(3);
 
 /*
 	AArch64 condition codes (the 4-bit field of `B.cond`). Only the ones the first kernel and its bounds/fuel checks use
@@ -179,7 +179,7 @@ class Emitter {
 		void finalize();										// patch all branch displacements to bound labels
 
 		// --- buffer access ---
-		const uint32_t* code() const { return words.empty() ? nullptr : &words[0]; }
+		const uint32_t* code() const { return words.empty() ? 0 : &words[0]; }
 		size_t wordCount() const { return words.size(); }		// number of 32-bit instruction words emitted
 
 	private:

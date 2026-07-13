@@ -32,7 +32,7 @@
 #ifndef GAZLJitMem_h
 #define GAZLJitMem_h
 
-#include <cstdint>
+#include <stdint.h>
 #include <cstddef>
 
 namespace GAZL {

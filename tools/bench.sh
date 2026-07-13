@@ -35,9 +35,9 @@ arch=$(uname -m)
 has_jit=0; { [ "$arch" = arm64 ] || [ "$arch" = aarch64 ]; } && has_jit=1
 
 build_bin() {  # $1 = CPP_OPTIONS, $2 = output basename
-	# -std=c++17 is explicit: GAZLCmd uses C++11 lambdas / <chrono> / unique_ptr, and BuildCpp does not set a standard,
+	# -std=c++11 is explicit: GAZLCmd uses C++11 lambdas / <chrono> / unique_ptr, and BuildCpp does not set a standard,
 	# so on a compiler whose default is pre-C++11 (older Apple clang) the build fails without it.
-	(cd tools && CPP_OPTIONS="$1" bash BuildCpp.sh release native "../output/$2" -std=c++17 -I.. GAZLCmd.cpp ../src/GAZL.cpp) \
+	(cd tools && CPP_OPTIONS="$1" bash BuildCpp.sh release native "../output/$2" -std=c++11 -I.. GAZLCmd.cpp ../src/GAZL.cpp) \
 		>/dev/null 2>&1
 }
 build_o2() {  # -O2 macro binary, with the JIT compiled in on AArch64 (so one binary serves both interp and --jit)
@@ -45,7 +45,7 @@ build_o2() {  # -O2 macro binary, with the JIT compiled in on AArch64 (so one bi
 	if [ "$has_jit" = 1 ]; then
 		local jitmem=../src/GAZLJitMemPosix.cpp
 		[ "$(uname -s)" = Darwin ] && jitmem=../src/GAZLJitMemMacOS.cpp
-		jitargs="-std=c++17 -DGAZL_JIT ../src/GAZLJit.cpp ../src/GAZLJitCompile.cpp $jitmem"
+		jitargs="-std=c++11 -DGAZL_JIT ../src/GAZLJit.cpp ../src/GAZLJitCompile.cpp $jitmem"
 	fi
 	(cd tools && CPP_OPTIONS="-O2" bash BuildCpp.sh release native ../output/GAZLCmd_o2 \
 		-I.. GAZLCmd.cpp ../src/GAZL.cpp $jitargs) >/dev/null 2>&1

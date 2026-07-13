@@ -25,7 +25,7 @@ opt="-O2"
 [ "$mode" = "debug" ] && opt="-O0"
 
 mkdir -p output
-"$CPP" $opt -std=c++17 -I src \
+"$CPP" $opt -std=c++11 -I src \
 	src/GAZLJit.cpp \
 	tools/GAZLJitExecTest.cpp \
 	-o output/GAZLJitExecTest
