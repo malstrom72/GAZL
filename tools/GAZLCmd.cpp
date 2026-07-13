@@ -316,6 +316,7 @@ int main(int argc, const char* argv[]) {
 		int benchRepeat = 0;	// 0 = normal single run; >0 = benchmark mode with this many measured iterations
 		int benchWarmup = 3;	// iterations run and discarded before measuring
 		bool useJit = false;	// --jit: run on the native (arm64) JIT instead of the interpreter (see GAZL_JIT build)
+		bool noLibm = false;	// --no-libm: don't register the atan2/sqrt/log natives (for programs that define their own)
 		for (int i = 0; i < argc; ++i) {
 			const char* a = argv[i];
 			if (i > 0 && a[0] == '-' && a[1] == '-') {
@@ -325,6 +326,8 @@ int main(int argc, const char* argv[]) {
 					benchWarmup = (a[8] == '=') ? atoi(a + 9) : benchWarmup;
 				} else if (strcmp(a, "--jit") == 0) {
 					useJit = true;
+				} else if (strcmp(a, "--no-libm") == 0) {
+					noLibm = true;
 				} else {
 					throw CmdException(std::string("Unknown option: ") + a);
 				}
@@ -337,13 +340,21 @@ int main(int argc, const char* argv[]) {
 			std::cerr << "GAZLCmd <filename> [<function> = 'main'] [<define symbol> <define value> ...]" << std::endl;
 			std::cerr << "        [--bench[=N]] [--warmup=W]   run N timed iterations (default 10), W warmups (default 3)"
 					<< std::endl;
+			std::cerr << "        [--jit]                      run on the native arm64 JIT (falls back to interpreter)"
+					<< std::endl;
+			std::cerr << "        [--no-libm]                  skip the atan2/sqrt/log natives (for self-contained libm)"
+					<< std::endl;
 			return 0;
 		}
 
 		Symbols globals;
 
-		for (int i = 0; i < sizeof (NATIVE_TABLE) / sizeof (*NATIVE_TABLE); ++i)
+		for (int i = 0; i < sizeof (NATIVE_TABLE) / sizeof (*NATIVE_TABLE); ++i) {
+			if (noLibm && (strcmp(NATIVE_NAMES[i], "atan2") == 0 || strcmp(NATIVE_NAMES[i], "sqrt") == 0
+					|| strcmp(NATIVE_NAMES[i], "log") == 0))
+				continue;								// a self-contained libm (e.g. perfTest) defines these itself
 			globals.registerNative(NATIVE_NAMES[i], i);
+		}
 
 		for (size_t i = 3; i + 2 <= pos.size(); i += 2) {
 			Value v;
