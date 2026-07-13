@@ -1,0 +1,29 @@
+// Sieve of Eratosthenes (AWFY classic), integer + array only -- the suite's first non-float-dominant kernel. Repeated
+// REPS times for a stable timing; the checksum is the prime count (deterministic, identical interp-vs-JIT).
+extern native printInt;
+
+const int N = 90000;
+const int REPS = 300;
+
+global array flags[N];
+
+function main()
+locals int rep, int i, int j, int count
+{
+	count = 0;
+	for (rep = 0 to REPS) {
+		for (i = 0 to N) { global flags[i] = 1; }
+		count = 0;
+		for (i = 2 to N) {
+			if ((int) global flags[i] == 1) {
+				count = count + 1;
+				j = i + i;
+				while (j < N) {
+					global flags[j] = 0;
+					j = j + i;
+				}
+			}
+		}
+	}
+	printInt(count);
+}

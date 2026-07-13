@@ -1,0 +1,65 @@
+// SciMark/CLBG spectral-norm: power-iteration estimate of the largest singular value of the matrix A(i,j) =
+// 1/((i+j)(i+j+1)/2 + i+1). Float + array, no library calls (the final sqrt is dropped -- the checksum is the squared
+// value vBv/vv, which is what the iteration actually converges, and stays bit-exact interp-vs-JIT). The A(i,j) terms are
+// recomputed inline (matrix-free), so this is O(N^2) float work per iteration; ITERS is the standard 10 (unnormalised
+// power iteration overflows if pushed much further), and N sets the workload.
+extern native printInt;
+
+const int N = 1000;
+const int ITERS = 10;
+
+global array u[N];
+global array v[N];
+global array w[N];			// temp = A * x
+
+function main()
+locals int it, int i, int j, int d
+	, float sum, float vBv, float vv
+{
+	for (i = 0 to N) { global u[i] = 1.0; }
+
+	for (it = 0 to ITERS) {
+		// v = A^T A u :  w = A u ; v = A^T w
+		for (i = 0 to N) {
+			sum = 0.0;
+			for (j = 0 to N) {
+				d = (i + j) * (i + j + 1) / 2 + i + 1;
+				sum = sum + 1.0 / itof(d) * (float) global u[j];
+			}
+			global w[i] = sum;
+		}
+		for (i = 0 to N) {
+			sum = 0.0;
+			for (j = 0 to N) {
+				d = (j + i) * (j + i + 1) / 2 + j + 1;
+				sum = sum + 1.0 / itof(d) * (float) global w[j];
+			}
+			global v[i] = sum;
+		}
+		// u = A^T A v :  w = A v ; u = A^T w
+		for (i = 0 to N) {
+			sum = 0.0;
+			for (j = 0 to N) {
+				d = (i + j) * (i + j + 1) / 2 + i + 1;
+				sum = sum + 1.0 / itof(d) * (float) global v[j];
+			}
+			global w[i] = sum;
+		}
+		for (i = 0 to N) {
+			sum = 0.0;
+			for (j = 0 to N) {
+				d = (j + i) * (j + i + 1) / 2 + j + 1;
+				sum = sum + 1.0 / itof(d) * (float) global w[j];
+			}
+			global u[i] = sum;
+		}
+	}
+
+	vBv = 0.0;
+	vv = 0.0;
+	for (i = 0 to N) {
+		vBv = vBv + (float) global u[i] * (float) global v[i];
+		vv = vv + (float) global v[i] * (float) global v[i];
+	}
+	printInt(ftoi(vBv / vv * 1000000.0));
+}

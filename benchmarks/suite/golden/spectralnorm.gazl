@@ -1,0 +1,126 @@
+ ; Compiled with Impala version 1.0
+
+ ; signatures version=1
+ ; signature extern native printInt() -> unknown @ 6:23
+ N:					! DEFi #1000 ; signature const N : int @ 8:19
+ ITERS:				! DEFi #10	; signature const ITERS : int @ 9:21
+ u:					GLOB *N		; signature array u[N] : unknown @ 11:18
+ v:					GLOB *N		; signature array v[N] : unknown @ 12:18
+ w:					GLOB *N		; signature array w[N] : unknown @ 13:18
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC		; signature func main() -> void @ 15:15
+ 								PARA *1
+ 					$it:		LOCi
+ 					$i:			LOCi
+ 					$j:			LOCi
+ 					$d:			LOCi
+ 					$sum:		LOCf
+ 					$vBv:		LOCf
+ 					$vv:		LOCf
+ ;-----------------------------------------------------------------------------
+ 								MOVi $i #0 						; for (i = 0 to N) 
+ 								GEQi #0 #N @.e0
+ 					.l1:		POKE &u $i #1.0					; global u[i] = 1.0
+ 								FORi $i #N @.l1					; }
+ 					.e0:		MOVi $it #0 					; for (it = 0 to ITERS) 
+ 								GEQi #0 #ITERS @.e2
+ 					.l3:		MOVi $i #0 						; for (i = 0 to N) 
+ 								GEQi #0 #N @.e4
+ 					.l5:		MOVf $sum #0.0 					; sum = 0.0
+ 								MOVi $j #0 						; for (j = 0 to N) 
+ 								GEQi #0 #N @.e6
+ 					.l7:		ADDi %0 $i $j					; d = (i + j) * (i + j + 1) / 2 + i + 1
+ 								ADDi %1 $i $j
+ 								ADDi %0 %0 #1
+ 								MULi %1 %1 %0
+ 								DIVi %1 %1 #2
+ 								ADDi %1 %1 $i
+ 								ADDi $d %1 #1
+ 								iTOf %1 $d #1.0					; sum = sum + 1.0 / itof(d) * (float) global u[j]
+ 								DIVf %1 #1.0 %1
+ 								PEEK %0 &u $j
+ 								MULf %1 %1 %0
+ 								ADDf $sum $sum %1
+ 								FORi $j #N @.l7					; }
+ 					.e6:		POKE &w $i $sum					; global w[i] = sum
+ 								FORi $i #N @.l5					; }
+ 					.e4:		MOVi $i #0 						; for (i = 0 to N) 
+ 								GEQi #0 #N @.e8
+ 					.l9:		MOVf $sum #0.0 					; sum = 0.0
+ 								MOVi $j #0 						; for (j = 0 to N) 
+ 								GEQi #0 #N @.e10
+ 					.l11:		ADDi %1 $j $i					; d = (j + i) * (j + i + 1) / 2 + j + 1
+ 								ADDi %0 $j $i
+ 								ADDi %1 %1 #1
+ 								MULi %0 %0 %1
+ 								DIVi %0 %0 #2
+ 								ADDi %0 %0 $j
+ 								ADDi $d %0 #1
+ 								iTOf %0 $d #1.0					; sum = sum + 1.0 / itof(d) * (float) global w[j]
+ 								DIVf %0 #1.0 %0
+ 								PEEK %1 &w $j
+ 								MULf %0 %0 %1
+ 								ADDf $sum $sum %0
+ 								FORi $j #N @.l11				; }
+ 					.e10:		POKE &v $i $sum					; global v[i] = sum
+ 								FORi $i #N @.l9					; }
+ 					.e8:		MOVi $i #0 						; for (i = 0 to N) 
+ 								GEQi #0 #N @.e12
+ 					.l13:		MOVf $sum #0.0 					; sum = 0.0
+ 								MOVi $j #0 						; for (j = 0 to N) 
+ 								GEQi #0 #N @.e14
+ 					.l15:		ADDi %0 $i $j					; d = (i + j) * (i + j + 1) / 2 + i + 1
+ 								ADDi %1 $i $j
+ 								ADDi %0 %0 #1
+ 								MULi %1 %1 %0
+ 								DIVi %1 %1 #2
+ 								ADDi %1 %1 $i
+ 								ADDi $d %1 #1
+ 								iTOf %1 $d #1.0					; sum = sum + 1.0 / itof(d) * (float) global v[j]
+ 								DIVf %1 #1.0 %1
+ 								PEEK %0 &v $j
+ 								MULf %1 %1 %0
+ 								ADDf $sum $sum %1
+ 								FORi $j #N @.l15				; }
+ 					.e14:		POKE &w $i $sum					; global w[i] = sum
+ 								FORi $i #N @.l13				; }
+ 					.e12:		MOVi $i #0 						; for (i = 0 to N) 
+ 								GEQi #0 #N @.e16
+ 					.l17:		MOVf $sum #0.0 					; sum = 0.0
+ 								MOVi $j #0 						; for (j = 0 to N) 
+ 								GEQi #0 #N @.e18
+ 					.l19:		ADDi %1 $j $i					; d = (j + i) * (j + i + 1) / 2 + j + 1
+ 								ADDi %0 $j $i
+ 								ADDi %1 %1 #1
+ 								MULi %0 %0 %1
+ 								DIVi %0 %0 #2
+ 								ADDi %0 %0 $j
+ 								ADDi $d %0 #1
+ 								iTOf %0 $d #1.0					; sum = sum + 1.0 / itof(d) * (float) global w[j]
+ 								DIVf %0 #1.0 %0
+ 								PEEK %1 &w $j
+ 								MULf %0 %0 %1
+ 								ADDf $sum $sum %0
+ 								FORi $j #N @.l19				; }
+ 					.e18:		POKE &u $i $sum					; global u[i] = sum
+ 								FORi $i #N @.l17				; }
+ 					.e16:		FORi $it #ITERS @.l3			; }
+ 					.e2:		MOVf $vBv #0.0 					; vBv = 0.0
+ 								MOVf $vv #0.0 					; vv = 0.0
+ 								MOVi $i #0 						; for (i = 0 to N) 
+ 								GEQi #0 #N @.e20
+ 					.l21:		PEEK %0 &u $i					; vBv = vBv + (float) global u[i] * (float) global v[i]
+ 								PEEK %1 &v $i
+ 								MULf %0 %0 %1
+ 								ADDf $vBv $vBv %0
+ 								PEEK %0 &v $i					; vv = vv + (float) global v[i] * (float) global v[i]
+ 								PEEK %1 &v $i
+ 								MULf %0 %0 %1
+ 								ADDf $vv $vv %0
+ 								FORi $i #N @.l21				; }
+ 					.e20:		DIVf %1 $vBv $vv				; printInt(ftoi(vBv / vv * 1000000.0))
+ 								fTOi %1 %1 #1000000.0
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 64:38
+ 								RETU   							; }
+

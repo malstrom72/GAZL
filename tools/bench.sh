@@ -133,10 +133,17 @@ run_suite() {  # $1 = gazl path
 	cms=$(echo "$st" | cut -d' ' -f1)
 	ckb=$(awk "BEGIN{printf \"%.1f\", $(echo "$st" | cut -d' ' -f2)/1024}")
 	spd=$([ -n "$j" ] && awk "BEGIN{printf \"%.2fx\", $i/$j}" || echo "-")
+	[ -n "$j" ] && SUITE_RATIOS="${SUITE_RATIOS:-} $(awk "BEGIN{print $i/$j}")"
 	printf '%-12s %10.3f %10s %8s %10s %8s  %s\n' "$name" "$i" "${j:-n/a}" "$spd" "$cms" "$ckb" "$chk"
 }
 if ls benchmarks/suite/golden/*.gazl >/dev/null 2>&1; then
 	printf '\n%-12s %10s %10s %8s %10s %8s  %s\n' "suite -O2" "interp_ms" "jit_ms" "speedup" "compile_ms" "code_KB" "check"
 	printf '%-12s %10s %10s %8s %10s %8s  %s\n' "------------" "----------" "----------" "--------" "----------" "--------" "-----"
+	SUITE_RATIOS=""
 	for g in benchmarks/suite/golden/*.gazl; do run_suite "$g"; done
+	if [ "$has_jit" = 1 ] && [ -n "$SUITE_RATIOS" ]; then
+		gm=$(awk "BEGIN{m=split(\"$SUITE_RATIOS\",a,\" \");s=0;n=0;for(k=1;k<=m;k++)if(a[k]+0>0){s+=log(a[k]);n++};if(n>0)printf\"%.2fx\",exp(s/n)}")
+		printf '%-12s %10s %10s %8s   (geomean speedup over %d kernels)\n' "geomean" "" "" "$gm" \
+			"$(echo $SUITE_RATIOS | wc -w)"
+	fi
 fi
