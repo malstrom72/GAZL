@@ -51,7 +51,7 @@ static int failures = 0;
 
 // Copy `words` instruction words into freshly-allocated W^X memory, flush the icache, and return an executable pointer.
 // Reuses the spike A1 ladder's rung-1 strategy (see file header). Returns nullptr on allocation failure.
-static void* makeExecutable(const uint32_t* words, size_t wordCount) {
+static void* mapExecutable(const uint32_t* words, size_t wordCount) {
 	const size_t bytes = wordCount * sizeof(uint32_t);
 #if defined(__APPLE__)
 	void* p = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
@@ -169,7 +169,7 @@ typedef int (*Fn2)(int, int);
 static void runCheck1(const char* name, void (*emit)(Emitter&), int (*ref)(int), int arg) {
 	Emitter e;
 	emit(e);
-	void* code = makeExecutable(e.code(), e.wordCount());
+	void* code = mapExecutable(e.code(), e.wordCount());
 	if (code == nullptr) {
 		std::printf("  %-20s ALLOC FAILED (W^X unavailable)\n", name);
 		++failures;
@@ -188,7 +188,7 @@ static void runCheck1(const char* name, void (*emit)(Emitter&), int (*ref)(int),
 static void runCheck2(const char* name, void (*emit)(Emitter&), int (*ref)(int, int), int a, int b) {
 	Emitter e;
 	emit(e);
-	void* code = makeExecutable(e.code(), e.wordCount());
+	void* code = mapExecutable(e.code(), e.wordCount());
 	if (code == nullptr) {
 		std::printf("  %-20s ALLOC FAILED (W^X unavailable)\n", name);
 		++failures;

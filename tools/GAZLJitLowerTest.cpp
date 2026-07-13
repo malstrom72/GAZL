@@ -40,7 +40,6 @@
 #include <sys/mman.h>							// ::munmap (GAZLJit.h no longer pulls this in transitively)
 
 using namespace GAZL;
-using namespace GAZLJitLower;
 
 static int failures = 0;
 

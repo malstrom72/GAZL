@@ -32,7 +32,7 @@
 #include <cstring>
 #include <sys/mman.h>
 
-namespace GAZLJitLower {
+namespace GAZL {
 
 void* makeExecutable(const uint32_t* words, size_t wordCount) {
 	const size_t bytes = wordCount * sizeof(uint32_t);
@@ -44,4 +44,4 @@ void* makeExecutable(const uint32_t* words, size_t wordCount) {
 	return p;
 }
 
-} // namespace GAZLJitLower
+} // namespace GAZL

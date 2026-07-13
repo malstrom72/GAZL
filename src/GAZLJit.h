@@ -27,7 +27,7 @@
 	  - `Emitter` (namespace `GAZL`): a tiny AArch64 machine-code assembler — one method per instruction, one canonical
 	    encoding form per operation — with no dependency on the interpreter (it only produces bytes; the Emitter-only
 	    diff test links without `GAZL.cpp`). Verified against a clang-assembled oracle.
-	  - the v1 lowering pass + `JitEngine` + native dispatcher (namespace `GAZLJitLower`): compiles a function's finalized
+	  - the v1 lowering pass + `JitEngine` + native dispatcher: compiles a function's finalized
 	    `Instruction[]` to native code and runs it. `JitEngine` is a `Processor` subclass (§5.1) that overrides the virtual
 	    `run()`/`enterCall()`, so it is a polymorphic drop-in for the interpreter — the host loop is identical
 	    (`enterCall(); do { resetTimeOut(N); } while (run() == TIME_OUT)`). This half depends on `GAZL.h`. Only these two
@@ -199,12 +199,10 @@ class Emitter {
 } // namespace GAZL
 
 // ============================================================================================================
-// JIT lowering, engine, and native dispatcher (graduated from tools/GAZLJitLower.h). Depends on GAZL.h.
+// JIT lowering, engine, and native dispatcher (reopens namespace GAZL). Depends on GAZL.h.
 // ============================================================================================================
 
-namespace GAZLJitLower {
-
-using namespace GAZL;
+namespace GAZL {
 
 const int TRANSFER = 1;							// segment-to-segment transfer sentinel (no GAZL status is +1)
 const int NATIVE_CALL = 2;						// "invoke a native, then continue" sentinel
@@ -247,8 +245,7 @@ enum {
 	OP_GOTO = 0x2345 + 89
 };
 
-// makeExecutable() is declared in GAZLJitMem.h (platform backend) — still in namespace GAZLJitLower, so callers here
-// and in the tests reach it unchanged.
+// makeExecutable() is declared in GAZLJitMem.h (platform backend), also in namespace GAZL.
 
 // Byte offsets of the machine state a segment/dispatcher touches, within the (subclass) engine.
 struct Offsets {
@@ -313,6 +310,6 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 // and return to the host only to suspend (TIME_OUT) or finish. Returns the trampoline's word offset in the buffer.
 size_t emitDispatcher(Emitter& e, const Offsets& o);
 
-} // namespace GAZLJitLower
+} // namespace GAZL
 
 #endif

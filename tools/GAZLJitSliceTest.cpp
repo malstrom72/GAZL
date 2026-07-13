@@ -67,7 +67,7 @@ static int failures = 0;
 
 // --- W^X executable memory (reuses the spike A1 rung-1 strategy; see tools/GAZLJitExecTest.cpp) ---
 
-static void* makeExecutable(const uint32_t* words, size_t wordCount) {
+static void* mapExecutable(const uint32_t* words, size_t wordCount) {
 	const size_t bytes = wordCount * sizeof(uint32_t);
 #if defined(__APPLE__)
 	void* p = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
@@ -232,7 +232,7 @@ int main() {
 	// Build the emitted kernel once and make it executable.
 	Emitter e;
 	emitSumTo(e);
-	void* code = makeExecutable(e.code(), e.wordCount());
+	void* code = mapExecutable(e.code(), e.wordCount());
 	if (code == nullptr) {
 		std::printf("  ALLOC FAILED (W^X unavailable) — aborting\n");
 		return 1;

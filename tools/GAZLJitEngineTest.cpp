@@ -29,7 +29,7 @@
 	read-only here; the only VM edits the real design wants are making `run()`/`enterCall()` virtual + a `RESUME` field,
 	so the *host* can pick an engine through a `Processor*` — orthogonal to this prototype.)
 
-	`JitEngine` drives Emitter-produced native code over the *same* `Processor` state the interpreter uses, and this test
+	`ProtoEngine` drives Emitter-produced native code over the *same* `Processor` state the interpreter uses, and this test
 	demonstrates the three claims C3/C4 exist to prove (docs/JitCompilerResearch.md §5.2, §5.4, §5.5, §5.7.5):
 
 	  1. C3 — run a whole GAZL function through the dispatcher; the final observable memory image is BYTE-IDENTICAL to a
@@ -67,7 +67,7 @@ static int failures = 0;
 
 // --- W^X executable memory (reuses the spike A1 rung-1 strategy; see tools/GAZLJitExecTest.cpp) ---
 
-static void* makeExecutable(const uint32_t* words, size_t wordCount) {
+static void* mapExecutable(const uint32_t* words, size_t wordCount) {
 	const size_t bytes = wordCount * sizeof(uint32_t);
 #if defined(__APPLE__)
 	void* p = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
@@ -98,16 +98,8 @@ static void* makeExecutable(const uint32_t* words, size_t wordCount) {
 	return p;
 }
 
-// GAZL finalized opcodes we depend on (enum is internal to GAZL.cpp; base = FIRST_OPCODE_VALUE 0x2345).
-enum {
-	OP_FUNC = 0x2345 + 0,		// FUNC_CC_
-	OP_RETU = 0x2345 + 4,		// RETU_C__
-	OP_MOVE_VC = 0x2345 + 6,	// MOVE_VC_  (MOVi immediate)
-	OP_PEEK_VC = 0x2345 + 7,	// PEEK_VC_
-	OP_POKE_CV = 0x2345 + 8,	// POKE_CV_
-	OP_ADDI_VVV = 0x2345 + 21,	// ADDI_VVV
-	OP_FORi_VVB = 0x2345 + 67	// FORi_VVB
-};
+// GAZL finalized opcodes (OP_FUNC/OP_RETU/OP_MOVE_VC/OP_PEEK_VC/OP_POKE_CV/OP_ADDI_VVV/OP_FORi_VVB) come from GAZLJit.h
+// (namespace GAZL) now that the JIT is graduated — no local copy needed.
 
 // The native ABI for the emitted kernel (all caller-saved so the leaf needs no register save/restore; the pinned
 // callee-saved x19/x20/x21/w22 homes of the real design are the in-VM dispatcher's job, §5.8):
@@ -129,8 +121,8 @@ struct KernelLayout {
 	A JIT engine sharing the base `Processor`'s machine state. Being a subclass, it reaches the `protected` state
 	(`dsp`, `ip`, `ipsp`, `clockCyclesLeft`, `memoryBase`, `codeBase`) with no change to src/GAZL.*.
 */
-class JitEngine : public Processor {
-	public:		JitEngine(UInt codeSize, const Instruction* code, UInt fnCount, const UInt* fnTable, UInt memSize
+class ProtoEngine : public Processor {
+	public:		ProtoEngine(UInt codeSize, const Instruction* code, UInt fnCount, const UInt* fnTable, UInt memSize
 						, Value* mem, UInt globalsSize, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack
 						, NativeFunc const* natives)
 					: Processor(codeSize, code, fnCount, fnTable, memSize, mem, globalsSize, constsSize, ipStackSize
@@ -325,7 +317,7 @@ static bool imagesEqual(const std::vector<Value>& a, const std::vector<Value>& b
 }
 
 int main() {
-	std::printf("GAZLJit C3-full + C4 prototype: JitEngine (Processor subclass) vs interpreter (arm64)\n\n");
+	std::printf("GAZLJit C3-full + C4 prototype: ProtoEngine (Processor subclass) vs interpreter (arm64)\n\n");
 
 	Symbols globals;
 	KernelLayout layout;
@@ -338,10 +330,10 @@ int main() {
 
 	Emitter ek;
 	emitKernel(ek, layout);
-	void* kernelCode = makeExecutable(ek.code(), ek.wordCount());
+	void* kernelCode = mapExecutable(ek.code(), ek.wordCount());
 	Emitter et;
 	emitTrap(et);
-	void* trapCode = makeExecutable(et.code(), et.wordCount());
+	void* trapCode = mapExecutable(et.code(), et.wordCount());
 	if (kernelCode == nullptr || trapCode == nullptr) {
 		std::printf("  W^X allocation failed — aborting\n");
 		return 1;
@@ -358,7 +350,7 @@ int main() {
 		const std::vector<Value> want = runInterpreter(globals, gInPtr, n);
 
 		restoreCleanImage();
-		JitEngine eng(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
+		ProtoEngine eng(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
 				CALL_STACK_SIZE, gCallStack, nullptr);
 		eng.accessMemory(gInPtr, 1)->i = n;
 		eng.enterCall(mainPtr);
@@ -381,7 +373,7 @@ int main() {
 		const std::vector<Value> want = runInterpreter(globals, gInPtr, n);
 
 		restoreCleanImage();
-		JitEngine eng(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
+		ProtoEngine eng(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
 				CALL_STACK_SIZE, gCallStack, nullptr);
 		eng.accessMemory(gInPtr, 1)->i = n;
 		eng.enterCall(mainPtr);

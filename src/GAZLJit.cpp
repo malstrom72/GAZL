@@ -386,9 +386,7 @@ void Emitter::finalize() {
 // Emitter-only diff test without GAZL.cpp. (makeExecutable lives in the per-platform GAZLJitMem*.cpp backends.)
 // ============================================================================================================
 
-namespace GAZLJitLower {
-
-using namespace GAZL;
+namespace GAZL {
 
 // The JitEngine's field-offset gatherer (setup-time; non-virtual, so defining it here pulls no vtable into GAZLJit.o).
 Offsets JitEngine::offsets() const {
@@ -861,4 +859,4 @@ size_t emitDispatcher(Emitter& e, const Offsets& o) {
 	return entry;
 }
 
-} // namespace GAZLJitLower
+} // namespace GAZL
