@@ -27,6 +27,7 @@ opt="-O2"
 mkdir -p output
 "$CPP" $opt -std=c++11 -I src \
 	src/GAZLJit.cpp \
+	src/GAZLJitMemPosix.cpp \
 	tools/GAZLJitExecTest.cpp \
 	-o output/GAZLJitExecTest
 

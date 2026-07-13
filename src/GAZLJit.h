@@ -346,13 +346,10 @@ bool lowerFunction(Emitter& e, const Instruction* code, const Value* memory, UIn
 size_t emitDispatcher(Emitter& e, const Offsets& o);
 
 /*
-	The JIT compiler — mirrors `Assembler`: lowers a whole finalized program to native code and returns a JitModule. It
+	The JIT compiler — mirrors `Assembler`: lowers a whole finalized program to native code and fills a JitModule. It
 	takes the program (the `Instruction[]` + functionTable + the const memory image, read only for SWCH jump tables) —
-	never a processor. Bind the result by constructing a JitProcessor from it. Returns a module with ok()==false if any
+	never a processor. Bind the result by constructing a JitProcessor from it. The out module has ok()==false if any
 	function hits an opcode the backend can't lower yet (caller falls back to the interpreter). arm64 only.
-
-	Lives in GAZLJitCompiler.cpp (not GAZLJit.cpp) because it pulls in makeExecutable(): keeping the Emitter + lowering
-	substrate free of a memory backend is what lets the Emitter-only diff test link without one.
 */
 class JitCompiler {
 	public:		void compile(const Instruction* code, UInt functionCount, const UInt* functionTable

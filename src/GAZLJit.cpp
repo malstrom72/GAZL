@@ -390,10 +390,10 @@ void Emitter::finalize() {
 
 
 // ============================================================================================================
-// JIT lowering, engine, and native dispatcher (declarations in GAZLJit.h). Depends on GAZL.h; the Emitter above
-// does not — so the emit helpers here are file-local (`static`) and only lowerFunction/emitDispatcher (and the
-// JitProcessor methods) are external. None of this references a Processor symbol, so GAZLJit.o still links into the
-// Emitter-only diff test without GAZL.cpp. (makeExecutable lives in the per-platform GAZLJitMem*.cpp backends.)
+// JIT lowering, engine, native dispatcher, and the JitCompiler driver (declarations in GAZLJit.h). Depends on GAZL.h;
+// the Emitter above does not. The emit helpers are file-local (`static`); lowerFunction/emitDispatcher, JitProcessor's
+// methods, and JitCompiler::compile are external. JitCompiler::compile calls makeExecutable(), so anything linking
+// GAZLJit.cpp also links a per-platform GAZLJitMem*.cpp backend (GAZLJitMemPosix.cpp is enough for the encoding tests).
 // ============================================================================================================
 
 namespace GAZL {
@@ -916,6 +916,42 @@ size_t emitDispatcher(Emitter& e, const Offsets& o) {
 	e.bind(done);
 	e.ldrX(X19, SP, 0); e.ldrX(X30, SP, 8); e.addImmX(SP, SP, 16); e.ret();
 	return entry;
+}
+
+/*
+	JitCompiler — the JIT's counterpart of Assembler: lowers a whole finalized program to native code and fills a
+	JitModule (the executable page's dispatcher + ordinal→native-entry table, which the module then owns). Targets the
+	static JitProcessor::layout() ABI; never touches a processor instance. This is where the substrate above (Emitter +
+	lowerFunction + emitDispatcher) meets makeExecutable() to publish.
+*/
+void JitCompiler::compile(const Instruction* code, UInt functionCount, const UInt* functionTable,
+		const Value* memory, JitModule& out) {
+	// `out` starts empty (ok() == false); we only populate it once the whole program has lowered and published.
+	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
+	Emitter e;
+	std::vector<Label> entryLabels(functionCount);
+	std::vector<size_t> entryOffset(functionCount, 0);
+	for (UInt k = 0; k < functionCount; ++k) { entryLabels[k] = e.newLabel(); }
+	for (UInt ord = 0; ord < functionCount; ++ord) {
+		if (!lowerFunction(e, code, memory, functionTable[ord], o, entryLabels, entryOffset, ord, functionCount)) {
+			return;								// unsupported opcode → caller should fall back to the interpreter
+		}
+	}
+	const size_t dispatchOffset = emitDispatcher(e, o);
+	e.finalize();
+	const size_t words = e.wordCount();
+	void* page = makeExecutable(e.code(), words);
+	if (page == 0) { return; }
+
+	void** entries = new void*[functionCount];
+	for (UInt ord = 0; ord < functionCount; ++ord) {
+		entries[ord] = reinterpret_cast<char*>(page) + entryOffset[ord] * 4;
+	}
+	out.dispatch = reinterpret_cast<char*>(page) + dispatchOffset * 4;
+	out.nativeEntries = entries;
+	out.codeWords = words;
+	out.ownedPage = page;						// hand the page + table to `out`; its destructor frees them
+	out.ownedWords = words;
 }
 
 } // namespace GAZL

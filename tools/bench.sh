@@ -45,7 +45,7 @@ build_o2() {  # -O2 macro binary, with the JIT compiled in on AArch64 (so one bi
 	if [ "$has_jit" = 1 ]; then
 		local jitmem=../src/GAZLJitMemPosix.cpp
 		[ "$(uname -s)" = Darwin ] && jitmem=../src/GAZLJitMemMacOS.cpp
-		jitargs="-std=c++11 -DGAZL_JIT ../src/GAZLJit.cpp ../src/GAZLJitCompiler.cpp $jitmem"
+		jitargs="-std=c++11 -DGAZL_JIT ../src/GAZLJit.cpp $jitmem"
 	fi
 	(cd tools && CPP_OPTIONS="-O2" bash BuildCpp.sh release native ../output/GAZLCmd_o2 \
 		-I.. GAZLCmd.cpp ../src/GAZL.cpp $jitargs) >/dev/null 2>&1

@@ -23,6 +23,7 @@ opt="-O2"
 mkdir -p output
 "$CPP" $opt -std=c++11 -I src \
 	src/GAZLJit.cpp \
+	src/GAZLJitMemPosix.cpp \
 	tools/GAZLJitTest.cpp \
 	tools/GAZLJitTestRef.arm64.S \
 	-o output/GAZLJitTest
