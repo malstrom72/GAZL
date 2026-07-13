@@ -23,14 +23,14 @@
 
 /*
 	The comprehensive GAZLJit test: compiles a spread of GAZL kernels straight from their `Instruction[]` through the one
-	shared lowering pass (tools/GAZLJitLower.h) and checks each JIT run's whole memory image AND final Status against the
+	shared lowering pass (src/GAZLJit.h) and checks each JIT run's whole memory image AND final Status against the
 	interpreter. Exercises arithmetic, forward + back branches, multi-loop fuel suspend/resume (§5.7.5 RESUME), the §5.4
 	dispatcher/segment model for direct/indirect/native calls, and bounds-checked memory with traps. src/GAZL.* compiled
 	READ-ONLY; the native dispatcher keeps GAZL calls/returns out of C++ mid-run. AArch64 only. Exits non-zero on any
 	mismatch.
 */
 
-#include "GAZLJitLower.h"
+#include "GAZLJit.h"
 
 #include <cstdio>
 #include <cstdint>
@@ -168,14 +168,18 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 			restoreClean();
 			JitEngine eng(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize,
 					gConstsSize, CALL_STACK_SIZE, gCallStack, gNativeTable);
-			eng.funcEntries = funcEntries.data();
+			eng.setCompiled(dispatchAddr, funcEntries.data());
 			eng.accessMemory(gInPtr, 1)->i = n;
-			eng.enterCall(mainPtr);
-			eng.resetTimeOut(fuel);
-			void* mainEntry = reinterpret_cast<char*>(code) + entryOffset[mainOrd] * 4;
 			gNativeCallCount = 0;
+			// Drive the JIT through the polymorphic base interface — the exact host loop the interpreter uses (§5.1).
+			Processor* proc = &eng;
+			Status s = proc->enterCall(mainPtr);
 			int suspends = 0;
-			const Status s = eng.run(dispatchAddr, mainEntry, fuel, suspends);
+			do {
+				proc->resetTimeOut(fuel);
+				s = proc->run();
+				if (s == TIME_OUT || s == BLOCK_RETRY) { ++suspends; }
+			} while (s == TIME_OUT || s == BLOCK_RETRY);
 			std::vector<Value> got(gMemory, gMemory + DATA_SIZE);
 			int diff = -1;
 			const bool good = (s == wantStatus) && imagesEqual(want, got, diff);

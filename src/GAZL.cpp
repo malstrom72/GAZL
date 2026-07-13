@@ -1211,7 +1211,7 @@ const Char* Assembler::feed(const Char* line) {
 
 Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
 		, rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0), ip(0), dsp(0)
-		, ipsp(0), userData(0), clockCyclesLeft(0) {
+		, ipsp(0), userData(0), clockCyclesLeft(0), resume(0) {
 }
 
 Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
@@ -1221,7 +1221,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(rwMemorySize)
 		, dataStackBase(memory + dataStackOffset), dataStackEnd(memory + dataStackOffset + dataStackSize)
 		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase)
-		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
+		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0) {
 	assert(rwMemorySize <= memorySize);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(code != 0);
@@ -1236,7 +1236,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(memorySize - constsSize)
 		, dataStackBase(memory + globalsSize), dataStackEnd(memory + memorySize - constsSize), ipStackBase(ipStack)
 		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
-		, userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
+		, userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0) {
 	assert(globalsSize + constsSize <= memorySize);
 	assert(code != 0);
 	assert(memory != 0);

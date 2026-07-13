@@ -343,8 +343,9 @@ class Processor {
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessParams(UInt count) const; 																	// If returning null pointer you should normally return `DATA_STACK_OVERFLOW`
 	// FIX : stack alloc function
-	public:		Status enterCall(Pointer functionPointer); 																// After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
-	public:		Status run();
+	public:		virtual ~Processor() { }																				// Virtual: interpreter and JIT are subclasses over one shared state (§5.1). Vtable cost is nil.
+	public:		virtual Status enterCall(Pointer functionPointer); 														// After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
+	public:		virtual Status run();																					// `run()` and `enterCall()` are the only virtual methods (per-block / per-call, so vtable cost is nil).
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;
 	
@@ -365,6 +366,7 @@ class Processor {
 	protected:	Value* dsp;
 	protected:	CallStackEntry* ipsp;
 	protected:	void* userData;
+	protected:	void* resume;				// RESUME continuation (§5.7.5): native code address the JIT dispatcher jumps to; unused by the interpreter.
 };
 
 inline void Processor::resetTimeOut(Int clockCycles) { clockCyclesLeft = clockCycles; }
