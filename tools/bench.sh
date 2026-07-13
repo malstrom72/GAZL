@@ -111,3 +111,32 @@ printf '%-12s %10s %10s %8s %10s %8s\n' "------------" "----------" "----------"
 run_macro "perfTest"  "tests/impala/golden/perfTest.gazl"  --no-libm
 run_macro "perfTest1" "tests/impala/golden/perfTest1.gazl"
 run_macro "perfTest2" "tests/impala/golden/perfTest2.gazl"
+
+# suite lane: the ported benchmark kernels (benchmarks/suite/), each self-checking. `check` verifies the printed result
+# is identical interp-vs-jit AND matches the committed golden checksum; a fallback shows as FELLBACK in compile_ms.
+run_suite() {  # $1 = gazl path
+	local gazl="$1"; local name; name=$(basename "$gazl" .gazl)
+	local ci cj exp chk="ok"
+	ci=$(./output/GAZLCmd_o2 "$gazl" main </dev/null 2>/dev/null)
+	exp=$(cat "benchmarks/suite/expected/$name.checksum" 2>/dev/null || true)
+	[ -n "$exp" ] && [ "$ci" != "$exp" ] && chk="GOLDEN!"
+	local i; i=$(bench_min GAZLCmd_o2 "$gazl")
+	if [ "$has_jit" != 1 ]; then
+		printf '%-12s %10.3f %10s %8s %10s %8s  %s\n' "$name" "$i" "n/a" "-" "n/a" "n/a" "$chk"; return
+	fi
+	cj=$(./output/GAZLCmd_o2 --jit "$gazl" main </dev/null 2>/dev/null)
+	[ "$cj" != "$ci" ] && chk="JIT!=INT"
+	local j st cms ckb spd
+	j=$(bench_min GAZLCmd_o2 "$gazl" --jit)
+	st=$(jit_stats "$gazl")
+	if [ -z "$st" ]; then printf '%-12s %10.3f %10s %8s %10s %8s  %s\n' "$name" "$i" "n/a" "FELLBACK" "-" "-" "$chk"; return; fi
+	cms=$(echo "$st" | cut -d' ' -f1)
+	ckb=$(awk "BEGIN{printf \"%.1f\", $(echo "$st" | cut -d' ' -f2)/1024}")
+	spd=$([ -n "$j" ] && awk "BEGIN{printf \"%.2fx\", $i/$j}" || echo "-")
+	printf '%-12s %10.3f %10s %8s %10s %8s  %s\n' "$name" "$i" "${j:-n/a}" "$spd" "$cms" "$ckb" "$chk"
+}
+if ls benchmarks/suite/golden/*.gazl >/dev/null 2>&1; then
+	printf '\n%-12s %10s %10s %8s %10s %8s  %s\n' "suite -O2" "interp_ms" "jit_ms" "speedup" "compile_ms" "code_KB" "check"
+	printf '%-12s %10s %10s %8s %10s %8s  %s\n' "------------" "----------" "----------" "--------" "----------" "--------" "-----"
+	for g in benchmarks/suite/golden/*.gazl; do run_suite "$g"; done
+fi

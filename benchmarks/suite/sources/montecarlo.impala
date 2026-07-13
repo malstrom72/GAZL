@@ -1,0 +1,27 @@
+// SciMark-style Monte Carlo pi estimate via a deterministic LCG (no library calls, no arrays). Prints the in-circle
+// count -- a bit-exact integer checksum that must be identical between the interpreter and the JIT (float ops are
+// single-precision in both engines, so the same LCG stream lands the same points inside/outside the unit circle).
+extern native printInt;
+
+const int N = 20000000;
+
+const float SCALE = 2147483648.0;			// 2^31: maps a 31-bit non-negative int into [0, 1)
+
+function main()
+locals int i, int seed, int under, int h, float x, float y
+{
+	seed = 113;
+	under = 0;
+	for (i = 0 to N) {
+		seed = seed * 1103515245 + 12345;
+		h = seed >>> 1;
+		x = itof(h) / SCALE;
+		seed = seed * 1103515245 + 12345;
+		h = seed >>> 1;
+		y = itof(h) / SCALE;
+		if (x * x + y * y < 1.0) {
+			under = under + 1;
+		}
+	}
+	printInt(under);
+}

@@ -1,0 +1,41 @@
+ ; Compiled with Impala version 1.0
+
+ ; signatures version=1
+ ; signature extern native printInt() -> unknown @ 4:23
+ N:					! DEFi #20000000 ; signature const N : int @ 6:23
+ SCALE:				! DEFf #2147483648.0 ; signature const SCALE : float @ 8:33
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC		; signature func main() -> void @ 10:15
+ 								PARA *1
+ 					$i:			LOCi
+ 					$seed:		LOCi
+ 					$under:		LOCi
+ 					$h:			LOCi
+ 					$x:			LOCf
+ 					$y:			LOCf
+ ;-----------------------------------------------------------------------------
+ 								MOVi $seed #113 				; seed = 113
+ 								MOVi $under #0 					; under = 0
+ 								MOVi $i #0 						; for (i = 0 to N) 
+ 								GEQi #0 #N @.e0
+ 					.l1:		MULi %0 $seed #1103515245		; seed = seed * 1103515245 + 12345
+ 								ADDi $seed %0 #12345
+ 								SHRu $h $seed #1				; h = seed >>> 1
+ 								iTOf %0 $h #1.0					; x = itof(h) / SCALE
+ 								DIVf $x %0 #SCALE
+ 								MULi %0 $seed #1103515245		; seed = seed * 1103515245 + 12345
+ 								ADDi $seed %0 #12345
+ 								SHRu $h $seed #1				; h = seed >>> 1
+ 								iTOf %0 $h #1.0					; y = itof(h) / SCALE
+ 								DIVf $y %0 #SCALE
+ 								MULf %0 $x $x					; if (x * x + y * y < 1.0) 
+ 								MULf %1 $y $y
+ 								ADDf %0 %0 %1
+ 								GEQf %0 #1.0 @.f2
+ 								ADDi $under $under #1			; under = under + 1
+ 					.f2:		FORi $i #N @.l1					; }
+ 					.e0:		MOVi %1 $under 					; printInt(under)
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 26:17
+ 								RETU   							; }
+
