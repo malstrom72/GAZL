@@ -35,9 +35,9 @@
 
 namespace GAZL {
 
-JitModule JitCompiler::compile(const Instruction* code, UInt functionCount, const UInt* functionTable,
-		const Value* memory) {
-	JitModule module;								// ok() == false until fully built (invalid on any lowering gap)
+void JitCompiler::compile(const Instruction* code, UInt functionCount, const UInt* functionTable,
+		const Value* memory, JitModule& out) {
+	// `out` starts empty (ok() == false); we only populate it once the whole program has lowered and published.
 	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
 	Emitter e;
 	std::vector<Label> entryLabels(functionCount);
@@ -45,23 +45,24 @@ JitModule JitCompiler::compile(const Instruction* code, UInt functionCount, cons
 	for (UInt k = 0; k < functionCount; ++k) { entryLabels[k] = e.newLabel(); }
 	for (UInt ord = 0; ord < functionCount; ++ord) {
 		if (!lowerFunction(e, code, memory, functionTable[ord], o, entryLabels, entryOffset, ord, functionCount)) {
-			return module;							// unsupported opcode → caller should fall back to the interpreter
+			return;								// unsupported opcode → caller should fall back to the interpreter
 		}
 	}
 	const size_t dispatchOffset = emitDispatcher(e, o);
 	e.finalize();
-	void* page = makeExecutable(e.code(), e.wordCount());
-	if (page == 0) { return module; }
+	const size_t words = e.wordCount();
+	void* page = makeExecutable(e.code(), words);
+	if (page == 0) { return; }
 
-	// The page and the ordinal→entry table live for the process (compile-once model; nothing frees them yet — §5.6.1).
 	void** entries = new void*[functionCount];
 	for (UInt ord = 0; ord < functionCount; ++ord) {
 		entries[ord] = reinterpret_cast<char*>(page) + entryOffset[ord] * 4;
 	}
-	module.dispatch = reinterpret_cast<char*>(page) + dispatchOffset * 4;
-	module.nativeEntries = entries;
-	module.codeWords = e.wordCount();
-	return module;
+	out.dispatch = reinterpret_cast<char*>(page) + dispatchOffset * 4;
+	out.nativeEntries = entries;
+	out.codeWords = words;
+	out.ownedPage = page;						// hand the page + table to `out`; its destructor frees them
+	out.ownedWords = words;
 }
 
 } // namespace GAZL

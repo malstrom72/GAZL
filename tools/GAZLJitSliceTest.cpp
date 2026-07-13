@@ -98,7 +98,7 @@ static void* mapExecutable(const uint32_t* words, size_t wordCount) {
 	return p;
 }
 
-static void freeExecutable(void* p, size_t wordCount) {
+static void unmapExec(void* p, size_t wordCount) {
 	if (p != nullptr) {
 		::munmap(p, wordCount * sizeof(uint32_t));
 	}
@@ -272,7 +272,7 @@ int main() {
 		}
 	}
 
-	freeExecutable(code, e.wordCount());
+	unmapExec(code, e.wordCount());
 
 	std::printf("\n%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED", failures,
 			failures == 1 ? "" : "s");

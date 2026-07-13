@@ -260,14 +260,33 @@ struct Offsets {
 	The compiled artifact — the JIT's analogue of the interpreter's {code[], functionTable[]}: an executable page's
 	dispatcher entry plus the ordinal→native-entry table. Immutable and shareable, so one module can back many
 	JitProcessors, on many threads (§5.6). Produced by JitCompiler, consumed by JitProcessor's constructor.
-	(The page is process-lifetime today; a RAII owner/free is the §5.6.1 follow-up.)
+
+	RAII owner: when JitCompiler fills it, the module owns the executable page + the entry table and frees them in its
+	destructor (so `ownedPage != 0`). It must therefore outlive every JitProcessor bound to it, and it is non-copyable
+	(two owners would double-free). Left `ownedPage == 0` it is a non-owning view — used by GAZLJitLowerTest, which drives
+	the substrate by hand and keeps its own storage.
 */
-struct JitModule {
-	void* dispatch;						// native dispatcher trampoline entry
-	void** nativeEntries;				// ordinal -> native function entry (enterCall / indirect CALL_VVC)
-	size_t codeWords;					// emitted 32-bit words (for --jit-stats)
-	JitModule() : dispatch(0), nativeEntries(0), codeWords(0) { }
-	bool ok() const { return dispatch != 0; }		// false if a function used an opcode the backend can't lower
+class JitModule {
+	public:
+		void* dispatch;						// native dispatcher trampoline entry (bound by JitProcessor)
+		void** nativeEntries;				// ordinal -> native function entry (enterCall / indirect CALL_VVC)
+		size_t codeWords;					// emitted 32-bit words (for --jit-stats)
+		void* ownedPage;					// executable page owned here (0 = non-owning view; frees nothing)
+		size_t ownedWords;					// page size in words, for freeExecutable
+
+		JitModule()
+			: dispatch(0)
+			, nativeEntries(0)
+			, codeWords(0)
+			, ownedPage(0)
+			, ownedWords(0) { }
+		~JitModule() { if (ownedPage != 0) { freeExecutable(ownedPage, ownedWords); delete[] nativeEntries; } }
+
+		bool ok() const { return dispatch != 0; }		// false if a function used an opcode the backend can't lower
+
+	private:
+		JitModule(const JitModule&);					// non-copyable — it owns an executable page
+		JitModule& operator=(const JitModule&);
 };
 
 /*
@@ -336,8 +355,8 @@ size_t emitDispatcher(Emitter& e, const Offsets& o);
 	substrate free of a memory backend is what lets the Emitter-only diff test link without one.
 */
 class JitCompiler {
-	public:		JitModule compile(const Instruction* code, UInt functionCount, const UInt* functionTable
-						, const Value* memory);
+	public:		void compile(const Instruction* code, UInt functionCount, const UInt* functionTable
+						, const Value* memory, JitModule& out);		// fills `out`; check out.ok() (mirrors Assembler::finalize's out-params)
 };
 
 } // namespace GAZL

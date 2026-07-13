@@ -82,7 +82,7 @@ static void* mapExecutable(const uint32_t* words, size_t wordCount) {
 	return p;
 }
 
-static void freeExecutable(void* p, size_t wordCount) {
+static void unmapExec(void* p, size_t wordCount) {
 	if (p != nullptr) {
 		::munmap(p, wordCount * sizeof(uint32_t));
 	}
@@ -182,7 +182,7 @@ static void runCheck1(const char* name, void (*emit)(Emitter&), int (*ref)(int),
 	if (!ok) {
 		++failures;
 	}
-	freeExecutable(code, e.wordCount());
+	unmapExec(code, e.wordCount());
 }
 
 static void runCheck2(const char* name, void (*emit)(Emitter&), int (*ref)(int, int), int a, int b) {
@@ -201,7 +201,7 @@ static void runCheck2(const char* name, void (*emit)(Emitter&), int (*ref)(int, 
 	if (!ok) {
 		++failures;
 	}
-	freeExecutable(code, e.wordCount());
+	unmapExec(code, e.wordCount());
 }
 
 int main() {

@@ -44,4 +44,8 @@ void* makeExecutable(const uint32_t* words, size_t wordCount) {
 	return p;
 }
 
+void freeExecutable(void* page, size_t wordCount) {
+	if (page != 0) { ::munmap(page, wordCount * sizeof(uint32_t)); }
+}
+
 } // namespace GAZL
