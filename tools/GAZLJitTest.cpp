@@ -43,11 +43,13 @@ extern "C" {
 	extern const uint32_t ref_movz, ref_movk, ref_movn, ref_mov_reg;
 	extern const uint32_t ref_add, ref_add_imm, ref_sub, ref_sub_imm, ref_subs, ref_subs_imm;
 	extern const uint32_t ref_cmp, ref_cmp_imm, ref_mul, ref_and, ref_orr, ref_eor;
+	extern const uint32_t ref_sdiv, ref_msub, ref_lslv, ref_lsrv, ref_asrv;
 	extern const uint32_t ref_lsl, ref_lsr, ref_asr;
-	extern const uint32_t ref_ldr, ref_str, ref_str_zr, ref_ldr_reg, ref_str_reg;
+	extern const uint32_t ref_ldr, ref_str, ref_str_zr, ref_ldr_reg, ref_str_reg, ref_ldr_regs, ref_str_regs;
 	extern const uint32_t ref_fadd, ref_fmul, ref_fsub, ref_fcvtzs, ref_scvtf, ref_ldr_s, ref_str_s;
+	extern const uint32_t ref_fdiv, ref_fcmp, ref_fmov_sw, ref_ldur_s, ref_stur_s, ref_ldr_sxs, ref_str_sxs;
 	extern const uint32_t ref_ldur, ref_stur, ref_ldr_x, ref_str_x, ref_ldr_xr, ref_adr;
-	extern const uint32_t ref_add_immx, ref_sub_immx, ref_cbnz_x;
+	extern const uint32_t ref_add_immx, ref_sub_immx, ref_cbnz_x, ref_cmp_x, ref_add_x;
 	extern const uint32_t ref_b, ref_bcond_lt, ref_bcond_mi, ref_cbz, ref_cbnz, ref_ret, ref_br, ref_blr;
 	extern const uint32_t ref_bench_v2;
 	extern const uint32_t ref_bench_v2_end;
@@ -120,6 +122,11 @@ int main() {
 	check("cmp",       one([](Emitter& e) { e.cmp(W11, W0); }),             ref_cmp);
 	check("cmp(imm)",  one([](Emitter& e) { e.cmpImm(W11, 1); }),           ref_cmp_imm);
 	check("mul",       one([](Emitter& e) { e.mul(W9, W9, W13); }),         ref_mul);
+	check("sdiv",      one([](Emitter& e) { e.sdiv(W0, W1, W2); }),         ref_sdiv);
+	check("msub",      one([](Emitter& e) { e.msub(W0, W1, W2, W3); }),     ref_msub);
+	check("lslv",      one([](Emitter& e) { e.lslv(W0, W1, W2); }),         ref_lslv);
+	check("lsrv",      one([](Emitter& e) { e.lsrv(W0, W1, W2); }),         ref_lsrv);
+	check("asrv",      one([](Emitter& e) { e.asrv(W0, W1, W2); }),         ref_asrv);
 	check("and",       one([](Emitter& e) { e.and_(W12, W9, W15); }),       ref_and);
 	check("orr",       one([](Emitter& e) { e.orr(W0, W1, W2); }),          ref_orr);
 	check("eor",       one([](Emitter& e) { e.eor(W0, W1, W2); }),          ref_eor);
@@ -132,10 +139,19 @@ int main() {
 	check("str(wzr)",  one([](Emitter& e) { e.strW(WZR, X2, 4); }),         ref_str_zr);
 	check("ldr(reg)",  one([](Emitter& e) { e.ldrWx(W12, X2, W11); }),      ref_ldr_reg);
 	check("str(reg)",  one([](Emitter& e) { e.strWx(W12, X2, W11); }),      ref_str_reg);
+	check("ldr(regs)", one([](Emitter& e) { e.ldrWxs(W0, X1, W2); }),       ref_ldr_regs);
+	check("str(regs)", one([](Emitter& e) { e.strWxs(W0, X1, W2); }),       ref_str_regs);
 
 	check("fadd",      one([](Emitter& e) { e.faddS(S0, S1, S2); }),        ref_fadd);
 	check("fmul",      one([](Emitter& e) { e.fmulS(S0, S1, S2); }),        ref_fmul);
 	check("fsub",      one([](Emitter& e) { e.fsubS(S0, S1, S2); }),        ref_fsub);
+	check("fdiv",      one([](Emitter& e) { e.fdivS(S0, S1, S2); }),        ref_fdiv);
+	check("fcmp",      one([](Emitter& e) { e.fcmpS(S1, S2); }),            ref_fcmp);
+	check("fmov(sw)",  one([](Emitter& e) { e.fmovSW(S0, W1); }),           ref_fmov_sw);
+	check("ldur(s)",   one([](Emitter& e) { e.ldurS(S0, X2, -4); }),        ref_ldur_s);
+	check("stur(s)",   one([](Emitter& e) { e.sturS(S0, X2, -4); }),        ref_stur_s);
+	check("ldr(sxs)",  one([](Emitter& e) { e.ldrSxs(S0, X1, W2); }),       ref_ldr_sxs);
+	check("str(sxs)",  one([](Emitter& e) { e.strSxs(S0, X1, W2); }),       ref_str_sxs);
 	check("fcvtzs",    one([](Emitter& e) { e.fcvtzs(W0, S1); }),           ref_fcvtzs);
 	check("scvtf",     one([](Emitter& e) { e.scvtf(S0, W1); }),            ref_scvtf);
 	check("ldr(s)",    one([](Emitter& e) { e.ldrS(S0, X2, 8); }),          ref_ldr_s);
@@ -150,6 +166,8 @@ int main() {
 	check("add(immx)", one([](Emitter& e) { e.addImmX(X1, X1, 16); }),      ref_add_immx);
 	check("sub(immx)", one([](Emitter& e) { e.subImmX(X4, X4, 16); }),      ref_sub_immx);
 	check("cbnz(x)",   one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.cbnzX(X0, l); }), ref_cbnz_x);
+	check("cmp(x)",    one([](Emitter& e) { e.cmpX(X1, X9); }),             ref_cmp_x);
+	check("add(x)",    one([](Emitter& e) { e.addX(X1, X1, X9); }),         ref_add_x);
 
 	// Self-referential branches (displacement 0): isolates the opcode/cond/register fields from the displacement.
 	check("b",         one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.b(l); }),          ref_b);

@@ -106,6 +106,11 @@ class Emitter {
 		void cmp(Reg wn, Reg wm);								/// `cmp wn, wm` (`subs wzr, wn, wm`)
 		void cmpImm(Reg wn, uint32_t imm12);					/// `cmp wn, #imm12` (`subs wzr, wn, #imm12`)
 		void mul(Reg wd, Reg wn, Reg wm);						/// `mul wd, wn, wm` (`madd wd, wn, wm, wzr`)
+		void sdiv(Reg wd, Reg wn, Reg wm);						/// `sdiv wd, wn, wm` (signed; INT_MIN/-1 → INT_MIN, no trap)
+		void msub(Reg wd, Reg wn, Reg wm, Reg wa);				/// `msub wd, wn, wm, wa` = wa - wn*wm (for modulo)
+		void lslv(Reg wd, Reg wn, Reg wm);						/// `lsl wd, wn, wm` (register count, masked mod 32)
+		void lsrv(Reg wd, Reg wn, Reg wm);						/// `lsr wd, wn, wm`
+		void asrv(Reg wd, Reg wn, Reg wm);						/// `asr wd, wn, wm`
 		void and_(Reg wd, Reg wn, Reg wm);						/// `and wd, wn, wm`
 		void orr(Reg wd, Reg wn, Reg wm);						/// `orr wd, wn, wm`
 		void eor(Reg wd, Reg wn, Reg wm);						/// `eor wd, wn, wm`
@@ -118,6 +123,8 @@ class Emitter {
 		void strW(Reg wt, Reg xn, uint32_t byteOffset);			/// `str wt, [xn, #byteOffset]`
 		void ldrWx(Reg wt, Reg xn, Reg wm);						/// `ldr wt, [xn, wm, uxtw #2]`
 		void strWx(Reg wt, Reg xn, Reg wm);						/// `str wt, [xn, wm, uxtw #2]`
+		void ldrWxs(Reg wt, Reg xn, Reg wm);					/// `ldr wt, [xn, wm, sxtw #2]` (signed index)
+		void strWxs(Reg wt, Reg xn, Reg wm);					/// `str wt, [xn, wm, sxtw #2]`
 		void ldurW(Reg wt, Reg xn, int simm9);					/// `ldur wt, [xn, #simm9]` (signed byte offset, -256..255)
 		void sturW(Reg wt, Reg xn, int simm9);					/// `stur wt, [xn, #simm9]`
 
@@ -130,16 +137,25 @@ class Emitter {
 		// --- 64-bit address arithmetic / test (for the pinned dsp / ipsp pointers) ---
 		void addImmX(Reg xd, Reg xn, uint32_t imm12);			/// `add xd, xn, #imm12` (64-bit)
 		void subImmX(Reg xd, Reg xn, uint32_t imm12);			/// `sub xd, xn, #imm12` (64-bit)
+		void cmpX(Reg xn, Reg xm);								/// `cmp xn, xm` (64-bit, for pointer bounds)
+		void addX(Reg xd, Reg xn, Reg xm);						/// `add xd, xn, xm` (64-bit register add)
 		void cbnzX(Reg xt, Label target);						/// `cbnz xt, target` (64-bit)
 
 		// --- float scalar (single precision) ---
 		void faddS(Reg sd, Reg sn, Reg sm);						/// `fadd sd, sn, sm`
 		void fmulS(Reg sd, Reg sn, Reg sm);						/// `fmul sd, sn, sm`
 		void fsubS(Reg sd, Reg sn, Reg sm);						/// `fsub sd, sn, sm`
-		void fcvtzs(Reg wd, Reg sn);							/// `fcvtzs wd, sn` (FTOI, round toward zero)
+		void fdivS(Reg sd, Reg sn, Reg sm);						/// `fdiv sd, sn, sm`
+		void fcmpS(Reg sn, Reg sm);								/// `fcmp sn, sm` (sets NZCV for a float compare)
+		void fcvtzs(Reg wd, Reg sn);							/// `fcvtzs wd, sn` (FTOI, round toward zero, saturating)
 		void scvtf(Reg sd, Reg wn);								/// `scvtf sd, wn` (ITOF)
+		void fmovSW(Reg sd, Reg wn);							/// `fmov sd, wn` (bit-copy int→float reg; float const load)
 		void ldrS(Reg st, Reg xn, uint32_t byteOffset);			/// `ldr st, [xn, #byteOffset]`
 		void strS(Reg st, Reg xn, uint32_t byteOffset);			/// `str st, [xn, #byteOffset]`
+		void ldurS(Reg st, Reg xn, int simm9);					/// `ldur st, [xn, #simm9]` (signed offset; float frame slot)
+		void sturS(Reg st, Reg xn, int simm9);					/// `stur st, [xn, #simm9]`
+		void ldrSxs(Reg st, Reg xn, Reg wm);					/// `ldr st, [xn, wm, sxtw #2]` (far float slot, signed index)
+		void strSxs(Reg st, Reg xn, Reg wm);					/// `str st, [xn, wm, sxtw #2]`
 
 		// --- branches ---
 		void b(Label target);									/// `b target`

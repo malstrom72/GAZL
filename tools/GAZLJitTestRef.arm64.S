@@ -50,6 +50,16 @@ ENTRY(ref_cmp)		cmp w11, w0
 ENTRY(ref_cmp_imm)	cmp w11, #1
 		GLOBL(ref_mul)
 ENTRY(ref_mul)		mul w9, w9, w13
+		GLOBL(ref_sdiv)
+ENTRY(ref_sdiv)		sdiv w0, w1, w2
+		GLOBL(ref_msub)
+ENTRY(ref_msub)		msub w0, w1, w2, w3
+		GLOBL(ref_lslv)
+ENTRY(ref_lslv)		lsl w0, w1, w2
+		GLOBL(ref_lsrv)
+ENTRY(ref_lsrv)		lsr w0, w1, w2
+		GLOBL(ref_asrv)
+ENTRY(ref_asrv)		asr w0, w1, w2
 		GLOBL(ref_and)
 ENTRY(ref_and)		and w12, w9, w15
 		GLOBL(ref_orr)
@@ -73,6 +83,10 @@ ENTRY(ref_str_zr)	str wzr, [x2, #4]
 ENTRY(ref_ldr_reg)	ldr w12, [x2, w11, uxtw #2]
 		GLOBL(ref_str_reg)
 ENTRY(ref_str_reg)	str w12, [x2, w11, uxtw #2]
+		GLOBL(ref_ldr_regs)
+ENTRY(ref_ldr_regs)	ldr w0, [x1, w2, sxtw #2]
+		GLOBL(ref_str_regs)
+ENTRY(ref_str_regs)	str w0, [x1, w2, sxtw #2]
 
 		GLOBL(ref_fadd)
 ENTRY(ref_fadd)		fadd s0, s1, s2
@@ -80,6 +94,20 @@ ENTRY(ref_fadd)		fadd s0, s1, s2
 ENTRY(ref_fmul)		fmul s0, s1, s2
 		GLOBL(ref_fsub)
 ENTRY(ref_fsub)		fsub s0, s1, s2
+		GLOBL(ref_fdiv)
+ENTRY(ref_fdiv)		fdiv s0, s1, s2
+		GLOBL(ref_fcmp)
+ENTRY(ref_fcmp)		fcmp s1, s2
+		GLOBL(ref_fmov_sw)
+ENTRY(ref_fmov_sw)	fmov s0, w1
+		GLOBL(ref_ldur_s)
+ENTRY(ref_ldur_s)	ldur s0, [x2, #-4]
+		GLOBL(ref_stur_s)
+ENTRY(ref_stur_s)	stur s0, [x2, #-4]
+		GLOBL(ref_ldr_sxs)
+ENTRY(ref_ldr_sxs)	ldr s0, [x1, w2, sxtw #2]
+		GLOBL(ref_str_sxs)
+ENTRY(ref_str_sxs)	str s0, [x1, w2, sxtw #2]
 		GLOBL(ref_fcvtzs)
 ENTRY(ref_fcvtzs)	fcvtzs w0, s1
 		GLOBL(ref_scvtf)
@@ -107,6 +135,10 @@ ENTRY(ref_add_immx)	add x1, x1, #16
 ENTRY(ref_sub_immx)	sub x4, x4, #16
 		GLOBL(ref_cbnz_x)
 ENTRY(ref_cbnz_x)	cbnz x0, .
+		GLOBL(ref_cmp_x)
+ENTRY(ref_cmp_x)	cmp x1, x9
+		GLOBL(ref_add_x)
+ENTRY(ref_add_x)	add x1, x1, x9
 
 // Self-referential branches (displacement 0) isolate the opcode+condition/register fields from the displacement.
 		GLOBL(ref_b)

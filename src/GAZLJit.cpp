@@ -101,6 +101,28 @@ void Emitter::mul(Reg wd, Reg wn, Reg wm) {
 	emit(0x1B000000u | (static_cast<uint32_t>(wm) << 16) | (31u << 10) | (static_cast<uint32_t>(wn) << 5) | wd);
 }
 
+void Emitter::sdiv(Reg wd, Reg wn, Reg wm) {
+	emit(0x1AC00C00u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(wn) << 5) | wd);
+}
+
+void Emitter::msub(Reg wd, Reg wn, Reg wm, Reg wa) {
+	// `msub wd, wn, wm, wa` = wa - wn*wm. Modulo is `msub(rem, quotient, divisor, dividend)`.
+	emit(0x1B008000u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(wa) << 10)
+			| (static_cast<uint32_t>(wn) << 5) | wd);
+}
+
+void Emitter::lslv(Reg wd, Reg wn, Reg wm) {
+	emit(0x1AC02000u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(wn) << 5) | wd);
+}
+
+void Emitter::lsrv(Reg wd, Reg wn, Reg wm) {
+	emit(0x1AC02400u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(wn) << 5) | wd);
+}
+
+void Emitter::asrv(Reg wd, Reg wn, Reg wm) {
+	emit(0x1AC02800u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(wn) << 5) | wd);
+}
+
 void Emitter::and_(Reg wd, Reg wn, Reg wm) {
 	emit(0x0A000000u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(wn) << 5) | wd);
 }
@@ -154,6 +176,15 @@ void Emitter::strWx(Reg wt, Reg xn, Reg wm) {
 	emit(0xB8205800u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(xn) << 5) | wt);
 }
 
+void Emitter::ldrWxs(Reg wt, Reg xn, Reg wm) {
+	// `ldr wt, [xn, wm, sxtw #2]`: option=sxtw(110), S=1 (scale by 4). Signed index (frame slot can be below dsp).
+	emit(0xB860D800u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(xn) << 5) | wt);
+}
+
+void Emitter::strWxs(Reg wt, Reg xn, Reg wm) {
+	emit(0xB820D800u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(xn) << 5) | wt);
+}
+
 void Emitter::ldurW(Reg wt, Reg xn, int simm9) {
 	assert(simm9 >= -256 && simm9 <= 255);							// unscaled signed 9-bit byte offset
 	emit(0xB8400000u | ((static_cast<uint32_t>(simm9) & 0x1FFu) << 12) | (static_cast<uint32_t>(xn) << 5) | wt);
@@ -201,6 +232,14 @@ void Emitter::cbnzX(Reg xt, Label target) {
 	branch(0xB5000000u | xt, target.id, FIXUP_IMM19);
 }
 
+void Emitter::cmpX(Reg xn, Reg xm) {
+	emit(0xEB00001Fu | (static_cast<uint32_t>(xm) << 16) | (static_cast<uint32_t>(xn) << 5));	// subs xzr, xn, xm
+}
+
+void Emitter::addX(Reg xd, Reg xn, Reg xm) {
+	emit(0x8B000000u | (static_cast<uint32_t>(xm) << 16) | (static_cast<uint32_t>(xn) << 5) | xd);
+}
+
 // --- float scalar (single precision) ---
 
 void Emitter::faddS(Reg sd, Reg sn, Reg sm) {
@@ -215,12 +254,24 @@ void Emitter::fsubS(Reg sd, Reg sn, Reg sm) {
 	emit(0x1E203800u | (static_cast<uint32_t>(sm) << 16) | (static_cast<uint32_t>(sn) << 5) | sd);
 }
 
+void Emitter::fdivS(Reg sd, Reg sn, Reg sm) {
+	emit(0x1E201800u | (static_cast<uint32_t>(sm) << 16) | (static_cast<uint32_t>(sn) << 5) | sd);
+}
+
+void Emitter::fcmpS(Reg sn, Reg sm) {
+	emit(0x1E202000u | (static_cast<uint32_t>(sm) << 16) | (static_cast<uint32_t>(sn) << 5));
+}
+
 void Emitter::fcvtzs(Reg wd, Reg sn) {
-	emit(0x1E380000u | (static_cast<uint32_t>(sn) << 5) | wd);		// FTOI, round toward zero
+	emit(0x1E380000u | (static_cast<uint32_t>(sn) << 5) | wd);		// FTOI, round toward zero (saturating)
 }
 
 void Emitter::scvtf(Reg sd, Reg wn) {
 	emit(0x1E220000u | (static_cast<uint32_t>(wn) << 5) | sd);		// ITOF
+}
+
+void Emitter::fmovSW(Reg sd, Reg wn) {
+	emit(0x1E270000u | (static_cast<uint32_t>(wn) << 5) | sd);		// bit-copy Wn -> Sd (no conversion)
 }
 
 void Emitter::ldrS(Reg st, Reg xn, uint32_t byteOffset) {
@@ -231,6 +282,24 @@ void Emitter::ldrS(Reg st, Reg xn, uint32_t byteOffset) {
 void Emitter::strS(Reg st, Reg xn, uint32_t byteOffset) {
 	assert((byteOffset & 3u) == 0 && (byteOffset >> 2) < 0x1000);
 	emit(0xBD000000u | ((byteOffset >> 2) << 10) | (static_cast<uint32_t>(xn) << 5) | st);
+}
+
+void Emitter::ldurS(Reg st, Reg xn, int simm9) {
+	assert(simm9 >= -256 && simm9 <= 255);
+	emit(0xBC400000u | ((static_cast<uint32_t>(simm9) & 0x1FFu) << 12) | (static_cast<uint32_t>(xn) << 5) | st);
+}
+
+void Emitter::sturS(Reg st, Reg xn, int simm9) {
+	assert(simm9 >= -256 && simm9 <= 255);
+	emit(0xBC000000u | ((static_cast<uint32_t>(simm9) & 0x1FFu) << 12) | (static_cast<uint32_t>(xn) << 5) | st);
+}
+
+void Emitter::ldrSxs(Reg st, Reg xn, Reg wm) {
+	emit(0xBC60D800u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(xn) << 5) | st);
+}
+
+void Emitter::strSxs(Reg st, Reg xn, Reg wm) {
+	emit(0xBC20D800u | (static_cast<uint32_t>(wm) << 16) | (static_cast<uint32_t>(xn) << 5) | st);
 }
 
 // --- branches ---
