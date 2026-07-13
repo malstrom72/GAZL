@@ -33,7 +33,11 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <memory>
 #include "../src/GAZL.h"
+#ifdef GAZL_JIT
+	#include "../src/GAZLJit.h"		// JitEngine + compile() — arm64 only; enabled by the build on AArch64 hosts
+#endif
 
 using namespace GAZL;
 
@@ -311,6 +315,7 @@ int main(int argc, const char* argv[]) {
 		std::vector<const char*> pos;
 		int benchRepeat = 0;	// 0 = normal single run; >0 = benchmark mode with this many measured iterations
 		int benchWarmup = 3;	// iterations run and discarded before measuring
+		bool useJit = false;	// --jit: run on the native (arm64) JIT instead of the interpreter (see GAZL_JIT build)
 		for (int i = 0; i < argc; ++i) {
 			const char* a = argv[i];
 			if (i > 0 && a[0] == '-' && a[1] == '-') {
@@ -318,6 +323,8 @@ int main(int argc, const char* argv[]) {
 					benchRepeat = (a[7] == '=') ? atoi(a + 8) : 10;
 				} else if (strncmp(a, "--warmup", 8) == 0) {
 					benchWarmup = (a[8] == '=') ? atoi(a + 9) : benchWarmup;
+				} else if (strcmp(a, "--jit") == 0) {
+					useJit = true;
 				} else {
 					throw CmdException(std::string("Unknown option: ") + a);
 				}
@@ -386,8 +393,32 @@ int main(int argc, const char* argv[]) {
 		}
 		
 		{
-			Processor pmachine(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory, globalsSize
-					, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			// Pick the engine: the native JIT (--jit, arm64) if it can compile the whole program, else the interpreter.
+			// Both are Processor subclasses, so the run loop below is identical (§5.1).
+			std::unique_ptr<Processor> proc;
+		#ifdef GAZL_JIT
+			if (useJit) {
+				std::unique_ptr<JitEngine> eng(new JitEngine(codeSize, code, functionCount, functionTable
+						, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
+				if (compile(*eng, code, functionTable, functionCount)) {
+					std::cerr << "JIT: compiled " << functionCount << " function(s) to native arm64." << std::endl;
+					proc = std::move(eng);
+				} else {
+					std::cerr << "JIT: a function used an opcode the backend can't lower; using the interpreter."
+							<< std::endl;
+				}
+			}
+		#else
+			if (useJit) {
+				std::cerr << "JIT: this build has no JIT support (needs an AArch64 GAZL_JIT build); using the interpreter."
+						<< std::endl;
+			}
+		#endif
+			if (!proc) {
+				proc.reset(new Processor(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory
+						, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0));
+			}
+
 			const char* mainFunctionName = pos.size() >= 3 ? pos[2] : "main";
 			Pointer mainFunction = globals.findFunction(mainFunctionName);
 			if (mainFunction == 0) throw CmdException(std::string("Could not locate function: ") + mainFunctionName);
@@ -396,11 +427,11 @@ int main(int argc, const char* argv[]) {
 			// (Opcode counts can't be recovered here: the print* natives call resetTimeOut(), which clobbers
 			// the cycle budget mid-run. Benchmarks compare wall time of the identical workload instead.)
 			auto runToCompletion = [&]() {
-				Status status = pmachine.enterCall(mainFunction);
+				Status status = proc->enterCall(mainFunction);
 				if (status != OK) throw CmdException(std::string("enterCall returned status ") + std::to_string(status));
 				do {
-					pmachine.resetTimeOut(0x7FFFFFFF);
-					status = pmachine.run();
+					proc->resetTimeOut(0x7FFFFFFF);
+					status = proc->run();
 				} while (status == TIME_OUT);
 				if (status != OK) throw CmdException(std::string("run returned status ") + std::to_string(status));
 			};

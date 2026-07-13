@@ -618,6 +618,7 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 		case OP_MOVE_VV: loadSlot(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); break;
 		case OP_PEEK_VC: e.ldrW(W9, X2, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); storeSlot(e, W9, in.p0.i); break;
 		case OP_POKE_CV: loadSlot(e, W9, in.p1.i); e.strW(W9, X2, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); break;
+		case OP_POKE_CC: matConst(e, W9, in.p1.i); e.strW(W9, X2, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); break;
 		case OP_PEEK_VCV: {
 			Label trap = e.newLabel(), cont = e.newLabel();
 			matConst(e, W9, static_cast<Int>(in.p1.p - MEMORY_OFFSET)); loadSlot(e, W10, in.p2.i); e.add(W9, W9, W10);
@@ -627,11 +628,12 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.bind(cont);
 			break;
 		}
-		case OP_POKE_CVV: {
+		case OP_POKE_CVV: case OP_POKE_CVC: {					// base const, index var; value var (CVV) or const (CVC)
 			Label trap = e.newLabel(), cont = e.newLabel();
 			matConst(e, W9, static_cast<Int>(in.p0.p - MEMORY_OFFSET)); loadSlot(e, W10, in.p1.i); e.add(W9, W9, W10);
 			e.ldrW(W10, X0, o.rwmemsize); e.cmp(W9, W10); e.bcond(HS, trap);
-			loadSlot(e, W11, in.p2.i); e.strWx(W11, X2, W9);
+			if (op == OP_POKE_CVC) { matConst(e, W11, in.p2.i); } else { loadSlot(e, W11, in.p2.i); }
+			e.strWx(W11, X2, W9);
 			e.b(cont); e.bind(trap); e.movn(W0, 2); e.ret();	// ~2 = -3 = BAD_POKE
 			e.bind(cont);
 			break;
@@ -700,12 +702,13 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.bind(cont);
 			break;
 		}
-		case OP_POKE_VVV: {
+		case OP_POKE_VVV: case OP_POKE_VVC: {					// base var, index var; value var (VVV) or const (VVC)
 			Label trap = e.newLabel(), cont = e.newLabel();
 			loadSlot(e, W9, in.p0.i); loadSlot(e, W10, in.p1.i); e.add(W9, W9, W10);	// base + index
 			matConst(e, W10, static_cast<Int>(MEMORY_OFFSET)); e.sub(W9, W9, W10);
 			e.ldrW(W10, X0, o.rwmemsize); e.cmp(W9, W10); e.bcond(HS, trap);
-			loadSlot(e, W11, in.p2.i); e.strWx(W11, X2, W9);
+			if (op == OP_POKE_VVC) { matConst(e, W11, in.p2.i); } else { loadSlot(e, W11, in.p2.i); }
+			e.strWx(W11, X2, W9);
 			e.b(cont); e.bind(trap); e.movn(W0, 2); e.ret();	// BAD_POKE
 			e.bind(cont);
 			break;
@@ -815,7 +818,7 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 			break;
 		}
-		default: return false;									// unsupported opcode
+		default: return false;									// unsupported opcode → caller falls back to the interpreter
 		}
 	}
 

@@ -212,8 +212,8 @@ const int BLOCK_RETRY = 5;						// a native returns this to suspend-and-retry (h
 enum {
 	OP_FUNC = 0x2345 + 0, OP_CALL_VVC = 0x2345 + 1, OP_CALL_CVC = 0x2345 + 2, OP_CALL_NVC = 0x2345 + 3,
 	OP_RETU = 0x2345 + 4, OP_MOVE_VV = 0x2345 + 5, OP_MOVE_VC = 0x2345 + 6, OP_PEEK_VC = 0x2345 + 7,
-	OP_POKE_CV = 0x2345 + 8, OP_PEEK_VVV = 0x2345 + 10, OP_PEEK_VCV = 0x2345 + 11,
-	OP_POKE_VVV = 0x2345 + 12, OP_POKE_CVV = 0x2345 + 13,
+	OP_POKE_CV = 0x2345 + 8, OP_POKE_CC = 0x2345 + 9, OP_PEEK_VVV = 0x2345 + 10, OP_PEEK_VCV = 0x2345 + 11,
+	OP_POKE_VVV = 0x2345 + 12, OP_POKE_CVV = 0x2345 + 13, OP_POKE_VVC = 0x2345 + 14, OP_POKE_CVC = 0x2345 + 15,
 	OP_GETL_VVV = 0x2345 + 16, OP_SETL_VVV = 0x2345 + 17, OP_SETL_VVC = 0x2345 + 18, OP_ADRL = 0x2345 + 19,
 	OP_COPY_VVC = 0x2345 + 63, OP_COPY_VCC = 0x2345 + 64, OP_COPY_CVC = 0x2345 + 65, OP_COPY_CCC = 0x2345 + 66,
 	OP_ABSI = 0x2345 + 20,
@@ -309,6 +309,11 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 // reg, jump to RESUME, loop on TRANSFER (GAZL call/return — no host round-trip), make the one host call on NATIVE_CALL,
 // and return to the host only to suspend (TIME_OUT) or finish. Returns the trampoline's word offset in the buffer.
 size_t emitDispatcher(Emitter& e, const Offsets& o);
+
+// Whole-program driver (GAZLJitCompile.cpp): lower every function, emit the dispatcher, publish an executable page, and
+// bind it to `engine` via setCompiled(). Returns false if any function hits an opcode the backend can't lower yet (the
+// caller should then fall back to the interpreter). arm64 only.
+bool compile(JitEngine& engine, const Instruction* code, const UInt* functionTable, UInt functionCount);
 
 } // namespace GAZL
 
