@@ -22,7 +22,7 @@ if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
 	bash BuildCpp.sh "$mode" native "$out" -std=c++17 -DGAZL_JIT -I.. \
 		GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp ../src/GAZLJitCompile.cpp "$jitmem"
 else
-	bash BuildCpp.sh "$mode" native "$out" -I.. GAZLCmd.cpp ../src/GAZL.cpp
+	bash BuildCpp.sh "$mode" native "$out" -std=c++17 -I.. GAZLCmd.cpp ../src/GAZL.cpp
 fi
 chmod +x "$out" 2>/dev/null || true
 

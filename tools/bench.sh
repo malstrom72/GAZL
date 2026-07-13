@@ -35,7 +35,9 @@ arch=$(uname -m)
 has_jit=0; { [ "$arch" = arm64 ] || [ "$arch" = aarch64 ]; } && has_jit=1
 
 build_bin() {  # $1 = CPP_OPTIONS, $2 = output basename
-	(cd tools && CPP_OPTIONS="$1" bash BuildCpp.sh release native "../output/$2" -I.. GAZLCmd.cpp ../src/GAZL.cpp) \
+	# -std=c++17 is explicit: GAZLCmd uses C++11 lambdas / <chrono> / unique_ptr, and BuildCpp does not set a standard,
+	# so on a compiler whose default is pre-C++11 (older Apple clang) the build fails without it.
+	(cd tools && CPP_OPTIONS="$1" bash BuildCpp.sh release native "../output/$2" -std=c++17 -I.. GAZLCmd.cpp ../src/GAZL.cpp) \
 		>/dev/null 2>&1
 }
 build_o2() {  # -O2 macro binary, with the JIT compiled in on AArch64 (so one binary serves both interp and --jit)
