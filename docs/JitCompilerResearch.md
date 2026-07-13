@@ -1563,6 +1563,36 @@ not starting from zero. None of this code is kept.
 7. **License hygiene:** if embedding a library, AsmJit = Zlib, SLJIT/DynASM = BSD/MIT (all BSD‑2‑compatible); avoid
    LGPL (Lightning, LibJIT) and LLVM‑as‑dependency for the core. Verify Cockos WDL/EEL2 license terms before borrowing
    any stencil ideas from their source.
+8. **BTI / IBT landing pads — opt in, or not?** (§6.2#6, §6.3, §5.4): *open — our choice, low stakes.* We map no
+   CFI‑guarded pages today, so `bti`/`ENDBR64` pads are not required and nothing faults. The pads are cheap (a NOP when
+   the feature is off) and keep us forward‑compatible if a host ever maps our code `PROT_BTI` / under CET‑IBT. They are
+   **not** intrinsic to the transfer encoding: the current dispatcher already enters segments by an indirect `blr`, so
+   guarding would need pads at segment entries regardless, and direct‑threading (§5.4 encoding b) targets the *same*
+   set of entries. So this is a standalone decision — *emit landing pads unconditionally* (belt‑and‑braces, tiny size
+   cost) vs. *only when we actually opt a page into guarding*. Leaning: emit them for forward‑compat, but record it as a
+   deliberate choice, not something the call encoding forces.
+9. **Hardware/CPU exceptions in emitted code — possible? handleable?** (§2.5, §6.1, §7): *stance — prevent by
+   construction; one residual to pin down.* We install **no signal handler** (a plugin must never touch process‑global
+   signal state, §2.5), so the design cannot *handle* a CPU fault — the invariant is that emitted code must **never
+   raise one**; every trap is an explicit software check that returns a `Status` (§5.4). Enumerating what could fault:
+   - **Integer divide** — `#DE` on x64 for `/0` *and* `INT_MIN/-1`; guarded explicitly (§6.1). AArch64 `sdiv`/`msub`
+     never trap. Covered.
+   - **Memory access** — explicit bounds checks and no guard pages mean every access lands inside our own buffer; no
+     `SIGSEGV` if the checks are correct (the whole §7 sandbox argument). Covered.
+   - **Native stack** — the dispatcher owns a single constant‑depth native frame (GAZL call depth lives in the software
+     ipStack, §5.4), so the host stack never grows into its guard page. Covered.
+   - **Misalignment** — frame slots and globals are word‑aligned, and ordinary `ldr`/`str` permit unaligned access on
+     AArch64 anyway (barring `SCTLR.A`). Low risk.
+   - **BTI fault** — only if we opt into guarding and miss a pad (item 8). Our choice.
+   - **FP exceptions** — *the residual.* GAZL inherits the host's FPU mode (§6.3); audio hosts almost always mask FP
+     exceptions (with FTZ/DAZ), so an emitted `fdiv`/invalid won't trap. But a host that *unmasks* them could raise
+     `SIGFPE`/FP trap with no handler of ours. **To decide:** either treat "FP exceptions masked" as a documented host
+     invariant, or defensively mask the `FPCR`/`MXCSR` exception‑enable bits at dispatcher entry (cheap; restore on
+     exit) so we're robust regardless. This is the one place the "never fault" guarantee rests on a host assumption
+     rather than on our own emitted code — worth closing before shipping.
+
+   Net: hardware exceptions are *theoretically* possible but *engineered to be impossible* for everything except
+   host‑unmasked FP, which is the item to investigate and close.
 
 ---
 
