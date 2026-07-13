@@ -37,6 +37,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <sys/mman.h>							// ::munmap (GAZLJit.h no longer pulls this in transitively)
 
 using namespace GAZL;
 using namespace GAZLJitLower;
