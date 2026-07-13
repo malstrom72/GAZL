@@ -24,15 +24,8 @@
 #include "GAZLJit.h"
 
 #include <cassert>
-#include <cstring>
 #include <map>
 #include <set>
-#include <sys/mman.h>
-
-#if defined(__APPLE__)
-	#include <pthread.h>
-	#include <libkern/OSCacheControl.h>
-#endif
 
 namespace GAZL {
 
@@ -388,36 +381,14 @@ void Emitter::finalize() {
 
 // ============================================================================================================
 // JIT lowering, engine, and native dispatcher (declarations in GAZLJit.h). Depends on GAZL.h; the Emitter above
-// does not — so the emit helpers here are file-local (`static`) and only lowerFunction/emitDispatcher/makeExecutable
-// (and the JitEngine methods) are external. None of this references a Processor symbol, so GAZLJit.o still links
-// into the Emitter-only diff test without GAZL.cpp.
+// does not — so the emit helpers here are file-local (`static`) and only lowerFunction/emitDispatcher (and the
+// JitEngine methods) are external. None of this references a Processor symbol, so GAZLJit.o still links into the
+// Emitter-only diff test without GAZL.cpp. (makeExecutable lives in the per-platform GAZLJitMem*.cpp backends.)
 // ============================================================================================================
 
 namespace GAZLJitLower {
 
 using namespace GAZL;
-
-// --- W^X executable memory (spike A1 rung-1 strategy; see docs/JitSpikeA1-Results.md) ---
-
-void* makeExecutable(const uint32_t* words, size_t wordCount) {
-	const size_t bytes = wordCount * sizeof(uint32_t);
-#if defined(__APPLE__)
-	void* p = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
-	if (p == MAP_FAILED) { return nullptr; }
-	const bool toggle = (pthread_jit_write_protect_supported_np() != 0);
-	if (toggle) { pthread_jit_write_protect_np(0); }
-	std::memcpy(p, words, bytes);
-	if (toggle) { pthread_jit_write_protect_np(1); }
-	sys_icache_invalidate(p, bytes);
-#else
-	void* p = ::mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	if (p == MAP_FAILED) { return nullptr; }
-	std::memcpy(p, words, bytes);
-	if (::mprotect(p, bytes, PROT_READ | PROT_EXEC) != 0) { ::munmap(p, bytes); return nullptr; }
-	__builtin___clear_cache(reinterpret_cast<char*>(p), reinterpret_cast<char*>(p) + bytes);
-#endif
-	return p;
-}
 
 // The JitEngine's field-offset gatherer (setup-time; non-virtual, so defining it here pulls no vtable into GAZLJit.o).
 Offsets JitEngine::offsets() const {

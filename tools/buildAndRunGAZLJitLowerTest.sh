@@ -21,10 +21,15 @@ CPP=${CPP_COMPILER:-clang++}
 opt="-O2"
 [ "$mode" = "debug" ] && opt="-O0"
 
+# One executable-memory backend per OS (see src/GAZLJitMem.h); pick the target's.
+jitmem=src/GAZLJitMemPosix.cpp
+[ "$(uname -s)" = "Darwin" ] && jitmem=src/GAZLJitMemMacOS.cpp
+
 mkdir -p output
 "$CPP" $opt -std=c++17 -I src \
 	src/GAZL.cpp \
 	src/GAZLJit.cpp \
+	"$jitmem" \
 	tools/GAZLJitLowerTest.cpp \
 	-o output/GAZLJitLowerTest
 

@@ -44,6 +44,7 @@
 #include <cstddef>
 #include <vector>
 #include "GAZL.h"
+#include "GAZLJitMem.h"			// makeExecutable() — platform-specific backend, architecture-neutral
 
 namespace GAZL {
 
@@ -246,9 +247,8 @@ enum {
 	OP_GOTO = 0x2345 + 89
 };
 
-// --- W^X executable memory (spike A1 rung-1 strategy; see docs/JitSpikeA1-Results.md) ---
-// Copy `wordCount` machine words into a fresh executable page; returns the entry pointer (null on failure).
-void* makeExecutable(const uint32_t* words, size_t wordCount);
+// makeExecutable() is declared in GAZLJitMem.h (platform backend) — still in namespace GAZLJitLower, so callers here
+// and in the tests reach it unchanged.
 
 // Byte offsets of the machine state a segment/dispatcher touches, within the (subclass) engine.
 struct Offsets {
