@@ -137,7 +137,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	JitModule module;
 	jc.compile(gCode, gFunctionCount, gFunctionTable, gMemory, module);
 	if (!module.ok()) { std::printf("  compile failed (unsupported opcode / W^X alloc)\n"); ++failures; return; }
-	std::printf("  compiled %zu native words for %u function(s)\n", module.codeWords, gFunctionCount);
+	std::printf("  compiled %zu native words for %u function(s)\n", module.codeWords(), gFunctionCount);
 
 	for (size_t k = 0; k < nInputs; ++k) {
 		const int n = inputs[k];

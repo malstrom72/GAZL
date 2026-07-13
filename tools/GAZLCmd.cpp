@@ -424,7 +424,7 @@ int main(int argc, const char* argv[]) {
 				if (module.ok()) {
 					if (jitStats) {						// machine-readable line for the benchmark harness
 						const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords * 4)
+						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords() * 4)
 								<< " funcs=" << functionCount << std::endl;
 					} else {
 						std::cerr << "JIT: compiled " << functionCount << " function(s) to native arm64." << std::endl;

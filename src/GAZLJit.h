@@ -259,32 +259,35 @@ struct Offsets {
 /*
 	The compiled artifact — the JIT's analogue of the interpreter's {code[], functionTable[]}: an executable page's
 	dispatcher entry plus the ordinal→native-entry table. Immutable and shareable, so one module can back many
-	JitProcessors, on many threads (§5.6). Produced by JitCompiler, consumed by JitProcessor's constructor.
+	JitProcessors, on many threads (§5.6). Produced by JitCompiler (which fills it), consumed by JitProcessor's ctor.
 
-	RAII owner: when JitCompiler fills it, the module owns the executable page + the entry table and frees them in its
-	destructor (so `ownedPage != 0`). It must therefore outlive every JitProcessor bound to it, and it is non-copyable
-	(two owners would double-free). Left `ownedPage == 0` it is a non-owning view — used by GAZLJitLowerTest, which drives
-	the substrate by hand and keeps its own storage.
+	RAII owner: a filled module owns its executable page + entry table and frees them in its destructor, so it must
+	outlive every JitProcessor bound to it, and it is non-copyable (two owners would double-free). An empty module
+	(default-constructed, or a failed compile) owns nothing — ok() is false and the destructor frees nothing.
 */
 class JitModule {
 	public:
-		void* dispatch;						// native dispatcher trampoline entry (bound by JitProcessor)
-		void** nativeEntries;				// ordinal -> native function entry (enterCall / indirect CALL_VVC)
-		size_t codeWords;					// emitted 32-bit words (for --jit-stats)
-		void* ownedPage;					// executable page owned here (0 = non-owning view; frees nothing)
-		size_t ownedWords;					// page size in words, for freeExecutable
-
 		JitModule()
 			: dispatch(0)
 			, nativeEntries(0)
-			, codeWords(0)
+			, codeWordCount(0)
 			, ownedPage(0)
 			, ownedWords(0) { }
 		~JitModule() { if (ownedPage != 0) { freeExecutable(ownedPage, ownedWords); delete[] nativeEntries; } }
 
-		bool ok() const { return dispatch != 0; }		// false if a function used an opcode the backend can't lower
+		bool ok() const { return dispatch != 0; }			// false if a function used an opcode the backend can't lower
+		size_t codeWords() const { return codeWordCount; }	// emitted 32-bit words (for --jit-stats)
 
 	private:
+		friend class JitCompiler;			// fills the module
+		friend class JitProcessor;			// binds dispatch + nativeEntries
+
+		void* dispatch;						// native dispatcher trampoline entry
+		void** nativeEntries;				// ordinal -> native function entry (enterCall / indirect CALL_VVC)
+		size_t codeWordCount;				// emitted 32-bit words
+		void* ownedPage;					// executable page owned here (0 = empty module; frees nothing)
+		size_t ownedWords;					// page size in words, for freeExecutable
+
 		JitModule(const JitModule&);					// non-copyable — it owns an executable page
 		JitModule& operator=(const JitModule&);
 };
@@ -295,12 +298,14 @@ class JitModule {
 	run()/enterCall(), so it is a polymorphic drop-in — the host loop is identical to the interpreter's.
 */
 class JitProcessor : public Processor {
-	public:		Value* savedDsp;					// dsp saved across a native call (the C1 window is transient)
-				void* nativeFn;						// resolved native fn pointer, blr'd by the native dispatcher
-				void* nativeAfter;					// after-call continuation (dispatcher sets RESUME to it on native OK)
-				void** funcEntries;					// ordinal -> native entry (bound from the JitModule)
-				void* jitDispatch;					// the native dispatcher trampoline (bound from the JitModule)
+	private:
+		Value* savedDsp;					// dsp saved across a native call (the C1 window is transient)
+		void* nativeFn;						// resolved native fn pointer, blr'd by the native dispatcher
+		void* nativeAfter;					// after-call continuation (dispatcher sets RESUME to it on native OK)
+		void** funcEntries;					// ordinal -> native entry (bound from the JitModule)
+		void* jitDispatch;					// the native dispatcher trampoline (bound from the JitModule)
 
+	public:
 		JitProcessor(const JitModule& module, UInt codeSize, const Instruction* code, UInt fnCount, const UInt* fnTable
 					, UInt memSize, Value* mem, UInt globalsSize, UInt constsSize, UInt ipStackSize
 					, CallStackEntry* ipStack, NativeFunc const* nat)

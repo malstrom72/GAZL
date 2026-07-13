@@ -951,7 +951,7 @@ void JitCompiler::compile(const Instruction* code, UInt functionCount, const UIn
 	}
 	out.dispatch = reinterpret_cast<char*>(page) + dispatchOffset * 4;
 	out.nativeEntries = entries;
-	out.codeWords = words;
+	out.codeWordCount = words;
 	out.ownedPage = page;						// hand the page + table to `out`; its destructor frees them
 	out.ownedWords = words;
 }
