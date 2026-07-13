@@ -1,0 +1,84 @@
+ ; Compiled with Impala version 1.0
+
+ ; signatures version=1
+ ; signature extern native printInt() -> unknown @ 5:23
+ M:					! DEFi #100	; signature const M : int @ 7:18
+ SIZE:				! DEFi #10000 ; signature const SIZE : int @ 8:23
+ NITER:				! DEFi #2000 ; signature const NITER : int @ 9:23
+ g:					GLOB *SIZE	; signature array g[SIZE] : unknown @ 11:21
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC		; signature func main() -> void @ 13:15
+ 								PARA *1
+ 					$p:			LOCi
+ 					$i:			LOCi
+ 					$j:			LOCi
+ 					$base:		LOCi
+ 					$omega:		LOCf
+ 					$o4:		LOCf
+ 					$om1:		LOCf
+ 					$sum:		LOCf
+ 					$v:			LOCf
+ ;-----------------------------------------------------------------------------
+ 								MOVi $i #0 						; for (i = 0 to M) 
+ 								GEQi #0 #M @.e0
+ 					.l1:		MOVi $j #0 						; for (j = 0 to M) 
+ 								GEQi #0 #M @.e2
+ 					.l3:		MULi %0 $i #M					; global g[i * M + j] = itof((i * 7 + j * 3) % 97) / 97.0
+ 								ADDi %0 %0 $j
+ 								MULi %1 $i #7
+ 								MULi %2 $j #3
+ 								ADDi %1 %1 %2
+ 								MODi %1 %1 #97
+ 								iTOf %1 %1 #1.0
+ 								DIVf %1 %1 #97.0
+ 								POKE &g %0 %1
+ 								FORi $j #M @.l3					; }
+ 					.e2:		FORi $i #M @.l1					; }
+ 					.e0:		MOVf $omega #1.25 				; omega = 1.25
+ 								DIVf $o4 $omega #4.0			; o4 = omega / 4.0
+ 								SUBf $om1 #1.0 $omega			; om1 = 1.0 - omega
+ 								MOVi $p #0 						; for (p = 0 to NITER) 
+ 								GEQi #0 #NITER @.e4
+ 					.l5:		MOVi $i #1 						; for (i = 1 to M - 1) 
+ 								! SUBi <A> #M #1
+ 								GEQi #1 <A> @.e6
+ 					.l7:		MULi $base $i #M				; base = i * M
+ 								MOVi $j #1 						; for (j = 1 to M - 1) 
+ 								! SUBi <B> #M #1
+ 								GEQi #1 <B> @.e8
+ 					.l9:		ADDi %1 $base $j				; v = o4 * ( (float) global g[base + j - M] + (float) global g[base + j + M]
+ 								SUBi %1 %1 #M
+ 								ADDi %0 $base $j
+ 								ADDi %0 %0 #M
+ 								PEEK %1 &g %1
+ 								PEEK %0 &g %0
+ 								ADDi %2 $base $j
+ 								SUBi %2 %2 #1
+ 								ADDf %1 %1 %0
+ 								PEEK %2 &g %2
+ 								ADDi %0 $base $j
+ 								ADDi %0 %0 #1
+ 								ADDf %1 %1 %2
+ 								PEEK %0 &g %0
+ 								ADDf %1 %1 %0
+ 								ADDi %0 $base $j
+ 								PEEK %0 &g %0
+ 								MULf %1 $o4 %1
+ 								MULf %0 $om1 %0
+ 								ADDf $v %1 %0
+ 								ADDi %1 $base $j				; global g[base + j] = v
+ 								POKE &g %1 $v
+ 								FORi $j <B> @.l9				; }
+ 					.e8:		FORi $i <A> @.l7				; }
+ 					.e6:		FORi $p #NITER @.l5				; }
+ 					.e4:		MOVf $sum #0.0 					; sum = 0.0
+ 								MOVi $i #0 						; for (i = 0 to SIZE) 
+ 								GEQi #0 #SIZE @.e10
+ 					.l11:		PEEK %1 &g $i					; sum = sum + (float) global g[i]
+ 								ADDf $sum $sum %1
+ 								FORi $i #SIZE @.l11				; }
+ 					.e10:		fTOi %1 $sum #1000.0			; printInt(ftoi(sum * 1000.0))
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 43:30
+ 								RETU   							; }
+
