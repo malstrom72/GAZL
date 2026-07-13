@@ -1,0 +1,61 @@
+ ; Compiled with Impala version 1.0
+
+ ; signatures version=1
+ ; signature extern native printInt() -> unknown @ 4:23
+ W:					! DEFi #800	; signature const W : int @ 6:18
+ H:					! DEFi #600	; signature const H : int @ 7:18
+ MAXITER:			! DEFi #256	; signature const MAXITER : int @ 8:24
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC		; signature func main() -> void @ 10:15
+ 								PARA *1
+ 					$px:		LOCi
+ 					$py:		LOCi
+ 					$iter:		LOCi
+ 					$total:		LOCi
+ 					$cx:		LOCf
+ 					$cy:		LOCf
+ 					$zx:		LOCf
+ 					$zy:		LOCf
+ 					$zx2:		LOCf
+ 					$zy2:		LOCf
+ ;-----------------------------------------------------------------------------
+ 								MOVi $total #0 					; total = 0
+ 								MOVi $py #0 					; for (py = 0 to H) 
+ 								GEQi #0 #H @.e0
+ 					.l1:		iTOf %0 $py #1.0				; cy = itof(py) / itof(H) * 2.0 - 1.0
+ 								! iTOf <A> #H #1.0
+ 								DIVf %0 %0 <A>
+ 								MULf %0 %0 #2.0
+ 								SUBf $cy %0 #1.0
+ 								MOVi $px #0 					; for (px = 0 to W) 
+ 								GEQi #0 #W @.e2
+ 					.l3:		iTOf %0 $px #1.0				; cx = itof(px) / itof(W) * 3.5 - 2.5
+ 								! iTOf <A> #W #1.0
+ 								DIVf %0 %0 <A>
+ 								MULf %0 %0 #3.5
+ 								SUBf $cx %0 #2.5
+ 								MOVf $zx #0.0 					; zx = 0.0
+ 								MOVf $zy #0.0 					; zy = 0.0
+ 								MOVf $zx2 #0.0 					; zx2 = 0.0
+ 								MOVf $zy2 #0.0 					; zy2 = 0.0
+ 								MOVi $iter #0 					; iter = 0
+ 					.l4:		GEQi $iter #MAXITER @.e6		; while (iter < MAXITER && zx2 + zy2 <= 4.0) 
+ 								ADDf %0 $zx2 $zy2
+ 								GRTf %0 #4.0 @.e6
+ 								MULf %0 #2.0 $zx				; zy = 2.0 * zx * zy + cy
+ 								MULf %0 %0 $zy
+ 								ADDf $zy %0 $cy
+ 								SUBf %0 $zx2 $zy2				; zx = zx2 - zy2 + cx
+ 								ADDf $zx %0 $cx
+ 								MULf $zx2 $zx $zx				; zx2 = zx * zx
+ 								MULf $zy2 $zy $zy				; zy2 = zy * zy
+ 								ADDi $iter $iter #1				; iter = iter + 1
+ 								GOTO @.l4  						; }
+ 					.e6:		ADDi $total $total $iter		; total = total + iter
+ 								FORi $px #W @.l3				; }
+ 					.e2:		FORi $py #H @.l1				; }
+ 					.e0:		MOVi %1 $total 					; printInt(total)
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 33:17
+ 								RETU   							; }
+
