@@ -750,84 +750,80 @@ table above, for calls.
 `STATUS` and returns through the shared EXIT (`OK`, `TIME_OUT`, a trap code); `run()` behaves exactly as today.
 `--no-jit` or a failed executable‑memory probe feeds the same `Instruction[]` to the interpreter — no other difference.
 
-### 5.6.1 Host API & compiled-module lifetime (open — layers + ownership)
+### 5.6.1 Host API — the JitCompiler / JitModule / JitProcessor split (implemented)
 
-§5.6 fixes the *mechanism and timing* (whole program, once, at load, Emit -> Fixup -> Publish). It does **not** yet fix
-the *host-facing API*: how a host asks for native code, and who owns the artifact it gets back. Two impulses pull in
-different directions and we want **both**, cleanly layered rather than merged:
+§5.6 fixes the mechanism and timing; this fixes the host-facing API. The shape deliberately mirrors the interpreter's
+`Assembler` / `Processor` split: a *producer* class turns the program into an artifact, and a *consumer* engine runs the
+artifact over its own state. So the two engines are structurally symmetric (§5.1), and the JIT is just a second
+producer/consumer pair of the same form (`Instruction[]` -> machine code instead of text -> `Instruction[]`).
 
-- **Explicit, low-level control** over each step (build a buffer, lower selected functions, publish, bind) — for tests,
-  tooling, experiments, and any future partial/lazy scheme.
-- **A one-call "just switch on the JIT" front door** that keeps the *exact same* host calls (`enterCall` / `run` /
-  `resetTimeOut` on a `Processor*`) and silently falls back to the interpreter when the JIT can't run: a non-JIT arch, a
-  failed W^X probe, or an opcode the backend can't lower yet.
-
-**What exists today (arm64 MVP).** Both impulses are present, but ad hoc:
-
-- *Substrate (explicit):* `Emitter` -> `lowerFunction` -> `emitDispatcher` -> `makeExecutable` ->
-  `JitEngine::setCompiled(dispatchAddr, entries)`. `GAZLJitLowerTest` drives these by hand.
-- *Convenience (one call):* `GAZL::compile(engine, code, fnTable, fnCount)` wraps all of it; `JitEngine` is a polymorphic
-  `Processor*` drop-in; `GAZLCmd --jit` calls `compile()` and falls back to the interpreter on `false`.
-
-Gaps: the executable page and the `ordinal -> entry` table are **leaked for the process** (no owner); `compile()`
-currently lives in a **separate `GAZLJitCompile.cpp`** only so the Emitter-only assemble-diff test still links without a
-memory backend; and "did it fall back, and why" is just a `bool`.
-
-**The three decisions.**
-
-**(1) Keep two public layers (recommended), not one.** Expose the substrate *and* a thin facade; the facade is written
-purely in terms of the substrate and adds no private capability. Rejected alternatives: facade-only (loses the explicit
-control we specifically want for tooling and differential tests) and substrate-only (every host re-implements the
-publish + bind + fallback dance).
-
-**(2) Introduce an owning `CompiledModule` handle (recommended).** A move-only RAII value that owns the published page
-**and** the `ordinal -> entry` table (plus the dispatcher address), and unmaps the page in its destructor — killing the
-current leak and removing the `new void*[]` in the driver. It is **separable from the engine**: `compileModule()`
-produces it once; an engine `bind()`s a non-owning view of it. That matches both §5.1 ("engine chosen once at load")
-*and* the test pattern of many fresh engines sharing one compiled artifact. The module must outlive the engines bound to
-it (documented, and natural — it *is* the program's code). This needs a `freeExecutable(page, words)` counterpart in the
-`GAZLJitMem*` backends (the unmap TODO already noted in `GAZLJitMem.h`).
+| interpreter | JIT |
+|---|---|
+| `Assembler` (text -> `Instruction[]`) | `JitCompiler` (`Instruction[]` -> machine code) |
+| artifact: `code[]` + `functionTable[]` | artifact: `JitModule` {dispatch, native-entry table} |
+| `Processor` | `JitProcessor` (a `Processor` subclass) |
+| shared ABI: the `Instruction`/`Value` format | shared ABI: `JitProcessor::layout()` (the ctx field offsets) |
 
 ```cpp
 namespace GAZL {
-    class CompiledModule {                 // move-only; frees the page in ~CompiledModule
-    public:
-        bool ok() const;                   // false if a function hit an unlowerable opcode, or publish failed
-        // dispatch address + entry table are internal; consumed via JitEngine::bind()
+    // The compiled artifact -- the JIT's analogue of {code[], functionTable[]}. Immutable and shareable: one module can
+    // back many JitProcessors, on many threads (§5.6). The page is process-lifetime today (see "still open" below).
+    struct JitModule {
+        void* dispatch; void** nativeEntries; size_t codeWords;
+        bool ok() const;                       // false if a function used an opcode the backend can't lower
     };
-    // One-call front door: lower the whole program -> publish -> module (arm64; ok()==false on any gap).
-    CompiledModule compileModule(const Instruction* code, const UInt* fnTable, UInt fnCount);
 
-    class JitEngine : public Processor {
-        void bind(const CompiledModule& m);   // replaces setCompiled(rawDispatch, rawEntries)
+    // Producer -- mirrors Assembler; takes the PROGRAM, never a processor.
+    class JitCompiler {
+        JitModule compile(const Instruction* code, UInt functionCount, const UInt* functionTable, const Value* memory);
+    };
+
+    // Consumer / engine -- mirrors Processor; constructed FROM a module plus the same run state.
+    class JitProcessor : public Processor {
+        JitProcessor(const JitModule& module, /* the usual Processor ctor args */);
+        static Offsets layout();               // the field ABI JitCompiler bakes into the code -- instance-free
+        virtual Status enterCall(Pointer); virtual Status run();
     };
 }
 ```
 
-**(3) A `makeProcessor()` facade owns the fallback policy (recommended).** The "magic switch": one call returns a ready
-`Processor*` — JIT-backed if the program compiled on this arch, else the interpreter — so the host's `enterCall` / `run`
-loop is byte-for-byte identical either way. A host that *wants* to know (or wants to reuse a module across engines) drops
-to the layer below, calls `compileModule()` itself, checks `.ok()`, and decides. So fallback is explicit at whatever
-layer the host chose.
+Host usage is the interpreter's, plus two lines:
 
 ```cpp
-// JIT engine bound to `module` if module.ok() and this build has a backend; else an interpreter. Same Processor* API.
-std::unique_ptr<Processor> makeProcessor(/* the usual Processor ctor args */,
-                                         const CompiledModule* module /* = nullptr -> interpreter */);
+JitCompiler  jc;
+JitModule    mod = jc.compile(code, functionCount, functionTable, memory);      // no engine
+JitProcessor p(mod, codeSize, code, functionCount, functionTable, MEM, memory, ...);
+p.enterCall(main); do { p.resetTimeOut(N); } while (p.run() == TIME_OUT);        // identical to Processor
 ```
 
-The `CompiledModule` is passed in, not created inside, so its lifetime belongs to the host and it can be shared or cached.
+**Why this shape.**
 
-**Where the code lands (this folds `GAZLJitCompile.cpp` away).** With ownership in `CompiledModule`, the
-publish + bind logic moves into `GAZLJit.cpp` next to the Emitter and lowering, and the temporary `GAZLJitCompile.cpp`
-disappears. Consequence to accept: because `compileModule()` calls `makeExecutable()`, `GAZLJit.o` then references a
-`GAZLJitMem*` backend, so the Emitter-only assemble-diff test must link one (`GAZLJitMemPosix.cpp` suffices). That trades
-the "Emitter links against nothing" property for one fewer file; since the facade is the intended home, that is the right
-trade. (Alternative, if keeping the Emitter TU standalone matters more: leave the publish layer in its own `.cpp` — i.e.
-keep a `GAZLJitCompile.cpp` after all. Pick which property is worth more.)
+- **No engine in `compile()`.** Compilation depends only on the program (`code` + `functionTable` + the const `memory`
+  image, read only for `SWCH` jump tables) and the static `layout()` ABI. `JitCompiler` never sees a processor -- exactly
+  as `Assembler` never sees a `Processor`.
+- **`layout()` is static.** The ctx field offsets are instance-independent (single inheritance, fixed struct), computed
+  with `offsetof`, so there is no reason for the compiler to hold an engine. It is the JIT's equivalent of "the
+  `Instruction` binary format" that `Assembler` and `Processor` both agree on.
+- **Two layers, both public.** The low-level substrate (`Emitter` -> `lowerFunction` -> `emitDispatcher` ->
+  `makeExecutable`) stays exposed for tooling and differential tests -- `GAZLJitLowerTest` drives it by hand and wraps the
+  result in a `JitModule`. `JitCompiler` is the thin facade over that substrate; `GAZLCmd --jit` uses the facade.
+- **Fallback lives in the caller.** `JitModule::ok()` is `false` on an unlowerable opcode (or a failed W^X publish); the
+  host checks it and constructs a `Processor` instead, so the run loop is byte-identical either way. A one-call
+  `makeProcessor(..., module)` helper that hides that choice is an easy future convenience -- not needed yet.
 
-**Out of scope for v1 (noted).** Persisting/caching a `CompiledModule` across loads, and lazy or per-function
-compilation. The handle makes both *possible* later without changing the facade; v1 stays compile-once, whole-module.
+**File placement.** `JitCompiler` lives in its own translation unit (`GAZLJitCompiler.cpp`) because it pulls in
+`makeExecutable()`; `GAZLJit.cpp` (the Emitter + lowering substrate + `JitProcessor::layout()`) stays free of a memory
+backend, so the Emitter-only assemble-diff test still links without one. (This resolves the earlier "fold it into
+GAZLJit.cpp?" question in favour of keeping the standalone-Emitter property.)
+
+**Still open (follow-ups, not blocking).**
+
+- **Page ownership.** `JitModule` currently holds raw pointers; the executable page and the `new void*[]` entry table are
+  leaked for the process (fine for the compile-once model). Making `JitModule` a move-only RAII owner that frees on
+  destruction needs a `freeExecutable(page, words)` counterpart in the `GAZLJitMem*` backends (the unmap TODO already
+  noted in `GAZLJitMem.h`).
+- **Caching / lazy or per-function compilation.** Still out of scope for v1; the `JitModule` handle makes both possible
+  later without changing the API.
 
 
 ### 5.7 v2 register allocation — registers as a write‑back cache of the frame (committed, staged)
