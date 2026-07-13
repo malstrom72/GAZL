@@ -316,6 +316,7 @@ int main(int argc, const char* argv[]) {
 		int benchRepeat = 0;	// 0 = normal single run; >0 = benchmark mode with this many measured iterations
 		int benchWarmup = 3;	// iterations run and discarded before measuring
 		bool useJit = false;	// --jit: run on the native (arm64) JIT instead of the interpreter (see GAZL_JIT build)
+		bool jitStats = false;	// --jit-stats: implies --jit; print `jitstats compile_ms=.. code_bytes=.. funcs=..`
 		bool noLibm = false;	// --no-libm: don't register the atan2/sqrt/log natives (for programs that define their own)
 		for (int i = 0; i < argc; ++i) {
 			const char* a = argv[i];
@@ -326,6 +327,8 @@ int main(int argc, const char* argv[]) {
 					benchWarmup = (a[8] == '=') ? atoi(a + 9) : benchWarmup;
 				} else if (strcmp(a, "--jit") == 0) {
 					useJit = true;
+				} else if (strcmp(a, "--jit-stats") == 0) {
+					useJit = true; jitStats = true;
 				} else if (strcmp(a, "--no-libm") == 0) {
 					noLibm = true;
 				} else {
@@ -411,8 +414,18 @@ int main(int argc, const char* argv[]) {
 			if (useJit) {
 				std::unique_ptr<JitEngine> eng(new JitEngine(codeSize, code, functionCount, functionTable
 						, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
-				if (compile(*eng, code, functionTable, functionCount)) {
-					std::cerr << "JIT: compiled " << functionCount << " function(s) to native arm64." << std::endl;
+				size_t codeWords = 0;
+				const auto t0 = std::chrono::steady_clock::now();
+				const bool compiled = compile(*eng, code, functionTable, functionCount, &codeWords);
+				const auto t1 = std::chrono::steady_clock::now();
+				if (compiled) {
+					if (jitStats) {						// machine-readable line for the benchmark harness
+						const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (codeWords * 4)
+								<< " funcs=" << functionCount << std::endl;
+					} else {
+						std::cerr << "JIT: compiled " << functionCount << " function(s) to native arm64." << std::endl;
+					}
 					proc = std::move(eng);
 				} else {
 					std::cerr << "JIT: a function used an opcode the backend can't lower; using the interpreter."
@@ -420,6 +433,7 @@ int main(int argc, const char* argv[]) {
 				}
 			}
 		#else
+			(void)jitStats;
 			if (useJit) {
 				std::cerr << "JIT: this build has no JIT support (needs an AArch64 GAZL_JIT build); using the interpreter."
 						<< std::endl;

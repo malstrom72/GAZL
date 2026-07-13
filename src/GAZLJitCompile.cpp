@@ -33,7 +33,8 @@
 
 namespace GAZL {
 
-bool compile(JitEngine& engine, const Instruction* code, const UInt* functionTable, UInt functionCount) {
+bool compile(JitEngine& engine, const Instruction* code, const UInt* functionTable, UInt functionCount,
+		size_t* outCodeWords) {
 	const Offsets o = engine.offsets();					// field offsets are instance-independent — any engine will do
 	Emitter e;
 	std::vector<Label> entryLabels(functionCount);
@@ -48,6 +49,7 @@ bool compile(JitEngine& engine, const Instruction* code, const UInt* functionTab
 	e.finalize();
 	void* page = makeExecutable(e.code(), e.wordCount());
 	if (page == nullptr) { return false; }
+	if (outCodeWords != 0) { *outCodeWords = e.wordCount(); }
 
 	// The page and the ordinal->entry table live for the process (compile-once model; nothing frees them).
 	void** funcEntries = new void*[functionCount];

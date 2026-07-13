@@ -318,8 +318,10 @@ size_t emitDispatcher(Emitter& e, const Offsets& o);
 
 // Whole-program driver (GAZLJitCompile.cpp): lower every function, emit the dispatcher, publish an executable page, and
 // bind it to `engine` via setCompiled(). Returns false if any function hits an opcode the backend can't lower yet (the
-// caller should then fall back to the interpreter). arm64 only.
-bool compile(JitEngine& engine, const Instruction* code, const UInt* functionTable, UInt functionCount);
+// caller should then fall back to the interpreter). arm64 only. If `outCodeWords` is non-null it receives the number of
+// emitted 32-bit machine words on success (for --jit-stats: code_bytes = words * 4).
+bool compile(JitEngine& engine, const Instruction* code, const UInt* functionTable, UInt functionCount,
+		size_t* outCodeWords = 0);
 
 } // namespace GAZL
 

@@ -82,22 +82,32 @@ bench_min() {  # $1 = binary basename, $2 = gazl, $3.. = extra flags; echoes min
 	"$bin" "$@" "$gazl" main --bench="$iters" --warmup="$warmup" 2>/dev/null \
 		| grep '^bench' | sed -n 's/.*min_ms=\([^	]*\).*/\1/p'
 }
+jit_stats() {  # $1 = gazl, $2.. = extra flags; echoes "compile_ms code_bytes" (empty => fell back to interpreter)
+	local gazl="$1"; shift
+	./output/GAZLCmd_o2 --jit-stats "$@" "$gazl" main </dev/null 2>&1 >/dev/null \
+		| sed -n 's/^jitstats compile_ms=\([^ ]*\) code_bytes=\([^ ]*\).*/\1 \2/p'
+}
 run_macro() {  # $1 = label, $2 = gazl, $3.. = extra flags (e.g. --no-libm)
 	local label="$1" gazl="$2"; shift 2
-	if [ ! -f "$gazl" ]; then printf '%-16s %12s\n' "$label" "MISSING"; return; fi
-	local i j spd
-	i=$(bench_min GAZLCmd_o2 "$gazl" "$@")
-	if [ -z "$i" ]; then printf '%-16s %12s\n' "$label" "FAILED"; return; fi
-	if [ "$has_jit" = 1 ]; then j=$(bench_min GAZLCmd_o2 "$gazl" --jit "$@"); fi
-	if [ "$has_jit" = 1 ] && [ -n "$j" ]; then
-		spd=$(awk "BEGIN{printf \"%.2fx\", $i/$j}")
-		printf '%-16s %12.3f %12.3f %10s\n' "$label" "$i" "$j" "$spd"
-	else
-		printf '%-16s %12.3f %12s %10s\n' "$label" "$i" "n/a" "-"
+	if [ ! -f "$gazl" ]; then printf '%-12s %10s\n' "$label" "MISSING"; return; fi
+	local i; i=$(bench_min GAZLCmd_o2 "$gazl" "$@")
+	if [ -z "$i" ]; then printf '%-12s %10s\n' "$label" "FAILED"; return; fi
+	if [ "$has_jit" != 1 ]; then
+		printf '%-12s %10.3f %10s %8s %10s %8s\n' "$label" "$i" "n/a" "-" "n/a" "n/a"; return
 	fi
+	local j st cms ckb spd
+	j=$(bench_min GAZLCmd_o2 "$gazl" --jit "$@")
+	st=$(jit_stats "$gazl" "$@")
+	if [ -z "$st" ]; then					# no jitstats line -> the program fell back (full-JIT assertion failed)
+		printf '%-12s %10.3f %10s %8s %10s %8s\n' "$label" "$i" "n/a" "FELLBACK" "-" "-"; return
+	fi
+	cms=$(echo "$st" | cut -d' ' -f1)
+	ckb=$(awk "BEGIN{printf \"%.1f\", $(echo "$st" | cut -d' ' -f2)/1024}")
+	spd=$([ -n "$j" ] && awk "BEGIN{printf \"%.2fx\", $i/$j}" || echo "-")
+	printf '%-12s %10.3f %10.3f %8s %10s %8s\n' "$label" "$i" "${j:-n/a}" "$spd" "$cms" "$ckb"
 }
-printf '\n%-16s %12s %12s %10s\n' "macro -O2" "interp_ms" "jit_ms" "speedup"
-printf '%-16s %12s %12s %10s\n' "----------------" "------------" "------------" "----------"
+printf '\n%-12s %10s %10s %8s %10s %8s\n' "macro -O2" "interp_ms" "jit_ms" "speedup" "compile_ms" "code_KB"
+printf '%-12s %10s %10s %8s %10s %8s\n' "------------" "----------" "----------" "--------" "----------" "--------"
 run_macro "perfTest"  "tests/impala/golden/perfTest.gazl"  --no-libm
 run_macro "perfTest1" "tests/impala/golden/perfTest1.gazl"
 run_macro "perfTest2" "tests/impala/golden/perfTest2.gazl"
