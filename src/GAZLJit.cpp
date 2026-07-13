@@ -582,8 +582,9 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 		if (loopWeight.count(j)) { e.subsImm(W3, W3, loopWeight[j]); e.bcond(MI, suspendL[j]); }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
-		if (op == OP_FUNC) { continue; }							// prologue stack/fuel check omitted for the prototype
-		else if (op == OP_RETU) {
+		switch (op) {
+		case OP_FUNC: continue;	// prologue stack/fuel check omitted for the prototype
+		case OP_RETU: {
 			Label notNative = e.newLabel();
 			e.subImmX(X4, X4, 16);								// ipsp-- ; pop {cont, dsp}
 			e.ldrX(X9, X4, 0); e.ldrX(X1, X4, 8);				// cont ; caller dsp (or 0 = native marker)
@@ -594,8 +595,9 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.bind(notNative);
 			writebackState(e, o);
 			e.strX(X9, X0, o.resume); e.movz(W0, TRANSFER); e.ret();	// GAZL return: RESUME = cont, transfer
+			break;
 		}
-		else if (op == OP_CALL_CVC) {
+		case OP_CALL_CVC: {
 			const UInt callee = in.p0.p - IP_OFFSET;			// ordinal known at compile time → direct
 			const UInt window = static_cast<UInt>(in.p1.i);
 			Label after = e.newLabel(), iok = e.newLabel();
@@ -607,8 +609,9 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.adr(X9, entryLabels[callee]); e.strX(X9, X0, o.resume);	// RESUME = callee entry
 			e.movz(W0, TRANSFER); e.ret();
 			e.bind(after); reloadState(e, o);					// after the call returns: fresh segment → reload
+			break;
 		}
-		else if (op == OP_CALL_VVC) {
+		case OP_CALL_VVC: {
 			const UInt window = static_cast<UInt>(in.p1.i);		// ordinal from a slot at runtime → resolve + bounds-check
 			Label after = e.newLabel(), trap = e.newLabel(), iok = e.newLabel();
 			e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);	// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
@@ -624,8 +627,9 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.strX(X9, X0, o.resume); e.movz(W0, TRANSFER); e.ret();
 			e.bind(trap); e.movn(W0, 3); e.ret();				// ~3 = -4 = BAD_CALL (terminal)
 			e.bind(after); reloadState(e, o);
+			break;
 		}
-		else if (op == OP_CALL_NVC) {
+		case OP_CALL_NVC: {
 			const UInt ordinal = static_cast<UInt>(in.p0.i);	// native ordinal (C0)
 			const UInt window = static_cast<UInt>(in.p1.i);		// param-window offset (C1)
 			Label after = e.newLabel(), hot = e.newLabel(), callReload = e.newLabel();
@@ -639,28 +643,31 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.movz(W0, NATIVE_CALL); e.ret();					// hand the host call to the dispatcher
 			nativeReloads.push_back(std::make_pair(callReload, hot));
 			e.bind(after); reloadState(e, o);
+			break;
 		}
-		else if (op == OP_MOVE_VC) { matConst(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); }
-		else if (op == OP_MOVE_VV) { loadSlot(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); }
-		else if (op == OP_PEEK_VC) { e.ldrW(W9, X2, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); storeSlot(e, W9, in.p0.i); }
-		else if (op == OP_POKE_CV) { loadSlot(e, W9, in.p1.i); e.strW(W9, X2, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); }
-		else if (op == OP_PEEK_VCV) {							// checked read: ui=(base-OFF)+index; ui<memorySize else BAD_PEEK
+		case OP_MOVE_VC: matConst(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); break;
+		case OP_MOVE_VV: loadSlot(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); break;
+		case OP_PEEK_VC: e.ldrW(W9, X2, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); storeSlot(e, W9, in.p0.i); break;
+		case OP_POKE_CV: loadSlot(e, W9, in.p1.i); e.strW(W9, X2, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); break;
+		case OP_PEEK_VCV: {
 			Label trap = e.newLabel(), cont = e.newLabel();
 			matConst(e, W9, static_cast<Int>(in.p1.p - MEMORY_OFFSET)); loadSlot(e, W10, in.p2.i); e.add(W9, W9, W10);
 			e.ldrW(W10, X0, o.memsize); e.cmp(W9, W10); e.bcond(HS, trap);
 			e.ldrWx(W11, X2, W9); storeSlot(e, W11, in.p0.i);
 			e.b(cont); e.bind(trap); e.movn(W0, 1); e.ret();	// ~1 = -2 = BAD_PEEK
 			e.bind(cont);
+			break;
 		}
-		else if (op == OP_POKE_CVV) {							// checked write: ui=(base-OFF)+index; ui<rwMemorySize else BAD_POKE
+		case OP_POKE_CVV: {
 			Label trap = e.newLabel(), cont = e.newLabel();
 			matConst(e, W9, static_cast<Int>(in.p0.p - MEMORY_OFFSET)); loadSlot(e, W10, in.p1.i); e.add(W9, W9, W10);
 			e.ldrW(W10, X0, o.rwmemsize); e.cmp(W9, W10); e.bcond(HS, trap);
 			loadSlot(e, W11, in.p2.i); e.strWx(W11, X2, W9);
 			e.b(cont); e.bind(trap); e.movn(W0, 2); e.ret();	// ~2 = -3 = BAD_POKE
 			e.bind(cont);
+			break;
 		}
-		else if (op == OP_GETL_VVV) {							// checked stack-local read: dst = (dsp+C1)[index], index < stackLeft
+		case OP_GETL_VVV: {
 			Label trap = e.newLabel(), cont = e.newLabel();
 			e.ldrX(X9, X0, o.dsend); e.sub(W9, W9, W1); e.lsrImm(W9, W9, 2);	// (dataStackEnd - dsp) in Value units
 			matConst(e, W10, in.p1.i); e.sub(W9, W9, W10);					// limit = that - C1
@@ -669,8 +676,9 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.ldrWxs(W11, X1, W11); storeSlot(e, W11, in.p0.i);
 			e.b(cont); e.bind(trap); e.movn(W0, 1); e.ret();
 			e.bind(cont);
+			break;
 		}
-		else if (op == OP_SETL_VVV || op == OP_SETL_VVC) {		// checked stack-local write: (dsp+C0)[index] = value
+		case OP_SETL_VVV: case OP_SETL_VVC: {
 			Label trap = e.newLabel(), cont = e.newLabel();
 			e.ldrX(X9, X0, o.dsend); e.sub(W9, W9, W1); e.lsrImm(W9, W9, 2);
 			matConst(e, W10, in.p0.i); e.sub(W9, W9, W10);					// limit = (end-dsp) - C0
@@ -680,8 +688,9 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.strWxs(W12, X1, W11);
 			e.b(cont); e.bind(trap); e.movn(W0, 2); e.ret();
 			e.bind(cont);
+			break;
 		}
-		else if (op == OP_COPY_VVC || op == OP_COPY_VCC || op == OP_COPY_CVC || op == OP_COPY_CCC) {
+		case OP_COPY_VVC: case OP_COPY_VCC: case OP_COPY_CVC: case OP_COPY_CCC: {
 			// block copy of `count` words src->dest (both MEMORY_OFFSET-biased ptrs); checked → ACCESS_VIOLATION.
 			const bool destConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
 			const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
@@ -703,14 +712,16 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.bind(ldone); e.b(cont);
 			e.bind(trap); e.movn(W0, 7); e.ret();				// ~7 = -8 = ACCESS_VIOLATION
 			e.bind(cont);
+			break;
 		}
-		else if (op == OP_ADRL) {								// V0 = &dsp[C1] as a MEMORY_OFFSET-biased pointer
+		case OP_ADRL: {
 			e.sub(W9, W1, W2);									// (dsp - memoryBase) in bytes (low 32 valid within buffer)
 			e.lsrImm(W9, W9, 2);								//   -> Value units
 			matConst(e, W10, static_cast<Int>(MEMORY_OFFSET) + in.p1.i); e.add(W9, W9, W10);
 			storeSlot(e, W9, in.p0.i);
+			break;
 		}
-		else if (op == OP_PEEK_VVV) {							// checked read through a runtime pointer: dst = mem[base+index-OFF]
+		case OP_PEEK_VVV: {
 			Label trap = e.newLabel(), cont = e.newLabel();
 			loadSlot(e, W9, in.p1.i); loadSlot(e, W10, in.p2.i); e.add(W9, W9, W10);	// base + index
 			matConst(e, W10, static_cast<Int>(MEMORY_OFFSET)); e.sub(W9, W9, W10);	// - MEMORY_OFFSET
@@ -718,8 +729,9 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			e.ldrWx(W11, X2, W9); storeSlot(e, W11, in.p0.i);
 			e.b(cont); e.bind(trap); e.movn(W0, 1); e.ret();	// BAD_PEEK
 			e.bind(cont);
+			break;
 		}
-		else if (op == OP_POKE_VVV) {							// checked write through a runtime pointer: mem[base+index-OFF] = value
+		case OP_POKE_VVV: {
 			Label trap = e.newLabel(), cont = e.newLabel();
 			loadSlot(e, W9, in.p0.i); loadSlot(e, W10, in.p1.i); e.add(W9, W9, W10);	// base + index
 			matConst(e, W10, static_cast<Int>(MEMORY_OFFSET)); e.sub(W9, W9, W10);
@@ -727,66 +739,71 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			loadSlot(e, W11, in.p2.i); e.strWx(W11, X2, W9);
 			e.b(cont); e.bind(trap); e.movn(W0, 2); e.ret();	// BAD_POKE
 			e.bind(cont);
+			break;
 		}
-		else if (op == OP_ADDI_VVV) { emitBinary(e, &Emitter::add, in, false, false); }
-		else if (op == OP_ADDI_VVC) { emitBinary(e, &Emitter::add, in, false, true); }
-		else if (op == OP_SUBI_VVV) { emitBinary(e, &Emitter::sub, in, false, false); }
-		else if (op == OP_SUBI_VVC) { emitBinary(e, &Emitter::sub, in, false, true); }
-		else if (op == OP_SUBI_VCV) { emitBinary(e, &Emitter::sub, in, true, false); }
-		else if (op == OP_MULI_VVV) { emitBinary(e, &Emitter::mul, in, false, false); }
-		else if (op == OP_MULI_VVC) { emitBinary(e, &Emitter::mul, in, false, true); }
-		else if (op == OP_DIVI_VVV) { emitDivMod(e, false, in, 0); }
-		else if (op == OP_DIVI_VVC) { emitDivMod(e, false, in, 1); }
-		else if (op == OP_DIVI_VCV) { emitDivMod(e, false, in, 2); }
-		else if (op == OP_MODI_VVV) { emitDivMod(e, true, in, 0); }
-		else if (op == OP_MODI_VVC) { emitDivMod(e, true, in, 1); }
-		else if (op == OP_MODI_VCV) { emitDivMod(e, true, in, 2); }
-		else if (op == OP_SHLI_VVV) { emitShift(e, 0, in, 0); }
-		else if (op == OP_SHLI_VVC) { emitShift(e, 0, in, 1); }
-		else if (op == OP_SHLI_VCV) { emitShift(e, 0, in, 2); }
-		else if (op == OP_SHRI_VVV) { emitShift(e, 1, in, 0); }
-		else if (op == OP_SHRI_VVC) { emitShift(e, 1, in, 1); }
-		else if (op == OP_SHRI_VCV) { emitShift(e, 1, in, 2); }
-		else if (op == OP_SHRU_VVV) { emitShift(e, 2, in, 0); }
-		else if (op == OP_SHRU_VVC) { emitShift(e, 2, in, 1); }
-		else if (op == OP_SHRU_VCV) { emitShift(e, 2, in, 2); }
-		else if (op == OP_ABSI) {						// dst = |src| (branchless: mask = src>>31; (src^mask)-mask)
+		case OP_ADDI_VVV: emitBinary(e, &Emitter::add, in, false, false); break;
+		case OP_ADDI_VVC: emitBinary(e, &Emitter::add, in, false, true); break;
+		case OP_SUBI_VVV: emitBinary(e, &Emitter::sub, in, false, false); break;
+		case OP_SUBI_VVC: emitBinary(e, &Emitter::sub, in, false, true); break;
+		case OP_SUBI_VCV: emitBinary(e, &Emitter::sub, in, true, false); break;
+		case OP_MULI_VVV: emitBinary(e, &Emitter::mul, in, false, false); break;
+		case OP_MULI_VVC: emitBinary(e, &Emitter::mul, in, false, true); break;
+		case OP_DIVI_VVV: emitDivMod(e, false, in, 0); break;
+		case OP_DIVI_VVC: emitDivMod(e, false, in, 1); break;
+		case OP_DIVI_VCV: emitDivMod(e, false, in, 2); break;
+		case OP_MODI_VVV: emitDivMod(e, true, in, 0); break;
+		case OP_MODI_VVC: emitDivMod(e, true, in, 1); break;
+		case OP_MODI_VCV: emitDivMod(e, true, in, 2); break;
+		case OP_SHLI_VVV: emitShift(e, 0, in, 0); break;
+		case OP_SHLI_VVC: emitShift(e, 0, in, 1); break;
+		case OP_SHLI_VCV: emitShift(e, 0, in, 2); break;
+		case OP_SHRI_VVV: emitShift(e, 1, in, 0); break;
+		case OP_SHRI_VVC: emitShift(e, 1, in, 1); break;
+		case OP_SHRI_VCV: emitShift(e, 1, in, 2); break;
+		case OP_SHRU_VVV: emitShift(e, 2, in, 0); break;
+		case OP_SHRU_VVC: emitShift(e, 2, in, 1); break;
+		case OP_SHRU_VCV: emitShift(e, 2, in, 2); break;
+		case OP_ABSI: {
 			loadSlot(e, W10, in.p1.i); e.asrImm(W11, W10, 31); e.eor(W9, W10, W11); e.sub(W9, W9, W11);
 			storeSlot(e, W9, in.p0.i);
+			break;
 		}
-		else if (op == OP_ADDF_VVV) { emitBinaryF(e, &Emitter::faddS, in, false, false); }
-		else if (op == OP_ADDF_VVC) { emitBinaryF(e, &Emitter::faddS, in, false, true); }
-		else if (op == OP_SUBF_VVV) { emitBinaryF(e, &Emitter::fsubS, in, false, false); }
-		else if (op == OP_SUBF_VVC) { emitBinaryF(e, &Emitter::fsubS, in, false, true); }
-		else if (op == OP_SUBF_VCV) { emitBinaryF(e, &Emitter::fsubS, in, true, false); }
-		else if (op == OP_MULF_VVV) { emitBinaryF(e, &Emitter::fmulS, in, false, false); }
-		else if (op == OP_MULF_VVC) { emitBinaryF(e, &Emitter::fmulS, in, false, true); }
-		else if (op == OP_DIVF_VVV) { emitBinaryF(e, &Emitter::fdivS, in, false, false); }
-		else if (op == OP_DIVF_VVC) { emitBinaryF(e, &Emitter::fdivS, in, false, true); }
-		else if (op == OP_DIVF_VCV) { emitBinaryF(e, &Emitter::fdivS, in, true, false); }
-		else if (op == OP_FTOI_VVC) {					// dst_int = fcvtzs(src_float * scale)  (saturating, toward zero)
+		case OP_ADDF_VVV: emitBinaryF(e, &Emitter::faddS, in, false, false); break;
+		case OP_ADDF_VVC: emitBinaryF(e, &Emitter::faddS, in, false, true); break;
+		case OP_SUBF_VVV: emitBinaryF(e, &Emitter::fsubS, in, false, false); break;
+		case OP_SUBF_VVC: emitBinaryF(e, &Emitter::fsubS, in, false, true); break;
+		case OP_SUBF_VCV: emitBinaryF(e, &Emitter::fsubS, in, true, false); break;
+		case OP_MULF_VVV: emitBinaryF(e, &Emitter::fmulS, in, false, false); break;
+		case OP_MULF_VVC: emitBinaryF(e, &Emitter::fmulS, in, false, true); break;
+		case OP_DIVF_VVV: emitBinaryF(e, &Emitter::fdivS, in, false, false); break;
+		case OP_DIVF_VVC: emitBinaryF(e, &Emitter::fdivS, in, false, true); break;
+		case OP_DIVF_VCV: emitBinaryF(e, &Emitter::fdivS, in, true, false); break;
+		case OP_FTOI_VVC: {
 			loadSlotF(e, S0, in.p1.i); matConst(e, W9, in.p2.i); e.fmovSW(S1, W9);
 			e.fmulS(S0, S0, S1); e.fcvtzs(W9, S0); storeSlot(e, W9, in.p0.i);
+			break;
 		}
-		else if (op == OP_ITOF_VVC) {					// dst_float = (float)src_int * scale
+		case OP_ITOF_VVC: {
 			loadSlot(e, W9, in.p1.i); e.scvtf(S0, W9); matConst(e, W10, in.p2.i); e.fmovSW(S1, W10);
 			e.fmulS(S0, S0, S1); storeSlotF(e, S0, in.p0.i);
+			break;
 		}
-		else if (op == OP_ANDI_VVV) { emitBinary(e, &Emitter::and_, in, false, false); }
-		else if (op == OP_ANDI_VVC) { emitBinary(e, &Emitter::and_, in, false, true); }
-		else if (op == OP_IORI_VVV) { emitBinary(e, &Emitter::orr, in, false, false); }
-		else if (op == OP_IORI_VVC) { emitBinary(e, &Emitter::orr, in, false, true); }
-		else if (op == OP_XORI_VVV) { emitBinary(e, &Emitter::eor, in, false, false); }
-		else if (op == OP_XORI_VVC) { emitBinary(e, &Emitter::eor, in, false, true); }
-		else if (op == OP_FORi_VVB || op == OP_FORi_VCB) {		// ++i ; if i < n goto head
+		case OP_ANDI_VVV: emitBinary(e, &Emitter::and_, in, false, false); break;
+		case OP_ANDI_VVC: emitBinary(e, &Emitter::and_, in, false, true); break;
+		case OP_IORI_VVV: emitBinary(e, &Emitter::orr, in, false, false); break;
+		case OP_IORI_VVC: emitBinary(e, &Emitter::orr, in, false, true); break;
+		case OP_XORI_VVV: emitBinary(e, &Emitter::eor, in, false, false); break;
+		case OP_XORI_VVC: emitBinary(e, &Emitter::eor, in, false, true); break;
+		case OP_FORi_VVB: case OP_FORi_VCB: {
 			loadSlot(e, W10, in.p0.i); e.addImm(W10, W10, 1); storeSlot(e, W10, in.p0.i);
 			loadOp(e, W11, in.p1, op == OP_FORi_VCB);
 			e.cmp(W10, W11);
 			e.bcond(LT, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
+			break;
 		}
-		else if (op == OP_GOTO) { e.b(mainline[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); }
-		else if (op == OP_LSSF_VVB || op == OP_LSSF_VCB || op == OP_LSSF_CVB || op == OP_EQUF_VVB || op == OP_EQUF_VCB
-				|| op == OP_NLSF_VVB || op == OP_NLSF_VCB || op == OP_NLSF_CVB || op == OP_NEQF_VVB || op == OP_NEQF_VCB) {
+		case OP_GOTO: e.b(mainline[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
+		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB: case OP_EQUF_VVB: case OP_EQUF_VCB:
+		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB: case OP_NEQF_VVB: case OP_NEQF_VCB: {
 			// float compare-branch. Conditions chosen so NaN matches C++ (a<b false, !(a<b) true): LSS→MI, NLS→PL.
 			Cond c; bool c0const, c1const;
 			switch (op) {
@@ -805,8 +822,10 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			loadOpF(e, S1, W10, in.p1, c1const);
 			e.fcmpS(S0, S1);
 			e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
+			break;
 		}
-		else {													// integer conditional branches LSS/EQU/NLS/NEQ
+		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB: case OP_EQUI_VVB: case OP_EQUI_VCB:
+		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB: case OP_NEQI_VVB: case OP_NEQI_VCB: {
 			Cond c; bool c0const, c1const;
 			switch (op) {
 				case OP_LSSI_VVB: c = LT; c0const = false; c1const = false; break;
@@ -825,6 +844,9 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			loadOp(e, W11, in.p1, c1const);
 			e.cmp(W10, W11);
 			e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
+			break;
+		}
+		default: return false;									// unsupported opcode
 		}
 	}
 
