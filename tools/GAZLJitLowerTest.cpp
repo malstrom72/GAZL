@@ -143,7 +143,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	for (UInt k = 0; k < gFunctionCount; ++k) { entryLabels[k] = e.newLabel(); }
 	bool ok = true;
 	for (UInt ord = 0; ord < gFunctionCount; ++ord) {
-		ok = ok && lowerFunction(e, gCode, gFunctionTable[ord], o, entryLabels, entryOffset, ord, gFunctionCount);
+		ok = ok && lowerFunction(e, gCode, gMemory, gFunctionTable[ord], o, entryLabels, entryOffset, ord, gFunctionCount);
 	}
 	if (!ok) { std::printf("  lowering failed (unsupported opcode)\n"); ++failures; return; }
 	const size_t dispatchOffset = emitDispatcher(e, o);
@@ -226,6 +226,14 @@ static const char* const K_FLOAT =			// iTOf/fTOi (scaled), ADDf/MULf/DIVf, floa
 	" LSSf $g #1000000.0 @.ok\n MOVf $g #1000000.0\n"		// clamp g to 1e6 if g >= 1e6
 	".ok: ADDf $g $g $f\n"									// g += f
 	" fTOi $r $g #1.0\n POKE &gOut $r\n RETU\n";
+
+static const char* const K_FLOATABS =		// ABSf (|x|) + FLOf (floor toward -inf, distinct from truncation)
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *1\n$n: LOCi\n$f: LOCf\n$a: LOCf\n$r: LOCi\n"
+	" PEEK $n &gIn\n iTOf $f $n #0.5\n"						// f = n * 0.5  (fractional; negative for n<0)
+	" FLOf $a $f\n"											// a = floorf(f)  (toward -inf: floor(-2.5) = -3)
+	" ABSf $a $a\n"											// a = |a|
+	" fTOi $r $a #1.0\n POKE &gOut $r\n RETU\n";
 
 static const char* const K_ABS =			// forward conditional (GEQi -> NLSI) + SUBi_VCV negate
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
@@ -339,6 +347,7 @@ int main() {
 	runKernel("sumTo        [loop]", K_SUMTO, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("intops       [DIVi/MODi/shift/ABSi]", K_INTOPS, divs, sizeof(divs) / sizeof(*divs));
 	runKernel("floats       [iTOf/fTOi/arith/LSSf]", K_FLOAT, floats, sizeof(floats) / sizeof(*floats));
+	runKernel("float abs/flr[ABSf/FLOf]", K_FLOATABS, signed_, sizeof(signed_) / sizeof(*signed_));
 	runKernel("sumSq        [MULi]", K_SUMSQ, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("abs          [fwd branch + SUBi_VCV]", K_ABS, signed_, sizeof(signed_) / sizeof(*signed_));
 	runKernel("twoLoop      [2 safepoints]", K_TWOLOOP, counts, sizeof(counts) / sizeof(*counts));

@@ -152,6 +152,8 @@ class Emitter {
 		void fsubS(Reg sd, Reg sn, Reg sm);						/// `fsub sd, sn, sm`
 		void fdivS(Reg sd, Reg sn, Reg sm);						/// `fdiv sd, sn, sm`
 		void fcmpS(Reg sn, Reg sm);								/// `fcmp sn, sm` (sets NZCV for a float compare)
+		void fabsS(Reg sd, Reg sn);								/// `fabs sd, sn` (single-precision absolute value; ABSf)
+		void frintmS(Reg sd, Reg sn);							/// `frintm sd, sn` (round toward -inf = floorf; FLOf)
 		void fcvtzs(Reg wd, Reg sn);							/// `fcvtzs wd, sn` (FTOI, round toward zero, saturating)
 		void scvtf(Reg sd, Reg wn);								/// `scvtf sd, wn` (ITOF)
 		void fmovSW(Reg sd, Reg wn);							/// `fmov sd, wn` (bit-copy int→float reg; float const load)
@@ -228,6 +230,7 @@ enum {
 	OP_SHLI_VVV = 0x2345 + 40, OP_SHLI_VVC = 0x2345 + 41, OP_SHLI_VCV = 0x2345 + 42,
 	OP_SHRI_VVV = 0x2345 + 43, OP_SHRI_VVC = 0x2345 + 44, OP_SHRI_VCV = 0x2345 + 45,
 	OP_SHRU_VVV = 0x2345 + 46, OP_SHRU_VVC = 0x2345 + 47, OP_SHRU_VCV = 0x2345 + 48,
+	OP_ABSF = 0x2345 + 49, OP_FLOF = 0x2345 + 50,
 	OP_ADDF_VVV = 0x2345 + 51, OP_ADDF_VVC = 0x2345 + 52,
 	OP_SUBF_VVV = 0x2345 + 53, OP_SUBF_VVC = 0x2345 + 54, OP_SUBF_VCV = 0x2345 + 55,
 	OP_MULF_VVV = 0x2345 + 56, OP_MULF_VVC = 0x2345 + 57,
@@ -242,7 +245,7 @@ enum {
 	OP_EQUF_VVB = 0x2345 + 82, OP_EQUF_VCB = 0x2345 + 83,
 	OP_NLSF_VVB = 0x2345 + 84, OP_NLSF_VCB = 0x2345 + 85, OP_NLSF_CVB = 0x2345 + 86,
 	OP_NEQF_VVB = 0x2345 + 87, OP_NEQF_VCB = 0x2345 + 88,
-	OP_GOTO = 0x2345 + 89
+	OP_GOTO = 0x2345 + 89, OP_SWCH = 0x2345 + 90
 };
 
 // makeExecutable() is declared in GAZLJitMem.h (platform backend), also in namespace GAZL.
@@ -273,6 +276,9 @@ class JitEngine : public Processor {
 		// Bind the compiled artifacts (dispatcher trampoline + ordinal→entry table) produced by lowerProgram().
 		void setCompiled(void* dispatchAddr, void** entries) { jitDispatch = dispatchAddr; funcEntries = entries; }
 
+		// The memory image (globals/consts/data) — the lowering reads finalize-time constant tables from it (e.g. SWCH).
+		const Value* memoryImage() const { return memoryBase; }
+
 		Offsets offsets() const;			// gather the byte offsets of the machine-state fields (setup-time, see .cpp)
 
 		// Polymorphic drop-in for the base Processor (§5.1). enterCall sets up the call stack (base logic) and seeds the
@@ -302,7 +308,7 @@ class JitEngine : public Processor {
 	are pre-created (for direct calls); `entryOffset[selfOrdinal]` is set to this function's native word offset. Returns
 	false on an unsupported opcode.
 */
-bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Offsets& o,
+bool lowerFunction(Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
 		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount);
 
 // Emit the native dispatcher trampoline (§5.4 encoding (a)). `int dispatch(JitEngine* ctx)`: park CTX in a callee-saved

@@ -40,7 +40,7 @@ bool compile(JitEngine& engine, const Instruction* code, const UInt* functionTab
 	std::vector<size_t> entryOffset(functionCount, 0);
 	for (UInt k = 0; k < functionCount; ++k) { entryLabels[k] = e.newLabel(); }
 	for (UInt ord = 0; ord < functionCount; ++ord) {
-		if (!lowerFunction(e, code, functionTable[ord], o, entryLabels, entryOffset, ord, functionCount)) {
+		if (!lowerFunction(e, code, engine.memoryImage(), functionTable[ord], o, entryLabels, entryOffset, ord, functionCount)) {
 			return false;								// unsupported opcode → caller should fall back to the interpreter
 		}
 	}

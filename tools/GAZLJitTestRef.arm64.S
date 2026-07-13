@@ -100,6 +100,10 @@ ENTRY(ref_fdiv)		fdiv s0, s1, s2
 ENTRY(ref_fcmp)		fcmp s1, s2
 		GLOBL(ref_fmov_sw)
 ENTRY(ref_fmov_sw)	fmov s0, w1
+		GLOBL(ref_fabs)
+ENTRY(ref_fabs)		fabs s0, s1
+		GLOBL(ref_frintm)
+ENTRY(ref_frintm)	frintm s0, s1
 		GLOBL(ref_ldur_s)
 ENTRY(ref_ldur_s)	ldur s0, [x2, #-4]
 		GLOBL(ref_stur_s)

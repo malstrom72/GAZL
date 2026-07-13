@@ -264,6 +264,14 @@ void Emitter::fcmpS(Reg sn, Reg sm) {
 	emit(0x1E202000u | (static_cast<uint32_t>(sm) << 16) | (static_cast<uint32_t>(sn) << 5));
 }
 
+void Emitter::fabsS(Reg sd, Reg sn) {
+	emit(0x1E20C000u | (static_cast<uint32_t>(sn) << 5) | sd);		// FP data-proc (1 source), single, opcode ABS
+}
+
+void Emitter::frintmS(Reg sd, Reg sn) {
+	emit(0x1E254000u | (static_cast<uint32_t>(sn) << 5) | sd);		// round toward -inf (floorf)
+}
+
 void Emitter::fcvtzs(Reg wd, Reg sn) {
 	emit(0x1E380000u | (static_cast<uint32_t>(sn) << 5) | wd);		// FTOI, round toward zero (saturating)
 }
@@ -506,7 +514,7 @@ static bool branchTarget(const Instruction* code, UInt j, UInt& target) {
 	are pre-created (for direct calls); `entryOffset[selfOrdinal]` is set to this function's native word offset. Returns
 	false on an unsupported opcode.
 */
-bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Offsets& o,
+bool lowerFunction(Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
 		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount) {
 	UInt retIndex = funcIndex;
 	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
@@ -519,6 +527,14 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 		if (branchTarget(code, j, tgt)) {
 			targets.insert(tgt);
 			if (tgt <= j) { loopWeight[tgt] = j - tgt + 1; }		// back-edge → loop head needs a fuel-check safepoint
+		} else if (code[j].opcode == OP_SWCH) {						// jump-table: every case target is a branch target
+			const UInt sz = static_cast<UInt>(code[j].p1.i) + 1;	// entries = clamp-max + 1
+			const UInt tbl = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);	// table word-index in the memory image
+			for (UInt k = 0; k < sz; ++k) {
+				const UInt t = static_cast<UInt>(static_cast<Int>(j) + memory[tbl + k].i);	// target = swch + relOffset
+				targets.insert(t);
+				if (t <= j) { loopWeight[t] = j - t + 1; }
+			}
 		}
 	}
 	std::map<UInt, Label> mainline, reloadL, suspendL;
@@ -740,6 +756,8 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			storeSlot(e, W9, in.p0.i);
 			break;
 		}
+		case OP_ABSF: loadSlotF(e, S0, in.p1.i); e.fabsS(S0, S0); storeSlotF(e, S0, in.p0.i); break;	// V0 = fabs(V1)
+		case OP_FLOF: loadSlotF(e, S0, in.p1.i); e.frintmS(S0, S0); storeSlotF(e, S0, in.p0.i); break;	// V0 = floorf(V1)
 		case OP_ADDF_VVV: emitBinaryF(e, &Emitter::faddS, in, false, false); break;
 		case OP_ADDF_VVC: emitBinaryF(e, &Emitter::faddS, in, false, true); break;
 		case OP_SUBF_VVV: emitBinaryF(e, &Emitter::fsubS, in, false, false); break;
@@ -774,6 +792,27 @@ bool lowerFunction(Emitter& e, const Instruction* code, UInt funcIndex, const Of
 			break;
 		}
 		case OP_GOTO: e.b(mainline[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
+		case OP_SWCH: {											// index = min(unsigned(V0), C1); br into a table of `b target`
+			const UInt sz = static_cast<UInt>(in.p1.i) + 1;
+			const UInt tbl = static_cast<UInt>(in.p2.p - MEMORY_OFFSET);
+			loadSlot(e, W9, in.p0.i);							// switch value
+			matConst(e, W10, in.p1.i);							// clamp max = C1 = sz-1
+			e.cmp(W9, W10);
+			Label useVal = e.newLabel();
+			e.bcond(LS, useVal);								// (unsigned) val <= C1 → keep; else clamp to C1
+			e.mov(W9, W10);
+			e.bind(useVal);
+			Label caseBase = e.newLabel();
+			e.adr(X10, caseBase);								// base of the branch table (below)
+			e.lslImm(W11, W9, 2); e.addX(X10, X10, X11);		// += index * 4  (W-write zero-extends into X11)
+			e.br(X10);
+			e.bind(caseBase);									// sz consecutive `b target` — br lands on the index'th
+			for (UInt k = 0; k < sz; ++k) {
+				const UInt t = static_cast<UInt>(static_cast<Int>(j) + memory[tbl + k].i);
+				e.b(mainline[t]);
+			}
+			break;
+		}
 		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB: case OP_EQUF_VVB: case OP_EQUF_VCB:
 		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB: case OP_NEQF_VVB: case OP_NEQF_VCB: {
 			// float compare-branch. Conditions chosen so NaN matches C++ (a<b false, !(a<b) true): LSS→MI, NLS→PL.

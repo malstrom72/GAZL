@@ -47,6 +47,7 @@ extern "C" {
 	extern const uint32_t ref_lsl, ref_lsr, ref_asr;
 	extern const uint32_t ref_ldr, ref_str, ref_str_zr, ref_ldr_reg, ref_str_reg, ref_ldr_regs, ref_str_regs;
 	extern const uint32_t ref_fadd, ref_fmul, ref_fsub, ref_fcvtzs, ref_scvtf, ref_ldr_s, ref_str_s;
+	extern const uint32_t ref_fabs, ref_frintm;
 	extern const uint32_t ref_fdiv, ref_fcmp, ref_fmov_sw, ref_ldur_s, ref_stur_s, ref_ldr_sxs, ref_str_sxs;
 	extern const uint32_t ref_ldur, ref_stur, ref_ldr_x, ref_str_x, ref_ldr_xr, ref_adr;
 	extern const uint32_t ref_add_immx, ref_sub_immx, ref_cbnz_x, ref_cmp_x, ref_add_x;
@@ -147,6 +148,8 @@ int main() {
 	check("fsub",      one([](Emitter& e) { e.fsubS(S0, S1, S2); }),        ref_fsub);
 	check("fdiv",      one([](Emitter& e) { e.fdivS(S0, S1, S2); }),        ref_fdiv);
 	check("fcmp",      one([](Emitter& e) { e.fcmpS(S1, S2); }),            ref_fcmp);
+	check("fabs",      one([](Emitter& e) { e.fabsS(S0, S1); }),            ref_fabs);
+	check("frintm",    one([](Emitter& e) { e.frintmS(S0, S1); }),          ref_frintm);
 	check("fmov(sw)",  one([](Emitter& e) { e.fmovSW(S0, W1); }),           ref_fmov_sw);
 	check("ldur(s)",   one([](Emitter& e) { e.ldurS(S0, X2, -4); }),        ref_ldur_s);
 	check("stur(s)",   one([](Emitter& e) { e.sturS(S0, X2, -4); }),        ref_stur_s);
