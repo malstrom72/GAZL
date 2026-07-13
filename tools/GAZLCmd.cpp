@@ -407,8 +407,10 @@ int main(int argc, const char* argv[]) {
 		}
 		
 		{
-			// Pick the engine: the native JIT (--jit, arm64) if it can compile the whole program, else the interpreter.
-			// Both are Processor subclasses, so the run loop below is identical (§5.1).
+			/*
+				Pick the engine: the native JIT (--jit, arm64) if it can compile the whole program, else the interpreter.
+				Both are Processor subclasses, so the run loop below is identical (§5.1).
+			*/
 		#ifdef GAZL_JIT
 			JitModule module;					// declared before `proc`: it owns the code page and must outlive the engine
 		#endif

@@ -398,10 +398,12 @@ void Emitter::finalize() {
 
 namespace GAZL {
 
-// The field ABI JitCompiler bakes into the machine code — byte offsets of the run-state fields within a JitProcessor.
-// Static / instance-independent: computed with offsetof, so no engine is needed. offsetof on this polymorphic type is
-// universally correct (single inheritance, fixed layout); the one -Winvalid-offsetof is silenced locally. Non-virtual,
-// so defining it here pulls no vtable into GAZLJit.o.
+/*
+	The field ABI JitCompiler bakes into the machine code — byte offsets of the run-state fields within a JitProcessor.
+	Static / instance-independent: computed with offsetof, so no engine is needed. offsetof on this polymorphic type is
+	universally correct (single inheritance, fixed layout); the one -Winvalid-offsetof is silenced locally. Non-virtual,
+	so defining it here pulls no vtable into GAZLJit.o.
+*/
 Offsets JitProcessor::layout() {
 	Offsets o;
 #if defined(__GNUC__)

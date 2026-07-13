@@ -308,13 +308,17 @@ class JitProcessor : public Processor {
 				, nat, 0), savedDsp(0), nativeFn(0), nativeAfter(0)
 				, funcEntries(module.nativeEntries), jitDispatch(module.dispatch) { }
 
-		// The field ABI JitCompiler bakes into the machine code (byte offsets of dsp/memoryBase/... in a JitProcessor).
-		// Static: the layout is instance-independent (single inheritance, fixed struct), so no engine is needed (see .cpp).
+		/*
+			The field ABI JitCompiler bakes into the machine code (byte offsets of dsp/memoryBase/... in a JitProcessor).
+			Static: the layout is instance-independent (single inheritance, fixed struct), so no engine is needed (see .cpp).
+		*/
 		static Offsets layout();
 
-		// Polymorphic drop-in for the base Processor (§5.1). enterCall seeds the RESUME continuation with the callee's
-		// compiled entry; run() is one trip through the native dispatcher (mid-run GAZL/native calls stay inside it).
-		// Host loop, identical to the interpreter's: enterCall(); do { resetTimeOut(N); } while (run()==TIME_OUT).
+		/*
+			Polymorphic drop-in for the base Processor (§5.1). enterCall seeds the RESUME continuation with the callee's
+			compiled entry; run() is one trip through the native dispatcher (mid-run GAZL/native calls stay inside it).
+			Host loop, identical to the interpreter's: enterCall(); do { resetTimeOut(N); } while (run()==TIME_OUT).
+		*/
 		virtual Status enterCall(Pointer functionPointer) {
 			const Status s = Processor::enterCall(functionPointer);
 			if (s != OK) { return s; }
@@ -327,8 +331,10 @@ class JitProcessor : public Processor {
 		}
 };
 
-// The lowering pass (lowerFunction) and dispatcher emitter (emitDispatcher) are internal to GAZLJit.cpp (file-static),
-// used only by JitCompiler::compile below.
+/*
+	The lowering pass (lowerFunction) and dispatcher emitter (emitDispatcher) are internal to GAZLJit.cpp (file-static),
+	used only by JitCompiler::compile below.
+*/
 
 /*
 	The JIT compiler — mirrors `Assembler`: lowers a whole finalized program to native code and fills a JitModule. It
