@@ -126,6 +126,8 @@ class X64Emitter {
 		void ret();												// `ret` (C3)
 		void jmp(Label target);									// `jmp rel32` (E9)
 		void jcc(Cond cc, Label target);						// `j<cc> rel32` (0F 8x)
+		void callRel(Label target);								// `call rel32` (E8) — GAZL->GAZL direct call
+		void callReg(Reg r);									// `call r` (FF /2) — indirect / native via a materialized pointer
 
 		// --- labels / fixups ---
 		Label newLabel();										// allocate an unbound label

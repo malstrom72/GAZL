@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <cstring>
 #include <map>
+#include <vector>
 #include <sys/mman.h>
 
 using namespace GAZL;
@@ -128,6 +129,26 @@ static const char* const ARRAY_SOURCE =
 	".sum:  GETL $t $arr $i\n"			// t = arr[i]
 	"       ADDi $s $s $t\n"
 	"       FORi $i #16 @.sum\n"
+	"       POKE &gOut $s\n"
+	"       RETU\n";
+
+// Two functions: main calls square(i) in a loop -> sum of i*i. Exercises CALL_CVC + the window/return convention.
+static const char* const CALL_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"square: FUNC\n"					// square(x) -> x*x
+	"$r:    OUTi\n" "$x:    INPi\n"
+	"       MULi $r $x $x\n"
+	"       RETU\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$s:    LOCi\n" "$i:    LOCi\n"
+	"       PEEK $n &gIn\n"
+	"       MOVi $s #0\n"
+	"       MOVi $i #0\n"
+	".loop: MOVi %1 $i\n"				// window: %0 = return, %1 = arg
+	"       CALL &square %0 *2\n"
+	"       ADDi $s $s %0\n"			// s += square(i)
+	"       FORi $i $n @.loop\n"
 	"       POKE &gOut $s\n"
 	"       RETU\n";
 
@@ -270,7 +291,7 @@ static void emitFBranch(X64Emitter& e, int kind, const Instruction& in, UInt j, 
 	else { e.ucomiss(F0, F1); e.jcc(CC_P, tgt); e.jcc(CC_NE, tgt); }		// unordered or not-equal
 }
 
-static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
+static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, const std::vector<Label>& entry, Label epilogue) {
 	UInt end = funcStart;
 	while (code[end].opcode != OP_RETU) { ++end; }
 
@@ -281,6 +302,7 @@ static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
 	}
 
 	e.push(DSP); e.push(MEM);					// SysV prologue: save callee-saved pins
+	e.addImmQ(RSP, 0xFFFFFFF8u);				// sub rsp, 8 — keep rsp 16-aligned at inner call sites
 	e.movQ(DSP, RDI); e.movQ(MEM, RSI);			// dsp = arg0, memory base = arg1
 	e.addImmQ(DSP, static_cast<uint32_t>(code[funcStart].p0.i) * 4u);	// FUNC: advance to this frame
 
@@ -292,9 +314,17 @@ static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
 		switch (op) {
 			case OP_FUNC: break;
 			case OP_RETU:
-				e.movImm(RAX, 0);				// Status OK
-				e.pop(MEM); e.pop(DSP); e.ret();
+				e.movImm(RAX, 0); e.jmp(epilogue);	// Status OK -> shared epilogue
 				break;
+			case OP_CALL_CVC: {						// direct GAZL call: callee runs with dsp += window, returns Status in eax
+				const UInt callee = in.p0.p - IP_OFFSET;
+				e.movQ(RDI, DSP);
+				if (in.p1.i != 0) { e.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }	// rdi = dsp + window
+				e.movQ(RSI, MEM);
+				e.callRel(entry[callee]);
+				e.cmpImm(RAX, 0); e.jcc(CC_NE, epilogue);	// propagate a non-OK status
+				break;
+			}
 
 			case OP_MOVE_VV: e.load(A, DSP, in.p1.i * 4); e.store(DSP, in.p0.i * 4, A); break;
 			case OP_MOVE_VC: e.movImm(A, static_cast<uint32_t>(in.p1.i)); e.store(DSP, in.p0.i * 4, A); break;
@@ -424,6 +454,25 @@ static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
 			default: return false;			// unsupported opcode
 		}
 	}
+	return true;
+}
+
+// Compile every function into one buffer: main first (so its entry is offset 0), then the rest, then one shared
+// epilogue (all functions have identical prologue/epilogue). Direct CALLs resolve to entry labels via rel32 fixups.
+static bool compileProgram(X64Emitter& e, const Instruction* code, const UInt* functionTable, UInt functionCount, UInt mainOrd) {
+	std::vector<Label> entry(functionCount);
+	for (UInt k = 0; k < functionCount; ++k) { entry[k] = e.newLabel(); }
+	Label epilogue = e.newLabel();
+
+	e.bind(entry[mainOrd]);
+	if (!lowerBody(e, code, functionTable[mainOrd], entry, epilogue)) { return false; }
+	for (UInt k = 0; k < functionCount; ++k) {
+		if (k == mainOrd) { continue; }
+		e.bind(entry[k]);
+		if (!lowerBody(e, code, functionTable[k], entry, epilogue)) { return false; }
+	}
+	e.bind(epilogue);
+	e.addImmQ(RSP, 8u); e.pop(MEM); e.pop(DSP); e.ret();
 	e.finalize();
 	return true;
 }
@@ -436,7 +485,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	Pointer gInPtr = NULL_POINTER, gOutPtr = NULL_POINTER;
 	if (!assembleKernel(globals, source, gInPtr, gOutPtr)) { std::printf("  %s: assemble failed\n", name); ++failures; return; }
 	X64Emitter e;
-	if (!lowerX64(e, gCode, gFunctionTable[globals.findFunction("main") - IP_OFFSET])) {
+	if (!compileProgram(e, gCode, gFunctionTable, gFunctionCount, globals.findFunction("main") - IP_OFFSET)) {
 		std::printf("  %s: unsupported opcode\n", name); ++failures; return;
 	}
 	void* code = mapExecutable(e.code(), e.size());
@@ -472,6 +521,9 @@ int main() {
 	std::printf("\n");
 	const int adrlInputs[] = { 0, 42 };
 	runKernel("adrl", ADRL_SOURCE, adrlInputs, sizeof(adrlInputs) / sizeof(*adrlInputs));
+	std::printf("\n");
+	const int callInputs[] = { 0, 1, 2, 5, 10, 100 };
+	runKernel("call", CALL_SOURCE, callInputs, sizeof(callInputs) / sizeof(*callInputs));
 	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
 	return failures == 0 ? 0 : 1;
 }
