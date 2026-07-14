@@ -48,7 +48,7 @@ enum Reg {
 */
 enum Cond {
 	CC_E = 0x4, CC_NE = 0x5, CC_L = 0xC, CC_GE = 0xD, CC_LE = 0xE, CC_G = 0xF,
-	CC_B = 0x2, CC_AE = 0x3, CC_BE = 0x6, CC_A = 0x7
+	CC_B = 0x2, CC_AE = 0x3, CC_BE = 0x6, CC_A = 0x7, CC_P = 0xA, CC_NP = 0xB	// P/NP = parity (unordered) for float compares
 };
 
 // A branch target; `id` indexes the emitter's label table (-1 = invalid).
@@ -103,6 +103,19 @@ class X64Emitter {
 		void loadQ(Reg rd, Reg base, int32_t disp);				// `mov rd(64), [base + disp]`
 		void storeQ(Reg base, int32_t disp, Reg rs);			// `mov [base + disp], rs(64)`
 
+		// --- SSE scalar single-precision floats (XMM operands reuse the Reg 0..15 encodings, a separate file from GP) ---
+		void movssLoad(Reg xd, Reg base, int32_t disp);			// `movss xd, [base + disp]` (F3 0F 10)
+		void movssStore(Reg base, int32_t disp, Reg xs);		// `movss [base + disp], xs` (F3 0F 11)
+		void addss(Reg xd, Reg xs);								// `addss xd, xs`
+		void subss(Reg xd, Reg xs);								// `subss xd, xs`
+		void mulss(Reg xd, Reg xs);								// `mulss xd, xs`
+		void divss(Reg xd, Reg xs);								// `divss xd, xs`
+		void ucomiss(Reg xa, Reg xb);							// `ucomiss xa, xb` (sets EFLAGS for a float compare)
+		void cvttss2si(Reg rd, Reg xs);							// `cvttss2si rd, xs` (float -> int, truncate; FTOI)
+		void cvtsi2ss(Reg xd, Reg rs);							// `cvtsi2ss xd, rs` (int -> float; ITOF)
+		void movdToXmm(Reg xd, Reg rs);							// `movd xd, rs` (bit-copy int -> xmm; float const load)
+		void roundss(Reg xd, Reg xs, uint8_t mode);				// `roundss xd, xs, imm8` (SSE4.1; mode 1 = floor; FLOF)
+
 		// --- stack / control ---
 		void push(Reg r);										// `push r` (50+rd, REX.B for r8-15)
 		void pop(Reg r);										// `pop r`  (58+rd)
@@ -132,6 +145,7 @@ class X64Emitter {
 		void rex(bool w, int reg, int base);					// emit REX iff needed (W, or reg/base extended)
 		void modrmReg(int reg, int rm);							// mod=11 register-direct
 		void memOperand(int reg, Reg base, int32_t disp);		// ModRM (+SIB +disp) for [base + disp]
+		void sseRR(uint8_t prefix, uint8_t opcode, int reg, int rm);	// [prefix] REX? 0F opcode  register-direct SSE form
 		void aluImm(int ext, Reg rd, uint32_t imm);				// 81 /ext id  (ext selects add/sub/cmp/...)
 		void relBranch(int labelId);							// emit a rel32 placeholder + record a fixup
 

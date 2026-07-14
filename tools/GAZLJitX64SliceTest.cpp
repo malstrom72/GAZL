@@ -22,7 +22,7 @@
 */
 
 /*
-	X64 lowering vertical slice: a minimal, general integer lowering pass (no calls, no floats, no fuel/suspend) that
+	X64 lowering vertical slice: a minimal, general lowering pass (integer + float; no calls, no fuel/suspend) that
 	compiles an *assembled* GAZL function straight through the X64Emitter, runs the native code under Rosetta, and diffs
 	the result against the GAZL interpreter over a range of inputs. Proves the SysV frame/dsp model, memory (PEEK/POKE)
 	via a pinned base register, the integer op subset, and the Label/rel32 branch pass end to end. Sibling of the arm64
@@ -89,6 +89,29 @@ static const char* const ARITH_SOURCE =
 	"       POKE &gOut $a\n"
 	"       RETU\n";
 
+// Exercises the float set: ITOF/FTOI, add/sub/mul/div, abs, floor, and a float compare-branch. int in, int out.
+static const char* const FLOAT_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$f:    LOCf\n" "$g:    LOCf\n"
+	"       PEEK $n &gIn\n"
+	"       iTOf $f $n #1.0\n"				// f = (float)n
+	"       MULf $g $f #0.25\n"
+	"       ADDf $g $g #10.5\n"
+	"       SUBf $g $f $g\n"
+	"       DIVf $g $g #3.0\n"
+	"       ABSf $g $g\n"
+	"       MOVf $f #0.0\n"
+	"       GEQf $g #1000.0 @.big\n"	// if g >= 1000 goto big
+	"       MOVf $f $g\n"
+	"       GOTO @.done\n"
+	".big:  MOVf $f #1000.0\n"
+	".done: FLOf $f $f\n"				// floor
+	"       fTOi $n $f #1.0\n"				// n = (int)f
+	"       POKE &gOut $n\n"
+	"       RETU\n";
+
 namespace {
 	const int CODE_SIZE = 64 * 1024, DATA_SIZE = 64 * 1024, FUNCTION_TABLE_SIZE = 1024, CALL_STACK_SIZE = 256;
 	Instruction gCode[CODE_SIZE];
@@ -133,9 +156,10 @@ static int interpreterRun(Symbols& globals, Pointer gInPtr, Pointer gOutPtr, int
 	return p.accessMemory(gOutPtr, 1)->i;
 }
 
-// --- the minimal x64 integer lowering ---
+// --- the minimal x64 lowering (integer + float) ---
 
-static const Reg DSP = RBX, MEM = R14, A = RCX, B = RDX;		// pinned + scratch roles
+static const Reg DSP = RBX, MEM = R14, A = RCX, B = RDX;		// pinned + GP scratch roles
+static const Reg F0 = static_cast<Reg>(0), F1 = static_cast<Reg>(1);	// XMM scratch (separate file from GP)
 
 static bool branchTgt(const Instruction* code, UInt j, UInt& t) {
 	const Int op = code[j].opcode;
@@ -191,7 +215,32 @@ static void emitBranch(X64Emitter& e, Cond cc, const Instruction& in, UInt j, bo
 	e.jcc(cc, lbl[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 }
 
-static bool lowerX64Integer(X64Emitter& e, const Instruction* code, UInt funcStart) {
+// Render a float operand into an XMM reg: a slot (movss load) or a constant (int bits -> movd).
+static void toXmm(X64Emitter& e, Reg xmm, const Value& p, bool isConst) {
+	if (isConst) { e.movImm(A, static_cast<uint32_t>(p.i)); e.movdToXmm(xmm, A); }
+	else { e.movssLoad(xmm, DSP, p.i * 4); }
+}
+
+// dst = a <fop> b  (fop = addss/subss/mulss/divss), operands in the const modes named by the opcode.
+static void emitFBin(X64Emitter& e, BinOp fop, const Instruction& in, bool s1Const, bool s2Const) {
+	toXmm(e, F0, in.p1, s1Const);
+	toXmm(e, F1, in.p2, s2Const);
+	(e.*fop)(F0, F1);
+	e.movssStore(DSP, in.p0.i * 4, F0);
+}
+
+// Float compare-branch, NaN-correct vs C++: kind 0=< 1=>= 2=== 3=!=. a=p0, b=p1.
+static void emitFBranch(X64Emitter& e, int kind, const Instruction& in, UInt j, bool c0Const, bool c1Const, std::map<UInt, Label>& lbl) {
+	toXmm(e, F0, in.p0, c0Const);
+	toXmm(e, F1, in.p1, c1Const);
+	Label tgt = lbl[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)];
+	if (kind == 0) { e.ucomiss(F1, F0); e.jcc(CC_A, tgt); }				// b>a ordered  == (a<b)
+	else if (kind == 1) { e.ucomiss(F0, F1); e.jcc(CC_AE, tgt); }		// a>=b ordered
+	else if (kind == 2) { e.ucomiss(F0, F1); Label over = e.newLabel(); e.jcc(CC_P, over); e.jcc(CC_E, tgt); e.bind(over); }
+	else { e.ucomiss(F0, F1); e.jcc(CC_P, tgt); e.jcc(CC_NE, tgt); }		// unordered or not-equal
+}
+
+static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
 	UInt end = funcStart;
 	while (code[end].opcode != OP_RETU) { ++end; }
 
@@ -266,6 +315,38 @@ static bool lowerX64Integer(X64Emitter& e, const Instruction* code, UInt funcSta
 				e.jcc(CC_L, lbl[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 
+			case OP_ADDF_VVV: emitFBin(e, &X64Emitter::addss, in, false, false); break;
+			case OP_ADDF_VVC: emitFBin(e, &X64Emitter::addss, in, false, true); break;
+			case OP_SUBF_VVV: emitFBin(e, &X64Emitter::subss, in, false, false); break;
+			case OP_SUBF_VVC: emitFBin(e, &X64Emitter::subss, in, false, true); break;
+			case OP_SUBF_VCV: emitFBin(e, &X64Emitter::subss, in, true, false); break;
+			case OP_MULF_VVV: emitFBin(e, &X64Emitter::mulss, in, false, false); break;
+			case OP_MULF_VVC: emitFBin(e, &X64Emitter::mulss, in, false, true); break;
+			case OP_DIVF_VVV: emitFBin(e, &X64Emitter::divss, in, false, false); break;
+			case OP_DIVF_VVC: emitFBin(e, &X64Emitter::divss, in, false, true); break;
+			case OP_DIVF_VCV: emitFBin(e, &X64Emitter::divss, in, true, false); break;
+			// FTOI/ITOF carry a scale constant (p2): FTOI = (int)(src * scale), ITOF = (float)src * scale.
+			case OP_FTOI_VVC:
+				e.movssLoad(F0, DSP, in.p1.i * 4);
+				e.movImm(A, static_cast<uint32_t>(in.p2.i)); e.movdToXmm(F1, A); e.mulss(F0, F1);
+				e.cvttss2si(A, F0); e.store(DSP, in.p0.i * 4, A); break;
+			case OP_ITOF_VVC:
+				e.load(A, DSP, in.p1.i * 4); e.cvtsi2ss(F0, A);
+				e.movImm(A, static_cast<uint32_t>(in.p2.i)); e.movdToXmm(F1, A); e.mulss(F0, F1);
+				e.movssStore(DSP, in.p0.i * 4, F0); break;
+			case OP_ABSF: e.load(A, DSP, in.p1.i * 4); e.movImm(B, 0x7fffffffu); e.and_(A, B); e.store(DSP, in.p0.i * 4, A); break;
+			case OP_FLOF: e.movssLoad(F0, DSP, in.p1.i * 4); e.roundss(F1, F0, 1); e.movssStore(DSP, in.p0.i * 4, F1); break;
+			case OP_LSSF_VVB: emitFBranch(e, 0, in, j, false, false, lbl); break;
+			case OP_LSSF_VCB: emitFBranch(e, 0, in, j, false, true, lbl); break;
+			case OP_LSSF_CVB: emitFBranch(e, 0, in, j, true, false, lbl); break;
+			case OP_EQUF_VVB: emitFBranch(e, 2, in, j, false, false, lbl); break;
+			case OP_EQUF_VCB: emitFBranch(e, 2, in, j, false, true, lbl); break;
+			case OP_NLSF_VVB: emitFBranch(e, 1, in, j, false, false, lbl); break;
+			case OP_NLSF_VCB: emitFBranch(e, 1, in, j, false, true, lbl); break;
+			case OP_NLSF_CVB: emitFBranch(e, 1, in, j, true, false, lbl); break;
+			case OP_NEQF_VVB: emitFBranch(e, 3, in, j, false, false, lbl); break;
+			case OP_NEQF_VCB: emitFBranch(e, 3, in, j, false, true, lbl); break;
+
 			case OP_GOTO: e.jmp(lbl[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
 
 			case OP_LSSI_VVB: emitBranch(e, CC_L, in, j, false, false, lbl); break;
@@ -294,7 +375,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	Pointer gInPtr = NULL_POINTER, gOutPtr = NULL_POINTER;
 	if (!assembleKernel(globals, source, gInPtr, gOutPtr)) { std::printf("  %s: assemble failed\n", name); ++failures; return; }
 	X64Emitter e;
-	if (!lowerX64Integer(e, gCode, gFunctionTable[globals.findFunction("main") - IP_OFFSET])) {
+	if (!lowerX64(e, gCode, gFunctionTable[globals.findFunction("main") - IP_OFFSET])) {
 		std::printf("  %s: unsupported opcode\n", name); ++failures; return;
 	}
 	void* code = mapExecutable(e.code(), e.size());
@@ -321,6 +402,9 @@ int main() {
 	runKernel("sumTo", SUMTO_SOURCE, sumInputs, sizeof(sumInputs) / sizeof(*sumInputs));
 	std::printf("\n");
 	runKernel("arith", ARITH_SOURCE, arithInputs, sizeof(arithInputs) / sizeof(*arithInputs));
+	std::printf("\n");
+	const int floatInputs[] = { 0, 1, 10, 100, 1000, 5000, -100, -5000, 12345 };
+	runKernel("float", FLOAT_SOURCE, floatInputs, sizeof(floatInputs) / sizeof(*floatInputs));
 	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
 	return failures == 0 ? 0 : 1;
 }
