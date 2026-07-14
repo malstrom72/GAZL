@@ -24,8 +24,13 @@ if [ "$host" = "arm64" ] || [ "$host" = "aarch64" ]; then
 fi
 
 mkdir -p output
+# GAZLJitX64.cpp now hosts JitCompiler::compile, so it pulls in GAZLJit.h / GAZL.h and needs the VM + JIT-mem backend
+# linked in (mirrors how the arm64 emitter test links GAZLJit.cpp). GAZLJitMemPosix.cpp is enough for these tests.
 "$CPP" $opt $archflag -std=c++11 -I src \
 	src/GAZLJitX64.cpp \
+	src/GAZLJit.cpp \
+	src/GAZL.cpp \
+	src/GAZLJitMemPosix.cpp \
 	tools/GAZLJitX64Test.cpp \
 	tools/GAZLJitX64TestRef.x64.s \
 	-o output/GAZLJitX64Test

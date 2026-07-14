@@ -22,6 +22,12 @@
 */
 
 #include "GAZLJitX64.h"
+#include "GAZLJit.h"			// arch-neutral opcode enum + Offsets / JitModule / JitProcessor / JitCompiler (+ GAZL.h)
+#include "GAZLJitMem.h"			// makeExecutable() — platform-specific backend, architecture-neutral
+
+#include <cstddef>
+#include <map>
+#include <vector>
 
 namespace GAZL {
 
@@ -203,6 +209,506 @@ void X64Emitter::finalize() {
 		bytes[f.site + 2] = static_cast<uint8_t>(u >> 16);
 		bytes[f.site + 3] = static_cast<uint8_t>(u >> 24);
 	}
+}
+
+
+// ============================================================================================================
+// JIT lowering, native dispatcher, and the JitCompiler driver (declarations in GAZLJit.h). Depends on GAZL.h and the
+// X64Emitter above. The emit helpers are file-local (`static`); lowerFunction / emitDispatcher / JitCompiler::compile
+// are the external surface. JitCompiler::compile calls makeExecutable(), so anything linking this file also links a
+// per-platform GAZLJitMem*.cpp backend. This is the x86-64 counterpart of GAZLJitArm64.cpp's lowering; it reuses the
+// verified per-instruction lowering from tools/GAZLJitX64SliceTest.cpp, re-hosted onto the JitProcessor field ABI.
+//
+// Register roles (SysV AMD64). Each GAZL function compiles to
+//   Status function(Value* dsp, Value* memory, Value* dataStackEnd, JitProcessor* ctx)
+// entered with rdi=dsp, rsi=memory, rdx=dataStackEnd, rcx=ctx, and pins them into callee-saved registers:
+//   rbx=dsp (advanced by FUNC), r14=memoryBase, r15=dataStackEnd, r12=ctx.
+// Scratch is rax + rcx/rdx (after the prologue reads the args) + xmm0/xmm1. GAZL->GAZL calls are ordinary C calls (the
+// C stack is the call stack); one shared aligned epilogue returns the Status in eax. This is a run-to-completion
+// backend — no fuel, no suspend, no RESUME transfers — so the whole program finishes inside one dispatcher entry.
+// ============================================================================================================
+
+// --- pinned registers + scratch roles ---
+
+static const Reg DSP = RBX, MEMORY_BASE = R14, DATA_STACK_END = R15, CONTEXT = R12;
+static const Reg SCRATCH_A = RCX, SCRATCH_B = RDX;					// general scratch (A also serves as the shift-count CL)
+static const Reg FLOAT_0 = static_cast<Reg>(0), FLOAT_1 = static_cast<Reg>(1);	// xmm0 / xmm1 (a separate register file from GP)
+
+// Compute a branch instruction's absolute target index. Returns false if `instructionIndex` is not a branch.
+static bool branchTarget(const Instruction* code, UInt instructionIndex, UInt& target) {
+	const Int opcode = code[instructionIndex].opcode;
+	if (opcode == OP_GOTO) {
+		target = static_cast<UInt>(static_cast<Int>(instructionIndex) + code[instructionIndex].p0.i);
+		return true;
+	}
+	if (opcode >= OP_FORi_VVB && opcode <= OP_NEQF_VCB) {
+		target = static_cast<UInt>(static_cast<Int>(instructionIndex) + code[instructionIndex].p2.i);
+		return true;
+	}
+	return false;
+}
+
+// Render an integer operand into register `reg`: a frame slot (load off dsp) or an immediate constant.
+static void loadOperand(X64Emitter& emitter, Reg reg, const Value& operand, bool isConst) {
+	if (isConst) { emitter.movImm(reg, static_cast<uint32_t>(operand.i)); }
+	else { emitter.load(reg, DSP, operand.i * 4); }
+}
+
+typedef void (X64Emitter::*BinaryOp)(Reg, Reg);
+
+// destination = source1 <op> source2, each source a slot or a constant per its *Const flag; result flows through SCRATCH_A.
+static void emitBinary(X64Emitter& emitter, BinaryOp op, const Instruction& instruction, bool source1Const, bool source2Const) {
+	loadOperand(emitter, SCRATCH_A, instruction.p1, source1Const);
+	loadOperand(emitter, SCRATCH_B, instruction.p2, source2Const);
+	(emitter.*op)(SCRATCH_A, SCRATCH_B);
+	emitter.store(DSP, instruction.p0.i * 4, SCRATCH_A);
+}
+
+// Signed division (rem=false) / modulo (rem=true). Dividend p1 -> eax, divisor p2 -> ecx. Guards match the interpreter:
+// a runtime zero divisor traps DIVISION_BY_ZERO; divisor == -1 is special-cased (div -> -a, mod -> 0) to dodge the x86
+// #DE on INT_MIN / -1. Result is left in eax before the store. (A const-zero divisor is an assemble-time error, so the
+// zero guard is only for a variable divisor, matching arm64.)
+static void emitDivMod(X64Emitter& emitter, const Instruction& instruction, bool rem, bool source1Const, bool source2Const, Label epilogue) {
+	if (source1Const) { emitter.movImm(RAX, static_cast<uint32_t>(instruction.p1.i)); } else { emitter.load(RAX, DSP, instruction.p1.i * 4); }
+	if (source2Const) { emitter.movImm(RCX, static_cast<uint32_t>(instruction.p2.i)); } else { emitter.load(RCX, DSP, instruction.p2.i * 4); }
+	if (!source2Const) {
+		emitter.cmpImm(RCX, 0);
+		Label nonZero = emitter.newLabel();
+		emitter.jcc(CC_NE, nonZero);
+		emitter.movImm(RAX, static_cast<uint32_t>(DIVISION_BY_ZERO)); emitter.jmp(epilogue);
+		emitter.bind(nonZero);
+	}
+	emitter.cmpImm(RCX, 0xFFFFFFFFu);								// divisor == -1 ?
+	Label notMinusOne = emitter.newLabel(), done = emitter.newLabel();
+	emitter.jcc(CC_NE, notMinusOne);
+	if (rem) { emitter.movImm(RAX, 0); } else { emitter.neg(RAX); }
+	emitter.jmp(done);
+	emitter.bind(notMinusOne);
+	emitter.cdq(); emitter.idiv(RCX);
+	if (rem) { emitter.mov(RAX, RDX); }
+	emitter.bind(done);
+	emitter.store(DSP, instruction.p0.i * 4, RAX);
+}
+
+// Shift: value p1 -> eax, count p2 (const -> imm8, else slot -> cl). kind: 0 = shl, 1 = shr (logical), 2 = sar (arithmetic).
+static void emitShift(X64Emitter& emitter, const Instruction& instruction, int kind, bool source1Const, bool source2Const) {
+	if (source1Const) { emitter.movImm(RAX, static_cast<uint32_t>(instruction.p1.i)); } else { emitter.load(RAX, DSP, instruction.p1.i * 4); }
+	if (source2Const) {
+		const uint8_t count = static_cast<uint8_t>(instruction.p2.i & 31);
+		if (kind == 0) { emitter.shlImm(RAX, count); } else if (kind == 1) { emitter.shrImm(RAX, count); } else { emitter.sarImm(RAX, count); }
+	} else {
+		emitter.load(RCX, DSP, instruction.p2.i * 4);
+		if (kind == 0) { emitter.shlCl(RAX); } else if (kind == 1) { emitter.shrCl(RAX); } else { emitter.sarCl(RAX); }
+	}
+	emitter.store(DSP, instruction.p0.i * 4, RAX);
+}
+
+// if (a <condition> b) goto target — a = p0, b = p1, in the const modes named by the opcode; target = this index + p2.
+static void emitBranch(X64Emitter& emitter, Cond condition, const Instruction& instruction, UInt instructionIndex,
+		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels) {
+	loadOperand(emitter, SCRATCH_A, instruction.p0, operand0Const);
+	loadOperand(emitter, SCRATCH_B, instruction.p1, operand1Const);
+	emitter.cmp(SCRATCH_A, SCRATCH_B);
+	emitter.jcc(condition, labels[static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i)]);
+}
+
+// Render a float operand into an XMM register: a slot (movss load) or a constant (its int bits via movd).
+static void loadOperandFloat(X64Emitter& emitter, Reg xmm, const Value& operand, bool isConst) {
+	if (isConst) { emitter.movImm(SCRATCH_A, static_cast<uint32_t>(operand.i)); emitter.movdToXmm(xmm, SCRATCH_A); }
+	else { emitter.movssLoad(xmm, DSP, operand.i * 4); }
+}
+
+// destination = source1 <fop> source2 (fop = addss/subss/mulss/divss), operands per the opcode's const modes.
+static void emitBinaryFloat(X64Emitter& emitter, BinaryOp fop, const Instruction& instruction, bool source1Const, bool source2Const) {
+	loadOperandFloat(emitter, FLOAT_0, instruction.p1, source1Const);
+	loadOperandFloat(emitter, FLOAT_1, instruction.p2, source2Const);
+	(emitter.*fop)(FLOAT_0, FLOAT_1);
+	emitter.movssStore(DSP, instruction.p0.i * 4, FLOAT_0);
+}
+
+// Float compare-branch, NaN-correct versus C++: kind 0 = <, 1 = >=, 2 = ==, 3 = !=. a = p0, b = p1, target = index + p2.
+static void emitBranchFloat(X64Emitter& emitter, int kind, const Instruction& instruction, UInt instructionIndex,
+		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels) {
+	loadOperandFloat(emitter, FLOAT_0, instruction.p0, operand0Const);
+	loadOperandFloat(emitter, FLOAT_1, instruction.p1, operand1Const);
+	Label target = labels[static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i)];
+	if (kind == 0) { emitter.ucomiss(FLOAT_1, FLOAT_0); emitter.jcc(CC_A, target); }			// b > a ordered  == (a < b)
+	else if (kind == 1) { emitter.ucomiss(FLOAT_0, FLOAT_1); emitter.jcc(CC_AE, target); }		// a >= b ordered
+	else if (kind == 2) { emitter.ucomiss(FLOAT_0, FLOAT_1); Label unordered = emitter.newLabel(); emitter.jcc(CC_P, unordered); emitter.jcc(CC_E, target); emitter.bind(unordered); }
+	else { emitter.ucomiss(FLOAT_0, FLOAT_1); emitter.jcc(CC_P, target); emitter.jcc(CC_NE, target); }	// unordered or not-equal
+}
+
+/*
+	Lower one GAZL function (starting at `funcStart`, an OP_FUNC) into `emitter` (appended). Emits the SysV prologue that
+	pins dsp/memory/dataStackEnd/ctx and runs the FUNC frame advance, then one x86-64 sequence per instruction up to the
+	terminating RETU. Direct calls resolve to `entryLabels[ordinal]` via rel32 fixups; every trap and every non-OK return
+	sets eax and jumps to the shared `epilogue`. Returns false on an opcode this backend cannot lower.
+*/
+static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart,
+		const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue, UInt functionCount) {
+	UInt endIndex = funcStart;
+	while (code[endIndex].opcode != OP_RETU) { ++endIndex; }
+
+	// Pass 1 — collect branch / SWCH-case targets and allocate a label for each.
+	std::map<UInt, Label> labels;
+	for (UInt j = funcStart; j <= endIndex; ++j) {
+		if (code[j].opcode == OP_SWCH) {							// every jump-table entry (read from const memory) is a target
+			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
+			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
+			for (UInt k = 0; k < size; ++k) {
+				const UInt target = static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i);
+				if (!labels.count(target)) { labels[target] = emitter.newLabel(); }
+			}
+			continue;
+		}
+		UInt target;
+		if (branchTarget(code, j, target) && !labels.count(target)) { labels[target] = emitter.newLabel(); }
+	}
+
+	// SysV prologue: save the callee-saved pins, keep rsp 16-aligned for inner calls, then set the pins from the args.
+	emitter.push(DSP); emitter.push(MEMORY_BASE); emitter.push(DATA_STACK_END); emitter.push(CONTEXT);
+	emitter.addImmQ(RSP, 0xFFFFFFF8u);							// sub rsp, 8
+	emitter.movQ(DSP, RDI); emitter.movQ(MEMORY_BASE, RSI); emitter.movQ(DATA_STACK_END, RDX); emitter.movQ(CONTEXT, RCX);
+	const UInt localsSize = static_cast<UInt>(code[funcStart].p0.i);
+	if (localsSize != 0) { emitter.addImmQ(DSP, localsSize * 4u); }	// FUNC: advance dsp to this frame
+
+	// Pass 2 — emit.
+	for (UInt j = funcStart; j <= endIndex; ++j) {
+		std::map<UInt, Label>::iterator labelIt = labels.find(j);
+		if (labelIt != labels.end()) { emitter.bind(labelIt->second); }
+		const Instruction& in = code[j];
+		const Int op = in.opcode;
+		switch (op) {
+			case OP_FUNC: break;
+			case OP_RETU:
+				emitter.movImm(RAX, 0); emitter.jmp(epilogue);		// Status OK -> shared epilogue
+				break;
+
+			case OP_CALL_CVC: {										// direct GAZL call: callee runs with dsp += window, returns Status in eax
+				const UInt callee = in.p0.p - IP_OFFSET;
+				emitter.movQ(RDI, DSP);
+				if (in.p1.i != 0) { emitter.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }	// rdi = dsp + window
+				emitter.movQ(RSI, MEMORY_BASE); emitter.movQ(RDX, DATA_STACK_END); emitter.movQ(RCX, CONTEXT);
+				emitter.callRel(entryLabels[callee]);
+				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, epilogue);	// propagate a non-OK status
+				break;
+			}
+			case OP_CALL_VVC: {										// indirect call: fn pointer in a slot -> ordinal -> ctx.funcEntries[ordinal]
+				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+				emitter.load(RCX, DSP, in.p0.i * 4);				// fn pointer = IP_OFFSET + ordinal
+				emitter.subImm(RCX, IP_OFFSET);						// ordinal
+				emitter.cmpImm(RCX, functionCount);
+				emitter.jcc(CC_AE, trap);							// (unsigned) ordinal >= functionCount -> BAD_CALL
+				emitter.loadQ(RAX, CONTEXT, offsets.funcentries);	// funcEntries base
+				emitter.shlImm(RCX, 3);								// ordinal * 8 (byte index)
+				emitter.addQ(RAX, RCX); emitter.loadQ(RAX, RAX, 0);	// RAX = funcEntries[ordinal]
+				emitter.movQ(RDI, DSP);
+				if (in.p1.i != 0) { emitter.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }
+				emitter.movQ(RSI, MEMORY_BASE); emitter.movQ(RDX, DATA_STACK_END); emitter.movQ(RCX, CONTEXT);
+				emitter.callReg(RAX);
+				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, epilogue);
+				emitter.jmp(cont);
+				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_CALL)); emitter.jmp(epilogue);
+				emitter.bind(cont);
+				break;
+			}
+			case OP_CALL_NVC: {										// native call: params = dsp + window written to ctx.dsp; fn = ctx.natives[ordinal]
+				const UInt ordinal = static_cast<UInt>(in.p0.i);
+				emitter.movQ(RAX, DSP);
+				if (in.p1.i != 0) { emitter.addImmQ(RAX, static_cast<uint32_t>(in.p1.i) * 4u); }	// rax = param window
+				emitter.storeQ(CONTEXT, offsets.dsp, RAX);			// ctx.dsp = window (accessParams reads it; our dsp stays pinned in rbx)
+				Label retry = emitter.newLabel();
+				emitter.bind(retry);								// blocking-retry: re-issue the call until it stops returning BLOCK_RETRY
+				emitter.loadQ(RAX, CONTEXT, offsets.natives);		// natives base
+				emitter.loadQ(RAX, RAX, static_cast<int32_t>(ordinal * 8));	// rax = natives[ordinal]
+				emitter.movQ(RDI, CONTEXT);							// the native takes Processor* (= ctx)
+				emitter.callReg(RAX);
+				emitter.cmpImm(RAX, static_cast<uint32_t>(BLOCK_RETRY)); emitter.jcc(CC_E, retry);
+				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, epilogue);	// any other non-OK status -> propagate
+				break;
+			}
+
+			case OP_MOVE_VV: emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
+			case OP_MOVE_VC: emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i)); emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
+
+			case OP_PEEK_VC: emitter.load(SCRATCH_A, MEMORY_BASE, static_cast<int32_t>((in.p1.p - MEMORY_OFFSET) * 4)); emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
+			case OP_POKE_CV: emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), SCRATCH_A); break;
+			case OP_POKE_CC: emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), SCRATCH_A); break;
+
+			// var-indexed global memory: base const (p1/p0), index var, value var/const. Bounds-checked against the
+			// memory size the interpreter uses — memorySize (read) / rwMemorySize (write) — matching GAZLJitArm64.cpp.
+			case OP_PEEK_VCV: {
+				const int32_t base = static_cast<int32_t>(in.p1.p - MEMORY_OFFSET);
+				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+				emitter.load(SCRATCH_A, DSP, in.p2.i * 4);			// index (ecx)
+				emitter.mov(RAX, SCRATCH_A); emitter.addImm(RAX, static_cast<uint32_t>(base));	// word index = base + index
+				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);	// >= memorySize -> BAD_PEEK
+				emitter.loadIdx(RAX, MEMORY_BASE, SCRATCH_A, base * 4);
+				emitter.store(DSP, in.p0.i * 4, RAX);
+				emitter.jmp(cont);
+				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
+				emitter.bind(cont);
+				break;
+			}
+			case OP_POKE_CVV: case OP_POKE_CVC: {
+				const int32_t base = static_cast<int32_t>(in.p0.p - MEMORY_OFFSET);
+				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+				emitter.load(SCRATCH_A, DSP, in.p1.i * 4);			// index (ecx)
+				emitter.mov(RAX, SCRATCH_A); emitter.addImm(RAX, static_cast<uint32_t>(base));	// word index = base + index
+				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);	// >= rwMemorySize -> BAD_POKE
+				if (op == OP_POKE_CVC) { emitter.movImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); } else { emitter.load(SCRATCH_B, DSP, in.p2.i * 4); }
+				emitter.storeIdx(MEMORY_BASE, SCRATCH_A, base * 4, SCRATCH_B);
+				emitter.jmp(cont);
+				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
+				emitter.bind(cont);
+				break;
+			}
+
+			// local array (frame): base = dsp + C (p1 for GETL, p0 for SETL), index var. The bound is the free frame span
+			// (dataStackEnd - dsp) in Value units, minus C — exactly GAZLJitArm64.cpp's GETL/SETL formula.
+			case OP_GETL_VVV: {
+				const int32_t frameBase = static_cast<int32_t>(in.p1.i);
+				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+				emitter.loadQ(RAX, CONTEXT, offsets.dsend); emitter.subQ(RAX, DSP); emitter.shrImm(RAX, 2);	// (dataStackEnd - dsp) in words
+				emitter.subImm(RAX, static_cast<uint32_t>(frameBase));	// limit = words - C
+				emitter.load(SCRATCH_A, DSP, in.p2.i * 4); emitter.cmp(SCRATCH_A, RAX); emitter.jcc(CC_AE, trap);	// index >= limit -> BAD_PEEK
+				emitter.loadIdx(RAX, DSP, SCRATCH_A, frameBase * 4);	// [dsp + index*4 + C*4]
+				emitter.store(DSP, in.p0.i * 4, RAX);
+				emitter.jmp(cont);
+				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
+				emitter.bind(cont);
+				break;
+			}
+			case OP_SETL_VVV: case OP_SETL_VVC: {
+				const int32_t frameBase = static_cast<int32_t>(in.p0.i);
+				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+				emitter.loadQ(RAX, CONTEXT, offsets.dsend); emitter.subQ(RAX, DSP); emitter.shrImm(RAX, 2);
+				emitter.subImm(RAX, static_cast<uint32_t>(frameBase));	// limit = words - C
+				emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.cmp(SCRATCH_A, RAX); emitter.jcc(CC_AE, trap);	// index >= limit -> BAD_POKE
+				if (op == OP_SETL_VVC) { emitter.movImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); } else { emitter.load(SCRATCH_B, DSP, in.p2.i * 4); }
+				emitter.storeIdx(DSP, SCRATCH_A, frameBase * 4, SCRATCH_B);	// [dsp + index*4 + C*4] = value
+				emitter.jmp(cont);
+				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
+				emitter.bind(cont);
+				break;
+			}
+
+			// bulk copy p2 words from src (p1) to dst (p0) via rep movsd. Each pointer is a const memory address or a slot
+			// holding a GAZL pointer; resolve to a byte address (memoryBase + wordIndex*4). Unchecked, as in the slice.
+			case OP_COPY_VVC: case OP_COPY_VCC: case OP_COPY_CVC: case OP_COPY_CCC: {
+				const bool destConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
+				const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
+				if (destConst) { emitter.movQ(RDI, MEMORY_BASE); emitter.addImmQ(RDI, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); }
+				else { emitter.load(RAX, DSP, in.p0.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); emitter.shlImm(RAX, 2); emitter.movQ(RDI, MEMORY_BASE); emitter.addQ(RDI, RAX); }
+				if (srcConst) { emitter.movQ(RSI, MEMORY_BASE); emitter.addImmQ(RSI, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); }
+				else { emitter.load(RAX, DSP, in.p1.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); emitter.shlImm(RAX, 2); emitter.movQ(RSI, MEMORY_BASE); emitter.addQ(RSI, RAX); }
+				emitter.movImm(RCX, static_cast<uint32_t>(in.p2.i));
+				emitter.cld(); emitter.repMovsd();
+				break;
+			}
+
+			// address of a local p1 -> dest p0. pointer = MEMORY_OFFSET + wordIndex(dsp) + slot.
+			case OP_ADRL:
+				emitter.movQ(RAX, DSP); emitter.subQ(RAX, MEMORY_BASE); emitter.shrImm(RAX, 2);	// (dsp - memoryBase) / 4 = dsp word offset
+				emitter.addImm(RAX, static_cast<uint32_t>(in.p1.i));		// + slot
+				emitter.addImm(RAX, MEMORY_OFFSET);
+				emitter.store(DSP, in.p0.i * 4, RAX); break;
+
+			case OP_ADDI_VVV: emitBinary(emitter, &X64Emitter::add, in, false, false); break;
+			case OP_ADDI_VVC: emitBinary(emitter, &X64Emitter::add, in, false, true); break;
+			case OP_SUBI_VVV: emitBinary(emitter, &X64Emitter::sub, in, false, false); break;
+			case OP_SUBI_VVC: emitBinary(emitter, &X64Emitter::sub, in, false, true); break;
+			case OP_SUBI_VCV: emitBinary(emitter, &X64Emitter::sub, in, true, false); break;
+			case OP_MULI_VVV: emitBinary(emitter, &X64Emitter::imul, in, false, false); break;
+			case OP_MULI_VVC: emitBinary(emitter, &X64Emitter::imul, in, false, true); break;
+			case OP_ANDI_VVV: emitBinary(emitter, &X64Emitter::and_, in, false, false); break;
+			case OP_ANDI_VVC: emitBinary(emitter, &X64Emitter::and_, in, false, true); break;
+			case OP_IORI_VVV: emitBinary(emitter, &X64Emitter::or_, in, false, false); break;
+			case OP_IORI_VVC: emitBinary(emitter, &X64Emitter::or_, in, false, true); break;
+			case OP_XORI_VVV: emitBinary(emitter, &X64Emitter::xor_, in, false, false); break;
+			case OP_XORI_VVC: emitBinary(emitter, &X64Emitter::xor_, in, false, true); break;
+
+			case OP_DIVI_VVV: emitDivMod(emitter, in, false, false, false, epilogue); break;
+			case OP_DIVI_VVC: emitDivMod(emitter, in, false, false, true, epilogue); break;
+			case OP_DIVI_VCV: emitDivMod(emitter, in, false, true, false, epilogue); break;
+			case OP_MODI_VVV: emitDivMod(emitter, in, true, false, false, epilogue); break;
+			case OP_MODI_VVC: emitDivMod(emitter, in, true, false, true, epilogue); break;
+			case OP_MODI_VCV: emitDivMod(emitter, in, true, true, false, epilogue); break;
+			case OP_SHLI_VVV: emitShift(emitter, in, 0, false, false); break;
+			case OP_SHLI_VVC: emitShift(emitter, in, 0, false, true); break;
+			case OP_SHLI_VCV: emitShift(emitter, in, 0, true, false); break;
+			case OP_SHRI_VVV: emitShift(emitter, in, 2, false, false); break;
+			case OP_SHRI_VVC: emitShift(emitter, in, 2, false, true); break;
+			case OP_SHRI_VCV: emitShift(emitter, in, 2, true, false); break;
+			case OP_SHRU_VVV: emitShift(emitter, in, 1, false, false); break;
+			case OP_SHRU_VVC: emitShift(emitter, in, 1, false, true); break;
+			case OP_SHRU_VCV: emitShift(emitter, in, 1, true, false); break;
+			case OP_ABSI:
+				emitter.load(RAX, DSP, in.p1.i * 4);				// |x| = (x ^ (x >> 31)) - (x >> 31)
+				emitter.mov(RDX, RAX); emitter.sarImm(RDX, 31); emitter.xor_(RAX, RDX); emitter.sub(RAX, RDX);
+				emitter.store(DSP, in.p0.i * 4, RAX);
+				break;
+
+			case OP_FORi_VVB: case OP_FORi_VCB:
+				emitter.load(SCRATCH_A, DSP, in.p0.i * 4); emitter.addImm(SCRATCH_A, 1); emitter.store(DSP, in.p0.i * 4, SCRATCH_A);
+				loadOperand(emitter, SCRATCH_B, in.p1, op == OP_FORi_VCB);
+				emitter.cmp(SCRATCH_A, SCRATCH_B);
+				emitter.jcc(CC_L, labels[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
+				break;
+
+			case OP_ADDF_VVV: emitBinaryFloat(emitter, &X64Emitter::addss, in, false, false); break;
+			case OP_ADDF_VVC: emitBinaryFloat(emitter, &X64Emitter::addss, in, false, true); break;
+			case OP_SUBF_VVV: emitBinaryFloat(emitter, &X64Emitter::subss, in, false, false); break;
+			case OP_SUBF_VVC: emitBinaryFloat(emitter, &X64Emitter::subss, in, false, true); break;
+			case OP_SUBF_VCV: emitBinaryFloat(emitter, &X64Emitter::subss, in, true, false); break;
+			case OP_MULF_VVV: emitBinaryFloat(emitter, &X64Emitter::mulss, in, false, false); break;
+			case OP_MULF_VVC: emitBinaryFloat(emitter, &X64Emitter::mulss, in, false, true); break;
+			case OP_DIVF_VVV: emitBinaryFloat(emitter, &X64Emitter::divss, in, false, false); break;
+			case OP_DIVF_VVC: emitBinaryFloat(emitter, &X64Emitter::divss, in, false, true); break;
+			case OP_DIVF_VCV: emitBinaryFloat(emitter, &X64Emitter::divss, in, true, false); break;
+			// FTOI / ITOF carry a scale constant (p2): FTOI = (int)(src * scale) with the interpreter's saturation;
+			// ITOF = (float)src * scale.
+			case OP_FTOI_VVC: {
+				emitter.movssLoad(FLOAT_0, DSP, in.p1.i * 4);
+				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p2.i)); emitter.movdToXmm(FLOAT_1, SCRATCH_A); emitter.mulss(FLOAT_0, FLOAT_1);	// * scale
+				emitter.cvttss2si(SCRATCH_A, FLOAT_0);				// x86 yields 0x80000000 for overflow / inf / NaN
+				emitter.cmpImm(SCRATCH_A, 0x80000000u);
+				Label ftoiDone = emitter.newLabel();
+				emitter.jcc(CC_NE, ftoiDone);						// in range -> done; else saturate like the interpreter's ftoi()
+				emitter.ucomiss(FLOAT_0, FLOAT_0);					// NaN sets PF
+				Label ftoiNotNan = emitter.newLabel();
+				emitter.jcc(CC_NP, ftoiNotNan);
+				emitter.movImm(SCRATCH_A, 0); emitter.jmp(ftoiDone);	// NaN -> 0
+				emitter.bind(ftoiNotNan);
+				emitter.movdFromXmm(SCRATCH_B, FLOAT_0); emitter.cmpImm(SCRATCH_B, 0);	// sign bit: signed >= 0 means positive / +inf
+				Label ftoiNegative = emitter.newLabel();
+				emitter.jcc(CC_L, ftoiNegative);					// negative / -inf -> keep INT_MIN
+				emitter.movImm(SCRATCH_A, 0x7FFFFFFFu);				// positive / +inf -> INT_MAX
+				emitter.bind(ftoiNegative); emitter.bind(ftoiDone);
+				emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
+			}
+			case OP_ITOF_VVC:
+				emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.cvtsi2ss(FLOAT_0, SCRATCH_A);
+				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p2.i)); emitter.movdToXmm(FLOAT_1, SCRATCH_A); emitter.mulss(FLOAT_0, FLOAT_1);
+				emitter.movssStore(DSP, in.p0.i * 4, FLOAT_0); break;
+			case OP_ABSF: emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.movImm(SCRATCH_B, 0x7FFFFFFFu); emitter.and_(SCRATCH_A, SCRATCH_B); emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
+			case OP_FLOF: emitter.movssLoad(FLOAT_0, DSP, in.p1.i * 4); emitter.roundss(FLOAT_1, FLOAT_0, 1); emitter.movssStore(DSP, in.p0.i * 4, FLOAT_1); break;
+
+			case OP_LSSF_VVB: emitBranchFloat(emitter, 0, in, j, false, false, labels); break;
+			case OP_LSSF_VCB: emitBranchFloat(emitter, 0, in, j, false, true, labels); break;
+			case OP_LSSF_CVB: emitBranchFloat(emitter, 0, in, j, true, false, labels); break;
+			case OP_EQUF_VVB: emitBranchFloat(emitter, 2, in, j, false, false, labels); break;
+			case OP_EQUF_VCB: emitBranchFloat(emitter, 2, in, j, false, true, labels); break;
+			case OP_NLSF_VVB: emitBranchFloat(emitter, 1, in, j, false, false, labels); break;
+			case OP_NLSF_VCB: emitBranchFloat(emitter, 1, in, j, false, true, labels); break;
+			case OP_NLSF_CVB: emitBranchFloat(emitter, 1, in, j, true, false, labels); break;
+			case OP_NEQF_VVB: emitBranchFloat(emitter, 3, in, j, false, false, labels); break;
+			case OP_NEQF_VCB: emitBranchFloat(emitter, 3, in, j, false, true, labels); break;
+
+			case OP_GOTO: emitter.jmp(labels[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
+
+			case OP_SWCH: {											// index = min(unsigned(V0), C1); jump into a table of `jmp case`
+				const UInt size = static_cast<UInt>(in.p1.i) + 1;
+				const UInt table = static_cast<UInt>(in.p2.p - MEMORY_OFFSET);
+				emitter.load(SCRATCH_A, DSP, in.p0.i * 4);
+				emitter.cmpImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i));
+				Label keep = emitter.newLabel();
+				emitter.jcc(CC_BE, keep);							// (unsigned) val <= C1 -> keep; else clamp
+				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i));
+				emitter.bind(keep);
+				emitter.mov(SCRATCH_B, SCRATCH_A); emitter.shlImm(SCRATCH_B, 2); emitter.add(SCRATCH_B, SCRATCH_A);	// index * 5 (each table jmp is 5 bytes)
+				Label tableBase = emitter.newLabel();
+				emitter.leaRip(RAX, tableBase); emitter.addQ(RAX, SCRATCH_B); emitter.jmpReg(RAX);
+				emitter.bind(tableBase);
+				for (UInt k = 0; k < size; ++k) {
+					const UInt target = static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i);
+					emitter.jmp(labels[target]);
+				}
+				break;
+			}
+
+			case OP_LSSI_VVB: emitBranch(emitter, CC_L, in, j, false, false, labels); break;
+			case OP_LSSI_VCB: emitBranch(emitter, CC_L, in, j, false, true, labels); break;
+			case OP_LSSI_CVB: emitBranch(emitter, CC_L, in, j, true, false, labels); break;
+			case OP_EQUI_VVB: emitBranch(emitter, CC_E, in, j, false, false, labels); break;
+			case OP_EQUI_VCB: emitBranch(emitter, CC_E, in, j, false, true, labels); break;
+			case OP_NLSI_VVB: emitBranch(emitter, CC_GE, in, j, false, false, labels); break;
+			case OP_NLSI_VCB: emitBranch(emitter, CC_GE, in, j, false, true, labels); break;
+			case OP_NLSI_CVB: emitBranch(emitter, CC_GE, in, j, true, false, labels); break;
+			case OP_NEQI_VVB: emitBranch(emitter, CC_NE, in, j, false, false, labels); break;
+			case OP_NEQI_VCB: emitBranch(emitter, CC_NE, in, j, false, true, labels); break;
+
+			default: return false;									// unsupported opcode -> caller falls back to the interpreter
+		}
+	}
+	return true;
+}
+
+/*
+	Emit the native dispatcher trampoline: `int dispatch(JitProcessor* ctx)`. Unlike the arm64 dispatcher (which threads
+	TRANSFER / NATIVE_CALL segments), the x86-64 backend runs GAZL calls as real C calls, so a whole program completes
+	inside a single compiled entry. The trampoline just loads the ctx run-state fields into the SysV argument registers
+	and jumps to `ctx.resume` (the entry seeded by JitProcessor::enterCall). Returns its byte offset in the buffer.
+*/
+static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets) {
+	const size_t entry = emitter.size();
+	// rdi = ctx on entry. Read the ctx fields BEFORE overwriting rdi (dsp is loaded last).
+	emitter.movQ(RCX, RDI);										// rcx = ctx
+	emitter.loadQ(RAX, RDI, offsets.resume);					// rax = resume (the entry to jump into)
+	emitter.loadQ(RSI, RDI, offsets.mb);						// rsi = memoryBase
+	emitter.loadQ(RDX, RDI, offsets.dsend);						// rdx = dataStackEnd
+	emitter.loadQ(RDI, RDI, offsets.dsp);						// rdi = dsp (overwrites the ctx base last)
+	emitter.addImmQ(RSP, 0xFFFFFFF8u);							// sub rsp, 8 — 16-align before the call
+	emitter.callReg(RAX);
+	emitter.addImmQ(RSP, 8u);
+	emitter.ret();												// eax = Status
+	return entry;
+}
+
+/*
+	JitCompiler::compile — lowers a whole finalized program to x86-64 machine code and fills a JitModule (the executable
+	page's dispatcher + ordinal->entry table, which the module then owns). Mirrors GAZLJitArm64.cpp's driver: lower every
+	function into one buffer, append one shared epilogue, append the dispatcher, publish via makeExecutable(), and record
+	the ordinal->entry table. Leaves `out` empty (ok() == false) on any opcode the backend cannot lower, so the caller
+	falls back to the interpreter.
+*/
+void JitCompiler::compile(const Instruction* code, UInt functionCount, const UInt* functionTable,
+		const Value* memory, JitModule& out) {
+	const Offsets offsets = JitProcessor::layout();				// the run-state ABI, obtained without an engine
+	X64Emitter emitter;
+	std::vector<Label> entryLabels(functionCount);
+	for (UInt k = 0; k < functionCount; ++k) { entryLabels[k] = emitter.newLabel(); }
+	Label epilogue = emitter.newLabel();
+
+	for (UInt ordinal = 0; ordinal < functionCount; ++ordinal) {
+		emitter.bind(entryLabels[ordinal]);
+		if (!lowerFunction(emitter, code, memory, functionTable[ordinal], offsets, entryLabels, epilogue, functionCount)) {
+			return;												// unsupported opcode -> caller should fall back to the interpreter
+		}
+	}
+	// One shared aligned epilogue (all functions have the identical prologue): undo the alignment pad, restore the pins.
+	emitter.bind(epilogue);
+	emitter.addImmQ(RSP, 8u);
+	emitter.pop(CONTEXT); emitter.pop(DATA_STACK_END); emitter.pop(MEMORY_BASE); emitter.pop(DSP);
+	emitter.ret();
+
+	const size_t dispatcherOffset = emitDispatcher(emitter, offsets);
+	emitter.finalize();
+
+	// x86-64 code is a byte stream; makeExecutable() works in 32-bit words, so round up.
+	const size_t wordCount = (emitter.size() + 3) / 4;
+	void* page = makeExecutable(reinterpret_cast<const uint32_t*>(emitter.code()), wordCount);
+	if (page == 0) { return; }
+
+	void** entries = new void*[functionCount];
+	for (UInt ordinal = 0; ordinal < functionCount; ++ordinal) {
+		entries[ordinal] = reinterpret_cast<char*>(page) + static_cast<size_t>(emitter.labelOffset(entryLabels[ordinal]));
+	}
+	out.dispatch = reinterpret_cast<char*>(page) + dispatcherOffset;
+	out.nativeEntries = entries;
+	out.codeWordCount = wordCount;
+	out.ownedPage = page;										// hand the page + table to `out`; its destructor frees them
+	out.ownedWords = wordCount;
 }
 
 } // namespace GAZL
