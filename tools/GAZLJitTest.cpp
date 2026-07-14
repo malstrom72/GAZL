@@ -22,14 +22,14 @@
 */
 
 /*
-	Test runner for the GAZLJit arm64 Emitter (assemble-diff harness). For every instruction form in the covered subset
+	Test runner for the GAZLJit arm64 Arm64Emitter (assemble-diff harness). For every instruction form in the covered subset
 	it emits one word and compares it to the matching clang-assembled reference in tools/GAZLJitTestRef.arm64.S; then it
-	rebuilds the whole `bench_v2` kernel through the Emitter (Label + branch fixups) and compares it word-for-word to the
+	rebuilds the whole `bench_v2` kernel through the Arm64Emitter (Label + branch fixups) and compares it word-for-word to the
 	reference copy of that function; finally it runs a deliberately-corrupted encoding to prove the harness catches a bad
 	byte. Exits non-zero on any failure. See docs/JitEmitterHandoff.md.
 */
 
-#include "GAZLJit.h"
+#include "GAZLJitArm64.h"
 
 #include <cstdio>
 #include <cstdint>
@@ -67,17 +67,17 @@ static void check(const char* name, uint32_t emitted, uint32_t reference) {
 	}
 }
 
-// Emit a single instruction through a fresh Emitter and return its one word.
+// Emit a single instruction through a fresh Arm64Emitter and return its one word.
 template<class F> static uint32_t one(F emitOne) {
-	Emitter e;
+	Arm64Emitter e;
 	emitOne(e);
 	e.finalize();
 	return e.code()[0];
 }
 
-// Emit the whole `bench_v2` kernel through the Emitter, exercising the Label/fixup pass (forward `b.mi`, backward
+// Emit the whole `bench_v2` kernel through the Arm64Emitter, exercising the Label/fixup pass (forward `b.mi`, backward
 // `b.lt`). Must reproduce benchmarks/jit/JitBenchA3.arm64.S byte-for-byte.
-static void emitBenchV2(Emitter& e) {
+static void emitBenchV2(Arm64Emitter& e) {
 	e.movz(W9, 12345);							// mov w9, #12345   (acc)
 	e.movz(W10, 0);								// mov w10, #0      (sum)
 	e.movz(W11, 0);								// mov w11, #0      (i)
@@ -106,85 +106,85 @@ static void emitBenchV2(Emitter& e) {
 }
 
 int main() {
-	std::printf("GAZLJit Emitter assemble-diff test (arm64)\n\n");
+	std::printf("GAZLJit Arm64Emitter assemble-diff test (arm64)\n\n");
 
 	std::printf("Per-form encodings vs clang oracle:\n");
-	check("movz",      one([](Emitter& e) { e.movz(W13, 0x4E6D); }),        ref_movz);
-	check("movk",      one([](Emitter& e) { e.movk(W13, 0x41C6, 16); }),    ref_movk);
-	check("movn",      one([](Emitter& e) { e.movn(W0, 998); }),            ref_movn);
-	check("mov(reg)",  one([](Emitter& e) { e.mov(W0, W10); }),             ref_mov_reg);
+	check("movz",      one([](Arm64Emitter& e) { e.movz(W13, 0x4E6D); }),        ref_movz);
+	check("movk",      one([](Arm64Emitter& e) { e.movk(W13, 0x41C6, 16); }),    ref_movk);
+	check("movn",      one([](Arm64Emitter& e) { e.movn(W0, 998); }),            ref_movn);
+	check("mov(reg)",  one([](Arm64Emitter& e) { e.mov(W0, W10); }),             ref_mov_reg);
 
-	check("add",       one([](Emitter& e) { e.add(W9, W9, W14); }),         ref_add);
-	check("add(imm)",  one([](Emitter& e) { e.addImm(W11, W11, 1); }),      ref_add_imm);
-	check("sub",       one([](Emitter& e) { e.sub(W0, W1, W2); }),          ref_sub);
-	check("sub(imm)",  one([](Emitter& e) { e.subImm(W13, W3, 1); }),       ref_sub_imm);
-	check("subs",      one([](Emitter& e) { e.subs(W0, W1, W2); }),         ref_subs);
-	check("subs(imm)", one([](Emitter& e) { e.subsImm(W1, W1, 5); }),       ref_subs_imm);
-	check("cmp",       one([](Emitter& e) { e.cmp(W11, W0); }),             ref_cmp);
-	check("cmp(imm)",  one([](Emitter& e) { e.cmpImm(W11, 1); }),           ref_cmp_imm);
-	check("mul",       one([](Emitter& e) { e.mul(W9, W9, W13); }),         ref_mul);
-	check("sdiv",      one([](Emitter& e) { e.sdiv(W0, W1, W2); }),         ref_sdiv);
-	check("msub",      one([](Emitter& e) { e.msub(W0, W1, W2, W3); }),     ref_msub);
-	check("lslv",      one([](Emitter& e) { e.lslv(W0, W1, W2); }),         ref_lslv);
-	check("lsrv",      one([](Emitter& e) { e.lsrv(W0, W1, W2); }),         ref_lsrv);
-	check("asrv",      one([](Emitter& e) { e.asrv(W0, W1, W2); }),         ref_asrv);
-	check("and",       one([](Emitter& e) { e.and_(W12, W9, W15); }),       ref_and);
-	check("orr",       one([](Emitter& e) { e.orr(W0, W1, W2); }),          ref_orr);
-	check("eor",       one([](Emitter& e) { e.eor(W0, W1, W2); }),          ref_eor);
-	check("lsl(imm)",  one([](Emitter& e) { e.lslImm(W0, W1, 3); }),        ref_lsl);
-	check("lsr(imm)",  one([](Emitter& e) { e.lsrImm(W12, W9, 10); }),      ref_lsr);
-	check("asr(imm)",  one([](Emitter& e) { e.asrImm(W0, W1, 5); }),        ref_asr);
+	check("add",       one([](Arm64Emitter& e) { e.add(W9, W9, W14); }),         ref_add);
+	check("add(imm)",  one([](Arm64Emitter& e) { e.addImm(W11, W11, 1); }),      ref_add_imm);
+	check("sub",       one([](Arm64Emitter& e) { e.sub(W0, W1, W2); }),          ref_sub);
+	check("sub(imm)",  one([](Arm64Emitter& e) { e.subImm(W13, W3, 1); }),       ref_sub_imm);
+	check("subs",      one([](Arm64Emitter& e) { e.subs(W0, W1, W2); }),         ref_subs);
+	check("subs(imm)", one([](Arm64Emitter& e) { e.subsImm(W1, W1, 5); }),       ref_subs_imm);
+	check("cmp",       one([](Arm64Emitter& e) { e.cmp(W11, W0); }),             ref_cmp);
+	check("cmp(imm)",  one([](Arm64Emitter& e) { e.cmpImm(W11, 1); }),           ref_cmp_imm);
+	check("mul",       one([](Arm64Emitter& e) { e.mul(W9, W9, W13); }),         ref_mul);
+	check("sdiv",      one([](Arm64Emitter& e) { e.sdiv(W0, W1, W2); }),         ref_sdiv);
+	check("msub",      one([](Arm64Emitter& e) { e.msub(W0, W1, W2, W3); }),     ref_msub);
+	check("lslv",      one([](Arm64Emitter& e) { e.lslv(W0, W1, W2); }),         ref_lslv);
+	check("lsrv",      one([](Arm64Emitter& e) { e.lsrv(W0, W1, W2); }),         ref_lsrv);
+	check("asrv",      one([](Arm64Emitter& e) { e.asrv(W0, W1, W2); }),         ref_asrv);
+	check("and",       one([](Arm64Emitter& e) { e.and_(W12, W9, W15); }),       ref_and);
+	check("orr",       one([](Arm64Emitter& e) { e.orr(W0, W1, W2); }),          ref_orr);
+	check("eor",       one([](Arm64Emitter& e) { e.eor(W0, W1, W2); }),          ref_eor);
+	check("lsl(imm)",  one([](Arm64Emitter& e) { e.lslImm(W0, W1, 3); }),        ref_lsl);
+	check("lsr(imm)",  one([](Arm64Emitter& e) { e.lsrImm(W12, W9, 10); }),      ref_lsr);
+	check("asr(imm)",  one([](Arm64Emitter& e) { e.asrImm(W0, W1, 5); }),        ref_asr);
 
-	check("ldr",       one([](Emitter& e) { e.ldrW(W3, X2, 8); }),          ref_ldr);
-	check("str",       one([](Emitter& e) { e.strW(W3, X2, 4); }),          ref_str);
-	check("str(wzr)",  one([](Emitter& e) { e.strW(WZR, X2, 4); }),         ref_str_zr);
-	check("ldr(reg)",  one([](Emitter& e) { e.ldrWx(W12, X2, W11); }),      ref_ldr_reg);
-	check("str(reg)",  one([](Emitter& e) { e.strWx(W12, X2, W11); }),      ref_str_reg);
-	check("ldr(regs)", one([](Emitter& e) { e.ldrWxs(W0, X1, W2); }),       ref_ldr_regs);
-	check("str(regs)", one([](Emitter& e) { e.strWxs(W0, X1, W2); }),       ref_str_regs);
+	check("ldr",       one([](Arm64Emitter& e) { e.ldrW(W3, X2, 8); }),          ref_ldr);
+	check("str",       one([](Arm64Emitter& e) { e.strW(W3, X2, 4); }),          ref_str);
+	check("str(wzr)",  one([](Arm64Emitter& e) { e.strW(WZR, X2, 4); }),         ref_str_zr);
+	check("ldr(reg)",  one([](Arm64Emitter& e) { e.ldrWx(W12, X2, W11); }),      ref_ldr_reg);
+	check("str(reg)",  one([](Arm64Emitter& e) { e.strWx(W12, X2, W11); }),      ref_str_reg);
+	check("ldr(regs)", one([](Arm64Emitter& e) { e.ldrWxs(W0, X1, W2); }),       ref_ldr_regs);
+	check("str(regs)", one([](Arm64Emitter& e) { e.strWxs(W0, X1, W2); }),       ref_str_regs);
 
-	check("fadd",      one([](Emitter& e) { e.faddS(S0, S1, S2); }),        ref_fadd);
-	check("fmul",      one([](Emitter& e) { e.fmulS(S0, S1, S2); }),        ref_fmul);
-	check("fsub",      one([](Emitter& e) { e.fsubS(S0, S1, S2); }),        ref_fsub);
-	check("fdiv",      one([](Emitter& e) { e.fdivS(S0, S1, S2); }),        ref_fdiv);
-	check("fcmp",      one([](Emitter& e) { e.fcmpS(S1, S2); }),            ref_fcmp);
-	check("fabs",      one([](Emitter& e) { e.fabsS(S0, S1); }),            ref_fabs);
-	check("frintm",    one([](Emitter& e) { e.frintmS(S0, S1); }),          ref_frintm);
-	check("fmov(sw)",  one([](Emitter& e) { e.fmovSW(S0, W1); }),           ref_fmov_sw);
-	check("ldur(s)",   one([](Emitter& e) { e.ldurS(S0, X2, -4); }),        ref_ldur_s);
-	check("stur(s)",   one([](Emitter& e) { e.sturS(S0, X2, -4); }),        ref_stur_s);
-	check("ldr(sxs)",  one([](Emitter& e) { e.ldrSxs(S0, X1, W2); }),       ref_ldr_sxs);
-	check("str(sxs)",  one([](Emitter& e) { e.strSxs(S0, X1, W2); }),       ref_str_sxs);
-	check("fcvtzs",    one([](Emitter& e) { e.fcvtzs(W0, S1); }),           ref_fcvtzs);
-	check("scvtf",     one([](Emitter& e) { e.scvtf(S0, W1); }),            ref_scvtf);
-	check("ldr(s)",    one([](Emitter& e) { e.ldrS(S0, X2, 8); }),          ref_ldr_s);
-	check("str(s)",    one([](Emitter& e) { e.strS(S0, X2, 8); }),          ref_str_s);
+	check("fadd",      one([](Arm64Emitter& e) { e.faddS(S0, S1, S2); }),        ref_fadd);
+	check("fmul",      one([](Arm64Emitter& e) { e.fmulS(S0, S1, S2); }),        ref_fmul);
+	check("fsub",      one([](Arm64Emitter& e) { e.fsubS(S0, S1, S2); }),        ref_fsub);
+	check("fdiv",      one([](Arm64Emitter& e) { e.fdivS(S0, S1, S2); }),        ref_fdiv);
+	check("fcmp",      one([](Arm64Emitter& e) { e.fcmpS(S1, S2); }),            ref_fcmp);
+	check("fabs",      one([](Arm64Emitter& e) { e.fabsS(S0, S1); }),            ref_fabs);
+	check("frintm",    one([](Arm64Emitter& e) { e.frintmS(S0, S1); }),          ref_frintm);
+	check("fmov(sw)",  one([](Arm64Emitter& e) { e.fmovSW(S0, W1); }),           ref_fmov_sw);
+	check("ldur(s)",   one([](Arm64Emitter& e) { e.ldurS(S0, X2, -4); }),        ref_ldur_s);
+	check("stur(s)",   one([](Arm64Emitter& e) { e.sturS(S0, X2, -4); }),        ref_stur_s);
+	check("ldr(sxs)",  one([](Arm64Emitter& e) { e.ldrSxs(S0, X1, W2); }),       ref_ldr_sxs);
+	check("str(sxs)",  one([](Arm64Emitter& e) { e.strSxs(S0, X1, W2); }),       ref_str_sxs);
+	check("fcvtzs",    one([](Arm64Emitter& e) { e.fcvtzs(W0, S1); }),           ref_fcvtzs);
+	check("scvtf",     one([](Arm64Emitter& e) { e.scvtf(S0, W1); }),            ref_scvtf);
+	check("ldr(s)",    one([](Arm64Emitter& e) { e.ldrS(S0, X2, 8); }),          ref_ldr_s);
+	check("str(s)",    one([](Arm64Emitter& e) { e.strS(S0, X2, 8); }),          ref_str_s);
 
-	check("ldur",      one([](Emitter& e) { e.ldurW(W3, X2, -4); }),        ref_ldur);
-	check("stur",      one([](Emitter& e) { e.sturW(W3, X2, -4); }),        ref_stur);
-	check("ldr(x)",    one([](Emitter& e) { e.ldrX(X3, X2, 8); }),          ref_ldr_x);
-	check("str(x)",    one([](Emitter& e) { e.strX(X3, X2, 8); }),          ref_str_x);
-	check("ldr(xr)",   one([](Emitter& e) { e.ldrXr(X9, X10, W9); }),       ref_ldr_xr);
-	check("adr",       one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.adr(X0, l); }),  ref_adr);
-	check("add(immx)", one([](Emitter& e) { e.addImmX(X1, X1, 16); }),      ref_add_immx);
-	check("sub(immx)", one([](Emitter& e) { e.subImmX(X4, X4, 16); }),      ref_sub_immx);
-	check("cbnz(x)",   one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.cbnzX(X0, l); }), ref_cbnz_x);
-	check("cmp(x)",    one([](Emitter& e) { e.cmpX(X1, X9); }),             ref_cmp_x);
-	check("add(x)",    one([](Emitter& e) { e.addX(X1, X1, X9); }),         ref_add_x);
+	check("ldur",      one([](Arm64Emitter& e) { e.ldurW(W3, X2, -4); }),        ref_ldur);
+	check("stur",      one([](Arm64Emitter& e) { e.sturW(W3, X2, -4); }),        ref_stur);
+	check("ldr(x)",    one([](Arm64Emitter& e) { e.ldrX(X3, X2, 8); }),          ref_ldr_x);
+	check("str(x)",    one([](Arm64Emitter& e) { e.strX(X3, X2, 8); }),          ref_str_x);
+	check("ldr(xr)",   one([](Arm64Emitter& e) { e.ldrXr(X9, X10, W9); }),       ref_ldr_xr);
+	check("adr",       one([](Arm64Emitter& e) { Label l = e.newLabel(); e.bind(l); e.adr(X0, l); }),  ref_adr);
+	check("add(immx)", one([](Arm64Emitter& e) { e.addImmX(X1, X1, 16); }),      ref_add_immx);
+	check("sub(immx)", one([](Arm64Emitter& e) { e.subImmX(X4, X4, 16); }),      ref_sub_immx);
+	check("cbnz(x)",   one([](Arm64Emitter& e) { Label l = e.newLabel(); e.bind(l); e.cbnzX(X0, l); }), ref_cbnz_x);
+	check("cmp(x)",    one([](Arm64Emitter& e) { e.cmpX(X1, X9); }),             ref_cmp_x);
+	check("add(x)",    one([](Arm64Emitter& e) { e.addX(X1, X1, X9); }),         ref_add_x);
 
 	// Self-referential branches (displacement 0): isolates the opcode/cond/register fields from the displacement.
-	check("b",         one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.b(l); }),          ref_b);
-	check("b.lt",      one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.bcond(LT, l); }),  ref_bcond_lt);
-	check("b.mi",      one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.bcond(MI, l); }),  ref_bcond_mi);
-	check("cbz",       one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.cbz(W0, l); }),    ref_cbz);
-	check("cbnz",      one([](Emitter& e) { Label l = e.newLabel(); e.bind(l); e.cbnz(W0, l); }),   ref_cbnz);
-	check("ret",       one([](Emitter& e) { e.ret(); }),                    ref_ret);
-	check("br",        one([](Emitter& e) { e.br(X9); }),                   ref_br);
-	check("blr",       one([](Emitter& e) { e.blr(X9); }),                  ref_blr);
+	check("b",         one([](Arm64Emitter& e) { Label l = e.newLabel(); e.bind(l); e.b(l); }),          ref_b);
+	check("b.lt",      one([](Arm64Emitter& e) { Label l = e.newLabel(); e.bind(l); e.bcond(LT, l); }),  ref_bcond_lt);
+	check("b.mi",      one([](Arm64Emitter& e) { Label l = e.newLabel(); e.bind(l); e.bcond(MI, l); }),  ref_bcond_mi);
+	check("cbz",       one([](Arm64Emitter& e) { Label l = e.newLabel(); e.bind(l); e.cbz(W0, l); }),    ref_cbz);
+	check("cbnz",      one([](Arm64Emitter& e) { Label l = e.newLabel(); e.bind(l); e.cbnz(W0, l); }),   ref_cbnz);
+	check("ret",       one([](Arm64Emitter& e) { e.ret(); }),                    ref_ret);
+	check("br",        one([](Arm64Emitter& e) { e.br(X9); }),                   ref_br);
+	check("blr",       one([](Arm64Emitter& e) { e.blr(X9); }),                  ref_blr);
 
 	// Cross-check the whole kernel: proves the Label/fixup pass, not just individual instructions.
 	std::printf("\nbench_v2 kernel cross-check (Label/fixup pass):\n");
-	Emitter kernel;
+	Arm64Emitter kernel;
 	emitBenchV2(kernel);
 	const size_t refCount = static_cast<size_t>(&ref_bench_v2_end - &ref_bench_v2);
 	const uint32_t* refWords = &ref_bench_v2;
@@ -210,7 +210,7 @@ int main() {
 	// Corrupted control: prove the harness has teeth. A deliberately-broken encoding MUST report a mismatch; if it
 	// somehow matched the reference, the harness itself is broken.
 	std::printf("\nCorrupted control (must be caught):\n");
-	const uint32_t good = one([](Emitter& e) { e.add(W9, W9, W14); });
+	const uint32_t good = one([](Arm64Emitter& e) { e.add(W9, W9, W14); });
 	const uint32_t corrupted = good ^ 0x1u;					// flip a bit: Rd 9 -> 8, i.e. `add w8, w9, w14`
 	const bool caught = (corrupted != ref_add);
 	std::printf("  corrupted add   emit=%08X  ref=%08X  %s\n", corrupted, ref_add,

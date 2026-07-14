@@ -25,6 +25,7 @@ mkdir -p output
 "$CPP" $opt -std=c++11 -I src \
 	src/GAZL.cpp \
 	src/GAZLJit.cpp \
+	src/GAZLJitArm64.cpp \
 	src/GAZLJitMemPosix.cpp \
 	tools/GAZLJitSliceTest.cpp \
 	-o output/GAZLJitSliceTest

@@ -22,11 +22,11 @@
 */
 
 /*
-	End-to-end execution check for the GAZLJit arm64 Emitter: the encoding-vs-execution bridge that follows the
+	End-to-end execution check for the GAZLJit arm64 Arm64Emitter: the encoding-vs-execution bridge that follows the
 	byte-for-byte assemble-diff test (tools/GAZLJitTest.cpp) and precedes the full vertical slice (dispatcher / RESUME /
 	fuel / suspend-resume).
 
-	It emits real kernels through the Emitter, copies the bytes into W^X executable memory, invalidates the icache, and
+	It emits real kernels through the Arm64Emitter, copies the bytes into W^X executable memory, invalidates the icache, and
 	*calls* them — reusing the allocation + flush strategy proven GO by JIT spike A1 (see spike/jit-probe/,
 	docs/JitSpikeA1-Results.md): on Apple Silicon, `mmap(MAP_JIT)` + a per-thread `pthread_jit_write_protect_np` toggle
 	+ `sys_icache_invalidate`; on Linux arm64, `mmap(RW)` → `mprotect(RX)` → `__builtin___clear_cache`. The emitted
@@ -34,6 +34,7 @@
 */
 
 #include "GAZLJit.h"
+#include "GAZLJitArm64.h"
 
 #include <cstdio>
 #include <cstdint>
@@ -90,7 +91,7 @@ static void unmapExec(void* p, size_t wordCount) {
 
 // --- kernel 1: int sumTo(int n) = 0 + 1 + ... + (n-1), all in registers (docs/JitCompilerResearch.md §5.8) ---
 
-static void emitSumTo(Emitter& e) {
+static void emitSumTo(Arm64Emitter& e) {
 	e.movz(W9, 0);							// result = 0
 	e.movz(W10, 0);							// i = 0
 	Label loop = e.newLabel();
@@ -117,7 +118,7 @@ static int refSumTo(int n) {
 
 // --- kernel 2: bench_v2 (benchmarks/jit/JitBenchA3.arm64.S) — LCG sum with the per-block fuel check ---
 
-static void emitBenchV2(Emitter& e) {
+static void emitBenchV2(Arm64Emitter& e) {
 	e.movz(W9, 12345);						// acc
 	e.movz(W10, 0);							// sum
 	e.movz(W11, 0);							// i
@@ -166,8 +167,8 @@ typedef int (*Fn1)(int);
 typedef int (*Fn2)(int, int);
 
 // Emit a kernel, run it from W^X memory, and compare its return value against a reference.
-static void runCheck1(const char* name, void (*emit)(Emitter&), int (*ref)(int), int arg) {
-	Emitter e;
+static void runCheck1(const char* name, void (*emit)(Arm64Emitter&), int (*ref)(int), int arg) {
+	Arm64Emitter e;
 	emit(e);
 	void* code = mapExecutable(e.code(), e.wordCount());
 	if (code == nullptr) {
@@ -185,8 +186,8 @@ static void runCheck1(const char* name, void (*emit)(Emitter&), int (*ref)(int),
 	unmapExec(code, e.wordCount());
 }
 
-static void runCheck2(const char* name, void (*emit)(Emitter&), int (*ref)(int, int), int a, int b) {
-	Emitter e;
+static void runCheck2(const char* name, void (*emit)(Arm64Emitter&), int (*ref)(int, int), int a, int b) {
+	Arm64Emitter e;
 	emit(e);
 	void* code = mapExecutable(e.code(), e.wordCount());
 	if (code == nullptr) {
@@ -205,7 +206,7 @@ static void runCheck2(const char* name, void (*emit)(Emitter&), int (*ref)(int, 
 }
 
 int main() {
-	std::printf("GAZLJit Emitter execution test (arm64, W^X)\n\n");
+	std::printf("GAZLJit Arm64Emitter execution test (arm64, W^X)\n\n");
 
 	std::printf("sumTo(n) = 0+1+...+(n-1), register-resident loop:\n");
 	runCheck1("sumTo", emitSumTo, refSumTo, 0);

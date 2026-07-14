@@ -29,6 +29,7 @@ mkdir -p output
 "$CPP" $opt -std=c++11 -I src \
 	src/GAZL.cpp \
 	src/GAZLJit.cpp \
+	src/GAZLJitArm64.cpp \
 	"$jitmem" \
 	tools/GAZLJitLowerTest.cpp \
 	-o output/GAZLJitLowerTest

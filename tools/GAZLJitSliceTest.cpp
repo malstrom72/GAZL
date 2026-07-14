@@ -22,7 +22,7 @@
 */
 
 /*
-	C3 vertical slice (minimal) — proves that a function hand-lowered through the GAZLJit `Emitter` reproduces the GAZL
+	C3 vertical slice (minimal) — proves that a function hand-lowered through the GAZLJit `Arm64Emitter` reproduces the GAZL
 	*interpreter's* observable result, running under a JIT calling convention with a per-basic-block fuel check and a
 	trap-free status-returning safepoint. This is roadmap spike C3 (docs/JitCompilerResearch.md §11.0).
 
@@ -33,7 +33,7 @@
 	    literally `br` into JIT code from inside `run()` nor write resume state (ip/fuel) back into a Processor from a
 	    safepoint stub. A true in-VM dispatcher + suspend/resume therefore needs VM edits and is deferred to C3-full/C4.
 	    Instead this is a STANDALONE dispatcher: it runs the same kernel in the real interpreter for the golden result
-	    (read back through a global via the public API) and runs the Emitter's native code over an identical Value frame.
+	    (read back through a global via the public API) and runs the Arm64Emitter's native code over an identical Value frame.
 
 	What it demonstrates concretely: the frame/`dsp` slot-addressing model (operands are Value-indices off the frame
 	base, matching the interpreter), a per-block fuel check (`subs`/`b.mi`) charging the whole block, and the trap-free
@@ -47,6 +47,7 @@
 */
 
 #include "GAZLJit.h"
+#include "GAZLJitArm64.h"
 #include "GAZL.h"
 
 #include <cstdio>
@@ -191,11 +192,11 @@ static int interpreterSumTo(Symbols& globals, Pointer gInPtr, Pointer gOutPtr, i
 	return pmachine.accessMemory(gOutPtr, 1)->i;				// read output global
 }
 
-// --- the JIT side: hand-lower the same kernel through the Emitter ---
+// --- the JIT side: hand-lower the same kernel through the Arm64Emitter ---
 
 // Emitted sumTo. Inputs: x0 = dsp (frame base), w1 = fuel. Frame: [+0] = n (in), [+4] = sum (out).
 // Returns Status in w0 (OK on completion, TIME_OUT if the fuel ran out at a block boundary).
-static void emitSumTo(Emitter& e) {
+static void emitSumTo(Arm64Emitter& e) {
 	e.ldrW(W9, X0, 0);				// n = frame[0]
 	e.movz(W11, 0);					// i = 0
 	e.strW(WZR, X0, 4);				// sum = 0  (frame[1])
@@ -230,7 +231,7 @@ int main() {
 		return 1;
 	}
 	// Build the emitted kernel once and make it executable.
-	Emitter e;
+	Arm64Emitter e;
 	emitSumTo(e);
 	void* code = mapExecutable(e.code(), e.wordCount());
 	if (code == nullptr) {

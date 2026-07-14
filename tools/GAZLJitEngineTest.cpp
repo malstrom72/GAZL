@@ -29,7 +29,7 @@
 	read-only here; the only VM edits the real design wants are making `run()`/`enterCall()` virtual + a `RESUME` field,
 	so the *host* can pick an engine through a `Processor*` — orthogonal to this prototype.)
 
-	`ProtoEngine` drives Emitter-produced native code over the *same* `Processor` state the interpreter uses, and this test
+	`ProtoEngine` drives Arm64Emitter-produced native code over the *same* `Processor` state the interpreter uses, and this test
 	demonstrates the three claims C3/C4 exist to prove (docs/JitCompilerResearch.md §5.2, §5.4, §5.5, §5.7.5):
 
 	  1. C3 — run a whole GAZL function through the dispatcher; the final observable memory image is BYTE-IDENTICAL to a
@@ -47,6 +47,7 @@
 */
 
 #include "GAZLJit.h"
+#include "GAZLJitArm64.h"
 #include "GAZL.h"
 
 #include <cstdio>
@@ -236,7 +237,7 @@ static bool assembleKernel(Symbols& globals, KernelLayout& layout, Pointer& gInP
 
 // v1 (memory-resident) hand lowering of the kernel, faithful instruction-for-instruction so it writes exactly the same
 // cells the interpreter does. Offsets are baked from `layout`.
-static void emitKernel(Emitter& e, const KernelLayout& L) {
+static void emitKernel(Arm64Emitter& e, const KernelLayout& L) {
 	e.ldrW(W9, X1, L.gInOff);		// [1] PEEK $n <- gIn
 	e.strW(W9, X0, L.nOff);
 	e.strW(WZR, X0, L.sumOff);		// [2] $sum = 0
@@ -268,7 +269,7 @@ static void emitKernel(Emitter& e, const KernelLayout& L) {
 
 // A trap kernel: force a bounds check to fail and return the trap Status in the return register — no signal, no
 // longjmp (§5.4). x2 = limit; a deliberately out-of-range index takes the b.hs to the trap stub.
-static void emitTrap(Emitter& e) {
+static void emitTrap(Arm64Emitter& e) {
 	Label trap = e.newLabel();
 	e.movz(W9, 0xFFFF);				// index = 65535 (deliberately out of range)
 	e.cmp(W9, W2);					// index vs limit
@@ -328,10 +329,10 @@ int main() {
 	}
 	const Pointer mainPtr = globals.findFunction("main");
 
-	Emitter ek;
+	Arm64Emitter ek;
 	emitKernel(ek, layout);
 	void* kernelCode = mapExecutable(ek.code(), ek.wordCount());
-	Emitter et;
+	Arm64Emitter et;
 	emitTrap(et);
 	void* trapCode = mapExecutable(et.code(), et.wordCount());
 	if (kernelCode == nullptr || trapCode == nullptr) {
