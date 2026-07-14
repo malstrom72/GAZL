@@ -347,7 +347,7 @@ int main(int argc, const char* argv[]) {
 			std::cerr << "GAZLCmd <filename> [<function> = 'main'] [<define symbol> <define value> ...]" << std::endl;
 			std::cerr << "        [--bench[=N]] [--warmup=W]   run N timed iterations (default 10), W warmups (default 3)"
 					<< std::endl;
-			std::cerr << "        [--jit]                      run on the native arm64 JIT (falls back to interpreter)"
+			std::cerr << "        [--jit]                      run on the native JIT (arm64 / x64) (falls back to interpreter)"
 					<< std::endl;
 			std::cerr << "        [--no-libm]                  skip the atan2/sqrt/log natives (for self-contained libm)"
 					<< std::endl;
@@ -445,7 +445,7 @@ int main(int argc, const char* argv[]) {
 						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords() * 4)
 								<< " funcs=" << functionCount << std::endl;
 					} else {
-						std::cerr << "JIT: compiled " << functionCount << " function(s) to native arm64." << std::endl;
+						std::cerr << "JIT: compiled " << functionCount << " function(s) to native code." << std::endl;
 					}
 					proc.reset(new JitProcessor(module, codeSize, code, functionCount, functionTable
 							, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
