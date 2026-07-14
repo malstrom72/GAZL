@@ -427,6 +427,18 @@ static void storeSlotF(Arm64Emitter& e, Reg s, Int slot) {
 	if (slotNear(slot)) { e.sturS(s, X1, static_cast<int>(slot * 4)); }
 	else { matConst(e, W13, slot); e.strSxs(s, X1, W13); }
 }
+// PEEK/POKE at a compile-time-constant memory word index (off memoryBase, X2). The scaled imm12 form reaches word
+// index 4095 (16 KB in); past that — large globals/consts such as audio tables — materialize the index and use the
+// scaled register-offset form, mirroring loadSlot/storeSlot. W13 is the dedicated addressing scratch (kept distinct
+// from the W9..W12 operand scratches), so callers may still hold a value in W9..W12 across these.
+static void loadMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
+	if (wordIndex < 0x1000u) { e.ldrW(r, X2, wordIndex * 4u); }
+	else { matConst(e, W13, static_cast<Int>(wordIndex)); e.ldrWx(r, X2, W13); }
+}
+static void storeMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
+	if (wordIndex < 0x1000u) { e.strW(r, X2, wordIndex * 4u); }
+	else { matConst(e, W13, static_cast<Int>(wordIndex)); e.strWx(r, X2, W13); }
+}
 static void loadOp(Arm64Emitter& e, Reg r, const Value& p, bool isConst) {
 	if (isConst) { matConst(e, r, p.i); } else { loadSlot(e, r, p.i); }
 }
@@ -605,9 +617,9 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 			}
 			case OP_MOVE_VC: matConst(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); break;
 			case OP_MOVE_VV: loadSlot(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); break;
-			case OP_PEEK_VC: e.ldrW(W9, X2, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); storeSlot(e, W9, in.p0.i); break;
-			case OP_POKE_CV: loadSlot(e, W9, in.p1.i); e.strW(W9, X2, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); break;
-			case OP_POKE_CC: matConst(e, W9, in.p1.i); e.strW(W9, X2, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); break;
+			case OP_PEEK_VC: loadMemConst(e, W9, static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); storeSlot(e, W9, in.p0.i); break;
+			case OP_POKE_CV: loadSlot(e, W9, in.p1.i); storeMemConst(e, W9, static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); break;
+			case OP_POKE_CC: matConst(e, W9, in.p1.i); storeMemConst(e, W9, static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); break;
 			case OP_PEEK_VCV: {
 				Label trap = e.newLabel(), cont = e.newLabel();
 				matConst(e, W9, static_cast<Int>(in.p1.p - MEMORY_OFFSET)); loadSlot(e, W10, in.p2.i); e.add(W9, W9, W10);
