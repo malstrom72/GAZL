@@ -1,0 +1,263 @@
+/*
+	GAZL is released under the BSD 2-Clause License.
+
+	Copyright 2010-2025, Magnus Lidström
+
+	Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+	following conditions are met:
+
+	1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+	disclaimer.
+
+	2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following
+	disclaimer in the documentation and/or other materials provided with the distribution.
+
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+	INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+	SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+	WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+/*
+	X64 lowering vertical slice: a minimal, general integer lowering pass (no calls, no floats, no fuel/suspend) that
+	compiles an *assembled* GAZL function straight through the X64Emitter, runs the native code under Rosetta, and diffs
+	the result against the GAZL interpreter over a range of inputs. Proves the SysV frame/dsp model, memory (PEEK/POKE)
+	via a pinned base register, the integer op subset, and the Label/rel32 branch pass end to end. Sibling of the arm64
+	GAZLJitSliceTest; built -arch x86_64. src/GAZL.* are used READ-ONLY through the public API.
+
+	Register roles (SysV): rdi=dsp-in, rsi=mem-in on entry; pinned into callee-saved rbx=dsp (advanced by FUNC) and
+	r14=memory base. Scratch ecx/edx per instruction; eax returns the Status. No GAZL calls, so no callee-saved
+	trampoline beyond the two pushes.
+*/
+
+#include "GAZLJit.h"			// arch-neutral opcode enum (+ GAZL.h: Assembler / Processor / Instruction / Value)
+#include "GAZLJitX64.h"
+
+#include <cstdio>
+#include <cstdint>
+#include <cstring>
+#include <map>
+#include <sys/mman.h>
+
+using namespace GAZL;
+
+static int failures = 0;
+
+static void* mapExecutable(const uint8_t* code, size_t n) {
+	void* p = mmap(0, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+	if (p == MAP_FAILED) { return 0; }
+	std::memcpy(p, code, n);
+	if (mprotect(p, 4096, PROT_READ | PROT_EXEC) != 0) { return 0; }
+	return p;
+}
+
+// sumTo(n) = 0 + 1 + ... + (n-1), read from global gIn, stored to global gOut. Exercises PEEK/POKE + a do-while loop.
+static const char* const KERNEL_SOURCE =
+	"gIn:   GLOB *1\n"
+	"       DATi #0\n"
+	"gOut:  GLOB *1\n"
+	"       DATi #0\n"
+	"main:  FUNC\n"
+	"       PARA *1\n"
+	"$n:    LOCi\n"
+	"$sum:  LOCi\n"
+	"$i:    LOCi\n"
+	"       PEEK $n &gIn\n"
+	"       MOVi $sum #0\n"
+	"       MOVi $i #0\n"
+	".loop: ADDi $sum $sum $i\n"
+	"       FORi $i $n @.loop\n"
+	"       POKE &gOut $sum\n"
+	"       RETU\n";
+
+namespace {
+	const int CODE_SIZE = 64 * 1024, DATA_SIZE = 64 * 1024, FUNCTION_TABLE_SIZE = 1024, CALL_STACK_SIZE = 256;
+	Instruction gCode[CODE_SIZE];
+	Value gMemory[DATA_SIZE];
+	UInt gFunctionTable[FUNCTION_TABLE_SIZE];
+	CallStackEntry gCallStack[CALL_STACK_SIZE];
+	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
+}
+
+static bool assembleKernel(Symbols& globals, Pointer& gInPtr, Pointer& gOutPtr) {
+	UInt codeSize = 0, gs = 0, cs = 0, fc = 0;
+	try {
+		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
+		assem.newUnit("x64slice");
+		std::string src(KERNEL_SOURCE);
+		size_t pos = 0;
+		while (pos < src.size()) {
+			const size_t nl = src.find('\n', pos);
+			assem.feed(src.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos).c_str());
+			if (nl == std::string::npos) { break; }
+			pos = nl + 1;
+		}
+		assem.finalize(codeSize, gs, cs, fc);
+	} catch (const Exception& e) {
+		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());
+		return false;
+	}
+	gGlobalsSize = gs; gConstsSize = cs; gFunctionCount = fc;
+	UInt sz = 0;
+	gInPtr = globals.findGlobal("gIn", sz);
+	gOutPtr = globals.findGlobal("gOut", sz);
+	return (gInPtr != NULL_POINTER && gOutPtr != NULL_POINTER);
+}
+
+static int interpreterRun(Symbols& globals, Pointer gInPtr, Pointer gOutPtr, int n) {
+	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize,
+			gConstsSize, CALL_STACK_SIZE, gCallStack, 0, 0);
+	p.accessMemory(gInPtr, 1)->i = n;
+	Status s = p.enterCall(globals.findFunction("main"));
+	do { p.resetTimeOut(0x7FFFFFFF); s = p.run(); } while (s == TIME_OUT);
+	if (s != OK) { std::printf("  interpreter status %d\n", s); ++failures; return 0; }
+	return p.accessMemory(gOutPtr, 1)->i;
+}
+
+// --- the minimal x64 integer lowering ---
+
+static const Reg DSP = RBX, MEM = R14, A = RCX, B = RDX;		// pinned + scratch roles
+
+static bool branchTgt(const Instruction* code, UInt j, UInt& t) {
+	const Int op = code[j].opcode;
+	if (op == OP_GOTO) { t = static_cast<UInt>(static_cast<Int>(j) + code[j].p0.i); return true; }
+	if (op >= OP_FORi_VVB && op <= OP_NEQF_VCB) { t = static_cast<UInt>(static_cast<Int>(j) + code[j].p2.i); return true; }
+	return false;
+}
+
+// Render operand into reg A or B: a slot (load from dsp) or a constant (movImm).
+static void toReg(X64Emitter& e, Reg r, const Value& p, bool isConst) {
+	if (isConst) { e.movImm(r, static_cast<uint32_t>(p.i)); }
+	else { e.load(r, DSP, p.i * 4); }
+}
+
+typedef void (X64Emitter::*BinOp)(Reg, Reg);
+
+// dst = a <op> b, a = p1 (slot or const s1Const), b = p2 (slot or const s2Const). result via A.
+static void emitBin(X64Emitter& e, BinOp op, const Instruction& in, bool s1Const, bool s2Const) {
+	toReg(e, A, in.p1, s1Const);
+	toReg(e, B, in.p2, s2Const);
+	(e.*op)(A, B);
+	e.store(DSP, in.p0.i * 4, A);
+}
+
+// if (a <cc> b) goto target — a = p0, b = p1 in the const modes named by the opcode.
+static void emitBranch(X64Emitter& e, Cond cc, const Instruction& in, UInt j, bool c0Const, bool c1Const, std::map<UInt, Label>& lbl) {
+	toReg(e, A, in.p0, c0Const);
+	toReg(e, B, in.p1, c1Const);
+	e.cmp(A, B);
+	e.jcc(cc, lbl[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
+}
+
+static bool lowerX64Integer(X64Emitter& e, const Instruction* code, UInt funcStart) {
+	UInt end = funcStart;
+	while (code[end].opcode != OP_RETU) { ++end; }
+
+	std::map<UInt, Label> lbl;
+	for (UInt j = funcStart; j <= end; ++j) {
+		UInt t;
+		if (branchTgt(code, j, t)) { lbl[t] = e.newLabel(); }
+	}
+
+	e.push(DSP); e.push(MEM);					// SysV prologue: save callee-saved pins
+	e.movQ(DSP, RDI); e.movQ(MEM, RSI);			// dsp = arg0, memory base = arg1
+	e.addImmQ(DSP, static_cast<uint32_t>(code[funcStart].p0.i) * 4u);	// FUNC: advance to this frame
+
+	for (UInt j = funcStart; j <= end; ++j) {
+		std::map<UInt, Label>::iterator it = lbl.find(j);
+		if (it != lbl.end()) { e.bind(it->second); }
+		const Instruction& in = code[j];
+		const Int op = in.opcode;
+		switch (op) {
+			case OP_FUNC: break;
+			case OP_RETU:
+				e.movImm(RAX, 0);				// Status OK
+				e.pop(MEM); e.pop(DSP); e.ret();
+				break;
+
+			case OP_MOVE_VV: e.load(A, DSP, in.p1.i * 4); e.store(DSP, in.p0.i * 4, A); break;
+			case OP_MOVE_VC: e.movImm(A, static_cast<uint32_t>(in.p1.i)); e.store(DSP, in.p0.i * 4, A); break;
+
+			case OP_PEEK_VC: e.load(A, MEM, static_cast<int32_t>((in.p1.p - MEMORY_OFFSET) * 4)); e.store(DSP, in.p0.i * 4, A); break;
+			case OP_POKE_CV: e.load(A, DSP, in.p1.i * 4); e.store(MEM, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), A); break;
+			case OP_POKE_CC: e.movImm(A, static_cast<uint32_t>(in.p1.i)); e.store(MEM, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), A); break;
+
+			case OP_ADDI_VVV: emitBin(e, &X64Emitter::add, in, false, false); break;
+			case OP_ADDI_VVC: emitBin(e, &X64Emitter::add, in, false, true); break;
+			case OP_SUBI_VVV: emitBin(e, &X64Emitter::sub, in, false, false); break;
+			case OP_SUBI_VVC: emitBin(e, &X64Emitter::sub, in, false, true); break;
+			case OP_SUBI_VCV: emitBin(e, &X64Emitter::sub, in, true, false); break;
+			case OP_MULI_VVV: emitBin(e, &X64Emitter::imul, in, false, false); break;
+			case OP_MULI_VVC: emitBin(e, &X64Emitter::imul, in, false, true); break;
+			case OP_ANDI_VVV: emitBin(e, &X64Emitter::and_, in, false, false); break;
+			case OP_ANDI_VVC: emitBin(e, &X64Emitter::and_, in, false, true); break;
+			case OP_IORI_VVV: emitBin(e, &X64Emitter::or_, in, false, false); break;
+			case OP_IORI_VVC: emitBin(e, &X64Emitter::or_, in, false, true); break;
+			case OP_XORI_VVV: emitBin(e, &X64Emitter::xor_, in, false, false); break;
+			case OP_XORI_VVC: emitBin(e, &X64Emitter::xor_, in, false, true); break;
+
+			case OP_FORi_VVB: case OP_FORi_VCB:
+				e.load(A, DSP, in.p0.i * 4); e.addImm(A, 1); e.store(DSP, in.p0.i * 4, A);
+				toReg(e, B, in.p1, op == OP_FORi_VCB);
+				e.cmp(A, B);
+				e.jcc(CC_L, lbl[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
+				break;
+
+			case OP_GOTO: e.jmp(lbl[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
+
+			case OP_LSSI_VVB: emitBranch(e, CC_L, in, j, false, false, lbl); break;
+			case OP_LSSI_VCB: emitBranch(e, CC_L, in, j, false, true, lbl); break;
+			case OP_LSSI_CVB: emitBranch(e, CC_L, in, j, true, false, lbl); break;
+			case OP_EQUI_VVB: emitBranch(e, CC_E, in, j, false, false, lbl); break;
+			case OP_EQUI_VCB: emitBranch(e, CC_E, in, j, false, true, lbl); break;
+			case OP_NLSI_VVB: emitBranch(e, CC_GE, in, j, false, false, lbl); break;
+			case OP_NLSI_VCB: emitBranch(e, CC_GE, in, j, false, true, lbl); break;
+			case OP_NLSI_CVB: emitBranch(e, CC_GE, in, j, true, false, lbl); break;
+			case OP_NEQI_VVB: emitBranch(e, CC_NE, in, j, false, false, lbl); break;
+			case OP_NEQI_VCB: emitBranch(e, CC_NE, in, j, false, true, lbl); break;
+
+			default: return false;			// unsupported opcode
+		}
+	}
+	e.finalize();
+	return true;
+}
+
+typedef int (*JitFn)(Value* dsp, Value* mem);
+
+int main() {
+	std::printf("GAZLJit X64 lowering slice: JIT (Rosetta) vs interpreter\n\n");
+
+	Symbols globals;
+	Pointer gInPtr = NULL_POINTER, gOutPtr = NULL_POINTER;
+	if (!assembleKernel(globals, gInPtr, gOutPtr)) { std::printf("  kernel setup failed\n"); return 1; }
+
+	X64Emitter e;
+	if (!lowerX64Integer(e, gCode, gFunctionTable[globals.findFunction("main") - IP_OFFSET])) {
+		std::printf("  lowering hit an unsupported opcode\n"); return 1;
+	}
+	void* code = mapExecutable(e.code(), e.size());
+	if (code == 0) { std::printf("  mapExecutable failed\n"); return 1; }
+	JitFn jit = reinterpret_cast<JitFn>(code);
+	std::printf("  lowered %zu bytes\n\n", e.size());
+
+	const int inputs[] = { 0, 1, 2, 5, 10, 100, 1000, 65536 };
+	for (size_t k = 0; k < sizeof(inputs) / sizeof(*inputs); ++k) {
+		const int n = inputs[k];
+		const int want = interpreterRun(globals, gInPtr, gOutPtr, n);
+		// Run the JIT over the same memory image (reset, set input, call, read output).
+		std::memset(gMemory, 0, sizeof(gMemory));
+		gMemory[gInPtr - MEMORY_OFFSET].i = n;
+		const int st = jit(&gMemory[gGlobalsSize], &gMemory[0]);
+		const int got = gMemory[gOutPtr - MEMORY_OFFSET].i;
+		const bool ok = (st == 0) && (got == want);
+		std::printf("  n=%-6d interp=%-12d jit=%-12d %s\n", n, want, got, ok ? "OK" : "MISMATCH");
+		if (!ok) { ++failures; }
+	}
+
+	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
+	return failures == 0 ? 0 : 1;
+}

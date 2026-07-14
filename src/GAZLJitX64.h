@@ -86,6 +86,7 @@ class X64Emitter {
 		void subImm(Reg rd, uint32_t imm);						// `sub rd, imm32` (81 /5)
 		void cmpImm(Reg ra, uint32_t imm);						// `cmp ra, imm32` (81 /7)
 		void addQ(Reg rd, Reg rs);								// `add rd, rs` (64-bit; pointer arithmetic)
+		void addImmQ(Reg rd, uint32_t imm);						// `add rd, imm32` (64-bit; advances the dsp pointer)
 
 		// --- loads / stores off a base register + displacement ---
 		void load(Reg rd, Reg base, int32_t disp);				// `mov rd(32), [base + disp]`

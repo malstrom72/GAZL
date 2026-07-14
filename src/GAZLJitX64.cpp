@@ -95,6 +95,7 @@ void X64Emitter::addImm(Reg rd, uint32_t imm) { aluImm(0, rd, imm); }
 void X64Emitter::subImm(Reg rd, uint32_t imm) { aluImm(5, rd, imm); }
 void X64Emitter::cmpImm(Reg ra, uint32_t imm) { aluImm(7, ra, imm); }
 void X64Emitter::addQ(Reg rd, Reg rs) { rex(true, rs, rd); b(0x01); modrmReg(rs, rd); }
+void X64Emitter::addImmQ(Reg rd, uint32_t imm) { rex(true, 0, rd); b(0x81); b(static_cast<uint8_t>(0xC0 | (rd & 7))); d32(imm); }
 
 // --- loads / stores ---
 
