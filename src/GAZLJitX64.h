@@ -102,6 +102,9 @@ class X64Emitter {
 		void store(Reg base, int32_t disp, Reg rs);				// `mov [base + disp], rs(32)`
 		void loadQ(Reg rd, Reg base, int32_t disp);				// `mov rd(64), [base + disp]`
 		void storeQ(Reg base, int32_t disp, Reg rs);			// `mov [base + disp], rs(64)`
+		void loadIdx(Reg rd, Reg base, Reg index, int32_t disp);	// `mov rd(32), [base + index*4 + disp]` (SIB, scale 4)
+		void storeIdx(Reg base, Reg index, int32_t disp, Reg rs);	// `mov [base + index*4 + disp], rs(32)`
+		void subQ(Reg rd, Reg rs);								// `sub rd, rs` (64-bit; pointer difference for ADRL)
 
 		// --- SSE scalar single-precision floats (XMM operands reuse the Reg 0..15 encodings, a separate file from GP) ---
 		void movssLoad(Reg xd, Reg base, int32_t disp);			// `movss xd, [base + disp]` (F3 0F 10)
@@ -145,6 +148,8 @@ class X64Emitter {
 		void rex(bool w, int reg, int base);					// emit REX iff needed (W, or reg/base extended)
 		void modrmReg(int reg, int rm);							// mod=11 register-direct
 		void memOperand(int reg, Reg base, int32_t disp);		// ModRM (+SIB +disp) for [base + disp]
+		void memOperandIdx(int reg, Reg base, Reg index, int32_t disp);	// ModRM+SIB for [base + index*4 + disp]
+		void rex3(bool w, int reg, int index, int base);		// REX with an index field (REX.X) too
 		void sseRR(uint8_t prefix, uint8_t opcode, int reg, int rm);	// [prefix] REX? 0F opcode  register-direct SSE form
 		void aluImm(int ext, Reg rd, uint32_t imm);				// 81 /ext id  (ext selects add/sub/cmp/...)
 		void relBranch(int labelId);							// emit a rel32 placeholder + record a fixup

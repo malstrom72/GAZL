@@ -112,6 +112,36 @@ static const char* const FLOAT_SOURCE =
 	"       POKE &gOut $n\n"
 	"       RETU\n";
 
+// Local array via SETL/GETL (indexed frame addressing): arr[i] = i*n, then sum -> n*120.
+static const char* const ARRAY_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$i:    LOCi\n" "$s:    LOCi\n" "$t:    LOCi\n" "$arr:  LOCA *16\n"
+	"       PEEK $n &gIn\n"
+	"       MOVi $i #0\n"
+	".fill: MULi $t $i $n\n"
+	"       SETL $arr $i $t\n"			// arr[i] = i*n
+	"       FORi $i #16 @.fill\n"
+	"       MOVi $s #0\n"
+	"       MOVi $i #0\n"
+	".sum:  GETL $t $arr $i\n"			// t = arr[i]
+	"       ADDi $s $s $t\n"
+	"       FORi $i #16 @.sum\n"
+	"       POKE &gOut $s\n"
+	"       RETU\n";
+
+// ADRL: output the pointer VALUE of a local; both interpreter and JIT must compute the same biased address.
+static const char* const ADRL_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$s:    LOCi\n" "$p:    LOCp\n"
+	"       PEEK $n &gIn\n"
+	"       ADRL $p $s *1\n"			// p = &s
+	"       POKE &gOut $p\n"			// output the biased pointer value
+	"       RETU\n";
+
 namespace {
 	const int CODE_SIZE = 64 * 1024, DATA_SIZE = 64 * 1024, FUNCTION_TABLE_SIZE = 1024, CALL_STACK_SIZE = 256;
 	Instruction gCode[CODE_SIZE];
@@ -273,6 +303,37 @@ static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
 			case OP_POKE_CV: e.load(A, DSP, in.p1.i * 4); e.store(MEM, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), A); break;
 			case OP_POKE_CC: e.movImm(A, static_cast<uint32_t>(in.p1.i)); e.store(MEM, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), A); break;
 
+			// var-indexed global memory: base const (p1/p0), index var, value var/const. [MEM + index*4 + base*4]
+			case OP_PEEK_VCV:
+				e.load(A, DSP, in.p2.i * 4);
+				e.loadIdx(A, MEM, A, static_cast<int32_t>((in.p1.p - MEMORY_OFFSET) * 4));
+				e.store(DSP, in.p0.i * 4, A); break;
+			case OP_POKE_CVV:
+				e.load(A, DSP, in.p1.i * 4); e.load(B, DSP, in.p2.i * 4);
+				e.storeIdx(MEM, A, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), B); break;
+			case OP_POKE_CVC:
+				e.load(A, DSP, in.p1.i * 4); e.movImm(B, static_cast<uint32_t>(in.p2.i));
+				e.storeIdx(MEM, A, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), B); break;
+
+			// local array (frame): base = dsp + C (p1 for GETL, p0 for SETL), index var. [DSP + index*4 + C*4]
+			case OP_GETL_VVV:
+				e.load(A, DSP, in.p2.i * 4);
+				e.loadIdx(A, DSP, A, in.p1.i * 4);
+				e.store(DSP, in.p0.i * 4, A); break;
+			case OP_SETL_VVV:
+				e.load(A, DSP, in.p1.i * 4); e.load(B, DSP, in.p2.i * 4);
+				e.storeIdx(DSP, A, in.p0.i * 4, B); break;
+			case OP_SETL_VVC:
+				e.load(A, DSP, in.p1.i * 4); e.movImm(B, static_cast<uint32_t>(in.p2.i));
+				e.storeIdx(DSP, A, in.p0.i * 4, B); break;
+
+			// address of a local p1 -> dest p0. pointer = MEMORY_OFFSET + wordIndex(dsp) + slot.
+			case OP_ADRL:
+				e.movQ(RAX, DSP); e.subQ(RAX, MEM); e.shrImm(RAX, 2);	// (dsp - membase) / 4 = dsp word offset
+				e.addImm(RAX, static_cast<uint32_t>(in.p1.i));			// + slot
+				e.addImm(RAX, MEMORY_OFFSET);
+				e.store(DSP, in.p0.i * 4, RAX); break;
+
 			case OP_ADDI_VVV: emitBin(e, &X64Emitter::add, in, false, false); break;
 			case OP_ADDI_VVC: emitBin(e, &X64Emitter::add, in, false, true); break;
 			case OP_SUBI_VVV: emitBin(e, &X64Emitter::sub, in, false, false); break;
@@ -405,6 +466,12 @@ int main() {
 	std::printf("\n");
 	const int floatInputs[] = { 0, 1, 10, 100, 1000, 5000, -100, -5000, 12345 };
 	runKernel("float", FLOAT_SOURCE, floatInputs, sizeof(floatInputs) / sizeof(*floatInputs));
+	std::printf("\n");
+	const int arrInputs[] = { 0, 1, 3, 10, 100 };
+	runKernel("array", ARRAY_SOURCE, arrInputs, sizeof(arrInputs) / sizeof(*arrInputs));
+	std::printf("\n");
+	const int adrlInputs[] = { 0, 42 };
+	runKernel("adrl", ADRL_SOURCE, adrlInputs, sizeof(adrlInputs) / sizeof(*adrlInputs));
 	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
 	return failures == 0 ? 0 : 1;
 }

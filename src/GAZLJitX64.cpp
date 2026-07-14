@@ -67,6 +67,24 @@ void X64Emitter::memOperand(int reg, Reg base, int32_t disp) {
 	else if (mod == 2) { d32(static_cast<uint32_t>(disp)); }
 }
 
+void X64Emitter::rex3(bool w, int reg, int index, int base) {
+	const uint8_t r = static_cast<uint8_t>(0x40 | (w ? 8 : 0) | ((reg >= 8) ? 4 : 0) | ((index >= 8) ? 2 : 0) | ((base >= 8) ? 1 : 0));
+	if (r != 0x40) { b(r); }
+}
+
+// [base + index*4 + disp]: ModRM.rm = 4 (SIB escape), SIB = scale(2 => *4) | index | base.
+void X64Emitter::memOperandIdx(int reg, Reg base, Reg index, int32_t disp) {
+	const int bb = base & 7;
+	int mod;
+	if (disp == 0 && bb != 5) { mod = 0; }
+	else if (disp >= -128 && disp <= 127) { mod = 1; }
+	else { mod = 2; }
+	b(static_cast<uint8_t>((mod << 6) | ((reg & 7) << 3) | 4));
+	b(static_cast<uint8_t>((2 << 6) | ((index & 7) << 3) | bb));	// scale 4
+	if (mod == 1) { b(static_cast<uint8_t>(disp)); }
+	else if (mod == 2) { d32(static_cast<uint32_t>(disp)); }
+}
+
 // 81 /ext id  — immediate ALU op (ext = 0 add, 5 sub, 7 cmp, ...).
 void X64Emitter::aluImm(int ext, Reg rd, uint32_t imm) {
 	rex(false, 0, rd);
@@ -114,6 +132,9 @@ void X64Emitter::load(Reg rd, Reg base, int32_t disp) { rex(false, rd, base); b(
 void X64Emitter::store(Reg base, int32_t disp, Reg rs) { rex(false, rs, base); b(0x89); memOperand(rs, base, disp); }
 void X64Emitter::loadQ(Reg rd, Reg base, int32_t disp) { rex(true, rd, base); b(0x8B); memOperand(rd, base, disp); }
 void X64Emitter::storeQ(Reg base, int32_t disp, Reg rs) { rex(true, rs, base); b(0x89); memOperand(rs, base, disp); }
+void X64Emitter::loadIdx(Reg rd, Reg base, Reg index, int32_t disp) { rex3(false, rd, index, base); b(0x8B); memOperandIdx(rd, base, index, disp); }
+void X64Emitter::storeIdx(Reg base, Reg index, int32_t disp, Reg rs) { rex3(false, rs, index, base); b(0x89); memOperandIdx(rs, base, index, disp); }
+void X64Emitter::subQ(Reg rd, Reg rs) { rex(true, rs, rd); b(0x29); modrmReg(rs, rd); }
 
 // --- SSE scalar single-precision floats ---
 
