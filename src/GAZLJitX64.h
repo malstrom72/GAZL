@@ -117,6 +117,7 @@ class X64Emitter {
 		void cvttss2si(Reg rd, Reg xs);							// `cvttss2si rd, xs` (float -> int, truncate; FTOI)
 		void cvtsi2ss(Reg xd, Reg rs);							// `cvtsi2ss xd, rs` (int -> float; ITOF)
 		void movdToXmm(Reg xd, Reg rs);							// `movd xd, rs` (bit-copy int -> xmm; float const load)
+		void movdFromXmm(Reg rd, Reg xs);						// `movd rd, xs` (bit-copy xmm -> int; FTOI saturation)
 		void roundss(Reg xd, Reg xs, uint8_t mode);				// `roundss xd, xs, imm8` (SSE4.1; mode 1 = floor; FLOF)
 
 		// --- stack / control ---

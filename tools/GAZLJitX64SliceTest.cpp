@@ -113,6 +113,31 @@ static const char* const FLOAT_SOURCE =
 	"       POKE &gOut $n\n"
 	"       RETU\n";
 
+// FTOI saturation: n * 1e9 overflows INT range for |n| >= 3 -> INT_MAX / INT_MIN like the interpreter's ftoi().
+static const char* const FTOISAT_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$f:    LOCf\n"
+	"       PEEK $n &gIn\n"
+	"       iTOf $f $n #1000000000.0\n"	// f = n * 1e9
+	"       fTOi $n $f #1.0\n"			// saturating convert
+	"       POKE &gOut $n\n"
+	"       RETU\n";
+
+// Runtime div-by-zero: d = n - n = 0, then 100 / d -> DIVISION_BY_ZERO status (matched, not a failure).
+static const char* const DIVZERO_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$d:    LOCi\n" "$r:    LOCi\n"
+	"       PEEK $n &gIn\n"
+	"       MOVi $d $n\n"
+	"       SUBi $d $d $n\n"			// d = 0
+	"       DIVi $r #100 $d\n"			// 100 / 0 (runtime) -> DIVISION_BY_ZERO
+	"       POKE &gOut $r\n"
+	"       RETU\n";
+
 // Local array via SETL/GETL (indexed frame addressing): arr[i] = i*n, then sum -> n*120.
 static const char* const ARRAY_SOURCE =
 	"gIn:   GLOB *1\n" "       DATi #0\n"
@@ -282,14 +307,14 @@ static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr
 	return (gInPtr != NULL_POINTER && gOutPtr != NULL_POINTER);
 }
 
-static int interpreterRun(Symbols& globals, Pointer gInPtr, Pointer gOutPtr, int n) {
+static int interpreterRun(Symbols& globals, Pointer gInPtr, Pointer gOutPtr, int n, Status& outStatus) {
 	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize,
 			gConstsSize, CALL_STACK_SIZE, gCallStack, gNat, 0);
 	p.accessMemory(gInPtr, 1)->i = n;
 	Status s = p.enterCall(globals.findFunction("main"));
-	do { p.resetTimeOut(0x7FFFFFFF); s = p.run(); } while (s == TIME_OUT);
-	if (s != OK) { std::printf("  interpreter status %d\n", s); ++failures; return 0; }
-	return p.accessMemory(gOutPtr, 1)->i;
+	do { p.resetTimeOut(0x7FFFFFFF); s = p.run(); } while (s == TIME_OUT || s == BLOCK_RETRY);
+	outStatus = s;								// traps (div-by-zero, bounds) are valid results to match, not failures
+	return (s == OK) ? p.accessMemory(gOutPtr, 1)->i : 0;
 }
 
 // --- the minimal x64 lowering (integer + float) ---
@@ -320,14 +345,30 @@ static void emitBin(X64Emitter& e, BinOp op, const Instruction& in, bool s1Const
 	e.store(DSP, in.p0.i * 4, A);
 }
 
-// Signed division: dividend p1 -> eax, divisor p2 -> ecx, cdq sign-extends into edx, idiv; store quotient (eax) or
-// remainder (edx). (No div-by-zero / INT_MIN-over-minus-one guard yet — the test inputs avoid both; TODO with traps.)
-static void emitDivMod(X64Emitter& e, const Instruction& in, bool rem, bool s1Const, bool s2Const) {
+// Signed division: dividend p1 -> eax, divisor p2 -> ecx. Guards match the interpreter's idiv/imod helpers: a runtime
+// zero divisor traps DIVISION_BY_ZERO; divisor == -1 is special-cased (div -> -a, mod -> 0) to dodge the x86 #DE on
+// INT_MIN/-1. Result is always left in eax before the store. (A const-zero divisor is an assemble-time error, so the
+// zero guard is only for a variable divisor, matching arm64.)
+static void emitDivMod(X64Emitter& e, const Instruction& in, bool rem, bool s1Const, bool s2Const, Label epilogue) {
 	if (s1Const) { e.movImm(RAX, static_cast<uint32_t>(in.p1.i)); } else { e.load(RAX, DSP, in.p1.i * 4); }
 	if (s2Const) { e.movImm(RCX, static_cast<uint32_t>(in.p2.i)); } else { e.load(RCX, DSP, in.p2.i * 4); }
-	e.cdq();
-	e.idiv(RCX);
-	e.store(DSP, in.p0.i * 4, rem ? RDX : RAX);
+	if (!s2Const) {
+		e.cmpImm(RCX, 0);
+		Label nz = e.newLabel();
+		e.jcc(CC_NE, nz);
+		e.movImm(RAX, static_cast<uint32_t>(DIVISION_BY_ZERO)); e.jmp(epilogue);
+		e.bind(nz);
+	}
+	e.cmpImm(RCX, 0xFFFFFFFFu);						// divisor == -1 ?
+	Label notM1 = e.newLabel(), done = e.newLabel();
+	e.jcc(CC_NE, notM1);
+	if (rem) { e.movImm(RAX, 0); } else { e.neg(RAX); }
+	e.jmp(done);
+	e.bind(notM1);
+	e.cdq(); e.idiv(RCX);
+	if (rem) { e.mov(RAX, RDX); }
+	e.bind(done);
+	e.store(DSP, in.p0.i * 4, RAX);
 }
 
 // Shift: value p1 -> eax, count p2 (const -> imm8, or slot -> cl). kind 0=shl, 1=shr(logical), 2=sar(arithmetic).
@@ -507,12 +548,12 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 			case OP_XORI_VVV: emitBin(e, &X64Emitter::xor_, in, false, false); break;
 			case OP_XORI_VVC: emitBin(e, &X64Emitter::xor_, in, false, true); break;
 
-			case OP_DIVI_VVV: emitDivMod(e, in, false, false, false); break;
-			case OP_DIVI_VVC: emitDivMod(e, in, false, false, true); break;
-			case OP_DIVI_VCV: emitDivMod(e, in, false, true, false); break;
-			case OP_MODI_VVV: emitDivMod(e, in, true, false, false); break;
-			case OP_MODI_VVC: emitDivMod(e, in, true, false, true); break;
-			case OP_MODI_VCV: emitDivMod(e, in, true, true, false); break;
+			case OP_DIVI_VVV: emitDivMod(e, in, false, false, false, epilogue); break;
+			case OP_DIVI_VVC: emitDivMod(e, in, false, false, true, epilogue); break;
+			case OP_DIVI_VCV: emitDivMod(e, in, false, true, false, epilogue); break;
+			case OP_MODI_VVV: emitDivMod(e, in, true, false, false, epilogue); break;
+			case OP_MODI_VVC: emitDivMod(e, in, true, false, true, epilogue); break;
+			case OP_MODI_VCV: emitDivMod(e, in, true, true, false, epilogue); break;
 			case OP_SHLI_VVV: emitShift(e, in, 0, false, false); break;
 			case OP_SHLI_VVC: emitShift(e, in, 0, false, true); break;
 			case OP_SHLI_VCV: emitShift(e, in, 0, true, false); break;
@@ -546,10 +587,25 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 			case OP_DIVF_VVC: emitFBin(e, &X64Emitter::divss, in, false, true); break;
 			case OP_DIVF_VCV: emitFBin(e, &X64Emitter::divss, in, true, false); break;
 			// FTOI/ITOF carry a scale constant (p2): FTOI = (int)(src * scale), ITOF = (float)src * scale.
-			case OP_FTOI_VVC:
+			case OP_FTOI_VVC: {
 				e.movssLoad(F0, DSP, in.p1.i * 4);
-				e.movImm(A, static_cast<uint32_t>(in.p2.i)); e.movdToXmm(F1, A); e.mulss(F0, F1);
-				e.cvttss2si(A, F0); e.store(DSP, in.p0.i * 4, A); break;
+				e.movImm(A, static_cast<uint32_t>(in.p2.i)); e.movdToXmm(F1, A); e.mulss(F0, F1);	// * scale
+				e.cvttss2si(A, F0);					// x86 yields 0x80000000 for overflow / inf / NaN
+				e.cmpImm(A, 0x80000000u);
+				Label ftDone = e.newLabel();
+				e.jcc(CC_NE, ftDone);				// in range -> done; else saturate like the interpreter's ftoi()
+				e.ucomiss(F0, F0);					// NaN sets PF
+				Label ftNotNan = e.newLabel();
+				e.jcc(CC_NP, ftNotNan);
+				e.movImm(A, 0); e.jmp(ftDone);		// NaN -> 0
+				e.bind(ftNotNan);
+				e.movdFromXmm(B, F0); e.cmpImm(B, 0);	// sign bit: signed >= 0 means positive / +inf
+				Label ftNeg = e.newLabel();
+				e.jcc(CC_L, ftNeg);					// negative / -inf -> keep INT_MIN
+				e.movImm(A, 0x7FFFFFFFu);			// positive / +inf -> INT_MAX
+				e.bind(ftNeg); e.bind(ftDone);
+				e.store(DSP, in.p0.i * 4, A); break;
+			}
 			case OP_ITOF_VVC:
 				e.load(A, DSP, in.p1.i * 4); e.cvtsi2ss(F0, A);
 				e.movImm(A, static_cast<uint32_t>(in.p2.i)); e.movdToXmm(F1, A); e.mulss(F0, F1);
@@ -648,13 +704,14 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	for (size_t k = 0; k < nInputs; ++k) {
 		const int n = inputs[k];
 		std::memcpy(gMemory, gClean, sizeof(gMemory));	// interpreter run starts from the clean image
-		const int want = interpreterRun(globals, gInPtr, gOutPtr, n);
+		Status wantStatus = OK;
+		const int want = interpreterRun(globals, gInPtr, gOutPtr, n, wantStatus);
 		std::memcpy(gMemory, gClean, sizeof(gMemory));	// JIT run too
 		gMemory[gInPtr - MEMORY_OFFSET].i = n;
 		const int st = jit(&gMemory[gGlobalsSize], &gMemory[0]);
 		const int got = gMemory[gOutPtr - MEMORY_OFFSET].i;
-		const bool ok = (st == 0) && (got == want);
-		std::printf("  n=%-8d interp=%-12d jit=%-12d %s\n", n, want, got, ok ? "OK" : "MISMATCH");
+		const bool ok = (st == static_cast<int>(wantStatus)) && (wantStatus != OK || got == want);
+		std::printf("  n=%-8d interp=%-12d/%d jit=%-12d/%d %s\n", n, want, static_cast<int>(wantStatus), got, st, ok ? "OK" : "MISMATCH");
 		if (!ok) { ++failures; }
 	}
 }
@@ -689,6 +746,12 @@ int main() {
 	std::printf("\n");
 	const int swInputs[] = { 0, 1, 2, 3, 4, 5, -1 };	// 0/1/2 -> cases; 3/4/oob -> default
 	runKernel("switch", SWITCH_SOURCE, swInputs, sizeof(swInputs) / sizeof(*swInputs));
+	std::printf("\n");
+	const int satInputs[] = { 0, 1, 2, 3, 5, -2, -3, -5 };	// |n|>=3 -> saturate to INT_MAX/INT_MIN
+	runKernel("ftoi-sat", FTOISAT_SOURCE, satInputs, sizeof(satInputs) / sizeof(*satInputs));
+	std::printf("\n");
+	const int dzInputs[] = { 0, 5, -7 };				// all trap DIVISION_BY_ZERO (matched)
+	runKernel("div-zero", DIVZERO_SOURCE, dzInputs, sizeof(dzInputs) / sizeof(*dzInputs));
 	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
 	return failures == 0 ? 0 : 1;
 }
