@@ -152,6 +152,29 @@ static const char* const CALL_SOURCE =
 	"       POKE &gOut $s\n"
 	"       RETU\n";
 
+// Indirect call: pick square or cube via a function pointer chosen at runtime, then CALL through the slot (CALL_VVC).
+static const char* const INDIRECT_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"square: FUNC\n" "$r:    OUTi\n" "$x:    INPi\n"
+	"       MULi $r $x $x\n"
+	"       RETU\n"
+	"cube:  FUNC\n" "$cr:   OUTi\n" "$cx:   INPi\n"
+	"       MULi $cr $cx $cx\n"
+	"       MULi $cr $cr $cx\n"
+	"       RETU\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$fp:   LOCp\n" "$rr:   LOCi\n"
+	"       PEEK $n &gIn\n"
+	"       MOVp $fp &square\n"
+	"       GEQi $n #0 @.go\n"			// n >= 0 -> square; else cube
+	"       MOVp $fp &cube\n"
+	".go:   MOVi %1 $n\n"
+	"       CALL $fp %0 *2\n"			// indirect call through the pointer
+	"       MOVi $rr %0\n"
+	"       POKE &gOut $rr\n"
+	"       RETU\n";
+
 // COPY (the bank idiom): ADRL a local array, COPY a global block into it, sum it. Exercises COPY_VCC + ADRL + GETL.
 static const char* const COPY_SOURCE =
 	"gIn:   GLOB *1\n" "       DATi #0\n"
@@ -207,6 +230,7 @@ namespace {
 	UInt gFunctionTable[FUNCTION_TABLE_SIZE];
 	CallStackEntry gCallStack[CALL_STACK_SIZE];
 	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
+	void* gEntryAddr[FUNCTION_TABLE_SIZE];		// ordinal -> native entry address (filled after mapping; for CALL_VVC)
 }
 
 // A native, in both flavors: the interpreter's (Processor*, reads via accessParams) and the JIT's (params = dsp+window,
@@ -371,6 +395,18 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 				e.cmpImm(RAX, 0); e.jcc(CC_NE, epilogue);	// propagate a non-OK status
 				break;
 			}
+			case OP_CALL_VVC: {						// indirect call: fn pointer in a slot -> ordinal -> gEntryAddr[ordinal]
+				e.load(RCX, DSP, in.p0.i * 4);		// fn pointer = IP_OFFSET + ordinal
+				e.subImm(RCX, IP_OFFSET); e.shlImm(RCX, 3);		// ordinal * 8 (byte index into the entry table)
+				e.movImm64(RAX, static_cast<uint64_t>(reinterpret_cast<uintptr_t>(gEntryAddr)));
+				e.addQ(RAX, RCX); e.loadQ(RAX, RAX, 0);			// RAX = gEntryAddr[ordinal]
+				e.movQ(RDI, DSP);
+				if (in.p1.i != 0) { e.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }
+				e.movQ(RSI, MEM);
+				e.callReg(RAX);
+				e.cmpImm(RAX, 0); e.jcc(CC_NE, epilogue);
+				break;
+			}
 			case OP_CALL_NVC: {						// native call: params = dsp + window; native fn baked as an absolute call
 				const UInt ord = static_cast<UInt>(in.p0.i);
 				e.movQ(RDI, DSP);
@@ -528,7 +564,7 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 
 // Compile every function into one buffer: main first (so its entry is offset 0), then the rest, then one shared
 // epilogue (all functions have identical prologue/epilogue). Direct CALLs resolve to entry labels via rel32 fixups.
-static bool compileProgram(X64Emitter& e, const Instruction* code, const UInt* functionTable, UInt functionCount, UInt mainOrd, void* const* natives) {
+static bool compileProgram(X64Emitter& e, const Instruction* code, const UInt* functionTable, UInt functionCount, UInt mainOrd, void* const* natives, size_t* entryOffsets) {
 	std::vector<Label> entry(functionCount);
 	for (UInt k = 0; k < functionCount; ++k) { entry[k] = e.newLabel(); }
 	Label epilogue = e.newLabel();
@@ -543,6 +579,7 @@ static bool compileProgram(X64Emitter& e, const Instruction* code, const UInt* f
 	e.bind(epilogue);
 	e.addImmQ(RSP, 8u); e.pop(MEM); e.pop(DSP); e.ret();
 	e.finalize();
+	for (UInt k = 0; k < functionCount; ++k) { entryOffsets[k] = static_cast<size_t>(e.labelOffset(entry[k])); }
 	return true;
 }
 
@@ -554,11 +591,13 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	Pointer gInPtr = NULL_POINTER, gOutPtr = NULL_POINTER;
 	if (!assembleKernel(globals, source, gInPtr, gOutPtr)) { std::printf("  %s: assemble failed\n", name); ++failures; return; }
 	X64Emitter e;
-	if (!compileProgram(e, gCode, gFunctionTable, gFunctionCount, globals.findFunction("main") - IP_OFFSET, gNatJit)) {
+	static size_t entryOffsets[FUNCTION_TABLE_SIZE];
+	if (!compileProgram(e, gCode, gFunctionTable, gFunctionCount, globals.findFunction("main") - IP_OFFSET, gNatJit, entryOffsets)) {
 		std::printf("  %s: unsupported opcode\n", name); ++failures; return;
 	}
 	void* code = mapExecutable(e.code(), e.size());
 	if (code == 0) { std::printf("  %s: mapExecutable failed\n", name); ++failures; return; }
+	for (UInt k = 0; k < gFunctionCount; ++k) { gEntryAddr[k] = reinterpret_cast<char*>(code) + entryOffsets[k]; }
 	JitFn jit = reinterpret_cast<JitFn>(code);
 	std::memcpy(gClean, gMemory, sizeof(gMemory));		// clean image (globals + DATi/DATf inits) to restore each run
 	std::printf("Kernel \"%s\" (%zu bytes):\n", name, e.size());
@@ -600,6 +639,9 @@ int main() {
 	std::printf("\n");
 	const int copyInputs[] = { 0, 5, 1000 };
 	runKernel("copy", COPY_SOURCE, copyInputs, sizeof(copyInputs) / sizeof(*copyInputs));
+	std::printf("\n");
+	const int indInputs[] = { 0, 3, 7, -3, -5 };		// n>=0 -> square, n<0 -> cube
+	runKernel("indirect", INDIRECT_SOURCE, indInputs, sizeof(indInputs) / sizeof(*indInputs));
 	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
 	return failures == 0 ? 0 : 1;
 }

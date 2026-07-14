@@ -139,6 +139,7 @@ class X64Emitter {
 		// --- buffer access ---
 		const uint8_t* code() const { return bytes.empty() ? 0 : &bytes[0]; }
 		size_t size() const { return bytes.size(); }			// emitted byte count
+		ptrdiff_t labelOffset(Label l) const { return labelTargets[l.id]; }	// bound byte offset (after bind); for entry tables
 
 	private:
 		struct Fixup {
