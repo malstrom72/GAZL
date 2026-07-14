@@ -69,6 +69,24 @@ v2.1 bound‑register eligibility improves in exactly the `process()` functions 
 
 ---
 
+## 2. JIT-availability probe — `jitAvailable()` (library API, design-resolved)
+
+**Why.** A JIT must never crash the host merely because W^X / executable memory turns out to be forbidden by policy. So JIT availability is a **runtime-detected capability**, exposed from the GAZL library as `bool GAZL::jitAvailable()` (declared in `GAZLJitMem.h`, implemented per-OS alongside `makeExecutable`). Callers gate on it; the interpreter is always the fallback (`GAZLCmd` already falls back when a module isn't `ok()`).
+
+**Two layers, neither of which can crash:**
+1. **Return-code checks** catch most denials cleanly — the OS says "no" through the alloc/protect calls:
+   - macOS arm64 (native): `mmap(MAP_JIT)` → `MAP_FAILED` without the `com.apple.security.cs.allow-jit` entitlement (hardened runtime).
+   - macOS under Rosetta (x64): plain `mmap(RW)`+`mprotect(RX)` — `mprotect` → `EACCES` if blocked.
+   - Windows: `VirtualProtect(PAGE_EXECUTE_READ)` → `FALSE` under **ACG** (Arbitrary Code Guard) — the main "forbidden" case there.
+2. **A fault-guarded execution probe** catches the residual "syscall succeeded but *executing* the page faults." At startup, once: emit a trivial stub (`mov eax, 0xC0DE; ret` on x64; `movz w0,#0xC0DE; ret` on arm64), `makeExecutable` it, and **call it inside a fault guard**, checking it returns `0xC0DE`:
+   - POSIX (macOS/Linux): temporary `SIGSEGV`/`SIGBUS`/`SIGILL` handler + `sigsetjmp`/`siglongjmp` around the call.
+   - Windows: SEH `__try/__except (EXECUTE_HANDLER)` (or a vectored exception handler).
+   Fault or wrong value → JIT unavailable. Cache the boolean (sub-ms, call once at startup, single-threaded).
+
+**Rule:** never run generated code in production without having first run a *trivial* piece of generated code and seen it return the right answer. Ship posture: request the capability up front (macOS `allow-jit` entitlement in the signature; on Windows don't opt the process into ACG) so it's normally granted — the probe covers policy/MDM/App-Store denial, where it simply reports `false` and the interpreter runs. Phase-0 infra item; pairs with Spike A2 (below). *Status: designed, not yet implemented.*
+
+---
+
 ## Other open investigations (tracked elsewhere, listed here for the index)
 
 - **Spike A2 — ARM64 cross‑thread code publication** (compile on loader thread, first execute on audio thread):
