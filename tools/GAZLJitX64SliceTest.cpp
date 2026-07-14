@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <cstring>
 #include <map>
+#include <vector>
 #include <sys/mman.h>
 
 using namespace GAZL;
@@ -131,6 +132,100 @@ static const char* const ARRAY_SOURCE =
 	"       POKE &gOut $s\n"
 	"       RETU\n";
 
+// Two functions: main calls square(i) in a loop -> sum of i*i. Exercises CALL_CVC + the window/return convention.
+static const char* const CALL_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"square: FUNC\n"					// square(x) -> x*x
+	"$r:    OUTi\n" "$x:    INPi\n"
+	"       MULi $r $x $x\n"
+	"       RETU\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$s:    LOCi\n" "$i:    LOCi\n"
+	"       PEEK $n &gIn\n"
+	"       MOVi $s #0\n"
+	"       MOVi $i #0\n"
+	".loop: MOVi %1 $i\n"				// window: %0 = return, %1 = arg
+	"       CALL &square %0 *2\n"
+	"       ADDi $s $s %0\n"			// s += square(i)
+	"       FORi $i $n @.loop\n"
+	"       POKE &gOut $s\n"
+	"       RETU\n";
+
+// SWCH: switch(n clamped 0..4) -> distinct results; missing cases + out-of-range fall to the default. Jump table.
+static const char* const SWITCH_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$r:    LOCi\n"
+	"       PEEK $n &gIn\n"
+	"       SWCH $n *4 @.sw\n"
+	".sw#0: MOVi $r #100\n" "       GOTO @.done\n"
+	".sw#1: MOVi $r #200\n" "       GOTO @.done\n"
+	".sw#2: MOVi $r #300\n" "       GOTO @.done\n"
+	".sw:   MOVi $r #999\n"			// default (bare label): cases 3,4 and out-of-range clamp here
+	".done: POKE &gOut $r\n"
+	"       RETU\n";
+
+// Indirect call: pick square or cube via a function pointer chosen at runtime, then CALL through the slot (CALL_VVC).
+static const char* const INDIRECT_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"square: FUNC\n" "$r:    OUTi\n" "$x:    INPi\n"
+	"       MULi $r $x $x\n"
+	"       RETU\n"
+	"cube:  FUNC\n" "$cr:   OUTi\n" "$cx:   INPi\n"
+	"       MULi $cr $cx $cx\n"
+	"       MULi $cr $cr $cx\n"
+	"       RETU\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$fp:   LOCp\n" "$rr:   LOCi\n"
+	"       PEEK $n &gIn\n"
+	"       MOVp $fp &square\n"
+	"       GEQi $n #0 @.go\n"			// n >= 0 -> square; else cube
+	"       MOVp $fp &cube\n"
+	".go:   MOVi %1 $n\n"
+	"       CALL $fp %0 *2\n"			// indirect call through the pointer
+	"       MOVi $rr %0\n"
+	"       POKE &gOut $rr\n"
+	"       RETU\n";
+
+// COPY (the bank idiom): ADRL a local array, COPY a global block into it, sum it. Exercises COPY_VCC + ADRL + GETL.
+static const char* const COPY_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gSrc:  GLOB *8\n" "       DATi #10\n" "       DATi #20\n" "       DATi #30\n" "       DATi #40\n"
+	"       DATi #50\n" "       DATi #60\n" "       DATi #70\n" "       DATi #80\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$i:    LOCi\n" "$s:    LOCi\n" "$t:    LOCi\n" "$buf:  LOCA *8\n"
+	"       PEEK $n &gIn\n"
+	"       ADRL %0 $buf *8\n"			// %0 = &buf
+	"       COPY %0 &gSrc *8\n"			// copy 8 words gSrc -> buf
+	"       MOVi $s #0\n"
+	"       MOVi $i #0\n"
+	".sum:  GETL $t $buf $i\n"
+	"       ADDi $s $s $t\n"
+	"       FORi $i #8 @.sum\n"
+	"       ADDi $s $s $n\n"			// + input so it varies
+	"       POKE &gOut $s\n"
+	"       RETU\n";
+
+// Native call: main calls the host native nsq(i) = i*i in a loop -> sum of i*i. Exercises CALL_NVC.
+static const char* const NATIVE_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$s:    LOCi\n" "$i:    LOCi\n"
+	"       PEEK $n &gIn\n"
+	"       MOVi $s #0\n"
+	"       MOVi $i #0\n"
+	".loop: MOVi %1 $i\n"
+	"       CALL ^nsq %0 *2\n"			// native call: %0 = return, %1 = arg
+	"       ADDi $s $s %0\n"
+	"       FORi $i $n @.loop\n"
+	"       POKE &gOut $s\n"
+	"       RETU\n";
+
 // ADRL: output the pointer VALUE of a local; both interpreter and JIT must compute the same biased address.
 static const char* const ADRL_SOURCE =
 	"gIn:   GLOB *1\n" "       DATi #0\n"
@@ -146,12 +241,23 @@ namespace {
 	const int CODE_SIZE = 64 * 1024, DATA_SIZE = 64 * 1024, FUNCTION_TABLE_SIZE = 1024, CALL_STACK_SIZE = 256;
 	Instruction gCode[CODE_SIZE];
 	Value gMemory[DATA_SIZE];
+	Value gClean[DATA_SIZE];			// snapshot of the assembled image (globals + const inits), restored before each run
 	UInt gFunctionTable[FUNCTION_TABLE_SIZE];
 	CallStackEntry gCallStack[CALL_STACK_SIZE];
 	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
+	void* gEntryAddr[FUNCTION_TABLE_SIZE];		// ordinal -> native entry address (filled after mapping; for CALL_VVC)
 }
 
+// A native, in both flavors: the interpreter's (Processor*, reads via accessParams) and the JIT's (params = dsp+window,
+// baked as an absolute call). Both compute r = x*x, so interpreter and JIT agree. Ordinal 0 = "nsq".
+static Status nsqInterp(Processor* p) { Value* q = p->accessParams(2); if (q == 0) { return DATA_STACK_OVERFLOW; } q[0].i = q[1].i * q[1].i; return OK; }
+static int nsqJit(Value* params) { params[0].i = params[1].i * params[1].i; return 0; }
+static NativeFunc const gNat[] = { nsqInterp };
+static void* const gNatJit[] = { reinterpret_cast<void*>(&nsqJit) };
+static const char* const gNatNames[] = { "nsq" };
+
 static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr, Pointer& gOutPtr) {
+	for (int i = 0; i < static_cast<int>(sizeof(gNatNames) / sizeof(*gNatNames)); ++i) { globals.registerNative(gNatNames[i], i); }
 	UInt codeSize = 0, gs = 0, cs = 0, fc = 0;
 	try {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
@@ -178,7 +284,7 @@ static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr
 
 static int interpreterRun(Symbols& globals, Pointer gInPtr, Pointer gOutPtr, int n) {
 	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize,
-			gConstsSize, CALL_STACK_SIZE, gCallStack, 0, 0);
+			gConstsSize, CALL_STACK_SIZE, gCallStack, gNat, 0);
 	p.accessMemory(gInPtr, 1)->i = n;
 	Status s = p.enterCall(globals.findFunction("main"));
 	do { p.resetTimeOut(0x7FFFFFFF); s = p.run(); } while (s == TIME_OUT);
@@ -270,17 +376,27 @@ static void emitFBranch(X64Emitter& e, int kind, const Instruction& in, UInt j, 
 	else { e.ucomiss(F0, F1); e.jcc(CC_P, tgt); e.jcc(CC_NE, tgt); }		// unordered or not-equal
 }
 
-static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
+static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, const std::vector<Label>& entry, Label epilogue, void* const* natives) {
 	UInt end = funcStart;
 	while (code[end].opcode != OP_RETU) { ++end; }
 
 	std::map<UInt, Label> lbl;
 	for (UInt j = funcStart; j <= end; ++j) {
+		if (code[j].opcode == OP_SWCH) {			// every jump-table entry (read from const memory) is a target
+			const UInt sz = static_cast<UInt>(code[j].p1.i) + 1;
+			const UInt tbl = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
+			for (UInt kk = 0; kk < sz; ++kk) {
+				const UInt t = static_cast<UInt>(static_cast<Int>(j) + gMemory[tbl + kk].i);
+				if (!lbl.count(t)) { lbl[t] = e.newLabel(); }
+			}
+			continue;
+		}
 		UInt t;
-		if (branchTgt(code, j, t)) { lbl[t] = e.newLabel(); }
+		if (branchTgt(code, j, t) && !lbl.count(t)) { lbl[t] = e.newLabel(); }
 	}
 
 	e.push(DSP); e.push(MEM);					// SysV prologue: save callee-saved pins
+	e.addImmQ(RSP, 0xFFFFFFF8u);				// sub rsp, 8 — keep rsp 16-aligned at inner call sites
 	e.movQ(DSP, RDI); e.movQ(MEM, RSI);			// dsp = arg0, memory base = arg1
 	e.addImmQ(DSP, static_cast<uint32_t>(code[funcStart].p0.i) * 4u);	// FUNC: advance to this frame
 
@@ -292,9 +408,38 @@ static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
 		switch (op) {
 			case OP_FUNC: break;
 			case OP_RETU:
-				e.movImm(RAX, 0);				// Status OK
-				e.pop(MEM); e.pop(DSP); e.ret();
+				e.movImm(RAX, 0); e.jmp(epilogue);	// Status OK -> shared epilogue
 				break;
+			case OP_CALL_CVC: {						// direct GAZL call: callee runs with dsp += window, returns Status in eax
+				const UInt callee = in.p0.p - IP_OFFSET;
+				e.movQ(RDI, DSP);
+				if (in.p1.i != 0) { e.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }	// rdi = dsp + window
+				e.movQ(RSI, MEM);
+				e.callRel(entry[callee]);
+				e.cmpImm(RAX, 0); e.jcc(CC_NE, epilogue);	// propagate a non-OK status
+				break;
+			}
+			case OP_CALL_VVC: {						// indirect call: fn pointer in a slot -> ordinal -> gEntryAddr[ordinal]
+				e.load(RCX, DSP, in.p0.i * 4);		// fn pointer = IP_OFFSET + ordinal
+				e.subImm(RCX, IP_OFFSET); e.shlImm(RCX, 3);		// ordinal * 8 (byte index into the entry table)
+				e.movImm64(RAX, static_cast<uint64_t>(reinterpret_cast<uintptr_t>(gEntryAddr)));
+				e.addQ(RAX, RCX); e.loadQ(RAX, RAX, 0);			// RAX = gEntryAddr[ordinal]
+				e.movQ(RDI, DSP);
+				if (in.p1.i != 0) { e.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }
+				e.movQ(RSI, MEM);
+				e.callReg(RAX);
+				e.cmpImm(RAX, 0); e.jcc(CC_NE, epilogue);
+				break;
+			}
+			case OP_CALL_NVC: {						// native call: params = dsp + window; native fn baked as an absolute call
+				const UInt ord = static_cast<UInt>(in.p0.i);
+				e.movQ(RDI, DSP);
+				if (in.p1.i != 0) { e.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }
+				e.movImm64(RAX, static_cast<uint64_t>(reinterpret_cast<uintptr_t>(natives[ord])));
+				e.callReg(RAX);
+				e.cmpImm(RAX, 0); e.jcc(CC_NE, epilogue);	// native returned a non-OK Status
+				break;
+			}
 
 			case OP_MOVE_VV: e.load(A, DSP, in.p1.i * 4); e.store(DSP, in.p0.i * 4, A); break;
 			case OP_MOVE_VC: e.movImm(A, static_cast<uint32_t>(in.p1.i)); e.store(DSP, in.p0.i * 4, A); break;
@@ -326,6 +471,20 @@ static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
 			case OP_SETL_VVC:
 				e.load(A, DSP, in.p1.i * 4); e.movImm(B, static_cast<uint32_t>(in.p2.i));
 				e.storeIdx(DSP, A, in.p0.i * 4, B); break;
+
+			// bulk copy p2 words from src (p1) to dst (p0), via rep movsd. Each pointer is a const memory address or a
+			// slot holding a GAZL pointer; resolve to a byte address (MEM + wordIndex*4).
+			case OP_COPY_VVC: case OP_COPY_VCC: case OP_COPY_CVC: case OP_COPY_CCC: {
+				const bool dstConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
+				const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
+				if (dstConst) { e.movQ(RDI, MEM); e.addImmQ(RDI, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); }
+				else { e.load(RAX, DSP, in.p0.i * 4); e.subImm(RAX, MEMORY_OFFSET); e.shlImm(RAX, 2); e.movQ(RDI, MEM); e.addQ(RDI, RAX); }
+				if (srcConst) { e.movQ(RSI, MEM); e.addImmQ(RSI, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); }
+				else { e.load(RAX, DSP, in.p1.i * 4); e.subImm(RAX, MEMORY_OFFSET); e.shlImm(RAX, 2); e.movQ(RSI, MEM); e.addQ(RSI, RAX); }
+				e.movImm(RCX, static_cast<uint32_t>(in.p2.i));
+				e.cld(); e.repMovsd();
+				break;
+			}
 
 			// address of a local p1 -> dest p0. pointer = MEMORY_OFFSET + wordIndex(dsp) + slot.
 			case OP_ADRL:
@@ -410,6 +569,26 @@ static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
 
 			case OP_GOTO: e.jmp(lbl[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
 
+			case OP_SWCH: {						// index = min(unsigned(V0), C1); jump into a table of `jmp case`
+				const UInt sz = static_cast<UInt>(in.p1.i) + 1;
+				const UInt tbl = static_cast<UInt>(in.p2.p - MEMORY_OFFSET);
+				e.load(A, DSP, in.p0.i * 4);
+				e.cmpImm(A, static_cast<uint32_t>(in.p1.i));
+				Label keep = e.newLabel();
+				e.jcc(CC_BE, keep);				// (unsigned) val <= C1 -> keep; else clamp
+				e.movImm(A, static_cast<uint32_t>(in.p1.i));
+				e.bind(keep);
+				e.mov(B, A); e.shlImm(B, 2); e.add(B, A);	// B = index * 5 (each table jmp is 5 bytes)
+				Label tableBase = e.newLabel();
+				e.leaRip(RAX, tableBase); e.addQ(RAX, B); e.jmpReg(RAX);
+				e.bind(tableBase);
+				for (UInt kk = 0; kk < sz; ++kk) {
+					const UInt t = static_cast<UInt>(static_cast<Int>(j) + gMemory[tbl + kk].i);
+					e.jmp(lbl[t]);
+				}
+				break;
+			}
+
 			case OP_LSSI_VVB: emitBranch(e, CC_L, in, j, false, false, lbl); break;
 			case OP_LSSI_VCB: emitBranch(e, CC_L, in, j, false, true, lbl); break;
 			case OP_LSSI_CVB: emitBranch(e, CC_L, in, j, true, false, lbl); break;
@@ -424,7 +603,27 @@ static bool lowerX64(X64Emitter& e, const Instruction* code, UInt funcStart) {
 			default: return false;			// unsupported opcode
 		}
 	}
+	return true;
+}
+
+// Compile every function into one buffer: main first (so its entry is offset 0), then the rest, then one shared
+// epilogue (all functions have identical prologue/epilogue). Direct CALLs resolve to entry labels via rel32 fixups.
+static bool compileProgram(X64Emitter& e, const Instruction* code, const UInt* functionTable, UInt functionCount, UInt mainOrd, void* const* natives, size_t* entryOffsets) {
+	std::vector<Label> entry(functionCount);
+	for (UInt k = 0; k < functionCount; ++k) { entry[k] = e.newLabel(); }
+	Label epilogue = e.newLabel();
+
+	e.bind(entry[mainOrd]);
+	if (!lowerBody(e, code, functionTable[mainOrd], entry, epilogue, natives)) { return false; }
+	for (UInt k = 0; k < functionCount; ++k) {
+		if (k == mainOrd) { continue; }
+		e.bind(entry[k]);
+		if (!lowerBody(e, code, functionTable[k], entry, epilogue, natives)) { return false; }
+	}
+	e.bind(epilogue);
+	e.addImmQ(RSP, 8u); e.pop(MEM); e.pop(DSP); e.ret();
 	e.finalize();
+	for (UInt k = 0; k < functionCount; ++k) { entryOffsets[k] = static_cast<size_t>(e.labelOffset(entry[k])); }
 	return true;
 }
 
@@ -436,17 +635,21 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	Pointer gInPtr = NULL_POINTER, gOutPtr = NULL_POINTER;
 	if (!assembleKernel(globals, source, gInPtr, gOutPtr)) { std::printf("  %s: assemble failed\n", name); ++failures; return; }
 	X64Emitter e;
-	if (!lowerX64(e, gCode, gFunctionTable[globals.findFunction("main") - IP_OFFSET])) {
+	static size_t entryOffsets[FUNCTION_TABLE_SIZE];
+	if (!compileProgram(e, gCode, gFunctionTable, gFunctionCount, globals.findFunction("main") - IP_OFFSET, gNatJit, entryOffsets)) {
 		std::printf("  %s: unsupported opcode\n", name); ++failures; return;
 	}
 	void* code = mapExecutable(e.code(), e.size());
 	if (code == 0) { std::printf("  %s: mapExecutable failed\n", name); ++failures; return; }
+	for (UInt k = 0; k < gFunctionCount; ++k) { gEntryAddr[k] = reinterpret_cast<char*>(code) + entryOffsets[k]; }
 	JitFn jit = reinterpret_cast<JitFn>(code);
+	std::memcpy(gClean, gMemory, sizeof(gMemory));		// clean image (globals + DATi/DATf inits) to restore each run
 	std::printf("Kernel \"%s\" (%zu bytes):\n", name, e.size());
 	for (size_t k = 0; k < nInputs; ++k) {
 		const int n = inputs[k];
+		std::memcpy(gMemory, gClean, sizeof(gMemory));	// interpreter run starts from the clean image
 		const int want = interpreterRun(globals, gInPtr, gOutPtr, n);
-		std::memset(gMemory, 0, sizeof(gMemory));
+		std::memcpy(gMemory, gClean, sizeof(gMemory));	// JIT run too
 		gMemory[gInPtr - MEMORY_OFFSET].i = n;
 		const int st = jit(&gMemory[gGlobalsSize], &gMemory[0]);
 		const int got = gMemory[gOutPtr - MEMORY_OFFSET].i;
@@ -472,6 +675,20 @@ int main() {
 	std::printf("\n");
 	const int adrlInputs[] = { 0, 42 };
 	runKernel("adrl", ADRL_SOURCE, adrlInputs, sizeof(adrlInputs) / sizeof(*adrlInputs));
+	std::printf("\n");
+	const int callInputs[] = { 0, 1, 2, 5, 10, 100 };
+	runKernel("call", CALL_SOURCE, callInputs, sizeof(callInputs) / sizeof(*callInputs));
+	std::printf("\n");
+	runKernel("native", NATIVE_SOURCE, callInputs, sizeof(callInputs) / sizeof(*callInputs));
+	std::printf("\n");
+	const int copyInputs[] = { 0, 5, 1000 };
+	runKernel("copy", COPY_SOURCE, copyInputs, sizeof(copyInputs) / sizeof(*copyInputs));
+	std::printf("\n");
+	const int indInputs[] = { 0, 3, 7, -3, -5 };		// n>=0 -> square, n<0 -> cube
+	runKernel("indirect", INDIRECT_SOURCE, indInputs, sizeof(indInputs) / sizeof(*indInputs));
+	std::printf("\n");
+	const int swInputs[] = { 0, 1, 2, 3, 4, 5, -1 };	// 0/1/2 -> cases; 3/4/oob -> default
+	runKernel("switch", SWITCH_SOURCE, swInputs, sizeof(swInputs) / sizeof(*swInputs));
 	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
 	return failures == 0 ? 0 : 1;
 }

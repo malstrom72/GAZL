@@ -123,9 +123,15 @@ class X64Emitter {
 		void push(Reg r);										// `push r` (50+rd, REX.B for r8-15)
 		void pop(Reg r);										// `pop r`  (58+rd)
 		void nop();												// `nop` (0x90)
+		void cld();												// `cld` (FC): clear direction flag (forward string ops)
+		void repMovsd();										// `rep movsd` (F3 A5): copy ecx dwords [rsi]->[rdi] (COPY)
 		void ret();												// `ret` (C3)
 		void jmp(Label target);									// `jmp rel32` (E9)
 		void jcc(Cond cc, Label target);						// `j<cc> rel32` (0F 8x)
+		void callRel(Label target);								// `call rel32` (E8) — GAZL->GAZL direct call
+		void callReg(Reg r);									// `call r` (FF /2) — indirect / native via a materialized pointer
+		void leaRip(Reg rd, Label target);						// `lea rd, [rip + target]` (48 8D /r rel32) — jump-table base
+		void jmpReg(Reg r);										// `jmp r` (FF /4) — computed jump into the SWCH table
 
 		// --- labels / fixups ---
 		Label newLabel();										// allocate an unbound label
@@ -135,6 +141,7 @@ class X64Emitter {
 		// --- buffer access ---
 		const uint8_t* code() const { return bytes.empty() ? 0 : &bytes[0]; }
 		size_t size() const { return bytes.size(); }			// emitted byte count
+		ptrdiff_t labelOffset(Label l) const { return labelTargets[l.id]; }	// bound byte offset (after bind); for entry tables
 
 	private:
 		struct Fixup {
