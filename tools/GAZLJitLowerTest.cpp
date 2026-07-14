@@ -314,6 +314,14 @@ static const char* const K_MEMORY =			// bounds-checked indexed memory (POKE_CVV
 	"main: FUNC\n PARA *1\n$n: LOCi\n$x: LOCi\n"
 	" PEEK $n &gIn\n MOVi $x #12345\n POKE &buf $n $x\n PEEK $x &buf $n\n POKE &gOut $x\n RETU\n";
 
+static const char* const K_FARGLOBAL =		// globals past word 4096: constant-address PEEK_VC/POKE_CV/POKE_CC past the
+	"pad: GLOB *5000\n"						// arm64 scaled-imm12 reach -> must fall back to the register-offset form
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"fa: GLOB *1\n DATi #0\n" "fb: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *1\n$n: LOCi\n$m: LOCi\n"
+	" PEEK $n &gIn\n POKE &fa $n\n POKE &fb #7\n"				// PEEK_VC + POKE_CV + POKE_CC, all at word index >= 5000
+	" PEEK $n &fa\n PEEK $m &fb\n ADDi $n $n $m\n POKE &gOut $n\n RETU\n";	// gOut = gIn + 7
+
 int main() {
 	std::printf("GAZLJit consolidated lowering test: JIT (compiled from Instruction[]) vs interpreter (arm64)\n\n");
 	const int counts[] = { 0, 1, 2, 5, 10, 100, 1000 };
@@ -343,6 +351,7 @@ int main() {
 	runKernel("recursion    [IP_STACK_OVERFLOW]", K_RECURSE, depths, sizeof(depths) / sizeof(*depths));
 	runKernel("big frame    [DATA_STACK_OVERFLOW]", K_BIGFRAME, one, sizeof(one) / sizeof(*one));
 	runKernel("checked mem  [PEEK/POKE + trap]", K_MEMORY, indices, sizeof(indices) / sizeof(*indices));
+	runKernel("far globals  [const-addr PEEK/POKE >4096]", K_FARGLOBAL, counts, sizeof(counts) / sizeof(*counts));
 
 	std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED", failures, failures == 1 ? "" : "s");
 	return failures == 0 ? 0 : 1;
