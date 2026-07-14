@@ -865,14 +865,14 @@ void Assembler::finalizeFunction() {
 	locals.clear();
 }
 
-void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount) {
+void Assembler::finalize(UInt& codeSize, UInt& functionCount, UInt& globalsSize, UInt& constsSize) {
 	newUnit(0);
 	if (dataPointer != 0) memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 	globals.resolveForwardRefs();
 	codeSize = (UInt)(ip - codeBase);
+	functionCount = this->functionCount;
 	globalsSize = (UInt)(globalsPointer - memoryBase);
 	constsSize = (UInt)(memoryEnd - constantsPointer);
-	functionCount = this->functionCount;
 }
 
 void Assembler::newUnit(const Char* unitName) { // FIX : use unitName (or not?)
@@ -1677,7 +1677,7 @@ bool unitTest() {
 			while (*cp != 0) {
 				try {
 					cp = assem.feed(cp);
-					if (*cp == 0) assem.finalize(codySize, globalsSize, constsSize, functionCount);
+					if (*cp == 0) assem.finalize(codySize, functionCount, globalsSize, constsSize);
 				}
 				catch (const Exception& e) {
 					(void)e;
@@ -1743,7 +1743,7 @@ bool unitTest() {
 				const Char* cp = UNITTEST;
 				while (*cp != 0) {
 					cp = assem.feed(cp);
-					if (*cp == 0) assem.finalize(codySize2, globalsSize2, constsSize2, functionCount2);
+					if (*cp == 0) assem.finalize(codySize2, functionCount2, globalsSize2, constsSize2);
 				}
 			}
 

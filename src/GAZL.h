@@ -209,10 +209,11 @@ struct Operator;
 */
 class Assembler {
 	friend class Symbols;
-	public:		Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable, UInt maxMemorySize, Value* memoryBase, Symbols& globals); // Create an assembler for the provided buffers. `functionTable` maps each function's ordinal to its code offset (see `finalize`).
-	public:		void newUnit(const Char* unitName); // Begin assembling a new source unit.
-	public:		const Char* feed(const Char* line); // Assemble a single line and return pointer to the next.
-	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount); // Finish assembly and report memory usage. `functionCount` is the number of entries filled in `functionTable`.
+	public:		Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable
+						, UInt maxMemorySize, Value* memoryBase, Symbols& globals); 						// Create an assembler for the provided buffers. `functionTable` maps each function's ordinal to its code offset (see `finalize`).
+	public:		void newUnit(const Char* unitName); 														// Begin assembling a new source unit.
+	public:		const Char* feed(const Char* line); 														// Assemble a single line and return pointer to the next.
+	public:		void finalize(UInt& codeSize, UInt& functionCount, UInt& globalsSize, UInt& constsSize); 	// Finish assembly and report memory usage. `functionCount` is the number of entries filled in `functionTable`.
 	
 	protected:	struct CompileTimeVar {
 					int types;
