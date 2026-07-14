@@ -148,13 +148,31 @@ class JitProcessor : public Processor {
 		void** funcEntries;					// ordinal -> native entry (bound from the JitModule)
 		void* jitDispatch;					// the native dispatcher trampoline (bound from the JitModule)
 
+		// Bind the compiled module + zero the native-call scratch. Shared by both constructors (C++03 has no delegation).
+		void bindModule(const JitModule& module) {
+			savedDsp = 0; nativeFn = 0; nativeAfter = 0;
+			funcEntries = module.nativeEntries; jitDispatch = module.dispatch;
+		}
+
 	public:
+		/*
+			Two constructors, mirroring the base Processor's two: the higher-level one (data stack = the whole span
+			between globals and constants) and the lower-level one (explicit rwMemorySize / dataStackOffset /
+			dataStackSize, for running several engines over one shared code image — e.g. a JitProcessor per thread, each
+			with its own data + ip stack; the compiled code is immutable after publish, so it is safe to share). Both add
+			the JitModule up front and forward an optional userData through to the Processor.
+		*/
 		JitProcessor(const JitModule& module, UInt codeSize, const Instruction* code, UInt fnCount, const UInt* fnTable
 					, UInt memSize, Value* mem, UInt globalsSize, UInt constsSize, UInt ipStackSize
-					, CallStackEntry* ipStack, NativeFunc const* nat)
+					, CallStackEntry* ipStack, NativeFunc const* nat, void* userData = 0)
 			: Processor(codeSize, code, fnCount, fnTable, memSize, mem, globalsSize, constsSize, ipStackSize, ipStack
-				, nat, 0), savedDsp(0), nativeFn(0), nativeAfter(0)
-				, funcEntries(module.nativeEntries), jitDispatch(module.dispatch) { }
+				, nat, userData) { bindModule(module); }
+
+		JitProcessor(const JitModule& module, UInt codeSize, const Instruction* code, UInt fnCount, const UInt* fnTable
+					, UInt memSize, Value* mem, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
+					, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* nat, void* userData = 0)
+			: Processor(codeSize, code, fnCount, fnTable, memSize, mem, rwMemorySize, dataStackOffset, dataStackSize
+				, ipStackSize, ipStack, nat, userData) { bindModule(module); }
 
 		/*
 			The field ABI JitCompiler bakes into the machine code (byte offsets of dsp/memoryBase/... in a JitProcessor).
