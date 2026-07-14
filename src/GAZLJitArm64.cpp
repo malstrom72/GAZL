@@ -481,25 +481,6 @@ static void emitDivMod(Arm64Emitter& e, bool rem, const Instruction& in, int for
 	storeSlot(e, W9, in.p0.i);
 }
 
-// Compute a branch instruction's target (absolute index). Returns false if `j` is not a branch.
-static bool branchTarget(const Instruction* code, UInt j, UInt& target) {
-	const Int op = code[j].opcode;
-	switch (op) {
-		case OP_GOTO: target = static_cast<UInt>(static_cast<Int>(j) + code[j].p0.i); return true;
-		case OP_FORi_VVB: case OP_FORi_VCB:
-		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB:
-		case OP_EQUI_VVB: case OP_EQUI_VCB:
-		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB:
-		case OP_NEQI_VVB: case OP_NEQI_VCB:
-		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
-		case OP_EQUF_VVB: case OP_EQUF_VCB:
-		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
-		case OP_NEQF_VVB: case OP_NEQF_VCB:
-			target = static_cast<UInt>(static_cast<Int>(j) + code[j].p2.i); return true;
-		default: return false;
-	}
-}
-
 /*
 	Lower one function at `funcIndex` into `e` (appended). Emits an entry reload + FUNC prologue, a mainline per block,
 	cold reload trampolines + §5.7.5 suspend stubs for loop heads, and the §5.4 call/return transfers. `entryLabels[ord]`
@@ -516,7 +497,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 	std::map<UInt, UInt> loopWeight;
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
 		UInt tgt;
-		if (branchTarget(code, j, tgt)) {
+		if (jitBranchTarget(code, j, tgt)) {
 			targets.insert(tgt);
 			if (tgt <= j) { loopWeight[tgt] = j - tgt + 1; }		// back-edge → loop head needs a fuel-check safepoint
 		} else if (code[j].opcode == OP_SWCH) {						// jump-table: every case target is a branch target
@@ -917,18 +898,11 @@ void JitCompiler::compile(const Instruction* code, UInt functionCount, const UIn
 	const size_t dispatchOffset = emitDispatcher(e, o);
 	e.finalize();
 	const size_t words = e.wordCount();
-	void* page = makeExecutable(e.code(), words);
-	if (page == 0) { return; }
-
-	void** entries = new void*[functionCount];
-	for (UInt ord = 0; ord < functionCount; ++ord) {
-		entries[ord] = reinterpret_cast<char*>(page) + entryOffset[ord] * 4;
-	}
-	out.dispatch = reinterpret_cast<char*>(page) + dispatchOffset * 4;
-	out.nativeEntries = entries;
-	out.codeWordCount = words;
-	out.ownedPage = page;						// hand the page + table to `out`; its destructor frees them
-	out.ownedWords = words;
+	// AArch64 offsets are in words; the shared publish step takes bytes, so scale by 4.
+	std::vector<size_t> entryByteOffsets(functionCount);
+	for (UInt ord = 0; ord < functionCount; ++ord) { entryByteOffsets[ord] = entryOffset[ord] * 4; }
+	publishModule(out, e.code(), words, entryByteOffsets.empty() ? 0 : &entryByteOffsets[0], functionCount
+			, dispatchOffset * 4);
 }
 
 } // namespace GAZL

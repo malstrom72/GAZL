@@ -22,10 +22,55 @@
 */
 
 #include "GAZLJit.h"
+#include "GAZLJitMem.h"			// makeExecutable() — for the shared publishModule step
 
 #include <cstddef>
 
 namespace GAZL {
+
+/*
+	Arch-neutral pass-1 primitive: is instruction `instructionIndex` a branch, and if so, to which instruction? GOTO
+	targets via p0; the conditional forms (FORi + the integer/float compare-branches) target via p2. Both backends' pass
+	1 use this; SWCH's jump-table targets are read separately from const memory by each backend.
+*/
+bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& target) {
+	const Int op = code[instructionIndex].opcode;
+	const Int j = static_cast<Int>(instructionIndex);
+	switch (op) {
+		case OP_GOTO: target = static_cast<UInt>(j + code[instructionIndex].p0.i); return true;
+		case OP_FORi_VVB: case OP_FORi_VCB:
+		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB:
+		case OP_EQUI_VVB: case OP_EQUI_VCB:
+		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB:
+		case OP_NEQI_VVB: case OP_NEQI_VCB:
+		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
+		case OP_EQUF_VVB: case OP_EQUF_VCB:
+		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
+		case OP_NEQF_VVB: case OP_NEQF_VCB:
+			target = static_cast<UInt>(j + code[instructionIndex].p2.i); return true;
+		default: return false;
+	}
+}
+
+/*
+	Shared publish: copy the emitted code into an executable page and populate `out`. Byte offsets keep it
+	architecture-independent (arm64 passes word offsets * 4). On makeExecutable failure `out` is left empty, so
+	out.ok() stays false and the caller falls back to the interpreter.
+*/
+void JitCompiler::publishModule(JitModule& out, const uint32_t* codeWords, size_t wordCount
+		, const size_t* entryByteOffsets, UInt functionCount, size_t dispatchByteOffset) {
+	void* page = makeExecutable(codeWords, wordCount);
+	if (page == 0) { return; }
+	void** entries = new void*[functionCount];
+	for (UInt ordinal = 0; ordinal < functionCount; ++ordinal) {
+		entries[ordinal] = reinterpret_cast<char*>(page) + entryByteOffsets[ordinal];
+	}
+	out.dispatch = reinterpret_cast<char*>(page) + dispatchByteOffset;
+	out.nativeEntries = entries;
+	out.codeWordCount = wordCount;
+	out.ownedPage = page;
+	out.ownedWords = wordCount;
+}
 
 /*
 	The field ABI JitCompiler bakes into the machine code — byte offsets of the run-state fields within a JitProcessor.

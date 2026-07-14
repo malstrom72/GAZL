@@ -234,20 +234,6 @@ static const Reg DSP = RBX, MEMORY_BASE = R14, DATA_STACK_END = R15, CONTEXT = R
 static const Reg SCRATCH_A = RCX, SCRATCH_B = RDX;					// general scratch (A also serves as the shift-count CL)
 static const Reg FLOAT_0 = static_cast<Reg>(0), FLOAT_1 = static_cast<Reg>(1);	// xmm0 / xmm1 (a separate register file from GP)
 
-// Compute a branch instruction's absolute target index. Returns false if `instructionIndex` is not a branch.
-static bool branchTarget(const Instruction* code, UInt instructionIndex, UInt& target) {
-	const Int opcode = code[instructionIndex].opcode;
-	if (opcode == OP_GOTO) {
-		target = static_cast<UInt>(static_cast<Int>(instructionIndex) + code[instructionIndex].p0.i);
-		return true;
-	}
-	if (opcode >= OP_FORi_VVB && opcode <= OP_NEQF_VCB) {
-		target = static_cast<UInt>(static_cast<Int>(instructionIndex) + code[instructionIndex].p2.i);
-		return true;
-	}
-	return false;
-}
-
 // Render an integer operand into register `reg`: a frame slot (load off dsp) or an immediate constant.
 static void loadOperand(X64Emitter& emitter, Reg reg, const Value& operand, bool isConst) {
 	if (isConst) { emitter.movImm(reg, static_cast<uint32_t>(operand.i)); }
@@ -362,7 +348,7 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 			continue;
 		}
 		UInt target;
-		if (branchTarget(code, j, target) && !labels.count(target)) { labels[target] = emitter.newLabel(); }
+		if (jitBranchTarget(code, j, target) && !labels.count(target)) { labels[target] = emitter.newLabel(); }
 	}
 
 	// SysV prologue: save the callee-saved pins, keep rsp 16-aligned for inner calls, then set the pins from the args.
@@ -695,20 +681,15 @@ void JitCompiler::compile(const Instruction* code, UInt functionCount, const UIn
 	const size_t dispatcherOffset = emitDispatcher(emitter, offsets);
 	emitter.finalize();
 
-	// x86-64 code is a byte stream; makeExecutable() works in 32-bit words, so round up.
+	// x86-64 code is a byte stream; makeExecutable() works in 32-bit words, so round up. Entry/dispatch offsets are
+	// already byte offsets, so hand them to the shared publish step directly.
 	const size_t wordCount = (emitter.size() + 3) / 4;
-	void* page = makeExecutable(reinterpret_cast<const uint32_t*>(emitter.code()), wordCount);
-	if (page == 0) { return; }
-
-	void** entries = new void*[functionCount];
+	std::vector<size_t> entryByteOffsets(functionCount);
 	for (UInt ordinal = 0; ordinal < functionCount; ++ordinal) {
-		entries[ordinal] = reinterpret_cast<char*>(page) + static_cast<size_t>(emitter.labelOffset(entryLabels[ordinal]));
+		entryByteOffsets[ordinal] = static_cast<size_t>(emitter.labelOffset(entryLabels[ordinal]));
 	}
-	out.dispatch = reinterpret_cast<char*>(page) + dispatcherOffset;
-	out.nativeEntries = entries;
-	out.codeWordCount = wordCount;
-	out.ownedPage = page;										// hand the page + table to `out`; its destructor frees them
-	out.ownedWords = wordCount;
+	publishModule(out, reinterpret_cast<const uint32_t*>(emitter.code()), wordCount
+			, entryByteOffsets.empty() ? 0 : &entryByteOffsets[0], functionCount, dispatcherOffset);
 }
 
 } // namespace GAZL

@@ -93,6 +93,13 @@ enum {
 
 // makeExecutable() is declared in GAZLJitMem.h (platform backend), also in namespace GAZL.
 
+/*
+	Shared, arch-neutral pass-1 primitive used by both JIT backends (defined in GAZLJit.cpp): if instruction
+	`instructionIndex` is a conditional/unconditional branch, report the target instruction index and return true. SWCH
+	jump-table targets are not covered here — each backend reads those from the const-memory table itself.
+*/
+bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& target);
+
 // Byte offsets of the machine state a segment/dispatcher touches, within the (subclass) engine.
 struct Offsets {
 	uint32_t dsp, mb, fuel, ipsp, resume, saveddsp, natives, nativefn, funcentries, memsize, rwmemsize, dsend, ipsend,
@@ -212,6 +219,12 @@ class JitProcessor : public Processor {
 class JitCompiler {
 	public:		void compile(const Instruction* code, UInt functionCount, const UInt* functionTable
 						, const Value* memory, JitModule& out);		// fills `out`; check out.ok() (mirrors Assembler::finalize's out-params)
+
+	// Shared publish step (defined in GAZLJit.cpp): makeExecutable the emitted words, then fill `out`'s page + native
+	// entry table + dispatch entry from byte offsets. Both backends call this after emitting; leaves `out` empty (so
+	// ok() stays false) if the page can't be made executable. Offsets are in bytes (arm64 converts its word offsets).
+	protected:	static void publishModule(JitModule& out, const uint32_t* codeWords, size_t wordCount
+						, const size_t* entryByteOffsets, UInt functionCount, size_t dispatchByteOffset);
 };
 
 } // namespace GAZL
