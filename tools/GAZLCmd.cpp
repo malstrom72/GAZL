@@ -35,6 +35,7 @@
 #include <algorithm>
 #include <memory>
 #include "../src/GAZL.h"
+#include "../src/GAZLCpp.h"			// translateToCpp — portable GAZL->C++ source (--emit-cpp)
 #ifdef GAZL_JIT
 	#include "../src/GAZLJit.h"		// JitProcessor + JitCompiler — arm64 only; enabled by the build on AArch64 hosts
 #endif
@@ -318,6 +319,7 @@ int main(int argc, const char* argv[]) {
 		bool useJit = false;	// --jit: run on the native (arm64) JIT instead of the interpreter (see GAZL_JIT build)
 		bool jitStats = false;	// --jit-stats: implies --jit; print `jitstats compile_ms=.. code_bytes=.. funcs=..`
 		bool noLibm = false;	// --no-libm: don't register the atan2/sqrt/log natives (for programs that define their own)
+		const char* emitCpp = 0;	// --emit-cpp=<path>: write a standalone C++ translation of the program and exit
 		for (int i = 0; i < argc; ++i) {
 			const char* a = argv[i];
 			if (i > 0 && a[0] == '-' && a[1] == '-') {
@@ -331,6 +333,8 @@ int main(int argc, const char* argv[]) {
 					useJit = true; jitStats = true;
 				} else if (strcmp(a, "--no-libm") == 0) {
 					noLibm = true;
+				} else if (strncmp(a, "--emit-cpp=", 11) == 0) {
+					emitCpp = a + 11;
 				} else {
 					throw CmdException(std::string("Unknown option: ") + a);
 				}
@@ -405,7 +409,21 @@ int main(int argc, const char* argv[]) {
 			
 			gazlStream.close();
 		}
-		
+
+		if (emitCpp != 0) {
+			const char* mfn = (pos.size() > 2) ? pos[2] : "main";
+			Pointer mainPtr = globals.findFunction(mfn);
+			if (mainPtr == NULL_POINTER) throw CmdException(std::string("emit-cpp: no function '") + mfn + "'");
+			std::string src = translateToCpp(code, functionCount, functionTable, memory, DATA_MEMORY_SIZE,
+					globalsSize, constsSize, static_cast<UInt>(mainPtr - IP_OFFSET));
+			if (src.empty()) { std::cerr << "emit-cpp: program uses an opcode outside the Tier-0 subset" << std::endl; return -1; }
+			std::ofstream out(emitCpp, std::ofstream::binary);
+			if (!out.good()) throw CmdException(std::string("emit-cpp: cannot write '") + emitCpp + "'");
+			out << src;
+			std::cerr << "emit-cpp: wrote " << emitCpp << std::endl;
+			return 0;
+		}
+
 		{
 			/*
 				Pick the engine: the native JIT (--jit, arm64) if it can compile the whole program, else the interpreter.
