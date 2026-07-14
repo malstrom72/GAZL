@@ -152,6 +152,22 @@ static const char* const CALL_SOURCE =
 	"       POKE &gOut $s\n"
 	"       RETU\n";
 
+// Native call: main calls the host native nsq(i) = i*i in a loop -> sum of i*i. Exercises CALL_NVC.
+static const char* const NATIVE_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$s:    LOCi\n" "$i:    LOCi\n"
+	"       PEEK $n &gIn\n"
+	"       MOVi $s #0\n"
+	"       MOVi $i #0\n"
+	".loop: MOVi %1 $i\n"
+	"       CALL ^nsq %0 *2\n"			// native call: %0 = return, %1 = arg
+	"       ADDi $s $s %0\n"
+	"       FORi $i $n @.loop\n"
+	"       POKE &gOut $s\n"
+	"       RETU\n";
+
 // ADRL: output the pointer VALUE of a local; both interpreter and JIT must compute the same biased address.
 static const char* const ADRL_SOURCE =
 	"gIn:   GLOB *1\n" "       DATi #0\n"
@@ -172,7 +188,16 @@ namespace {
 	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
 }
 
+// A native, in both flavors: the interpreter's (Processor*, reads via accessParams) and the JIT's (params = dsp+window,
+// baked as an absolute call). Both compute r = x*x, so interpreter and JIT agree. Ordinal 0 = "nsq".
+static Status nsqInterp(Processor* p) { Value* q = p->accessParams(2); if (q == 0) { return DATA_STACK_OVERFLOW; } q[0].i = q[1].i * q[1].i; return OK; }
+static int nsqJit(Value* params) { params[0].i = params[1].i * params[1].i; return 0; }
+static NativeFunc const gNat[] = { nsqInterp };
+static void* const gNatJit[] = { reinterpret_cast<void*>(&nsqJit) };
+static const char* const gNatNames[] = { "nsq" };
+
 static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr, Pointer& gOutPtr) {
+	for (int i = 0; i < static_cast<int>(sizeof(gNatNames) / sizeof(*gNatNames)); ++i) { globals.registerNative(gNatNames[i], i); }
 	UInt codeSize = 0, gs = 0, cs = 0, fc = 0;
 	try {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
@@ -199,7 +224,7 @@ static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr
 
 static int interpreterRun(Symbols& globals, Pointer gInPtr, Pointer gOutPtr, int n) {
 	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize,
-			gConstsSize, CALL_STACK_SIZE, gCallStack, 0, 0);
+			gConstsSize, CALL_STACK_SIZE, gCallStack, gNat, 0);
 	p.accessMemory(gInPtr, 1)->i = n;
 	Status s = p.enterCall(globals.findFunction("main"));
 	do { p.resetTimeOut(0x7FFFFFFF); s = p.run(); } while (s == TIME_OUT);
@@ -291,7 +316,7 @@ static void emitFBranch(X64Emitter& e, int kind, const Instruction& in, UInt j, 
 	else { e.ucomiss(F0, F1); e.jcc(CC_P, tgt); e.jcc(CC_NE, tgt); }		// unordered or not-equal
 }
 
-static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, const std::vector<Label>& entry, Label epilogue) {
+static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, const std::vector<Label>& entry, Label epilogue, void* const* natives) {
 	UInt end = funcStart;
 	while (code[end].opcode != OP_RETU) { ++end; }
 
@@ -323,6 +348,15 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 				e.movQ(RSI, MEM);
 				e.callRel(entry[callee]);
 				e.cmpImm(RAX, 0); e.jcc(CC_NE, epilogue);	// propagate a non-OK status
+				break;
+			}
+			case OP_CALL_NVC: {						// native call: params = dsp + window; native fn baked as an absolute call
+				const UInt ord = static_cast<UInt>(in.p0.i);
+				e.movQ(RDI, DSP);
+				if (in.p1.i != 0) { e.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }
+				e.movImm64(RAX, static_cast<uint64_t>(reinterpret_cast<uintptr_t>(natives[ord])));
+				e.callReg(RAX);
+				e.cmpImm(RAX, 0); e.jcc(CC_NE, epilogue);	// native returned a non-OK Status
 				break;
 			}
 
@@ -459,17 +493,17 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 
 // Compile every function into one buffer: main first (so its entry is offset 0), then the rest, then one shared
 // epilogue (all functions have identical prologue/epilogue). Direct CALLs resolve to entry labels via rel32 fixups.
-static bool compileProgram(X64Emitter& e, const Instruction* code, const UInt* functionTable, UInt functionCount, UInt mainOrd) {
+static bool compileProgram(X64Emitter& e, const Instruction* code, const UInt* functionTable, UInt functionCount, UInt mainOrd, void* const* natives) {
 	std::vector<Label> entry(functionCount);
 	for (UInt k = 0; k < functionCount; ++k) { entry[k] = e.newLabel(); }
 	Label epilogue = e.newLabel();
 
 	e.bind(entry[mainOrd]);
-	if (!lowerBody(e, code, functionTable[mainOrd], entry, epilogue)) { return false; }
+	if (!lowerBody(e, code, functionTable[mainOrd], entry, epilogue, natives)) { return false; }
 	for (UInt k = 0; k < functionCount; ++k) {
 		if (k == mainOrd) { continue; }
 		e.bind(entry[k]);
-		if (!lowerBody(e, code, functionTable[k], entry, epilogue)) { return false; }
+		if (!lowerBody(e, code, functionTable[k], entry, epilogue, natives)) { return false; }
 	}
 	e.bind(epilogue);
 	e.addImmQ(RSP, 8u); e.pop(MEM); e.pop(DSP); e.ret();
@@ -485,7 +519,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	Pointer gInPtr = NULL_POINTER, gOutPtr = NULL_POINTER;
 	if (!assembleKernel(globals, source, gInPtr, gOutPtr)) { std::printf("  %s: assemble failed\n", name); ++failures; return; }
 	X64Emitter e;
-	if (!compileProgram(e, gCode, gFunctionTable, gFunctionCount, globals.findFunction("main") - IP_OFFSET)) {
+	if (!compileProgram(e, gCode, gFunctionTable, gFunctionCount, globals.findFunction("main") - IP_OFFSET, gNatJit)) {
 		std::printf("  %s: unsupported opcode\n", name); ++failures; return;
 	}
 	void* code = mapExecutable(e.code(), e.size());
@@ -524,6 +558,8 @@ int main() {
 	std::printf("\n");
 	const int callInputs[] = { 0, 1, 2, 5, 10, 100 };
 	runKernel("call", CALL_SOURCE, callInputs, sizeof(callInputs) / sizeof(*callInputs));
+	std::printf("\n");
+	runKernel("native", NATIVE_SOURCE, callInputs, sizeof(callInputs) / sizeof(*callInputs));
 	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
 	return failures == 0 ? 0 : 1;
 }
