@@ -123,6 +123,8 @@ class X64Emitter {
 		void push(Reg r);										// `push r` (50+rd, REX.B for r8-15)
 		void pop(Reg r);										// `pop r`  (58+rd)
 		void nop();												// `nop` (0x90)
+		void cld();												// `cld` (FC): clear direction flag (forward string ops)
+		void repMovsd();										// `rep movsd` (F3 A5): copy ecx dwords [rsi]->[rdi] (COPY)
 		void ret();												// `ret` (C3)
 		void jmp(Label target);									// `jmp rel32` (E9)
 		void jcc(Cond cc, Label target);						// `j<cc> rel32` (0F 8x)

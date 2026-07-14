@@ -152,6 +152,26 @@ static const char* const CALL_SOURCE =
 	"       POKE &gOut $s\n"
 	"       RETU\n";
 
+// COPY (the bank idiom): ADRL a local array, COPY a global block into it, sum it. Exercises COPY_VCC + ADRL + GETL.
+static const char* const COPY_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gSrc:  GLOB *8\n" "       DATi #10\n" "       DATi #20\n" "       DATi #30\n" "       DATi #40\n"
+	"       DATi #50\n" "       DATi #60\n" "       DATi #70\n" "       DATi #80\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$i:    LOCi\n" "$s:    LOCi\n" "$t:    LOCi\n" "$buf:  LOCA *8\n"
+	"       PEEK $n &gIn\n"
+	"       ADRL %0 $buf *8\n"			// %0 = &buf
+	"       COPY %0 &gSrc *8\n"			// copy 8 words gSrc -> buf
+	"       MOVi $s #0\n"
+	"       MOVi $i #0\n"
+	".sum:  GETL $t $buf $i\n"
+	"       ADDi $s $s $t\n"
+	"       FORi $i #8 @.sum\n"
+	"       ADDi $s $s $n\n"			// + input so it varies
+	"       POKE &gOut $s\n"
+	"       RETU\n";
+
 // Native call: main calls the host native nsq(i) = i*i in a loop -> sum of i*i. Exercises CALL_NVC.
 static const char* const NATIVE_SOURCE =
 	"gIn:   GLOB *1\n" "       DATi #0\n"
@@ -183,6 +203,7 @@ namespace {
 	const int CODE_SIZE = 64 * 1024, DATA_SIZE = 64 * 1024, FUNCTION_TABLE_SIZE = 1024, CALL_STACK_SIZE = 256;
 	Instruction gCode[CODE_SIZE];
 	Value gMemory[DATA_SIZE];
+	Value gClean[DATA_SIZE];			// snapshot of the assembled image (globals + const inits), restored before each run
 	UInt gFunctionTable[FUNCTION_TABLE_SIZE];
 	CallStackEntry gCallStack[CALL_STACK_SIZE];
 	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
@@ -391,6 +412,20 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 				e.load(A, DSP, in.p1.i * 4); e.movImm(B, static_cast<uint32_t>(in.p2.i));
 				e.storeIdx(DSP, A, in.p0.i * 4, B); break;
 
+			// bulk copy p2 words from src (p1) to dst (p0), via rep movsd. Each pointer is a const memory address or a
+			// slot holding a GAZL pointer; resolve to a byte address (MEM + wordIndex*4).
+			case OP_COPY_VVC: case OP_COPY_VCC: case OP_COPY_CVC: case OP_COPY_CCC: {
+				const bool dstConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
+				const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
+				if (dstConst) { e.movQ(RDI, MEM); e.addImmQ(RDI, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); }
+				else { e.load(RAX, DSP, in.p0.i * 4); e.subImm(RAX, MEMORY_OFFSET); e.shlImm(RAX, 2); e.movQ(RDI, MEM); e.addQ(RDI, RAX); }
+				if (srcConst) { e.movQ(RSI, MEM); e.addImmQ(RSI, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); }
+				else { e.load(RAX, DSP, in.p1.i * 4); e.subImm(RAX, MEMORY_OFFSET); e.shlImm(RAX, 2); e.movQ(RSI, MEM); e.addQ(RSI, RAX); }
+				e.movImm(RCX, static_cast<uint32_t>(in.p2.i));
+				e.cld(); e.repMovsd();
+				break;
+			}
+
 			// address of a local p1 -> dest p0. pointer = MEMORY_OFFSET + wordIndex(dsp) + slot.
 			case OP_ADRL:
 				e.movQ(RAX, DSP); e.subQ(RAX, MEM); e.shrImm(RAX, 2);	// (dsp - membase) / 4 = dsp word offset
@@ -525,11 +560,13 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	void* code = mapExecutable(e.code(), e.size());
 	if (code == 0) { std::printf("  %s: mapExecutable failed\n", name); ++failures; return; }
 	JitFn jit = reinterpret_cast<JitFn>(code);
+	std::memcpy(gClean, gMemory, sizeof(gMemory));		// clean image (globals + DATi/DATf inits) to restore each run
 	std::printf("Kernel \"%s\" (%zu bytes):\n", name, e.size());
 	for (size_t k = 0; k < nInputs; ++k) {
 		const int n = inputs[k];
+		std::memcpy(gMemory, gClean, sizeof(gMemory));	// interpreter run starts from the clean image
 		const int want = interpreterRun(globals, gInPtr, gOutPtr, n);
-		std::memset(gMemory, 0, sizeof(gMemory));
+		std::memcpy(gMemory, gClean, sizeof(gMemory));	// JIT run too
 		gMemory[gInPtr - MEMORY_OFFSET].i = n;
 		const int st = jit(&gMemory[gGlobalsSize], &gMemory[0]);
 		const int got = gMemory[gOutPtr - MEMORY_OFFSET].i;
@@ -560,6 +597,9 @@ int main() {
 	runKernel("call", CALL_SOURCE, callInputs, sizeof(callInputs) / sizeof(*callInputs));
 	std::printf("\n");
 	runKernel("native", NATIVE_SOURCE, callInputs, sizeof(callInputs) / sizeof(*callInputs));
+	std::printf("\n");
+	const int copyInputs[] = { 0, 5, 1000 };
+	runKernel("copy", COPY_SOURCE, copyInputs, sizeof(copyInputs) / sizeof(*copyInputs));
 	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
 	return failures == 0 ? 0 : 1;
 }
