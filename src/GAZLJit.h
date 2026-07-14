@@ -94,6 +94,15 @@ enum {
 // makeExecutable() is declared in GAZLJitMem.h (platform backend), also in namespace GAZL.
 
 /*
+	Runtime probe: will this host actually let us run JIT-compiled code? Two layers, both in GAZLJit.cpp: makeExecutable()
+	must succeed (catches macOS' missing allow-jit entitlement and Windows' Arbitrary Code Guard), then a trivial emitted
+	stub must run under a fault guard and return its sentinel (catches "the syscalls succeeded but executing the page
+	faults"). The result is cached and the call is safe before any compile; the interpreter is always the fallback. Only
+	meaningful in a GAZL_JIT build (that is where GAZLJit.cpp is linked).
+*/
+bool jitAvailable();
+
+/*
 	Shared, arch-neutral pass-1 primitive used by both JIT backends (defined in GAZLJit.cpp): if instruction
 	`instructionIndex` is a conditional/unconditional branch, report the target instruction index and return true. SWCH
 	jump-table targets are not covered here — each backend reads those from the const-memory table itself.

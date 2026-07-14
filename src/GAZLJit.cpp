@@ -25,6 +25,17 @@
 #include "GAZLJitMem.h"			// makeExecutable() — for the shared publishModule step
 
 #include <cstddef>
+#include <cstring>				// memset / memcpy — the jitAvailable() probe
+
+#if defined(_WIN32)
+#	ifndef WIN32_LEAN_AND_MEAN
+#		define WIN32_LEAN_AND_MEAN
+#	endif
+#	include <windows.h>			// __try/__except fault guard for the probe
+#else
+#	include <csignal>			// sigaction — POSIX fault guard for the probe
+#	include <csetjmp>			// sigsetjmp / siglongjmp
+#endif
 
 namespace GAZL {
 
@@ -97,6 +108,83 @@ Offsets JitProcessor::layout() {
 #	pragma GCC diagnostic pop
 #endif
 	return o;
+}
+
+/*
+	jitAvailable() — the two-layer capability probe declared in GAZLJit.h. Layer 1 is makeExecutable() itself (a policy
+	denial such as a missing macOS allow-jit entitlement or Windows Arbitrary Code Guard fails the syscalls). Layer 2 runs
+	a trivial position-independent stub — `return 0xC0DE` — under a fault guard, so a page that mapped but cannot execute
+	turns into `false` instead of a crash. The stub is one word-aligned block (makeExecutable works in 32-bit words); it is
+	architecture-specific but tiny, so it lives here rather than in a backend. Both shipping targets are little-endian.
+*/
+namespace {
+
+typedef uint32_t (*ProbeFunc)();
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+const uint32_t PROBE_STUB[2] = { 0x52981BC0u, 0xD65F03C0u };		// movz w0, #0xC0DE ; ret
+#elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+const uint32_t PROBE_STUB[2] = { 0x00C0DEB8u, 0x9090C300u };		// mov eax, 0xC0DE ; ret ; nop ; nop
+#else
+#	define GAZL_NO_PROBE_STUB									// no JIT backend for this architecture
+#endif
+
+#if !defined(_WIN32) && !defined(GAZL_NO_PROBE_STUB)
+sigjmp_buf gProbeJump;
+void probeFaultHandler(int) { siglongjmp(gProbeJump, 1); }
+#endif
+
+#if !defined(GAZL_NO_PROBE_STUB)
+// Run `func` under a fault guard: true only if it returned 0xC0DE. A SIGILL/SIGSEGV/SIGBUS/SIGTRAP (POSIX) or any
+// structured exception (Windows) means executing generated code faults on this host -> false.
+bool runProbe(ProbeFunc func) {
+#if defined(_WIN32)
+	__try {
+		return func() == 0xC0DEu;
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return false;
+	}
+#else
+	struct sigaction guard, savedIll, savedSegv, savedBus, savedTrap;
+	std::memset(&guard, 0, sizeof(guard));
+	guard.sa_handler = probeFaultHandler;
+	sigemptyset(&guard.sa_mask);
+	sigaction(SIGILL, &guard, &savedIll);
+	sigaction(SIGSEGV, &guard, &savedSegv);
+	sigaction(SIGBUS, &guard, &savedBus);
+	sigaction(SIGTRAP, &guard, &savedTrap);
+	bool ok = false;
+	if (sigsetjmp(gProbeJump, 1) == 0) { ok = (func() == 0xC0DEu); }
+	sigaction(SIGILL, &savedIll, 0);
+	sigaction(SIGSEGV, &savedSegv, 0);
+	sigaction(SIGBUS, &savedBus, 0);
+	sigaction(SIGTRAP, &savedTrap, 0);
+	return ok;
+#endif
+}
+#endif
+
+} // anonymous namespace
+
+bool jitAvailable() {
+#if defined(GAZL_NO_PROBE_STUB)
+	return false;
+#else
+	static int cached = -1;										// -1 unknown / 0 no / 1 yes; probed once (single-threaded startup)
+	if (cached < 0) {
+		const size_t words = sizeof(PROBE_STUB) / sizeof(PROBE_STUB[0]);
+		void* page = makeExecutable(PROBE_STUB, words);			// layer 1: policy denial fails the syscalls here
+		if (page == 0) {
+			cached = 0;
+		} else {
+			ProbeFunc func;
+			std::memcpy(&func, &page, sizeof(func));				// void* -> function pointer without an ISO-illegal cast
+			cached = runProbe(func) ? 1 : 0;						// layer 2: the emitted stub actually runs and returns 0xC0DE
+			freeExecutable(page, words);
+		}
+	}
+	return cached != 0;
+#endif
 }
 
 } // namespace GAZL

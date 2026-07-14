@@ -434,7 +434,9 @@ int main(int argc, const char* argv[]) {
 		#endif
 			std::unique_ptr<Processor> proc;
 		#ifdef GAZL_JIT
-			if (useJit) {
+			if (useJit && !GAZL::jitAvailable()) {	// host forbids executable memory (entitlement / ACG) — never risk a crash
+				std::cerr << "JIT: this host does not permit executable memory; using the interpreter." << std::endl;
+			} else if (useJit) {
 				JitCompiler jc;						// produce the machine code — mirrors Assembler; no engine involved
 				const auto t0 = std::chrono::steady_clock::now();
 				jc.compile(code, functionCount, functionTable, memory, module);

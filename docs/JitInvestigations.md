@@ -83,7 +83,7 @@ v2.1 bound‑register eligibility improves in exactly the `process()` functions 
    - Windows: SEH `__try/__except (EXECUTE_HANDLER)` (or a vectored exception handler).
    Fault or wrong value → JIT unavailable. Cache the boolean (sub-ms, call once at startup, single-threaded).
 
-**Rule:** never run generated code in production without having first run a *trivial* piece of generated code and seen it return the right answer. Ship posture: request the capability up front (macOS `allow-jit` entitlement in the signature; on Windows don't opt the process into ACG) so it's normally granted — the probe covers policy/MDM/App-Store denial, where it simply reports `false` and the interpreter runs. Phase-0 infra item; pairs with Spike A2 (below). *Status: designed, not yet implemented.*
+**Rule:** never run generated code in production without having first run a *trivial* piece of generated code and seen it return the right answer. Ship posture: request the capability up front (macOS `allow-jit` entitlement in the signature; on Windows don't opt the process into ACG) so it's normally granted — the probe covers policy/MDM/App-Store denial, where it simply reports `false` and the interpreter runs. Phase-0 infra item; pairs with Spike A2 (below). *Status: implemented in `GAZLJit.cpp` (declared in `GAZLJit.h`); stub is `movz w0,#0xC0DE;ret` on arm64 / `mov eax,0xC0DE;ret` on x64, guarded by POSIX signals or Windows SEH, cached. `GAZLCmd --jit` gates on it. Verified reporting `true` on macOS arm64 and Windows x64.*
 
 ---
 
