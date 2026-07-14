@@ -130,6 +130,8 @@ class X64Emitter {
 		void jcc(Cond cc, Label target);						// `j<cc> rel32` (0F 8x)
 		void callRel(Label target);								// `call rel32` (E8) — GAZL->GAZL direct call
 		void callReg(Reg r);									// `call r` (FF /2) — indirect / native via a materialized pointer
+		void leaRip(Reg rd, Label target);						// `lea rd, [rip + target]` (48 8D /r rel32) — jump-table base
+		void jmpReg(Reg r);										// `jmp r` (FF /4) — computed jump into the SWCH table
 
 		// --- labels / fixups ---
 		Label newLabel();										// allocate an unbound label

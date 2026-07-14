@@ -152,6 +152,21 @@ static const char* const CALL_SOURCE =
 	"       POKE &gOut $s\n"
 	"       RETU\n";
 
+// SWCH: switch(n clamped 0..4) -> distinct results; missing cases + out-of-range fall to the default. Jump table.
+static const char* const SWITCH_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$r:    LOCi\n"
+	"       PEEK $n &gIn\n"
+	"       SWCH $n *4 @.sw\n"
+	".sw#0: MOVi $r #100\n" "       GOTO @.done\n"
+	".sw#1: MOVi $r #200\n" "       GOTO @.done\n"
+	".sw#2: MOVi $r #300\n" "       GOTO @.done\n"
+	".sw:   MOVi $r #999\n"			// default (bare label): cases 3,4 and out-of-range clamp here
+	".done: POKE &gOut $r\n"
+	"       RETU\n";
+
 // Indirect call: pick square or cube via a function pointer chosen at runtime, then CALL through the slot (CALL_VVC).
 static const char* const INDIRECT_SOURCE =
 	"gIn:   GLOB *1\n" "       DATi #0\n"
@@ -367,8 +382,17 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 
 	std::map<UInt, Label> lbl;
 	for (UInt j = funcStart; j <= end; ++j) {
+		if (code[j].opcode == OP_SWCH) {			// every jump-table entry (read from const memory) is a target
+			const UInt sz = static_cast<UInt>(code[j].p1.i) + 1;
+			const UInt tbl = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
+			for (UInt kk = 0; kk < sz; ++kk) {
+				const UInt t = static_cast<UInt>(static_cast<Int>(j) + gMemory[tbl + kk].i);
+				if (!lbl.count(t)) { lbl[t] = e.newLabel(); }
+			}
+			continue;
+		}
 		UInt t;
-		if (branchTgt(code, j, t)) { lbl[t] = e.newLabel(); }
+		if (branchTgt(code, j, t) && !lbl.count(t)) { lbl[t] = e.newLabel(); }
 	}
 
 	e.push(DSP); e.push(MEM);					// SysV prologue: save callee-saved pins
@@ -545,6 +569,26 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 
 			case OP_GOTO: e.jmp(lbl[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
 
+			case OP_SWCH: {						// index = min(unsigned(V0), C1); jump into a table of `jmp case`
+				const UInt sz = static_cast<UInt>(in.p1.i) + 1;
+				const UInt tbl = static_cast<UInt>(in.p2.p - MEMORY_OFFSET);
+				e.load(A, DSP, in.p0.i * 4);
+				e.cmpImm(A, static_cast<uint32_t>(in.p1.i));
+				Label keep = e.newLabel();
+				e.jcc(CC_BE, keep);				// (unsigned) val <= C1 -> keep; else clamp
+				e.movImm(A, static_cast<uint32_t>(in.p1.i));
+				e.bind(keep);
+				e.mov(B, A); e.shlImm(B, 2); e.add(B, A);	// B = index * 5 (each table jmp is 5 bytes)
+				Label tableBase = e.newLabel();
+				e.leaRip(RAX, tableBase); e.addQ(RAX, B); e.jmpReg(RAX);
+				e.bind(tableBase);
+				for (UInt kk = 0; kk < sz; ++kk) {
+					const UInt t = static_cast<UInt>(static_cast<Int>(j) + gMemory[tbl + kk].i);
+					e.jmp(lbl[t]);
+				}
+				break;
+			}
+
 			case OP_LSSI_VVB: emitBranch(e, CC_L, in, j, false, false, lbl); break;
 			case OP_LSSI_VCB: emitBranch(e, CC_L, in, j, false, true, lbl); break;
 			case OP_LSSI_CVB: emitBranch(e, CC_L, in, j, true, false, lbl); break;
@@ -642,6 +686,9 @@ int main() {
 	std::printf("\n");
 	const int indInputs[] = { 0, 3, 7, -3, -5 };		// n>=0 -> square, n<0 -> cube
 	runKernel("indirect", INDIRECT_SOURCE, indInputs, sizeof(indInputs) / sizeof(*indInputs));
+	std::printf("\n");
+	const int swInputs[] = { 0, 1, 2, 3, 4, 5, -1 };	// 0/1/2 -> cases; 3/4/oob -> default
+	runKernel("switch", SWITCH_SOURCE, swInputs, sizeof(swInputs) / sizeof(*swInputs));
 	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
 	return failures == 0 ? 0 : 1;
 }
