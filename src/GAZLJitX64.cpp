@@ -219,13 +219,15 @@ void X64Emitter::finalize() {
 // per-platform GAZLJitMem*.cpp backend. This is the x86-64 counterpart of GAZLJitArm64.cpp's lowering; it reuses the
 // verified per-instruction lowering from tools/GAZLJitX64SliceTest.cpp, re-hosted onto the JitProcessor field ABI.
 //
-// Register roles (SysV AMD64). Each GAZL function compiles to
+// Register roles. Each GAZL function compiles to
 //   Status function(Value* dsp, Value* memory, Value* dataStackEnd, JitProcessor* ctx)
-// entered with rdi=dsp, rsi=memory, rdx=dataStackEnd, rcx=ctx, and pins them into callee-saved registers:
+// entered with the four arguments in ARG_0..ARG_3, and pins them into callee-saved registers:
 //   rbx=dsp (advanced by FUNC), r14=memoryBase, r15=dataStackEnd, r12=ctx.
 // Scratch is rax + rcx/rdx (after the prologue reads the args) + xmm0/xmm1. GAZL->GAZL calls are ordinary C calls (the
 // C stack is the call stack); one shared aligned epilogue returns the Status in eax. This is a run-to-completion
 // backend — no fuel, no suspend, no RESUME transfers — so the whole program finishes inside one dispatcher entry.
+// The pins are callee-saved and the scratch is caller-saved on both SysV AMD64 and Win64, so this whole file is ABI
+// neutral except the boundary code, which flows through the ARG_0..ARG_3 / CALL_FRAME constants defined below.
 // ============================================================================================================
 
 // --- pinned registers + scratch roles ---
@@ -233,6 +235,25 @@ void X64Emitter::finalize() {
 static const Reg DSP = RBX, MEMORY_BASE = R14, DATA_STACK_END = R15, CONTEXT = R12;
 static const Reg SCRATCH_A = RCX, SCRATCH_B = RDX;					// general scratch (A also serves as the shift-count CL)
 static const Reg FLOAT_0 = static_cast<Reg>(0), FLOAT_1 = static_cast<Reg>(1);	// xmm0 / xmm1 (a separate register file from GP)
+
+/*
+	The ONLY calling-convention difference this backend cares about. The pins (rbx/r12/r14/r15) are callee-saved and the
+	scratch (rax/rcx/rdx/xmm0/1) is caller-saved on BOTH SysV AMD64 and Win64, so every instruction body is ABI-neutral;
+	only the boundary code varies, and it varies on just two axes: which registers carry the integer arguments, and how
+	much stack a call needs. Win64 additionally treats rsi/rdi as callee-saved — that bites in exactly one place (the
+	rep-movsd COPY), handled locally there. Funnelling both axes through these constants keeps the #ifdef to one spot.
+	  ARG_0..ARG_3   the entry ABI  Status fn(Value* dsp, Value* memory, Value* dataStackEnd, JitProcessor* ctx)
+	  CALL_FRAME     bytes subtracted from rsp in every frame: SysV needs only the 16-align pad; Win64 also reserves the
+	                 32-byte shadow space every callee may spill its register args into. The value keeps rsp 16-aligned
+	                 at the call in both the function prologue (after 4 pushes) and the dispatcher (no pushes).
+*/
+#if defined(_WIN32)
+static const Reg ARG_0 = RCX, ARG_1 = RDX, ARG_2 = R8, ARG_3 = R9;
+static const uint32_t CALL_FRAME = 40u;								// 32-byte shadow space + 8-byte align pad
+#else
+static const Reg ARG_0 = RDI, ARG_1 = RSI, ARG_2 = RDX, ARG_3 = RCX;
+static const uint32_t CALL_FRAME = 8u;								// just the 16-align pad; SysV has no shadow space
+#endif
 
 // Render an integer operand into register `reg`: a frame slot (load off dsp) or an immediate constant.
 static void loadOperand(X64Emitter& emitter, Reg reg, const Value& operand, bool isConst) {
@@ -351,10 +372,11 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 		if (jitBranchTarget(code, j, target) && !labels.count(target)) { labels[target] = emitter.newLabel(); }
 	}
 
-	// SysV prologue: save the callee-saved pins, keep rsp 16-aligned for inner calls, then set the pins from the args.
+	// Prologue: save the callee-saved pins, reserve the call frame (align pad + Win64 shadow), then set the pins from
+	// the incoming argument registers. Pins and args never overlap on either ABI, so no move ordering hazard.
 	emitter.push(DSP); emitter.push(MEMORY_BASE); emitter.push(DATA_STACK_END); emitter.push(CONTEXT);
-	emitter.addImmQ(RSP, 0xFFFFFFF8u);							// sub rsp, 8
-	emitter.movQ(DSP, RDI); emitter.movQ(MEMORY_BASE, RSI); emitter.movQ(DATA_STACK_END, RDX); emitter.movQ(CONTEXT, RCX);
+	emitter.addImmQ(RSP, 0u - CALL_FRAME);						// sub rsp, CALL_FRAME
+	emitter.movQ(DSP, ARG_0); emitter.movQ(MEMORY_BASE, ARG_1); emitter.movQ(DATA_STACK_END, ARG_2); emitter.movQ(CONTEXT, ARG_3);
 	const UInt localsSize = static_cast<UInt>(code[funcStart].p0.i);
 	if (localsSize != 0) { emitter.addImmQ(DSP, localsSize * 4u); }	// FUNC: advance dsp to this frame
 
@@ -372,9 +394,9 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 
 			case OP_CALL_CVC: {										// direct GAZL call: callee runs with dsp += window, returns Status in eax
 				const UInt callee = in.p0.p - IP_OFFSET;
-				emitter.movQ(RDI, DSP);
-				if (in.p1.i != 0) { emitter.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }	// rdi = dsp + window
-				emitter.movQ(RSI, MEMORY_BASE); emitter.movQ(RDX, DATA_STACK_END); emitter.movQ(RCX, CONTEXT);
+				emitter.movQ(ARG_0, DSP);
+				if (in.p1.i != 0) { emitter.addImmQ(ARG_0, static_cast<uint32_t>(in.p1.i) * 4u); }	// arg0 = dsp + window
+				emitter.movQ(ARG_1, MEMORY_BASE); emitter.movQ(ARG_2, DATA_STACK_END); emitter.movQ(ARG_3, CONTEXT);
 				emitter.callRel(entryLabels[callee]);
 				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, epilogue);	// propagate a non-OK status
 				break;
@@ -388,9 +410,9 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 				emitter.loadQ(RAX, CONTEXT, offsets.funcentries);	// funcEntries base
 				emitter.shlImm(RCX, 3);								// ordinal * 8 (byte index)
 				emitter.addQ(RAX, RCX); emitter.loadQ(RAX, RAX, 0);	// RAX = funcEntries[ordinal]
-				emitter.movQ(RDI, DSP);
-				if (in.p1.i != 0) { emitter.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }
-				emitter.movQ(RSI, MEMORY_BASE); emitter.movQ(RDX, DATA_STACK_END); emitter.movQ(RCX, CONTEXT);
+				emitter.movQ(ARG_0, DSP);
+				if (in.p1.i != 0) { emitter.addImmQ(ARG_0, static_cast<uint32_t>(in.p1.i) * 4u); }
+				emitter.movQ(ARG_1, MEMORY_BASE); emitter.movQ(ARG_2, DATA_STACK_END); emitter.movQ(ARG_3, CONTEXT);
 				emitter.callReg(RAX);
 				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, epilogue);
 				emitter.jmp(cont);
@@ -407,7 +429,7 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 				emitter.bind(retry);								// blocking-retry: re-issue the call until it stops returning BLOCK_RETRY
 				emitter.loadQ(RAX, CONTEXT, offsets.natives);		// natives base
 				emitter.loadQ(RAX, RAX, static_cast<int32_t>(ordinal * 8));	// rax = natives[ordinal]
-				emitter.movQ(RDI, CONTEXT);							// the native takes Processor* (= ctx)
+				emitter.movQ(ARG_0, CONTEXT);							// the native takes Processor* (= ctx)
 				emitter.callReg(RAX);
 				emitter.cmpImm(RAX, static_cast<uint32_t>(BLOCK_RETRY)); emitter.jcc(CC_E, retry);
 				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, epilogue);	// any other non-OK status -> propagate
@@ -484,12 +506,18 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 			case OP_COPY_VVC: case OP_COPY_VCC: case OP_COPY_CVC: case OP_COPY_CCC: {
 				const bool destConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
 				const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
+#if defined(_WIN32)
+				emitter.push(RSI); emitter.push(RDI);				// Win64: rsi/rdi are callee-saved; rep movsd clobbers them
+#endif
 				if (destConst) { emitter.movQ(RDI, MEMORY_BASE); emitter.addImmQ(RDI, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); }
 				else { emitter.load(RAX, DSP, in.p0.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); emitter.shlImm(RAX, 2); emitter.movQ(RDI, MEMORY_BASE); emitter.addQ(RDI, RAX); }
 				if (srcConst) { emitter.movQ(RSI, MEMORY_BASE); emitter.addImmQ(RSI, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); }
 				else { emitter.load(RAX, DSP, in.p1.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); emitter.shlImm(RAX, 2); emitter.movQ(RSI, MEMORY_BASE); emitter.addQ(RSI, RAX); }
 				emitter.movImm(RCX, static_cast<uint32_t>(in.p2.i));
 				emitter.cld(); emitter.repMovsd();
+#if defined(_WIN32)
+				emitter.pop(RDI); emitter.pop(RSI);
+#endif
 				break;
 			}
 
@@ -638,15 +666,16 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 */
 static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets) {
 	const size_t entry = emitter.size();
-	// rdi = ctx on entry. Read the ctx fields BEFORE overwriting rdi (dsp is loaded last).
-	emitter.movQ(RCX, RDI);										// rcx = ctx
-	emitter.loadQ(RAX, RDI, offsets.resume);					// rax = resume (the entry to jump into)
-	emitter.loadQ(RSI, RDI, offsets.mb);						// rsi = memoryBase
-	emitter.loadQ(RDX, RDI, offsets.dsend);						// rdx = dataStackEnd
-	emitter.loadQ(RDI, RDI, offsets.dsp);						// rdi = dsp (overwrites the ctx base last)
-	emitter.addImmQ(RSP, 0xFFFFFFF8u);							// sub rsp, 8 — 16-align before the call
+	// ctx arrives in ARG_0. Load the entry ABI (dsp, memory, dataStackEnd, ctx) into ARG_0..ARG_3, reading each ctx
+	// field through the base BEFORE the final dsp load overwrites it; ARG_3 (= ctx) is saved first for the same reason.
+	emitter.movQ(ARG_3, ARG_0);									// arg3 = ctx
+	emitter.loadQ(RAX, ARG_0, offsets.resume);					// rax = resume (the entry to jump into)
+	emitter.loadQ(ARG_1, ARG_0, offsets.mb);					// arg1 = memoryBase
+	emitter.loadQ(ARG_2, ARG_0, offsets.dsend);					// arg2 = dataStackEnd
+	emitter.loadQ(ARG_0, ARG_0, offsets.dsp);					// arg0 = dsp (overwrites the ctx base last)
+	emitter.addImmQ(RSP, 0u - CALL_FRAME);						// reserve the call frame (16-align pad + Win64 shadow)
 	emitter.callReg(RAX);
-	emitter.addImmQ(RSP, 8u);
+	emitter.addImmQ(RSP, CALL_FRAME);
 	emitter.ret();												// eax = Status
 	return entry;
 }
@@ -674,7 +703,7 @@ void JitCompiler::compile(const Instruction* code, UInt functionCount, const UIn
 	}
 	// One shared aligned epilogue (all functions have the identical prologue): undo the alignment pad, restore the pins.
 	emitter.bind(epilogue);
-	emitter.addImmQ(RSP, 8u);
+	emitter.addImmQ(RSP, CALL_FRAME);							// undo the reserved call frame
 	emitter.pop(CONTEXT); emitter.pop(DATA_STACK_END); emitter.pop(MEMORY_BASE); emitter.pop(DSP);
 	emitter.ret();
 
