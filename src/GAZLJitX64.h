@@ -87,6 +87,15 @@ class X64Emitter {
 		void cmpImm(Reg ra, uint32_t imm);						// `cmp ra, imm32` (81 /7)
 		void addQ(Reg rd, Reg rs);								// `add rd, rs` (64-bit; pointer arithmetic)
 		void addImmQ(Reg rd, uint32_t imm);						// `add rd, imm32` (64-bit; advances the dsp pointer)
+		void neg(Reg rd);										// `neg rd` (F7 /3)
+		void cdq();												// `cdq` (99): sign-extend eax into edx before idiv
+		void idiv(Reg rs);										// `idiv rs` (F7 /7): edx:eax / rs -> eax quot, edx rem
+		void shlCl(Reg rd);										// `shl rd, cl`
+		void shrCl(Reg rd);										// `shr rd, cl` (logical)
+		void sarCl(Reg rd);										// `sar rd, cl` (arithmetic)
+		void shlImm(Reg rd, uint8_t n);							// `shl rd, imm8`
+		void shrImm(Reg rd, uint8_t n);							// `shr rd, imm8`
+		void sarImm(Reg rd, uint8_t n);							// `sar rd, imm8`
 
 		// --- loads / stores off a base register + displacement ---
 		void load(Reg rd, Reg base, int32_t disp);				// `mov rd(32), [base + disp]`

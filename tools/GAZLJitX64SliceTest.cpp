@@ -54,23 +54,39 @@ static void* mapExecutable(const uint8_t* code, size_t n) {
 	return p;
 }
 
-// sumTo(n) = 0 + 1 + ... + (n-1), read from global gIn, stored to global gOut. Exercises PEEK/POKE + a do-while loop.
-static const char* const KERNEL_SOURCE =
-	"gIn:   GLOB *1\n"
-	"       DATi #0\n"
-	"gOut:  GLOB *1\n"
-	"       DATi #0\n"
-	"main:  FUNC\n"
-	"       PARA *1\n"
-	"$n:    LOCi\n"
-	"$sum:  LOCi\n"
-	"$i:    LOCi\n"
+// sumTo(n) = 0 + 1 + ... + (n-1): PEEK/POKE + a do-while loop.
+static const char* const SUMTO_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$n:    LOCi\n" "$sum:  LOCi\n" "$i:    LOCi\n"
 	"       PEEK $n &gIn\n"
 	"       MOVi $sum #0\n"
 	"       MOVi $i #0\n"
 	".loop: ADDi $sum $sum $i\n"
 	"       FORi $i $n @.loop\n"
 	"       POKE &gOut $sum\n"
+	"       RETU\n";
+
+// Exercises the completed integer set: div / mod / mul / shifts (arith + logical) / abs / and-or-xor, with signed inputs.
+static const char* const ARITH_SOURCE =
+	"gIn:   GLOB *1\n" "       DATi #0\n"
+	"gOut:  GLOB *1\n" "       DATi #0\n"
+	"main:  FUNC\n" "       PARA *1\n"
+	"$x:    LOCi\n" "$a:    LOCi\n" "$b:    LOCi\n"
+	"       PEEK $x &gIn\n"
+	"       DIVi $a $x #7\n"			// a = x / 7
+	"       MODi $b $x #100\n"			// b = x % 100
+	"       MULi $a $a $b\n"
+	"       SHLi $a $a #2\n"
+	"       SUBi $a $a $x\n"
+	"       ABSi $a $a\n"				// a = |a|
+	"       SHRi $b $x #1\n"			// arithmetic (signed) shift
+	"       ADDi $a $a $b\n"
+	"       SHRu $b $x #1\n"			// logical (unsigned) shift
+	"       XORi $a $a $b\n"
+	"       ANDi $a $a #16777215\n"
+	"       POKE &gOut $a\n"
 	"       RETU\n";
 
 namespace {
@@ -82,12 +98,12 @@ namespace {
 	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
 }
 
-static bool assembleKernel(Symbols& globals, Pointer& gInPtr, Pointer& gOutPtr) {
+static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr, Pointer& gOutPtr) {
 	UInt codeSize = 0, gs = 0, cs = 0, fc = 0;
 	try {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
 		assem.newUnit("x64slice");
-		std::string src(KERNEL_SOURCE);
+		std::string src(source);
 		size_t pos = 0;
 		while (pos < src.size()) {
 			const size_t nl = src.find('\n', pos);
@@ -142,6 +158,29 @@ static void emitBin(X64Emitter& e, BinOp op, const Instruction& in, bool s1Const
 	toReg(e, B, in.p2, s2Const);
 	(e.*op)(A, B);
 	e.store(DSP, in.p0.i * 4, A);
+}
+
+// Signed division: dividend p1 -> eax, divisor p2 -> ecx, cdq sign-extends into edx, idiv; store quotient (eax) or
+// remainder (edx). (No div-by-zero / INT_MIN-over-minus-one guard yet — the test inputs avoid both; TODO with traps.)
+static void emitDivMod(X64Emitter& e, const Instruction& in, bool rem, bool s1Const, bool s2Const) {
+	if (s1Const) { e.movImm(RAX, static_cast<uint32_t>(in.p1.i)); } else { e.load(RAX, DSP, in.p1.i * 4); }
+	if (s2Const) { e.movImm(RCX, static_cast<uint32_t>(in.p2.i)); } else { e.load(RCX, DSP, in.p2.i * 4); }
+	e.cdq();
+	e.idiv(RCX);
+	e.store(DSP, in.p0.i * 4, rem ? RDX : RAX);
+}
+
+// Shift: value p1 -> eax, count p2 (const -> imm8, or slot -> cl). kind 0=shl, 1=shr(logical), 2=sar(arithmetic).
+static void emitShift(X64Emitter& e, const Instruction& in, int kind, bool s1Const, bool s2Const) {
+	if (s1Const) { e.movImm(RAX, static_cast<uint32_t>(in.p1.i)); } else { e.load(RAX, DSP, in.p1.i * 4); }
+	if (s2Const) {
+		const uint8_t n = static_cast<uint8_t>(in.p2.i & 31);
+		if (kind == 0) { e.shlImm(RAX, n); } else if (kind == 1) { e.shrImm(RAX, n); } else { e.sarImm(RAX, n); }
+	} else {
+		e.load(RCX, DSP, in.p2.i * 4);
+		if (kind == 0) { e.shlCl(RAX); } else if (kind == 1) { e.shrCl(RAX); } else { e.sarCl(RAX); }
+	}
+	e.store(DSP, in.p0.i * 4, RAX);
 }
 
 // if (a <cc> b) goto target — a = p0, b = p1 in the const modes named by the opcode.
@@ -199,6 +238,27 @@ static bool lowerX64Integer(X64Emitter& e, const Instruction* code, UInt funcSta
 			case OP_XORI_VVV: emitBin(e, &X64Emitter::xor_, in, false, false); break;
 			case OP_XORI_VVC: emitBin(e, &X64Emitter::xor_, in, false, true); break;
 
+			case OP_DIVI_VVV: emitDivMod(e, in, false, false, false); break;
+			case OP_DIVI_VVC: emitDivMod(e, in, false, false, true); break;
+			case OP_DIVI_VCV: emitDivMod(e, in, false, true, false); break;
+			case OP_MODI_VVV: emitDivMod(e, in, true, false, false); break;
+			case OP_MODI_VVC: emitDivMod(e, in, true, false, true); break;
+			case OP_MODI_VCV: emitDivMod(e, in, true, true, false); break;
+			case OP_SHLI_VVV: emitShift(e, in, 0, false, false); break;
+			case OP_SHLI_VVC: emitShift(e, in, 0, false, true); break;
+			case OP_SHLI_VCV: emitShift(e, in, 0, true, false); break;
+			case OP_SHRI_VVV: emitShift(e, in, 2, false, false); break;
+			case OP_SHRI_VVC: emitShift(e, in, 2, false, true); break;
+			case OP_SHRI_VCV: emitShift(e, in, 2, true, false); break;
+			case OP_SHRU_VVV: emitShift(e, in, 1, false, false); break;
+			case OP_SHRU_VVC: emitShift(e, in, 1, false, true); break;
+			case OP_SHRU_VCV: emitShift(e, in, 1, true, false); break;
+			case OP_ABSI:
+				e.load(RAX, DSP, in.p1.i * 4);					// |x| = (x ^ (x>>31)) - (x>>31)
+				e.mov(RDX, RAX); e.sarImm(RDX, 31); e.xor_(RAX, RDX); e.sub(RAX, RDX);
+				e.store(DSP, in.p0.i * 4, RAX);
+				break;
+
 			case OP_FORi_VVB: case OP_FORi_VCB:
 				e.load(A, DSP, in.p0.i * 4); e.addImm(A, 1); e.store(DSP, in.p0.i * 4, A);
 				toReg(e, B, in.p1, op == OP_FORi_VCB);
@@ -228,36 +288,39 @@ static bool lowerX64Integer(X64Emitter& e, const Instruction* code, UInt funcSta
 
 typedef int (*JitFn)(Value* dsp, Value* mem);
 
-int main() {
-	std::printf("GAZLJit X64 lowering slice: JIT (Rosetta) vs interpreter\n\n");
-
+// Assemble + lower one kernel, then diff the JIT'd native code against the interpreter over a set of inputs.
+static void runKernel(const char* name, const char* source, const int* inputs, size_t nInputs) {
 	Symbols globals;
 	Pointer gInPtr = NULL_POINTER, gOutPtr = NULL_POINTER;
-	if (!assembleKernel(globals, gInPtr, gOutPtr)) { std::printf("  kernel setup failed\n"); return 1; }
-
+	if (!assembleKernel(globals, source, gInPtr, gOutPtr)) { std::printf("  %s: assemble failed\n", name); ++failures; return; }
 	X64Emitter e;
 	if (!lowerX64Integer(e, gCode, gFunctionTable[globals.findFunction("main") - IP_OFFSET])) {
-		std::printf("  lowering hit an unsupported opcode\n"); return 1;
+		std::printf("  %s: unsupported opcode\n", name); ++failures; return;
 	}
 	void* code = mapExecutable(e.code(), e.size());
-	if (code == 0) { std::printf("  mapExecutable failed\n"); return 1; }
+	if (code == 0) { std::printf("  %s: mapExecutable failed\n", name); ++failures; return; }
 	JitFn jit = reinterpret_cast<JitFn>(code);
-	std::printf("  lowered %zu bytes\n\n", e.size());
-
-	const int inputs[] = { 0, 1, 2, 5, 10, 100, 1000, 65536 };
-	for (size_t k = 0; k < sizeof(inputs) / sizeof(*inputs); ++k) {
+	std::printf("Kernel \"%s\" (%zu bytes):\n", name, e.size());
+	for (size_t k = 0; k < nInputs; ++k) {
 		const int n = inputs[k];
 		const int want = interpreterRun(globals, gInPtr, gOutPtr, n);
-		// Run the JIT over the same memory image (reset, set input, call, read output).
 		std::memset(gMemory, 0, sizeof(gMemory));
 		gMemory[gInPtr - MEMORY_OFFSET].i = n;
 		const int st = jit(&gMemory[gGlobalsSize], &gMemory[0]);
 		const int got = gMemory[gOutPtr - MEMORY_OFFSET].i;
 		const bool ok = (st == 0) && (got == want);
-		std::printf("  n=%-6d interp=%-12d jit=%-12d %s\n", n, want, got, ok ? "OK" : "MISMATCH");
+		std::printf("  n=%-8d interp=%-12d jit=%-12d %s\n", n, want, got, ok ? "OK" : "MISMATCH");
 		if (!ok) { ++failures; }
 	}
+}
 
+int main() {
+	std::printf("GAZLJit X64 lowering slice: JIT (Rosetta) vs interpreter\n\n");
+	const int sumInputs[] = { 0, 1, 2, 5, 10, 100, 1000, 65536 };
+	const int arithInputs[] = { 0, 1, 7, 99, 100, 12345, -12345, 5000, -5000, 1000000 };
+	runKernel("sumTo", SUMTO_SOURCE, sumInputs, sizeof(sumInputs) / sizeof(*sumInputs));
+	std::printf("\n");
+	runKernel("arith", ARITH_SOURCE, arithInputs, sizeof(arithInputs) / sizeof(*arithInputs));
 	std::printf("\n%s (%d failures)\n", failures == 0 ? "ALL PASS" : "FAILURES", failures);
 	return failures == 0 ? 0 : 1;
 }
