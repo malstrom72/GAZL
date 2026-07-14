@@ -22,15 +22,15 @@
 */
 
 /*
-	X64 lowering vertical slice: a minimal, general lowering pass (integer + float; no calls, no fuel/suspend) that
-	compiles an *assembled* GAZL function straight through the X64Emitter, runs the native code under Rosetta, and diffs
-	the result against the GAZL interpreter over a range of inputs. Proves the SysV frame/dsp model, memory (PEEK/POKE)
-	via a pinned base register, the integer op subset, and the Label/rel32 branch pass end to end. Sibling of the arm64
+	X64 lowering vertical slice: a full run-to-completion lowering (all GAZL instructions except the fuel/suspend/RESUME
+	dispatcher) that compiles an *assembled* GAZL program straight through the X64Emitter, runs the native code under
+	Rosetta, and diffs the result against the GAZL interpreter over a range of inputs. Covers integer + float arithmetic,
+	const/var-indexed memory, GETL/SETL, ADRL, COPY, direct/native/indirect calls, and SWCH. Sibling of the arm64
 	GAZLJitSliceTest; built -arch x86_64. src/GAZL.* are used READ-ONLY through the public API.
 
-	Register roles (SysV): rdi=dsp-in, rsi=mem-in on entry; pinned into callee-saved rbx=dsp (advanced by FUNC) and
-	r14=memory base. Scratch ecx/edx per instruction; eax returns the Status. No GAZL calls, so no callee-saved
-	trampoline beyond the two pushes.
+	Register roles (SysV): each function is a `Status fn(Value* dsp, Value* mem)` — rdi=dsp-in, rsi=mem-in on entry,
+	pinned into callee-saved rbx=dsp (advanced by FUNC) and r14=memory base; scratch ecx/edx (+ xmm0/1) per instruction;
+	eax returns the Status. GAZL calls are ordinary C calls (the C stack is the ipStack); one shared aligned epilogue.
 */
 
 #include "GAZLJit.h"			// arch-neutral opcode enum (+ GAZL.h: Assembler / Processor / Instruction / Value)
@@ -270,7 +270,7 @@ static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr
 			if (nl == std::string::npos) { break; }
 			pos = nl + 1;
 		}
-		assem.finalize(codeSize, gs, cs, fc);
+		assem.finalize(codeSize, fc, gs, cs);
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());
 		return false;

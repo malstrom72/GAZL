@@ -231,7 +231,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 					getline(gazlStream, line);
 					assem.feed(line.c_str());
 				}
-				assem.finalize(codeSize, globalsSize, constsSize, functionCount);
+				assem.finalize(codeSize, functionCount, globalsSize, constsSize);
 			}
 		}
 
@@ -399,7 +399,7 @@ int main(int argc, const char* argv[]) {
 				}
 				if (gazlStream.bad()) throw CmdException("Problem with input stream");
 
-				assem.finalize(codeSize, globalsSize, constsSize, functionCount);
+				assem.finalize(codeSize, functionCount, globalsSize, constsSize);
 
 				std::cerr << "Code size: " << codeSize << ", globals size: " << globalsSize << ", consts size: "
 						<< constsSize << ", functions: " << functionCount << std::endl;
