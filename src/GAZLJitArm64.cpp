@@ -863,7 +863,7 @@ static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel)
 	JitCompilerArm64::emit (declared in GAZLJitArm64.h) - lowers a whole finalized program to AArch64 machine code (the
 	substrate above: Arm64Emitter + lowerFunction + emitDispatcher) and fills an EmittedModule; the shared
 	JitCompiler::compile then makes it executable. Targets the static JitProcessor::layout() ABI; never touches a processor
-	instance. nativeJitCompiler() is the host entry point - this TU is linked only on arm64 hosts.
+	instance. (nativeJitCompiler() is defined at the bottom of this file, guarded to arm64 hosts.)
 */
 void JitCompilerArm64::emit(const AssembledProgram& program, EmittedModule& out) {
 	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
@@ -886,9 +886,14 @@ void JitCompilerArm64::emit(const AssembledProgram& program, EmittedModule& out)
 	out.dispatchByteOffset = dispatchOffset * 4;
 }
 
-JitCompiler& nativeJitCompiler() {					// arm64 host backend (stateless - shared instance)
+// nativeJitCompiler() resolves to this backend only when arm64 is the host arch; on other hosts it compiles out (the
+// x86-64 TU provides it there), so both backends may link together without a duplicate. A client that wants the arm64
+// backend regardless of host names JitCompilerArm64 directly instead.
+#if defined(__aarch64__) || defined(_M_ARM64)
+JitCompiler& nativeJitCompiler() {
 	static JitCompilerArm64 compiler;
 	return compiler;
 }
+#endif
 
 } // namespace GAZL

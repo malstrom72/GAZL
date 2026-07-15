@@ -290,7 +290,9 @@ class JitCompiler {
 				virtual void emit(const AssembledProgram& program, EmittedModule& out) = 0;
 };
 
-// The host-native JIT compiler - a shared, stateless instance, defined in whichever backend .cpp the build links.
+// The host-native JIT compiler: a shared, stateless instance. Each backend .cpp defines it guarded to its own host arch,
+// so exactly one definition is active (both backends can link together), and it is absent if the host-matching backend
+// was not built - in which case name the concrete backend (JitCompilerArm64 / JitCompilerX64) directly.
 JitCompiler& nativeJitCompiler();
 
 } // namespace GAZL

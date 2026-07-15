@@ -743,8 +743,8 @@ static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets, Label 
 	JitCompilerX64::emit (declared in GAZLJitX64.h) - lowers a whole finalized program to x86-64 machine code and fills an
 	EmittedModule; the shared JitCompiler::compile then makes it executable. Lower every function into one buffer, append
 	one shared epilogue, append the dispatcher, then record the byte stream + ordinal->entry byte offsets. Throws (via
-	lowerFunction) on any finalized opcode the backend fails to cover. nativeJitCompiler() is the host entry point - this
-	TU is linked only on x86-64 hosts.
+	lowerFunction) on any finalized opcode the backend fails to cover. (nativeJitCompiler() is defined at the bottom of this
+	file, guarded to x86-64 hosts.)
 */
 void JitCompilerX64::emit(const AssembledProgram& program, EmittedModule& out) {
 	const Offsets offsets = JitProcessor::layout();				// the run-state ABI, obtained without an engine
@@ -775,9 +775,14 @@ void JitCompilerX64::emit(const AssembledProgram& program, EmittedModule& out) {
 	out.dispatchByteOffset = dispatcherOffset;
 }
 
-JitCompiler& nativeJitCompiler() {							// x86-64 host backend (stateless - shared instance)
+// nativeJitCompiler() resolves to this backend only when x86-64 is the host arch; on other hosts it compiles out (the
+// arm64 TU provides it there), so both backends may link together without a duplicate. A client that wants the x86-64
+// backend regardless of host names JitCompilerX64 directly instead.
+#if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+JitCompiler& nativeJitCompiler() {
 	static JitCompilerX64 compiler;
 	return compiler;
 }
+#endif
 
 } // namespace GAZL
