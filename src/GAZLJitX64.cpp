@@ -746,7 +746,7 @@ static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets, Label 
 	lowerFunction) on any finalized opcode the backend fails to cover. nativeJitCompiler() is the host entry point — this
 	TU is linked only on x86-64 hosts.
 */
-void JitCompilerX64::emit(const Program& program, EmittedModule& out) {
+void JitCompilerX64::emit(const AssembledProgram& program, EmittedModule& out) {
 	const Offsets offsets = JitProcessor::layout();				// the run-state ABI, obtained without an engine
 	X64Emitter emitter;
 	std::vector<Label> entryLabels(program.functionCount);

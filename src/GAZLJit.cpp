@@ -163,7 +163,7 @@ void throwUnlowerableOpcode(Int opcode) {
 	JitModule (which makes the code executable, throwing JitException if the host refuses) and swap it into `out`. On any
 	throw `out` is left untouched.
 */
-void JitCompiler::compile(const Program& program, JitModule& out) {
+void JitCompiler::compile(const AssembledProgram& program, JitModule& out) {
 	EmittedModule emitted;
 	emit(program, emitted);
 	JitModule built(emitted);									// acquires the executable page; throws JitException on host denial

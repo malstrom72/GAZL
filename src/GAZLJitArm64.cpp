@@ -865,7 +865,7 @@ static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel)
 	JitCompiler::compile then makes it executable. Targets the static JitProcessor::layout() ABI; never touches a processor
 	instance. nativeJitCompiler() is the host entry point — this TU is linked only on arm64 hosts.
 */
-void JitCompilerArm64::emit(const Program& program, EmittedModule& out) {
+void JitCompilerArm64::emit(const AssembledProgram& program, EmittedModule& out) {
 	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
 	Arm64Emitter e;
 	std::vector<Label> entryLabels(program.functionCount);

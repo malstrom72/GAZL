@@ -42,6 +42,7 @@ namespace GAZL {
 
 std::string translateToCpp(const Instruction* code, UInt functionCount, const UInt* functionTable
 		, const Value* memory, UInt memorySize, UInt globalsSize, UInt constsSize, UInt mainOrdinal);
+std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal);	// from an AssembledProgram (delegates to the above)
 
 } // namespace GAZL
 

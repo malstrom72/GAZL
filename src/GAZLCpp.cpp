@@ -238,6 +238,11 @@ static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt 
 	return true;
 }
 
+std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal) {
+	return translateToCpp(program.code, program.functionCount, program.functionTable, program.memory
+			, program.memorySize, program.globalsSize, program.constsSize, mainOrdinal);
+}
+
 std::string translateToCpp(const Instruction* code, UInt functionCount, const UInt* functionTable
 		, const Value* memory, UInt memorySize, UInt globalsSize, UInt constsSize, UInt mainOrdinal) {
 	std::ostringstream body;

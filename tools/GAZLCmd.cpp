@@ -216,10 +216,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 			globals.registerNative(NATIVE_NAMES[i], i);
 		}
 		
-		UInt codeSize;
-		UInt globalsSize;
-		UInt constsSize;
-		UInt functionCount = 0;
+		AssembledProgram program;
 
 		{
 			std::istringstream gazlStream(std::string(reinterpret_cast<const char*>(Data), reinterpret_cast<const char*>(Data) + Size));
@@ -231,13 +228,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 					getline(gazlStream, line);
 					assem.feed(line.c_str());
 				}
-				assem.finalize(codeSize, functionCount, globalsSize, constsSize);
+				assem.finalize(program);
 			}
 		}
 
 		{
-			Processor pmachine(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory, globalsSize
-					, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			Processor pmachine(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 			Pointer mainFunction = globals.findFunction("main");
 			if (mainFunction != 0) {
 				Status status = pmachine.enterCall(mainFunction);
@@ -369,10 +365,7 @@ int main(int argc, const char* argv[]) {
 			globals.defineConstant(pos[i + 0], false, v);
 		}
 		
-		UInt codeSize;
-		UInt globalsSize;
-		UInt constsSize;
-		UInt functionCount = 0;
+		AssembledProgram program;
 
 		{
 			std::ifstream gazlStream(pos[1], std::ifstream::binary);
@@ -399,10 +392,10 @@ int main(int argc, const char* argv[]) {
 				}
 				if (gazlStream.bad()) throw CmdException("Problem with input stream");
 
-				assem.finalize(codeSize, functionCount, globalsSize, constsSize);
+				assem.finalize(program);
 
-				std::cerr << "Code size: " << codeSize << ", globals size: " << globalsSize << ", consts size: "
-						<< constsSize << ", functions: " << functionCount << std::endl;
+				std::cerr << "Code size: " << program.codeSize << ", globals size: " << program.globalsSize << ", consts size: "
+						<< program.constsSize << ", functions: " << program.functionCount << std::endl;
 				std::cerr << "--------------------------------------------------------------------------------"
 						<< std::endl;
 			}
@@ -414,8 +407,7 @@ int main(int argc, const char* argv[]) {
 			const char* mfn = (pos.size() > 2) ? pos[2] : "main";
 			Pointer mainPtr = globals.findFunction(mfn);
 			if (mainPtr == NULL_POINTER) throw CmdException(std::string("emit-cpp: no function '") + mfn + "'");
-			std::string src = translateToCpp(code, functionCount, functionTable, memory, DATA_MEMORY_SIZE,
-					globalsSize, constsSize, static_cast<UInt>(mainPtr - IP_OFFSET));
+			std::string src = translateToCpp(program, static_cast<UInt>(mainPtr - IP_OFFSET));
 			if (src.empty()) { std::cerr << "emit-cpp: program uses an opcode outside the Tier-0 subset" << std::endl; return -1; }
 			std::ofstream out(emitCpp, std::ofstream::binary);
 			if (!out.good()) throw CmdException(std::string("emit-cpp: cannot write '") + emitCpp + "'");
@@ -437,7 +429,6 @@ int main(int argc, const char* argv[]) {
 			if (useJit && !GAZL::jitAvailable()) {	// host forbids executable memory (entitlement / ACG) — never risk a crash
 				std::cerr << "JIT: this host does not permit executable memory; using the interpreter." << std::endl;
 			} else if (useJit) {
-				const Program program = { code, functionCount, functionTable, memory };
 				const auto t0 = std::chrono::steady_clock::now();
 				try {
 					nativeJitCompiler().compile(program, module);		// the host backend; compiles a valid program or throws
@@ -445,12 +436,11 @@ int main(int argc, const char* argv[]) {
 					if (jitStats) {							// machine-readable line for the benchmark harness
 						const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords() * 4)
-								<< " funcs=" << functionCount << std::endl;
+								<< " funcs=" << program.functionCount << std::endl;
 					} else {
-						std::cerr << "JIT: compiled " << functionCount << " function(s) to native code." << std::endl;
+						std::cerr << "JIT: compiled " << program.functionCount << " function(s) to native code." << std::endl;
 					}
-					proc.reset(new JitProcessor(module, codeSize, code, functionCount, functionTable
-							, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
+					proc.reset(new JitProcessor(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
 				} catch (const JitException& x) {			// host refused executable memory, or an opcode the backend can't lower
 					std::cerr << "JIT: " << x.what() << "; using the interpreter." << std::endl;
 				}
@@ -463,8 +453,7 @@ int main(int argc, const char* argv[]) {
 			}
 		#endif
 			if (!proc) {
-				proc.reset(new Processor(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory
-						, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0));
+				proc.reset(new Processor(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0));
 			}
 
 			const char* mainFunctionName = pos.size() >= 3 ? pos[2] : "main";

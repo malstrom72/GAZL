@@ -37,7 +37,7 @@
 #include <cstddef>
 #include <vector>
 #include "GAZL.h"
-#include "GAZLJit.h"			// JitCompiler base + Program / EmittedModule, for JitCompilerArm64 below
+#include "GAZLJit.h"			// JitCompiler base + AssembledProgram / EmittedModule, for JitCompilerArm64 below
 
 namespace GAZL {
 
@@ -197,7 +197,7 @@ class Arm64Emitter {
 	bytes). Obtain the host backend with nativeJitCompiler() (defined in GAZLJitArm64.cpp).
 */
 class JitCompilerArm64 : public JitCompiler {
-	protected:	virtual void emit(const Program& program, EmittedModule& out);
+	protected:	virtual void emit(const AssembledProgram& program, EmittedModule& out);
 };
 
 } // namespace GAZL

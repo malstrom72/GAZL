@@ -149,18 +149,6 @@ class JitException : public Exception {
 };
 
 /*
-	The finalized program a JIT backend reads — everything the interpreter runs on, all const. `memory` is the const
-	memory image, consulted only for SWCH jump tables. Passed to JitCompiler::compile; a JitCompiler holds no program, so
-	one compiler compiles many programs.
-*/
-struct Program {
-	const Instruction* code;
-	UInt functionCount;
-	const UInt* functionTable;
-	const Value* memory;
-};
-
-/*
 	A backend's raw output, before it is made executable: the emitted machine-code words, each function ordinal's entry as
 	a byte offset into them, and the dispatcher's byte offset. A plain value (its vectors own themselves); JitCompiler
 	turns it into an executable JitModule.
@@ -235,6 +223,17 @@ class JitProcessor : public Processor {
 			: Processor(codeSize, code, functionCount, functionTable, memorySize, memory, rwMemorySize, dataStackOffset
 				, dataStackSize, ipStackSize, ipStack, natives, userData) { bindModule(module); }
 
+		// The same two, from an AssembledProgram (delegating to the matching Processor constructor).
+		JitProcessor(const JitModule& module, const AssembledProgram& program, UInt ipStackSize
+					, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0)
+			: Processor(program, ipStackSize, ipStack, natives, userData) { bindModule(module); }
+
+		JitProcessor(const JitModule& module, const AssembledProgram& program, UInt rwMemorySize
+					, UInt dataStackOffset, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack
+					, NativeFunc const* natives, void* userData = 0)
+			: Processor(program, rwMemorySize, dataStackOffset, dataStackSize, ipStackSize, ipStack, natives
+				, userData) { bindModule(module); }
+
 		/*
 			The field ABI JitCompiler bakes into the machine code (byte offsets of dsp/memoryBase/... in a JitProcessor).
 			Static: the layout is instance-independent (single inheritance, fixed struct), so no engine is needed (see .cpp).
@@ -272,7 +271,7 @@ class JitProcessor : public Processor {
 /*
 	The JIT compiler — the JIT's counterpart of Assembler. Abstract base with one backend subclass per target
 	(JitCompilerArm64 / JitCompilerX64), each supplying emit(); the per-instruction lowering pass and dispatcher emitter
-	are file-static inside each backend .cpp. It reads a Program (Instruction[] + functionTable + the const memory image,
+	are file-static inside each backend .cpp. It reads an AssembledProgram (Instruction[] + functionTable + the const memory image,
 	read only for SWCH jump tables) — never a processor — and holds no program itself, so one compiler compiles many.
 	Obtain the host's backend with nativeJitCompiler(); a build links only the backend(s) it includes.
 */
@@ -283,12 +282,12 @@ class JitCompiler {
 				// every finalized opcode, so lowering a valid finalized program always succeeds — the only failures are
 				// exceptional and both throw GAZL::JitException (leaving `out` unchanged): the host refusing executable
 				// memory (call jitAvailable() first to avoid it), or a finalized opcode left unlowered (a backend bug).
-				void compile(const Program& program, JitModule& out);
+				void compile(const AssembledProgram& program, JitModule& out);
 
 	protected:	// The one arch-specific step: lower `program` into `out` (emitted code words + per-ordinal entry byte
 				// offsets + dispatcher byte offset). One virtual call per compile, never per instruction. Throws
 				// GAZL::JitException on an opcode it fails to cover — a bug, since every finalized opcode is lowerable.
-				virtual void emit(const Program& program, EmittedModule& out) = 0;
+				virtual void emit(const AssembledProgram& program, EmittedModule& out) = 0;
 };
 
 // The host-native JIT compiler — a shared, stateless instance, defined in whichever backend .cpp the build links.

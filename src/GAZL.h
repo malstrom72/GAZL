@@ -204,6 +204,24 @@ class Symbols {
 struct Operator;
 
 /*
+	One assembled program: the buffers the Assembler filled plus the sizes it computed — everything a Processor or the JIT
+	needs to run it, in one value. Static and read-only after assembly, so a single AssembledProgram is shareable across
+	many Processors / threads (§5.6). A non-owning view: the code / functionTable / memory buffers it points at are owned by
+	whoever allocated them (typically the caller who passed them to the Assembler) and must outlive it. `code` /
+	`functionTable` are const (frozen after assembly); `memory` stays writable because globals and the data stack live in it.
+*/
+struct AssembledProgram {
+	const Instruction* code;
+	UInt codeSize;
+	const UInt* functionTable;
+	UInt functionCount;
+	Value* memory;
+	UInt memorySize;
+	UInt globalsSize;
+	UInt constsSize;
+};
+
+/*
 	Parses GAZL source code and emits executable data.
 
 	Maintains symbol tables and compile-time variables while converting assembly text to a binary representation.
@@ -215,6 +233,7 @@ class Assembler {
 	public:		void newUnit(const Char* unitName); 														// Begin assembling a new source unit.
 	public:		const Char* feed(const Char* line); 														// Assemble a single line and return pointer to the next.
 	public:		void finalize(UInt& codeSize, UInt& functionCount, UInt& globalsSize, UInt& constsSize); 	// Finish assembly and report memory usage. `functionCount` is the number of entries filled in `functionTable`.
+	public:		void finalize(AssembledProgram& program); 													// Finish assembly and fill `program` (the buffers this Assembler was given + the computed sizes) in one step.
 	
 	protected:	struct CompileTimeVar {
 					int types;
@@ -340,6 +359,10 @@ class Processor {
 	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
 						, UInt memorySize, Value* memory, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
 						, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);	// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack
+	public:		Processor(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
+						, NativeFunc const* natives, void* userData = 0);											// higher level, from an AssembledProgram (delegates to the ctor above)
+	public:		Processor(const AssembledProgram& program, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
+						, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);	// lower level, from an AssembledProgram (delegates to the ctor above)
 	public:		void resetTimeOut(Int clockCycles); 																	// It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing it's next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
 	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; 										// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`

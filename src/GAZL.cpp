@@ -875,6 +875,14 @@ void Assembler::finalize(UInt& codeSize, UInt& functionCount, UInt& globalsSize,
 	constsSize = (UInt)(memoryEnd - constantsPointer);
 }
 
+void Assembler::finalize(AssembledProgram& program) {												// fill the whole descriptor in one step
+	finalize(program.codeSize, program.functionCount, program.globalsSize, program.constsSize);	// the computed sizes
+	program.code = codeBase;																		// the buffers this Assembler was given
+	program.functionTable = functionTable;
+	program.memory = memoryBase;
+	program.memorySize = (UInt)(memoryEnd - memoryBase);
+}
+
 void Assembler::newUnit(const Char* unitName) { // FIX : use unitName (or not?)
 	(void)unitName;
 	if (!skipUntilLabel.empty()) throw Exception(MISSING_COMPILE_TIME_LABEL, skipUntilLabel);
@@ -1240,6 +1248,40 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 	assert(globalsSize + constsSize <= memorySize);
 	assert(code != 0);
 	assert(memory != 0);
+	assert(ipStack != 0);
+}
+
+/*
+	The two AssembledProgram constructors mirror the two raw constructors above, unpacking the descriptor. They repeat the
+	member-init lists rather than delegate because the data members are const (no shared init()) and C++03 has no delegating
+	constructors; if the memory-layout math here ever changes, change it in the matching raw constructor too.
+*/
+Processor::Processor(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
+		, NativeFunc const* natives, void* userData)
+		: codeSize(program.codeSize), codeBase(program.code), functionCount(program.functionCount)
+		, functionTable(program.functionTable), memorySize(program.memorySize - 1), memoryBase(program.memory)
+		, rwMemorySize(program.memorySize - program.constsSize), dataStackBase(program.memory + program.globalsSize)
+		, dataStackEnd(program.memory + program.memorySize - program.constsSize), ipStackBase(ipStack)
+		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(program.code), dsp(dataStackBase), ipsp(ipStackBase)
+		, userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0) {
+	assert(program.globalsSize + program.constsSize <= program.memorySize);
+	assert(program.code != 0);
+	assert(program.memory != 0);
+	assert(ipStack != 0);
+}
+
+Processor::Processor(const AssembledProgram& program, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
+		, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
+		: codeSize(program.codeSize), codeBase(program.code), functionCount(program.functionCount)
+		, functionTable(program.functionTable), memorySize(program.memorySize - 1), memoryBase(program.memory)
+		, rwMemorySize(rwMemorySize), dataStackBase(program.memory + dataStackOffset)
+		, dataStackEnd(program.memory + dataStackOffset + dataStackSize), ipStackBase(ipStack)
+		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(program.code), dsp(dataStackBase), ipsp(ipStackBase)
+		, userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0) {
+	assert(rwMemorySize <= program.memorySize);
+	assert(dataStackOffset + dataStackSize <= rwMemorySize);
+	assert(program.code != 0);
+	assert(program.memory != 0);
 	assert(ipStack != 0);
 }
 
