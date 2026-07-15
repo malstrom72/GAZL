@@ -37,7 +37,6 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include <sys/mman.h>							// ::munmap (GAZLJit.h no longer pulls this in transitively)
 
 using namespace GAZL;
 
@@ -322,6 +321,21 @@ static const char* const K_FARGLOBAL =		// globals past word 4096: constant-addr
 	" PEEK $n &gIn\n POKE &fa $n\n POKE &fb #7\n"				// PEEK_VC + POKE_CV + POKE_CC, all at word index >= 5000
 	" PEEK $n &fa\n PEEK $m &fb\n ADDi $n $n $m\n POKE &gOut $n\n RETU\n";	// gOut = gIn + 7
 
+static const char* const K_SWITCH =			// SWCH jump table (targets read from const memory) + GOTO joins
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *1\n$n: LOCi\n$r: LOCi\n"
+	" PEEK $n &gIn\n SWCH $n *4 @.sw\n"
+	".sw#0: MOVi $r #100\n GOTO @.done\n"
+	".sw#1: MOVi $r #200\n GOTO @.done\n"
+	".sw#2: MOVi $r #300\n GOTO @.done\n"
+	".sw: MOVi $r #999\n"
+	".done: POKE &gOut $r\n RETU\n";
+
+static const char* const K_FTOISAT =		// fTOi saturation: a huge float clamps to the int range (must match the interpreter)
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *1\n$n: LOCi\n$f: LOCf\n"
+	" PEEK $n &gIn\n iTOf $f $n #1000000000.0\n fTOi $n $f #1.0\n POKE &gOut $n\n RETU\n";
+
 int main() {
 	std::printf("GAZLJit consolidated lowering test: JIT (compiled from Instruction[]) vs interpreter (arm64)\n\n");
 	const int counts[] = { 0, 1, 2, 5, 10, 100, 1000 };
@@ -352,6 +366,8 @@ int main() {
 	runKernel("big frame    [DATA_STACK_OVERFLOW]", K_BIGFRAME, one, sizeof(one) / sizeof(*one));
 	runKernel("checked mem  [PEEK/POKE + trap]", K_MEMORY, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("far globals  [const-addr PEEK/POKE >4096]", K_FARGLOBAL, counts, sizeof(counts) / sizeof(*counts));
+	runKernel("switch       [SWCH jump table]", K_SWITCH, indices, sizeof(indices) / sizeof(*indices));
+	runKernel("ftoi sat     [fTOi clamp]", K_FTOISAT, signed_, sizeof(signed_) / sizeof(*signed_));
 
 	std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED", failures, failures == 1 ? "" : "s");
 	return failures == 0 ? 0 : 1;

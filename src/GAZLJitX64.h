@@ -48,7 +48,8 @@ enum Reg {
 */
 enum Cond {
 	CC_E = 0x4, CC_NE = 0x5, CC_L = 0xC, CC_GE = 0xD, CC_LE = 0xE, CC_G = 0xF,
-	CC_B = 0x2, CC_AE = 0x3, CC_BE = 0x6, CC_A = 0x7, CC_P = 0xA, CC_NP = 0xB	// P/NP = parity (unordered) for float compares
+	CC_B = 0x2, CC_AE = 0x3, CC_BE = 0x6, CC_A = 0x7, CC_P = 0xA, CC_NP = 0xB,	// P/NP = parity (unordered) for float compares
+	CC_S = 0x8																	// sign (SF=1, result negative) — the fuel-timeout check
 };
 
 // A branch target; `id` indexes the emitter's label table (-1 = invalid).
@@ -82,6 +83,7 @@ class X64Emitter {
 		void or_(Reg rd, Reg rs);								// `or rd, rs`
 		void xor_(Reg rd, Reg rs);								// `xor rd, rs`
 		void cmp(Reg ra, Reg rb);								// `cmp ra, rb` (sets flags)
+		void cmpQ(Reg ra, Reg rb);								// `cmp ra, rb` (64-bit; pointer compares — ipsp/dsend)
 		void addImm(Reg rd, uint32_t imm);						// `add rd, imm32` (81 /0)
 		void subImm(Reg rd, uint32_t imm);						// `sub rd, imm32` (81 /5)
 		void cmpImm(Reg ra, uint32_t imm);						// `cmp ra, imm32` (81 /7)

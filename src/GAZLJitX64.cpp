@@ -115,6 +115,7 @@ void X64Emitter::and_(Reg rd, Reg rs) { rex(false, rs, rd); b(0x21); modrmReg(rs
 void X64Emitter::or_(Reg rd, Reg rs) { rex(false, rs, rd); b(0x09); modrmReg(rs, rd); }
 void X64Emitter::xor_(Reg rd, Reg rs) { rex(false, rs, rd); b(0x31); modrmReg(rs, rd); }
 void X64Emitter::cmp(Reg ra, Reg rb) { rex(false, rb, ra); b(0x39); modrmReg(rb, ra); }
+void X64Emitter::cmpQ(Reg ra, Reg rb) { rex(true, rb, ra); b(0x39); modrmReg(rb, ra); }
 void X64Emitter::addImm(Reg rd, uint32_t imm) { aluImm(0, rd, imm); }
 void X64Emitter::subImm(Reg rd, uint32_t imm) { aluImm(5, rd, imm); }
 void X64Emitter::cmpImm(Reg ra, uint32_t imm) { aluImm(7, ra, imm); }
@@ -219,41 +220,55 @@ void X64Emitter::finalize() {
 // per-platform GAZLJitMem*.cpp backend. This is the x86-64 counterpart of GAZLJitArm64.cpp's lowering; it reuses the
 // verified per-instruction lowering from tools/GAZLJitX64SliceTest.cpp, re-hosted onto the JitProcessor field ABI.
 //
-// Register roles. Each GAZL function compiles to
-//   Status function(Value* dsp, Value* memory, Value* dataStackEnd, JitProcessor* ctx)
-// entered with the four arguments in ARG_0..ARG_3, and pins them into callee-saved registers:
-//   rbx=dsp (advanced by FUNC), r14=memoryBase, r15=dataStackEnd, r12=ctx.
-// Scratch is rax + rcx/rdx (after the prologue reads the args) + xmm0/xmm1. GAZL->GAZL calls are ordinary C calls (the
-// C stack is the call stack); one shared aligned epilogue returns the Status in eax. This is a run-to-completion
-// backend — no fuel, no suspend, no RESUME transfers — so the whole program finishes inside one dispatcher entry.
-// The pins are callee-saved and the scratch is caller-saved on both SysV AMD64 and Win64, so this whole file is ABI
-// neutral except the boundary code, which flows through the ARG_0..ARG_3 / CALL_FRAME constants defined below.
+// Execution model: §5.4 dispatcher/TRANSFER, identical to GAZLJitArm64.cpp (and interoperating with the shared
+// JitProcessor / ipStack). Each GAZL function is a `Status segment(JitProcessor* ctx)` — ctx in ARG_0, no frame of its
+// own. It reloads the pins from ctx (rbx=dsp, r14=memoryBase, r13=fuel, r15=ipsp; dataStackEnd on demand; r12=ctx),
+// runs, and hands control back by returning a Status: TRANSFER (the dispatcher threads the next segment — GAZL calls and
+// returns push/pop the ipStack, never a host frame), NATIVE_CALL (the dispatcher makes the one host call), or a terminal
+// OK / TIME_OUT / trap. Because the C stack is only ever the dispatcher's single frame, a fuel timeout can suspend and
+// resume from ANY point, including inside nested GAZL calls. Scratch is rax + rcx/rdx + xmm0/xmm1. The pins are
+// callee-saved and the scratch caller-saved on both SysV AMD64 and Win64, so the file is ABI-neutral except the
+// dispatcher's frame, which flows through the ARG_0 / CALL_FRAME constants below.
 // ============================================================================================================
 
 // --- pinned registers + scratch roles ---
 
-static const Reg DSP = RBX, MEMORY_BASE = R14, DATA_STACK_END = R15, CONTEXT = R12;
+// §5.4 dispatcher/TRANSFER model — the per-segment pins mirror arm64's (x1=dsp, x2=membase, w3=fuel, x4=ipsp, x0=ctx).
+// dataStackEnd is NOT pinned (only bounds checks want it) — it is loaded from ctx on demand. Every segment reloads these
+// from ctx at entry and writes them back before any TRANSFER, so the C stack stays a single frame (the dispatcher) and a
+// timeout/suspend can return to the host and resume from any point — including inside nested GAZL calls.
+static const Reg DSP = RBX, MEMORY_BASE = R14, FUEL = R13, IP_STACK_PTR = R15, CONTEXT = R12;
 static const Reg SCRATCH_A = RCX, SCRATCH_B = RDX;					// general scratch (A also serves as the shift-count CL)
 static const Reg FLOAT_0 = static_cast<Reg>(0), FLOAT_1 = static_cast<Reg>(1);	// xmm0 / xmm1 (a separate register file from GP)
 
 /*
-	The ONLY calling-convention difference this backend cares about. The pins (rbx/r12/r14/r15) are callee-saved and the
-	scratch (rax/rcx/rdx/xmm0/1) is caller-saved on BOTH SysV AMD64 and Win64, so every instruction body is ABI-neutral;
-	only the boundary code varies, and it varies on just two axes: which registers carry the integer arguments, and how
-	much stack a call needs. Win64 additionally treats rsi/rdi as callee-saved — that bites in exactly one place (the
-	rep-movsd COPY), handled locally there. Funnelling both axes through these constants keeps the #ifdef to one spot.
-	  ARG_0..ARG_3   the entry ABI  Status fn(Value* dsp, Value* memory, Value* dataStackEnd, JitProcessor* ctx)
-	  CALL_FRAME     bytes subtracted from rsp in every frame: SysV needs only the 16-align pad; Win64 also reserves the
-	                 32-byte shadow space every callee may spill its register args into. The value keeps rsp 16-aligned
-	                 at the call in both the function prologue (after 4 pushes) and the dispatcher (no pushes).
+	Calling convention. In the dispatcher/TRANSFER model only the dispatcher makes host-ABI calls (into each segment and
+	into natives); segments are leaf code entered as `Status segment(JitProcessor* ctx)` with ctx in ARG_0 and never call
+	out, so they need no frame of their own. ARG_0 is the one arg register that differs by ABI. CALL_FRAME is the stack the
+	*dispatcher* reserves for its calls: SysV needs only the 16-align pad; Win64 also reserves the 32-byte shadow space a
+	callee may spill its register args into. The pins (rbx/r12/r13/r14/r15) are callee-saved on both ABIs and the dispatcher
+	saves them once; rbp holds ctx across the loop. Win64's callee-saved rsi/rdi bite only in the rep-movsd COPY (guarded
+	there); xmm6-15 are untouched (segments use xmm0/1).
 */
 #if defined(_WIN32)
-static const Reg ARG_0 = RCX, ARG_1 = RDX, ARG_2 = R8, ARG_3 = R9;
+static const Reg ARG_0 = RCX;
 static const uint32_t CALL_FRAME = 40u;								// 32-byte shadow space + 8-byte align pad
 #else
-static const Reg ARG_0 = RDI, ARG_1 = RSI, ARG_2 = RDX, ARG_3 = RCX;
+static const Reg ARG_0 = RDI;
 static const uint32_t CALL_FRAME = 8u;								// just the 16-align pad; SysV has no shadow space
 #endif
+
+// Segment state lives in ctx between transfers. reloadState loads the pins from ctx (ctx must already be in CONTEXT);
+// enterSegment is a fresh dispatcher entry (ctx arrives in ARG_0); writebackState flushes before a TRANSFER. Mirrors the
+// arm64 reloadState/writebackState. dataStackEnd is loaded on demand, not pinned.
+static void reloadState(X64Emitter& e, const Offsets& o) {
+	e.loadQ(DSP, CONTEXT, o.dsp); e.loadQ(MEMORY_BASE, CONTEXT, o.mb);
+	e.load(FUEL, CONTEXT, o.fuel); e.loadQ(IP_STACK_PTR, CONTEXT, o.ipsp);
+}
+static void enterSegment(X64Emitter& e, const Offsets& o) { e.movQ(CONTEXT, ARG_0); reloadState(e, o); }
+static void writebackState(X64Emitter& e, const Offsets& o) {
+	e.storeQ(CONTEXT, o.dsp, DSP); e.store(CONTEXT, o.fuel, FUEL); e.storeQ(CONTEXT, o.ipsp, IP_STACK_PTR);
+}
 
 // Render an integer operand into register `reg`: a frame slot (load off dsp) or an immediate constant.
 static void loadOperand(X64Emitter& emitter, Reg reg, const Value& operand, bool isConst) {
@@ -346,93 +361,128 @@ static void emitBranchFloat(X64Emitter& emitter, int kind, const Instruction& in
 }
 
 /*
-	Lower one GAZL function (starting at `funcStart`, an OP_FUNC) into `emitter` (appended). Emits the SysV prologue that
-	pins dsp/memory/dataStackEnd/ctx and runs the FUNC frame advance, then one x86-64 sequence per instruction up to the
-	terminating RETU. Direct calls resolve to `entryLabels[ordinal]` via rel32 fixups; every trap and every non-OK return
-	sets eax and jumps to the shared `epilogue`. Returns false on an opcode this backend cannot lower.
+	Lower one GAZL function (starting at `funcStart`, an OP_FUNC) into `emitter` (appended) as §5.4 segments. The segment
+	entry reloads the pins from ctx, advances dsp by the frame, and runs the FUNC stack-overflow check; then one x86-64
+	sequence per instruction to the terminating RETU. Loop back-edges get a fuel-check safepoint (suspend → cold reload
+	trampoline). Calls/RETU transfer via the ipStack (§5.7.5); every trap sets eax and jumps to the shared `epilogue`
+	(a bare ret back to the dispatcher). Returns false on an opcode this backend cannot lower.
 */
 static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart,
 		const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue, UInt functionCount) {
 	UInt endIndex = funcStart;
 	while (code[endIndex].opcode != OP_RETU) { ++endIndex; }
 
-	// Pass 1 — collect branch / SWCH-case targets and allocate a label for each.
+	// Pass 1 — branch/SWCH targets (each gets a label) + loop back-edges (target <= j) that become loop-head fuel
+	// safepoints charged loopWeight = block span. Then a reload trampoline + suspend stub per loop head; nativeReloads
+	// (filled in pass 2) is a reload trampoline per CALL_NVC for the blocking-retry re-entry.
 	std::map<UInt, Label> labels;
+	std::map<UInt, UInt> loopWeight;
 	for (UInt j = funcStart; j <= endIndex; ++j) {
-		if (code[j].opcode == OP_SWCH) {							// every jump-table entry (read from const memory) is a target
+		if (code[j].opcode == OP_SWCH) {
 			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
 			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
 			for (UInt k = 0; k < size; ++k) {
 				const UInt target = static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i);
 				if (!labels.count(target)) { labels[target] = emitter.newLabel(); }
+				if (target <= j) { loopWeight[target] = j - target + 1; }
 			}
 			continue;
 		}
 		UInt target;
-		if (jitBranchTarget(code, j, target) && !labels.count(target)) { labels[target] = emitter.newLabel(); }
+		if (jitBranchTarget(code, j, target)) {
+			if (!labels.count(target)) { labels[target] = emitter.newLabel(); }
+			if (target <= j) { loopWeight[target] = j - target + 1; }
+		}
 	}
+	std::map<UInt, Label> reloadL, suspendL;
+	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
+		reloadL[it->first] = emitter.newLabel(); suspendL[it->first] = emitter.newLabel();
+	}
+	std::vector<std::pair<Label, Label> > nativeReloads;	// {call-site reload, hot re-entry} per CALL_NVC (blocking retry)
 
-	// Prologue: save the callee-saved pins, reserve the call frame (align pad + Win64 shadow), then set the pins from
-	// the incoming argument registers. Pins and args never overlap on either ABI, so no move ordering hazard.
-	emitter.push(DSP); emitter.push(MEMORY_BASE); emitter.push(DATA_STACK_END); emitter.push(CONTEXT);
-	emitter.addImmQ(RSP, 0u - CALL_FRAME);						// sub rsp, CALL_FRAME
-	emitter.movQ(DSP, ARG_0); emitter.movQ(MEMORY_BASE, ARG_1); emitter.movQ(DATA_STACK_END, ARG_2); emitter.movQ(CONTEXT, ARG_3);
+	// Segment entry: reload the pins from ctx, advance dsp by the frame (FUNC p0), then the FUNC stack-overflow check.
+	enterSegment(emitter, offsets);
 	const UInt localsSize = static_cast<UInt>(code[funcStart].p0.i);
-	if (localsSize != 0) { emitter.addImmQ(DSP, localsSize * 4u); }	// FUNC: advance dsp to this frame
+	if (localsSize != 0) { emitter.addImmQ(DSP, localsSize * 4u); }		// dsp += frame
+	{
+		const UInt paramsSize = static_cast<UInt>(code[funcStart].p1.i);
+		Label stackOk = emitter.newLabel();
+		emitter.movQ(RAX, DSP); if (paramsSize != 0) { emitter.addImmQ(RAX, paramsSize * 4u); }
+		emitter.loadQ(SCRATCH_A, CONTEXT, offsets.dsend); emitter.cmpQ(RAX, SCRATCH_A); emitter.jcc(CC_BE, stackOk);
+		emitter.movImm(RAX, static_cast<uint32_t>(DATA_STACK_OVERFLOW)); emitter.ret();	// dsp + params > dsend
+		emitter.bind(stackOk);
+	}
 
 	// Pass 2 — emit.
 	for (UInt j = funcStart; j <= endIndex; ++j) {
 		std::map<UInt, Label>::iterator labelIt = labels.find(j);
 		if (labelIt != labels.end()) { emitter.bind(labelIt->second); }
+		std::map<UInt, UInt>::iterator weightIt = loopWeight.find(j);	// loop head: charge the block, suspend on timeout (§5.5)
+		if (weightIt != loopWeight.end()) { emitter.subImm(FUEL, weightIt->second); emitter.jcc(CC_S, suspendL[j]); }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
 		switch (op) {
 			case OP_FUNC: break;
-			case OP_RETU:
-				emitter.movImm(RAX, 0); emitter.jmp(epilogue);		// Status OK -> shared epilogue
+			case OP_RETU: {										// pop the ipStack; TRANSFER back to the caller, or OK at the native/top marker
+				Label notNative = emitter.newLabel();
+				emitter.addImmQ(IP_STACK_PTR, 0u - 16u);				// ipsp -= 16 : pop {cont, dsp}
+				emitter.loadQ(RAX, IP_STACK_PTR, 0);					// cont (native continuation)
+				emitter.loadQ(DSP, IP_STACK_PTR, 8);					// caller dsp (0 = native/top marker)
+				emitter.movImm(SCRATCH_A, 0); emitter.cmpQ(DSP, SCRATCH_A); emitter.jcc(CC_NE, notNative);
+				emitter.addImmQ(IP_STACK_PTR, 0u - 16u); emitter.loadQ(DSP, IP_STACK_PTR, 8);	// native return: pop again for the true dsp
+				writebackState(emitter, offsets);
+				emitter.movImm(RAX, 0); emitter.ret();					// OK — terminal (return to host)
+				emitter.bind(notNative);
+				writebackState(emitter, offsets);
+				emitter.storeQ(CONTEXT, offsets.resume, RAX);			// RESUME = cont
+				emitter.movImm(RAX, static_cast<uint32_t>(TRANSFER)); emitter.ret();
 				break;
+			}
 
-			case OP_CALL_CVC: {										// direct GAZL call: callee runs with dsp += window, returns Status in eax
+			case OP_CALL_CVC: {										// direct GAZL call: push {after, dsp}, RESUME = callee entry, TRANSFER
 				const UInt callee = in.p0.p - IP_OFFSET;
-				emitter.movQ(ARG_0, DSP);
-				if (in.p1.i != 0) { emitter.addImmQ(ARG_0, static_cast<uint32_t>(in.p1.i) * 4u); }	// arg0 = dsp + window
-				emitter.movQ(ARG_1, MEMORY_BASE); emitter.movQ(ARG_2, DATA_STACK_END); emitter.movQ(ARG_3, CONTEXT);
-				emitter.callRel(entryLabels[callee]);
-				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, epilogue);	// propagate a non-OK status
+				const UInt window = static_cast<UInt>(in.p1.i);
+				Label after = emitter.newLabel(), ipOk = emitter.newLabel();
+				emitter.loadQ(RAX, CONTEXT, offsets.ipsend); emitter.cmpQ(IP_STACK_PTR, RAX); emitter.jcc(CC_B, ipOk);
+				emitter.movImm(RAX, static_cast<uint32_t>(IP_STACK_OVERFLOW)); emitter.ret(); emitter.bind(ipOk);
+				emitter.leaRip(RAX, after); emitter.storeQ(IP_STACK_PTR, 0, RAX); emitter.storeQ(IP_STACK_PTR, 8, DSP); emitter.addImmQ(IP_STACK_PTR, 16);
+				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }	// dsp += arg window
+				writebackState(emitter, offsets);
+				emitter.leaRip(RAX, entryLabels[callee]); emitter.storeQ(CONTEXT, offsets.resume, RAX);
+				emitter.movImm(RAX, static_cast<uint32_t>(TRANSFER)); emitter.ret();
+				emitter.bind(after); enterSegment(emitter, offsets);		// callee returned -> fresh segment: reload
 				break;
 			}
-			case OP_CALL_VVC: {										// indirect call: fn pointer in a slot -> ordinal -> ctx.funcEntries[ordinal]
-				Label trap = emitter.newLabel(), cont = emitter.newLabel();
-				emitter.load(RCX, DSP, in.p0.i * 4);				// fn pointer = IP_OFFSET + ordinal
-				emitter.subImm(RCX, IP_OFFSET);						// ordinal
-				emitter.cmpImm(RCX, functionCount);
-				emitter.jcc(CC_AE, trap);							// (unsigned) ordinal >= functionCount -> BAD_CALL
-				emitter.loadQ(RAX, CONTEXT, offsets.funcentries);	// funcEntries base
-				emitter.shlImm(RCX, 3);								// ordinal * 8 (byte index)
-				emitter.addQ(RAX, RCX); emitter.loadQ(RAX, RAX, 0);	// RAX = funcEntries[ordinal]
-				emitter.movQ(ARG_0, DSP);
-				if (in.p1.i != 0) { emitter.addImmQ(ARG_0, static_cast<uint32_t>(in.p1.i) * 4u); }
-				emitter.movQ(ARG_1, MEMORY_BASE); emitter.movQ(ARG_2, DATA_STACK_END); emitter.movQ(ARG_3, CONTEXT);
-				emitter.callReg(RAX);
-				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, epilogue);
-				emitter.jmp(cont);
-				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_CALL)); emitter.jmp(epilogue);
-				emitter.bind(cont);
+			case OP_CALL_VVC: {										// indirect: slot -> ordinal -> ctx.funcEntries[ordinal] -> RESUME, TRANSFER
+				const UInt window = static_cast<UInt>(in.p1.i);
+				Label after = emitter.newLabel(), ipOk = emitter.newLabel(), trap = emitter.newLabel();
+				emitter.loadQ(RAX, CONTEXT, offsets.ipsend); emitter.cmpQ(IP_STACK_PTR, RAX); emitter.jcc(CC_B, ipOk);
+				emitter.movImm(RAX, static_cast<uint32_t>(IP_STACK_OVERFLOW)); emitter.ret(); emitter.bind(ipOk);
+				emitter.load(RCX, DSP, in.p0.i * 4); emitter.subImm(RCX, IP_OFFSET);	// ordinal
+				emitter.cmpImm(RCX, functionCount); emitter.jcc(CC_AE, trap);		// >= functionCount -> BAD_CALL
+				emitter.loadQ(RAX, CONTEXT, offsets.funcentries); emitter.shlImm(RCX, 3); emitter.addQ(RAX, RCX); emitter.loadQ(RDX, RAX, 0);	// rdx = funcEntries[ordinal]
+				emitter.leaRip(RAX, after); emitter.storeQ(IP_STACK_PTR, 0, RAX); emitter.storeQ(IP_STACK_PTR, 8, DSP); emitter.addImmQ(IP_STACK_PTR, 16);
+				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }
+				writebackState(emitter, offsets);
+				emitter.storeQ(CONTEXT, offsets.resume, RDX); emitter.movImm(RAX, static_cast<uint32_t>(TRANSFER)); emitter.ret();
+				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_CALL)); emitter.ret();
+				emitter.bind(after); enterSegment(emitter, offsets);
 				break;
 			}
-			case OP_CALL_NVC: {										// native call: params = dsp + window written to ctx.dsp; fn = ctx.natives[ordinal]
+			case OP_CALL_NVC: {										// native: publish window/fuel/ipsp, hand the host call to the dispatcher
 				const UInt ordinal = static_cast<UInt>(in.p0.i);
-				emitter.movQ(RAX, DSP);
-				if (in.p1.i != 0) { emitter.addImmQ(RAX, static_cast<uint32_t>(in.p1.i) * 4u); }	// rax = param window
-				emitter.storeQ(CONTEXT, offsets.dsp, RAX);			// ctx.dsp = window (accessParams reads it; our dsp stays pinned in rbx)
-				Label retry = emitter.newLabel();
-				emitter.bind(retry);								// blocking-retry: re-issue the call until it stops returning BLOCK_RETRY
-				emitter.loadQ(RAX, CONTEXT, offsets.natives);		// natives base
-				emitter.loadQ(RAX, RAX, static_cast<int32_t>(ordinal * 8));	// rax = natives[ordinal]
-				emitter.movQ(ARG_0, CONTEXT);							// the native takes Processor* (= ctx)
-				emitter.callReg(RAX);
-				emitter.cmpImm(RAX, static_cast<uint32_t>(BLOCK_RETRY)); emitter.jcc(CC_E, retry);
-				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, epilogue);	// any other non-OK status -> propagate
+				const UInt window = static_cast<UInt>(in.p1.i);
+				Label after = emitter.newLabel(), hot = emitter.newLabel(), callReload = emitter.newLabel();
+				emitter.bind(hot);										// hot re-entry (fall-through + blocking-retry target)
+				emitter.storeQ(CONTEXT, offsets.saveddsp, DSP);			// stash original dsp (dispatcher restores after the call)
+				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }
+				emitter.storeQ(CONTEXT, offsets.dsp, DSP); emitter.store(CONTEXT, offsets.fuel, FUEL); emitter.storeQ(CONTEXT, offsets.ipsp, IP_STACK_PTR);
+				emitter.leaRip(RAX, after); emitter.storeQ(CONTEXT, offsets.nativeafter, RAX);	// success continuation
+				emitter.leaRip(RAX, callReload); emitter.storeQ(CONTEXT, offsets.resume, RAX);	// RESUME = call site (blocking retry)
+				emitter.loadQ(RAX, CONTEXT, offsets.natives); emitter.loadQ(RAX, RAX, static_cast<int32_t>(ordinal * 8)); emitter.storeQ(CONTEXT, offsets.nativefn, RAX);
+				emitter.movImm(RAX, static_cast<uint32_t>(NATIVE_CALL)); emitter.ret();
+				nativeReloads.push_back(std::make_pair(callReload, hot));
+				emitter.bind(after); enterSegment(emitter, offsets);
 				break;
 			}
 
@@ -468,6 +518,29 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 				emitter.storeIdx(MEMORY_BASE, SCRATCH_A, base * 4, SCRATCH_B);
 				emitter.jmp(cont);
 				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
+				emitter.bind(cont);
+				break;
+			}
+
+			// full pointer deref: base(var) + index(var) = a GAZL pointer; wordIndex = base + index - MEMORY_OFFSET, checked.
+			case OP_PEEK_VVV: {
+				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+				emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.load(RAX, DSP, in.p2.i * 4); emitter.add(SCRATCH_A, RAX);	// base + index
+				emitter.subImm(SCRATCH_A, MEMORY_OFFSET);			// word index (ecx)
+				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(SCRATCH_A, SCRATCH_B); emitter.jcc(CC_AE, trap);	// >= memorySize -> BAD_PEEK
+				emitter.loadIdx(RAX, MEMORY_BASE, SCRATCH_A, 0); emitter.store(DSP, in.p0.i * 4, RAX);
+				emitter.jmp(cont); emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
+				emitter.bind(cont);
+				break;
+			}
+			case OP_POKE_VVV: case OP_POKE_VVC: {					// base(var) + index(var) = pointer; value var (VVV) or const (VVC)
+				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+				emitter.load(SCRATCH_A, DSP, in.p0.i * 4); emitter.load(RAX, DSP, in.p1.i * 4); emitter.add(SCRATCH_A, RAX);	// base + index
+				emitter.subImm(SCRATCH_A, MEMORY_OFFSET);
+				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(SCRATCH_A, SCRATCH_B); emitter.jcc(CC_AE, trap);	// >= rwMemorySize -> BAD_POKE
+				if (op == OP_POKE_VVC) { emitter.movImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); } else { emitter.load(SCRATCH_B, DSP, in.p2.i * 4); }
+				emitter.storeIdx(MEMORY_BASE, SCRATCH_A, 0, SCRATCH_B);
+				emitter.jmp(cont); emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
 				emitter.bind(cont);
 				break;
 			}
@@ -655,27 +728,48 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 			default: return false;									// unsupported opcode -> caller falls back to the interpreter
 		}
 	}
+	// Cold section: per loop head a reload trampoline (resume entry: reload, re-enter the hot mainline) and a suspend
+	// stub (writeback, RESUME = reload trampoline, return TIME_OUT); then a reload trampoline per CALL_NVC (blocking
+	// retry). Unreachable by fall-through — each preceding block ends in ret/jmp. Mirrors the arm64 cold section.
+	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
+		const UInt head = it->first;
+		emitter.bind(reloadL[head]); enterSegment(emitter, offsets); emitter.jmp(labels[head]);
+		emitter.bind(suspendL[head]);
+		writebackState(emitter, offsets);
+		emitter.leaRip(RAX, reloadL[head]); emitter.storeQ(CONTEXT, offsets.resume, RAX);	// RESUME = this head's reload
+		emitter.movImm(RAX, static_cast<uint32_t>(TIME_OUT)); emitter.ret();
+	}
+	for (size_t k = 0; k < nativeReloads.size(); ++k) {
+		emitter.bind(nativeReloads[k].first); enterSegment(emitter, offsets); emitter.jmp(nativeReloads[k].second);
+	}
+
 	return true;
 }
 
 /*
-	Emit the native dispatcher trampoline: `int dispatch(JitProcessor* ctx)`. Unlike the arm64 dispatcher (which threads
-	TRANSFER / NATIVE_CALL segments), the x86-64 backend runs GAZL calls as real C calls, so a whole program completes
-	inside a single compiled entry. The trampoline just loads the ctx run-state fields into the SysV argument registers
-	and jumps to `ctx.resume` (the entry seeded by JitProcessor::enterCall). Returns its byte offset in the buffer.
+	Emit the native dispatcher (§5.4): `int dispatch(JitProcessor* ctx)`. Park ctx in rbp (survives across segment
+	calls), save the callee-saved pins once, then loop: jump into RESUME, thread TRANSFER segments with no host round-trip,
+	make the one host call on NATIVE_CALL, and return to the host only to suspend (TIME_OUT) or finish. Mirrors arm64.
 */
 static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets) {
 	const size_t entry = emitter.size();
-	// ctx arrives in ARG_0. Load the entry ABI (dsp, memory, dataStackEnd, ctx) into ARG_0..ARG_3, reading each ctx
-	// field through the base BEFORE the final dsp load overwrites it; ARG_3 (= ctx) is saved first for the same reason.
-	emitter.movQ(ARG_3, ARG_0);									// arg3 = ctx
-	emitter.loadQ(RAX, ARG_0, offsets.resume);					// rax = resume (the entry to jump into)
-	emitter.loadQ(ARG_1, ARG_0, offsets.mb);					// arg1 = memoryBase
-	emitter.loadQ(ARG_2, ARG_0, offsets.dsend);					// arg2 = dataStackEnd
-	emitter.loadQ(ARG_0, ARG_0, offsets.dsp);					// arg0 = dsp (overwrites the ctx base last)
-	emitter.addImmQ(RSP, 0u - CALL_FRAME);						// reserve the call frame (16-align pad + Win64 shadow)
-	emitter.callReg(RAX);
+	Label loop = emitter.newLabel(), done = emitter.newLabel();
+	emitter.push(DSP); emitter.push(RBP); emitter.push(CONTEXT); emitter.push(FUEL); emitter.push(MEMORY_BASE); emitter.push(IP_STACK_PTR);	// 6 pushes (even -> keeps rsp alignment)
+	emitter.addImmQ(RSP, 0u - CALL_FRAME);						// dispatcher's call frame (16-align pad + Win64 shadow)
+	emitter.movQ(RBP, ARG_0);									// rbp = ctx (segments never touch rbp)
+	emitter.bind(loop);
+	emitter.loadQ(RAX, RBP, offsets.resume);					// rax = RESUME
+	emitter.movQ(ARG_0, RBP); emitter.callReg(RAX);				// run the segment (arg0 = ctx); eax = status
+	emitter.cmpImm(RAX, static_cast<uint32_t>(TRANSFER)); emitter.jcc(CC_E, loop);		// TRANSFER: thread next segment
+	emitter.cmpImm(RAX, static_cast<uint32_t>(NATIVE_CALL)); emitter.jcc(CC_NE, done);	// TIME_OUT / OK / trap -> host
+	emitter.loadQ(RAX, RBP, offsets.nativefn); emitter.movQ(ARG_0, RBP); emitter.callReg(RAX);	// the one real host call
+	emitter.loadQ(RCX, RBP, offsets.saveddsp); emitter.storeQ(RBP, offsets.dsp, RCX);	// restore the transient window dsp
+	emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, done);			// nonzero native = suspend/retry: return status
+	emitter.loadQ(RCX, RBP, offsets.nativeafter); emitter.storeQ(RBP, offsets.resume, RCX);	// OK: RESUME = after-call
+	emitter.jmp(loop);
+	emitter.bind(done);
 	emitter.addImmQ(RSP, CALL_FRAME);
+	emitter.pop(IP_STACK_PTR); emitter.pop(MEMORY_BASE); emitter.pop(FUEL); emitter.pop(CONTEXT); emitter.pop(RBP); emitter.pop(DSP);
 	emitter.ret();												// eax = Status
 	return entry;
 }
@@ -701,10 +795,9 @@ void JitCompiler::compile(const Instruction* code, UInt functionCount, const UIn
 			return;												// unsupported opcode -> caller should fall back to the interpreter
 		}
 	}
-	// One shared aligned epilogue (all functions have the identical prologue): undo the alignment pad, restore the pins.
+	// Shared segment epilogue: a trap sets eax and jumps here to hand its Status to the dispatcher. Segments own no
+	// frame (the dispatcher does), so this is a bare ret.
 	emitter.bind(epilogue);
-	emitter.addImmQ(RSP, CALL_FRAME);							// undo the reserved call frame
-	emitter.pop(CONTEXT); emitter.pop(DATA_STACK_END); emitter.pop(MEMORY_BASE); emitter.pop(DSP);
 	emitter.ret();
 
 	const size_t dispatcherOffset = emitDispatcher(emitter, offsets);

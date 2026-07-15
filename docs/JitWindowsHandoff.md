@@ -81,9 +81,13 @@ The SysV path is byte-for-byte unchanged by this refactor — the engine test st
 
 ## Still open / out of scope
 
-- **The dedicated `GAZLJitX64EngineTest`** (memory-image diff over 14 synthetic kernels) has not been ported to a
-  Windows build; the 16 end-to-end program diffs cover the same ground more realistically. Porting it is optional
-  belt-and-suspenders.
+- **Kernel test** — the x64 backend now runs the unified `tools/GAZLJitLowerTest.cpp` (via
+  `tools/buildAndRunGAZLJitLowerTest.cmd`), which diffs JIT vs interpreter over the whole memory image at full fuel
+  *and* tiny fuel (forcing suspend/resume). The old run-to-completion `GAZLJitX64EngineTest` has been retired.
+- **Execution model (updated).** The x64 backend was rebuilt on the §5.4 dispatcher/TRANSFER model, at parity with
+  arm64: GAZL→GAZL calls thread through the dispatcher via the ipStack (no host frames), so fuel timeouts suspend and
+  resume from any point, including inside nested GAZL calls. The earlier "run-to-completion / native call stack"
+  description elsewhere in this doc is historical.
 - **Windows-on-ARM64.** The arm64 backend already avoids `x18` (the Windows platform register) and matches base
   AAPCS64, and `GAZLJitMemWindows.cpp` is architecture-neutral, so `buildGAZLCmd.cmd` already selects `GAZLJitArm64.cpp`
   on an ARM64 host — but that path is unbuilt/untested. The remaining gap is SEH unwind metadata, only relevant if C++
