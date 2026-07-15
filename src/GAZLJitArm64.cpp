@@ -596,7 +596,9 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				e.addImmX(X0, X19, 0); reloadState(e, o); e.ldrX(X1, X0, o.saveddsp);	// native clobbered the pins: restore ctx + reload (dsp = original)
 				e.cmpImm(W12, 0); e.bcond(EQ, okStatus);			// OK → continue inline
 				e.mov(W0, W12); e.b(exitLabel);						// nonzero (BLOCK_RETRY / TIME_OUT / trap): return to host; RESUME = call site so it re-issues
-				e.bind(okStatus);									// OK: continue (state live)
+				e.bind(okStatus);									// OK: continue (state live). w3 now holds ctx.fuel — a native
+																	// that yielded via resetTimeOut(0) leaves it 0, and the MANDATORY fuel check at the next
+																	// block leader (jitFuelSafepoints inserts one right after every call) suspends immediately.
 				break;
 			}
 			case OP_MOVE_VC: matConst(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); break;

@@ -85,7 +85,14 @@ void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, c
 			for (UInt k = 0; k < size; ++k) { leaders.insert(static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i)); }
 			if (j + 1 <= endIndex) { leaders.insert(j + 1); }
 		} else if (op == OP_CALL_CVC || op == OP_CALL_VVC || op == OP_CALL_NVC) {
-			if (j + 1 <= endIndex) { leaders.insert(j + 1); }	// a call ends a block (§5.5)
+			// A call ends a block, so the instruction right after it is a leader with its own fuel check. For CALL_NVC
+			// this leader is REQUIRED, not just tidy block structure: a native may yield by resetTimeOut(0) + return OK
+			// (the standard cooperative-yield convention — Permut8/Prawn sleep() and launch() do exactly this). Each
+			// backend reloads the fuel pin from ctx immediately after the native returns, so THIS safepoint is what makes
+			// a zeroed fuel budget suspend on the very next instruction — zero slack, matching the interpreter's
+			// per-instruction suspend point. Remove it and a yielding native would keep running until the next natural
+			// block leader (e.g. a loop head), silently breaking real-time cooperative scheduling. Do not drop it.
+			if (j + 1 <= endIndex) { leaders.insert(j + 1); }
 		}
 	}
 	// Cap: split any [leader, nextLeader) run longer than maxBlockWeight so no single block exceeds one fuel grant.
@@ -154,29 +161,50 @@ Offsets JitProcessor::layout() {
 /*
 	jitAvailable() — the two-layer capability probe declared in GAZLJit.h. Layer 1 is makeExecutable() itself (a policy
 	denial such as a missing macOS allow-jit entitlement or Windows Arbitrary Code Guard fails the syscalls). Layer 2 runs
-	a trivial position-independent stub — `return 0xC0DE` — under a fault guard, so a page that mapped but cannot execute
-	turns into `false` instead of a crash. The stub is one word-aligned block (makeExecutable works in 32-bit words); it is
-	architecture-specific but tiny, so it lives here rather than in a backend. Both shipping targets are little-endian.
+	a position-independent stub under a fault guard, so a page that mapped but cannot execute turns into `false` instead of
+	a crash — and the stub does a real JIT->C round-trip (it calls a C function through the platform convention and returns
+	its result), so a broken native calling convention — the exact crossing CALL_NVC bakes in — also fails the probe rather
+	than Permut8. The stub is one word-aligned block (makeExecutable works in 32-bit words); it is architecture- and
+	ABI-specific but tiny, so it lives here rather than in a backend. Both shipping targets are little-endian.
 */
 namespace {
 
 // The native ABI the JIT bakes into CALL_NVC: a plain C function of one pointer, returning a single-register Status.
 // Pinned so a future change to either (a wider Status, a by-value struct return, a non-default convention) can't
-// silently break the hand-emitted call/return. (The runtime counterpart — an actual JIT→C round-trip in the probe —
-// is the belt to this suspenders.)
+// silently break the hand-emitted call/return. The runtime counterpart — an actual JIT->C round-trip — is the probe stub.
 typedef Status (*JitNativeSignatureCheck)(Processor*);
 #if __cplusplus >= 201103L
 static_assert(sizeof(Status) <= sizeof(void*), "JIT CALL_NVC assumes a native's Status returns in one integer register");
 #endif
 
-typedef uint32_t (*ProbeFunc)();
-
+// The probe stub: `uint32_t stub(ProbeCallee callee, const void* arg)` — move callee out of arg0, move arg into arg0,
+// call it through the platform's native convention, hand back its return. Exercises the exact JIT->C crossing CALL_NVC
+// bakes in (arg in the ABI arg register, the call/return, frame alignment + Win64 shadow space).
 #if defined(__aarch64__) || defined(_M_ARM64)
-const uint32_t PROBE_STUB[2] = { 0x52981BC0u, 0xD65F03C0u };		// movz w0, #0xC0DE ; ret
+const uint32_t PROBE_STUB[] = {			// stp x29,x30,[sp,#-16]! ; mov x9,x0 ; mov x0,x1 ; blr x9 ; ldp x29,x30,[sp],#16 ; ret
+	0xA9BF7BFDu, 0xAA0003E9u, 0xAA0103E0u, 0xD63F0120u, 0xA8C17BFDu, 0xD65F03C0u
+};
 #elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
-const uint32_t PROBE_STUB[2] = { 0x00C0DEB8u, 0x9090C300u };		// mov eax, 0xC0DE ; ret ; nop ; nop
+#	if defined(_WIN32)
+const uint32_t PROBE_STUB[] = {			// sub rsp,40 ; mov rax,rcx ; mov rcx,rdx ; call rax ; add rsp,40 ; ret   (Win64: 32B shadow + align)
+	0x28EC8348u, 0x48C88948u, 0xD0FFD189u, 0x28C48348u, 0x909090C3u
+};
+#	else
+const uint32_t PROBE_STUB[] = {			// sub rsp,8 ; mov rax,rdi ; mov rdi,rsi ; call rax ; add rsp,8 ; ret   (SysV)
+	0x08EC8348u, 0x48F88948u, 0xD0FFF789u, 0x08C48348u, 0x909090C3u
+};
+#	endif
 #else
 #	define GAZL_NO_PROBE_STUB									// no JIT backend for this architecture
+#endif
+
+#if !defined(GAZL_NO_PROBE_STUB)
+typedef uint32_t (*ProbeCallee)(const void*);
+typedef uint32_t (*ProbeFunc)(ProbeCallee, const void*);
+// The C side of the round-trip: read the 32-bit input and add 0x1111, so a passing probe proves the call really ran (not
+// a passthrough) and the arg pointer crossed intact. probeCallee(&PROBE_INPUT) == 0xC0DE — the value the stub returns.
+uint32_t probeCallee(const void* arg) { return *static_cast<const uint32_t*>(arg) + 0x1111u; }
+const uint32_t PROBE_INPUT = 0xAFCDu;							// 0xAFCD + 0x1111 == 0xC0DE
 #endif
 
 #if !defined(_WIN32) && !defined(GAZL_NO_PROBE_STUB)
@@ -190,7 +218,7 @@ void probeFaultHandler(int) { siglongjmp(gProbeJump, 1); }
 bool runProbe(ProbeFunc func) {
 #if defined(_WIN32)
 	__try {
-		return func() == 0xC0DEu;
+		return func(&probeCallee, &PROBE_INPUT) == 0xC0DEu;
 	} __except (EXCEPTION_EXECUTE_HANDLER) {
 		return false;
 	}
@@ -204,7 +232,7 @@ bool runProbe(ProbeFunc func) {
 	sigaction(SIGBUS, &guard, &savedBus);
 	sigaction(SIGTRAP, &guard, &savedTrap);
 	bool ok = false;
-	if (sigsetjmp(gProbeJump, 1) == 0) { ok = (func() == 0xC0DEu); }
+	if (sigsetjmp(gProbeJump, 1) == 0) { ok = (func(&probeCallee, &PROBE_INPUT) == 0xC0DEu); }
 	sigaction(SIGILL, &savedIll, 0);
 	sigaction(SIGSEGV, &savedSegv, 0);
 	sigaction(SIGBUS, &savedBus, 0);
