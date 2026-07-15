@@ -361,11 +361,11 @@ static void emitBranchFloat(X64Emitter& emitter, int kind, const Instruction& in
 }
 
 /*
-	Lower one GAZL function (starting at `funcStart`, an OP_FUNC) into `emitter` (appended) as §5.4 segments. The segment
-	entry reloads the pins from ctx, advances dsp by the frame, and runs the FUNC stack-overflow check; then one x86-64
-	sequence per instruction to the terminating RETU. Loop back-edges get a fuel-check safepoint (suspend → cold reload
-	trampoline). Calls/RETU transfer via the ipStack (§5.7.5); every trap sets eax and jumps to the shared `epilogue`
-	(a bare ret back to the dispatcher). Returns false on an opcode this backend cannot lower.
+	Lower one GAZL function (starting at `funcStart`, an OP_FUNC) into `emitter` (appended) as §5.4 segments (encoding b).
+	The dispatcher supplies live pins, so the entry just advances dsp by the frame and runs the FUNC stack-overflow check;
+	then one x86-64 sequence per instruction to the terminating RETU. Every block leader gets a fuel-check safepoint
+	(suspend → cold stub). GAZL calls/RETU tail-branch directly (the ipStack holds the return address, §5.7.5); native
+	calls run inline; every terminal path sets eax and jumps to the shared `epilogue`. Returns false on an unlowerable opcode.
 */
 static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart,
 		const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue, UInt functionCount) {
@@ -373,18 +373,17 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 	while (code[endIndex].opcode != OP_RETU) { ++endIndex; }
 
 	// Pass 1 — fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight and each a
-	// resumable point. `labels` is the mainline label per leader (hot entry + branch + resume target); reloadL/suspendL
-	// its reload trampoline + suspend stub. Charging per block (not just loop heads) keeps fuel spend ≈ the interpreter's.
+	// resumable point. `labels` is the mainline label per leader (hot entry + branch + resume target); suspendL its
+	// suspend stub. Charging per block (not just loop heads) keeps fuel spend ≈ the interpreter's.
 	std::map<UInt, UInt> loopWeight;
 	jitFuelSafepoints(code, funcStart, endIndex, memory, MAX_BLOCK_WEIGHT, loopWeight);
-	std::map<UInt, Label> labels, reloadL, suspendL;
+	std::map<UInt, Label> labels, suspendL;
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
-		labels[it->first] = emitter.newLabel(); reloadL[it->first] = emitter.newLabel(); suspendL[it->first] = emitter.newLabel();
+		labels[it->first] = emitter.newLabel(); suspendL[it->first] = emitter.newLabel();
 	}
-	std::vector<std::pair<Label, Label> > nativeReloads;	// {call-site reload, hot re-entry} per CALL_NVC (blocking retry)
 
-	// Segment entry: reload the pins from ctx, advance dsp by the frame (FUNC p0), then the FUNC stack-overflow check.
-	enterSegment(emitter, offsets);
+	// Function entry: the dispatcher supplies live pins (encoding b — no per-segment reload), so just advance dsp by the
+	// frame (FUNC p0) and run the FUNC stack-overflow check.
 	const UInt localsSize = static_cast<UInt>(code[funcStart].p0.i);
 	if (localsSize != 0) { emitter.addImmQ(DSP, localsSize * 4u); }		// dsp += frame
 	{
@@ -392,7 +391,7 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 		Label stackOk = emitter.newLabel();
 		emitter.movQ(RAX, DSP); if (paramsSize != 0) { emitter.addImmQ(RAX, paramsSize * 4u); }
 		emitter.loadQ(SCRATCH_A, CONTEXT, offsets.dsend); emitter.cmpQ(RAX, SCRATCH_A); emitter.jcc(CC_BE, stackOk);
-		emitter.movImm(RAX, static_cast<uint32_t>(DATA_STACK_OVERFLOW)); emitter.ret();	// dsp + params > dsend
+		emitter.movImm(RAX, static_cast<uint32_t>(DATA_STACK_OVERFLOW)); emitter.jmp(epilogue);	// dsp + params > dsend
 		emitter.bind(stackOk);
 	}
 
@@ -406,66 +405,62 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 		const Int op = in.opcode;
 		switch (op) {
 			case OP_FUNC: break;
-			case OP_RETU: {										// pop the ipStack; TRANSFER back to the caller, or OK at the native/top marker
+			case OP_RETU: {										// pop the ipStack; tail-branch back to the caller, or OK at the native/top marker
 				Label notNative = emitter.newLabel();
 				emitter.addImmQ(IP_STACK_PTR, 0u - 16u);				// ipsp -= 16 : pop {cont, dsp}
-				emitter.loadQ(RAX, IP_STACK_PTR, 0);					// cont (native continuation)
+				emitter.loadQ(RAX, IP_STACK_PTR, 0);					// cont (caller continuation address)
 				emitter.loadQ(DSP, IP_STACK_PTR, 8);					// caller dsp (0 = native/top marker)
 				emitter.movImm(SCRATCH_A, 0); emitter.cmpQ(DSP, SCRATCH_A); emitter.jcc(CC_NE, notNative);
 				emitter.addImmQ(IP_STACK_PTR, 0u - 16u); emitter.loadQ(DSP, IP_STACK_PTR, 8);	// native return: pop again for the true dsp
-				writebackState(emitter, offsets);
-				emitter.movImm(RAX, 0); emitter.ret();					// OK — terminal (return to host)
+				emitter.movImm(RAX, 0); emitter.jmp(epilogue);			// OK — terminal (return to host); pins stay live in regs
 				emitter.bind(notNative);
-				writebackState(emitter, offsets);
-				emitter.storeQ(CONTEXT, offsets.resume, RAX);			// RESUME = cont
-				emitter.movImm(RAX, static_cast<uint32_t>(TRANSFER)); emitter.ret();
+				emitter.jmpReg(RAX);									// GAZL return: jump straight into the caller's continuation
 				break;
 			}
 
-			case OP_CALL_CVC: {										// direct GAZL call: push {after, dsp}, RESUME = callee entry, TRANSFER
+			case OP_CALL_CVC: {										// direct GAZL call: push {after, dsp}, tail-branch into the callee entry
 				const UInt callee = in.p0.p - IP_OFFSET;
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = emitter.newLabel(), ipOk = emitter.newLabel();
 				emitter.loadQ(RAX, CONTEXT, offsets.ipsend); emitter.cmpQ(IP_STACK_PTR, RAX); emitter.jcc(CC_B, ipOk);
-				emitter.movImm(RAX, static_cast<uint32_t>(IP_STACK_OVERFLOW)); emitter.ret(); emitter.bind(ipOk);
+				emitter.movImm(RAX, static_cast<uint32_t>(IP_STACK_OVERFLOW)); emitter.jmp(epilogue); emitter.bind(ipOk);
 				emitter.leaRip(RAX, after); emitter.storeQ(IP_STACK_PTR, 0, RAX); emitter.storeQ(IP_STACK_PTR, 8, DSP); emitter.addImmQ(IP_STACK_PTR, 16);
 				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }	// dsp += arg window
-				writebackState(emitter, offsets);
-				emitter.leaRip(RAX, entryLabels[callee]); emitter.storeQ(CONTEXT, offsets.resume, RAX);
-				emitter.movImm(RAX, static_cast<uint32_t>(TRANSFER)); emitter.ret();
-				emitter.bind(after); enterSegment(emitter, offsets);		// callee returned -> fresh segment: reload
+				emitter.jmp(entryLabels[callee]);						// direct tail-branch into the callee (state stays live)
+				emitter.bind(after);									// callee's RETU lands here; pins already live
 				break;
 			}
-			case OP_CALL_VVC: {										// indirect: slot -> ordinal -> ctx.funcEntries[ordinal] -> RESUME, TRANSFER
+			case OP_CALL_VVC: {										// indirect: slot -> ordinal -> ctx.funcEntries[ordinal], tail-branch
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = emitter.newLabel(), ipOk = emitter.newLabel(), trap = emitter.newLabel();
 				emitter.loadQ(RAX, CONTEXT, offsets.ipsend); emitter.cmpQ(IP_STACK_PTR, RAX); emitter.jcc(CC_B, ipOk);
-				emitter.movImm(RAX, static_cast<uint32_t>(IP_STACK_OVERFLOW)); emitter.ret(); emitter.bind(ipOk);
+				emitter.movImm(RAX, static_cast<uint32_t>(IP_STACK_OVERFLOW)); emitter.jmp(epilogue); emitter.bind(ipOk);
 				emitter.load(RCX, DSP, in.p0.i * 4); emitter.subImm(RCX, IP_OFFSET);	// ordinal
 				emitter.cmpImm(RCX, functionCount); emitter.jcc(CC_AE, trap);		// >= functionCount -> BAD_CALL
 				emitter.loadQ(RAX, CONTEXT, offsets.funcentries); emitter.shlImm(RCX, 3); emitter.addQ(RAX, RCX); emitter.loadQ(RDX, RAX, 0);	// rdx = funcEntries[ordinal]
 				emitter.leaRip(RAX, after); emitter.storeQ(IP_STACK_PTR, 0, RAX); emitter.storeQ(IP_STACK_PTR, 8, DSP); emitter.addImmQ(IP_STACK_PTR, 16);
 				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }
-				writebackState(emitter, offsets);
-				emitter.storeQ(CONTEXT, offsets.resume, RDX); emitter.movImm(RAX, static_cast<uint32_t>(TRANSFER)); emitter.ret();
-				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_CALL)); emitter.ret();
-				emitter.bind(after); enterSegment(emitter, offsets);
+				emitter.jmpReg(RDX);									// indirect tail-branch into the callee segment
+				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_CALL)); emitter.jmp(epilogue);
+				emitter.bind(after);
 				break;
 			}
-			case OP_CALL_NVC: {										// native: publish window/fuel/ipsp, hand the host call to the dispatcher
+			case OP_CALL_NVC: {										// native: publish window/fuel/ipsp, call the native inline (no dispatcher round-trip)
 				const UInt ordinal = static_cast<UInt>(in.p0.i);
 				const UInt window = static_cast<UInt>(in.p1.i);
-				Label after = emitter.newLabel(), hot = emitter.newLabel(), callReload = emitter.newLabel();
-				emitter.bind(hot);										// hot re-entry (fall-through + blocking-retry target)
-				emitter.storeQ(CONTEXT, offsets.saveddsp, DSP);			// stash original dsp (dispatcher restores after the call)
+				Label hot = emitter.newLabel(), okStatus = emitter.newLabel();
+				emitter.bind(hot);										// hot re-entry (blocking-retry / suspend re-issue target)
+				emitter.storeQ(CONTEXT, offsets.saveddsp, DSP);			// stash original dsp (restored after the call)
 				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }
 				emitter.storeQ(CONTEXT, offsets.dsp, DSP); emitter.store(CONTEXT, offsets.fuel, FUEL); emitter.storeQ(CONTEXT, offsets.ipsp, IP_STACK_PTR);
-				emitter.leaRip(RAX, after); emitter.storeQ(CONTEXT, offsets.nativeafter, RAX);	// success continuation
-				emitter.leaRip(RAX, callReload); emitter.storeQ(CONTEXT, offsets.resume, RAX);	// RESUME = call site (blocking retry)
-				emitter.loadQ(RAX, CONTEXT, offsets.natives); emitter.loadQ(RAX, RAX, static_cast<int32_t>(ordinal * 8)); emitter.storeQ(CONTEXT, offsets.nativefn, RAX);
-				emitter.movImm(RAX, static_cast<uint32_t>(NATIVE_CALL)); emitter.ret();
-				nativeReloads.push_back(std::make_pair(callReload, hot));
-				emitter.bind(after); enterSegment(emitter, offsets);
+				emitter.leaRip(RAX, hot); emitter.storeQ(CONTEXT, offsets.resume, RAX);	// RESUME = call site (blocking retry / suspend re-issue)
+				emitter.loadQ(RAX, CONTEXT, offsets.natives); emitter.loadQ(RAX, RAX, static_cast<int32_t>(ordinal * 8));	// rax = natives[ordinal]
+				emitter.movQ(ARG_0, CONTEXT); emitter.callReg(RAX);		// native(ctx); eax = status (pins are callee-saved -> preserved)
+				emitter.load(FUEL, CONTEXT, offsets.fuel);				// native may resetTimeOut(0): refresh the fuel pin from ctx
+				emitter.loadQ(DSP, CONTEXT, offsets.saveddsp);			// restore original dsp (pop the arg window)
+				emitter.cmpImm(RAX, 0); emitter.jcc(CC_E, okStatus);	// OK -> fall through and continue
+				emitter.jmp(epilogue);									// nonzero (retry / suspend / trap): return to host, eax = status, RESUME = hot
+				emitter.bind(okStatus);
 				break;
 			}
 
@@ -711,46 +706,34 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 			default: return false;									// unsupported opcode -> caller falls back to the interpreter
 		}
 	}
-	// Cold section: per loop head a reload trampoline (resume entry: reload, re-enter the hot mainline) and a suspend
-	// stub (writeback, RESUME = reload trampoline, return TIME_OUT); then a reload trampoline per CALL_NVC (blocking
-	// retry). Unreachable by fall-through — each preceding block ends in ret/jmp. Mirrors the arm64 cold section.
+	// Cold section: one suspend stub per block leader — writeback the pins to ctx, set RESUME = this block's mainline head
+	// (the dispatcher reloads centrally on resume), return TIME_OUT to the host. Unreachable by fall-through — each
+	// preceding block ends in jmp. Mirrors the arm64 cold section.
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
 		const UInt head = it->first;
-		emitter.bind(reloadL[head]); enterSegment(emitter, offsets); emitter.jmp(labels[head]);
 		emitter.bind(suspendL[head]);
 		writebackState(emitter, offsets);
-		emitter.leaRip(RAX, reloadL[head]); emitter.storeQ(CONTEXT, offsets.resume, RAX);	// RESUME = this head's reload
-		emitter.movImm(RAX, static_cast<uint32_t>(TIME_OUT)); emitter.ret();
-	}
-	for (size_t k = 0; k < nativeReloads.size(); ++k) {
-		emitter.bind(nativeReloads[k].first); enterSegment(emitter, offsets); emitter.jmp(nativeReloads[k].second);
+		emitter.leaRip(RAX, labels[head]); emitter.storeQ(CONTEXT, offsets.resume, RAX);		// RESUME = this block's mainline head
+		emitter.movImm(RAX, static_cast<uint32_t>(TIME_OUT)); emitter.jmp(epilogue);
 	}
 
 	return true;
 }
 
 /*
-	Emit the native dispatcher (§5.4): `int dispatch(JitProcessor* ctx)`. Park ctx in rbp (survives across segment
-	calls), save the callee-saved pins once, then loop: jump into RESUME, thread TRANSFER segments with no host round-trip,
-	make the one host call on NATIVE_CALL, and return to the host only to suspend (TIME_OUT) or finish. Mirrors arm64.
+	Emit the native dispatcher (§5.4, encoding b): `int dispatch(JitProcessor* ctx)`. It owns the single native frame:
+	save the callee-saved pins once, reserve CALL_FRAME (so a segment's inline native call is aligned + has Win64 shadow),
+	pin ctx, reload the pins from ctx, then tail-jump into RESUME. Segments thread among themselves by direct jmp with no
+	host round-trip; a segment returns here (to `epilogue`, in eax) only to suspend (TIME_OUT), finish (OK), or trap.
+	Mirrors the arm64 dispatcher.
 */
-static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets) {
+static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets, Label epilogue) {
 	const size_t entry = emitter.size();
-	Label loop = emitter.newLabel(), done = emitter.newLabel();
 	emitter.push(DSP); emitter.push(RBP); emitter.push(CONTEXT); emitter.push(FUEL); emitter.push(MEMORY_BASE); emitter.push(IP_STACK_PTR);	// 6 pushes (even -> keeps rsp alignment)
 	emitter.addImmQ(RSP, 0u - CALL_FRAME);						// dispatcher's call frame (16-align pad + Win64 shadow)
-	emitter.movQ(RBP, ARG_0);									// rbp = ctx (segments never touch rbp)
-	emitter.bind(loop);
-	emitter.loadQ(RAX, RBP, offsets.resume);					// rax = RESUME
-	emitter.movQ(ARG_0, RBP); emitter.callReg(RAX);				// run the segment (arg0 = ctx); eax = status
-	emitter.cmpImm(RAX, static_cast<uint32_t>(TRANSFER)); emitter.jcc(CC_E, loop);		// TRANSFER: thread next segment
-	emitter.cmpImm(RAX, static_cast<uint32_t>(NATIVE_CALL)); emitter.jcc(CC_NE, done);	// TIME_OUT / OK / trap -> host
-	emitter.loadQ(RAX, RBP, offsets.nativefn); emitter.movQ(ARG_0, RBP); emitter.callReg(RAX);	// the one real host call
-	emitter.loadQ(RCX, RBP, offsets.saveddsp); emitter.storeQ(RBP, offsets.dsp, RCX);	// restore the transient window dsp
-	emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, done);			// nonzero native = suspend/retry: return status
-	emitter.loadQ(RCX, RBP, offsets.nativeafter); emitter.storeQ(RBP, offsets.resume, RCX);	// OK: RESUME = after-call
-	emitter.jmp(loop);
-	emitter.bind(done);
+	enterSegment(emitter, offsets);								// ctx = arg0; reload the pins from ctx
+	emitter.loadQ(RAX, CONTEXT, offsets.resume); emitter.jmpReg(RAX);	// tail-jump into RESUME (the hot entry / resume point)
+	emitter.bind(epilogue);										// a segment jumps here with its Status in eax
 	emitter.addImmQ(RSP, CALL_FRAME);
 	emitter.pop(IP_STACK_PTR); emitter.pop(MEMORY_BASE); emitter.pop(FUEL); emitter.pop(CONTEXT); emitter.pop(RBP); emitter.pop(DSP);
 	emitter.ret();												// eax = Status
@@ -778,12 +761,9 @@ void JitCompiler::compile(const Instruction* code, UInt functionCount, const UIn
 			return;												// unsupported opcode -> caller should fall back to the interpreter
 		}
 	}
-	// Shared segment epilogue: a trap sets eax and jumps here to hand its Status to the dispatcher. Segments own no
-	// frame (the dispatcher does), so this is a bare ret.
-	emitter.bind(epilogue);
-	emitter.ret();
-
-	const size_t dispatcherOffset = emitDispatcher(emitter, offsets);
+	// Shared exit `epilogue` (bound inside emitDispatcher): every terminal path — suspend, OK return, or trap — jumps
+	// there with its Status in eax; the dispatcher restores the frame and returns to the host.
+	const size_t dispatcherOffset = emitDispatcher(emitter, offsets, epilogue);
 	emitter.finalize();
 
 	// x86-64 code is a byte stream; makeExecutable() works in 32-bit words, so round up. Entry/dispatch offsets are
