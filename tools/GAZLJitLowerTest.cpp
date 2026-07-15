@@ -363,8 +363,136 @@ static const char* const K_FTOISAT =		// fTOi saturation: a huge float clamps to
 	"main: FUNC\n PARA *1\n$n: LOCi\n$f: LOCf\n"
 	" PEEK $n &gIn\n iTOf $f $n #1000000000.0\n fTOi $n $f #1.0\n POKE &gOut $n\n RETU\n";
 
+/*
+	v2.0 RegisterCache isolation tests: drive the arch-neutral floating cache (src/GAZLJit.cpp) against a mock backend
+	that records every fill/spill as text, then assert the exact fill/spill sequence for each coherence scenario. This
+	validates the allocator's brain in isolation - no ISA, no interpreter - before either real backend routes operands
+	through it. Register ids are arbitrary (10/11/12 general, 20/21 float) so the log reads clearly: "F<reg><-[<slot>]"
+	is a fill, "[<slot>]<-S<reg>" a spill.
+*/
+namespace {
+struct RecordingBackend : public RegisterCacheBackend {
+	std::string log;
+	virtual void emitFill(int physicalRegister, Int slot, RegisterClass) {
+		char buffer[32];
+		std::snprintf(buffer, sizeof buffer, "F%d<-[%d] ", physicalRegister, static_cast<int>(slot));
+		log += buffer;
+	}
+	virtual void emitSpill(Int slot, int physicalRegister, RegisterClass) {
+		char buffer[32];
+		std::snprintf(buffer, sizeof buffer, "[%d]<-S%d ", static_cast<int>(slot), physicalRegister);
+		log += buffer;
+	}
+};
+}
+
+static void cacheExpect(const char* name, const std::string& got, const char* want) {
+	if (got == want) { std::printf("  cache %-24s OK\n", name); }
+	else { std::printf("  cache %-24s FAIL\n    got : \"%s\"\n    want: \"%s\"\n", name, got.c_str(), want); ++failures; }
+}
+
+static void runRegisterCacheTests() {
+	std::printf("RegisterCache isolation (mock backend):\n");
+	static const int gp3[] = { 10, 11, 12 };
+	static const int gp2[] = { 10, 11 };
+	static const int gp1[] = { 10 };
+	static const int fp2[] = { 20, 21 };
+
+	// A: a read miss loads once, a re-read hits (no load), a def stores nothing, and barrier spills only the dirty line.
+	{
+		RegisterPool pool = { gp3, 3, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		const int r = c.read(5, GENERAL_REGISTER); c.endInstruction();
+		const int r2 = c.read(5, GENERAL_REGISTER); c.endInstruction();
+		if (r != r2) { std::printf("  cache re-read returned a different register\n"); ++failures; }
+		c.define(7, GENERAL_REGISTER); c.endInstruction();
+		c.barrier();
+		cacheExpect("hit/def/barrier", m.log, "F10<-[5] [7]<-S11 ");
+	}
+
+	// B: eviction picks the least-recently-used line, not the most recent (slot2 goes, slot1 stays).
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.read(1, GENERAL_REGISTER); c.endInstruction();
+		c.read(2, GENERAL_REGISTER); c.endInstruction();
+		c.read(1, GENERAL_REGISTER); c.endInstruction();		// touch slot1 -> slot2 is now the LRU victim
+		c.read(3, GENERAL_REGISTER); c.endInstruction();		// evicts slot2 (clean: no spill), reuses its register
+		cacheExpect("lru victim", m.log, "F10<-[1] F11<-[2] F11<-[3] ");
+		if (!c.isResident(1) || !c.isResident(3) || c.isResident(2)) { std::printf("  cache lru residency wrong\n"); ++failures; }
+	}
+
+	// C: spillDirtyResident stores yet keeps lines resident (later read hits); invalidateAll drops them (later read reloads).
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.define(1, GENERAL_REGISTER); c.endInstruction();
+		c.define(2, GENERAL_REGISTER); c.endInstruction();
+		c.spillDirtyResident();									// store both, keep resident + clean
+		c.read(1, GENERAL_REGISTER); c.endInstruction();		// hit -> no fill
+		c.invalidateAll();										// drop all mappings
+		c.read(1, GENERAL_REGISTER); c.endInstruction();		// miss -> reload
+		cacheExpect("spill-resident/invalidate", m.log, "[1]<-S10 [2]<-S11 F10<-[1] ");
+	}
+
+	// D: evicting a DIRTY line under pressure spills it before the register is reused.
+	{
+		RegisterPool pool = { gp1, 1, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.define(1, GENERAL_REGISTER); c.endInstruction();
+		c.read(2, GENERAL_REGISTER); c.endInstruction();		// pool full -> spill slot1, fill slot2
+		cacheExpect("dirty eviction spills", m.log, "[1]<-S10 F10<-[2] ");
+	}
+
+	// E: a scratch has no home - dropped at endInstruction, never spilled; its register frees for reuse.
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.scratch(GENERAL_REGISTER); c.endInstruction();		// dropped, no store
+		c.read(1, GENERAL_REGISTER); c.endInstruction();		// register reused
+		c.barrier();											// slot1 clean -> no spill
+		cacheExpect("scratch dropped", m.log, "F10<-[1] ");
+	}
+
+	// F: evict(reg) frees a specific physical register (x64 idiv/shift/rep operands), spilling if dirty.
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.define(1, GENERAL_REGISTER); c.endInstruction();
+		c.evict(10);											// spill + drop reg 10
+		c.read(2, GENERAL_REGISTER); c.endInstruction();		// reg 10 free -> fill
+		cacheExpect("evict specific reg", m.log, "[1]<-S10 F10<-[2] ");
+	}
+
+	// G: the float file is independent of the general file (own pool, own lines).
+	{
+		RegisterPool pool = { gp1, 1, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.read(1, FLOAT_REGISTER); c.endInstruction();
+		c.define(2, FLOAT_REGISTER); c.endInstruction();
+		c.barrier();											// spill the dirty float slot only
+		cacheExpect("float pool", m.log, "F20<-[1] [2]<-S21 ");
+	}
+	std::printf("\n");
+}
+
 int main() {
 	std::printf("GAZLJit consolidated lowering test: JIT (compiled from Instruction[]) vs interpreter (arm64)\n\n");
+	runRegisterCacheTests();
 	const int counts[] = { 0, 1, 2, 5, 10, 100, 1000 };
 	const int signed_[] = { 0, 1, -1, 7, -7, 123456, -123456 };
 	const int indices[] = { 0, 3, 7, 100, 2000000 };			// last is out of range -> BAD_POKE trap

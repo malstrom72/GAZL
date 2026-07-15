@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstring>				// memset / memcpy - the jitAvailable() probe
 #include <cstdio>				// std::snprintf - the unlowerable-opcode diagnostic
+#include <cassert>				// assert - RegisterCache contracts + the unlowerable-opcode check
 #include <set>					// jitFuelSafepoints - block-leader set
 
 #if defined(_WIN32)
@@ -168,6 +169,189 @@ void JitCompiler::throwUnlowerableOpcode(Int opcode) {
 	char message[64];
 	std::snprintf(message, sizeof (message), "JIT: backend cannot lower finalized opcode 0x%X", static_cast<unsigned>(opcode));
 	throw JitException(message);
+}
+
+/*
+	RegisterCache - the v2.0 floating cache (GAZLJit.h §5.7.1). All arch-neutral bookkeeping: which pool entry holds
+	which slot, dirty tracking, LRU eviction, and the coherence flushes. It touches machine code only through the
+	backend's emitFill/emitSpill. A pool entry (a Line) parallels registerPool.<class>Registers[i]: index i in the array
+	is the physical register registersOf(class)[i].
+*/
+RegisterCache::RegisterCache(const RegisterPool& pool, RegisterCacheBackend& backend)
+		: registerPool(pool)
+		, cacheBackend(backend)
+		, useClock(0) {
+	assert(pool.generalCount <= POOL_CAPACITY && pool.floatCount <= POOL_CAPACITY);
+	for (size_t i = 0; i < POOL_CAPACITY; ++i) {
+		generalLines[i].occupied = false;
+		floatLines[i].occupied = false;
+	}
+}
+
+RegisterCache::Line* RegisterCache::linesOf(RegisterClass registerClass, size_t& count) {
+	if (registerClass == GENERAL_REGISTER) { count = registerPool.generalCount; return generalLines; }
+	count = registerPool.floatCount;
+	return floatLines;
+}
+
+const int* RegisterCache::registersOf(RegisterClass registerClass) const {
+	return (registerClass == GENERAL_REGISTER) ? registerPool.generalRegisters : registerPool.floatRegisters;
+}
+
+// Store a line to its home if it is dirty and has one (scratch temps have no home), then mark it clean. Keeps it resident.
+void RegisterCache::spillLine(RegisterClass registerClass, int index) {
+	size_t count;
+	Line* lines = linesOf(registerClass, count);
+	Line& line = lines[index];
+	if (line.occupied && line.dirty && !line.scratchTemp) {
+		cacheBackend.emitSpill(line.slot, registersOf(registerClass)[index], registerClass);
+		line.dirty = false;
+	}
+}
+
+// A pool index ready to be (re)assigned: a free entry if one exists, else the least-recently-used UNPINNED line (spilled).
+int RegisterCache::acquire(RegisterClass registerClass) {
+	size_t count;
+	Line* lines = linesOf(registerClass, count);
+	for (size_t i = 0; i < count; ++i) {
+		if (!lines[i].occupied) { return static_cast<int>(i); }
+	}
+	int victim = -1;
+	uint32_t oldest = 0;
+	for (size_t i = 0; i < count; ++i) {
+		if (!lines[i].pinned && (victim < 0 || lines[i].lastUse < oldest)) {
+			victim = static_cast<int>(i);
+			oldest = lines[i].lastUse;
+		}
+	}
+	assert(victim >= 0 && "register pool exhausted by one instruction's pinned operands");
+	spillLine(registerClass, victim);
+	lines[victim].occupied = false;
+	return victim;
+}
+
+int RegisterCache::read(Int slot, RegisterClass registerClass) {
+	size_t count;
+	Line* lines = linesOf(registerClass, count);
+	const int* registers = registersOf(registerClass);
+	for (size_t i = 0; i < count; ++i) {
+		if (lines[i].occupied && !lines[i].scratchTemp && lines[i].slot == slot) {
+			lines[i].pinned = true;
+			lines[i].lastUse = ++useClock;
+			return registers[i];							// hit: no load
+		}
+	}
+	const int i = acquire(registerClass);
+	Line& line = lines[i];
+	line.occupied = true;
+	line.scratchTemp = false;
+	line.slot = slot;
+	line.registerClass = registerClass;
+	line.dirty = false;										// filled from the home, so still matches it
+	line.pinned = true;
+	line.lastUse = ++useClock;
+	cacheBackend.emitFill(registers[i], slot, registerClass);
+	return registers[i];
+}
+
+int RegisterCache::define(Int slot, RegisterClass registerClass) {
+	size_t count;
+	Line* lines = linesOf(registerClass, count);
+	const int* registers = registersOf(registerClass);
+	for (size_t i = 0; i < count; ++i) {
+		if (lines[i].occupied && !lines[i].scratchTemp && lines[i].slot == slot) {
+			lines[i].dirty = true;							// overwriting the resident value
+			lines[i].pinned = true;
+			lines[i].lastUse = ++useClock;
+			return registers[i];
+		}
+	}
+	const int i = acquire(registerClass);
+	Line& line = lines[i];
+	line.occupied = true;
+	line.scratchTemp = false;
+	line.slot = slot;
+	line.registerClass = registerClass;
+	line.dirty = true;										// defined value diverges from the home, and no store at the def
+	line.pinned = true;
+	line.lastUse = ++useClock;
+	return registers[i];									// no fill: we are about to overwrite it
+}
+
+int RegisterCache::scratch(RegisterClass registerClass) {
+	const int i = acquire(registerClass);
+	size_t count;
+	Line* lines = linesOf(registerClass, count);
+	Line& line = lines[i];
+	line.occupied = true;
+	line.scratchTemp = true;								// no home; never spilled, dropped at endInstruction
+	line.slot = 0;
+	line.registerClass = registerClass;
+	line.dirty = false;
+	line.pinned = true;
+	line.lastUse = ++useClock;
+	return registersOf(registerClass)[i];
+}
+
+void RegisterCache::endInstruction() {
+	for (size_t i = 0; i < registerPool.generalCount; ++i) {
+		if (generalLines[i].occupied) { if (generalLines[i].scratchTemp) { generalLines[i].occupied = false; } else { generalLines[i].pinned = false; } }
+	}
+	for (size_t i = 0; i < registerPool.floatCount; ++i) {
+		if (floatLines[i].occupied) { if (floatLines[i].scratchTemp) { floatLines[i].occupied = false; } else { floatLines[i].pinned = false; } }
+	}
+}
+
+void RegisterCache::spillDirtyResident() {
+	for (size_t i = 0; i < registerPool.generalCount; ++i) { spillLine(GENERAL_REGISTER, static_cast<int>(i)); }
+	for (size_t i = 0; i < registerPool.floatCount; ++i) { spillLine(FLOAT_REGISTER, static_cast<int>(i)); }
+}
+
+// spill all dirty (so the home image is current), then drop every mapping (the next block/read starts from memory).
+void RegisterCache::flushAndClear() {
+	spillDirtyResident();
+	for (size_t i = 0; i < registerPool.generalCount; ++i) { generalLines[i].occupied = false; }
+	for (size_t i = 0; i < registerPool.floatCount; ++i) { floatLines[i].occupied = false; }
+}
+
+void RegisterCache::barrier() { flushAndClear(); }
+
+void RegisterCache::invalidateAll() { flushAndClear(); }
+
+void RegisterCache::enterBlock() {
+	assertNoDirty();										// contract: a leader is reached only via a barrier, so nothing is dirty
+	flushAndClear();										// release: never drop a dirty line - spill it - even if the contract was broken
+}
+
+void RegisterCache::evict(int physicalRegister) {
+	for (size_t i = 0; i < registerPool.generalCount; ++i) {
+		if (registerPool.generalRegisters[i] == physicalRegister) {
+			if (generalLines[i].occupied) { assert(!generalLines[i].pinned); spillLine(GENERAL_REGISTER, static_cast<int>(i)); generalLines[i].occupied = false; }
+			return;
+		}
+	}
+	for (size_t i = 0; i < registerPool.floatCount; ++i) {
+		if (registerPool.floatRegisters[i] == physicalRegister) {
+			if (floatLines[i].occupied) { assert(!floatLines[i].pinned); spillLine(FLOAT_REGISTER, static_cast<int>(i)); floatLines[i].occupied = false; }
+			return;
+		}
+	}
+	// physicalRegister is not in either pool (e.g. a pinned VM-state register the cache never allocates): nothing to do.
+}
+
+bool RegisterCache::isResident(Int slot) const {
+	for (size_t i = 0; i < registerPool.generalCount; ++i) {
+		if (generalLines[i].occupied && !generalLines[i].scratchTemp && generalLines[i].slot == slot) { return true; }
+	}
+	for (size_t i = 0; i < registerPool.floatCount; ++i) {
+		if (floatLines[i].occupied && !floatLines[i].scratchTemp && floatLines[i].slot == slot) { return true; }
+	}
+	return false;
+}
+
+void RegisterCache::assertNoDirty() const {
+	for (size_t i = 0; i < registerPool.generalCount; ++i) { assert(!(generalLines[i].occupied && generalLines[i].dirty)); }
+	for (size_t i = 0; i < registerPool.floatCount; ++i) { assert(!(floatLines[i].occupied && floatLines[i].dirty)); }
 }
 
 /*

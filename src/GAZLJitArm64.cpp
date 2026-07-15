@@ -443,15 +443,65 @@ static void storeMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
 	if (wordIndex < 0x1000u) { e.strW(r, X2, wordIndex * 4u); }
 	else { matConst(e, W13, static_cast<Int>(wordIndex)); e.strWx(r, X2, W13); }
 }
+
+/*
+	v2.0 register cache (§5.7): the arm64 register pool + the fill/spill backend. The pool is caller-saved registers only
+	(so no prologue save is needed) and disjoint from the W9-W15 fixed scratch the not-yet-cached opcodes use. The cache
+	is flushed at every block boundary and before every uncached opcode, so a suspend point - a fuel-check leader or a
+	native call - always sees an empty cache; that is why these registers never need to survive suspend/resume. General
+	entries are X-registers, float entries are V-registers (a separate file), so the two never collide.
+*/
+static const int ARM64_GENERAL_POOL[] = { W5, W6, W7, W8 };
+static const int ARM64_FLOAT_POOL[] = { 16, 17, 18, 19, 20, 21, 22, 23 };	// V16-V23 (caller-saved; unused until floats are cached)
+
+namespace {
+class Arm64SlotBackend : public RegisterCacheBackend {
+	public:		Arm64SlotBackend(Arm64Emitter& emitter) : e(emitter) { }
+	public:		virtual void emitFill(int physicalRegister, Int slot, RegisterClass registerClass) {
+					const Reg r = static_cast<Reg>(physicalRegister);
+					if (registerClass == GENERAL_REGISTER) { loadSlot(e, r, slot); } else { loadSlotF(e, r, slot); }
+				}
+	public:		virtual void emitSpill(Int slot, int physicalRegister, RegisterClass registerClass) {
+					const Reg r = static_cast<Reg>(physicalRegister);
+					if (registerClass == GENERAL_REGISTER) { storeSlot(e, r, slot); } else { storeSlotF(e, r, slot); }
+				}
+	private:	Arm64Emitter& e;
+};
+}
+
+/*
+	Which opcodes route their operands through the RegisterCache (v2.0). Everything else barriers the cache first and
+	lowers exactly as v1 did, so cached and uncached opcodes coexist while cache coverage grows opcode by opcode. Grow
+	this set (and the matching cases below) as more opcodes are converted.
+*/
+static bool cacheLowered(Int op) {
+	switch (op) {
+		case OP_MOVE_VV: case OP_MOVE_VC: case OP_ABSI:
+		case OP_ADDI_VVV: case OP_ADDI_VVC:
+		case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV:
+		case OP_MULI_VVV: case OP_MULI_VVC:
+		case OP_ANDI_VVV: case OP_ANDI_VVC:
+		case OP_IORI_VVV: case OP_IORI_VVC:
+		case OP_XORI_VVV: case OP_XORI_VVC:
+			return true;
+		default:
+			return false;
+	}
+}
 static void loadOp(Arm64Emitter& e, Reg r, const Value& p, bool isConst) {
 	if (isConst) { matConst(e, r, p.i); } else { loadSlot(e, r, p.i); }
 }
-// `dst = s1 <op> s2`, where s2 is a const (imm-form) or slot; s1 is always a slot for VVV/VVC, a const for VCV.
-static void emitBinary(Arm64Emitter& e, void (Arm64Emitter::*op)(Reg, Reg, Reg), const Instruction& in, bool s1Const, bool s2Const) {
-	loadOp(e, W10, in.p1, s1Const);
-	loadOp(e, W11, in.p2, s2Const);
-	(e.*op)(W9, W10, W11);
-	storeSlot(e, W9, in.p0.i);
+// `dst = s1 <op> s2` through the register cache; s1 is a slot (VVV/VVC) or a const (VCV), s2 a const (VVC) or a slot.
+static void emitBinary(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitter::*op)(Reg, Reg, Reg), const Instruction& in, bool s1Const, bool s2Const) {
+	int a;
+	if (s1Const) { a = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(a), in.p1.i); }
+	else { a = cache.read(in.p1.i, GENERAL_REGISTER); }
+	int b;
+	if (s2Const) { b = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(b), in.p2.i); }
+	else { b = cache.read(in.p2.i, GENERAL_REGISTER); }
+	const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+	(e.*op)(static_cast<Reg>(d), static_cast<Reg>(a), static_cast<Reg>(b));
+	cache.endInstruction();
 }
 
 // Load a float operand into S-reg `s` (using `wtmp` for a const): a slot via ldur, or a float constant via fmov s,w.
@@ -544,12 +594,20 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		e.bind(sok);
 	}
 
+	// v2.0 register cache: cached opcodes route operands through it; every uncached opcode and every block boundary
+	// barriers it first (spill dirty + clear), so memory is interpreter-current at each safepoint.
+	Arm64SlotBackend slotBackend(e);
+	const RegisterPool registerPool = { ARM64_GENERAL_POOL, sizeof(ARM64_GENERAL_POOL) / sizeof(ARM64_GENERAL_POOL[0])
+			, ARM64_FLOAT_POOL, sizeof(ARM64_FLOAT_POOL) / sizeof(ARM64_FLOAT_POOL[0]) };
+	RegisterCache cache(registerPool, slotBackend);
+
 	// Pass 2 - emit.
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
-		if (mainline.count(j)) { e.bind(mainline[j]); }
+		if (mainline.count(j)) { cache.barrier(); e.bind(mainline[j]); }		// leader: flush the fall-through path, then start empty
 		if (loopWeight.count(j)) { e.subsImm(W3, W3, loopWeight[j]); e.bcond(MI, suspendL[j]); }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
+		if (!cacheLowered(op)) { cache.barrier(); }							// uncached opcode: lower it as v1 over an empty cache
 		switch (op) {
 			case OP_FUNC: continue;	// prologue stack/fuel check omitted for the prototype
 			case OP_RETU: {
@@ -613,8 +671,8 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 																	// block leader (jitFuelSafepoints inserts one right after every call) suspends immediately.
 				break;
 			}
-			case OP_MOVE_VC: matConst(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); break;
-			case OP_MOVE_VV: loadSlot(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); break;
+			case OP_MOVE_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); matConst(e, static_cast<Reg>(d), in.p1.i); cache.endInstruction(); break; }
+			case OP_MOVE_VV: { const int s = cache.read(in.p1.i, GENERAL_REGISTER); const int d = cache.define(in.p0.i, GENERAL_REGISTER); e.mov(static_cast<Reg>(d), static_cast<Reg>(s)); cache.endInstruction(); break; }
 			case OP_PEEK_VC: loadMemConst(e, W9, static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); storeSlot(e, W9, in.p0.i); break;
 			case OP_POKE_CV: loadSlot(e, W9, in.p1.i); storeMemConst(e, W9, static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); break;
 			case OP_POKE_CC: matConst(e, W9, in.p1.i); storeMemConst(e, W9, static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); break;
@@ -712,13 +770,13 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.bind(cont);
 				break;
 			}
-			case OP_ADDI_VVV: emitBinary(e, &Arm64Emitter::add, in, false, false); break;
-			case OP_ADDI_VVC: emitBinary(e, &Arm64Emitter::add, in, false, true); break;
-			case OP_SUBI_VVV: emitBinary(e, &Arm64Emitter::sub, in, false, false); break;
-			case OP_SUBI_VVC: emitBinary(e, &Arm64Emitter::sub, in, false, true); break;
-			case OP_SUBI_VCV: emitBinary(e, &Arm64Emitter::sub, in, true, false); break;
-			case OP_MULI_VVV: emitBinary(e, &Arm64Emitter::mul, in, false, false); break;
-			case OP_MULI_VVC: emitBinary(e, &Arm64Emitter::mul, in, false, true); break;
+			case OP_ADDI_VVV: emitBinary(e, cache, &Arm64Emitter::add, in, false, false); break;
+			case OP_ADDI_VVC: emitBinary(e, cache, &Arm64Emitter::add, in, false, true); break;
+			case OP_SUBI_VVV: emitBinary(e, cache, &Arm64Emitter::sub, in, false, false); break;
+			case OP_SUBI_VVC: emitBinary(e, cache, &Arm64Emitter::sub, in, false, true); break;
+			case OP_SUBI_VCV: emitBinary(e, cache, &Arm64Emitter::sub, in, true, false); break;
+			case OP_MULI_VVV: emitBinary(e, cache, &Arm64Emitter::mul, in, false, false); break;
+			case OP_MULI_VVC: emitBinary(e, cache, &Arm64Emitter::mul, in, false, true); break;
 			case OP_DIVI_VVV: emitDivMod(e, false, in, 0, exitLabel); break;
 			case OP_DIVI_VVC: emitDivMod(e, false, in, 1, exitLabel); break;
 			case OP_DIVI_VCV: emitDivMod(e, false, in, 2, exitLabel); break;
@@ -735,8 +793,13 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_SHRU_VVC: emitShift(e, 2, in, 1); break;
 			case OP_SHRU_VCV: emitShift(e, 2, in, 2); break;
 			case OP_ABSI: {
-				loadSlot(e, W10, in.p1.i); e.asrImm(W11, W10, 31); e.eor(W9, W10, W11); e.sub(W9, W9, W11);
-				storeSlot(e, W9, in.p0.i);
+				const int s = cache.read(in.p1.i, GENERAL_REGISTER);
+				const int t = cache.scratch(GENERAL_REGISTER);					// sign mask (v >> 31)
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);			// (v ^ mask) - mask = |v|
+				e.asrImm(static_cast<Reg>(t), static_cast<Reg>(s), 31);
+				e.eor(static_cast<Reg>(d), static_cast<Reg>(s), static_cast<Reg>(t));
+				e.sub(static_cast<Reg>(d), static_cast<Reg>(d), static_cast<Reg>(t));
+				cache.endInstruction();
 				break;
 			}
 			case OP_ABSF: loadSlotF(e, S0, in.p1.i); e.fabsS(S0, S0); storeSlotF(e, S0, in.p0.i); break;	// V0 = fabs(V1)
@@ -761,12 +824,12 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.fmulS(S0, S0, S1); storeSlotF(e, S0, in.p0.i);
 				break;
 			}
-			case OP_ANDI_VVV: emitBinary(e, &Arm64Emitter::and_, in, false, false); break;
-			case OP_ANDI_VVC: emitBinary(e, &Arm64Emitter::and_, in, false, true); break;
-			case OP_IORI_VVV: emitBinary(e, &Arm64Emitter::orr, in, false, false); break;
-			case OP_IORI_VVC: emitBinary(e, &Arm64Emitter::orr, in, false, true); break;
-			case OP_XORI_VVV: emitBinary(e, &Arm64Emitter::eor, in, false, false); break;
-			case OP_XORI_VVC: emitBinary(e, &Arm64Emitter::eor, in, false, true); break;
+			case OP_ANDI_VVV: emitBinary(e, cache, &Arm64Emitter::and_, in, false, false); break;
+			case OP_ANDI_VVC: emitBinary(e, cache, &Arm64Emitter::and_, in, false, true); break;
+			case OP_IORI_VVV: emitBinary(e, cache, &Arm64Emitter::orr, in, false, false); break;
+			case OP_IORI_VVC: emitBinary(e, cache, &Arm64Emitter::orr, in, false, true); break;
+			case OP_XORI_VVV: emitBinary(e, cache, &Arm64Emitter::eor, in, false, false); break;
+			case OP_XORI_VVC: emitBinary(e, cache, &Arm64Emitter::eor, in, false, true); break;
 			case OP_FORi_VVB: case OP_FORi_VCB: {
 				loadSlot(e, W10, in.p0.i); e.addImm(W10, W10, 1); storeSlot(e, W10, in.p0.i);
 				loadOp(e, W11, in.p1, op == OP_FORi_VCB);
