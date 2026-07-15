@@ -26,6 +26,7 @@
 
 #include <cstddef>
 #include <cstring>				// memset / memcpy — the jitAvailable() probe
+#include <cstdio>				// std::snprintf — the unlowerable-opcode diagnostic
 #include <set>					// jitFuelSafepoints — block-leader set
 
 #if defined(_WIN32)
@@ -145,21 +146,28 @@ void JitModule::swap(JitModule& other) {
 }
 
 /*
-	JitCompiler::compile — the template method shared by every backend. Lower the program via the backend's emit(); if a
-	function used an opcode the backend can't lower, leave `out` empty and report false (the caller uses the interpreter).
-	Otherwise construct the owning JitModule (which makes the code executable, throwing JitException if the host refuses)
-	and swap it into `out`.
+	A backend met a finalized opcode it does not cover. That is a programmer error — the backend must lower all 91
+	finalized opcodes — so assert first (loud during development). Asserts vanish in release, so also throw: a shipped
+	build then degrades to the interpreter instead of running past a gap in the switch. Never returns.
 */
-bool JitCompiler::compile(const Program& program, JitModule& out) {
+void throwUnlowerableOpcode(Int opcode) {
+	assert(0 && "JIT backend does not cover a finalized opcode (backend bug)");
+	char message[64];
+	std::snprintf(message, sizeof(message), "JIT: backend cannot lower finalized opcode 0x%X", static_cast<unsigned>(opcode));
+	throw JitException(message);
+}
+
+/*
+	JitCompiler::compile — the template method shared by every backend. Lower the program via the backend's emit() (which
+	throws if it meets an opcode it fails to cover — a backend bug, not a routine outcome), then construct the owning
+	JitModule (which makes the code executable, throwing JitException if the host refuses) and swap it into `out`. On any
+	throw `out` is left untouched.
+*/
+void JitCompiler::compile(const Program& program, JitModule& out) {
 	EmittedModule emitted;
-	if (!emit(program, emitted)) {								// an opcode this backend can't lower: not JIT-able
-		JitModule empty;
-		out.swap(empty);										// honor the contract: `out` left empty
-		return false;
-	}
+	emit(program, emitted);
 	JitModule built(emitted);									// acquires the executable page; throws JitException on host denial
 	out.swap(built);
-	return true;
 }
 
 /*
@@ -187,6 +195,17 @@ Offsets JitProcessor::layout() {
 #	pragma GCC diagnostic pop
 #endif
 	return o;
+}
+
+/*
+	Bind the compiled module into this engine + zero the native-call scratch. Shared by both constructors (C++03 has no
+	delegation). Precondition: the module holds compiled code — an empty module has no dispatcher to run.
+*/
+void JitProcessor::bindModule(const JitModule& module) {
+	assert(module.isCompiled() && "JitProcessor requires a compiled JitModule");
+	savedDsp = 0; nativeFn = 0; nativeAfter = 0;
+	funcEntries = module.entryTable();
+	jitDispatch = module.dispatchEntry();
 }
 
 /*

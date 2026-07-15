@@ -499,7 +499,7 @@ static void emitDivMod(Arm64Emitter& e, bool rem, const Instruction& in, int for
 	are pre-created (for direct calls); `entryOffset[selfOrdinal]` is set to this function's native word offset. Returns
 	false on an unsupported opcode.
 */
-static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
+static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
 		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount, Label exitLabel) {
 	UInt retIndex = funcIndex;
 	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
@@ -808,7 +808,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 			}
 			case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB: case OP_EQUI_VVB: case OP_EQUI_VCB:
 			case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB: case OP_NEQI_VVB: case OP_NEQI_VCB: {
-				Cond c; bool c0const, c1const;
+				Cond c = LT; bool c0const = false, c1const = false;			// (the sub-switch is exhaustive; its default throws)
 				switch (op) {
 					case OP_LSSI_VVB: c = LT; c0const = false; c1const = false; break;
 					case OP_LSSI_VCB: c = LT; c0const = false; c1const = true; break;
@@ -820,7 +820,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 					case OP_NLSI_CVB: c = GE; c0const = true; c1const = false; break;
 					case OP_NEQI_VVB: c = NE; c0const = false; c1const = false; break;
 					case OP_NEQI_VCB: c = NE; c0const = false; c1const = true; break;
-					default: return false;							// unsupported opcode
+					default: throwUnlowerableOpcode(in.opcode);		// unreachable: the outer case only enters here for these
 				}
 				loadOp(e, W10, in.p0, c0const);
 				loadOp(e, W11, in.p1, c1const);
@@ -828,7 +828,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
-			default: return false;									// unsupported opcode → caller falls back to the interpreter
+			default: throwUnlowerableOpcode(op);					// a finalized opcode the backend must cover (a bug, never routine)
 		}
 	}
 
@@ -840,7 +840,6 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 		e.adr(X9, mainline[it->first]); e.strX(X9, X0, o.resume);		// RESUME = this block's hot mainline
 		e.movn(W0, 0); e.b(exitLabel);									// TIME_OUT
 	}
-	return true;
 }
 
 /*
@@ -867,10 +866,10 @@ static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel)
 	processor instance. nativeJitCompiler() is the host entry point — this TU is linked only on arm64 hosts.
 */
 class JitCompilerArm64 : public JitCompiler {
-	protected:	virtual bool emit(const Program& program, EmittedModule& out);
+	protected:	virtual void emit(const Program& program, EmittedModule& out);
 };
 
-bool JitCompilerArm64::emit(const Program& program, EmittedModule& out) {
+void JitCompilerArm64::emit(const Program& program, EmittedModule& out) {
 	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
 	Arm64Emitter e;
 	std::vector<Label> entryLabels(program.functionCount);
@@ -878,10 +877,8 @@ bool JitCompilerArm64::emit(const Program& program, EmittedModule& out) {
 	for (UInt k = 0; k < program.functionCount; ++k) { entryLabels[k] = e.newLabel(); }
 	Label exitLabel = e.newLabel();					// the one dispatcher EXIT; every segment terminal branches here (§5.4 (b))
 	for (UInt ord = 0; ord < program.functionCount; ++ord) {
-		if (!lowerFunction(e, program.code, program.memory, program.functionTable[ord], o, entryLabels, entryOffset, ord
-				, program.functionCount, exitLabel)) {
-			return false;							// unsupported opcode → caller falls back to the interpreter
-		}
+		lowerFunction(e, program.code, program.memory, program.functionTable[ord], o, entryLabels, entryOffset, ord
+				, program.functionCount, exitLabel);
 	}
 	const size_t dispatchOffset = emitDispatcher(e, o, exitLabel);
 	e.finalize();
@@ -891,7 +888,6 @@ bool JitCompilerArm64::emit(const Program& program, EmittedModule& out) {
 	out.entryByteOffsets.resize(program.functionCount);
 	for (UInt ord = 0; ord < program.functionCount; ++ord) { out.entryByteOffsets[ord] = entryOffset[ord] * 4; }
 	out.dispatchByteOffset = dispatchOffset * 4;
-	return true;
 }
 
 JitCompiler& nativeJitCompiler() {					// arm64 host backend (stateless — shared instance)

@@ -121,6 +121,14 @@ const UInt MAX_BLOCK_WEIGHT = 64;				// fuel-check granularity: the host must gr
 void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, const Value* memory
 		, UInt maxBlockWeight, std::map<UInt, UInt>& weight);
 
+/*
+	A backend hit a finalized opcode it does not cover — a programmer error (every backend must lower all 91 finalized
+	opcodes), not a runtime condition. asserts (loud in debug) and, because asserts vanish in release, also throws
+	GAZL::JitException so a release build degrades to the interpreter rather than emitting wrong code. Never returns; the
+	backends' switch defaults call it. Defined in GAZLJit.cpp.
+*/
+void throwUnlowerableOpcode(Int opcode);
+
 // Byte offsets of the machine state a segment/dispatcher touches, within the (subclass) engine.
 struct Offsets {
 	uint32_t dsp, mb, fuel, ipsp, resume, saveddsp, natives, nativefn, funcentries, memsize, rwmemsize, dsend, ipsend,
@@ -169,7 +177,7 @@ struct EmittedModule {
 	dispatcher entry, and the ordinal→entry table the machine code indexes. Immutable and shareable, so one module can
 	back many JitProcessors, on many threads (§5.6).
 
-	RAII value type. A default-constructed module is empty (compiled() == false) and owns nothing. JitCompiler::compile
+	RAII value type. A default-constructed module is empty (isCompiled() == false) and owns nothing. JitCompiler::compile
 	builds a filled module and hands it over via swap() — there is no half-built state and nothing sets its fields from
 	outside. It owns a unique executable page, so it is non-copyable; transfer ownership with swap(). It must outlive every
 	JitProcessor bound to it.
@@ -183,7 +191,7 @@ class JitModule {
 		~JitModule();													// frees the page (a no-op when empty)
 		void swap(JitModule& other);									// O(1) — exchange ownership
 
-		bool compiled() const { return dispatch != 0; }					// holds a runnable artifact (a value-state query)
+		bool isCompiled() const { return dispatch != 0; }				// holds a runnable artifact (a value-state query)
 		size_t codeWords() const { return ownedWords; }					// emitted 32-bit words (for --jit-stats)
 		void* dispatchEntry() const { return dispatch; }					// native dispatcher entry (JitProcessor binds this)
 		void* const* entryTable() const { return entries.empty() ? 0 : &entries[0]; }	// ordinal -> entry; the machine code indexes it
@@ -206,22 +214,6 @@ inline void swap(JitModule& a, JitModule& b) { a.swap(b); }				// ADL swap
 	run()/enterCall(), so it is a polymorphic drop-in — the host loop is identical to the interpreter's.
 */
 class JitProcessor : public Processor {
-	private:
-		Value* savedDsp;					// dsp saved across a native call (the C1 window is transient)
-		void* nativeFn;						// resolved native fn pointer, blr'd by the native dispatcher
-		void* nativeAfter;					// after-call continuation (dispatcher sets RESUME to it on native OK)
-		void* const* funcEntries;			// ordinal -> native entry (bound from the JitModule)
-		void* jitDispatch;					// the native dispatcher trampoline (bound from the JitModule)
-
-		// Bind the compiled module + zero the native-call scratch. Shared by both constructors (C++03 has no delegation).
-		// Precondition: the module holds compiled code (an empty module has no dispatcher to run).
-		void bindModule(const JitModule& module) {
-			assert(module.compiled() && "JitProcessor requires a compiled JitModule");
-			savedDsp = 0; nativeFn = 0; nativeAfter = 0;
-			funcEntries = module.entryTable();
-			jitDispatch = module.dispatchEntry();
-		}
-
 	public:
 		/*
 			Two constructors, mirroring the base Processor's two: the higher-level one (data stack = the whole span
@@ -264,6 +256,17 @@ class JitProcessor : public Processor {
 			typedef int (*Disp)(JitProcessor*);
 			return static_cast<Status>(reinterpret_cast<Disp>(jitDispatch)(this));
 		}
+
+	private:
+		// Bind the compiled module + zero the native-call scratch. Shared by both constructors (C++03 has no delegation).
+		// Precondition: the module holds compiled code (an empty module has no dispatcher to run). Defined in GAZLJit.cpp.
+		void bindModule(const JitModule& module);
+
+		Value* savedDsp;					// dsp saved across a native call (the C1 window is transient)
+		void* nativeFn;						// resolved native fn pointer, blr'd by the native dispatcher
+		void* nativeAfter;					// after-call continuation (dispatcher sets RESUME to it on native OK)
+		void* const* funcEntries;			// ordinal -> native entry (bound from the JitModule)
+		void* jitDispatch;					// the native dispatcher trampoline (bound from the JitModule)
 };
 
 /*
@@ -276,15 +279,16 @@ class JitProcessor : public Processor {
 class JitCompiler {
 	public:		virtual ~JitCompiler() { }
 
-				// Compile `program` into `out` (transferred in via swap). Returns true and leaves `out` compiled() on
-				// success; returns false and leaves `out` empty if a function uses an opcode this backend can't lower.
-				// Throws GAZL::JitException if the host refuses executable memory (call jitAvailable() first to avoid it).
-				bool compile(const Program& program, JitModule& out);
+				// Compile `program` into `out` (transferred in via swap); on return `out` is compiled(). A backend covers
+				// every finalized opcode, so lowering a valid finalized program always succeeds — the only failures are
+				// exceptional and both throw GAZL::JitException (leaving `out` unchanged): the host refusing executable
+				// memory (call jitAvailable() first to avoid it), or a finalized opcode left unlowered (a backend bug).
+				void compile(const Program& program, JitModule& out);
 
 	protected:	// The one arch-specific step: lower `program` into `out` (emitted code words + per-ordinal entry byte
-				// offsets + dispatcher byte offset). One virtual call per compile, never per instruction. Returns false
-				// on an opcode the backend can't lower.
-				virtual bool emit(const Program& program, EmittedModule& out) = 0;
+				// offsets + dispatcher byte offset). One virtual call per compile, never per instruction. Throws
+				// GAZL::JitException on an opcode it fails to cover — a bug, since every finalized opcode is lowerable.
+				virtual void emit(const Program& program, EmittedModule& out) = 0;
 };
 
 // The host-native JIT compiler — a shared, stateless instance, defined in whichever backend .cpp the build links.

@@ -368,7 +368,7 @@ static void emitBranchFloat(X64Emitter& emitter, int kind, const Instruction& in
 	(suspend → cold stub). GAZL calls/RETU tail-branch directly (the ipStack holds the return address, §5.7.5); native
 	calls run inline; every terminal path sets eax and jumps to the shared `epilogue`. Returns false on an unlowerable opcode.
 */
-static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart,
+static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart,
 		const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue, UInt functionCount) {
 	UInt endIndex = funcStart;
 	while (code[endIndex].opcode != OP_RETU) { ++endIndex; }
@@ -704,7 +704,7 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 			case OP_NEQI_VVB: emitBranch(emitter, CC_NE, in, j, false, false, labels); break;
 			case OP_NEQI_VCB: emitBranch(emitter, CC_NE, in, j, false, true, labels); break;
 
-			default: return false;									// unsupported opcode -> caller falls back to the interpreter
+			default: throwUnlowerableOpcode(op);					// a finalized opcode the backend must cover (a bug, never routine)
 		}
 	}
 	// Cold section: one suspend stub per block leader — writeback the pins to ctx, set RESUME = this block's mainline head
@@ -717,8 +717,6 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 		emitter.leaRip(RAX, labels[head]); emitter.storeQ(CONTEXT, offsets.resume, RAX);		// RESUME = this block's mainline head
 		emitter.movImm(RAX, static_cast<uint32_t>(TIME_OUT)); emitter.jmp(epilogue);
 	}
-
-	return true;
 }
 
 /*
@@ -749,10 +747,10 @@ static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets, Label 
 	is the host entry point — this TU is linked only on x86-64 hosts.
 */
 class JitCompilerX64 : public JitCompiler {
-	protected:	virtual bool emit(const Program& program, EmittedModule& out);
+	protected:	virtual void emit(const Program& program, EmittedModule& out);
 };
 
-bool JitCompilerX64::emit(const Program& program, EmittedModule& out) {
+void JitCompilerX64::emit(const Program& program, EmittedModule& out) {
 	const Offsets offsets = JitProcessor::layout();				// the run-state ABI, obtained without an engine
 	X64Emitter emitter;
 	std::vector<Label> entryLabels(program.functionCount);
@@ -761,10 +759,8 @@ bool JitCompilerX64::emit(const Program& program, EmittedModule& out) {
 
 	for (UInt ordinal = 0; ordinal < program.functionCount; ++ordinal) {
 		emitter.bind(entryLabels[ordinal]);
-		if (!lowerFunction(emitter, program.code, program.memory, program.functionTable[ordinal], offsets, entryLabels
-				, epilogue, program.functionCount)) {
-			return false;										// unsupported opcode -> caller falls back to the interpreter
-		}
+		lowerFunction(emitter, program.code, program.memory, program.functionTable[ordinal], offsets, entryLabels
+				, epilogue, program.functionCount);
 	}
 	// Shared exit `epilogue` (bound inside emitDispatcher): every terminal path — suspend, OK return, or trap — jumps
 	// there with its Status in eax; the dispatcher restores the frame and returns to the host.
@@ -781,7 +777,6 @@ bool JitCompilerX64::emit(const Program& program, EmittedModule& out) {
 		out.entryByteOffsets[ordinal] = static_cast<size_t>(emitter.labelOffset(entryLabels[ordinal]));
 	}
 	out.dispatchByteOffset = dispatcherOffset;
-	return true;
 }
 
 JitCompiler& nativeJitCompiler() {							// x86-64 host backend (stateless — shared instance)

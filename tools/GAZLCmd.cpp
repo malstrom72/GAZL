@@ -440,22 +440,18 @@ int main(int argc, const char* argv[]) {
 				const Program program = { code, functionCount, functionTable, memory };
 				const auto t0 = std::chrono::steady_clock::now();
 				try {
-					if (nativeJitCompiler().compile(program, module)) {		// the host backend; no engine involved
-						const auto t1 = std::chrono::steady_clock::now();
-						if (jitStats) {						// machine-readable line for the benchmark harness
-							const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-							std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords() * 4)
-									<< " funcs=" << functionCount << std::endl;
-						} else {
-							std::cerr << "JIT: compiled " << functionCount << " function(s) to native code." << std::endl;
-						}
-						proc.reset(new JitProcessor(module, codeSize, code, functionCount, functionTable
-								, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
+					nativeJitCompiler().compile(program, module);		// the host backend; compiles a valid program or throws
+					const auto t1 = std::chrono::steady_clock::now();
+					if (jitStats) {							// machine-readable line for the benchmark harness
+						const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords() * 4)
+								<< " funcs=" << functionCount << std::endl;
 					} else {
-						std::cerr << "JIT: a function used an opcode the backend can't lower; using the interpreter."
-								<< std::endl;
+						std::cerr << "JIT: compiled " << functionCount << " function(s) to native code." << std::endl;
 					}
-				} catch (const JitException& x) {			// host refused executable memory despite jitAvailable()
+					proc.reset(new JitProcessor(module, codeSize, code, functionCount, functionTable
+							, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
+				} catch (const JitException& x) {			// host refused executable memory, or an opcode the backend can't lower
 					std::cerr << "JIT: " << x.what() << "; using the interpreter." << std::endl;
 				}
 			}
