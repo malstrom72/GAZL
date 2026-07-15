@@ -860,12 +860,13 @@ static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel)
 }
 
 /*
-	JitCompilerArm64::emit (declared in GAZLJitArm64.h) - lowers a whole finalized program to AArch64 machine code (the
-	substrate above: Arm64Emitter + lowerFunction + emitDispatcher) and fills an EmittedModule; the shared
-	JitCompiler::compile then makes it executable. Targets the static JitProcessor::layout() ABI; never touches a processor
-	instance. (NativeJitCompiler's constructor is defined at the bottom of this file, guarded to arm64 hosts.)
+	JitCompilerArm64::compile (declared in GAZLJitArm64.h) - lowers a whole finalized program to AArch64 machine code (the
+	substrate above: Arm64Emitter + lowerFunction + emitDispatcher) into an EmittedModule, then makes it executable by
+	handing it to JitModule and swaps that into `out` (the last three lines are the same in the x86-64 backend). Targets
+	the static JitProcessor::layout() ABI; never touches a processor instance.
 */
-void JitCompilerArm64::emit(const AssembledProgram& program, EmittedModule& out) {
+void JitCompilerArm64::compile(const AssembledProgram& program, JitModule& out) {
+	EmittedModule emitted;
 	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
 	Arm64Emitter e;
 	std::vector<Label> entryLabels(program.functionCount);
@@ -880,17 +881,19 @@ void JitCompilerArm64::emit(const AssembledProgram& program, EmittedModule& out)
 	e.finalize();
 	// AArch64 emits 32-bit instruction words directly; entry/dispatch offsets are in words, scaled to bytes for the module.
 	const size_t words = e.wordCount();
-	out.code.assign(e.code(), e.code() + words);
-	out.entryByteOffsets.resize(program.functionCount);
-	for (UInt ord = 0; ord < program.functionCount; ++ord) { out.entryByteOffsets[ord] = entryOffset[ord] * 4; }
-	out.dispatchByteOffset = dispatchOffset * 4;
+	emitted.code.assign(e.code(), e.code() + words);
+	emitted.entryByteOffsets.resize(program.functionCount);
+	for (UInt ord = 0; ord < program.functionCount; ++ord) { emitted.entryByteOffsets[ord] = entryOffset[ord] * 4; }
+	emitted.dispatchByteOffset = dispatchOffset * 4;
+	JitModule built(emitted);						// makes the code executable (throws JitException on host denial)
+	out.swap(built);
 }
 
-// NativeJitCompiler's constructor creates this backend when arm64 is the host arch; on other hosts it compiles out (the
-// x86-64 TU provides it there), so both backends may link together without a duplicate. A client that wants the arm64
-// backend regardless of host names JitCompilerArm64 directly instead.
+// NativeJitCompiler compiles with this backend when arm64 is the host arch; on other hosts it compiles out (the x86-64 TU
+// provides it there), so both backends may link together without a duplicate. A client that wants the arm64 backend
+// regardless of host names JitCompilerArm64 directly instead.
 #if defined(__aarch64__) || defined(_M_ARM64)
-NativeJitCompiler::NativeJitCompiler() : backend(new JitCompilerArm64) { }
+void NativeJitCompiler::compile(const AssembledProgram& program, JitModule& out) { JitCompilerArm64().compile(program, out); }
 #endif
 
 } // namespace GAZL

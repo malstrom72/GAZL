@@ -161,19 +161,6 @@ void JitCompiler::throwUnlowerableOpcode(Int opcode) {
 }
 
 /*
-	JitCompiler::compile - the template method shared by every backend. Lower the program via the backend's emit() (which
-	throws if it meets an opcode it fails to cover - a backend bug, not a routine outcome), then construct the owning
-	JitModule (which makes the code executable, throwing JitException if the host refuses) and swap it into `out`. On any
-	throw `out` is left untouched.
-*/
-void JitCompiler::compile(const AssembledProgram& program, JitModule& out) {
-	EmittedModule emitted;
-	emit(program, emitted);
-	JitModule built(emitted);									// acquires the executable page; throws JitException on host denial
-	out.swap(built);
-}
-
-/*
 	The field ABI JitCompiler bakes into the machine code - byte offsets of the run-state fields within a JitProcessor.
 	Arch-neutral (offsetof on JitProcessor fields), so it lives here rather than in a backend .cpp. Static /
 	instance-independent: computed with offsetof, so no engine is needed. offsetof on this polymorphic type is
@@ -316,19 +303,6 @@ bool jitAvailable() {
 	}
 	return cached != 0;
 #endif
-}
-
-/*
-	NativeJitCompiler - the backend-agnostic parts. The constructor (which creates the host-arch backend) lives in the
-	backend .cpp the host selects; the destructor frees it and compile() forwards through the JitCompiler base, so both
-	are arch-neutral and live here.
-*/
-NativeJitCompiler::~NativeJitCompiler() {
-	delete backend;
-}
-
-void NativeJitCompiler::compile(const AssembledProgram& program, JitModule& out) {
-	backend->compile(program, out);
 }
 
 } // namespace GAZL

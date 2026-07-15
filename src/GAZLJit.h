@@ -238,18 +238,13 @@ class JitProcessor : public Processor {
 class JitCompiler {
 	public:		virtual ~JitCompiler() { }
 
-				// Compile `program` into `out` (transferred in via swap); on return `out` is compiled(). A backend covers
-				// every finalized opcode, so lowering a valid finalized program always succeeds - the only failures are
-				// exceptional and both throw GAZL::JitException (leaving `out` unchanged): the host refusing executable
-				// memory (call jitAvailable() first to avoid it), or a finalized opcode left unlowered (a backend bug).
-				void compile(const AssembledProgram& program, JitModule& out);
+				// Compile `program` into `out` (transferred in via swap); on return `out` is isCompiled(). A backend
+				// covers every finalized opcode, so lowering a valid finalized program always succeeds - the only
+				// failures are exceptional and both throw GAZL::JitException (leaving `out` unchanged): the host refusing
+				// executable memory (call jitAvailable() first to avoid it), or a finalized opcode left unlowered (a bug).
+				virtual void compile(const AssembledProgram& program, JitModule& out) = 0;
 
-	protected:	// The one arch-specific step: lower `program` into `out` (emitted code words + per-ordinal entry byte
-				// offsets + dispatcher byte offset). One virtual call per compile, never per instruction. Throws
-				// GAZL::JitException on an opcode it fails to cover - a bug, since every finalized opcode is lowerable.
-				virtual void emit(const AssembledProgram& program, EmittedModule& out) = 0;
-
-				// Arch-neutral lowering helpers for the backend subclasses (defined in GAZLJit.cpp).
+	protected:	// Arch-neutral lowering helpers for the backend subclasses (defined in GAZLJit.cpp).
 				// Fuel safepoints for one function: the basic-block leaders (function entry, branch/SWCH targets, the
 				// instruction after any branch/GOTO/SWCH/CALL, with long straight runs split so none exceeds the internal
 				// fuel-check granularity), filled into `weight` as leader -> charge; each backend emits a fuel check
@@ -264,20 +259,13 @@ class JitCompiler {
 };
 
 /*
-	The host-native JIT compiler: owns the backend matching the host arch (JitCompilerArm64 / JitCompilerX64) and forwards
-	compile() to it. Construct one wherever you need to compile - each instance owns its own backend, so instances (and
-	threads) are independent and a backend is free to hold per-compile state. The backend is created in whichever backend
-	.cpp the host arch selects, so both backends can still link together; if the host-matching backend was not built the
-	constructor is absent (name the concrete backend directly instead). Non-copyable (it owns the backend).
+	The host-native JIT compiler: a JitCompiler whose compile() lowers with the backend matching the host arch
+	(JitCompilerArm64 / JitCompilerX64). Construct one wherever you need to compile; it holds no state, so instances (and
+	threads) are independent. compile() is defined in whichever backend .cpp the host arch selects, so both backends can
+	still link together; if the host-matching backend was not built it is absent (name the concrete backend directly).
 */
-class NativeJitCompiler {
-	public:		NativeJitCompiler();				// creates the host backend (defined in the linked backend .cpp)
-				~NativeJitCompiler();
-				void compile(const AssembledProgram& program, JitModule& out);
-
-	private:	JitCompiler* backend;				// owned; freed in the destructor
-				NativeJitCompiler(const NativeJitCompiler&);
-				NativeJitCompiler& operator=(const NativeJitCompiler&);
+class NativeJitCompiler : public JitCompiler {
+	public:		virtual void compile(const AssembledProgram& program, JitModule& out);	// lowers with the host backend
 };
 
 } // namespace GAZL

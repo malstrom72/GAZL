@@ -172,11 +172,11 @@ class X64Emitter {
 
 /*
 	The x86-64 JIT backend. JitCompilerX64 drives the X64Emitter above through the lowering pass in GAZLJitX64.cpp,
-	supplying JitCompiler::emit(). Declared here so it is nameable (e.g. a codegen test that emits and inspects a backend's
+	implementing JitCompiler::compile(). Declared here so it is nameable (e.g. a codegen test that emits and inspects a backend's
 	bytes). NativeJitCompiler (in GAZLJit.h) creates this backend on an x86-64 host; its constructor lives in GAZLJitX64.cpp.
 */
 class JitCompilerX64 : public JitCompiler {
-	protected:	virtual void emit(const AssembledProgram& program, EmittedModule& out);
+	public:		virtual void compile(const AssembledProgram& program, JitModule& out);
 	private:	static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart
 						, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue
 						, UInt functionCount);	// calls the inherited fuel/opcode helpers

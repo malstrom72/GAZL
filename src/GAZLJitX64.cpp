@@ -740,13 +740,14 @@ static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets, Label 
 }
 
 /*
-	JitCompilerX64::emit (declared in GAZLJitX64.h) - lowers a whole finalized program to x86-64 machine code and fills an
-	EmittedModule; the shared JitCompiler::compile then makes it executable. Lower every function into one buffer, append
-	one shared epilogue, append the dispatcher, then record the byte stream + ordinal->entry byte offsets. Throws (via
-	lowerFunction) on any finalized opcode the backend fails to cover. (NativeJitCompiler's constructor is defined at the bottom of this
-	file, guarded to x86-64 hosts.)
+	JitCompilerX64::compile (declared in GAZLJitX64.h) - lowers a whole finalized program to x86-64 machine code into an
+	EmittedModule, then makes it executable by handing it to JitModule and swaps that into `out` (the last three lines are
+	the same in the arm64 backend). Lower every function into one buffer, append one shared epilogue, append the
+	dispatcher, then record the byte stream + ordinal->entry byte offsets. Throws (via lowerFunction) on any finalized
+	opcode the backend fails to cover.
 */
-void JitCompilerX64::emit(const AssembledProgram& program, EmittedModule& out) {
+void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
+	EmittedModule emitted;
 	const Offsets offsets = JitProcessor::layout();				// the run-state ABI, obtained without an engine
 	X64Emitter emitter;
 	std::vector<Label> entryLabels(program.functionCount);
@@ -766,20 +767,22 @@ void JitCompilerX64::emit(const AssembledProgram& program, EmittedModule& out) {
 	// x86-64 is a byte stream; the module holds 32-bit words, so round up and zero-pad the last partial word. Entry and
 	// dispatch offsets are already byte offsets.
 	const size_t byteCount = emitter.size();
-	out.code.assign((byteCount + 3) / 4, 0);
-	if (byteCount != 0) { std::memcpy(&out.code[0], emitter.code(), byteCount); }
-	out.entryByteOffsets.resize(program.functionCount);
+	emitted.code.assign((byteCount + 3) / 4, 0);
+	if (byteCount != 0) { std::memcpy(&emitted.code[0], emitter.code(), byteCount); }
+	emitted.entryByteOffsets.resize(program.functionCount);
 	for (UInt ordinal = 0; ordinal < program.functionCount; ++ordinal) {
-		out.entryByteOffsets[ordinal] = static_cast<size_t>(emitter.labelOffset(entryLabels[ordinal]));
+		emitted.entryByteOffsets[ordinal] = static_cast<size_t>(emitter.labelOffset(entryLabels[ordinal]));
 	}
-	out.dispatchByteOffset = dispatcherOffset;
+	emitted.dispatchByteOffset = dispatcherOffset;
+	JitModule built(emitted);									// makes the code executable (throws JitException on host denial)
+	out.swap(built);
 }
 
-// NativeJitCompiler's constructor creates this backend when x86-64 is the host arch; on other hosts it compiles out (the
-// arm64 TU provides it there), so both backends may link together without a duplicate. A client that wants the x86-64
-// backend regardless of host names JitCompilerX64 directly instead.
+// NativeJitCompiler compiles with this backend when x86-64 is the host arch; on other hosts it compiles out (the arm64 TU
+// provides it there), so both backends may link together without a duplicate. A client that wants the x86-64 backend
+// regardless of host names JitCompilerX64 directly instead.
 #if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
-NativeJitCompiler::NativeJitCompiler() : backend(new JitCompilerX64) { }
+void NativeJitCompiler::compile(const AssembledProgram& program, JitModule& out) { JitCompilerX64().compile(program, out); }
 #endif
 
 } // namespace GAZL
