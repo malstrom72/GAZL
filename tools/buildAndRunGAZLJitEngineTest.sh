@@ -5,7 +5,7 @@ set -e -o pipefail -u
 # Processor drives Emitter-produced native code over shared machine state, and the test checks full-run equivalence,
 # suspend-in-JIT/resume-in-interpreter, and trap-as-status against the interpreter. AArch64 only.
 #
-# Links the shipped VM (src/GAZL.cpp) READ-ONLY — compiled, not modified. Standalone by design (not wired into
+# Links the shipped VM (src/GAZL.cpp) READ-ONLY - compiled, not modified. Standalone by design (not wired into
 # build.sh). clang++ direct, like the benchmarks/jit/ scripts. Override the compiler with CPP_COMPILER.
 
 cd "$(dirname "$0")"/..

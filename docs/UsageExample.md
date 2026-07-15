@@ -34,7 +34,7 @@ Hello, world!
 ## 3. Re-run without recompiling (optional)
 
 `hello.gazl` is a self-contained assembly file, so once it is compiled you can run it again at any
-time with just `GAZLCmd` — no need to invoke the compiler:
+time with just `GAZLCmd` - no need to invoke the compiler:
 
 ```bash
 ./output/GAZLCmd hello.gazl main

@@ -22,12 +22,12 @@
 */
 
 #include "GAZLJit.h"
-#include "GAZLJitMem.h"			// makeExecutable / freeExecutable — the JitModule owns the executable page
+#include "GAZLJitMem.h"			// makeExecutable / freeExecutable - the JitModule owns the executable page
 
 #include <cstddef>
-#include <cstring>				// memset / memcpy — the jitAvailable() probe
-#include <cstdio>				// std::snprintf — the unlowerable-opcode diagnostic
-#include <set>					// jitFuelSafepoints — block-leader set
+#include <cstring>				// memset / memcpy - the jitAvailable() probe
+#include <cstdio>				// std::snprintf - the unlowerable-opcode diagnostic
+#include <set>					// jitFuelSafepoints - block-leader set
 
 #if defined(_WIN32)
 #	ifndef WIN32_LEAN_AND_MEAN
@@ -35,7 +35,7 @@
 #	endif
 #	include <windows.h>			// __try/__except fault guard for the probe
 #else
-#	include <csignal>			// sigaction — POSIX fault guard for the probe
+#	include <csignal>			// sigaction - POSIX fault guard for the probe
 #	include <csetjmp>			// sigsetjmp / siglongjmp
 #endif
 
@@ -66,7 +66,7 @@ bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& targe
 }
 
 /*
-	Fuel safepoints — see GAZLJit.h. Leaders partition the function into basic blocks; charging each block's static
+	Fuel safepoints - see GAZLJit.h. Leaders partition the function into basic blocks; charging each block's static
 	weight once, at its leader, makes the JIT's total fuel spend equal the interpreter's per-instruction spend. The
 	maxBlockWeight cap splits any long straight run so a block always fits one fuel grant (§5.5).
 */
@@ -88,9 +88,9 @@ void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, c
 		} else if (op == OP_CALL_CVC || op == OP_CALL_VVC || op == OP_CALL_NVC) {
 			// A call ends a block, so the instruction right after it is a leader with its own fuel check. For CALL_NVC
 			// this leader is REQUIRED, not just tidy block structure: a native may yield by resetTimeOut(0) + return OK
-			// (the standard cooperative-yield convention — Permut8/Prawn sleep() and launch() do exactly this). Each
+			// (the standard cooperative-yield convention - Permut8/Prawn sleep() and launch() do exactly this). Each
 			// backend reloads the fuel pin from ctx immediately after the native returns, so THIS safepoint is what makes
-			// a zeroed fuel budget suspend on the very next instruction — zero slack, matching the interpreter's
+			// a zeroed fuel budget suspend on the very next instruction - zero slack, matching the interpreter's
 			// per-instruction suspend point. Remove it and a yielding native would keep running until the next natural
 			// block leader (e.g. a loop head), silently breaking real-time cooperative scheduling. Do not drop it.
 			if (j + 1 <= endIndex) { leaders.insert(j + 1); }
@@ -113,7 +113,7 @@ void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, c
 }
 
 /*
-	JitModule — the RAII owner of the executable page: the constructor makes the emitted code executable and takes
+	JitModule - the RAII owner of the executable page: the constructor makes the emitted code executable and takes
 	ownership (acquisition == initialization), then materializes the ordinal->entry table + dispatcher entry. makeExecutable
 	is the last thing that acquires, and everything after it is plain pointer arithmetic that cannot throw, so a partially
 	built module never leaks a page. Throws JitException if the host refuses. The destructor frees the page (a no-op when
@@ -146,8 +146,8 @@ void JitModule::swap(JitModule& other) {
 }
 
 /*
-	A backend met a finalized opcode it does not cover. That is a programmer error — the backend must lower all 91
-	finalized opcodes — so assert first (loud during development). Asserts vanish in release, so also throw: a shipped
+	A backend met a finalized opcode it does not cover. That is a programmer error - the backend must lower all 91
+	finalized opcodes - so assert first (loud during development). Asserts vanish in release, so also throw: a shipped
 	build then degrades to the interpreter instead of running past a gap in the switch. Never returns.
 */
 void throwUnlowerableOpcode(Int opcode) {
@@ -158,8 +158,8 @@ void throwUnlowerableOpcode(Int opcode) {
 }
 
 /*
-	JitCompiler::compile — the template method shared by every backend. Lower the program via the backend's emit() (which
-	throws if it meets an opcode it fails to cover — a backend bug, not a routine outcome), then construct the owning
+	JitCompiler::compile - the template method shared by every backend. Lower the program via the backend's emit() (which
+	throws if it meets an opcode it fails to cover - a backend bug, not a routine outcome), then construct the owning
 	JitModule (which makes the code executable, throwing JitException if the host refuses) and swap it into `out`. On any
 	throw `out` is left untouched.
 */
@@ -171,7 +171,7 @@ void JitCompiler::compile(const AssembledProgram& program, JitModule& out) {
 }
 
 /*
-	The field ABI JitCompiler bakes into the machine code — byte offsets of the run-state fields within a JitProcessor.
+	The field ABI JitCompiler bakes into the machine code - byte offsets of the run-state fields within a JitProcessor.
 	Arch-neutral (offsetof on JitProcessor fields), so it lives here rather than in a backend .cpp. Static /
 	instance-independent: computed with offsetof, so no engine is needed. offsetof on this polymorphic type is
 	universally correct (single inheritance, fixed layout); the one -Winvalid-offsetof is silenced locally. Non-virtual,
@@ -199,7 +199,7 @@ Offsets JitProcessor::layout() {
 
 /*
 	Bind the compiled module into this engine + zero the native-call scratch. Shared by both constructors (C++03 has no
-	delegation). Precondition: the module holds compiled code — an empty module has no dispatcher to run.
+	delegation). Precondition: the module holds compiled code - an empty module has no dispatcher to run.
 */
 void JitProcessor::bindModule(const JitModule& module) {
 	assert(module.isCompiled() && "JitProcessor requires a compiled JitModule");
@@ -209,11 +209,11 @@ void JitProcessor::bindModule(const JitModule& module) {
 }
 
 /*
-	jitAvailable() — the two-layer capability probe declared in GAZLJit.h. Layer 1 is makeExecutable() itself (a policy
+	jitAvailable() - the two-layer capability probe declared in GAZLJit.h. Layer 1 is makeExecutable() itself (a policy
 	denial such as a missing macOS allow-jit entitlement or Windows Arbitrary Code Guard fails the syscalls). Layer 2 runs
 	a position-independent stub under a fault guard, so a page that mapped but cannot execute turns into `false` instead of
-	a crash — and the stub does a real JIT->C round-trip (it calls a C function through the platform convention and returns
-	its result), so a broken native calling convention — the exact crossing CALL_NVC bakes in — also fails the probe rather
+	a crash - and the stub does a real JIT->C round-trip (it calls a C function through the platform convention and returns
+	its result), so a broken native calling convention - the exact crossing CALL_NVC bakes in - also fails the probe rather
 	than Permut8. The stub is one word-aligned block (makeExecutable works in 32-bit words); it is architecture- and
 	ABI-specific but tiny, so it lives here rather than in a backend. Both shipping targets are little-endian.
 */
@@ -221,13 +221,13 @@ namespace {
 
 // The native ABI the JIT bakes into CALL_NVC: a plain C function of one pointer, returning a single-register Status.
 // Pinned so a future change to either (a wider Status, a by-value struct return, a non-default convention) can't
-// silently break the hand-emitted call/return. The runtime counterpart — an actual JIT->C round-trip — is the probe stub.
+// silently break the hand-emitted call/return. The runtime counterpart - an actual JIT->C round-trip - is the probe stub.
 typedef Status (*JitNativeSignatureCheck)(Processor*);
 #if __cplusplus >= 201103L
 static_assert(sizeof(Status) <= sizeof(void*), "JIT CALL_NVC assumes a native's Status returns in one integer register");
 #endif
 
-// The probe stub: `uint32_t stub(ProbeCallee callee, const void* arg)` — move callee out of arg0, move arg into arg0,
+// The probe stub: `uint32_t stub(ProbeCallee callee, const void* arg)` - move callee out of arg0, move arg into arg0,
 // call it through the platform's native convention, hand back its return. Exercises the exact JIT->C crossing CALL_NVC
 // bakes in (arg in the ABI arg register, the call/return, frame alignment + Win64 shadow space).
 #if defined(__aarch64__) || defined(_M_ARM64)
@@ -252,7 +252,7 @@ const uint32_t PROBE_STUB[] = {			// sub rsp,8 ; mov rax,rdi ; mov rdi,rsi ; cal
 typedef uint32_t (*ProbeCallee)(const void*);
 typedef uint32_t (*ProbeFunc)(ProbeCallee, const void*);
 // The C side of the round-trip: read the 32-bit input and add 0x1111, so a passing probe proves the call really ran (not
-// a passthrough) and the arg pointer crossed intact. probeCallee(&PROBE_INPUT) == 0xC0DE — the value the stub returns.
+// a passthrough) and the arg pointer crossed intact. probeCallee(&PROBE_INPUT) == 0xC0DE - the value the stub returns.
 uint32_t probeCallee(const void* arg) { return *static_cast<const uint32_t*>(arg) + 0x1111u; }
 const uint32_t PROBE_INPUT = 0xAFCDu;							// 0xAFCD + 0x1111 == 0xC0DE
 #endif

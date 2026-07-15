@@ -23,7 +23,7 @@
 
 #include "GAZLJit.h"
 #include "GAZLJitArm64.h"
-#include "GAZLJitMem.h"			// makeExecutable() — platform-specific backend, architecture-neutral
+#include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
 
 #include <stdint.h>
 #include <cassert>
@@ -409,7 +409,7 @@ static void writebackState(Arm64Emitter& e, const Offsets& o) {
 }
 static void matConst(Arm64Emitter& e, Reg r, Int v) { e.movImm32(r, static_cast<uint32_t>(v)); }
 // Frame slots are Value-indices off dsp (x1). ldur/stur reach ±64 words; far slots (big frames / LOCA arrays) fall back
-// to a register-offset load (index in W13 — kept distinct from the W9..W12 operand scratches). See task #23.
+// to a register-offset load (index in W13 - kept distinct from the W9..W12 operand scratches). See task #23.
 static bool slotNear(Int slot) { return slot >= -64 && slot <= 63; }
 static void loadSlot(Arm64Emitter& e, Reg r, Int slot) {
 	if (slotNear(slot)) { e.ldurW(r, X1, static_cast<int>(slot * 4)); }
@@ -428,7 +428,7 @@ static void storeSlotF(Arm64Emitter& e, Reg s, Int slot) {
 	else { matConst(e, W13, slot); e.strSxs(s, X1, W13); }
 }
 // PEEK/POKE at a compile-time-constant memory word index (off memoryBase, X2). The scaled imm12 form reaches word
-// index 4095 (16 KB in); past that — large globals/consts such as audio tables — materialize the index and use the
+// index 4095 (16 KB in); past that - large globals/consts such as audio tables - materialize the index and use the
 // scaled register-offset form, mirroring loadSlot/storeSlot. W13 is the dedicated addressing scratch (kept distinct
 // from the W9..W12 operand scratches), so callers may still hold a value in W9..W12 across these.
 static void loadMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
@@ -504,7 +504,7 @@ static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 	UInt retIndex = funcIndex;
 	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
 
-	// Pass 1 — fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight. Every leader
+	// Pass 1 - fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight. Every leader
 	// is a resumable point, so each gets a mainline label (hot entry + branch + resume target), a reload trampoline, and a
 	// suspend stub. Charging per block (not just loop heads) makes fuel spend ≈ the interpreter's, so straight-line and
 	// recursive code yields on time too.
@@ -515,7 +515,7 @@ static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 		mainline[it->first] = e.newLabel(); suspendL[it->first] = e.newLabel();
 	}
 
-	// Function entry (hot — reached by a tail-branch from a caller or by the dispatcher after it reloaded the pins, so
+	// Function entry (hot - reached by a tail-branch from a caller or by the dispatcher after it reloaded the pins, so
 	// state is already live). FUNC prologue: dsp += localsSize.
 	entryOffset[selfOrdinal] = e.wordCount();
 	e.bind(entryLabels[selfOrdinal]);
@@ -532,7 +532,7 @@ static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 		e.bind(sok);
 	}
 
-	// Pass 2 — emit.
+	// Pass 2 - emit.
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
 		if (mainline.count(j)) { e.bind(mainline[j]); }
 		if (loopWeight.count(j)) { e.subsImm(W3, W3, loopWeight[j]); e.bcond(MI, suspendL[j]); }
@@ -547,7 +547,7 @@ static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				e.cbnzX(X1, notNative);
 				e.subImmX(X4, X4, 16); e.ldrX(X1, X4, 8);			// native/top return: pop again for the true dsp
 				writebackState(e, o);
-				e.movz(W0, 0); e.b(exitLabel);						// OK — terminal (return to host)
+				e.movz(W0, 0); e.b(exitLabel);						// OK - terminal (return to host)
 				e.bind(notNative);
 				e.br(X9);											// GAZL return: tail-branch to the continuation (state live)
 				break;
@@ -596,7 +596,7 @@ static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				e.addImmX(X0, X19, 0); reloadState(e, o); e.ldrX(X1, X0, o.saveddsp);	// native clobbered the pins: restore ctx + reload (dsp = original)
 				e.cmpImm(W12, 0); e.bcond(EQ, okStatus);			// OK → continue inline
 				e.mov(W0, W12); e.b(exitLabel);						// nonzero (BLOCK_RETRY / TIME_OUT / trap): return to host; RESUME = call site so it re-issues
-				e.bind(okStatus);									// OK: continue (state live). w3 now holds ctx.fuel — a native
+				e.bind(okStatus);									// OK: continue (state live). w3 now holds ctx.fuel - a native
 																	// that yielded via resetTimeOut(0) leaves it 0, and the MANDATORY fuel check at the next
 																	// block leader (jitFuelSafepoints inserts one right after every call) suspends immediately.
 				break;
@@ -777,7 +777,7 @@ static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				e.adr(X10, caseBase);								// base of the branch table (below)
 				e.lslImm(W11, W9, 2); e.addX(X10, X10, X11);		// += index * 4  (W-write zero-extends into X11)
 				e.br(X10);
-				e.bind(caseBase);									// sz consecutive `b target` — br lands on the index'th
+				e.bind(caseBase);									// sz consecutive `b target` - br lands on the index'th
 				for (UInt k = 0; k < sz; ++k) {
 					const UInt t = static_cast<UInt>(static_cast<Int>(j) + memory[tbl + k].i);
 					e.b(mainline[t]);
@@ -860,10 +860,10 @@ static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel)
 }
 
 /*
-	JitCompilerArm64::emit (declared in GAZLJitArm64.h) — lowers a whole finalized program to AArch64 machine code (the
+	JitCompilerArm64::emit (declared in GAZLJitArm64.h) - lowers a whole finalized program to AArch64 machine code (the
 	substrate above: Arm64Emitter + lowerFunction + emitDispatcher) and fills an EmittedModule; the shared
 	JitCompiler::compile then makes it executable. Targets the static JitProcessor::layout() ABI; never touches a processor
-	instance. nativeJitCompiler() is the host entry point — this TU is linked only on arm64 hosts.
+	instance. nativeJitCompiler() is the host entry point - this TU is linked only on arm64 hosts.
 */
 void JitCompilerArm64::emit(const AssembledProgram& program, EmittedModule& out) {
 	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
@@ -886,7 +886,7 @@ void JitCompilerArm64::emit(const AssembledProgram& program, EmittedModule& out)
 	out.dispatchByteOffset = dispatchOffset * 4;
 }
 
-JitCompiler& nativeJitCompiler() {					// arm64 host backend (stateless — shared instance)
+JitCompiler& nativeJitCompiler() {					// arm64 host backend (stateless - shared instance)
 	static JitCompilerArm64 compiler;
 	return compiler;
 }

@@ -24,7 +24,7 @@ if [ "$host" = "arm64" ] || [ "$host" = "aarch64" ]; then
 fi
 
 mkdir -p output
-# GAZLJitX64.cpp now hosts JitCompiler::compile, so it references JitProcessor::layout() and makeExecutable() — link the
+# GAZLJitX64.cpp now hosts JitCompiler::compile, so it references JitProcessor::layout() and makeExecutable() - link the
 # JIT driver + JIT-mem backend even though this slice test drives its own standalone lowering.
 "$CPP" $opt $archflag -std=c++11 -I src \
 	src/GAZLJitX64.cpp \

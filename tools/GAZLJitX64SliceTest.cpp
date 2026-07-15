@@ -28,7 +28,7 @@
 	const/var-indexed memory, GETL/SETL, ADRL, COPY, direct/native/indirect calls, and SWCH. Sibling of the arm64
 	GAZLJitSliceTest; built -arch x86_64. src/GAZL.* are used READ-ONLY through the public API.
 
-	Register roles (SysV): each function is a `Status fn(Value* dsp, Value* mem)` — rdi=dsp-in, rsi=mem-in on entry,
+	Register roles (SysV): each function is a `Status fn(Value* dsp, Value* mem)` - rdi=dsp-in, rsi=mem-in on entry,
 	pinned into callee-saved rbx=dsp (advanced by FUNC) and r14=memory base; scratch ecx/edx (+ xmm0/1) per instruction;
 	eax returns the Status. GAZL calls are ordinary C calls (the C stack is the ipStack); one shared aligned epilogue.
 */
@@ -384,7 +384,7 @@ static void emitShift(X64Emitter& e, const Instruction& in, int kind, bool s1Con
 	e.store(DSP, in.p0.i * 4, RAX);
 }
 
-// if (a <cc> b) goto target — a = p0, b = p1 in the const modes named by the opcode.
+// if (a <cc> b) goto target - a = p0, b = p1 in the const modes named by the opcode.
 static void emitBranch(X64Emitter& e, Cond cc, const Instruction& in, UInt j, bool c0Const, bool c1Const, std::map<UInt, Label>& lbl) {
 	toReg(e, A, in.p0, c0Const);
 	toReg(e, B, in.p1, c1Const);
@@ -437,7 +437,7 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 	}
 
 	e.push(DSP); e.push(MEM);					// SysV prologue: save callee-saved pins
-	e.addImmQ(RSP, 0xFFFFFFF8u);				// sub rsp, 8 — keep rsp 16-aligned at inner call sites
+	e.addImmQ(RSP, 0xFFFFFFF8u);				// sub rsp, 8 - keep rsp 16-aligned at inner call sites
 	e.movQ(DSP, RDI); e.movQ(MEM, RSI);			// dsp = arg0, memory base = arg1
 	e.addImmQ(DSP, static_cast<uint32_t>(code[funcStart].p0.i) * 4u);	// FUNC: advance to this frame
 

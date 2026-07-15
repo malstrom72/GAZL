@@ -204,7 +204,7 @@ class Symbols {
 struct Operator;
 
 /*
-	One assembled program: the buffers the Assembler filled plus the sizes it computed — everything a Processor or the JIT
+	One assembled program: the buffers the Assembler filled plus the sizes it computed - everything a Processor or the JIT
 	needs to run it, in one value. Static and read-only after assembly, so a single AssembledProgram is shareable across
 	many Processors / threads (§5.6). A non-owning view: the code / functionTable / memory buffers it points at are owned by
 	whoever allocated them (typically the caller who passed them to the Assembler) and must outlive it. `code` /

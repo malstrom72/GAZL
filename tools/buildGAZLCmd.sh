@@ -2,7 +2,7 @@
 set -e -o pipefail -u
 cd "$(dirname "$0")"
 mode=${1:-release}
-target=${2:-native}		# native (host) | x64 — x64 cross-builds -arch x86_64 (runs under Rosetta on Apple Silicon)
+target=${2:-native}		# native (host) | x64 - x64 cross-builds -arch x86_64 (runs under Rosetta on Apple Silicon)
 mkdir -p ../output
 
 # update unit test include

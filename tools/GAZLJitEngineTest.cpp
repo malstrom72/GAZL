@@ -22,27 +22,27 @@
 */
 
 /*
-	C3-full + C4 prototype — the JIT as a `Processor` SUBCLASS sharing one machine state with the interpreter, exactly
+	C3-full + C4 prototype - the JIT as a `Processor` SUBCLASS sharing one machine state with the interpreter, exactly
 	the engine factoring decided in docs/JitCompilerResearch.md §5.1. This settles the question raised during C3-minimal:
 	`Processor`'s runtime state is `protected`, so a subclass reaches `dsp`/`ip`/`ipsp`/`clockCyclesLeft`/`memoryBase`
-	directly — NO edit to src/GAZL.* is needed to build a dispatcher or write resume state. (src/GAZL.* is still compiled
+	directly - NO edit to src/GAZL.* is needed to build a dispatcher or write resume state. (src/GAZL.* is still compiled
 	read-only here; the only VM edits the real design wants are making `run()`/`enterCall()` virtual + a `RESUME` field,
-	so the *host* can pick an engine through a `Processor*` — orthogonal to this prototype.)
+	so the *host* can pick an engine through a `Processor*` - orthogonal to this prototype.)
 
 	`ProtoEngine` drives Arm64Emitter-produced native code over the *same* `Processor` state the interpreter uses, and this test
 	demonstrates the three claims C3/C4 exist to prove (docs/JitCompilerResearch.md §5.2, §5.4, §5.5, §5.7.5):
 
-	  1. C3 — run a whole GAZL function through the dispatcher; the final observable memory image is BYTE-IDENTICAL to a
+	  1. C3 - run a whole GAZL function through the dispatcher; the final observable memory image is BYTE-IDENTICAL to a
 	     pure interpreter run.
-	  2. C4 suspend/resume + engine interchange — run with tiny fuel so the per-block fuel check suspends the JIT at a
+	  2. C4 suspend/resume + engine interchange - run with tiny fuel so the per-block fuel check suspends the JIT at a
 	     basic-block boundary; because v1 keeps every local memory-resident, the suspended state is interpreter-identical,
 	     so the *interpreter* resumes from the recorded GAZL ip and finishes to the same byte-identical memory.
-	  3. C4 trap — a checked operation that fails returns a `Status` in the return register (no signal handler, no
+	  3. C4 trap - a checked operation that fails returns a `Status` in the return register (no signal handler, no
 	     longjmp); the dispatcher propagates it like any other status.
 
 	Scope note: the emitted kernel is a hand lowering (v1, memory-resident, §5.8) of the assembled function, faithful
 	instruction-for-instruction so both engines write the same cells. The single static safepoint (the loop head) lets
-	the dispatcher recover the resume ip without the emitted code materializing a 64-bit pointer — that generality
+	the dispatcher recover the resume ip without the emitted code materializing a 64-bit pointer - that generality
 	(a per-block RESUME continuation, register spills for v2) is later work. AArch64 only. Exits non-zero on any mismatch.
 */
 
@@ -100,7 +100,7 @@ static void* mapExecutable(const uint32_t* words, size_t wordCount) {
 }
 
 // GAZL finalized opcodes (OP_FUNC/OP_RETU/OP_MOVE_VC/OP_PEEK_VC/OP_POKE_CV/OP_ADDI_VVV/OP_FORi_VVB) come from GAZLJit.h
-// (namespace GAZL) now that the JIT is graduated — no local copy needed.
+// (namespace GAZL) now that the JIT is graduated - no local copy needed.
 
 // The native ABI for the emitted kernel (all caller-saved so the leaf needs no register save/restore; the pinned
 // callee-saved x19/x20/x21/w22 homes of the real design are the in-VM dispatcher's job, §5.8):
@@ -261,13 +261,13 @@ static void emitKernel(Arm64Emitter& e, const KernelLayout& L) {
 	e.strW(W9, X1, L.gOutOff);
 	e.movz(W0, 0);					// [7] RETU -> OK
 	e.ret();
-	e.bind(timeout);				// safepoint stub: single static resume point (the loop head) — dispatcher sets ip
+	e.bind(timeout);				// safepoint stub: single static resume point (the loop head) - dispatcher sets ip
 	e.movn(W0, 0);					// TIME_OUT (-1)
 	e.ret();
 	e.finalize();
 }
 
-// A trap kernel: force a bounds check to fail and return the trap Status in the return register — no signal, no
+// A trap kernel: force a bounds check to fail and return the trap Status in the return register - no signal, no
 // longjmp (§5.4). x2 = limit; a deliberately out-of-range index takes the b.hs to the trap stub.
 static void emitTrap(Arm64Emitter& e) {
 	Label trap = e.newLabel();
@@ -324,7 +324,7 @@ int main() {
 	KernelLayout layout;
 	Pointer gInPtr = NULL_POINTER, gOutPtr = NULL_POINTER;
 	if (!assembleKernel(globals, layout, gInPtr, gOutPtr)) {
-		std::printf("  setup failed — aborting\n");
+		std::printf("  setup failed - aborting\n");
 		return 1;
 	}
 	const Pointer mainPtr = globals.findFunction("main");
@@ -336,7 +336,7 @@ int main() {
 	emitTrap(et);
 	void* trapCode = mapExecutable(et.code(), et.wordCount());
 	if (kernelCode == nullptr || trapCode == nullptr) {
-		std::printf("  W^X allocation failed — aborting\n");
+		std::printf("  W^X allocation failed - aborting\n");
 		return 1;
 	}
 	KernelFn jitKernel = reinterpret_cast<KernelFn>(kernelCode);
@@ -344,7 +344,7 @@ int main() {
 
 	const int inputs[] = { 0, 1, 2, 10, 100, 1000 };
 
-	// 1. C3 — full JIT run, memory byte-identical to the interpreter.
+	// 1. C3 - full JIT run, memory byte-identical to the interpreter.
 	std::printf("[C3] full JIT run vs interpreter (whole memory image):\n");
 	for (size_t k = 0; k < sizeof(inputs) / sizeof(*inputs); ++k) {
 		const int n = inputs[k];
@@ -367,7 +367,7 @@ int main() {
 		}
 	}
 
-	// 2. C4 — suspend in JIT on tiny fuel, resume in the INTERPRETER, still byte-identical.
+	// 2. C4 - suspend in JIT on tiny fuel, resume in the INTERPRETER, still byte-identical.
 	std::printf("\n[C4] suspend in JIT (tiny fuel) -> resume in interpreter -> vs full interpreter:\n");
 	for (size_t k = 0; k < sizeof(inputs) / sizeof(*inputs); ++k) {
 		const int n = inputs[k];
@@ -380,7 +380,7 @@ int main() {
 		eng.enterCall(mainPtr);
 		Status s = eng.dispatch(jitKernel, 8, layout);		// 8 fuel: suspends after a few blocks (n>=5 cases)
 		bool suspended = (s == TIME_OUT);
-		while (s == TIME_OUT) {								// resume in the OTHER engine — the interpreter
+		while (s == TIME_OUT) {								// resume in the OTHER engine - the interpreter
 			eng.resetTimeOut(0x7FFFFFFF);
 			s = eng.run();
 		}
@@ -395,7 +395,7 @@ int main() {
 		}
 	}
 
-	// 3. C4 — a trap returns a Status through the return register (no signal handler).
+	// 3. C4 - a trap returns a Status through the return register (no signal handler).
 	std::printf("\n[C4] trap returns a Status (no signal/longjmp):\n");
 	{
 		const int status = jitTrap(nullptr, nullptr, /*limit*/ 100);

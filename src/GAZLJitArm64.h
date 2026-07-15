@@ -26,7 +26,7 @@
 	tiny one-method-per-instruction encoder with one canonical encoding form per operation: it only produces bytes and does
 	not touch the interpreter. Verified against a clang-assembled oracle. The arch-neutral JIT API (JitModule /
 	JitProcessor / JitCompiler) lives in GAZLJit.h; the arm64 lowering pass + native dispatcher that drive this emitter,
-	plus JitCompilerArm64 (declared below), live in GAZLJitArm64.cpp. The diff test still links GAZL.cpp — the backend TU's
+	plus JitCompilerArm64 (declared below), live in GAZLJitArm64.cpp. The diff test still links GAZL.cpp - the backend TU's
 	lowering throws GAZL::JitException, whose base vtable is anchored there. See docs/JitEmitterHandoff.md.
 */
 

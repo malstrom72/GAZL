@@ -34,7 +34,7 @@ namespace GAZL {
 /*
 	x86-64 general-purpose register, by 4-bit hardware encoding. The 32-bit view (`eax`..`r15d`) and the 64-bit view
 	(`rax`..`r15`) share the encoding; the emitter method (or a REX.W bit) picks the width. Numbers 8..15 (`r8`..`r15`)
-	need a REX prefix. `RSP`/`R12` as a memory base force a SIB byte; `RBP`/`R13` force a displacement — the memory
+	need a REX prefix. `RSP`/`R12` as a memory base force a SIB byte; `RBP`/`R13` force a displacement - the memory
 	operand encoder handles both. SysV AMD64 (Darwin/Linux): int args RDI,RSI,RDX,RCX,R8,R9; return RAX; callee-saved
 	RBX,RBP,R12-R15.
 */
@@ -50,7 +50,7 @@ enum Reg {
 enum Cond {
 	CC_E = 0x4, CC_NE = 0x5, CC_L = 0xC, CC_GE = 0xD, CC_LE = 0xE, CC_G = 0xF,
 	CC_B = 0x2, CC_AE = 0x3, CC_BE = 0x6, CC_A = 0x7, CC_P = 0xA, CC_NP = 0xB,	// P/NP = parity (unordered) for float compares
-	CC_S = 0x8																	// sign (SF=1, result negative) — the fuel-timeout check
+	CC_S = 0x8																	// sign (SF=1, result negative) - the fuel-timeout check
 };
 
 // A branch target; `id` indexes the emitter's label table (-1 = invalid).
@@ -84,7 +84,7 @@ class X64Emitter {
 		void or_(Reg rd, Reg rs);								// `or rd, rs`
 		void xor_(Reg rd, Reg rs);								// `xor rd, rs`
 		void cmp(Reg ra, Reg rb);								// `cmp ra, rb` (sets flags)
-		void cmpQ(Reg ra, Reg rb);								// `cmp ra, rb` (64-bit; pointer compares — ipsp/dsend)
+		void cmpQ(Reg ra, Reg rb);								// `cmp ra, rb` (64-bit; pointer compares - ipsp/dsend)
 		void addImm(Reg rd, uint32_t imm);						// `add rd, imm32` (81 /0)
 		void subImm(Reg rd, uint32_t imm);						// `sub rd, imm32` (81 /5)
 		void cmpImm(Reg ra, uint32_t imm);						// `cmp ra, imm32` (81 /7)
@@ -132,10 +132,10 @@ class X64Emitter {
 		void ret();												// `ret` (C3)
 		void jmp(Label target);									// `jmp rel32` (E9)
 		void jcc(Cond cc, Label target);						// `j<cc> rel32` (0F 8x)
-		void callRel(Label target);								// `call rel32` (E8) — GAZL->GAZL direct call
-		void callReg(Reg r);									// `call r` (FF /2) — indirect / native via a materialized pointer
-		void leaRip(Reg rd, Label target);						// `lea rd, [rip + target]` (48 8D /r rel32) — jump-table base
-		void jmpReg(Reg r);										// `jmp r` (FF /4) — computed jump into the SWCH table
+		void callRel(Label target);								// `call rel32` (E8) - GAZL->GAZL direct call
+		void callReg(Reg r);									// `call r` (FF /2) - indirect / native via a materialized pointer
+		void leaRip(Reg rd, Label target);						// `lea rd, [rip + target]` (48 8D /r rel32) - jump-table base
+		void jmpReg(Reg r);										// `jmp r` (FF /4) - computed jump into the SWCH table
 
 		// --- labels / fixups ---
 		Label newLabel();										// allocate an unbound label

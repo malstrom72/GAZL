@@ -96,7 +96,7 @@ static std::string ishift(const Instruction& in, const char* op, bool cast, bool
 	const std::string b = s2Const ? I(in.p2.i & 31) : ("(" + islot(in.p2) + " & 31)");
 	return islot(in.p0) + " = (Int)(" + a + " " + op + " " + b + ");";
 }
-// Compare-branch: `if (a <cmp> b) goto L;` — a/b in the const mode named by the opcode.
+// Compare-branch: `if (a <cmp> b) goto L;` - a/b in the const mode named by the opcode.
 static std::string ibranch(const Instruction& in, UInt j, const char* cmp, bool c0Const, bool c1Const) {
 	const std::string a = c0Const ? I(in.p0.i) : islot(in.p0);
 	const std::string b = c1Const ? I(in.p1.i) : islot(in.p1);

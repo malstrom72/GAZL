@@ -27,7 +27,7 @@
 	fuel / suspend-resume).
 
 	It emits real kernels through the Arm64Emitter, copies the bytes into W^X executable memory, invalidates the icache, and
-	*calls* them — reusing the allocation + flush strategy proven GO by JIT spike A1 (see spike/jit-probe/,
+	*calls* them - reusing the allocation + flush strategy proven GO by JIT spike A1 (see spike/jit-probe/,
 	docs/JitSpikeA1-Results.md): on Apple Silicon, `mmap(MAP_JIT)` + a per-thread `pthread_jit_write_protect_np` toggle
 	+ `sys_icache_invalidate`; on Linux arm64, `mmap(RW)` → `mprotect(RX)` → `__builtin___clear_cache`. The emitted
 	results are compared against independent C reference implementations. Exits non-zero on any mismatch.
@@ -116,7 +116,7 @@ static int refSumTo(int n) {
 	return result;
 }
 
-// --- kernel 2: bench_v2 (benchmarks/jit/JitBenchA3.arm64.S) — LCG sum with the per-block fuel check ---
+// --- kernel 2: bench_v2 (benchmarks/jit/JitBenchA3.arm64.S) - LCG sum with the per-block fuel check ---
 
 static void emitBenchV2(Arm64Emitter& e) {
 	e.movz(W9, 12345);						// acc

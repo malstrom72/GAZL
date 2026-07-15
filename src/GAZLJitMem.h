@@ -22,8 +22,8 @@
 */
 
 /*
-	Executable-memory (W^X) interface for the JIT. Exactly one implementation is compiled per target OS — the build
-	selects GAZLJitMemMacOS.cpp / GAZLJitMemPosix.cpp / GAZLJitMemWindows.cpp — so this stays free of #ifdef branches.
+	Executable-memory (W^X) interface for the JIT. Exactly one implementation is compiled per target OS - the build
+	selects GAZLJitMemMacOS.cpp / GAZLJitMemPosix.cpp / GAZLJitMemWindows.cpp - so this stays free of #ifdef branches.
 	Isolating the per-OS JIT-hardening story here (Apple's pthread_jit_write_protect toggle, POSIX mprotect, Windows
 	VirtualAlloc/FlushInstructionCache) keeps it from leaking into the architecture backends, which vary on a different
 	axis (see GAZLJit.h). This is platform-specific but architecture-neutral.
@@ -39,7 +39,7 @@ namespace GAZL {
 
 /*
 	Copy `wordCount` machine words into a fresh page, make it executable (honoring W^X), flush the i-cache, and return
-	the entry pointer — or null on failure.
+	the entry pointer - or null on failure.
 */
 void* makeExecutable(const uint32_t* words, size_t wordCount);
 

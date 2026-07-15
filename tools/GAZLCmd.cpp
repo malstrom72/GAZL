@@ -35,9 +35,9 @@
 #include <algorithm>
 #include <memory>
 #include "../src/GAZL.h"
-#include "../src/GAZLCpp.h"			// translateToCpp — portable GAZL->C++ source (--emit-cpp)
+#include "../src/GAZLCpp.h"			// translateToCpp - portable GAZL->C++ source (--emit-cpp)
 #ifdef GAZL_JIT
-	#include "../src/GAZLJit.h"		// JitProcessor + JitCompiler — arm64 only; enabled by the build on AArch64 hosts
+	#include "../src/GAZLJit.h"		// JitProcessor + JitCompiler - arm64 only; enabled by the build on AArch64 hosts
 #endif
 
 using namespace GAZL;
@@ -426,7 +426,7 @@ int main(int argc, const char* argv[]) {
 		#endif
 			std::unique_ptr<Processor> proc;
 		#ifdef GAZL_JIT
-			if (useJit && !GAZL::jitAvailable()) {	// host forbids executable memory (entitlement / ACG) — never risk a crash
+			if (useJit && !GAZL::jitAvailable()) {	// host forbids executable memory (entitlement / ACG) - never risk a crash
 				std::cerr << "JIT: this host does not permit executable memory; using the interpreter." << std::endl;
 			} else if (useJit) {
 				const auto t0 = std::chrono::steady_clock::now();

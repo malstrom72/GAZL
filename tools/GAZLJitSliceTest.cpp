@@ -22,7 +22,7 @@
 */
 
 /*
-	C3 vertical slice (minimal) — proves that a function hand-lowered through the GAZLJit `Arm64Emitter` reproduces the GAZL
+	C3 vertical slice (minimal) - proves that a function hand-lowered through the GAZLJit `Arm64Emitter` reproduces the GAZL
 	*interpreter's* observable result, running under a JIT calling convention with a per-basic-block fuel check and a
 	trap-free status-returning safepoint. This is roadmap spike C3 (docs/JitCompilerResearch.md §11.0).
 
@@ -37,11 +37,11 @@
 
 	What it demonstrates concretely: the frame/`dsp` slot-addressing model (operands are Value-indices off the frame
 	base, matching the interpreter), a per-block fuel check (`subs`/`b.mi`) charging the whole block, and the trap-free
-	"return a Status" safepoint model — the ABI decisions C3 exists to force. Exits non-zero on any mismatch.
+	"return a Status" safepoint model - the ABI decisions C3 exists to force. Exits non-zero on any mismatch.
 
 	Note on registers: the real design pins ctx/dsp/membase/fuel in callee-saved x19/x20/x21/w22 (§5.8) so they survive
 	GAZL calls. This standalone slice's kernel makes no calls and is invoked directly from C++, so to avoid a
-	callee-saved save/restore trampoline it takes dsp in x0 and fuel in w1 (caller-saved) — the register *roles* are the
+	callee-saved save/restore trampoline it takes dsp in x0 and fuel in w1 (caller-saved) - the register *roles* are the
 	same; only their homes differ. Moving them into the pinned callee-saved set is the trampoline's job in the deferred
 	in-VM dispatcher.
 */
@@ -108,7 +108,7 @@ static void unmapExec(void* p, size_t wordCount) {
 // --- the interpreter side: assemble & run the sum-loop kernel, read the result back from a global ---
 
 // sumTo(n) = 0 + 1 + ... + (n-1), stored to global `gOut`; input read from global `gIn`. Do-while loop (FORi does
-// ++i then compares), so n <= 0 yields 0 with no guard — identical to the emitted kernel below.
+// ++i then compares), so n <= 0 yields 0 with no guard - identical to the emitted kernel below.
 static const char* const KERNEL_SOURCE =
 	"gIn:   GLOB *1\n"
 	"       DATi #0\n"
@@ -227,7 +227,7 @@ int main() {
 	Symbols globals;
 	Pointer gInPtr = NULL_POINTER, gOutPtr = NULL_POINTER;
 	if (!assembleKernel(globals, gInPtr, gOutPtr)) {
-		std::printf("  kernel assembly/setup failed — aborting\n");
+		std::printf("  kernel assembly/setup failed - aborting\n");
 		return 1;
 	}
 	// Build the emitted kernel once and make it executable.
@@ -235,7 +235,7 @@ int main() {
 	emitSumTo(e);
 	void* code = mapExecutable(e.code(), e.wordCount());
 	if (code == nullptr) {
-		std::printf("  ALLOC FAILED (W^X unavailable) — aborting\n");
+		std::printf("  ALLOC FAILED (W^X unavailable) - aborting\n");
 		return 1;
 	}
 	SumFn jitSumTo = reinterpret_cast<SumFn>(code);

@@ -52,7 +52,7 @@ static Status nativeSquare(Processor* p) {
 	return OK;
 }
 // A BLOCKING native: returns BLOCK_RETRY twice (suspend-and-retry), then computes r = x*x. Exercises §5.4 blocking
-// retry — each invocation is re-issued from the call site until it succeeds.
+// retry - each invocation is re-issued from the call site until it succeeds.
 static Status nativeBlock(Processor* p) {
 	static int retries = 0;
 	if (retries < 2) { ++retries; return static_cast<Status>(BLOCK_RETRY); }
@@ -63,7 +63,7 @@ static Status nativeBlock(Processor* p) {
 	++gNativeCallCount;
 	return OK;
 }
-// A YIELDING native: the standard cooperative-yield convention — zero the fuel and return OK, so the *next* block
+// A YIELDING native: the standard cooperative-yield convention - zero the fuel and return OK, so the *next* block
 // suspends (TIME_OUT) and the host regains control. Permut8/Prawn rely on this (sleep/launch), so the JIT must make a
 // native that does resetTimeOut(0)+OK behave exactly like the interpreter: work after the yield still runs on resume.
 static Status nativeYield(Processor* p) {
@@ -159,7 +159,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 			JitProcessor eng(module, program, CALL_STACK_SIZE, gCallStack, gNativeTable);
 			eng.accessMemory(gInPtr, 1)->i = n;
 			gNativeCallCount = 0;
-			// Drive the JIT through the polymorphic base interface — the exact host loop the interpreter uses (§5.1).
+			// Drive the JIT through the polymorphic base interface - the exact host loop the interpreter uses (§5.1).
 			Processor* proc = &eng;
 			Status s = proc->enterCall(mainPtr);
 			int suspends = 0;

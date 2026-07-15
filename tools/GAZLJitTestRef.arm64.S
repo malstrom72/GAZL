@@ -2,14 +2,14 @@
 //
 // Each `ref_*` symbol labels exactly one 4-byte AArch64 instruction; the test reads the word at
 // `*(const uint32_t*)&ref_*` and compares it to the byte the Emitter produces for the same mnemonic. The whole file is
-// assembled by clang, so it is a second, independent encoding of every form — a mismatch means the Emitter is wrong.
+// assembled by clang, so it is a second, independent encoding of every form - a mismatch means the Emitter is wrong.
 //
 // `ref_bench_v2` .. `ref_bench_v2_end` bracket a byte-for-byte copy of `bench_v2` from
 // benchmarks/jit/JitBenchA3.arm64.S; the test emits the same body via the Emitter (labels + branch fixups) and asserts
 // the two word arrays are identical, exercising the Label/fixup pass.
 //
 // This is a .S (capital) so the C preprocessor runs; symbols use the platform C-symbol prefix so it links on both
-// macOS (Mach-O, leading underscore) and Linux (ELF) arm64 — same convention as benchmarks/jit/JitBenchA3.arm64.S.
+// macOS (Mach-O, leading underscore) and Linux (ELF) arm64 - same convention as benchmarks/jit/JitBenchA3.arm64.S.
 #if defined(__APPLE__)
 # define GLOBL(n) .globl _##n
 # define ENTRY(n) _##n:
@@ -21,7 +21,7 @@
 		.text
 		.align	2
 
-// One labeled instruction per form (GLOBL and ENTRY must be on their own lines — the C preprocessor cannot emit the
+// One labeled instruction per form (GLOBL and ENTRY must be on their own lines - the C preprocessor cannot emit the
 // newline that would let them share one). The instruction sits on the ENTRY line after the label.
 		GLOBL(ref_movz)
 ENTRY(ref_movz)		movz w13, #0x4E6D

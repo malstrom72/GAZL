@@ -23,10 +23,10 @@
 
 #include "GAZLJitX64.h"
 #include "GAZLJit.h"			// arch-neutral opcode enum + Offsets / JitModule / JitProcessor / JitCompiler (+ GAZL.h)
-#include "GAZLJitMem.h"			// makeExecutable() — platform-specific backend, architecture-neutral
+#include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
 
 #include <cstddef>
-#include <cstring>			// std::memcpy — pack the emitted byte stream into 32-bit words
+#include <cstring>			// std::memcpy - pack the emitted byte stream into 32-bit words
 #include <map>
 #include <vector>
 
@@ -92,7 +92,7 @@ void X64Emitter::memOperandIdx(int reg, Reg base, Reg index, int32_t disp) {
 	else if (mod == 2) { d32(static_cast<uint32_t>(disp)); }
 }
 
-// 81 /ext id  — immediate ALU op (ext = 0 add, 5 sub, 7 cmp, ...).
+// 81 /ext id  - immediate ALU op (ext = 0 add, 5 sub, 7 cmp, ...).
 void X64Emitter::aluImm(int ext, Reg rd, uint32_t imm) {
 	rex(false, 0, rd);
 	b(0x81);
@@ -222,9 +222,9 @@ void X64Emitter::finalize() {
 // verified per-instruction lowering from tools/GAZLJitX64SliceTest.cpp, re-hosted onto the JitProcessor field ABI.
 //
 // Execution model: §5.4 dispatcher/TRANSFER, identical to GAZLJitArm64.cpp (and interoperating with the shared
-// JitProcessor / ipStack). Each GAZL function is a `Status segment(JitProcessor* ctx)` — ctx in ARG_0, no frame of its
+// JitProcessor / ipStack). Each GAZL function is a `Status segment(JitProcessor* ctx)` - ctx in ARG_0, no frame of its
 // own. It reloads the pins from ctx (rbx=dsp, r14=memoryBase, r13=fuel, r15=ipsp; dataStackEnd on demand; r12=ctx),
-// runs, and hands control back by returning a Status: TRANSFER (the dispatcher threads the next segment — GAZL calls and
+// runs, and hands control back by returning a Status: TRANSFER (the dispatcher threads the next segment - GAZL calls and
 // returns push/pop the ipStack, never a host frame), NATIVE_CALL (the dispatcher makes the one host call), or a terminal
 // OK / TIME_OUT / trap. Because the C stack is only ever the dispatcher's single frame, a fuel timeout can suspend and
 // resume from ANY point, including inside nested GAZL calls. Scratch is rax + rcx/rdx + xmm0/xmm1. The pins are
@@ -234,10 +234,10 @@ void X64Emitter::finalize() {
 
 // --- pinned registers + scratch roles ---
 
-// §5.4 dispatcher/TRANSFER model — the per-segment pins mirror arm64's (x1=dsp, x2=membase, w3=fuel, x4=ipsp, x0=ctx).
-// dataStackEnd is NOT pinned (only bounds checks want it) — it is loaded from ctx on demand. Every segment reloads these
+// §5.4 dispatcher/TRANSFER model - the per-segment pins mirror arm64's (x1=dsp, x2=membase, w3=fuel, x4=ipsp, x0=ctx).
+// dataStackEnd is NOT pinned (only bounds checks want it) - it is loaded from ctx on demand. Every segment reloads these
 // from ctx at entry and writes them back before any TRANSFER, so the C stack stays a single frame (the dispatcher) and a
-// timeout/suspend can return to the host and resume from any point — including inside nested GAZL calls.
+// timeout/suspend can return to the host and resume from any point - including inside nested GAZL calls.
 static const Reg DSP = RBX, MEMORY_BASE = R14, FUEL = R13, IP_STACK_PTR = R15, CONTEXT = R12;
 static const Reg SCRATCH_A = RCX, SCRATCH_B = RDX;					// general scratch (A also serves as the shift-count CL)
 static const Reg FLOAT_0 = static_cast<Reg>(0), FLOAT_1 = static_cast<Reg>(1);	// xmm0 / xmm1 (a separate register file from GP)
@@ -326,7 +326,7 @@ static void emitShift(X64Emitter& emitter, const Instruction& instruction, int k
 	emitter.store(DSP, instruction.p0.i * 4, RAX);
 }
 
-// if (a <condition> b) goto target — a = p0, b = p1, in the const modes named by the opcode; target = this index + p2.
+// if (a <condition> b) goto target - a = p0, b = p1, in the const modes named by the opcode; target = this index + p2.
 static void emitBranch(X64Emitter& emitter, Cond condition, const Instruction& instruction, UInt instructionIndex,
 		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels) {
 	loadOperand(emitter, SCRATCH_A, instruction.p0, operand0Const);
@@ -373,7 +373,7 @@ static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 	UInt endIndex = funcStart;
 	while (code[endIndex].opcode != OP_RETU) { ++endIndex; }
 
-	// Pass 1 — fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight and each a
+	// Pass 1 - fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight and each a
 	// resumable point. `labels` is the mainline label per leader (hot entry + branch + resume target); suspendL its
 	// suspend stub. Charging per block (not just loop heads) keeps fuel spend ≈ the interpreter's.
 	std::map<UInt, UInt> loopWeight;
@@ -383,7 +383,7 @@ static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 		labels[it->first] = emitter.newLabel(); suspendL[it->first] = emitter.newLabel();
 	}
 
-	// Function entry: the dispatcher supplies live pins (encoding b — no per-segment reload), so just advance dsp by the
+	// Function entry: the dispatcher supplies live pins (encoding b - no per-segment reload), so just advance dsp by the
 	// frame (FUNC p0) and run the FUNC stack-overflow check.
 	const UInt localsSize = static_cast<UInt>(code[funcStart].p0.i);
 	if (localsSize != 0) { emitter.addImmQ(DSP, localsSize * 4u); }		// dsp += frame
@@ -396,7 +396,7 @@ static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 		emitter.bind(stackOk);
 	}
 
-	// Pass 2 — emit.
+	// Pass 2 - emit.
 	for (UInt j = funcStart; j <= endIndex; ++j) {
 		std::map<UInt, Label>::iterator labelIt = labels.find(j);
 		if (labelIt != labels.end()) { emitter.bind(labelIt->second); }
@@ -413,7 +413,7 @@ static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 				emitter.loadQ(DSP, IP_STACK_PTR, 8);					// caller dsp (0 = native/top marker)
 				emitter.movImm(SCRATCH_A, 0); emitter.cmpQ(DSP, SCRATCH_A); emitter.jcc(CC_NE, notNative);
 				emitter.addImmQ(IP_STACK_PTR, 0u - 16u); emitter.loadQ(DSP, IP_STACK_PTR, 8);	// native return: pop again for the true dsp
-				emitter.movImm(RAX, 0); emitter.jmp(epilogue);			// OK — terminal (return to host); pins stay live in regs
+				emitter.movImm(RAX, 0); emitter.jmp(epilogue);			// OK - terminal (return to host); pins stay live in regs
 				emitter.bind(notNative);
 				emitter.jmpReg(RAX);									// GAZL return: jump straight into the caller's continuation
 				break;
@@ -473,7 +473,7 @@ static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 			case OP_POKE_CC: emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), SCRATCH_A); break;
 
 			// var-indexed global memory: base const (p1/p0), index var, value var/const. Bounds-checked against the
-			// memory size the interpreter uses — memorySize (read) / rwMemorySize (write) — matching GAZLJitArm64.cpp.
+			// memory size the interpreter uses - memorySize (read) / rwMemorySize (write) - matching GAZLJitArm64.cpp.
 			case OP_PEEK_VCV: {
 				const int32_t base = static_cast<int32_t>(in.p1.p - MEMORY_OFFSET);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
@@ -525,7 +525,7 @@ static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 			}
 
 			// local array (frame): base = dsp + C (p1 for GETL, p0 for SETL), index var. The bound is the free frame span
-			// (dataStackEnd - dsp) in Value units, minus C — exactly GAZLJitArm64.cpp's GETL/SETL formula.
+			// (dataStackEnd - dsp) in Value units, minus C - exactly GAZLJitArm64.cpp's GETL/SETL formula.
 			case OP_GETL_VVV: {
 				const int32_t frameBase = static_cast<int32_t>(in.p1.i);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
@@ -707,8 +707,8 @@ static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 			default: throwUnlowerableOpcode(op);					// a finalized opcode the backend must cover (a bug, never routine)
 		}
 	}
-	// Cold section: one suspend stub per block leader — writeback the pins to ctx, set RESUME = this block's mainline head
-	// (the dispatcher reloads centrally on resume), return TIME_OUT to the host. Unreachable by fall-through — each
+	// Cold section: one suspend stub per block leader - writeback the pins to ctx, set RESUME = this block's mainline head
+	// (the dispatcher reloads centrally on resume), return TIME_OUT to the host. Unreachable by fall-through - each
 	// preceding block ends in jmp. Mirrors the arm64 cold section.
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
 		const UInt head = it->first;
@@ -740,10 +740,10 @@ static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets, Label 
 }
 
 /*
-	JitCompilerX64::emit (declared in GAZLJitX64.h) — lowers a whole finalized program to x86-64 machine code and fills an
+	JitCompilerX64::emit (declared in GAZLJitX64.h) - lowers a whole finalized program to x86-64 machine code and fills an
 	EmittedModule; the shared JitCompiler::compile then makes it executable. Lower every function into one buffer, append
 	one shared epilogue, append the dispatcher, then record the byte stream + ordinal->entry byte offsets. Throws (via
-	lowerFunction) on any finalized opcode the backend fails to cover. nativeJitCompiler() is the host entry point — this
+	lowerFunction) on any finalized opcode the backend fails to cover. nativeJitCompiler() is the host entry point - this
 	TU is linked only on x86-64 hosts.
 */
 void JitCompilerX64::emit(const AssembledProgram& program, EmittedModule& out) {
@@ -758,7 +758,7 @@ void JitCompilerX64::emit(const AssembledProgram& program, EmittedModule& out) {
 		lowerFunction(emitter, program.code, program.memory, program.functionTable[ordinal], offsets, entryLabels
 				, epilogue, program.functionCount);
 	}
-	// Shared exit `epilogue` (bound inside emitDispatcher): every terminal path — suspend, OK return, or trap — jumps
+	// Shared exit `epilogue` (bound inside emitDispatcher): every terminal path - suspend, OK return, or trap - jumps
 	// there with its Status in eax; the dispatcher restores the frame and returns to the host.
 	const size_t dispatcherOffset = emitDispatcher(emitter, offsets, epilogue);
 	emitter.finalize();
@@ -775,7 +775,7 @@ void JitCompilerX64::emit(const AssembledProgram& program, EmittedModule& out) {
 	out.dispatchByteOffset = dispatcherOffset;
 }
 
-JitCompiler& nativeJitCompiler() {							// x86-64 host backend (stateless — shared instance)
+JitCompiler& nativeJitCompiler() {							// x86-64 host backend (stateless - shared instance)
 	static JitCompilerX64 compiler;
 	return compiler;
 }

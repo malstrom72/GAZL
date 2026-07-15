@@ -27,10 +27,10 @@
 
 	  - the finalized-opcode enum + `Offsets`, and `JitModule` / `JitProcessor` / `JitCompiler`: the compiled artifact,
 	    the engine, and the compiler driver. `JitProcessor` is a `Processor` subclass (§5.1) that overrides the virtual
-	    `run()`/`enterCall()`, so it is a polymorphic drop-in for the interpreter — the host loop is identical
+	    `run()`/`enterCall()`, so it is a polymorphic drop-in for the interpreter - the host loop is identical
 	    (`enterCall(); do { resetTimeOut(N); } while (run() == TIME_OUT)`). This depends on `GAZL.h`. Only these two
-	    virtual overrides stay inline (they are tiny and must not pull the vtable into the .o); every heavy body —
-	    `JitProcessor::layout` and (per backend) `lowerFunction`, `emitDispatcher`, `JitCompiler::compile` — lives in a
+	    virtual overrides stay inline (they are tiny and must not pull the vtable into the .o); every heavy body -
+	    `JitProcessor::layout` and (per backend) `lowerFunction`, `emitDispatcher`, `JitCompiler::compile` - lives in a
 	    .cpp.
 
 	The arm64 backend lives beside this in GAZLJitArm64.h / GAZLJitArm64.cpp: the `Arm64Emitter` assembler plus the v1
@@ -46,7 +46,7 @@
 #include <vector>
 #include <map>
 #include "GAZL.h"
-#include "GAZLJitMem.h"			// makeExecutable() — platform-specific backend, architecture-neutral
+#include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
 
 namespace GAZL {
 
@@ -106,13 +106,13 @@ bool jitAvailable();
 /*
 	Shared, arch-neutral pass-1 primitive used by both JIT backends (defined in GAZLJit.cpp): if instruction
 	`instructionIndex` is a conditional/unconditional branch, report the target instruction index and return true. SWCH
-	jump-table targets are not covered here — each backend reads those from the const-memory table itself.
+	jump-table targets are not covered here - each backend reads those from the const-memory table itself.
 */
 bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& target);
 
 /*
-	Fuel safepoints for one function (arch-neutral, defined in GAZLJit.cpp): the basic-block leaders — function entry,
-	branch/SWCH targets, and the instruction after any branch/GOTO/SWCH/CALL — with long straight runs split so no block
+	Fuel safepoints for one function (arch-neutral, defined in GAZLJit.cpp): the basic-block leaders - function entry,
+	branch/SWCH targets, and the instruction after any branch/GOTO/SWCH/CALL - with long straight runs split so no block
 	exceeds maxBlockWeight. Fills `weight` with leaderIndex -> charge (instruction span to the next safepoint). Both
 	backends emit a fuel check charging `weight` at each leader, so the JIT consumes fuel at ~the interpreter's
 	1/instruction rate (fuel-rate fidelity) and worst-case time-to-suspend is bounded by maxBlockWeight (§5.5).
@@ -122,7 +122,7 @@ void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, c
 		, UInt maxBlockWeight, std::map<UInt, UInt>& weight);
 
 /*
-	A backend hit a finalized opcode it does not cover — a programmer error (every backend must lower all 91 finalized
+	A backend hit a finalized opcode it does not cover - a programmer error (every backend must lower all 91 finalized
 	opcodes), not a runtime condition. asserts (loud in debug) and, because asserts vanish in release, also throws
 	GAZL::JitException so a release build degrades to the interpreter rather than emitting wrong code. Never returns; the
 	backends' switch defaults call it. Defined in GAZLJit.cpp.
@@ -136,7 +136,7 @@ struct Offsets {
 };
 
 /*
-	Thrown when the JIT itself fails at runtime — e.g. the host refuses to make a code page executable even though
+	Thrown when the JIT itself fails at runtime - e.g. the host refuses to make a code page executable even though
 	jitAvailable() reported the capability (a broken invariant / resource exhaustion, not an assembler error). A
 	GAZL::Exception subclass, so a host that already catches GAZL::Exception catches it too; it carries a free-form
 	message instead of an AssemblerError.
@@ -161,23 +161,23 @@ struct EmittedModule {
 };
 
 /*
-	The compiled artifact — the JIT's analogue of the interpreter's {code[], functionTable[]}: an executable page, its
+	The compiled artifact - the JIT's analogue of the interpreter's {code[], functionTable[]}: an executable page, its
 	dispatcher entry, and the ordinal→entry table the machine code indexes. Immutable and shareable, so one module can
 	back many JitProcessors, on many threads (§5.6).
 
 	RAII value type. A default-constructed module is empty (isCompiled() == false) and owns nothing. JitCompiler::compile
-	builds a filled module and hands it over via swap() — there is no half-built state and nothing sets its fields from
+	builds a filled module and hands it over via swap() - there is no half-built state and nothing sets its fields from
 	outside. It owns a unique executable page, so it is non-copyable; transfer ownership with swap(). It must outlive every
 	JitProcessor bound to it.
 */
 class JitModule {
 	public:
-		JitModule() : ownedPage(0), ownedWords(0), dispatch(0) { }		// empty — owns nothing
+		JitModule() : ownedPage(0), ownedWords(0), dispatch(0) { }		// empty - owns nothing
 		// Make an emitted module's code executable and take ownership of the page (acquisition == initialization).
 		// Throws GAZL::JitException if the host refuses executable memory (jitAvailable() gates this).
 		explicit JitModule(const EmittedModule& emitted);
 		~JitModule();													// frees the page (a no-op when empty)
-		void swap(JitModule& other);									// O(1) — exchange ownership
+		void swap(JitModule& other);									// O(1) - exchange ownership
 
 		bool isCompiled() const { return dispatch != 0; }				// holds a runnable artifact (a value-state query)
 		size_t codeWords() const { return ownedWords; }					// emitted 32-bit words (for --jit-stats)
@@ -190,23 +190,23 @@ class JitModule {
 		std::vector<void*> entries;			// ordinal -> entry (page + byte offset)
 		void* dispatch;						// native dispatcher entry (page + byte offset)
 
-		JitModule(const JitModule&);					// non-copyable — owns a unique page; transfer via swap
+		JitModule(const JitModule&);					// non-copyable - owns a unique page; transfer via swap
 		JitModule& operator=(const JitModule&);
 };
 
 inline void swap(JitModule& a, JitModule& b) { a.swap(b); }				// ADL swap
 
 /*
-	The JIT engine — mirrors `Processor`: a `Processor` subclass over the shared machine state (§5.1), constructed FROM a
+	The JIT engine - mirrors `Processor`: a `Processor` subclass over the shared machine state (§5.1), constructed FROM a
 	JitModule (as `Processor` is from `code`/`functionTable`) plus the same run state. It overrides the virtual
-	run()/enterCall(), so it is a polymorphic drop-in — the host loop is identical to the interpreter's.
+	run()/enterCall(), so it is a polymorphic drop-in - the host loop is identical to the interpreter's.
 */
 class JitProcessor : public Processor {
 	public:
 		/*
 			Two constructors, mirroring the base Processor's two: the higher-level one (data stack = the whole span
 			between globals and constants) and the lower-level one (explicit rwMemorySize / dataStackOffset /
-			dataStackSize, for running several engines over one shared code image — e.g. a JitProcessor per thread, each
+			dataStackSize, for running several engines over one shared code image - e.g. a JitProcessor per thread, each
 			with its own data + ip stack; the compiled code is immutable after publish, so it is safe to share). Both add
 			the JitModule up front and forward an optional userData through to the Processor.
 		*/
@@ -269,28 +269,28 @@ class JitProcessor : public Processor {
 };
 
 /*
-	The JIT compiler — the JIT's counterpart of Assembler. Abstract base with one backend subclass per target
+	The JIT compiler - the JIT's counterpart of Assembler. Abstract base with one backend subclass per target
 	(JitCompilerArm64 / JitCompilerX64), each supplying emit(); the per-instruction lowering pass and dispatcher emitter
 	are file-static inside each backend .cpp. It reads an AssembledProgram (Instruction[] + functionTable + the const memory image,
-	read only for SWCH jump tables) — never a processor — and holds no program itself, so one compiler compiles many.
+	read only for SWCH jump tables) - never a processor - and holds no program itself, so one compiler compiles many.
 	Obtain the host's backend with nativeJitCompiler(); a build links only the backend(s) it includes.
 */
 class JitCompiler {
 	public:		virtual ~JitCompiler() { }
 
 				// Compile `program` into `out` (transferred in via swap); on return `out` is compiled(). A backend covers
-				// every finalized opcode, so lowering a valid finalized program always succeeds — the only failures are
+				// every finalized opcode, so lowering a valid finalized program always succeeds - the only failures are
 				// exceptional and both throw GAZL::JitException (leaving `out` unchanged): the host refusing executable
 				// memory (call jitAvailable() first to avoid it), or a finalized opcode left unlowered (a backend bug).
 				void compile(const AssembledProgram& program, JitModule& out);
 
 	protected:	// The one arch-specific step: lower `program` into `out` (emitted code words + per-ordinal entry byte
 				// offsets + dispatcher byte offset). One virtual call per compile, never per instruction. Throws
-				// GAZL::JitException on an opcode it fails to cover — a bug, since every finalized opcode is lowerable.
+				// GAZL::JitException on an opcode it fails to cover - a bug, since every finalized opcode is lowerable.
 				virtual void emit(const AssembledProgram& program, EmittedModule& out) = 0;
 };
 
-// The host-native JIT compiler — a shared, stateless instance, defined in whichever backend .cpp the build links.
+// The host-native JIT compiler - a shared, stateless instance, defined in whichever backend .cpp the build links.
 JitCompiler& nativeJitCompiler();
 
 } // namespace GAZL

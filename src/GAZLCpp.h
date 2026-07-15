@@ -24,7 +24,7 @@
 /*
 	GAZL -> C++ source translator (the "C++ backend"). A pure source-to-source pass: assembled GAZL
 	`Instruction[]` in, a standalone, self-contained, runnable C++ program out. Tier 0 (faithful): the frame
-	is `dsp[slot]` and memory is one `Value[]`, exactly as the interpreter — no local lifting yet, so clang
+	is `dsp[slot]` and memory is one `Value[]`, exactly as the interpreter - no local lifting yet, so clang
 	does the register allocation on the array accesses. It exists to be the optimizer-ceiling benchmark
 	baseline (compare vs the interpreter and the arm64 JIT, at -O0 and -O2). See docs/CppBackendSpec.md.
 

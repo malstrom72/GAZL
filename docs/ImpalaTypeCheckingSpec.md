@@ -1,6 +1,6 @@
 # Improved Type Checking for Impala
 
-Impala developers enjoy being able to compile individual sources to textual `.gazl` units and then assemble a program by concatenating those files. The goal of this specification is to tighten cross-unit type checking—primarily around ints, floats, pointers, function pointers, and void returns—without disturbing that lightweight workflow.
+Impala developers enjoy being able to compile individual sources to textual `.gazl` units and then assemble a program by concatenating those files. The goal of this specification is to tighten cross-unit type checking-primarily around ints, floats, pointers, function pointers, and void returns-without disturbing that lightweight workflow.
 
 This document records the design and implementation plan. For current user-facing
 syntax and validator usage, see the "Signature metadata and validation" section
@@ -75,7 +75,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
 
   The comments describe the definition’s signature, the exported global, the caller’s expectations, and now even bare extern declarations using the same primitive categories (rendered as `int`, `float`, `ptr`, `funcptr`, `void`). Because they are ordinary comments, concatenating multiple `.gazl` files simply produces a larger stream of inline signature notes for the validator to consume without affecting assemblers that ignore comments.
   Standalone `extern` declarations that produce no GAZL directive still emit a one-line annotation (for example, `; signature extern func bar() -> unknown`) so validators can record imports alongside executable code.
-  The call-site comment rides on the `CALL` instruction itself, so there is no need for a `caller->callee` shorthand—the surrounding assembler already makes the callee obvious.
+  The call-site comment rides on the `CALL` instruction itself, so there is no need for a `caller->callee` shorthand-the surrounding assembler already makes the callee obvious.
 
   #### Source span capture and formatting
 
@@ -115,7 +115,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
 ### 4. Preserve Backward Compatibility
 
 * Units without signature comments are treated as having all exports/imports in the `unknown` category. The validator warns but does not fail unless `--force` is enabled.
-* When reading concatenated `.gazl`, the validator should tolerate signature comments appearing anywhere—multiple concatenated blocks simply append to the same stream.
+* When reading concatenated `.gazl`, the validator should tolerate signature comments appearing anywhere-multiple concatenated blocks simply append to the same stream.
 * Version the signature comment schema from the start via the file header (`; signatures version=1`). Future expansions (e.g., distinguishing pointer depth or struct shapes) can bump the header while older validators fall back to permissive behaviour.
 
 ## Implementation Plan
@@ -159,7 +159,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
 
 ## Success Criteria
 
-* Typical cross-unit mistakes—wrong argument counts, mismatched return categories, globals declared with incompatible primitives—are caught by the validator before the `.gazl` files reach the VM.
+* Typical cross-unit mistakes-wrong argument counts, mismatched return categories, globals declared with incompatible primitives-are caught by the validator before the `.gazl` files reach the VM.
 * Independent compilation and text concatenation remain the default path; developers who ignore the signature comments still obtain runnable output, albeit without cross-checking.
 * Build time impact stays within 5% for metadata generation and under one second for validation on medium projects, matching today’s snappy iteration loop.
 * Documentation and samples make it clear how the signature comments map to the compiler’s internal type codes, lowering the barrier for teams adopting the stricter checks.
