@@ -479,13 +479,13 @@ static void emitShift(Arm64Emitter& e, int kind, const Instruction& in, int form
 
 // Emit an integer divide (rem=false) or modulo (rem=true) `dst = s1 </%> s2`. form: 0=VVV, 1=VVC, 2=VCV. A variable
 // divisor (VVV/VCV) gets a divide-by-zero guard → DIVISION_BY_ZERO; a VVC divisor is a nonzero assembler constant.
-static void emitDivMod(Arm64Emitter& e, bool rem, const Instruction& in, int form) {
+static void emitDivMod(Arm64Emitter& e, bool rem, const Instruction& in, int form, Label exitLabel) {
 	loadOp(e, W10, in.p1, form == 2);					// dividend (const for VCV)
 	loadOp(e, W11, in.p2, form == 1);					// divisor (const for VVC)
 	if (form != 1) {									// variable divisor → guard
 		Label ok = e.newLabel();
 		e.cbnz(W11, ok);
-		e.movn(W0, 6); e.ret();							// ~6 = -7 = DIVISION_BY_ZERO (terminal)
+		e.movn(W0, 6); e.b(exitLabel);					// ~6 = -7 = DIVISION_BY_ZERO (terminal)
 		e.bind(ok);
 	}
 	e.sdiv(W9, W10, W11);								// quotient (INT_MIN/-1 → INT_MIN, matches §6.1)
@@ -500,7 +500,7 @@ static void emitDivMod(Arm64Emitter& e, bool rem, const Instruction& in, int for
 	false on an unsupported opcode.
 */
 static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
-		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount) {
+		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount, Label exitLabel) {
 	UInt retIndex = funcIndex;
 	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
 
@@ -510,16 +510,15 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 	// recursive code yields on time too.
 	std::map<UInt, UInt> loopWeight;
 	jitFuelSafepoints(code, funcIndex, retIndex, memory, MAX_BLOCK_WEIGHT, loopWeight);
-	std::map<UInt, Label> mainline, reloadL, suspendL;
-	std::vector<std::pair<Label, Label> > nativeReloads;	// {call-site reload prologue, hot re-entry} per CALL_NVC (blocking retry)
+	std::map<UInt, Label> mainline, suspendL;
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
-		mainline[it->first] = e.newLabel(); reloadL[it->first] = e.newLabel(); suspendL[it->first] = e.newLabel();
+		mainline[it->first] = e.newLabel(); suspendL[it->first] = e.newLabel();
 	}
 
-	// Function entry: reload pinned state, then FUNC prologue (dsp += localsSize).
+	// Function entry (hot — reached by a tail-branch from a caller or by the dispatcher after it reloaded the pins, so
+	// state is already live). FUNC prologue: dsp += localsSize.
 	entryOffset[selfOrdinal] = e.wordCount();
 	e.bind(entryLabels[selfOrdinal]);
-	reloadState(e, o);
 	const UInt localsSize = static_cast<UInt>(code[funcIndex].p0.i);
 	if (localsSize != 0) {							// dsp += localsSize (in bytes); register add if beyond the imm12 range
 		if (localsSize * 4 < 0x1000) { e.addImmX(X1, X1, localsSize * 4); }
@@ -529,7 +528,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 		const UInt paramsSize = static_cast<UInt>(code[funcIndex].p1.i);
 		Label sok = e.newLabel();
 		e.ldrX(X9, X0, o.dsend); e.addImmX(X10, X1, paramsSize * 4); e.cmpX(X10, X9);
-		e.bcond(LS, sok); e.movn(W0, 4); e.ret();	// > end → ~4 = -5 = DATA_STACK_OVERFLOW
+		e.bcond(LS, sok); e.movn(W0, 4); e.b(exitLabel);	// > end → ~4 = -5 = DATA_STACK_OVERFLOW
 		e.bind(sok);
 	}
 
@@ -544,62 +543,60 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 			case OP_RETU: {
 				Label notNative = e.newLabel();
 				e.subImmX(X4, X4, 16);								// ipsp-- ; pop {cont, dsp}
-				e.ldrX(X9, X4, 0); e.ldrX(X1, X4, 8);				// cont ; caller dsp (or 0 = native marker)
+				e.ldrX(X9, X4, 0); e.ldrX(X1, X4, 8);				// cont ; caller dsp (or 0 = native/top marker)
 				e.cbnzX(X1, notNative);
-				e.subImmX(X4, X4, 16); e.ldrX(X1, X4, 8);			// native return: pop again for true dsp
+				e.subImmX(X4, X4, 16); e.ldrX(X1, X4, 8);			// native/top return: pop again for the true dsp
 				writebackState(e, o);
-				e.movz(W0, 0); e.ret();								// OK — terminal (return to host)
+				e.movz(W0, 0); e.b(exitLabel);						// OK — terminal (return to host)
 				e.bind(notNative);
-				writebackState(e, o);
-				e.strX(X9, X0, o.resume); e.movz(W0, TRANSFER); e.ret();	// GAZL return: RESUME = cont, transfer
+				e.br(X9);											// GAZL return: tail-branch to the continuation (state live)
 				break;
 			}
 			case OP_CALL_CVC: {
-				const UInt callee = in.p0.p - IP_OFFSET;			// ordinal known at compile time → direct
+				const UInt callee = in.p0.p - IP_OFFSET;			// ordinal known at compile time → direct tail-branch
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = e.newLabel(), iok = e.newLabel();
 				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);	// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
-				e.movn(W0, 5); e.ret(); e.bind(iok);				// ~5 = -6
-				e.adr(X9, after); e.strX(X9, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);	// push {cont, dsp}
+				e.movn(W0, 5); e.b(exitLabel); e.bind(iok);			// ~5 = -6
+				e.adr(X9, after); e.strX(X9, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);	// push {after, dsp}
 				if (window != 0) { e.addImmX(X1, X1, window * 4); }	// dsp += arg window
-				writebackState(e, o);
-				e.adr(X9, entryLabels[callee]); e.strX(X9, X0, o.resume);	// RESUME = callee entry
-				e.movz(W0, TRANSFER); e.ret();
-				e.bind(after); reloadState(e, o);					// after the call returns: fresh segment → reload
+				e.b(entryLabels[callee]);							// tail-branch to the callee entry (state stays live)
+				e.bind(after);										// return lands here (hot; state live)
 				break;
 			}
 			case OP_CALL_VVC: {
 				const UInt window = static_cast<UInt>(in.p1.i);		// ordinal from a slot at runtime → resolve + bounds-check
 				Label after = e.newLabel(), trap = e.newLabel(), iok = e.newLabel();
 				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);	// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
-				e.movn(W0, 5); e.ret(); e.bind(iok);
+				e.movn(W0, 5); e.b(exitLabel); e.bind(iok);
 				loadSlot(e, W9, in.p0.i);							// fn pointer = IP_OFFSET + ordinal
 				matConst(e, W10, static_cast<Int>(IP_OFFSET)); e.sub(W9, W9, W10);	// ordinal
 				matConst(e, W10, static_cast<Int>(functionCount));
 				e.cmp(W9, W10); e.bcond(HS, trap);					// ordinal >= functionCount → BAD_CALL
-				e.ldrX(X10, X0, o.funcentries); e.ldrXr(X9, X10, W9);	// entry = funcEntries[ordinal]
-				e.adr(X10, after); e.strX(X10, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);
+				e.ldrX(X10, X0, o.funcentries); e.ldrXr(X9, X10, W9);	// entry = funcEntries[ordinal] (hot)
+				e.adr(X10, after); e.strX(X10, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);	// push {after, dsp}
 				if (window != 0) { e.addImmX(X1, X1, window * 4); }
-				writebackState(e, o);
-				e.strX(X9, X0, o.resume); e.movz(W0, TRANSFER); e.ret();
-				e.bind(trap); e.movn(W0, 3); e.ret();				// ~3 = -4 = BAD_CALL (terminal)
-				e.bind(after); reloadState(e, o);
+				e.br(X9);											// tail-branch to the callee entry (state stays live)
+				e.bind(trap); e.movn(W0, 3); e.b(exitLabel);		// ~3 = -4 = BAD_CALL
+				e.bind(after);
 				break;
 			}
 			case OP_CALL_NVC: {
 				const UInt ordinal = static_cast<UInt>(in.p0.i);	// native ordinal (C0)
 				const UInt window = static_cast<UInt>(in.p1.i);		// param-window offset (C1)
-				Label after = e.newLabel(), hot = e.newLabel(), callReload = e.newLabel();
-				e.bind(hot);										// hot re-entry (also fall-through target); dsp/fuel/ipsp live
-				e.strX(X1, X0, o.saveddsp);							// stash original dsp (restored by the dispatcher after)
+				Label hot = e.newLabel(), okStatus = e.newLabel();
+				e.bind(hot);										// re-entry for blocking retry / suspend-resume
+				e.strX(X1, X0, o.saveddsp);							// stash original dsp (the window advance is transient)
 				if (window != 0) { e.addImmX(X1, X1, window * 4); }
-				e.strX(X1, X0, o.dsp); e.strW(W3, X0, o.fuel); e.strX(X4, X0, o.ipsp);	// publish window/fuel/ipsp
-				e.adr(X9, after); e.strX(X9, X0, o.nativeafter);	// stash success continuation (dispatcher uses it on OK)
-				e.adr(X9, callReload); e.strX(X9, X0, o.resume);	// RESUME = call site (nonzero native → re-issue: blocking retry)
-				e.ldrX(X9, X0, o.natives); e.ldrX(X9, X9, ordinal * 8); e.strX(X9, X0, o.nativefn);	// resolve natives[ord]
-				e.movz(W0, NATIVE_CALL); e.ret();					// hand the host call to the dispatcher
-				nativeReloads.push_back(std::make_pair(callReload, hot));
-				e.bind(after); reloadState(e, o);
+				e.strX(X1, X0, o.dsp); e.strW(W3, X0, o.fuel); e.strX(X4, X0, o.ipsp);	// publish window/fuel/ipsp (interpreter-shaped)
+				e.adr(X9, hot); e.strX(X9, X0, o.resume);			// RESUME = call site (nonzero native → re-issue: blocking retry)
+				e.ldrX(X9, X0, o.natives); e.ldrX(X9, X9, ordinal * 8);	// natives[ordinal]
+				e.blr(X9);											// inline host call (x0 = ctx); w0 = status
+				e.mov(W12, W0);										// save the status BEFORE we overwrite x0 with ctx
+				e.addImmX(X0, X19, 0); reloadState(e, o); e.ldrX(X1, X0, o.saveddsp);	// native clobbered the pins: restore ctx + reload (dsp = original)
+				e.cmpImm(W12, 0); e.bcond(EQ, okStatus);			// OK → continue inline
+				e.mov(W0, W12); e.b(exitLabel);						// nonzero (BLOCK_RETRY / TIME_OUT / trap): return to host; RESUME = call site so it re-issues
+				e.bind(okStatus);									// OK: continue (state live)
 				break;
 			}
 			case OP_MOVE_VC: matConst(e, W9, in.p1.i); storeSlot(e, W9, in.p0.i); break;
@@ -612,7 +609,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				matConst(e, W9, static_cast<Int>(in.p1.p - MEMORY_OFFSET)); loadSlot(e, W10, in.p2.i); e.add(W9, W9, W10);
 				e.ldrW(W10, X0, o.memsize); e.cmp(W9, W10); e.bcond(HS, trap);
 				e.ldrWx(W11, X2, W9); storeSlot(e, W11, in.p0.i);
-				e.b(cont); e.bind(trap); e.movn(W0, 1); e.ret();	// ~1 = -2 = BAD_PEEK
+				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);	// ~1 = -2 = BAD_PEEK
 				e.bind(cont);
 				break;
 			}
@@ -622,7 +619,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				e.ldrW(W10, X0, o.rwmemsize); e.cmp(W9, W10); e.bcond(HS, trap);
 				if (op == OP_POKE_CVC) { matConst(e, W11, in.p2.i); } else { loadSlot(e, W11, in.p2.i); }
 				e.strWx(W11, X2, W9);
-				e.b(cont); e.bind(trap); e.movn(W0, 2); e.ret();	// ~2 = -3 = BAD_POKE
+				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);	// ~2 = -3 = BAD_POKE
 				e.bind(cont);
 				break;
 			}
@@ -633,7 +630,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				loadSlot(e, W10, in.p2.i); e.cmp(W10, W9); e.bcond(HS, trap);	// index >= limit → BAD_PEEK
 				matConst(e, W11, in.p1.i); e.add(W11, W11, W10);				// C1 + index (signed offset off dsp)
 				e.ldrWxs(W11, X1, W11); storeSlot(e, W11, in.p0.i);
-				e.b(cont); e.bind(trap); e.movn(W0, 1); e.ret();
+				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);
 				e.bind(cont);
 				break;
 			}
@@ -645,7 +642,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				matConst(e, W11, in.p0.i); e.add(W11, W11, W10);				// C0 + index
 				if (op == OP_SETL_VVC) { matConst(e, W12, in.p2.i); } else { loadSlot(e, W12, in.p2.i); }
 				e.strWxs(W12, X1, W11);
-				e.b(cont); e.bind(trap); e.movn(W0, 2); e.ret();
+				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);
 				e.bind(cont);
 				break;
 			}
@@ -669,7 +666,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				e.add(W14, W9, W11); e.strWx(W12, X2, W14);			// memoryBase[destIdx+i] = val
 				e.addImm(W11, W11, 1); e.b(lp);
 				e.bind(ldone); e.b(cont);
-				e.bind(trap); e.movn(W0, 7); e.ret();				// ~7 = -8 = ACCESS_VIOLATION
+				e.bind(trap); e.movn(W0, 7); e.b(exitLabel);				// ~7 = -8 = ACCESS_VIOLATION
 				e.bind(cont);
 				break;
 			}
@@ -686,7 +683,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				matConst(e, W10, static_cast<Int>(MEMORY_OFFSET)); e.sub(W9, W9, W10);	// - MEMORY_OFFSET
 				e.ldrW(W10, X0, o.memsize); e.cmp(W9, W10); e.bcond(HS, trap);
 				e.ldrWx(W11, X2, W9); storeSlot(e, W11, in.p0.i);
-				e.b(cont); e.bind(trap); e.movn(W0, 1); e.ret();	// BAD_PEEK
+				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);	// BAD_PEEK
 				e.bind(cont);
 				break;
 			}
@@ -697,7 +694,7 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 				e.ldrW(W10, X0, o.rwmemsize); e.cmp(W9, W10); e.bcond(HS, trap);
 				if (op == OP_POKE_VVC) { matConst(e, W11, in.p2.i); } else { loadSlot(e, W11, in.p2.i); }
 				e.strWx(W11, X2, W9);
-				e.b(cont); e.bind(trap); e.movn(W0, 2); e.ret();	// BAD_POKE
+				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);	// BAD_POKE
 				e.bind(cont);
 				break;
 			}
@@ -708,12 +705,12 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 			case OP_SUBI_VCV: emitBinary(e, &Arm64Emitter::sub, in, true, false); break;
 			case OP_MULI_VVV: emitBinary(e, &Arm64Emitter::mul, in, false, false); break;
 			case OP_MULI_VVC: emitBinary(e, &Arm64Emitter::mul, in, false, true); break;
-			case OP_DIVI_VVV: emitDivMod(e, false, in, 0); break;
-			case OP_DIVI_VVC: emitDivMod(e, false, in, 1); break;
-			case OP_DIVI_VCV: emitDivMod(e, false, in, 2); break;
-			case OP_MODI_VVV: emitDivMod(e, true, in, 0); break;
-			case OP_MODI_VVC: emitDivMod(e, true, in, 1); break;
-			case OP_MODI_VCV: emitDivMod(e, true, in, 2); break;
+			case OP_DIVI_VVV: emitDivMod(e, false, in, 0, exitLabel); break;
+			case OP_DIVI_VVC: emitDivMod(e, false, in, 1, exitLabel); break;
+			case OP_DIVI_VCV: emitDivMod(e, false, in, 2, exitLabel); break;
+			case OP_MODI_VVV: emitDivMod(e, true, in, 0, exitLabel); break;
+			case OP_MODI_VVC: emitDivMod(e, true, in, 1, exitLabel); break;
+			case OP_MODI_VCV: emitDivMod(e, true, in, 2, exitLabel); break;
 			case OP_SHLI_VVV: emitShift(e, 0, in, 0); break;
 			case OP_SHLI_VVC: emitShift(e, 0, in, 1); break;
 			case OP_SHLI_VCV: emitShift(e, 0, in, 2); break;
@@ -833,44 +830,30 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 		}
 	}
 
-	// Cold section: loop-head reload trampolines + §5.7.5 suspend stubs (each names its own continuation via adr).
+	// Cold section: §5.7.5 suspend stubs. Each writes state back, points RESUME at its block's hot mainline (the
+	// dispatcher reloads the pins on re-entry, so no per-block reload trampoline is needed), and branches to EXIT.
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
-		const UInt head = it->first;
-		e.bind(reloadL[head]); reloadState(e, o); e.b(mainline[head]);	// resume entry: reload, then hot mainline
-		e.bind(suspendL[head]);
+		e.bind(suspendL[it->first]);
 		writebackState(e, o);
-		e.adr(X9, reloadL[head]); e.strX(X9, X0, o.resume);				// RESUME = this head's reload prologue
-		e.movn(W0, 0); e.ret();											// TIME_OUT
-	}
-	// Cold native-call retry trampolines: a re-dispatch (RESUME=call site) reloads then re-enters the CALL_NVC hot code.
-	for (size_t k = 0; k < nativeReloads.size(); ++k) {
-		e.bind(nativeReloads[k].first); reloadState(e, o); e.b(nativeReloads[k].second);
+		e.adr(X9, mainline[it->first]); e.strX(X9, X0, o.resume);		// RESUME = this block's hot mainline
+		e.movn(W0, 0); e.b(exitLabel);									// TIME_OUT
 	}
 	return true;
 }
 
 /*
-	Emit the native dispatcher trampoline (§5.4 encoding (a)). `int dispatch(JitProcessor* ctx)`: park CTX in a callee-saved
-	reg, jump to RESUME, loop on TRANSFER (GAZL call/return — no host round-trip), make the one host call on NATIVE_CALL,
-	and return to the host only to suspend (TIME_OUT) or finish. Returns the trampoline's word offset in the buffer.
+	Emit the native dispatcher (§5.4 encoding (b)). `int dispatch(JitProcessor* ctx)`: park ctx in a callee-saved reg,
+	reload the pins from ctx once, then branch into RESUME. Segments tail-branch among themselves for GAZL calls/returns
+	and call natives inline (no host round-trip per call/return); a suspend, a top-level return, or a trap branches to
+	EXIT with the Status in w0. Returns the trampoline's word offset in the buffer.
 */
-static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o) {
+static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel) {
 	const size_t entry = e.wordCount();
-	Label loop = e.newLabel(), done = e.newLabel();
-	e.subImmX(SP, SP, 16); e.strX(X19, SP, 0); e.strX(X30, SP, 8);	// save CTX (x19) + return addr (x30)
-	e.addImmX(X19, X0, 0);								// x19 = ctx (callee-saved → survives the host call)
-	e.bind(loop);
-	e.ldrX(X9, X19, o.resume);
-	e.addImmX(X0, X19, 0); e.blr(X9);					// run the segment (arg0 = ctx); w0 = status
-	e.cmpImm(W0, TRANSFER); e.bcond(EQ, loop);			// TRANSFER: thread next segment — stays in JIT
-	e.cmpImm(W0, NATIVE_CALL); e.bcond(NE, done);		// TIME_OUT / OK / trap → return to host
-	e.ldrX(X9, X19, o.nativefn);						// NATIVE_CALL: the one real host call
-	e.addImmX(X0, X19, 0); e.blr(X9);
-	e.ldrX(X10, X19, o.saveddsp); e.strX(X10, X19, o.dsp);	// restore the transient window dsp
-	e.cmpImm(W0, 0); e.bcond(NE, done);					// nonzero native = suspend: return status; RESUME stays = call site (retry)
-	e.ldrX(X10, X19, o.nativeafter); e.strX(X10, X19, o.resume);	// native OK: RESUME = after-call, continue
-	e.b(loop);
-	e.bind(done);
+	e.subImmX(SP, SP, 16); e.strX(X19, SP, 0); e.strX(X30, SP, 8);	// save the ctx holder (x19) + return addr (x30)
+	e.addImmX(X19, X0, 0);								// x19 = ctx (callee-saved → survives inline native calls)
+	reloadState(e, o);									// load the pins from ctx once (x0 = ctx)
+	e.ldrX(X9, X0, o.resume); e.br(X9);					// branch into RESUME (hot; pins live)
+	e.bind(exitLabel);									// segments branch here with w0 = Status (suspend / finish / trap)
 	e.ldrX(X19, SP, 0); e.ldrX(X30, SP, 8); e.addImmX(SP, SP, 16); e.ret();
 	return entry;
 }
@@ -889,12 +872,13 @@ void JitCompiler::compile(const Instruction* code, UInt functionCount, const UIn
 	std::vector<Label> entryLabels(functionCount);
 	std::vector<size_t> entryOffset(functionCount, 0);
 	for (UInt k = 0; k < functionCount; ++k) { entryLabels[k] = e.newLabel(); }
+	Label exitLabel = e.newLabel();					// the one dispatcher EXIT; every segment terminal branches here (§5.4 (b))
 	for (UInt ord = 0; ord < functionCount; ++ord) {
-		if (!lowerFunction(e, code, memory, functionTable[ord], o, entryLabels, entryOffset, ord, functionCount)) {
+		if (!lowerFunction(e, code, memory, functionTable[ord], o, entryLabels, entryOffset, ord, functionCount, exitLabel)) {
 			return;								// unsupported opcode → caller should fall back to the interpreter
 		}
 	}
-	const size_t dispatchOffset = emitDispatcher(e, o);
+	const size_t dispatchOffset = emitDispatcher(e, o, exitLabel);
 	e.finalize();
 	const size_t words = e.wordCount();
 	// AArch64 offsets are in words; the shared publish step takes bytes, so scale by 4.

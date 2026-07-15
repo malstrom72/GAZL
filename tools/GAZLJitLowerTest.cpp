@@ -63,8 +63,16 @@ static Status nativeBlock(Processor* p) {
 	++gNativeCallCount;
 	return OK;
 }
-static NativeFunc const gNativeTable[] = { nativeSquare, nativeBlock };
-static const char* const gNativeNames[] = { "nsq", "blk" };
+// A YIELDING native: the standard cooperative-yield convention — zero the fuel and return OK, so the *next* block
+// suspends (TIME_OUT) and the host regains control. Permut8/Prawn rely on this (sleep/launch), so the JIT must make a
+// native that does resetTimeOut(0)+OK behave exactly like the interpreter: work after the yield still runs on resume.
+static Status nativeYield(Processor* p) {
+	p->resetTimeOut(0);
+	++gNativeCallCount;
+	return OK;
+}
+static NativeFunc const gNativeTable[] = { nativeSquare, nativeBlock, nativeYield };
+static const char* const gNativeNames[] = { "nsq", "blk", "yld" };
 
 namespace {
 	const int CODE_SIZE = 64 * 1024, DATA_SIZE = 64 * 1024, FUNCTION_TABLE_SIZE = 1024, CALL_STACK_SIZE = 256;
@@ -346,6 +354,11 @@ static const char* const K_SWITCH =			// SWCH jump table (targets read from cons
 	".sw: MOVi $r #999\n"
 	".done: POKE &gOut $r\n RETU\n";
 
+static const char* const K_YIELD =			// resetTimeOut(0)+OK cooperative yield native: work AFTER the yield must survive suspend/resume
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *2\n$n: LOCi\n"
+	" PEEK $n &gIn\n CALL ^yld %0 *2\n ADDi $n $n $n\n ADDi $n $n #7\n POKE &gOut $n\n RETU\n";	// gOut = 2*gIn + 7
+
 static const char* const K_FTOISAT =		// fTOi saturation: a huge float clamps to the int range (must match the interpreter)
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
 	"main: FUNC\n PARA *1\n$n: LOCi\n$f: LOCf\n"
@@ -382,6 +395,7 @@ int main() {
 	runKernel("checked mem  [PEEK/POKE + trap]", K_MEMORY, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("far globals  [const-addr PEEK/POKE >4096]", K_FARGLOBAL, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("switch       [SWCH jump table]", K_SWITCH, indices, sizeof(indices) / sizeof(*indices));
+	runKernel("yield native [resetTimeOut(0)+OK]", K_YIELD, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("ftoi sat     [fTOi clamp]", K_FTOISAT, signed_, sizeof(signed_) / sizeof(*signed_));
 
 	std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED", failures, failures == 1 ? "" : "s");

@@ -160,6 +160,15 @@ Offsets JitProcessor::layout() {
 */
 namespace {
 
+// The native ABI the JIT bakes into CALL_NVC: a plain C function of one pointer, returning a single-register Status.
+// Pinned so a future change to either (a wider Status, a by-value struct return, a non-default convention) can't
+// silently break the hand-emitted call/return. (The runtime counterpart — an actual JIT→C round-trip in the probe —
+// is the belt to this suspenders.)
+typedef Status (*JitNativeSignatureCheck)(Processor*);
+#if __cplusplus >= 201103L
+static_assert(sizeof(Status) <= sizeof(void*), "JIT CALL_NVC assumes a native's Status returns in one integer register");
+#endif
+
 typedef uint32_t (*ProbeFunc)();
 
 #if defined(__aarch64__) || defined(_M_ARM64)
