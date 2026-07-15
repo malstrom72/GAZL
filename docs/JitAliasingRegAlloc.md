@@ -89,17 +89,24 @@ ever land in a pointer‑typed slot or a typeless `%` transient.)
 - Cost: loop‑carried values reload every iteration (the price of canonical‑memory joins). Ships correct
   and already dodges the blanket‑flush disaster; the remaining traffic is what §6 removes.
 
-## 6. Multi‑pass upgrade - one backward pass
+## 6. Next‑use eviction - split by scope (block-local is cheap, global is the multi-pass)
 
-- **One backward pass** tags each operand with its **next‑use distance** (and last‑use / liveness falls
-  out for free). Backward because next‑use is *future* information: a reverse sweep has already seen the
-  future, so it answers in O(1); forward would need repeated lookahead (O(n²)). Per instruction: *kill
-  dests, then gen sources* (`live_in = (live_out − dests) ∪ sources`); a value that is both keeps
-  `next = i`. Up to 3 operands per instruction, and an instruction's own operands are **pinned** during
-  its allocation cycle.
-- **Belady eviction** (furthest‑next‑use) replaces LRU - a **drop‑in victim‑selection swap**, same
-  architecture, fed by the pass's tags. This is the single highest‑value change; LRU's fatal move is
-  evicting a hot pointer (`$line`) right before its next use.
+The "backward pass" is two different-sized things; splitting them puts each where it is cheap:
+
+- **Block-local next‑use = v2.0.5, not a multi-pass.** The floating cache is cleared at every block
+  boundary, so the only next‑use it can act on is *within the current block* - a single reverse scan of the
+  block, no fixpoint, no cross‑block liveness. It does **not** break v2.0's "no liveness" property (that is
+  about cross‑block dataflow). It also yields block-local **last‑use**, so a dead transient is dropped
+  instead of flushed (skip-dead-flush). This is a **drop‑in victim‑selection swap** on v2.0's cache, so it
+  is a point release (v2.0.5), independent of bound lines; it already bites under x64 pressure.
+- **Global next‑use / liveness = the real multi-pass, folded into v2.2.** The full backward dataflow pass
+  (fixpoint, `live_in = (live_out − dests) ∪ sources`; up to 3 operands, an instruction's own operands
+  **pinned** during its cycle) is only needed to decide what stays resident *across* edges - exactly what
+  v2.2's Liftoff join reconciliation needs, and worthless without it. So it rides in with v2.2, not as a
+  stage of its own.
+- **Belady eviction** (furthest‑next‑use) replaces LRU - fed by whichever scan is in scope (block-local at
+  v2.0.5, global at v2.2). This is the single highest‑value change; LRU's fatal move is evicting a hot
+  pointer (`$line`) right before its next use.
 - Alternatives to LRU **and** pinning: **(a)** Belady (which to evict), **(b)** cost‑based + **remat**
   (recompute cheap invariants like `&global`/`ADRL`/constants instead of spilling), **(c)** live‑range
   **splitting** (hold a value in a register only across the spans that use it - residency where it pays,
@@ -163,8 +170,9 @@ the gap is our classification.
 
 - Adopt `*0`/`*N` (revive the size hint); reinstate the C‑object‑model rule via new‑Impala `LOCA` banks;
   keep the GAZL assembler permissive, enforce "no span" in the frontend.
-- Ship the simple single‑pass allocator (canonical‑memory joins + provenance‑gated clobbers) first, then
-  add one backward pass for next‑use → Belady + splitting/remat.
+- Ship the simple single‑pass allocator (canonical‑memory joins + provenance‑gated clobbers) first; add
+  block-local Belady as a v2.0.5 point release (cheap reverse scan), the global liveness pass with v2.2,
+  and splitting/remat as the tail.
 - The aliasing spec only needs to be cheap and conservative; a cost‑model allocator prices imprecision
   instead of falling off a cliff.
 - Only 4 programs ever exercise the hard case; all stay correct under `*0` meanwhile.

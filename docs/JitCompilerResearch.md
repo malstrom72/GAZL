@@ -855,9 +855,10 @@ emitted code, Apple Silicon, integer kernels; speedups vs the interpreter):
 | Stage | Mechanism | Needs the §1.1 aliasing spec? | Arith kernel | Seq‑memory kernel |
 |---|---|---|--:|--:|
 | v1 | all slots memory‑resident | no | 2.8× | ~3× (est.) |
-| **v2.0** | floating lines only; **conservative flush around every pointer memory op** | **no - sound with no aliasing rule at all** | 3.9× | 5.2-5.5× |
-| **v2.1** | + bound lines (fixed‑map cross‑block, §5.7.6) for hot private scalars (escape floor) | **yes - this is what the spec is for** | 6.1× | 12.4-13.6× |
-| **v2.2** | + **Liftoff‑style join reconciliation** (varying per‑block maps; the general cross‑block form, §5.7.6) | yes (same spec as v2.1) | (gains on multi‑join call‑free loops) | - |
+| **v2.0** | floating lines only; **conservative flush around every pointer memory op**; **LRU** eviction | **no - sound with no aliasing rule at all** | 3.9× | 5.2-5.5× |
+| **v2.0.5** | + **block-local Belady** eviction (furthest next use from a single reverse scan of the block) + skip-dead-flush; a drop-in victim swap, no aliasing spec, no cross-block liveness | no | (arm64 ≈ v2.0; bites on x64 pressure) | - |
+| **v2.1** | + bound lines (fixed‑map cross‑block, §5.7.6) for hot private scalars (region membership, §1.1) | **yes - this is what the spec is for** | 6.1× | 12.4-13.6× |
+| **v2.2** | + **Liftoff‑style join reconciliation** (varying per‑block maps; the general cross‑block form, §5.7.6) **+ the global backward liveness / next-use pass** (needed to decide cross-block residency) | yes (same spec as v2.1) | (gains on multi‑join call‑free loops) | - |
 | v2.3 | + provenance‑scoped flushing (taint frame‑born pointers) | yes (already required by v2.1) | - | 5.7-6.4× without bound lines; ~10-20 % over v2.0 |
 
 The measured surprise that set this staging: **the block‑boundary clear is the expensive part, not the pointer
@@ -918,18 +919,21 @@ is the next committed stage; this fixed‑map form is deliberately first because
 the dominant single‑block loops.
 
 Bound lines are **exempt from all pointer‑op flushes** - and that exemption is only sound for slots no defined pointer
-access can reach. This is where the **provenance‑bounded local‑access rule** (§1.1, normative, Phase 0) enters, via the
-escape floor:
+access can reach. This is where the **provenance‑bounded local‑access rule** (§1.1, normative, Phase 0) enters as region
+membership, not a one-sided floor (pointer decrement is as valid as increment, so a floor bounds nothing on its low side):
 
 ```
-escapeFloor = +INF                                   // a layout offset; locals < 0 < transients
+regions        = {}                                  // bounded aliasable spans; a span is a set, direction-free
+frameUnbounded = false                               // a legacy *0 pointer can walk anywhere, either direction
 for ins in func:
-    if ins.op == ADRL:          escapeFloor = min(escapeFloor, layoutOff(base of ins.target))
-    if ins.op in {GETL, SETL}:  escapeFloor = min(escapeFloor, layoutOff(ins.base))
+    if ins.op == ADRL:
+        if ins.extent == 0:  frameUnbounded = true                                    // *0: unbounded up AND down
+        else:                regions += [base(ins.target), base(ins.target) + ins.extent)   // *N region
+    if ins.op in {GETL, SETL}:  regions += span(ins.base)                             // the named array's slot set
 
-private(s)   = s.layoutOff < escapeFloor             // unreachable by any defined pointer access
-               or s.kind == TRANSIENT                 // above dsp: outside every defined span
-aliasable(s) = otherwise                              // floating lines only (v2.0 treatment)
+aliasable(s) = s.kind != TRANSIENT                   // transients sit above dsp, outside every span
+               and (frameUnbounded or (exists r in regions: s in r))
+private(s)   = not aliasable(s)                      // no defined pointer can reach it -> register-material
 
 eligible  = { s : s.kind == LOCAL_SCALAR and private(s) }       // params (PARA scalars) included
 weight(s) = Σ over references of s:  10 ^ loopDepth(block)
@@ -937,8 +941,9 @@ boundGPR  = top KG of eligible with class GPR (LOCi/LOCp), by weight
 boundFPR  = top KF of eligible with class FPR (LOCf),      by weight
 ```
 
-(`base of` - the floor anchors at the named object's **base**, not the `:offset` derivation point, so reverse iteration
-through an interior/end pointer stays defined; measured on the corpus this changes no function's floor. §1.1's rule
+(`base(...)` anchors at the named object's **base**, not the `:offset` derivation point, so a region covers the
+whole object and reverse iteration through an interior/end pointer stays defined. A legacy `*0` makes the entire frame
+aliasable (a decrementing pointer can leave any assumed lower bound), so no local is private until the function emits `*N`. §1.1's rule
 text should be amended to match.) Register pools: because GAZL calls are dispatcher transfers (§5.4) and everything is
 resynced around them, bound lines may use **any** host register not pinned by §5.3 - caller‑saved included. That is
 ≈20 GPR + ≈28 FP/SIMD on AArch64 and ≈9 GPR + ≈14 XMM on x64. Cap KG/KF (initially ~8/8) to keep scratch headroom;
@@ -951,14 +956,16 @@ its 14 pre‑bank scalars are bound‑eligible even though the function bulk‑c
 on the floor‑raising refinements in §5.7.6 (Impala declaring arrays last; `GETL`/`SETL` spans tightened to the named
 array) - until then those functions still enjoy full v2.0 floating‑cache treatment.
 
-#### 5.7.3 v2.3 - provenance‑scoped flushing (optional knob)
+#### 5.7.3 v2.3 - provenance‑scoped flushing (core for aliasable-bank firmware; a knob elsewhere)
 
 v2.0 flushes floating lines around *every* pointer memory op. The refinement: track a one‑bit taint - "derived from an
 `ADRL` in this function" - through `MOVp`/`ADDp`/`SUBp`; only **tainted** pointer ops (plus `GETL`/`SETL`) flush, since
 global‑born and param‑born pointers cannot reach this frame's slots (§1.1; a tainted pointer that round‑trips through
 memory loses its guarantee, so the taint pass stays single‑pass). Measured: worth only ~10-20 % over conservative
-flushing on Apple Silicon (store‑to‑load forwarding), likely more on small x64 cores. **Build only if profiling on x64
-demands it** - it needs no new spec (v2.1 already requires §1.1) but adds the only genuinely subtle analysis in the
+flushing on Apple Silicon (store‑to‑load forwarding), likely more on small x64 cores. **For aliasable-bank firmware (the Vortex reverb, §8) this is not optional - it is the decisive win**, because the hot
+state bank is aliasable (an `ADRL`/`COPY` target) so bound lines cannot hold it, and only provenance-scoped flushing
+keeps it resident; the ~10-20 % figure is for kernels where bound lines already carried the load. **Elsewhere, build it
+only if profiling on x64 demands it** - it needs no new spec (v2.1 already requires §1.1) but adds the only genuinely subtle analysis in the
 allocator, so it must earn its place with numbers.
 
 #### 5.7.4 Codegen skeleton
