@@ -283,7 +283,10 @@ class Processor;
 typedef Status (*NativeFunc)(Processor* processor);
 
 struct CallStackEntry {
-	const Instruction* ip;
+	union {						// the return continuation - same pointer slot, different meaning per engine:
+		const Instruction* ip;			// interpreter: the return instruction pointer
+		void* returnAddress;			// JIT: the return address into the compiled code page
+	};
 	Value* dsp;					// Zero here means return to native function, pop previous stack entry for true dsp (ip is identical).
 };
 
