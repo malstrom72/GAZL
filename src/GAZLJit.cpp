@@ -26,6 +26,7 @@
 
 #include <cstddef>
 #include <cstring>				// memset / memcpy — the jitAvailable() probe
+#include <set>					// jitFuelSafepoints — block-leader set
 
 #if defined(_WIN32)
 #	ifndef WIN32_LEAN_AND_MEAN
@@ -60,6 +61,46 @@ bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& targe
 		case OP_NEQF_VVB: case OP_NEQF_VCB:
 			target = static_cast<UInt>(j + code[instructionIndex].p2.i); return true;
 		default: return false;
+	}
+}
+
+/*
+	Fuel safepoints — see GAZLJit.h. Leaders partition the function into basic blocks; charging each block's static
+	weight once, at its leader, makes the JIT's total fuel spend equal the interpreter's per-instruction spend. The
+	maxBlockWeight cap splits any long straight run so a block always fits one fuel grant (§5.5).
+*/
+void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, const Value* memory
+		, UInt maxBlockWeight, std::map<UInt, UInt>& weight) {
+	std::set<UInt> leaders;
+	leaders.insert(funcStart);
+	for (UInt j = funcStart; j <= endIndex; ++j) {
+		const Int op = code[j].opcode;
+		UInt target;
+		if (jitBranchTarget(code, j, target)) {
+			leaders.insert(target);								// branch/GOTO/FORi target begins a block
+			if (j + 1 <= endIndex) { leaders.insert(j + 1); }	// so does the fall-through after it
+		} else if (op == OP_SWCH) {
+			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
+			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
+			for (UInt k = 0; k < size; ++k) { leaders.insert(static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i)); }
+			if (j + 1 <= endIndex) { leaders.insert(j + 1); }
+		} else if (op == OP_CALL_CVC || op == OP_CALL_VVC || op == OP_CALL_NVC) {
+			if (j + 1 <= endIndex) { leaders.insert(j + 1); }	// a call ends a block (§5.5)
+		}
+	}
+	// Cap: split any [leader, nextLeader) run longer than maxBlockWeight so no single block exceeds one fuel grant.
+	{
+		std::vector<UInt> sorted(leaders.begin(), leaders.end());
+		for (size_t i = 0; i < sorted.size(); ++i) {
+			const UInt stop = (i + 1 < sorted.size()) ? sorted[i + 1] : endIndex + 1;
+			for (UInt p = sorted[i] + maxBlockWeight; p < stop; p += maxBlockWeight) { leaders.insert(p); }
+		}
+	}
+	// weight[leader] = instruction span to the next leader.
+	std::vector<UInt> all(leaders.begin(), leaders.end());
+	for (size_t i = 0; i < all.size(); ++i) {
+		const UInt stop = (i + 1 < all.size()) ? all[i + 1] : endIndex + 1;
+		weight[all[i]] = stop - all[i];
 	}
 }
 

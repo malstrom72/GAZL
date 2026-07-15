@@ -44,6 +44,7 @@
 #include <stdint.h>
 #include <cstddef>
 #include <vector>
+#include <map>
 #include "GAZL.h"
 #include "GAZLJitMem.h"			// makeExecutable() — platform-specific backend, architecture-neutral
 
@@ -108,6 +109,17 @@ bool jitAvailable();
 	jump-table targets are not covered here — each backend reads those from the const-memory table itself.
 */
 bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& target);
+
+/*
+	Fuel safepoints for one function (arch-neutral, defined in GAZLJit.cpp): the basic-block leaders — function entry,
+	branch/SWCH targets, and the instruction after any branch/GOTO/SWCH/CALL — with long straight runs split so no block
+	exceeds maxBlockWeight. Fills `weight` with leaderIndex -> charge (instruction span to the next safepoint). Both
+	backends emit a fuel check charging `weight` at each leader, so the JIT consumes fuel at ~the interpreter's
+	1/instruction rate (fuel-rate fidelity) and worst-case time-to-suspend is bounded by maxBlockWeight (§5.5).
+*/
+const UInt MAX_BLOCK_WEIGHT = 64;				// fuel-check granularity: the host must grant at least this per resume
+void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, const Value* memory
+		, UInt maxBlockWeight, std::map<UInt, UInt>& weight);
 
 // Byte offsets of the machine state a segment/dispatcher touches, within the (subclass) engine.
 struct Offsets {

@@ -372,31 +372,14 @@ static bool lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 	UInt endIndex = funcStart;
 	while (code[endIndex].opcode != OP_RETU) { ++endIndex; }
 
-	// Pass 1 — branch/SWCH targets (each gets a label) + loop back-edges (target <= j) that become loop-head fuel
-	// safepoints charged loopWeight = block span. Then a reload trampoline + suspend stub per loop head; nativeReloads
-	// (filled in pass 2) is a reload trampoline per CALL_NVC for the blocking-retry re-entry.
-	std::map<UInt, Label> labels;
+	// Pass 1 — fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight and each a
+	// resumable point. `labels` is the mainline label per leader (hot entry + branch + resume target); reloadL/suspendL
+	// its reload trampoline + suspend stub. Charging per block (not just loop heads) keeps fuel spend ≈ the interpreter's.
 	std::map<UInt, UInt> loopWeight;
-	for (UInt j = funcStart; j <= endIndex; ++j) {
-		if (code[j].opcode == OP_SWCH) {
-			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
-			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
-			for (UInt k = 0; k < size; ++k) {
-				const UInt target = static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i);
-				if (!labels.count(target)) { labels[target] = emitter.newLabel(); }
-				if (target <= j) { loopWeight[target] = j - target + 1; }
-			}
-			continue;
-		}
-		UInt target;
-		if (jitBranchTarget(code, j, target)) {
-			if (!labels.count(target)) { labels[target] = emitter.newLabel(); }
-			if (target <= j) { loopWeight[target] = j - target + 1; }
-		}
-	}
-	std::map<UInt, Label> reloadL, suspendL;
+	jitFuelSafepoints(code, funcStart, endIndex, memory, MAX_BLOCK_WEIGHT, loopWeight);
+	std::map<UInt, Label> labels, reloadL, suspendL;
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
-		reloadL[it->first] = emitter.newLabel(); suspendL[it->first] = emitter.newLabel();
+		labels[it->first] = emitter.newLabel(); reloadL[it->first] = emitter.newLabel(); suspendL[it->first] = emitter.newLabel();
 	}
 	std::vector<std::pair<Label, Label> > nativeReloads;	// {call-site reload, hot re-entry} per CALL_NVC (blocking retry)
 

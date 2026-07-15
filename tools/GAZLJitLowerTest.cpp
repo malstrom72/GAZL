@@ -102,14 +102,17 @@ static bool assemble(const char* source, Symbols& globals) {
 
 static void restoreClean() { std::memcpy(gMemory, gCleanImage.data(), DATA_SIZE * sizeof(Value)); }
 
-static std::vector<Value> runInterpreter(Pointer mainPtr, Pointer gInPtr, int n, Status& outStatus) {
+static std::vector<Value> runInterpreter(Pointer mainPtr, Pointer gInPtr, int n, Status& outStatus,
+		int fuel = 0x7FFFFFFF, int* suspendsOut = 0) {
 	restoreClean();
 	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
 			CALL_STACK_SIZE, gCallStack, gNativeTable, nullptr);
 	p.accessMemory(gInPtr, 1)->i = n;
 	Status s = p.enterCall(mainPtr);
-	do { p.resetTimeOut(0x7FFFFFFF); s = p.run(); } while (s == TIME_OUT || s == BLOCK_RETRY);	// trap valid; blocking native retries
+	int suspends = 0;
+	do { p.resetTimeOut(fuel); s = p.run(); if (s == TIME_OUT || s == BLOCK_RETRY) { ++suspends; } } while (s == TIME_OUT || s == BLOCK_RETRY);
 	outStatus = s;
+	if (suspendsOut != 0) { *suspendsOut = suspends; }
 	return std::vector<Value>(gMemory, gMemory + DATA_SIZE);
 }
 
@@ -144,7 +147,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 		const std::vector<Value> want = runInterpreter(mainPtr, gInPtr, n, wantStatus);
 
 		for (int pass = 0; pass < 2; ++pass) {
-			const int fuel = (pass == 0) ? 0x7FFFFFFF : 6;
+			const int fuel = (pass == 0) ? 0x7FFFFFFF : 100;	// tiny grant (> MAX_BLOCK_WEIGHT) forces repeated suspend/resume
 			restoreClean();
 			JitProcessor eng(module, CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory,
 					gGlobalsSize, gConstsSize, CALL_STACK_SIZE, gCallStack, gNativeTable);
@@ -166,6 +169,18 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 					pass == 0 ? "[fullfuel]" : "[tinyfuel]", s, gNativeCallCount, suspends,
 					gMemory[gOutPtr - MEMORY_OFFSET].i, good ? "OK" : "MISMATCH");
 			if (!good) { std::printf("    want status=%d, diff word=%d\n", wantStatus, diff); ++failures; }
+			if (pass == 1 && good) {						// fuel-rate fidelity: JIT charge (per block) vs interpreter (1/instr)
+				Status ds = OK; int interpSuspends = 0;
+				runInterpreter(mainPtr, gInPtr, n, ds, fuel, &interpSuspends);
+				if (interpSuspends >= 8) {					// enough suspends at this grant to compare meaningfully
+					const double ratio = static_cast<double>(suspends) / interpSuspends;
+					if (ratio < 0.5 || ratio > 2.0) {		// the JIT should yield about as often as the interpreter
+						std::printf("    FIDELITY n=%d interp_suspends=%d jit_suspends=%d ratio=%.2f (want 0.5..2.0)\n",
+								n, interpSuspends, suspends, ratio);
+						++failures;
+					}
+				}
+			}
 		}
 	}
 	// `module` frees its executable page here as it goes out of scope (RAII).

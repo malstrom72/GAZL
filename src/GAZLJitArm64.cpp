@@ -504,29 +504,16 @@ static bool lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 	UInt retIndex = funcIndex;
 	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
 
-	// Pass 1 — analysis: branch targets + back-edge loop heads (with block weights).
-	std::set<UInt> targets;
+	// Pass 1 — fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight. Every leader
+	// is a resumable point, so each gets a mainline label (hot entry + branch + resume target), a reload trampoline, and a
+	// suspend stub. Charging per block (not just loop heads) makes fuel spend ≈ the interpreter's, so straight-line and
+	// recursive code yields on time too.
 	std::map<UInt, UInt> loopWeight;
-	for (UInt j = funcIndex; j <= retIndex; ++j) {
-		UInt tgt;
-		if (jitBranchTarget(code, j, tgt)) {
-			targets.insert(tgt);
-			if (tgt <= j) { loopWeight[tgt] = j - tgt + 1; }		// back-edge → loop head needs a fuel-check safepoint
-		} else if (code[j].opcode == OP_SWCH) {						// jump-table: every case target is a branch target
-			const UInt sz = static_cast<UInt>(code[j].p1.i) + 1;	// entries = clamp-max + 1
-			const UInt tbl = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);	// table word-index in the memory image
-			for (UInt k = 0; k < sz; ++k) {
-				const UInt t = static_cast<UInt>(static_cast<Int>(j) + memory[tbl + k].i);	// target = swch + relOffset
-				targets.insert(t);
-				if (t <= j) { loopWeight[t] = j - t + 1; }
-			}
-		}
-	}
+	jitFuelSafepoints(code, funcIndex, retIndex, memory, MAX_BLOCK_WEIGHT, loopWeight);
 	std::map<UInt, Label> mainline, reloadL, suspendL;
 	std::vector<std::pair<Label, Label> > nativeReloads;	// {call-site reload prologue, hot re-entry} per CALL_NVC (blocking retry)
-	for (std::set<UInt>::const_iterator it = targets.begin(); it != targets.end(); ++it) { mainline[*it] = e.newLabel(); }
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
-		reloadL[it->first] = e.newLabel(); suspendL[it->first] = e.newLabel();
+		mainline[it->first] = e.newLabel(); reloadL[it->first] = e.newLabel(); suspendL[it->first] = e.newLabel();
 	}
 
 	// Function entry: reload pinned state, then FUNC prologue (dsp += localsSize).
