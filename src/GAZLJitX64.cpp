@@ -740,16 +740,12 @@ static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets, Label 
 }
 
 /*
-	JitCompilerX64 — the x86-64 backend of JitCompiler. Its emit() lowers a whole finalized program to x86-64 machine code
-	and fills an EmittedModule; the shared JitCompiler::compile then makes it executable. Lower every function into one
-	buffer, append one shared epilogue, append the dispatcher, then record the byte stream + ordinal->entry byte offsets.
-	Returns false on any opcode the backend cannot lower, so the caller falls back to the interpreter. nativeJitCompiler()
-	is the host entry point — this TU is linked only on x86-64 hosts.
+	JitCompilerX64::emit (declared in GAZLJitX64.h) — lowers a whole finalized program to x86-64 machine code and fills an
+	EmittedModule; the shared JitCompiler::compile then makes it executable. Lower every function into one buffer, append
+	one shared epilogue, append the dispatcher, then record the byte stream + ordinal->entry byte offsets. Throws (via
+	lowerFunction) on any finalized opcode the backend fails to cover. nativeJitCompiler() is the host entry point — this
+	TU is linked only on x86-64 hosts.
 */
-class JitCompilerX64 : public JitCompiler {
-	protected:	virtual void emit(const Program& program, EmittedModule& out);
-};
-
 void JitCompilerX64::emit(const Program& program, EmittedModule& out) {
 	const Offsets offsets = JitProcessor::layout();				// the run-state ABI, obtained without an engine
 	X64Emitter emitter;

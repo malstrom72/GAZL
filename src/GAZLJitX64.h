@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <vector>
 #include <cstddef>
+#include "GAZLJit.h"			// JitCompiler base + Program / EmittedModule, for JitCompilerX64 below
 
 namespace GAZL {
 
@@ -167,6 +168,15 @@ class X64Emitter {
 		std::vector<uint8_t> bytes;
 		std::vector<ptrdiff_t> labelTargets;					// per-label bound byte offset, or -1 while unbound
 		std::vector<Fixup> fixups;
+};
+
+/*
+	The x86-64 JIT backend. JitCompilerX64 drives the X64Emitter above through the lowering pass in GAZLJitX64.cpp,
+	supplying JitCompiler::emit(). Declared here so it is nameable (e.g. a codegen test that emits and inspects a backend's
+	bytes). Obtain the host backend with nativeJitCompiler() (defined in GAZLJitX64.cpp).
+*/
+class JitCompilerX64 : public JitCompiler {
+	protected:	virtual void emit(const Program& program, EmittedModule& out);
 };
 
 } // namespace GAZL

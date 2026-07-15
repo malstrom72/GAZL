@@ -23,11 +23,11 @@
 
 /*
 	GAZLJitArm64 is the arm64 backend for the GAZL VM JIT: the AArch64 machine-code assembler (`Arm64Emitter`). It is a
-	tiny one-method-per-instruction encoder with one canonical encoding form per operation and no dependency on the
-	interpreter (it only produces bytes; the Emitter-only diff test links without `GAZL.cpp`). Verified against a
-	clang-assembled oracle. The arch-neutral JIT API (JitModule / JitProcessor / JitCompiler) lives in GAZLJit.h; the
-	arm64 lowering pass + native dispatcher that drive this emitter live in GAZLJitArm64.cpp. See
-	docs/JitEmitterHandoff.md.
+	tiny one-method-per-instruction encoder with one canonical encoding form per operation: it only produces bytes and does
+	not touch the interpreter. Verified against a clang-assembled oracle. The arch-neutral JIT API (JitModule /
+	JitProcessor / JitCompiler) lives in GAZLJit.h; the arm64 lowering pass + native dispatcher that drive this emitter,
+	plus JitCompilerArm64 (declared below), live in GAZLJitArm64.cpp. The diff test still links GAZL.cpp — the backend TU's
+	lowering throws GAZL::JitException, whose base vtable is anchored there. See docs/JitEmitterHandoff.md.
 */
 
 #ifndef GAZLJitArm64_h
@@ -37,6 +37,7 @@
 #include <cstddef>
 #include <vector>
 #include "GAZL.h"
+#include "GAZLJit.h"			// JitCompiler base + Program / EmittedModule, for JitCompilerArm64 below
 
 namespace GAZL {
 
@@ -188,6 +189,15 @@ class Arm64Emitter {
 		std::vector<uint32_t> words;
 		std::vector<ptrdiff_t> labelTargets;					// per-label bound word index, or -1 while unbound
 		std::vector<Fixup> fixups;
+};
+
+/*
+	The arm64 JIT backend. JitCompilerArm64 drives the Arm64Emitter above through the lowering pass in GAZLJitArm64.cpp,
+	supplying JitCompiler::emit(). Declared here so it is nameable (e.g. a codegen test that emits and inspects a backend's
+	bytes). Obtain the host backend with nativeJitCompiler() (defined in GAZLJitArm64.cpp).
+*/
+class JitCompilerArm64 : public JitCompiler {
+	protected:	virtual void emit(const Program& program, EmittedModule& out);
 };
 
 } // namespace GAZL

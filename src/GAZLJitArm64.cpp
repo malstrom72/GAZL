@@ -860,15 +860,11 @@ static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel)
 }
 
 /*
-	JitCompilerArm64 — the arm64 backend of JitCompiler. Its emit() lowers a whole finalized program to AArch64 machine
-	code (the substrate above: Arm64Emitter + lowerFunction + emitDispatcher) and fills an EmittedModule; the shared
-	JitCompiler::compile then makes it executable. Targets the static JitProcessor::layout() ABI; never touches a
-	processor instance. nativeJitCompiler() is the host entry point — this TU is linked only on arm64 hosts.
+	JitCompilerArm64::emit (declared in GAZLJitArm64.h) — lowers a whole finalized program to AArch64 machine code (the
+	substrate above: Arm64Emitter + lowerFunction + emitDispatcher) and fills an EmittedModule; the shared
+	JitCompiler::compile then makes it executable. Targets the static JitProcessor::layout() ABI; never touches a processor
+	instance. nativeJitCompiler() is the host entry point — this TU is linked only on arm64 hosts.
 */
-class JitCompilerArm64 : public JitCompiler {
-	protected:	virtual void emit(const Program& program, EmittedModule& out);
-};
-
 void JitCompilerArm64::emit(const Program& program, EmittedModule& out) {
 	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
 	Arm64Emitter e;
