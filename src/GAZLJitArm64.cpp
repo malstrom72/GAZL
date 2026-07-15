@@ -889,11 +889,15 @@ void JitCompilerArm64::compile(const AssembledProgram& program, JitModule& out) 
 	out.swap(built);
 }
 
-// NativeJitCompiler compiles with this backend when arm64 is the host arch; on other hosts it compiles out (the x86-64 TU
-// provides it there), so both backends may link together without a duplicate. A client that wants the arm64 backend
-// regardless of host names JitCompilerArm64 directly instead.
+/*
+	NativeJitCompiler compiles with this backend when arm64 is the host arch; on other hosts it compiles out (the x86-64 TU
+	provides it there), so both backends may link together without a duplicate. A client that wants the arm64 backend
+	regardless of host names JitCompilerArm64 directly instead.
+*/
 #if defined(__aarch64__) || defined(_M_ARM64)
-void NativeJitCompiler::compile(const AssembledProgram& program, JitModule& out) { JitCompilerArm64().compile(program, out); }
+void NativeJitCompiler::compile(const AssembledProgram& program, JitModule& out) {
+	JitCompilerArm64().compile(program, out);
+}
 #endif
 
 } // namespace GAZL

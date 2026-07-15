@@ -259,9 +259,11 @@ static const Reg ARG_0 = RDI;
 static const uint32_t CALL_FRAME = 8u;								// just the 16-align pad; SysV has no shadow space
 #endif
 
-// Segment state lives in ctx between transfers. reloadState loads the pins from ctx (ctx must already be in CONTEXT);
-// enterSegment is a fresh dispatcher entry (ctx arrives in ARG_0); writebackState flushes before a TRANSFER. Mirrors the
-// arm64 reloadState/writebackState. dataStackEnd is loaded on demand, not pinned.
+/*
+	Segment state lives in ctx between transfers. reloadState loads the pins from ctx (ctx must already be in CONTEXT);
+	enterSegment is a fresh dispatcher entry (ctx arrives in ARG_0); writebackState flushes before a TRANSFER. Mirrors the
+	arm64 reloadState/writebackState. dataStackEnd is loaded on demand, not pinned.
+*/
 static void reloadState(X64Emitter& e, const Offsets& o) {
 	e.loadQ(DSP, CONTEXT, o.dsp); e.loadQ(MEMORY_BASE, CONTEXT, o.mb);
 	e.load(FUEL, CONTEXT, o.fuel); e.loadQ(IP_STACK_PTR, CONTEXT, o.ipsp);
@@ -287,10 +289,12 @@ static void emitBinary(X64Emitter& emitter, BinaryOp op, const Instruction& inst
 	emitter.store(DSP, instruction.p0.i * 4, SCRATCH_A);
 }
 
-// Signed division (rem=false) / modulo (rem=true). Dividend p1 -> eax, divisor p2 -> ecx. Guards match the interpreter:
-// a runtime zero divisor traps DIVISION_BY_ZERO; divisor == -1 is special-cased (div -> -a, mod -> 0) to dodge the x86
-// #DE on INT_MIN / -1. Result is left in eax before the store. (A const-zero divisor is an assemble-time error, so the
-// zero guard is only for a variable divisor, matching arm64.)
+/*
+	Signed division (rem=false) / modulo (rem=true). Dividend p1 -> eax, divisor p2 -> ecx. Guards match the interpreter:
+	a runtime zero divisor traps DIVISION_BY_ZERO; divisor == -1 is special-cased (div -> -a, mod -> 0) to dodge the x86
+	#DE on INT_MIN / -1. Result is left in eax before the store. (A const-zero divisor is an assemble-time error, so the
+	zero guard is only for a variable divisor, matching arm64.)
+*/
 static void emitDivMod(X64Emitter& emitter, const Instruction& instruction, bool rem, bool source1Const, bool source2Const, Label epilogue) {
 	if (source1Const) { emitter.movImm(RAX, static_cast<uint32_t>(instruction.p1.i)); } else { emitter.load(RAX, DSP, instruction.p1.i * 4); }
 	if (source2Const) { emitter.movImm(RCX, static_cast<uint32_t>(instruction.p2.i)); } else { emitter.load(RCX, DSP, instruction.p2.i * 4); }
@@ -373,9 +377,11 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 	UInt endIndex = funcStart;
 	while (code[endIndex].opcode != OP_RETU) { ++endIndex; }
 
-	// Pass 1 - fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight and each a
-	// resumable point. `labels` is the mainline label per leader (hot entry + branch + resume target); suspendL its
-	// suspend stub. Charging per block (not just loop heads) keeps fuel spend ≈ the interpreter's.
+	/*
+		Pass 1 - fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight and each a
+		resumable point. `labels` is the mainline label per leader (hot entry + branch + resume target); suspendL its
+		suspend stub. Charging per block (not just loop heads) keeps fuel spend ≈ the interpreter's.
+	*/
 	std::map<UInt, UInt> loopWeight;
 	jitFuelSafepoints(code, funcStart, endIndex, memory, loopWeight);
 	std::map<UInt, Label> labels, suspendL;
@@ -383,8 +389,10 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 		labels[it->first] = emitter.newLabel(); suspendL[it->first] = emitter.newLabel();
 	}
 
-	// Function entry: the dispatcher supplies live pins (encoding b - no per-segment reload), so just advance dsp by the
-	// frame (FUNC p0) and run the FUNC stack-overflow check.
+	/*
+		Function entry: the dispatcher supplies live pins (encoding b - no per-segment reload), so just advance dsp by the
+		frame (FUNC p0) and run the FUNC stack-overflow check.
+	*/
 	const UInt localsSize = static_cast<UInt>(code[funcStart].p0.i);
 	if (localsSize != 0) { emitter.addImmQ(DSP, localsSize * 4u); }		// dsp += frame
 	{
@@ -558,18 +566,18 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_COPY_VVC: case OP_COPY_VCC: case OP_COPY_CVC: case OP_COPY_CCC: {
 				const bool destConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
 				const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
-#if defined(_WIN32)
+			#if defined(_WIN32)
 				emitter.push(RSI); emitter.push(RDI);				// Win64: rsi/rdi are callee-saved; rep movsd clobbers them
-#endif
+			#endif
 				if (destConst) { emitter.movQ(RDI, MEMORY_BASE); emitter.addImmQ(RDI, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); }
 				else { emitter.load(RAX, DSP, in.p0.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); emitter.shlImm(RAX, 2); emitter.movQ(RDI, MEMORY_BASE); emitter.addQ(RDI, RAX); }
 				if (srcConst) { emitter.movQ(RSI, MEMORY_BASE); emitter.addImmQ(RSI, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); }
 				else { emitter.load(RAX, DSP, in.p1.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); emitter.shlImm(RAX, 2); emitter.movQ(RSI, MEMORY_BASE); emitter.addQ(RSI, RAX); }
 				emitter.movImm(RCX, static_cast<uint32_t>(in.p2.i));
 				emitter.cld(); emitter.repMovsd();
-#if defined(_WIN32)
+			#if defined(_WIN32)
 				emitter.pop(RDI); emitter.pop(RSI);
-#endif
+			#endif
 				break;
 			}
 
@@ -707,9 +715,11 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			default: throwUnlowerableOpcode(op);					// a finalized opcode the backend must cover (a bug, never routine)
 		}
 	}
-	// Cold section: one suspend stub per block leader - writeback the pins to ctx, set RESUME = this block's mainline head
-	// (the dispatcher reloads centrally on resume), return TIME_OUT to the host. Unreachable by fall-through - each
-	// preceding block ends in jmp. Mirrors the arm64 cold section.
+	/*
+		Cold section: one suspend stub per block leader - writeback the pins to ctx, set RESUME = this block's mainline head
+		(the dispatcher reloads centrally on resume), return TIME_OUT to the host. Unreachable by fall-through - each
+		preceding block ends in jmp. Mirrors the arm64 cold section.
+	*/
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
 		const UInt head = it->first;
 		emitter.bind(suspendL[head]);
@@ -778,11 +788,15 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 	out.swap(built);
 }
 
-// NativeJitCompiler compiles with this backend when x86-64 is the host arch; on other hosts it compiles out (the arm64 TU
-// provides it there), so both backends may link together without a duplicate. A client that wants the x86-64 backend
-// regardless of host names JitCompilerX64 directly instead.
+/*
+	NativeJitCompiler compiles with this backend when x86-64 is the host arch; on other hosts it compiles out (the arm64 TU
+	provides it there), so both backends may link together without a duplicate. A client that wants the x86-64 backend
+	regardless of host names JitCompilerX64 directly instead.
+*/
 #if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
-void NativeJitCompiler::compile(const AssembledProgram& program, JitModule& out) { JitCompilerX64().compile(program, out); }
+void NativeJitCompiler::compile(const AssembledProgram& program, JitModule& out) {
+	JitCompilerX64().compile(program, out);
+}
 #endif
 
 } // namespace GAZL

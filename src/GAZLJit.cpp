@@ -30,13 +30,13 @@
 #include <set>					// jitFuelSafepoints - block-leader set
 
 #if defined(_WIN32)
-#	ifndef WIN32_LEAN_AND_MEAN
-#		define WIN32_LEAN_AND_MEAN
-#	endif
-#	include <windows.h>			// __try/__except fault guard for the probe
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>			// __try/__except fault guard for the probe
 #else
-#	include <csignal>			// sigaction - POSIX fault guard for the probe
-#	include <csetjmp>			// sigsetjmp / siglongjmp
+#include <csignal>				// sigaction - POSIX fault guard for the probe
+#include <csetjmp>				// sigsetjmp / siglongjmp
 #endif
 
 namespace GAZL {
@@ -89,13 +89,15 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 			for (UInt k = 0; k < size; ++k) { leaders.insert(static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i)); }
 			if (j + 1 <= endIndex) { leaders.insert(j + 1); }
 		} else if (op == OP_CALL_CVC || op == OP_CALL_VVC || op == OP_CALL_NVC) {
-			// A call ends a block, so the instruction right after it is a leader with its own fuel check. For CALL_NVC
-			// this leader is REQUIRED, not just tidy block structure: a native may yield by resetTimeOut(0) + return OK
-			// (the standard cooperative-yield convention - Permut8/Prawn sleep() and launch() do exactly this). Each
-			// backend reloads the fuel pin from ctx immediately after the native returns, so THIS safepoint is what makes
-			// a zeroed fuel budget suspend on the very next instruction - zero slack, matching the interpreter's
-			// per-instruction suspend point. Remove it and a yielding native would keep running until the next natural
-			// block leader (e.g. a loop head), silently breaking real-time cooperative scheduling. Do not drop it.
+			/*
+				A call ends a block, so the instruction right after it is a leader with its own fuel check. For CALL_NVC
+				this leader is REQUIRED, not just tidy block structure: a native may yield by resetTimeOut(0) + return OK
+				(the standard cooperative-yield convention - Permut8/Prawn sleep() and launch() do exactly this). Each
+				backend reloads the fuel pin from ctx immediately after the native returns, so THIS safepoint is what makes
+				a zeroed fuel budget suspend on the very next instruction - zero slack, matching the interpreter's
+				per-instruction suspend point. Remove it and a yielding native would keep running until the next natural
+				block leader (e.g. a loop head), silently breaking real-time cooperative scheduling. Do not drop it.
+			*/
 			if (j + 1 <= endIndex) { leaders.insert(j + 1); }
 		}
 	}
@@ -142,10 +144,18 @@ JitModule::~JitModule() {
 }
 
 void JitModule::swap(JitModule& other) {
-	void* tmpPage = ownedPage; ownedPage = other.ownedPage; other.ownedPage = tmpPage;
-	size_t tmpWords = ownedWords; ownedWords = other.ownedWords; other.ownedWords = tmpWords;
+	void* const tmpPage = ownedPage;
+	ownedPage = other.ownedPage;
+	other.ownedPage = tmpPage;
+
+	const size_t tmpWords = ownedWords;
+	ownedWords = other.ownedWords;
+	other.ownedWords = tmpWords;
 	entries.swap(other.entries);
-	void* tmpDispatch = dispatch; dispatch = other.dispatch; other.dispatch = tmpDispatch;
+	
+	void* const tmpDispatch = dispatch;
+	dispatch = other.dispatch;
+	other.dispatch = tmpDispatch;
 }
 
 /*
@@ -156,7 +166,7 @@ void JitModule::swap(JitModule& other) {
 void JitCompiler::throwUnlowerableOpcode(Int opcode) {
 	assert(0 && "JIT backend does not cover a finalized opcode (backend bug)");
 	char message[64];
-	std::snprintf(message, sizeof(message), "JIT: backend cannot lower finalized opcode 0x%X", static_cast<unsigned>(opcode));
+	std::snprintf(message, sizeof (message), "JIT: backend cannot lower finalized opcode 0x%X", static_cast<unsigned>(opcode));
 	throw JitException(message);
 }
 
@@ -170,8 +180,8 @@ void JitCompiler::throwUnlowerableOpcode(Int opcode) {
 Offsets JitProcessor::layout() {
 	Offsets o;
 #if defined(__GNUC__)
-#	pragma GCC diagnostic push
-#	pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
 #endif
 	o.dsp = offsetof(JitProcessor, dsp); o.mb = offsetof(JitProcessor, memoryBase);
 	o.fuel = offsetof(JitProcessor, clockCyclesLeft); o.ipsp = offsetof(JitProcessor, ipsp);
@@ -182,9 +192,23 @@ Offsets JitProcessor::layout() {
 	o.dsend = offsetof(JitProcessor, dataStackEnd); o.ipsend = offsetof(JitProcessor, ipStackEnd);
 	o.nativeafter = offsetof(JitProcessor, nativeAfter);
 #if defined(__GNUC__)
-#	pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 #endif
 	return o;
+}
+
+Status JitProcessor::enterCall(Pointer functionPointer) {
+	const Status s = Processor::enterCall(functionPointer);
+	if (s != OK) {
+		return s;
+	}
+	resume = funcEntries[functionPointer - IP_OFFSET];
+	return OK;
+}
+
+Status JitProcessor::run() {
+	typedef int (*Disp)(JitProcessor*);
+	return static_cast<Status>(reinterpret_cast<Disp>(jitDispatch)(this));
 }
 
 /*

@@ -238,23 +238,30 @@ class JitProcessor : public Processor {
 class JitCompiler {
 	public:		virtual ~JitCompiler() { }
 
-				// Compile `program` into `out` (transferred in via swap); on return `out` is isCompiled(). A backend
-				// covers every finalized opcode, so lowering a valid finalized program always succeeds - the only
-				// failures are exceptional and both throw GAZL::JitException (leaving `out` unchanged): the host refusing
-				// executable memory (call jitAvailable() first to avoid it), or a finalized opcode left unlowered (a bug).
+				/*
+					Compile `program` into `out` (transferred in via swap); on return `out` is isCompiled(). A backend
+					covers every finalized opcode, so lowering a valid finalized program always succeeds - the only
+					failures are exceptional and both throw GAZL::JitException (leaving `out` unchanged): the host refusing
+					executable memory (call jitAvailable() first to avoid it), or a finalized opcode left unlowered (a bug).
+				*/
 				virtual void compile(const AssembledProgram& program, JitModule& out) = 0;
 
-	protected:	// Arch-neutral lowering helpers for the backend subclasses (defined in GAZLJit.cpp).
-				// Fuel safepoints for one function: the basic-block leaders (function entry, branch/SWCH targets, the
-				// instruction after any branch/GOTO/SWCH/CALL, with long straight runs split so none exceeds the internal
-				// fuel-check granularity), filled into `weight` as leader -> charge; each backend emits a fuel check
-				// charging `weight` at each leader, so the JIT spends fuel at ~the interpreter's 1/instruction rate (§5.5).
-				static void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex,
-						const Value* memory, std::map<UInt, UInt>& weight);
-				// A backend hit a finalized opcode it does not cover - a programmer error (every backend must lower all 91),
-				// not a runtime condition. asserts (loud in debug) and, because asserts vanish in release, also throws
-				// GAZL::JitException so a release build degrades to the interpreter rather than emitting wrong code. Never
-				// returns; the backends' switch defaults call it.
+	protected:	/*
+					Arch-neutral lowering helpers for the backend subclasses (defined in GAZLJit.cpp).
+					Fuel safepoints for one function: the basic-block leaders (function entry, branch/SWCH targets, the
+					instruction after any branch/GOTO/SWCH/CALL, with long straight runs split so none exceeds the internal
+					fuel-check granularity), filled into `weight` as leader -> charge; each backend emits a fuel check
+					charging `weight` at each leader, so the JIT spends fuel at ~the interpreter's 1/instruction rate (§5.5).
+				*/
+				static void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex
+						, const Value* memory, std::map<UInt, UInt>& weight);
+
+				/*
+					A backend hit a finalized opcode it does not cover - a programmer error (every backend must lower all 91),
+					not a runtime condition. asserts (loud in debug) and, because asserts vanish in release, also throws
+					GAZL::JitException so a release build degrades to the interpreter rather than emitting wrong code. Never
+					returns; the backends' switch defaults call it.
+				*/
 				static void throwUnlowerableOpcode(Int opcode);
 };
 
