@@ -24,6 +24,7 @@
 #include "GAZLJitX64.h"
 #include "GAZLJit.h"			// arch-neutral opcode enum + Offsets / JitModule / JitProcessor / JitCompiler (+ GAZL.h)
 #include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
+#include "GAZLJitInternal.h"		// jitFuelSafepoints / MAX_BLOCK_WEIGHT / throwUnlowerableOpcode (backend-shared)
 
 #include <cstddef>
 #include <cstring>			// std::memcpy - pack the emitted byte stream into 32-bit words
@@ -743,7 +744,7 @@ static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets, Label 
 	JitCompilerX64::emit (declared in GAZLJitX64.h) - lowers a whole finalized program to x86-64 machine code and fills an
 	EmittedModule; the shared JitCompiler::compile then makes it executable. Lower every function into one buffer, append
 	one shared epilogue, append the dispatcher, then record the byte stream + ordinal->entry byte offsets. Throws (via
-	lowerFunction) on any finalized opcode the backend fails to cover. (nativeJitCompiler() is defined at the bottom of this
+	lowerFunction) on any finalized opcode the backend fails to cover. (NativeJitCompiler's constructor is defined at the bottom of this
 	file, guarded to x86-64 hosts.)
 */
 void JitCompilerX64::emit(const AssembledProgram& program, EmittedModule& out) {
@@ -775,14 +776,11 @@ void JitCompilerX64::emit(const AssembledProgram& program, EmittedModule& out) {
 	out.dispatchByteOffset = dispatcherOffset;
 }
 
-// nativeJitCompiler() resolves to this backend only when x86-64 is the host arch; on other hosts it compiles out (the
+// NativeJitCompiler's constructor creates this backend when x86-64 is the host arch; on other hosts it compiles out (the
 // arm64 TU provides it there), so both backends may link together without a duplicate. A client that wants the x86-64
 // backend regardless of host names JitCompilerX64 directly instead.
 #if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
-JitCompiler& nativeJitCompiler() {
-	static JitCompilerX64 compiler;
-	return compiler;
-}
+NativeJitCompiler::NativeJitCompiler() : backend(new JitCompilerX64) { }
 #endif
 
 } // namespace GAZL

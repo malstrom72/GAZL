@@ -44,7 +44,6 @@
 #include <stdint.h>
 #include <cstddef>
 #include <vector>
-#include <map>
 #include "GAZL.h"
 #include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
 
@@ -103,31 +102,8 @@ enum {
 */
 bool jitAvailable();
 
-/*
-	Shared, arch-neutral pass-1 primitive used by both JIT backends (defined in GAZLJit.cpp): if instruction
-	`instructionIndex` is a conditional/unconditional branch, report the target instruction index and return true. SWCH
-	jump-table targets are not covered here - each backend reads those from the const-memory table itself.
-*/
-bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& target);
-
-/*
-	Fuel safepoints for one function (arch-neutral, defined in GAZLJit.cpp): the basic-block leaders - function entry,
-	branch/SWCH targets, and the instruction after any branch/GOTO/SWCH/CALL - with long straight runs split so no block
-	exceeds maxBlockWeight. Fills `weight` with leaderIndex -> charge (instruction span to the next safepoint). Both
-	backends emit a fuel check charging `weight` at each leader, so the JIT consumes fuel at ~the interpreter's
-	1/instruction rate (fuel-rate fidelity) and worst-case time-to-suspend is bounded by maxBlockWeight (§5.5).
-*/
-const UInt MAX_BLOCK_WEIGHT = 64;				// fuel-check granularity: the host must grant at least this per resume
-void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, const Value* memory
-		, UInt maxBlockWeight, std::map<UInt, UInt>& weight);
-
-/*
-	A backend hit a finalized opcode it does not cover - a programmer error (every backend must lower all 91 finalized
-	opcodes), not a runtime condition. asserts (loud in debug) and, because asserts vanish in release, also throws
-	GAZL::JitException so a release build degrades to the interpreter rather than emitting wrong code. Never returns; the
-	backends' switch defaults call it. Defined in GAZLJit.cpp.
-*/
-void throwUnlowerableOpcode(Int opcode);
+// The arch-neutral lowering helpers shared by GAZLJit.cpp and the backends (jitFuelSafepoints / throwUnlowerableOpcode)
+// are backend internals, declared in GAZLJitInternal.h - not part of this client-facing API.
 
 // Byte offsets of the machine state a segment/dispatcher touches, within the (subclass) engine.
 struct Offsets {
@@ -208,22 +184,8 @@ class JitProcessor : public Processor {
 			between globals and constants) and the lower-level one (explicit rwMemorySize / dataStackOffset /
 			dataStackSize, for running several engines over one shared code image - e.g. a JitProcessor per thread, each
 			with its own data + ip stack; the compiled code is immutable after publish, so it is safe to share). Both add
-			the JitModule up front and forward an optional userData through to the Processor.
+			the JitModule up front and delegate to the matching Processor constructor.
 		*/
-		JitProcessor(const JitModule& module, UInt codeSize, const Instruction* code, UInt functionCount
-					, const UInt* functionTable, UInt memorySize, Value* memory, UInt globalsSize, UInt constsSize
-					, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0)
-			: Processor(codeSize, code, functionCount, functionTable, memorySize, memory, globalsSize, constsSize
-				, ipStackSize, ipStack, natives, userData) { bindModule(module); }
-
-		JitProcessor(const JitModule& module, UInt codeSize, const Instruction* code, UInt functionCount
-					, const UInt* functionTable, UInt memorySize, Value* memory, UInt rwMemorySize, UInt dataStackOffset
-					, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
-					, void* userData = 0)
-			: Processor(codeSize, code, functionCount, functionTable, memorySize, memory, rwMemorySize, dataStackOffset
-				, dataStackSize, ipStackSize, ipStack, natives, userData) { bindModule(module); }
-
-		// The same two, from an AssembledProgram (delegating to the matching Processor constructor).
 		JitProcessor(const JitModule& module, const AssembledProgram& program, UInt ipStackSize
 					, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0)
 			: Processor(program, ipStackSize, ipStack, natives, userData) { bindModule(module); }
@@ -273,7 +235,7 @@ class JitProcessor : public Processor {
 	(JitCompilerArm64 / JitCompilerX64), each supplying emit(); the per-instruction lowering pass and dispatcher emitter
 	are file-static inside each backend .cpp. It reads an AssembledProgram (Instruction[] + functionTable + the const memory image,
 	read only for SWCH jump tables) - never a processor - and holds no program itself, so one compiler compiles many.
-	Obtain the host's backend with nativeJitCompiler(); a build links only the backend(s) it includes.
+	Obtain the host's backend via NativeJitCompiler (below); a build links only the backend(s) it includes.
 */
 class JitCompiler {
 	public:		virtual ~JitCompiler() { }
@@ -290,10 +252,22 @@ class JitCompiler {
 				virtual void emit(const AssembledProgram& program, EmittedModule& out) = 0;
 };
 
-// The host-native JIT compiler: a shared, stateless instance. Each backend .cpp defines it guarded to its own host arch,
-// so exactly one definition is active (both backends can link together), and it is absent if the host-matching backend
-// was not built - in which case name the concrete backend (JitCompilerArm64 / JitCompilerX64) directly.
-JitCompiler& nativeJitCompiler();
+/*
+	The host-native JIT compiler: owns the backend matching the host arch (JitCompilerArm64 / JitCompilerX64) and forwards
+	compile() to it. Construct one wherever you need to compile - each instance owns its own backend, so instances (and
+	threads) are independent and a backend is free to hold per-compile state. The backend is created in whichever backend
+	.cpp the host arch selects, so both backends can still link together; if the host-matching backend was not built the
+	constructor is absent (name the concrete backend directly instead). Non-copyable (it owns the backend).
+*/
+class NativeJitCompiler {
+	public:		NativeJitCompiler();				// creates the host backend (defined in the linked backend .cpp)
+				~NativeJitCompiler();
+				void compile(const AssembledProgram& program, JitModule& out);
+
+	private:	JitCompiler* backend;				// owned; freed in the destructor
+				NativeJitCompiler(const NativeJitCompiler&);
+				NativeJitCompiler& operator=(const NativeJitCompiler&);
+};
 
 } // namespace GAZL
 

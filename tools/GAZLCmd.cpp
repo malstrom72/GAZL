@@ -431,7 +431,8 @@ int main(int argc, const char* argv[]) {
 			} else if (useJit) {
 				const auto t0 = std::chrono::steady_clock::now();
 				try {
-					nativeJitCompiler().compile(program, module);		// the host backend; compiles a valid program or throws
+					NativeJitCompiler compiler;							// the host backend; each instance owns its own
+					compiler.compile(program, module);					// compiles a valid program or throws
 					const auto t1 = std::chrono::steady_clock::now();
 					if (jitStats) {							// machine-readable line for the benchmark harness
 						const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();

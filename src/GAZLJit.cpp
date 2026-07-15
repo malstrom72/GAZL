@@ -23,6 +23,7 @@
 
 #include "GAZLJit.h"
 #include "GAZLJitMem.h"			// makeExecutable / freeExecutable - the JitModule owns the executable page
+#include "GAZLJitInternal.h"		// jitFuelSafepoints / throwUnlowerableOpcode - backend-shared internals (defined below)
 
 #include <cstddef>
 #include <cstring>				// memset / memcpy - the jitAvailable() probe
@@ -42,11 +43,11 @@
 namespace GAZL {
 
 /*
-	Arch-neutral pass-1 primitive: is instruction `instructionIndex` a branch, and if so, to which instruction? GOTO
-	targets via p0; the conditional forms (FORi + the integer/float compare-branches) target via p2. Both backends' pass
-	1 use this; SWCH's jump-table targets are read separately from const memory by each backend.
+	Is instruction `instructionIndex` a branch, and if so, to which instruction? GOTO targets via p0; the conditional forms
+	(FORi + the integer/float compare-branches) target via p2. Used only by jitFuelSafepoints below (file-static); SWCH's
+	jump-table targets are read separately from const memory by each backend.
 */
-bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& target) {
+static bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& target) {
 	const Int op = code[instructionIndex].opcode;
 	const Int j = static_cast<Int>(instructionIndex);
 	switch (op) {
@@ -313,6 +314,19 @@ bool jitAvailable() {
 	}
 	return cached != 0;
 #endif
+}
+
+/*
+	NativeJitCompiler - the backend-agnostic parts. The constructor (which creates the host-arch backend) lives in the
+	backend .cpp the host selects; the destructor frees it and compile() forwards through the JitCompiler base, so both
+	are arch-neutral and live here.
+*/
+NativeJitCompiler::~NativeJitCompiler() {
+	delete backend;
+}
+
+void NativeJitCompiler::compile(const AssembledProgram& program, JitModule& out) {
+	backend->compile(program, out);
 }
 
 } // namespace GAZL

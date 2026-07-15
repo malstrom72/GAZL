@@ -145,7 +145,8 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	// backs every JitProcessor constructed below.
 	JitModule module;
 	const AssembledProgram program = { gCode, CODE_SIZE, gFunctionTable, gFunctionCount, gMemory, DATA_SIZE, gGlobalsSize, gConstsSize };
-	nativeJitCompiler().compile(program, module);				// always yields a compiled module (throws on host denial / a backend bug)
+	NativeJitCompiler compiler;
+	compiler.compile(program, module);							// always yields a compiled module (throws on host denial / a backend bug)
 	std::printf("  compiled %zu native words for %u function(s)\n", module.codeWords(), gFunctionCount);
 
 	for (size_t k = 0; k < nInputs; ++k) {
