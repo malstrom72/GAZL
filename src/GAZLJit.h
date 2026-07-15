@@ -128,40 +128,77 @@ struct Offsets {
 };
 
 /*
-	The compiled artifact — the JIT's analogue of the interpreter's {code[], functionTable[]}: an executable page's
-	dispatcher entry plus the ordinal→native-entry table. Immutable and shareable, so one module can back many
-	JitProcessors, on many threads (§5.6). Produced by JitCompiler (which fills it), consumed by JitProcessor's ctor.
+	Thrown when the JIT itself fails at runtime — e.g. the host refuses to make a code page executable even though
+	jitAvailable() reported the capability (a broken invariant / resource exhaustion, not an assembler error). A
+	GAZL::Exception subclass, so a host that already catches GAZL::Exception catches it too; it carries a free-form
+	message instead of an AssemblerError.
+*/
+class JitException : public Exception {
+	public:		JitException(const std::string& message) : failureMessage(message) { }
+	public:		virtual ~JitException() throw() { }
+	public:		virtual const char* what() const throw() { return failureMessage.c_str(); }
+	private:	std::string failureMessage;
+};
 
-	RAII owner: a filled module owns its executable page + entry table and frees them in its destructor, so it must
-	outlive every JitProcessor bound to it, and it is non-copyable (two owners would double-free). An empty module
-	(default-constructed, or a failed compile) owns nothing — ok() is false and the destructor frees nothing.
+/*
+	The finalized program a JIT backend reads — everything the interpreter runs on, all const. `memory` is the const
+	memory image, consulted only for SWCH jump tables. Passed to JitCompiler::compile; a JitCompiler holds no program, so
+	one compiler compiles many programs.
+*/
+struct Program {
+	const Instruction* code;
+	UInt functionCount;
+	const UInt* functionTable;
+	const Value* memory;
+};
+
+/*
+	A backend's raw output, before it is made executable: the emitted machine-code words, each function ordinal's entry as
+	a byte offset into them, and the dispatcher's byte offset. A plain value (its vectors own themselves); JitCompiler
+	turns it into an executable JitModule.
+*/
+struct EmittedModule {
+	std::vector<uint32_t> code;
+	std::vector<size_t> entryByteOffsets;		// per function ordinal
+	size_t dispatchByteOffset;
+	EmittedModule() : dispatchByteOffset(0) { }
+};
+
+/*
+	The compiled artifact — the JIT's analogue of the interpreter's {code[], functionTable[]}: an executable page, its
+	dispatcher entry, and the ordinal→entry table the machine code indexes. Immutable and shareable, so one module can
+	back many JitProcessors, on many threads (§5.6).
+
+	RAII value type. A default-constructed module is empty (compiled() == false) and owns nothing. JitCompiler::compile
+	builds a filled module and hands it over via swap() — there is no half-built state and nothing sets its fields from
+	outside. It owns a unique executable page, so it is non-copyable; transfer ownership with swap(). It must outlive every
+	JitProcessor bound to it.
 */
 class JitModule {
 	public:
-		JitModule()
-			: dispatch(0)
-			, nativeEntries(0)
-			, codeWordCount(0)
-			, ownedPage(0)
-			, ownedWords(0) { }
-		~JitModule() { if (ownedPage != 0) { freeExecutable(ownedPage, ownedWords); delete[] nativeEntries; } }
+		JitModule() : ownedPage(0), ownedWords(0), dispatch(0) { }		// empty — owns nothing
+		// Make an emitted module's code executable and take ownership of the page (acquisition == initialization).
+		// Throws GAZL::JitException if the host refuses executable memory (jitAvailable() gates this).
+		explicit JitModule(const EmittedModule& emitted);
+		~JitModule();													// frees the page (a no-op when empty)
+		void swap(JitModule& other);									// O(1) — exchange ownership
 
-		bool ok() const { return dispatch != 0; }			// false if a function used an opcode the backend can't lower
-		size_t codeWords() const { return codeWordCount; }	// emitted 32-bit words (for --jit-stats)
+		bool compiled() const { return dispatch != 0; }					// holds a runnable artifact (a value-state query)
+		size_t codeWords() const { return ownedWords; }					// emitted 32-bit words (for --jit-stats)
+		void* dispatchEntry() const { return dispatch; }					// native dispatcher entry (JitProcessor binds this)
+		void* const* entryTable() const { return entries.empty() ? 0 : &entries[0]; }	// ordinal -> entry; the machine code indexes it
 
 	private:
-		friend class JitCompiler;			// fills the module
-		friend class JitProcessor;			// binds dispatch + nativeEntries
-
-		void* dispatch;						// native dispatcher trampoline entry
-		void** nativeEntries;				// ordinal -> native function entry (enterCall / indirect CALL_VVC)
-		size_t codeWordCount;				// emitted 32-bit words
-		void* ownedPage;					// executable page owned here (0 = empty module; frees nothing)
+		void* ownedPage;					// executable page owned here (0 = empty)
 		size_t ownedWords;					// page size in words, for freeExecutable
+		std::vector<void*> entries;			// ordinal -> entry (page + byte offset)
+		void* dispatch;						// native dispatcher entry (page + byte offset)
 
-		JitModule(const JitModule&);					// non-copyable — it owns an executable page
+		JitModule(const JitModule&);					// non-copyable — owns a unique page; transfer via swap
 		JitModule& operator=(const JitModule&);
 };
+
+inline void swap(JitModule& a, JitModule& b) { a.swap(b); }				// ADL swap
 
 /*
 	The JIT engine — mirrors `Processor`: a `Processor` subclass over the shared machine state (§5.1), constructed FROM a
@@ -173,13 +210,16 @@ class JitProcessor : public Processor {
 		Value* savedDsp;					// dsp saved across a native call (the C1 window is transient)
 		void* nativeFn;						// resolved native fn pointer, blr'd by the native dispatcher
 		void* nativeAfter;					// after-call continuation (dispatcher sets RESUME to it on native OK)
-		void** funcEntries;					// ordinal -> native entry (bound from the JitModule)
+		void* const* funcEntries;			// ordinal -> native entry (bound from the JitModule)
 		void* jitDispatch;					// the native dispatcher trampoline (bound from the JitModule)
 
 		// Bind the compiled module + zero the native-call scratch. Shared by both constructors (C++03 has no delegation).
+		// Precondition: the module holds compiled code (an empty module has no dispatcher to run).
 		void bindModule(const JitModule& module) {
+			assert(module.compiled() && "JitProcessor requires a compiled JitModule");
 			savedDsp = 0; nativeFn = 0; nativeAfter = 0;
-			funcEntries = module.nativeEntries; jitDispatch = module.dispatch;
+			funcEntries = module.entryTable();
+			jitDispatch = module.dispatchEntry();
 		}
 
 	public:
@@ -227,26 +267,28 @@ class JitProcessor : public Processor {
 };
 
 /*
-	The lowering pass (lowerFunction) and dispatcher emitter (emitDispatcher) are internal to GAZLJit.cpp (file-static),
-	used only by JitCompiler::compile below.
-*/
-
-/*
-	The JIT compiler — mirrors `Assembler`: lowers a whole finalized program to native code and fills a JitModule. It
-	takes the program (the `Instruction[]` + functionTable + the const memory image, read only for SWCH jump tables) —
-	never a processor. Bind the result by constructing a JitProcessor from it. The out module has ok()==false if any
-	function hits an opcode the backend can't lower yet (caller falls back to the interpreter). arm64 only.
+	The JIT compiler — the JIT's counterpart of Assembler. Abstract base with one backend subclass per target
+	(JitCompilerArm64 / JitCompilerX64), each supplying emit(); the per-instruction lowering pass and dispatcher emitter
+	are file-static inside each backend .cpp. It reads a Program (Instruction[] + functionTable + the const memory image,
+	read only for SWCH jump tables) — never a processor — and holds no program itself, so one compiler compiles many.
+	Obtain the host's backend with nativeJitCompiler(); a build links only the backend(s) it includes.
 */
 class JitCompiler {
-	public:		void compile(const Instruction* code, UInt functionCount, const UInt* functionTable
-						, const Value* memory, JitModule& out);		// fills `out`; check out.ok() (mirrors Assembler::finalize's out-params)
+	public:		virtual ~JitCompiler() { }
 
-	// Shared publish step (defined in GAZLJit.cpp): makeExecutable the emitted words, then fill `out`'s page + native
-	// entry table + dispatch entry from byte offsets. Both backends call this after emitting; leaves `out` empty (so
-	// ok() stays false) if the page can't be made executable. Offsets are in bytes (arm64 converts its word offsets).
-	protected:	static void publishModule(JitModule& out, const uint32_t* codeWords, size_t wordCount
-						, const size_t* entryByteOffsets, UInt functionCount, size_t dispatchByteOffset);
+				// Compile `program` into `out` (transferred in via swap). Returns true and leaves `out` compiled() on
+				// success; returns false and leaves `out` empty if a function uses an opcode this backend can't lower.
+				// Throws GAZL::JitException if the host refuses executable memory (call jitAvailable() first to avoid it).
+				bool compile(const Program& program, JitModule& out);
+
+	protected:	// The one arch-specific step: lower `program` into `out` (emitted code words + per-ordinal entry byte
+				// offsets + dispatcher byte offset). One virtual call per compile, never per instruction. Returns false
+				// on an opcode the backend can't lower.
+				virtual bool emit(const Program& program, EmittedModule& out) = 0;
 };
+
+// The host-native JIT compiler — a shared, stateless instance, defined in whichever backend .cpp the build links.
+JitCompiler& nativeJitCompiler();
 
 } // namespace GAZL
 

@@ -26,6 +26,7 @@
 #include "GAZLJitMem.h"			// makeExecutable() — platform-specific backend, architecture-neutral
 
 #include <cstddef>
+#include <cstring>			// std::memcpy — pack the emitted byte stream into 32-bit words
 #include <map>
 #include <vector>
 
@@ -741,24 +742,28 @@ static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets, Label 
 }
 
 /*
-	JitCompiler::compile — lowers a whole finalized program to x86-64 machine code and fills a JitModule (the executable
-	page's dispatcher + ordinal->entry table, which the module then owns). Mirrors GAZLJitArm64.cpp's driver: lower every
-	function into one buffer, append one shared epilogue, append the dispatcher, publish via makeExecutable(), and record
-	the ordinal->entry table. Leaves `out` empty (ok() == false) on any opcode the backend cannot lower, so the caller
-	falls back to the interpreter.
+	JitCompilerX64 — the x86-64 backend of JitCompiler. Its emit() lowers a whole finalized program to x86-64 machine code
+	and fills an EmittedModule; the shared JitCompiler::compile then makes it executable. Lower every function into one
+	buffer, append one shared epilogue, append the dispatcher, then record the byte stream + ordinal->entry byte offsets.
+	Returns false on any opcode the backend cannot lower, so the caller falls back to the interpreter. nativeJitCompiler()
+	is the host entry point — this TU is linked only on x86-64 hosts.
 */
-void JitCompiler::compile(const Instruction* code, UInt functionCount, const UInt* functionTable,
-		const Value* memory, JitModule& out) {
+class JitCompilerX64 : public JitCompiler {
+	protected:	virtual bool emit(const Program& program, EmittedModule& out);
+};
+
+bool JitCompilerX64::emit(const Program& program, EmittedModule& out) {
 	const Offsets offsets = JitProcessor::layout();				// the run-state ABI, obtained without an engine
 	X64Emitter emitter;
-	std::vector<Label> entryLabels(functionCount);
-	for (UInt k = 0; k < functionCount; ++k) { entryLabels[k] = emitter.newLabel(); }
+	std::vector<Label> entryLabels(program.functionCount);
+	for (UInt k = 0; k < program.functionCount; ++k) { entryLabels[k] = emitter.newLabel(); }
 	Label epilogue = emitter.newLabel();
 
-	for (UInt ordinal = 0; ordinal < functionCount; ++ordinal) {
+	for (UInt ordinal = 0; ordinal < program.functionCount; ++ordinal) {
 		emitter.bind(entryLabels[ordinal]);
-		if (!lowerFunction(emitter, code, memory, functionTable[ordinal], offsets, entryLabels, epilogue, functionCount)) {
-			return;												// unsupported opcode -> caller should fall back to the interpreter
+		if (!lowerFunction(emitter, program.code, program.memory, program.functionTable[ordinal], offsets, entryLabels
+				, epilogue, program.functionCount)) {
+			return false;										// unsupported opcode -> caller falls back to the interpreter
 		}
 	}
 	// Shared exit `epilogue` (bound inside emitDispatcher): every terminal path — suspend, OK return, or trap — jumps
@@ -766,15 +771,22 @@ void JitCompiler::compile(const Instruction* code, UInt functionCount, const UIn
 	const size_t dispatcherOffset = emitDispatcher(emitter, offsets, epilogue);
 	emitter.finalize();
 
-	// x86-64 code is a byte stream; makeExecutable() works in 32-bit words, so round up. Entry/dispatch offsets are
-	// already byte offsets, so hand them to the shared publish step directly.
-	const size_t wordCount = (emitter.size() + 3) / 4;
-	std::vector<size_t> entryByteOffsets(functionCount);
-	for (UInt ordinal = 0; ordinal < functionCount; ++ordinal) {
-		entryByteOffsets[ordinal] = static_cast<size_t>(emitter.labelOffset(entryLabels[ordinal]));
+	// x86-64 is a byte stream; the module holds 32-bit words, so round up and zero-pad the last partial word. Entry and
+	// dispatch offsets are already byte offsets.
+	const size_t byteCount = emitter.size();
+	out.code.assign((byteCount + 3) / 4, 0);
+	if (byteCount != 0) { std::memcpy(&out.code[0], emitter.code(), byteCount); }
+	out.entryByteOffsets.resize(program.functionCount);
+	for (UInt ordinal = 0; ordinal < program.functionCount; ++ordinal) {
+		out.entryByteOffsets[ordinal] = static_cast<size_t>(emitter.labelOffset(entryLabels[ordinal]));
 	}
-	publishModule(out, reinterpret_cast<const uint32_t*>(emitter.code()), wordCount
-			, entryByteOffsets.empty() ? 0 : &entryByteOffsets[0], functionCount, dispatcherOffset);
+	out.dispatchByteOffset = dispatcherOffset;
+	return true;
+}
+
+JitCompiler& nativeJitCompiler() {							// x86-64 host backend (stateless — shared instance)
+	static JitCompilerX64 compiler;
+	return compiler;
 }
 
 } // namespace GAZL

@@ -143,6 +143,7 @@ class Exception : public std::exception {
 	public:		virtual ~Exception() throw();
 	public:		AssemblerError error;
 	public:		std::string detail;
+	protected:	Exception() throw() : error(ASSEMBLER_ERROR_COUNT) { }	// subclass hook: derived error carries its own what(), not an AssemblerError
 	protected:	mutable std::string whatString;
 };
 inline Exception::Exception(AssemblerError error) : error(error) { assert(0 <= error && error < ASSEMBLER_ERROR_COUNT); }

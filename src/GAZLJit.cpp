@@ -22,7 +22,7 @@
 */
 
 #include "GAZLJit.h"
-#include "GAZLJitMem.h"			// makeExecutable() — for the shared publishModule step
+#include "GAZLJitMem.h"			// makeExecutable / freeExecutable — the JitModule owns the executable page
 
 #include <cstddef>
 #include <cstring>				// memset / memcpy — the jitAvailable() probe
@@ -112,23 +112,54 @@ void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, c
 }
 
 /*
-	Shared publish: copy the emitted code into an executable page and populate `out`. Byte offsets keep it
-	architecture-independent (arm64 passes word offsets * 4). On makeExecutable failure `out` is left empty, so
-	out.ok() stays false and the caller falls back to the interpreter.
+	JitModule — the RAII owner of the executable page: the constructor makes the emitted code executable and takes
+	ownership (acquisition == initialization), then materializes the ordinal->entry table + dispatcher entry. makeExecutable
+	is the last thing that acquires, and everything after it is plain pointer arithmetic that cannot throw, so a partially
+	built module never leaks a page. Throws JitException if the host refuses. The destructor frees the page (a no-op when
+	empty); swap() exchanges ownership in O(1).
 */
-void JitCompiler::publishModule(JitModule& out, const uint32_t* codeWords, size_t wordCount
-		, const size_t* entryByteOffsets, UInt functionCount, size_t dispatchByteOffset) {
-	void* page = makeExecutable(codeWords, wordCount);
-	if (page == 0) { return; }
-	void** entries = new void*[functionCount];
-	for (UInt ordinal = 0; ordinal < functionCount; ++ordinal) {
-		entries[ordinal] = reinterpret_cast<char*>(page) + entryByteOffsets[ordinal];
+JitModule::JitModule(const EmittedModule& emitted)
+		: ownedPage(0)
+		, ownedWords(emitted.code.size())
+		, entries(emitted.entryByteOffsets.size())				// may throw (bad_alloc) before any page is acquired
+		, dispatch(0) {
+	ownedPage = makeExecutable(emitted.code.empty() ? 0 : &emitted.code[0], emitted.code.size());
+	if (ownedPage == 0) {										// host refused executable memory (should not happen after jitAvailable())
+		throw JitException("JIT: host refused to make the code page executable");
 	}
-	out.dispatch = reinterpret_cast<char*>(page) + dispatchByteOffset;
-	out.nativeEntries = entries;
-	out.codeWordCount = wordCount;
-	out.ownedPage = page;
-	out.ownedWords = wordCount;
+	for (size_t ordinal = 0; ordinal < entries.size(); ++ordinal) {		// noexcept from here: the page is owned, dtor will free it
+		entries[ordinal] = reinterpret_cast<char*>(ownedPage) + emitted.entryByteOffsets[ordinal];
+	}
+	dispatch = reinterpret_cast<char*>(ownedPage) + emitted.dispatchByteOffset;
+}
+
+JitModule::~JitModule() {
+	freeExecutable(ownedPage, ownedWords);						// freeExecutable(0, ...) is a no-op
+}
+
+void JitModule::swap(JitModule& other) {
+	void* tmpPage = ownedPage; ownedPage = other.ownedPage; other.ownedPage = tmpPage;
+	size_t tmpWords = ownedWords; ownedWords = other.ownedWords; other.ownedWords = tmpWords;
+	entries.swap(other.entries);
+	void* tmpDispatch = dispatch; dispatch = other.dispatch; other.dispatch = tmpDispatch;
+}
+
+/*
+	JitCompiler::compile — the template method shared by every backend. Lower the program via the backend's emit(); if a
+	function used an opcode the backend can't lower, leave `out` empty and report false (the caller uses the interpreter).
+	Otherwise construct the owning JitModule (which makes the code executable, throwing JitException if the host refuses)
+	and swap it into `out`.
+*/
+bool JitCompiler::compile(const Program& program, JitModule& out) {
+	EmittedModule emitted;
+	if (!emit(program, emitted)) {								// an opcode this backend can't lower: not JIT-able
+		JitModule empty;
+		out.swap(empty);										// honor the contract: `out` left empty
+		return false;
+	}
+	JitModule built(emitted);									// acquires the executable page; throws JitException on host denial
+	out.swap(built);
+	return true;
 }
 
 /*

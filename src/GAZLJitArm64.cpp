@@ -861,33 +861,42 @@ static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel)
 }
 
 /*
-	JitCompiler — the JIT's counterpart of Assembler: lowers a whole finalized program to native code and fills a
-	JitModule (the executable page's dispatcher + ordinal→native-entry table, which the module then owns). Targets the
-	static JitProcessor::layout() ABI; never touches a processor instance. This is where the substrate above (Arm64Emitter +
-	lowerFunction + emitDispatcher) meets makeExecutable() to publish.
+	JitCompilerArm64 — the arm64 backend of JitCompiler. Its emit() lowers a whole finalized program to AArch64 machine
+	code (the substrate above: Arm64Emitter + lowerFunction + emitDispatcher) and fills an EmittedModule; the shared
+	JitCompiler::compile then makes it executable. Targets the static JitProcessor::layout() ABI; never touches a
+	processor instance. nativeJitCompiler() is the host entry point — this TU is linked only on arm64 hosts.
 */
-void JitCompiler::compile(const Instruction* code, UInt functionCount, const UInt* functionTable,
-		const Value* memory, JitModule& out) {
-	// `out` starts empty (ok() == false); we only populate it once the whole program has lowered and published.
+class JitCompilerArm64 : public JitCompiler {
+	protected:	virtual bool emit(const Program& program, EmittedModule& out);
+};
+
+bool JitCompilerArm64::emit(const Program& program, EmittedModule& out) {
 	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
 	Arm64Emitter e;
-	std::vector<Label> entryLabels(functionCount);
-	std::vector<size_t> entryOffset(functionCount, 0);
-	for (UInt k = 0; k < functionCount; ++k) { entryLabels[k] = e.newLabel(); }
+	std::vector<Label> entryLabels(program.functionCount);
+	std::vector<size_t> entryOffset(program.functionCount, 0);
+	for (UInt k = 0; k < program.functionCount; ++k) { entryLabels[k] = e.newLabel(); }
 	Label exitLabel = e.newLabel();					// the one dispatcher EXIT; every segment terminal branches here (§5.4 (b))
-	for (UInt ord = 0; ord < functionCount; ++ord) {
-		if (!lowerFunction(e, code, memory, functionTable[ord], o, entryLabels, entryOffset, ord, functionCount, exitLabel)) {
-			return;								// unsupported opcode → caller should fall back to the interpreter
+	for (UInt ord = 0; ord < program.functionCount; ++ord) {
+		if (!lowerFunction(e, program.code, program.memory, program.functionTable[ord], o, entryLabels, entryOffset, ord
+				, program.functionCount, exitLabel)) {
+			return false;							// unsupported opcode → caller falls back to the interpreter
 		}
 	}
 	const size_t dispatchOffset = emitDispatcher(e, o, exitLabel);
 	e.finalize();
+	// AArch64 emits 32-bit instruction words directly; entry/dispatch offsets are in words, scaled to bytes for the module.
 	const size_t words = e.wordCount();
-	// AArch64 offsets are in words; the shared publish step takes bytes, so scale by 4.
-	std::vector<size_t> entryByteOffsets(functionCount);
-	for (UInt ord = 0; ord < functionCount; ++ord) { entryByteOffsets[ord] = entryOffset[ord] * 4; }
-	publishModule(out, e.code(), words, entryByteOffsets.empty() ? 0 : &entryByteOffsets[0], functionCount
-			, dispatchOffset * 4);
+	out.code.assign(e.code(), e.code() + words);
+	out.entryByteOffsets.resize(program.functionCount);
+	for (UInt ord = 0; ord < program.functionCount; ++ord) { out.entryByteOffsets[ord] = entryOffset[ord] * 4; }
+	out.dispatchByteOffset = dispatchOffset * 4;
+	return true;
+}
+
+JitCompiler& nativeJitCompiler() {					// arm64 host backend (stateless — shared instance)
+	static JitCompilerArm64 compiler;
+	return compiler;
 }
 
 } // namespace GAZL

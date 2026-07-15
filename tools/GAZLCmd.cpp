@@ -437,23 +437,26 @@ int main(int argc, const char* argv[]) {
 			if (useJit && !GAZL::jitAvailable()) {	// host forbids executable memory (entitlement / ACG) — never risk a crash
 				std::cerr << "JIT: this host does not permit executable memory; using the interpreter." << std::endl;
 			} else if (useJit) {
-				JitCompiler jc;						// produce the machine code — mirrors Assembler; no engine involved
+				const Program program = { code, functionCount, functionTable, memory };
 				const auto t0 = std::chrono::steady_clock::now();
-				jc.compile(code, functionCount, functionTable, memory, module);
-				const auto t1 = std::chrono::steady_clock::now();
-				if (module.ok()) {
-					if (jitStats) {						// machine-readable line for the benchmark harness
-						const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords() * 4)
-								<< " funcs=" << functionCount << std::endl;
+				try {
+					if (nativeJitCompiler().compile(program, module)) {		// the host backend; no engine involved
+						const auto t1 = std::chrono::steady_clock::now();
+						if (jitStats) {						// machine-readable line for the benchmark harness
+							const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+							std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords() * 4)
+									<< " funcs=" << functionCount << std::endl;
+						} else {
+							std::cerr << "JIT: compiled " << functionCount << " function(s) to native code." << std::endl;
+						}
+						proc.reset(new JitProcessor(module, codeSize, code, functionCount, functionTable
+								, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
 					} else {
-						std::cerr << "JIT: compiled " << functionCount << " function(s) to native code." << std::endl;
+						std::cerr << "JIT: a function used an opcode the backend can't lower; using the interpreter."
+								<< std::endl;
 					}
-					proc.reset(new JitProcessor(module, codeSize, code, functionCount, functionTable
-							, DATA_MEMORY_SIZE, memory, globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
-				} else {
-					std::cerr << "JIT: a function used an opcode the backend can't lower; using the interpreter."
-							<< std::endl;
+				} catch (const JitException& x) {			// host refused executable memory despite jitAvailable()
+					std::cerr << "JIT: " << x.what() << "; using the interpreter." << std::endl;
 				}
 			}
 		#else
