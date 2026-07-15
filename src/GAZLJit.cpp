@@ -23,7 +23,6 @@
 
 #include "GAZLJit.h"
 #include "GAZLJitMem.h"			// makeExecutable / freeExecutable - the JitModule owns the executable page
-#include "GAZLJitInternal.h"		// jitFuelSafepoints / throwUnlowerableOpcode - backend-shared internals (defined below)
 
 #include <cstddef>
 #include <cstring>				// memset / memcpy - the jitAvailable() probe
@@ -66,13 +65,16 @@ static bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt
 	}
 }
 
+// Fuel-check granularity: the host must grant at least this per resume, and no basic block is charged more (§5.5).
+static const UInt MAX_BLOCK_WEIGHT = 64;
+
 /*
 	Fuel safepoints - see GAZLJit.h. Leaders partition the function into basic blocks; charging each block's static
 	weight once, at its leader, makes the JIT's total fuel spend equal the interpreter's per-instruction spend. The
-	maxBlockWeight cap splits any long straight run so a block always fits one fuel grant (§5.5).
+	MAX_BLOCK_WEIGHT cap splits any long straight run so a block always fits one fuel grant (§5.5).
 */
-void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, const Value* memory
-		, UInt maxBlockWeight, std::map<UInt, UInt>& weight) {
+void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, const Value* memory
+		, std::map<UInt, UInt>& weight) {
 	std::set<UInt> leaders;
 	leaders.insert(funcStart);
 	for (UInt j = funcStart; j <= endIndex; ++j) {
@@ -97,12 +99,12 @@ void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, c
 			if (j + 1 <= endIndex) { leaders.insert(j + 1); }
 		}
 	}
-	// Cap: split any [leader, nextLeader) run longer than maxBlockWeight so no single block exceeds one fuel grant.
+	// Cap: split any [leader, nextLeader) run longer than MAX_BLOCK_WEIGHT so no single block exceeds one fuel grant.
 	{
 		std::vector<UInt> sorted(leaders.begin(), leaders.end());
 		for (size_t i = 0; i < sorted.size(); ++i) {
 			const UInt stop = (i + 1 < sorted.size()) ? sorted[i + 1] : endIndex + 1;
-			for (UInt p = sorted[i] + maxBlockWeight; p < stop; p += maxBlockWeight) { leaders.insert(p); }
+			for (UInt p = sorted[i] + MAX_BLOCK_WEIGHT; p < stop; p += MAX_BLOCK_WEIGHT) { leaders.insert(p); }
 		}
 	}
 	// weight[leader] = instruction span to the next leader.
@@ -151,7 +153,7 @@ void JitModule::swap(JitModule& other) {
 	finalized opcodes - so assert first (loud during development). Asserts vanish in release, so also throw: a shipped
 	build then degrades to the interpreter instead of running past a gap in the switch. Never returns.
 */
-void throwUnlowerableOpcode(Int opcode) {
+void JitCompiler::throwUnlowerableOpcode(Int opcode) {
 	assert(0 && "JIT backend does not cover a finalized opcode (backend bug)");
 	char message[64];
 	std::snprintf(message, sizeof(message), "JIT: backend cannot lower finalized opcode 0x%X", static_cast<unsigned>(opcode));

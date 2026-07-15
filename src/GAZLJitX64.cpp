@@ -24,7 +24,6 @@
 #include "GAZLJitX64.h"
 #include "GAZLJit.h"			// arch-neutral opcode enum + Offsets / JitModule / JitProcessor / JitCompiler (+ GAZL.h)
 #include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
-#include "GAZLJitInternal.h"		// jitFuelSafepoints / MAX_BLOCK_WEIGHT / throwUnlowerableOpcode (backend-shared)
 
 #include <cstddef>
 #include <cstring>			// std::memcpy - pack the emitted byte stream into 32-bit words
@@ -369,7 +368,7 @@ static void emitBranchFloat(X64Emitter& emitter, int kind, const Instruction& in
 	(suspend → cold stub). GAZL calls/RETU tail-branch directly (the ipStack holds the return address, §5.7.5); native
 	calls run inline; every terminal path sets eax and jumps to the shared `epilogue`. Returns false on an unlowerable opcode.
 */
-static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart,
+void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart,
 		const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue, UInt functionCount) {
 	UInt endIndex = funcStart;
 	while (code[endIndex].opcode != OP_RETU) { ++endIndex; }
@@ -378,7 +377,7 @@ static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Va
 	// resumable point. `labels` is the mainline label per leader (hot entry + branch + resume target); suspendL its
 	// suspend stub. Charging per block (not just loop heads) keeps fuel spend ≈ the interpreter's.
 	std::map<UInt, UInt> loopWeight;
-	jitFuelSafepoints(code, funcStart, endIndex, memory, MAX_BLOCK_WEIGHT, loopWeight);
+	jitFuelSafepoints(code, funcStart, endIndex, memory, loopWeight);
 	std::map<UInt, Label> labels, suspendL;
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
 		labels[it->first] = emitter.newLabel(); suspendL[it->first] = emitter.newLabel();

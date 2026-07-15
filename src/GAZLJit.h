@@ -44,6 +44,7 @@
 #include <stdint.h>
 #include <cstddef>
 #include <vector>
+#include <map>
 #include "GAZL.h"
 #include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
 
@@ -101,9 +102,6 @@ enum {
 	meaningful in a GAZL_JIT build (that is where GAZLJit.cpp is linked).
 */
 bool jitAvailable();
-
-// The arch-neutral lowering helpers shared by GAZLJit.cpp and the backends (jitFuelSafepoints / throwUnlowerableOpcode)
-// are backend internals, declared in GAZLJitInternal.h - not part of this client-facing API.
 
 // Byte offsets of the machine state a segment/dispatcher touches, within the (subclass) engine.
 struct Offsets {
@@ -250,6 +248,19 @@ class JitCompiler {
 				// offsets + dispatcher byte offset). One virtual call per compile, never per instruction. Throws
 				// GAZL::JitException on an opcode it fails to cover - a bug, since every finalized opcode is lowerable.
 				virtual void emit(const AssembledProgram& program, EmittedModule& out) = 0;
+
+				// Arch-neutral lowering helpers for the backend subclasses (defined in GAZLJit.cpp).
+				// Fuel safepoints for one function: the basic-block leaders (function entry, branch/SWCH targets, the
+				// instruction after any branch/GOTO/SWCH/CALL, with long straight runs split so none exceeds the internal
+				// fuel-check granularity), filled into `weight` as leader -> charge; each backend emits a fuel check
+				// charging `weight` at each leader, so the JIT spends fuel at ~the interpreter's 1/instruction rate (§5.5).
+				static void jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex,
+						const Value* memory, std::map<UInt, UInt>& weight);
+				// A backend hit a finalized opcode it does not cover - a programmer error (every backend must lower all 91),
+				// not a runtime condition. asserts (loud in debug) and, because asserts vanish in release, also throws
+				// GAZL::JitException so a release build degrades to the interpreter rather than emitting wrong code. Never
+				// returns; the backends' switch defaults call it.
+				static void throwUnlowerableOpcode(Int opcode);
 };
 
 /*

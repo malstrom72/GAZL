@@ -177,6 +177,9 @@ class X64Emitter {
 */
 class JitCompilerX64 : public JitCompiler {
 	protected:	virtual void emit(const AssembledProgram& program, EmittedModule& out);
+	private:	static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart
+						, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue
+						, UInt functionCount);	// calls the inherited fuel/opcode helpers
 };
 
 } // namespace GAZL

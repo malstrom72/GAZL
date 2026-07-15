@@ -24,7 +24,6 @@
 #include "GAZLJit.h"
 #include "GAZLJitArm64.h"
 #include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
-#include "GAZLJitInternal.h"		// jitFuelSafepoints / MAX_BLOCK_WEIGHT / throwUnlowerableOpcode (backend-shared)
 
 #include <stdint.h>
 #include <cassert>
@@ -500,7 +499,7 @@ static void emitDivMod(Arm64Emitter& e, bool rem, const Instruction& in, int for
 	are pre-created (for direct calls); `entryOffset[selfOrdinal]` is set to this function's native word offset. Returns
 	false on an unsupported opcode.
 */
-static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
+void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
 		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount, Label exitLabel) {
 	UInt retIndex = funcIndex;
 	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
@@ -510,7 +509,7 @@ static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value*
 	// suspend stub. Charging per block (not just loop heads) makes fuel spend ≈ the interpreter's, so straight-line and
 	// recursive code yields on time too.
 	std::map<UInt, UInt> loopWeight;
-	jitFuelSafepoints(code, funcIndex, retIndex, memory, MAX_BLOCK_WEIGHT, loopWeight);
+	jitFuelSafepoints(code, funcIndex, retIndex, memory, loopWeight);
 	std::map<UInt, Label> mainline, suspendL;
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
 		mainline[it->first] = e.newLabel(); suspendL[it->first] = e.newLabel();
