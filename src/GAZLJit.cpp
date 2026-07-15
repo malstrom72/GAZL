@@ -233,17 +233,21 @@ void JitProcessor::bindModule(const JitModule& module) {
 */
 namespace {
 
-// The native ABI the JIT bakes into CALL_NVC: a plain C function of one pointer, returning a single-register Status.
-// Pinned so a future change to either (a wider Status, a by-value struct return, a non-default convention) can't
-// silently break the hand-emitted call/return. The runtime counterpart - an actual JIT->C round-trip - is the probe stub.
+/*
+	The native ABI the JIT bakes into CALL_NVC: a plain C function of one pointer, returning a single-register Status.
+	Pinned so a future change to either (a wider Status, a by-value struct return, a non-default convention) can't
+	silently break the hand-emitted call/return. The runtime counterpart - an actual JIT->C round-trip - is the probe stub.
+*/
 typedef Status (*JitNativeSignatureCheck)(Processor*);
 #if __cplusplus >= 201103L
 static_assert(sizeof(Status) <= sizeof(void*), "JIT CALL_NVC assumes a native's Status returns in one integer register");
 #endif
 
-// The probe stub: `uint32_t stub(ProbeCallee callee, const void* arg)` - move callee out of arg0, move arg into arg0,
-// call it through the platform's native convention, hand back its return. Exercises the exact JIT->C crossing CALL_NVC
-// bakes in (arg in the ABI arg register, the call/return, frame alignment + Win64 shadow space).
+/*
+	The probe stub: `uint32_t stub(ProbeCallee callee, const void* arg)` - move callee out of arg0, move arg into arg0,
+	call it through the platform's native convention, hand back its return. Exercises the exact JIT->C crossing CALL_NVC
+	bakes in (arg in the ABI arg register, the call/return, frame alignment + Win64 shadow space).
+*/
 #if defined(__aarch64__) || defined(_M_ARM64)
 const uint32_t PROBE_STUB[] = {			// stp x29,x30,[sp,#-16]! ; mov x9,x0 ; mov x0,x1 ; blr x9 ; ldp x29,x30,[sp],#16 ; ret
 	0xA9BF7BFDu, 0xAA0003E9u, 0xAA0103E0u, 0xD63F0120u, 0xA8C17BFDu, 0xD65F03C0u
@@ -265,8 +269,10 @@ const uint32_t PROBE_STUB[] = {			// sub rsp,8 ; mov rax,rdi ; mov rdi,rsi ; cal
 #if !defined(GAZL_NO_PROBE_STUB)
 typedef uint32_t (*ProbeCallee)(const void*);
 typedef uint32_t (*ProbeFunc)(ProbeCallee, const void*);
-// The C side of the round-trip: read the 32-bit input and add 0x1111, so a passing probe proves the call really ran (not
-// a passthrough) and the arg pointer crossed intact. probeCallee(&PROBE_INPUT) == 0xC0DE - the value the stub returns.
+/*
+	The C side of the round-trip: read the 32-bit input and add 0x1111, so a passing probe proves the call really ran (not
+	a passthrough) and the arg pointer crossed intact. probeCallee(&PROBE_INPUT) == 0xC0DE - the value the stub returns.
+*/
 uint32_t probeCallee(const void* arg) { return *static_cast<const uint32_t*>(arg) + 0x1111u; }
 const uint32_t PROBE_INPUT = 0xAFCDu;							// 0xAFCD + 0x1111 == 0xC0DE
 #endif
@@ -277,8 +283,10 @@ void probeFaultHandler(int) { siglongjmp(gProbeJump, 1); }
 #endif
 
 #if !defined(GAZL_NO_PROBE_STUB)
-// Run `func` under a fault guard: true only if it returned 0xC0DE. A SIGILL/SIGSEGV/SIGBUS/SIGTRAP (POSIX) or any
-// structured exception (Windows) means executing generated code faults on this host -> false.
+/*
+	Run `func` under a fault guard: true only if it returned 0xC0DE. A SIGILL/SIGSEGV/SIGBUS/SIGTRAP (POSIX) or any
+	structured exception (Windows) means executing generated code faults on this host -> false.
+*/
 bool runProbe(ProbeFunc func) {
 #if defined(_WIN32)
 	__try {

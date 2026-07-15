@@ -28,10 +28,9 @@
 	  - the finalized-opcode enum + `Offsets`, and `JitModule` / `JitProcessor` / `JitCompiler`: the compiled artifact,
 	    the engine, and the compiler driver. `JitProcessor` is a `Processor` subclass (§5.1) that overrides the virtual
 	    `run()`/`enterCall()`, so it is a polymorphic drop-in for the interpreter - the host loop is identical
-	    (`enterCall(); do { resetTimeOut(N); } while (run() == TIME_OUT)`). This depends on `GAZL.h`. Only these two
-	    virtual overrides stay inline (they are tiny and must not pull the vtable into the .o); every heavy body -
-	    `JitProcessor::layout` and (per backend) `lowerFunction`, `emitDispatcher`, `JitCompiler::compile` - lives in a
-	    .cpp.
+	    (`enterCall(); do { resetTimeOut(N); } while (run() == TIME_OUT)`). This depends on `GAZL.h`. Every body -
+	    the two virtual overrides, `JitProcessor::layout`, and (per backend) `lowerFunction`, `emitDispatcher`,
+	    `JitCompiler::compile` - lives in a .cpp.
 
 	The arm64 backend lives beside this in GAZLJitArm64.h / GAZLJitArm64.cpp: the `Arm64Emitter` assembler plus the v1
 	lowering pass + native dispatcher that drive it. The x64 emitter and the v2 register allocator (§5.7) are later
@@ -147,8 +146,10 @@ struct EmittedModule {
 class JitModule {
 	public:
 		JitModule() : ownedPage(0), ownedWords(0), dispatch(0) { }		// empty - owns nothing
-		// Make an emitted module's code executable and take ownership of the page (acquisition == initialization).
-		// Throws GAZL::JitException if the host refuses executable memory (jitAvailable() gates this).
+		/*
+			Make an emitted module's code executable and take ownership of the page (acquisition == initialization).
+			Throws GAZL::JitException if the host refuses executable memory (jitAvailable() gates this).
+		*/
 		explicit JitModule(const EmittedModule& emitted);
 		~JitModule();													// frees the page (a no-op when empty)
 		void swap(JitModule& other);									// O(1) - exchange ownership
@@ -204,21 +205,16 @@ class JitProcessor : public Processor {
 			Polymorphic drop-in for the base Processor (§5.1). enterCall seeds the RESUME continuation with the callee's
 			compiled entry; run() is one trip through the native dispatcher (mid-run GAZL/native calls stay inside it).
 			Host loop, identical to the interpreter's: enterCall(); do { resetTimeOut(N); } while (run()==TIME_OUT).
+			Both are defined in GAZLJit.cpp.
 		*/
-		virtual Status enterCall(Pointer functionPointer) {
-			const Status s = Processor::enterCall(functionPointer);
-			if (s != OK) { return s; }
-			resume = funcEntries[functionPointer - IP_OFFSET];
-			return OK;
-		}
-		virtual Status run() {
-			typedef int (*Disp)(JitProcessor*);
-			return static_cast<Status>(reinterpret_cast<Disp>(jitDispatch)(this));
-		}
+		virtual Status enterCall(Pointer functionPointer);
+		virtual Status run();
 
 	private:
-		// Bind the compiled module + zero the native-call scratch. Shared by both constructors (C++03 has no delegation).
-		// Precondition: the module holds compiled code (an empty module has no dispatcher to run). Defined in GAZLJit.cpp.
+		/*
+			Bind the compiled module + zero the native-call scratch. Shared by both constructors (C++03 has no delegation).
+			Precondition: the module holds compiled code (an empty module has no dispatcher to run). Defined in GAZLJit.cpp.
+		*/
 		void bindModule(const JitModule& module);
 
 		Value* savedDsp;					// dsp saved across a native call (the C1 window is transient)

@@ -234,10 +234,12 @@ void X64Emitter::finalize() {
 
 // --- pinned registers + scratch roles ---
 
-// §5.4 dispatcher/TRANSFER model - the per-segment pins mirror arm64's (x1=dsp, x2=membase, w3=fuel, x4=ipsp, x0=ctx).
-// dataStackEnd is NOT pinned (only bounds checks want it) - it is loaded from ctx on demand. Every segment reloads these
-// from ctx at entry and writes them back before any TRANSFER, so the C stack stays a single frame (the dispatcher) and a
-// timeout/suspend can return to the host and resume from any point - including inside nested GAZL calls.
+/*
+	§5.4 dispatcher/TRANSFER model - the per-segment pins mirror arm64's (x1=dsp, x2=membase, w3=fuel, x4=ipsp, x0=ctx).
+	dataStackEnd is NOT pinned (only bounds checks want it) - it is loaded from ctx on demand. Every segment reloads these
+	from ctx at entry and writes them back before any TRANSFER, so the C stack stays a single frame (the dispatcher) and a
+	timeout/suspend can return to the host and resume from any point - including inside nested GAZL calls.
+*/
 static const Reg DSP = RBX, MEMORY_BASE = R14, FUEL = R13, IP_STACK_PTR = R15, CONTEXT = R12;
 static const Reg SCRATCH_A = RCX, SCRATCH_B = RDX;					// general scratch (A also serves as the shift-count CL)
 static const Reg FLOAT_0 = static_cast<Reg>(0), FLOAT_1 = static_cast<Reg>(1);	// xmm0 / xmm1 (a separate register file from GP)
@@ -480,8 +482,10 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_POKE_CV: emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), SCRATCH_A); break;
 			case OP_POKE_CC: emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), SCRATCH_A); break;
 
-			// var-indexed global memory: base const (p1/p0), index var, value var/const. Bounds-checked against the
-			// memory size the interpreter uses - memorySize (read) / rwMemorySize (write) - matching GAZLJitArm64.cpp.
+			/*
+				var-indexed global memory: base const (p1/p0), index var, value var/const. Bounds-checked against the
+				memory size the interpreter uses - memorySize (read) / rwMemorySize (write) - matching GAZLJitArm64.cpp.
+			*/
 			case OP_PEEK_VCV: {
 				const int32_t base = static_cast<int32_t>(in.p1.p - MEMORY_OFFSET);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
@@ -532,8 +536,10 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 
-			// local array (frame): base = dsp + C (p1 for GETL, p0 for SETL), index var. The bound is the free frame span
-			// (dataStackEnd - dsp) in Value units, minus C - exactly GAZLJitArm64.cpp's GETL/SETL formula.
+			/*
+				local array (frame): base = dsp + C (p1 for GETL, p0 for SETL), index var. The bound is the free frame span
+				(dataStackEnd - dsp) in Value units, minus C - exactly GAZLJitArm64.cpp's GETL/SETL formula.
+			*/
 			case OP_GETL_VVV: {
 				const int32_t frameBase = static_cast<int32_t>(in.p1.i);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
@@ -561,8 +567,10 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 
-			// bulk copy p2 words from src (p1) to dst (p0) via rep movsd. Each pointer is a const memory address or a slot
-			// holding a GAZL pointer; resolve to a byte address (memoryBase + wordIndex*4). Unchecked, as in the slice.
+			/*
+				bulk copy p2 words from src (p1) to dst (p0) via rep movsd. Each pointer is a const memory address or a slot
+				holding a GAZL pointer; resolve to a byte address (memoryBase + wordIndex*4). Unchecked, as in the slice.
+			*/
 			case OP_COPY_VVC: case OP_COPY_VCC: case OP_COPY_CVC: case OP_COPY_CCC: {
 				const bool destConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
 				const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
@@ -640,8 +648,10 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_DIVF_VVV: emitBinaryFloat(emitter, &X64Emitter::divss, in, false, false); break;
 			case OP_DIVF_VVC: emitBinaryFloat(emitter, &X64Emitter::divss, in, false, true); break;
 			case OP_DIVF_VCV: emitBinaryFloat(emitter, &X64Emitter::divss, in, true, false); break;
-			// FTOI / ITOF carry a scale constant (p2): FTOI = (int)(src * scale) with the interpreter's saturation;
-			// ITOF = (float)src * scale.
+			/*
+				FTOI / ITOF carry a scale constant (p2): FTOI = (int)(src * scale) with the interpreter's saturation;
+				ITOF = (float)src * scale.
+			*/
 			case OP_FTOI_VVC: {
 				emitter.movssLoad(FLOAT_0, DSP, in.p1.i * 4);
 				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p2.i)); emitter.movdToXmm(FLOAT_1, SCRATCH_A); emitter.mulss(FLOAT_0, FLOAT_1);	// * scale
@@ -769,13 +779,17 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 		lowerFunction(emitter, program.code, program.memory, program.functionTable[ordinal], offsets, entryLabels
 				, epilogue, program.functionCount);
 	}
-	// Shared exit `epilogue` (bound inside emitDispatcher): every terminal path - suspend, OK return, or trap - jumps
-	// there with its Status in eax; the dispatcher restores the frame and returns to the host.
+	/*
+		Shared exit `epilogue` (bound inside emitDispatcher): every terminal path - suspend, OK return, or trap - jumps
+		there with its Status in eax; the dispatcher restores the frame and returns to the host.
+	*/
 	const size_t dispatcherOffset = emitDispatcher(emitter, offsets, epilogue);
 	emitter.finalize();
 
-	// x86-64 is a byte stream; the module holds 32-bit words, so round up and zero-pad the last partial word. Entry and
-	// dispatch offsets are already byte offsets.
+	/*
+		x86-64 is a byte stream; the module holds 32-bit words, so round up and zero-pad the last partial word. Entry and
+		dispatch offsets are already byte offsets.
+	*/
 	const size_t byteCount = emitter.size();
 	emitted.code.assign((byteCount + 3) / 4, 0);
 	if (byteCount != 0) { std::memcpy(&emitted.code[0], emitter.code(), byteCount); }

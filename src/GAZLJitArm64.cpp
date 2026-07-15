@@ -408,8 +408,10 @@ static void writebackState(Arm64Emitter& e, const Offsets& o) {
 	e.strX(X1, X0, o.dsp); e.strW(W3, X0, o.fuel); e.strX(X4, X0, o.ipsp);
 }
 static void matConst(Arm64Emitter& e, Reg r, Int v) { e.movImm32(r, static_cast<uint32_t>(v)); }
-// Frame slots are Value-indices off dsp (x1). ldur/stur reach ±64 words; far slots (big frames / LOCA arrays) fall back
-// to a register-offset load (index in W13 - kept distinct from the W9..W12 operand scratches). See task #23.
+/*
+	Frame slots are Value-indices off dsp (x1). ldur/stur reach ±64 words; far slots (big frames / LOCA arrays) fall back
+	to a register-offset load (index in W13 - kept distinct from the W9..W12 operand scratches). See task #23.
+*/
 static bool slotNear(Int slot) { return slot >= -64 && slot <= 63; }
 static void loadSlot(Arm64Emitter& e, Reg r, Int slot) {
 	if (slotNear(slot)) { e.ldurW(r, X1, static_cast<int>(slot * 4)); }
@@ -427,10 +429,12 @@ static void storeSlotF(Arm64Emitter& e, Reg s, Int slot) {
 	if (slotNear(slot)) { e.sturS(s, X1, static_cast<int>(slot * 4)); }
 	else { matConst(e, W13, slot); e.strSxs(s, X1, W13); }
 }
-// PEEK/POKE at a compile-time-constant memory word index (off memoryBase, X2). The scaled imm12 form reaches word
-// index 4095 (16 KB in); past that - large globals/consts such as audio tables - materialize the index and use the
-// scaled register-offset form, mirroring loadSlot/storeSlot. W13 is the dedicated addressing scratch (kept distinct
-// from the W9..W12 operand scratches), so callers may still hold a value in W9..W12 across these.
+/*
+	PEEK/POKE at a compile-time-constant memory word index (off memoryBase, X2). The scaled imm12 form reaches word
+	index 4095 (16 KB in); past that - large globals/consts such as audio tables - materialize the index and use the
+	scaled register-offset form, mirroring loadSlot/storeSlot. W13 is the dedicated addressing scratch (kept distinct
+	from the W9..W12 operand scratches), so callers may still hold a value in W9..W12 across these.
+*/
 static void loadMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
 	if (wordIndex < 0x1000u) { e.ldrW(r, X2, wordIndex * 4u); }
 	else { matConst(e, W13, static_cast<Int>(wordIndex)); e.ldrWx(r, X2, W13); }
@@ -463,8 +467,10 @@ static void emitBinaryF(Arm64Emitter& e, void (Arm64Emitter::*fop)(Reg, Reg, Reg
 	storeSlotF(e, S2, in.p0.i);
 }
 
-// Emit a shift `dst = value <shift> count`. kind: 0=lsl, 1=asr (SHRi), 2=lsr (SHRu). form: 0=VVV, 1=VVC, 2=VCV.
-// value is p1 (a slot for VVV/VVC, a const for VCV); count is p2 (a const for VVC, else a slot, masked mod 32 by HW).
+/*
+	Emit a shift `dst = value <shift> count`. kind: 0=lsl, 1=asr (SHRi), 2=lsr (SHRu). form: 0=VVV, 1=VVC, 2=VCV.
+	value is p1 (a slot for VVV/VVC, a const for VCV); count is p2 (a const for VVC, else a slot, masked mod 32 by HW).
+*/
 static void emitShift(Arm64Emitter& e, int kind, const Instruction& in, int form) {
 	loadOp(e, W10, in.p1, form == 2);					// value
 	if (form == 1) {									// VVC: constant count → immediate shift
@@ -477,8 +483,10 @@ static void emitShift(Arm64Emitter& e, int kind, const Instruction& in, int form
 	storeSlot(e, W9, in.p0.i);
 }
 
-// Emit an integer divide (rem=false) or modulo (rem=true) `dst = s1 </%> s2`. form: 0=VVV, 1=VVC, 2=VCV. A variable
-// divisor (VVV/VCV) gets a divide-by-zero guard → DIVISION_BY_ZERO; a VVC divisor is a nonzero assembler constant.
+/*
+	Emit an integer divide (rem=false) or modulo (rem=true) `dst = s1 </%> s2`. form: 0=VVV, 1=VVC, 2=VCV. A variable
+	divisor (VVV/VCV) gets a divide-by-zero guard → DIVISION_BY_ZERO; a VVC divisor is a nonzero assembler constant.
+*/
 static void emitDivMod(Arm64Emitter& e, bool rem, const Instruction& in, int form, Label exitLabel) {
 	loadOp(e, W10, in.p1, form == 2);					// dividend (const for VCV)
 	loadOp(e, W11, in.p2, form == 1);					// divisor (const for VVC)
@@ -504,10 +512,12 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	UInt retIndex = funcIndex;
 	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
 
-	// Pass 1 - fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight. Every leader
-	// is a resumable point, so each gets a mainline label (hot entry + branch + resume target), a reload trampoline, and a
-	// suspend stub. Charging per block (not just loop heads) makes fuel spend ≈ the interpreter's, so straight-line and
-	// recursive code yields on time too.
+	/*
+		Pass 1 - fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight. Every leader
+		is a resumable point, so each gets a mainline label (hot entry + branch + resume target), a reload trampoline, and a
+		suspend stub. Charging per block (not just loop heads) makes fuel spend ≈ the interpreter's, so straight-line and
+		recursive code yields on time too.
+	*/
 	std::map<UInt, UInt> loopWeight;
 	jitFuelSafepoints(code, funcIndex, retIndex, memory, loopWeight);
 	std::map<UInt, Label> mainline, suspendL;
@@ -515,8 +525,10 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		mainline[it->first] = e.newLabel(); suspendL[it->first] = e.newLabel();
 	}
 
-	// Function entry (hot - reached by a tail-branch from a caller or by the dispatcher after it reloaded the pins, so
-	// state is already live). FUNC prologue: dsp += localsSize.
+	/*
+		Function entry (hot - reached by a tail-branch from a caller or by the dispatcher after it reloaded the pins, so
+		state is already live). FUNC prologue: dsp += localsSize.
+	*/
 	entryOffset[selfOrdinal] = e.wordCount();
 	e.bind(entryLabels[selfOrdinal]);
 	const UInt localsSize = static_cast<UInt>(code[funcIndex].p0.i);
@@ -832,8 +844,10 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		}
 	}
 
-	// Cold section: §5.7.5 suspend stubs. Each writes state back, points RESUME at its block's hot mainline (the
-	// dispatcher reloads the pins on re-entry, so no per-block reload trampoline is needed), and branches to EXIT.
+	/*
+		Cold section: §5.7.5 suspend stubs. Each writes state back, points RESUME at its block's hot mainline (the
+		dispatcher reloads the pins on re-entry, so no per-block reload trampoline is needed), and branches to EXIT.
+	*/
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
 		e.bind(suspendL[it->first]);
 		writebackState(e, o);
