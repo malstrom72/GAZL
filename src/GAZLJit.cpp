@@ -230,7 +230,25 @@ int RegisterCache::acquire(RegisterClass registerClass) {
 	return victim;
 }
 
+// A slot lives in only one register file at a time (transients are typeless: a `%` slot may hold an int now and a float
+// next). Before touching `slot` in `wantedClass`, resolve any copy sitting in the OTHER file: on a read the other-file
+// copy is the current value, so spill it to the home first (the wanted-class fill then reads that home); on a define the
+// slot is overwritten whole, so the old copy is dead - just drop it.
+void RegisterCache::evictOtherClass(Int slot, RegisterClass wantedClass, bool spillFirst) {
+	const RegisterClass other = (wantedClass == GENERAL_REGISTER) ? FLOAT_REGISTER : GENERAL_REGISTER;
+	size_t count;
+	Line* lines = linesOf(other, count);
+	for (size_t i = 0; i < count; ++i) {
+		if (lines[i].occupied && !lines[i].scratchTemp && lines[i].slot == slot) {
+			if (spillFirst) { spillLine(other, static_cast<int>(i)); }
+			lines[i].occupied = false;
+			return;
+		}
+	}
+}
+
 int RegisterCache::read(Int slot, RegisterClass registerClass) {
+	evictOtherClass(slot, registerClass, true);				// the value may currently live in the other file
 	size_t count;
 	Line* lines = linesOf(registerClass, count);
 	const int* registers = registersOf(registerClass);
@@ -255,6 +273,7 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 }
 
 int RegisterCache::define(Int slot, RegisterClass registerClass) {
+	evictOtherClass(slot, registerClass, false);			// overwriting the slot whole: any other-file copy is now dead
 	size_t count;
 	Line* lines = linesOf(registerClass, count);
 	const int* registers = registersOf(registerClass);

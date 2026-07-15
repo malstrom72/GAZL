@@ -483,6 +483,15 @@ static bool cacheLowered(Int op) {
 		case OP_ANDI_VVV: case OP_ANDI_VVC:
 		case OP_IORI_VVV: case OP_IORI_VVC:
 		case OP_XORI_VVV: case OP_XORI_VVC:
+		case OP_SHLI_VVV: case OP_SHLI_VVC: case OP_SHLI_VCV:
+		case OP_SHRI_VVV: case OP_SHRI_VVC: case OP_SHRI_VCV:
+		case OP_SHRU_VVV: case OP_SHRU_VVC: case OP_SHRU_VCV:
+		case OP_ABSF: case OP_FLOF:
+		case OP_ADDF_VVV: case OP_ADDF_VVC:
+		case OP_SUBF_VVV: case OP_SUBF_VVC: case OP_SUBF_VCV:
+		case OP_MULF_VVV: case OP_MULF_VVC:
+		case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
+		case OP_FTOI_VVC: case OP_ITOF_VVC:
 			return true;
 		default:
 			return false;
@@ -504,33 +513,51 @@ static void emitBinary(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitter
 	cache.endInstruction();
 }
 
-// Load a float operand into S-reg `s` (using `wtmp` for a const): a slot via ldur, or a float constant via fmov s,w.
+// Load a float operand into a fixed S-reg `s` (using `wtmp` for a const): used by the not-yet-cached float compare-branches.
 static void loadOpF(Arm64Emitter& e, Reg s, Reg wtmp, const Value& p, bool isConst) {
 	if (isConst) { matConst(e, wtmp, p.i); e.fmovSW(s, wtmp); }
 	else { loadSlotF(e, s, p.i); }
 }
-// `dst = s1 <fop> s2` on float slots/consts.
-static void emitBinaryF(Arm64Emitter& e, void (Arm64Emitter::*fop)(Reg, Reg, Reg), const Instruction& in, bool s1Const, bool s2Const) {
-	loadOpF(e, S0, W9, in.p1, s1Const);
-	loadOpF(e, S1, W10, in.p2, s2Const);
-	(e.*fop)(S2, S0, S1);
-	storeSlotF(e, S2, in.p0.i);
+// Load a float operand into a cache register: a float slot (read), or a float constant materialized via a GP scratch + fmov.
+static int loadFloatOperand(Arm64Emitter& e, RegisterCache& cache, const Value& p, bool isConst) {
+	if (!isConst) { return cache.read(p.i, FLOAT_REGISTER); }
+	const int bits = cache.scratch(GENERAL_REGISTER);
+	const int s = cache.scratch(FLOAT_REGISTER);
+	matConst(e, static_cast<Reg>(bits), p.i);
+	e.fmovSW(static_cast<Reg>(s), static_cast<Reg>(bits));
+	return s;
+}
+// `dst = s1 <fop> s2` on float slots/consts, through the register cache.
+static void emitBinaryF(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitter::*fop)(Reg, Reg, Reg), const Instruction& in, bool s1Const, bool s2Const) {
+	const int a = loadFloatOperand(e, cache, in.p1, s1Const);
+	const int b = loadFloatOperand(e, cache, in.p2, s2Const);
+	const int d = cache.define(in.p0.i, FLOAT_REGISTER);
+	(e.*fop)(static_cast<Reg>(d), static_cast<Reg>(a), static_cast<Reg>(b));
+	cache.endInstruction();
 }
 
 /*
 	Emit a shift `dst = value <shift> count`. kind: 0=lsl, 1=asr (SHRi), 2=lsr (SHRu). form: 0=VVV, 1=VVC, 2=VCV.
 	value is p1 (a slot for VVV/VVC, a const for VCV); count is p2 (a const for VVC, else a slot, masked mod 32 by HW).
 */
-static void emitShift(Arm64Emitter& e, int kind, const Instruction& in, int form) {
-	loadOp(e, W10, in.p1, form == 2);					// value
+static void emitShift(Arm64Emitter& e, RegisterCache& cache, int kind, const Instruction& in, int form) {
+	int v;												// value: a const for VCV (form 2), else a slot
+	if (form == 2) { v = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(v), in.p1.i); }
+	else { v = cache.read(in.p1.i, GENERAL_REGISTER); }
 	if (form == 1) {									// VVC: constant count → immediate shift
 		const unsigned sh = static_cast<unsigned>(in.p2.i) & 31u;
-		if (kind == 0) { e.lslImm(W9, W10, sh); } else if (kind == 1) { e.asrImm(W9, W10, sh); } else { e.lsrImm(W9, W10, sh); }
-	} else {											// register count
-		loadSlot(e, W11, in.p2.i);
-		if (kind == 0) { e.lslv(W9, W10, W11); } else if (kind == 1) { e.asrv(W9, W10, W11); } else { e.lsrv(W9, W10, W11); }
+		const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+		if (kind == 0) { e.lslImm(static_cast<Reg>(d), static_cast<Reg>(v), sh); }
+		else if (kind == 1) { e.asrImm(static_cast<Reg>(d), static_cast<Reg>(v), sh); }
+		else { e.lsrImm(static_cast<Reg>(d), static_cast<Reg>(v), sh); }
+	} else {											// register count (VVV/VCV): count is a slot, masked mod 32 by HW
+		const int cnt = cache.read(in.p2.i, GENERAL_REGISTER);
+		const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+		if (kind == 0) { e.lslv(static_cast<Reg>(d), static_cast<Reg>(v), static_cast<Reg>(cnt)); }
+		else if (kind == 1) { e.asrv(static_cast<Reg>(d), static_cast<Reg>(v), static_cast<Reg>(cnt)); }
+		else { e.lsrv(static_cast<Reg>(d), static_cast<Reg>(v), static_cast<Reg>(cnt)); }
 	}
-	storeSlot(e, W9, in.p0.i);
+	cache.endInstruction();
 }
 
 /*
@@ -783,15 +810,15 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_MODI_VVV: emitDivMod(e, true, in, 0, exitLabel); break;
 			case OP_MODI_VVC: emitDivMod(e, true, in, 1, exitLabel); break;
 			case OP_MODI_VCV: emitDivMod(e, true, in, 2, exitLabel); break;
-			case OP_SHLI_VVV: emitShift(e, 0, in, 0); break;
-			case OP_SHLI_VVC: emitShift(e, 0, in, 1); break;
-			case OP_SHLI_VCV: emitShift(e, 0, in, 2); break;
-			case OP_SHRI_VVV: emitShift(e, 1, in, 0); break;
-			case OP_SHRI_VVC: emitShift(e, 1, in, 1); break;
-			case OP_SHRI_VCV: emitShift(e, 1, in, 2); break;
-			case OP_SHRU_VVV: emitShift(e, 2, in, 0); break;
-			case OP_SHRU_VVC: emitShift(e, 2, in, 1); break;
-			case OP_SHRU_VCV: emitShift(e, 2, in, 2); break;
+			case OP_SHLI_VVV: emitShift(e, cache, 0, in, 0); break;
+			case OP_SHLI_VVC: emitShift(e, cache, 0, in, 1); break;
+			case OP_SHLI_VCV: emitShift(e, cache, 0, in, 2); break;
+			case OP_SHRI_VVV: emitShift(e, cache, 1, in, 0); break;
+			case OP_SHRI_VVC: emitShift(e, cache, 1, in, 1); break;
+			case OP_SHRI_VCV: emitShift(e, cache, 1, in, 2); break;
+			case OP_SHRU_VVV: emitShift(e, cache, 2, in, 0); break;
+			case OP_SHRU_VVC: emitShift(e, cache, 2, in, 1); break;
+			case OP_SHRU_VCV: emitShift(e, cache, 2, in, 2); break;
 			case OP_ABSI: {
 				const int s = cache.read(in.p1.i, GENERAL_REGISTER);
 				const int t = cache.scratch(GENERAL_REGISTER);					// sign mask (v >> 31)
@@ -802,26 +829,39 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				cache.endInstruction();
 				break;
 			}
-			case OP_ABSF: loadSlotF(e, S0, in.p1.i); e.fabsS(S0, S0); storeSlotF(e, S0, in.p0.i); break;	// V0 = fabs(V1)
-			case OP_FLOF: loadSlotF(e, S0, in.p1.i); e.frintmS(S0, S0); storeSlotF(e, S0, in.p0.i); break;	// V0 = floorf(V1)
-			case OP_ADDF_VVV: emitBinaryF(e, &Arm64Emitter::faddS, in, false, false); break;
-			case OP_ADDF_VVC: emitBinaryF(e, &Arm64Emitter::faddS, in, false, true); break;
-			case OP_SUBF_VVV: emitBinaryF(e, &Arm64Emitter::fsubS, in, false, false); break;
-			case OP_SUBF_VVC: emitBinaryF(e, &Arm64Emitter::fsubS, in, false, true); break;
-			case OP_SUBF_VCV: emitBinaryF(e, &Arm64Emitter::fsubS, in, true, false); break;
-			case OP_MULF_VVV: emitBinaryF(e, &Arm64Emitter::fmulS, in, false, false); break;
-			case OP_MULF_VVC: emitBinaryF(e, &Arm64Emitter::fmulS, in, false, true); break;
-			case OP_DIVF_VVV: emitBinaryF(e, &Arm64Emitter::fdivS, in, false, false); break;
-			case OP_DIVF_VVC: emitBinaryF(e, &Arm64Emitter::fdivS, in, false, true); break;
-			case OP_DIVF_VCV: emitBinaryF(e, &Arm64Emitter::fdivS, in, true, false); break;
-			case OP_FTOI_VVC: {
-				loadSlotF(e, S0, in.p1.i); matConst(e, W9, in.p2.i); e.fmovSW(S1, W9);
-				e.fmulS(S0, S0, S1); e.fcvtzs(W9, S0); storeSlot(e, W9, in.p0.i);
+			case OP_ABSF: { const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER); e.fabsS(static_cast<Reg>(d), static_cast<Reg>(s)); cache.endInstruction(); break; }		// |V|
+			case OP_FLOF: { const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER); e.frintmS(static_cast<Reg>(d), static_cast<Reg>(s)); cache.endInstruction(); break; }	// floorf(V)
+			case OP_ADDF_VVV: emitBinaryF(e, cache, &Arm64Emitter::faddS, in, false, false); break;
+			case OP_ADDF_VVC: emitBinaryF(e, cache, &Arm64Emitter::faddS, in, false, true); break;
+			case OP_SUBF_VVV: emitBinaryF(e, cache, &Arm64Emitter::fsubS, in, false, false); break;
+			case OP_SUBF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fsubS, in, false, true); break;
+			case OP_SUBF_VCV: emitBinaryF(e, cache, &Arm64Emitter::fsubS, in, true, false); break;
+			case OP_MULF_VVV: emitBinaryF(e, cache, &Arm64Emitter::fmulS, in, false, false); break;
+			case OP_MULF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fmulS, in, false, true); break;
+			case OP_DIVF_VVV: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, false); break;
+			case OP_DIVF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, true); break;
+			case OP_DIVF_VCV: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, true, false); break;
+			case OP_FTOI_VVC: {												// int(V * scale), scale = C2 (saturating fcvtzs)
+				const int src = cache.read(in.p1.i, FLOAT_REGISTER);
+				const int bits = cache.scratch(GENERAL_REGISTER);
+				const int scale = cache.scratch(FLOAT_REGISTER);
+				matConst(e, static_cast<Reg>(bits), in.p2.i); e.fmovSW(static_cast<Reg>(scale), static_cast<Reg>(bits));
+				const int prod = cache.scratch(FLOAT_REGISTER);
+				e.fmulS(static_cast<Reg>(prod), static_cast<Reg>(src), static_cast<Reg>(scale));
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				e.fcvtzs(static_cast<Reg>(d), static_cast<Reg>(prod));
+				cache.endInstruction();
 				break;
 			}
-			case OP_ITOF_VVC: {
-				loadSlot(e, W9, in.p1.i); e.scvtf(S0, W9); matConst(e, W10, in.p2.i); e.fmovSW(S1, W10);
-				e.fmulS(S0, S0, S1); storeSlotF(e, S0, in.p0.i);
+			case OP_ITOF_VVC: {												// float(V) * scale, scale = C2
+				const int src = cache.read(in.p1.i, GENERAL_REGISTER);
+				const int d = cache.define(in.p0.i, FLOAT_REGISTER);
+				e.scvtf(static_cast<Reg>(d), static_cast<Reg>(src));
+				const int bits = cache.scratch(GENERAL_REGISTER);
+				const int scale = cache.scratch(FLOAT_REGISTER);
+				matConst(e, static_cast<Reg>(bits), in.p2.i); e.fmovSW(static_cast<Reg>(scale), static_cast<Reg>(bits));
+				e.fmulS(static_cast<Reg>(d), static_cast<Reg>(d), static_cast<Reg>(scale));
+				cache.endInstruction();
 				break;
 			}
 			case OP_ANDI_VVV: emitBinary(e, cache, &Arm64Emitter::and_, in, false, false); break;

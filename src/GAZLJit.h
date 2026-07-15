@@ -368,6 +368,7 @@ class RegisterCache {
 	private:	Line* linesOf(RegisterClass registerClass, size_t& count);
 	private:	const int* registersOf(RegisterClass registerClass) const;
 	private:	int acquire(RegisterClass registerClass);	// a pool index ready to (re)assign, evicting the LRU unpinned line if full
+	private:	void evictOtherClass(Int slot, RegisterClass wantedClass, bool spillFirst);	// a slot lives in one file at a time
 	private:	void spillLine(RegisterClass registerClass, int index);	// store it if dirty + has a home, then mark clean
 	private:	void flushAndClear();						// spill all dirty, then drop every mapping
 	private:	void assertNoDirty() const;					// debug contract check for enterBlock

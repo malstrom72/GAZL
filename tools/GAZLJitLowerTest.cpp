@@ -487,6 +487,17 @@ static void runRegisterCacheTests() {
 		c.barrier();											// spill the dirty float slot only
 		cacheExpect("float pool", m.log, "F20<-[1] [2]<-S21 ");
 	}
+
+	// H: a slot cached in one file, then read in the other, spills to the home and reloads (a MOVE-then-float-use word).
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.define(1, GENERAL_REGISTER); c.endInstruction();		// slot1 dirty in the general file
+		c.read(1, FLOAT_REGISTER); c.endInstruction();			// wants it in the float file -> spill general, reload float
+		cacheExpect("cross-file slot", m.log, "[1]<-S10 F20<-[1] ");
+	}
 	std::printf("\n");
 }
 
