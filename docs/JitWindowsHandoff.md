@@ -84,10 +84,16 @@ The SysV path is byte-for-byte unchanged by this refactor — the engine test st
 - **Kernel test** — the x64 backend now runs the unified `tools/GAZLJitLowerTest.cpp` (via
   `tools/buildAndRunGAZLJitLowerTest.cmd`), which diffs JIT vs interpreter over the whole memory image at full fuel
   *and* tiny fuel (forcing suspend/resume). The old run-to-completion `GAZLJitX64EngineTest` has been retired.
-- **Execution model (updated).** The x64 backend was rebuilt on the §5.4 dispatcher/TRANSFER model, at parity with
-  arm64: GAZL→GAZL calls thread through the dispatcher via the ipStack (no host frames), so fuel timeouts suspend and
-  resume from any point, including inside nested GAZL calls. The earlier "run-to-completion / native call stack"
-  description elsewhere in this doc is historical.
+- **Execution model (updated — encoding b).** The x64 backend runs the §5.4 dispatcher model at parity with arm64, now
+  **direct-threaded** (roadmap #19): the dispatcher owns the single native frame and reloads the pins once, then GAZL→GAZL
+  calls/RETU **tail-branch directly** (`jmp`/`jmpReg`, the ipStack holds the return address) and native calls run **inline**
+  (`call [natives[ordinal]]`, ctx in the ABI arg register) — no per-call TRANSFER round-trip. A segment returns to the
+  dispatcher only to suspend (TIME_OUT), finish (OK), or trap. Fuel timeouts still suspend and resume from any point,
+  including inside nested GAZL calls. Win64 note: because the pins are callee-saved, an inline native preserves them, and
+  the native's Status returns in `eax` (never clobbered by ctx, which lives in `r12`); only the fuel pin (a native may
+  `resetTimeOut(0)`) and the window dsp are refreshed from ctx after the call. On the call-heavy fib benchmark this took
+  native-Windows JIT from **118 ms → 53 ms** (5.0× vs the 267 ms interpreter). The earlier "run-to-completion / native
+  call stack" and per-call TRANSFER descriptions elsewhere in this doc are historical.
 - **Windows-on-ARM64.** The arm64 backend already avoids `x18` (the Windows platform register) and matches base
   AAPCS64, and `GAZLJitMemWindows.cpp` is architecture-neutral, so `buildGAZLCmd.cmd` already selects `GAZLJitArm64.cpp`
   on an ARM64 host — but that path is unbuilt/untested. The remaining gap is SEH unwind metadata, only relevant if C++
