@@ -276,12 +276,6 @@ static void writebackState(X64Emitter& e, const Offsets& o) {
 	e.storeQ(CONTEXT, o.dsp, DSP); e.store(CONTEXT, o.fuel, FUEL); e.storeQ(CONTEXT, o.ipsp, IP_STACK_PTR);
 }
 
-// Render an integer operand into register `reg`: a frame slot (load off dsp) or an immediate constant.
-static void loadOperand(X64Emitter& emitter, Reg reg, const Value& operand, bool isConst) {
-	if (isConst) { emitter.movImm(reg, static_cast<uint32_t>(operand.i)); }
-	else { emitter.load(reg, DSP, operand.i * 4); }
-}
-
 typedef void (X64Emitter::*BinaryOp)(Reg, Reg);
 
 /*
@@ -331,6 +325,17 @@ static bool cacheLowered(Int op) {
 		case OP_PEEK_VCV: case OP_PEEK_VVV:
 		case OP_POKE_CVV: case OP_POKE_CVC: case OP_POKE_VVV: case OP_POKE_VVC:
 		case OP_GETL_VVV: case OP_SETL_VVV: case OP_SETL_VVC:
+		case OP_DIVI_VVV: case OP_DIVI_VVC: case OP_DIVI_VCV:
+		case OP_MODI_VVV: case OP_MODI_VVC: case OP_MODI_VCV:
+		case OP_FORi_VVB: case OP_FORi_VCB:
+		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB:
+		case OP_EQUI_VVB: case OP_EQUI_VCB:
+		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB:
+		case OP_NEQI_VVB: case OP_NEQI_VCB:
+		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
+		case OP_EQUF_VVB: case OP_EQUF_VCB:
+		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
+		case OP_NEQF_VVB: case OP_NEQF_VCB:
 			return true;
 		default:
 			return false;
@@ -364,10 +369,13 @@ static void emitBinary(X64Emitter& emitter, RegisterCache& cache, BinaryOp op, c
 	#DE on INT_MIN / -1. Result is left in eax before the store. (A const-zero divisor is an assemble-time error, so the
 	zero guard is only for a variable divisor, matching arm64.)
 */
-static void emitDivMod(X64Emitter& emitter, const Instruction& instruction, bool rem, bool source1Const, bool source2Const, Label epilogue) {
-	if (source1Const) { emitter.movImm(RAX, static_cast<uint32_t>(instruction.p1.i)); } else { emitter.load(RAX, DSP, instruction.p1.i * 4); }
-	if (source2Const) { emitter.movImm(RCX, static_cast<uint32_t>(instruction.p2.i)); } else { emitter.load(RCX, DSP, instruction.p2.i * 4); }
+static void emitDivMod(X64Emitter& emitter, RegisterCache& cache, const Instruction& instruction, bool rem, bool source1Const, bool source2Const, Label epilogue) {
+	if (source1Const) { emitter.movImm(RAX, static_cast<uint32_t>(instruction.p1.i)); }
+	else { const int a = cache.read(instruction.p1.i, GENERAL_REGISTER); emitter.mov(RAX, static_cast<Reg>(a)); }	// dividend -> eax
+	if (source2Const) { emitter.movImm(RCX, static_cast<uint32_t>(instruction.p2.i)); }
+	else { const int bb = cache.read(instruction.p2.i, GENERAL_REGISTER); emitter.mov(RCX, static_cast<Reg>(bb)); }	// divisor -> ecx
 	if (!source2Const) {
+		cache.spillDirtyResident();									// on the MAIN path: the terminal trap needs memory interpreter-current
 		emitter.cmpImm(RCX, 0);
 		Label nonZero = emitter.newLabel();
 		emitter.jcc(CC_NE, nonZero);
@@ -383,7 +391,9 @@ static void emitDivMod(X64Emitter& emitter, const Instruction& instruction, bool
 	emitter.cdq(); emitter.idiv(RCX);
 	if (rem) { emitter.mov(RAX, RDX); }
 	emitter.bind(done);
-	emitter.store(DSP, instruction.p0.i * 4, RAX);
+	const int d = cache.define(instruction.p0.i, GENERAL_REGISTER);
+	emitter.mov(static_cast<Reg>(d), RAX);
+	cache.endInstruction();
 }
 
 // Shift through the cache: value p1 -> dst (a pool reg), count p2 (const -> imm8, else a slot -> CL). kind: 0=shl, 1=shr, 2=sar.
@@ -408,18 +418,18 @@ static void emitShift(X64Emitter& emitter, RegisterCache& cache, const Instructi
 }
 
 // if (a <condition> b) goto target - a = p0, b = p1, in the const modes named by the opcode; target = this index + p2.
-static void emitBranch(X64Emitter& emitter, Cond condition, const Instruction& instruction, UInt instructionIndex,
+static void emitBranch(X64Emitter& emitter, RegisterCache& cache, Cond condition, const Instruction& instruction, UInt instructionIndex,
 		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels) {
-	loadOperand(emitter, SCRATCH_A, instruction.p0, operand0Const);
-	loadOperand(emitter, SCRATCH_B, instruction.p1, operand1Const);
-	emitter.cmp(SCRATCH_A, SCRATCH_B);
+	int a;
+	if (operand0Const) { a = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(a), static_cast<uint32_t>(instruction.p0.i)); }
+	else { a = cache.read(instruction.p0.i, GENERAL_REGISTER); }
+	int b;
+	if (operand1Const) { b = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(b), static_cast<uint32_t>(instruction.p1.i)); }
+	else { b = cache.read(instruction.p1.i, GENERAL_REGISTER); }
+	emitter.cmp(static_cast<Reg>(a), static_cast<Reg>(b));
+	cache.endInstruction();
+	cache.barrier();												// block ends here: flush (mov spills leave EFLAGS) before the branch
 	emitter.jcc(condition, labels[static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i)]);
-}
-
-// Render a float operand into an XMM register: a slot (movss load) or a constant (its int bits via movd).
-static void loadOperandFloat(X64Emitter& emitter, Reg xmm, const Value& operand, bool isConst) {
-	if (isConst) { emitter.movImm(SCRATCH_A, static_cast<uint32_t>(operand.i)); emitter.movdToXmm(xmm, SCRATCH_A); }
-	else { emitter.movssLoad(xmm, DSP, operand.i * 4); }
 }
 
 // Load a float operand into a cache register: a float slot (read), or a constant materialized via a GP scratch + movd.
@@ -449,15 +459,20 @@ static void emitBinaryFloat(X64Emitter& emitter, RegisterCache& cache, BinaryOp 
 }
 
 // Float compare-branch, NaN-correct versus C++: kind 0 = <, 1 = >=, 2 = ==, 3 = !=. a = p0, b = p1, target = index + p2.
-static void emitBranchFloat(X64Emitter& emitter, int kind, const Instruction& instruction, UInt instructionIndex,
+static void emitBranchFloat(X64Emitter& emitter, RegisterCache& cache, int kind, const Instruction& instruction, UInt instructionIndex,
 		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels) {
-	loadOperandFloat(emitter, FLOAT_0, instruction.p0, operand0Const);
-	loadOperandFloat(emitter, FLOAT_1, instruction.p1, operand1Const);
+	const int a = loadFloatOperandCached(emitter, cache, instruction.p0, operand0Const);
+	const int b = loadFloatOperandCached(emitter, cache, instruction.p1, operand1Const);
+	const Reg xa = static_cast<Reg>(a), xb = static_cast<Reg>(b);
 	Label target = labels[static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i)];
-	if (kind == 0) { emitter.ucomiss(FLOAT_1, FLOAT_0); emitter.jcc(CC_A, target); }			// b > a ordered  == (a < b)
-	else if (kind == 1) { emitter.ucomiss(FLOAT_0, FLOAT_1); emitter.jcc(CC_AE, target); }		// a >= b ordered
-	else if (kind == 2) { emitter.ucomiss(FLOAT_0, FLOAT_1); Label unordered = emitter.newLabel(); emitter.jcc(CC_P, unordered); emitter.jcc(CC_E, target); emitter.bind(unordered); }
-	else { emitter.ucomiss(FLOAT_0, FLOAT_1); emitter.jcc(CC_P, target); emitter.jcc(CC_NE, target); }	// unordered or not-equal
+	if (kind == 0) { emitter.ucomiss(xb, xa); }				// b > a ordered == (a < b)
+	else { emitter.ucomiss(xa, xb); }
+	cache.endInstruction();
+	cache.barrier();										// block ends here: flush (mov spills leave EFLAGS) before the branch
+	if (kind == 0) { emitter.jcc(CC_A, target); }
+	else if (kind == 1) { emitter.jcc(CC_AE, target); }		// a >= b ordered
+	else if (kind == 2) { Label unordered = emitter.newLabel(); emitter.jcc(CC_P, unordered); emitter.jcc(CC_E, target); emitter.bind(unordered); }
+	else { emitter.jcc(CC_P, target); emitter.jcc(CC_NE, target); }	// unordered or not-equal
 }
 
 /*
@@ -735,12 +750,12 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_XORI_VVV: emitBinary(emitter, cache, &X64Emitter::xor_, in, false, false); break;
 			case OP_XORI_VVC: emitBinary(emitter, cache, &X64Emitter::xor_, in, false, true); break;
 
-			case OP_DIVI_VVV: emitDivMod(emitter, in, false, false, false, epilogue); break;
-			case OP_DIVI_VVC: emitDivMod(emitter, in, false, false, true, epilogue); break;
-			case OP_DIVI_VCV: emitDivMod(emitter, in, false, true, false, epilogue); break;
-			case OP_MODI_VVV: emitDivMod(emitter, in, true, false, false, epilogue); break;
-			case OP_MODI_VVC: emitDivMod(emitter, in, true, false, true, epilogue); break;
-			case OP_MODI_VCV: emitDivMod(emitter, in, true, true, false, epilogue); break;
+			case OP_DIVI_VVV: emitDivMod(emitter, cache, in, false, false, false, epilogue); break;
+			case OP_DIVI_VVC: emitDivMod(emitter, cache, in, false, false, true, epilogue); break;
+			case OP_DIVI_VCV: emitDivMod(emitter, cache, in, false, true, false, epilogue); break;
+			case OP_MODI_VVV: emitDivMod(emitter, cache, in, true, false, false, epilogue); break;
+			case OP_MODI_VVC: emitDivMod(emitter, cache, in, true, false, true, epilogue); break;
+			case OP_MODI_VCV: emitDivMod(emitter, cache, in, true, true, false, epilogue); break;
 			case OP_SHLI_VVV: emitShift(emitter, cache, in, 0, false, false); break;
 			case OP_SHLI_VVC: emitShift(emitter, cache, in, 0, false, true); break;
 			case OP_SHLI_VCV: emitShift(emitter, cache, in, 0, true, false); break;
@@ -761,12 +776,19 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 
-			case OP_FORi_VVB: case OP_FORi_VCB:
-				emitter.load(SCRATCH_A, DSP, in.p0.i * 4); emitter.addImm(SCRATCH_A, 1); emitter.store(DSP, in.p0.i * 4, SCRATCH_A);
-				loadOperand(emitter, SCRATCH_B, in.p1, op == OP_FORi_VCB);
-				emitter.cmp(SCRATCH_A, SCRATCH_B);
+			case OP_FORi_VVB: case OP_FORi_VCB: {					// ++counter; if (counter < limit) branch
+				const int r = cache.read(in.p0.i, GENERAL_REGISTER);
+				emitter.addImm(static_cast<Reg>(r), 1);
+				cache.define(in.p0.i, GENERAL_REGISTER);			// counter now dirty (barrier will spill the increment)
+				int lim;
+				if (op == OP_FORi_VCB) { lim = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(lim), static_cast<uint32_t>(in.p1.i)); }
+				else { lim = cache.read(in.p1.i, GENERAL_REGISTER); }
+				emitter.cmp(static_cast<Reg>(r), static_cast<Reg>(lim));
+				cache.endInstruction();
+				cache.barrier();									// block ends here: flush before the branch
 				emitter.jcc(CC_L, labels[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
+			}
 
 			case OP_ADDF_VVV: emitBinaryFloat(emitter, cache, &X64Emitter::addss, in, false, false); break;
 			case OP_ADDF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::addss, in, false, true); break;
@@ -824,16 +846,16 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			}
 			case OP_FLOF: { const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER); emitter.roundss(static_cast<Reg>(d), static_cast<Reg>(s), 1); cache.endInstruction(); break; }
 
-			case OP_LSSF_VVB: emitBranchFloat(emitter, 0, in, j, false, false, labels); break;
-			case OP_LSSF_VCB: emitBranchFloat(emitter, 0, in, j, false, true, labels); break;
-			case OP_LSSF_CVB: emitBranchFloat(emitter, 0, in, j, true, false, labels); break;
-			case OP_EQUF_VVB: emitBranchFloat(emitter, 2, in, j, false, false, labels); break;
-			case OP_EQUF_VCB: emitBranchFloat(emitter, 2, in, j, false, true, labels); break;
-			case OP_NLSF_VVB: emitBranchFloat(emitter, 1, in, j, false, false, labels); break;
-			case OP_NLSF_VCB: emitBranchFloat(emitter, 1, in, j, false, true, labels); break;
-			case OP_NLSF_CVB: emitBranchFloat(emitter, 1, in, j, true, false, labels); break;
-			case OP_NEQF_VVB: emitBranchFloat(emitter, 3, in, j, false, false, labels); break;
-			case OP_NEQF_VCB: emitBranchFloat(emitter, 3, in, j, false, true, labels); break;
+			case OP_LSSF_VVB: emitBranchFloat(emitter, cache, 0, in, j, false, false, labels); break;
+			case OP_LSSF_VCB: emitBranchFloat(emitter, cache, 0, in, j, false, true, labels); break;
+			case OP_LSSF_CVB: emitBranchFloat(emitter, cache, 0, in, j, true, false, labels); break;
+			case OP_EQUF_VVB: emitBranchFloat(emitter, cache, 2, in, j, false, false, labels); break;
+			case OP_EQUF_VCB: emitBranchFloat(emitter, cache, 2, in, j, false, true, labels); break;
+			case OP_NLSF_VVB: emitBranchFloat(emitter, cache, 1, in, j, false, false, labels); break;
+			case OP_NLSF_VCB: emitBranchFloat(emitter, cache, 1, in, j, false, true, labels); break;
+			case OP_NLSF_CVB: emitBranchFloat(emitter, cache, 1, in, j, true, false, labels); break;
+			case OP_NEQF_VVB: emitBranchFloat(emitter, cache, 3, in, j, false, false, labels); break;
+			case OP_NEQF_VCB: emitBranchFloat(emitter, cache, 3, in, j, false, true, labels); break;
 
 			case OP_GOTO: emitter.jmp(labels[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
 
@@ -857,16 +879,16 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 
-			case OP_LSSI_VVB: emitBranch(emitter, CC_L, in, j, false, false, labels); break;
-			case OP_LSSI_VCB: emitBranch(emitter, CC_L, in, j, false, true, labels); break;
-			case OP_LSSI_CVB: emitBranch(emitter, CC_L, in, j, true, false, labels); break;
-			case OP_EQUI_VVB: emitBranch(emitter, CC_E, in, j, false, false, labels); break;
-			case OP_EQUI_VCB: emitBranch(emitter, CC_E, in, j, false, true, labels); break;
-			case OP_NLSI_VVB: emitBranch(emitter, CC_GE, in, j, false, false, labels); break;
-			case OP_NLSI_VCB: emitBranch(emitter, CC_GE, in, j, false, true, labels); break;
-			case OP_NLSI_CVB: emitBranch(emitter, CC_GE, in, j, true, false, labels); break;
-			case OP_NEQI_VVB: emitBranch(emitter, CC_NE, in, j, false, false, labels); break;
-			case OP_NEQI_VCB: emitBranch(emitter, CC_NE, in, j, false, true, labels); break;
+			case OP_LSSI_VVB: emitBranch(emitter, cache, CC_L, in, j, false, false, labels); break;
+			case OP_LSSI_VCB: emitBranch(emitter, cache, CC_L, in, j, false, true, labels); break;
+			case OP_LSSI_CVB: emitBranch(emitter, cache, CC_L, in, j, true, false, labels); break;
+			case OP_EQUI_VVB: emitBranch(emitter, cache, CC_E, in, j, false, false, labels); break;
+			case OP_EQUI_VCB: emitBranch(emitter, cache, CC_E, in, j, false, true, labels); break;
+			case OP_NLSI_VVB: emitBranch(emitter, cache, CC_GE, in, j, false, false, labels); break;
+			case OP_NLSI_VCB: emitBranch(emitter, cache, CC_GE, in, j, false, true, labels); break;
+			case OP_NLSI_CVB: emitBranch(emitter, cache, CC_GE, in, j, true, false, labels); break;
+			case OP_NEQI_VVB: emitBranch(emitter, cache, CC_NE, in, j, false, false, labels); break;
+			case OP_NEQI_VCB: emitBranch(emitter, cache, CC_NE, in, j, false, true, labels); break;
 
 			default: throwUnlowerableOpcode(op);					// a finalized opcode the backend must cover (a bug, never routine)
 		}
