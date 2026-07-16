@@ -26,7 +26,7 @@
 #include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
 
 #include <stdint.h>
-#include <cassert>
+#include "assert.h"
 #include <map>
 #include <set>
 #include <utility>

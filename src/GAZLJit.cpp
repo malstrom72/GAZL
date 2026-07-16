@@ -27,7 +27,7 @@
 #include <cstddef>
 #include <cstring>				// memset / memcpy - the jitAvailable() probe
 #include <cstdio>				// std::snprintf - the unlowerable-opcode diagnostic
-#include <cassert>				// assert - RegisterCache contracts + the unlowerable-opcode check
+#include "assert.h"				// assert - RegisterCache contracts + the unlowerable-opcode check (local-overridable, see GAZL.h)
 #include <set>					// jitFuelSafepoints - block-leader set
 
 #if defined(_WIN32)

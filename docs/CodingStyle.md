@@ -12,14 +12,22 @@ These are the most important principles in the codebase. Get them wrong and the 
 - **RAII means resource acquisition IS initialization.** A constructor either produces a fully valid object or throws.
   No two-phase construction. No `ok()` / `isValid()` / `init()` methods to check after the fact. No friend class that
   reaches in and fills the fields. A resource-owning class exposes no public data members.
-- **Design by contract.** State preconditions and `assert` them. A broken precondition is a programmer error, not a
-  runtime condition to paper over.
-- **Exceptions are for errors.** Never silently swallow an error. Never return a half-filled output or a success code
-  on a path that did not actually succeed. If a function cannot do its job, it throws.
-- **assert loudly, then degrade safely.** `assert` catches bugs in development; asserts vanish in release, so where
-  running past a broken invariant would corrupt state, ALSO throw (or take the safe branch) so a release build degrades
-  predictably instead of emitting wrong results. Example: a JIT backend that meets an opcode it cannot lower asserts AND
-  throws, so release falls back to the interpreter rather than running past the gap.
+- **Assert liberally - a lot of them.** Assertions are the primary tool for programmer errors: anything that cannot
+  happen with correct code and valid inputs (a broken invariant, a precondition, an impossible case) gets an `assert`.
+  Prefer the `assert(condition && "why this must hold")` form so a failure reads as an explanation. Include it as
+  `#include "assert.h"` (with quotes, not `<cassert>`) so a project can override the handler with a local `assert.h`
+  (see `GAZL.h`). Asserts are how programmer errors are handled - you never reach for `abort()`.
+- **Exceptions are for runtime conditions, not for bugs.** Throw when a failure CAN happen with correct code because of
+  the environment or input (the OS refuses an executable page, allocation fails, malformed source). Never silently
+  swallow such an error and never return a half-filled output or a success code on a path that did not succeed - if a
+  function cannot do its job, it throws. But do NOT throw a catchable exception for a programmer error you have proven
+  cannot happen: that invites the caller to build recovery around a non-condition. Assert it instead.
+- **`assert` + `throw` together is transitional scaffolding, not a default.** Use it only for a bug you have not yet
+  PROVEN impossible, where running past it in release would corrupt state and a real safe fallback exists - e.g. a JIT
+  backend that meets an opcode it does not yet lower and falls back to the interpreter while coverage is being built.
+  The throw is the release net precisely because `assert` vanishes there. Once the invariant is proven (an exhaustive
+  test plus fuzzing, ideally a compile-time exhaustiveness check), remove the throw and drop to assert-only. A permanent
+  hybrid advertises doubt in your own invariant.
 
 ## 2. Naming
 
@@ -39,9 +47,11 @@ These are the most important principles in the codebase. Get them wrong and the 
   method defined inline in a header will be moved out in review.
 - **Keep the client surface minimal.** Internal helpers are not public API - make them protected members of the class
   that uses them, or namespace-internal, not part of what a client sees when they include the header.
-- **Shipped headers stay C++03-clean.** The distributed library headers (and their `.cpp`) compile under strict
-  `-std=c++03` (`0` not `nullptr`, `const` not `constexpr`, `<stdint.h>` not `<cstdint>`). Tools and tests may use
-  C++11.
+- **C++ standard is per-repo, not a universal rule.** Match whatever standard the target repo requires. Magnus's
+  product code is C++11 with some C++14; reusable libraries lean C++03 for maximum portability and stability, but
+  pragmatically go to C++11 where it clearly pays (e.g. `shared_ptr`) - it is a judgement call, not dogma. **For GAZL
+  specifically:** the distributed library headers and their `.cpp` compile under strict `-std=c++03` (`0` not
+  `nullptr`, `const` not `constexpr`, `<stdint.h>` not `<cstdint>`); the tools and tests may use C++11.
 
 ## 4. Comments
 
@@ -68,18 +78,3 @@ These are the most important principles in the codebase. Get them wrong and the 
 - **Run the regression gate before committing**: `timeout 180 ./build.sh` (see `AGENTS.md`).
 - Do not proliferate files. Reuse an existing `.cpp` / `.h`; a new file has to earn its place. When something belongs
   in an existing translation unit, put it there.
-
-## 6. Working style
-
-Observed from how changes are built and reviewed here:
-
-- **Stage large changes into small, independently-sound increments**, and keep the test suite green at every step. A big
-  refactor lands as a sequence of commits, each of which builds and passes, not one giant drop.
-- **Differential testing against a reference oracle.** New execution engines are validated by running them in lockstep
-  against the interpreter (the ground truth) and comparing the full result byte-for-byte, across many inputs and edge
-  conditions (including forced suspend/resume). Validate on every target platform (arm64, x86-64, Windows), not just the
-  development host.
-- **Match the surrounding code** - its comment density, naming, and idiom. New code should read like the code next to
-  it.
-- **Be decisive.** Recommend a direction rather than surveying every option; act when the path is clear; surface a real
-  fork for a decision rather than guessing on something that changes the outcome.
