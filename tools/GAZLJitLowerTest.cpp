@@ -364,11 +364,8 @@ static const char* const K_FTOISAT =		// fTOi saturation: a huge float clamps to
 	" PEEK $n &gIn\n iTOf $f $n #1000000000.0\n fTOi $n $f #1.0\n POKE &gOut $n\n RETU\n";
 
 /*
-	v2.0 RegisterCache isolation tests: drive the arch-neutral floating cache (src/GAZLJit.cpp) against a mock backend
-	that records every fill/spill as text, then assert the exact fill/spill sequence for each coherence scenario. This
-	validates the allocator's brain in isolation - no ISA, no interpreter - before either real backend routes operands
-	through it. Register ids are arbitrary (10/11/12 general, 20/21 float) so the log reads clearly: "F<reg><-[<slot>]"
-	is a fill, "[<slot>]<-S<reg>" a spill.
+	RegisterCache isolation tests: drive the cache against a mock backend that records every fill/spill as text, and
+	assert the exact sequence per coherence scenario. Log format: "F<reg><-[<slot>]" a fill, "[<slot>]<-S<reg>" a spill.
 */
 namespace {
 struct RecordingBackend : public RegisterCacheBackend {

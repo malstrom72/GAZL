@@ -279,10 +279,9 @@ static void writebackState(X64Emitter& e, const Offsets& o) {
 typedef void (X64Emitter::*BinaryOp)(Reg, Reg);
 
 /*
-	v2.0 register cache (§5.7): the x64 register pool + the fill/spill backend. The pool is registers that are caller-saved
-	on BOTH SysV and Win64 (so no prologue save) and outside the §5.3 pins (RBX/R14/R13/R15/R12) and the RAX/RCX/RDX fixed
-	scratch that idiv / shift / rep-movsd need - so the cache never collides with those fixed-register ops and evict() is
-	never needed here. slot -> [DSP + slot*4]; the byte displacement is 32-bit, so there is no near/far split like arm64.
+	x64 register pool + fill/spill backend (§5.7). Registers caller-saved on BOTH SysV and Win64 (no prologue save),
+	outside the §5.3 pins and the RAX/RCX/RDX scratch idiv/shift/rep use - so the cache never collides with those and
+	evict() is never needed here. slot -> [DSP + slot*4] (32-bit disp, no near/far split).
 */
 static const int X64_GENERAL_POOL[] = { R8, R9, R10, R11 };
 static const int X64_FLOAT_POOL[] = { 2, 3, 4, 5 };			// xmm2-xmm5 (caller-saved on both ABIs; xmm0/xmm1 stay fixed scratch)
@@ -302,7 +301,7 @@ class X64SlotBackend : public RegisterCacheBackend {
 	private:	X64Emitter& e;
 };
 
-// Which opcodes route operands through the cache (v2.0). Everything else barriers the cache and lowers as v1. Grows opcode by opcode.
+// Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
 static bool cacheLowered(Int op) {
 	switch (op) {
 		case OP_MOVE_VV: case OP_MOVE_VC:
@@ -514,8 +513,6 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 		emitter.bind(stackOk);
 	}
 
-	// v2.0 register cache: cached opcodes route operands through it; every uncached opcode and every block boundary
-	// barriers it first (spill dirty + clear), so memory is interpreter-current at each safepoint.
 	X64SlotBackend slotBackend(emitter);
 	const RegisterPool registerPool = { X64_GENERAL_POOL, sizeof(X64_GENERAL_POOL) / sizeof(X64_GENERAL_POOL[0])
 			, X64_FLOAT_POOL, sizeof(X64_FLOAT_POOL) / sizeof(X64_FLOAT_POOL[0]) };

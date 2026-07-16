@@ -445,11 +445,8 @@ static void storeMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
 }
 
 /*
-	v2.0 register cache (§5.7): the arm64 register pool + the fill/spill backend. The pool is caller-saved registers only
-	(so no prologue save is needed) and disjoint from the W9-W15 fixed scratch the not-yet-cached opcodes use. The cache
-	is flushed at every block boundary and before every uncached opcode, so a suspend point - a fuel-check leader or a
-	native call - always sees an empty cache; that is why these registers never need to survive suspend/resume. General
-	entries are X-registers, float entries are V-registers (a separate file), so the two never collide.
+	arm64 register pool + fill/spill backend (§5.7). Caller-saved registers only (no prologue save), disjoint from the
+	W9-W15 fixed scratch of uncached opcodes. General entries are X-registers, float entries V-registers.
 */
 static const int ARM64_GENERAL_POOL[] = { W5, W6, W7, W8, W16, W17 };
 static const int ARM64_FLOAT_POOL[] = { 16, 17, 18, 19, 20, 21, 22, 23 };	// V16-V23 (caller-saved; unused until floats are cached)
@@ -469,11 +466,7 @@ class Arm64SlotBackend : public RegisterCacheBackend {
 };
 }
 
-/*
-	Which opcodes route their operands through the RegisterCache (v2.0). Everything else barriers the cache first and
-	lowers exactly as v1 did, so cached and uncached opcodes coexist while cache coverage grows opcode by opcode. Grow
-	this set (and the matching cases below) as more opcodes are converted.
-*/
+// Opcodes whose operands route through the RegisterCache; everything else barriers the cache and lowers as v1 (§5.7).
 static bool cacheLowered(Int op) {
 	switch (op) {
 		case OP_MOVE_VV: case OP_MOVE_VC: case OP_ABSI:
@@ -640,8 +633,6 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		e.bind(sok);
 	}
 
-	// v2.0 register cache: cached opcodes route operands through it; every uncached opcode and every block boundary
-	// barriers it first (spill dirty + clear), so memory is interpreter-current at each safepoint.
 	Arm64SlotBackend slotBackend(e);
 	const RegisterPool registerPool = { ARM64_GENERAL_POOL, sizeof(ARM64_GENERAL_POOL) / sizeof(ARM64_GENERAL_POOL[0])
 			, ARM64_FLOAT_POOL, sizeof(ARM64_FLOAT_POOL) / sizeof(ARM64_FLOAT_POOL[0]) };
