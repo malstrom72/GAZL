@@ -473,6 +473,13 @@ static void emitDirtyStores(Arm64Emitter& e, const ResidencyMap& map) {
 		if (entry.registerClass == GENERAL_REGISTER) { storeSlot(e, r, entry.slot); } else { storeSlotF(e, r, entry.slot); }
 	}
 }
+
+// A checked memory op's terminal trap, deferred to the function's cold section so the hot path stays branch-and-continue.
+struct ColdTrap {
+	Label label;
+	ResidencyMap dirty;								// the captureDirtyLines snapshot to store before exiting
+	unsigned statusComplement;						// movn immediate: ~1 = BAD_PEEK, ~2 = BAD_POKE
+};
 }
 
 // Opcodes whose operands route through the RegisterCache; everything else barriers the cache and lowers as v1 (§5.7).
@@ -672,6 +679,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	std::map<UInt, UInt> loopExtent;
 	jitResidencyLeaders(code, funcIndex, retIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
 	std::map<UInt, ResidencyMap> entryMaps;
+	std::vector<ColdTrap> coldTraps;																					// checked-op trap arms, emitted after the mainline
 
 	// Pass 2 - emit.
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
@@ -759,20 +767,18 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
 			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(r), in.p1.i); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
 			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]; globals/constants-realm read
-				Label trap = e.newLabel(), cont = e.newLabel();
+				ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 1;									// ~1 = -2 = BAD_PEEK
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
 				const int addr = cache.scratch(GENERAL_REGISTER);														// no flush: a const-base access cannot reach the frame (§1.1 realms)
 				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p1.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
 				const int lim = cache.scratch(GENERAL_REGISTER);
 				e.ldrW(static_cast<Reg>(lim), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim));
-				ResidencyMap trapDirty;
-				cache.captureDirtyLines(trapDirty);																		// the trap exit must leave memory interpreter-identical
-				e.bcond(HS, trap);
+				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
+				e.bcond(HS, trap.label);																				// trap arm is cold, after the mainline
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				e.ldrWx(static_cast<Reg>(d), X2, static_cast<Reg>(addr));
 				cache.endInstruction();
-				e.b(cont); e.bind(trap); emitDirtyStores(e, trapDirty); e.movn(W0, 1); e.b(exitLabel);					// ~1 = -2 = BAD_PEEK
-				e.bind(cont);
+				coldTraps.push_back(trap);
 				break;
 			}
 			case OP_PEEK_VVV: {																							// dst = memory[base + index]; pointer read
@@ -793,7 +799,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				break;
 			}
 			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value; globals-realm write
-				Label trap = e.newLabel(), cont = e.newLabel();
+				ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 2;									// ~2 = -3 = BAD_POKE
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
 				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(val), in.p2.i); }
@@ -802,13 +808,11 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p0.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
 				const int lim = cache.scratch(GENERAL_REGISTER);
 				e.ldrW(static_cast<Reg>(lim), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim));
-				ResidencyMap trapDirty;
-				cache.captureDirtyLines(trapDirty);																		// the trap exit must leave memory interpreter-identical
-				e.bcond(HS, trap);
+				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
+				e.bcond(HS, trap.label);																				// trap arm is cold, after the mainline
 				e.strWx(static_cast<Reg>(val), X2, static_cast<Reg>(addr));
 				cache.endInstruction();
-				e.b(cont); e.bind(trap); emitDirtyStores(e, trapDirty); e.movn(W0, 2); e.b(exitLabel);					// ~2 = -3 = BAD_POKE
-				e.bind(cont);
+				coldTraps.push_back(trap);
 				break;
 			}
 			case OP_POKE_VVV: case OP_POKE_VVC: {																		// memory[base + index] = value; pointer write
@@ -1069,6 +1073,13 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			}
 			default: throwUnlowerableOpcode(op);																		// a finalized opcode the backend must cover (a bug, never routine)
 		}
+	}
+
+	// Cold section: checked-op trap arms (see ColdTrap) - store the dirty snapshot, set the status, exit.
+	for (size_t k = 0; k < coldTraps.size(); ++k) {
+		e.bind(coldTraps[k].label);
+		emitDirtyStores(e, coldTraps[k].dirty);
+		e.movn(W0, coldTraps[k].statusComplement); e.b(exitLabel);
 	}
 
 	/*
