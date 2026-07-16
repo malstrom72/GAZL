@@ -327,6 +327,10 @@ static bool cacheLowered(Int op) {
 		case OP_SHLI_VVV: case OP_SHLI_VVC: case OP_SHLI_VCV:
 		case OP_SHRI_VVV: case OP_SHRI_VVC: case OP_SHRI_VCV:
 		case OP_SHRU_VVV: case OP_SHRU_VVC: case OP_SHRU_VCV:
+		case OP_PEEK_VC: case OP_POKE_CV: case OP_POKE_CC: case OP_ADRL:
+		case OP_PEEK_VCV: case OP_PEEK_VVV:
+		case OP_POKE_CVV: case OP_POKE_CVC: case OP_POKE_VVV: case OP_POKE_VVC:
+		case OP_GETL_VVV: case OP_SETL_VVV: case OP_SETL_VVC:
 			return true;
 		default:
 			return false;
@@ -575,22 +579,22 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_MOVE_VV: { const int s = cache.read(in.p1.i, GENERAL_REGISTER); const int d = cache.define(in.p0.i, GENERAL_REGISTER); if (d != s) { emitter.mov(static_cast<Reg>(d), static_cast<Reg>(s)); } cache.endInstruction(); break; }
 			case OP_MOVE_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(d), static_cast<uint32_t>(in.p1.i)); cache.endInstruction(); break; }
 
-			case OP_PEEK_VC: emitter.load(SCRATCH_A, MEMORY_BASE, static_cast<int32_t>((in.p1.p - MEMORY_OFFSET) * 4)); emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
-			case OP_POKE_CV: emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), SCRATCH_A); break;
-			case OP_POKE_CC: emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), SCRATCH_A); break;
+			// constant-address global access: assembler-validated, cannot touch the frame, so no cache coherence is needed.
+			case OP_PEEK_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.load(static_cast<Reg>(d), MEMORY_BASE, static_cast<int32_t>((in.p1.p - MEMORY_OFFSET) * 4)); cache.endInstruction(); break; }
+			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
+			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(r), static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
 
-			/*
-				var-indexed global memory: base const (p1/p0), index var, value var/const. Bounds-checked against the
-				memory size the interpreter uses - memorySize (read) / rwMemorySize (write) - matching GAZLJitArm64.cpp.
-			*/
+			// var-indexed global memory (pointer coherence): flush dirty before a read; flush + invalidate around a write.
 			case OP_PEEK_VCV: {
 				const int32_t base = static_cast<int32_t>(in.p1.p - MEMORY_OFFSET);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
-				emitter.load(SCRATCH_A, DSP, in.p2.i * 4);			// index (ecx)
-				emitter.mov(RAX, SCRATCH_A); emitter.addImm(RAX, static_cast<uint32_t>(base));	// word index = base + index
-				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);	// >= memorySize -> BAD_PEEK
-				emitter.loadIdx(RAX, MEMORY_BASE, SCRATCH_A, base * 4);
-				emitter.store(DSP, in.p0.i * 4, RAX);
+				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
+				cache.spillDirtyResident();
+				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));	// word index = base + index
+				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				emitter.loadIdx(static_cast<Reg>(d), MEMORY_BASE, static_cast<Reg>(idx), base * 4);
+				cache.endInstruction();
 				emitter.jmp(cont);
 				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
 				emitter.bind(cont);
@@ -599,52 +603,66 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_POKE_CVV: case OP_POKE_CVC: {
 				const int32_t base = static_cast<int32_t>(in.p0.p - MEMORY_OFFSET);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
-				emitter.load(SCRATCH_A, DSP, in.p1.i * 4);			// index (ecx)
-				emitter.mov(RAX, SCRATCH_A); emitter.addImm(RAX, static_cast<uint32_t>(base));	// word index = base + index
-				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);	// >= rwMemorySize -> BAD_POKE
-				if (op == OP_POKE_CVC) { emitter.movImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); } else { emitter.load(SCRATCH_B, DSP, in.p2.i * 4); }
-				emitter.storeIdx(MEMORY_BASE, SCRATCH_A, base * 4, SCRATCH_B);
+				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
+				int val;
+				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(val), static_cast<uint32_t>(in.p2.i)); }
+				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
+				cache.spillDirtyResident();
+				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));
+				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);
+				emitter.storeIdx(MEMORY_BASE, static_cast<Reg>(idx), base * 4, static_cast<Reg>(val));
+				cache.endInstruction();
+				cache.invalidateAll();
 				emitter.jmp(cont);
 				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
 				emitter.bind(cont);
 				break;
 			}
 
-			// full pointer deref: base(var) + index(var) = a GAZL pointer; wordIndex = base + index - MEMORY_OFFSET, checked.
-			case OP_PEEK_VVV: {
+			case OP_PEEK_VVV: {										// base(var) + index(var) = a GAZL pointer; wordIndex = base+index-MEMORY_OFFSET
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
-				emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.load(RAX, DSP, in.p2.i * 4); emitter.add(SCRATCH_A, RAX);	// base + index
-				emitter.subImm(SCRATCH_A, MEMORY_OFFSET);			// word index (ecx)
-				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(SCRATCH_A, SCRATCH_B); emitter.jcc(CC_AE, trap);	// >= memorySize -> BAD_PEEK
-				emitter.loadIdx(RAX, MEMORY_BASE, SCRATCH_A, 0); emitter.store(DSP, in.p0.i * 4, RAX);
+				const int bp = cache.read(in.p1.i, GENERAL_REGISTER);
+				const int ip = cache.read(in.p2.i, GENERAL_REGISTER);
+				cache.spillDirtyResident();
+				emitter.mov(RAX, static_cast<Reg>(bp)); emitter.add(RAX, static_cast<Reg>(ip)); emitter.subImm(RAX, MEMORY_OFFSET);
+				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				emitter.loadIdx(static_cast<Reg>(d), MEMORY_BASE, RAX, 0);
+				cache.endInstruction();
 				emitter.jmp(cont); emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
 				emitter.bind(cont);
 				break;
 			}
-			case OP_POKE_VVV: case OP_POKE_VVC: {					// base(var) + index(var) = pointer; value var (VVV) or const (VVC)
+			case OP_POKE_VVV: case OP_POKE_VVC: {
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
-				emitter.load(SCRATCH_A, DSP, in.p0.i * 4); emitter.load(RAX, DSP, in.p1.i * 4); emitter.add(SCRATCH_A, RAX);	// base + index
-				emitter.subImm(SCRATCH_A, MEMORY_OFFSET);
-				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(SCRATCH_A, SCRATCH_B); emitter.jcc(CC_AE, trap);	// >= rwMemorySize -> BAD_POKE
-				if (op == OP_POKE_VVC) { emitter.movImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); } else { emitter.load(SCRATCH_B, DSP, in.p2.i * 4); }
-				emitter.storeIdx(MEMORY_BASE, SCRATCH_A, 0, SCRATCH_B);
+				const int bp = cache.read(in.p0.i, GENERAL_REGISTER);
+				const int ip = cache.read(in.p1.i, GENERAL_REGISTER);
+				int val;
+				if (op == OP_POKE_VVC) { val = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(val), static_cast<uint32_t>(in.p2.i)); }
+				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
+				cache.spillDirtyResident();
+				emitter.mov(RAX, static_cast<Reg>(bp)); emitter.add(RAX, static_cast<Reg>(ip)); emitter.subImm(RAX, MEMORY_OFFSET);
+				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);
+				emitter.storeIdx(MEMORY_BASE, RAX, 0, static_cast<Reg>(val));
+				cache.endInstruction();
+				cache.invalidateAll();
 				emitter.jmp(cont); emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
 				emitter.bind(cont);
 				break;
 			}
 
-			/*
-				local array (frame): base = dsp + C (p1 for GETL, p0 for SETL), index var. The bound is the free frame span
-				(dataStackEnd - dsp) in Value units, minus C - exactly GAZLJitArm64.cpp's GETL/SETL formula.
-			*/
+			// local array (frame): bound is the free frame span (dataStackEnd - dsp)/4 - C. Frame access -> pointer coherence.
 			case OP_GETL_VVV: {
 				const int32_t frameBase = static_cast<int32_t>(in.p1.i);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
+				cache.spillDirtyResident();
 				emitter.loadQ(RAX, CONTEXT, offsets.dsend); emitter.subQ(RAX, DSP); emitter.shrImm(RAX, 2);	// (dataStackEnd - dsp) in words
 				emitter.subImm(RAX, static_cast<uint32_t>(frameBase));	// limit = words - C
-				emitter.load(SCRATCH_A, DSP, in.p2.i * 4); emitter.cmp(SCRATCH_A, RAX); emitter.jcc(CC_AE, trap);	// index >= limit -> BAD_PEEK
-				emitter.loadIdx(RAX, DSP, SCRATCH_A, frameBase * 4);	// [dsp + index*4 + C*4]
-				emitter.store(DSP, in.p0.i * 4, RAX);
+				emitter.cmp(static_cast<Reg>(idx), RAX); emitter.jcc(CC_AE, trap);
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				emitter.loadIdx(static_cast<Reg>(d), DSP, static_cast<Reg>(idx), frameBase * 4);	// [dsp + index*4 + C*4]
+				cache.endInstruction();
 				emitter.jmp(cont);
 				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
 				emitter.bind(cont);
@@ -653,11 +671,17 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_SETL_VVV: case OP_SETL_VVC: {
 				const int32_t frameBase = static_cast<int32_t>(in.p0.i);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
+				int val;
+				if (op == OP_SETL_VVC) { val = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(val), static_cast<uint32_t>(in.p2.i)); }
+				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
+				cache.spillDirtyResident();
 				emitter.loadQ(RAX, CONTEXT, offsets.dsend); emitter.subQ(RAX, DSP); emitter.shrImm(RAX, 2);
 				emitter.subImm(RAX, static_cast<uint32_t>(frameBase));	// limit = words - C
-				emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.cmp(SCRATCH_A, RAX); emitter.jcc(CC_AE, trap);	// index >= limit -> BAD_POKE
-				if (op == OP_SETL_VVC) { emitter.movImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); } else { emitter.load(SCRATCH_B, DSP, in.p2.i * 4); }
-				emitter.storeIdx(DSP, SCRATCH_A, frameBase * 4, SCRATCH_B);	// [dsp + index*4 + C*4] = value
+				emitter.cmp(static_cast<Reg>(idx), RAX); emitter.jcc(CC_AE, trap);
+				emitter.storeIdx(DSP, static_cast<Reg>(idx), frameBase * 4, static_cast<Reg>(val));	// [dsp + index*4 + C*4] = value
+				cache.endInstruction();
+				cache.invalidateAll();
 				emitter.jmp(cont);
 				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
 				emitter.bind(cont);
@@ -687,11 +711,15 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			}
 
 			// address of a local p1 -> dest p0. pointer = MEMORY_OFFSET + wordIndex(dsp) + slot.
-			case OP_ADRL:
+			case OP_ADRL: {
 				emitter.movQ(RAX, DSP); emitter.subQ(RAX, MEMORY_BASE); emitter.shrImm(RAX, 2);	// (dsp - memoryBase) / 4 = dsp word offset
 				emitter.addImm(RAX, static_cast<uint32_t>(in.p1.i));		// + slot
 				emitter.addImm(RAX, MEMORY_OFFSET);
-				emitter.store(DSP, in.p0.i * 4, RAX); break;
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				emitter.mov(static_cast<Reg>(d), RAX);
+				cache.endInstruction();
+				break;
+			}
 
 			case OP_ADDI_VVV: emitBinary(emitter, cache, &X64Emitter::add, in, false, false); break;
 			case OP_ADDI_VVC: emitBinary(emitter, cache, &X64Emitter::add, in, false, true); break;
