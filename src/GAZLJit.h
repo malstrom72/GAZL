@@ -301,13 +301,26 @@ class RegisterCacheBackend {
 	public:		virtual ~RegisterCacheBackend() { }
 };
 
+// slot -> ascending instruction indices where the slot is READ (the JIT builds one per function; see setUseSchedule).
+typedef std::map<Int, std::vector<UInt> > UseSchedule;
+
+// Scan code[from..to] and record every slot READ per instruction (uses GAZL::operandRoles) into `schedule` (Belady input).
+void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& schedule);
+
 /*
 	v2.0 floating register cache (§5.7.1): a per-function write-back cache of frame slots. The opcode switch routes
 	operands through read/define/scratch and calls the coherence events below; correctness never rests on the aliasing
 	spec because memory is made current at every pointer op, block boundary, and call.
+
+	Eviction is v2.0.5 block-local Belady when a use schedule is supplied (evict the resident line whose next read is
+	furthest, dead lines first), else LRU. Belady only picks WHICH line to spill, so an imprecise schedule stays correct.
 */
 class RegisterCache {
 	public:		RegisterCache(const RegisterPool& pool, RegisterCacheBackend& backend);
+
+	// Belady inputs (optional): the per-function next-read schedule, and the scan position advanced per instruction.
+	public:		void setUseSchedule(const UseSchedule* schedule) { useSchedule = schedule; }
+	public:		void setInstructionIndex(UInt index) { instructionIndex = index; }
 
 	// read/define/scratch pin their register for the current instruction; endInstruction releases the pins.
 	public:		int read(Int slot, RegisterClass registerClass);		// fills on a miss
@@ -332,11 +345,13 @@ class RegisterCache {
 					bool pinned;					// operand of the current instruction; not evictable this cycle
 					bool scratchTemp;				// no home: never spilled, dropped at endInstruction
 					uint32_t lastUse;				// LRU stamp
+					uint32_t nextUse;				// Belady: instruction index of this slot's next READ (UINT32_MAX = none)
 				};
 
 	private:	Line* linesOf(RegisterClass registerClass, size_t& count);
 	private:	const int* registersOf(RegisterClass registerClass) const;
-	private:	int acquire(RegisterClass registerClass);	// a pool index ready to (re)assign, evicting the LRU unpinned line if full
+	private:	int acquire(RegisterClass registerClass);	// a pool index ready to (re)assign, evicting a line (Belady or LRU) if full
+	private:	uint32_t nextReadAfter(Int slot) const;		// next scheduled read of `slot` strictly after instructionIndex
 	private:	void evictOtherClass(Int slot, RegisterClass wantedClass, bool spillFirst);	// a slot lives in one file at a time
 	private:	void spillLine(RegisterClass registerClass, int index);	// store it if dirty + has a home, then mark clean
 	private:	void flushAndClear();						// spill all dirty, then drop every mapping
@@ -347,6 +362,8 @@ class RegisterCache {
 	private:	Line generalLines[POOL_CAPACITY];			// parallels registerPool.generalRegisters[0..generalCount)
 	private:	Line floatLines[POOL_CAPACITY];				// parallels registerPool.floatRegisters[0..floatCount)
 	private:	uint32_t useClock;							// increments on every access; stamps Line::lastUse for LRU
+	private:	const UseSchedule* useSchedule;				// Belady next-read lists (0 = fall back to LRU eviction)
+	private:	UInt instructionIndex;						// current scan position, for nextReadAfter
 };
 
 } // namespace GAZL

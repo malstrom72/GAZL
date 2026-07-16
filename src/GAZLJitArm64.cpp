@@ -655,9 +655,13 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	const RegisterPool registerPool = { ARM64_GENERAL_POOL, sizeof(ARM64_GENERAL_POOL) / sizeof(ARM64_GENERAL_POOL[0])
 			, ARM64_FLOAT_POOL, sizeof(ARM64_FLOAT_POOL) / sizeof(ARM64_FLOAT_POOL[0]) };
 	RegisterCache cache(registerPool, slotBackend);
+	UseSchedule useSchedule;
+	buildUseSchedule(code, funcIndex, retIndex, useSchedule);															// Belady next-read lists (§5.7 v2.0.5)
+	cache.setUseSchedule(&useSchedule);
 
 	// Pass 2 - emit.
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
+		cache.setInstructionIndex(j);
 		if (mainline.count(j)) { cache.barrier(); e.bind(mainline[j]); }												// leader: flush the fall-through path, then start empty
 		if (loopWeight.count(j)) { e.subsImm(W3, W3, loopWeight[j]); e.bcond(MI, suspendL[j]); }
 		const Instruction& in = code[j];

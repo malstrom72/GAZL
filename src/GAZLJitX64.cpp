@@ -543,9 +543,13 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 	const RegisterPool registerPool = { X64_GENERAL_POOL, sizeof(X64_GENERAL_POOL) / sizeof(X64_GENERAL_POOL[0])
 			, X64_FLOAT_POOL, sizeof(X64_FLOAT_POOL) / sizeof(X64_FLOAT_POOL[0]) };
 	RegisterCache cache(registerPool, slotBackend);
+	UseSchedule useSchedule;
+	buildUseSchedule(code, funcStart, endIndex, useSchedule);															// Belady next-read lists (§5.7 v2.0.5)
+	cache.setUseSchedule(&useSchedule);
 
 	// Pass 2 - emit.
 	for (UInt j = funcStart; j <= endIndex; ++j) {
+		cache.setInstructionIndex(j);
 		std::map<UInt, Label>::iterator labelIt = labels.find(j);
 		if (labelIt != labels.end()) { cache.barrier(); emitter.bind(labelIt->second); }								// leader: flush fall-through, then start empty
 		std::map<UInt, UInt>::iterator weightIt = loopWeight.find(j);													// loop head: charge the block, suspend on timeout (§5.5)

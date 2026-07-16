@@ -29,6 +29,7 @@
 #include <cstdio>																										// std::snprintf - the unlowerable-opcode diagnostic
 #include "assert.h"																										// assert - RegisterCache contracts + the unlowerable-opcode check (local-overridable, see GAZL.h)
 #include <set>																											// jitFuelSafepoints - block-leader set
+#include <algorithm>																									// std::upper_bound - Belady next-read lookup
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -175,10 +176,23 @@ void JitCompiler::throwUnlowerableOpcode(Int opcode) {
 	RegisterCache (GAZLJit.h, §5.7.1): arch-neutral bookkeeping, reaching machine code only via emitFill/emitSpill.
 	Invariant: Line index i holds physical register registersOf(class)[i].
 */
+void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& schedule) {
+	for (UInt j = from; j <= to; ++j) {
+		OperandRole roles[3];
+		operandRoles(code[j].opcode, roles);
+		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
+		for (int k = 0; k < 3; ++k) {
+			if (roles[k] == OPERAND_SLOT_READ) { schedule[operands[k]->i].push_back(j); }				// ascending j -> lists stay sorted
+		}
+	}
+}
+
 RegisterCache::RegisterCache(const RegisterPool& pool, RegisterCacheBackend& backend)
 		: registerPool(pool)
 		, cacheBackend(backend)
-		, useClock(0) {
+		, useClock(0)
+		, useSchedule(0)
+		, instructionIndex(0) {
 	assert(pool.generalCount <= POOL_CAPACITY && pool.floatCount <= POOL_CAPACITY);
 	for (size_t i = 0; i < POOL_CAPACITY; ++i) {
 		generalLines[i].occupied = false;
@@ -207,7 +221,21 @@ void RegisterCache::spillLine(RegisterClass registerClass, int index) {
 	}
 }
 
-// A pool index ready to be (re)assigned: a free entry if one exists, else the least-recently-used UNPINNED line (spilled).
+// The next scheduled read of `slot` strictly after the current instruction, or UINT32_MAX if it is read no more (dead).
+uint32_t RegisterCache::nextReadAfter(Int slot) const {
+	if (useSchedule == 0) { return UINT32_MAX; }
+	const UseSchedule::const_iterator it = useSchedule->find(slot);
+	if (it == useSchedule->end()) { return UINT32_MAX; }
+	const std::vector<UInt>& reads = it->second;
+	const std::vector<UInt>::const_iterator r = std::upper_bound(reads.begin(), reads.end(), instructionIndex);
+	return (r == reads.end()) ? UINT32_MAX : static_cast<uint32_t>(*r);
+}
+
+/*
+	A pool index ready to be (re)assigned: a free entry if one exists, else an UNPINNED line (spilled). Belady picks the
+	line whose next read is furthest (dead lines, nextUse = MAX, go first) when a schedule is set; otherwise the LRU line.
+	Either choice is correct - a dirty victim is always spilled first - so an imprecise schedule only costs optimality.
+*/
 int RegisterCache::acquire(RegisterClass registerClass) {
 	size_t count;
 	Line* lines = linesOf(registerClass, count);
@@ -215,12 +243,12 @@ int RegisterCache::acquire(RegisterClass registerClass) {
 		if (!lines[i].occupied) { return static_cast<int>(i); }
 	}
 	int victim = -1;
-	uint32_t oldest = 0;
+	uint32_t best = 0;
 	for (size_t i = 0; i < count; ++i) {
-		if (!lines[i].pinned && (victim < 0 || lines[i].lastUse < oldest)) {
-			victim = static_cast<int>(i);
-			oldest = lines[i].lastUse;
-		}
+		if (lines[i].pinned) { continue; }
+		const uint32_t key = (useSchedule != 0) ? lines[i].nextUse : lines[i].lastUse;
+		const bool better = (useSchedule != 0) ? (key > best) : (key < best);						// Belady: furthest; LRU: oldest
+		if (victim < 0 || better) { victim = static_cast<int>(i); best = key; }
 	}
 	assert(victim >= 0 && "register pool exhausted by one instruction's pinned operands");
 	spillLine(registerClass, victim);
@@ -254,6 +282,7 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 		if (lines[i].occupied && !lines[i].scratchTemp && lines[i].slot == slot) {
 			lines[i].pinned = true;
 			lines[i].lastUse = ++useClock;
+			lines[i].nextUse = nextReadAfter(slot);
 			return registers[i];																						// hit: no load
 		}
 	}
@@ -266,6 +295,7 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 	line.dirty = false;																									// filled from the home, so still matches it
 	line.pinned = true;
 	line.lastUse = ++useClock;
+	line.nextUse = nextReadAfter(slot);
 	cacheBackend.emitFill(registers[i], slot, registerClass);
 	return registers[i];
 }
@@ -280,6 +310,7 @@ int RegisterCache::define(Int slot, RegisterClass registerClass) {
 			lines[i].dirty = true;																						// overwriting the resident value
 			lines[i].pinned = true;
 			lines[i].lastUse = ++useClock;
+			lines[i].nextUse = nextReadAfter(slot);
 			return registers[i];
 		}
 	}
@@ -292,6 +323,7 @@ int RegisterCache::define(Int slot, RegisterClass registerClass) {
 	line.dirty = true;																									// defined value diverges from the home, and no store at the def
 	line.pinned = true;
 	line.lastUse = ++useClock;
+	line.nextUse = nextReadAfter(slot);
 	return registers[i];																								// no fill: we are about to overwrite it
 }
 
@@ -307,6 +339,7 @@ int RegisterCache::scratch(RegisterClass registerClass) {
 	line.dirty = false;
 	line.pinned = true;
 	line.lastUse = ++useClock;
+	line.nextUse = UINT32_MAX;																							// no home; pinned this instruction then dropped, so never a victim
 	return registersOf(registerClass)[i];
 }
 

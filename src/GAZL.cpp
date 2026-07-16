@@ -574,6 +574,23 @@ static const Operator OPERATORS[] = {
 };
 const Int OPERATOR_COUNT = sizeof (OPERATORS) / sizeof (*OPERATORS);
 
+void operandRoles(Int opcode, OperandRole roles[3]) {
+	roles[0] = roles[1] = roles[2] = OPERAND_OTHER;
+	const int READ = (VAR_INT_R | VAR_FLOAT_R | VAR_PTR_R) & ~TRANSIENT;			// the read bits alone (drop the shared TRANSIENT)
+	const int WRITE = (VAR_INT_W | VAR_FLOAT_W | VAR_PTR_W) & ~TRANSIENT;
+	for (Int i = 0; i < OPERATOR_COUNT; ++i) {
+		const Operator& op = OPERATORS[i];
+		if (op.opcode != opcode) { continue; }
+		if ((op.otherFlags & (SWAP_0_AND_1 | SWAP_1_AND_2)) != 0) { continue; }	// pre-swap alias; the no-swap entry matches the finalized operands
+		for (int j = 0; j < 3; ++j) {
+			const int a = op.accepts[j];
+			if ((a & WRITE) != 0) { roles[j] = OPERAND_SLOT_WRITE; }
+			else if ((a & READ) != 0) { roles[j] = OPERAND_SLOT_READ; }
+		}
+		return;
+	}
+}
+
 static bool isValidIdentifierChar(Char c) {
 	return (c == '_' || c == '.' || c == '$' || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
 }

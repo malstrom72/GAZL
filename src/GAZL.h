@@ -203,6 +203,16 @@ class Symbols {
 
 struct Operator;
 
+enum OperandRole { OPERAND_OTHER = 0, OPERAND_SLOT_READ = 1, OPERAND_SLOT_WRITE = 2 };
+
+/*
+	Per-operand roles for a finalized `opcode`, in the canonical (post-swap) layout that matches Instruction.p0/p1/p2.
+	Lets tools reason about which operands are frame-slot reads vs writes without duplicating the operator table - the JIT
+	register allocator uses it for its next-use (Belady) scan. Fills roles[0..2]; absent operands and non-slots (consts,
+	branch targets) are OPERAND_OTHER.
+*/
+void operandRoles(Int opcode, OperandRole roles[3]);
+
 /*
 	One assembled program: the buffers the Assembler filled plus the sizes it computed - everything a Processor or the JIT
 	needs to run it, in one value. Static and read-only after assembly, so a single AssembledProgram is shareable across
