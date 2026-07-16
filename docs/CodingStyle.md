@@ -55,6 +55,10 @@ These are the most important principles in the codebase. Get them wrong and the 
 
 ## 4. Comments
 
+- **Comment sparingly - few and short.** Every comment is a maintenance liability that drifts as the code moves out
+  from under it, so minimize the surface that can go stale. A comment must earn its place: the non-obvious *why*, an
+  invariant, a gotcha - never the *what* (the code says that). Default to no comment. Lean on a doc `§` reference
+  instead of re-explaining the design inline, and when editing prefer deleting a stale comment to updating it.
 - **Multi-line block comments** use `/*` on its own line, the body indented one tab, and `*/` on its own line - single
   asterisk, tab-indented body:
   ```
