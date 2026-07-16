@@ -1,5 +1,8 @@
 # Repository Guidelines
 
+For design principles and C++ conventions (RAII / design-by-contract, naming, headers, comment style, commit rules,
+working style), see [docs/CodingStyle.md](docs/CodingStyle.md). This file covers the mechanical rules below.
+
 To run the test suite use the helper script with up to three minutes allowed for execution:
 
 ```bash
@@ -30,16 +33,18 @@ BuildCpp.sh and BuildCpp.cmd are copied from another repository. Only make chang
 - Maximum line width is 120 characters. End-of-line comments may start at column 120.
 - Line continuations should start with the operator and be indented two tabs from the original line.
 - `#if`/`#endif` blocks should appear one tab *left* of the current indentation level.
-- Class comment – put a plain C-style block comment immediately above each class, *not* Doxygen.  
+- Access specifiers - use grouped `public:` / `protected:` / `private:` section headers (one tab in) with members indented one further tab beneath, public section first. Do not prefix each member with its own access specifier (an old GAZL style being phased out).
+- No Doxygen anywhere - no `///`, `///<`, `/** */`, or `@tags`. Plain `//` and `/* */` only.
+- Class comment - put a plain C-style block comment immediately above each class, *not* Doxygen.  
 	```
-	/**
+	/*
 		One-sentence summary of what the class does.
 		Extra details if truly needed.
-	**/
+	*/
 	```
-	* The two asterisks open/close the block; everything inside is indented with one tab.  
-- Small method comment – use a single end-of-line comment:  
-	void blahblah(int blah);	/// brief description of `blahblah`
+	* The single asterisk opens/closes the block; everything inside is indented with one tab. Do not stack `//` lines for a paragraph, and do not use decorative empty `//` banner lines.  
+- Small method comment - use a single end-of-line comment:  
+	void blahblah(int blah);	// brief description of `blahblah`
 - Inside comment text, wrap any variable, parameter, class or function names in back-ticks, e.g. `blah` is the temporary buffer.
 
 When handling files with command-line tools (which may break tab characters):
