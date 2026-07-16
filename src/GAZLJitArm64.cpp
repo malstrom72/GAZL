@@ -496,13 +496,21 @@ static bool cacheLowered(Int op) {
 		case OP_PEEK_VCV: case OP_PEEK_VVV:
 		case OP_POKE_CVV: case OP_POKE_CVC: case OP_POKE_VVV: case OP_POKE_VVC:
 		case OP_GETL_VVV: case OP_SETL_VVV: case OP_SETL_VVC:
+		case OP_DIVI_VVV: case OP_DIVI_VVC: case OP_DIVI_VCV:
+		case OP_MODI_VVV: case OP_MODI_VVC: case OP_MODI_VCV:
+		case OP_FORi_VVB: case OP_FORi_VCB:
+		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB:
+		case OP_EQUI_VVB: case OP_EQUI_VCB:
+		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB:
+		case OP_NEQI_VVB: case OP_NEQI_VCB:
+		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
+		case OP_EQUF_VVB: case OP_EQUF_VCB:
+		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
+		case OP_NEQF_VVB: case OP_NEQF_VCB:
 			return true;
 		default:
 			return false;
 	}
-}
-static void loadOp(Arm64Emitter& e, Reg r, const Value& p, bool isConst) {
-	if (isConst) { matConst(e, r, p.i); } else { loadSlot(e, r, p.i); }
 }
 // `dst = s1 <op> s2` through the register cache; s1 is a slot (VVV/VVC) or a const (VCV), s2 a const (VVC) or a slot.
 static void emitBinary(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitter::*op)(Reg, Reg, Reg), const Instruction& in, bool s1Const, bool s2Const) {
@@ -517,11 +525,6 @@ static void emitBinary(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitter
 	cache.endInstruction();
 }
 
-// Load a float operand into a fixed S-reg `s` (using `wtmp` for a const): used by the not-yet-cached float compare-branches.
-static void loadOpF(Arm64Emitter& e, Reg s, Reg wtmp, const Value& p, bool isConst) {
-	if (isConst) { matConst(e, wtmp, p.i); e.fmovSW(s, wtmp); }
-	else { loadSlotF(e, s, p.i); }
-}
 // Load a float operand into a cache register: a float slot (read), or a float constant materialized via a GP scratch + fmov.
 static int loadFloatOperand(Arm64Emitter& e, RegisterCache& cache, const Value& p, bool isConst) {
 	if (!isConst) { return cache.read(p.i, FLOAT_REGISTER); }
@@ -568,18 +571,30 @@ static void emitShift(Arm64Emitter& e, RegisterCache& cache, int kind, const Ins
 	Emit an integer divide (rem=false) or modulo (rem=true) `dst = s1 </%> s2`. form: 0=VVV, 1=VVC, 2=VCV. A variable
 	divisor (VVV/VCV) gets a divide-by-zero guard → DIVISION_BY_ZERO; a VVC divisor is a nonzero assembler constant.
 */
-static void emitDivMod(Arm64Emitter& e, bool rem, const Instruction& in, int form, Label exitLabel) {
-	loadOp(e, W10, in.p1, form == 2);					// dividend (const for VCV)
-	loadOp(e, W11, in.p2, form == 1);					// divisor (const for VVC)
-	if (form != 1) {									// variable divisor → guard
-		Label ok = e.newLabel();
-		e.cbnz(W11, ok);
-		e.movn(W0, 6); e.b(exitLabel);					// ~6 = -7 = DIVISION_BY_ZERO (terminal)
+static void emitDivMod(Arm64Emitter& e, RegisterCache& cache, bool rem, const Instruction& in, int form, Label exitLabel) {
+	int dividend;
+	if (form == 2) { dividend = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(dividend), in.p1.i); }
+	else { dividend = cache.read(in.p1.i, GENERAL_REGISTER); }
+	int divisor;
+	if (form == 1) { divisor = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(divisor), in.p2.i); }
+	else { divisor = cache.read(in.p2.i, GENERAL_REGISTER); }
+	if (form != 1) {									// variable divisor → divide-by-zero guard
+		cache.spillDirtyResident();					// on the MAIN path (not the trap arm): the model must match what executes,
+		Label ok = e.newLabel();					//   and the terminal trap needs memory interpreter-current when it returns
+		e.cbnz(static_cast<Reg>(divisor), ok);
+		e.movn(W0, 6); e.b(exitLabel);				// ~6 = -7 = DIVISION_BY_ZERO
 		e.bind(ok);
 	}
-	e.sdiv(W9, W10, W11);								// quotient (INT_MIN/-1 → INT_MIN, matches §6.1)
-	if (rem) { e.msub(W9, W9, W11, W10); }				// remainder = dividend - quotient*divisor
-	storeSlot(e, W9, in.p0.i);
+	if (rem) {											// modulo: msub needs the dividend intact, so quotient goes to a distinct scratch
+		const int q = cache.scratch(GENERAL_REGISTER);
+		e.sdiv(static_cast<Reg>(q), static_cast<Reg>(dividend), static_cast<Reg>(divisor));
+		const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+		e.msub(static_cast<Reg>(d), static_cast<Reg>(q), static_cast<Reg>(divisor), static_cast<Reg>(dividend));	// dividend - q*divisor
+	} else {											// divide: one instruction, so writing dst over an operand is safe
+		const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+		e.sdiv(static_cast<Reg>(d), static_cast<Reg>(dividend), static_cast<Reg>(divisor));	// INT_MIN/-1 → INT_MIN, matches §6.1
+	}
+	cache.endInstruction();
 }
 
 /*
@@ -856,12 +871,12 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_SUBI_VCV: emitBinary(e, cache, &Arm64Emitter::sub, in, true, false); break;
 			case OP_MULI_VVV: emitBinary(e, cache, &Arm64Emitter::mul, in, false, false); break;
 			case OP_MULI_VVC: emitBinary(e, cache, &Arm64Emitter::mul, in, false, true); break;
-			case OP_DIVI_VVV: emitDivMod(e, false, in, 0, exitLabel); break;
-			case OP_DIVI_VVC: emitDivMod(e, false, in, 1, exitLabel); break;
-			case OP_DIVI_VCV: emitDivMod(e, false, in, 2, exitLabel); break;
-			case OP_MODI_VVV: emitDivMod(e, true, in, 0, exitLabel); break;
-			case OP_MODI_VVC: emitDivMod(e, true, in, 1, exitLabel); break;
-			case OP_MODI_VCV: emitDivMod(e, true, in, 2, exitLabel); break;
+			case OP_DIVI_VVV: emitDivMod(e, cache, false, in, 0, exitLabel); break;
+			case OP_DIVI_VVC: emitDivMod(e, cache, false, in, 1, exitLabel); break;
+			case OP_DIVI_VCV: emitDivMod(e, cache, false, in, 2, exitLabel); break;
+			case OP_MODI_VVV: emitDivMod(e, cache, true, in, 0, exitLabel); break;
+			case OP_MODI_VVC: emitDivMod(e, cache, true, in, 1, exitLabel); break;
+			case OP_MODI_VCV: emitDivMod(e, cache, true, in, 2, exitLabel); break;
 			case OP_SHLI_VVV: emitShift(e, cache, 0, in, 0); break;
 			case OP_SHLI_VVC: emitShift(e, cache, 0, in, 1); break;
 			case OP_SHLI_VCV: emitShift(e, cache, 0, in, 2); break;
@@ -922,10 +937,16 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_IORI_VVC: emitBinary(e, cache, &Arm64Emitter::orr, in, false, true); break;
 			case OP_XORI_VVV: emitBinary(e, cache, &Arm64Emitter::eor, in, false, false); break;
 			case OP_XORI_VVC: emitBinary(e, cache, &Arm64Emitter::eor, in, false, true); break;
-			case OP_FORi_VVB: case OP_FORi_VCB: {
-				loadSlot(e, W10, in.p0.i); e.addImm(W10, W10, 1); storeSlot(e, W10, in.p0.i);
-				loadOp(e, W11, in.p1, op == OP_FORi_VCB);
-				e.cmp(W10, W11);
+			case OP_FORi_VVB: case OP_FORi_VCB: {					// ++counter; if (counter < limit) branch
+				const int r = cache.read(in.p0.i, GENERAL_REGISTER);
+				e.addImm(static_cast<Reg>(r), static_cast<Reg>(r), 1);
+				cache.define(in.p0.i, GENERAL_REGISTER);			// same register, now dirty (barrier will spill the increment)
+				int lim;
+				if (op == OP_FORi_VCB) { lim = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(lim), in.p1.i); }
+				else { lim = cache.read(in.p1.i, GENERAL_REGISTER); }
+				e.cmp(static_cast<Reg>(r), static_cast<Reg>(lim));
+				cache.endInstruction();
+				cache.barrier();									// block ends here: flush (spills don't touch NZCV) before the branch
 				e.bcond(LT, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
@@ -967,9 +988,11 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 					case OP_NEQF_VVB: c = NE; c0const = false; c1const = false; break;
 					default: c = NE; c0const = false; c1const = true; break;	// NEQF_VCB
 				}
-				loadOpF(e, S0, W9, in.p0, c0const);
-				loadOpF(e, S1, W10, in.p1, c1const);
-				e.fcmpS(S0, S1);
+				const int a = loadFloatOperand(e, cache, in.p0, c0const);
+				const int b = loadFloatOperand(e, cache, in.p1, c1const);
+				e.fcmpS(static_cast<Reg>(a), static_cast<Reg>(b));
+				cache.endInstruction();
+				cache.barrier();									// block ends here: flush (spills don't touch NZCV) before the branch
 				e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
@@ -989,9 +1012,15 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 					case OP_NEQI_VCB: c = NE; c0const = false; c1const = true; break;
 					default: throwUnlowerableOpcode(in.opcode);		// unreachable: the outer case only enters here for these
 				}
-				loadOp(e, W10, in.p0, c0const);
-				loadOp(e, W11, in.p1, c1const);
-				e.cmp(W10, W11);
+				int a;
+				if (c0const) { a = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(a), in.p0.i); }
+				else { a = cache.read(in.p0.i, GENERAL_REGISTER); }
+				int b;
+				if (c1const) { b = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(b), in.p1.i); }
+				else { b = cache.read(in.p1.i, GENERAL_REGISTER); }
+				e.cmp(static_cast<Reg>(a), static_cast<Reg>(b));
+				cache.endInstruction();
+				cache.barrier();									// block ends here: flush (spills don't touch NZCV) before the branch
 				e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
