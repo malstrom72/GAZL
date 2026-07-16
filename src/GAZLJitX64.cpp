@@ -301,6 +301,16 @@ class X64SlotBackend : public RegisterCacheBackend {
 	private:	X64Emitter& e;
 };
 
+// Store every entry of a captured dirty snapshot to its home (terminal trap arms; see RegisterCache::captureDirtyLines).
+static void emitDirtyStores(X64Emitter& e, const ResidencyMap& map) {
+	for (size_t k = 0; k < map.entries.size(); ++k) {
+		const ResidencyMap::Entry& entry = map.entries[k];
+		const Reg r = static_cast<Reg>(entry.physicalRegister);
+		if (entry.registerClass == GENERAL_REGISTER) { e.store(DSP, static_cast<int32_t>(entry.slot) * 4, r); }
+		else { e.movssStore(DSP, static_cast<int32_t>(entry.slot) * 4, r); }
+	}
+}
+
 // Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
 static bool cacheLowered(Int op) {
 	switch (op) {
@@ -641,36 +651,39 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(r), static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
 
 			// var-indexed global memory (pointer coherence): flush dirty before a read; flush + invalidate around a write.
-			case OP_PEEK_VCV: {
+			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]; globals/constants-realm read
 				const int32_t base = static_cast<int32_t>(in.p1.p - MEMORY_OFFSET);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
-				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
-				cache.spillDirtyResident();
+				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);													// no flush: a const-base access cannot reach the frame (§1.1 realms)
 				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));				// word index = base + index
-				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);
+				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B);
+				ResidencyMap trapDirty;
+				cache.captureDirtyLines(trapDirty);																		// the trap exit must leave memory interpreter-identical
+				emitter.jcc(CC_AE, trap);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				emitter.loadIdx(static_cast<Reg>(d), MEMORY_BASE, static_cast<Reg>(idx), base * 4);
 				cache.endInstruction();
 				emitter.jmp(cont);
-				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
+				emitter.bind(trap); emitDirtyStores(emitter, trapDirty); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
 				emitter.bind(cont);
 				break;
 			}
-			case OP_POKE_CVV: case OP_POKE_CVC: {
+			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value; globals-realm write
 				const int32_t base = static_cast<int32_t>(in.p0.p - MEMORY_OFFSET);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
 				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(val), static_cast<uint32_t>(in.p2.i)); }
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
-				cache.spillDirtyResident();
-				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));
-				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);
+				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));				// no flush: a const-base access cannot reach the frame (§1.1 realms)
+				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B);
+				ResidencyMap trapDirty;
+				cache.captureDirtyLines(trapDirty);																		// the trap exit must leave memory interpreter-identical
+				emitter.jcc(CC_AE, trap);
 				emitter.storeIdx(MEMORY_BASE, static_cast<Reg>(idx), base * 4, static_cast<Reg>(val));
 				cache.endInstruction();
-				cache.invalidateAll();
 				emitter.jmp(cont);
-				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
+				emitter.bind(trap); emitDirtyStores(emitter, trapDirty); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
 				emitter.bind(cont);
 				break;
 			}

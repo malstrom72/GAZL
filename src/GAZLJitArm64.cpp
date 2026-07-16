@@ -464,6 +464,15 @@ class Arm64SlotBackend : public RegisterCacheBackend {
 				}
 	private:	Arm64Emitter& e;
 };
+
+// Store every entry of a captured dirty snapshot to its home (terminal trap arms; see RegisterCache::captureDirtyLines).
+static void emitDirtyStores(Arm64Emitter& e, const ResidencyMap& map) {
+	for (size_t k = 0; k < map.entries.size(); ++k) {
+		const ResidencyMap::Entry& entry = map.entries[k];
+		const Reg r = static_cast<Reg>(entry.physicalRegister);
+		if (entry.registerClass == GENERAL_REGISTER) { storeSlot(e, r, entry.slot); } else { storeSlotF(e, r, entry.slot); }
+	}
+}
 }
 
 // Opcodes whose operands route through the RegisterCache; everything else barriers the cache and lowers as v1 (§5.7).
@@ -749,18 +758,20 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_PEEK_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); loadMemConst(e, static_cast<Reg>(d), static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
 			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
 			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(r), in.p1.i); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
-			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]; pointer read
+			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]; globals/constants-realm read
 				Label trap = e.newLabel(), cont = e.newLabel();
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
-				cache.spillDirtyResident();																				// the load may alias a cached slot: make the home current
-				const int addr = cache.scratch(GENERAL_REGISTER);
+				const int addr = cache.scratch(GENERAL_REGISTER);														// no flush: a const-base access cannot reach the frame (§1.1 realms)
 				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p1.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
 				const int lim = cache.scratch(GENERAL_REGISTER);
-				e.ldrW(static_cast<Reg>(lim), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim)); e.bcond(HS, trap);
+				e.ldrW(static_cast<Reg>(lim), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim));
+				ResidencyMap trapDirty;
+				cache.captureDirtyLines(trapDirty);																		// the trap exit must leave memory interpreter-identical
+				e.bcond(HS, trap);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				e.ldrWx(static_cast<Reg>(d), X2, static_cast<Reg>(addr));
 				cache.endInstruction();
-				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);													// ~1 = -2 = BAD_PEEK
+				e.b(cont); e.bind(trap); emitDirtyStores(e, trapDirty); e.movn(W0, 1); e.b(exitLabel);					// ~1 = -2 = BAD_PEEK
 				e.bind(cont);
 				break;
 			}
@@ -781,21 +792,22 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.bind(cont);
 				break;
 			}
-			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value; pointer write
+			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value; globals-realm write
 				Label trap = e.newLabel(), cont = e.newLabel();
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
 				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(val), in.p2.i); }
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
-				cache.spillDirtyResident();																				// pending cached writes land before the store
-				const int addr = cache.scratch(GENERAL_REGISTER);
+				const int addr = cache.scratch(GENERAL_REGISTER);														// no flush: a const-base access cannot reach the frame (§1.1 realms)
 				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p0.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
 				const int lim = cache.scratch(GENERAL_REGISTER);
-				e.ldrW(static_cast<Reg>(lim), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim)); e.bcond(HS, trap);
+				e.ldrW(static_cast<Reg>(lim), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim));
+				ResidencyMap trapDirty;
+				cache.captureDirtyLines(trapDirty);																		// the trap exit must leave memory interpreter-identical
+				e.bcond(HS, trap);
 				e.strWx(static_cast<Reg>(val), X2, static_cast<Reg>(addr));
 				cache.endInstruction();
-				cache.invalidateAll();																					// the store may alias cached slots: drop them
-				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);													// ~2 = -3 = BAD_POKE
+				e.b(cont); e.bind(trap); emitDirtyStores(e, trapDirty); e.movn(W0, 2); e.b(exitLabel);					// ~2 = -3 = BAD_POKE
 				e.bind(cont);
 				break;
 			}

@@ -364,6 +364,7 @@ class RegisterCache {
 
 	public:		void enterBlock();				// leader: map starts empty
 	public:		void spillDirtyResident();		// before a pointer READ / back-edge: flush dirty, keep resident
+	public:		void captureDirtyLines(ResidencyMap& map) const;	// snapshot for a terminal trap arm; no model change
 	public:		void invalidateAll();			// after a pointer WRITE: flush dirty + drop all
 	public:		void barrier();					// branch / fall-through to leader / CALL / RETU: flush dirty + drop all
 

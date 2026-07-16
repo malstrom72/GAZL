@@ -131,7 +131,12 @@ static bool imagesEqual(const std::vector<Value>& a, const std::vector<Value>& b
 
 // Assemble + lower every function through the shared pass, then check the JIT against the interpreter (status AND whole
 // memory image) at full fuel and at tiny fuel (forcing repeated suspend/resume).
-static void runKernel(const char* name, const char* source, const int* inputs, size_t nInputs) {
+/*
+	`crossRealmInput` (optional): an input whose access crosses a §1.1 realm boundary (e.g. a const-base index past its
+	symbol but inside rwMemorySize). The sandbox semantics stay load-bearing - the status (no trap / the right trap) must
+	match - but the VALUE is unspecified under the realm rule, so the memory-image comparison is skipped for that input.
+*/
+static void runKernel(const char* name, const char* source, const int* inputs, size_t nInputs, int crossRealmInput = 0x7FFFFFFF) {
 	std::printf("Kernel \"%s\":\n", name);
 	Symbols globals;
 	if (!assemble(source, globals)) { ++failures; return; }
@@ -171,10 +176,11 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 			} while (s == TIME_OUT || s == BLOCK_RETRY);
 			std::vector<Value> got(gMemory, gMemory + DATA_SIZE);
 			int diff = -1;
-			const bool good = (s == wantStatus) && imagesEqual(want, got, diff);
+			const bool valueUnspecified = (n == crossRealmInput);
+			const bool good = (s == wantStatus) && (valueUnspecified || imagesEqual(want, got, diff));
 			std::printf("  n=%-8d %-11s status=%-3d hostcalls=%-5ld suspends=%-5d gOut=%-12d %s\n", n,
 					pass == 0 ? "[fullfuel]" : "[tinyfuel]", s, gNativeCallCount, suspends,
-					gMemory[gOutPtr - MEMORY_OFFSET].i, good ? "OK" : "MISMATCH");
+					gMemory[gOutPtr - MEMORY_OFFSET].i, good ? (valueUnspecified ? "OK (cross-realm: status only)" : "OK") : "MISMATCH");
 			if (!good) { std::printf("    want status=%d, diff word=%d\n", wantStatus, diff); ++failures; }
 			if (pass == 1 && good) {						// fuel-rate fidelity: JIT charge (per block) vs interpreter (1/instr)
 				Status ds = OK; int interpSuspends = 0;
@@ -619,7 +625,7 @@ int main() {
 	runKernel("far slots    [big frame, register-offset]", K_FARSLOT, floats, sizeof(floats) / sizeof(*floats));
 	runKernel("recursion    [IP_STACK_OVERFLOW]", K_RECURSE, depths, sizeof(depths) / sizeof(*depths));
 	runKernel("big frame    [DATA_STACK_OVERFLOW]", K_BIGFRAME, one, sizeof(one) / sizeof(*one));
-	runKernel("checked mem  [PEEK/POKE + trap]", K_MEMORY, indices, sizeof(indices) / sizeof(*indices));
+	runKernel("checked mem  [PEEK/POKE + trap]", K_MEMORY, indices, sizeof(indices) / sizeof(*indices), 100);		// 100 = past the symbol, inside rwMemorySize: cross-realm (§1.1)
 	runKernel("far globals  [const-addr PEEK/POKE >4096]", K_FARGLOBAL, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("switch       [SWCH jump table]", K_SWITCH, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("yield native [resetTimeOut(0)+OK]", K_YIELD, counts, sizeof(counts) / sizeof(*counts));

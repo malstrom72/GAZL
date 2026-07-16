@@ -120,15 +120,18 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 }
 
 /*
-	Register-only opcodes: a resident loop pays off when its body is made of these. A memory op, call, or COPY inside
-	the body flushes or drops the map every iteration, and the header's dirty modeling then adds stores that the plain
-	v2.0 fill-on-use block never paid - measured as a net LOSS on such loops - so they stay v2.0 until the general
-	per-block reconciliation lands. DIVI/MODI/DIVF flush dirty lines on their trap path's main-path spill but keep the
-	map resident, which measured as a net win; they stay allowed.
+	Residency-compatible opcodes: a resident loop pays off when its body never drops the map. A frame-touching memory op
+	(pointer/GETL/SETL), call, or COPY inside the body flushes or drops the map every iteration, and the header's dirty
+	modeling then adds stores that the plain v2.0 fill-on-use block never paid - measured as a net LOSS on such loops -
+	so they stay v2.0 until the general per-block reconciliation lands. Const-address SCALAR PEEK/POKE are globals-realm
+	(§1.1) and flush-free: residency-safe. The INDEXED const forms are flush-free too but burn several scratch registers
+	per op, and inside a resident loop that eviction churn measured 2x SLOWER (spectralnorm) - they stay excluded.
+	DIVI/MODI/DIVF flush dirty lines on their main-path trap spill but keep the map resident (a net win); allowed.
 */
 static bool jitResidencySafe(Int op) {
 	switch (op) {
 		case OP_MOVE_VV: case OP_MOVE_VC:
+		case OP_PEEK_VC: case OP_POKE_CV: case OP_POKE_CC:
 		case OP_ABSI: case OP_ABSF: case OP_FLOF:
 		case OP_ADDI_VVV: case OP_ADDI_VVC: case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV:
 		case OP_MULI_VVV: case OP_MULI_VVC:
@@ -435,6 +438,30 @@ void RegisterCache::endInstruction() {
 void RegisterCache::spillDirtyResident() {
 	for (size_t i = 0; i < registerPool.generalCount; ++i) { spillLine(GENERAL_REGISTER, static_cast<int>(i)); }
 	for (size_t i = 0; i < registerPool.floatCount; ++i) { spillLine(FLOAT_REGISTER, static_cast<int>(i)); }
+}
+
+/*
+	Snapshot the dirty lines for a terminal trap ARM (no model change, no emission). Captured at the trap BRANCH's
+	emission point - where the compile-time model equals the trap path's runtime register state - the backend then emits
+	plain stores from the snapshot on the cold arm, making the exit image interpreter-identical. The arm never rejoins
+	the mainline, so the model must not observe those stores (marking lines clean was the historical mid-op trap bug);
+	and capturing anywhere later is wrong too - the op's own define holds garbage on the trap path, and a later eviction
+	may reuse a captured register.
+*/
+void RegisterCache::captureDirtyLines(ResidencyMap& map) const {
+	assert(map.entries.empty());
+	for (int c = 0; c < 2; ++c) {
+		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
+		const size_t count = (registerClass == GENERAL_REGISTER) ? registerPool.generalCount : registerPool.floatCount;
+		const Line* lines = (registerClass == GENERAL_REGISTER) ? generalLines : floatLines;
+		const int* registers = registersOf(registerClass);
+		for (size_t i = 0; i < count; ++i) {
+			if (lines[i].occupied && lines[i].dirty && !lines[i].scratchTemp) {
+				ResidencyMap::Entry entry = { lines[i].slot, registerClass, static_cast<int>(i), registers[i], true };
+				map.entries.push_back(entry);
+			}
+		}
+	}
 }
 
 // spill all dirty (so the home image is current), then drop every mapping (the next block/read starts from memory).
