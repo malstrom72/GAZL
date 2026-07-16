@@ -283,12 +283,65 @@ static void loadOperand(X64Emitter& emitter, Reg reg, const Value& operand, bool
 
 typedef void (X64Emitter::*BinaryOp)(Reg, Reg);
 
-// destination = source1 <op> source2, each source a slot or a constant per its *Const flag; result flows through SCRATCH_A.
-static void emitBinary(X64Emitter& emitter, BinaryOp op, const Instruction& instruction, bool source1Const, bool source2Const) {
-	loadOperand(emitter, SCRATCH_A, instruction.p1, source1Const);
-	loadOperand(emitter, SCRATCH_B, instruction.p2, source2Const);
-	(emitter.*op)(SCRATCH_A, SCRATCH_B);
-	emitter.store(DSP, instruction.p0.i * 4, SCRATCH_A);
+/*
+	v2.0 register cache (§5.7): the x64 register pool + the fill/spill backend. The pool is registers that are caller-saved
+	on BOTH SysV and Win64 (so no prologue save) and outside the §5.3 pins (RBX/R14/R13/R15/R12) and the RAX/RCX/RDX fixed
+	scratch that idiv / shift / rep-movsd need - so the cache never collides with those fixed-register ops and evict() is
+	never needed here. slot -> [DSP + slot*4]; the byte displacement is 32-bit, so there is no near/far split like arm64.
+*/
+static const int X64_GENERAL_POOL[] = { R8, R9, R10, R11 };
+static const int X64_FLOAT_POOL[] = { 2, 3, 4, 5 };			// xmm2-xmm5 (caller-saved on both ABIs; xmm0/xmm1 stay fixed scratch)
+
+class X64SlotBackend : public RegisterCacheBackend {
+	public:		X64SlotBackend(X64Emitter& emitter) : e(emitter) { }
+	public:		virtual void emitFill(int physicalRegister, Int slot, RegisterClass registerClass) {
+					const Reg r = static_cast<Reg>(physicalRegister);
+					if (registerClass == GENERAL_REGISTER) { e.load(r, DSP, static_cast<int32_t>(slot) * 4); }
+					else { e.movssLoad(r, DSP, static_cast<int32_t>(slot) * 4); }
+				}
+	public:		virtual void emitSpill(Int slot, int physicalRegister, RegisterClass registerClass) {
+					const Reg r = static_cast<Reg>(physicalRegister);
+					if (registerClass == GENERAL_REGISTER) { e.store(DSP, static_cast<int32_t>(slot) * 4, r); }
+					else { e.movssStore(DSP, static_cast<int32_t>(slot) * 4, r); }
+				}
+	private:	X64Emitter& e;
+};
+
+// Which opcodes route operands through the cache (v2.0). Everything else barriers the cache and lowers as v1. Grows opcode by opcode.
+static bool cacheLowered(Int op) {
+	switch (op) {
+		case OP_MOVE_VV: case OP_MOVE_VC:
+		case OP_ADDI_VVV: case OP_ADDI_VVC:
+		case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV:
+		case OP_MULI_VVV: case OP_MULI_VVC:
+		case OP_ANDI_VVV: case OP_ANDI_VVC:
+		case OP_IORI_VVV: case OP_IORI_VVC:
+		case OP_XORI_VVV: case OP_XORI_VVC:
+			return true;
+		default:
+			return false;
+	}
+}
+
+// destination = source1 <op> source2 through the cache. Two-operand ISA: seed dst with s1, then `op dst, s2` in place.
+static void emitBinary(X64Emitter& emitter, RegisterCache& cache, BinaryOp op, const Instruction& instruction, bool source1Const, bool source2Const) {
+	int a;
+	if (source1Const) { a = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(a), static_cast<uint32_t>(instruction.p1.i)); }
+	else { a = cache.read(instruction.p1.i, GENERAL_REGISTER); }
+	int b;
+	if (source2Const) { b = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(b), static_cast<uint32_t>(instruction.p2.i)); }
+	else { b = cache.read(instruction.p2.i, GENERAL_REGISTER); }
+	const int d = cache.define(instruction.p0.i, GENERAL_REGISTER);
+	if (d != b) {											// normal: dst holds s1, then op dst, s2
+		if (d != a) { emitter.mov(static_cast<Reg>(d), static_cast<Reg>(a)); }
+		(emitter.*op)(static_cast<Reg>(d), static_cast<Reg>(b));
+	} else {												// dst aliases s2 (p0 == p2): route through a temp so `op` does not read a clobbered s2
+		const int t = cache.scratch(GENERAL_REGISTER);
+		emitter.mov(static_cast<Reg>(t), static_cast<Reg>(a));
+		(emitter.*op)(static_cast<Reg>(t), static_cast<Reg>(b));
+		emitter.mov(static_cast<Reg>(d), static_cast<Reg>(t));
+	}
+	cache.endInstruction();
 }
 
 /*
@@ -406,14 +459,22 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 		emitter.bind(stackOk);
 	}
 
+	// v2.0 register cache: cached opcodes route operands through it; every uncached opcode and every block boundary
+	// barriers it first (spill dirty + clear), so memory is interpreter-current at each safepoint.
+	X64SlotBackend slotBackend(emitter);
+	const RegisterPool registerPool = { X64_GENERAL_POOL, sizeof(X64_GENERAL_POOL) / sizeof(X64_GENERAL_POOL[0])
+			, X64_FLOAT_POOL, sizeof(X64_FLOAT_POOL) / sizeof(X64_FLOAT_POOL[0]) };
+	RegisterCache cache(registerPool, slotBackend);
+
 	// Pass 2 - emit.
 	for (UInt j = funcStart; j <= endIndex; ++j) {
 		std::map<UInt, Label>::iterator labelIt = labels.find(j);
-		if (labelIt != labels.end()) { emitter.bind(labelIt->second); }
+		if (labelIt != labels.end()) { cache.barrier(); emitter.bind(labelIt->second); }	// leader: flush fall-through, then start empty
 		std::map<UInt, UInt>::iterator weightIt = loopWeight.find(j);	// loop head: charge the block, suspend on timeout (§5.5)
 		if (weightIt != loopWeight.end()) { emitter.subImm(FUEL, weightIt->second); emitter.jcc(CC_S, suspendL[j]); }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
+		if (!cacheLowered(op)) { cache.barrier(); }						// uncached opcode: lower it as v1 over an empty cache
 		switch (op) {
 			case OP_FUNC: break;
 			case OP_RETU: {										// pop the ipStack; tail-branch back to the caller, or OK at the native/top marker
@@ -475,8 +536,8 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 
-			case OP_MOVE_VV: emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
-			case OP_MOVE_VC: emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i)); emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
+			case OP_MOVE_VV: { const int s = cache.read(in.p1.i, GENERAL_REGISTER); const int d = cache.define(in.p0.i, GENERAL_REGISTER); if (d != s) { emitter.mov(static_cast<Reg>(d), static_cast<Reg>(s)); } cache.endInstruction(); break; }
+			case OP_MOVE_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(d), static_cast<uint32_t>(in.p1.i)); cache.endInstruction(); break; }
 
 			case OP_PEEK_VC: emitter.load(SCRATCH_A, MEMORY_BASE, static_cast<int32_t>((in.p1.p - MEMORY_OFFSET) * 4)); emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
 			case OP_POKE_CV: emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), SCRATCH_A); break;
@@ -596,19 +657,19 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				emitter.addImm(RAX, MEMORY_OFFSET);
 				emitter.store(DSP, in.p0.i * 4, RAX); break;
 
-			case OP_ADDI_VVV: emitBinary(emitter, &X64Emitter::add, in, false, false); break;
-			case OP_ADDI_VVC: emitBinary(emitter, &X64Emitter::add, in, false, true); break;
-			case OP_SUBI_VVV: emitBinary(emitter, &X64Emitter::sub, in, false, false); break;
-			case OP_SUBI_VVC: emitBinary(emitter, &X64Emitter::sub, in, false, true); break;
-			case OP_SUBI_VCV: emitBinary(emitter, &X64Emitter::sub, in, true, false); break;
-			case OP_MULI_VVV: emitBinary(emitter, &X64Emitter::imul, in, false, false); break;
-			case OP_MULI_VVC: emitBinary(emitter, &X64Emitter::imul, in, false, true); break;
-			case OP_ANDI_VVV: emitBinary(emitter, &X64Emitter::and_, in, false, false); break;
-			case OP_ANDI_VVC: emitBinary(emitter, &X64Emitter::and_, in, false, true); break;
-			case OP_IORI_VVV: emitBinary(emitter, &X64Emitter::or_, in, false, false); break;
-			case OP_IORI_VVC: emitBinary(emitter, &X64Emitter::or_, in, false, true); break;
-			case OP_XORI_VVV: emitBinary(emitter, &X64Emitter::xor_, in, false, false); break;
-			case OP_XORI_VVC: emitBinary(emitter, &X64Emitter::xor_, in, false, true); break;
+			case OP_ADDI_VVV: emitBinary(emitter, cache, &X64Emitter::add, in, false, false); break;
+			case OP_ADDI_VVC: emitBinary(emitter, cache, &X64Emitter::add, in, false, true); break;
+			case OP_SUBI_VVV: emitBinary(emitter, cache, &X64Emitter::sub, in, false, false); break;
+			case OP_SUBI_VVC: emitBinary(emitter, cache, &X64Emitter::sub, in, false, true); break;
+			case OP_SUBI_VCV: emitBinary(emitter, cache, &X64Emitter::sub, in, true, false); break;
+			case OP_MULI_VVV: emitBinary(emitter, cache, &X64Emitter::imul, in, false, false); break;
+			case OP_MULI_VVC: emitBinary(emitter, cache, &X64Emitter::imul, in, false, true); break;
+			case OP_ANDI_VVV: emitBinary(emitter, cache, &X64Emitter::and_, in, false, false); break;
+			case OP_ANDI_VVC: emitBinary(emitter, cache, &X64Emitter::and_, in, false, true); break;
+			case OP_IORI_VVV: emitBinary(emitter, cache, &X64Emitter::or_, in, false, false); break;
+			case OP_IORI_VVC: emitBinary(emitter, cache, &X64Emitter::or_, in, false, true); break;
+			case OP_XORI_VVV: emitBinary(emitter, cache, &X64Emitter::xor_, in, false, false); break;
+			case OP_XORI_VVC: emitBinary(emitter, cache, &X64Emitter::xor_, in, false, true); break;
 
 			case OP_DIVI_VVV: emitDivMod(emitter, in, false, false, false, epilogue); break;
 			case OP_DIVI_VVC: emitDivMod(emitter, in, false, false, true, epilogue); break;
