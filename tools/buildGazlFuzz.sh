@@ -31,6 +31,10 @@ else
 		done
 	fi
 	: "${CPP_COMPILER:=clang++}"
+	# Homebrew LLVM's fuzzer runtime is built against LLVM's libc++ (references std::__1::__hash_memory etc.); link THAT
+	# libc++, not Apple's system one, or the link fails with undefined std::__1 symbols. libc++ sits at <prefix>/lib/c++.
+	llvmlibcxx="$(dirname "$(dirname "$CPP_COMPILER")")/lib/c++"
+	[ -d "$llvmlibcxx" ] && defopts="$defopts -L$llvmlibcxx -Wl,-rpath,$llvmlibcxx"
 fi
 CPP_OPTIONS=${CPP_OPTIONS:-$defopts}
 
