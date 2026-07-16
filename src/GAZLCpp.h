@@ -40,7 +40,15 @@
 
 namespace GAZL {
 
-std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal);
+/*
+	`promoteLocals` (Tier 1, optional): emit each function's locals as C++ `Value` locals instead of `dsp[-N]` frame
+	words, for functions containing no ADRL/GETL/SETL - freeing the C++ optimizer from assuming every MEM store may
+	alias them (measured ~2.8x on store-in-loop kernels). Conforming under the §1.1 memory-realm rule: a cross-realm
+	access (e.g. a const-base POKE indexed past its symbol into the data stack) would hit the frame word that a promoted
+	local no longer observes - UB under the rule, memory-safe-flat under Tier 0. Default off: Tier 0 stays the plain,
+	always-available translation.
+*/
+std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bool promoteLocals = false);
 
 } // namespace GAZL
 
