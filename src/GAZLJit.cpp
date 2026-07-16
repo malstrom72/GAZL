@@ -120,6 +120,72 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 }
 
 /*
+	Register-only opcodes: a resident loop pays off when its body is made of these. A memory op, call, or COPY inside
+	the body flushes or drops the map every iteration, and the header's dirty modeling then adds stores that the plain
+	v2.0 fill-on-use block never paid - measured as a net LOSS on such loops - so they stay v2.0 until the general
+	per-block reconciliation lands. DIVI/MODI/DIVF flush dirty lines on their trap path's main-path spill but keep the
+	map resident, which measured as a net win; they stay allowed.
+*/
+static bool jitResidencySafe(Int op) {
+	switch (op) {
+		case OP_MOVE_VV: case OP_MOVE_VC:
+		case OP_ABSI: case OP_ABSF: case OP_FLOF:
+		case OP_ADDI_VVV: case OP_ADDI_VVC: case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV:
+		case OP_MULI_VVV: case OP_MULI_VVC:
+		case OP_DIVI_VVV: case OP_DIVI_VVC: case OP_DIVI_VCV:
+		case OP_MODI_VVV: case OP_MODI_VVC: case OP_MODI_VCV:
+		case OP_ANDI_VVV: case OP_ANDI_VVC: case OP_IORI_VVV: case OP_IORI_VVC: case OP_XORI_VVV: case OP_XORI_VVC:
+		case OP_SHLI_VVV: case OP_SHLI_VVC: case OP_SHLI_VCV:
+		case OP_SHRI_VVV: case OP_SHRI_VVC: case OP_SHRI_VCV:
+		case OP_SHRU_VVV: case OP_SHRU_VVC: case OP_SHRU_VCV:
+		case OP_ADDF_VVV: case OP_ADDF_VVC: case OP_SUBF_VVV: case OP_SUBF_VVC: case OP_SUBF_VCV:
+		case OP_MULF_VVV: case OP_MULF_VVC:
+		case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
+		case OP_FTOI_VVC: case OP_ITOF_VVC:
+		case OP_FORi_VVB: case OP_FORi_VCB:
+		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB:
+		case OP_EQUI_VVB: case OP_EQUI_VCB:
+		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB:
+		case OP_NEQI_VVB: case OP_NEQI_VCB:
+		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
+		case OP_EQUF_VVB: case OP_EQUF_VCB:
+		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
+		case OP_NEQF_VVB: case OP_NEQF_VCB:
+		case OP_GOTO:
+			return true;
+		default:
+			return false;
+	}
+}
+
+// v2.2 residency qualification - see GAZLJit.h. A loop header = a back-edge target no forward branch or SWCH reaches.
+void JitCompiler::jitResidencyLeaders(const Instruction* code, UInt funcStart, UInt endIndex
+		, const Value* memory, std::map<UInt, UInt>& loopExtent) {
+	std::set<UInt> excluded;
+	for (UInt j = funcStart; j <= endIndex; ++j) {
+		UInt target;
+		if (jitBranchTarget(code, j, target)) {
+			if (target > j) { excluded.insert(target); }																	// a forward edge arrives with an empty cache
+			else { std::map<UInt, UInt>::iterator it = loopExtent.find(target); if (it == loopExtent.end() || it->second < j) { loopExtent[target] = j; } }
+		} else if (code[j].opcode == OP_SWCH) {
+			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
+			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
+			for (UInt k = 0; k < size; ++k) { excluded.insert(static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i)); }
+		}
+	}
+	for (std::set<UInt>::const_iterator it = excluded.begin(); it != excluded.end(); ++it) { loopExtent.erase(*it); }
+	for (std::map<UInt, UInt>::iterator it = loopExtent.begin(); it != loopExtent.end(); ) {							// keep only register-only single-block bodies (see jitResidencySafe)
+		bool safe = true;
+		for (UInt j = it->first; j <= it->second && safe; ++j) {
+			if (!jitResidencySafe(code[j].opcode)) { safe = false; }
+			UInt target;
+			if (jitBranchTarget(code, j, target) && target > j) { safe = false; }										// an internal forward branch (early exit / if-join): the leader after it drops the map
+		}
+		if (safe) { ++it; } else { loopExtent.erase(it++); }
+	}
+}
+
+/*
 	JitModule - the RAII owner of the executable page: the constructor makes the emitted code executable and takes
 	ownership (acquisition == initialization), then materializes the ordinal->entry table + dispatcher entry. makeExecutable
 	is the last thing that acquires, and everything after it is plain pointer arithmetic that cannot throw, so a partially
@@ -180,10 +246,24 @@ void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& 
 	for (UInt j = from; j <= to; ++j) {
 		OperandRole roles[3];
 		operandRoles(code[j].opcode, roles);
+		if (code[j].opcode == OP_FORi_VVB || code[j].opcode == OP_FORi_VCB) { roles[0] = OPERAND_SLOT_READ; }	// the counter is read-modify-write
 		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
 		for (int k = 0; k < 3; ++k) {
 			if (roles[k] == OPERAND_SLOT_READ) { schedule[operands[k]->i].push_back(j); }				// ascending j -> lists stay sorted
 		}
+	}
+}
+
+void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots) {
+	for (UInt j = from; j <= to; ++j) {
+		OperandRole roles[3];
+		operandRoles(code[j].opcode, roles);
+		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
+		for (int k = 0; k < 3; ++k) {
+			if (roles[k] == OPERAND_SLOT_READ) { readSlots.insert(operands[k]->i); }
+			else if (roles[k] == OPERAND_SLOT_WRITE) { writtenSlots.insert(operands[k]->i); }
+		}
+		if (code[j].opcode == OP_FORi_VVB || code[j].opcode == OP_FORi_VCB) { readSlots.insert(code[j].p0.i); }	// the counter is read-modify-write
 	}
 }
 
@@ -367,23 +447,38 @@ void RegisterCache::flushAndClear() {
 void RegisterCache::barrier() { flushAndClear(); }
 
 /*
-	Snapshot the resident lines as a loop header's fixed entry state, and switch them to the all-dirty model (see
-	ResidencyMap): a loop-carried value redefined in the body IS dirty when the header is reached again, so the model
-	must assume dirty from iteration one or an eviction inside the body would skip the store and lose the value.
+	Snapshot the resident lines as a loop header's fixed entry state (see ResidencyMap). Pruned: a slot the loop never
+	reads is spilled-and-dropped here (keeping it would only make every back-edge refill it). A kept slot the loop
+	WRITES is modeled dirty from iteration one (the redefined value really is dirty when the header is reached again; a
+	clean model would let an eviction skip the store and lose it). A kept read-only slot is canonicalized to
+	register==home (one store, emitted before the header label so it runs once), so hazard flushes inside the loop never
+	re-store it.
 */
-void RegisterCache::capture(ResidencyMap& map) {
+void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& readInLoop, const std::set<Int>& writtenInLoop) {
 	assert(map.entries.empty() && "a header's entry map is captured once");
+	const size_t RESIDENCY_HEADROOM = 3;																				// registers per class left free for the body's temps and constants (halved for small pools)
 	for (int c = 0; c < 2; ++c) {
 		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
 		size_t count;
 		Line* lines = linesOf(registerClass, count);
 		const int* registers = registersOf(registerClass);
+		size_t kept = 0;
+		const size_t headroom = (RESIDENCY_HEADROOM < count / 2) ? RESIDENCY_HEADROOM : count / 2;
+		const size_t keepMax = count - headroom;
 		for (size_t i = 0; i < count; ++i) {
 			if (!lines[i].occupied) { continue; }
 			assert(!lines[i].pinned && !lines[i].scratchTemp && "capture between instructions only");
-			ResidencyMap::Entry entry = { lines[i].slot, registerClass, static_cast<int>(i), registers[i] };
+			if (readInLoop.count(lines[i].slot) == 0 || kept >= keepMax) {												// unread in the loop, or the map would strangle the body
+				spillLine(registerClass, static_cast<int>(i));
+				lines[i].occupied = false;
+				continue;
+			}
+			const bool expectDirty = (writtenInLoop.count(lines[i].slot) != 0);
+			if (!expectDirty) { spillLine(registerClass, static_cast<int>(i)); }										// canonical clean: register==home for the whole loop
+			ResidencyMap::Entry entry = { lines[i].slot, registerClass, static_cast<int>(i), registers[i], expectDirty };
 			map.entries.push_back(entry);
-			lines[i].dirty = true;
+			lines[i].dirty = expectDirty;
+			++kept;
 		}
 	}
 }
@@ -426,7 +521,8 @@ void RegisterCache::reconcileTo(const ResidencyMap& map) {
 			line.lastUse = ++useClock;
 			line.nextUse = nextReadAfter(entry.slot);
 		}
-		line.dirty = true;																								// the header's all-dirty model
+		if (entry.expectDirty) { line.dirty = true; }																	// the header models loop-written slots dirty
+		else if (line.dirty) { spillLine(entry.registerClass, entry.poolIndex); }										// read-only slot: re-establish register==home
 	}
 }
 

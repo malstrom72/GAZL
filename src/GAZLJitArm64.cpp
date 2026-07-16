@@ -500,11 +500,13 @@ static bool cacheLowered(Int op) {
 		case OP_EQUF_VVB: case OP_EQUF_VCB:
 		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
 		case OP_NEQF_VVB: case OP_NEQF_VCB:
+		case OP_GOTO:																									// flushes inside its case: reconcile (backward, qualified) or barrier
 			return true;
 		default:
 			return false;
 	}
 }
+
 // `dst = s1 <op> s2` through the register cache; s1 is a slot (VVV/VVC) or a const (VCV), s2 a const (VVC) or a slot.
 static void emitBinary(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitter::*op)(Reg, Reg, Reg), const Instruction& in, bool s1Const, bool s2Const) {
 	int a;
@@ -658,11 +660,22 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	UseSchedule useSchedule;
 	buildUseSchedule(code, funcIndex, retIndex, useSchedule);															// Belady next-read lists (§5.7 v2.0.5)
 	cache.setUseSchedule(&useSchedule);
+	std::map<UInt, UInt> loopExtent;
+	jitResidencyLeaders(code, funcIndex, retIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
+	std::map<UInt, ResidencyMap> entryMaps;
 
 	// Pass 2 - emit.
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
 		cache.setInstructionIndex(j);
-		if (mainline.count(j)) { cache.barrier(); e.bind(mainline[j]); }												// leader: flush the fall-through path, then start empty
+		if (mainline.count(j)) {
+			std::map<UInt, UInt>::const_iterator loopIt = loopExtent.find(j);
+			if (loopIt != loopExtent.end()) {																			// loop header: the fall-through state (pruned) becomes the fixed entry state
+				std::set<Int> readSlots, writtenSlots;
+				buildLoopSlotSets(code, j, loopIt->second, readSlots, writtenSlots);
+				cache.capture(entryMaps[j], readSlots, writtenSlots);
+			} else { cache.barrier(); }																					// any other leader: starts empty as in v2.0
+			e.bind(mainline[j]);
+		}
 		if (loopWeight.count(j)) { e.subsImm(W3, W3, loopWeight[j]); e.bcond(MI, suspendL[j]); }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
@@ -959,11 +972,16 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				else { lim = cache.read(in.p1.i, GENERAL_REGISTER); }
 				e.cmp(static_cast<Reg>(r), static_cast<Reg>(lim));
 				cache.endInstruction();
-				cache.barrier();																						// block ends here: flush (spills don't touch NZCV) before the branch
+				reconcileOrBarrier(cache, entryMaps, static_cast<UInt>(static_cast<Int>(j) + in.p2.i));					// block ends here (loads/stores don't touch NZCV)
 				e.bcond(LT, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
-			case OP_GOTO: e.b(mainline[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
+			case OP_GOTO: {
+				const UInt target = static_cast<UInt>(static_cast<Int>(j) + in.p0.i);
+				reconcileOrBarrier(cache, entryMaps, target);
+				e.b(mainline[target]);
+				break;
+			}
 			case OP_SWCH: {																								// index = min(unsigned(V0), C1); br into a table of `b target`
 				const UInt sz = static_cast<UInt>(in.p1.i) + 1;
 				const UInt tbl = static_cast<UInt>(in.p2.p - MEMORY_OFFSET);
@@ -1005,7 +1023,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const int b = loadFloatOperand(e, cache, in.p1, c1const);
 				e.fcmpS(static_cast<Reg>(a), static_cast<Reg>(b));
 				cache.endInstruction();
-				cache.barrier();																						// block ends here: flush (spills don't touch NZCV) before the branch
+				reconcileOrBarrier(cache, entryMaps, static_cast<UInt>(static_cast<Int>(j) + in.p2.i));					// block ends here (loads/stores don't touch NZCV)
 				e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
@@ -1033,7 +1051,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				else { b = cache.read(in.p1.i, GENERAL_REGISTER); }
 				e.cmp(static_cast<Reg>(a), static_cast<Reg>(b));
 				cache.endInstruction();
-				cache.barrier();																						// block ends here: flush (spills don't touch NZCV) before the branch
+				reconcileOrBarrier(cache, entryMaps, static_cast<UInt>(static_cast<Int>(j) + in.p2.i));					// block ends here (loads/stores don't touch NZCV)
 				e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
@@ -1042,14 +1060,39 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	}
 
 	/*
-		Cold section: §5.7.5 suspend stubs. Each writes state back, points RESUME at its block's hot mainline (the
-		dispatcher reloads the pins on re-entry, so no per-block reload trampoline is needed), and branches to EXIT.
+		Cold section: §5.7.5 suspend stubs. Each writes state back and branches to EXIT. A leader with register-resident
+		entry state (v2.2) first spills its ResidencyMap - memory must be interpreter-identical at a suspend - and parks
+		RESUME at a reload stub that refills the map before re-entering the mainline; an empty map points RESUME straight
+		at the hot mainline as before (the dispatcher reloads only the pins on re-entry).
 	*/
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
 		e.bind(suspendL[it->first]);
+		const std::map<UInt, ResidencyMap>::const_iterator m = entryMaps.find(it->first);
+		const bool resident = (m != entryMaps.end() && !m->second.entries.empty());
+		if (resident) {
+			for (size_t k = 0; k < m->second.entries.size(); ++k) {
+				const ResidencyMap::Entry& entry = m->second.entries[k];
+				if (!entry.expectDirty) { continue; }																	// read-only in the loop: register==home already
+				const Reg r = static_cast<Reg>(entry.physicalRegister);
+				if (entry.registerClass == GENERAL_REGISTER) { storeSlot(e, r, entry.slot); } else { storeSlotF(e, r, entry.slot); }
+			}
+		}
 		writebackState(e, o);
-		e.adr(X9, mainline[it->first]); e.strX(X9, X0, o.resume);														// RESUME = this block's hot mainline
-		e.movn(W0, 0); e.b(exitLabel);																					// TIME_OUT
+		if (resident) {
+			Label reload = e.newLabel();
+			e.adr(X9, reload); e.strX(X9, X0, o.resume);																// RESUME = reload stub (below)
+			e.movn(W0, 0); e.b(exitLabel);																				// TIME_OUT
+			e.bind(reload);
+			for (size_t k = 0; k < m->second.entries.size(); ++k) {
+				const ResidencyMap::Entry& entry = m->second.entries[k];
+				const Reg r = static_cast<Reg>(entry.physicalRegister);
+				if (entry.registerClass == GENERAL_REGISTER) { loadSlot(e, r, entry.slot); } else { loadSlotF(e, r, entry.slot); }
+			}
+			e.b(mainline[it->first]);
+		} else {
+			e.adr(X9, mainline[it->first]); e.strX(X9, X0, o.resume);													// RESUME = this block's hot mainline
+			e.movn(W0, 0); e.b(exitLabel);																				// TIME_OUT
+		}
 	}
 }
 
