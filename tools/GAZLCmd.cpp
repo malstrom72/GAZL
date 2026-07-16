@@ -607,6 +607,7 @@ int main(int argc, const char* argv[]) {
 		bool noLibm = false;	// --no-libm: don't register the atan2/sqrt/log natives (for programs that define their own)
 		const char* emitCpp = 0;	// --emit-cpp=<path>: write a standalone C++ translation of the program and exit
 		bool promoteLocals = false;	// --promote-locals: emit-cpp Tier 1 - locals become C++ locals (see GAZLCpp.h)
+		const char* emitJit = 0;	// --emit-jit=<path>: write the JIT's raw machine code + <path>.txt layout sidecar and exit (see tools/jitDisasm.sh)
 		for (int i = 0; i < argc; ++i) {
 			const char* a = argv[i];
 			if (i > 0 && a[0] == '-' && a[1] == '-') {
@@ -624,6 +625,8 @@ int main(int argc, const char* argv[]) {
 					emitCpp = a + 11;
 				} else if (strcmp(a, "--promote-locals") == 0) {
 					promoteLocals = true;
+				} else if (strncmp(a, "--emit-jit=", 11) == 0) {
+					emitJit = a + 11;
 				} else {
 					throw CmdException(std::string("Unknown option: ") + a);
 				}
@@ -712,6 +715,42 @@ int main(int argc, const char* argv[]) {
 			std::cerr << "emit-cpp: wrote " << emitCpp << std::endl;
 			return 0;
 		}
+
+#ifdef GAZL_JIT
+		if (emitJit != 0) {
+			NativeJitCompiler compiler;
+			JitModule module;
+			compiler.compile(program, module);
+			/*
+				The page base is not exposed; the lowest interior pointer (all function entries + the dispatcher) is the
+				start of everything emitted, and codeWords() spans to the end. Offsets in the sidecar are bytes from it.
+			*/
+			const char* base = static_cast<const char*>(module.dispatchEntry());
+			void* const* entries = module.entryTable();
+			for (UInt f = 0; f < program.functionCount; ++f) {
+				if (static_cast<const char*>(entries[f]) < base) { base = static_cast<const char*>(entries[f]); }
+			}
+			std::ofstream binary(emitJit, std::ofstream::binary);
+			if (!binary.good()) throw CmdException(std::string("emit-jit: cannot write '") + emitJit + "'");
+			binary.write(base, static_cast<std::streamsize>(module.codeWords() * 4));
+			std::ofstream sidecar((std::string(emitJit) + ".txt").c_str());
+#if defined(__aarch64__) || defined(_M_ARM64)
+			sidecar << "arch arm64\n";
+#else
+			sidecar << "arch x64\n";
+#endif
+			sidecar << "code_bytes " << (module.codeWords() * 4) << "\n";
+			sidecar << "dispatch " << (static_cast<const char*>(module.dispatchEntry()) - base) << "\n";
+			for (UInt f = 0; f < program.functionCount; ++f) {
+				sidecar << "function " << f << " " << (static_cast<const char*>(entries[f]) - base) << "\n";
+			}
+			std::cerr << "emit-jit: wrote " << emitJit << " + sidecar (" << (module.codeWords() * 4) << " bytes, "
+					<< program.functionCount << " functions)" << std::endl;
+			return 0;
+		}
+#else
+		if (emitJit != 0) { std::cerr << "emit-jit: this build has no JIT" << std::endl; return -1; }
+#endif
 
 		{
 			/*
