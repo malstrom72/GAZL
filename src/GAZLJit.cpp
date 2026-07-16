@@ -366,6 +366,70 @@ void RegisterCache::flushAndClear() {
 
 void RegisterCache::barrier() { flushAndClear(); }
 
+/*
+	Snapshot the resident lines as a loop header's fixed entry state, and switch them to the all-dirty model (see
+	ResidencyMap): a loop-carried value redefined in the body IS dirty when the header is reached again, so the model
+	must assume dirty from iteration one or an eviction inside the body would skip the store and lose the value.
+*/
+void RegisterCache::capture(ResidencyMap& map) {
+	assert(map.entries.empty() && "a header's entry map is captured once");
+	for (int c = 0; c < 2; ++c) {
+		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
+		size_t count;
+		Line* lines = linesOf(registerClass, count);
+		const int* registers = registersOf(registerClass);
+		for (size_t i = 0; i < count; ++i) {
+			if (!lines[i].occupied) { continue; }
+			assert(!lines[i].pinned && !lines[i].scratchTemp && "capture between instructions only");
+			ResidencyMap::Entry entry = { lines[i].slot, registerClass, static_cast<int>(i), registers[i] };
+			map.entries.push_back(entry);
+			lines[i].dirty = true;
+		}
+	}
+}
+
+/*
+	Re-establish a header's entry state at a back-edge, from spill/fill primitives alone: spill-and-drop every line the
+	map does not want (including a wanted slot sitting in the wrong register - its refill below reads the home the spill
+	just made current), then fill the missing entries. Emits nothing when the state already matches, which is the common
+	back-edge case. Flags are untouched (loads/stores only), so this may sit between a compare and its branch.
+*/
+void RegisterCache::reconcileTo(const ResidencyMap& map) {
+	for (int c = 0; c < 2; ++c) {
+		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
+		size_t count;
+		Line* lines = linesOf(registerClass, count);
+		for (size_t i = 0; i < count; ++i) {
+			if (!lines[i].occupied) { continue; }
+			assert(!lines[i].pinned && !lines[i].scratchTemp && "reconcile between instructions only");
+			bool wanted = false;
+			for (size_t k = 0; k < map.entries.size(); ++k) {
+				const ResidencyMap::Entry& entry = map.entries[k];
+				if (entry.registerClass == registerClass && entry.poolIndex == static_cast<int>(i)
+						&& entry.slot == lines[i].slot) { wanted = true; break; }
+			}
+			if (!wanted) { spillLine(registerClass, static_cast<int>(i)); lines[i].occupied = false; }
+		}
+	}
+	for (size_t k = 0; k < map.entries.size(); ++k) {
+		const ResidencyMap::Entry& entry = map.entries[k];
+		size_t count;
+		Line* lines = linesOf(entry.registerClass, count);
+		Line& line = lines[entry.poolIndex];
+		if (!line.occupied) {
+			cacheBackend.emitFill(entry.physicalRegister, entry.slot, entry.registerClass);							// home is current: the value was spilled above or never diverged
+			line.occupied = true;
+			line.scratchTemp = false;
+			line.slot = entry.slot;
+			line.registerClass = entry.registerClass;
+			line.pinned = false;
+			line.lastUse = ++useClock;
+			line.nextUse = nextReadAfter(entry.slot);
+		}
+		line.dirty = true;																								// the header's all-dirty model
+	}
+}
+
 void RegisterCache::invalidateAll() { flushAndClear(); }
 
 void RegisterCache::enterBlock() {

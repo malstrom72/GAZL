@@ -502,6 +502,68 @@ static void runRegisterCacheTests() {
 		c.read(1, FLOAT_REGISTER); c.endInstruction();			// wants it in the float file -> spill general, reload float
 		cacheExpect("cross-file slot", m.log, "[1]<-S10 F20<-[1] ");
 	}
+
+	// I: reconcile to an unchanged state emits nothing (the common back-edge), across both files.
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.read(1, GENERAL_REGISTER); c.endInstruction();
+		c.define(2, FLOAT_REGISTER); c.endInstruction();
+		ResidencyMap map;
+		c.capture(map);
+		m.log.clear();
+		c.reconcileTo(map);
+		cacheExpect("reconcile no-op", m.log, "");
+		if (map.entries.size() != 2) { std::printf("  cache capture entry count wrong\n"); ++failures; }
+	}
+
+	// J: capture adopts the all-dirty model - a line clean at capture still spills when evicted inside the loop body.
+	{
+		RegisterPool pool = { gp1, 1, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.read(1, GENERAL_REGISTER); c.endInstruction();		// clean (just filled)
+		ResidencyMap map;
+		c.capture(map);											// model turns dirty: iteration 2+ may really be dirty here
+		m.log.clear();
+		c.read(2, GENERAL_REGISTER); c.endInstruction();		// pool of 1 -> evicts slot1, which MUST spill despite "clean"
+		cacheExpect("all-dirty capture", m.log, "[1]<-S10 F10<-[2] ");
+	}
+
+	// K: a stray resident line (not in the map) is spilled and dropped; the map's own line is untouched.
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.define(1, GENERAL_REGISTER); c.endInstruction();
+		ResidencyMap map;
+		c.capture(map);											// map = { slot1 in reg10 }
+		c.define(9, GENERAL_REGISTER); c.endInstruction();		// stray joins in reg11
+		m.log.clear();
+		c.reconcileTo(map);
+		cacheExpect("reconcile drops stray", m.log, "[9]<-S11 ");
+		if (!c.isResident(1) || c.isResident(9)) { std::printf("  cache reconcile residency wrong\n"); ++failures; }
+	}
+
+	// L: a map slot evicted inside the body (spilled there by the all-dirty model) is refilled at the edge.
+	{
+		RegisterPool pool = { gp1, 1, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.define(1, GENERAL_REGISTER); c.endInstruction();
+		ResidencyMap map;
+		c.capture(map);											// map = { slot1 in reg10 }
+		c.read(2, GENERAL_REGISTER); c.endInstruction();		// evicts slot1 (spills: all-dirty), fills slot2
+		m.log.clear();
+		c.reconcileTo(map);										// slot2 (clean) dropped without store, slot1 refilled
+		cacheExpect("reconcile refills", m.log, "F10<-[1] ");
+		if (!c.isResident(1) || c.isResident(2)) { std::printf("  cache refill residency wrong\n"); ++failures; }
+	}
 	std::printf("\n");
 }
 

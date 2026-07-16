@@ -304,6 +304,23 @@ class RegisterCacheBackend {
 // slot -> ascending instruction indices where the slot is READ (the JIT builds one per function; see setUseSchedule).
 typedef std::map<Int, std::vector<UInt> > UseSchedule;
 
+/*
+	A snapshot of which slots are register-resident (v2.2 cross-block residency): the fixed entry state of a loop header.
+	Captured at the header's fall-through entry, reconciled to at every back-edge, spilled by the header's suspend stub
+	and refilled by its resume trampoline. Lines are modeled ALL-DIRTY: a loop-carried value redefined in the body really
+	is dirty when the header is reached again, so the compile-time model must assume dirty from iteration one - a clean
+	model would let an eviction skip the store and lose the value.
+*/
+struct ResidencyMap {
+	struct Entry {
+		Int slot;
+		RegisterClass registerClass;
+		int poolIndex;								// index into the RegisterPool's class array
+		int physicalRegister;						// the register itself, for backend stubs (suspend spill / resume fill)
+	};
+	std::vector<Entry> entries;
+};
+
 // Scan code[from..to] and record every slot READ per instruction (uses GAZL::operandRoles) into `schedule` (Belady input).
 void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& schedule);
 
@@ -335,6 +352,10 @@ class RegisterCache {
 
 	public:		void evict(int physicalRegister);	// x64 fixed-register ops (idiv/shift/rep); no-op on arm64
 	public:		bool isResident(Int slot) const;
+
+	// v2.2 loop-header residency: snapshot the resident set (and adopt the all-dirty model), later re-establish it.
+	public:		void capture(ResidencyMap& map);				// at a qualified header's fall-through entry
+	public:		void reconcileTo(const ResidencyMap& map);		// at a back-edge: spill/drop strays, fill missing; empty when equal
 
 	private:	static const size_t POOL_CAPACITY = 32;
 	private:	struct Line {
