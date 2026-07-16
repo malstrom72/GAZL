@@ -1,0 +1,8 @@
+# Only the minimized seed corpus (corpus/) is tracked. Live run output is transient.
+live/
+crashes/
+crash-*
+leak-*
+timeout-*
+oom-*
+fuzz-*.log
