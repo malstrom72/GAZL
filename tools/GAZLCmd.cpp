@@ -230,6 +230,46 @@ static void requireMatch(const char* which, const uint8_t* data, size_t size, St
 	std::abort();										// fuzzer harness: a found miscompile is a crash libFuzzer captures
 }
 
+/*
+	G1 generator (docs/JitFuzzPlan.md): decode a seed into an always-valid straight-line GAZL program - a `main` over a
+	fixed int/float frame, random value ops (const or slot operands, so VVV and VVC both appear), RETU. The assembler is
+	the gatekeeper, so we generate TEXT and let it validate + finalize; the computed locals stay in the data-stack region
+	that the diff compares, so a miscompiled value is caught even without an explicit store.
+*/
+static uint32_t lcg(uint32_t& s) { s = s * 1664525u + 1013904223u; return s; }
+
+static std::string generateProgram(uint32_t seed) {
+	uint32_t r = seed ? seed : 1;
+	const int NI = 8, NF = 4;
+	std::string p = "main: FUNC\n PARA *1\n";
+	for (int i = 0; i < NI; ++i) { p += " $i" + std::to_string(i) + ": LOCi\n"; }
+	for (int i = 0; i < NF; ++i) { p += " $f" + std::to_string(i) + ": LOCf\n"; }
+	char buf[32];
+	for (int i = 0; i < NI; ++i) { std::snprintf(buf, sizeof buf, " MOVi $i%d #%d\n", i, static_cast<int>(lcg(r))); p += buf; }
+	for (int i = 0; i < NF; ++i) { std::snprintf(buf, sizeof buf, " MOVf $f%d #%d.%u\n", i, static_cast<int>(lcg(r) % 2000) - 1000, lcg(r) % 1000); p += buf; }
+	static const char* const IOPS[] = { "ADDi", "SUBi", "MULi", "ANDi", "IORi", "XORi" };
+	static const char* const FOPS[] = { "ADDf", "SUBf", "MULf", "DIVf" };
+	const int k = 20 + static_cast<int>(lcg(r) % 60);
+	for (int n = 0; n < k; ++n) {
+		const uint32_t pick = lcg(r) % 10;
+		if (pick < 6) {
+			const char* op = IOPS[lcg(r) % 6];
+			if (lcg(r) & 1u) { std::snprintf(buf, sizeof buf, " %s $i%u $i%u #%d\n", op, lcg(r) % NI, lcg(r) % NI, static_cast<int>(lcg(r))); }
+			else { std::snprintf(buf, sizeof buf, " %s $i%u $i%u $i%u\n", op, lcg(r) % NI, lcg(r) % NI, lcg(r) % NI); }
+		} else if (pick == 6) {
+			std::snprintf(buf, sizeof buf, " ABSi $i%u $i%u\n", lcg(r) % NI, lcg(r) % NI);
+		} else if (pick < 9) {
+			const char* op = FOPS[lcg(r) % 4];
+			std::snprintf(buf, sizeof buf, " %s $f%u $f%u $f%u\n", op, lcg(r) % NF, lcg(r) % NF, lcg(r) % NF);
+		} else {
+			std::snprintf(buf, sizeof buf, " %s $f%u $f%u\n", (lcg(r) & 1u) ? "ABSf" : "FLOf", lcg(r) % NF, lcg(r) % NF);
+		}
+		p += buf;
+	}
+	p += " RETU\n";
+	return p;
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
 	try {
 		Symbols globals;
@@ -352,6 +392,23 @@ void doOne(const char* fn) {
 }
 
 int main(int argc, const char* argv[]) {
+#if defined(JITDIFF) && defined(GAZL_JIT)
+	if (argc >= 3 && strcmp(argv[1], "--gen1") == 0) {		// dump the generated program for a seed (repro / inspection)
+		fputs(generateProgram(static_cast<uint32_t>(strtoul(argv[2], 0, 10))).c_str(), stdout);
+		return 0;
+	}
+	if (argc >= 2 && strcmp(argv[1], "--gen") == 0) {		// self-contained generative fuzzing: --gen COUNT [SEED0]
+		const uint32_t count = argc >= 3 ? static_cast<uint32_t>(strtoul(argv[2], 0, 10)) : 100000;
+		const uint32_t seed0 = argc >= 4 ? static_cast<uint32_t>(strtoul(argv[3], 0, 10)) : 1;
+		for (uint32_t i = 0; i < count; ++i) {
+			const std::string prog = generateProgram(seed0 + i);
+			if ((i % 5000) == 0) { fprintf(stderr, "gen %u/%u (seed %u)\n", i, count, seed0 + i); }
+			LLVMFuzzerTestOneInput(reinterpret_cast<const uint8_t*>(prog.data()), prog.size());	// aborts on any JIT/interp divergence
+		}
+		fprintf(stderr, "gen %u programs, no divergence\n", count);
+		return 0;
+	}
+#endif
 	for (int i = 1; i < argc; ++i) {
 		DIR *dir;
 		struct dirent *ent;
