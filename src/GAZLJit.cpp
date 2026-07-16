@@ -36,6 +36,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>																									// __try/__except fault guard for the probe
+#undef RegisterClass																									// winuser.h macro (RegisterClassW) collides with GAZL::RegisterClass
 #else
 #include <csignal>																										// sigaction - POSIX fault guard for the probe
 #include <csetjmp>																										// sigsetjmp / siglongjmp
