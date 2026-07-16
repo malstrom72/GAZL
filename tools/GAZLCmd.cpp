@@ -200,6 +200,83 @@ int testCallback(Processor* p) {
 	return 0;
 }
 
+#if defined(JITDIFF) && defined(GAZL_JIT)
+
+#include <cstdio>
+
+/*
+	JIT-vs-interpreter differential fuzzer (docs/JitFuzzPlan.md). Assemble the input, run the interpreter and the JIT
+	from an identical initial image, and require byte-identical final memory + status at full AND tiny fuel. A mismatch
+	is a miscompile: dump the program and abort so libFuzzer captures and minimizes it.
+*/
+static Status fuzzStub(Processor*) { return OK; }			// abort / assertFail / input -> deterministic no-op (natives must be pure here)
+
+static Status runEngine(Processor& engine, Pointer mainFn, Int fuel) {
+	Status s = engine.enterCall(mainFn);
+	if (s == OK) { do { engine.resetTimeOut(fuel); s = engine.run(); } while (s == TIME_OUT); }
+	return s;
+}
+
+static void requireMatch(const char* which, const uint8_t* data, size_t size, Status refStatus, const Value* refImage
+		, Status gotStatus, const Value* gotImage) {
+	int diffWord = -1;
+	for (int i = 0; i < DATA_MEMORY_SIZE; ++i) { if (refImage[i].i != gotImage[i].i) { diffWord = i; break; } }
+	if (gotStatus == refStatus && diffWord < 0) { return; }
+	std::fprintf(stderr, "\n=== JIT/interp divergence (%s): interp status=%d got status=%d", which
+			, static_cast<int>(refStatus), static_cast<int>(gotStatus));
+	if (diffWord >= 0) { std::fprintf(stderr, "; word[%d] interp=%d got=%d", diffWord, refImage[diffWord].i, gotImage[diffWord].i); }
+	std::fprintf(stderr, " ===\n%.*s\n", static_cast<int>(size), reinterpret_cast<const char*>(data));
+	std::fflush(stderr);
+	std::abort();										// fuzzer harness: a found miscompile is a crash libFuzzer captures
+}
+
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
+	try {
+		Symbols globals;
+		// Mirror GAZLCmd's real native names/order so corpus programs assemble; stub the side-effecting ones (deterministic,
+		// no stdout, no real abort), keep the pure math real for richer float coverage. Same table for both engines = a valid diff.
+		static const NativeFunc NATIVE_TABLE[] = { fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, gazlAtan2, gazlSqrt, gazlLog };
+		static const char* const NATIVE_NAMES[] = { "abort", "assertFail", "printInt", "printFloat", "print", "printLF", "input", "atan2", "sqrt", "log" };
+		for (size_t i = 0; i < sizeof (NATIVE_TABLE) / sizeof (*NATIVE_TABLE); ++i) { globals.registerNative(NATIVE_NAMES[i], static_cast<int>(i)); }
+
+		AssembledProgram program;
+		{
+			std::istringstream gazlStream(std::string(reinterpret_cast<const char*>(Data), reinterpret_cast<const char*>(Data) + Size));
+			Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable, DATA_MEMORY_SIZE, memory, globals);
+			assem.newUnit("string");
+			std::string line;
+			while (!gazlStream.eof()) { getline(gazlStream, line); assem.feed(line.c_str()); }
+			assem.finalize(program);
+		}
+		const Pointer mainFunction = globals.findFunction("main");
+		if (mainFunction == 0 || !GAZL::jitAvailable()) { return 0; }
+
+		static Value snapshot[DATA_MEMORY_SIZE];
+		static Value interpImage[DATA_MEMORY_SIZE];
+		std::memcpy(snapshot, memory, sizeof (memory));					// clean post-assembly image; every run restores from it
+
+		std::memcpy(memory, snapshot, sizeof (memory));
+		Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+		const Status interpStatus = runEngine(interp, mainFunction, 10000000);	// the oracle
+		std::memcpy(interpImage, memory, sizeof (memory));
+
+		NativeJitCompiler compiler;
+		JitModule module;
+		compiler.compile(program, module);								// throws JitException -> caught below, no diff
+
+		std::memcpy(memory, snapshot, sizeof (memory));
+		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); const Status s = runEngine(jit, mainFunction, 10000000); requireMatch("jit full-fuel", Data, Size, interpStatus, interpImage, s, memory); }
+		std::memcpy(memory, snapshot, sizeof (memory));
+		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); const Status s = runEngine(jit, mainFunction, 64); requireMatch("jit tiny-fuel", Data, Size, interpStatus, interpImage, s, memory); }
+		std::memcpy(memory, snapshot, sizeof (memory));
+		{ Processor it(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0); const Status s = runEngine(it, mainFunction, 64); requireMatch("interp tiny-fuel", Data, Size, interpStatus, interpImage, s, memory); }
+	}
+	catch (GAZL::Exception&) { return 0; }
+	return 0;
+}
+
+#else
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
     try {
 		Symbols globals;
@@ -249,6 +326,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 	}
   	return 0;  // Non-zero return values are reserved for future use.
 }
+
+#endif	// JITDIFF
 #endif
 
 #ifdef LIBFUZZ_STANDALONE
