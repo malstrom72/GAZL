@@ -1,8 +1,8 @@
 # Repository Guidelines
 
-All code style and design principles (RAII / design-by-contract, naming, class layout, comments, formatting, commit
-rules) are in [docs/CodingStyle.md](docs/CodingStyle.md), the canonical cross-project style doc. This file covers only
-this repository's operations (layout, build/test, scripts).
+All code style and design principles (RAII / design-by-contract, naming, class layout, comments, formatting) are in
+[docs/CodingStyle.md](docs/CodingStyle.md), the canonical cross-project style doc. This file covers this repository's
+operations (layout, build/test, scripts) and the commit conventions.
 
 To run the test suite use the helper script with up to three minutes allowed for execution:
 
@@ -30,12 +30,21 @@ BuildCpp.sh and BuildCpp.cmd are copied from another repository. Only make chang
 ## Code style
 
 Naming, comments, class layout, formatting (tabs width 4, braces, 120-column lines, line continuations, `#if`
-indentation), error handling, and commit conventions are in [docs/CodingStyle.md](docs/CodingStyle.md) - the canonical
-cross-project style doc. Not duplicated here, to avoid drift.
+indentation), and error handling are in [docs/CodingStyle.md](docs/CodingStyle.md) - the canonical cross-project style
+doc. Not duplicated here, to avoid drift. Commit conventions are below.
 
 When handling files with command-line tools (which may break tab characters):
 - Always run `expand -t 4` on the file before processing.
 - Always run `unexpand -t 4` on the file after processing.
+
+## Commits and git
+
+- **Short, concise, one-line commit subjects.** No essay in the subject.
+- **Never add a `Co-Authored-By` trailer** (or any Claude / Anthropic attribution) to a commit.
+- **Commit and push only when explicitly asked.** Do not commit proactively.
+- **Run `./build.sh` before committing** (see above) so the build and regression tests pass.
+- **Do not proliferate files.** Reuse an existing `.cpp` / `.h`; a new file has to earn its place. When something
+  belongs in an existing translation unit, put it there.
 
 ## Script portability
 All user-facing `.sh` and `.cmd` files must work when launched from any directory.

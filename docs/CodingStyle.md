@@ -39,6 +39,14 @@ These are the most important principles in the codebase. Get them wrong and the 
 
 ## 3. Class layout and headers
 
+- **Hard encapsulation.** A class owns its representation and hides it completely. Data members are private; state changes
+  only through methods that preserve the class invariant, which the constructor establishes (see RAII, §1). No client,
+  subclass, or friend reaches past the interface to read or write internals, and there is no backdoor that fills the
+  fields from outside. Expose behavior, not state: a getter/setter pair over what is really a public field is still a leak
+  if it lets a caller drive the object into an invalid state. Keep implementation detail - helper types, buffers,
+  bookkeeping - out of the public header so the client surface shows only what a client must call. Hard encapsulation is
+  what makes RAII and design-by-contract enforceable: if the representation can only change through vetted methods, an
+  inconsistent or half-built object is simply unobservable.
 - **Grouped access-specifier sections, public first.** Write `public:` / `protected:` / `private:` as section headers
   on their own line (one tab in), with members indented one further tab beneath them - the NuXJS style. Do NOT prefix
   every member with its access specifier (`public:  method()` on each line): that per-declaration form is an older
@@ -48,9 +56,9 @@ These are the most important principles in the codebase. Get them wrong and the 
   method defined inline in a header will be moved out in review.
 - **Keep the client surface minimal.** Internal helpers are not public API - make them protected members of the class
   that uses them, or namespace-internal, not part of what a client sees when they include the header.
-- **C++ standard is per-repo, not a universal rule.** Match whatever standard the target repo requires. Magnus's
-  product code is C++11 with some C++14; reusable libraries lean C++03 for maximum portability and stability, but
-  pragmatically go to C++11 where it clearly pays (e.g. `shared_ptr`) - it is a judgement call, not dogma. (GAZL, for
+- **C++ standard is per-repo, not a universal rule.** Match whatever standard the target repo requires. Application and
+  product code is typically C++11 with some C++14; reusable libraries lean C++03 for maximum portability and stability,
+  but pragmatically go to C++11 where it clearly pays (e.g. `shared_ptr`) - it is a judgement call, not dogma. (GAZL, for
   example, keeps its shipped headers and `.cpp` strict `-std=c++03`-clean - `0` not `nullptr`, `<stdint.h>` not
   `<cstdint>` - while its tools and tests use C++11.)
 
@@ -89,12 +97,3 @@ These are the most important principles in the codebase. Get them wrong and the 
   someCall(veryLongFirstArgument, secondArgument, thirdArgument
   		, fourthArgument, fifthArgument)
   ```
-
-## 6. Commits and git
-
-- **Short, concise, one-line commit subjects.** No essay in the subject.
-- **Never add a `Co-Authored-By` trailer** (or any Claude / Anthropic attribution) to a commit.
-- **Commit and push only when explicitly asked.** Do not commit proactively.
-- **Run the project's test/regression gate before committing** (each project's `AGENTS.md` names it).
-- Do not proliferate files. Reuse an existing `.cpp` / `.h`; a new file has to earn its place. When something belongs
-  in an existing translation unit, put it there.
