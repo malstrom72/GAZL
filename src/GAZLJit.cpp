@@ -172,10 +172,8 @@ void JitCompiler::throwUnlowerableOpcode(Int opcode) {
 }
 
 /*
-	RegisterCache - the v2.0 floating cache (GAZLJit.h §5.7.1). All arch-neutral bookkeeping: which pool entry holds
-	which slot, dirty tracking, LRU eviction, and the coherence flushes. It touches machine code only through the
-	backend's emitFill/emitSpill. A pool entry (a Line) parallels registerPool.<class>Registers[i]: index i in the array
-	is the physical register registersOf(class)[i].
+	RegisterCache (GAZLJit.h, §5.7.1): arch-neutral bookkeeping, reaching machine code only via emitFill/emitSpill.
+	Invariant: Line index i holds physical register registersOf(class)[i].
 */
 RegisterCache::RegisterCache(const RegisterPool& pool, RegisterCacheBackend& backend)
 		: registerPool(pool)
@@ -230,10 +228,10 @@ int RegisterCache::acquire(RegisterClass registerClass) {
 	return victim;
 }
 
-// A slot lives in only one register file at a time (transients are typeless: a `%` slot may hold an int now and a float
-// next). Before touching `slot` in `wantedClass`, resolve any copy sitting in the OTHER file: on a read the other-file
-// copy is the current value, so spill it to the home first (the wanted-class fill then reads that home); on a define the
-// slot is overwritten whole, so the old copy is dead - just drop it.
+/*
+	A slot lives in one file at a time (transients are typeless). Resolve a copy in the OTHER file before use: a read
+	spills it to the home first (the fill then reads it back); a define overwrites the slot whole, so just drop it.
+*/
 void RegisterCache::evictOtherClass(Int slot, RegisterClass wantedClass, bool spillFirst) {
 	const RegisterClass other = (wantedClass == GENERAL_REGISTER) ? FLOAT_REGISTER : GENERAL_REGISTER;
 	size_t count;

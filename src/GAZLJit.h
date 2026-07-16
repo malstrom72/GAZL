@@ -272,31 +272,20 @@ class NativeJitCompiler : public JitCompiler {
 };
 
 /*
-	------------------------------------------------------------------------------------------------------------------
-	v2 register allocator - internal to the JIT backends, not client API (docs/JitCompilerResearch.md §5.7). Declared at
-	namespace scope (not nested in JitCompiler) because the concrete RegisterCacheBackend is supplied by code that is not
-	a JitCompiler subclass - each backend's file-static fill/spill helper and the GAZLJitLowerTest mock - which a
-	protected nesting would lock out. Implemented in GAZLJit.cpp.
-	------------------------------------------------------------------------------------------------------------------
+	v2 register allocator - internal to the JIT backends (docs/JitCompilerResearch.md §5.7), implemented in GAZLJit.cpp.
+	At namespace scope, not nested in JitCompiler, so non-subclass code (each backend's fill/spill helper, the
+	GAZLJitLowerTest mock) can implement RegisterCacheBackend.
 */
 
-/*
-	Which physical register file a value lives in. Chosen per definition, because GAZL transients are typeless (a `%`
-	slot legitimately holds ptr, int, and float in successive defs); locals carry their declared type. The memory image
-	is class-agnostic (a spill is a raw word store), so class matters only for picking the register and the op.
-*/
+// Which register file a value is in; chosen per def, since GAZL transients are typeless. A spill is a class-agnostic word store.
 enum RegisterClass {
-	GENERAL_REGISTER,		// integer / pointer (Wn on arm64, e-/r- on x64)
-	FLOAT_REGISTER			// single-precision  (Sn on arm64, xmm on x64)
+	GENERAL_REGISTER,
+	FLOAT_REGISTER
 };
 
 /*
-	The physical registers the cache may allocate, per class: the host registers NOT pinned by the §5.3 segment ABI
-	(dsp / memoryBase / fuel / ipsp / ctx) and not otherwise reserved. Values are the backend's own register encodings
-	(GAZL::Reg) widened to int and opaque to the cache; list them best-first if the arch has a preference. Each backend
-	owns one static pool. Everything is flushed at calls, so caller-saved registers are fair game within a block.
-	Intended: arm64 general X5-X17/X19-X28 (~22), float S0-S31 (32); x64 general RAX RCX RDX RSI RDI R8-R11 (9), float
-	XMM0-XMM15 (16).
+	The registers the cache may allocate, per class: everything not pinned by the §5.3 segment ABI. Values are the
+	backend's own Reg encodings widened to int. Each backend owns one pool; caller-saved is fine (all flushed at calls).
 */
 struct RegisterPool {
 	const int* generalRegisters;
@@ -305,64 +294,44 @@ struct RegisterPool {
 	size_t floatCount;
 };
 
-/*
-	The one arch-specific service the cache needs: emit a load/store between a physical register and a frame slot's
-	memory home (a Value index off dsp, exactly as the opcode operands carry it). These wrap the existing per-backend
-	loadSlot/storeSlot helpers (which already handle near vs far slots). The cache never emits an instruction itself; it
-	only decides which register holds what and calls these to fill/spill.
-*/
+// The cache's one arch-specific service: fill/spill a register from/to a slot's frame home (the backends' loadSlot/storeSlot).
 class RegisterCacheBackend {
-	public:		virtual void emitFill(int physicalRegister, Int slot, RegisterClass registerClass) = 0;	// reg <- home(slot)
-	public:		virtual void emitSpill(Int slot, int physicalRegister, RegisterClass registerClass) = 0;	// home(slot) <- reg
+	public:		virtual void emitFill(int physicalRegister, Int slot, RegisterClass registerClass) = 0;
+	public:		virtual void emitSpill(Int slot, int physicalRegister, RegisterClass registerClass) = 0;
 	public:		virtual ~RegisterCacheBackend() { }
 };
 
 /*
-	v2.0 floating register cache (§5.7.1). One instance per function lowering; the per-opcode switch routes every operand
-	through read()/define()/scratch() instead of naming a fixed scratch register, and calls the coherence events at the
-	situations the §5.7.1 table names. Lines are floating: filled on first read, dirty-on-write with NO store at the def,
-	LRU-evicted under pressure (spilled if dirty), flushed + cleared at every basic-block boundary. Correctness never
-	rests on the aliasing spec - memory is made current at every pointer op, boundary, and call - so any GAZL the
-	interpreter accepts is handled (v2.0 needs no §1.1 rule at all).
-
-	Two-operand ISAs (x64): the cache hands out independent registers; turning `dst = s1 OP s2` into `mov dst,s1; OP
-	dst,s2` stays in the x64 switch. Fixed-register ops (x64 idiv -> EDX:EAX, shifts -> CL, rep movsd -> RSI/RDI/RCX)
-	call evict() on the specific registers first; on arm64 evict() finds nothing to do.
-
-	Per-instruction protocol: read()/define()/scratch() each pin their register for the current instruction so a later
-	operand in the SAME instruction cannot evict it (up to 3 operands + scratch); call endInstruction() to release the
-	pins (and drop the transient scratch lines).
+	v2.0 floating register cache (§5.7.1): a per-function write-back cache of frame slots. The opcode switch routes
+	operands through read/define/scratch and calls the coherence events below; correctness never rests on the aliasing
+	spec because memory is made current at every pointer op, block boundary, and call.
 */
 class RegisterCache {
 	public:		RegisterCache(const RegisterPool& pool, RegisterCacheBackend& backend);
 
-	// --- per-instruction operand access (each pins its register until endInstruction) ---
-	public:		int read(Int slot, RegisterClass registerClass);	// slot's value in a register, filling on a miss
-	public:		int define(Int slot, RegisterClass registerClass);	// a register to write slot's new value into (dirty, no store)
-	public:		int scratch(RegisterClass registerClass);			// a register holding no live value (address math, boxed constants)
-	public:		void endInstruction();								// release this instruction's pins; drop its scratch lines
+	// read/define/scratch pin their register for the current instruction; endInstruction releases the pins.
+	public:		int read(Int slot, RegisterClass registerClass);		// fills on a miss
+	public:		int define(Int slot, RegisterClass registerClass);		// dirty, no store at the def
+	public:		int scratch(RegisterClass registerClass);				// no home; dropped at endInstruction
+	public:		void endInstruction();
 
-	// --- coherence events (§5.7.1 event table) ---
-	public:		void enterBlock();				// at a block leader: the map starts empty (canonical-memory join)
-	public:		void spillDirtyResident();		// store dirty lines, KEEP them resident: before a pointer READ, before a back-edge fuel check
-	public:		void invalidateAll();			// spill dirty + drop every mapping: AFTER a pointer WRITE
-	public:		void barrier();					// spill dirty + drop every mapping: a branch, a fall-through into a leader, a CALL, a RETU
+	public:		void enterBlock();				// leader: map starts empty
+	public:		void spillDirtyResident();		// before a pointer READ / back-edge: flush dirty, keep resident
+	public:		void invalidateAll();			// after a pointer WRITE: flush dirty + drop all
+	public:		void barrier();					// branch / fall-through to leader / CALL / RETU: flush dirty + drop all
 
-	// --- x64 fixed-register ops (finds nothing to do on arm64) ---
-	public:		void evict(int physicalRegister);	// free a specific physical register (spill if dirty, then drop its line)
+	public:		void evict(int physicalRegister);	// x64 fixed-register ops (idiv/shift/rep); no-op on arm64
+	public:		bool isResident(Int slot) const;
 
-	// --- queries ---
-	public:		bool isResident(Int slot) const;	// is this slot currently held in a register?
-
-	private:	static const size_t POOL_CAPACITY = 32;	// ceiling for either file (arm64 float uses all 32)
+	private:	static const size_t POOL_CAPACITY = 32;
 	private:	struct Line {
-					Int slot;						// the frame slot this register holds (meaningless when scratchTemp)
-					RegisterClass registerClass;	// which file (parallels the pool array this Line sits in)
-					bool occupied;					// this pool entry currently holds a value
-					bool dirty;						// register copy has diverged from the home (needs a spill to evict)
-					bool pinned;					// pinned for the current instruction (cannot be evicted this cycle)
-					bool scratchTemp;				// a transient with no home: never spilled, dropped at endInstruction
-					uint32_t lastUse;				// LRU stamp (monotonic; smallest = eviction victim)
+					Int slot;
+					RegisterClass registerClass;
+					bool occupied;
+					bool dirty;						// register copy diverged from the home
+					bool pinned;					// operand of the current instruction; not evictable this cycle
+					bool scratchTemp;				// no home: never spilled, dropped at endInstruction
+					uint32_t lastUse;				// LRU stamp
 				};
 
 	private:	Line* linesOf(RegisterClass registerClass, size_t& count);
