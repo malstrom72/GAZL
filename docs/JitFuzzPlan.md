@@ -1,5 +1,13 @@
 # GAZL JIT - Differential Fuzzer Plan
 
+**Status (2026-07):** oracle + G1-G4 generator all built and green. `tools/GAZLCmd.cpp` under `-DJITDIFF`; drive with
+`--gen COUNT [SEED0] [deep]` (self-contained, aborts on divergence) or `--gen1 SEED` (dump one program). G1 straight-
+line value ops, G2 memory ops (`PEEK`/`POKE`/`GETL`/`SETL` + const-address globals, plus checked `DIVi`/`MODi`), G3
+control flow (nested `FORi` + forward if-skips), G4 calls (int helpers, native `sqrt`/`atan2`, self-recursion; `deep`
+lets some recursions overflow the ipStack). Ran 200k+/stage on arm64 and 100k deep on both arm64 and x64 (Rosetta),
+0 divergences. The one bug it found (JIT `DIVf` not trapping a runtime zero divisor) is fixed. Remainder of this doc is
+the original plan.
+
 Plan for a JIT-vs-interpreter differential fuzzer. Today's `GAZLFuzz` (tools/buildGazlFuzz.sh + the `LIBFUZZ`
 block in tools/GAZLCmd.cpp) feeds raw bytes as GAZL source text, assembles them, and runs ONLY the interpreter at
 high fuel to catch crashes. It does not link the JIT at all, and random bytes almost never assemble, so the JIT is

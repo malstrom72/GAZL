@@ -231,42 +231,147 @@ static void requireMatch(const char* which, const uint8_t* data, size_t size, St
 }
 
 /*
-	G1 generator (docs/JitFuzzPlan.md): decode a seed into an always-valid straight-line GAZL program - a `main` over a
-	fixed int/float frame, random value ops (const or slot operands, so VVV and VVC both appear), RETU. The assembler is
-	the gatekeeper, so we generate TEXT and let it validate + finalize; the computed locals stay in the data-stack region
-	that the diff compares, so a miscompiled value is caught even without an explicit store.
+	Program generator (docs/JitFuzzPlan.md): decode a seed into an always-valid GAZL program. We generate TEXT and let
+	the assembler be the gatekeeper (validate + finalize); the computed locals + globals stay in the region the diff
+	compares, so a miscompiled value is caught without an explicit store. G1 = straight-line int/float value ops (VVV and
+	VVC). G2 adds memory ops interleaved so the pointer coherence gets stressed: const-address globals, a LOCA array via
+	an ADRL pointer (PEEK/POKE_VVV), and GETL/SETL - indices masked in-bounds so the ops execute (store/load + invalidate).
 */
 static uint32_t lcg(uint32_t& s) { s = s * 1664525u + 1013904223u; return s; }
 
-static std::string generateProgram(uint32_t seed) {
-	uint32_t r = seed ? seed : 1;
-	const int NI = 8, NF = 4;
-	std::string p = "main: FUNC\n PARA *1\n";
-	for (int i = 0; i < NI; ++i) { p += " $i" + std::to_string(i) + ": LOCi\n"; }
-	for (int i = 0; i < NF; ++i) { p += " $f" + std::to_string(i) + ": LOCf\n"; }
-	char buf[32];
-	for (int i = 0; i < NI; ++i) { std::snprintf(buf, sizeof buf, " MOVi $i%d #%d\n", i, static_cast<int>(lcg(r))); p += buf; }
-	for (int i = 0; i < NF; ++i) { std::snprintf(buf, sizeof buf, " MOVf $f%d #%d.%u\n", i, static_cast<int>(lcg(r) % 2000) - 1000, lcg(r) % 1000); p += buf; }
+/* Bounded pick via multiply-shift on the full word: uses the high bits (full period), dodging LCG low-bit cycling. */
+static unsigned pick(uint32_t& s, unsigned n) { return static_cast<unsigned>((static_cast<uint64_t>(lcg(s)) * n) >> 32); }
+
+enum { NI = 8, NF = 4 };	// int / float scalar slots the generated frame provides
+
+/* Append one instruction line (leading space + text + '\n'), attaching+consuming a pending label prefix if present. */
+static void putLine(std::string& p, std::string& pending, const char* line) {
+	if (!pending.empty()) { p += pending; pending.clear(); }		// label carries its trailing ':'; the line's space separates
+	p += line;
+}
+
+/* One straight-line op: an int/float value op (VVV or VVC) or a G2 memory op (index masked in-bounds). */
+static void emitSimpleOp(std::string& p, uint32_t& r, std::string& pending) {
 	static const char* const IOPS[] = { "ADDi", "SUBi", "MULi", "ANDi", "IORi", "XORi" };
 	static const char* const FOPS[] = { "ADDf", "SUBf", "MULf", "DIVf" };
-	const int k = 20 + static_cast<int>(lcg(r) % 60);
-	for (int n = 0; n < k; ++n) {
-		const uint32_t pick = lcg(r) % 10;
-		if (pick < 6) {
-			const char* op = IOPS[lcg(r) % 6];
-			if (lcg(r) & 1u) { std::snprintf(buf, sizeof buf, " %s $i%u $i%u #%d\n", op, lcg(r) % NI, lcg(r) % NI, static_cast<int>(lcg(r))); }
-			else { std::snprintf(buf, sizeof buf, " %s $i%u $i%u $i%u\n", op, lcg(r) % NI, lcg(r) % NI, lcg(r) % NI); }
-		} else if (pick == 6) {
-			std::snprintf(buf, sizeof buf, " ABSi $i%u $i%u\n", lcg(r) % NI, lcg(r) % NI);
-		} else if (pick < 9) {
-			const char* op = FOPS[lcg(r) % 4];
-			std::snprintf(buf, sizeof buf, " %s $f%u $f%u $f%u\n", op, lcg(r) % NF, lcg(r) % NF, lcg(r) % NF);
-		} else {
-			std::snprintf(buf, sizeof buf, " %s $f%u $f%u\n", (lcg(r) & 1u) ? "ABSf" : "FLOf", lcg(r) % NF, lcg(r) % NF);
+	char buf[64];
+	const unsigned choice = pick(r, 18);
+	if (choice < 5) {
+		const char* op = IOPS[pick(r, 6)];
+		if (pick(r, 2)) { std::snprintf(buf, sizeof buf, " %s $i%u $i%u #%d\n", op, pick(r, NI), pick(r, NI), static_cast<int>(lcg(r))); }
+		else { std::snprintf(buf, sizeof buf, " %s $i%u $i%u $i%u\n", op, pick(r, NI), pick(r, NI), pick(r, NI)); }
+	} else if (choice == 5) {
+		std::snprintf(buf, sizeof buf, " ABSi $i%u $i%u\n", pick(r, NI), pick(r, NI));
+	} else if (choice == 6) {
+		std::snprintf(buf, sizeof buf, " ANDi $idx $i%u #7\n", pick(r, NI)); putLine(p, pending, buf);	// divisor 0-7: ~1/8 traps
+		std::snprintf(buf, sizeof buf, " %s $i%u $i%u $idx\n", pick(r, 2) ? "DIVi" : "MODi", pick(r, NI), pick(r, NI));
+	} else if (choice < 9) {
+		const char* op = FOPS[pick(r, 4)];
+		std::snprintf(buf, sizeof buf, " %s $f%u $f%u $f%u\n", op, pick(r, NF), pick(r, NF), pick(r, NF));
+	} else if (choice == 9) {
+		std::snprintf(buf, sizeof buf, " %s $f%u $f%u\n", pick(r, 2) ? "ABSf" : "FLOf", pick(r, NF), pick(r, NF));
+	} else {
+		std::snprintf(buf, sizeof buf, " ANDi $idx $i%u #7\n", pick(r, NI)); putLine(p, pending, buf);	// in-bounds index (size 8)
+		const unsigned a = pick(r, NI);
+		switch (pick(r, 6)) {
+			case 0: std::snprintf(buf, sizeof buf, " POKE &buf $idx $i%u\n", a); break;		// POKE_CVV
+			case 1: std::snprintf(buf, sizeof buf, " PEEK $i%u &buf $idx\n", a); break;		// PEEK_VCV
+			case 2: std::snprintf(buf, sizeof buf, " POKE $p $idx $i%u\n", a); break;		// POKE_VVV (frame pointer)
+			case 3: std::snprintf(buf, sizeof buf, " PEEK $i%u $p $idx\n", a); break;		// PEEK_VVV
+			case 4: std::snprintf(buf, sizeof buf, " SETL $arr $idx $i%u\n", a); break;		// SETL
+			default: std::snprintf(buf, sizeof buf, " GETL $i%u $arr $idx\n", a); break;		// GETL
 		}
-		p += buf;
 	}
-	p += " RETU\n";
+	putLine(p, pending, buf);
+}
+
+/*
+	G3 control flow. Emit `stmts` statements; each is a simple op, a counted FORi loop, or a forward if-skip. Loops and
+	skips recurse (depth <= MAX_DEPTH) to nest; a loop's counter is keyed by depth so a nested loop never clobbers its
+	enclosing counter. limit >= 1 so the body always runs (no pre-guard needed). Loops at small fuel exercise suspend/
+	resume. A label is a prefix on the next instruction (`pending`), so the loop back-edge target rides the body's first
+	op and each skip's forward target rides a guaranteed trailing op - never a bare/stacked label line.
+*/
+enum { NFUNC = 3 };			// non-recursive int helpers fn0..fn2
+static bool g_deepRecursion = false;	// when set, some rec calls take a raw (possibly huge) count -> ipStack overflow trap
+
+static void emitBody(std::string& p, uint32_t& r, std::string& pending, int stmts, int depth, int& label) {
+	static const char* const CMP[] = { "LSSi", "LEQi", "GEQi", "EQUi", "NEQi" };
+	const int MAX_DEPTH = 2;
+	char buf[64];
+	for (int n = 0; n < stmts; ++n) {
+		unsigned kind = pick(r, 18);
+		if ((kind == 0 || kind == 1) && depth >= MAX_DEPTH) { kind = 99; }	// no deeper loops/skips; calls still allowed
+		if (kind == 0) {
+			const int id = label++;
+			const int limit = 2 + static_cast<int>(pick(r, 38));
+			std::snprintf(buf, sizeof buf, " MOVi $c%d #0\n", depth); putLine(p, pending, buf);	// consumes any incoming label
+			std::string back = ".l" + std::to_string(id) + ":";									// rides the body's first op
+			emitBody(p, r, back, 1 + static_cast<int>(pick(r, 4)), depth + 1, label);
+			std::snprintf(buf, sizeof buf, " FORi $c%d #%d @.l%d\n", depth, limit, id); putLine(p, pending, buf);
+		} else if (kind == 1) {
+			const int id = label++;
+			std::snprintf(buf, sizeof buf, " %s $i%u $i%u @.s%d\n", CMP[pick(r, 5)], pick(r, NI), pick(r, NI), id); putLine(p, pending, buf);
+			std::string none;
+			emitBody(p, r, none, 1 + static_cast<int>(pick(r, 3)), depth + 1, label);
+			std::string skip = ".s" + std::to_string(id) + ":";									// rides a guaranteed trailing op
+			emitSimpleOp(p, r, skip);
+		} else if (kind == 2) {																	// direct GAZL call: fnK(int, int) -> int
+			std::snprintf(buf, sizeof buf, " MOVi %%1 $i%u\n", pick(r, NI)); putLine(p, pending, buf);
+			std::snprintf(buf, sizeof buf, " MOVi %%2 $i%u\n", pick(r, NI)); p += buf;
+			std::snprintf(buf, sizeof buf, " CALL &fn%u %%0 *3\n", pick(r, NFUNC)); p += buf;
+			std::snprintf(buf, sizeof buf, " MOVi $i%u %%0\n", pick(r, NI)); p += buf;
+		} else if (kind == 3) {																	// native math call (identical C in both engines)
+			if (pick(r, 2)) {
+				std::snprintf(buf, sizeof buf, " MOVf %%1 $f%u\n", pick(r, NF)); putLine(p, pending, buf);
+				p += " CALL ^sqrt %0 *2\n";
+				std::snprintf(buf, sizeof buf, " MOVf $f%u %%0\n", pick(r, NF)); p += buf;
+			} else {
+				std::snprintf(buf, sizeof buf, " MOVf %%1 $f%u\n", pick(r, NF)); putLine(p, pending, buf);
+				std::snprintf(buf, sizeof buf, " MOVf %%2 $f%u\n", pick(r, NF)); p += buf;
+				p += " CALL ^atan2 %0 *3\n";
+				std::snprintf(buf, sizeof buf, " MOVf $f%u %%0\n", pick(r, NF)); p += buf;
+			}
+		} else if (kind == 4) {																	// recursion: rec(count) -> sum
+			if (g_deepRecursion && pick(r, 8) == 0) {
+				std::snprintf(buf, sizeof buf, " MOVi %%1 $i%u\n", pick(r, NI)); putLine(p, pending, buf);	// raw count: may overflow ipStack
+			} else {
+				std::snprintf(buf, sizeof buf, " ANDi $idx $i%u #15\n", pick(r, NI)); putLine(p, pending, buf);	// bounded, shallow
+				p += " MOVi %1 $idx\n";
+			}
+			p += " CALL &rec %0 *2\n";
+			std::snprintf(buf, sizeof buf, " MOVi $i%u %%0\n", pick(r, NI)); p += buf;
+		} else {
+			emitSimpleOp(p, r, pending);
+		}
+	}
+}
+
+/* G4 callees: three int helpers fn(int,int)->int (window %0=out, %1/%2=in) and one bounded self-recursive summer. */
+static const char* const CALLEES =
+	"fn0: FUNC\n$r: OUTi\n$a: INPi\n$b: INPi\n$t: LOCi\n ADDi $r $a $b\n MULi $t $a $b\n XORi $r $r $t\n SUBi $r $r $b\n RETU\n"
+	"fn1: FUNC\n$r: OUTi\n$a: INPi\n$b: INPi\n$t: LOCi\n SUBi $r $a $b\n IORi $t $a $b\n ADDi $r $r $t\n RETU\n"
+	"fn2: FUNC\n$r: OUTi\n$a: INPi\n$b: INPi\n MULi $r $a $b\n ADDi $r $r $a\n SUBi $r $r $b\n RETU\n"
+	"rec: FUNC\n PARA *2\n$r: OUTi\n$n: INPi\n$t: LOCi\n MOVi $r #0\n LEQi $n #0 @.base\n"
+	" SUBi $t $n #1\n MOVi %1 $t\n CALL &rec %0 *2\n ADDi $r %0 $n\n.base: RETU\n";
+
+static std::string generateProgram(uint32_t seed) {
+	uint32_t r = seed ? seed : 1;
+	std::string p = "buf: GLOB *8\n";
+	for (int i = 0; i < 8; ++i) { p += " DATi #0\n"; }
+	p += CALLEES;
+	p += "main: FUNC\n PARA *3\n";
+	for (int i = 0; i < NI; ++i) { p += " $i" + std::to_string(i) + ": LOCi\n"; }
+	for (int i = 0; i < NF; ++i) { p += " $f" + std::to_string(i) + ": LOCf\n"; }
+	p += " $arr: LOCA *8\n $p: LOCp\n $idx: LOCi\n $c0: LOCi\n $c1: LOCi\n";
+	char buf[48];
+	for (int i = 0; i < NI; ++i) { std::snprintf(buf, sizeof buf, " MOVi $i%d #%d\n", i, static_cast<int>(lcg(r))); p += buf; }
+	for (int i = 0; i < NF; ++i) { std::snprintf(buf, sizeof buf, " MOVf $f%d #%d.%u\n", i, static_cast<int>(pick(r, 2000)) - 1000, pick(r, 1000)); p += buf; }
+	p += " ADRL $p $arr *0\n";
+	std::string pending;
+	int label = 0;
+	emitBody(p, r, pending, 30 + static_cast<int>(pick(r, 60)), 0, label);
+	putLine(p, pending, " RETU\n");
 	return p;
 }
 
@@ -311,9 +416,21 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ Processor it(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0); const Status s = runEngine(it, mainFunction, 64); requireMatch("interp tiny-fuel", Data, Size, interpStatus, interpImage, s, memory); }
 	}
-	catch (GAZL::Exception&) { return 0; }
+	catch (GAZL::Exception& e) {
+#ifdef FUZZ_TRACE_SKIP
+		extern long g_fuzzSkips; if (g_fuzzSkips < 3) { fprintf(stderr, "SKIP: %s\n", e.what()); } ++g_fuzzSkips;
+#endif
+		return 0;
+	}
+#ifdef FUZZ_TRACE_SKIP
+	{ extern long g_fuzzRan; ++g_fuzzRan; }
+#endif
 	return 0;
 }
+
+#ifdef FUZZ_TRACE_SKIP
+long g_fuzzSkips = 0, g_fuzzRan = 0;
+#endif
 
 #else
 
@@ -397,15 +514,19 @@ int main(int argc, const char* argv[]) {
 		fputs(generateProgram(static_cast<uint32_t>(strtoul(argv[2], 0, 10))).c_str(), stdout);
 		return 0;
 	}
-	if (argc >= 2 && strcmp(argv[1], "--gen") == 0) {		// self-contained generative fuzzing: --gen COUNT [SEED0]
+	if (argc >= 2 && strcmp(argv[1], "--gen") == 0) {		// self-contained generative fuzzing: --gen COUNT [SEED0] [deep]
 		const uint32_t count = argc >= 3 ? static_cast<uint32_t>(strtoul(argv[2], 0, 10)) : 100000;
 		const uint32_t seed0 = argc >= 4 ? static_cast<uint32_t>(strtoul(argv[3], 0, 10)) : 1;
+		if (argc >= 5 && strcmp(argv[4], "deep") == 0) { g_deepRecursion = true; }	// some rec calls overflow the ipStack
 		for (uint32_t i = 0; i < count; ++i) {
 			const std::string prog = generateProgram(seed0 + i);
 			if ((i % 5000) == 0) { fprintf(stderr, "gen %u/%u (seed %u)\n", i, count, seed0 + i); }
 			LLVMFuzzerTestOneInput(reinterpret_cast<const uint8_t*>(prog.data()), prog.size());	// aborts on any JIT/interp divergence
 		}
 		fprintf(stderr, "gen %u programs, no divergence\n", count);
+#ifdef FUZZ_TRACE_SKIP
+		{ extern long g_fuzzSkips, g_fuzzRan; fprintf(stderr, "  ran=%ld skipped=%ld\n", g_fuzzRan, g_fuzzSkips); }
+#endif
 		return 0;
 	}
 #endif

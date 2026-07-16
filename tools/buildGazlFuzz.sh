@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
+# Usage: buildGazlFuzz.sh [standalone]
+# Default links libFuzzer (needs a toolchain with the fuzzer runtime; Apple clang lacks it). `standalone` builds the
+# self-contained generative driver instead - no libFuzzer needed - driven by `../output/GAZLFuzz --gen COUNT [SEED] [deep]`.
 set -e -o pipefail -u
 cd "$(dirname "$0")"
 mkdir -p ../output
 CPP_COMPILER=${CPP_COMPILER:-clang++}
-CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer,address -DLIBFUZZ -DGAZL_JIT -DJITDIFF"}
+if [ "${1:-}" = "standalone" ]; then
+	CPP_OPTIONS=${CPP_OPTIONS:-"-O1 -g -DLIBFUZZ -DLIBFUZZ_STANDALONE -DGAZL_JIT -DJITDIFF"}
+else
+	CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer,address -DLIBFUZZ -DGAZL_JIT -DJITDIFF"}
+fi
 case "$(uname -m)" in
 	arm64 | aarch64) backend=../src/GAZLJitArm64.cpp ;;
 	x86_64) backend=../src/GAZLJitX64.cpp ;;
