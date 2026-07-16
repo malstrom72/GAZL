@@ -150,3 +150,40 @@ if ls benchmarks/suite/golden/*.gazl >/dev/null 2>&1; then
 			"$(echo $SUITE_RATIOS | wc -w)"
 	fi
 fi
+
+# x64 (Rosetta) suite lane, on Apple Silicon only: catches x64-backend regressions the arm64 lane cannot see. RATIOS
+# only - Rosetta absolutes are unstable (translation cache, background load, code-layout sensitivity); confirm any
+# suspicious delta with several fresh-process runs on an unloaded machine, or natively on real x64 hardware.
+if [ "$(uname -s)" = Darwin ] && [ "$arch" = arm64 ] && arch -x86_64 true 2>/dev/null; then
+	echo "Building GAZLCmd_o2x64 (-O2 +JIT, Rosetta suite lane)..." >&2
+	jitmem=../src/GAZLJitMemMacOS.cpp
+	(cd tools && clang++ -arch x86_64 -O2 -std=c++11 -DGAZL_JIT -I.. -o ../output/GAZLCmd_o2x64 \
+			GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLCpp.cpp ../src/GAZLJit.cpp ../src/GAZLJitX64.cpp "$jitmem") >/dev/null 2>&1
+	if [ -x output/GAZLCmd_o2x64 ]; then
+		x64min() {  # $1 = gazl, $2.. = extra flags; echoes min_ms
+			local gazl="$1"; shift
+			arch -x86_64 ./output/GAZLCmd_o2x64 "$@" "$gazl" main --bench="$iters" --warmup="$warmup" 2>/dev/null \
+				| grep '^bench' | sed -n 's/.*min_ms=\([^	]*\).*/\1/p'
+		}
+		printf '\n%-12s %10s %10s %8s  %s\n' "x64 suite" "interp_ms" "jit_ms" "speedup" "(Rosetta: ratios only)"
+		printf '%-12s %10s %10s %8s\n' "------------" "----------" "----------" "--------"
+		X64_RATIOS=""
+		for g in benchmarks/suite/golden/*.gazl; do
+			name=$(basename "$g" .gazl)
+			i=$(x64min "$g"); j=$(x64min "$g" --jit)
+			if [ -n "$i" ] && [ -n "$j" ]; then
+				spd=$(awk "BEGIN{printf \"%.2fx\", $i/$j}")
+				X64_RATIOS="$X64_RATIOS $(awk "BEGIN{print $i/$j}")"
+				printf '%-12s %10.3f %10.3f %8s\n' "$name" "$i" "$j" "$spd"
+			else
+				printf '%-12s %10s\n' "$name" "FAILED"
+			fi
+		done
+		if [ -n "$X64_RATIOS" ]; then
+			gm=$(awk "BEGIN{m=split(\"$X64_RATIOS\",a,\" \");s=0;n=0;for(k=1;k<=m;k++)if(a[k]+0>0){s+=log(a[k]);n++};if(n>0)printf\"%.2fx\",exp(s/n)}")
+			printf '%-12s %10s %10s %8s   (geomean speedup over %d kernels)\n' "geomean" "" "" "$gm" "$(echo $X64_RATIOS | wc -w)"
+		fi
+	else
+		echo "x64 suite lane skipped (Rosetta build failed)" >&2
+	fi
+fi
