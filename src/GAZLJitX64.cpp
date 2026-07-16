@@ -440,6 +440,32 @@ static int loadFloatOperandCached(X64Emitter& emitter, RegisterCache& cache, con
 	emitter.movdToXmm(static_cast<Reg>(x), static_cast<Reg>(bits));
 	return x;
 }
+// DIVf with a runtime divisor: match the interpreter's zero-divisor trap (GAZL.cpp CHECK_FLOAT_DIV_BY_ZERO). Test the
+// divisor's bits: (bits << 1) == 0 iff the value is +0.0 or -0.0 (matching `== 0.0f`; NaN/inf fall through). VVC (const
+// divisor) is assemble-time-checked, so it stays on emitBinaryFloat.
+static void emitDivFChecked(X64Emitter& emitter, RegisterCache& cache, const Instruction& instruction, bool source1Const, Label epilogue) {
+	const int a = loadFloatOperandCached(emitter, cache, instruction.p1, source1Const);
+	const int b = loadFloatOperandCached(emitter, cache, instruction.p2, false);
+	cache.spillDirtyResident();							// main-path flush before the terminal trap
+	emitter.movdFromXmm(SCRATCH_B, static_cast<Reg>(b));
+	emitter.add(SCRATCH_B, SCRATCH_B);					// <<1: ZF set iff divisor is +-0.0
+	Label ok = emitter.newLabel();
+	emitter.jcc(CC_NE, ok);
+	emitter.movImm(RAX, static_cast<uint32_t>(DIVISION_BY_ZERO)); emitter.jmp(epilogue);
+	emitter.bind(ok);
+	const int d = cache.define(instruction.p0.i, FLOAT_REGISTER);
+	if (d != b) {
+		if (d != a) { emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(a)); }
+		emitter.divss(static_cast<Reg>(d), static_cast<Reg>(b));
+	} else {
+		const int t = cache.scratch(FLOAT_REGISTER);
+		emitter.movssReg(static_cast<Reg>(t), static_cast<Reg>(a));
+		emitter.divss(static_cast<Reg>(t), static_cast<Reg>(b));
+		emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(t));
+	}
+	cache.endInstruction();
+}
+
 // destination = source1 <fop> source2 through the cache (two-operand: seed dst with s1, then fop dst, s2).
 static void emitBinaryFloat(X64Emitter& emitter, RegisterCache& cache, BinaryOp fop, const Instruction& instruction, bool source1Const, bool source2Const) {
 	const int a = loadFloatOperandCached(emitter, cache, instruction.p1, source1Const);
@@ -794,9 +820,9 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_SUBF_VCV: emitBinaryFloat(emitter, cache, &X64Emitter::subss, in, true, false); break;
 			case OP_MULF_VVV: emitBinaryFloat(emitter, cache, &X64Emitter::mulss, in, false, false); break;
 			case OP_MULF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::mulss, in, false, true); break;
-			case OP_DIVF_VVV: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, false, false); break;
-			case OP_DIVF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, false, true); break;
-			case OP_DIVF_VCV: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, true, false); break;
+			case OP_DIVF_VVV: emitDivFChecked(emitter, cache, in, false, epilogue); break;
+			case OP_DIVF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, false, true); break;	// const divisor: assemble-checked
+			case OP_DIVF_VCV: emitDivFChecked(emitter, cache, in, true, epilogue); break;
 			/*
 				FTOI / ITOF carry a scale constant (p2): FTOI = (int)(src * scale) with the interpreter's saturation;
 				ITOF = (float)src * scale.

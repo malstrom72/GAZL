@@ -536,6 +536,24 @@ static void emitBinaryF(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitte
 	cache.endInstruction();
 }
 
+// DIVf with a runtime divisor: the interpreter traps a zero divisor (GAZL.cpp CHECK_FLOAT_DIV_BY_ZERO), so match it.
+// VVC (const divisor) is assemble-time-checked, so it stays on emitBinaryF.
+static void emitDivFChecked(Arm64Emitter& e, RegisterCache& cache, const Instruction& in, bool s1Const, Label exitLabel) {
+	const int a = loadFloatOperand(e, cache, in.p1, s1Const);
+	const int b = loadFloatOperand(e, cache, in.p2, false);
+	cache.spillDirtyResident();							// main-path flush before the terminal trap
+	const int zero = cache.scratch(FLOAT_REGISTER);
+	e.fmovSW(static_cast<Reg>(zero), WZR);				// 0.0f
+	e.fcmpS(static_cast<Reg>(b), static_cast<Reg>(zero));
+	Label ok = e.newLabel();
+	e.bcond(NE, ok);									// != 0 (NaN is unordered, also passes) → divide
+	e.movn(W0, 6); e.b(exitLabel);						// ~6 = -7 = DIVISION_BY_ZERO
+	e.bind(ok);
+	const int d = cache.define(in.p0.i, FLOAT_REGISTER);
+	e.fdivS(static_cast<Reg>(d), static_cast<Reg>(a), static_cast<Reg>(b));
+	cache.endInstruction();
+}
+
 /*
 	Emit a shift `dst = value <shift> count`. kind: 0=lsl, 1=asr (SHRi), 2=lsr (SHRu). form: 0=VVV, 1=VVC, 2=VCV.
 	value is p1 (a slot for VVV/VVC, a const for VCV); count is p2 (a const for VVC, else a slot, masked mod 32 by HW).
@@ -896,9 +914,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_SUBF_VCV: emitBinaryF(e, cache, &Arm64Emitter::fsubS, in, true, false); break;
 			case OP_MULF_VVV: emitBinaryF(e, cache, &Arm64Emitter::fmulS, in, false, false); break;
 			case OP_MULF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fmulS, in, false, true); break;
-			case OP_DIVF_VVV: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, false); break;
-			case OP_DIVF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, true); break;
-			case OP_DIVF_VCV: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, true, false); break;
+			case OP_DIVF_VVV: emitDivFChecked(e, cache, in, false, exitLabel); break;
+			case OP_DIVF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, true); break;	// const divisor: assemble-checked
+			case OP_DIVF_VCV: emitDivFChecked(e, cache, in, true, exitLabel); break;
 			case OP_FTOI_VVC: {												// int(V * scale), scale = C2 (saturating fcvtzs)
 				const int src = cache.read(in.p1.i, FLOAT_REGISTER);
 				const int bits = cache.scratch(GENERAL_REGISTER);

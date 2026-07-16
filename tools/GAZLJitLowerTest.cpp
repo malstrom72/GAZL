@@ -358,6 +358,13 @@ static const char* const K_YIELD =			// resetTimeOut(0)+OK cooperative yield nat
 	"main: FUNC\n PARA *2\n$n: LOCi\n"
 	" PEEK $n &gIn\n CALL ^yld %0 *2\n ADDi $n $n $n\n ADDi $n $n #7\n POKE &gOut $n\n RETU\n";	// gOut = 2*gIn + 7
 
+static const char* const K_DIVFZERO =		// DIVf by a runtime zero divisor -> DIVISION_BY_ZERO (matches interp; fuzzer-found)
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *1\n$n: LOCi\n$f: LOCf\n$g: LOCf\n$r: LOCi\n"
+	" PEEK $n &gIn\n iTOf $f $n #1.0\n"						// f = (float)n
+	" MOVf $g #1000.0\n DIVf $g $g $f\n"					// g = 1000.0 / f  (f == 0 when n == 0 -> trap; else divides)
+	" fTOi $r $g #1.0\n POKE &gOut $r\n RETU\n";
+
 static const char* const K_FTOISAT =		// fTOi saturation: a huge float clamps to the int range (must match the interpreter)
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
 	"main: FUNC\n PARA *1\n$n: LOCi\n$f: LOCf\n"
@@ -532,6 +539,7 @@ int main() {
 	runKernel("switch       [SWCH jump table]", K_SWITCH, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("yield native [resetTimeOut(0)+OK]", K_YIELD, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("ftoi sat     [fTOi clamp]", K_FTOISAT, signed_, sizeof(signed_) / sizeof(*signed_));
+	runKernel("divf zero     [DIVf /0 trap]", K_DIVFZERO, signed_, sizeof(signed_) / sizeof(*signed_));
 
 	std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED", failures, failures == 1 ? "" : "s");
 	return failures == 0 ? 0 : 1;
