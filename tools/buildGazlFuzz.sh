@@ -5,10 +5,15 @@
 set -e -o pipefail -u
 cd "$(dirname "$0")"
 mkdir -p ../output
-CPP_COMPILER=${CPP_COMPILER:-clang++}
 if [ "${1:-}" = "standalone" ]; then
+	# Self-contained --gen driver: no libFuzzer runtime needed, so the default clang++ (incl. Apple's) is fine.
+	CPP_COMPILER=${CPP_COMPILER:-clang++}
 	CPP_OPTIONS=${CPP_OPTIONS:-"-O1 -g -DLIBFUZZ -DLIBFUZZ_STANDALONE -DGAZL_JIT -DJITDIFF"}
 else
+	# Coverage-guided libFuzzer needs a clang that ships the fuzzer runtime; Apple clang does not, so prefer Homebrew LLVM.
+	if [ -z "${CPP_COMPILER:-}" ] && [ -x /opt/homebrew/opt/llvm/bin/clang++ ]; then CPP_COMPILER=/opt/homebrew/opt/llvm/bin/clang++; fi
+	if [ -z "${CPP_COMPILER:-}" ] && [ -x /usr/local/opt/llvm/bin/clang++ ]; then CPP_COMPILER=/usr/local/opt/llvm/bin/clang++; fi
+	CPP_COMPILER=${CPP_COMPILER:-clang++}
 	CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer,address -DLIBFUZZ -DGAZL_JIT -DJITDIFF"}
 fi
 case "$(uname -m)" in

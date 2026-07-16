@@ -231,16 +231,34 @@ static void requireMatch(const char* which, const uint8_t* data, size_t size, St
 }
 
 /*
-	Program generator (docs/JitFuzzPlan.md): decode a seed into an always-valid GAZL program. We generate TEXT and let
-	the assembler be the gatekeeper (validate + finalize); the computed locals + globals stay in the region the diff
-	compares, so a miscompiled value is caught without an explicit store. G1 = straight-line int/float value ops (VVV and
-	VVC). G2 adds memory ops interleaved so the pointer coherence gets stressed: const-address globals, a LOCA array via
-	an ADRL pointer (PEEK/POKE_VVV), and GETL/SETL - indices masked in-bounds so the ops execute (store/load + invalidate).
+	Program generator (docs/JitFuzzPlan.md): decode a choice stream into an always-valid GAZL program. We generate TEXT
+	and let the assembler be the gatekeeper (validate + finalize); the computed locals + globals stay in the region the
+	diff compares, so a miscompiled value is caught without an explicit store. G1 = straight-line int/float value ops (VVV
+	and VVC). G2 adds memory ops interleaved so the pointer coherence gets stressed: const-address globals, a LOCA array
+	via an ADRL pointer (PEEK/POKE_VVV), and GETL/SETL - indices masked in-bounds so the ops execute (store/load +
+	invalidate). G3 adds control flow (nested FORi + if-skips), G4 calls (helpers, native math, recursion).
+
+	The stream is either an LCG seeded by a number (`--gen`, reproducible) or the raw libFuzzer input bytes (coverage-
+	guided). Same 32-bit-word interface for both, so seed-mode output is unchanged and libFuzzer mutations map to choices.
 */
-static uint32_t lcg(uint32_t& s) { s = s * 1664525u + 1013904223u; return s; }
+struct Rng {
+	uint32_t state;					// LCG state (seed mode)
+	const uint8_t* data;			// byte source, or 0 in seed mode
+	size_t size;
+	size_t position;
+	uint32_t word() {
+		if (data != 0) {			// libFuzzer bytes: big-endian quad, zero-padded past the end
+			uint32_t v = 0;
+			for (int i = 0; i < 4; ++i) { v = (v << 8) | (position < size ? data[position++] : 0u); }
+			return v;
+		}
+		state = state * 1664525u + 1013904223u;
+		return state;
+	}
+};
 
 /* Bounded pick via multiply-shift on the full word: uses the high bits (full period), dodging LCG low-bit cycling. */
-static unsigned pick(uint32_t& s, unsigned n) { return static_cast<unsigned>((static_cast<uint64_t>(lcg(s)) * n) >> 32); }
+static unsigned pick(Rng& r, unsigned n) { return static_cast<unsigned>((static_cast<uint64_t>(r.word()) * n) >> 32); }
 
 enum { NI = 8, NF = 4 };	// int / float scalar slots the generated frame provides
 
@@ -251,14 +269,14 @@ static void putLine(std::string& p, std::string& pending, const char* line) {
 }
 
 /* One straight-line op: an int/float value op (VVV or VVC) or a G2 memory op (index masked in-bounds). */
-static void emitSimpleOp(std::string& p, uint32_t& r, std::string& pending) {
+static void emitSimpleOp(std::string& p, Rng& r, std::string& pending) {
 	static const char* const IOPS[] = { "ADDi", "SUBi", "MULi", "ANDi", "IORi", "XORi" };
 	static const char* const FOPS[] = { "ADDf", "SUBf", "MULf", "DIVf" };
 	char buf[64];
 	const unsigned choice = pick(r, 18);
 	if (choice < 5) {
 		const char* op = IOPS[pick(r, 6)];
-		if (pick(r, 2)) { std::snprintf(buf, sizeof buf, " %s $i%u $i%u #%d\n", op, pick(r, NI), pick(r, NI), static_cast<int>(lcg(r))); }
+		if (pick(r, 2)) { std::snprintf(buf, sizeof buf, " %s $i%u $i%u #%d\n", op, pick(r, NI), pick(r, NI), static_cast<int>(r.word())); }
 		else { std::snprintf(buf, sizeof buf, " %s $i%u $i%u $i%u\n", op, pick(r, NI), pick(r, NI), pick(r, NI)); }
 	} else if (choice == 5) {
 		std::snprintf(buf, sizeof buf, " ABSi $i%u $i%u\n", pick(r, NI), pick(r, NI));
@@ -295,7 +313,7 @@ static void emitSimpleOp(std::string& p, uint32_t& r, std::string& pending) {
 enum { NFUNC = 3 };			// non-recursive int helpers fn0..fn2
 static bool g_deepRecursion = false;	// when set, some rec calls take a raw (possibly huge) count -> ipStack overflow trap
 
-static void emitBody(std::string& p, uint32_t& r, std::string& pending, int stmts, int depth, int& label) {
+static void emitBody(std::string& p, Rng& r, std::string& pending, int stmts, int depth, int& label) {
 	static const char* const CMP[] = { "LSSi", "LEQi", "GEQi", "EQUi", "NEQi" };
 	const int MAX_DEPTH = 2;
 	char buf[64];
@@ -355,8 +373,7 @@ static const char* const CALLEES =
 	"rec: FUNC\n PARA *2\n$r: OUTi\n$n: INPi\n$t: LOCi\n MOVi $r #0\n LEQi $n #0 @.base\n"
 	" SUBi $t $n #1\n MOVi %1 $t\n CALL &rec %0 *2\n ADDi $r %0 $n\n.base: RETU\n";
 
-static std::string generateProgram(uint32_t seed) {
-	uint32_t r = seed ? seed : 1;
+static std::string buildProgram(Rng& r) {
 	std::string p = "buf: GLOB *8\n";
 	for (int i = 0; i < 8; ++i) { p += " DATi #0\n"; }
 	p += CALLEES;
@@ -365,7 +382,7 @@ static std::string generateProgram(uint32_t seed) {
 	for (int i = 0; i < NF; ++i) { p += " $f" + std::to_string(i) + ": LOCf\n"; }
 	p += " $arr: LOCA *8\n $p: LOCp\n $idx: LOCi\n $c0: LOCi\n $c1: LOCi\n";
 	char buf[48];
-	for (int i = 0; i < NI; ++i) { std::snprintf(buf, sizeof buf, " MOVi $i%d #%d\n", i, static_cast<int>(lcg(r))); p += buf; }
+	for (int i = 0; i < NI; ++i) { std::snprintf(buf, sizeof buf, " MOVi $i%d #%d\n", i, static_cast<int>(r.word())); p += buf; }
 	for (int i = 0; i < NF; ++i) { std::snprintf(buf, sizeof buf, " MOVf $f%d #%d.%u\n", i, static_cast<int>(pick(r, 2000)) - 1000, pick(r, 1000)); p += buf; }
 	p += " ADRL $p $arr *0\n";
 	std::string pending;
@@ -375,7 +392,20 @@ static std::string generateProgram(uint32_t seed) {
 	return p;
 }
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
+static std::string generateProgram(uint32_t seed) {					// reproducible seed stream (--gen / --gen1)
+	Rng r; r.state = seed ? seed : 1; r.data = 0; r.size = 0; r.position = 0;
+	return buildProgram(r);
+}
+
+static std::string generateProgramFromBytes(const uint8_t* data, size_t size) {	// libFuzzer input as the choice stream
+	Rng r; r.state = 0; r.data = data; r.size = size; r.position = 0;
+	return buildProgram(r);
+}
+
+/* Assemble one generated program and run the four-way diff; on divergence dump the program + abort. */
+static void runDiff(const std::string& programText) {
+	const uint8_t* Data = reinterpret_cast<const uint8_t*>(programText.data());
+	const size_t Size = programText.size();
 	try {
 		Symbols globals;
 		// Mirror GAZLCmd's real native names/order so corpus programs assemble; stub the side-effecting ones (deterministic,
@@ -394,7 +424,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
 			assem.finalize(program);
 		}
 		const Pointer mainFunction = globals.findFunction("main");
-		if (mainFunction == 0 || !GAZL::jitAvailable()) { return 0; }
+		if (mainFunction == 0 || !GAZL::jitAvailable()) { return; }
 
 		static Value snapshot[DATA_MEMORY_SIZE];
 		static Value interpImage[DATA_MEMORY_SIZE];
@@ -420,11 +450,15 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
 #ifdef FUZZ_TRACE_SKIP
 		extern long g_fuzzSkips; if (g_fuzzSkips < 3) { fprintf(stderr, "SKIP: %s\n", e.what()); } ++g_fuzzSkips;
 #endif
-		return 0;
+		return;
 	}
 #ifdef FUZZ_TRACE_SKIP
 	{ extern long g_fuzzRan; ++g_fuzzRan; }
 #endif
+}
+
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
+	runDiff(generateProgramFromBytes(Data, Size));	// libFuzzer bytes -> structured program -> diff (coverage-guided)
 	return 0;
 }
 
@@ -519,9 +553,8 @@ int main(int argc, const char* argv[]) {
 		const uint32_t seed0 = argc >= 4 ? static_cast<uint32_t>(strtoul(argv[3], 0, 10)) : 1;
 		if (argc >= 5 && strcmp(argv[4], "deep") == 0) { g_deepRecursion = true; }	// some rec calls overflow the ipStack
 		for (uint32_t i = 0; i < count; ++i) {
-			const std::string prog = generateProgram(seed0 + i);
 			if ((i % 5000) == 0) { fprintf(stderr, "gen %u/%u (seed %u)\n", i, count, seed0 + i); }
-			LLVMFuzzerTestOneInput(reinterpret_cast<const uint8_t*>(prog.data()), prog.size());	// aborts on any JIT/interp divergence
+			runDiff(generateProgram(seed0 + i));	// seed -> program -> diff; aborts on any JIT/interp divergence
 		}
 		fprintf(stderr, "gen %u programs, no divergence\n", count);
 #ifdef FUZZ_TRACE_SKIP
