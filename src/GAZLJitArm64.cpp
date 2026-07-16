@@ -451,7 +451,7 @@ static void storeMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
 	native call - always sees an empty cache; that is why these registers never need to survive suspend/resume. General
 	entries are X-registers, float entries are V-registers (a separate file), so the two never collide.
 */
-static const int ARM64_GENERAL_POOL[] = { W5, W6, W7, W8 };
+static const int ARM64_GENERAL_POOL[] = { W5, W6, W7, W8, W16, W17 };
 static const int ARM64_FLOAT_POOL[] = { 16, 17, 18, 19, 20, 21, 22, 23 };	// V16-V23 (caller-saved; unused until floats are cached)
 
 namespace {
@@ -492,6 +492,10 @@ static bool cacheLowered(Int op) {
 		case OP_MULF_VVV: case OP_MULF_VVC:
 		case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
 		case OP_FTOI_VVC: case OP_ITOF_VVC:
+		case OP_PEEK_VC: case OP_POKE_CV: case OP_POKE_CC: case OP_ADRL:
+		case OP_PEEK_VCV: case OP_PEEK_VVV:
+		case OP_POKE_CVV: case OP_POKE_CVC: case OP_POKE_VVV: case OP_POKE_VVC:
+		case OP_GETL_VVV: case OP_SETL_VVV: case OP_SETL_VVC:
 			return true;
 		default:
 			return false;
@@ -700,47 +704,113 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			}
 			case OP_MOVE_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); matConst(e, static_cast<Reg>(d), in.p1.i); cache.endInstruction(); break; }
 			case OP_MOVE_VV: { const int s = cache.read(in.p1.i, GENERAL_REGISTER); const int d = cache.define(in.p0.i, GENERAL_REGISTER); e.mov(static_cast<Reg>(d), static_cast<Reg>(s)); cache.endInstruction(); break; }
-			case OP_PEEK_VC: loadMemConst(e, W9, static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); storeSlot(e, W9, in.p0.i); break;
-			case OP_POKE_CV: loadSlot(e, W9, in.p1.i); storeMemConst(e, W9, static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); break;
-			case OP_POKE_CC: matConst(e, W9, in.p1.i); storeMemConst(e, W9, static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); break;
-			case OP_PEEK_VCV: {
+			// constant-address global access: assembler-validated, cannot touch the frame, so no cache coherence is needed.
+			case OP_PEEK_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); loadMemConst(e, static_cast<Reg>(d), static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
+			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
+			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(r), in.p1.i); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
+			case OP_PEEK_VCV: {										// dst = memory[C1 + index]; pointer read
 				Label trap = e.newLabel(), cont = e.newLabel();
-				matConst(e, W9, static_cast<Int>(in.p1.p - MEMORY_OFFSET)); loadSlot(e, W10, in.p2.i); e.add(W9, W9, W10);
-				e.ldrW(W10, X0, o.memsize); e.cmp(W9, W10); e.bcond(HS, trap);
-				e.ldrWx(W11, X2, W9); storeSlot(e, W11, in.p0.i);
+				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
+				cache.spillDirtyResident();						// the load may alias a cached slot: make the home current
+				const int addr = cache.scratch(GENERAL_REGISTER);
+				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p1.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
+				const int lim = cache.scratch(GENERAL_REGISTER);
+				e.ldrW(static_cast<Reg>(lim), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim)); e.bcond(HS, trap);
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				e.ldrWx(static_cast<Reg>(d), X2, static_cast<Reg>(addr));
+				cache.endInstruction();
 				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);	// ~1 = -2 = BAD_PEEK
 				e.bind(cont);
 				break;
 			}
-			case OP_POKE_CVV: case OP_POKE_CVC: {					// base const, index var; value var (CVV) or const (CVC)
+			case OP_PEEK_VVV: {										// dst = memory[base + index]; pointer read
 				Label trap = e.newLabel(), cont = e.newLabel();
-				matConst(e, W9, static_cast<Int>(in.p0.p - MEMORY_OFFSET)); loadSlot(e, W10, in.p1.i); e.add(W9, W9, W10);
-				e.ldrW(W10, X0, o.rwmemsize); e.cmp(W9, W10); e.bcond(HS, trap);
-				if (op == OP_POKE_CVC) { matConst(e, W11, in.p2.i); } else { loadSlot(e, W11, in.p2.i); }
-				e.strWx(W11, X2, W9);
-				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);	// ~2 = -3 = BAD_POKE
-				e.bind(cont);
-				break;
-			}
-			case OP_GETL_VVV: {
-				Label trap = e.newLabel(), cont = e.newLabel();
-				e.ldrX(X9, X0, o.dsend); e.sub(W9, W9, W1); e.lsrImm(W9, W9, 2);	// (dataStackEnd - dsp) in Value units
-				matConst(e, W10, in.p1.i); e.sub(W9, W9, W10);					// limit = that - C1
-				loadSlot(e, W10, in.p2.i); e.cmp(W10, W9); e.bcond(HS, trap);	// index >= limit → BAD_PEEK
-				matConst(e, W11, in.p1.i); e.add(W11, W11, W10);				// C1 + index (signed offset off dsp)
-				e.ldrWxs(W11, X1, W11); storeSlot(e, W11, in.p0.i);
+				const int base = cache.read(in.p1.i, GENERAL_REGISTER);
+				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
+				cache.spillDirtyResident();
+				const int addr = cache.scratch(GENERAL_REGISTER);
+				const int tmp = cache.scratch(GENERAL_REGISTER);	// MEMORY_OFFSET, then reused for the size limit
+				e.add(static_cast<Reg>(addr), static_cast<Reg>(base), static_cast<Reg>(idx));
+				matConst(e, static_cast<Reg>(tmp), static_cast<Int>(MEMORY_OFFSET)); e.sub(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(tmp));
+				e.ldrW(static_cast<Reg>(tmp), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(tmp)); e.bcond(HS, trap);
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				e.ldrWx(static_cast<Reg>(d), X2, static_cast<Reg>(addr));
+				cache.endInstruction();
 				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);
 				e.bind(cont);
 				break;
 			}
-			case OP_SETL_VVV: case OP_SETL_VVC: {
+			case OP_POKE_CVV: case OP_POKE_CVC: {					// memory[C0 + index] = value; pointer write
 				Label trap = e.newLabel(), cont = e.newLabel();
-				e.ldrX(X9, X0, o.dsend); e.sub(W9, W9, W1); e.lsrImm(W9, W9, 2);
-				matConst(e, W10, in.p0.i); e.sub(W9, W9, W10);					// limit = (end-dsp) - C0
-				loadSlot(e, W10, in.p1.i); e.cmp(W10, W9); e.bcond(HS, trap);	// index >= limit → BAD_POKE
-				matConst(e, W11, in.p0.i); e.add(W11, W11, W10);				// C0 + index
-				if (op == OP_SETL_VVC) { matConst(e, W12, in.p2.i); } else { loadSlot(e, W12, in.p2.i); }
-				e.strWxs(W12, X1, W11);
+				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
+				int val;
+				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(val), in.p2.i); }
+				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
+				cache.spillDirtyResident();						// pending cached writes land before the store
+				const int addr = cache.scratch(GENERAL_REGISTER);
+				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p0.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
+				const int lim = cache.scratch(GENERAL_REGISTER);
+				e.ldrW(static_cast<Reg>(lim), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim)); e.bcond(HS, trap);
+				e.strWx(static_cast<Reg>(val), X2, static_cast<Reg>(addr));
+				cache.endInstruction();
+				cache.invalidateAll();							// the store may alias cached slots: drop them
+				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);	// ~2 = -3 = BAD_POKE
+				e.bind(cont);
+				break;
+			}
+			case OP_POKE_VVV: case OP_POKE_VVC: {					// memory[base + index] = value; pointer write
+				Label trap = e.newLabel(), cont = e.newLabel();
+				const int base = cache.read(in.p0.i, GENERAL_REGISTER);
+				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
+				int val;
+				if (op == OP_POKE_VVC) { val = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(val), in.p2.i); }
+				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
+				cache.spillDirtyResident();
+				const int addr = cache.scratch(GENERAL_REGISTER);
+				const int tmp = cache.scratch(GENERAL_REGISTER);
+				e.add(static_cast<Reg>(addr), static_cast<Reg>(base), static_cast<Reg>(idx));
+				matConst(e, static_cast<Reg>(tmp), static_cast<Int>(MEMORY_OFFSET)); e.sub(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(tmp));
+				e.ldrW(static_cast<Reg>(tmp), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(tmp)); e.bcond(HS, trap);
+				e.strWx(static_cast<Reg>(val), X2, static_cast<Reg>(addr));
+				cache.endInstruction();
+				cache.invalidateAll();
+				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);
+				e.bind(cont);
+				break;
+			}
+			case OP_GETL_VVV: {										// dst = frame[C1 + index]; frame read (bounds vs free frame span)
+				Label trap = e.newLabel(), cont = e.newLabel();
+				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
+				cache.spillDirtyResident();						// indexes the frame: may alias a cached slot
+				const int lim = cache.scratch(GENERAL_REGISTER);
+				e.ldrX(static_cast<Reg>(lim), X0, o.dsend); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), W1); e.lsrImm(static_cast<Reg>(lim), static_cast<Reg>(lim), 2);
+				const int c = cache.scratch(GENERAL_REGISTER);
+				matConst(e, static_cast<Reg>(c), in.p1.i); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), static_cast<Reg>(c));	// limit = (end-dsp)/4 - C1
+				e.cmp(static_cast<Reg>(idx), static_cast<Reg>(lim)); e.bcond(HS, trap);
+				e.add(static_cast<Reg>(c), static_cast<Reg>(c), static_cast<Reg>(idx));	// C1 + index (reuse c as the signed frame offset)
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				e.ldrWxs(static_cast<Reg>(d), X1, static_cast<Reg>(c));
+				cache.endInstruction();
+				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);
+				e.bind(cont);
+				break;
+			}
+			case OP_SETL_VVV: case OP_SETL_VVC: {					// frame[C0 + index] = value; frame write
+				Label trap = e.newLabel(), cont = e.newLabel();
+				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
+				int val;
+				if (op == OP_SETL_VVC) { val = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(val), in.p2.i); }
+				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
+				cache.spillDirtyResident();
+				const int lim = cache.scratch(GENERAL_REGISTER);
+				e.ldrX(static_cast<Reg>(lim), X0, o.dsend); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), W1); e.lsrImm(static_cast<Reg>(lim), static_cast<Reg>(lim), 2);
+				const int c = cache.scratch(GENERAL_REGISTER);
+				matConst(e, static_cast<Reg>(c), in.p0.i); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), static_cast<Reg>(c));	// limit = (end-dsp)/4 - C0
+				e.cmp(static_cast<Reg>(idx), static_cast<Reg>(lim)); e.bcond(HS, trap);
+				e.add(static_cast<Reg>(c), static_cast<Reg>(c), static_cast<Reg>(idx));	// C0 + index
+				e.strWxs(static_cast<Reg>(val), X1, static_cast<Reg>(c));
+				cache.endInstruction();
+				cache.invalidateAll();
 				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);
 				e.bind(cont);
 				break;
@@ -769,32 +839,14 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.bind(cont);
 				break;
 			}
-			case OP_ADRL: {
-				e.sub(W9, W1, W2);									// (dsp - memoryBase) in bytes (low 32 valid within buffer)
-				e.lsrImm(W9, W9, 2);								//   -> Value units
-				matConst(e, W10, static_cast<Int>(MEMORY_OFFSET) + in.p1.i); e.add(W9, W9, W10);
-				storeSlot(e, W9, in.p0.i);
-				break;
-			}
-			case OP_PEEK_VVV: {
-				Label trap = e.newLabel(), cont = e.newLabel();
-				loadSlot(e, W9, in.p1.i); loadSlot(e, W10, in.p2.i); e.add(W9, W9, W10);	// base + index
-				matConst(e, W10, static_cast<Int>(MEMORY_OFFSET)); e.sub(W9, W9, W10);	// - MEMORY_OFFSET
-				e.ldrW(W10, X0, o.memsize); e.cmp(W9, W10); e.bcond(HS, trap);
-				e.ldrWx(W11, X2, W9); storeSlot(e, W11, in.p0.i);
-				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);	// BAD_PEEK
-				e.bind(cont);
-				break;
-			}
-			case OP_POKE_VVV: case OP_POKE_VVC: {					// base var, index var; value var (VVV) or const (VVC)
-				Label trap = e.newLabel(), cont = e.newLabel();
-				loadSlot(e, W9, in.p0.i); loadSlot(e, W10, in.p1.i); e.add(W9, W9, W10);	// base + index
-				matConst(e, W10, static_cast<Int>(MEMORY_OFFSET)); e.sub(W9, W9, W10);
-				e.ldrW(W10, X0, o.rwmemsize); e.cmp(W9, W10); e.bcond(HS, trap);
-				if (op == OP_POKE_VVC) { matConst(e, W11, in.p2.i); } else { loadSlot(e, W11, in.p2.i); }
-				e.strWx(W11, X2, W9);
-				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);	// BAD_POKE
-				e.bind(cont);
+			case OP_ADRL: {											// address of a frame local as a MEMORY_OFFSET-biased pointer
+				const int t = cache.scratch(GENERAL_REGISTER);
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				e.sub(static_cast<Reg>(t), W1, W2);					// (dsp - memoryBase) in bytes (low 32 valid within buffer)
+				e.lsrImm(static_cast<Reg>(t), static_cast<Reg>(t), 2);	//   -> Value units
+				matConst(e, static_cast<Reg>(d), static_cast<Int>(MEMORY_OFFSET) + in.p1.i);
+				e.add(static_cast<Reg>(d), static_cast<Reg>(d), static_cast<Reg>(t));
+				cache.endInstruction();
 				break;
 			}
 			case OP_ADDI_VVV: emitBinary(e, cache, &Arm64Emitter::add, in, false, false); break;
