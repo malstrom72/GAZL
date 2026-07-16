@@ -112,6 +112,7 @@ class X64Emitter {
 		// --- SSE scalar single-precision floats (XMM operands reuse the Reg 0..15 encodings, a separate file from GP) ---
 		void movssLoad(Reg xd, Reg base, int32_t disp);			// `movss xd, [base + disp]` (F3 0F 10)
 		void movssStore(Reg base, int32_t disp, Reg xs);		// `movss [base + disp], xs` (F3 0F 11)
+		void movssReg(Reg xd, Reg xs);							// `movss xd, xs` (xmm register-to-register copy)
 		void addss(Reg xd, Reg xs);								// `addss xd, xs`
 		void subss(Reg xd, Reg xs);								// `subss xd, xs`
 		void mulss(Reg xd, Reg xs);								// `mulss xd, xs`

@@ -155,6 +155,7 @@ void X64Emitter::sseRR(uint8_t prefix, uint8_t opcode, int reg, int rm) {
 }
 void X64Emitter::movssLoad(Reg xd, Reg base, int32_t disp) { b(0xF3); rex(false, xd, base); b(0x0F); b(0x10); memOperand(xd, base, disp); }
 void X64Emitter::movssStore(Reg base, int32_t disp, Reg xs) { b(0xF3); rex(false, xs, base); b(0x0F); b(0x11); memOperand(xs, base, disp); }
+void X64Emitter::movssReg(Reg xd, Reg xs) { sseRR(0xF3, 0x10, xd, xs); }	// movss xd, xs (xmm register copy; F3 0F 10 /r)
 void X64Emitter::addss(Reg xd, Reg xs) { sseRR(0xF3, 0x58, xd, xs); }
 void X64Emitter::subss(Reg xd, Reg xs) { sseRR(0xF3, 0x5C, xd, xs); }
 void X64Emitter::mulss(Reg xd, Reg xs) { sseRR(0xF3, 0x59, xd, xs); }
@@ -317,6 +318,15 @@ static bool cacheLowered(Int op) {
 		case OP_ANDI_VVV: case OP_ANDI_VVC:
 		case OP_IORI_VVV: case OP_IORI_VVC:
 		case OP_XORI_VVV: case OP_XORI_VVC:
+		case OP_ABSI: case OP_ABSF: case OP_FLOF:
+		case OP_ADDF_VVV: case OP_ADDF_VVC:
+		case OP_SUBF_VVV: case OP_SUBF_VVC: case OP_SUBF_VCV:
+		case OP_MULF_VVV: case OP_MULF_VVC:
+		case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
+		case OP_FTOI_VVC: case OP_ITOF_VVC:
+		case OP_SHLI_VVV: case OP_SHLI_VVC: case OP_SHLI_VCV:
+		case OP_SHRI_VVV: case OP_SHRI_VVC: case OP_SHRI_VCV:
+		case OP_SHRU_VVV: case OP_SHRU_VVC: case OP_SHRU_VCV:
 			return true;
 		default:
 			return false;
@@ -372,17 +382,25 @@ static void emitDivMod(X64Emitter& emitter, const Instruction& instruction, bool
 	emitter.store(DSP, instruction.p0.i * 4, RAX);
 }
 
-// Shift: value p1 -> eax, count p2 (const -> imm8, else slot -> cl). kind: 0 = shl, 1 = shr (logical), 2 = sar (arithmetic).
-static void emitShift(X64Emitter& emitter, const Instruction& instruction, int kind, bool source1Const, bool source2Const) {
-	if (source1Const) { emitter.movImm(RAX, static_cast<uint32_t>(instruction.p1.i)); } else { emitter.load(RAX, DSP, instruction.p1.i * 4); }
-	if (source2Const) {
-		const uint8_t count = static_cast<uint8_t>(instruction.p2.i & 31);
-		if (kind == 0) { emitter.shlImm(RAX, count); } else if (kind == 1) { emitter.shrImm(RAX, count); } else { emitter.sarImm(RAX, count); }
-	} else {
-		emitter.load(RCX, DSP, instruction.p2.i * 4);
-		if (kind == 0) { emitter.shlCl(RAX); } else if (kind == 1) { emitter.shrCl(RAX); } else { emitter.sarCl(RAX); }
+// Shift through the cache: value p1 -> dst (a pool reg), count p2 (const -> imm8, else a slot -> CL). kind: 0=shl, 1=shr, 2=sar.
+static void emitShift(X64Emitter& emitter, RegisterCache& cache, const Instruction& instruction, int kind, bool source1Const, bool source2Const) {
+	int v;
+	if (source1Const) { v = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(v), static_cast<uint32_t>(instruction.p1.i)); }
+	else { v = cache.read(instruction.p1.i, GENERAL_REGISTER); }
+	int count = -1;
+	if (!source2Const) {
+		count = cache.read(instruction.p2.i, GENERAL_REGISTER);
+		emitter.mov(RCX, static_cast<Reg>(count));		// capture the count into CL BEFORE seeding dst (dst may alias the count slot)
 	}
-	emitter.store(DSP, instruction.p0.i * 4, RAX);
+	const int d = cache.define(instruction.p0.i, GENERAL_REGISTER);
+	if (d != v) { emitter.mov(static_cast<Reg>(d), static_cast<Reg>(v)); }
+	if (source2Const) {
+		const uint8_t n = static_cast<uint8_t>(instruction.p2.i & 31);
+		if (kind == 0) { emitter.shlImm(static_cast<Reg>(d), n); } else if (kind == 1) { emitter.shrImm(static_cast<Reg>(d), n); } else { emitter.sarImm(static_cast<Reg>(d), n); }
+	} else {
+		if (kind == 0) { emitter.shlCl(static_cast<Reg>(d)); } else if (kind == 1) { emitter.shrCl(static_cast<Reg>(d)); } else { emitter.sarCl(static_cast<Reg>(d)); }
+	}
+	cache.endInstruction();
 }
 
 // if (a <condition> b) goto target - a = p0, b = p1, in the const modes named by the opcode; target = this index + p2.
@@ -400,12 +418,30 @@ static void loadOperandFloat(X64Emitter& emitter, Reg xmm, const Value& operand,
 	else { emitter.movssLoad(xmm, DSP, operand.i * 4); }
 }
 
-// destination = source1 <fop> source2 (fop = addss/subss/mulss/divss), operands per the opcode's const modes.
-static void emitBinaryFloat(X64Emitter& emitter, BinaryOp fop, const Instruction& instruction, bool source1Const, bool source2Const) {
-	loadOperandFloat(emitter, FLOAT_0, instruction.p1, source1Const);
-	loadOperandFloat(emitter, FLOAT_1, instruction.p2, source2Const);
-	(emitter.*fop)(FLOAT_0, FLOAT_1);
-	emitter.movssStore(DSP, instruction.p0.i * 4, FLOAT_0);
+// Load a float operand into a cache register: a float slot (read), or a constant materialized via a GP scratch + movd.
+static int loadFloatOperandCached(X64Emitter& emitter, RegisterCache& cache, const Value& operand, bool isConst) {
+	if (!isConst) { return cache.read(operand.i, FLOAT_REGISTER); }
+	const int bits = cache.scratch(GENERAL_REGISTER);
+	const int x = cache.scratch(FLOAT_REGISTER);
+	emitter.movImm(static_cast<Reg>(bits), static_cast<uint32_t>(operand.i));
+	emitter.movdToXmm(static_cast<Reg>(x), static_cast<Reg>(bits));
+	return x;
+}
+// destination = source1 <fop> source2 through the cache (two-operand: seed dst with s1, then fop dst, s2).
+static void emitBinaryFloat(X64Emitter& emitter, RegisterCache& cache, BinaryOp fop, const Instruction& instruction, bool source1Const, bool source2Const) {
+	const int a = loadFloatOperandCached(emitter, cache, instruction.p1, source1Const);
+	const int b = loadFloatOperandCached(emitter, cache, instruction.p2, source2Const);
+	const int d = cache.define(instruction.p0.i, FLOAT_REGISTER);
+	if (d != b) {
+		if (d != a) { emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(a)); }
+		(emitter.*fop)(static_cast<Reg>(d), static_cast<Reg>(b));
+	} else {
+		const int t = cache.scratch(FLOAT_REGISTER);
+		emitter.movssReg(static_cast<Reg>(t), static_cast<Reg>(a));
+		(emitter.*fop)(static_cast<Reg>(t), static_cast<Reg>(b));
+		emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(t));
+	}
+	cache.endInstruction();
 }
 
 // Float compare-branch, NaN-correct versus C++: kind 0 = <, 1 = >=, 2 = ==, 3 = !=. a = p0, b = p1, target = index + p2.
@@ -677,20 +713,25 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_MODI_VVV: emitDivMod(emitter, in, true, false, false, epilogue); break;
 			case OP_MODI_VVC: emitDivMod(emitter, in, true, false, true, epilogue); break;
 			case OP_MODI_VCV: emitDivMod(emitter, in, true, true, false, epilogue); break;
-			case OP_SHLI_VVV: emitShift(emitter, in, 0, false, false); break;
-			case OP_SHLI_VVC: emitShift(emitter, in, 0, false, true); break;
-			case OP_SHLI_VCV: emitShift(emitter, in, 0, true, false); break;
-			case OP_SHRI_VVV: emitShift(emitter, in, 2, false, false); break;
-			case OP_SHRI_VVC: emitShift(emitter, in, 2, false, true); break;
-			case OP_SHRI_VCV: emitShift(emitter, in, 2, true, false); break;
-			case OP_SHRU_VVV: emitShift(emitter, in, 1, false, false); break;
-			case OP_SHRU_VVC: emitShift(emitter, in, 1, false, true); break;
-			case OP_SHRU_VCV: emitShift(emitter, in, 1, true, false); break;
-			case OP_ABSI:
-				emitter.load(RAX, DSP, in.p1.i * 4);				// |x| = (x ^ (x >> 31)) - (x >> 31)
-				emitter.mov(RDX, RAX); emitter.sarImm(RDX, 31); emitter.xor_(RAX, RDX); emitter.sub(RAX, RDX);
-				emitter.store(DSP, in.p0.i * 4, RAX);
+			case OP_SHLI_VVV: emitShift(emitter, cache, in, 0, false, false); break;
+			case OP_SHLI_VVC: emitShift(emitter, cache, in, 0, false, true); break;
+			case OP_SHLI_VCV: emitShift(emitter, cache, in, 0, true, false); break;
+			case OP_SHRI_VVV: emitShift(emitter, cache, in, 2, false, false); break;
+			case OP_SHRI_VVC: emitShift(emitter, cache, in, 2, false, true); break;
+			case OP_SHRI_VCV: emitShift(emitter, cache, in, 2, true, false); break;
+			case OP_SHRU_VVV: emitShift(emitter, cache, in, 1, false, false); break;
+			case OP_SHRU_VVC: emitShift(emitter, cache, in, 1, false, true); break;
+			case OP_SHRU_VCV: emitShift(emitter, cache, in, 1, true, false); break;
+			case OP_ABSI: {											// |x| = (x ^ (x >> 31)) - (x >> 31)
+				const int s = cache.read(in.p1.i, GENERAL_REGISTER);
+				const int mask = cache.scratch(GENERAL_REGISTER);
+				emitter.mov(static_cast<Reg>(mask), static_cast<Reg>(s)); emitter.sarImm(static_cast<Reg>(mask), 31);
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				if (d != s) { emitter.mov(static_cast<Reg>(d), static_cast<Reg>(s)); }
+				emitter.xor_(static_cast<Reg>(d), static_cast<Reg>(mask)); emitter.sub(static_cast<Reg>(d), static_cast<Reg>(mask));
+				cache.endInstruction();
 				break;
+			}
 
 			case OP_FORi_VVB: case OP_FORi_VCB:
 				emitter.load(SCRATCH_A, DSP, in.p0.i * 4); emitter.addImm(SCRATCH_A, 1); emitter.store(DSP, in.p0.i * 4, SCRATCH_A);
@@ -699,22 +740,22 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				emitter.jcc(CC_L, labels[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 
-			case OP_ADDF_VVV: emitBinaryFloat(emitter, &X64Emitter::addss, in, false, false); break;
-			case OP_ADDF_VVC: emitBinaryFloat(emitter, &X64Emitter::addss, in, false, true); break;
-			case OP_SUBF_VVV: emitBinaryFloat(emitter, &X64Emitter::subss, in, false, false); break;
-			case OP_SUBF_VVC: emitBinaryFloat(emitter, &X64Emitter::subss, in, false, true); break;
-			case OP_SUBF_VCV: emitBinaryFloat(emitter, &X64Emitter::subss, in, true, false); break;
-			case OP_MULF_VVV: emitBinaryFloat(emitter, &X64Emitter::mulss, in, false, false); break;
-			case OP_MULF_VVC: emitBinaryFloat(emitter, &X64Emitter::mulss, in, false, true); break;
-			case OP_DIVF_VVV: emitBinaryFloat(emitter, &X64Emitter::divss, in, false, false); break;
-			case OP_DIVF_VVC: emitBinaryFloat(emitter, &X64Emitter::divss, in, false, true); break;
-			case OP_DIVF_VCV: emitBinaryFloat(emitter, &X64Emitter::divss, in, true, false); break;
+			case OP_ADDF_VVV: emitBinaryFloat(emitter, cache, &X64Emitter::addss, in, false, false); break;
+			case OP_ADDF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::addss, in, false, true); break;
+			case OP_SUBF_VVV: emitBinaryFloat(emitter, cache, &X64Emitter::subss, in, false, false); break;
+			case OP_SUBF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::subss, in, false, true); break;
+			case OP_SUBF_VCV: emitBinaryFloat(emitter, cache, &X64Emitter::subss, in, true, false); break;
+			case OP_MULF_VVV: emitBinaryFloat(emitter, cache, &X64Emitter::mulss, in, false, false); break;
+			case OP_MULF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::mulss, in, false, true); break;
+			case OP_DIVF_VVV: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, false, false); break;
+			case OP_DIVF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, false, true); break;
+			case OP_DIVF_VCV: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, true, false); break;
 			/*
 				FTOI / ITOF carry a scale constant (p2): FTOI = (int)(src * scale) with the interpreter's saturation;
 				ITOF = (float)src * scale.
 			*/
 			case OP_FTOI_VVC: {
-				emitter.movssLoad(FLOAT_0, DSP, in.p1.i * 4);
+				{ const int sx = cache.read(in.p1.i, FLOAT_REGISTER); emitter.movssReg(FLOAT_0, static_cast<Reg>(sx)); }	// operand via cache
 				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p2.i)); emitter.movdToXmm(FLOAT_1, SCRATCH_A); emitter.mulss(FLOAT_0, FLOAT_1);	// * scale
 				emitter.cvttss2si(SCRATCH_A, FLOAT_0);				// x86 yields 0x80000000 for overflow / inf / NaN
 				emitter.cmpImm(SCRATCH_A, 0x80000000u);
@@ -730,14 +771,30 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				emitter.jcc(CC_L, ftoiNegative);					// negative / -inf -> keep INT_MIN
 				emitter.movImm(SCRATCH_A, 0x7FFFFFFFu);				// positive / +inf -> INT_MAX
 				emitter.bind(ftoiNegative); emitter.bind(ftoiDone);
-				emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
+				{ const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.mov(static_cast<Reg>(d), SCRATCH_A); }	// result via cache
+				cache.endInstruction();
+				break;
 			}
-			case OP_ITOF_VVC:
-				emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.cvtsi2ss(FLOAT_0, SCRATCH_A);
+			case OP_ITOF_VVC: {
+				const int src = cache.read(in.p1.i, GENERAL_REGISTER);
+				emitter.cvtsi2ss(FLOAT_0, static_cast<Reg>(src));
 				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p2.i)); emitter.movdToXmm(FLOAT_1, SCRATCH_A); emitter.mulss(FLOAT_0, FLOAT_1);
-				emitter.movssStore(DSP, in.p0.i * 4, FLOAT_0); break;
-			case OP_ABSF: emitter.load(SCRATCH_A, DSP, in.p1.i * 4); emitter.movImm(SCRATCH_B, 0x7FFFFFFFu); emitter.and_(SCRATCH_A, SCRATCH_B); emitter.store(DSP, in.p0.i * 4, SCRATCH_A); break;
-			case OP_FLOF: emitter.movssLoad(FLOAT_0, DSP, in.p1.i * 4); emitter.roundss(FLOAT_1, FLOAT_0, 1); emitter.movssStore(DSP, in.p0.i * 4, FLOAT_1); break;
+				const int d = cache.define(in.p0.i, FLOAT_REGISTER);
+				emitter.movssReg(static_cast<Reg>(d), FLOAT_0);
+				cache.endInstruction();
+				break;
+			}
+			case OP_ABSF: {											// clear the float word's sign bit (bitwise, in a GP register)
+				const int s = cache.read(in.p1.i, GENERAL_REGISTER);
+				const int m = cache.scratch(GENERAL_REGISTER);
+				emitter.movImm(static_cast<Reg>(m), 0x7FFFFFFFu);
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				if (d != s) { emitter.mov(static_cast<Reg>(d), static_cast<Reg>(s)); }
+				emitter.and_(static_cast<Reg>(d), static_cast<Reg>(m));
+				cache.endInstruction();
+				break;
+			}
+			case OP_FLOF: { const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER); emitter.roundss(static_cast<Reg>(d), static_cast<Reg>(s), 1); cache.endInstruction(); break; }
 
 			case OP_LSSF_VVB: emitBranchFloat(emitter, 0, in, j, false, false, labels); break;
 			case OP_LSSF_VCB: emitBranchFloat(emitter, 0, in, j, false, true, labels); break;
