@@ -23,7 +23,7 @@
 
 #include "GAZLJit.h"
 #include "GAZLJitArm64.h"
-#include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
+#include "GAZLJitMem.h"																									// makeExecutable() - platform-specific backend, architecture-neutral
 
 #include <stdint.h>
 #include "assert.h"
@@ -58,7 +58,7 @@ void Arm64Emitter::movn(Reg wd, uint16_t imm16, unsigned shift) {
 }
 
 void Arm64Emitter::mov(Reg wd, Reg wm) {
-	orr(wd, WZR, wm);												// canonical register move: `orr wd, wzr, wm`
+	orr(wd, WZR, wm);																									// canonical register move: `orr wd, wzr, wm`
 }
 
 void Arm64Emitter::movImm32(Reg wd, uint32_t imm) {
@@ -98,11 +98,11 @@ void Arm64Emitter::subsImm(Reg wd, Reg wn, uint32_t imm12) {
 }
 
 void Arm64Emitter::cmp(Reg wn, Reg wm) {
-	subs(WZR, wn, wm);												// `cmp` is `subs wzr, wn, wm`
+	subs(WZR, wn, wm);																									// `cmp` is `subs wzr, wn, wm`
 }
 
 void Arm64Emitter::cmpImm(Reg wn, uint32_t imm12) {
-	subsImm(WZR, wn, imm12);										// `cmp` is `subs wzr, wn, #imm12`
+	subsImm(WZR, wn, imm12);																							// `cmp` is `subs wzr, wn, #imm12`
 }
 
 void Arm64Emitter::mul(Reg wd, Reg wn, Reg wm) {
@@ -167,7 +167,7 @@ void Arm64Emitter::asrImm(Reg wd, Reg wn, unsigned shift) {
 // --- word loads / stores (32-bit) ---
 
 void Arm64Emitter::ldrW(Reg wt, Reg xn, uint32_t byteOffset) {
-	assert((byteOffset & 3u) == 0 && (byteOffset >> 2) < 0x1000);	// unsigned offset, scaled by 4
+	assert((byteOffset & 3u) == 0 && (byteOffset >> 2) < 0x1000);														// unsigned offset, scaled by 4
 	emit(0xB9400000u | ((byteOffset >> 2) << 10) | (static_cast<uint32_t>(xn) << 5) | wt);
 }
 
@@ -195,7 +195,7 @@ void Arm64Emitter::strWxs(Reg wt, Reg xn, Reg wm) {
 }
 
 void Arm64Emitter::ldurW(Reg wt, Reg xn, int simm9) {
-	assert(simm9 >= -256 && simm9 <= 255);							// unscaled signed 9-bit byte offset
+	assert(simm9 >= -256 && simm9 <= 255);																				// unscaled signed 9-bit byte offset
 	emit(0xB8400000u | ((static_cast<uint32_t>(simm9) & 0x1FFu) << 12) | (static_cast<uint32_t>(xn) << 5) | wt);
 }
 
@@ -207,7 +207,7 @@ void Arm64Emitter::sturW(Reg wt, Reg xn, int simm9) {
 // --- doubleword loads / stores (64-bit) ---
 
 void Arm64Emitter::ldrX(Reg xt, Reg xn, uint32_t byteOffset) {
-	assert((byteOffset & 7u) == 0 && (byteOffset >> 3) < 0x1000);	// unsigned offset, scaled by 8
+	assert((byteOffset & 7u) == 0 && (byteOffset >> 3) < 0x1000);														// unsigned offset, scaled by 8
 	emit(0xF9400000u | ((byteOffset >> 3) << 10) | (static_cast<uint32_t>(xn) << 5) | xt);
 }
 
@@ -222,7 +222,7 @@ void Arm64Emitter::ldrXr(Reg xt, Reg xn, Reg wm) {
 }
 
 void Arm64Emitter::adr(Reg xd, Label target) {
-	branch(0x10000000u | xd, target.id, FIXUP_ADR);					// PC-relative; displacement patched by finalize()
+	branch(0x10000000u | xd, target.id, FIXUP_ADR);																		// PC-relative; displacement patched by finalize()
 }
 
 // --- 64-bit address arithmetic / test ---
@@ -242,7 +242,7 @@ void Arm64Emitter::cbnzX(Reg xt, Label target) {
 }
 
 void Arm64Emitter::cmpX(Reg xn, Reg xm) {
-	emit(0xEB00001Fu | (static_cast<uint32_t>(xm) << 16) | (static_cast<uint32_t>(xn) << 5));	// subs xzr, xn, xm
+	emit(0xEB00001Fu | (static_cast<uint32_t>(xm) << 16) | (static_cast<uint32_t>(xn) << 5));							// subs xzr, xn, xm
 }
 
 void Arm64Emitter::addX(Reg xd, Reg xn, Reg xm) {
@@ -272,23 +272,23 @@ void Arm64Emitter::fcmpS(Reg sn, Reg sm) {
 }
 
 void Arm64Emitter::fabsS(Reg sd, Reg sn) {
-	emit(0x1E20C000u | (static_cast<uint32_t>(sn) << 5) | sd);		// FP data-proc (1 source), single, opcode ABS
+	emit(0x1E20C000u | (static_cast<uint32_t>(sn) << 5) | sd);															// FP data-proc (1 source), single, opcode ABS
 }
 
 void Arm64Emitter::frintmS(Reg sd, Reg sn) {
-	emit(0x1E254000u | (static_cast<uint32_t>(sn) << 5) | sd);		// round toward -inf (floorf)
+	emit(0x1E254000u | (static_cast<uint32_t>(sn) << 5) | sd);															// round toward -inf (floorf)
 }
 
 void Arm64Emitter::fcvtzs(Reg wd, Reg sn) {
-	emit(0x1E380000u | (static_cast<uint32_t>(sn) << 5) | wd);		// FTOI, round toward zero (saturating)
+	emit(0x1E380000u | (static_cast<uint32_t>(sn) << 5) | wd);															// FTOI, round toward zero (saturating)
 }
 
 void Arm64Emitter::scvtf(Reg sd, Reg wn) {
-	emit(0x1E220000u | (static_cast<uint32_t>(wn) << 5) | sd);		// ITOF
+	emit(0x1E220000u | (static_cast<uint32_t>(wn) << 5) | sd);															// ITOF
 }
 
 void Arm64Emitter::fmovSW(Reg sd, Reg wn) {
-	emit(0x1E270000u | (static_cast<uint32_t>(wn) << 5) | sd);		// bit-copy Wn -> Sd (no conversion)
+	emit(0x1E270000u | (static_cast<uint32_t>(wn) << 5) | sd);															// bit-copy Wn -> Sd (no conversion)
 }
 
 void Arm64Emitter::ldrS(Reg st, Reg xn, uint32_t byteOffset) {
@@ -327,7 +327,7 @@ void Arm64Emitter::branch(uint32_t base, int labelId, FixupKind kind) {
 	f.labelId = labelId;
 	f.kind = kind;
 	fixups.push_back(f);
-	emit(base);														// displacement is patched in by finalize()
+	emit(base);																											// displacement is patched in by finalize()
 }
 
 void Arm64Emitter::b(Label target) {
@@ -378,12 +378,12 @@ void Arm64Emitter::finalize() {
 		const Fixup& f = fixups[i];
 		const ptrdiff_t target = labelTargets[f.labelId];
 		assert(target >= 0 && "branch to unbound label");
-		const ptrdiff_t disp = target - static_cast<ptrdiff_t>(f.site);	// PC-relative, in instruction words
+		const ptrdiff_t disp = target - static_cast<ptrdiff_t>(f.site);													// PC-relative, in instruction words
 		if (f.kind == FIXUP_IMM26) {
 			words[f.site] |= (static_cast<uint32_t>(disp) & 0x03FFFFFFu);
 		} else if (f.kind == FIXUP_IMM19) {
 			words[f.site] |= ((static_cast<uint32_t>(disp) & 0x0007FFFFu) << 5);
-		} else {														// FIXUP_ADR: 21-bit byte displacement, split lo/hi
+		} else {																										// FIXUP_ADR: 21-bit byte displacement, split lo/hi
 			const uint32_t immBytes = static_cast<uint32_t>(disp * 4) & 0x001FFFFFu;
 			words[f.site] |= ((immBytes & 0x3u) << 29) | (((immBytes >> 2) & 0x0007FFFFu) << 5);
 		}
@@ -449,7 +449,7 @@ static void storeMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
 	W9-W15 fixed scratch of uncached opcodes. General entries are X-registers, float entries V-registers.
 */
 static const int ARM64_GENERAL_POOL[] = { W5, W6, W7, W8, W16, W17 };
-static const int ARM64_FLOAT_POOL[] = { 16, 17, 18, 19, 20, 21, 22, 23 };	// V16-V23 (caller-saved; unused until floats are cached)
+static const int ARM64_FLOAT_POOL[] = { 16, 17, 18, 19, 20, 21, 22, 23 };												// V16-V23 (caller-saved; unused until floats are cached)
 
 namespace {
 class Arm64SlotBackend : public RegisterCacheBackend {
@@ -541,13 +541,13 @@ static void emitBinaryF(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitte
 static void emitDivFChecked(Arm64Emitter& e, RegisterCache& cache, const Instruction& in, bool s1Const, Label exitLabel) {
 	const int a = loadFloatOperand(e, cache, in.p1, s1Const);
 	const int b = loadFloatOperand(e, cache, in.p2, false);
-	cache.spillDirtyResident();							// main-path flush before the terminal trap
+	cache.spillDirtyResident();																							// main-path flush before the terminal trap
 	const int zero = cache.scratch(FLOAT_REGISTER);
-	e.fmovSW(static_cast<Reg>(zero), WZR);				// 0.0f
+	e.fmovSW(static_cast<Reg>(zero), WZR);																				// 0.0f
 	e.fcmpS(static_cast<Reg>(b), static_cast<Reg>(zero));
 	Label ok = e.newLabel();
-	e.bcond(NE, ok);									// != 0 (NaN is unordered, also passes) → divide
-	e.movn(W0, 6); e.b(exitLabel);						// ~6 = -7 = DIVISION_BY_ZERO
+	e.bcond(NE, ok);																									// != 0 (NaN is unordered, also passes) → divide
+	e.movn(W0, 6); e.b(exitLabel);																						// ~6 = -7 = DIVISION_BY_ZERO
 	e.bind(ok);
 	const int d = cache.define(in.p0.i, FLOAT_REGISTER);
 	e.fdivS(static_cast<Reg>(d), static_cast<Reg>(a), static_cast<Reg>(b));
@@ -559,16 +559,16 @@ static void emitDivFChecked(Arm64Emitter& e, RegisterCache& cache, const Instruc
 	value is p1 (a slot for VVV/VVC, a const for VCV); count is p2 (a const for VVC, else a slot, masked mod 32 by HW).
 */
 static void emitShift(Arm64Emitter& e, RegisterCache& cache, int kind, const Instruction& in, int form) {
-	int v;												// value: a const for VCV (form 2), else a slot
+	int v;																												// value: a const for VCV (form 2), else a slot
 	if (form == 2) { v = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(v), in.p1.i); }
 	else { v = cache.read(in.p1.i, GENERAL_REGISTER); }
-	if (form == 1) {									// VVC: constant count → immediate shift
+	if (form == 1) {																									// VVC: constant count → immediate shift
 		const unsigned sh = static_cast<unsigned>(in.p2.i) & 31u;
 		const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 		if (kind == 0) { e.lslImm(static_cast<Reg>(d), static_cast<Reg>(v), sh); }
 		else if (kind == 1) { e.asrImm(static_cast<Reg>(d), static_cast<Reg>(v), sh); }
 		else { e.lsrImm(static_cast<Reg>(d), static_cast<Reg>(v), sh); }
-	} else {											// register count (VVV/VCV): count is a slot, masked mod 32 by HW
+	} else {																											// register count (VVV/VCV): count is a slot, masked mod 32 by HW
 		const int cnt = cache.read(in.p2.i, GENERAL_REGISTER);
 		const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 		if (kind == 0) { e.lslv(static_cast<Reg>(d), static_cast<Reg>(v), static_cast<Reg>(cnt)); }
@@ -589,21 +589,21 @@ static void emitDivMod(Arm64Emitter& e, RegisterCache& cache, bool rem, const In
 	int divisor;
 	if (form == 1) { divisor = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(divisor), in.p2.i); }
 	else { divisor = cache.read(in.p2.i, GENERAL_REGISTER); }
-	if (form != 1) {									// variable divisor → divide-by-zero guard
-		cache.spillDirtyResident();					// on the MAIN path (not the trap arm): the model must match what executes,
-		Label ok = e.newLabel();					//   and the terminal trap needs memory interpreter-current when it returns
+	if (form != 1) {																									// variable divisor → divide-by-zero guard
+		cache.spillDirtyResident();																						// on the MAIN path (not the trap arm): the model must match what executes,
+		Label ok = e.newLabel();																						//   and the terminal trap needs memory interpreter-current when it returns
 		e.cbnz(static_cast<Reg>(divisor), ok);
-		e.movn(W0, 6); e.b(exitLabel);				// ~6 = -7 = DIVISION_BY_ZERO
+		e.movn(W0, 6); e.b(exitLabel);																					// ~6 = -7 = DIVISION_BY_ZERO
 		e.bind(ok);
 	}
-	if (rem) {											// modulo: msub needs the dividend intact, so quotient goes to a distinct scratch
+	if (rem) {																											// modulo: msub needs the dividend intact, so quotient goes to a distinct scratch
 		const int q = cache.scratch(GENERAL_REGISTER);
 		e.sdiv(static_cast<Reg>(q), static_cast<Reg>(dividend), static_cast<Reg>(divisor));
 		const int d = cache.define(in.p0.i, GENERAL_REGISTER);
-		e.msub(static_cast<Reg>(d), static_cast<Reg>(q), static_cast<Reg>(divisor), static_cast<Reg>(dividend));	// dividend - q*divisor
-	} else {											// divide: one instruction, so writing dst over an operand is safe
+		e.msub(static_cast<Reg>(d), static_cast<Reg>(q), static_cast<Reg>(divisor), static_cast<Reg>(dividend));		// dividend - q*divisor
+	} else {																											// divide: one instruction, so writing dst over an operand is safe
 		const int d = cache.define(in.p0.i, GENERAL_REGISTER);
-		e.sdiv(static_cast<Reg>(d), static_cast<Reg>(dividend), static_cast<Reg>(divisor));	// INT_MIN/-1 → INT_MIN, matches §6.1
+		e.sdiv(static_cast<Reg>(d), static_cast<Reg>(dividend), static_cast<Reg>(divisor));								// INT_MIN/-1 → INT_MIN, matches §6.1
 	}
 	cache.endInstruction();
 }
@@ -639,15 +639,15 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	entryOffset[selfOrdinal] = e.wordCount();
 	e.bind(entryLabels[selfOrdinal]);
 	const UInt localsSize = static_cast<UInt>(code[funcIndex].p0.i);
-	if (localsSize != 0) {							// dsp += localsSize (in bytes); register add if beyond the imm12 range
+	if (localsSize != 0) {																								// dsp += localsSize (in bytes); register add if beyond the imm12 range
 		if (localsSize * 4 < 0x1000) { e.addImmX(X1, X1, localsSize * 4); }
 		else { matConst(e, W9, static_cast<Int>(localsSize * 4)); e.addX(X1, X1, X9); }
 	}
-	{												// FUNC stack-overflow: if (dsp + paramsSize > dataStackEnd) DATA_STACK_OVERFLOW
+	{																													// FUNC stack-overflow: if (dsp + paramsSize > dataStackEnd) DATA_STACK_OVERFLOW
 		const UInt paramsSize = static_cast<UInt>(code[funcIndex].p1.i);
 		Label sok = e.newLabel();
 		e.ldrX(X9, X0, o.dsend); e.addImmX(X10, X1, paramsSize * 4); e.cmpX(X10, X9);
-		e.bcond(LS, sok); e.movn(W0, 4); e.b(exitLabel);	// > end → ~4 = -5 = DATA_STACK_OVERFLOW
+		e.bcond(LS, sok); e.movn(W0, 4); e.b(exitLabel);																// > end → ~4 = -5 = DATA_STACK_OVERFLOW
 		e.bind(sok);
 	}
 
@@ -658,70 +658,70 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 
 	// Pass 2 - emit.
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
-		if (mainline.count(j)) { cache.barrier(); e.bind(mainline[j]); }		// leader: flush the fall-through path, then start empty
+		if (mainline.count(j)) { cache.barrier(); e.bind(mainline[j]); }												// leader: flush the fall-through path, then start empty
 		if (loopWeight.count(j)) { e.subsImm(W3, W3, loopWeight[j]); e.bcond(MI, suspendL[j]); }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
-		if (!cacheLowered(op)) { cache.barrier(); }							// uncached opcode: lower it as v1 over an empty cache
+		if (!cacheLowered(op)) { cache.barrier(); }																		// uncached opcode: lower it as v1 over an empty cache
 		switch (op) {
-			case OP_FUNC: continue;	// prologue stack/fuel check omitted for the prototype
+			case OP_FUNC: continue;																						// prologue stack/fuel check omitted for the prototype
 			case OP_RETU: {
 				Label notNative = e.newLabel();
-				e.subImmX(X4, X4, 16);								// ipsp-- ; pop {cont, dsp}
-				e.ldrX(X9, X4, 0); e.ldrX(X1, X4, 8);				// cont ; caller dsp (or 0 = native/top marker)
+				e.subImmX(X4, X4, 16);																					// ipsp-- ; pop {cont, dsp}
+				e.ldrX(X9, X4, 0); e.ldrX(X1, X4, 8);																	// cont ; caller dsp (or 0 = native/top marker)
 				e.cbnzX(X1, notNative);
-				e.subImmX(X4, X4, 16); e.ldrX(X1, X4, 8);			// native/top return: pop again for the true dsp
+				e.subImmX(X4, X4, 16); e.ldrX(X1, X4, 8);																// native/top return: pop again for the true dsp
 				writebackState(e, o);
-				e.movz(W0, 0); e.b(exitLabel);						// OK - terminal (return to host)
+				e.movz(W0, 0); e.b(exitLabel);																			// OK - terminal (return to host)
 				e.bind(notNative);
-				e.br(X9);											// GAZL return: tail-branch to the continuation (state live)
+				e.br(X9);																								// GAZL return: tail-branch to the continuation (state live)
 				break;
 			}
 			case OP_CALL_CVC: {
-				const UInt callee = in.p0.p - IP_OFFSET;			// ordinal known at compile time → direct tail-branch
+				const UInt callee = in.p0.p - IP_OFFSET;																// ordinal known at compile time → direct tail-branch
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = e.newLabel(), iok = e.newLabel();
-				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);	// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
-				e.movn(W0, 5); e.b(exitLabel); e.bind(iok);			// ~5 = -6
-				e.adr(X9, after); e.strX(X9, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);	// push {after, dsp}
-				if (window != 0) { e.addImmX(X1, X1, window * 4); }	// dsp += arg window
-				e.b(entryLabels[callee]);							// tail-branch to the callee entry (state stays live)
-				e.bind(after);										// return lands here (hot; state live)
+				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);												// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
+				e.movn(W0, 5); e.b(exitLabel); e.bind(iok);																// ~5 = -6
+				e.adr(X9, after); e.strX(X9, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);							// push {after, dsp}
+				if (window != 0) { e.addImmX(X1, X1, window * 4); }														// dsp += arg window
+				e.b(entryLabels[callee]);																				// tail-branch to the callee entry (state stays live)
+				e.bind(after);																							// return lands here (hot; state live)
 				break;
 			}
 			case OP_CALL_VVC: {
-				const UInt window = static_cast<UInt>(in.p1.i);		// ordinal from a slot at runtime → resolve + bounds-check
+				const UInt window = static_cast<UInt>(in.p1.i);															// ordinal from a slot at runtime → resolve + bounds-check
 				Label after = e.newLabel(), trap = e.newLabel(), iok = e.newLabel();
-				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);	// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
+				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);												// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
 				e.movn(W0, 5); e.b(exitLabel); e.bind(iok);
-				loadSlot(e, W9, in.p0.i);							// fn pointer = IP_OFFSET + ordinal
-				matConst(e, W10, static_cast<Int>(IP_OFFSET)); e.sub(W9, W9, W10);	// ordinal
+				loadSlot(e, W9, in.p0.i);																				// fn pointer = IP_OFFSET + ordinal
+				matConst(e, W10, static_cast<Int>(IP_OFFSET)); e.sub(W9, W9, W10);										// ordinal
 				matConst(e, W10, static_cast<Int>(functionCount));
-				e.cmp(W9, W10); e.bcond(HS, trap);					// ordinal >= functionCount → BAD_CALL
-				e.ldrX(X10, X0, o.funcentries); e.ldrXr(X9, X10, W9);	// entry = funcEntries[ordinal] (hot)
-				e.adr(X10, after); e.strX(X10, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);	// push {after, dsp}
+				e.cmp(W9, W10); e.bcond(HS, trap);																		// ordinal >= functionCount → BAD_CALL
+				e.ldrX(X10, X0, o.funcentries); e.ldrXr(X9, X10, W9);													// entry = funcEntries[ordinal] (hot)
+				e.adr(X10, after); e.strX(X10, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);						// push {after, dsp}
 				if (window != 0) { e.addImmX(X1, X1, window * 4); }
-				e.br(X9);											// tail-branch to the callee entry (state stays live)
-				e.bind(trap); e.movn(W0, 3); e.b(exitLabel);		// ~3 = -4 = BAD_CALL
+				e.br(X9);																								// tail-branch to the callee entry (state stays live)
+				e.bind(trap); e.movn(W0, 3); e.b(exitLabel);															// ~3 = -4 = BAD_CALL
 				e.bind(after);
 				break;
 			}
 			case OP_CALL_NVC: {
-				const UInt ordinal = static_cast<UInt>(in.p0.i);	// native ordinal (C0)
-				const UInt window = static_cast<UInt>(in.p1.i);		// param-window offset (C1)
+				const UInt ordinal = static_cast<UInt>(in.p0.i);														// native ordinal (C0)
+				const UInt window = static_cast<UInt>(in.p1.i);															// param-window offset (C1)
 				Label hot = e.newLabel(), okStatus = e.newLabel();
-				e.bind(hot);										// re-entry for blocking retry / suspend-resume
-				e.strX(X1, X0, o.saveddsp);							// stash original dsp (the window advance is transient)
+				e.bind(hot);																							// re-entry for blocking retry / suspend-resume
+				e.strX(X1, X0, o.saveddsp);																				// stash original dsp (the window advance is transient)
 				if (window != 0) { e.addImmX(X1, X1, window * 4); }
-				e.strX(X1, X0, o.dsp); e.strW(W3, X0, o.fuel); e.strX(X4, X0, o.ipsp);	// publish window/fuel/ipsp (interpreter-shaped)
-				e.adr(X9, hot); e.strX(X9, X0, o.resume);			// RESUME = call site (nonzero native → re-issue: blocking retry)
-				e.ldrX(X9, X0, o.natives); e.ldrX(X9, X9, ordinal * 8);	// natives[ordinal]
-				e.blr(X9);											// inline host call (x0 = ctx); w0 = status
-				e.mov(W12, W0);										// save the status BEFORE we overwrite x0 with ctx
-				e.addImmX(X0, X19, 0); reloadState(e, o); e.ldrX(X1, X0, o.saveddsp);	// native clobbered the pins: restore ctx + reload (dsp = original)
-				e.cmpImm(W12, 0); e.bcond(EQ, okStatus);			// OK → continue inline
-				e.mov(W0, W12); e.b(exitLabel);						// nonzero (BLOCK_RETRY / TIME_OUT / trap): return to host; RESUME = call site so it re-issues
-				e.bind(okStatus);									// OK: continue (state live). w3 now holds ctx.fuel - a native
+				e.strX(X1, X0, o.dsp); e.strW(W3, X0, o.fuel); e.strX(X4, X0, o.ipsp);									// publish window/fuel/ipsp (interpreter-shaped)
+				e.adr(X9, hot); e.strX(X9, X0, o.resume);																// RESUME = call site (nonzero native → re-issue: blocking retry)
+				e.ldrX(X9, X0, o.natives); e.ldrX(X9, X9, ordinal * 8);													// natives[ordinal]
+				e.blr(X9);																								// inline host call (x0 = ctx); w0 = status
+				e.mov(W12, W0);																							// save the status BEFORE we overwrite x0 with ctx
+				e.addImmX(X0, X19, 0); reloadState(e, o); e.ldrX(X1, X0, o.saveddsp);									// native clobbered the pins: restore ctx + reload (dsp = original)
+				e.cmpImm(W12, 0); e.bcond(EQ, okStatus);																// OK → continue inline
+				e.mov(W0, W12); e.b(exitLabel);																			// nonzero (BLOCK_RETRY / TIME_OUT / trap): return to host; RESUME = call site so it re-issues
+				e.bind(okStatus);																						// OK: continue (state live). w3 now holds ctx.fuel - a native
 																	// that yielded via resetTimeOut(0) leaves it 0, and the MANDATORY fuel check at the next
 																	// block leader (jitFuelSafepoints inserts one right after every call) suspends immediately.
 				break;
@@ -732,10 +732,10 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_PEEK_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); loadMemConst(e, static_cast<Reg>(d), static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
 			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
 			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(r), in.p1.i); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
-			case OP_PEEK_VCV: {										// dst = memory[C1 + index]; pointer read
+			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]; pointer read
 				Label trap = e.newLabel(), cont = e.newLabel();
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
-				cache.spillDirtyResident();						// the load may alias a cached slot: make the home current
+				cache.spillDirtyResident();																				// the load may alias a cached slot: make the home current
 				const int addr = cache.scratch(GENERAL_REGISTER);
 				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p1.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
 				const int lim = cache.scratch(GENERAL_REGISTER);
@@ -743,17 +743,17 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				e.ldrWx(static_cast<Reg>(d), X2, static_cast<Reg>(addr));
 				cache.endInstruction();
-				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);	// ~1 = -2 = BAD_PEEK
+				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);													// ~1 = -2 = BAD_PEEK
 				e.bind(cont);
 				break;
 			}
-			case OP_PEEK_VVV: {										// dst = memory[base + index]; pointer read
+			case OP_PEEK_VVV: {																							// dst = memory[base + index]; pointer read
 				Label trap = e.newLabel(), cont = e.newLabel();
 				const int base = cache.read(in.p1.i, GENERAL_REGISTER);
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
 				cache.spillDirtyResident();
 				const int addr = cache.scratch(GENERAL_REGISTER);
-				const int tmp = cache.scratch(GENERAL_REGISTER);	// MEMORY_OFFSET, then reused for the size limit
+				const int tmp = cache.scratch(GENERAL_REGISTER);														// MEMORY_OFFSET, then reused for the size limit
 				e.add(static_cast<Reg>(addr), static_cast<Reg>(base), static_cast<Reg>(idx));
 				matConst(e, static_cast<Reg>(tmp), static_cast<Int>(MEMORY_OFFSET)); e.sub(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(tmp));
 				e.ldrW(static_cast<Reg>(tmp), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(tmp)); e.bcond(HS, trap);
@@ -764,25 +764,25 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.bind(cont);
 				break;
 			}
-			case OP_POKE_CVV: case OP_POKE_CVC: {					// memory[C0 + index] = value; pointer write
+			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value; pointer write
 				Label trap = e.newLabel(), cont = e.newLabel();
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
 				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(val), in.p2.i); }
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
-				cache.spillDirtyResident();						// pending cached writes land before the store
+				cache.spillDirtyResident();																				// pending cached writes land before the store
 				const int addr = cache.scratch(GENERAL_REGISTER);
 				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p0.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
 				const int lim = cache.scratch(GENERAL_REGISTER);
 				e.ldrW(static_cast<Reg>(lim), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim)); e.bcond(HS, trap);
 				e.strWx(static_cast<Reg>(val), X2, static_cast<Reg>(addr));
 				cache.endInstruction();
-				cache.invalidateAll();							// the store may alias cached slots: drop them
-				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);	// ~2 = -3 = BAD_POKE
+				cache.invalidateAll();																					// the store may alias cached slots: drop them
+				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);													// ~2 = -3 = BAD_POKE
 				e.bind(cont);
 				break;
 			}
-			case OP_POKE_VVV: case OP_POKE_VVC: {					// memory[base + index] = value; pointer write
+			case OP_POKE_VVV: case OP_POKE_VVC: {																		// memory[base + index] = value; pointer write
 				Label trap = e.newLabel(), cont = e.newLabel();
 				const int base = cache.read(in.p0.i, GENERAL_REGISTER);
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
@@ -802,16 +802,16 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.bind(cont);
 				break;
 			}
-			case OP_GETL_VVV: {										// dst = frame[C1 + index]; frame read (bounds vs free frame span)
+			case OP_GETL_VVV: {																							// dst = frame[C1 + index]; frame read (bounds vs free frame span)
 				Label trap = e.newLabel(), cont = e.newLabel();
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
-				cache.spillDirtyResident();						// indexes the frame: may alias a cached slot
+				cache.spillDirtyResident();																				// indexes the frame: may alias a cached slot
 				const int lim = cache.scratch(GENERAL_REGISTER);
 				e.ldrX(static_cast<Reg>(lim), X0, o.dsend); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), W1); e.lsrImm(static_cast<Reg>(lim), static_cast<Reg>(lim), 2);
 				const int c = cache.scratch(GENERAL_REGISTER);
-				matConst(e, static_cast<Reg>(c), in.p1.i); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), static_cast<Reg>(c));	// limit = (end-dsp)/4 - C1
+				matConst(e, static_cast<Reg>(c), in.p1.i); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), static_cast<Reg>(c)); // limit = (end-dsp)/4 - C1
 				e.cmp(static_cast<Reg>(idx), static_cast<Reg>(lim)); e.bcond(HS, trap);
-				e.add(static_cast<Reg>(c), static_cast<Reg>(c), static_cast<Reg>(idx));	// C1 + index (reuse c as the signed frame offset)
+				e.add(static_cast<Reg>(c), static_cast<Reg>(c), static_cast<Reg>(idx));									// C1 + index (reuse c as the signed frame offset)
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				e.ldrWxs(static_cast<Reg>(d), X1, static_cast<Reg>(c));
 				cache.endInstruction();
@@ -819,7 +819,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.bind(cont);
 				break;
 			}
-			case OP_SETL_VVV: case OP_SETL_VVC: {					// frame[C0 + index] = value; frame write
+			case OP_SETL_VVV: case OP_SETL_VVC: {																		// frame[C0 + index] = value; frame write
 				Label trap = e.newLabel(), cont = e.newLabel();
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
@@ -829,9 +829,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const int lim = cache.scratch(GENERAL_REGISTER);
 				e.ldrX(static_cast<Reg>(lim), X0, o.dsend); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), W1); e.lsrImm(static_cast<Reg>(lim), static_cast<Reg>(lim), 2);
 				const int c = cache.scratch(GENERAL_REGISTER);
-				matConst(e, static_cast<Reg>(c), in.p0.i); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), static_cast<Reg>(c));	// limit = (end-dsp)/4 - C0
+				matConst(e, static_cast<Reg>(c), in.p0.i); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), static_cast<Reg>(c)); // limit = (end-dsp)/4 - C0
 				e.cmp(static_cast<Reg>(idx), static_cast<Reg>(lim)); e.bcond(HS, trap);
-				e.add(static_cast<Reg>(c), static_cast<Reg>(c), static_cast<Reg>(idx));	// C0 + index
+				e.add(static_cast<Reg>(c), static_cast<Reg>(c), static_cast<Reg>(idx));									// C0 + index
 				e.strWxs(static_cast<Reg>(val), X1, static_cast<Reg>(c));
 				cache.endInstruction();
 				cache.invalidateAll();
@@ -849,25 +849,25 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				else { loadSlot(e, W9, in.p0.i); matConst(e, W12, static_cast<Int>(MEMORY_OFFSET)); e.sub(W9, W9, W12); }
 				if (srcConst) { matConst(e, W10, in.p1.i - static_cast<Int>(MEMORY_OFFSET)); }
 				else { loadSlot(e, W10, in.p1.i); matConst(e, W12, static_cast<Int>(MEMORY_OFFSET)); e.sub(W10, W10, W12); }
-				matConst(e, W15, in.p2.i);							// count
-				e.add(W12, W9, W15); e.ldrW(W14, X0, o.rwmemsize); e.cmp(W12, W14); e.bcond(HS, trap);	// destIdx+count < rwMemorySize
-				e.add(W12, W10, W15); e.ldrW(W14, X0, o.memsize); e.cmp(W12, W14); e.bcond(HS, trap);	// srcIdx+count < memorySize
-				e.movz(W11, 0);										// i = 0
+				matConst(e, W15, in.p2.i);																				// count
+				e.add(W12, W9, W15); e.ldrW(W14, X0, o.rwmemsize); e.cmp(W12, W14); e.bcond(HS, trap);					// destIdx+count < rwMemorySize
+				e.add(W12, W10, W15); e.ldrW(W14, X0, o.memsize); e.cmp(W12, W14); e.bcond(HS, trap);					// srcIdx+count < memorySize
+				e.movz(W11, 0);																							// i = 0
 				e.bind(lp);
-				e.cmp(W11, W15); e.bcond(HS, ldone);				// i >= count → done
-				e.add(W12, W10, W11); e.ldrWx(W12, X2, W12);		// val = memoryBase[srcIdx+i]
-				e.add(W14, W9, W11); e.strWx(W12, X2, W14);			// memoryBase[destIdx+i] = val
+				e.cmp(W11, W15); e.bcond(HS, ldone);																	// i >= count → done
+				e.add(W12, W10, W11); e.ldrWx(W12, X2, W12);															// val = memoryBase[srcIdx+i]
+				e.add(W14, W9, W11); e.strWx(W12, X2, W14);																// memoryBase[destIdx+i] = val
 				e.addImm(W11, W11, 1); e.b(lp);
 				e.bind(ldone); e.b(cont);
-				e.bind(trap); e.movn(W0, 7); e.b(exitLabel);				// ~7 = -8 = ACCESS_VIOLATION
+				e.bind(trap); e.movn(W0, 7); e.b(exitLabel);															// ~7 = -8 = ACCESS_VIOLATION
 				e.bind(cont);
 				break;
 			}
-			case OP_ADRL: {											// address of a frame local as a MEMORY_OFFSET-biased pointer
+			case OP_ADRL: {																								// address of a frame local as a MEMORY_OFFSET-biased pointer
 				const int t = cache.scratch(GENERAL_REGISTER);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
-				e.sub(static_cast<Reg>(t), W1, W2);					// (dsp - memoryBase) in bytes (low 32 valid within buffer)
-				e.lsrImm(static_cast<Reg>(t), static_cast<Reg>(t), 2);	//   -> Value units
+				e.sub(static_cast<Reg>(t), W1, W2);																		// (dsp - memoryBase) in bytes (low 32 valid within buffer)
+				e.lsrImm(static_cast<Reg>(t), static_cast<Reg>(t), 2);													//   -> Value units
 				matConst(e, static_cast<Reg>(d), static_cast<Int>(MEMORY_OFFSET) + in.p1.i);
 				e.add(static_cast<Reg>(d), static_cast<Reg>(d), static_cast<Reg>(t));
 				cache.endInstruction();
@@ -897,16 +897,16 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_SHRU_VCV: emitShift(e, cache, 2, in, 2); break;
 			case OP_ABSI: {
 				const int s = cache.read(in.p1.i, GENERAL_REGISTER);
-				const int t = cache.scratch(GENERAL_REGISTER);					// sign mask (v >> 31)
-				const int d = cache.define(in.p0.i, GENERAL_REGISTER);			// (v ^ mask) - mask = |v|
+				const int t = cache.scratch(GENERAL_REGISTER);															// sign mask (v >> 31)
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);													// (v ^ mask) - mask = |v|
 				e.asrImm(static_cast<Reg>(t), static_cast<Reg>(s), 31);
 				e.eor(static_cast<Reg>(d), static_cast<Reg>(s), static_cast<Reg>(t));
 				e.sub(static_cast<Reg>(d), static_cast<Reg>(d), static_cast<Reg>(t));
 				cache.endInstruction();
 				break;
 			}
-			case OP_ABSF: { const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER); e.fabsS(static_cast<Reg>(d), static_cast<Reg>(s)); cache.endInstruction(); break; }		// |V|
-			case OP_FLOF: { const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER); e.frintmS(static_cast<Reg>(d), static_cast<Reg>(s)); cache.endInstruction(); break; }	// floorf(V)
+			case OP_ABSF: { const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER); e.fabsS(static_cast<Reg>(d), static_cast<Reg>(s)); cache.endInstruction(); break; } // |V|
+			case OP_FLOF: { const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER); e.frintmS(static_cast<Reg>(d), static_cast<Reg>(s)); cache.endInstruction(); break; } // floorf(V)
 			case OP_ADDF_VVV: emitBinaryF(e, cache, &Arm64Emitter::faddS, in, false, false); break;
 			case OP_ADDF_VVC: emitBinaryF(e, cache, &Arm64Emitter::faddS, in, false, true); break;
 			case OP_SUBF_VVV: emitBinaryF(e, cache, &Arm64Emitter::fsubS, in, false, false); break;
@@ -915,9 +915,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_MULF_VVV: emitBinaryF(e, cache, &Arm64Emitter::fmulS, in, false, false); break;
 			case OP_MULF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fmulS, in, false, true); break;
 			case OP_DIVF_VVV: emitDivFChecked(e, cache, in, false, exitLabel); break;
-			case OP_DIVF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, true); break;	// const divisor: assemble-checked
+			case OP_DIVF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, true); break;						// const divisor: assemble-checked
 			case OP_DIVF_VCV: emitDivFChecked(e, cache, in, true, exitLabel); break;
-			case OP_FTOI_VVC: {												// int(V * scale), scale = C2 (saturating fcvtzs)
+			case OP_FTOI_VVC: {																							// int(V * scale), scale = C2 (saturating fcvtzs)
 				const int src = cache.read(in.p1.i, FLOAT_REGISTER);
 				const int bits = cache.scratch(GENERAL_REGISTER);
 				const int scale = cache.scratch(FLOAT_REGISTER);
@@ -929,7 +929,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				cache.endInstruction();
 				break;
 			}
-			case OP_ITOF_VVC: {												// float(V) * scale, scale = C2
+			case OP_ITOF_VVC: {																							// float(V) * scale, scale = C2
 				const int src = cache.read(in.p1.i, GENERAL_REGISTER);
 				const int d = cache.define(in.p0.i, FLOAT_REGISTER);
 				e.scvtf(static_cast<Reg>(d), static_cast<Reg>(src));
@@ -946,35 +946,35 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_IORI_VVC: emitBinary(e, cache, &Arm64Emitter::orr, in, false, true); break;
 			case OP_XORI_VVV: emitBinary(e, cache, &Arm64Emitter::eor, in, false, false); break;
 			case OP_XORI_VVC: emitBinary(e, cache, &Arm64Emitter::eor, in, false, true); break;
-			case OP_FORi_VVB: case OP_FORi_VCB: {					// ++counter; if (counter < limit) branch
+			case OP_FORi_VVB: case OP_FORi_VCB: {																		// ++counter; if (counter < limit) branch
 				const int r = cache.read(in.p0.i, GENERAL_REGISTER);
 				e.addImm(static_cast<Reg>(r), static_cast<Reg>(r), 1);
-				cache.define(in.p0.i, GENERAL_REGISTER);			// same register, now dirty (barrier will spill the increment)
+				cache.define(in.p0.i, GENERAL_REGISTER);																// same register, now dirty (barrier will spill the increment)
 				int lim;
 				if (op == OP_FORi_VCB) { lim = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(lim), in.p1.i); }
 				else { lim = cache.read(in.p1.i, GENERAL_REGISTER); }
 				e.cmp(static_cast<Reg>(r), static_cast<Reg>(lim));
 				cache.endInstruction();
-				cache.barrier();									// block ends here: flush (spills don't touch NZCV) before the branch
+				cache.barrier();																						// block ends here: flush (spills don't touch NZCV) before the branch
 				e.bcond(LT, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
 			case OP_GOTO: e.b(mainline[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
-			case OP_SWCH: {											// index = min(unsigned(V0), C1); br into a table of `b target`
+			case OP_SWCH: {																								// index = min(unsigned(V0), C1); br into a table of `b target`
 				const UInt sz = static_cast<UInt>(in.p1.i) + 1;
 				const UInt tbl = static_cast<UInt>(in.p2.p - MEMORY_OFFSET);
-				loadSlot(e, W9, in.p0.i);							// switch value
-				matConst(e, W10, in.p1.i);							// clamp max = C1 = sz-1
+				loadSlot(e, W9, in.p0.i);																				// switch value
+				matConst(e, W10, in.p1.i);																				// clamp max = C1 = sz-1
 				e.cmp(W9, W10);
 				Label useVal = e.newLabel();
-				e.bcond(LS, useVal);								// (unsigned) val <= C1 → keep; else clamp to C1
+				e.bcond(LS, useVal);																					// (unsigned) val <= C1 → keep; else clamp to C1
 				e.mov(W9, W10);
 				e.bind(useVal);
 				Label caseBase = e.newLabel();
-				e.adr(X10, caseBase);								// base of the branch table (below)
-				e.lslImm(W11, W9, 2); e.addX(X10, X10, X11);		// += index * 4  (W-write zero-extends into X11)
+				e.adr(X10, caseBase);																					// base of the branch table (below)
+				e.lslImm(W11, W9, 2); e.addX(X10, X10, X11);															// += index * 4  (W-write zero-extends into X11)
 				e.br(X10);
-				e.bind(caseBase);									// sz consecutive `b target` - br lands on the index'th
+				e.bind(caseBase);																						// sz consecutive `b target` - br lands on the index'th
 				for (UInt k = 0; k < sz; ++k) {
 					const UInt t = static_cast<UInt>(static_cast<Int>(j) + memory[tbl + k].i);
 					e.b(mainline[t]);
@@ -995,19 +995,19 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 					case OP_NLSF_VCB: c = PL; c0const = false; c1const = true; break;
 					case OP_NLSF_CVB: c = PL; c0const = true; c1const = false; break;
 					case OP_NEQF_VVB: c = NE; c0const = false; c1const = false; break;
-					default: c = NE; c0const = false; c1const = true; break;	// NEQF_VCB
+					default: c = NE; c0const = false; c1const = true; break;											// NEQF_VCB
 				}
 				const int a = loadFloatOperand(e, cache, in.p0, c0const);
 				const int b = loadFloatOperand(e, cache, in.p1, c1const);
 				e.fcmpS(static_cast<Reg>(a), static_cast<Reg>(b));
 				cache.endInstruction();
-				cache.barrier();									// block ends here: flush (spills don't touch NZCV) before the branch
+				cache.barrier();																						// block ends here: flush (spills don't touch NZCV) before the branch
 				e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
 			case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB: case OP_EQUI_VVB: case OP_EQUI_VCB:
 			case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB: case OP_NEQI_VVB: case OP_NEQI_VCB: {
-				Cond c = LT; bool c0const = false, c1const = false;			// (the sub-switch is exhaustive; its default throws)
+				Cond c = LT; bool c0const = false, c1const = false;														// (the sub-switch is exhaustive; its default throws)
 				switch (op) {
 					case OP_LSSI_VVB: c = LT; c0const = false; c1const = false; break;
 					case OP_LSSI_VCB: c = LT; c0const = false; c1const = true; break;
@@ -1019,7 +1019,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 					case OP_NLSI_CVB: c = GE; c0const = true; c1const = false; break;
 					case OP_NEQI_VVB: c = NE; c0const = false; c1const = false; break;
 					case OP_NEQI_VCB: c = NE; c0const = false; c1const = true; break;
-					default: throwUnlowerableOpcode(in.opcode);		// unreachable: the outer case only enters here for these
+					default: throwUnlowerableOpcode(in.opcode);															// unreachable: the outer case only enters here for these
 				}
 				int a;
 				if (c0const) { a = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(a), in.p0.i); }
@@ -1029,11 +1029,11 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				else { b = cache.read(in.p1.i, GENERAL_REGISTER); }
 				e.cmp(static_cast<Reg>(a), static_cast<Reg>(b));
 				cache.endInstruction();
-				cache.barrier();									// block ends here: flush (spills don't touch NZCV) before the branch
+				cache.barrier();																						// block ends here: flush (spills don't touch NZCV) before the branch
 				e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
-			default: throwUnlowerableOpcode(op);					// a finalized opcode the backend must cover (a bug, never routine)
+			default: throwUnlowerableOpcode(op);																		// a finalized opcode the backend must cover (a bug, never routine)
 		}
 	}
 
@@ -1044,8 +1044,8 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
 		e.bind(suspendL[it->first]);
 		writebackState(e, o);
-		e.adr(X9, mainline[it->first]); e.strX(X9, X0, o.resume);		// RESUME = this block's hot mainline
-		e.movn(W0, 0); e.b(exitLabel);									// TIME_OUT
+		e.adr(X9, mainline[it->first]); e.strX(X9, X0, o.resume);														// RESUME = this block's hot mainline
+		e.movn(W0, 0); e.b(exitLabel);																					// TIME_OUT
 	}
 }
 
@@ -1057,11 +1057,11 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 */
 static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel) {
 	const size_t entry = e.wordCount();
-	e.subImmX(SP, SP, 16); e.strX(X19, SP, 0); e.strX(X30, SP, 8);	// save the ctx holder (x19) + return addr (x30)
-	e.addImmX(X19, X0, 0);								// x19 = ctx (callee-saved → survives inline native calls)
-	reloadState(e, o);									// load the pins from ctx once (x0 = ctx)
-	e.ldrX(X9, X0, o.resume); e.br(X9);					// branch into RESUME (hot; pins live)
-	e.bind(exitLabel);									// segments branch here with w0 = Status (suspend / finish / trap)
+	e.subImmX(SP, SP, 16); e.strX(X19, SP, 0); e.strX(X30, SP, 8);														// save the ctx holder (x19) + return addr (x30)
+	e.addImmX(X19, X0, 0);																								// x19 = ctx (callee-saved → survives inline native calls)
+	reloadState(e, o);																									// load the pins from ctx once (x0 = ctx)
+	e.ldrX(X9, X0, o.resume); e.br(X9);																					// branch into RESUME (hot; pins live)
+	e.bind(exitLabel);																									// segments branch here with w0 = Status (suspend / finish / trap)
 	e.ldrX(X19, SP, 0); e.ldrX(X30, SP, 8); e.addImmX(SP, SP, 16); e.ret();
 	return entry;
 }
@@ -1074,12 +1074,12 @@ static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel)
 */
 void JitCompilerArm64::compile(const AssembledProgram& program, JitModule& out) {
 	EmittedModule emitted;
-	const Offsets o = JitProcessor::layout();		// the run-state ABI, obtained without an engine
+	const Offsets o = JitProcessor::layout();																			// the run-state ABI, obtained without an engine
 	Arm64Emitter e;
 	std::vector<Label> entryLabels(program.functionCount);
 	std::vector<size_t> entryOffset(program.functionCount, 0);
 	for (UInt k = 0; k < program.functionCount; ++k) { entryLabels[k] = e.newLabel(); }
-	Label exitLabel = e.newLabel();					// the one dispatcher EXIT; every segment terminal branches here (§5.4 (b))
+	Label exitLabel = e.newLabel();																						// the one dispatcher EXIT; every segment terminal branches here (§5.4 (b))
 	for (UInt ord = 0; ord < program.functionCount; ++ord) {
 		lowerFunction(e, program.code, program.memory, program.functionTable[ord], o, entryLabels, entryOffset, ord
 				, program.functionCount, exitLabel);
@@ -1092,7 +1092,7 @@ void JitCompilerArm64::compile(const AssembledProgram& program, JitModule& out) 
 	emitted.entryByteOffsets.resize(program.functionCount);
 	for (UInt ord = 0; ord < program.functionCount; ++ord) { emitted.entryByteOffsets[ord] = entryOffset[ord] * 4; }
 	emitted.dispatchByteOffset = dispatchOffset * 4;
-	JitModule built(emitted);						// makes the code executable (throws JitException on host denial)
+	JitModule built(emitted);																							// makes the code executable (throws JitException on host denial)
 	out.swap(built);
 }
 
@@ -1107,4 +1107,4 @@ void NativeJitCompiler::compile(const AssembledProgram& program, JitModule& out)
 }
 #endif
 
-} // namespace GAZL
+}																														// namespace GAZL

@@ -22,22 +22,22 @@
 */
 
 #include "GAZLJit.h"
-#include "GAZLJitMem.h"			// makeExecutable / freeExecutable - the JitModule owns the executable page
+#include "GAZLJitMem.h"																									// makeExecutable / freeExecutable - the JitModule owns the executable page
 
 #include <cstddef>
-#include <cstring>				// memset / memcpy - the jitAvailable() probe
-#include <cstdio>				// std::snprintf - the unlowerable-opcode diagnostic
-#include "assert.h"				// assert - RegisterCache contracts + the unlowerable-opcode check (local-overridable, see GAZL.h)
-#include <set>					// jitFuelSafepoints - block-leader set
+#include <cstring>																										// memset / memcpy - the jitAvailable() probe
+#include <cstdio>																										// std::snprintf - the unlowerable-opcode diagnostic
+#include "assert.h"																										// assert - RegisterCache contracts + the unlowerable-opcode check (local-overridable, see GAZL.h)
+#include <set>																											// jitFuelSafepoints - block-leader set
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <windows.h>			// __try/__except fault guard for the probe
+#include <windows.h>																									// __try/__except fault guard for the probe
 #else
-#include <csignal>				// sigaction - POSIX fault guard for the probe
-#include <csetjmp>				// sigsetjmp / siglongjmp
+#include <csignal>																										// sigaction - POSIX fault guard for the probe
+#include <csetjmp>																										// sigsetjmp / siglongjmp
 #endif
 
 namespace GAZL {
@@ -82,8 +82,8 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 		const Int op = code[j].opcode;
 		UInt target;
 		if (jitBranchTarget(code, j, target)) {
-			leaders.insert(target);								// branch/GOTO/FORi target begins a block
-			if (j + 1 <= endIndex) { leaders.insert(j + 1); }	// so does the fall-through after it
+			leaders.insert(target);																						// branch/GOTO/FORi target begins a block
+			if (j + 1 <= endIndex) { leaders.insert(j + 1); }															// so does the fall-through after it
 		} else if (op == OP_SWCH) {
 			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
 			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
@@ -128,20 +128,20 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 JitModule::JitModule(const EmittedModule& emitted)
 		: ownedPage(0)
 		, ownedWords(emitted.code.size())
-		, entries(emitted.entryByteOffsets.size())				// may throw (bad_alloc) before any page is acquired
+		, entries(emitted.entryByteOffsets.size())																		// may throw (bad_alloc) before any page is acquired
 		, dispatch(0) {
 	ownedPage = makeExecutable(emitted.code.empty() ? 0 : &emitted.code[0], emitted.code.size());
-	if (ownedPage == 0) {										// host refused executable memory (should not happen after jitAvailable())
+	if (ownedPage == 0) {																								// host refused executable memory (should not happen after jitAvailable())
 		throw JitException("JIT: host refused to make the code page executable");
 	}
-	for (size_t ordinal = 0; ordinal < entries.size(); ++ordinal) {		// noexcept from here: the page is owned, dtor will free it
+	for (size_t ordinal = 0; ordinal < entries.size(); ++ordinal) {														// noexcept from here: the page is owned, dtor will free it
 		entries[ordinal] = reinterpret_cast<char*>(ownedPage) + emitted.entryByteOffsets[ordinal];
 	}
 	dispatch = reinterpret_cast<char*>(ownedPage) + emitted.dispatchByteOffset;
 }
 
 JitModule::~JitModule() {
-	freeExecutable(ownedPage, ownedWords);						// freeExecutable(0, ...) is a no-op
+	freeExecutable(ownedPage, ownedWords);																				// freeExecutable(0, ...) is a no-op
 }
 
 void JitModule::swap(JitModule& other) {
@@ -246,7 +246,7 @@ void RegisterCache::evictOtherClass(Int slot, RegisterClass wantedClass, bool sp
 }
 
 int RegisterCache::read(Int slot, RegisterClass registerClass) {
-	evictOtherClass(slot, registerClass, true);				// the value may currently live in the other file
+	evictOtherClass(slot, registerClass, true);																			// the value may currently live in the other file
 	size_t count;
 	Line* lines = linesOf(registerClass, count);
 	const int* registers = registersOf(registerClass);
@@ -254,7 +254,7 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 		if (lines[i].occupied && !lines[i].scratchTemp && lines[i].slot == slot) {
 			lines[i].pinned = true;
 			lines[i].lastUse = ++useClock;
-			return registers[i];							// hit: no load
+			return registers[i];																						// hit: no load
 		}
 	}
 	const int i = acquire(registerClass);
@@ -263,7 +263,7 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 	line.scratchTemp = false;
 	line.slot = slot;
 	line.registerClass = registerClass;
-	line.dirty = false;										// filled from the home, so still matches it
+	line.dirty = false;																									// filled from the home, so still matches it
 	line.pinned = true;
 	line.lastUse = ++useClock;
 	cacheBackend.emitFill(registers[i], slot, registerClass);
@@ -271,13 +271,13 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 }
 
 int RegisterCache::define(Int slot, RegisterClass registerClass) {
-	evictOtherClass(slot, registerClass, false);			// overwriting the slot whole: any other-file copy is now dead
+	evictOtherClass(slot, registerClass, false);																		// overwriting the slot whole: any other-file copy is now dead
 	size_t count;
 	Line* lines = linesOf(registerClass, count);
 	const int* registers = registersOf(registerClass);
 	for (size_t i = 0; i < count; ++i) {
 		if (lines[i].occupied && !lines[i].scratchTemp && lines[i].slot == slot) {
-			lines[i].dirty = true;							// overwriting the resident value
+			lines[i].dirty = true;																						// overwriting the resident value
 			lines[i].pinned = true;
 			lines[i].lastUse = ++useClock;
 			return registers[i];
@@ -289,10 +289,10 @@ int RegisterCache::define(Int slot, RegisterClass registerClass) {
 	line.scratchTemp = false;
 	line.slot = slot;
 	line.registerClass = registerClass;
-	line.dirty = true;										// defined value diverges from the home, and no store at the def
+	line.dirty = true;																									// defined value diverges from the home, and no store at the def
 	line.pinned = true;
 	line.lastUse = ++useClock;
-	return registers[i];									// no fill: we are about to overwrite it
+	return registers[i];																								// no fill: we are about to overwrite it
 }
 
 int RegisterCache::scratch(RegisterClass registerClass) {
@@ -301,7 +301,7 @@ int RegisterCache::scratch(RegisterClass registerClass) {
 	Line* lines = linesOf(registerClass, count);
 	Line& line = lines[i];
 	line.occupied = true;
-	line.scratchTemp = true;								// no home; never spilled, dropped at endInstruction
+	line.scratchTemp = true;																							// no home; never spilled, dropped at endInstruction
 	line.slot = 0;
 	line.registerClass = registerClass;
 	line.dirty = false;
@@ -336,8 +336,8 @@ void RegisterCache::barrier() { flushAndClear(); }
 void RegisterCache::invalidateAll() { flushAndClear(); }
 
 void RegisterCache::enterBlock() {
-	assertNoDirty();										// contract: a leader is reached only via a barrier, so nothing is dirty
-	flushAndClear();										// release: never drop a dirty line - spill it - even if the contract was broken
+	assertNoDirty();																									// contract: a leader is reached only via a barrier, so nothing is dirty
+	flushAndClear();																									// release: never drop a dirty line - spill it - even if the contract was broken
 }
 
 void RegisterCache::evict(int physicalRegister) {
@@ -450,21 +450,21 @@ static_assert(sizeof(Status) <= sizeof(void*), "JIT CALL_NVC assumes a native's 
 	bakes in (arg in the ABI arg register, the call/return, frame alignment + Win64 shadow space).
 */
 #if defined(__aarch64__) || defined(_M_ARM64)
-const uint32_t PROBE_STUB[] = {			// stp x29,x30,[sp,#-16]! ; mov x9,x0 ; mov x0,x1 ; blr x9 ; ldp x29,x30,[sp],#16 ; ret
+const uint32_t PROBE_STUB[] = {																							// stp x29,x30,[sp,#-16]! ; mov x9,x0 ; mov x0,x1 ; blr x9 ; ldp x29,x30,[sp],#16 ; ret
 	0xA9BF7BFDu, 0xAA0003E9u, 0xAA0103E0u, 0xD63F0120u, 0xA8C17BFDu, 0xD65F03C0u
 };
 #elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
 #	if defined(_WIN32)
-const uint32_t PROBE_STUB[] = {			// sub rsp,40 ; mov rax,rcx ; mov rcx,rdx ; call rax ; add rsp,40 ; ret   (Win64: 32B shadow + align)
+const uint32_t PROBE_STUB[] = {																							// sub rsp,40 ; mov rax,rcx ; mov rcx,rdx ; call rax ; add rsp,40 ; ret   (Win64: 32B shadow + align)
 	0x28EC8348u, 0x48C88948u, 0xD0FFD189u, 0x28C48348u, 0x909090C3u
 };
 #	else
-const uint32_t PROBE_STUB[] = {			// sub rsp,8 ; mov rax,rdi ; mov rdi,rsi ; call rax ; add rsp,8 ; ret   (SysV)
+const uint32_t PROBE_STUB[] = {																							// sub rsp,8 ; mov rax,rdi ; mov rdi,rsi ; call rax ; add rsp,8 ; ret   (SysV)
 	0x08EC8348u, 0x48F88948u, 0xD0FFF789u, 0x08C48348u, 0x909090C3u
 };
 #	endif
 #else
-#	define GAZL_NO_PROBE_STUB									// no JIT backend for this architecture
+#	define GAZL_NO_PROBE_STUB																							// no JIT backend for this architecture
 #endif
 
 #if !defined(GAZL_NO_PROBE_STUB)
@@ -475,7 +475,7 @@ typedef uint32_t (*ProbeFunc)(ProbeCallee, const void*);
 	a passthrough) and the arg pointer crossed intact. probeCallee(&PROBE_INPUT) == 0xC0DE - the value the stub returns.
 */
 uint32_t probeCallee(const void* arg) { return *static_cast<const uint32_t*>(arg) + 0x1111u; }
-const uint32_t PROBE_INPUT = 0xAFCDu;							// 0xAFCD + 0x1111 == 0xC0DE
+const uint32_t PROBE_INPUT = 0xAFCDu;																					// 0xAFCD + 0x1111 == 0xC0DE
 #endif
 
 #if !defined(_WIN32) && !defined(GAZL_NO_PROBE_STUB)
@@ -515,22 +515,22 @@ bool runProbe(ProbeFunc func) {
 }
 #endif
 
-} // anonymous namespace
+}																														// anonymous namespace
 
 bool jitAvailable() {
 #if defined(GAZL_NO_PROBE_STUB)
 	return false;
 #else
-	static int cached = -1;										// -1 unknown / 0 no / 1 yes; probed once (single-threaded startup)
+	static int cached = -1;																								// -1 unknown / 0 no / 1 yes; probed once (single-threaded startup)
 	if (cached < 0) {
 		const size_t words = sizeof(PROBE_STUB) / sizeof(PROBE_STUB[0]);
-		void* page = makeExecutable(PROBE_STUB, words);			// layer 1: policy denial fails the syscalls here
+		void* page = makeExecutable(PROBE_STUB, words);																	// layer 1: policy denial fails the syscalls here
 		if (page == 0) {
 			cached = 0;
 		} else {
 			ProbeFunc func;
-			std::memcpy(&func, &page, sizeof(func));				// void* -> function pointer without an ISO-illegal cast
-			cached = runProbe(func) ? 1 : 0;						// layer 2: the emitted stub actually runs and returns 0xC0DE
+			std::memcpy(&func, &page, sizeof(func));																	// void* -> function pointer without an ISO-illegal cast
+			cached = runProbe(func) ? 1 : 0;																			// layer 2: the emitted stub actually runs and returns 0xC0DE
 			freeExecutable(page, words);
 		}
 	}
@@ -538,4 +538,4 @@ bool jitAvailable() {
 #endif
 }
 
-} // namespace GAZL
+}																														// namespace GAZL
