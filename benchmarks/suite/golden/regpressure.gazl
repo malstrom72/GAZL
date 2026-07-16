@@ -1,0 +1,124 @@
+; register-pressure kernel (Belady vs LRU). A single-block loop updates 12 INDEPENDENT accumulators in
+; place, cycled 6 rounds. The working set far exceeds the JIT register pool, and each update is a
+; read-modify-write, so an eviction costs a dirty spill AND a reload. In this round-robin, LRU keeps the
+; just-used (furthest-next) accumulators and evicts the soonest-needed - near-0 reuse - while block-local
+; Belady keeps the soon-used ones. Independent chains, so the extra memory traffic is not hidden by ILP.
+; Hand-written (not from Impala).
+main:	FUNC
+ PARA *2
+$acc: LOCi
+$i: LOCi
+$t0: LOCi
+$t1: LOCi
+$t2: LOCi
+$t3: LOCi
+$t4: LOCi
+$t5: LOCi
+$t6: LOCi
+$t7: LOCi
+$t8: LOCi
+$t9: LOCi
+$t10: LOCi
+$t11: LOCi
+ MOVi $t0 #1
+ MOVi $t1 #2
+ MOVi $t2 #3
+ MOVi $t3 #4
+ MOVi $t4 #5
+ MOVi $t5 #6
+ MOVi $t6 #7
+ MOVi $t7 #8
+ MOVi $t8 #9
+ MOVi $t9 #10
+ MOVi $t10 #11
+ MOVi $t11 #12
+ MOVi $i #0
+.loop: ADDi $t0 $t0 #1
+ ADDi $t1 $t1 #2
+ ADDi $t2 $t2 #3
+ ADDi $t3 $t3 #4
+ ADDi $t4 $t4 #5
+ ADDi $t5 $t5 #6
+ ADDi $t6 $t6 #7
+ ADDi $t7 $t7 #8
+ ADDi $t8 $t8 #9
+ ADDi $t9 $t9 #10
+ ADDi $t10 $t10 #11
+ ADDi $t11 $t11 #12
+ ADDi $t0 $t0 #1
+ ADDi $t1 $t1 #2
+ ADDi $t2 $t2 #3
+ ADDi $t3 $t3 #4
+ ADDi $t4 $t4 #5
+ ADDi $t5 $t5 #6
+ ADDi $t6 $t6 #7
+ ADDi $t7 $t7 #8
+ ADDi $t8 $t8 #9
+ ADDi $t9 $t9 #10
+ ADDi $t10 $t10 #11
+ ADDi $t11 $t11 #12
+ ADDi $t0 $t0 #1
+ ADDi $t1 $t1 #2
+ ADDi $t2 $t2 #3
+ ADDi $t3 $t3 #4
+ ADDi $t4 $t4 #5
+ ADDi $t5 $t5 #6
+ ADDi $t6 $t6 #7
+ ADDi $t7 $t7 #8
+ ADDi $t8 $t8 #9
+ ADDi $t9 $t9 #10
+ ADDi $t10 $t10 #11
+ ADDi $t11 $t11 #12
+ ADDi $t0 $t0 #1
+ ADDi $t1 $t1 #2
+ ADDi $t2 $t2 #3
+ ADDi $t3 $t3 #4
+ ADDi $t4 $t4 #5
+ ADDi $t5 $t5 #6
+ ADDi $t6 $t6 #7
+ ADDi $t7 $t7 #8
+ ADDi $t8 $t8 #9
+ ADDi $t9 $t9 #10
+ ADDi $t10 $t10 #11
+ ADDi $t11 $t11 #12
+ ADDi $t0 $t0 #1
+ ADDi $t1 $t1 #2
+ ADDi $t2 $t2 #3
+ ADDi $t3 $t3 #4
+ ADDi $t4 $t4 #5
+ ADDi $t5 $t5 #6
+ ADDi $t6 $t6 #7
+ ADDi $t7 $t7 #8
+ ADDi $t8 $t8 #9
+ ADDi $t9 $t9 #10
+ ADDi $t10 $t10 #11
+ ADDi $t11 $t11 #12
+ ADDi $t0 $t0 #1
+ ADDi $t1 $t1 #2
+ ADDi $t2 $t2 #3
+ ADDi $t3 $t3 #4
+ ADDi $t4 $t4 #5
+ ADDi $t5 $t5 #6
+ ADDi $t6 $t6 #7
+ ADDi $t7 $t7 #8
+ ADDi $t8 $t8 #9
+ ADDi $t9 $t9 #10
+ ADDi $t10 $t10 #11
+ ADDi $t11 $t11 #12
+ FORi $i #2000000 @.loop
+ MOVi $acc #0
+ ADDi $acc $acc $t0
+ ADDi $acc $acc $t1
+ ADDi $acc $acc $t2
+ ADDi $acc $acc $t3
+ ADDi $acc $acc $t4
+ ADDi $acc $acc $t5
+ ADDi $acc $acc $t6
+ ADDi $acc $acc $t7
+ ADDi $acc $acc $t8
+ ADDi $acc $acc $t9
+ ADDi $acc $acc $t10
+ ADDi $acc $acc $t11
+ MOVi %1 $acc
+ CALL ^printInt %0 *2
+ RETU
