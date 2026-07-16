@@ -179,10 +179,11 @@ Then:
   bit‑identical by construction. `GETL`/`SETL`/`ADRL` lower to the same checked memory ops the interpreter runs.
 - **v2:** registers become a **write‑back cache of the frame** (§5.7): every slot - aliasable or not - is cacheable
   within a basic block, with conservative flushes around pointer memory ops (v2.0, sound with no aliasing rule at all);
-  **private** slots additionally get fixed whole‑function *bound* registers exempt from those flushes (v2.1 - this is
-  what the escape floor and the §1.1 rule are for). The 15 zero‑escape kernels (`perfTest1`/`perfTest2`/
-  `LadderFilter`/…) have no floor, so every scalar is bound‑eligible; even `perfTest.main` (the 13‑slot bank) keeps its
-  14 pre‑bank scalars bound. The full allocator design is **§5.7**.
+  **private** slots additionally get fixed *bound* registers held *through* those flushes (v2.3 - this is what the §1.1
+  region‑membership rule is for; the earlier directional "escape floor" was rejected as unsound). Binding across control
+  flow *between* hazards needs no such proof and is aliasing‑free (v2.1/v2.2). The 15 zero‑escape kernels (`perfTest1`/
+  `perfTest2`/`LadderFilter`/…) have no address‑taken slots at all, so every scalar is bound‑eligible; even
+  `perfTest.main` (the 13‑slot bank) keeps its 14 pre‑bank scalars bound. The full allocator design is **§5.7**.
 
 **Spec decision - two iterations.** A first draft proposed "distinct named locals never alias" (any cross‑local access
 = unspecified). **Retracted as unsound**: `perfTest.gazl`, `buffer.gazl`, and `nobuffer.gazl` deliberately `ADRL` one
@@ -552,9 +553,10 @@ beside it.
   load. No profiling, no tiering, no OSR, no deopt. Produces one native function per GAZL `FUNC`.
 
 - **Tier 2 - register‑allocating JIT (v2, committed - §5.7).** Same lowering + registers treated as a write‑back
-  cache of the frame, staged v2.0 (block‑local floating cache, no aliasing‑spec dependence) → v2.1 (bound registers for
-  hot private scalars) → v2.2 (Liftoff‑style cross‑block join reconciliation) → v2.3 (optional provenance‑scoped
-  flushing). Not built first, but **designed up front**: v1 must
+  cache of the frame, staged v2.0 (block‑local floating cache, no aliasing‑spec dependence) → v2.0.5 (block‑local Belady
+  eviction) → v2.1 (fixed binding over memory‑clean regions, aliasing‑free) → v2.2 (Liftoff‑style cross‑block
+  reconciliation, aliasing‑free - the big win) → v2.3 (bind through hazards + provenance‑scoped flushing, the only stage
+  needing the aliasing spec). v2.0/v2.0.5 committed. Not built first, but **designed up front**: v1 must
   satisfy the compatibility contract in §5.7.7 so v2 is an additive change. Still no speculation and no deopt - GAZL
   has no dynamic types to speculate on, so the machinery that causes most JIT CVEs never enters the design.
 
@@ -844,10 +846,11 @@ joins* (a label's predecessors must agree on cache state). Two kinds of line:
   def), LRU‑evicted under pressure, **flushed‑dirty and cleared at every basic‑block boundary**. Because floating state
   never crosses a label, joins are trivially consistent, resume needs no register reconstruction, and the §8 machine‑
   code verifier can check each block in isolation.
-- **Bound lines** (v2.1) - a few hot *private* scalars given one fixed register for the whole function. Because the
-  binding is the same everywhere, a bound line is join‑consistent by construction and survives labels - which is
-  exactly what floating lines give up. ("Bound", not "pinned", to avoid colliding with §5.3's pinned VM‑state
-  registers.)
+- **Bound lines** - a hot *private* scalar given a fixed register. Because the binding is the same everywhere, a bound
+  line is join‑consistent by construction and survives labels - exactly what floating lines give up. Two reaches: over a
+  **memory‑clean region**, still flushed at hazards + safepoints, which needs no aliasing spec (v2.1); or held *through*
+  hazards for a whole function, which needs the privacy proof (v2.3, region membership §1.1). ("Bound", not "pinned", to
+  avoid colliding with §5.3's pinned VM‑state registers.)
 
 **The stages - each independently sound, each measured** (`benchmarks/jit/JitBenchA3`, hand‑written models of the
 emitted code, Apple Silicon, integer kernels; speedups vs the interpreter):
@@ -857,15 +860,28 @@ emitted code, Apple Silicon, integer kernels; speedups vs the interpreter):
 | v1 | all slots memory‑resident | no | 2.8× | ~3× (est.) |
 | **v2.0** | floating lines only; **conservative flush around every pointer memory op**; **LRU** eviction | **no - sound with no aliasing rule at all** | 3.9× | 5.2-5.5× |
 | **v2.0.5** | + **block-local Belady** eviction (furthest next use from a single reverse scan of the block) + skip-dead-flush; a drop-in victim swap, no aliasing spec, no cross-block liveness | no | (arm64 ≈ v2.0; bites on x64 pressure) | - |
-| **v2.1** | + bound lines (fixed‑map cross‑block, §5.7.6) for hot private scalars (region membership, §1.1) | **yes - this is what the spec is for** | 6.1× | 12.4-13.6× |
-| **v2.2** | + **Liftoff‑style join reconciliation** (varying per‑block maps; the general cross‑block form, §5.7.6) **+ the global backward liveness / next-use pass** (needed to decide cross-block residency) | yes (same spec as v2.1) | (gains on multi‑join call‑free loops) | - |
-| v2.3 | + provenance‑scoped flushing (taint frame‑born pointers) | yes (already required by v2.1) | - | 5.7-6.4× without bound lines; ~10-20 % over v2.0 |
+| **v2.1** | + **fixed binding** over memory‑clean regions: a hot private scalar gets a fixed register, survives labels (join‑trivial), still flushed/reloaded at hazards + safepoints (§5.7.6). Aliasing‑FREE. Likely skipped - v2.2 subsumes it. | **no - control‑flow survival only** | \* | \* |
+| **v2.2** | + **cross‑block reconciliation** (Liftoff‑style, §5.7.6): keep the floating cache live *across* control‑flow boundaries, flush only at hazards, reload only on a real suspend; varying per‑block maps + edge shuffles + the global backward liveness/next‑use pass. Aliasing‑FREE. **The big win - removes the block‑boundary clear.** | **no** | \* | \* |
+| v2.3 | + **reduce hazard flushing itself**: bind THROUGH provably‑unaliased pointer/`GETL`/`SETL`/`COPY` (region membership, §1.1) + provenance‑scoped flushing. Merges old v2.1 (bind‑through‑hazards) + old v2.3. | **yes - the spec's only customer** | - | ~10-20 % over v2.2 (5.7-6.4× standalone) |
 
 The measured surprise that set this staging: **the block‑boundary clear is the expensive part, not the pointer
 flushes.** Conservative flushing costs only ~10-20 % over provenance‑scoped flushing (store‑to‑load forwarding makes
-the flush/reload traffic nearly free, at least on Apple Silicon - expect somewhat more on small x64 cores), while bound
-lines roughly **double** throughput on both kernels. So the aliasing spec's real customer is v2.1's bound lines, and
-v2.0 ships with no spec dependence whatsoever.
+the flush/reload traffic nearly free, at least on Apple Silicon - expect somewhat more on small x64 cores), while
+surviving *labels* roughly **doubles** throughput on both kernels.
+
+\* **Renumbered (2026‑07).** The old staging bundled two independent flushes into one "bound lines" stage; they are now
+split by *which* flush they remove. **v2.1/v2.2 remove the control‑flow (block‑boundary) clear - aliasing‑FREE; v2.3
+removes the hazard‑op flush - needs the spec.** The old bound‑lines measurement (6.1× arith / 12.4-13.6× seq‑memory) was
+of the bundled mechanism; per the finding above its bulk is the aliasing‑free label survival (now v2.1 for a single
+scalar, v2.2 in general), and the spec is worth only the ~10-20 % residual (now v2.3). So the aliasing spec's real - and
+*only* - customer is v2.3; everything through v2.2 ships with no spec dependence whatsoever. Suspend/resume across live
+registers is not a separate obstacle: the spill/reload rides the existing per‑safepoint suspend and cold‑reload stubs
+(§5.7.5), driven by the same reconciliation map, paid only on an actual suspension.
+
+> The detailed subsections below (§5.7.2, §5.7.3) still use the pre‑renumber "bound lines" framing (whole‑function
+> binding bundled with hazard‑flush exemption) and its old §-numbers; read them against this split. A careful pass to
+> reconcile the pseudo‑code with v2.1 (aliasing‑free fixed binding) / v2.2 (reconciliation) / v2.3 (hazard flushing) is
+> pending - deferred rather than swept, to avoid corrupting the measured detail.
 
 **Corpus facts the design builds on (§1.1):** locals sit at negative dsp‑relative offsets in declaration order,
 transients at `[0, paramsSize)`; frame layout is ABI; every `ADRL` carries `*0`; ~18 % of `ADRL` targets are scalars;
