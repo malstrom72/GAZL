@@ -94,3 +94,38 @@ ref_seq_back:				add eax, ecx
 ref_seq_done:				ret
 		GLOBL(ref_seq_end)
 ENTRY(ref_seq_end)			ret
+
+// SSE scalar-float forms (movssReg emits movaps since the xmm-merge false-dep fix; ITOF/FLOF get an xorps dep-break).
+// xmm1/xmm2 stay in the low 8 so most forms need no REX; ref_movaps_ext covers the REX.R path on the SSE opcode map.
+		GLOBL(ref_movss_load)
+ENTRY(ref_movss_load)		movss xmm1, [rbx + 0x40]
+		GLOBL(ref_movss_store)
+ENTRY(ref_movss_store)		movss [rbx + 0x40], xmm1
+		GLOBL(ref_movaps_rr)
+ENTRY(ref_movaps_rr)		movaps xmm1, xmm2
+		GLOBL(ref_movaps_ext)
+ENTRY(ref_movaps_ext)		movaps xmm9, xmm2
+		GLOBL(ref_addss)
+ENTRY(ref_addss)			addss xmm1, xmm2
+		GLOBL(ref_subss)
+ENTRY(ref_subss)			subss xmm1, xmm2
+		GLOBL(ref_mulss)
+ENTRY(ref_mulss)			mulss xmm1, xmm2
+		GLOBL(ref_divss)
+ENTRY(ref_divss)			divss xmm1, xmm2
+		GLOBL(ref_ucomiss)
+ENTRY(ref_ucomiss)			ucomiss xmm1, xmm2
+		GLOBL(ref_xorps)
+ENTRY(ref_xorps)			xorps xmm1, xmm1
+		GLOBL(ref_cvtsi2ss)
+ENTRY(ref_cvtsi2ss)			cvtsi2ss xmm1, ecx
+		GLOBL(ref_cvttss2si)
+ENTRY(ref_cvttss2si)		cvttss2si eax, xmm1
+		GLOBL(ref_movd_to_xmm)
+ENTRY(ref_movd_to_xmm)		movd xmm1, ecx
+		GLOBL(ref_movd_from_xmm)
+ENTRY(ref_movd_from_xmm)	movd eax, xmm1
+		GLOBL(ref_roundss)
+ENTRY(ref_roundss)			roundss xmm1, xmm2, 1
+		GLOBL(ref_float_end)
+ENTRY(ref_float_end)		ret

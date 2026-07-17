@@ -46,6 +46,9 @@ extern "C" {
 	extern const uint8_t ref_store_d8, ref_loadq_d8;
 	extern const uint8_t ref_push_rbx, ref_push_r12, ref_pop_rbx, ref_ret;
 	extern const uint8_t ref_seq, ref_seq_end;
+	extern const uint8_t ref_movss_load, ref_movss_store, ref_movaps_rr, ref_movaps_ext;
+	extern const uint8_t ref_addss, ref_subss, ref_mulss, ref_divss, ref_ucomiss, ref_xorps;
+	extern const uint8_t ref_cvtsi2ss, ref_cvttss2si, ref_movd_to_xmm, ref_movd_from_xmm, ref_roundss, ref_float_end;
 }
 
 static int failures = 0;
@@ -110,6 +113,25 @@ int main() {
 		e.finalize();
 		check("seq(branches)", e, &ref_seq, &ref_seq_end);
 	}
+
+	// SSE scalar-float forms (XMM operands reuse the Reg 0..15 encodings). xmm1/xmm2 are the low-8 pool range; xmm9
+	// exercises the REX.R path on the SSE opcode map. movssReg lowers to movaps (0F 28) since the merge false-dep fix.
+	const Reg X1 = static_cast<Reg>(1), X2 = static_cast<Reg>(2), X9 = static_cast<Reg>(9);
+	{ X64Emitter e; e.movssLoad(X1, RBX, 0x40); check("movss_load", e, &ref_movss_load, &ref_movss_store); }
+	{ X64Emitter e; e.movssStore(RBX, 0x40, X1); check("movss_store", e, &ref_movss_store, &ref_movaps_rr); }
+	{ X64Emitter e; e.movssReg(X1, X2); check("movaps_rr", e, &ref_movaps_rr, &ref_movaps_ext); }
+	{ X64Emitter e; e.movssReg(X9, X2); check("movaps_ext", e, &ref_movaps_ext, &ref_addss); }
+	{ X64Emitter e; e.addss(X1, X2); check("addss", e, &ref_addss, &ref_subss); }
+	{ X64Emitter e; e.subss(X1, X2); check("subss", e, &ref_subss, &ref_mulss); }
+	{ X64Emitter e; e.mulss(X1, X2); check("mulss", e, &ref_mulss, &ref_divss); }
+	{ X64Emitter e; e.divss(X1, X2); check("divss", e, &ref_divss, &ref_ucomiss); }
+	{ X64Emitter e; e.ucomiss(X1, X2); check("ucomiss", e, &ref_ucomiss, &ref_xorps); }
+	{ X64Emitter e; e.xorps(X1, X1); check("xorps", e, &ref_xorps, &ref_cvtsi2ss); }
+	{ X64Emitter e; e.cvtsi2ss(X1, RCX); check("cvtsi2ss", e, &ref_cvtsi2ss, &ref_cvttss2si); }
+	{ X64Emitter e; e.cvttss2si(RAX, X1); check("cvttss2si", e, &ref_cvttss2si, &ref_movd_to_xmm); }
+	{ X64Emitter e; e.movdToXmm(X1, RCX); check("movd_to_xmm", e, &ref_movd_to_xmm, &ref_movd_from_xmm); }
+	{ X64Emitter e; e.movdFromXmm(RAX, X1); check("movd_from_xmm", e, &ref_movd_from_xmm, &ref_roundss); }
+	{ X64Emitter e; e.roundss(X1, X2, 1); check("roundss", e, &ref_roundss, &ref_float_end); }
 
 	// Negative control: a deliberately wrong encoding must be flagged (proves the harness bites).
 	{
