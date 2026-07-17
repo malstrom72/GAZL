@@ -1,0 +1,27 @@
+// Phase-wrap quantizer with a gain-normalize stage, scalar float only -- no arrays. Suite coverage for FLOF (floor)
+// next to a long-latency divide: floor lowers to x64 roundss, which MERGES into its destination register, so a stale
+// still-in-flight value there (e.g. last iteration's divss) would join the loop-carried recurrence -- the hazard class
+// behind the v2.0.5 mandelbrot regression. Today the emitter's per-iteration constant loads (full-width movd into pool
+// scratch) happen to scrub every rotating register, masking the effect; this kernel guards the dependency-breaking
+// zero in the FLOF lowering against codegen changes (e.g. hoisting loop constants) that would remove that accidental
+// protection. The checksum is ftoi(acc/1e9) + ftoi(accQ/1e18): deterministic and bit-exact between the interpreter
+// and the JIT (all arithmetic is single-precision in both, evaluated in the same order).
+extern native printInt;
+
+const int N = 20000000;
+
+function main()
+locals int i, float p, float q, float acc, float accQ
+{
+	i = 0;
+	p = itof(i);					// itof of a VARIABLE, not a 0.0 literal: a constant init (even itof(0) -- the assembler
+	acc = itof(i);					// folds a const source) defines the slot in a GENERAL register, and the v2.2 loop residency
+	accQ = itof(i);					// would then pin it there, adding a GP->mem->XMM round trip per iteration
+	for (i = 0 to N) {
+		p = p + 0.7137;
+		acc = acc + floor(p);
+		q = acc / 1.7;
+		accQ = accQ + q;
+	}
+	printInt(ftoi(acc * 0.000000001) + ftoi(accQ * 0.000000000000000001));
+}

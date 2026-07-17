@@ -1,0 +1,22 @@
+// Crossfade of two integer ramps (the DSP staple: mix = a*(1-t) + b*t with integer indices), scalar float only -- no
+// arrays. Two int->float conversions per sample: every ITOF lowers to cvtsi2ss into the same fixed x64 scratch
+// register, and cvtsi2ss MERGES into its destination, so without a dependency-breaking zero each conversion
+// false-depends on the previous one -- all conversions in the program serialize into a single chain. The checksum is
+// ftoi(acc / 1000000000): deterministic and bit-exact between the interpreter and the JIT (all arithmetic is
+// single-precision in both, evaluated in the same order).
+extern native printInt;
+
+const int N = 20000000;
+
+function main()
+locals int k, float acc
+{
+	k = 0;
+	acc = itof(k);					// itof of a VARIABLE, not a 0.0 literal: a constant init (even itof(0) -- the assembler
+									// folds a const source) defines the slot in a GENERAL register, and the v2.2 loop residency
+									// would then pin it there, adding a GP->mem->XMM round trip per iteration
+	for (k = 0 to N) {
+		acc = acc + itof(k) * 0.25 + itof(N - k) * 0.75;
+	}
+	printInt(ftoi(acc * 0.000000001));
+}

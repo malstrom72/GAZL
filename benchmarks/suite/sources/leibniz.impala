@@ -1,0 +1,23 @@
+// Leibniz series for pi (4 * sum of (-1)^k / (2k+1)), scalar float only -- no arrays. One int->float conversion (ITOF)
+// per term keeps the conversion unit on the loop's critical path, which is exactly what the x64 backend's cvtsi2ss
+// merge false-dependency punishes (the ITOF scratch register's previous value chains consecutive conversions). The
+// checksum is ftoi(sum * 4000000): deterministic and bit-exact between the interpreter and the JIT (all arithmetic is
+// single-precision in both, evaluated in the same order).
+extern native printInt;
+
+const int N = 20000000;
+
+function main()
+locals int k, float acc, float sign, float den
+{
+	k = 0;
+	acc = itof(k);					// itof of a VARIABLE, not a 0.0 literal: a constant init (even itof(0) -- the assembler
+	sign = itof(k) + 1.0;			// folds a const source) defines the slot in a GENERAL register, and the v2.2 loop residency
+									// would then pin it there, adding a GP->mem->XMM round trip per iteration
+	for (k = 0 to N) {
+		den = itof(2 * k + 1);
+		acc = acc + sign / den;
+		sign = 0.0 - sign;
+	}
+	printInt(ftoi(acc * 4000000.0));
+}

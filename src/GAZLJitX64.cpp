@@ -155,13 +155,14 @@ void X64Emitter::sseRR(uint8_t prefix, uint8_t opcode, int reg, int rm) {
 }
 void X64Emitter::movssLoad(Reg xd, Reg base, int32_t disp) { b(0xF3); rex(false, xd, base); b(0x0F); b(0x10); memOperand(xd, base, disp); }
 void X64Emitter::movssStore(Reg base, int32_t disp, Reg xs) { b(0xF3); rex(false, xs, base); b(0x0F); b(0x11); memOperand(xs, base, disp); }
-void X64Emitter::movssReg(Reg xd, Reg xs) { sseRR(0xF3, 0x10, xd, xs); }												// movss xd, xs (xmm register copy; F3 0F 10 /r)
+void X64Emitter::movssReg(Reg xd, Reg xs) { sseRR(0x00, 0x28, xd, xs); }												// movaps xd, xs (xmm register copy; 0F 28 /r - full-register write: no merge false-dep, move-eliminated)
 void X64Emitter::addss(Reg xd, Reg xs) { sseRR(0xF3, 0x58, xd, xs); }
 void X64Emitter::subss(Reg xd, Reg xs) { sseRR(0xF3, 0x5C, xd, xs); }
 void X64Emitter::mulss(Reg xd, Reg xs) { sseRR(0xF3, 0x59, xd, xs); }
 void X64Emitter::divss(Reg xd, Reg xs) { sseRR(0xF3, 0x5E, xd, xs); }
 void X64Emitter::ucomiss(Reg xa, Reg xb) { sseRR(0x00, 0x2E, xa, xb); }
 void X64Emitter::cvttss2si(Reg rd, Reg xs) { sseRR(0xF3, 0x2C, rd, xs); }
+void X64Emitter::xorps(Reg xd, Reg xs) { sseRR(0x00, 0x57, xd, xs); }													// xorps xd, xs (0F 57 /r); xd == xs is the recognized zero idiom, breaking dependencies on xd
 void X64Emitter::cvtsi2ss(Reg xd, Reg rs) { sseRR(0xF3, 0x2A, xd, rs); }
 void X64Emitter::movdToXmm(Reg xd, Reg rs) { sseRR(0x66, 0x6E, xd, rs); }
 void X64Emitter::movdFromXmm(Reg rd, Reg xs) { sseRR(0x66, 0x7E, xs, rd); }												// 66 0F 7E /r: ModRM.reg = xmm source
@@ -882,11 +883,11 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 			case OP_ITOF_VVC: {
-				const int src = cache.read(in.p1.i, GENERAL_REGISTER);
-				emitter.cvtsi2ss(FLOAT_0, static_cast<Reg>(src));
-				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p2.i)); emitter.movdToXmm(FLOAT_1, SCRATCH_A); emitter.mulss(FLOAT_0, FLOAT_1);
+				const int src = cache.read(in.p1.i, GENERAL_REGISTER);													// read before define: p0 may alias p1 (in-place itof)
 				const int d = cache.define(in.p0.i, FLOAT_REGISTER);
-				emitter.movssReg(static_cast<Reg>(d), FLOAT_0);
+				emitter.xorps(static_cast<Reg>(d), static_cast<Reg>(d));												// cvtsi2ss merges into d: zero it first or the conversion false-depends on d's last writer
+				emitter.cvtsi2ss(static_cast<Reg>(d), static_cast<Reg>(src));											// convert straight into d (no FLOAT_0 round trip / copy)
+				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p2.i)); emitter.movdToXmm(FLOAT_1, SCRATCH_A); emitter.mulss(static_cast<Reg>(d), FLOAT_1);
 				cache.endInstruction();
 				break;
 			}
@@ -900,7 +901,11 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				cache.endInstruction();
 				break;
 			}
-			case OP_FLOF: { const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER); emitter.roundss(static_cast<Reg>(d), static_cast<Reg>(s), 1); cache.endInstruction(); break; }
+			case OP_FLOF: {
+				const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER);
+				if (d != s) { emitter.xorps(static_cast<Reg>(d), static_cast<Reg>(d)); }								// roundss merges into d: zero a distinct d first or it false-depends on d's stale value
+				emitter.roundss(static_cast<Reg>(d), static_cast<Reg>(s), 1); cache.endInstruction(); break;
+			}
 
 			case OP_LSSF_VVB: emitBranchFloat(emitter, cache, 0, in, j, false, false, labels, entryMaps); break;
 			case OP_LSSF_VCB: emitBranchFloat(emitter, cache, 0, in, j, false, true, labels, entryMaps); break;

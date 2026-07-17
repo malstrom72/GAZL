@@ -1,0 +1,31 @@
+ ; Compiled with Impala version 1.0
+
+ ; signatures version=1
+ ; signature extern native printInt() -> unknown @ 6:23
+ N:					! DEFi #20000000 ; signature const N : int @ 8:23
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC		; signature func main() -> void @ 10:15
+ 								PARA *1
+ 					$k:			LOCi
+ 					$acc:		LOCf
+ 					$sign:		LOCf
+ 					$den:		LOCf
+ ;-----------------------------------------------------------------------------
+ 								MOVi $k #0 						; k = 0
+ 								iTOf $acc $k #1.0				; acc = itof(k)
+ 								iTOf %0 $k #1.0					; sign = itof(k) + 1.0
+ 								ADDf $sign %0 #1.0
+ 								MOVi $k #0 						; for (k = 0 to N) 
+ 								GEQi #0 #N @.e0
+ 					.l1:		MULi %0 #2 $k					; den = itof(2 * k + 1)
+ 								ADDi %0 %0 #1
+ 								iTOf $den %0 #1.0
+ 								DIVf %0 $sign $den				; acc = acc + sign / den
+ 								ADDf $acc $acc %0
+ 								SUBf $sign #0.0 $sign			; sign = 0.0 - sign
+ 								FORi $k #N @.l1					; }
+ 					.e0:		fTOi %1 $acc #4000000.0			; printInt(ftoi(acc * 4000000.0))
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 22:33
+ 								RETU   							; }
+

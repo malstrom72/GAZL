@@ -119,6 +119,7 @@ class X64Emitter {
 		void divss(Reg xd, Reg xs);								// `divss xd, xs`
 		void ucomiss(Reg xa, Reg xb);							// `ucomiss xa, xb` (sets EFLAGS for a float compare)
 		void cvttss2si(Reg rd, Reg xs);							// `cvttss2si rd, xs` (float -> int, truncate; FTOI)
+		void xorps(Reg xd, Reg xs);								// `xorps xd, xs` (xd == xs zeroes xd, breaking merge false-deps)
 		void cvtsi2ss(Reg xd, Reg rs);							// `cvtsi2ss xd, rs` (int -> float; ITOF)
 		void movdToXmm(Reg xd, Reg rs);							// `movd xd, rs` (bit-copy int -> xmm; float const load)
 		void movdFromXmm(Reg rd, Reg xs);						// `movd rd, xs` (bit-copy xmm -> int; FTOI saturation)
