@@ -36,6 +36,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>																									// __try/__except fault guard for the probe
+#undef RegisterClass																									// winuser.h macro (RegisterClassW) collides with GAZL::RegisterClass
 #else
 #include <csignal>																										// sigaction - POSIX fault guard for the probe
 #include <csetjmp>																										// sigsetjmp / siglongjmp
@@ -120,6 +121,75 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 }
 
 /*
+	Residency-compatible opcodes: a resident loop pays off when its body never drops the map. A frame-touching memory op
+	(pointer/GETL/SETL), call, or COPY inside the body flushes or drops the map every iteration, and the header's dirty
+	modeling then adds stores that the plain v2.0 fill-on-use block never paid - measured as a net LOSS on such loops -
+	so they stay v2.0 until the general per-block reconciliation lands. Const-address SCALAR PEEK/POKE are globals-realm
+	(§1.1) and flush-free: residency-safe. The INDEXED const forms are flush-free too but burn several scratch registers
+	per op, and inside a resident loop that eviction churn measured 2x SLOWER (spectralnorm) - they stay excluded.
+	DIVI/MODI/DIVF flush dirty lines on their main-path trap spill but keep the map resident (a net win); allowed.
+*/
+static bool jitResidencySafe(Int op) {
+	switch (op) {
+		case OP_MOVE_VV: case OP_MOVE_VC:
+		case OP_PEEK_VC: case OP_POKE_CV: case OP_POKE_CC:
+		case OP_ABSI: case OP_ABSF: case OP_FLOF:
+		case OP_ADDI_VVV: case OP_ADDI_VVC: case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV:
+		case OP_MULI_VVV: case OP_MULI_VVC:
+		case OP_DIVI_VVV: case OP_DIVI_VVC: case OP_DIVI_VCV:
+		case OP_MODI_VVV: case OP_MODI_VVC: case OP_MODI_VCV:
+		case OP_ANDI_VVV: case OP_ANDI_VVC: case OP_IORI_VVV: case OP_IORI_VVC: case OP_XORI_VVV: case OP_XORI_VVC:
+		case OP_SHLI_VVV: case OP_SHLI_VVC: case OP_SHLI_VCV:
+		case OP_SHRI_VVV: case OP_SHRI_VVC: case OP_SHRI_VCV:
+		case OP_SHRU_VVV: case OP_SHRU_VVC: case OP_SHRU_VCV:
+		case OP_ADDF_VVV: case OP_ADDF_VVC: case OP_SUBF_VVV: case OP_SUBF_VVC: case OP_SUBF_VCV:
+		case OP_MULF_VVV: case OP_MULF_VVC:
+		case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
+		case OP_FTOI_VVC: case OP_ITOF_VVC:
+		case OP_FORi_VVB: case OP_FORi_VCB:
+		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB:
+		case OP_EQUI_VVB: case OP_EQUI_VCB:
+		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB:
+		case OP_NEQI_VVB: case OP_NEQI_VCB:
+		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
+		case OP_EQUF_VVB: case OP_EQUF_VCB:
+		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
+		case OP_NEQF_VVB: case OP_NEQF_VCB:
+		case OP_GOTO:
+			return true;
+		default:
+			return false;
+	}
+}
+
+// v2.2 residency qualification - see GAZLJit.h. A loop header = a back-edge target no forward branch or SWCH reaches.
+void JitCompiler::jitResidencyLeaders(const Instruction* code, UInt funcStart, UInt endIndex
+		, const Value* memory, std::map<UInt, UInt>& loopExtent) {
+	std::set<UInt> excluded;
+	for (UInt j = funcStart; j <= endIndex; ++j) {
+		UInt target;
+		if (jitBranchTarget(code, j, target)) {
+			if (target > j) { excluded.insert(target); }																	// a forward edge arrives with an empty cache
+			else { std::map<UInt, UInt>::iterator it = loopExtent.find(target); if (it == loopExtent.end() || it->second < j) { loopExtent[target] = j; } }
+		} else if (code[j].opcode == OP_SWCH) {
+			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
+			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
+			for (UInt k = 0; k < size; ++k) { excluded.insert(static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i)); }
+		}
+	}
+	for (std::set<UInt>::const_iterator it = excluded.begin(); it != excluded.end(); ++it) { loopExtent.erase(*it); }
+	for (std::map<UInt, UInt>::iterator it = loopExtent.begin(); it != loopExtent.end(); ) {							// keep only register-only single-block bodies (see jitResidencySafe)
+		bool safe = true;
+		for (UInt j = it->first; j <= it->second && safe; ++j) {
+			if (!jitResidencySafe(code[j].opcode)) { safe = false; }
+			UInt target;
+			if (jitBranchTarget(code, j, target) && target > j) { safe = false; }										// an internal forward branch (early exit / if-join): the leader after it drops the map
+		}
+		if (safe) { ++it; } else { loopExtent.erase(it++); }
+	}
+}
+
+/*
 	JitModule - the RAII owner of the executable page: the constructor makes the emitted code executable and takes
 	ownership (acquisition == initialization), then materializes the ordinal->entry table + dispatcher entry. makeExecutable
 	is the last thing that acquires, and everything after it is plain pointer arithmetic that cannot throw, so a partially
@@ -180,10 +250,24 @@ void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& 
 	for (UInt j = from; j <= to; ++j) {
 		OperandRole roles[3];
 		operandRoles(code[j].opcode, roles);
+		if (code[j].opcode == OP_FORi_VVB || code[j].opcode == OP_FORi_VCB) { roles[0] = OPERAND_SLOT_READ; }	// the counter is read-modify-write
 		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
 		for (int k = 0; k < 3; ++k) {
 			if (roles[k] == OPERAND_SLOT_READ) { schedule[operands[k]->i].push_back(j); }				// ascending j -> lists stay sorted
 		}
+	}
+}
+
+void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots) {
+	for (UInt j = from; j <= to; ++j) {
+		OperandRole roles[3];
+		operandRoles(code[j].opcode, roles);
+		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
+		for (int k = 0; k < 3; ++k) {
+			if (roles[k] == OPERAND_SLOT_READ) { readSlots.insert(operands[k]->i); }
+			else if (roles[k] == OPERAND_SLOT_WRITE) { writtenSlots.insert(operands[k]->i); }
+		}
+		if (code[j].opcode == OP_FORi_VVB || code[j].opcode == OP_FORi_VCB) { readSlots.insert(code[j].p0.i); }	// the counter is read-modify-write
 	}
 }
 
@@ -357,6 +441,30 @@ void RegisterCache::spillDirtyResident() {
 	for (size_t i = 0; i < registerPool.floatCount; ++i) { spillLine(FLOAT_REGISTER, static_cast<int>(i)); }
 }
 
+/*
+	Snapshot the dirty lines for a terminal trap ARM (no model change, no emission). Captured at the trap BRANCH's
+	emission point - where the compile-time model equals the trap path's runtime register state - the backend then emits
+	plain stores from the snapshot on the cold arm, making the exit image interpreter-identical. The arm never rejoins
+	the mainline, so the model must not observe those stores (marking lines clean was the historical mid-op trap bug);
+	and capturing anywhere later is wrong too - the op's own define holds garbage on the trap path, and a later eviction
+	may reuse a captured register.
+*/
+void RegisterCache::captureDirtyLines(ResidencyMap& map) const {
+	assert(map.entries.empty());
+	for (int c = 0; c < 2; ++c) {
+		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
+		const size_t count = (registerClass == GENERAL_REGISTER) ? registerPool.generalCount : registerPool.floatCount;
+		const Line* lines = (registerClass == GENERAL_REGISTER) ? generalLines : floatLines;
+		const int* registers = registersOf(registerClass);
+		for (size_t i = 0; i < count; ++i) {
+			if (lines[i].occupied && lines[i].dirty && !lines[i].scratchTemp) {
+				ResidencyMap::Entry entry = { lines[i].slot, registerClass, static_cast<int>(i), registers[i], true };
+				map.entries.push_back(entry);
+			}
+		}
+	}
+}
+
 // spill all dirty (so the home image is current), then drop every mapping (the next block/read starts from memory).
 void RegisterCache::flushAndClear() {
 	spillDirtyResident();
@@ -365,6 +473,86 @@ void RegisterCache::flushAndClear() {
 }
 
 void RegisterCache::barrier() { flushAndClear(); }
+
+/*
+	Snapshot the resident lines as a loop header's fixed entry state (see ResidencyMap). Pruned: a slot the loop never
+	reads is spilled-and-dropped here (keeping it would only make every back-edge refill it). A kept slot the loop
+	WRITES is modeled dirty from iteration one (the redefined value really is dirty when the header is reached again; a
+	clean model would let an eviction skip the store and lose it). A kept read-only slot is canonicalized to
+	register==home (one store, emitted before the header label so it runs once), so hazard flushes inside the loop never
+	re-store it.
+*/
+void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& readInLoop, const std::set<Int>& writtenInLoop) {
+	assert(map.entries.empty() && "a header's entry map is captured once");
+	const size_t RESIDENCY_HEADROOM = 3;																				// registers per class left free for the body's temps and constants (halved for small pools)
+	for (int c = 0; c < 2; ++c) {
+		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
+		size_t count;
+		Line* lines = linesOf(registerClass, count);
+		const int* registers = registersOf(registerClass);
+		size_t kept = 0;
+		const size_t headroom = (RESIDENCY_HEADROOM < count / 2) ? RESIDENCY_HEADROOM : count / 2;
+		const size_t keepMax = count - headroom;
+		for (size_t i = 0; i < count; ++i) {
+			if (!lines[i].occupied) { continue; }
+			assert(!lines[i].pinned && !lines[i].scratchTemp && "capture between instructions only");
+			if (readInLoop.count(lines[i].slot) == 0 || kept >= keepMax) {												// unread in the loop, or the map would strangle the body
+				spillLine(registerClass, static_cast<int>(i));
+				lines[i].occupied = false;
+				continue;
+			}
+			const bool expectDirty = (writtenInLoop.count(lines[i].slot) != 0);
+			if (!expectDirty) { spillLine(registerClass, static_cast<int>(i)); }										// canonical clean: register==home for the whole loop
+			ResidencyMap::Entry entry = { lines[i].slot, registerClass, static_cast<int>(i), registers[i], expectDirty };
+			map.entries.push_back(entry);
+			lines[i].dirty = expectDirty;
+			++kept;
+		}
+	}
+}
+
+/*
+	Re-establish a header's entry state at a back-edge, from spill/fill primitives alone: spill-and-drop every line the
+	map does not want (including a wanted slot sitting in the wrong register - its refill below reads the home the spill
+	just made current), then fill the missing entries. Emits nothing when the state already matches, which is the common
+	back-edge case. Flags are untouched (loads/stores only), so this may sit between a compare and its branch.
+*/
+void RegisterCache::reconcileTo(const ResidencyMap& map) {
+	for (int c = 0; c < 2; ++c) {
+		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
+		size_t count;
+		Line* lines = linesOf(registerClass, count);
+		for (size_t i = 0; i < count; ++i) {
+			if (!lines[i].occupied) { continue; }
+			assert(!lines[i].pinned && !lines[i].scratchTemp && "reconcile between instructions only");
+			bool wanted = false;
+			for (size_t k = 0; k < map.entries.size(); ++k) {
+				const ResidencyMap::Entry& entry = map.entries[k];
+				if (entry.registerClass == registerClass && entry.poolIndex == static_cast<int>(i)
+						&& entry.slot == lines[i].slot) { wanted = true; break; }
+			}
+			if (!wanted) { spillLine(registerClass, static_cast<int>(i)); lines[i].occupied = false; }
+		}
+	}
+	for (size_t k = 0; k < map.entries.size(); ++k) {
+		const ResidencyMap::Entry& entry = map.entries[k];
+		size_t count;
+		Line* lines = linesOf(entry.registerClass, count);
+		Line& line = lines[entry.poolIndex];
+		if (!line.occupied) {
+			cacheBackend.emitFill(entry.physicalRegister, entry.slot, entry.registerClass);							// home is current: the value was spilled above or never diverged
+			line.occupied = true;
+			line.scratchTemp = false;
+			line.slot = entry.slot;
+			line.registerClass = entry.registerClass;
+			line.pinned = false;
+			line.lastUse = ++useClock;
+			line.nextUse = nextReadAfter(entry.slot);
+		}
+		if (entry.expectDirty) { line.dirty = true; }																	// the header models loop-written slots dirty
+		else if (line.dirty) { spillLine(entry.registerClass, entry.poolIndex); }										// read-only slot: re-establish register==home
+	}
+}
 
 void RegisterCache::invalidateAll() { flushAndClear(); }
 

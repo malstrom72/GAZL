@@ -301,6 +301,23 @@ class X64SlotBackend : public RegisterCacheBackend {
 	private:	X64Emitter& e;
 };
 
+// Store every entry of a captured dirty snapshot to its home (terminal trap arms; see RegisterCache::captureDirtyLines).
+static void emitDirtyStores(X64Emitter& e, const ResidencyMap& map) {
+	for (size_t k = 0; k < map.entries.size(); ++k) {
+		const ResidencyMap::Entry& entry = map.entries[k];
+		const Reg r = static_cast<Reg>(entry.physicalRegister);
+		if (entry.registerClass == GENERAL_REGISTER) { e.store(DSP, static_cast<int32_t>(entry.slot) * 4, r); }
+		else { e.movssStore(DSP, static_cast<int32_t>(entry.slot) * 4, r); }
+	}
+}
+
+// A checked memory op's terminal trap, deferred to the function's cold section so the hot path stays branch-and-continue.
+struct ColdTrap {
+	Label label;
+	ResidencyMap dirty;								// the captureDirtyLines snapshot to store before exiting
+	Status status;									// BAD_PEEK / BAD_POKE
+};
+
 // Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
 static bool cacheLowered(Int op) {
 	switch (op) {
@@ -335,6 +352,7 @@ static bool cacheLowered(Int op) {
 		case OP_EQUF_VVB: case OP_EQUF_VCB:
 		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
 		case OP_NEQF_VVB: case OP_NEQF_VCB:
+		case OP_GOTO:																									// flushes inside its case: reconcile (backward, qualified) or barrier
 			return true;
 		default:
 			return false;
@@ -418,7 +436,7 @@ static void emitShift(X64Emitter& emitter, RegisterCache& cache, const Instructi
 
 // if (a <condition> b) goto target - a = p0, b = p1, in the const modes named by the opcode; target = this index + p2.
 static void emitBranch(X64Emitter& emitter, RegisterCache& cache, Cond condition, const Instruction& instruction, UInt instructionIndex,
-		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels) {
+		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels, std::map<UInt, ResidencyMap>& entryMaps) {
 	int a;
 	if (operand0Const) { a = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(a), static_cast<uint32_t>(instruction.p0.i)); }
 	else { a = cache.read(instruction.p0.i, GENERAL_REGISTER); }
@@ -427,8 +445,9 @@ static void emitBranch(X64Emitter& emitter, RegisterCache& cache, Cond condition
 	else { b = cache.read(instruction.p1.i, GENERAL_REGISTER); }
 	emitter.cmp(static_cast<Reg>(a), static_cast<Reg>(b));
 	cache.endInstruction();
-	cache.barrier();																									// block ends here: flush (mov spills leave EFLAGS) before the branch
-	emitter.jcc(condition, labels[static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i)]);
+	const UInt target = static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i);
+	reconcileOrBarrier(cache, entryMaps, target);																		// block ends here (mov loads/stores leave EFLAGS)
+	emitter.jcc(condition, labels[target]);
 }
 
 // Load a float operand into a cache register: a float slot (read), or a constant materialized via a GP scratch + movd.
@@ -485,15 +504,16 @@ static void emitBinaryFloat(X64Emitter& emitter, RegisterCache& cache, BinaryOp 
 
 // Float compare-branch, NaN-correct versus C++: kind 0 = <, 1 = >=, 2 = ==, 3 = !=. a = p0, b = p1, target = index + p2.
 static void emitBranchFloat(X64Emitter& emitter, RegisterCache& cache, int kind, const Instruction& instruction, UInt instructionIndex,
-		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels) {
+		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels, std::map<UInt, ResidencyMap>& entryMaps) {
 	const int a = loadFloatOperandCached(emitter, cache, instruction.p0, operand0Const);
 	const int b = loadFloatOperandCached(emitter, cache, instruction.p1, operand1Const);
 	const Reg xa = static_cast<Reg>(a), xb = static_cast<Reg>(b);
-	Label target = labels[static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i)];
+	const UInt targetIndex = static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i);
+	Label target = labels[targetIndex];
 	if (kind == 0) { emitter.ucomiss(xb, xa); }																			// b > a ordered == (a < b)
 	else { emitter.ucomiss(xa, xb); }
 	cache.endInstruction();
-	cache.barrier();																									// block ends here: flush (mov spills leave EFLAGS) before the branch
+	reconcileOrBarrier(cache, entryMaps, targetIndex);																	// block ends here (mov loads/stores leave EFLAGS)
 	if (kind == 0) { emitter.jcc(CC_A, target); }
 	else if (kind == 1) { emitter.jcc(CC_AE, target); }																	// a >= b ordered
 	else if (kind == 2) { Label unordered = emitter.newLabel(); emitter.jcc(CC_P, unordered); emitter.jcc(CC_E, target); emitter.bind(unordered); }
@@ -546,12 +566,24 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 	UseSchedule useSchedule;
 	buildUseSchedule(code, funcStart, endIndex, useSchedule);															// Belady next-read lists (§5.7 v2.0.5)
 	cache.setUseSchedule(&useSchedule);
+	std::map<UInt, UInt> loopExtent;
+	jitResidencyLeaders(code, funcStart, endIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
+	std::map<UInt, ResidencyMap> entryMaps;
+	std::vector<ColdTrap> coldTraps;																					// checked-op trap arms, emitted after the mainline
 
 	// Pass 2 - emit.
 	for (UInt j = funcStart; j <= endIndex; ++j) {
 		cache.setInstructionIndex(j);
 		std::map<UInt, Label>::iterator labelIt = labels.find(j);
-		if (labelIt != labels.end()) { cache.barrier(); emitter.bind(labelIt->second); }								// leader: flush fall-through, then start empty
+		if (labelIt != labels.end()) {
+			std::map<UInt, UInt>::const_iterator loopIt = loopExtent.find(j);
+			if (loopIt != loopExtent.end()) {																			// loop header: the fall-through state (pruned) becomes the fixed entry state
+				std::set<Int> readSlots, writtenSlots;
+				buildLoopSlotSets(code, j, loopIt->second, readSlots, writtenSlots);
+				cache.capture(entryMaps[j], readSlots, writtenSlots);
+			} else { cache.barrier(); }																					// any other leader: starts empty as in v2.0
+			emitter.bind(labelIt->second);
+		}
 		std::map<UInt, UInt>::iterator weightIt = loopWeight.find(j);													// loop head: charge the block, suspend on timeout (§5.5)
 		if (weightIt != loopWeight.end()) { emitter.subImm(FUEL, weightIt->second); emitter.jcc(CC_S, suspendL[j]); }
 		const Instruction& in = code[j];
@@ -627,37 +659,34 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(r), static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
 
 			// var-indexed global memory (pointer coherence): flush dirty before a read; flush + invalidate around a write.
-			case OP_PEEK_VCV: {
+			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]; globals/constants-realm read
 				const int32_t base = static_cast<int32_t>(in.p1.p - MEMORY_OFFSET);
-				Label trap = emitter.newLabel(), cont = emitter.newLabel();
-				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
-				cache.spillDirtyResident();
+				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_PEEK;
+				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);													// no flush: a const-base access cannot reach the frame (§1.1 realms)
 				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));				// word index = base + index
-				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);
+				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B);
+				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
+				emitter.jcc(CC_AE, trap.label);																			// trap arm is cold, after the mainline
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				emitter.loadIdx(static_cast<Reg>(d), MEMORY_BASE, static_cast<Reg>(idx), base * 4);
 				cache.endInstruction();
-				emitter.jmp(cont);
-				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
-				emitter.bind(cont);
+				coldTraps.push_back(trap);
 				break;
 			}
-			case OP_POKE_CVV: case OP_POKE_CVC: {
+			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value; globals-realm write
 				const int32_t base = static_cast<int32_t>(in.p0.p - MEMORY_OFFSET);
-				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_POKE;
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
 				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(val), static_cast<uint32_t>(in.p2.i)); }
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
-				cache.spillDirtyResident();
-				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));
-				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);
+				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));				// no flush: a const-base access cannot reach the frame (§1.1 realms)
+				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B);
+				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
+				emitter.jcc(CC_AE, trap.label);																			// trap arm is cold, after the mainline
 				emitter.storeIdx(MEMORY_BASE, static_cast<Reg>(idx), base * 4, static_cast<Reg>(val));
 				cache.endInstruction();
-				cache.invalidateAll();
-				emitter.jmp(cont);
-				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
-				emitter.bind(cont);
+				coldTraps.push_back(trap);
 				break;
 			}
 
@@ -812,7 +841,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				else { lim = cache.read(in.p1.i, GENERAL_REGISTER); }
 				emitter.cmp(static_cast<Reg>(r), static_cast<Reg>(lim));
 				cache.endInstruction();
-				cache.barrier();																						// block ends here: flush before the branch
+				reconcileOrBarrier(cache, entryMaps, static_cast<UInt>(static_cast<Int>(j) + in.p2.i));					// block ends here (mov loads/stores leave EFLAGS)
 				emitter.jcc(CC_L, labels[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
 				break;
 			}
@@ -873,18 +902,23 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			}
 			case OP_FLOF: { const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER); emitter.roundss(static_cast<Reg>(d), static_cast<Reg>(s), 1); cache.endInstruction(); break; }
 
-			case OP_LSSF_VVB: emitBranchFloat(emitter, cache, 0, in, j, false, false, labels); break;
-			case OP_LSSF_VCB: emitBranchFloat(emitter, cache, 0, in, j, false, true, labels); break;
-			case OP_LSSF_CVB: emitBranchFloat(emitter, cache, 0, in, j, true, false, labels); break;
-			case OP_EQUF_VVB: emitBranchFloat(emitter, cache, 2, in, j, false, false, labels); break;
-			case OP_EQUF_VCB: emitBranchFloat(emitter, cache, 2, in, j, false, true, labels); break;
-			case OP_NLSF_VVB: emitBranchFloat(emitter, cache, 1, in, j, false, false, labels); break;
-			case OP_NLSF_VCB: emitBranchFloat(emitter, cache, 1, in, j, false, true, labels); break;
-			case OP_NLSF_CVB: emitBranchFloat(emitter, cache, 1, in, j, true, false, labels); break;
-			case OP_NEQF_VVB: emitBranchFloat(emitter, cache, 3, in, j, false, false, labels); break;
-			case OP_NEQF_VCB: emitBranchFloat(emitter, cache, 3, in, j, false, true, labels); break;
+			case OP_LSSF_VVB: emitBranchFloat(emitter, cache, 0, in, j, false, false, labels, entryMaps); break;
+			case OP_LSSF_VCB: emitBranchFloat(emitter, cache, 0, in, j, false, true, labels, entryMaps); break;
+			case OP_LSSF_CVB: emitBranchFloat(emitter, cache, 0, in, j, true, false, labels, entryMaps); break;
+			case OP_EQUF_VVB: emitBranchFloat(emitter, cache, 2, in, j, false, false, labels, entryMaps); break;
+			case OP_EQUF_VCB: emitBranchFloat(emitter, cache, 2, in, j, false, true, labels, entryMaps); break;
+			case OP_NLSF_VVB: emitBranchFloat(emitter, cache, 1, in, j, false, false, labels, entryMaps); break;
+			case OP_NLSF_VCB: emitBranchFloat(emitter, cache, 1, in, j, false, true, labels, entryMaps); break;
+			case OP_NLSF_CVB: emitBranchFloat(emitter, cache, 1, in, j, true, false, labels, entryMaps); break;
+			case OP_NEQF_VVB: emitBranchFloat(emitter, cache, 3, in, j, false, false, labels, entryMaps); break;
+			case OP_NEQF_VCB: emitBranchFloat(emitter, cache, 3, in, j, false, true, labels, entryMaps); break;
 
-			case OP_GOTO: emitter.jmp(labels[static_cast<UInt>(static_cast<Int>(j) + in.p0.i)]); break;
+			case OP_GOTO: {
+				const UInt target = static_cast<UInt>(static_cast<Int>(j) + in.p0.i);
+				reconcileOrBarrier(cache, entryMaps, target);
+				emitter.jmp(labels[target]);
+				break;
+			}
 
 			case OP_SWCH: {																								// index = min(unsigned(V0), C1); jump into a table of `jmp case`
 				const UInt size = static_cast<UInt>(in.p1.i) + 1;
@@ -906,31 +940,65 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 
-			case OP_LSSI_VVB: emitBranch(emitter, cache, CC_L, in, j, false, false, labels); break;
-			case OP_LSSI_VCB: emitBranch(emitter, cache, CC_L, in, j, false, true, labels); break;
-			case OP_LSSI_CVB: emitBranch(emitter, cache, CC_L, in, j, true, false, labels); break;
-			case OP_EQUI_VVB: emitBranch(emitter, cache, CC_E, in, j, false, false, labels); break;
-			case OP_EQUI_VCB: emitBranch(emitter, cache, CC_E, in, j, false, true, labels); break;
-			case OP_NLSI_VVB: emitBranch(emitter, cache, CC_GE, in, j, false, false, labels); break;
-			case OP_NLSI_VCB: emitBranch(emitter, cache, CC_GE, in, j, false, true, labels); break;
-			case OP_NLSI_CVB: emitBranch(emitter, cache, CC_GE, in, j, true, false, labels); break;
-			case OP_NEQI_VVB: emitBranch(emitter, cache, CC_NE, in, j, false, false, labels); break;
-			case OP_NEQI_VCB: emitBranch(emitter, cache, CC_NE, in, j, false, true, labels); break;
+			case OP_LSSI_VVB: emitBranch(emitter, cache, CC_L, in, j, false, false, labels, entryMaps); break;
+			case OP_LSSI_VCB: emitBranch(emitter, cache, CC_L, in, j, false, true, labels, entryMaps); break;
+			case OP_LSSI_CVB: emitBranch(emitter, cache, CC_L, in, j, true, false, labels, entryMaps); break;
+			case OP_EQUI_VVB: emitBranch(emitter, cache, CC_E, in, j, false, false, labels, entryMaps); break;
+			case OP_EQUI_VCB: emitBranch(emitter, cache, CC_E, in, j, false, true, labels, entryMaps); break;
+			case OP_NLSI_VVB: emitBranch(emitter, cache, CC_GE, in, j, false, false, labels, entryMaps); break;
+			case OP_NLSI_VCB: emitBranch(emitter, cache, CC_GE, in, j, false, true, labels, entryMaps); break;
+			case OP_NLSI_CVB: emitBranch(emitter, cache, CC_GE, in, j, true, false, labels, entryMaps); break;
+			case OP_NEQI_VVB: emitBranch(emitter, cache, CC_NE, in, j, false, false, labels, entryMaps); break;
+			case OP_NEQI_VCB: emitBranch(emitter, cache, CC_NE, in, j, false, true, labels, entryMaps); break;
 
 			default: throwUnlowerableOpcode(op);																		// a finalized opcode the backend must cover (a bug, never routine)
 		}
 	}
+	// Cold section: checked-op trap arms (see ColdTrap) - store the dirty snapshot, set the status, exit.
+	for (size_t k = 0; k < coldTraps.size(); ++k) {
+		emitter.bind(coldTraps[k].label);
+		emitDirtyStores(emitter, coldTraps[k].dirty);
+		emitter.movImm(RAX, static_cast<uint32_t>(coldTraps[k].status)); emitter.jmp(epilogue);
+	}
+
 	/*
-		Cold section: one suspend stub per block leader - writeback the pins to ctx, set RESUME = this block's mainline head
-		(the dispatcher reloads centrally on resume), return TIME_OUT to the host. Unreachable by fall-through - each
-		preceding block ends in jmp. Mirrors the arm64 cold section.
+		Cold section: one suspend stub per block leader - writeback the pins to ctx and return TIME_OUT to the host. A
+		leader with register-resident entry state (v2.2) first spills its ResidencyMap - memory must be interpreter-
+		identical at a suspend - and parks RESUME at a reload stub that refills the map before re-entering the mainline;
+		an empty map points RESUME straight at the mainline head as before (the dispatcher reloads only the pins).
+		Unreachable by fall-through - each preceding block ends in jmp. Mirrors the arm64 cold section.
 	*/
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
 		const UInt head = it->first;
 		emitter.bind(suspendL[head]);
+		const std::map<UInt, ResidencyMap>::const_iterator m = entryMaps.find(head);
+		const bool resident = (m != entryMaps.end() && !m->second.entries.empty());
+		if (resident) {
+			for (size_t k = 0; k < m->second.entries.size(); ++k) {
+				const ResidencyMap::Entry& entry = m->second.entries[k];
+				if (!entry.expectDirty) { continue; }																	// read-only in the loop: register==home already
+				const Reg r = static_cast<Reg>(entry.physicalRegister);
+				if (entry.registerClass == GENERAL_REGISTER) { emitter.store(DSP, static_cast<int32_t>(entry.slot) * 4, r); }
+				else { emitter.movssStore(DSP, static_cast<int32_t>(entry.slot) * 4, r); }
+			}
+		}
 		writebackState(emitter, offsets);
-		emitter.leaRip(RAX, labels[head]); emitter.storeQ(CONTEXT, offsets.resume, RAX);								// RESUME = this block's mainline head
-		emitter.movImm(RAX, static_cast<uint32_t>(TIME_OUT)); emitter.jmp(epilogue);
+		if (resident) {
+			Label reload = emitter.newLabel();
+			emitter.leaRip(RAX, reload); emitter.storeQ(CONTEXT, offsets.resume, RAX);									// RESUME = reload stub (below)
+			emitter.movImm(RAX, static_cast<uint32_t>(TIME_OUT)); emitter.jmp(epilogue);
+			emitter.bind(reload);
+			for (size_t k = 0; k < m->second.entries.size(); ++k) {
+				const ResidencyMap::Entry& entry = m->second.entries[k];
+				const Reg r = static_cast<Reg>(entry.physicalRegister);
+				if (entry.registerClass == GENERAL_REGISTER) { emitter.load(r, DSP, static_cast<int32_t>(entry.slot) * 4); }
+				else { emitter.movssLoad(r, DSP, static_cast<int32_t>(entry.slot) * 4); }
+			}
+			emitter.jmp(labels[head]);
+		} else {
+			emitter.leaRip(RAX, labels[head]); emitter.storeQ(CONTEXT, offsets.resume, RAX);							// RESUME = this block's mainline head
+			emitter.movImm(RAX, static_cast<uint32_t>(TIME_OUT)); emitter.jmp(epilogue);
+		}
 	}
 }
 

@@ -35,6 +35,20 @@ cd tools && bash buildGazlFuzz.sh
 libFuzzer's input bytes ARE the generator's choice stream, so coverage feedback evolves the bytes toward uncovered JIT
 paths. Point soak runs at a scratch directory (e.g. `tests/fuzz/live/`, git-ignored), not `corpus/`.
 
+## Source-text fuzzing (the assembler, not the JIT)
+
+The differential fuzzer decodes its input as generator choices, so it does NOT mutate GAZL text. To fuzz the
+**assembler + interpreter** the old way - libFuzzer mutating raw bytes fed straight to the assembler - build the `text`
+mode (no JIT, no `-DJITDIFF`):
+
+```
+cd tools && bash buildGazlFuzz.sh text                 # -> ../output/GAZLFuzzText
+../output/GAZLFuzzText -max_len=4096 <seed-with-.gazl> # seed with real .gazl so mutations start from valid programs
+```
+
+This is a different tool with a different goal: it hunts assembler crashes/UB on malformed and mutated GAZL, and a
+corpus of real `.gazl` files IS useful here (unlike the differential fuzzer). Its own corpus is separate from `corpus/`.
+
 ## Both backends
 
 Each binary links ONE JIT backend - the host's - and diffs it against the (arch-neutral) interpreter, so a single run

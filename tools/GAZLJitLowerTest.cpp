@@ -131,7 +131,12 @@ static bool imagesEqual(const std::vector<Value>& a, const std::vector<Value>& b
 
 // Assemble + lower every function through the shared pass, then check the JIT against the interpreter (status AND whole
 // memory image) at full fuel and at tiny fuel (forcing repeated suspend/resume).
-static void runKernel(const char* name, const char* source, const int* inputs, size_t nInputs) {
+/*
+	`crossRealmInput` (optional): an input whose access crosses a §1.1 realm boundary (e.g. a const-base index past its
+	symbol but inside rwMemorySize). The sandbox semantics stay load-bearing - the status (no trap / the right trap) must
+	match - but the VALUE is unspecified under the realm rule, so the memory-image comparison is skipped for that input.
+*/
+static void runKernel(const char* name, const char* source, const int* inputs, size_t nInputs, int crossRealmInput = 0x7FFFFFFF) {
 	std::printf("Kernel \"%s\":\n", name);
 	Symbols globals;
 	if (!assemble(source, globals)) { ++failures; return; }
@@ -171,10 +176,11 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 			} while (s == TIME_OUT || s == BLOCK_RETRY);
 			std::vector<Value> got(gMemory, gMemory + DATA_SIZE);
 			int diff = -1;
-			const bool good = (s == wantStatus) && imagesEqual(want, got, diff);
+			const bool valueUnspecified = (n == crossRealmInput);
+			const bool good = (s == wantStatus) && (valueUnspecified || imagesEqual(want, got, diff));
 			std::printf("  n=%-8d %-11s status=%-3d hostcalls=%-5ld suspends=%-5d gOut=%-12d %s\n", n,
 					pass == 0 ? "[fullfuel]" : "[tinyfuel]", s, gNativeCallCount, suspends,
-					gMemory[gOutPtr - MEMORY_OFFSET].i, good ? "OK" : "MISMATCH");
+					gMemory[gOutPtr - MEMORY_OFFSET].i, good ? (valueUnspecified ? "OK (cross-realm: status only)" : "OK") : "MISMATCH");
 			if (!good) { std::printf("    want status=%d, diff word=%d\n", wantStatus, diff); ++failures; }
 			if (pass == 1 && good) {						// fuel-rate fidelity: JIT charge (per block) vs interpreter (1/instr)
 				Status ds = OK; int interpSuspends = 0;
@@ -502,6 +508,91 @@ static void runRegisterCacheTests() {
 		c.read(1, FLOAT_REGISTER); c.endInstruction();			// wants it in the float file -> spill general, reload float
 		cacheExpect("cross-file slot", m.log, "[1]<-S10 F20<-[1] ");
 	}
+
+	// Read/write sets for the capture tests below: rw(slot) = the loop both reads and writes it.
+	std::set<Int> rw12; rw12.insert(1); rw12.insert(2);
+	std::set<Int> rw1; rw1.insert(1);
+	std::set<Int> none;
+
+	// I: reconcile to an unchanged state emits nothing (the common back-edge), across both files.
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.read(1, GENERAL_REGISTER); c.endInstruction();
+		c.define(2, FLOAT_REGISTER); c.endInstruction();
+		ResidencyMap map;
+		c.capture(map, rw12, rw12);
+		m.log.clear();
+		c.reconcileTo(map);
+		cacheExpect("reconcile no-op", m.log, "");
+		if (map.entries.size() != 2) { std::printf("  cache capture entry count wrong\n"); ++failures; }
+	}
+
+	// J: a loop-written slot is modeled dirty from the header - clean at capture, it still spills when evicted in the body.
+	{
+		RegisterPool pool = { gp1, 1, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.read(1, GENERAL_REGISTER); c.endInstruction();		// clean (just filled)
+		ResidencyMap map;
+		c.capture(map, rw1, rw1);								// written in loop: iteration 2+ may really be dirty here
+		m.log.clear();
+		c.read(2, GENERAL_REGISTER); c.endInstruction();		// pool of 1 -> evicts slot1, which MUST spill despite "clean"
+		cacheExpect("loop-written stays dirty", m.log, "[1]<-S10 F10<-[2] ");
+	}
+
+	// K: a stray resident line (not in the map) is spilled and dropped; the map's own line is untouched.
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.define(1, GENERAL_REGISTER); c.endInstruction();
+		ResidencyMap map;
+		c.capture(map, rw1, rw1);								// map = { slot1 in reg10, expectDirty }
+		c.define(9, GENERAL_REGISTER); c.endInstruction();		// stray joins in reg11
+		m.log.clear();
+		c.reconcileTo(map);
+		cacheExpect("reconcile drops stray", m.log, "[9]<-S11 ");
+		if (!c.isResident(1) || c.isResident(9)) { std::printf("  cache reconcile residency wrong\n"); ++failures; }
+	}
+
+	// L: a map slot evicted inside the body (spilled there: loop-written) is refilled at the edge.
+	{
+		RegisterPool pool = { gp1, 1, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.define(1, GENERAL_REGISTER); c.endInstruction();
+		ResidencyMap map;
+		c.capture(map, rw1, rw1);								// map = { slot1 in reg10, expectDirty }
+		c.read(2, GENERAL_REGISTER); c.endInstruction();		// evicts slot1 (spills: modeled dirty), fills slot2
+		m.log.clear();
+		c.reconcileTo(map);										// slot2 (clean) dropped without store, slot1 refilled
+		cacheExpect("reconcile refills", m.log, "F10<-[1] ");
+		if (!c.isResident(1) || c.isResident(2)) { std::printf("  cache refill residency wrong\n"); ++failures; }
+	}
+
+	// M: capture prunes a slot the loop never reads (spill+drop), and canonicalizes a dirty read-only slot to clean -
+	//    one store at capture, after which body evictions and back-edges never store it again.
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m;
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.define(1, GENERAL_REGISTER); c.endInstruction();		// dirty; loop only READS it
+		c.define(9, GENERAL_REGISTER); c.endInstruction();		// dirty; loop never touches it
+		ResidencyMap map;
+		c.capture(map, rw1, none);								// prune slot9 (store+drop), canonicalize slot1 (store, keep)
+		cacheExpect("capture prune+canonical", m.log, "[1]<-S10 [9]<-S11 ");
+		if (map.entries.size() != 1 || map.entries[0].expectDirty) { std::printf("  cache pruned map wrong\n"); ++failures; }
+		m.log.clear();
+		c.reconcileTo(map);										// clean everywhere: nothing to emit
+		cacheExpect("read-only edge no-op", m.log, "");
+	}
 	std::printf("\n");
 }
 
@@ -534,7 +625,7 @@ int main() {
 	runKernel("far slots    [big frame, register-offset]", K_FARSLOT, floats, sizeof(floats) / sizeof(*floats));
 	runKernel("recursion    [IP_STACK_OVERFLOW]", K_RECURSE, depths, sizeof(depths) / sizeof(*depths));
 	runKernel("big frame    [DATA_STACK_OVERFLOW]", K_BIGFRAME, one, sizeof(one) / sizeof(*one));
-	runKernel("checked mem  [PEEK/POKE + trap]", K_MEMORY, indices, sizeof(indices) / sizeof(*indices));
+	runKernel("checked mem  [PEEK/POKE + trap]", K_MEMORY, indices, sizeof(indices) / sizeof(*indices), 100);		// 100 = past the symbol, inside rwMemorySize: cross-realm (§1.1)
 	runKernel("far globals  [const-addr PEEK/POKE >4096]", K_FARGLOBAL, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("switch       [SWCH jump table]", K_SWITCH, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("yield native [resetTimeOut(0)+OK]", K_YIELD, counts, sizeof(counts) / sizeof(*counts));

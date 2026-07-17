@@ -185,12 +185,12 @@ Then:
   `perfTest2`/`LadderFilter`/…) have no address‑taken slots at all, so every scalar is bound‑eligible; even
   `perfTest.main` (the 13‑slot bank) keeps its 14 pre‑bank scalars bound. The full allocator design is **§5.7**.
 
-**Spec decision - two iterations.** A first draft proposed "distinct named locals never alias" (any cross‑local access
+**Spec decision - three iterations.** A first draft proposed "distinct named locals never alias" (any cross‑local access
 = unspecified). **Retracted as unsound**: `perfTest.gazl`, `buffer.gazl`, and `nobuffer.gazl` deliberately `ADRL` one
 local and `COPY` a block spanning a whole run of adjacent named locals - the bulk load/store of a global‑state struct
 into a bank of register‑like scalars is a normal, compiler‑emitted idiom, and the observed output *does* depend on that
-cross‑local write. The second iteration (adopted below) keeps that idiom **defined** while drawing the unspecified zone
-where no real program goes - which is also the weakest rule under which register caching is possible at all:
+cross‑local write. The second iteration (below, superseded) kept that idiom **defined** while drawing the unspecified
+zone where no real program goes - which is also the weakest rule under which register caching is possible at all:
 
 > **Local‑access rule (normative, provenance‑bounded).** A pointer derived from `ADRL var` in frame F (through any
 > chain of `ADDp`/`SUBp`/`COPY`/argument passing) yields **defined** values exactly within `[&var, F.dsp)` - from the
@@ -212,6 +212,43 @@ leaving each frame's transients and every *other* function's private locals unre
 v2 allocator (§5.7) needs. It changes nothing about the sandbox guarantee and nothing for v1; the interpreter needs no
 modification. This is a **Phase 0 spec item**: it must be normative (with golden tests exercising the defined span)
 before any caching JIT ships.
+
+**Third iteration (ADOPTED 2026-07, supersedes the directional `[&var, F.dsp)` span above).** That span is itself
+unsound: pointer *decrement* is as valid as increment, so a rule that assumes a pointer only walks *up*-frame lets a JIT
+skip flushes it must not skip. It is replaced by **realm membership** - non-directional, and the weakest sound rule that
+still separates what the allocator needs:
+
+> **Memory-realm rule (normative).** GAZL data memory is partitioned into five disjoint **realms**: **globals**,
+> **constants**, and - within each active call frame - that frame's **parameters**, **locals**, and **transients**. A
+> pointer's realm is fixed at its origin (`ADRL` / address-of a slot ⇒ that slot's realm; a global or constant symbol ⇒
+> the globals or constants realm) and is **preserved** by `ADDp`/`SUBp`/`COPY`/argument passing. **A pointer access is
+> defined only within its own realm** (for a frame realm, its *owning* frame's region). **Within a realm nothing is
+> assumed**: a local-realm pointer may reach any of that frame's locals, in *either* direction - frame layout
+> (declaration order, sizes, offsets) is ABI and reproduced bit-for-bit, which is what the bank/`COPY`/out-param idioms
+> rely on (they stay inside the *locals* realm). **Across realms behavior is undefined**: a local-realm pointer never
+> legally reaches a transient, a parameter, a global, a constant, or another frame, and symmetrically for every realm.
+> Out-of-realm access stays *memory-safe* (the sandbox `rwMemorySize` / `BAD_PEEK` / `BAD_POKE` bounds and the fuel limit
+> are unchanged) but yields an **unspecified value**; the interpreter's flat-memory behavior is one conforming instance.
+
+Two structural facts the realms rest on: **constants are read-only**, so a constant-realm pointer only reads and can
+never invalidate a cached slot; and the caller's **transient** region *physically overlaps* its callee's **parameter**
+region (see the frame diagram in §1), but that is a **cross-frame** coincidence mediated by the **call barrier** - the
+cache is empty across a `CALL` - so within one frame's own execution its parameters, locals, and transients are distinct
+sub-ranges and the overlap never enters the realm reasoning.
+
+**JIT consequence - realm-scoped flushing (§5.7.3, v2.3a).** Stamp each pointer *value* with its realm during lowering
+(globals / constants / parameters / locals / transients / **unknown**). A `PEEK` / `POKE` / `COPY` through a
+realm-known pointer spills-and-invalidates only cached slots **of that realm**; cross-realm cached slots stay resident. A
+pointer of **unknown** realm (loaded from memory, or returned by a call/native) falls back to flushing everything,
+exactly as v2.0 does. This is **sound on all GAZL 1.0 with no opt-in**, because the realms are a language guarantee, not
+an annotation. Telling two slots apart *within* one realm (two locals, for the aliasable-bank firmware case) still needs
+the finer `*N`/region analysis (**v2.3b**).
+
+**Phase 0 obligation (verify before v2.3a ships).** The load-bearing idioms - the bank `COPY`, by-ref out-params, passed
+arrays - must be shown by golden `.gazl` tests to stay *within one realm*; if any legitimately crosses the
+parameters/locals/transients boundaries, that boundary is relaxed or those realms merged. The differential fuzzer must
+additionally emit deliberately cross-realm pointer walks, so any program that relies on crossing surfaces as a
+divergence rather than a shipped miscompile.
 
 ---
 
@@ -973,6 +1010,16 @@ on the floor‑raising refinements in §5.7.6 (Impala declaring arrays last; `GE
 array) - until then those functions still enjoy full v2.0 floating‑cache treatment.
 
 #### 5.7.3 v2.3 - provenance‑scoped flushing (core for aliasable-bank firmware; a knob elsewhere)
+
+> **Realm-scoped flushing (v2.3a) - now generalized to the §1.1 memory-realm rule.** Stamp each pointer *value's* realm
+> (globals / constants / parameters / locals / transients / **unknown**) at its `ADRL`/symbol origin, preserved through
+> `MOVp`/`ADDp`/`SUBp`/`COPY`; a `PEEK`/`POKE`/`COPY` flushes only cached slots **of the pointer's realm** (unknown ⇒
+> flush all, as v2.0). **Sound on all GAZL 1.0, no opt-in** - the realms are a language guarantee. This strictly
+> generalizes the one-bit frame/global taint described next: it additionally keeps cached **transients** resident across
+> a local-realm write (and vice versa) - the hottest values across the commonest frame-pointer ops. **v2.3b** = telling
+> slots apart *within* one realm (`*N`/region, §5.7.6) - the only genuinely subtle part, needed for the aliasable-bank
+> firmware where the bank shares a realm with non-bank slots. The paragraph below is the original coarse (frame-vs-not)
+> formulation, kept for its measured figures.
 
 v2.0 flushes floating lines around *every* pointer memory op. The refinement: track a one‑bit taint - "derived from an
 `ADRL` in this function" - through `MOVp`/`ADDp`/`SUBp`; only **tainted** pointer ops (plus `GETL`/`SETL`) flush, since

@@ -38,6 +38,7 @@ enum {
 	OP_RETU = 0x2345 + 4, OP_MOVE_VV = 0x2345 + 5, OP_MOVE_VC = 0x2345 + 6, OP_PEEK_VC = 0x2345 + 7,
 	OP_POKE_CV = 0x2345 + 8, OP_POKE_CC = 0x2345 + 9, OP_PEEK_VVV = 0x2345 + 10, OP_PEEK_VCV = 0x2345 + 11,
 	OP_POKE_VVV = 0x2345 + 12, OP_POKE_CVV = 0x2345 + 13, OP_POKE_VVC = 0x2345 + 14, OP_POKE_CVC = 0x2345 + 15,
+	OP_GETL_VVV = 0x2345 + 16, OP_SETL_VVV = 0x2345 + 17, OP_SETL_VVC = 0x2345 + 18, OP_ADRL = 0x2345 + 19,			// outside the subset; recognized only by the promotion guard
 	OP_ABSI = 0x2345 + 20,
 	OP_ADDI_VVV = 0x2345 + 21, OP_ADDI_VVC = 0x2345 + 22,
 	OP_SUBI_VVV = 0x2345 + 23, OP_SUBI_VVC = 0x2345 + 24, OP_SUBI_VCV = 0x2345 + 25,
@@ -85,6 +86,17 @@ static std::string ibin(const Instruction& in, const char* op, bool s1Const, boo
 	const std::string b = s2Const ? I(in.p2.i) : islot(in.p2);
 	return islot(in.p0) + " = " + a + " " + op + " " + b + ";";
 }
+/*
+	Wrap-semantics int ops go through helpers copied verbatim from the interpreter (iadd/isub/imul/idiv/imod/ineg,
+	emitted in the prelude): raw signed `+`/`-`/`*`/INT_MIN-negation is UB in C++, and once the optimizer can see through
+	the values (constant seeds, Tier-1 promoted locals) it folds through that UB and the output silently diverges from
+	the interpreter - observed with an xorshift PRNG. GAZL's semantics are two's-complement wrap; say so.
+*/
+static std::string icall(const Instruction& in, const char* helper, bool s1Const, bool s2Const) {
+	const std::string a = s1Const ? I(in.p1.i) : islot(in.p1);
+	const std::string b = s2Const ? I(in.p2.i) : islot(in.p2);
+	return islot(in.p0) + " = " + helper + "(" + a + ", " + b + ");";
+}
 static std::string fbin(const Instruction& in, const char* op, bool s1Const, bool s2Const) {
 	const std::string a = s1Const ? fconst(in.p1) : fslot(in.p1);
 	const std::string b = s2Const ? fconst(in.p2) : fslot(in.p2);
@@ -118,22 +130,54 @@ static bool branchTarget(const Instruction* code, UInt j, UInt& target) {
 	return false;
 }
 
-// Emit one function body; returns false on an unsupported opcode.
-static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt funcIndex, UInt ordinal) {
+/*
+	Tier 1 local promotion: rewrite a function's private `dsp[-N]` frame accesses to C++ `Value` locals `v_mN` (declared
+	after the frame advance), so the optimizer stops assuming MEM stores may alias them. Private = the frame minus the
+	CALLER-SHARED window: a callee's OUT/INP slots are the deepest `sharedWindow` slots of its frame (the caller writes
+	arguments there and reads results back through memory), so only offsets -1 down to -(frameSize - sharedWindow) are
+	promotable. Additionally requires no ADRL/GETL/SETL in the function - nothing may address its frame - which today is
+	every translatable function (those opcodes are outside the Tier-0 subset); the guard in emitFunction keeps this
+	correct if the subset grows. Cross-realm accesses (§1.1) would observe the unpromoted frame word: UB under the realm
+	rule. Token replacement is unambiguous because the closing bracket terminates the match (`dsp[-1]` never matches
+	inside `dsp[-10]`).
+*/
+static void promoteFunctionLocals(std::string& text, Int localsSize) {
+	std::string declarations;
+	for (Int n = 1; n <= localsSize; ++n) {
+		const std::string token = "dsp[-" + I(n) + "]";
+		const std::string name = "v_m" + I(n);
+		bool used = false;
+		for (size_t at = text.find(token); at != std::string::npos; at = text.find(token, at)) {
+			text.replace(at, token.size(), name);
+			at += name.size();
+			used = true;
+		}
+		if (used) { declarations += "\tValue " + name + " = {0};\n"; }
+	}
+	const size_t advance = text.find("\tdsp += ");
+	text.insert(text.find('\n', advance) + 1, declarations);
+}
+
+// Emit one function body; returns false on an unsupported opcode. `sharedWindow` = the caller-shared slot count (see above).
+static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt funcIndex, UInt ordinal, bool promoteLocals, Int sharedWindow) {
 	UInt retIndex = funcIndex;
 	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
 
 	std::set<UInt> targets;
+	bool frameAddressed = false;
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
 		UInt t;
 		if (branchTarget(code, j, t)) { targets.insert(t); }
+		const Int op = code[j].opcode;
+		if (op == OP_GETL_VVV || op == OP_SETL_VVV || op == OP_SETL_VVC || op == OP_ADRL) { frameAddressed = true; }	// outside the subset today; guards promotion if it grows
 	}
 
-	out << "static int gazl_fn_" << ordinal << "(Value* dsp) {\n";
-	out << "\tdsp += " << I(code[funcIndex].p0.i) << ";\n";		// FUNC: advance to this frame
+	std::ostringstream fn;
+	fn << "static int gazl_fn_" << ordinal << "(Value* dsp) {\n";
+	fn << "\tdsp += " << I(code[funcIndex].p0.i) << ";\n";		// FUNC: advance to this frame
 
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
-		if (targets.count(j)) { out << "L_" << j << ":;\n"; }
+		if (targets.count(j)) { fn << "L_" << j << ":;\n"; }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
 		std::string s;
@@ -151,29 +195,29 @@ static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt 
 			case OP_POKE_CVV: s = "MEM[" + memIndex(in.p0) + " + (UInt)" + islot(in.p1) + "] = dsp[" + I(in.p2.i) + "];"; break;
 			case OP_POKE_CVC: s = "MEM[" + memIndex(in.p0) + " + (UInt)" + islot(in.p1) + "].i = " + I(in.p2.i) + ";"; break;
 
-			case OP_ABSI: s = islot(in.p0) + " = " + islot(in.p1) + " < 0 ? -" + islot(in.p1) + " : " + islot(in.p1) + ";"; break;
-			case OP_ADDI_VVV: s = ibin(in, "+", false, false); break;
-			case OP_ADDI_VVC: s = ibin(in, "+", false, true); break;
-			case OP_SUBI_VVV: s = ibin(in, "-", false, false); break;
-			case OP_SUBI_VVC: s = ibin(in, "-", false, true); break;
-			case OP_SUBI_VCV: s = ibin(in, "-", true, false); break;
-			case OP_MULI_VVV: s = ibin(in, "*", false, false); break;
-			case OP_MULI_VVC: s = ibin(in, "*", false, true); break;
-			case OP_DIVI_VVV: s = "if (" + islot(in.p2) + " == 0) return -6; " + ibin(in, "/", false, false); break;
-			case OP_DIVI_VVC: s = ibin(in, "/", false, true); break;
-			case OP_DIVI_VCV: s = "if (" + islot(in.p2) + " == 0) return -6; " + ibin(in, "/", true, false); break;
-			case OP_MODI_VVV: s = "if (" + islot(in.p2) + " == 0) return -6; " + ibin(in, "%", false, false); break;
-			case OP_MODI_VVC: s = ibin(in, "%", false, true); break;
-			case OP_MODI_VCV: s = "if (" + islot(in.p2) + " == 0) return -6; " + ibin(in, "%", true, false); break;
+			case OP_ABSI: s = islot(in.p0) + " = " + islot(in.p1) + " < 0 ? ineg(" + islot(in.p1) + ") : " + islot(in.p1) + ";"; break;
+			case OP_ADDI_VVV: s = icall(in, "iadd", false, false); break;
+			case OP_ADDI_VVC: s = icall(in, "iadd", false, true); break;
+			case OP_SUBI_VVV: s = icall(in, "isub", false, false); break;
+			case OP_SUBI_VVC: s = icall(in, "isub", false, true); break;
+			case OP_SUBI_VCV: s = icall(in, "isub", true, false); break;
+			case OP_MULI_VVV: s = icall(in, "imul", false, false); break;
+			case OP_MULI_VVC: s = icall(in, "imul", false, true); break;
+			case OP_DIVI_VVV: s = "if (" + islot(in.p2) + " == 0) return -6; " + icall(in, "idiv", false, false); break;
+			case OP_DIVI_VVC: s = icall(in, "idiv", false, true); break;
+			case OP_DIVI_VCV: s = "if (" + islot(in.p2) + " == 0) return -6; " + icall(in, "idiv", true, false); break;
+			case OP_MODI_VVV: s = "if (" + islot(in.p2) + " == 0) return -6; " + icall(in, "imod", false, false); break;
+			case OP_MODI_VVC: s = icall(in, "imod", false, true); break;
+			case OP_MODI_VCV: s = "if (" + islot(in.p2) + " == 0) return -6; " + icall(in, "imod", true, false); break;
 			case OP_ANDI_VVV: s = ibin(in, "&", false, false); break;
 			case OP_ANDI_VVC: s = ibin(in, "&", false, true); break;
 			case OP_IORI_VVV: s = ibin(in, "|", false, false); break;
 			case OP_IORI_VVC: s = ibin(in, "|", false, true); break;
 			case OP_XORI_VVV: s = ibin(in, "^", false, false); break;
 			case OP_XORI_VVC: s = ibin(in, "^", false, true); break;
-			case OP_SHLI_VVV: s = ishift(in, "<<", false, false, false); break;
-			case OP_SHLI_VVC: s = ishift(in, "<<", false, false, true); break;
-			case OP_SHLI_VCV: s = ishift(in, "<<", false, true, false); break;
+			case OP_SHLI_VVV: s = ishift(in, "<<", true, false, false); break;										// unsigned shift: signed << overflow is UB
+			case OP_SHLI_VVC: s = ishift(in, "<<", true, false, true); break;
+			case OP_SHLI_VCV: s = ishift(in, "<<", true, true, false); break;
 			case OP_SHRI_VVV: s = ishift(in, ">>", false, false, false); break;
 			case OP_SHRI_VVC: s = ishift(in, ">>", false, false, true); break;
 			case OP_SHRI_VCV: s = ishift(in, ">>", false, true, false); break;
@@ -193,8 +237,8 @@ static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt 
 			case OP_DIVF_VVV: s = fbin(in, "/", false, false); break;
 			case OP_DIVF_VVC: s = fbin(in, "/", false, true); break;
 			case OP_DIVF_VCV: s = fbin(in, "/", true, false); break;
-			case OP_FTOI_VVC: s = islot(in.p0) + " = (Int)" + fslot(in.p1) + ";"; break;
-			case OP_ITOF_VVC: s = fslot(in.p0) + " = (float)" + islot(in.p1) + ";"; break;
+			case OP_FTOI_VVC: s = islot(in.p0) + " = ftoi(" + fslot(in.p1) + " * " + fconst(in.p2) + ");"; break;	// scaled + saturating, as the interpreter
+			case OP_ITOF_VVC: s = fslot(in.p0) + " = (float)" + islot(in.p1) + " * " + fconst(in.p2) + ";"; break;
 
 			case OP_FORi_VVB: s = islot(in.p0) + " += 1; if (" + islot(in.p0) + " < " + islot(in.p1) + ") goto " + label(j, in.p2.i) + ";"; break;
 			case OP_FORi_VCB: s = islot(in.p0) + " += 1; if (" + islot(in.p0) + " < " + I(in.p1.i) + ") goto " + label(j, in.p2.i) + ";"; break;
@@ -232,13 +276,16 @@ static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt 
 
 			default: return false;		// unsupported opcode
 		}
-		out << "\t" << s << "\n";
+		fn << "\t" << s << "\n";
 	}
-	out << "}\n\n";
+	fn << "}\n\n";
+	std::string text = fn.str();
+	if (promoteLocals && !frameAddressed) { promoteFunctionLocals(text, code[funcIndex].p0.i - sharedWindow); }
+	out << text;
 	return true;
 }
 
-std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal) {
+std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bool promoteLocals) {
 	const Instruction* const code = program.code;
 	const UInt functionCount = program.functionCount;
 	const UInt* const functionTable = program.functionTable;
@@ -247,18 +294,44 @@ std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal) {
 	const UInt globalsSize = program.globalsSize;
 	const UInt constsSize = program.constsSize;
 
+	// Caller-shared window per callee: the widest `*N` any CALL_CVC passes it (its OUT/INP region; excluded from promotion).
+	std::vector<Int> sharedWindow(functionCount, 0);
+	for (UInt ord = 0; ord < functionCount; ++ord) {
+		for (UInt j = functionTable[ord]; code[j].opcode != OP_RETU; ++j) {
+			if (code[j].opcode == OP_CALL_CVC) {
+				const UInt callee = code[j].p0.p - IP_OFFSET;
+				if (callee < functionCount && code[j].p2.i > sharedWindow[callee]) { sharedWindow[callee] = code[j].p2.i; }
+			}
+		}
+	}
+
 	std::ostringstream body;
 	for (UInt ord = 0; ord < functionCount; ++ord) {
-		if (!emitFunction(body, code, functionTable[ord], ord)) { return std::string(); }
+		if (!emitFunction(body, code, functionTable[ord], ord, promoteLocals, sharedWindow[ord])) { return std::string(); }
 	}
 
 	std::ostringstream out;
-	out << "/* generated by GAZLCpp (Tier 0) -- do not edit */\n";
+	out << "/* generated by GAZLCpp (Tier " << (promoteLocals ? 1 : 0) << ") -- do not edit */\n";
 	out << "#include <cstdio>\n#include <cstdint>\n#include <cstring>\n#include <cmath>\n#include <chrono>\n\n";
 	out << "typedef int32_t Int; typedef uint32_t UInt; typedef uint32_t Ptr;\n";
 	out << "union Value { Int i; float f; Ptr p; };\n";
 	out << "static const Ptr MEMORY_OFFSET = 0x12345678u;\n";
-	out << "static inline float f32(uint32_t b) { float r; std::memcpy(&r, &b, 4); return r; }\n\n";
+	out << "static inline float f32(uint32_t b) { float r; std::memcpy(&r, &b, 4); return r; }\n";
+	out << "static inline Int iadd(Int a, Int b) { return (Int)((UInt)a + (UInt)b); }\n";							// wrap semantics, verbatim from the interpreter (see icall)
+	out << "static inline Int isub(Int a, Int b) { return (Int)((UInt)a - (UInt)b); }\n";
+	out << "static inline Int imul(Int a, Int b) { return (Int)((UInt)a * (UInt)b); }\n";
+	out << "static inline Int ineg(Int a) { return (Int)(0u - (UInt)a); }\n";
+	out << "static inline Int idiv(Int a, Int b) { return (b == -1) ? ineg(a) : a / b; }\n";
+	out << "static inline Int imod(Int a, Int b) { return (b == -1) ? 0 : a % b; }\n";
+	out << "static inline Int ftoi(float v) {\n";																	// saturating float->int, verbatim from the interpreter
+	out << "\tUInt b; std::memcpy(&b, &v, sizeof b);\n";
+	out << "\tconst UInt e = (b >> 23) & 0xFF;\n";
+	out << "\tif (e >= 158) {\n";
+	out << "\t\tif (e == 255 && (b & 0x7FFFFF) != 0) return 0;\n";
+	out << "\t\treturn (b >> 31) != 0 ? (Int)(-2147483647 - 1) : 2147483647;\n";
+	out << "\t}\n";
+	out << "\treturn (Int)v;\n";
+	out << "}\n\n";
 	out << "static Value MEM[" << memorySize << "];\n\n";
 
 	// Native table (ordinals match tools/GAZLCmd.cpp registration order). Params base = dsp + window.

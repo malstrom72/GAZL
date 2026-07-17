@@ -44,6 +44,7 @@
 #include <cstddef>
 #include <vector>
 #include <map>
+#include <set>
 #include "GAZL.h"
 #include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
 
@@ -253,6 +254,16 @@ class JitCompiler {
 						, const Value* memory, std::map<UInt, UInt>& weight);
 
 				/*
+					v2.2 residency qualification: the loop headers whose every in-edge re-establishes a fixed entry state -
+					the natural fall-through plus backward GOTO / conditional branches, which reconcile to the captured map.
+					A leader targeted by any FORWARD branch or by SWCH is excluded (those edges arrive with an empty cache).
+					Fills `loopExtent` with header -> index of its LAST back-edge (the loop body span, for slot-set pruning).
+					At a qualified header the backend captures instead of clearing; at a backward branch it reconciles.
+				*/
+				static void jitResidencyLeaders(const Instruction* code, UInt funcStart, UInt endIndex
+						, const Value* memory, std::map<UInt, UInt>& loopExtent);
+
+				/*
 					A backend hit a finalized opcode it does not cover - a programmer error (every backend must lower all 91),
 					not a runtime condition. asserts (loud in debug) and, because asserts vanish in release, also throws
 					GAZL::JitException so a release build degrades to the interpreter rather than emitting wrong code. Never
@@ -304,8 +315,31 @@ class RegisterCacheBackend {
 // slot -> ascending instruction indices where the slot is READ (the JIT builds one per function; see setUseSchedule).
 typedef std::map<Int, std::vector<UInt> > UseSchedule;
 
+/*
+	A snapshot of which slots are register-resident (v2.2 cross-block residency): the fixed entry state of a loop header.
+	Captured at the header's fall-through entry (pruned to the slots the loop actually reads), reconciled to at every
+	back-edge, spilled by the header's suspend stub and refilled by its resume trampoline. `expectDirty` marks slots the
+	loop WRITES: they are modeled dirty from iteration one (the redefined value really is dirty when the header is
+	reached again, and a clean model would let an eviction skip the store and lose it). Slots the loop only reads are
+	kept register==home (canonicalized by one store at capture if needed), so hazard flushes inside the loop never
+	re-store them.
+*/
+struct ResidencyMap {
+	struct Entry {
+		Int slot;
+		RegisterClass registerClass;
+		int poolIndex;								// index into the RegisterPool's class array
+		int physicalRegister;						// the register itself, for backend stubs (suspend spill / resume fill)
+		bool expectDirty;							// the loop writes this slot: model dirty at the header
+	};
+	std::vector<Entry> entries;
+};
+
 // Scan code[from..to] and record every slot READ per instruction (uses GAZL::operandRoles) into `schedule` (Belady input).
 void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& schedule);
+
+// Scan a loop body code[from..to] for the slots it reads / writes (residency pruning + expectDirty; see ResidencyMap).
+void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots);
 
 /*
 	v2.0 floating register cache (§5.7.1): a per-function write-back cache of frame slots. The opcode switch routes
@@ -330,11 +364,16 @@ class RegisterCache {
 
 	public:		void enterBlock();				// leader: map starts empty
 	public:		void spillDirtyResident();		// before a pointer READ / back-edge: flush dirty, keep resident
+	public:		void captureDirtyLines(ResidencyMap& map) const;	// snapshot for a terminal trap arm; no model change
 	public:		void invalidateAll();			// after a pointer WRITE: flush dirty + drop all
 	public:		void barrier();					// branch / fall-through to leader / CALL / RETU: flush dirty + drop all
 
 	public:		void evict(int physicalRegister);	// x64 fixed-register ops (idiv/shift/rep); no-op on arm64
 	public:		bool isResident(Int slot) const;
+
+	// v2.2 loop-header residency: snapshot the resident set (pruned + dirtiness-canonicalized), later re-establish it.
+	public:		void capture(ResidencyMap& map, const std::set<Int>& readInLoop, const std::set<Int>& writtenInLoop);
+	public:		void reconcileTo(const ResidencyMap& map);		// at a back-edge: spill/drop strays, fill missing; empty when equal
 
 	private:	static const size_t POOL_CAPACITY = 32;
 	private:	struct Line {
@@ -365,6 +404,12 @@ class RegisterCache {
 	private:	const UseSchedule* useSchedule;				// Belady next-read lists (0 = fall back to LRU eviction)
 	private:	UInt instructionIndex;						// current scan position, for nextReadAfter
 };
+
+// A branch edge's cache handoff: a qualified target re-establishes its fixed entry state, anything else gets the v2.0 flush.
+inline void reconcileOrBarrier(RegisterCache& cache, std::map<UInt, ResidencyMap>& entryMaps, UInt target) {
+	std::map<UInt, ResidencyMap>::iterator it = entryMaps.find(target);
+	if (it != entryMaps.end()) { cache.reconcileTo(it->second); } else { cache.barrier(); }
+}
 
 } // namespace GAZL
 
