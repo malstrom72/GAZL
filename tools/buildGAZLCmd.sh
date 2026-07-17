@@ -32,9 +32,13 @@ if [ "$buildarch" = "arm64" ]; then
 elif [ "$buildarch" = "x64" ]; then
 	# distinct name so an x64 (Rosetta) build sits next to the native arm64 one for side-by-side runs. Rosetta's W^X is
 	# plain mmap+mprotect, so the Posix memory backend is the right one here.
-	out="${base}_x64"
-	buildtarget=native
-	[ "$(uname -m)" != "x86_64" ] && buildtarget=x64		# cross-build to x64 on a non-x64 host (Apple Silicon)
+	if [ "$(uname -m)" = "x86_64" ]; then
+		out="$base"
+		buildtarget=native
+	else
+		out="${base}_x64"
+		buildtarget=x64		# cross-build to x64 on a non-x64 host (Apple Silicon)
+	fi
 	bash BuildCpp.sh "$mode" "$buildtarget" "$out" -std=c++11 -DGAZL_JIT -I.. \
 		GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLCpp.cpp ../src/GAZLJit.cpp ../src/GAZLJitX64.cpp ../src/GAZLJitMemPosix.cpp
 else
