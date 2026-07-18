@@ -20,7 +20,7 @@
 #
 # Measure an interpreter change by running this before and after on the same machine and
 # comparing min_ms. `xor` (micro control) must stay flat; movement there means the
-# measurement drifted. Regenerate the micro set with tools/bench/genbench.sh.
+# measurement drifted. Regenerate the micro set with tools/genbench.sh.
 #
 # Usage:  bash tools/bench.sh [iters] [warmup]        (defaults: 10 measured, 3 warmup)
 #
