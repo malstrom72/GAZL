@@ -124,13 +124,16 @@ Modest codegen change, no grammar changes, and it can land before any Impala 2.0
 
 ## Sequencing
 
-Tied to the Impala 2.0 roadmap; every phase is gated by the existing parity fixtures.
+**Nothing here gates Impala 2.0 Step 1.** Step 1 (typed declarations) and the strict-expression
+rules need zero JSPEG changes — they are additive grammar work in the existing style. The groups
+below express *pairing and deadlines*, not prerequisites; every item is gated only by the parity
+fixtures.
 
-| Phase | Work | `impala.jspeg` impact |
-|---|---|---|
-| Now (pre-Step-1) | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers | none / mechanical helper migration |
-| With Step 1 | Automatic `dry` for predicates in JSPEG; de-IIFE + char-class codegen | delete the dry toggles and ~16 guards; otherwise none |
-| 2.0-era ("JSPEG 2") | Two-phase AST + value-returning rules, in one deliberate breaking step | rules unchanged; all actions rewritten as node constructors; holders, `dry`, and the `$$` special-casing retired |
+| When | Work | `impala.jspeg` impact | Ordering constraint |
+|---|---|---|---|
+| Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers | none / mechanical helper migration | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); neither blocks Step 1 |
+| Before Steps 4/5, *if adopted* | Automatic `dry` for predicates in JSPEG; de-IIFE + char-class codegen | delete the dry toggles and ~16 guards; otherwise none | destructuring lookahead and import interface mode are the two features that lean on the side-effect weakness — the only real ordering edge in this document |
+| After 2.0 stabilizes, if ever ("JSPEG 2") | Two-phase AST + value-returning rules, in one deliberate breaking step | rules unchanged; all actions rewritten as node constructors; holders, `dry`, and the `$$` special-casing retired | none — optional end-state |
 
 The closing point from the Impala 2.0 review bears repeating: JSPEG's parity discipline is its best
 feature, because it makes every one of these changes — up to and including a full replacement of
