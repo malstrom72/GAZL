@@ -80,11 +80,53 @@ There are four primitive types, all one VM word wide (standard configuration 32-
 | `pointer` | generic pointer (untyped target) |
 | `funcptr` | function pointer |
 
-Arrays and pointers carry **no** compile-time element type — they are untyped storage.
-Function arguments and return values are likewise untyped. Because of this, casts are
-common (see [Casting](#casting)). A side effect of this simplicity is that external
-functions need no prototypes, and multiple Impala sources can be linked simply by
-concatenating their assembled `.gazl` output.
+### Typed pointers and arrays (Impala 2)
+
+Since Impala 2, pointers and arrays may carry a **compile-time element type**, written
+type-first with stackable trailing keyword modifiers:
+
+```impala
+int pointer p                    // pointer to int
+int array a[10]                  // array of 10 ints
+float array buf[64]              // array of 64 floats
+int pointer array table[8]       // array of 8 (pointers to int)
+int pointer pointer pp           // pointer to pointer to int
+```
+
+The element type is a zero-cost overlay: at runtime a typed pointer is still one word and
+a typed array is still N words, with stride 1 word — the generated GAZL is identical to
+the hand-cast 1.0 equivalent. What changes is that element accesses are typed, so the
+casts disappear:
+
+```impala
+function findSmallest(int n, int pointer vector)
+returns int j
+locals int i
+{
+        j = 0;
+        for (i = 1 to n)
+                if (vector[i] < vector[j])      // no (int) casts needed
+                        j = i;
+}
+```
+
+Subscripts, dereferences (`*p`), pointer arithmetic (`p + i` keeps the element type), and
+`&` (address-of an `int` yields an `int pointer`; `&a[i]` of an `int array` likewise) all
+propagate element types. The boundary rules are asymmetric — *erasing is silent, assuming
+is loud*:
+
+- typed → untyped (`pointer raw = p`, passing a typed buffer to a native): **implicit**;
+- untyped → typed: **requires a cast** (`p = (int pointer) raw`);
+- differing element types: **requires a cast** (`(float pointer) intPtr` reinterprets);
+- `null` assigns into any pointer type.
+
+Bare `pointer` and `array` remain valid and mean untyped raw-word storage — the escape
+hatch for host boundaries, with exactly the 1.0 semantics.
+
+Function arguments and return values are untyped unless declared with typed forms.
+External functions need no prototypes, and multiple Impala sources can still be linked
+simply by concatenating their assembled `.gazl` output; casts are only needed where code
+genuinely crosses between the typed and untyped worlds (see [Casting](#casting)).
 
 ## Declarations
 

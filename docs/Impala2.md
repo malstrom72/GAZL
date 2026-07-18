@@ -1,7 +1,9 @@
 # Impala 2.0 Design
 
-> **Status: draft / design sketch.** This document maps out Impala 2.0. Nothing here is
-> implemented yet. It exists to be argued with before any grammar or compiler changes are made.
+> **Status: partially implemented.** Step 1 (typed pointers and arrays) and the strict-expression
+> rules are implemented in the JSPEG compiler with `--legacy` gating; see `tests/impala/sources/`
+> (`typedPointers.impala`) and the regression suites. Cross-unit element-type metadata in the
+> `; signature` channel is not yet emitted (within-unit checking only). Steps 2–5 remain proposals.
 
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),
