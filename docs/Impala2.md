@@ -64,6 +64,8 @@ The features are ordered by dependency, not ambition:
 4. **Multiple return values** — closing a known 1:1 gap: GAZL has supported multiple `OUT` words
    per function since 1.0, and Impala never exposed it. Proposed design in
    [Step 4: Multiple return values](#step-4-multiple-return-values-proposed).
+5. **Import** — sharing typed interfaces between units without textual copying. Proposed design in
+   [Step 5: Import](#step-5-import-proposed).
 
 Cross-cutting decisions — strict expressions, [compound assignment](#compound-assignment) (the
 full `<op>=` family), and the [diagnostic format](#diagnostics) — have their own sections below.
@@ -618,6 +620,109 @@ which makes Step 2's "structs travel by pointer, by-value deferred" decision eas
 
 ---
 
+## Step 5: Import (proposed)
+
+### The problem
+
+Impala has no `#include`: sharing declarations between units means textual copying — and the 2.0
+type system makes that materially *worse* than 1.0. A 1.0 extern is an information-free one-liner
+(`extern function foo`); a 2.0 interface is a struct layout plus typed signatures — a real,
+drift-prone surface, hand-synchronized in N copies. The validator turns drift into loud errors
+instead of silent garbage, but managing the pain is not removing it.
+
+### The design: import source as interface
+
+```impala
+import "filter.impala"
+```
+
+The imported file is a **normal compilable unit — not a header**. The compiler parses it in
+*interface mode* and takes its interface:
+
+- `struct`, `const`, and named `funcptr` type declarations enter scope directly;
+- **function and global definitions are converted to typed extern declarations automatically**,
+  with their full signatures (including multi-return, if Step 4 is adopted);
+- `extern` and `extern native` declarations pass through as-is;
+- its own `import`s are processed transitively;
+- **nothing is emitted** — the importing unit's `.gazl` output gains no code, data, or directives
+  from the import.
+
+There is exactly **one source of truth**: the struct and the functions live in `filter.impala` and
+nowhere else. No second artifact exists to drift.
+
+**Import is not linking.** Each unit is still compiled independently and the program is still
+assembled by concatenating `.gazl` files. `import "filter.impala"` gives the compiler the
+*interface*; you still compile `filter.impala` once and concatenate `filter.gazl`. Forgetting to
+do so surfaces as a missing definition at assembly/validation time, exactly like a missing unit
+today.
+
+**Rejected alternatives**, for the record:
+
+- *C-style declaration files* (a hand-maintained `filter_types.impala` of declarations only):
+  the C header disease — a second artifact that drifts from the definitions it describes. Moves
+  the copy, doesn't kill it.
+- *Importing compiled `.gazl` metadata*: no second artifact, but creates a build-order dependency
+  and makes mutually-referencing units impossible — properties concatenation deliberately
+  provides. Disqualifying.
+
+### Semantics
+
+- `import "path"` is a top-level statement; the path is a string literal resolved **relative to
+  the importing file's directory**.
+- Symbols arriving from two *different* files collide as duplicate declarations (the namespace is
+  flat, as it already is for functions and globals across concatenated units). The same file
+  reached via two paths is deduplicated by canonical path.
+- **Valued constants are inlined** at the importing side; only the defining unit emits its
+  `! DEF` directive. (Re-emitting `DEF`s from every importer would collide at concatenation.
+  Consequence: retuning a shared constant by editing `.gazl` text is done in the defining unit's
+  output — where it belongs.) Host-supplied valueless constants (`const int DEBUG`) emit
+  references by name, unchanged.
+- The `; signature` validator remains the link-time backstop: import guarantees agreement among
+  the *sources* you compiled today, but a stale `.gazl` compiled from an older version of an
+  imported file can still disagree — and the validator still catches it.
+
+### Cycles
+
+Import cycles are **legal**. Mutual dependency between units is a supported pattern today
+(concatenation is order-independent), and mutually-dependent units are exactly the ones with the
+most shared interface surface — erroring on cycles would push them back to hand-written externs,
+the boilerplate this feature exists to kill.
+
+Cycles are harmless because import is interface extraction, not compilation: the compiler keeps a
+**visited set keyed by canonical path**, seeded with the unit being compiled. Each file in the
+import closure is parsed exactly once; an `import` naming an already-visited file is skipped. The
+self-import-via-cycle case (B importing the very unit being compiled) needs no special rule — the
+seeding handles it. Diamonds dedupe the same way. Name resolution runs after the whole closure is
+gathered, so mutually-referencing types resolve regardless of parse order.
+
+What *does* error is definitional cycles in content — which are errors within a single file too;
+imports merely let them span files:
+
+| Cycle kind | Verdict |
+|---|---|
+| Import cycle (A↔B, any depth) | **legal** — visited-set memoization, each file parsed once |
+| Same file reached via two paths | legal — canonical-path dedup |
+| Same symbol from two different files | error — flat namespace, duplicate declaration |
+| Const *value* cycle across the closure | error, diagnostic cites the dependency chain |
+| **By-value** struct containment cycle (`struct A { B b }` / `struct B { A a }`) | error (infinite size) — the mutual generalization of the self-reference rule |
+| By-pointer struct cycle | legal, exactly like self-reference |
+
+### Compatibility
+
+`import` is a new reserved word with **zero** identifier collisions in the 78-file corpus
+(`include` has 8 uses as an identifier and is avoided for that reason). Same policy as `struct`
+and `sizeof`: a hypothetical wild source using `import` as an identifier fails loudly at parse
+with a rename as the mechanical fix. The statement form itself occupies previously rejected
+syntactic space.
+
+### What this unlocks
+
+The same mechanism is the standard-library story the snippets-`.txt` model never had:
+`import "math.impala"` plus one concatenated `math.gazl` replaces per-firmware copy-paste of
+`sin`/`sqrt`/`strlen` — discoverable by strangers and agents from the source itself.
+
+---
+
 ## Strict expressions: mixed bitwise operators
 
 1.0 flattens `<< >> >>> & ^ |` into a single left-associative level; C ladders them internally
@@ -725,17 +830,11 @@ path:line:col: note: add parentheses to keep the current meaning: (a & b) << 2
 
 ## Open questions
 
-- **Adoption of Steps 2, 3, and 4 themselves.** Structs, typed function pointers, and multiple
-  return values are worked proposals, not commitments: their syntax, semantics, lowering, and
+- **Adoption of Steps 2–5 themselves.** Structs, typed function pointers, multiple return values,
+  and import are worked proposals, not commitments: their syntax, semantics, lowering, and
   identity rules are specified above so the adoption decision can be made on a concrete design —
   but that decision has not been made. The committed scope is Step 1 plus the cross-cutting rules
   (strict expressions, compound assignment, diagnostics).
-- **An `import` mechanism** (under discussion): sharing struct definitions and typed interfaces
-  between units currently means textual copying, which the type system makes more painful than in
-  1.0 (typed externs and struct layouts are real drift surfaces, where 1.0 externs were
-  information-free one-liners). Leading candidate: `import "unit.impala"` reads a normal unit's
-  *interface* — declarations directly, definitions converted to typed externs — emitting nothing,
-  keeping concatenation linking and compile-order independence intact. Not yet specified.
 - Name of the strictness-lowering compiler argument (`--legacy` is the working name).
 - By-value struct parameters/returns: deferred, revisit if the small-struct performance case
   materializes in real firmware (see Step 2, *Passing, returning, copying*).
