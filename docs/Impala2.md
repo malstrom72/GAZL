@@ -62,8 +62,10 @@ The features are ordered by dependency, not ambition:
    `; signature` metadata channel. Proposed design in
    [Step 3: Typed function pointers](#step-3-typed-function-pointers-proposed).
 
-Other long-standing gaps (multiple return values, `+=`/`++`, richer `for`) are out of scope for
-this document and tracked separately.
+Cross-cutting decisions — strict expressions, [compound assignment](#compound-assignment) (the
+full `<op>=` family), and the [diagnostic format](#diagnostics) — have their own sections below.
+Other long-standing gaps (multiple return values via GAZL's multi-`OUT`, richer `for`) are out of
+scope for this document and tracked separately.
 
 ---
 
@@ -434,13 +436,23 @@ codegen never depends on how the struct is used elsewhere in the function.
 
 ### Passing, returning, copying
 
-- **Convention: structs travel by pointer.** GAZL `OUT` slots are scalar (`OUTi/f/p`), so struct
-  returns are by out-pointer-parameter; `&f` on a local struct value is cheap (`ADRL`).
-- **Open:** whole-struct assignment `a = b` as sugar for a `sizeof`-word `COPY` — predictable (one
-  GAZL `COPY`) but hides a multi-word cost behind `=`; the alternative is requiring explicit
-  `copy(sizeof(Filter) from &b to &a)`.
-- **Open:** by-value struct parameters (`PARA *sizeof` section) — expressible, but discouraged if
-  allowed at all.
+- **Convention: structs travel by pointer** — parameters and returns both; `&f` on a local struct
+  value is cheap (`ADRL`). This is a *choice*, not a VM constraint: GAZL supports multiple `OUT`
+  words per function and `PARA` sections cover multi-word input/output blocks, so by-value struct
+  parameters and returns are fully expressible. They are **deferred deliberately**: one convention
+  beats two, and adding by-value later is purely additive. The known counterargument, recorded for
+  that future decision: a small struct (a complex pair, a stereo frame) passed by value costs N
+  copied words at the call and then *free direct-operand access* inside the callee, versus one
+  `PEEK` per field access through a pointer — for hot inner loops, by-value small structs would be
+  strictly faster. Revisit when real firmware demonstrates the need. (Multiple scalar return
+  values — a 1.0 gap the demo explicitly earmarks for the future — ride the same multi-`OUT`
+  capability and remain out of scope here.)
+- **Whole-struct assignment `a = b` is allowed, statement-level only.** It lowers to exactly one
+  `COPY *sizeof(T)` — the instruction one would hand-write — with the size known at compile time
+  from the declared types. It is not an expression: a struct value does not fit an expression slot,
+  so `a = b = c` and struct assignment nested in a larger expression are errors. `*dst = *src`
+  (both typed struct pointers) is the same statement through places. Explicit `copy()` remains
+  available and equivalent.
 
 ### Identity across concatenation
 
@@ -553,16 +565,80 @@ own `$first`. Strictness is known at startup (a runner argument), so detection r
 immediately: `$$parser.fail(msg, $$s, $$i)` by default, an immediate stderr warning under
 `--legacy`. No deferral machinery is needed.
 
-**Possible extension (undecided):** the same treatment for unparenthesized bitwise-vs-comparison in
-conditions (`if (a & 3 == 0)`) — Impala parses it sanely as `(a & 3) == 0`, but a C-trained reader
-misreads it as `a & (3 == 0)`. Needs a corpus scan of condition idioms first.
+**Adopted extension — bitwise vs comparison in conditions.** An unparenthesized bitwise/shift
+operator directly against a comparison in a condition is the same error: `if (a & 3 == 0)` must be
+written `if ((a & 3) == 0)`. Impala's own parse is the sane one (`(a & 3) == 0`), but a C-trained
+reader misreads the unparenthesized form as `a & (3 == 0)`, which breaks the invariant that every
+accepted expression reads identically to a C-trained reader — and invariants with one exception
+stop being invariants. Corpus evidence: exactly one line in 78 files
+(`rpm16_code.impala:156`, `if ((tmp = global clock) != clock & 0xFFFF)`), and it is a genuinely
+divergent reading — Impala means `tmp != (clock & 0xFFFF)`; C's ladder would mean
+`(tmp != clock) & 0xFFFF`. Same gating (`--legacy` downgrades to a warning), same
+meaning-preserving parenthesization fix, byte-identical output after the edit.
+
+---
+
+## Compound assignment
+
+2.0 adopts the **complete `<op>=` family** — every binary infix operator combines with `=`:
+
+```
++=  -=  *=  /=  %=  &=  |=  ^=  <<=  >>=  >>>=
+```
+
+One rule covers them all: `lvalue <op>= expr` is equivalent to `lvalue = lvalue <op> expr` with the
+**lvalue evaluated exactly once**. Operand type rules are those of the expanded form (so `+=` works
+on `float`, `&=` does not, pointer `+=` int is pointer arithmetic, etc.).
+
+- **Statement-level only** — `<op>=` is not an expression, cannot be chained, and cannot nest
+  inside a larger expression. (Plain `=` keeps its 1.0 expression status unchanged.)
+- **Single evaluation is semantic, not just stylistic:** `a[f()] += 1` calls `f` once, where the
+  longhand calls it twice. For side-effect-free lvalues the generated GAZL is identical to the
+  longhand (`ADDi $x $x #1`; PEEK/op/POKE for globals and pointer targets, address computed once).
+- **`++` and `--` are not adopted.** `for (i = 0 to N)` already covers the dominant use case,
+  statement `++` saves three characters over `+= 1`, and expression `++` is C's most notorious bug
+  farm. This completes the sugar-policy decision started by keeping `->`: sugar is admitted when it
+  serves a dominant pattern *and* adds semantic value (single evaluation), and refused when it is
+  habit alone.
+- **Compatibility:** all `<op>=` tokens are parse errors in 1.0, so this occupies previously
+  rejected syntactic space — purely additive, no gating needed.
+
+---
+
+## Diagnostics
+
+The error format is part of the language's contract with its audience — AI agents iterate against
+diagnostics, so the format is specified, stable, and machine-parseable:
+
+```
+path:line:col: error[E023]: mixed bitwise operators ('&' and '<<') require parentheses
+path:line:col: note: add parentheses to keep the current meaning: (a & b) << 2
+```
+
+- **GCC-style line format** (`path:line:col: severity[code]: message`) — every editor, CI system,
+  and agent already parses it, and it matches the `@ path:line:col` origins in the signature
+  metadata.
+- **Stable error codes**, never reused, so tooling and agents can key on `E023` while message
+  wording stays free to improve.
+- **Every strictness error carries a fix-it note** stating the mechanical, meaning-preserving edit
+  ("add parentheses…", "use `->`…", "cast with `(int pointer)`…"). The agent feedback loop closes
+  in one round.
+- **First-error stop.** The compiler is single-pass with immediate code generation; error recovery
+  in that architecture produces cascading nonsense. One correct error beats five speculative ones.
+- A structured `--json` output mode can be added later if tooling demands it; the line format is
+  the contract.
 
 ---
 
 ## Open questions
-- What is the exact diagnostic format for type-mismatch errors (error codes, `path:line:col`, "did
-  you mean") that best serves an AI agent's feedback loop?
-- **Sugar policy.** Keeping `->` (justified as a cost annotation, not mere sugar) reopens the 1.0
-  question of `+=`/`++` and friends — same policy axis. Decide once, coherently, rather than
-  per-operator.
-- Struct opens listed inline in Step 2: whole-struct `=` vs explicit `copy()`, by-value parameters.
+
+- **Adoption of Steps 2 and 3 themselves.** Structs and typed function pointers are worked
+  proposals, not commitments: their syntax, semantics, lowering, and identity rules are specified
+  above so the adoption decision can be made on a concrete design — but that decision has not been
+  made. The committed scope is Step 1 plus the cross-cutting rules (strict expressions, compound
+  assignment, diagnostics).
+- Name of the strictness-lowering compiler argument (`--legacy` is the working name).
+- By-value struct parameters/returns: deferred, revisit if the small-struct performance case
+  materializes in real firmware (see Step 2, *Passing, returning, copying*).
+- Multiple scalar return values (multi-`OUT` in GAZL, earmarked since 1.0): a future step, out of
+  scope for this document.
