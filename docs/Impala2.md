@@ -61,11 +61,13 @@ The features are ordered by dependency, not ambition:
 3. **Typed function pointers** — named signature types for `funcptr`, riding the existing
    `; signature` metadata channel. Proposed design in
    [Step 3: Typed function pointers](#step-3-typed-function-pointers-proposed).
+4. **Multiple return values** — closing a known 1:1 gap: GAZL has supported multiple `OUT` words
+   per function since 1.0, and Impala never exposed it. Proposed design in
+   [Step 4: Multiple return values](#step-4-multiple-return-values-proposed).
 
 Cross-cutting decisions — strict expressions, [compound assignment](#compound-assignment) (the
 full `<op>=` family), and the [diagnostic format](#diagnostics) — have their own sections below.
-Other long-standing gaps (multiple return values via GAZL's multi-`OUT`, richer `for`) are out of
-scope for this document and tracked separately.
+Other long-standing gaps (richer `for`) are out of scope for this document and tracked separately.
 
 ---
 
@@ -445,8 +447,8 @@ codegen never depends on how the struct is used elsewhere in the function.
   copied words at the call and then *free direct-operand access* inside the callee, versus one
   `PEEK` per field access through a pointer — for hot inner loops, by-value small structs would be
   strictly faster. Revisit when real firmware demonstrates the need. (Multiple scalar return
-  values — a 1.0 gap the demo explicitly earmarks for the future — ride the same multi-`OUT`
-  capability and remain out of scope here.)
+  values ride the same multi-`OUT` capability — see
+  [Step 4: Multiple return values](#step-4-multiple-return-values-proposed).)
 - **Whole-struct assignment `a = b` is allowed, statement-level only.** It lowers to exactly one
   `COPY *sizeof(T)` — the instruction one would hand-write — with the size known at compile time
   from the declared types. It is not an expression: a struct value does not fit an expression slot,
@@ -522,6 +524,97 @@ global TickFn onTick = tickHandler  // checked: tickHandler must match TickFn's 
   they compose cleanly with `pointer`/`array` modifiers and make structs and funcptrs the *same*
   mechanism: a named type is a `BASE_TYPE`. Anonymous inline signatures are omitted unless a real
   need appears.
+
+---
+
+## Step 4: Multiple return values (proposed)
+
+Impala 1.0 supports a single return value while GAZL supports many — the demo has apologized for
+this since 2012 ("GAZL supports multiple 'OUT' variables per function and the intention is to
+eventually support this in Impala too"). This step closes the gap. **The VM needs zero changes.**
+
+### The calling convention (verified)
+
+From `docs/InstructionSet.md` and the compiler's own output (`impala/testdata/perfTest2.expected.gazl`,
+`src/UnitTest.gazl`):
+
+- **Callee:** `OUT` declarations first, then `INP` declarations, in order
+  (`fib`: `$x: OUTi` then `$y: INPi`).
+- **Caller:** picks a window base `%b`, writes arguments at `%b+N...`, executes
+  `CALL &f %b *size` where `*size` counts outputs *and* inputs (the `CALL` documentation says so
+  explicitly), and reads results from `%b+0..%b+N-1`. The `fib` fixture even shows window
+  *sliding*: a second call uses base `%1` so the first result parked in `%0` survives
+  (`ADDi $x %0 %1`).
+
+N returns simply occupy the first N window words. The convention was designed for this from the
+start; only the Impala surface was missing.
+
+### Syntax
+
+**Callee — `returns` becomes a comma list**, mirroring `locals`:
+
+```impala
+function polarToRect(float mag, float phase)
+returns float x, float y
+{
+	x = mag * cosApprox(phase)
+	y = mag * sinApprox(phase)
+}
+```
+
+**Caller — destructuring assignment, statement-level**, with `_` as the discard marker:
+
+```impala
+x, y = polarToRect(m, p)     // receive both
+x, _ = polarToRect(m, p)     // keep x, discard y
+_, y = polarToRect(m, p)     // discard x, keep y
+polarToRect(m, p)            // bare call statement: discards all — 1.0 already
+                             // idiomatically discards the return of a bare call
+```
+
+### Lowering
+
+```gazl
+polarToRect:	FUNC
+	$x:			OUTf
+	$y:			OUTf
+	$mag:		INPf
+	$phase:		INPf
+; caller of "x, _ = polarToRect(m, p)":
+	MOVf %2 $m
+	MOVf %3 $p
+	CALL &polarToRect %0 *4
+	MOVf $x %0					; y at %1 discarded — no instruction emitted
+```
+
+Discarding is free: the callee writes its `OUT` slots regardless; the caller emits no `MOV` for a
+skipped position.
+
+### Rules
+
+| Decision | Rule |
+|---|---|
+| Arity | all N positions must be written — `_` skips a *value*, never a *position*. Adding a return to a function breaks every call site loudly instead of silently shifting meanings. |
+| `_` semantics | inside a destructuring LHS, `_` is unconditionally the discard marker — no scope lookup. Plain `_ = expr` outside destructuring remains an ordinary 1.0 assignment to a variable named `_` (corpus: zero real uses; all hits are inside string literals). |
+| Multi-return call in an expression | error, with fix-it: "destructure the call". No silent dropping of values in value position. |
+| Bare call statement | legal, discards all returns — consistent with 1.0's idiom for single returns. |
+| LHS forms | any lvalue: locals, `global x`, `arr[i]`, `fp->field` (if Step 2 is adopted). |
+| Single-return functions | completely unchanged — expressions, chaining, byte-identical output (N=1 *is* today's layout). |
+| Named funcptr types | signatures extend naturally: `funcptr SplitFn(float in) returns float lo, float hi` (if Step 3 is adopted). |
+| Metadata | the `->` row grows a tuple form: `; signature func polarToRect(float, float) -> (float, float)`; the validator checks return arity and types cross-unit; `unknown` stays the legacy wildcard. |
+| Natives | host natives already write the window via `accessParams`, so multi-out natives are expressible; extend `docs/nativeCallbackSignatures.gazl` when a host wants one. |
+
+### Compatibility
+
+All new forms occupy previously rejected syntactic space: `returns a, b` and `x, y = f()` are 1.0
+parse errors (comma is not an operator in either position). Single-return code paths are
+byte-identical. Purely additive; no gating needed.
+
+### Interaction with structs
+
+Multi-return relieves pressure on by-value struct returns: the small-aggregate case
+(`returns float l, float r` for a stereo frame) is served directly by the calling convention,
+which makes Step 2's "structs travel by pointer, by-value deferred" decision easier to keep.
 
 ---
 
@@ -632,13 +725,17 @@ path:line:col: note: add parentheses to keep the current meaning: (a & b) << 2
 
 ## Open questions
 
-- **Adoption of Steps 2 and 3 themselves.** Structs and typed function pointers are worked
-  proposals, not commitments: their syntax, semantics, lowering, and identity rules are specified
-  above so the adoption decision can be made on a concrete design — but that decision has not been
-  made. The committed scope is Step 1 plus the cross-cutting rules (strict expressions, compound
-  assignment, diagnostics).
+- **Adoption of Steps 2, 3, and 4 themselves.** Structs, typed function pointers, and multiple
+  return values are worked proposals, not commitments: their syntax, semantics, lowering, and
+  identity rules are specified above so the adoption decision can be made on a concrete design —
+  but that decision has not been made. The committed scope is Step 1 plus the cross-cutting rules
+  (strict expressions, compound assignment, diagnostics).
+- **An `import` mechanism** (under discussion): sharing struct definitions and typed interfaces
+  between units currently means textual copying, which the type system makes more painful than in
+  1.0 (typed externs and struct layouts are real drift surfaces, where 1.0 externs were
+  information-free one-liners). Leading candidate: `import "unit.impala"` reads a normal unit's
+  *interface* — declarations directly, definitions converted to typed externs — emitting nothing,
+  keeping concatenation linking and compile-order independence intact. Not yet specified.
 - Name of the strictness-lowering compiler argument (`--legacy` is the working name).
 - By-value struct parameters/returns: deferred, revisit if the small-struct performance case
   materializes in real firmware (see Step 2, *Passing, returning, copying*).
-- Multiple scalar return values (multi-`OUT` in GAZL, earmarked since 1.0): a future step, out of
-  scope for this document.
