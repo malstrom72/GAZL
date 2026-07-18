@@ -26,6 +26,8 @@
 
 #include <stdint.h>
 #include <vector>
+#include <map>
+#include <utility>
 #include <cstddef>
 #include "GAZLJit.h"			// JitCompiler base + AssembledProgram / EmittedModule, for JitCompilerX64 below
 
@@ -124,6 +126,7 @@ class X64Emitter {
 		void movdToXmm(Reg xd, Reg rs);							// `movd xd, rs` (bit-copy int -> xmm; float const load)
 		void movdFromXmm(Reg rd, Reg xs);						// `movd rd, xs` (bit-copy xmm -> int; FTOI saturation)
 		void roundss(Reg xd, Reg xs, uint8_t mode);				// `roundss xd, xs, imm8` (SSE4.1; mode 1 = floor; FLOF)
+		void movssRip(Reg xd, Label literal);					// `movss xd, [rip + literal]` (F3 0F 10, mod=00 rm=101) - pooled float constant load
 
 		// --- stack / control ---
 		void push(Reg r);										// `push r` (50+rd, REX.B for r8-15)
@@ -143,6 +146,11 @@ class X64Emitter {
 		Label newLabel();										// allocate an unbound label
 		void bind(Label label);									// position `label` at the current emit point
 		void finalize();										// patch all rel32 branch displacements to bound labels
+		void alignTo(size_t boundary);							// nop-pad to a power-of-2 boundary (function entries; never executed)
+
+		// --- float literal pool ---
+		Label floatLiteral(uint32_t bits);						// label for a pooled float constant (bit pattern; deduplicated)
+		void emitLiteralPool();									// append the pool 4-aligned at the current emit point; once, before finalize()
 
 		// --- buffer access ---
 		const uint8_t* code() const { return bytes.empty() ? 0 : &bytes[0]; }
@@ -170,6 +178,8 @@ class X64Emitter {
 		std::vector<uint8_t> bytes;
 		std::vector<ptrdiff_t> labelTargets;					// per-label bound byte offset, or -1 while unbound
 		std::vector<Fixup> fixups;
+		std::vector< std::pair<uint32_t, Label> > literals;		// pooled float constants, in first-use order
+		std::map<uint32_t, int> literalIndex;					// bits -> index into `literals` (deduplication)
 };
 
 /*

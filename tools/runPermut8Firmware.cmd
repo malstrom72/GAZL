@@ -15,4 +15,6 @@ FOR %%N IN (input print printInt printFloat printLF exit) DO (
   FINDSTR /R /C:"^%%N:" "%FW%" >NUL 2>&1 && SET EXTRA=!EXTRA! --no-native=%%N
 )
 
-output\GAZLCmd.exe "output\p8\%NAME%.gazl" hostMain --forward=yield:yield_,read:read_,write:write_,trace:trace_ !EXTRA! %2 %3 %4
+REM GAZLCMD overrides the binary (e.g. an A-B baseline build).
+IF NOT DEFINED GAZLCMD SET GAZLCMD=output\GAZLCmd.exe
+%GAZLCMD% "output\p8\%NAME%.gazl" hostMain --forward=yield:yield_,read:read_,write:write_,trace:trace_ !EXTRA! %2 %3 %4

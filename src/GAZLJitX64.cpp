@@ -29,6 +29,7 @@
 #include <cstring>																										// std::memcpy - pack the emitted byte stream into 32-bit words
 #include <map>
 #include <vector>
+#include "assert.h"																										// finalize()'s bound-label contract (local-overridable, see GAZL.h)
 
 namespace GAZL {
 
@@ -167,6 +168,7 @@ void X64Emitter::cvtsi2ss(Reg xd, Reg rs) { sseRR(0xF3, 0x2A, xd, rs); }
 void X64Emitter::movdToXmm(Reg xd, Reg rs) { sseRR(0x66, 0x6E, xd, rs); }
 void X64Emitter::movdFromXmm(Reg rd, Reg xs) { sseRR(0x66, 0x7E, xs, rd); }												// 66 0F 7E /r: ModRM.reg = xmm source
 void X64Emitter::roundss(Reg xd, Reg xs, uint8_t mode) { b(0x66); rex(false, xd, xs); b(0x0F); b(0x3A); b(0x0A); modrmReg(xd, xs); b(mode); }
+void X64Emitter::movssRip(Reg xd, Label literal) { b(0xF3); rex(false, xd, 0); b(0x0F); b(0x10); b(static_cast<uint8_t>(((xd & 7) << 3) | 5)); relBranch(literal.id); }
 
 // --- stack / control ---
 
@@ -202,10 +204,39 @@ Label X64Emitter::newLabel() {
 
 void X64Emitter::bind(Label label) { labelTargets[label.id] = static_cast<ptrdiff_t>(bytes.size()); }
 
+/*
+	Pooled float constants for movssRip: floatLiteral hands out one label per distinct bit pattern; emitLiteralPool
+	appends the pool (4-aligned) at the current emit point and binds those labels. The pool goes after ALL code (compile()
+	calls it right before finalize()), so it never sits in an execution path and every rel32 reaches (+-2 GB).
+*/
+Label X64Emitter::floatLiteral(uint32_t bits) {
+	const std::map<uint32_t, int>::const_iterator it = literalIndex.find(bits);
+	if (it != literalIndex.end()) { return literals[it->second].second; }
+	const Label label = newLabel();
+	literalIndex[bits] = static_cast<int>(literals.size());
+	literals.push_back(std::make_pair(bits, label));
+	return label;
+}
+
+void X64Emitter::emitLiteralPool() {
+	if (literals.empty()) { return; }
+	while ((bytes.size() & 3) != 0) { b(0x90); }																		// 4-align the pool (data, never executed; nop keeps disassembly sane)
+	for (size_t i = 0; i < literals.size(); ++i) {
+		bind(literals[i].second);
+		d32(literals[i].first);
+	}
+}
+
+void X64Emitter::alignTo(size_t boundary) {
+	assert(boundary != 0 && (boundary & (boundary - 1)) == 0);
+	while ((bytes.size() & (boundary - 1)) != 0) { b(0x90); }															// padding is unreachable (every function ends in a terminal jmp/ret)
+}
+
 void X64Emitter::finalize() {
 	for (size_t i = 0; i < fixups.size(); ++i) {
 		const Fixup& f = fixups[i];
 		const ptrdiff_t target = labelTargets[f.labelId];
+		assert(target >= 0 && "fixup to an unbound label (missing bind() or emitLiteralPool())");
 		const int32_t rel = static_cast<int32_t>(target - static_cast<ptrdiff_t>(f.site + 4));
 		const uint32_t u = static_cast<uint32_t>(rel);
 		bytes[f.site + 0] = static_cast<uint8_t>(u);
@@ -451,13 +482,12 @@ static void emitBranch(X64Emitter& emitter, RegisterCache& cache, Cond condition
 	emitter.jcc(condition, labels[target]);
 }
 
-// Load a float operand into a cache register: a float slot (read), or a constant materialized via a GP scratch + movd.
+// Load a float operand into a cache register: a float slot (read), or a constant loaded RIP-relative from the literal
+// pool (one instruction, no GP scratch pressure; movss from memory writes the full register - no merge false-dep).
 static int loadFloatOperandCached(X64Emitter& emitter, RegisterCache& cache, const Value& operand, bool isConst) {
 	if (!isConst) { return cache.read(operand.i, FLOAT_REGISTER); }
-	const int bits = cache.scratch(GENERAL_REGISTER);
 	const int x = cache.scratch(FLOAT_REGISTER);
-	emitter.movImm(static_cast<Reg>(bits), static_cast<uint32_t>(operand.i));
-	emitter.movdToXmm(static_cast<Reg>(x), static_cast<Reg>(bits));
+	emitter.movssRip(static_cast<Reg>(x), emitter.floatLiteral(static_cast<uint32_t>(operand.i)));
 	return x;
 }
 // DIVf with a runtime divisor: match the interpreter's zero-divisor trap (GAZL.cpp CHECK_FLOAT_DIV_BY_ZERO). Test the
@@ -885,7 +915,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			*/
 			case OP_FTOI_VVC: {
 				{ const int sx = cache.read(in.p1.i, FLOAT_REGISTER); emitter.movssReg(FLOAT_0, static_cast<Reg>(sx)); } // operand via cache
-				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p2.i)); emitter.movdToXmm(FLOAT_1, SCRATCH_A); emitter.mulss(FLOAT_0, FLOAT_1); // * scale
+				emitter.movssRip(FLOAT_1, emitter.floatLiteral(static_cast<uint32_t>(in.p2.i))); emitter.mulss(FLOAT_0, FLOAT_1); // * scale (pooled constant)
 				emitter.cvttss2si(SCRATCH_A, FLOAT_0);																	// x86 yields 0x80000000 for overflow / inf / NaN
 				emitter.cmpImm(SCRATCH_A, 0x80000000u);
 				Label ftoiDone = emitter.newLabel();
@@ -909,7 +939,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				const int d = cache.define(in.p0.i, FLOAT_REGISTER);
 				emitter.xorps(static_cast<Reg>(d), static_cast<Reg>(d));												// cvtsi2ss merges into d: zero it first or the conversion false-depends on d's last writer
 				emitter.cvtsi2ss(static_cast<Reg>(d), static_cast<Reg>(src));											// convert straight into d (no FLOAT_0 round trip / copy)
-				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p2.i)); emitter.movdToXmm(FLOAT_1, SCRATCH_A); emitter.mulss(static_cast<Reg>(d), FLOAT_1);
+				emitter.movssRip(FLOAT_1, emitter.floatLiteral(static_cast<uint32_t>(in.p2.i))); emitter.mulss(static_cast<Reg>(d), FLOAT_1); // * scale (pooled constant)
 				cache.endInstruction();
 				break;
 			}
@@ -1065,6 +1095,7 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 	Label epilogue = emitter.newLabel();
 
 	for (UInt ordinal = 0; ordinal < program.functionCount; ++ordinal) {
+		emitter.alignTo(16);																							// 16-align entries: code-layout shifts stay within one function
 		emitter.bind(entryLabels[ordinal]);
 		lowerFunction(emitter, program.code, program.memory, program.functionTable[ordinal], offsets, entryLabels
 				, epilogue, program.functionCount);
@@ -1074,6 +1105,7 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 		there with its Status in eax; the dispatcher restores the frame and returns to the host.
 	*/
 	const size_t dispatcherOffset = emitDispatcher(emitter, offsets, epilogue);
+	emitter.emitLiteralPool();																							// pooled float constants (movssRip), after all code
 	emitter.finalize();
 
 	/*

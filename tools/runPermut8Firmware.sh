@@ -3,8 +3,7 @@
 # Run one Permut8 firmware (an UNMODIFIED tests/impala/golden/*.gazl) through the pure-GAZL host harness:
 # tools/permut8Host.js wraps it (host constants + delay line + yield_/read_/write_/trace_ + driver), and GAZLCmd
 # executes it with --forward mapping the firmware's ^yield/^read/^write/^trace native calls onto the GAZL
-# implementations (pushCall). Prints the deterministic output checksum. Interpreter only for now (pushCall is
-# not yet supported under the JIT).
+# implementations (pushCall). Prints the deterministic output checksum. Runs under either engine (pass --jit).
 #
 # Usage: bash tools/runPermut8Firmware.sh <firmware.gazl> [extra GAZLCmd args, e.g. --bench=8]
 set -e -o pipefail -u
@@ -15,7 +14,8 @@ name=$(basename "$fw" .gazl)
 mkdir -p output/p8
 node tools/permut8Host.js "$fw" "output/p8/$name.gazl" 1>&2
 
-CMD=output/GAZLCmd; [ -x output/GAZLCmd.exe ] && CMD=output/GAZLCmd.exe
+CMD=${GAZLCMD:-}																				# GAZLCMD overrides the binary (e.g. output/GAZLCmd_x64 for the Rosetta lane / an A-B baseline)
+if [ -z "$CMD" ]; then CMD=output/GAZLCmd; [ -x output/GAZLCmd.exe ] && CMD=output/GAZLCmd.exe; fi
 
 # Auto-flags: self-contained libm and/or globals colliding with a built-in native name.
 extra=""

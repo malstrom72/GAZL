@@ -49,6 +49,7 @@ extern "C" {
 	extern const uint8_t ref_movss_load, ref_movss_store, ref_movaps_rr, ref_movaps_ext;
 	extern const uint8_t ref_addss, ref_subss, ref_mulss, ref_divss, ref_ucomiss, ref_xorps;
 	extern const uint8_t ref_cvtsi2ss, ref_cvttss2si, ref_movd_to_xmm, ref_movd_from_xmm, ref_roundss, ref_float_end;
+	extern const uint8_t ref_pool_seq, ref_pool_seq_end;
 }
 
 static int failures = 0;
@@ -132,6 +133,19 @@ int main() {
 	{ X64Emitter e; e.movdToXmm(X1, RCX); check("movd_to_xmm", e, &ref_movd_to_xmm, &ref_movd_from_xmm); }
 	{ X64Emitter e; e.movdFromXmm(RAX, X1); check("movd_from_xmm", e, &ref_movd_from_xmm, &ref_roundss); }
 	{ X64Emitter e; e.roundss(X1, X2, 1); check("roundss", e, &ref_roundss, &ref_float_end); }
+
+	// RIP-relative float literal pool: three loads (xmm1 no REX, xmm9 REX.R, xmm2 REUSING the first literal - proves
+	// deduplication), ret, then emitLiteralPool (2 nops pad the 26 code bytes to a 4-aligned pool) and the rel32 fixups.
+	{
+		X64Emitter e;
+		e.movssRip(X1, e.floatLiteral(0x3F800000u));
+		e.movssRip(X9, e.floatLiteral(0x40490FDBu));
+		e.movssRip(X2, e.floatLiteral(0x3F800000u));
+		e.ret();
+		e.emitLiteralPool();
+		e.finalize();
+		check("pool(movssRip)", e, &ref_pool_seq, &ref_pool_seq_end);
+	}
 
 	// Negative control: a deliberately wrong encoding must be flagged (proves the harness bites).
 	{

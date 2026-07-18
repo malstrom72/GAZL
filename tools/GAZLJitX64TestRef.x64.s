@@ -129,3 +129,20 @@ ENTRY(ref_movd_from_xmm)	movd eax, xmm1
 ENTRY(ref_roundss)			roundss xmm1, xmm2, 1
 		GLOBL(ref_float_end)
 ENTRY(ref_float_end)		ret
+
+// RIP-relative float literal pool (movssRip + floatLiteral/emitLiteralPool). Three loads - xmm1 (no REX), xmm9 (REX.R),
+// then xmm2 rereading the FIRST literal (the emitter deduplicates) - then ret, then the pool itself. The two explicit
+// nops mirror emitLiteralPool's 4-alignment padding (26 code bytes -> pool at 28), computed relative to the sequence
+// start (the emitter's buffer origin), NOT section-aligned - so no .balign here.
+		GLOBL(ref_pool_seq)
+ENTRY(ref_pool_seq)
+							movss xmm1, [rip + ref_pool_lit_one]
+							movss xmm9, [rip + ref_pool_lit_pi]
+							movss xmm2, [rip + ref_pool_lit_one]
+							ret
+							nop
+							nop
+ref_pool_lit_one:			.long 0x3f800000
+ref_pool_lit_pi:			.long 0x40490fdb
+		GLOBL(ref_pool_seq_end)
+ENTRY(ref_pool_seq_end)		ret
