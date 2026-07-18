@@ -868,4 +868,103 @@ console.log("impala.jspeg compiler downgrades comparison mixes to a warning unde
 compileWithJsImpala(comparisonParenthesizedSource, { randomId: 42 });
 console.log("impala.jspeg compiler accepts parenthesized bitwise-vs-comparison conditions");
 
+// --- Impala 2 Step 1: typed pointers and arrays -----------------------------
+
+const typedPointerCases = [
+	{
+		label: "typed subscripts compile without casts",
+		source: [
+			"function findSmallest(int n, int pointer vector)",
+			"returns int j",
+			"locals int i",
+			"{",
+			"\tj = 0;",
+			"\tfor (i = 1 to n)",
+			"\t\tif (vector[i] < vector[j])",
+			"\t\t\tj = i;",
+			"}",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "typed array element assignment is typed",
+		source: [
+			"global float array gains[4]",
+			"function main() locals float f { f = global gains[2]; global gains[3] = f * 2.0; }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "null assigns into typed pointers",
+		source: "function main() locals int pointer p { p = null; }",
+		expectError: null,
+	},
+	{
+		label: "erasing typed to untyped is implicit",
+		source: "function main() locals int pointer p, pointer raw, int x { p = &x; raw = p; }",
+		expectError: null,
+	},
+	{
+		label: "cast admits untyped into typed",
+		source: "function main() locals int pointer p, pointer raw { p = (int pointer) raw; }",
+		expectError: null,
+	},
+	{
+		label: "pointer-to-pointer declarations and derefs",
+		source: "function main() locals int pointer p, int pointer pointer pp, int x { x = 1; p = &x; pp = &p; x = *(*pp); }",
+		expectError: null,
+	},
+	{
+		label: "untyped into typed pointer requires a cast",
+		source: "function main() locals int pointer p, pointer raw { p = raw; }",
+		expectError: "Pointer element type mismatch",
+	},
+	{
+		label: "sideways pointer element types require a cast",
+		source: "function main() locals int pointer p, float pointer fp, int x { p = &x; fp = p; }",
+		expectError: "Pointer element type mismatch",
+	},
+	{
+		label: "address-of mismatched element type is rejected",
+		source: "function main() locals int pointer p, float f { p = &f; }",
+		expectError: "Pointer element type mismatch",
+	},
+	{
+		label: "untyped call results need a cast into typed pointers",
+		source: [
+			"function alloc() returns pointer r { r = null; }",
+			"function main() locals int pointer p { p = alloc(); }",
+		].join("\n"),
+		expectError: "Pointer element type mismatch",
+	},
+	{
+		label: "element type must match across declarations",
+		source: ["extern int array shared", "global float array shared[4]"].join("\n"),
+		expectError: "Element type mismatch with previous declaration",
+	},
+];
+
+for (const testCase of typedPointerCases) {
+	let observedError = null;
+	try {
+		compileWithJsImpala(testCase.source + "\n", { randomId: 42 });
+	} catch (err) {
+		observedError = err && err.message ? err.message : String(err);
+	}
+	if (testCase.expectError === null) {
+		if (observedError !== null) {
+			console.error(`typed pointers: ${testCase.label} unexpectedly failed`);
+			console.error(observedError);
+			process.exit(1);
+		}
+	} else if (observedError === null || !observedError.includes(testCase.expectError)) {
+		console.error(`typed pointers: ${testCase.label} did not raise "${testCase.expectError}"`);
+		if (observedError !== null) {
+			console.error(observedError);
+		}
+		process.exit(1);
+	}
+}
+console.log("impala.jspeg compiler enforces typed pointer/array element rules");
+
 console.log("JSPEG regression suite completed successfully");

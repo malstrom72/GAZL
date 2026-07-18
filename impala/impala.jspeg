@@ -985,6 +985,48 @@
     };
 
     /* --------------------------------------------------------- *
+     *  Element-type descriptors (Impala 2 typed pointers/arrays) *
+     *  A descriptor is a chain like 'i', 'f', 'p:i', 'p:p:i' —   *
+     *  the type a pointer/array element yields when accessed.    *
+     * --------------------------------------------------------- */
+
+    $$parser.descHead = function (desc) {                         /// 'p:i' → 'p'; 'i' → 'i'
+        return (desc === undefined ? undefined : desc[0]);
+    };
+
+    $$parser.descTail = function (desc) {                         /// 'p:i' → 'i'; 'i' → undefined
+        return (desc === undefined || desc.length < 3 ? undefined : desc.substr(2));
+    };
+
+    $$parser.elemVerbose = function (desc) {                      /// 'p:i' → "int pointer"
+        if (desc === undefined) return 'untyped';
+        var text = $$parser.VERBOSE_TYPES[desc[desc.length - 1]];
+        for (var vi = desc.length - 3; vi >= 0; vi -= 2) {
+            text += ' pointer';
+        }
+        return text;
+    };
+
+    $$parser.setElem = function (rec, elem) {                     /// stamp element type on a meta record
+        metaSlot(rec).elem = elem;
+    };
+
+    $$parser.checkPtrAssign = function (leftx, rightx, sourceCode, sourceOffset) {
+        if (leftx.type === 'p' && leftx.elem !== undefined) {     /* typed pointer target: assume loudly */
+            if (rightx.operands && rightx.operands[1] === '&NULL'
+                    && rightx.operands[2] === undefined) {
+                return;                                           /* null is assignable to any pointer type */
+            }
+            if (rightx.elem !== leftx.elem) {
+                $$parser.fail('Pointer element type mismatch (expected '
+                        + $$parser.elemVerbose(leftx.elem) + ' elements, got '
+                        + $$parser.elemVerbose(rightx.elem)
+                        + ' elements); use a cast', sourceCode, sourceOffset);
+            }
+        }
+    };
+
+    /* --------------------------------------------------------- *
      *  Binary operations ( + – * / [] etc. )                    *
      * --------------------------------------------------------- */
     $$parser.binaryOp = function (operator, leftx, rightx,
@@ -992,6 +1034,8 @@
 
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
+
+        var lelem = leftx.elem;                                   /* element type of the base (Impala 2) */
 
         /* validate operand-type combination */
         var sig = operator + leftx.type + rightx.type;
@@ -1059,6 +1103,16 @@
                 $$parser.makeRValue(rightx)
             );
         }
+
+        /* element-type propagation (Impala 2) */
+        if (operator === '=[]' && lelem !== undefined) {
+            leftx.type = $$parser.descHead(lelem);                /* typed element read: no cast needed */
+            leftx.elem = $$parser.descTail(lelem);
+        } else if ((operator === '+' || operator === '-') && leftx.type === 'p') {
+            leftx.elem = lelem;                                   /* pointer arithmetic preserves element type */
+        } else {
+            leftx.elem = undefined;
+        }
     };
 
 
@@ -1094,6 +1148,7 @@
                     leftx.operands[1],
                     $$parser.makeRValue(rightx)
                 );
+                leftx.elem = undefined;
                 return;
             }
         }
@@ -1113,6 +1168,7 @@
                     rightx.operands[1],
                     $$parser.makeRValue(leftx)
                 );
+                leftx.elem = undefined;
                 return;
             }
         }
@@ -1123,6 +1179,7 @@
             $$parser.makeRValue(leftx),
             $$parser.makeRValue(rightx)
         );
+        leftx.elem = undefined;
     };
 
 
@@ -1156,6 +1213,8 @@
                 leftx.type, rightx.type
             );
         }
+
+        $$parser.checkPtrAssign(leftx, rightx, sourceCode, sourceOffset);
 
         /* fast path: constant expression on RHS */
         var op1 = rightx.operands[1];
@@ -1400,7 +1459,9 @@
 
         expr = metaSlot(expr);
 
-        var key = '=' + operator;                     // e.g. "=abs"
+        var key      = '=' + operator;                // e.g. "=abs"
+        var prevType = expr.type;                     /* for element-type propagation (Impala 2) */
+        var prevElem = expr.elem;
 
         /* check type support */
         var sig  = key + expr.type;                   // e.g. "=absf"
@@ -1418,13 +1479,28 @@
 
         /* update resulting type */
         expr.type = rTyp;
+
+        /* element-type propagation (Impala 2) */
+        if (key === '=*') {
+            if (prevElem !== undefined) {
+                expr.type = $$parser.descHead(prevElem);          /* typed dereference: no cast needed */
+                expr.elem = $$parser.descTail(prevElem);
+            } else {
+                expr.elem = undefined;
+            }
+        } else if (key === '=&') {
+            expr.elem = (prevType === undefined ? undefined       /* &x yields a pointer to x's type */
+                    : prevType + (prevElem !== undefined ? ':' + prevElem : ''));
+        } else {
+            expr.elem = undefined;                                /* casts and numeric ops erase */
+        }
     };
 
     /* -----------------------------------------------------------
      *  Symbol declaration helper
      * -------------------------------------------------------- */
 
-    function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment) {
+    function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment, elem) {
         /* emit data / flush pending code */
         if (kind !== undefined) {
             $$parser.flushMetaCode('');
@@ -1460,15 +1536,23 @@
                                        name + ' (was {$type1})',
                                        sourceCode, sourceOffset, prev.type);
                 }
+                if (prev.elem !== undefined && elem !== undefined && prev.elem !== elem) {
+                    $$parser.fail('Element type mismatch with previous declaration of ' + name
+                                  + ' (was ' + $$parser.elemVerbose(prev.elem) + ', now '
+                                  + $$parser.elemVerbose(elem) + ')',
+                                  sourceCode, sourceOffset);
+                }
                 /* inherit old flags */
                 kind     = (kind     !== undefined ? kind     : prev.kind);
                 readonly = (readonly || prev.readonly);
+                elem     = (elem     !== undefined ? elem     : prev.elem);
             }
 
             /* store / update */
             if (!table) $$parser.symbols[scope] = table = {};
             table[name] = {
                 type: type,
+                elem: elem,
                 readonly: !!readonly,
                 kind: kind,
                 signature: prev && prev.signature,
@@ -1591,6 +1675,7 @@
                                   '$' + name,
                                   undefined);
             }
+            $$parser.setElem(x, p.elem);
             return;
         }
 
@@ -1608,6 +1693,7 @@
                                   '&' + name,
                                   undefined);
             }
+            $$parser.setElem(x, p.elem);
             return;
         }
 
@@ -1621,6 +1707,7 @@
                 $$parser.makeMeta(x, ':=', 'F', undefined,
                                   '&' + name, undefined);
             }
+            $$parser.setElem(x, undefined);
             return;
         }
 
@@ -1628,6 +1715,7 @@
         if ((p = sym.defines[name])) {
             $$parser.makeMeta(x, ':=', p.type, undefined,
                               '#' + name, undefined);
+            $$parser.setElem(x, p.elem);
             return;
         }
 
@@ -1941,6 +2029,7 @@ inp:ArgsDecl ')'_
                                                                              entry.pendingReturnDeclaration = {
                                                                                  name: '$' + $out.name,
                                                                                  type: $out.type,
+                                                                                 elem: $out.elem,
                                                                                  size: ($out.size !== undefined ? '*' + $out.size : undefined),
                                                                                  sourceCode: $$s,
                                                                                  sourceOffset: $$i
@@ -1996,7 +2085,9 @@ inp:ArgsDecl ')'_
                                                                                         false,
                                                                                         ret.size,
                                                                                         ret.sourceCode,
-                                                                                        ret.sourceOffset
+                                                                                        ret.sourceOffset,
+                                                                                        undefined,
+                                                                                        ret.elem
                                                                                 );
                                                                                 entry.pendingReturnDeclaration = undefined;
                                                                         } else if (entry.pendingReturnPlaceholder) {
@@ -2018,7 +2109,9 @@ inp:ArgsDecl ')'_
                                                                                  p.type,
                                                                                  true,
                                                                                  (p.size !== undefined ? '*' + p.size : undefined),
-                                                                                 $$s, $$i
+                                                                                 $$s, $$i,
+                                                                                 undefined,
+                                                                                 p.elem
                                                                              );
                                                                          });
                                                                      }
@@ -2031,7 +2124,9 @@ inp:ArgsDecl ')'_
                                                                                  v.type,
                                                                                  false,
                                                                                  (v.size !== undefined ? '*' + v.size : undefined),
-                                                                                 $$s, $$i
+                                                                                 $$s, $$i,
+                                                                                 undefined,
+                                                                                 v.elem
                                                                              );
                                                                          });
                                                                      }
@@ -2051,8 +2146,17 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                 (
                     (   FUNCTION                                      { $$.type  = 'U';  $$.scope = 'functions'; }
                     /   NATIVE                                        { $$.type  = 'N';  $$.scope = 'functions'; }
-                    /   ARRAY                                         { $$.type  = 'A'; }
                     ) _ id:Identifier                                 { $$.name  = $id; }
+                /                                                     { $desc = undefined; }
+                    ( type:BASE_TYPE _                                { $desc = $$parser.CASTS_TO_TYPES[$type]; }
+                      ( POINTER _                                     { $desc = 'p:' + $desc; }
+                      )*
+                    )?
+                    ARRAY _ id:Identifier                             {
+                                                                         $$.type = 'A';
+                                                                         $$.name = $id;
+                                                                         $$.elem = $desc;
+                                                                     }
                 /   VarDecl
                 )                                                     {
                                                                          $$parser.declare(
@@ -2062,7 +2166,9 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              $$.type,
                                                                              false,                     // not readonly
                                                                              '?',
-                                                                             $$s, $$i
+                                                                             $$s, $$i,
+                                                                             undefined,
+                                                                             $$.elem
                                                                          );
                                                                          if ($$.scope === 'functions') {
                                                                              var entry = $$parser.symbols.functions[$$.name];
@@ -2118,10 +2224,16 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                     }
 
 ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
-                                                                         $t  = $$parser.CASTS_TO_TYPES[$type];
+                                                                         $desc = $$parser.CASTS_TO_TYPES[$type];
                                                                          $nf = $$parser.noForward;
                                                                          $$parser.noForward = true;
                                                                      }
+                 ( POINTER _                                          { $desc = 'p:' + $desc; }
+                 )*
+                                                                      {
+                                                                         $t     = $$parser.descHead($desc);
+                                                                         $telem = $$parser.descTail($desc);
+                                                                      }
                  id:Identifier
                  (   '=' _ x:Expr                                     {
                                                                             $$parser.declare(
@@ -2135,7 +2247,8 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                                     $$parser.sourceName,
                                                                                     $$s,
                                                                                     $$i
-                                                                                )
+                                                                                ),
+                                                                                $telem
                                                                             );
                                                                          }
                  /                                                     {
@@ -2143,7 +2256,9 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                                  undefined, 'defines',
                                                                                  $id, $t, true,
                                                                                  undefined,
-                                                                                 $$s, $$i
+                                                                                 $$s, $$i,
+                                                                                 undefined,
+                                                                                 $telem
                                                                              );
                                                                          }
                  )                                                     { $$parser.noForward = $nf; }
@@ -2183,7 +2298,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     $$parser.sourceName,
                                                                                     $$s,
                                                                                     $$i
-                                                                                )
+                                                                                ),
+                                                                                $v.elem
                                                                             );
                                                                          }
 
@@ -2205,7 +2321,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     $$parser.sourceName,
                                                                                     $$s,
                                                                                     $$i
-                                                                                )
+                                                                                ),
+                                                                                $a.elem
                                                                             );
                                                                          }
                          ( '=' _ d:InitList )?
@@ -2263,6 +2380,7 @@ ArgsDecl    <-                                                        {
                  ( v:VarDecl                                          {
                                                                              var entry = {};
                                                                              entry.type = $v.type;
+                                                                             entry.elem = $v.elem;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
                                                                              $$[$$.n++] = entry;
@@ -2270,6 +2388,7 @@ ArgsDecl    <-                                                        {
                    ( ',' _ v:VarDecl                                  {
                                                                              var entry = {};
                                                                              entry.type = $v.type;
+                                                                             entry.elem = $v.elem;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
                                                                              $$[$$.n++] = entry;
@@ -2284,6 +2403,7 @@ LocalsDecl  <-                                                        {
                  ( v:(VarDecl / ArrayDecl)                            {
                                                                              var entry = {};
                                                                              entry.type = $v.type;
+                                                                             entry.elem = $v.elem;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
                                                                              $$[$$.n++] = entry;
@@ -2291,6 +2411,7 @@ LocalsDecl  <-                                                        {
                    ( ',' _ v:(VarDecl / ArrayDecl)                    {
                                                                              var entry = {};
                                                                              entry.type = $v.type;
+                                                                             entry.elem = $v.elem;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
                                                                              $$[$$.n++] = entry;
@@ -2301,16 +2422,26 @@ LocalsDecl  <-                                                        {
 # ------------------------------------------------------------------
 #  Simple variable & array declarators                          
 # ------------------------------------------------------------------
-VarDecl     <-  type:BASE_TYPE _ id:Identifier                        {
-                                                                         $$.type = $$parser.CASTS_TO_TYPES[$type];
+VarDecl     <-  type:BASE_TYPE _                                      { $desc = $$parser.CASTS_TO_TYPES[$type]; }
+                ( POINTER _                                           { $desc = 'p:' + $desc; }
+                )*
+                id:Identifier                                         {
+                                                                         $$.type = $$parser.descHead($desc);
+                                                                         $$.elem = $$parser.descTail($desc);
                                                                          $$.name = $id;
                                                                          $$.size = undefined;
                                                                      }
 
-ArrayDecl   <-  ARRAY _ id:Identifier
+ArrayDecl   <-                                                        { $desc = undefined; }
+                ( type:BASE_TYPE _                                    { $desc = $$parser.CASTS_TO_TYPES[$type]; }
+                  ( POINTER _                                         { $desc = 'p:' + $desc; }
+                  )*
+                )?
+                ARRAY _ id:Identifier
                 '[' _ x:Expr ']' _                                    {
                                                                          $size = $$parser.makeConstant($x, 'i', $$s, $$i);
                                                                          $$.type = 'A';
+                                                                         $$.elem = $desc;
                                                                          $$.name = $id;
                                                                          $$.size = $$parser.dropHash($size);
                                                                          $$parser.returnBack($size);
@@ -2369,9 +2500,18 @@ MulDiv      <-  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
                                                        $$parser.mulDivOp($op, $$, $r, $$s, $$i); }
                 )*
 
-PrePost     <-  (op:PREFIX_OP _                    
-                / '('_ op:BASE_TYPE _ ')'_) PrePost { if (!$$parser.dry)
-                                                       $$parser.unaryOp($op, $$, $$s, $$i); }
+PrePost     <-  (op:PREFIX_OP _
+                / '('_ op:BASE_TYPE _               { $cdesc = $$parser.CASTS_TO_TYPES[$op]; }
+                  ( POINTER _                       { $cdesc = 'p:' + $cdesc; $cmods = true; }
+                  )* ')'_
+                ) PrePost                           { if (!$$parser.dry) {
+                                                       if ($cmods) {
+                                                           $$parser.unaryOp('pointer', $$, $$s, $$i);
+                                                           $$parser.setElem($$, $$parser.descTail($cdesc));
+                                                       } else {
+                                                           $$parser.unaryOp($op, $$, $$s, $$i);
+                                                       }
+                                                     } }
                 / Value (FuncCall / Subscript)*
 
 Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry)
@@ -2481,6 +2621,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                          undefined,
                                                                          '%' + $$.base,
                                                                          undefined);
+                                                       $$parser.setElem(callee, undefined);
 
                                                        if (calleeName) {
                                                            callee.callInfo = {
@@ -2884,18 +3025,23 @@ While       <-  WHILE _                             {
 Value       <-  Group
                 / f:FloatLiteral                    { if (!$$parser.dry) {
                                                         $$parser.makeMeta($$, ':=', 'f', undefined, '#' + $f, undefined);
+                                                        $$parser.setElem($$, undefined);
                                                       } }
                 / i:IntegerLiteral                  { if (!$$parser.dry) {
                                                         $$parser.makeMeta($$, ':=', 'i', undefined, '#' + $i, undefined);
+                                                        $$parser.setElem($$, undefined);
                                                       } }
                 / s:StringLiteral                   { if (!$$parser.dry) {
                                                         $$parser.makeString('s', $$, evaluate($s), $$s, $$i);
+                                                        $$parser.setElem($$, undefined);
                                                       } }
                 / NULL _                            { if (!$$parser.dry) {
                                                         $$parser.makeMeta($$, ':=', 'p', undefined, '&NULL', undefined);
+                                                        $$parser.setElem($$, undefined);
                                                       } }
                 / NULLFUNC _                        { if (!$$parser.dry) {
                                                         $$parser.makeMeta($$, ':=', 'F', undefined, '&NULL', undefined);
+                                                        $$parser.setElem($$, undefined);
                                                       } }
                 / Variable
 
