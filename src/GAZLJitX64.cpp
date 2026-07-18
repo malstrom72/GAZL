@@ -599,6 +599,8 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				emitter.loadQ(DSP, IP_STACK_PTR, 8);																	// caller dsp (0 = native/top marker)
 				emitter.movImm(SCRATCH_A, 0); emitter.cmpQ(DSP, SCRATCH_A); emitter.jcc(CC_NE, notNative);
 				emitter.addImmQ(IP_STACK_PTR, 0u - 16u); emitter.loadQ(DSP, IP_STACK_PTR, 8);							// native return: pop again for the true dsp
+				emitter.storeQ(CONTEXT, offsets.dsp, DSP); emitter.storeQ(CONTEXT, offsets.ipsp, IP_STACK_PTR);			// publish (the interpreter's ret: write-back): a BLOCKING
+				emitter.store(CONTEXT, offsets.fuel, FUEL);																// native's caller re-reads these after its nested run()
 				emitter.movImm(RAX, 0); emitter.jmp(epilogue);															// OK - terminal (return to host); pins stay live in regs
 				emitter.bind(notNative);
 				emitter.jmpReg(RAX);																					// GAZL return: jump straight into the caller's continuation
@@ -633,21 +635,41 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 			case OP_CALL_NVC: {																							// native: publish window/fuel/ipsp, call the native inline (no dispatcher round-trip)
+				/*
+					Re-entrancy-safe shape (see TODO(jit-native-reentrancy) resolution): every post-call value comes
+					from ctx fields that a nested enterCall()+run() episode inside the native leaves stable - ctx.dsp
+					is the published window and the sentinel discipline restores exactly it; ctx.ipsp reflects any
+					frames a pushCall() added (a no-op reload otherwise). The OK path continues INDIRECTLY through
+					ctx.nativeafter, preset to `after`: JitProcessor::pushCall retargets it at the pushed callee's
+					entry, whose RETU chains back to `after` through the pushed frames - so `^native` behaves exactly
+					like `&function`. `after` re-arms the not-in-a-native guard and normalizes dsp to the caller
+					frame, which is why pushed frames store the WINDOW uniformly. RESUME = hot is set on the nonzero
+					path only (same retry semantics, but nested episodes can no longer clobber it pre-call).
+				*/
 				const UInt ordinal = static_cast<UInt>(in.p0.i);
 				const UInt window = static_cast<UInt>(in.p1.i);
-				Label hot = emitter.newLabel(), okStatus = emitter.newLabel();
+				Label hot = emitter.newLabel(), retry = emitter.newLabel(), after = emitter.newLabel();
 				emitter.bind(hot);																						// hot re-entry (blocking-retry / suspend re-issue target)
-				emitter.storeQ(CONTEXT, offsets.saveddsp, DSP);															// stash original dsp (restored after the call)
 				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }
 				emitter.storeQ(CONTEXT, offsets.dsp, DSP); emitter.store(CONTEXT, offsets.fuel, FUEL); emitter.storeQ(CONTEXT, offsets.ipsp, IP_STACK_PTR);
-				emitter.leaRip(RAX, hot); emitter.storeQ(CONTEXT, offsets.resume, RAX);									// RESUME = call site (blocking retry / suspend re-issue)
+				emitter.leaRip(RAX, after); emitter.storeQ(CONTEXT, offsets.nativeafter, RAX);							// redirectable OK continuation (pushCall retargets)
 				emitter.loadQ(RAX, CONTEXT, offsets.natives); emitter.loadQ(RAX, RAX, static_cast<int32_t>(ordinal * 8)); // rax = natives[ordinal]
 				emitter.movQ(ARG_0, CONTEXT); emitter.callReg(RAX);														// native(ctx); eax = status (pins are callee-saved -> preserved)
 				emitter.load(FUEL, CONTEXT, offsets.fuel);																// native may resetTimeOut(0): refresh the fuel pin from ctx
-				emitter.loadQ(DSP, CONTEXT, offsets.saveddsp);															// restore original dsp (pop the arg window)
-				emitter.cmpImm(RAX, 0); emitter.jcc(CC_E, okStatus);													// OK -> fall through and continue
-				emitter.jmp(epilogue);																					// nonzero (retry / suspend / trap): return to host, eax = status, RESUME = hot
-				emitter.bind(okStatus);
+				emitter.loadQ(IP_STACK_PTR, CONTEXT, offsets.ipsp);														// adopt frames pushed by pushCall (no-op otherwise)
+				emitter.loadQ(DSP, CONTEXT, offsets.dsp);																// the window - stable across nested episodes (sentinel discipline)
+				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, retry);
+				emitter.loadQ(RAX, CONTEXT, offsets.nativeafter); emitter.jmpReg(RAX);									// OK: `after`, or the last-pushed callee's entry
+				emitter.bind(retry);
+				if (window != 0) {																						// publish the CALLER dsp (register AND ctx): the hot
+					emitter.addImmQ(DSP, 0u - window * 4u);																// re-issue reloads ctx.dsp and advances it again
+					emitter.storeQ(CONTEXT, offsets.dsp, DSP);
+				}
+				emitter.leaRip(SCRATCH_A, hot); emitter.storeQ(CONTEXT, offsets.resume, SCRATCH_A);						// RESUME = call site (rax still holds the status!)
+				emitter.jmp(epilogue);																					// nonzero (retry / suspend / trap): return to host, eax = status
+				emitter.bind(after);
+				emitter.movImm(RAX, 0); emitter.storeQ(CONTEXT, offsets.nativeafter, RAX);								// re-arm the "only inside a native call" guard
+				if (window != 0) { emitter.addImmQ(DSP, 0u - window * 4u); }											// normalize to the caller frame base
 				break;
 			}
 

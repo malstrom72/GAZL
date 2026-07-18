@@ -628,9 +628,41 @@ Status JitProcessor::enterCall(Pointer functionPointer) {
 	return OK;
 }
 
+/*
+	pushCall() under the JIT - the mirror of Processor::pushCall over compiled continuations. The native-call
+	sequence (both backends) presets ctx.nativeAfter to its `after` label and, on native OK, continues with an
+	indirect jump through it; each pushCall links the CURRENT continuation into a plain frame and retargets the
+	slot at the pushed callee's compiled entry. So the last-pushed callee runs first and every RETU chains through
+	the pushed frames (LIFO) back to `after`, which normalizes dsp to the caller frame - which is why every pushed
+	frame stores the WINDOW (this->dsp), first and chained alike, unlike the interpreter's frames. `after` also
+	zeroes ctx.nativeAfter, restoring the "only inside a native call" guard.
+*/
+Value* JitProcessor::pushCall(Pointer functionPointer) {
+	UInt ui = functionPointer - IP_OFFSET;
+	if (ui >= functionCount) return 0;
+	if (nativeAfter == 0) return 0;										// only valid from inside a native callback
+	if (ipsp >= ipStackEnd) return 0;
+	const Instruction* func = codeBase + functionTable[ui];
+	if (this->dsp + static_cast<UInt>(func->p0.i) + static_cast<UInt>(func->p1.i) > dataStackEnd) return 0;	// early FUNC check
+	ipsp->returnAddress = nativeAfter;									// current continuation: `after`, or an earlier-pushed entry
+	ipsp++->dsp = this->dsp;											// the window (see above)
+	nativeAfter = funcEntries[ui];										// the OK path jumps straight into the pushed callee
+	return this->dsp;
+}
+
 Status JitProcessor::run() {
 	typedef int (*Disp)(JitProcessor*);
-	return static_cast<Status>(reinterpret_cast<Disp>(jitDispatch)(this));
+	/*
+		nativeAfter is the one dispatch-scratch field live ACROSS a native call (the redirectable OK continuation
+		the compiled sequence reads after the native returns). A blocking native that nests run() (enterCall +
+		run, the documented interrupt pattern) would clobber it via its own native calls - so give it the same
+		C++-stack isolation the interpreter's locals enjoy. Everything else the sequence reads post-call
+		(ctx.dsp / ctx.ipsp / ctx.fuel) is stable across a well-formed nested episode by the sentinel discipline.
+	*/
+	void* const outerNativeAfter = nativeAfter;
+	const Status s = static_cast<Status>(reinterpret_cast<Disp>(jitDispatch)(this));
+	nativeAfter = outerNativeAfter;
+	return s;
 }
 
 /*

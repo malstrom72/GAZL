@@ -210,6 +210,7 @@ class JitProcessor : public Processor {
 		*/
 		virtual Status enterCall(Pointer functionPointer);
 		virtual Status run();
+		virtual Value* pushCall(Pointer functionPointer);	// native->GAZL forward over compiled continuations: links ctx.nativeAfter into a plain frame and retargets it at the pushed callee's entry (LIFO chains; see GAZLJit.cpp). Same contract as Processor::pushCall.
 
 	private:
 		/*
@@ -218,9 +219,9 @@ class JitProcessor : public Processor {
 		*/
 		void bindModule(const JitModule& module);
 
-		Value* savedDsp;					// dsp saved across a native call (the C1 window is transient)
+		Value* savedDsp;					// (legacy scratch; the x64 sequence no longer uses it - post-call state derives from ctx.dsp)
 		void* nativeFn;						// resolved native fn pointer, blr'd by the native dispatcher
-		void* nativeAfter;					// after-call continuation (dispatcher sets RESUME to it on native OK)
+		void* nativeAfter;					// the redirectable OK continuation of the ACTIVE native call: preset to the call site's `after` label, retargeted by pushCall, zeroed by `after` (doubles as the "inside a native call" guard); isolated across nested run() by JitProcessor::run
 		void* const* funcEntries;			// ordinal -> native entry (bound from the JitModule)
 		void* jitDispatch;					// the native dispatcher trampoline (bound from the JitModule)
 };

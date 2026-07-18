@@ -1352,6 +1352,20 @@ Int Processor::run() {
 							this->ipsp = ipsp;
 							if ((nativeError = (*natives[C0.i])(this)) != 0) { err = nativeError; goto ret; }
 							clockCyclesLeft = this->clockCyclesLeft;
+							if (this->ip != ip) {
+								/*
+									The native pushed one or more calls (pushCall()): adopt the redirected state and
+									flow into the last-pushed callee. Its RETU chains through the pushed frames (LIFO)
+									and finally returns into this caller, exactly like nested `&function` calls.
+									(Blocking usage - enterCall() plus a nested run() - restores this->ip before
+									returning here, so it never takes this path.)
+								*/
+								assert(this->ipsp > ipsp && this->ipsp[-1].dsp != 0);	// plain pushCall frames on top
+								ipsp = this->ipsp;
+								dsp = this->dsp;
+								ip = this->ip;
+								continue;
+							}
 							break;
 			case RETU_C__:	ip = (--ipsp)->ip;
 							dsp = ipsp->dsp;
@@ -1491,6 +1505,30 @@ Status Processor::enterCall(Pointer functionPointer) {
 	ipsp++->dsp = 0;			// Mark return to native caller.
 	this->ip = codeBase + ui;
 	return OK;
+}
+
+/*
+	pushCall() - see GAZL.h. The first push in a native call returns to the `^call`'s continuation and restores the
+	caller's frame base (undoing the window advance CALL_NVC performed for the native); every further push chains: its
+	frame resumes at the previously pushed target, so the calls run last-pushed-first, each RETU flowing into the next.
+	Frames store the resume point MINUS ONE because RETU restores and then the dispatch loop increments (`++ip`); for a
+	chain frame that minus-one address is never executed, only incremented over.
+*/
+Value* Processor::pushCall(Pointer functionPointer) {
+	assert(codeBase != 0);
+	UInt ui = functionPointer - IP_OFFSET;
+	if (ui >= functionCount) return 0;
+	const Instruction* func = codeBase + functionTable[ui];
+	assert(func->opcode == FUNC_CC_);
+	const bool atNativeCall = (ipsp != ipStackBase && this->ip->opcode == CALL_NVC);
+	const bool chainedPush = (ipsp != ipStackBase && this->ip->opcode == FUNC_CC_);	// a previous pushCall in this native call
+	if (!atNativeCall && !chainedPush) return 0;				// only valid from inside a native callback
+	if (ipsp >= ipStackEnd) return 0;
+	if (this->dsp + (UInt)(func->p0.i) + (UInt)(func->p1.i) > dataStackEnd) return 0;	// the callee's own FUNC check, done early
+	ipsp->ip = atNativeCall ? this->ip : this->ip - 1;
+	ipsp++->dsp = atNativeCall ? this->dsp - this->ip->p1.i : this->dsp;
+	this->ip = func;											// this->dsp stays: the ^call's window is the argument window
+	return this->dsp;
 }
  
 /*

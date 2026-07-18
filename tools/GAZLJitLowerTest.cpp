@@ -71,8 +71,48 @@ static Status nativeYield(Processor* p) {
 	++gNativeCallCount;
 	return OK;
 }
-static NativeFunc const gNativeTable[] = { nativeSquare, nativeBlock, nativeYield };
-static const char* const gNativeNames[] = { "nsq", "blk", "yld" };
+// RESOLVED(jit-native-reentrancy): calls issued from inside a native now work on BOTH engines, in both flavors
+// (kernels below: reenter blk / reenter fwd / push chain / blocking win; interpreter unit tests: GAZLEnterCallTest.cpp;
+// production users: GAZLCmd --forward and the Permut8 firmware harness, tools/permut8Host.js + checkPermut8Firmwares.sh
+// --jit, a 27-firmware interp-vs-JIT differential):
+//   - BLOCKING:     native does enterCall()+nested run(). JIT fixes: the CALL_NVC sequence takes all post-call state
+//                   from ctx fields a nested episode leaves stable (ctx.dsp = the published window, restored by the
+//                   sentinel discipline; x64's sentinel-RETU now publishes dsp/ipsp/fuel like the interpreter's ret:
+//                   write-back - arm64 already did); RESUME = hot moved to the nonzero path.
+//   - NON-BLOCKING: native does pushCall(). JIT: the sequence presets ctx.nativeAfter to its `after` label and, on
+//                   OK, continues with an indirect jump through it; JitProcessor::pushCall links the current
+//                   continuation into a plain frame (storing the WINDOW - `after` normalizes dsp) and retargets the
+//                   slot at the callee's compiled entry. JitProcessor::run() isolates nativeAfter across nesting.
+// Known assembler-legal shapes the JIT compiler still cannot digest (both from hand-written GAZL; compiled Impala
+// never emits them): a function ENDING in GOTO with no RETU (lowerFunction's `while (opcode != OP_RETU)` scan runs
+// off the code end - crash), and a MULTI-RETU function (the first RETU is taken as the function end, so branches past
+// it target outside the sliced range). Delimiting functions by functionTable offsets instead of the RETU scan would
+// fix both.
+/*
+	Re-entrant natives (the resolution of the TODO above): both flavors of a native running GAZL functions on the
+	same processor, identical on both engines. Targets are resolved per kernel by name (helperB / helperF / chA /
+	chB) after assembly.
+*/
+static Pointer gReBlk = 0, gReFwd = 0, gChA = 0, gChB = 0;
+static Status nativeReBlk(Processor* p) {				// BLOCKING: enterCall + nested run() (the documented interrupt pattern)
+	++gNativeCallCount;
+	Status s = p->enterCall(gReBlk);
+	if (s != OK) { return s; }
+	do { p->resetTimeOut(100000); s = p->run(); } while (s == TIME_OUT);
+	return s;
+}
+static Status nativeReFwd(Processor* p) {				// NON-BLOCKING: pushCall + return; the caller's run() flows in
+	++gNativeCallCount;
+	return p->pushCall(gReFwd) != 0 ? OK : BAD_CALL;
+}
+static Status nativeChain(Processor* p) {				// LIFO pushCall pair: chB runs first, then chA; one shared window
+	++gNativeCallCount;
+	if (p->pushCall(gChA) == 0) { return BAD_CALL; }
+	if (p->pushCall(gChB) == 0) { return BAD_CALL; }
+	return OK;
+}
+static NativeFunc const gNativeTable[] = { nativeSquare, nativeBlock, nativeYield, nativeReBlk, nativeReFwd, nativeChain };
+static const char* const gNativeNames[] = { "nsq", "blk", "yld", "nblk", "nfwd", "nchn" };
 
 namespace {
 	const int CODE_SIZE = 64 * 1024, DATA_SIZE = 64 * 1024, FUNCTION_TABLE_SIZE = 1024, CALL_STACK_SIZE = 256;
@@ -140,6 +180,8 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	std::printf("Kernel \"%s\":\n", name);
 	Symbols globals;
 	if (!assemble(source, globals)) { ++failures; return; }
+	gReBlk = globals.findFunction("helperB"); gReFwd = globals.findFunction("helperF");					// re-entrant native
+	gChA = globals.findFunction("chA"); gChB = globals.findFunction("chB");								// targets (if present)
 	const Pointer mainPtr = globals.findFunction("main");
 	UInt sz = 0;
 	const Pointer gInPtr = globals.findGlobal("gIn", sz), gOutPtr = globals.findGlobal("gOut", sz);
@@ -288,6 +330,41 @@ static const char* const K_BLOCKING =		// host native that suspends-and-retries 
 	" PEEK $n &gIn\n MOVi $acc #0\n MOVi $i #0\n"
 	".l: MOVi %1 $i\n CALL ^blk %0 *2\n MOVi $t %0\n ADDi $acc $acc $t\n FORi $i $n @.l\n"
 	" POKE &gOut $acc\n RETU\n";
+
+static const char* const K_BLOCKWIN =		// blocking retry at a NONZERO window base (%1): the retry path must republish
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"						// the CALLER dsp or the re-issue double-advances
+	"main: FUNC\n PARA *3\n$n: LOCi\n$acc: LOCi\n$i: LOCi\n"
+	" PEEK $n &gIn\n MOVi $acc #0\n MOVi $i #0\n"
+	".l: MOVi %2 $i\n CALL ^blk %1 *2\n ADDi $acc $acc %1\n FORi $i $n @.l\n"
+	" POKE &gOut $acc\n RETU\n";
+
+static const char* const K_REBLK =			// BLOCKING re-entrancy: recursion THROUGH ^nblk (enterCall + nested run() per level)
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"helperB: FUNC\n$r: OUTi\n$x: INPi\n"
+	" GRTi $x #0 @.f\n MOVi $r #0\n GOTO @.e\n"
+	".f: SUBi %1 $x #1\n CALL ^nblk %0 *2\n ADDi $r $x %0\n"
+	".e: RETU\n"
+	"main: FUNC\n PARA *2\n$n: LOCi\n"
+	" PEEK $n &gIn\n MOVi %1 $n\n CALL ^nblk %0 *2\n POKE &gOut %0\n RETU\n";
+
+static const char* const K_REFWD =			// NON-BLOCKING re-entrancy: recursion THROUGH ^nfwd (pushCall per level)
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"helperF: FUNC\n$r: OUTi\n$x: INPi\n"
+	" GRTi $x #0 @.f\n MOVi $r #0\n GOTO @.e\n"
+	".f: SUBi %1 $x #1\n CALL ^nfwd %0 *2\n ADDi $r $x %0\n"
+	".e: RETU\n"
+	"main: FUNC\n PARA *2\n$n: LOCi\n"
+	" PEEK $n &gIn\n MOVi %1 $n\n CALL ^nfwd %0 *2\n POKE &gOut %0\n RETU\n";
+
+static const char* const K_CHAIN =			// pushCall LIFO pair: chB (x*2) runs first, then chA (x+1); shared window, gOrd proves order
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n" "gOrd: GLOB *1\n DATi #0\n"
+	"chA: FUNC\n$r: OUTi\n$x: INPi\n"
+	" PEEK %0 &gOrd\n MULi %0 %0 #10\n ADDi %0 %0 #3\n POKE &gOrd %0\n ADDi $r $x #1\n RETU\n"
+	"chB: FUNC\n$r: OUTi\n$x: INPi\n"
+	" PEEK %0 &gOrd\n MULi %0 %0 #10\n ADDi %0 %0 #4\n POKE &gOrd %0\n MULi $r $x #2\n RETU\n"
+	"main: FUNC\n PARA *2\n$t: LOCi\n"
+	" POKE &gOrd #0\n PEEK %1 &gIn\n CALL ^nchn %0 *2\n MOVi $t %0\n"
+	" MULi %0 $t #1000\n PEEK %1 &gOrd\n ADDi %0 %0 %1\n POKE &gOut %0\n RETU\n";
 
 static const char* const K_NATIVE =			// host native call in a loop (CALL_NVC)
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
@@ -604,6 +681,7 @@ int main() {
 	const int indices[] = { 0, 3, 7, 100, 2000000 };			// last is out of range -> BAD_POKE trap
 	const int depths[] = { 1, 5, 50, 200, 300 };				// last overflows the call stack -> IP_STACK_OVERFLOW
 	const int one[] = { 0 };
+	const int reenter[] = { 0, 1, 2, 5, 8 };			// recursion depths THROUGH a re-entrant native
 	const int divs[] = { 1, 2, 3, 7, -7, 13, -13, 1000000, 0 };	// last traps DIVISION_BY_ZERO
 	const int floats[] = { 0, 1, 2, 10, -10, 100, 1414, 2000, -2000 };	// large n exercises the LSSf clamp
 
@@ -619,6 +697,10 @@ int main() {
 	runKernel("indirect     [CALL_VVC]", K_INDIRECT, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("native       [CALL_NVC]", K_NATIVE, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("blocking nat [CALL_NVC retry]", K_BLOCKING, counts, sizeof(counts) / sizeof(*counts));
+	runKernel("blocking win [CALL_NVC retry, window>0]", K_BLOCKWIN, counts, sizeof(counts) / sizeof(*counts));
+	runKernel("reenter blk  [enterCall+run in native]", K_REBLK, reenter, sizeof(reenter) / sizeof(*reenter));
+	runKernel("reenter fwd  [pushCall in native]", K_REFWD, reenter, sizeof(reenter) / sizeof(*reenter));
+	runKernel("push chain   [pushCall LIFO pair]", K_CHAIN, reenter, sizeof(reenter) / sizeof(*reenter));
 	runKernel("pointer      [ADRL + PEEK/POKE_VVV]", K_POINTER, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("stack access [GETL/SETL + trap]", K_STACK, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("block copy   [COPY]", K_COPY, signed_, sizeof(signed_) / sizeof(*signed_));

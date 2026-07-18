@@ -741,23 +741,40 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				break;
 			}
 			case OP_CALL_NVC: {
+				/*
+					Re-entrancy-safe shape, mirroring the x64 backend (see its OP_CALL_NVC comment): post-call state
+					comes from ctx fields a nested enterCall()+run() episode leaves stable (reloadState's ctx.dsp IS
+					the published window; the sentinel discipline restores it); the OK path continues INDIRECTLY
+					through ctx.nativeafter so JitProcessor::pushCall can retarget it at a pushed callee's entry;
+					`after` re-arms the guard and normalizes dsp to the caller frame (pushed frames store the WINDOW
+					uniformly); RESUME = hot is set on the nonzero path, which republishes the CALLER dsp because
+					the hot re-issue advances it again.
+				*/
 				const UInt ordinal = static_cast<UInt>(in.p0.i);														// native ordinal (C0)
 				const UInt window = static_cast<UInt>(in.p1.i);															// param-window offset (C1)
-				Label hot = e.newLabel(), okStatus = e.newLabel();
+				Label hot = e.newLabel(), retry = e.newLabel(), after = e.newLabel();
 				e.bind(hot);																							// re-entry for blocking retry / suspend-resume
-				e.strX(X1, X0, o.saveddsp);																				// stash original dsp (the window advance is transient)
 				if (window != 0) { e.addImmX(X1, X1, window * 4); }
 				e.strX(X1, X0, o.dsp); e.strW(W3, X0, o.fuel); e.strX(X4, X0, o.ipsp);									// publish window/fuel/ipsp (interpreter-shaped)
-				e.adr(X9, hot); e.strX(X9, X0, o.resume);																// RESUME = call site (nonzero native → re-issue: blocking retry)
+				e.adr(X9, after); e.strX(X9, X0, o.nativeafter);														// redirectable OK continuation (pushCall retargets)
 				e.ldrX(X9, X0, o.natives); e.ldrX(X9, X9, ordinal * 8);													// natives[ordinal]
 				e.blr(X9);																								// inline host call (x0 = ctx); w0 = status
 				e.mov(W12, W0);																							// save the status BEFORE we overwrite x0 with ctx
-				e.addImmX(X0, X19, 0); reloadState(e, o); e.ldrX(X1, X0, o.saveddsp);									// native clobbered the pins: restore ctx + reload (dsp = original)
-				e.cmpImm(W12, 0); e.bcond(EQ, okStatus);																// OK → continue inline
-				e.mov(W0, W12); e.b(exitLabel);																			// nonzero (BLOCK_RETRY / TIME_OUT / trap): return to host; RESUME = call site so it re-issues
-				e.bind(okStatus);																						// OK: continue (state live). w3 now holds ctx.fuel - a native
-																	// that yielded via resetTimeOut(0) leaves it 0, and the MANDATORY fuel check at the next
-																	// block leader (jitFuelSafepoints inserts one right after every call) suspends immediately.
+				e.addImmX(X0, X19, 0); reloadState(e, o);																// restore ctx + reload; x1 = ctx.dsp = the WINDOW, x4 adopts pushCall frames
+				e.cmpImm(W12, 0); e.bcond(NE, retry);
+				e.ldrX(X9, X0, o.nativeafter); e.br(X9);																// OK: `after`, or the last-pushed callee's entry
+				e.bind(retry);
+				if (window != 0) {																						// publish the CALLER dsp (register AND ctx): the hot
+					e.subImmX(X1, X1, window * 4);																		// re-issue reloads ctx.dsp and advances it again
+					e.strX(X1, X0, o.dsp);
+				}
+				e.adr(X9, hot); e.strX(X9, X0, o.resume);																// RESUME = call site (blocking retry / suspend re-issue)
+				e.mov(W0, W12); e.b(exitLabel);																			// nonzero (BLOCK_RETRY / TIME_OUT / trap): return to host
+				e.bind(after);
+				e.strX(XZR, X0, o.nativeafter);																			// re-arm the "only inside a native call" guard
+				if (window != 0) { e.subImmX(X1, X1, window * 4); }														// normalize to the caller frame base
+																	// state live; w3 holds ctx.fuel - a native that yielded via resetTimeOut(0) leaves it 0
+																	// and the MANDATORY fuel check at the next block leader suspends immediately.
 				break;
 			}
 			case OP_MOVE_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); matConst(e, static_cast<Reg>(d), in.p1.i); cache.endInstruction(); break; }

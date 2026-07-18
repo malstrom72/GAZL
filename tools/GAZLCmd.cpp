@@ -158,6 +158,23 @@ Status gazlAtan2(Processor* vpu) {
 	return OK;
 };
 
+Status gazlExit(Processor*) {
+	return TERMINATED;					// expected, clean termination (e.g. a firmware harness reaching its frame budget)
+}
+
+/*
+	--forward=native:function[,native:function...]: satisfy `^native` call sites with GAZL functions. Each listed native
+	name is registered as one of these stubs; after assembly the paired GAZL function is looked up by name and every call
+	to the native pushCall()s it - the `^native` call then behaves exactly like a `&function` call (args and return value
+	in the same window). This is how the Permut8 firmware harness supplies yield/read/write/trace as concatenated GAZL
+	(see tools/permut8Host.js). Interpreter only for now: pushCall is not yet supported under the JIT.
+*/
+const int MAX_FORWARDS = 8;
+static Pointer forwardTargets[MAX_FORWARDS];
+template<int INDEX> Status forwardNative(Processor* p) {
+	return p->pushCall(forwardTargets[INDEX]) != 0 ? OK : BAD_CALL;
+}
+
 
 const int DATA_MEMORY_SIZE = 128 * 1024;
 const int CODE_MEMORY_SIZE = 128 * 1024;
@@ -165,12 +182,16 @@ const int FUNCTION_TABLE_SIZE = CODE_MEMORY_SIZE;	// A function is at least one 
 const int CALL_STACK_SIZE = 2048;
 
 static const NativeFunc NATIVE_TABLE[] = {
-	abort, assertFail, printInt, printFloat, print, printLF, input, gazlAtan2, gazlSqrt, gazlLog
+	abort, assertFail, printInt, printFloat, print, printLF, input, gazlAtan2, gazlSqrt, gazlLog, gazlExit,
+	forwardNative<0>, forwardNative<1>, forwardNative<2>, forwardNative<3>,							// --forward slots;
+	forwardNative<4>, forwardNative<5>, forwardNative<6>, forwardNative<7>							// names registered on demand
 };
 
 static const char* NATIVE_NAMES[] = {
-	"abort", "assertFail", "printInt", "printFloat", "print", "printLF", "input", "atan2", "sqrt", "log"
+	"abort", "assertFail", "printInt", "printFloat", "print", "printLF", "input", "atan2", "sqrt", "log", "exit"
 };
+
+const int FIRST_FORWARD_INDEX = 11;						// index of forwardNative<0> in NATIVE_TABLE
 
 static Value memory[DATA_MEMORY_SIZE];
 static Instruction code[CODE_MEMORY_SIZE];
@@ -605,6 +626,8 @@ int main(int argc, const char* argv[]) {
 		bool useJit = false;	// --jit: run on the native (arm64) JIT instead of the interpreter (see GAZL_JIT build)
 		bool jitStats = false;	// --jit-stats: implies --jit; print `jitstats compile_ms=.. code_bytes=.. funcs=..`
 		bool noLibm = false;	// --no-libm: don't register the atan2/sqrt/log natives (for programs that define their own)
+		const char* noNativeSpec = 0;	// --no-native=name,...: don't register the listed built-in natives (for programs defining same-named functions)
+		const char* forwardSpec = 0;	// --forward=native:function,...: satisfy ^native calls with GAZL functions (see forwardNative)
 		const char* emitCpp = 0;	// --emit-cpp=<path>: write a standalone C++ translation of the program and exit
 		bool promoteLocals = false;	// --promote-locals: emit-cpp Tier 1 - locals become C++ locals (see GAZLCpp.h)
 		const char* emitJit = 0;	// --emit-jit=<path>: write the JIT's raw machine code + <path>.txt layout sidecar and exit (see tools/jitDisasm.sh)
@@ -621,6 +644,10 @@ int main(int argc, const char* argv[]) {
 					useJit = true; jitStats = true;
 				} else if (strcmp(a, "--no-libm") == 0) {
 					noLibm = true;
+				} else if (strncmp(a, "--forward=", 10) == 0) {
+					forwardSpec = a + 10;
+				} else if (strncmp(a, "--no-native=", 12) == 0) {
+					noNativeSpec = a + 12;
 				} else if (strncmp(a, "--emit-cpp=", 11) == 0) {
 					emitCpp = a + 11;
 				} else if (strcmp(a, "--promote-locals") == 0) {
@@ -643,6 +670,8 @@ int main(int argc, const char* argv[]) {
 					<< std::endl;
 			std::cerr << "        [--no-libm]                  skip the atan2/sqrt/log natives (for self-contained libm)"
 					<< std::endl;
+			std::cerr << "        [--forward=nat:func,...]     satisfy ^nat native calls with GAZL functions (interpreter only)"
+					<< std::endl;
 			std::cerr << "        [--emit-cpp=F]               write a standalone C++ translation to F and exit (Tier 0)"
 					<< std::endl;
 			std::cerr << "        [--promote-locals]           emit-cpp Tier 1: locals become C++ locals (realm-rule conforming)"
@@ -652,10 +681,14 @@ int main(int argc, const char* argv[]) {
 
 		Symbols globals;
 
-		for (int i = 0; i < sizeof (NATIVE_TABLE) / sizeof (*NATIVE_TABLE); ++i) {
-			if (noLibm && (strcmp(NATIVE_NAMES[i], "atan2") == 0 || strcmp(NATIVE_NAMES[i], "sqrt") == 0
-					|| strcmp(NATIVE_NAMES[i], "log") == 0))
+		for (int i = 0; i < sizeof (NATIVE_NAMES) / sizeof (*NATIVE_NAMES); ++i) {	// NAMES, not TABLE: the unnamed tail of
+			if (noLibm && (strcmp(NATIVE_NAMES[i], "atan2") == 0 || strcmp(NATIVE_NAMES[i], "sqrt") == 0	// NATIVE_TABLE is the
+					|| strcmp(NATIVE_NAMES[i], "log") == 0))											// --forward slots
 				continue;								// a self-contained libm (e.g. perfTest) defines these itself
+			if (noNativeSpec != 0) {					// --no-native: the program defines a same-named GAZL function itself
+				const std::string spec(std::string(",") + noNativeSpec + ",");
+				if (spec.find(std::string(",") + NATIVE_NAMES[i] + ",") != std::string::npos) continue;
+			}
 			globals.registerNative(NATIVE_NAMES[i], i);
 		}
 
@@ -663,6 +696,25 @@ int main(int argc, const char* argv[]) {
 			Value v;
 			v.i = atoi(pos[i + 1]);
 			globals.defineConstant(pos[i + 0], false, v);
+		}
+
+		// --forward: register each native name now (the assembler must resolve `^name`); the paired GAZL function names
+		// are remembered and looked up after assembly.
+		std::vector<std::string> forwardFunctionNames;
+		if (forwardSpec != 0) {
+			std::string spec(forwardSpec);
+			size_t at = 0;
+			while (at < spec.size()) {
+				const size_t comma = spec.find(',', at);
+				const std::string pair = spec.substr(at, comma == std::string::npos ? std::string::npos : comma - at);
+				const size_t colon = pair.find(':');
+				if (colon == std::string::npos) throw CmdException(std::string("--forward: expected native:function, got '") + pair + "'");
+				if (forwardFunctionNames.size() >= MAX_FORWARDS) throw CmdException("--forward: too many forwards");
+				globals.registerNative(pair.substr(0, colon).c_str(), FIRST_FORWARD_INDEX + static_cast<int>(forwardFunctionNames.size()));
+				forwardFunctionNames.push_back(pair.substr(colon + 1));
+				if (comma == std::string::npos) break;
+				at = comma + 1;
+			}
 		}
 		
 		AssembledProgram program;
@@ -789,8 +841,26 @@ int main(int argc, const char* argv[]) {
 						<< std::endl;
 			}
 		#endif
+			const bool jitEngine = (proc != 0);				// remember which engine was picked (for per-iteration recreation)
 			if (!proc) {
 				proc.reset(new Processor(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0));
+			}
+			/*
+				Recreate the engine (fresh dsp/ipsp). exit() terminates MID-FLIGHT, leaving frames on both stacks -
+				re-entering main without this makes every --bench iteration creep upward until the deepest workload
+				overflows the data stack. Also gives each iteration identical, fresh-engine conditions.
+			*/
+			auto remakeProc = [&]() {
+			#ifdef GAZL_JIT
+				if (jitEngine) { proc.reset(new JitProcessor(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE)); return; }
+			#endif
+				proc.reset(new Processor(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0));
+			};
+
+			for (size_t i = 0; i < forwardFunctionNames.size(); ++i) {		// resolve --forward targets against the assembled program
+				forwardTargets[i] = globals.findFunction(forwardFunctionNames[i].c_str());
+				if (forwardTargets[i] == NULL_POINTER)
+					throw CmdException(std::string("--forward: no function '") + forwardFunctionNames[i] + "'");
 			}
 
 			const char* mainFunctionName = pos.size() >= 3 ? pos[2] : "main";
@@ -807,12 +877,14 @@ int main(int argc, const char* argv[]) {
 					proc->resetTimeOut(0x7FFFFFFF);
 					status = proc->run();
 				} while (status == TIME_OUT);
-				if (status != OK) throw CmdException(std::string("run returned status ") + std::to_string(status));
+				// TERMINATED is a clean, expected stop via the exit() native (e.g. a firmware harness reaching its budget).
+				if (status != OK && status != TERMINATED) throw CmdException(std::string("run returned status ") + std::to_string(status));
 			};
 
 			if (benchRepeat > 0) {
 				std::vector<double> samples;			// milliseconds, measured iterations only
 				for (int iter = 0; iter < benchWarmup + benchRepeat; ++iter) {
+					if (iter != 0) remakeProc();		// fresh stacks per iteration (see remakeProc); outside the timed span
 					auto t0 = std::chrono::steady_clock::now();
 					runToCompletion();
 					auto t1 = std::chrono::steady_clock::now();
