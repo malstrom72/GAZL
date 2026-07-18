@@ -474,11 +474,11 @@ static void emitDirtyStores(Arm64Emitter& e, const ResidencyMap& map) {
 	}
 }
 
-// A checked memory op's terminal trap, deferred to the function's cold section so the hot path stays branch-and-continue.
+// A checked op's terminal trap, deferred to the function's cold section so the hot path stays branch-and-continue.
 struct ColdTrap {
 	Label label;
 	ResidencyMap dirty;								// the captureDirtyLines snapshot to store before exiting
-	unsigned statusComplement;						// movn immediate: ~1 = BAD_PEEK, ~2 = BAD_POKE
+	unsigned statusComplement;						// movn immediate: ~1 = BAD_PEEK, ~2 = BAD_POKE, ~6 = DIVISION_BY_ZERO
 };
 }
 
@@ -556,17 +556,16 @@ static void emitBinaryF(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitte
 
 // DIVf with a runtime divisor: the interpreter traps a zero divisor (GAZL.cpp CHECK_FLOAT_DIV_BY_ZERO), so match it.
 // VVC (const divisor) is assemble-time-checked, so it stays on emitBinaryF.
-static void emitDivFChecked(Arm64Emitter& e, RegisterCache& cache, const Instruction& in, bool s1Const, Label exitLabel) {
+static void emitDivFChecked(Arm64Emitter& e, RegisterCache& cache, const Instruction& in, bool s1Const, std::vector<ColdTrap>& coldTraps) {
 	const int a = loadFloatOperand(e, cache, in.p1, s1Const);
 	const int b = loadFloatOperand(e, cache, in.p2, false);
-	cache.spillDirtyResident();																							// main-path flush before the terminal trap
+	ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 6;												// ~6 = -7 = DIVISION_BY_ZERO
 	const int zero = cache.scratch(FLOAT_REGISTER);
 	e.fmovSW(static_cast<Reg>(zero), WZR);																				// 0.0f
 	e.fcmpS(static_cast<Reg>(b), static_cast<Reg>(zero));
-	Label ok = e.newLabel();
-	e.bcond(NE, ok);																									// != 0 (NaN is unordered, also passes) → divide
-	e.movn(W0, 6); e.b(exitLabel);																						// ~6 = -7 = DIVISION_BY_ZERO
-	e.bind(ok);
+	cache.captureDirtyLines(trap.dirty);																				// the trap exit must leave memory interpreter-identical
+	e.bcond(EQ, trap.label);																							// == 0 (ordered) → trap arm, cold; NaN is unordered → divide
+	coldTraps.push_back(trap);
 	const int d = cache.define(in.p0.i, FLOAT_REGISTER);
 	e.fdivS(static_cast<Reg>(d), static_cast<Reg>(a), static_cast<Reg>(b));
 	cache.endInstruction();
@@ -600,7 +599,7 @@ static void emitShift(Arm64Emitter& e, RegisterCache& cache, int kind, const Ins
 	Emit an integer divide (rem=false) or modulo (rem=true) `dst = s1 </%> s2`. form: 0=VVV, 1=VVC, 2=VCV. A variable
 	divisor (VVV/VCV) gets a divide-by-zero guard → DIVISION_BY_ZERO; a VVC divisor is a nonzero assembler constant.
 */
-static void emitDivMod(Arm64Emitter& e, RegisterCache& cache, bool rem, const Instruction& in, int form, Label exitLabel) {
+static void emitDivMod(Arm64Emitter& e, RegisterCache& cache, bool rem, const Instruction& in, int form, std::vector<ColdTrap>& coldTraps) {
 	int dividend;
 	if (form == 2) { dividend = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(dividend), in.p1.i); }
 	else { dividend = cache.read(in.p1.i, GENERAL_REGISTER); }
@@ -608,11 +607,10 @@ static void emitDivMod(Arm64Emitter& e, RegisterCache& cache, bool rem, const In
 	if (form == 1) { divisor = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(divisor), in.p2.i); }
 	else { divisor = cache.read(in.p2.i, GENERAL_REGISTER); }
 	if (form != 1) {																									// variable divisor → divide-by-zero guard
-		cache.spillDirtyResident();																						// on the MAIN path (not the trap arm): the model must match what executes,
-		Label ok = e.newLabel();																						//   and the terminal trap needs memory interpreter-current when it returns
-		e.cbnz(static_cast<Reg>(divisor), ok);
-		e.movn(W0, 6); e.b(exitLabel);																					// ~6 = -7 = DIVISION_BY_ZERO
-		e.bind(ok);
+		ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 6;											// ~6 = -7 = DIVISION_BY_ZERO
+		cache.captureDirtyLines(trap.dirty);																			// the trap exit must leave memory interpreter-identical
+		e.cbz(static_cast<Reg>(divisor), trap.label);																	// trap arm is cold, after the mainline
+		coldTraps.push_back(trap);
 	}
 	if (rem) {																											// modulo: msub needs the dividend intact, so quotient goes to a distinct scratch
 		const int q = cache.scratch(GENERAL_REGISTER);
@@ -930,12 +928,12 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_SUBI_VCV: emitBinary(e, cache, &Arm64Emitter::sub, in, true, false); break;
 			case OP_MULI_VVV: emitBinary(e, cache, &Arm64Emitter::mul, in, false, false); break;
 			case OP_MULI_VVC: emitBinary(e, cache, &Arm64Emitter::mul, in, false, true); break;
-			case OP_DIVI_VVV: emitDivMod(e, cache, false, in, 0, exitLabel); break;
-			case OP_DIVI_VVC: emitDivMod(e, cache, false, in, 1, exitLabel); break;
-			case OP_DIVI_VCV: emitDivMod(e, cache, false, in, 2, exitLabel); break;
-			case OP_MODI_VVV: emitDivMod(e, cache, true, in, 0, exitLabel); break;
-			case OP_MODI_VVC: emitDivMod(e, cache, true, in, 1, exitLabel); break;
-			case OP_MODI_VCV: emitDivMod(e, cache, true, in, 2, exitLabel); break;
+			case OP_DIVI_VVV: emitDivMod(e, cache, false, in, 0, coldTraps); break;
+			case OP_DIVI_VVC: emitDivMod(e, cache, false, in, 1, coldTraps); break;
+			case OP_DIVI_VCV: emitDivMod(e, cache, false, in, 2, coldTraps); break;
+			case OP_MODI_VVV: emitDivMod(e, cache, true, in, 0, coldTraps); break;
+			case OP_MODI_VVC: emitDivMod(e, cache, true, in, 1, coldTraps); break;
+			case OP_MODI_VCV: emitDivMod(e, cache, true, in, 2, coldTraps); break;
 			case OP_SHLI_VVV: emitShift(e, cache, 0, in, 0); break;
 			case OP_SHLI_VVC: emitShift(e, cache, 0, in, 1); break;
 			case OP_SHLI_VCV: emitShift(e, cache, 0, in, 2); break;
@@ -964,9 +962,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_SUBF_VCV: emitBinaryF(e, cache, &Arm64Emitter::fsubS, in, true, false); break;
 			case OP_MULF_VVV: emitBinaryF(e, cache, &Arm64Emitter::fmulS, in, false, false); break;
 			case OP_MULF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fmulS, in, false, true); break;
-			case OP_DIVF_VVV: emitDivFChecked(e, cache, in, false, exitLabel); break;
+			case OP_DIVF_VVV: emitDivFChecked(e, cache, in, false, coldTraps); break;
 			case OP_DIVF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, true); break;						// const divisor: assemble-checked
-			case OP_DIVF_VCV: emitDivFChecked(e, cache, in, true, exitLabel); break;
+			case OP_DIVF_VCV: emitDivFChecked(e, cache, in, true, coldTraps); break;
 			case OP_FTOI_VVC: {																							// int(V * scale), scale = C2 (saturating fcvtzs)
 				const int src = cache.read(in.p1.i, FLOAT_REGISTER);
 				const int bits = cache.scratch(GENERAL_REGISTER);
