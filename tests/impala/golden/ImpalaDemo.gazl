@@ -118,7 +118,7 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:18
 		MOVi $d #1234 	; d = 1234
 		MOVi $e #12 	; e = 12
 		ADDi $a $a #1	; a = a + 1
-		IORi %0 $a #250	; a = a | 250 & 120 ^ 60 << 3 >> 1
+		IORi %0 $a #250	; a = ((((a | 250) & 120) ^ 60) << 3) >> 1
 		ANDi %0 %0 #120
 		XORi %0 %0 #60
 		SHLi %0 %0 #3

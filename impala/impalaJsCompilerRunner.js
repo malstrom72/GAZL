@@ -152,6 +152,8 @@ function compileWithJsImpala(source, options = {}) {
 		retabulate: shouldRetabulate = true,
 		trailingNewline,
 		randomId,
+		legacy,
+		onWarning,
 	} = options;
 
 	const compilerPath = compilerPathOption ? path.resolve(compilerPathOption) : path.join(__dirname, "impalaCompiler.js");
@@ -173,6 +175,17 @@ function compileWithJsImpala(source, options = {}) {
 	if (sourceName !== undefined) {
 		compilerOptions.sourceName = sourceName;
 	}
+	if (legacy) {
+		compilerOptions.legacy = true;
+	}
+	compilerOptions.warn = (message, offset) => {
+		const formatted = formatErrorWithLocation(source, options, offset, `Warning: ${message} —`);
+		if (typeof onWarning === "function") {
+			onWarning(formatted, message, offset);
+		} else {
+			console.error(formatted);
+		}
+	};
 	let compileResult;
 	try {
 		compileResult = compilerFn(source, compilerOptions);

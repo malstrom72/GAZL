@@ -40,8 +40,9 @@ function readStdinLatin1Sync() {
 
 function usageAndExit() {
 	console.error('Usage:');
-	console.error('  node impala/impala.node.js compile [<input.impala>] [<output.gazl>|-] [<random id>]');
-	console.error('  node impala/impala.node.js run [<input.impala>]');
+	console.error('  node impala/impala.node.js compile [--legacy] [<input.impala>] [<output.gazl>|-] [<random id>]');
+	console.error('  node impala/impala.node.js run [--legacy] [<input.impala>]');
+	console.error('  --legacy downgrades Impala 2 strict-expression errors to warnings');
 	process.exit(1);
 }
 
@@ -52,7 +53,7 @@ function parseRandomId(arg) {
 	return Number.isFinite(n) ? Math.trunc(n) : undefined;
 }
 
-function compileCommand(args) {
+function compileCommand(args, legacy) {
 	let source;
 	let inputPath;
 	let outputPath;
@@ -80,7 +81,7 @@ function compileCommand(args) {
 
 	let output;
 	try {
-		output = compileWithJsImpala(source, { randomId, retabulate: true, trailingNewline: true, sourceName: inputPath || '<stdin>' });
+		output = compileWithJsImpala(source, { randomId, retabulate: true, trailingNewline: true, sourceName: inputPath || '<stdin>', legacy });
 	} catch (err) {
 		const message = (err && err.message) ? err.message : String(err);
 		if (inputPath) console.error(`Error compiling ${inputPath}: ${message}`);
@@ -106,7 +107,7 @@ function compileCommand(args) {
 	}
 }
 
-function runCommand(args) {
+function runCommand(args, legacy) {
 	let source;
 	let inputPath;
 	if (args.length === 0) {
@@ -127,7 +128,7 @@ function runCommand(args) {
 
 	let gazl;
 	try {
-		gazl = compileWithJsImpala(source, { retabulate: true, trailingNewline: true, sourceName: inputPath || '<stdin>' });
+		gazl = compileWithJsImpala(source, { retabulate: true, trailingNewline: true, sourceName: inputPath || '<stdin>', legacy });
 	} catch (err) {
 		console.error((err && err.message) ? err.message : String(err));
 		process.exit(1);
@@ -155,13 +156,15 @@ function runCommand(args) {
 }
 
 function main() {
-	const [cmd, ...rest] = process.argv.slice(2);
+	const argv = process.argv.slice(2);
+	const legacy = argv.includes('--legacy');
+	const [cmd, ...rest] = argv.filter((arg) => arg !== '--legacy');
 	if (!cmd) return usageAndExit();
 	switch (cmd) {
 		case 'compile':
-			return compileCommand(rest);
+			return compileCommand(rest, legacy);
 		case 'run':
-			return runCommand(rest);
+			return runCommand(rest, legacy);
 		default:
 			return usageAndExit();
 	}

@@ -63,7 +63,7 @@ process:	FUNC	; signature func process() -> void @ 151:18
 	$diff:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $clock #0 	; clock = 0
-	.l0:	PEEK $tmp &clock 	; if ((tmp = global clock) != clock & 0xFFFF) 
+	.l0:	PEEK $tmp &clock 	; if ((tmp = global clock) != (clock & 0xFFFF)) 
 		ANDi %0 $clock #0xFFFF
 		EQUi $tmp %0 @.f1
 		MOVi $clock $tmp 	; clock = tmp

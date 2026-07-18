@@ -67,8 +67,9 @@ The features are ordered by dependency, not ambition:
 5. **Import** — sharing typed interfaces between units without textual copying. Proposed design in
    [Step 5: Import](#step-5-import-proposed).
 
-Cross-cutting decisions — strict expressions, [compound assignment](#compound-assignment) (the
-full `<op>=` family), and the [diagnostic format](#diagnostics) — have their own sections below.
+Cross-cutting decisions — strict expressions, the rejection of
+[compound assignment](#compound-assignment--rejected), and the [diagnostic format](#diagnostics) —
+have their own sections below.
 Other long-standing gaps (richer `for`) are out of scope for this document and tracked separately.
 
 ---
@@ -776,30 +777,22 @@ meaning-preserving parenthesization fix, byte-identical output after the edit.
 
 ---
 
-## Compound assignment
+## Compound assignment — rejected
 
-2.0 adopts the **complete `<op>=` family** — every binary infix operator combines with `=`:
+The `<op>=` family (`+=`, `-=`, …) and `++`/`--` are **not adopted**. An earlier draft of this
+document adopted them; the decision was reversed.
 
-```
-+=  -=  *=  /=  %=  &=  |=  ^=  <<=  >>=  >>>=
-```
+**The rule that decides sugar questions:** a second spelling is admitted only when the spellings
+compile to **different GAZL** — i.e. when the syntax carries information. `a += 1` compiles to the
+*identical* instructions as `a = a + 1`, so it would be two representations of the same thing,
+leaving every author (and agent) wondering which one is preferred — neither is. It dilutes the 1:1
+GAZL↔Impala feel for zero information. Contrast `.`/`->`, which were kept precisely because they
+compile *differently* (a free constant offset vs a real load) — that split is a cost annotation,
+not sugar.
 
-One rule covers them all: `lvalue <op>= expr` is equivalent to `lvalue = lvalue <op> expr` with the
-**lvalue evaluated exactly once**. Operand type rules are those of the expanded form (so `+=` works
-on `float`, `&=` does not, pointer `+=` int is pointer arithmetic, etc.).
-
-- **Statement-level only** — `<op>=` is not an expression, cannot be chained, and cannot nest
-  inside a larger expression. (Plain `=` keeps its 1.0 expression status unchanged.)
-- **Single evaluation is semantic, not just stylistic:** `a[f()] += 1` calls `f` once, where the
-  longhand calls it twice. For side-effect-free lvalues the generated GAZL is identical to the
-  longhand (`ADDi $x $x #1`; PEEK/op/POKE for globals and pointer targets, address computed once).
-- **`++` and `--` are not adopted.** `for (i = 0 to N)` already covers the dominant use case,
-  statement `++` saves three characters over `+= 1`, and expression `++` is C's most notorious bug
-  farm. This completes the sugar-policy decision started by keeping `->`: sugar is admitted when it
-  serves a dominant pattern *and* adds semantic value (single evaluation), and refused when it is
-  habit alone.
-- **Compatibility:** all `<op>=` tokens are parse errors in 1.0, so this occupies previously
-  rejected syntactic space — purely additive, no gating needed.
+(The single-evaluation argument — `a[f()] += 1` calling `f` once — was considered and does not
+outweigh this: it makes `+=` *semantically different* from the longhand in exactly the cases where
+readers would assume it's the same, which is its own trap.)
 
 ---
 
@@ -834,7 +827,7 @@ path:line:col: note: add parentheses to keep the current meaning: (a & b) << 2
   and import are worked proposals, not commitments: their syntax, semantics, lowering, and
   identity rules are specified above so the adoption decision can be made on a concrete design —
   but that decision has not been made. The committed scope is Step 1 plus the cross-cutting rules
-  (strict expressions, compound assignment, diagnostics).
+  (strict expressions, the compound-assignment rejection, diagnostics).
 - Name of the strictness-lowering compiler argument (`--legacy` is the working name).
 - By-value struct parameters/returns: deferred, revisit if the small-struct performance case
   materializes in real firmware (see Step 2, *Passing, returning, copying*).

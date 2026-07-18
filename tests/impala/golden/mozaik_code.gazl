@@ -418,22 +418,22 @@ process:	FUNC	; signature func process() -> void @ 244:18
 		MOVi $newRCL #TRUE 	; newRCL = TRUE
 		MOVi $newRCR #TRUE 	; newRCR = TRUE
 	.f25:	SUBi $blockCounter $blockCounter #1	; blockCounter = blockCounter - 1
-		SHRi %1 $playPosL #16	; read(rcStartL + ((playPosL >> 16) & rateCrushMask ^ reverseMask), 1, y2)
+		SHRi %1 $playPosL #16	; read(rcStartL + (((playPosL >> 16) & rateCrushMask) ^ reverseMask), 1, y2)
 		ANDi %1 %1 $rateCrushMask
 		XORi %1 %1 $reverseMask
 		ADDi %1 $rcStartL %1
 		MOVi %2 #1 
 		ADRL %3 $y2 *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 354:76
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 354:78
 		ANDi %0 $y2:0 $bitCrushMask	; global signal[0] = (int) y2[0] & bitCrushMask
 		POKE &signal:0 %0 
-		SHRi %1 $playPosR #16	; read(rcStartR + ((playPosR >> 16) & rateCrushMask ^ reverseMask), 1, y2)
+		SHRi %1 $playPosR #16	; read(rcStartR + (((playPosR >> 16) & rateCrushMask) ^ reverseMask), 1, y2)
 		ANDi %1 %1 $rateCrushMask
 		XORi %1 %1 $reverseMask
 		ADDi %1 $rcStartR %1
 		MOVi %2 #1 
 		ADRL %3 $y2 *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 356:76
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 356:78
 		ANDi %0 $y2:1 $bitCrushMask	; global signal[1] = (int) y2[1] & bitCrushMask
 		POKE &signal:1 %0 
 		ADDi $playPosL $playPosL $readRate	; playPosL = playPosL + readRate

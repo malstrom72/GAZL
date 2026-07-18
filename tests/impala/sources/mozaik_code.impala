@@ -351,9 +351,9 @@ locals	float inL, float inR, float yL, float yR, array y2[2]
 			
 			// Output
 
-			read(rcStartL + ((playPosL >> 16) & rateCrushMask ^ reverseMask), 1, y2);
+			read(rcStartL + (((playPosL >> 16) & rateCrushMask) ^ reverseMask), 1, y2);
 			global signal[0] = (int) y2[0] & bitCrushMask;
-			read(rcStartR + ((playPosR >> 16) & rateCrushMask ^ reverseMask), 1, y2);
+			read(rcStartR + (((playPosR >> 16) & rateCrushMask) ^ reverseMask), 1, y2);
 			global signal[1] = (int) y2[1] & bitCrushMask;
 			
 			playPosL = playPosL + readRate;

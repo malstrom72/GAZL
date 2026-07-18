@@ -775,4 +775,97 @@ if (!observedMismatch) {
 }
 console.log("impala.jspeg compiler enforces inferred return type expectations");
 
+// --- Impala 2 strict expressions: mixed bitwise operators -------------------
+
+const mixedBitwiseSource = ["function main()", "locals int a", "{", "\ta = 1 | 2 & 3;", "}", ""].join("\n");
+const parenthesizedBitwiseSource = ["function main()", "locals int a", "{", "\ta = (1 | 2) & 3;", "}", ""].join("\n");
+const sameOpChainSource = ["function main()", "locals int a", "{", "\ta = 1 | 2 | 4;", "}", ""].join("\n");
+const comparisonMixSource = [
+	"function main()",
+	"locals int a, int ok",
+	"{",
+	"\ta = 12;",
+	"\tok = 0;",
+	"\tif (a & 3 == 0) ok = 1;",
+	"}",
+	"",
+].join("\n");
+const comparisonParenthesizedSource = comparisonMixSource.replace("(a & 3 == 0)", "((a & 3) == 0)");
+
+let observedMixedBitwiseError = false;
+try {
+	compileWithJsImpala(mixedBitwiseSource, { randomId: 42 });
+} catch (err) {
+	observedMixedBitwiseError = err && err.message && err.message.includes("Mixed bitwise operators")
+		&& err.message.includes("require parentheses");
+}
+if (!observedMixedBitwiseError) {
+	console.error("impala.jspeg compiler failed to reject mixed bitwise operators");
+	process.exit(1);
+}
+console.log("impala.jspeg compiler rejects unparenthesized mixed bitwise operators");
+
+const legacyWarnings = [];
+try {
+	compileWithJsImpala(mixedBitwiseSource, {
+		randomId: 42,
+		legacy: true,
+		onWarning: (formatted, message) => legacyWarnings.push(message),
+	});
+} catch (err) {
+	console.error("impala.jspeg compiler rejected mixed bitwise operators under --legacy");
+	console.error(err && err.message ? err.message : String(err));
+	process.exit(1);
+}
+if (legacyWarnings.length !== 1 || !legacyWarnings[0].includes("Mixed bitwise operators")) {
+	console.error("impala.jspeg compiler did not emit exactly one mixed-bitwise warning under --legacy");
+	process.exit(1);
+}
+console.log("impala.jspeg compiler downgrades mixed bitwise operators to a warning under --legacy");
+
+const strictParenthesized = compileWithJsImpala(parenthesizedBitwiseSource, { randomId: 42 });
+const legacyParenthesized = compileWithJsImpala(parenthesizedBitwiseSource, { randomId: 42, legacy: true });
+if (strictParenthesized !== legacyParenthesized) {
+	console.error("parenthesized bitwise source must compile identically in strict and legacy modes");
+	process.exit(1);
+}
+console.log("impala.jspeg compiler accepts parenthesized bitwise mixes identically in both modes");
+
+compileWithJsImpala(sameOpChainSource, { randomId: 42 });
+console.log("impala.jspeg compiler accepts same-operator bitwise chains without parentheses");
+
+let observedComparisonMixError = false;
+try {
+	compileWithJsImpala(comparisonMixSource, { randomId: 42 });
+} catch (err) {
+	observedComparisonMixError = err && err.message
+		&& err.message.includes("Comparison mixed with bitwise operators requires parentheses");
+}
+if (!observedComparisonMixError) {
+	console.error("impala.jspeg compiler failed to reject bitwise-vs-comparison mix in a condition");
+	process.exit(1);
+}
+console.log("impala.jspeg compiler rejects unparenthesized bitwise operators against comparisons");
+
+const comparisonWarnings = [];
+try {
+	compileWithJsImpala(comparisonMixSource, {
+		randomId: 42,
+		legacy: true,
+		onWarning: (formatted, message) => comparisonWarnings.push(message),
+	});
+} catch (err) {
+	console.error("impala.jspeg compiler rejected bitwise-vs-comparison mix under --legacy");
+	console.error(err && err.message ? err.message : String(err));
+	process.exit(1);
+}
+if (comparisonWarnings.length !== 1 || !comparisonWarnings[0].includes("Comparison mixed with bitwise")) {
+	console.error("impala.jspeg compiler did not emit exactly one comparison-mix warning under --legacy");
+	process.exit(1);
+}
+console.log("impala.jspeg compiler downgrades comparison mixes to a warning under --legacy");
+
+compileWithJsImpala(comparisonParenthesizedSource, { randomId: 42 });
+console.log("impala.jspeg compiler accepts parenthesized bitwise-vs-comparison conditions");
+
 console.log("JSPEG regression suite completed successfully");

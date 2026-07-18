@@ -131,6 +131,8 @@
     /* 1  constants & simple flags */
     var $$parser.IMPALA_VERSION = '1.0';
     var $$parser.dry            = false;
+    var $$parser.legacyMode     = (typeof _hostOptions !== 'undefined' && _hostOptions != null
+            && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings
 
     /* 2  make sure the buckets exist */
     var $$parser.META_TO_GAZL   = {};
@@ -951,6 +953,35 @@
                                $$parser.VERBOSE_TYPES[type2]);
         }
         $$parser.fail(message, source, offset);
+    };
+
+    /* --------------------------------------------------------- *
+     *  Strict-expression helpers (Impala 2)                     *
+     * --------------------------------------------------------- */
+
+    $$parser.strictError = function (message, source, offset) {   /// error by default; warning under `--legacy`
+        if (!$$parser.legacyMode) {
+            $$parser.fail(message, source, offset);
+        } else if (typeof _hostOptions !== 'undefined' && _hostOptions != null
+                && typeof _hostOptions.warn === 'function') {
+            _hostOptions.warn(message, offset);
+        }
+    };
+
+    $$parser.mixedBitwise = function (first, op, source, offset) {
+        $$parser.strictError("Mixed bitwise operators ('" + first + "' and '" + op
+                + "') require parentheses", source, offset);
+    };
+
+    $$parser.stampBitwise = function (rec, flag) {                /// mark whether `rec` folded top-level bitwise ops
+        metaSlot(rec).bitwiseTop = flag;
+    };
+
+    $$parser.checkCompMix = function (leftRec, rightRec, source, offset) {
+        if (metaSlot(leftRec).bitwiseTop === true || metaSlot(rightRec).bitwiseTop === true) {
+            $$parser.strictError('Comparison mixed with bitwise operators requires parentheses',
+                    source, offset);
+        }
     };
 
     /* --------------------------------------------------------- *
@@ -2320,9 +2351,15 @@ Expr        <-  Bitwise ('='_ r:Expr               { if (!$$parser.dry)
                                                        $$parser.assign($$, $$, $r, $$s, $$i); }
                 )?
 
-Bitwise     <-  AddSub (op:BITWISE_OP _ r:AddSub   { if (!$$parser.dry)
-                                                       $$parser.binaryOp($op, $$, $r, $$s, $$i); }
-                )*
+Bitwise     <-                                     { $first = undefined; }
+                AddSub (op:BITWISE_OP _ r:AddSub   { if (!$$parser.dry) {
+                                                       if ($first === undefined) $first = $op;
+                                                       else if ($first !== $op)
+                                                           $$parser.mixedBitwise($first, $op, $$s, $$i);
+                                                       $$parser.binaryOp($op, $$, $r, $$s, $$i);
+                                                     } }
+                )*                                 { if (!$$parser.dry)
+                                                       $$parser.stampBitwise($$, $first !== undefined); }
 
 AddSub      <-  MulDiv (op:ADDSUB_OP _ r:MulDiv    { if (!$$parser.dry)
                                                        $$parser.binaryOp($op, $$, $r, $$s, $$i); }
@@ -2472,7 +2509,8 @@ Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        $$parser.makeArgValue($a, $$.base + $$.count);
                                                     } }
 
-Group       <-  '('_ Expr ')'_
+Group       <-  '('_ Expr ')'_                      { if (!$$parser.dry)
+                                                        $$parser.stampBitwise($$, false); }
 
 
 BoolGroup   <-  '('_                                { $label = undefined; }
@@ -2510,7 +2548,8 @@ Comp        <-  '!'_ Comp                           {
                     !Group                          { $$parser.dry = false; }
                     BoolGroup
                 /                                   { $$parser.dry = false; }
-                    Expr op:COMP_OP _ r:Expr        { 
+                    Expr op:COMP_OP _ r:Expr        {
+                                                        $$parser.checkCompMix($$, $r, $$s, $$i);
                                                         $$parser.binaryOp($op, $$, $r, $$s, $$i);
                                                         $$parser.emitMeta($$);
                                                         $$parser.releaseMeta($$);

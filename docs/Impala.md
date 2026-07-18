@@ -330,11 +330,15 @@ From loosest to tightest binding:
 | Multiplicative | `*` `/` `%` | left |
 | Prefix / postfix | prefix `-` `~` `&` `*`, casts `(type)`, `abs` `floor` `itof` `ftoi`; postfix `()` `[]` | — |
 
-> **Important:** all bitwise and shift operators share **one** precedence level that
-> binds *looser* than `+` and `-`. This is **not** the same as C. For example,
-> `x & 0xFF + 1` parses as `x & (0xFF + 1)`, and `a << 2 + 1` parses as `a << (2 + 1)`.
-> When mixing bitwise/shift operators with arithmetic, parenthesize explicitly. The
-> example firmwares always do, e.g. `((clock + 1024) & 65535) >> 12`.
+> **Important:** all bitwise and shift operators share **one** precedence level that binds
+> *looser* than `+` and `-`. (Arithmetic-vs-bitwise actually agrees with C: `x & 0xFF + 1` is
+> `x & (0xFF + 1)` in both. The divergence from C is *within* the bitwise family, which C ladders
+> internally.) Since Impala 2, **mixing different bitwise/shift operators at the same
+> parenthesization level is a compile error** — write `(a | b) & c`, never `a | b & c`. The same
+> applies to an unparenthesized bitwise operator directly against a comparison in a condition:
+> write `if ((a & 3) == 0)`. Same-operator chains need no parentheses (`a | b | c`). The
+> `--legacy` compiler argument downgrades these errors to warnings for old code, which should
+> simply be updated — the parenthesized form compiles to identical GAZL.
 
 Details that are easy to miss:
 

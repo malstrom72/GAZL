@@ -1,16 +1,27 @@
 /* Command-line Impala compiler for the NuXJS REPL.
 
    Usage:
-     NuXJS impala/impala.nuxjs.js source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
+     NuXJS impala/impala.nuxjs.js [--legacy] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
 
    NuXJS exposes global `arguments` as [script.js, arguments...]. With no output
    path, or output path `-`, this script emits compiled GAZL to stdout.
+   `--legacy` downgrades Impala 2 strict-expression errors to warnings (printed
+   as `;`-prefixed comment lines so stdout remains a valid GAZL stream).
 */
 
-var impalaNuxArgs = arguments;
+var impalaNuxRawArgs = arguments;
+var impalaNuxLegacy = false;
+var impalaNuxArgs = [];
+for (var impalaNuxArgIndex = 0; impalaNuxArgIndex < impalaNuxRawArgs.length; ++impalaNuxArgIndex) {
+	if ("" + impalaNuxRawArgs[impalaNuxArgIndex] === "--legacy") {
+		impalaNuxLegacy = true;
+	} else {
+		impalaNuxArgs[impalaNuxArgs.length] = impalaNuxRawArgs[impalaNuxArgIndex];
+	}
+}
 
 function usage() {
-	print("Usage: NuXJS impala/impala.nuxjs.js source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
+	print("Usage: NuXJS impala/impala.nuxjs.js [--legacy] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
 }
 
 function fail(message) {
@@ -125,9 +136,15 @@ var impalaNuxCompilerOptions = {
 		impalaNuxLines[impalaNuxLines.length] = line;
 	},
 	sourceName: impalaNuxSourceName,
+	warn: function (message, offset) {
+		print("; WARNING: " + message + " (" + impalaNuxSourceName + " offset " + offset + ")");
+	},
 };
 if (impalaNuxHasRandomId) {
 	impalaNuxCompilerOptions.randomId = impalaNuxRandomId;
+}
+if (impalaNuxLegacy) {
+	impalaNuxCompilerOptions.legacy = true;
 }
 var impalaNuxResult = impalaCompiler(impalaNuxSource, impalaNuxCompilerOptions);
 
