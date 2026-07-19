@@ -1,13 +1,28 @@
 # Permut8 firmware execution tests (pure-GAZL host)
 
-This lane RUNS the real Permut8 firmwares in `tests/impala/golden/` - unmodified - and checks their output
-against committed checksums. The host that a firmware needs (constants, delay-line memory, per-sample driver,
-and the `yield`/`read`/`write`/`trace` callbacks) is supplied as **concatenated GAZL**, not C++:
+This lane RUNS real Permut8 firmwares - unmodified - and checks their output against committed checksums.
+The corpus has two tiers:
+
+- **`golden/` + `sources/`** - the RELEASED firmware set, recovered from the official `.p8bank` banks and
+  verified against them byte-for-byte: 13 firmwares, each as the exact SHIPPED build (`golden/<name>_code.gazl`)
+  plus its Impala source (`sources/<name>_code.impala`, consistent names). Notable provenance:
+  `js80rmx_code.impala` is the dev-named "hexynt", `vortex_code.impala` is "eggtones5min" (final source was
+  never saved under the release name), `reciter_code.impala` is "sam" (SAM, the Software Automatic Mouth -
+  its header said "Bitbox" for a decade, which is why it was lost). `specular_code.gazl` is the shipped
+  `specularFull` build. NOTE: two sources no longer compile with the current Impala compiler
+  (stricter checking since their era): `vortex_code.impala` (int/float argument) and `ringmod_code.impala`
+  (argument-count check). The era-correct Pika toolchain is preserved with the work archive; the shipped
+  `golden/` builds are unaffected.
+- **`tests/impala/golden/`** - dev/test firmwares (crash repros, miditest, phaser, verber8, mod-patch tests,
+  ...) that never shipped; the checker covers those too.
+
+The host that a firmware needs (constants, delay-line memory, per-sample driver, and the
+`yield`/`read`/`write`/`trace` callbacks) is supplied as **concatenated GAZL**, not C++:
 
 ```
-bash tools/runPermut8Firmware.sh tests/impala/golden/ringmod_code.gazl     # run one (prints its checksum)
-bash tools/checkPermut8Firmwares.sh                                        # check all against expected/
-tools\runPermut8Firmware.cmd tests\impala\golden\ringmod_code.gazl         # Windows
+bash tools/runPermut8Firmware.sh benchmarks/firmware/golden/ringmod_code.gazl   # run one (prints its checksum)
+bash tools/checkPermut8Firmwares.sh                                             # check all against expected/
+tools\runPermut8Firmware.cmd benchmarks\firmware\golden\ringmod_code.gazl       # Windows
 ```
 
 ## How it works

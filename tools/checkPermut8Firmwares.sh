@@ -12,7 +12,8 @@ cd "$(dirname "$0")/.."
 fails=0; count=0
 for exp in benchmarks/firmware/expected/*.checksum; do
 	name=$(basename "$exp" .checksum)
-	fw="tests/impala/golden/$name.gazl"
+	fw="benchmarks/firmware/golden/$name.gazl"			# the SHIPPED release builds (bank-verified) first,
+	[ -f "$fw" ] || fw="tests/impala/golden/$name.gazl"	# then the dev/test firmwares
 	if [ ! -f "$fw" ]; then printf '%-20s MISSING %s\n' "$name" "$fw"; fails=$((fails + 1)); continue; fi
 	want=$(tr -d '\r' < "$exp")
 	got=$(bash tools/runPermut8Firmware.sh "$fw" "$@" 2>/dev/null)
