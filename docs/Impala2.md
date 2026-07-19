@@ -227,8 +227,11 @@ what should be greppable. The rules:
 | data pointer ↔ `funcptr` | **never** (1.0 wall — different address spaces in GAZL) | |
 | `null` / `nullfunc` | implicit into any pointer / funcptr type | |
 
-Comparisons follow the same table: typed-vs-untyped comparands erase implicitly; `T pointer` vs
-`U pointer` with `T ≠ U` is an error without a cast.
+**Comparisons never element-check** (revised during implementation — an earlier draft made
+`T pointer` vs `U pointer` an error). Two reasons: a comparison mints no lasting assumption, so
+there is nothing to state loudly; and since `&` is type-producing, 1.0 sources that legitimately
+compare addresses of differently-typed globals (`&global aFloat == &global marker`) would
+otherwise become errors, violating compatibility. Pointer comparisons erase, always.
 
 Sideways reinterpretation (`T pointer` → `U pointer`) takes a **single cast** — no forced
 round-trip through untyped. Casts are already defined as reinterprets in this language; ceremony
@@ -237,14 +240,23 @@ beyond one cast would be punishment, not information.
 Initializers for typed arrays are element-checked: `global int array a[4] = { 1, 2.0 }` is a
 compile error on the float literal (new syntax, so no compatibility concern).
 
-Two free upgrades enabled by the boundary rules (overlay-only, zero codegen change, all existing
-uses still compile because erase is implicit):
+One free upgrade enabled by the boundary rules:
 
-- **`&` becomes type-producing.** `&global aFloat` yields `float pointer` (today: generic
-  `pointer`); `&f` on a struct value yields `Filter pointer`; `&voices[i]` likewise.
-- **String literals become `int pointer`** (GAZL string data is int words via `DATs`).
-  `hexDigit = HEX_CHARS[v & 0xf]` loses its cast; passing a literal to `print(pointer)` is an
-  implicit erase.
+- **`&` becomes type-producing.** `&global aFloat` yields `float pointer` (previously: generic
+  `pointer`); `&x` on an `int` local yields `int pointer`; `&a[i]` of an `int array` likewise.
+  All existing uses still compile because erase is implicit. *Implementation note:* type
+  refinement can upgrade a formerly-untyped result to a typed one inside a single expression
+  (e.g. `x = *(&global aFloat)` now emits `MOVf` where 1.0 emitted the untyped `MOVE`) — a
+  semantically identical instruction variant. No source in the corpus exhibits the pattern (the
+  byte-diff gate stays clean), but the guarantee is "semantically identical", not "byte-identical",
+  for this specific corner.
+
+A second upgrade from earlier drafts is **withdrawn**: string literals do *not* become
+`int pointer`. Existing 1.0 sources subscript string literals (`("0123456789abcdef")[v & 0xf]`),
+and typing the literal would change their emitted instruction from untyped `MOVE` to `MOVi` —
+a guaranteed byte-diff-gate violation on real corpus code, unlike the `&` corner above. The
+earlier "zero codegen change" claim was simply wrong. String literals stay generic `pointer`;
+cast where element typing is wanted.
 
 ### Cross-unit checking
 
