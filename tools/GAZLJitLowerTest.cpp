@@ -454,6 +454,38 @@ static const char* const K_FTOISAT =		// fTOi saturation: a huge float clamps to
 	" PEEK $n &gIn\n iTOf $f $n #1000000000.0\n fTOi $n $f #1.0\n POKE &gOut $n\n RETU\n";
 
 /*
+	§1.1 realm-rule golden kernels (Phase 0 for v2.3a): the load-bearing pointer idioms, each arranged so a cache line
+	dirty in a register would poison the result if a flush were skipped where the realm rule does NOT allow skipping it.
+*/
+static const char* const K_DEREF =			// scalar deref of a MY-FRAME pointer (`PEEK $x $p` / `POKE $p $x`, the sam.gazl
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"							// idiom): $v is DIRTY in a register at the deref
+	"main: FUNC\n PARA *1\n$v: LOCi\n$p: LOCp\n$x: LOCi\n"
+	" PEEK $v &gIn\n ADDi $v $v #1\n"												// v = gIn+1, dirty
+	" ADRL $p $v *0\n PEEK $x $p\n"													// x = *(&v): must see the incremented v
+	" ADDi $x $x #500\n POKE $p $x\n"												// *(&v) = x+500: memory write to v's home
+	" ADDi $x $v $x\n POKE &gOut $x\n RETU\n";										// gOut = v + x; v must reload the poked value
+
+static const char* const K_BANKCOPY =		// verber8 bank idiom: COPY globals->frame bank and frame->globals with a dirty
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"							// scalar local live across both copies
+	"gbank: GLOB *4\n DATi #10\n DATi #20\n DATi #30\n DATi #40\n"
+	"main: FUNC\n PARA *1\n$bank: LOCA *4\n$p: LOCp\n$a: LOCi\n$i: LOCi\n$x: LOCi\n"
+	" PEEK $a &gIn\n ADDi $a $a #5\n"												// a = gIn+5, dirty
+	" ADRL $p $bank *0\n COPY $p &gbank *4\n"										// bank[0..3] = 10,20,30,40 (globals -> frame)
+	" MOVi $i #2\n PEEK $x $p $i\n ADDi $x $x $a\n"									// x = bank[2] + a
+	" MOVi $i #1\n POKE $p $i $x\n"													// bank[1] = x (frame write through pointer)
+	" COPY &gbank $p *4\n"															// globals <- frame bank
+	" PEEK $x &gbank:1\n ADDi $x $x $a\n POKE &gOut $x\n RETU\n";					// gOut = gbank[1] + a = (30+gIn+5) + (gIn+5)
+
+static const char* const K_PTRPARAM =		// by-ref out-param: callee POKEs through an INPp into the CALLER's frame; the
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"							// caller's copy of that local must reload after the CALL
+	"sub: FUNC\n$r: OUTi\n$pp: INPp\n$t: LOCi\n"
+	" PEEK $t $pp\n ADDi $t $t #100\n POKE $pp $t\n MOVi $r $t\n RETU\n"			// *pp += 100, returns new value
+	"main: FUNC\n PARA *3\n$v: LOCi\n$x: LOCi\n"
+	" PEEK $v &gIn\n ADDi $v $v #1\n"												// v = gIn+1
+	" ADRL %1 $v *0\n CALL &sub %0 *2\n MOVi $x %0\n"								// sub(&v): v becomes gIn+101 in MEMORY
+	" ADDi $x $x $v\n POKE &gOut $x\n RETU\n";										// gOut = ret + v = 2*(gIn+101)
+
+/*
 	RegisterCache isolation tests: drive the cache against a mock backend that records every fill/spill as text, and
 	assert the exact sequence per coherence scenario. Log format: "F<reg><-[<slot>]" a fill, "[<slot>]<-S<reg>" a spill.
 */
@@ -712,6 +744,9 @@ int main() {
 	runKernel("switch       [SWCH jump table]", K_SWITCH, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("yield native [resetTimeOut(0)+OK]", K_YIELD, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("ftoi sat     [fTOi clamp]", K_FTOISAT, signed_, sizeof(signed_) / sizeof(*signed_));
+	runKernel("realm deref  [scalar *p, dirty line]", K_DEREF, counts, sizeof(counts) / sizeof(*counts));
+	runKernel("realm bank   [COPY frame<->globals]", K_BANKCOPY, counts, sizeof(counts) / sizeof(*counts));
+	runKernel("realm outparm[&local across CALL]", K_PTRPARAM, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("divf zero     [DIVf /0 trap]", K_DIVFZERO, signed_, sizeof(signed_) / sizeof(*signed_));
 
 	std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED", failures, failures == 1 ? "" : "s");

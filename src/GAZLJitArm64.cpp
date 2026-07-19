@@ -781,10 +781,18 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_PEEK_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); loadMemConst(e, static_cast<Reg>(d), static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
 			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
 			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(r), in.p1.i); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
-			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]; globals/constants-realm read
+			/*
+				var-indexed memory. No-flush is sound ONLY when the CONST operand is a genuine globals/constants-realm
+				address (>= MEMORY_OFFSET): then it can't reach the frame (§1.1). The scalar/offset deref `PEEK $x $p` /
+				`POKE $p $x` also finalizes to VCV/CVV (SWAP) but with a small OFFSET const and the pointer in the
+				VARIABLE operand (unknown realm) - must flush like POKE_VVV. constAddrBase tells them apart.
+			*/
+			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]
+				const bool constAddrBase = (in.p1.p >= MEMORY_OFFSET);
 				ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 1;									// ~1 = -2 = BAD_PEEK
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
-				const int addr = cache.scratch(GENERAL_REGISTER);														// no flush: a const-base access cannot reach the frame (§1.1 realms)
+				if (!constAddrBase) { cache.spillDirtyResident(); }														// pointer-in-variable form: flush so the read sees dirty frame lines
+				const int addr = cache.scratch(GENERAL_REGISTER);
 				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p1.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
 				const int lim = cache.scratch(GENERAL_REGISTER);
 				e.ldrW(static_cast<Reg>(lim), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim));
@@ -813,13 +821,15 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.bind(cont);
 				break;
 			}
-			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value; globals-realm write
+			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value
+				const bool constAddrBase = (in.p0.p >= MEMORY_OFFSET);
 				ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 2;									// ~2 = -3 = BAD_POKE
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
 				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(val), in.p2.i); }
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
-				const int addr = cache.scratch(GENERAL_REGISTER);														// no flush: a const-base access cannot reach the frame (§1.1 realms)
+				if (!constAddrBase) { cache.spillDirtyResident(); }														// pointer-in-variable form: flush before + invalidate after (may hit the frame)
+				const int addr = cache.scratch(GENERAL_REGISTER);
 				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p0.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
 				const int lim = cache.scratch(GENERAL_REGISTER);
 				e.ldrW(static_cast<Reg>(lim), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim));
@@ -827,6 +837,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.bcond(HS, trap.label);																				// trap arm is cold, after the mainline
 				e.strWx(static_cast<Reg>(val), X2, static_cast<Reg>(addr));
 				cache.endInstruction();
+				if (!constAddrBase) { cache.invalidateAll(); }
 				coldTraps.push_back(trap);
 				break;
 			}

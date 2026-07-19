@@ -710,11 +710,19 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
 			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(r), static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
 
-			// var-indexed global memory (pointer coherence): flush dirty before a read; flush + invalidate around a write.
-			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]; globals/constants-realm read
+			/*
+				var-indexed memory. The no-flush optimization is sound ONLY when the CONST operand is a genuine
+				globals/constants-realm address (>= MEMORY_OFFSET): then the access provably can't reach the frame (§1.1).
+				The scalar/offset pointer-deref idiom `PEEK $x $p` / `POKE $p $x` also finalizes to VCV/CVV (SWAP), but
+				with the const being a small OFFSET and the pointer riding the VARIABLE operand - unknown realm, so it
+				must flush like POKE_VVV. constAddrBase distinguishes the two by the const's range.
+			*/
+			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]
 				const int32_t base = static_cast<int32_t>(in.p1.p - MEMORY_OFFSET);
+				const bool constAddrBase = (in.p1.p >= MEMORY_OFFSET);
 				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_PEEK;
-				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);													// no flush: a const-base access cannot reach the frame (§1.1 realms)
+				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
+				if (!constAddrBase) { cache.spillDirtyResident(); }														// pointer-in-variable form: flush so the read sees dirty frame lines
 				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));				// word index = base + index
 				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B);
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
@@ -725,19 +733,22 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				coldTraps.push_back(trap);
 				break;
 			}
-			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value; globals-realm write
+			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value
 				const int32_t base = static_cast<int32_t>(in.p0.p - MEMORY_OFFSET);
+				const bool constAddrBase = (in.p0.p >= MEMORY_OFFSET);
 				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_POKE;
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
 				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(val), static_cast<uint32_t>(in.p2.i)); }
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
-				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));				// no flush: a const-base access cannot reach the frame (§1.1 realms)
+				if (!constAddrBase) { cache.spillDirtyResident(); }														// pointer-in-variable form: flush before + invalidate after (may hit the frame)
+				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));				// word index = base + index
 				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B);
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
 				emitter.jcc(CC_AE, trap.label);																			// trap arm is cold, after the mainline
 				emitter.storeIdx(MEMORY_BASE, static_cast<Reg>(idx), base * 4, static_cast<Reg>(val));
 				cache.endInstruction();
+				if (!constAddrBase) { cache.invalidateAll(); }
 				coldTraps.push_back(trap);
 				break;
 			}
