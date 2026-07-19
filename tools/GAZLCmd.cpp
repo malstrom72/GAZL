@@ -312,13 +312,22 @@ static void emitSimpleOp(std::string& p, Rng& r, std::string& pending) {
 	} else {
 		std::snprintf(buf, sizeof buf, " ANDi $idx $i%u #7\n", pick(r, NI)); putLine(p, pending, buf);	// in-bounds index (size 8)
 		const unsigned a = pick(r, NI);
-		switch (pick(r, 6)) {
+		switch (pick(r, 8)) {
 			case 0: std::snprintf(buf, sizeof buf, " POKE &buf $idx $i%u\n", a); break;		// POKE_CVV
 			case 1: std::snprintf(buf, sizeof buf, " PEEK $i%u &buf $idx\n", a); break;		// PEEK_VCV
 			case 2: std::snprintf(buf, sizeof buf, " POKE $p $idx $i%u\n", a); break;		// POKE_VVV (frame pointer)
 			case 3: std::snprintf(buf, sizeof buf, " PEEK $i%u $p $idx\n", a); break;		// PEEK_VVV
 			case 4: std::snprintf(buf, sizeof buf, " SETL $arr $idx $i%u\n", a); break;		// SETL
-			default: std::snprintf(buf, sizeof buf, " GETL $i%u $arr $idx\n", a); break;		// GETL
+			case 5: std::snprintf(buf, sizeof buf, " GETL $i%u $arr $idx\n", a); break;		// GETL
+			/*
+				Scalar deref of a pointer aimed at a LIVE scalar: `PEEK $x $ps` / `POKE $ps $x` finalize to PEEK_VCV /
+				POKE_CVV with a NON-address const base and the pointer in the variable operand - the case v2.3a-lite
+				must NOT skip the flush for (the alias is a dirty cached scalar). Re-aim $ps each time so it stays live.
+			*/
+			case 6: std::snprintf(buf, sizeof buf, " ADRL $ps $i%u *0\n", pick(r, NI)); putLine(p, pending, buf);
+					std::snprintf(buf, sizeof buf, " PEEK $i%u $ps\n", a); break;			// PEEK_VCV, const-0 base
+			default: std::snprintf(buf, sizeof buf, " ADRL $ps $i%u *0\n", pick(r, NI)); putLine(p, pending, buf);
+					std::snprintf(buf, sizeof buf, " POKE $ps $i%u\n", a); break;			// POKE_CVV, const-0 base
 		}
 	}
 	putLine(p, pending, buf);
@@ -401,7 +410,7 @@ static std::string buildProgram(Rng& r) {
 	p += "main: FUNC\n PARA *3\n";
 	for (int i = 0; i < NI; ++i) { p += " $i" + std::to_string(i) + ": LOCi\n"; }
 	for (int i = 0; i < NF; ++i) { p += " $f" + std::to_string(i) + ": LOCf\n"; }
-	p += " $arr: LOCA *8\n $p: LOCp\n $idx: LOCi\n $c0: LOCi\n $c1: LOCi\n";
+	p += " $arr: LOCA *8\n $p: LOCp\n $ps: LOCp\n $idx: LOCi\n $c0: LOCi\n $c1: LOCi\n";
 	char buf[48];
 	for (int i = 0; i < NI; ++i) { std::snprintf(buf, sizeof buf, " MOVi $i%d #%d\n", i, static_cast<int>(r.word())); p += buf; }
 	for (int i = 0; i < NF; ++i) { std::snprintf(buf, sizeof buf, " MOVf $f%d #%d.%u\n", i, static_cast<int>(pick(r, 2000)) - 1000, pick(r, 1000)); p += buf; }
