@@ -342,6 +342,10 @@ void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& 
 // Scan a loop body code[from..to] for the slots it reads / writes (residency pruning + expectDirty; see ResidencyMap).
 void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots);
 
+// A leader's residency map = the loop's fixed bindings FILTERED to the slots LIVE-IN at that leader (v2.2 varying maps:
+// dead bindings free their registers for body temps; same slot -> same register everywhere, so edges never need moves).
+void filterResidencyMap(const ResidencyMap& full, const std::set<Int>& liveIn, ResidencyMap& out);
+
 // Split a loop body's slot working set by REGISTER CLASS, mirroring the backends' lowering choices (float arithmetic /
 // compares / FLOF and the float halves of FTOI/ITOF use FLOAT_REGISTER; everything else, incl MOVE, uses GENERAL).
 // Input to the multi-block residency pressure gate: a per-class overflow of capture()'s keepMax thrashes the map.
@@ -400,8 +404,10 @@ class RegisterCache {
 	public:		void evict(int physicalRegister);	// x64 fixed-register ops (idiv/shift/rep); no-op on arm64
 	public:		bool isResident(Int slot) const;
 
-	// v2.2 loop-header residency: snapshot the resident set (pruned + dirtiness-canonicalized), later re-establish it.
-	public:		void capture(ResidencyMap& map, const std::set<Int>& readInLoop, const std::set<Int>& writtenInLoop);
+	// v2.2 loop-header residency: establish the header's entry state (varying maps: wanted = read-in-loop, live-in at
+	// the header, single-class; resident wanted lines are kept + dirtiness-canonicalized, absent ones PRELOADED into
+	// free lines up to keepMax), later re-establish it at every in-edge.
+	public:		void capture(ResidencyMap& map, const std::set<Int>& wantedGeneral, const std::set<Int>& wantedFloat, const std::set<Int>& writtenInLoop);
 	public:		void residencyCapacity(size_t& generalMax, size_t& floatMax) const;	// max entries capture() keeps per class; the multi-block pressure gate
 	public:		void reconcileTo(const ResidencyMap& map);		// at a back-edge: spill/drop strays, fill missing; empty when equal
 

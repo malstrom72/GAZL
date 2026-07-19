@@ -633,6 +633,8 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 	const std::map<Int, int>::const_iterator realmEnd = pointerRealm.end();
 	std::map<UInt, UInt> loopExtent;
 	jitResidencyLeaders(code, funcStart, endIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
+	std::map<UInt, std::set<Int> > liveIn;
+	buildLiveIn(code, funcStart, endIndex, memory, liveIn);																													// v2.2 varying maps: leader maps sized by liveness
 	std::map<UInt, ResidencyMap> entryMaps;
 	std::vector<ColdTrap> coldTraps;																					// checked-op trap arms, emitted after the mainline
 	std::vector<ColdEdge> coldEdges;																					// loop-exit edge stubs (v2.2-full), same section
@@ -654,15 +656,29 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				buildLoopSlotSets(code, j, loopIt->second, readSlots, writtenSlots);
 				std::set<Int> generalSlots, floatSlots;
 				buildLoopClassSets(code, j, loopIt->second, generalSlots, floatSlots);
+				/*
+					Wanted bindings (v2.2 varying maps): read in the loop AND live-in at the header (a written-first slot
+					like mandelbrot's zx2 burns no binding) AND single-class (a dual-class slot - e.g. a float bounced
+					through MOVE's general line - gets cross-class evicted mid-loop; never pin it). The per-class pressure
+					gate applies to THIS set: what capture would actually pin.
+				*/
+				std::set<Int> wantedGeneral, wantedFloat;
+				const std::set<Int>& liveHeader = liveIn[j];
+				for (std::set<Int>::const_iterator si = readSlots.begin(); si != readSlots.end(); ++si) {
+					if (liveHeader.count(*si) == 0) { continue; }
+					const bool g = (generalSlots.count(*si) != 0), f = (floatSlots.count(*si) != 0);
+					if (g && f) { continue; }
+					if (f) { wantedFloat.insert(*si); } else { wantedGeneral.insert(*si); }
+				}
 				size_t generalMax, floatMax;
 				cache.residencyCapacity(generalMax, floatMax);
-				if (multiBlock && (generalSlots.size() > generalMax || floatSlots.size() > floatMax)) {					// per-CLASS pressure gate: a strangling map loses to fill-on-use
+				if (multiBlock && (wantedGeneral.size() > generalMax || wantedFloat.size() > floatMax)) {				// pressure gate: a strangling map loses to fill-on-use
 					gated = true;
 					cache.barrier();
-				} else {																								// loop header: the fall-through state (pruned) becomes the fixed entry state
-					cache.capture(entryMaps[j], readSlots, writtenSlots);
+				} else {
+					cache.capture(entryMaps[j], wantedGeneral, wantedFloat, writtenSlots);								// keep + PRELOAD the wanted bindings
 					for (std::map<UInt, UInt>::const_iterator w = w0; w != loopWeight.end() && w->first <= loopIt->second; ++w) {
-						entryMaps[w->first] = entryMaps[j];																// interior leaders share the header's entry state (v2.2-full)
+						filterResidencyMap(entryMaps[j], liveIn[w->first], entryMaps[w->first]);						// interior leader: the bindings live there
 					}
 					resident = !entryMaps[j].entries.empty(); residentEnd = loopIt->second;
 				}

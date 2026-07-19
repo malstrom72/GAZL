@@ -682,21 +682,23 @@ void RegisterCache::residencyCapacity(size_t& generalMax, size_t& floatMax) cons
 	floatMax = fc - ((RESIDENCY_HEADROOM < fc / 2) ? RESIDENCY_HEADROOM : fc / 2);
 }
 
-void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& readInLoop, const std::set<Int>& writtenInLoop) {
+void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& wantedGeneral, const std::set<Int>& wantedFloat, const std::set<Int>& writtenInLoop) {
 	assert(map.entries.empty() && "a header's entry map is captured once");
 	const size_t RESIDENCY_HEADROOM = 3;																				// registers per class left free for the body's temps and constants (halved for small pools; keep in sync with residencyCapacity)
-	for (int c = 0; c < 2; ++c) {
+	size_t kept[2] = { 0, 0 };
+	std::set<Int> mapped[2];
+	for (int c = 0; c < 2; ++c) {																						// pass 1, BOTH classes: keep resident wanted lines, spill the rest
 		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
+		const std::set<Int>& wanted = (c == 0) ? wantedGeneral : wantedFloat;
 		size_t count;
 		Line* lines = linesOf(registerClass, count);
 		const int* registers = registersOf(registerClass);
-		size_t kept = 0;
 		const size_t headroom = (RESIDENCY_HEADROOM < count / 2) ? RESIDENCY_HEADROOM : count / 2;
 		const size_t keepMax = count - headroom;
 		for (size_t i = 0; i < count; ++i) {
 			if (!lines[i].occupied) { continue; }
 			assert(!lines[i].pinned && !lines[i].scratchTemp && "capture between instructions only");
-			if (readInLoop.count(lines[i].slot) == 0 || kept >= keepMax) {												// unread in the loop, or the map would strangle the body
+			if (wanted.count(lines[i].slot) == 0 || kept[c] >= keepMax) {												// unwanted (unread / dead at header / dual-class), or full
 				spillLine(registerClass, static_cast<int>(i));
 				lines[i].occupied = false;
 				continue;
@@ -706,8 +708,49 @@ void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& readInLoop, 
 			ResidencyMap::Entry entry = { lines[i].slot, registerClass, static_cast<int>(i), registers[i], expectDirty };
 			map.entries.push_back(entry);
 			lines[i].dirty = expectDirty;
-			++kept;
+			mapped[c].insert(lines[i].slot);
+			++kept[c];
 		}
+	}
+	/*
+		Pass 2, only after EVERY class has spilled: preload the absent wanted slots (deterministic by need, not arrival
+		luck). The phase split matters: a wanted-general slot can sit DIRTY in a FLOAT line (float-written before the
+		loop, general-read inside it) - preloading it before the float pass spilled that line would fill from a stale
+		home (fuzzer-caught, seed 780001).
+	*/
+	for (int c = 0; c < 2; ++c) {
+		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
+		const std::set<Int>& wanted = (c == 0) ? wantedGeneral : wantedFloat;
+		size_t count;
+		Line* lines = linesOf(registerClass, count);
+		const int* registers = registersOf(registerClass);
+		const size_t headroom = (RESIDENCY_HEADROOM < count / 2) ? RESIDENCY_HEADROOM : count / 2;
+		const size_t keepMax = count - headroom;
+		for (std::set<Int>::const_iterator s = wanted.begin(); s != wanted.end() && kept[c] < keepMax; ++s) {
+			if (mapped[c].count(*s) != 0) { continue; }
+			size_t i = 0;
+			while (i < count && lines[i].occupied) { ++i; }
+			if (i == count) { break; }
+			cacheBackend.emitFill(registers[i], *s, registerClass);
+			const bool expectDirty = (writtenInLoop.count(*s) != 0);
+			lines[i].occupied = true;
+			lines[i].scratchTemp = false;
+			lines[i].slot = *s;
+			lines[i].registerClass = registerClass;
+			lines[i].pinned = false;
+			lines[i].dirty = expectDirty;
+			lines[i].lastUse = ++useClock;
+			lines[i].nextUse = nextReadAfter(*s);
+			ResidencyMap::Entry entry = { *s, registerClass, static_cast<int>(i), registers[i], expectDirty };
+			map.entries.push_back(entry);
+			++kept[c];
+		}
+	}
+}
+
+void filterResidencyMap(const ResidencyMap& full, const std::set<Int>& liveIn, ResidencyMap& out) {
+	for (size_t k = 0; k < full.entries.size(); ++k) {
+		if (liveIn.count(full.entries[k].slot) != 0) { out.entries.push_back(full.entries[k]); }
 	}
 }
 
