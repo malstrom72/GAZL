@@ -10,9 +10,9 @@ IF NOT EXIST output\p8 MKDIR output\p8
 node tools\permut8Host.js "%FW%" "output\p8\%NAME%.gazl" || EXIT /B 1
 
 SET EXTRA=
-FINDSTR /R /C:"^sqrt:" /C:"^log:" /C:"^atan2:" "%FW%" >NUL 2>&1 && SET EXTRA=--no-libm
+FINDSTR /R /C:"^[ 	]*sqrt:" /C:"^[ 	]*log:" /C:"^[ 	]*atan2:" "%FW%" >NUL 2>&1 && SET EXTRA=--no-libm
 FOR %%N IN (input print printInt printFloat printLF exit) DO (
-  FINDSTR /R /C:"^%%N:" "%FW%" >NUL 2>&1 && SET EXTRA=!EXTRA! --no-native=%%N
+  FINDSTR /R /C:"^[ 	]*%%N:" "%FW%" >NUL 2>&1 && SET EXTRA=!EXTRA! --no-native=%%N
 )
 
 REM GAZLCMD overrides the binary (e.g. an A-B baseline build).
