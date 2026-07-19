@@ -84,7 +84,8 @@ function compileCommand(args, legacy) {
 		output = compileWithJsImpala(source, { randomId, retabulate: true, trailingNewline: true, sourceName: inputPath || '<stdin>', legacy });
 	} catch (err) {
 		const message = (err && err.message) ? err.message : String(err);
-		if (inputPath) console.error(`Error compiling ${inputPath}: ${message}`);
+		if (message.includes(': error[') || message.includes(': error:')) console.error(message);
+		else if (inputPath) console.error(`Error compiling ${inputPath}: ${message}`);
 		else console.error(`Error: ${message}`);
 		if (outputPath && outputPath !== '-') {
 			try { writeFileLatin1(outputPath, 'Error: ' + message); } catch (_) {}

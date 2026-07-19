@@ -1019,4 +1019,40 @@ for (const testCase of typedPointerCases) {
 }
 console.log("impala.jspeg compiler enforces typed pointer/array element rules");
 
+// --- Impala 2 diagnostics format --------------------------------------------
+
+let diagnosticMessage = null;
+try {
+	compileWithJsImpala("function main() locals int pointer p, pointer raw { p = raw; }\n", {
+		randomId: 42,
+		sourceName: "diag.impala",
+	});
+} catch (err) {
+	diagnosticMessage = err && err.message ? err.message : String(err);
+}
+if (
+	diagnosticMessage === null ||
+	!/^diag\.impala:1:\d+: error\[E201\]: /.test(diagnosticMessage) ||
+	!diagnosticMessage.includes(": note: use a cast: (int pointer)")
+) {
+	console.error("diagnostics did not use the path:line:col error[code] + note format");
+	console.error(diagnosticMessage);
+	process.exit(1);
+}
+console.log("impala.jspeg compiler emits GCC-style coded diagnostics with fix-it notes");
+
+const diagnosticWarnings = [];
+compileWithJsImpala("function main() locals int a { a = 1 | 2 & 3; }\n", {
+	randomId: 42,
+	sourceName: "diag.impala",
+	legacy: true,
+	onWarning: (formatted) => diagnosticWarnings.push(formatted),
+});
+if (diagnosticWarnings.length !== 1 || !/^diag\.impala:1:\d+: warning\[E101\]: /.test(diagnosticWarnings[0])) {
+	console.error("legacy warnings did not use the path:line:col warning[code] format");
+	console.error(diagnosticWarnings[0]);
+	process.exit(1);
+}
+console.log("impala.jspeg compiler renders --legacy warnings in the same diagnostic shape");
+
 console.log("JSPEG regression suite completed successfully");

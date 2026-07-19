@@ -443,7 +443,8 @@
                 sourceCode,
                 sourceOffset,
                 expectedType,
-                signature.expectedReturn
+                signature.expectedReturn,
+                'E304'
             );
         }
 
@@ -455,7 +456,8 @@
                 sourceCode,
                 sourceOffset,
                 expectedType,
-                signature.returns
+                signature.returns,
+                'E304'
             );
         }
     };
@@ -477,7 +479,8 @@
                 sourceCode,
                 sourceOffset,
                 actualType,
-                signature.expectedReturn
+                signature.expectedReturn,
+                'E304'
             );
         }
     };
@@ -571,7 +574,7 @@
     };
 
     /* 5  portable replacement for ppeg.fail */
-    $$parser.fail = function (error, source, offset) {
+    $$parser.fail = function (error, source, offset, code, hint) {
         function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
         var message = bake(error);
         var hasSource = typeof source === 'string';
@@ -586,6 +589,12 @@
         }
         err.impalaSnippetBefore = before;
         err.impalaSnippetAfter = after;
+        if (code !== undefined) {
+            err.impalaCode = code;                                /// stable diagnostic code, e.g. 'E201'
+        }
+        if (hint !== undefined) {
+            err.impalaHint = hint;                                /// mechanical fix-it, rendered as a note line
+        }
         throw err;
     };
 
@@ -970,32 +979,33 @@
      *  Typed error helper                                       *
      * --------------------------------------------------------- */
 
-    $$parser.typeError = function (desc, source, offset, type1, type2) {
+    $$parser.typeError = function (desc, source, offset, type1, type2, code, hint) {
         var message = replace(desc, '{$type1}',
                               $$parser.VERBOSE_TYPES[type1]);
         if (type2 !== undefined) {
             message = replace(message, '{$type2}',
                                $$parser.VERBOSE_TYPES[type2]);
         }
-        $$parser.fail(message, source, offset);
+        $$parser.fail(message, source, offset, code, hint);
     };
 
     /* --------------------------------------------------------- *
      *  Strict-expression helpers (Impala 2)                     *
      * --------------------------------------------------------- */
 
-    $$parser.strictError = function (message, source, offset) {   /// error by default; warning under `--legacy`
+    $$parser.strictError = function (message, source, offset, code, hint) {   /// error by default; warning under `--legacy`
         if (!$$parser.legacyMode) {
-            $$parser.fail(message, source, offset);
+            $$parser.fail(message, source, offset, code, hint);
         } else if (typeof _hostOptions !== 'undefined' && _hostOptions != null
                 && typeof _hostOptions.warn === 'function') {
-            _hostOptions.warn(message, offset);
+            _hostOptions.warn(message, offset, code, hint);
         }
     };
 
     $$parser.mixedBitwise = function (first, op, source, offset) {
         $$parser.strictError("Mixed bitwise operators ('" + first + "' and '" + op
-                + "') require parentheses", source, offset);
+                + "') require parentheses", source, offset, 'E101',
+                'add parentheses to keep the current meaning');
     };
 
     $$parser.stampBitwise = function (rec, flag) {                /// mark whether `rec` folded top-level bitwise ops
@@ -1005,7 +1015,8 @@
     $$parser.checkCompMix = function (leftRec, rightRec, source, offset) {
         if (metaSlot(leftRec).bitwiseTop === true || metaSlot(rightRec).bitwiseTop === true) {
             $$parser.strictError('Comparison mixed with bitwise operators requires parentheses',
-                    source, offset);
+                    source, offset, 'E102',
+                    'add parentheses around the bitwise expression to keep the current meaning');
         }
     };
 
@@ -1045,8 +1056,9 @@
             if (rightx.elem !== leftx.elem) {
                 $$parser.fail('Pointer element type mismatch (expected '
                         + $$parser.elemVerbose(leftx.elem) + ' elements, got '
-                        + $$parser.elemVerbose(rightx.elem)
-                        + ' elements); use a cast', sourceCode, sourceOffset);
+                        + $$parser.elemVerbose(rightx.elem) + ' elements)',
+                        sourceCode, sourceOffset, 'E201',
+                        'use a cast: (' + $$parser.elemVerbose(leftx.elem) + ' pointer)');
             }
         }
     };
@@ -1070,7 +1082,7 @@
                 'Invalid types ({$type1} and {$type2})',
                 sourceCode, sourceOffset,
                 leftx.type, rightx.type
-            );
+            , 'E301');
         }
 
         /* special treatment for indexed “=[]” form */
@@ -1155,7 +1167,7 @@
         if (tp === undefined) {
             $$parser.typeError('Invalid types ({$type1} and {$type2})',
                                sourceCode, sourceOffset,
-                               leftx.type, rightx.type);
+                               leftx.type, rightx.type, 'E301');
         }
 
         /* detect (itof X) * 1.0 → itof */
@@ -1236,7 +1248,7 @@
                 'Incompatible types for assignment ({$type1} = {$type2})',
                 sourceCode, sourceOffset,
                 leftx.type, rightx.type
-            );
+            , 'E303');
         }
 
         $$parser.checkPtrAssign(leftx, rightx, sourceCode, sourceOffset);
@@ -1297,7 +1309,7 @@
             );
 
         } else {
-            $$parser.fail("Invalid lvalue", sourceCode, sourceOffset);
+            $$parser.fail("Invalid lvalue", sourceCode, sourceOffset, 'E404');
         }
 
         /* push the instruction just built */
@@ -1378,7 +1390,7 @@
             );
 
         } else {
-            $$parser.fail("Invalid lvalue", sourceCode, sourceOffset);
+            $$parser.fail("Invalid lvalue", sourceCode, sourceOffset, 'E404');
         }
     };
 
@@ -1493,7 +1505,7 @@
         var rTyp = $$parser.SUPPORTED_OPS[ sig ];
         if (rTyp == null) {
             $$parser.typeError('Invalid type ({$type1})',
-                               sourceCode, sourceOffset, expr.type);
+                               sourceCode, sourceOffset, expr.type, undefined, 'E302');
         }
 
         /* dispatch actual work */
@@ -1554,18 +1566,18 @@
             if (prev) {
                 if (kind !== undefined && prev.kind !== undefined) {
                     $$parser.fail('Identifier already declared: ' + name,
-                                  sourceCode, sourceOffset);
+                                  sourceCode, sourceOffset, 'E401');
                 }
                 if (type !== prev.type) {
                     $$parser.typeError('Type mismatch with previous declaration of ' +
                                        name + ' (was {$type1})',
-                                       sourceCode, sourceOffset, prev.type);
+                                       sourceCode, sourceOffset, prev.type, undefined, 'E402');
                 }
                 if (prev.elem !== undefined && elem !== undefined && prev.elem !== elem) {
                     $$parser.fail('Element type mismatch with previous declaration of ' + name
                                   + ' (was ' + $$parser.elemVerbose(prev.elem) + ', now '
                                   + $$parser.elemVerbose(elem) + ')',
-                                  sourceCode, sourceOffset);
+                                  sourceCode, sourceOffset, 'E203');
                 }
                 /* inherit old flags */
                 kind     = (kind     !== undefined ? kind     : prev.kind);
@@ -1746,7 +1758,7 @@
 
         /* not found --------------------------------------------*/
         $$parser.fail('Undeclared identifier: ' + name,
-                      sourceCode, sourceOffset);
+                      sourceCode, sourceOffset, 'E403');
     };
 
     /* -----------------------------------------------------------
@@ -1763,7 +1775,7 @@
             $$parser.fail(
                 bake('Expected constant ' +
                      $$parser.VERBOSE_TYPES[ wantType ]),
-                sourceCode, sourceOffset);
+                sourceCode, sourceOffset, 'E407');
         }
         return r;
     };
@@ -2567,7 +2579,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            $$parser.typeError(
                                                                'Invalid type for function call ({$type1})',
                                                                $$s, $$i, callee.type
-                                                           );
+                                                           , undefined, 'E408');
                                                        }
 
                                                        if (callee.operator === ':=' &&
@@ -2592,7 +2604,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                    'Invalid argument count when calling ' + label +
                                                                    ' (expected ' + expectedCount + ', got ' + actualCount + ')',
                                                                    $$s, $$i
-                                                               );
+                                                               , 'E405');
                                                            }
 
                                                            for (var argIdx = 0; argIdx < expectedCount; ++argIdx) {
@@ -2611,7 +2623,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                        $$s, $$i,
                                                                        actual,
                                                                        expected
-                                                                   );
+                                                                   , 'E406');
                                                                }
                                                                var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */
                                                                if (expected === 'p' && expectedElem !== undefined
@@ -2621,7 +2633,8 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                            + (argIdx + 1) + ' when calling ' + label
                                                                            + ' (expected ' + $$parser.elemVerbose(expectedElem)
                                                                            + ' elements, got ' + $$parser.elemVerbose($$.elems[argIdx])
-                                                                           + ' elements); use a cast', $$s, $$i);
+                                                                           + ' elements)', $$s, $$i, 'E202',
+                                                                           'use a cast: (' + $$parser.elemVerbose(expectedElem) + ' pointer)');
                                                                }
                                                            }
 
@@ -2838,7 +2851,7 @@ For         <-  FOR _ '('_ var:Variable             {
                                                             $$parser.fail(
                                                                 'For variable must be a local modifiable int or pointer variable',
                                                                 $$s, $$i
-                                                            );
+                                                            , 'E305');
                                                         }
                                                         $gotInit = false;            /* flag to detect an explicit start value */
                                                     }
@@ -2854,7 +2867,7 @@ For         <-  FOR _ '('_ var:Variable             {
                                                             $$parser.typeError(
                                                                 'Incompatible types ({$type1} and {$type2})',
                                                                 $$s, $$i, varMeta.type, toMeta.type
-                                                            );
+                                                            , 'E301');
                                                         }
 
                                                         /* constant upper bound */
@@ -2914,7 +2927,7 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                             $$parser.typeError(
                                                                 'Invalid types ({$type1} and {$type2})',
                                                                 $$s, $$i, fromMeta.type, toMeta.type
-                                                            );
+                                                            , 'E301');
                                                         }
 
                                                         var copyMeta = metaSlot($l);
@@ -2941,7 +2954,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 
                                                         /* the switch expression must be an int */
                                                         if (switchMeta.type !== 'i') {
-                                                            $$parser.fail('Switch expression needs to be int', $$s, $$i);
+                                                            $$parser.fail('Switch expression needs to be int', $$s, $$i, 'E306');
                                                         }
 
                                                         /* lower bound (compile-time constant) */
@@ -3003,7 +3016,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                       (','_ CaseExpr)*
                     / DEFAULT _                     {
                                                             if ($progress === 'gotDefault') {
-                                                                $$parser.fail('Default case already defined');
+                                                                $$parser.fail('Default case already defined', undefined, undefined, 'E409');
                                                             } else if ($progress !== undefined) {
                                                                 $$parser.emit('-->', undefined, $switchExit, undefined, undefined);
                                                             }

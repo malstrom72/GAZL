@@ -131,13 +131,37 @@ loadCompilerPath(impalaNuxCompilerPath);
 
 var impalaNuxSource = read(impalaNuxSourcePath);
 var impalaNuxLines = [];
+function impalaNuxLineColumn(source, offset) {
+	var line = 1;
+	var column = 1;
+	var end = offset < source.length ? offset : source.length;
+	for (var i = 0; i < end; ++i) {
+		var ch = source[i];
+		if (ch === "\n") {
+			++line;
+			column = 1;
+		} else if (ch !== "\r") {
+			++column;
+		}
+	}
+	return line + ":" + column;
+}
+
+function impalaNuxDiagnostic(source, offset, severity, code, message) {
+	var position = impalaNuxSourceName + ":" + impalaNuxLineColumn(source, isFinite(offset) ? offset : 0);
+	return position + ": " + severity + (code ? "[" + code + "]" : "") + ": " + message;
+}
+
 var impalaNuxCompilerOptions = {
 	output: function (line) {
 		impalaNuxLines[impalaNuxLines.length] = line;
 	},
 	sourceName: impalaNuxSourceName,
-	warn: function (message, offset) {
-		print("; WARNING: " + message + " (" + impalaNuxSourceName + " offset " + offset + ")");
+	warn: function (message, offset, code, hint) {
+		print("; " + impalaNuxDiagnostic(impalaNuxSource, offset, "warning", code, message));
+		if (hint) {
+			print("; " + impalaNuxDiagnostic(impalaNuxSource, offset, "note", undefined, hint));
+		}
 	},
 };
 if (impalaNuxHasRandomId) {
@@ -146,9 +170,25 @@ if (impalaNuxHasRandomId) {
 if (impalaNuxLegacy) {
 	impalaNuxCompilerOptions.legacy = true;
 }
-var impalaNuxResult = impalaCompiler(impalaNuxSource, impalaNuxCompilerOptions);
+var impalaNuxResult;
+try {
+	impalaNuxResult = impalaCompiler(impalaNuxSource, impalaNuxCompilerOptions);
+} catch (impalaNuxError) {
+	if (impalaNuxError && isFinite(impalaNuxError.impalaOffset)) {
+		print(impalaNuxDiagnostic(impalaNuxSource, impalaNuxError.impalaOffset, "error",
+				impalaNuxError.impalaCode, impalaNuxError.impalaMessage || "compile error"));
+		if (impalaNuxError.impalaHint) {
+			print(impalaNuxDiagnostic(impalaNuxSource, impalaNuxError.impalaOffset, "note",
+					undefined, impalaNuxError.impalaHint));
+		}
+		throw new Error("Impala compilation failed");
+	}
+	throw impalaNuxError;
+}
 
 if (!impalaNuxResult || !impalaNuxResult[0]) {
+	print(impalaNuxDiagnostic(impalaNuxSource, impalaNuxResult ? impalaNuxResult[2] : 0,
+			"error", "E001", "syntax error"));
 	throw new Error("Impala compilation failed");
 }
 

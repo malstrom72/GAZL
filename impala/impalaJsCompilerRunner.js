@@ -100,18 +100,26 @@ function renderErrorContext(lineText, pointerOffset) {
 	};
 }
 
-function formatErrorWithLocation(source, options, rawIndex, baseMessage, explicitLocationLabel) {
+function formatDiagnostic(source, options, rawIndex, severity, code, message, hint) {
 	const { index, line, lineStart, lineEnd, lineText } = getLineInfo(source, rawIndex);
 	const context = renderErrorContext(lineText, index - lineStart);
-	const locationLabel = explicitLocationLabel ?? (options && options.sourceName ? ` ${options.sourceName}` : " source");
-	const detail = context.displayLine.length > 0 || lineEnd > lineStart ? `\n${context.displayLine}\n${context.pointerLine}` : "\n^";
-	return `${baseMessage}${locationLabel} at line ${line}, column ${context.column}, offset ${index}.${detail}`;
+	const label = options && options.sourceName ? options.sourceName : "<source>";
+	const position = `${label}:${line}:${context.column}`;
+	const codeText = code ? `[${code}]` : "";
+	let text = `${position}: ${severity}${codeText}: ${message}`;
+	if (context.displayLine.length > 0 || lineEnd > lineStart) {
+		text += `\n${context.displayLine}\n${context.pointerLine}`;
+	}
+	if (hint) {
+		text += `\n${position}: note: ${hint}`;
+	}
+	return text;
 }
 
 function formatThrownCompilerError(err, source, options) {
 	if (err && typeof err === "object" && Number.isFinite(err.impalaOffset)) {
 		const baseMessage = err.impalaMessage || (err.message ? err.message.split(" : ")[0] : "JSPEG impala compiler error");
-		return formatErrorWithLocation(source, options, err.impalaOffset, baseMessage);
+		return formatDiagnostic(source, options, err.impalaOffset, "error", err.impalaCode, baseMessage, err.impalaHint);
 	}
 	if (err && err.message) {
 		return err.message;
@@ -178,8 +186,8 @@ function compileWithJsImpala(source, options = {}) {
 	if (legacy) {
 		compilerOptions.legacy = true;
 	}
-	compilerOptions.warn = (message, offset) => {
-		const formatted = formatErrorWithLocation(source, options, offset, `Warning: ${message} —`);
+	compilerOptions.warn = (message, offset, code, hint) => {
+		const formatted = formatDiagnostic(source, options, offset ?? 0, "warning", code, message, hint);
 		if (typeof onWarning === "function") {
 			onWarning(formatted, message, offset);
 		} else {
@@ -194,7 +202,7 @@ function compileWithJsImpala(source, options = {}) {
 	}
 	const [ok, , index] = compileResult;
 	if (!ok) {
-		throw new Error(formatErrorWithLocation(source, options, index, "JSPEG impala compiler failed to compile"));
+		throw new Error(formatDiagnostic(source, options, index, "error", "E001", "syntax error", undefined));
 	}
 	if (index !== source.length) {
 		throw new Error(`JSPEG impala compiler stopped at ${index} of ${source.length}`);

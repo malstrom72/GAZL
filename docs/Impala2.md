@@ -834,25 +834,50 @@ readers would assume it's the same, which is its own trap.)
 ## Diagnostics
 
 The error format is part of the language's contract with its audience — AI agents iterate against
-diagnostics, so the format is specified, stable, and machine-parseable:
+diagnostics, so the format is specified, stable, and machine-parseable. **Implemented:**
 
 ```
-path:line:col: error[E023]: mixed bitwise operators ('&' and '<<') require parentheses
-path:line:col: note: add parentheses to keep the current meaning: (a & b) << 2
+foo.impala:12:9: error[E201]: Pointer element type mismatch (expected int elements, got float elements)
+        p = fp;
+              ^
+foo.impala:12:9: note: use a cast: (int pointer)
 ```
 
-- **GCC-style line format** (`path:line:col: severity[code]: message`) — every editor, CI system,
-  and agent already parses it, and it matches the `@ path:line:col` origins in the signature
-  metadata.
-- **Stable error codes**, never reused, so tooling and agents can key on `E023` while message
-  wording stays free to improve.
-- **Every strictness error carries a fix-it note** stating the mechanical, meaning-preserving edit
-  ("add parentheses…", "use `->`…", "cast with `(int pointer)`…"). The agent feedback loop closes
-  in one round.
+- **GCC-style line format** (`path:line:col: severity[code]: message`), followed by the source line
+  and a caret, followed by `note:` lines carrying mechanical fix-its. `--legacy` renders the same
+  shape with `warning[…]` severity. The NuXJS CLI prints warnings as `;`-prefixed comment lines so
+  a `-` stdout stream stays valid GAZL.
+- **Stable error codes**, never reused; message wording stays free to improve.
 - **First-error stop.** The compiler is single-pass with immediate code generation; error recovery
   in that architecture produces cascading nonsense. One correct error beats five speculative ones.
 - A structured `--json` output mode can be added later if tooling demands it; the line format is
   the contract.
+
+### Code registry
+
+| Code | Meaning |
+|---|---|
+| E001 | syntax error (parse failure; expected-set reporting is future JSPEG work) |
+| E101 | mixed bitwise operators require parentheses |
+| E102 | comparison mixed with bitwise operators requires parentheses |
+| E201 | pointer element type mismatch in assignment |
+| E202 | pointer element type mismatch in call argument |
+| E203 | element type mismatch with previous declaration |
+| E301 | invalid operand types for operator |
+| E302 | invalid operand type for unary operator |
+| E303 | incompatible types for assignment |
+| E304 | return type disagreement (mismatch / conflicting expectations / previous uses) |
+| E305 | `for` variable must be a local modifiable int or pointer |
+| E306 | `switch` expression must be int |
+| E401 | identifier already declared |
+| E402 | type mismatch with previous declaration |
+| E403 | undeclared identifier |
+| E404 | invalid lvalue |
+| E405 | invalid argument count |
+| E406 | argument type mismatch |
+| E407 | constant expression expected |
+| E408 | invalid type for function call |
+| E409 | `default` case already defined |
 
 ---
 
