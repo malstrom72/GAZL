@@ -739,6 +739,19 @@ The same mechanism is the standard-library story the snippets-`.txt` model never
 `import "math.impala"` plus one concatenated `math.gazl` replaces per-firmware copy-paste of
 `sin`/`sqrt`/`strlen` — discoverable by strangers and agents from the source itself.
 
+### Future direction (under consideration): importing compiled units
+
+`import "filter.gazl"` — reading a compiled unit's interface from its `; signature` rows (plus
+structural facts: `! DEF` const values, `GLOB` sizes) — would complement source import rather than
+replace it: *import the source of what you're building, import the artifact of what you're using.*
+It covers hand-written `.gazl`, third-party blobs, and a precompiled stdlib (one file = interface
+*and* link input), and "import what you link" closes the source-vs-artifact staleness gap that
+source import cannot. With an import-time content hash recorded in metadata and verified at link
+time, the standalone validator shrinks to a residue (natives, duplicates, legacy units) small
+enough to live inside a validate-and-concatenate link script. Costs: metadata must carry element
+types beyond array rows, and `.gazl`-grade interfaces are category-grade unless the row format
+grows element chains. To be worked out when Step 5 is taken up.
+
 ---
 
 ## Strict expressions: mixed bitwise operators
