@@ -596,6 +596,9 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 	UseSchedule useSchedule;
 	buildUseSchedule(code, funcStart, endIndex, useSchedule);															// Belady next-read lists (§5.7 v2.0.5)
 	cache.setUseSchedule(&useSchedule);
+	std::map<Int, int> pointerRealm;
+	buildPointerRealms(code, funcStart, endIndex, pointerRealm);															// §1.1 realm stamp (v2.3a): skip flushes for non-frame pointer ops
+	const std::map<Int, int>::const_iterator realmEnd = pointerRealm.end();
 	std::map<UInt, UInt> loopExtent;
 	jitResidencyLeaders(code, funcStart, endIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
 	std::map<UInt, ResidencyMap> entryMaps;
@@ -753,35 +756,47 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 
-			case OP_PEEK_VVV: {																							// base(var) + index(var) = a GAZL pointer; wordIndex = base+index-MEMORY_OFFSET
-				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+			/*
+				Runtime-pointer memory. When the base's realm is NONFRAME (§1.1: a received parameter pointer or a
+				globals/constants address), the access provably can't alias a cached local, so the hot-path flush is
+				skipped; the terminal trap still needs interpreter-current memory, so its dirty snapshot rides the cold
+				trap arm (captureDirtyLines). A MYFRAME / UNKNOWN base keeps the conservative v2.0 flush.
+			*/
+			case OP_PEEK_VVV: {																							// dst = memory[base + index]
+				const std::map<Int, int>::const_iterator baseRealm = pointerRealm.find(in.p1.i);
+				const bool nonFrame = (baseRealm != realmEnd && baseRealm->second == REALM_NONFRAME);
+				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_PEEK;
 				const int bp = cache.read(in.p1.i, GENERAL_REGISTER);
 				const int ip = cache.read(in.p2.i, GENERAL_REGISTER);
-				cache.spillDirtyResident();
+				if (!nonFrame) { cache.spillDirtyResident(); }
 				emitter.mov(RAX, static_cast<Reg>(bp)); emitter.add(RAX, static_cast<Reg>(ip)); emitter.subImm(RAX, MEMORY_OFFSET);
-				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);
+				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B);
+				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
+				emitter.jcc(CC_AE, trap.label);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				emitter.loadIdx(static_cast<Reg>(d), MEMORY_BASE, RAX, 0);
 				cache.endInstruction();
-				emitter.jmp(cont); emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
-				emitter.bind(cont);
+				coldTraps.push_back(trap);
 				break;
 			}
-			case OP_POKE_VVV: case OP_POKE_VVC: {
-				Label trap = emitter.newLabel(), cont = emitter.newLabel();
+			case OP_POKE_VVV: case OP_POKE_VVC: {																		// memory[base + index] = value
+				const std::map<Int, int>::const_iterator baseRealm = pointerRealm.find(in.p0.i);
+				const bool nonFrame = (baseRealm != realmEnd && baseRealm->second == REALM_NONFRAME);
+				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_POKE;
 				const int bp = cache.read(in.p0.i, GENERAL_REGISTER);
 				const int ip = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
 				if (op == OP_POKE_VVC) { val = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(val), static_cast<uint32_t>(in.p2.i)); }
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
-				cache.spillDirtyResident();
+				if (!nonFrame) { cache.spillDirtyResident(); }
 				emitter.mov(RAX, static_cast<Reg>(bp)); emitter.add(RAX, static_cast<Reg>(ip)); emitter.subImm(RAX, MEMORY_OFFSET);
-				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_AE, trap);
+				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B);
+				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
+				emitter.jcc(CC_AE, trap.label);
 				emitter.storeIdx(MEMORY_BASE, RAX, 0, static_cast<Reg>(val));
 				cache.endInstruction();
-				cache.invalidateAll();
-				emitter.jmp(cont); emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_POKE)); emitter.jmp(epilogue);
-				emitter.bind(cont);
+				if (!nonFrame) { cache.invalidateAll(); }
+				coldTraps.push_back(trap);
 				break;
 			}
 

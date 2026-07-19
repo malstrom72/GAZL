@@ -380,6 +380,12 @@ static void emitBody(std::string& p, Rng& r, std::string& pending, int stmts, in
 				p += " CALL ^atan2 %0 *3\n";
 				std::snprintf(buf, sizeof buf, " MOVf $f%u %%0\n", pick(r, NF)); p += buf;
 			}
+		} else if (kind == 5) {																	// pointer-param call: fnp(&arr, index) derefs a NONFRAME param
+			std::snprintf(buf, sizeof buf, " ADRL %%1 $arr *0\n"); putLine(p, pending, buf);	// pass the caller's array (MYFRAME here -> NONFRAME param in fnp)
+			std::snprintf(buf, sizeof buf, " ANDi $idx $i%u #7\n", pick(r, NI)); p += buf;
+			p += " MOVi %2 $idx\n";
+			p += " CALL &fnp %0 *3\n";
+			std::snprintf(buf, sizeof buf, " MOVi $i%u %%0\n", pick(r, NI)); p += buf;
 		} else if (kind == 4) {																	// recursion: rec(count) -> sum
 			if (g_deepRecursion && pick(r, 8) == 0) {
 				std::snprintf(buf, sizeof buf, " MOVi %%1 $i%u\n", pick(r, NI)); putLine(p, pending, buf);	// raw count: may overflow ipStack
@@ -401,7 +407,14 @@ static const char* const CALLEES =
 	"fn1: FUNC\n$r: OUTi\n$a: INPi\n$b: INPi\n$t: LOCi\n SUBi $r $a $b\n IORi $t $a $b\n ADDi $r $r $t\n RETU\n"
 	"fn2: FUNC\n$r: OUTi\n$a: INPi\n$b: INPi\n MULi $r $a $b\n ADDi $r $r $a\n SUBi $r $r $b\n RETU\n"
 	"rec: FUNC\n PARA *2\n$r: OUTi\n$n: INPi\n$t: LOCi\n MOVi $r #0\n LEQi $n #0 @.base\n"
-	" SUBi $t $n #1\n MOVi %1 $t\n CALL &rec %0 *2\n ADDi $r %0 $n\n.base: RETU\n";
+	" SUBi $t $n #1\n MOVi %1 $t\n CALL &rec %0 *2\n ADDi $r %0 $n\n.base: RETU\n"
+	/*
+		Pointer-param callee (v2.3a realm stressor): $pp is a live-in INPp -> NONFRAME, so its PEEK/POKE skip the frame
+		flush. $t is a dirty local held across the POKE; the caller passes &(caller array), so $pp can't alias $t - the
+		skip must be sound. Exercises the §1.1 win the firmware relies on (a received pointer never reaches this frame).
+	*/
+	"fnp: FUNC\n$r: OUTi\n$pp: INPp\n$k: INPi\n$m: LOCi\n$t: LOCi\n"
+	" ANDi $m $k #7\n PEEK $t $pp $m\n ADDi $t $t #1\n POKE $pp $m $t\n MOVi $r $t\n RETU\n";
 
 static std::string buildProgram(Rng& r) {
 	std::string p = "buf: GLOB *8\n";

@@ -476,6 +476,15 @@ static const char* const K_BANKCOPY =		// verber8 bank idiom: COPY globals->fram
 	" COPY &gbank $p *4\n"															// globals <- frame bank
 	" PEEK $x &gbank:1\n ADDi $x $x $a\n POKE &gOut $x\n RETU\n";					// gOut = gbank[1] + a = (30+gIn+5) + (gIn+5)
 
+static const char* const K_PTRVAR =			// 3-arg PEEK_VVV/POKE_VVV (variable base+index) through an ADRL pointer aimed at a
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"							// DIRTY scalar: base is MYFRAME, so the flush must NOT be skipped (realm-stamp teeth)
+	"main: FUNC\n PARA *1\n$v: LOCi\n$p: LOCp\n$z: LOCi\n$x: LOCi\n"
+	" PEEK $v &gIn\n ADDi $v $v #1\n"												// v = gIn+1, dirty in a register
+	" ADRL $p $v *0\n MOVi $z #0\n"													// p = &v (MYFRAME); z = 0 (variable index)
+	" PEEK $x $p $z\n ADDi $x $x #500\n"											// x = *(p+z) = v  -> PEEK_VVV, must see dirty v
+	" POKE $p $z $x\n"																// *(p+z) = x       -> POKE_VVV, writes v's home
+	" ADDi $x $v $x\n POKE &gOut $x\n RETU\n";										// gOut = v + x; v must reload the poked value
+
 static const char* const K_PTRPARAM =		// by-ref out-param: callee POKEs through an INPp into the CALLER's frame; the
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"							// caller's copy of that local must reload after the CALL
 	"sub: FUNC\n$r: OUTi\n$pp: INPp\n$t: LOCi\n"
@@ -746,6 +755,7 @@ int main() {
 	runKernel("ftoi sat     [fTOi clamp]", K_FTOISAT, signed_, sizeof(signed_) / sizeof(*signed_));
 	runKernel("realm deref  [scalar *p, dirty line]", K_DEREF, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("realm bank   [COPY frame<->globals]", K_BANKCOPY, counts, sizeof(counts) / sizeof(*counts));
+	runKernel("realm ptrvar [MYFRAME PEEK/POKE_VVV]", K_PTRVAR, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("realm outparm[&local across CALL]", K_PTRPARAM, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("divf zero     [DIVf /0 trap]", K_DIVFZERO, signed_, sizeof(signed_) / sizeof(*signed_));
 

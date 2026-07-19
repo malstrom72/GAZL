@@ -343,6 +343,20 @@ void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& 
 void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots);
 
 /*
+	Pointer-realm stamp (§1.1, v2.3a): the coarse realm of the pointer VALUE a slot holds, w.r.t. THIS frame's cached
+	slots. NONFRAME = provably not this frame (a received parameter pointer, or a globals/constants symbol address) -> a
+	`PEEK`/`POKE` through it cannot alias a cached local, so its flush is skipped. MYFRAME = an ADRL-of-local pointer (or
+	arithmetic on one) -> may alias, must flush. UNKNOWN = loaded from memory, a call result, or a join of the two -> must
+	flush (conservative, = v2.0). BOTTOM = no pointer definition reached the slot. Sound on all GAZL 1.0 (realms are a
+	language guarantee); the fuzzer's pointer-passing / cross-realm arms police it.
+*/
+enum PointerRealm { REALM_BOTTOM = 0, REALM_NONFRAME = 1, REALM_MYFRAME = 2, REALM_UNKNOWN = 3 };
+
+// Stamp each slot's pointer realm over code[from..to] (one function): live-in pointer slots (params) = NONFRAME, ADRL =
+// MYFRAME, propagated through MOVp/ADDp/SUBp, joined to a fixed point. Absent key => REALM_BOTTOM (treat as must-flush).
+void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<Int, int>& realm);
+
+/*
 	v2.0 floating register cache (§5.7.1): a per-function write-back cache of frame slots. The opcode switch routes
 	operands through read/define/scratch and calls the coherence events below; correctness never rests on the aliasing
 	spec because memory is made current at every pointer op, block boundary, and call.

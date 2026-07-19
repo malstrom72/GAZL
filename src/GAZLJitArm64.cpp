@@ -674,6 +674,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	UseSchedule useSchedule;
 	buildUseSchedule(code, funcIndex, retIndex, useSchedule);															// Belady next-read lists (§5.7 v2.0.5)
 	cache.setUseSchedule(&useSchedule);
+	std::map<Int, int> pointerRealm;
+	buildPointerRealms(code, funcIndex, retIndex, pointerRealm);															// §1.1 realm stamp (v2.3a): skip flushes for non-frame pointer ops
+	const std::map<Int, int>::const_iterator realmEnd = pointerRealm.end();
 	std::map<UInt, UInt> loopExtent;
 	jitResidencyLeaders(code, funcIndex, retIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
 	std::map<UInt, ResidencyMap> entryMaps;
@@ -804,21 +807,29 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				coldTraps.push_back(trap);
 				break;
 			}
+			/*
+				Runtime-pointer memory. A NONFRAME base (§1.1: a received parameter pointer or a globals/constants
+				address) provably can't alias a cached local, so the hot-path flush is skipped and the terminal trap's
+				dirty snapshot rides the cold arm (captureDirtyLines). MYFRAME / UNKNOWN keeps the conservative v2.0 flush.
+			*/
 			case OP_PEEK_VVV: {																							// dst = memory[base + index]; pointer read
-				Label trap = e.newLabel(), cont = e.newLabel();
+				const std::map<Int, int>::const_iterator baseRealm = pointerRealm.find(in.p1.i);
+				const bool nonFrame = (baseRealm != realmEnd && baseRealm->second == REALM_NONFRAME);
+				ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 1;									// ~1 = -2 = BAD_PEEK
 				const int base = cache.read(in.p1.i, GENERAL_REGISTER);
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
-				cache.spillDirtyResident();
+				if (!nonFrame) { cache.spillDirtyResident(); }
 				const int addr = cache.scratch(GENERAL_REGISTER);
 				const int tmp = cache.scratch(GENERAL_REGISTER);														// MEMORY_OFFSET, then reused for the size limit
 				e.add(static_cast<Reg>(addr), static_cast<Reg>(base), static_cast<Reg>(idx));
 				matConst(e, static_cast<Reg>(tmp), static_cast<Int>(MEMORY_OFFSET)); e.sub(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(tmp));
-				e.ldrW(static_cast<Reg>(tmp), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(tmp)); e.bcond(HS, trap);
+				e.ldrW(static_cast<Reg>(tmp), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(tmp));
+				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
+				e.bcond(HS, trap.label);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				e.ldrWx(static_cast<Reg>(d), X2, static_cast<Reg>(addr));
 				cache.endInstruction();
-				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);
-				e.bind(cont);
+				coldTraps.push_back(trap);
 				break;
 			}
 			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value
@@ -842,23 +853,26 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				break;
 			}
 			case OP_POKE_VVV: case OP_POKE_VVC: {																		// memory[base + index] = value; pointer write
-				Label trap = e.newLabel(), cont = e.newLabel();
+				const std::map<Int, int>::const_iterator baseRealm = pointerRealm.find(in.p0.i);
+				const bool nonFrame = (baseRealm != realmEnd && baseRealm->second == REALM_NONFRAME);
+				ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 2;									// ~2 = -3 = BAD_POKE
 				const int base = cache.read(in.p0.i, GENERAL_REGISTER);
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
 				if (op == OP_POKE_VVC) { val = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(val), in.p2.i); }
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
-				cache.spillDirtyResident();
+				if (!nonFrame) { cache.spillDirtyResident(); }
 				const int addr = cache.scratch(GENERAL_REGISTER);
 				const int tmp = cache.scratch(GENERAL_REGISTER);
 				e.add(static_cast<Reg>(addr), static_cast<Reg>(base), static_cast<Reg>(idx));
 				matConst(e, static_cast<Reg>(tmp), static_cast<Int>(MEMORY_OFFSET)); e.sub(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(tmp));
-				e.ldrW(static_cast<Reg>(tmp), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(tmp)); e.bcond(HS, trap);
+				e.ldrW(static_cast<Reg>(tmp), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(tmp));
+				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
+				e.bcond(HS, trap.label);
 				e.strWx(static_cast<Reg>(val), X2, static_cast<Reg>(addr));
 				cache.endInstruction();
-				cache.invalidateAll();
-				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);
-				e.bind(cont);
+				if (!nonFrame) { cache.invalidateAll(); }
+				coldTraps.push_back(trap);
 				break;
 			}
 			case OP_GETL_VVV: {																							// dst = frame[C1 + index]; frame read (bounds vs free frame span)

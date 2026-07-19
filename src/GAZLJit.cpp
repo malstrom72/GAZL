@@ -258,6 +258,84 @@ void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& 
 	}
 }
 
+// join two realms in the lattice BOTTOM < {NONFRAME, MYFRAME} < UNKNOWN (NONFRAME and MYFRAME are incomparable).
+static int joinRealm(int a, int b) {
+	if (a == REALM_BOTTOM) { return b; }
+	if (b == REALM_BOTTOM || a == b) { return a; }
+	return REALM_UNKNOWN;
+}
+
+void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<Int, int>& realm) {
+	/*
+		Pass 1: live-in slots (first textual role is a READ, before any WRITE) are received parameters -> NONFRAME. A
+		slot first WRITTEN in the function is not a parameter, so a value later used as a pointer base traces to a
+		definition we classify below (BOTTOM until then = must-flush).
+	*/
+	std::set<Int> written;
+	for (UInt j = from; j <= to; ++j) {
+		OperandRole roles[3];
+		operandRoles(code[j].opcode, roles);
+		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
+		for (int k = 0; k < 3; ++k) {
+			if (roles[k] == OPERAND_SLOT_READ && written.find(operands[k]->i) == written.end()) {
+				realm.insert(std::make_pair(operands[k]->i, static_cast<int>(REALM_NONFRAME)));				// live-in => parameter
+			}
+		}
+		for (int k = 0; k < 3; ++k) {
+			if (roles[k] == OPERAND_SLOT_WRITE) { written.insert(operands[k]->i); }
+		}
+	}
+
+	/*
+		Pass 2: forward transfer joined to a fixed point (flow-insensitive: a slot's realm is the join over ALL its
+		definitions, so a back-edge that redefines a pointer is already accounted for). Height-2 lattice -> converges in
+		a few sweeps; loops with a pointer-carried induction (`ADDi $p $p $k`) settle at their operand's realm.
+	*/
+	bool changed = true;
+	while (changed) {
+		changed = false;
+		for (UInt j = from; j <= to; ++j) {
+			const Int op = code[j].opcode;
+			int produced;
+			switch (op) {
+				case OP_ADRL: produced = REALM_MYFRAME; break;												// address of a local
+				case OP_MOVE_VC: produced = (code[j].p1.p >= MEMORY_OFFSET) ? REALM_NONFRAME : REALM_UNKNOWN; break;	// global/const symbol vs bare int
+				case OP_MOVE_VV: {
+					const std::map<Int, int>::const_iterator it = realm.find(code[j].p1.i);
+					produced = (it != realm.end()) ? it->second : REALM_BOTTOM;
+					break;
+				}
+				case OP_ADDI_VVV: case OP_ADDI_VVC: case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV: {
+					OperandRole roles[3];
+					operandRoles(op, roles);
+					const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
+					produced = REALM_BOTTOM;																// pointer +/- int keeps the pointer's realm; join the slot reads
+					for (int k = 0; k < 3; ++k) {
+						if (roles[k] == OPERAND_SLOT_READ) {
+							const std::map<Int, int>::const_iterator it = realm.find(operands[k]->i);
+							produced = joinRealm(produced, (it != realm.end()) ? it->second : REALM_BOTTOM);
+						}
+					}
+					break;
+				}
+				default: {																				// loads, calls, native, and every non-pointer producer
+					OperandRole roles[3];
+					operandRoles(op, roles);
+					if (roles[0] != OPERAND_SLOT_WRITE) { continue; }									// writes no slot -> nothing to stamp
+					produced = REALM_UNKNOWN;
+					break;
+				}
+			}
+			OperandRole roles[3];
+			operandRoles(op, roles);
+			if (roles[0] != OPERAND_SLOT_WRITE) { continue; }
+			const Int dst = code[j].p0.i;
+			const int merged = joinRealm(realm.count(dst) ? realm[dst] : REALM_BOTTOM, produced);
+			if (!realm.count(dst) || realm[dst] != merged) { realm[dst] = merged; changed = true; }
+		}
+	}
+}
+
 void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots) {
 	for (UInt j = from; j <= to; ++j) {
 		OperandRole roles[3];
