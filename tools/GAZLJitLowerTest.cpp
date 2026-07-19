@@ -714,9 +714,32 @@ static void runRegisterCacheTests() {
 	std::printf("\n");
 }
 
+/*
+	buildLiveIn sanity (v2.2-full foundation): assemble K_TWOLOOP and check the backward liveness. Entry has no live-in
+	(the body defines every local before use); the loop header .l1 carries {$a,$i,$n} so its live-in is non-empty. Precise
+	set validation comes when the varying entry maps consume it and the fuzzer/lockstep police the resulting codegen.
+*/
+static void runLivenessTest() {
+	std::printf("\nLiveness (buildLiveIn) sanity:\n");
+	Symbols globals;
+	if (!assemble(K_TWOLOOP, globals)) { ++failures; return; }
+	const UInt ord = static_cast<UInt>(globals.findFunction("main") - IP_OFFSET);
+	const UInt start = gFunctionTable[ord];
+	UInt end = start;
+	while (gCode[end].opcode != OP_RETU) { ++end; }
+	std::map<UInt, std::set<Int> > liveIn;
+	buildLiveIn(gCode, start, end, gMemory, liveIn);
+	bool anyNonEmpty = false;
+	for (UInt j = start; j <= end; ++j) { if (!liveIn[j].empty()) { anyNonEmpty = true; break; } }
+	const bool entryEmpty = liveIn[start].empty();
+	std::printf("  entry live-in empty: %s ; some leader non-empty: %s\n", entryEmpty ? "yes" : "NO", anyNonEmpty ? "yes" : "NO");
+	if (!entryEmpty || !anyNonEmpty) { std::printf("  FAIL\n"); ++failures; }
+}
+
 int main() {
 	std::printf("GAZLJit consolidated lowering test: JIT (compiled from Instruction[]) vs interpreter (arm64)\n\n");
 	runRegisterCacheTests();
+	runLivenessTest();
 	const int counts[] = { 0, 1, 2, 5, 10, 100, 1000 };
 	const int signed_[] = { 0, 1, -1, 7, -7, 123456, -123456 };
 	const int indices[] = { 0, 3, 7, 100, 2000000 };			// last is out of range -> BAD_POKE trap

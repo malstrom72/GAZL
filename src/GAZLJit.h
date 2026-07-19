@@ -357,6 +357,15 @@ enum PointerRealm { REALM_BOTTOM = 0, REALM_NONFRAME = 1, REALM_MYFRAME = 2, REA
 void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<Int, int>& realm);
 
 /*
+	Per-instruction live-in sets over code[from..to] (one function): slot s is live-in at j iff some path from j reads s
+	before writing it. Standard backward dataflow over the successor graph (fall-through + branch/SWCH targets from the
+	same successor model jitFuelSafepoints uses); gen = slots read, kill = slots written (a FORi counter is both). Foundation
+	for v2.2-full cross-block residency: a leader's entry-residency candidates are its live-in slots. `memory` supplies the
+	SWCH jump table. liveIn[j] holds the set for instruction j.
+*/
+void buildLiveIn(const Instruction* code, UInt from, UInt to, const Value* memory, std::map<UInt, std::set<Int> >& liveIn);
+
+/*
 	v2.0 floating register cache (§5.7.1): a per-function write-back cache of frame slots. The opcode switch routes
 	operands through read/define/scratch and calls the coherence events below; correctness never rests on the aliasing
 	spec because memory is made current at every pointer op, block boundary, and call.

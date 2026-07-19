@@ -336,6 +336,57 @@ void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<In
 	}
 }
 
+// Successors of instruction j in [from,to]: fall-through (j+1) unless j is an unconditional GOTO/RETU; plus branch and
+// SWCH-table targets. Conservative (extra successors only widen liveness). Appends to `succ`.
+static void jitSuccessors(const Instruction* code, UInt from, UInt to, const Value* memory, UInt j, std::vector<UInt>& succ) {
+	const Int op = code[j].opcode;
+	if (op == OP_RETU) { return; }																						// terminal
+	if (op == OP_GOTO) { succ.push_back(static_cast<UInt>(static_cast<Int>(j) + code[j].p0.i)); return; }				// unconditional: no fall-through
+	UInt target;
+	if (jitBranchTarget(code, j, target)) { succ.push_back(target); }													// conditional branch target
+	else if (op == OP_SWCH) {
+		const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
+		const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
+		for (UInt k = 0; k < size; ++k) { succ.push_back(static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i)); }
+	}
+	if (j + 1 <= to) { succ.push_back(j + 1); }																			// fall-through (also after a conditional branch / SWCH)
+}
+
+void buildLiveIn(const Instruction* code, UInt from, UInt to, const Value* memory, std::map<UInt, std::set<Int> >& liveIn) {
+	// gen (reads) / kill (writes) per instruction; a FORi counter is read-modify-write, so it is both.
+	std::map<UInt, std::set<Int> > gen, kill;
+	for (UInt j = from; j <= to; ++j) {
+		OperandRole roles[3];
+		operandRoles(code[j].opcode, roles);
+		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
+		for (int k = 0; k < 3; ++k) {
+			if (roles[k] == OPERAND_SLOT_READ) { gen[j].insert(operands[k]->i); }
+			else if (roles[k] == OPERAND_SLOT_WRITE) { kill[j].insert(operands[k]->i); }
+		}
+		if (code[j].opcode == OP_FORi_VVB || code[j].opcode == OP_FORi_VCB) { gen[j].insert(code[j].p0.i); kill[j].insert(code[j].p0.i); }
+	}
+	// Backward fixed point: liveIn[j] = gen[j] U (liveOut[j] - kill[j]); liveOut[j] = U liveIn[succ]. Reverse sweeps converge fast.
+	bool changed = true;
+	while (changed) {
+		changed = false;
+		for (UInt jj = to + 1; jj > from; --jj) {
+			const UInt j = jj - 1;
+			std::set<Int> out;
+			std::vector<UInt> succ;
+			jitSuccessors(code, from, to, memory, j, succ);
+			for (size_t s = 0; s < succ.size(); ++s) {
+				const std::map<UInt, std::set<Int> >::const_iterator it = liveIn.find(succ[s]);
+				if (it != liveIn.end()) { out.insert(it->second.begin(), it->second.end()); }
+			}
+			std::set<Int> in = gen[j];																					// gen U (out - kill)
+			for (std::set<Int>::const_iterator it = out.begin(); it != out.end(); ++it) {
+				if (kill[j].find(*it) == kill[j].end()) { in.insert(*it); }
+			}
+			if (in != liveIn[j]) { liveIn[j].swap(in); changed = true; }
+		}
+	}
+}
+
 void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots) {
 	for (UInt j = from; j <= to; ++j) {
 		OperandRole roles[3];
