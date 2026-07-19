@@ -33,8 +33,8 @@ Transform per call site:
 - Remap callee frame slots: the callee's OUT/INP window ALREADY overlaps the caller's transients at the call's
   window base (%N) - those references rewrite to caller-relative slots directly; callee locals/transients get
   fresh caller frame slots appended (caller FUNC frame grows; fix its C0/C1 and the stack-overflow check).
-- RETU -> GOTO to the end of the inlined body (handles multi-RETU callees, which the JIT lowerFunction cannot
-  even digest today - inlining REMOVES that class).
+- RETU -> GOTO to the end of the inlined body (handles multi-RETU callees; lowerFunction's old first-RETU
+  extent scan that could not digest them is FIXED - functions are now delimited to the next FUNC).
 - Rebase internal branch offsets; SWCH tables in callees excluded initially.
 - Remove the CALL/ipStack round trip entirely.
 Semantics: both engines see the same finalized code, so engine-vs-engine differential holds unchanged. Fuel spend

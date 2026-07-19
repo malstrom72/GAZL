@@ -590,9 +590,8 @@ static void emitBranchFloat(X64Emitter& emitter, RegisterCache& cache, int kind,
 	calls run inline; every terminal path sets eax and jumps to the shared `epilogue`. Returns false on an unlowerable opcode.
 */
 void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart,
-		const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue, UInt functionCount) {
-	UInt endIndex = funcStart;
-	while (code[endIndex].opcode != OP_RETU) { ++endIndex; }
+		UInt funcEnd, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue, UInt functionCount) {
+	const UInt endIndex = funcEnd;																						// a function extends to the next FUNC (functionTable order), NOT to its first RETU: multi-RETU and GOTO-ending functions are legal
 
 	/*
 		Pass 1 - fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight and each a
@@ -1201,7 +1200,8 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 	for (UInt ordinal = 0; ordinal < program.functionCount; ++ordinal) {
 		emitter.alignTo(16);																							// 16-align entries: code-layout shifts stay within one function
 		emitter.bind(entryLabels[ordinal]);
-		lowerFunction(emitter, program.code, program.memory, program.functionTable[ordinal], offsets, entryLabels
+		const UInt funcEnd = ((ordinal + 1 < program.functionCount) ? program.functionTable[ordinal + 1] : program.codeSize) - 1;
+		lowerFunction(emitter, program.code, program.memory, program.functionTable[ordinal], funcEnd, offsets, entryLabels
 				, epilogue, program.functionCount);
 	}
 	/*

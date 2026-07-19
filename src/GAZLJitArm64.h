@@ -199,7 +199,7 @@ class Arm64Emitter {
 class JitCompilerArm64 : public JitCompiler {
 	public:		virtual void compile(const AssembledProgram& program, JitModule& out);
 	private:	static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex
-						, const Offsets& o, std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset
+						, UInt funcEnd, const Offsets& o, std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset
 						, UInt selfOrdinal, UInt functionCount, Label exitLabel);	// calls the inherited fuel/opcode helpers
 };
 

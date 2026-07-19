@@ -190,7 +190,7 @@ class X64Emitter {
 class JitCompilerX64 : public JitCompiler {
 	public:		virtual void compile(const AssembledProgram& program, JitModule& out);
 	private:	static void lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart
-						, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue
+						, UInt funcEnd, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue
 						, UInt functionCount);	// calls the inherited fuel/opcode helpers
 };
 

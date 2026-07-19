@@ -404,7 +404,8 @@ static void emitBody(std::string& p, Rng& r, std::string& pending, int stmts, in
 /* G4 callees: three int helpers fn(int,int)->int (window %0=out, %1/%2=in) and one bounded self-recursive summer. */
 static const char* const CALLEES =
 	"fn0: FUNC\n$r: OUTi\n$a: INPi\n$b: INPi\n$t: LOCi\n ADDi $r $a $b\n MULi $t $a $b\n XORi $r $r $t\n SUBi $r $r $b\n RETU\n"
-	"fn1: FUNC\n$r: OUTi\n$a: INPi\n$b: INPi\n$t: LOCi\n SUBi $r $a $b\n IORi $t $a $b\n ADDi $r $r $t\n RETU\n"
+	"fn1: FUNC\n$r: OUTi\n$a: INPi\n$b: INPi\n$t: LOCi\n LSSi $a $b @.lt\n SUBi $r $a $b\n IORi $t $a $b\n ADDi $r $r $t\n RETU\n"
+	".lt: ADDi $r $a $b\n RETU\n"																						// MULTI-RETU callee: polices the extent-to-next-FUNC rule (branch past the first RETU)
 	"fn2: FUNC\n$r: OUTi\n$a: INPi\n$b: INPi\n MULi $r $a $b\n ADDi $r $r $a\n SUBi $r $r $b\n RETU\n"
 	"rec: FUNC\n PARA *2\n$r: OUTi\n$n: INPi\n$t: LOCi\n MOVi $r #0\n LEQi $n #0 @.base\n"
 	" SUBi $t $n #1\n MOVi %1 $t\n CALL &rec %0 *2\n ADDi $r %0 $n\n.base: RETU\n"

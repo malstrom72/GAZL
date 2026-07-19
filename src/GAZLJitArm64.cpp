@@ -663,10 +663,9 @@ static void emitDivMod(Arm64Emitter& e, RegisterCache& cache, bool rem, const In
 	are pre-created (for direct calls); `entryOffset[selfOrdinal]` is set to this function's native word offset. Returns
 	false on an unsupported opcode.
 */
-void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, const Offsets& o,
+void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, UInt funcEnd, const Offsets& o,
 		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount, Label exitLabel) {
-	UInt retIndex = funcIndex;
-	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
+	const UInt retIndex = funcEnd;																						// a function extends to the next FUNC (functionTable order), NOT to its first RETU: multi-RETU and GOTO-ending functions are legal
 
 	/*
 		Pass 1 - fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight. Every leader
@@ -1269,7 +1268,8 @@ void JitCompilerArm64::compile(const AssembledProgram& program, JitModule& out) 
 	for (UInt k = 0; k < program.functionCount; ++k) { entryLabels[k] = e.newLabel(); }
 	Label exitLabel = e.newLabel();																						// the one dispatcher EXIT; every segment terminal branches here (§5.4 (b))
 	for (UInt ord = 0; ord < program.functionCount; ++ord) {
-		lowerFunction(e, program.code, program.memory, program.functionTable[ord], o, entryLabels, entryOffset, ord
+		const UInt funcEnd = ((ord + 1 < program.functionCount) ? program.functionTable[ord + 1] : program.codeSize) - 1;
+		lowerFunction(e, program.code, program.memory, program.functionTable[ord], funcEnd, o, entryLabels, entryOffset, ord
 				, program.functionCount, exitLabel);
 	}
 	const size_t dispatchOffset = emitDispatcher(e, o, exitLabel);

@@ -83,11 +83,10 @@ static Status nativeYield(Processor* p) {
 //                   OK, continues with an indirect jump through it; JitProcessor::pushCall links the current
 //                   continuation into a plain frame (storing the WINDOW - `after` normalizes dsp) and retargets the
 //                   slot at the callee's compiled entry. JitProcessor::run() isolates nativeAfter across nesting.
-// Known assembler-legal shapes the JIT compiler still cannot digest (both from hand-written GAZL; compiled Impala
-// never emits them): a function ENDING in GOTO with no RETU (lowerFunction's `while (opcode != OP_RETU)` scan runs
-// off the code end - crash), and a MULTI-RETU function (the first RETU is taken as the function end, so branches past
-// it target outside the sliced range). Delimiting functions by functionTable offsets instead of the RETU scan would
-// fix both.
+// RESOLVED(jit-function-extent): lowerFunction used to find a function's end by scanning for the FIRST RETU, so a
+// MULTI-RETU function (branch past the first RETU targeted outside the sliced range) and a function ENDING in GOTO
+// with no RETU (scan ran off the code end) could not be lowered. Functions are now delimited the way the language
+// defines them - to the next FUNC (functionTable order; codeSize ends the last one). Kernel: multi-retu below.
 /*
 	Re-entrant natives (the resolution of the TODO above): both flavors of a native running GAZL functions on the
 	same processor, identical on both engines. Targets are resolved per kernel by name (helperB / helperF / chA /
@@ -120,7 +119,7 @@ namespace {
 	Value gMemory[DATA_SIZE];
 	UInt gFunctionTable[FUNCTION_TABLE_SIZE];
 	CallStackEntry gCallStack[CALL_STACK_SIZE];
-	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
+	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0, gCodeSize = 0;
 	std::vector<Value> gCleanImage;
 }
 
@@ -143,7 +142,7 @@ static bool assemble(const char* source, Symbols& globals) {
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str()); return false;
 	}
-	gGlobalsSize = gs; gConstsSize = cs; gFunctionCount = fc;
+	gGlobalsSize = gs; gConstsSize = cs; gFunctionCount = fc; gCodeSize = codeSize;
 	gCleanImage.assign(gMemory, gMemory + DATA_SIZE);
 	return true;
 }
@@ -191,7 +190,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	// Compile the whole program once through the facade; the returned module owns the page (freed at scope exit) and
 	// backs every JitProcessor constructed below.
 	JitModule module;
-	const AssembledProgram program = { gCode, CODE_SIZE, gFunctionTable, gFunctionCount, gMemory, DATA_SIZE, gGlobalsSize, gConstsSize };
+	const AssembledProgram program = { gCode, gCodeSize, gFunctionTable, gFunctionCount, gMemory, DATA_SIZE, gGlobalsSize, gConstsSize };	// USED size: the last function's extent ends here
 	NativeJitCompiler compiler;
 	compiler.compile(program, module);							// always yields a compiled module (throws on host denial / a backend bug)
 	std::printf("  compiled %zu native words for %u function(s)\n", module.codeWords(), gFunctionCount);
@@ -484,6 +483,14 @@ static const char* const K_PTRVAR =			// 3-arg PEEK_VVV/POKE_VVV (variable base+
 	" PEEK $x $p $z\n ADDi $x $x #500\n"											// x = *(p+z) = v  -> PEEK_VVV, must see dirty v
 	" POKE $p $z $x\n"																// *(p+z) = x       -> POKE_VVV, writes v's home
 	" ADDi $x $v $x\n POKE &gOut $x\n RETU\n";										// gOut = v + x; v must reload the poked value
+
+static const char* const K_MULTIRETU =		// callee with TWO RETUs (early return): branches past the first RETU used to
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"						// target outside the JIT's sliced function range (extent-by-first-RETU bug)
+	"half: FUNC\n$r: OUTi\n$n: INPi\n"
+	" LSSi $n #10 @.small\n MOVi $r #100\n RETU\n"
+	".small: MOVi $r $n\n RETU\n"
+	"main: FUNC\n PARA *2\n$x: LOCi\n"
+	" PEEK $x &gIn\n MOVi %1 $x\n CALL &half %0 *2\n MOVi $x %0\n POKE &gOut $x\n RETU\n";	// gOut = n<10 ? n : 100
 
 static const char* const K_PTRPARAM =		// by-ref out-param: callee POKEs through an INPp into the CALLER's frame; the
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"							// caller's copy of that local must reload after the CALL
@@ -796,6 +803,7 @@ int main() {
 	runKernel("realm bank   [COPY frame<->globals]", K_BANKCOPY, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("realm ptrvar [MYFRAME PEEK/POKE_VVV]", K_PTRVAR, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("realm outparm[&local across CALL]", K_PTRPARAM, counts, sizeof(counts) / sizeof(*counts));
+	runKernel("multi-retu    [extent to next FUNC]", K_MULTIRETU, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("divf zero     [DIVf /0 trap]", K_DIVFZERO, signed_, sizeof(signed_) / sizeof(*signed_));
 
 	std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED", failures, failures == 1 ? "" : "s");
