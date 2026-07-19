@@ -342,6 +342,11 @@ void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& 
 // Scan a loop body code[from..to] for the slots it reads / writes (residency pruning + expectDirty; see ResidencyMap).
 void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots);
 
+// Split a loop body's slot working set by REGISTER CLASS, mirroring the backends' lowering choices (float arithmetic /
+// compares / FLOF and the float halves of FTOI/ITOF use FLOAT_REGISTER; everything else, incl MOVE, uses GENERAL).
+// Input to the multi-block residency pressure gate: a per-class overflow of capture()'s keepMax thrashes the map.
+void buildLoopClassSets(const Instruction* code, UInt from, UInt to, std::set<Int>& generalSlots, std::set<Int>& floatSlots);
+
 /*
 	Pointer-realm stamp (§1.1, v2.3a): the coarse realm of the pointer VALUE a slot holds, w.r.t. THIS frame's cached
 	slots. NONFRAME = provably not this frame (a received parameter pointer, or a globals/constants symbol address) -> a
@@ -397,6 +402,7 @@ class RegisterCache {
 
 	// v2.2 loop-header residency: snapshot the resident set (pruned + dirtiness-canonicalized), later re-establish it.
 	public:		void capture(ResidencyMap& map, const std::set<Int>& readInLoop, const std::set<Int>& writtenInLoop);
+	public:		void residencyCapacity(size_t& generalMax, size_t& floatMax) const;	// max entries capture() keeps per class; the multi-block pressure gate
 	public:		void reconcileTo(const ResidencyMap& map);		// at a back-edge: spill/drop strays, fill missing; empty when equal
 
 	private:	static const size_t POOL_CAPACITY = 32;

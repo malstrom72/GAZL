@@ -162,7 +162,14 @@ static bool jitResidencySafe(Int op) {
 	}
 }
 
-// v2.2 residency qualification - see GAZLJit.h. A loop header = a back-edge target no forward branch or SWCH reaches.
+/*
+	v2.2 residency qualification - see GAZLJit.h. A loop header = a back-edge target no forward branch or SWCH reaches.
+	v2.2-full: a body may contain internal FORWARD branches (early exits / if-joins) - interior leaders share the
+	header's entry map and every in-edge reconciles to it. Still disqualified: any non-residency-safe op; an internal
+	BACKWARD branch to anything but the header (a nested loop - the inner loop may qualify on its own); and a SIDE
+	ENTRY (any branch or SWCH arm from outside [header, end] into the interior) - such an edge would arrive without
+	the map's registers loaded, so reconcileTo's model would lie.
+*/
 void JitCompiler::jitResidencyLeaders(const Instruction* code, UInt funcStart, UInt endIndex
 		, const Value* memory, std::map<UInt, UInt>& loopExtent) {
 	std::set<UInt> excluded;
@@ -178,12 +185,27 @@ void JitCompiler::jitResidencyLeaders(const Instruction* code, UInt funcStart, U
 		}
 	}
 	for (std::set<UInt>::const_iterator it = excluded.begin(); it != excluded.end(); ++it) { loopExtent.erase(*it); }
-	for (std::map<UInt, UInt>::iterator it = loopExtent.begin(); it != loopExtent.end(); ) {							// keep only register-only single-block bodies (see jitResidencySafe)
+	for (std::map<UInt, UInt>::iterator it = loopExtent.begin(); it != loopExtent.end(); ) {
+		const UInt header = it->first, end = it->second;
 		bool safe = true;
-		for (UInt j = it->first; j <= it->second && safe; ++j) {
+		for (UInt j = header; j <= end && safe; ++j) {																	// body: register-only ops; backward branches only to the header
 			if (!jitResidencySafe(code[j].opcode)) { safe = false; }
 			UInt target;
-			if (jitBranchTarget(code, j, target) && target > j) { safe = false; }										// an internal forward branch (early exit / if-join): the leader after it drops the map
+			if (jitBranchTarget(code, j, target) && target < j && target != header) { safe = false; }					// nested loop: the inner entry may qualify separately
+		}
+		for (UInt j = funcStart; j <= endIndex && safe; ++j) {															// side entries: nothing outside may branch into the interior
+			if (j >= header && j <= end) { continue; }
+			UInt target;
+			if (jitBranchTarget(code, j, target)) {
+				if (target > header && target <= end) { safe = false; }
+			} else if (code[j].opcode == OP_SWCH) {
+				const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
+				const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
+				for (UInt k = 0; k < size && safe; ++k) {
+					const UInt target2 = static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i);
+					if (target2 > header && target2 <= end) { safe = false; }
+				}
+			}
 		}
 		if (safe) { ++it; } else { loopExtent.erase(it++); }
 	}
@@ -400,6 +422,41 @@ void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int
 	}
 }
 
+/*
+	Per-class slot working sets (see GAZLJit.h). Class-by-opcode mirrors the shared lowering: float ops keep their VALUE
+	operands in FLOAT_REGISTER; FTOI reads float / writes general, ITOF the reverse; MOVE and all integer/pointer ops
+	(and ABSF, lowered bitwise in GP on x64) use GENERAL. A slot used both ways lands in both sets.
+*/
+void buildLoopClassSets(const Instruction* code, UInt from, UInt to, std::set<Int>& generalSlots, std::set<Int>& floatSlots) {
+	for (UInt j = from; j <= to; ++j) {
+		const Int op = code[j].opcode;
+		OperandRole roles[3];
+		operandRoles(op, roles);
+		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
+		bool isFloat[3] = { false, false, false };
+		switch (op) {
+			case OP_ADDF_VVV: case OP_ADDF_VVC: case OP_SUBF_VVV: case OP_SUBF_VVC: case OP_SUBF_VCV:
+			case OP_MULF_VVV: case OP_MULF_VVC:
+			case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
+			case OP_FLOF:
+			case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
+			case OP_EQUF_VVB: case OP_EQUF_VCB:
+			case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
+			case OP_NEQF_VVB: case OP_NEQF_VCB:
+				isFloat[0] = isFloat[1] = isFloat[2] = true; break;
+			case OP_FTOI_VVC: isFloat[1] = true; break;																// float read -> general write
+			case OP_ITOF_VVC: isFloat[0] = true; break;																// general read -> float write
+			default: break;
+		}
+		for (int k = 0; k < 3; ++k) {
+			if (roles[k] == OPERAND_SLOT_READ || roles[k] == OPERAND_SLOT_WRITE) {
+				if (isFloat[k]) { floatSlots.insert(operands[k]->i); } else { generalSlots.insert(operands[k]->i); }
+			}
+		}
+		if (op == OP_FORi_VVB || op == OP_FORi_VCB) { generalSlots.insert(code[j].p0.i); }
+	}
+}
+
 RegisterCache::RegisterCache(const RegisterPool& pool, RegisterCacheBackend& backend)
 		: registerPool(pool)
 		, cacheBackend(backend)
@@ -611,9 +668,23 @@ void RegisterCache::barrier() { flushAndClear(); }
 	register==home (one store, emitted before the header label so it runs once), so hazard flushes inside the loop never
 	re-store it.
 */
+/*
+	How many entries capture() keeps at most, PER CLASS (after headroom). The MULTI-BLOCK pressure gate: a body whose
+	per-class slot working set exceeds its class keepMax has values permanently outside the map, so evictions keep taking
+	map lines and every interior leader's reconciliation refills them - measured mandelbrot +28% x64 / +32% arm64 (6
+	float slots vs keepMax 2 / 5). The overflow is per-CLASS: a total-capacity gate missed the arm64 case. Such loops
+	stay v2.0 fill-on-use.
+*/
+void RegisterCache::residencyCapacity(size_t& generalMax, size_t& floatMax) const {
+	const size_t RESIDENCY_HEADROOM = 3;
+	const size_t gc = registerPool.generalCount, fc = registerPool.floatCount;
+	generalMax = gc - ((RESIDENCY_HEADROOM < gc / 2) ? RESIDENCY_HEADROOM : gc / 2);
+	floatMax = fc - ((RESIDENCY_HEADROOM < fc / 2) ? RESIDENCY_HEADROOM : fc / 2);
+}
+
 void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& readInLoop, const std::set<Int>& writtenInLoop) {
 	assert(map.entries.empty() && "a header's entry map is captured once");
-	const size_t RESIDENCY_HEADROOM = 3;																				// registers per class left free for the body's temps and constants (halved for small pools)
+	const size_t RESIDENCY_HEADROOM = 3;																				// registers per class left free for the body's temps and constants (halved for small pools; keep in sync with residencyCapacity)
 	for (int c = 0; c < 2; ++c) {
 		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
 		size_t count;

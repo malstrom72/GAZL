@@ -350,6 +350,38 @@ struct ColdTrap {
 	Status status;									// BAD_PEEK / BAD_POKE / DIVISION_BY_ZERO
 };
 
+/*
+	A conditional loop-EXIT branch from a register-resident body (v2.2-full): the spill of the resident dirty state is
+	deferred to a cold stub on the TAKEN path, so the fall-through (stay-in-loop) path keeps the map with no per-iteration
+	cost. The stub stores the captureDirtyLines snapshot and enters the exit leader, which assumes an empty cache -
+	memory is current, registers are ignored there.
+*/
+struct ColdEdge {
+	Label label;
+	ResidencyMap dirty;								// dirty state at the branch point, stored only if the exit is taken
+	UInt target;									// the exit leader (mainline label key)
+};
+
+/*
+	Resolve a conditional branch's cache transition and return its destination label (v2.2-full edge handling). Target
+	has an entry map (in-loop edge) -> reconcile inline (mov loads/stores leave EFLAGS) and branch to the mainline; no
+	map but a resident map is live (loop-exit edge) -> a ColdEdge stub spills on the TAKEN path only; neither -> plain
+	barrier + mainline, as v2.0.
+*/
+static Label resolveConditionalEdge(X64Emitter& emitter, RegisterCache& cache, std::map<UInt, ResidencyMap>& entryMaps
+		, std::map<UInt, Label>& labels, UInt target, bool resident, std::vector<ColdEdge>& coldEdges) {
+	std::map<UInt, ResidencyMap>::iterator it = entryMaps.find(target);
+	if (it != entryMaps.end()) { cache.reconcileTo(it->second); return labels[target]; }
+	if (resident) {
+		ColdEdge edge; edge.label = emitter.newLabel(); edge.target = target;
+		cache.captureDirtyLines(edge.dirty);																			// no model change: the fall-through keeps the map
+		coldEdges.push_back(edge);
+		return edge.label;
+	}
+	cache.barrier();
+	return labels[target];
+}
+
 // Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
 static bool cacheLowered(Int op) {
 	switch (op) {
@@ -468,7 +500,8 @@ static void emitShift(X64Emitter& emitter, RegisterCache& cache, const Instructi
 
 // if (a <condition> b) goto target - a = p0, b = p1, in the const modes named by the opcode; target = this index + p2.
 static void emitBranch(X64Emitter& emitter, RegisterCache& cache, Cond condition, const Instruction& instruction, UInt instructionIndex,
-		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels, std::map<UInt, ResidencyMap>& entryMaps) {
+		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels, std::map<UInt, ResidencyMap>& entryMaps,
+		bool resident, std::vector<ColdEdge>& coldEdges) {
 	int a;
 	if (operand0Const) { a = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(a), static_cast<uint32_t>(instruction.p0.i)); }
 	else { a = cache.read(instruction.p0.i, GENERAL_REGISTER); }
@@ -478,8 +511,7 @@ static void emitBranch(X64Emitter& emitter, RegisterCache& cache, Cond condition
 	emitter.cmp(static_cast<Reg>(a), static_cast<Reg>(b));
 	cache.endInstruction();
 	const UInt target = static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i);
-	reconcileOrBarrier(cache, entryMaps, target);																		// block ends here (mov loads/stores leave EFLAGS)
-	emitter.jcc(condition, labels[target]);
+	emitter.jcc(condition, resolveConditionalEdge(emitter, cache, entryMaps, labels, target, resident, coldEdges));
 }
 
 // Load a float operand into a cache register: a float slot (read), or a constant loaded RIP-relative from the literal
@@ -534,16 +566,16 @@ static void emitBinaryFloat(X64Emitter& emitter, RegisterCache& cache, BinaryOp 
 
 // Float compare-branch, NaN-correct versus C++: kind 0 = <, 1 = >=, 2 = ==, 3 = !=. a = p0, b = p1, target = index + p2.
 static void emitBranchFloat(X64Emitter& emitter, RegisterCache& cache, int kind, const Instruction& instruction, UInt instructionIndex,
-		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels, std::map<UInt, ResidencyMap>& entryMaps) {
+		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels, std::map<UInt, ResidencyMap>& entryMaps,
+		bool resident, std::vector<ColdEdge>& coldEdges) {
 	const int a = loadFloatOperandCached(emitter, cache, instruction.p0, operand0Const);
 	const int b = loadFloatOperandCached(emitter, cache, instruction.p1, operand1Const);
 	const Reg xa = static_cast<Reg>(a), xb = static_cast<Reg>(b);
 	const UInt targetIndex = static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i);
-	Label target = labels[targetIndex];
 	if (kind == 0) { emitter.ucomiss(xb, xa); }																			// b > a ordered == (a < b)
 	else { emitter.ucomiss(xa, xb); }
 	cache.endInstruction();
-	reconcileOrBarrier(cache, entryMaps, targetIndex);																	// block ends here (mov loads/stores leave EFLAGS)
+	Label target = resolveConditionalEdge(emitter, cache, entryMaps, labels, targetIndex, resident, coldEdges);			// block ends here (mov loads/stores leave EFLAGS)
 	if (kind == 0) { emitter.jcc(CC_A, target); }
 	else if (kind == 1) { emitter.jcc(CC_AE, target); }																	// a >= b ordered
 	else if (kind == 2) { Label unordered = emitter.newLabel(); emitter.jcc(CC_P, unordered); emitter.jcc(CC_E, target); emitter.bind(unordered); }
@@ -603,18 +635,43 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 	jitResidencyLeaders(code, funcStart, endIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
 	std::map<UInt, ResidencyMap> entryMaps;
 	std::vector<ColdTrap> coldTraps;																					// checked-op trap arms, emitted after the mainline
+	std::vector<ColdEdge> coldEdges;																					// loop-exit edge stubs (v2.2-full), same section
+	UInt residentEnd = 0;
+	bool resident = false;																								// inside a register-resident loop body [header, residentEnd]
 
 	// Pass 2 - emit.
 	for (UInt j = funcStart; j <= endIndex; ++j) {
 		cache.setInstructionIndex(j);
+		if (resident && j > residentEnd) { resident = false; }
 		std::map<UInt, Label>::iterator labelIt = labels.find(j);
 		if (labelIt != labels.end()) {
 			std::map<UInt, UInt>::const_iterator loopIt = loopExtent.find(j);
-			if (loopIt != loopExtent.end()) {																			// loop header: the fall-through state (pruned) becomes the fixed entry state
+			bool gated = false;
+			if (loopIt != loopExtent.end()) {
+				std::map<UInt, UInt>::const_iterator w0 = loopWeight.upper_bound(j);
+				const bool multiBlock = (w0 != loopWeight.end() && w0->first <= loopIt->second);
 				std::set<Int> readSlots, writtenSlots;
 				buildLoopSlotSets(code, j, loopIt->second, readSlots, writtenSlots);
-				cache.capture(entryMaps[j], readSlots, writtenSlots);
-			} else { cache.barrier(); }																					// any other leader: starts empty as in v2.0
+				std::set<Int> generalSlots, floatSlots;
+				buildLoopClassSets(code, j, loopIt->second, generalSlots, floatSlots);
+				size_t generalMax, floatMax;
+				cache.residencyCapacity(generalMax, floatMax);
+				if (multiBlock && (generalSlots.size() > generalMax || floatSlots.size() > floatMax)) {					// per-CLASS pressure gate: a strangling map loses to fill-on-use
+					gated = true;
+					cache.barrier();
+				} else {																								// loop header: the fall-through state (pruned) becomes the fixed entry state
+					cache.capture(entryMaps[j], readSlots, writtenSlots);
+					for (std::map<UInt, UInt>::const_iterator w = w0; w != loopWeight.end() && w->first <= loopIt->second; ++w) {
+						entryMaps[w->first] = entryMaps[j];																// interior leaders share the header's entry state (v2.2-full)
+					}
+					resident = !entryMaps[j].entries.empty(); residentEnd = loopIt->second;
+				}
+			}
+			if (loopIt == loopExtent.end() || gated) {
+				std::map<UInt, ResidencyMap>::const_iterator m = entryMaps.find(j);
+				if (m != entryMaps.end()) { cache.reconcileTo(m->second); }											// interior leader: re-establish the loop's entry state on fall-through
+				else { cache.barrier(); }																				// any other leader: starts empty as in v2.0
+			}
 			emitter.bind(labelIt->second);
 		}
 		std::map<UInt, UInt>::iterator weightIt = loopWeight.find(j);													// loop head: charge the block, suspend on timeout (§5.5)
@@ -919,8 +976,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				else { lim = cache.read(in.p1.i, GENERAL_REGISTER); }
 				emitter.cmp(static_cast<Reg>(r), static_cast<Reg>(lim));
 				cache.endInstruction();
-				reconcileOrBarrier(cache, entryMaps, static_cast<UInt>(static_cast<Int>(j) + in.p2.i));					// block ends here (mov loads/stores leave EFLAGS)
-				emitter.jcc(CC_L, labels[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
+				emitter.jcc(CC_L, resolveConditionalEdge(emitter, cache, entryMaps, labels, static_cast<UInt>(static_cast<Int>(j) + in.p2.i), resident, coldEdges));
 				break;
 			}
 
@@ -984,16 +1040,16 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				emitter.roundss(static_cast<Reg>(d), static_cast<Reg>(s), 1); cache.endInstruction(); break;
 			}
 
-			case OP_LSSF_VVB: emitBranchFloat(emitter, cache, 0, in, j, false, false, labels, entryMaps); break;
-			case OP_LSSF_VCB: emitBranchFloat(emitter, cache, 0, in, j, false, true, labels, entryMaps); break;
-			case OP_LSSF_CVB: emitBranchFloat(emitter, cache, 0, in, j, true, false, labels, entryMaps); break;
-			case OP_EQUF_VVB: emitBranchFloat(emitter, cache, 2, in, j, false, false, labels, entryMaps); break;
-			case OP_EQUF_VCB: emitBranchFloat(emitter, cache, 2, in, j, false, true, labels, entryMaps); break;
-			case OP_NLSF_VVB: emitBranchFloat(emitter, cache, 1, in, j, false, false, labels, entryMaps); break;
-			case OP_NLSF_VCB: emitBranchFloat(emitter, cache, 1, in, j, false, true, labels, entryMaps); break;
-			case OP_NLSF_CVB: emitBranchFloat(emitter, cache, 1, in, j, true, false, labels, entryMaps); break;
-			case OP_NEQF_VVB: emitBranchFloat(emitter, cache, 3, in, j, false, false, labels, entryMaps); break;
-			case OP_NEQF_VCB: emitBranchFloat(emitter, cache, 3, in, j, false, true, labels, entryMaps); break;
+			case OP_LSSF_VVB: emitBranchFloat(emitter, cache, 0, in, j, false, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_LSSF_VCB: emitBranchFloat(emitter, cache, 0, in, j, false, true, labels, entryMaps, resident, coldEdges); break;
+			case OP_LSSF_CVB: emitBranchFloat(emitter, cache, 0, in, j, true, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_EQUF_VVB: emitBranchFloat(emitter, cache, 2, in, j, false, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_EQUF_VCB: emitBranchFloat(emitter, cache, 2, in, j, false, true, labels, entryMaps, resident, coldEdges); break;
+			case OP_NLSF_VVB: emitBranchFloat(emitter, cache, 1, in, j, false, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_NLSF_VCB: emitBranchFloat(emitter, cache, 1, in, j, false, true, labels, entryMaps, resident, coldEdges); break;
+			case OP_NLSF_CVB: emitBranchFloat(emitter, cache, 1, in, j, true, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_NEQF_VVB: emitBranchFloat(emitter, cache, 3, in, j, false, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_NEQF_VCB: emitBranchFloat(emitter, cache, 3, in, j, false, true, labels, entryMaps, resident, coldEdges); break;
 
 			case OP_GOTO: {
 				const UInt target = static_cast<UInt>(static_cast<Int>(j) + in.p0.i);
@@ -1022,16 +1078,16 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 
-			case OP_LSSI_VVB: emitBranch(emitter, cache, CC_L, in, j, false, false, labels, entryMaps); break;
-			case OP_LSSI_VCB: emitBranch(emitter, cache, CC_L, in, j, false, true, labels, entryMaps); break;
-			case OP_LSSI_CVB: emitBranch(emitter, cache, CC_L, in, j, true, false, labels, entryMaps); break;
-			case OP_EQUI_VVB: emitBranch(emitter, cache, CC_E, in, j, false, false, labels, entryMaps); break;
-			case OP_EQUI_VCB: emitBranch(emitter, cache, CC_E, in, j, false, true, labels, entryMaps); break;
-			case OP_NLSI_VVB: emitBranch(emitter, cache, CC_GE, in, j, false, false, labels, entryMaps); break;
-			case OP_NLSI_VCB: emitBranch(emitter, cache, CC_GE, in, j, false, true, labels, entryMaps); break;
-			case OP_NLSI_CVB: emitBranch(emitter, cache, CC_GE, in, j, true, false, labels, entryMaps); break;
-			case OP_NEQI_VVB: emitBranch(emitter, cache, CC_NE, in, j, false, false, labels, entryMaps); break;
-			case OP_NEQI_VCB: emitBranch(emitter, cache, CC_NE, in, j, false, true, labels, entryMaps); break;
+			case OP_LSSI_VVB: emitBranch(emitter, cache, CC_L, in, j, false, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_LSSI_VCB: emitBranch(emitter, cache, CC_L, in, j, false, true, labels, entryMaps, resident, coldEdges); break;
+			case OP_LSSI_CVB: emitBranch(emitter, cache, CC_L, in, j, true, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_EQUI_VVB: emitBranch(emitter, cache, CC_E, in, j, false, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_EQUI_VCB: emitBranch(emitter, cache, CC_E, in, j, false, true, labels, entryMaps, resident, coldEdges); break;
+			case OP_NLSI_VVB: emitBranch(emitter, cache, CC_GE, in, j, false, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_NLSI_VCB: emitBranch(emitter, cache, CC_GE, in, j, false, true, labels, entryMaps, resident, coldEdges); break;
+			case OP_NLSI_CVB: emitBranch(emitter, cache, CC_GE, in, j, true, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_NEQI_VVB: emitBranch(emitter, cache, CC_NE, in, j, false, false, labels, entryMaps, resident, coldEdges); break;
+			case OP_NEQI_VCB: emitBranch(emitter, cache, CC_NE, in, j, false, true, labels, entryMaps, resident, coldEdges); break;
 
 			default: throwUnlowerableOpcode(op);																		// a finalized opcode the backend must cover (a bug, never routine)
 		}
@@ -1041,6 +1097,13 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 		emitter.bind(coldTraps[k].label);
 		emitDirtyStores(emitter, coldTraps[k].dirty);
 		emitter.movImm(RAX, static_cast<uint32_t>(coldTraps[k].status)); emitter.jmp(epilogue);
+	}
+
+	// Cold section: loop-exit edge stubs (v2.2-full, see ColdEdge) - store the dirty snapshot, enter the exit leader.
+	for (size_t k = 0; k < coldEdges.size(); ++k) {
+		emitter.bind(coldEdges[k].label);
+		emitDirtyStores(emitter, coldEdges[k].dirty);
+		emitter.jmp(labels[coldEdges[k].target]);
 	}
 
 	/*

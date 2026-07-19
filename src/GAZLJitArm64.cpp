@@ -480,6 +480,18 @@ struct ColdTrap {
 	ResidencyMap dirty;								// the captureDirtyLines snapshot to store before exiting
 	unsigned statusComplement;						// movn immediate: ~1 = BAD_PEEK, ~2 = BAD_POKE, ~6 = DIVISION_BY_ZERO
 };
+
+/*
+	A conditional loop-EXIT branch from a register-resident body (v2.2-full): the spill of the resident dirty state is
+	deferred to a cold stub on the TAKEN path, so the fall-through (stay-in-loop) path keeps the map with no per-iteration
+	cost. The stub stores the captureDirtyLines snapshot and enters the exit leader, which assumes an empty cache -
+	memory is current, registers are ignored there.
+*/
+struct ColdEdge {
+	Label label;
+	ResidencyMap dirty;								// dirty state at the branch point, stored only if the exit is taken
+	UInt target;									// the exit leader (mainline label key)
+};
 }
 
 // Opcodes whose operands route through the RegisterCache; everything else barriers the cache and lowers as v1 (§5.7).
@@ -524,6 +536,27 @@ static bool cacheLowered(Int op) {
 }
 
 // `dst = s1 <op> s2` through the register cache; s1 is a slot (VVV/VVC) or a const (VCV), s2 a const (VVC) or a slot.
+/*
+	Emit a conditional branch's cache transition + the branch itself (v2.2-full edge handling). Target has an entry
+	map (in-loop edge: the header or an interior leader) -> reconcile inline (loads/stores leave NZCV, so this may sit
+	between the compare and the bcond). No map but a resident map is live (loop-exit edge) -> spill on the TAKEN path
+	only, via a ColdEdge stub. Neither -> plain barrier, as v2.0.
+*/
+static void emitConditionalEdge(Arm64Emitter& e, RegisterCache& cache, std::map<UInt, ResidencyMap>& entryMaps
+		, std::map<UInt, Label>& mainline, UInt target, Cond c, bool resident, std::vector<ColdEdge>& coldEdges) {
+	std::map<UInt, ResidencyMap>::iterator it = entryMaps.find(target);
+	if (it != entryMaps.end()) { cache.reconcileTo(it->second); e.bcond(c, mainline[target]); return; }
+	if (resident) {
+		ColdEdge edge; edge.label = e.newLabel(); edge.target = target;
+		cache.captureDirtyLines(edge.dirty);																			// no model change: the fall-through keeps the map
+		coldEdges.push_back(edge);
+		e.bcond(c, edge.label);
+		return;
+	}
+	cache.barrier();
+	e.bcond(c, mainline[target]);
+}
+
 static void emitBinary(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitter::*op)(Reg, Reg, Reg), const Instruction& in, bool s1Const, bool s2Const) {
 	int a;
 	if (s1Const) { a = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(a), in.p1.i); }
@@ -681,17 +714,42 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	jitResidencyLeaders(code, funcIndex, retIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
 	std::map<UInt, ResidencyMap> entryMaps;
 	std::vector<ColdTrap> coldTraps;																					// checked-op trap arms, emitted after the mainline
+	std::vector<ColdEdge> coldEdges;																					// loop-exit edge stubs (v2.2-full), same section
+	UInt residentEnd = 0;
+	bool resident = false;																								// inside a register-resident loop body [header, residentEnd]
 
 	// Pass 2 - emit.
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
 		cache.setInstructionIndex(j);
+		if (resident && j > residentEnd) { resident = false; }
 		if (mainline.count(j)) {
 			std::map<UInt, UInt>::const_iterator loopIt = loopExtent.find(j);
-			if (loopIt != loopExtent.end()) {																			// loop header: the fall-through state (pruned) becomes the fixed entry state
+			bool gated = false;
+			if (loopIt != loopExtent.end()) {
+				std::map<UInt, UInt>::const_iterator w0 = loopWeight.upper_bound(j);
+				const bool multiBlock = (w0 != loopWeight.end() && w0->first <= loopIt->second);
 				std::set<Int> readSlots, writtenSlots;
 				buildLoopSlotSets(code, j, loopIt->second, readSlots, writtenSlots);
-				cache.capture(entryMaps[j], readSlots, writtenSlots);
-			} else { cache.barrier(); }																					// any other leader: starts empty as in v2.0
+				std::set<Int> generalSlots, floatSlots;
+				buildLoopClassSets(code, j, loopIt->second, generalSlots, floatSlots);
+				size_t generalMax, floatMax;
+				cache.residencyCapacity(generalMax, floatMax);
+				if (multiBlock && (generalSlots.size() > generalMax || floatSlots.size() > floatMax)) {					// per-CLASS pressure gate: a strangling map loses to fill-on-use
+					gated = true;
+					cache.barrier();
+				} else {																								// loop header: the fall-through state (pruned) becomes the fixed entry state
+					cache.capture(entryMaps[j], readSlots, writtenSlots);
+					for (std::map<UInt, UInt>::const_iterator w = w0; w != loopWeight.end() && w->first <= loopIt->second; ++w) {
+						entryMaps[w->first] = entryMaps[j];																// interior leaders share the header's entry state (v2.2-full)
+					}
+					resident = !entryMaps[j].entries.empty(); residentEnd = loopIt->second;
+				}
+			}
+			if (loopIt == loopExtent.end() || gated) {
+				std::map<UInt, ResidencyMap>::const_iterator m = entryMaps.find(j);
+				if (m != entryMaps.end()) { cache.reconcileTo(m->second); }											// interior leader: re-establish the loop's entry state on fall-through
+				else { cache.barrier(); }																				// any other leader: starts empty as in v2.0
+			}
 			e.bind(mainline[j]);
 		}
 		if (loopWeight.count(j)) { e.subsImm(W3, W3, loopWeight[j]); e.bcond(MI, suspendL[j]); }
@@ -1028,8 +1086,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				else { lim = cache.read(in.p1.i, GENERAL_REGISTER); }
 				e.cmp(static_cast<Reg>(r), static_cast<Reg>(lim));
 				cache.endInstruction();
-				reconcileOrBarrier(cache, entryMaps, static_cast<UInt>(static_cast<Int>(j) + in.p2.i));					// block ends here (loads/stores don't touch NZCV)
-				e.bcond(LT, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
+				emitConditionalEdge(e, cache, entryMaps, mainline, static_cast<UInt>(static_cast<Int>(j) + in.p2.i), LT, resident, coldEdges);
 				break;
 			}
 			case OP_GOTO: {
@@ -1079,8 +1136,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const int b = loadFloatOperand(e, cache, in.p1, c1const);
 				e.fcmpS(static_cast<Reg>(a), static_cast<Reg>(b));
 				cache.endInstruction();
-				reconcileOrBarrier(cache, entryMaps, static_cast<UInt>(static_cast<Int>(j) + in.p2.i));					// block ends here (loads/stores don't touch NZCV)
-				e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
+				emitConditionalEdge(e, cache, entryMaps, mainline, static_cast<UInt>(static_cast<Int>(j) + in.p2.i), c, resident, coldEdges);
 				break;
 			}
 			case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB: case OP_EQUI_VVB: case OP_EQUI_VCB:
@@ -1107,8 +1163,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				else { b = cache.read(in.p1.i, GENERAL_REGISTER); }
 				e.cmp(static_cast<Reg>(a), static_cast<Reg>(b));
 				cache.endInstruction();
-				reconcileOrBarrier(cache, entryMaps, static_cast<UInt>(static_cast<Int>(j) + in.p2.i));					// block ends here (loads/stores don't touch NZCV)
-				e.bcond(c, mainline[static_cast<UInt>(static_cast<Int>(j) + in.p2.i)]);
+				emitConditionalEdge(e, cache, entryMaps, mainline, static_cast<UInt>(static_cast<Int>(j) + in.p2.i), c, resident, coldEdges);
 				break;
 			}
 			default: throwUnlowerableOpcode(op);																		// a finalized opcode the backend must cover (a bug, never routine)
@@ -1120,6 +1175,13 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		e.bind(coldTraps[k].label);
 		emitDirtyStores(e, coldTraps[k].dirty);
 		e.movn(W0, coldTraps[k].statusComplement); e.b(exitLabel);
+	}
+
+	// Cold section: loop-exit edge stubs (v2.2-full, see ColdEdge) - store the dirty snapshot, enter the exit leader.
+	for (size_t k = 0; k < coldEdges.size(); ++k) {
+		e.bind(coldEdges[k].label);
+		emitDirtyStores(e, coldEdges[k].dirty);
+		e.b(mainline[coldEdges[k].target]);
 	}
 
 	/*
