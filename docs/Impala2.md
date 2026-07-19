@@ -3,9 +3,9 @@
 > **Status: partially implemented.** Step 1 (typed pointers and arrays) and the strict-expression
 > rules are implemented in the JSPEG compiler with `--legacy` gating; see `tests/impala/sources/`
 > (`typedPointers.impala`) and the regression suites. Element types are enforced within a unit at
-> assignments and call arguments (full depth), and across units for array rows in the `; signature`
-> channel (top category; the validator errors on mismatches). Element metadata for scalar pointer
-> globals and function parameters is not yet emitted. Steps 2–5 remain proposals.
+> assignments and call arguments (full depth), and across units via element chains in the
+> `; signature` channel (arrays, globals, consts, function params/returns; the validator errors on
+> mismatched chains and bridges bare `ptr` to any chain). Steps 2–5 remain proposals.
 
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),
@@ -263,14 +263,17 @@ cast where element typing is wanted.
 ### Cross-unit checking
 
 An `extern int array futureArray` now advertises an element type, so the `; signature` metadata that
-already rides inside `.gazl` gains an element-type field for array rows — the field the type-checking
-spec explicitly reserved (array rows emitted `: unknown`). *Implemented:* typed arrays emit their
-element category (`; signature array values[5] : int`), untyped arrays keep `: unknown`, and the
-validator's existing category matching (exact match, `unknown` wildcard) enforces agreement across
-concatenated units with no metadata-grammar change. Deep element types erase to their top category
-in metadata (`int pointer array` rows say `: ptr`); full-depth checking remains within-unit.
-Element types for scalar pointer *globals* (a new field, not a reserved one) are not yet emitted.
-The concatenation-linking model is untouched.
+already rides inside `.gazl` carries element information. *Implemented:* definition-side rows emit
+**element chains as single-token categories** — `; signature array values[5] : int`,
+`; signature global cursor : int-ptr`, `func take(int-ptr-ptr h) -> int-ptr`, const rows likewise —
+while untyped declarations keep their 1.0 categories (`ptr`, `unknown`). The validator treats a bare
+`ptr` as an element-unknown pointer that matches any chain (the metadata-level analogue of the
+erase/assume asymmetry: the typed side states the claim, the untyped side is a wildcard), and
+errors on differing chains. Call-site `; expects` rows deliberately keep bare categories: `&` is
+type-producing, so 1.0 sources can pass element-carrying arguments, and chain-rendering there would
+churn old units' output — the bridge rule makes bare-vs-chain compatible, so nothing is lost.
+The concatenation-linking model is untouched; single-token chains keep every row parseable by
+older tooling.
 
 The boundary asymmetry has an exact link-level analogue via that wildcard. A typed
 `extern int array data` in one unit binding an untyped `array data` definition in another is

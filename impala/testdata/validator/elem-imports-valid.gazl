@@ -1,3 +1,5 @@
 ; signatures version=1
 ; signature extern array sharedInts[] : int @ elem-imports-valid.gazl:2:1
 ; signature extern array plainWords[] : float @ elem-imports-valid.gazl:3:1
+; signature extern global cursor : ptr @ elem-imports-valid.gazl:4:1
+CALL touch	; expects touch(ptr) -> int @ elem-imports-valid.gazl:5:1

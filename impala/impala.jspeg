@@ -198,6 +198,24 @@
         }
     }
 
+    /* render a full element descriptor as a single metadata token: 'p:i' → "int-ptr",
+       'p:p:i' → "int-ptr-ptr", 'i' → "int", 'p' → "ptr" (element-unknown pointer) */
+    function signatureCategoryForDesc(desc) {
+        if (desc === undefined) {
+            return 'unknown';
+        }
+        var text = signatureParamCategory(desc[desc.length - 1]);
+        for (var wi = desc.length - 3; wi >= 0; wi -= 2) {
+            text += '-ptr';
+        }
+        return text;
+    }
+
+    /* full descriptor of a declared symbol: type char + optional element chain */
+    function fullDescFor(type, elem) {
+        return (elem !== undefined ? type + ':' + elem : type);
+    }
+
     function signatureReturnCategory(type, known) {
         switch (type) {
             case 'i': return 'int';
@@ -242,7 +260,9 @@
         var parts = [];
         for (var idx = 0; idx < params.length; ++idx) {
             var param = params[idx] || {};
-            var typeName = signatureParamCategory(param.type);
+            var typeName = (param.elem !== undefined
+                    ? signatureCategoryForDesc(fullDescFor(param.type, param.elem))
+                    : signatureParamCategory(param.type));
             var name = param.name;
             if (!name) {
                 name = 'arg' + idx;
@@ -324,7 +344,9 @@
 
         var paramsText = renderParamList(signature.params);
         var hasReturn = (signature && signature.returns !== undefined);
-        var returnType = signatureReturnCategory(signature.returns, hasReturn);
+        var returnType = (signature.returnElem !== undefined
+                ? signatureCategoryForDesc(fullDescFor(signature.returns, signature.returnElem))
+                : signatureReturnCategory(signature.returns, hasReturn));
         var kind = (role ? role : 'func');
 
         var originName = (sourceName !== undefined ? sourceName : (signature ? signature.sourceName : undefined));
@@ -499,15 +521,14 @@
 
         if (type === 'A') {
             var extent = (size !== undefined ? '[' + size + ']' : '[]');
-            var elemCategory = (elem !== undefined                /* element category for typed arrays (Impala 2); */
-                    ? signatureParamCategory($$parser.descHead(elem))
-                    : 'unknown');                                 /* untyped arrays keep the `unknown` wildcard */
+            var elemCategory = signatureCategoryForDesc(elem);    /* typed arrays advertise their element chain; */
+                                                                  /* untyped arrays keep the `unknown` wildcard */
             return appendOrigin('signature ' + prefix + 'array ' + name + extent + ' : ' + elemCategory,
                                 sourceName, sourceCode, sourceOffset);
         }
 
         return appendOrigin('signature ' + prefix + signatureRoleForSection(section) + ' ' +
-                            name + ' : ' + signatureParamCategory(type),
+                            name + ' : ' + signatureCategoryForDesc(fullDescFor(type, elem)),
                             sourceName, sourceCode, sourceOffset);
     };
 
@@ -521,12 +542,13 @@
         }
     }
 
-    $$parser.formatConstSignatureComment = function (name, type, sourceName, sourceCode, sourceOffset) {
+    $$parser.formatConstSignatureComment = function (name, type, sourceName, sourceCode, sourceOffset, elem) {
         if (!name) {
             return undefined;
         }
 
-        return appendOrigin('signature const ' + name + ' : ' + signatureParamCategory(type),
+        return appendOrigin('signature const ' + name + ' : '
+                            + signatureCategoryForDesc(fullDescFor(type, elem)),
                             sourceName, sourceCode, sourceOffset);
     };
 
@@ -2015,6 +2037,7 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                              }
                                                                              entry.signature.params = [];
                                                                              entry.signature.returns = '?';
+                                                                             entry.signature.returnElem = undefined;
                                                                              entry.signature.returnName = undefined;
                                                                              entry.signature.sourceCode = $$s;
                                                                              entry.signature.sourceOffset = $$i;
@@ -2040,6 +2063,7 @@ inp:ArgsDecl ')'_
                                                                          }
                                                                          if (entry && entry.signature) {
                                                                              entry.signature.returns = $out.type;
+                                                                             entry.signature.returnElem = $out.elem;
                                                                              entry.signature.returnName = $out.name;
                                                                              $$parser.resolveFunctionReturnType($id, $out.type, $$s, $$i);
                                                                          }
@@ -2059,6 +2083,7 @@ inp:ArgsDecl ')'_
 								}
 								if (entry && entry.signature) {
 									entry.signature.returns = '?';
+									entry.signature.returnElem = undefined;
 									entry.signature.returnName = undefined;
 									$$parser.resolveFunctionReturnType($id, '?', $$s, $$i);
 								}
@@ -2251,7 +2276,8 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                                     $t,
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i
+                                                                                    $$i,
+                                                                                    $telem
                                                                                 ),
                                                                                 $telem
                                                                             );
@@ -2302,7 +2328,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     undefined,
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i
+                                                                                    $$i,
+                                                                                    $v.elem
                                                                                 ),
                                                                                 $v.elem
                                                                             );

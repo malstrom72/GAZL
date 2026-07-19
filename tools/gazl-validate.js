@@ -160,7 +160,7 @@ function parseParamTypes(paramText) {
 		if (!raw) {
 			continue;
 		}
-		var match = raw.match(/^[A-Za-z?][A-Za-z0-9?]*/);
+		var match = raw.match(/^[A-Za-z?][A-Za-z0-9?-]*/);   // hyphens: element chains like "int-ptr"
 		var token = match ? match[0] : raw;
 		result.push(token.toLowerCase());
 	}
@@ -284,11 +284,15 @@ function parseSignatureComment(comment) {
 		var roleInfo = classifyRole(valueMatch[1]);
 		var type = valueMatch[3].toLowerCase();
 		var nameSpec = valueMatch[2].trim();
-		// The lazy role group leaves "array" attached to the name in rows such as
-		// "extern array name[] : unknown"; strip it so extern arrays match their definitions.
-		var arrayPrefix = nameSpec.match(/^array\s+(.+)$/);
-		if (arrayPrefix) {
-			nameSpec = arrayPrefix[1];
+		// The lazy role group leaves the role word attached to the name in extern rows such
+		// as "extern array name[] : unknown" or "extern global name : ptr"; strip it so
+		// extern declarations match their definitions.
+		var rolePrefix = nameSpec.match(/^(array|global|const)\s+(.+)$/);
+		if (rolePrefix) {
+			nameSpec = rolePrefix[2];
+			if (rolePrefix[1] !== "array") {
+				roleInfo = { extern: roleInfo.extern, native: roleInfo.native, role: rolePrefix[1] };
+			}
 		}
 		var arrayMatch = nameSpec.match(/^([^\[]+)\[(.*)\]$/);
 		if (arrayMatch) {
@@ -698,6 +702,10 @@ function addCallExpectation(ctx, parsed, loc, callInfo) {
 	});
 }
 
+function isPointerCategory(category) {
+	return category === "ptr" || category.length > 4 && category.substr(category.length - 4) === "-ptr";
+}
+
 function typesCompatible(a, b) {
 	if (a == null || b == null) {
 		return true;
@@ -705,7 +713,15 @@ function typesCompatible(a, b) {
 	if (a === "unknown" || b === "unknown") {
 		return true;
 	}
-	return a === b;
+	if (a === b) {
+		return true;
+	}
+	// Element-typed pointer chains ("int-ptr", "int-ptr-ptr"): a bare "ptr" is an
+	// element-unknown pointer and matches any chain; differing chains do not match.
+	if (isPointerCategory(a) && isPointerCategory(b) && (a === "ptr" || b === "ptr")) {
+		return true;
+	}
+	return false;
 }
 
 function functionSignaturesCompatible(a, b) {

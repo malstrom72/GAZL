@@ -7,14 +7,14 @@ values:	GLOB *5	; signature array values[5] : int @ 11:28
 gains:	GLOB *2	; signature array gains[2] : float @ 12:29
 	DATA #1.5 #2.5
 	GLOB *1
-cursor:	DATp &NULL	; signature global cursor : ptr @ 15:1
+cursor:	DATp &NULL	; signature global cursor : int-ptr @ 15:1
 ; signature extern native printInt() -> unknown @ 16:1
 ; signature extern native printLF() -> unknown @ 17:1
 ; signature extern native printFloat() -> unknown @ 18:1
 ; signature extern native print() -> unknown @ 20:1
 
 ;-----------------------------------------------------------------------------
-findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int @ 20:23
+findSmallest:	FUNC	; signature func findSmallest(int n, int-ptr vector) -> int @ 20:23
 	$j:	OUTi
 	$n:	INPi
 	$vector:	INPp
@@ -32,7 +32,7 @@ findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int @ 20:
 
 
 ;-----------------------------------------------------------------------------
-sum:	FUNC	; signature func sum(int n, ptr vector) -> int @ 30:14
+sum:	FUNC	; signature func sum(int n, int-ptr vector) -> int @ 30:14
 	$total:	OUTi
 	$n:	INPi
 	$vector:	INPp
