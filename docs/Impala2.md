@@ -357,6 +357,34 @@ Fields are laid out in declaration order, one word per primitive/pointer slot, a
 A by-value self-referential field (`Filter next`) is an error (infinite size); `Filter pointer` is
 fine.
 
+**Inline nesting is supported** *(decided)*: fields may be struct-typed by value, and offsets
+compose — `v.low.z1` is still a single free constant offset. By-value recursion (direct or mutual)
+remains an error:
+
+```impala
+struct Biquad { float b0; float b1; float a1; float z1 }
+struct Voice {
+	Biquad low                      // inline: offsets 0..3
+	Biquad high                     // inline: offsets 4..7
+	float gain                      // offset 8
+}                                   // sizeof(Voice) = 9
+```
+
+**Forward declarations** *(decided)*: `extern struct B` makes a struct name legal for pointer
+fields (and pointer declarations) before — or without — its definition. This is single-pass
+friendly, resolves mutual references explicitly, and is the same construct as the opaque-handle
+mechanism in *Identity across concatenation* below:
+
+```impala
+extern struct B                     // forward declaration
+struct A { B pointer next }
+struct B { A pointer back }         // completes B
+```
+
+Struct definitions are top-level only; **one definition per unit** (a duplicate is an
+already-declared error). Struct names share the flat namespace with functions, globals, and
+constants.
+
 The struct name becomes a `BASE_TYPE`, so usage needs **no new declaration syntax** (as anticipated
 by the Step 1 grammar):
 
@@ -367,10 +395,29 @@ Filter array banks[4]               // array of 4 Filters
 global Filter voice
 ```
 
-`sizeof(Filter)` is a new compile-time `int` (C-style spelling). New reserved words `struct` and
-`sizeof` have **zero identifier collisions** in the 78-file corpus (verified; note `type` has 23
-uses as an identifier and must never become a keyword). The `.` character appears in no existing
-source outside float literals, so the member operator is collision-free too.
+`sizeof(Filter)` is a new compile-time `int` (C-style spelling; the type-name form only — a
+`sizeof expr` form can come later if needed). New reserved words `struct` and `sizeof` have
+**zero identifier collisions** in the 78-file corpus (verified; note `type` has 23 uses as an
+identifier and must never become a keyword). The `.` character appears in no existing source
+outside float literals, so the member operator is collision-free too.
+
+### Initializers
+
+*(decided)* Global and readonly struct variables (and struct arrays) take **nested-brace
+initializers**, one brace group per struct or array field, each value checked against the field's
+type. Values must be compile-time constants, as for 1.0 globals; trailing fields may be omitted
+and are zero-filled (the 1.0 array rule). Uninitialized struct storage is zero-filled.
+
+```impala
+global Filter voice = { 0.5, 0.7, { 0.0, 0.0, 0.0, 0.0 }, 2, null }
+readonly Voice array PRESETS[2] = {
+	{ { 0.1, 0.0, 0.0, 0.0 }, { 0.2, 0.0, 0.0, 0.0 }, 1.0 },
+	{ { 0.3, 0.0, 0.0, 0.0 }, { 0.4, 0.0, 0.0, 0.0 }, 0.5 }
+}
+```
+
+The lowering is the flat `DATA` row the braces describe — the nesting exists for readability and
+per-field type checking, not for any runtime structure.
 
 ### Field access: `.` and `->`
 
@@ -480,6 +527,13 @@ codegen never depends on how the struct is used elsewhere in the function.
   so `a = b = c` and struct assignment nested in a larger expression are errors. `*dst = *src`
   (both typed struct pointers) is the same statement through places. Explicit `copy()` remains
   available and equivalent.
+- **Passing a value where a pointer is expected requires explicit `&`** *(decided)*:
+  `process(&f)`, never `process(f)`. This matches C exactly (arrays decay, structs do not) — the
+  expectation every agent carries — and keeps the value/pointer distinction the `.`/`->` split
+  already draws. The error carries a fix-it note: `note: pass a pointer: &f`. (Array *fields*
+  keep 1.0 array behavior: `f.state` decays to a typed pointer.)
+- **Whole-struct comparison is rejected.** GAZL has no multi-word compare; `a == b` on struct
+  values is an error — compare fields, or compare pointers.
 
 ### Identity across concatenation
 
@@ -522,6 +576,14 @@ Pointer declarations and pass-through are legal; field access and `sizeof(Filter
 errors (the layout is absent). This is C's incomplete-type pattern: it minimizes the copy-paste
 surface, its metadata row (`; signature extern struct Filter`) is a name-only wildcard matched
 against any full definition, and handle/token APIs get real encapsulation for free.
+
+The same construct doubles as the **forward declaration** for mutually-referencing structs within
+a unit (see *Definition* above): `extern struct B` before `struct A { B pointer next }`, with
+`struct B { ... }` completing the type later in the same unit. One mechanism, two uses.
+
+In metadata categories, struct-typed pointers render nominally in the element-chain notation
+(`Filter-ptr`, `Filter-ptr-ptr`); the bare-`ptr` bridge rule applies unchanged, so 1.0 units and
+opaque consumers interoperate.
 
 ---
 
