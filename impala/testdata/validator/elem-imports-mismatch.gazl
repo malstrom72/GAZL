@@ -1,0 +1,2 @@
+; signatures version=1
+; signature extern array sharedInts[] : float @ elem-imports-mismatch.gazl:2:1

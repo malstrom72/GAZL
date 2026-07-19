@@ -284,6 +284,12 @@ function parseSignatureComment(comment) {
 		var roleInfo = classifyRole(valueMatch[1]);
 		var type = valueMatch[3].toLowerCase();
 		var nameSpec = valueMatch[2].trim();
+		// The lazy role group leaves "array" attached to the name in rows such as
+		// "extern array name[] : unknown"; strip it so extern arrays match their definitions.
+		var arrayPrefix = nameSpec.match(/^array\s+(.+)$/);
+		if (arrayPrefix) {
+			nameSpec = arrayPrefix[1];
+		}
 		var arrayMatch = nameSpec.match(/^([^\[]+)\[(.*)\]$/);
 		if (arrayMatch) {
 			var sizeText = arrayMatch[2].trim();

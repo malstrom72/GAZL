@@ -261,11 +261,14 @@ cast where element typing is wanted.
 ### Cross-unit checking
 
 An `extern int array futureArray` now advertises an element type, so the `; signature` metadata that
-already rides inside `.gazl` gains an element-type field for array and pointer rows. The type-checking
-spec already anticipated this — array rows currently emit `: unknown` with that field explicitly
-"reserved for future metadata." So cross-unit element-type agreement extends an existing field rather
-than inventing a channel, and the concatenation-linking model is untouched (untyped rows remain the
-`unknown` wildcard).
+already rides inside `.gazl` gains an element-type field for array rows — the field the type-checking
+spec explicitly reserved (array rows emitted `: unknown`). *Implemented:* typed arrays emit their
+element category (`; signature array values[5] : int`), untyped arrays keep `: unknown`, and the
+validator's existing category matching (exact match, `unknown` wildcard) enforces agreement across
+concatenated units with no metadata-grammar change. Deep element types erase to their top category
+in metadata (`int pointer array` rows say `: ptr`); full-depth checking remains within-unit.
+Element types for scalar pointer *globals* (a new field, not a reserved one) are not yet emitted.
+The concatenation-linking model is untouched.
 
 The boundary asymmetry has an exact link-level analogue via that wildcard. A typed
 `extern int array data` in one unit binding an untyped `array data` definition in another is

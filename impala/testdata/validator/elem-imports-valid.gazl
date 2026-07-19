@@ -1,0 +1,3 @@
+; signatures version=1
+; signature extern array sharedInts[] : int @ elem-imports-valid.gazl:2:1
+; signature extern array plainWords[] : float @ elem-imports-valid.gazl:3:1

@@ -490,7 +490,7 @@
     }
 
     $$parser.formatGlobalSignatureComment = function (section, name, type, size, flavor,
-                                                      sourceName, sourceCode, sourceOffset) {
+                                                      sourceName, sourceCode, sourceOffset, elem) {
         if (!name) {
             return undefined;
         }
@@ -499,7 +499,10 @@
 
         if (type === 'A') {
             var extent = (size !== undefined ? '[' + size + ']' : '[]');
-            return appendOrigin('signature ' + prefix + 'array ' + name + extent + ' : unknown',
+            var elemCategory = (elem !== undefined                /* element category for typed arrays (Impala 2); */
+                    ? signatureParamCategory($$parser.descHead(elem))
+                    : 'unknown');                                 /* untyped arrays keep the `unknown` wildcard */
+            return appendOrigin('signature ' + prefix + 'array ' + name + extent + ' : ' + elemCategory,
                                 sourceName, sourceCode, sourceOffset);
         }
 
@@ -2217,7 +2220,8 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                                     'extern',
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i
+                                                                                    $$i,
+                                                                                    $$.elem
                                                                                 )
                                                                             );
                                                                         }
@@ -2320,7 +2324,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     undefined,
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i
+                                                                                    $$i,
+                                                                                    $a.elem
                                                                                 ),
                                                                                 $a.elem
                                                                             );

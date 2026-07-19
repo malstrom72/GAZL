@@ -2,9 +2,9 @@
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
-values:	GLOB *5	; signature array values[5] : unknown @ 11:28
+values:	GLOB *5	; signature array values[5] : int @ 11:28
 	DATA #10 #20 #30 #40 #50
-gains:	GLOB *2	; signature array gains[2] : unknown @ 12:29
+gains:	GLOB *2	; signature array gains[2] : float @ 12:29
 	DATA #1.5 #2.5
 	GLOB *1
 cursor:	DATp &NULL	; signature global cursor : ptr @ 15:1

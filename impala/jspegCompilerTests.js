@@ -695,6 +695,17 @@ legacyParityFixtures.forEach(runParityFixture);
 
 runValidatorCase("matching metadata fixtures", ["exports.gazl", "imports-valid.gazl"], 0);
 runValidatorCase("mismatched metadata fixtures", ["exports.gazl", "imports-mismatch.gazl"], 1, 'Signature mismatch for "foo"');
+runValidatorCase(
+	"matching array element metadata fixtures",
+	["elem-exports.gazl", "elem-imports-valid.gazl"],
+	0,
+);
+runValidatorCase(
+	"mismatched array element metadata fixtures",
+	["elem-exports.gazl", "elem-imports-mismatch.gazl"],
+	1,
+	"Array sharedInts does not match its definition",
+);
 
 const validatorUnitTestScript = path.join(dir, "..", "tests", "gazl-validator-tests.js");
 const validatorUnitResult = childProcess.spawnSync(process.execPath, [validatorUnitTestScript], {

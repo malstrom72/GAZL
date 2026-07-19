@@ -1,0 +1,5 @@
+; signatures version=1
+sharedInts:	GLOB *4	; signature array sharedInts[4] : int @ elem-exports.gazl:2:1
+	DATA #0 #0 #0 #0
+
+plainWords:	GLOB *8	; signature array plainWords[8] : unknown @ elem-exports.gazl:5:1
