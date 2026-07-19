@@ -953,6 +953,47 @@ const typedPointerCases = [
 		source: ["extern int array shared", "global float array shared[4]"].join("\n"),
 		expectError: "Element type mismatch with previous declaration",
 	},
+	{
+		label: "typed pointer arguments match typed parameters",
+		source: [
+			"function f(int pointer v) returns int r { r = *v; }",
+			"function main() locals int x, int y { x = 1; y = f(&x); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "null and erased arguments pass typed/untyped parameters",
+		source: [
+			"function f(int pointer v) locals int x { if (v != null) x = *v; }",
+			"function g(pointer v) returns int r { r = (int) v[0]; }",
+			"function main() locals int x, int y { x = 1; f(null); y = g(&x); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "cast admits untyped arguments into typed parameters",
+		source: [
+			"function f(int pointer v) returns int r { r = *v; }",
+			"function main() locals pointer raw, int y { y = f((int pointer) raw); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "sideways pointer argument element types are rejected",
+		source: [
+			"function f(int pointer v) returns int r { r = *v; }",
+			"function main() locals float g, int y { y = f(&g); }",
+		].join("\n"),
+		expectError: "Pointer element type mismatch for argument 1",
+	},
+	{
+		label: "untyped pointer arguments need a cast into typed parameters",
+		source: [
+			"function f(int pointer v) returns int r { r = *v; }",
+			"function main() locals pointer raw, int y { y = f(raw); }",
+		].join("\n"),
+		expectError: "Pointer element type mismatch for argument 1",
+	},
 ];
 
 for (const testCase of typedPointerCases) {

@@ -2,8 +2,10 @@
 
 > **Status: partially implemented.** Step 1 (typed pointers and arrays) and the strict-expression
 > rules are implemented in the JSPEG compiler with `--legacy` gating; see `tests/impala/sources/`
-> (`typedPointers.impala`) and the regression suites. Cross-unit element-type metadata in the
-> `; signature` channel is not yet emitted (within-unit checking only). Steps 2–5 remain proposals.
+> (`typedPointers.impala`) and the regression suites. Element types are enforced within a unit at
+> assignments and call arguments (full depth), and across units for array rows in the `; signature`
+> channel (top category; the validator errors on mismatches). Element metadata for scalar pointer
+> globals and function parameters is not yet emitted. Steps 2–5 remain proposals.
 
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),

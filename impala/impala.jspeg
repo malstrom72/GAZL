@@ -2072,6 +2072,7 @@ inp:ArgsDecl ')'_
                                                                                  var param = $inp[idx];
                                                                                  entry.signature.params.push({
                                                                                      type: param.type,
+                                                                                     elem: param.elem,
                                                                                      name: param.name,
                                                                                      size: param.size
                                                                                  });
@@ -2526,6 +2527,8 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.count = 0;
                                                        $$.base  = $$parser.borrowForCall();
                                                        $$.types = [];
+                                                       $$.elems = [];
+                                                       $$.nulls = [];
                                                     } }
                 (Argument (','_ Argument)*)? ')'_  { if (!$$parser.dry) {
                                                        var callee = metaSlot($$);
@@ -2582,6 +2585,16 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                        actual,
                                                                        expected
                                                                    );
+                                                               }
+                                                               var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */
+                                                               if (expected === 'p' && expectedElem !== undefined
+                                                                       && !$$.nulls[argIdx]
+                                                                       && $$.elems[argIdx] !== expectedElem) {
+                                                                   $$parser.fail('Pointer element type mismatch for argument '
+                                                                           + (argIdx + 1) + ' when calling ' + label
+                                                                           + ' (expected ' + $$parser.elemVerbose(expectedElem)
+                                                                           + ' elements, got ' + $$parser.elemVerbose($$.elems[argIdx])
+                                                                           + ' elements); use a cast', $$s, $$i);
                                                                }
                                                            }
 
@@ -2651,6 +2664,12 @@ Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        var meta = metaSlot($a);
                                                        if ($$.types) {
                                                            $$.types.push(meta.type);
+                                                       }
+                                                       if ($$.elems) {                       /* element chain + null-ness, captured */
+                                                           $$.elems.push(meta.elem);         /* before makeArgValue mutates the meta */
+                                                           $$.nulls.push(meta.type === 'p'
+                                                               && meta.operands[1] === '&NULL'
+                                                               && meta.operands[2] === undefined);
                                                        }
                                                        $$parser.makeArgValue($a, $$.base + $$.count);
                                                     } }
