@@ -44,9 +44,39 @@ function) so a program near the data-stack limit does not newly trap.
 Realms (section 1.1): inlining merges callee frame realms into the caller's - only LOOSENS what is defined;
 conforming programs stay conforming, and the JIT realm analysis is per-function so it stays sound.
 
-Where: a finalize-time pass in the assembler (Magnus's call: benefits every producer - hand-written GAZL, Impala,
-future compilers - with no source changes). Alternative placements (Impala, a GAZL->GAZL tool like gazlCompactor,
-which is text-only today) rejected for coverage.
+## Placement: Impala vs the assembler (OPEN DECISION, 2026-07-20)
+
+**Impala-level inlining** (AST/codegen transform in the compiler):
+- Structured transform: typed AST, named locals, scoping - no raw slot remapping or branch rebasing; much easier
+  to get right.
+- UNLOCKS follow-on optimization, which is most of inlining's value in mature compilers: arguments substitute
+  directly (the `MOVi %N` marshal moves disappear entirely, not just the CALL), constants propagate into the
+  body, dead branches fold. An assembler pass keeps the body literal.
+- Probe correction: the synthetic pair folded operands too, so the measured 1.51/2.69 ns per call is the
+  IMPALA-level prize. An assembler pass without copy propagation keeps the window MOVs and captures roughly
+  60-70% of it.
+- Better heuristics (loop depth, size, called-once all known), tighter frames (reuse dead slots vs append-only),
+  zero churn in the shipped sandbox-critical assembler.
+- DISQUALIFYING LIMIT for the current corpus: only code that goes THROUGH Impala benefits. The 13 recovered
+  shipped firmwares exist as .gazl (two sources no longer compile: vortex, ringmod), and the firmware host
+  wrapper is GENERATED GAZL text (permut8Host.js) - its per-frame driver->process() calls are invisible to
+  Impala. Impala inlining is a bet on FUTURE firmware only.
+
+**Assembler-level** (finalize-time pass, the sketch above):
+- Universal: hand-written GAZL, the wrapper, reassembled old firmware, any future frontend.
+- Uniquely strong policing: an --inline toggle is directly fuzzer-diffable (inline-on vs inline-off vs the
+  interpreter oracle, same program) - heavyweight argument after this week's two fuzzer-caught miscompiles.
+- Costs: raw-instruction surgery in the trusted gatekeeper; no unlock effects; frames only grow; smaller
+  realized per-call win (marshal moves remain).
+
+**Assessment**: they compose rather than conflict. If sequenced: a deliberately MINIMAL assembler pass (leaf
+functions, small budget - the only way to reach the recovered corpus, and fuzzer-policeable) with the fuller
+inlining story in Impala, where optimization belongs, when new-firmware performance matters. Also fair to ask
+whether the recovered-corpus prize (~5-15% harness benchmarks; the shipped .p8bank builds run as-is regardless)
+justifies assembler churn at all. DECIDE BEFORE IMPLEMENTING.
+
+Other placements (a GAZL->GAZL tool like gazlCompactor, text-only today) rejected: same coverage as the
+assembler pass with a weaker trust/policing story.
 
 Policing: the differential fuzzer's G4 stage already generates call-heavy programs; an --inline toggle in GAZLCmd
 lets the fuzzer diff inlined-vs-not against the interpreter oracle, and the 28-firmware checksum lane gates real
