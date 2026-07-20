@@ -567,7 +567,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 
 #ifdef LIBFUZZ_STANDALONE
 
-#include <dirent.h>
+#ifndef _WIN32
+#include <dirent.h>							// POSIX corpus-directory replay; MSVC has no dirent (Windows uses --gen / single-file replay)
+#endif
 
 void doOne(const char* fn) {
 	printf ("%s\n", fn);
@@ -608,6 +610,7 @@ int main(int argc, const char* argv[]) {
 	}
 #endif
 	for (int i = 1; i < argc; ++i) {
+#ifndef _WIN32
 		DIR *dir;
 		struct dirent *ent;
 		if ((dir = opendir (argv[i])) != NULL) {
@@ -628,6 +631,9 @@ int main(int argc, const char* argv[]) {
 				return EXIT_FAILURE;
 			}
 		}
+#else
+		doOne(argv[i]);							// Windows: single-file replay only (no dirent corpus-dir walk)
+#endif
 	}
 	return 0;
 }
