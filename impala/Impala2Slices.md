@@ -90,8 +90,15 @@ all base-kind combinations, and read-back verification after every write.
 > caller side — `a, b = f(...)` destructuring. The call reserves a leading N-slot output
 > window (`claimSlot` past `borrowForCall`); args land after it (`base + retSlots-1 + i`),
 > `CALL … *(count+retSlots)`; each target read out via `assign` (`_` discards, `global g`
-> targets supported), single-return path byte-identical (golden 0/67). Remaining here:
-> slice 2.5 by-value struct params/returns on the same window convention.
+> targets supported), single-return path byte-identical (golden 0/67).
+>
+> **Slice 2.5 DONE too — by-value struct params + returns.** Struct param → input `PARA
+> *sizeof` (place, read-only-ish); struct return → leading output `PARA *sizeof`. Caller arg
+> machinery moved from per-arg count to a running-WORD counter (`copyStructArg` = reserve slots
+> + ADRL window + ADRL source + COPY; scalar-only path byte-identical). Struct return = a window
+> place (`winBase`/`winWords`) freed by `freeStructWindow` once consumed (assign / arg / discard);
+> nested struct-return-as-arg is adopted in place (windows slide, no self-copy). E421/E423/E430.
+> VM-verified: structByValue, structReturn. gate 0/69.
 
 ## Step 4 + slice 2.5: returns and by-value — one window convention
 
