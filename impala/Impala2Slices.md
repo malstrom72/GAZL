@@ -99,27 +99,46 @@ the two fix-it notes from the spec.
 
 ## Step 5: import-as-linking + `--dead-strip`
 
-**Division of labor: the compiler stays single-unit; the builder owns the closure.**
+**Division of labor: the compiler gains a collect-only mode; the builder owns the closure.**
 
-- Grammar gains only: `import "path"` (delegates to a host callback
-  `_hostOptions.resolveImport(path)` which returns an already-extracted interface to merge into
-  scope) and the `export` declaration modifier (sets a flag; emits `export` as a role prefix in
-  the `; signature` rows; validator's `classifyRole` extended to accept it).
-- The **builder** (`impala build` in `impala.node.js`): DFS over canonical paths, compile each
-  unit once in dependency order, concatenate in closure order. Interface extraction v1 = compile
-  the imported unit fully with output discarded and expose its symbol/struct tables (an
-  `collectInterface` option); a body-skipping interface mode can come later with the JSPEG
-  auto-dry work — not needed for v1.
+**Architecture (revised 2026-07-20 per the thin-action/handler discussion): `$$parser` already IS
+the semantic-handler object the grammar dispatches to.** Finish thinning the remaining fat inline
+actions into `$$parser` methods, then give `$$parser` two modes:
+
+- **emit mode** — today's codegen.
+- **collect mode** — the import/interface parser: declarations register in the symbol/struct/type
+  tables **with type references recorded by NAME, not eagerly resolved**; function bodies are
+  parsed but their codegen calls no-op (or blocks are brace-skipped). Emits nothing.
+
+**This is declaration-level two-phase, and it is all import cycles need** — distinct from the
+expensive body-level two-phase (the AST rework that fixes `dry`/backtracking). Two independent
+moves:
+
+- *Declaration-level two-phase* (gather decls across the closure, then resolve names): cheap,
+  bounded, unlocks cycles. Delivered by collect-mode + deferred resolution.
+- *Body-level two-phase* (AST of expressions, resolve/emit later): the JSPEG 2 rework; cycles do
+  **not** need it; still deferred.
+
+- Grammar gains only: `import "path"` and the `export` declaration modifier (`export` emitted as a
+  role prefix in the `; signature` rows; validator's `classifyRole` extended to accept it).
+- The **builder** (`impala build` in `impala.node.js`): (1) **gather** — walk the import closure
+  (visited-set by canonical path), parse every unit in collect mode, merge declarations into one
+  closure-wide interface with names still symbolic; (2) **resolve** — resolve all type/name
+  references against the merged interface (by-value containment cycles caught here as infinite
+  size); (3) **codegen** — compile each unit in emit mode against the complete tables, concatenate
+  in closure order.
 - **Per-unit seeds are mandatory** — experiment 3 proved it: two units compiled with the same
   `randomId` that contain the same string constant collide at link
   (`Symbol already defined: .s_shared_4d2`). This is a *pre-existing* landmine of the manual
   workflow. The builder derives each unit's seed deterministically (user seed ⊕ hash of canonical
   unit path), making collisions impossible by construction and builds reproducible.
-- **Cycles, v1 honesty:** the spec's "import cycles are legal" assumed name resolution after
-  closure gathering, which the single-pass compiler cannot do without the JSPEG rework. v1:
-  import cycles are a **build error** with a clear message; the mutual-reference escape is an
-  explicit `extern` bridge in one direction (always available, 1.0-style). The spec needs this
-  amendment recorded; full cycle legality returns with the two-phase compiler.
+- **Cycles are legal** (revised — earlier draft here retreated to a build error). The gather →
+  resolve → codegen order means A↔B mutual references resolve regardless of order: gather records
+  `Node.partner : ptr-to-"B"` and `B.partner : ptr-to-"Node"` unresolved, resolve links them, and
+  bodies codegen against complete tables. The single-pass *body* compiler is never asked to
+  forward-reference a type. (Bonus: cross-unit forward function references also resolve without
+  `extern`, byte-safe — existing externs become redundant, not wrong. Whether to also make the
+  standalone single-unit path gather-first is a separate, byte-safe option, not required here.)
 - **`--dead-strip` is a text-level `.gazl` transform in the builder, not compiler logic.** The
   output is line-structured: labeled `FUNC` blocks, labeled `GLOB`/`CNST`/`TEMP` data blocks,
   `! DEF` rows. Build a reference graph from operands (`&name`, `^name`, `#name`), roots from
