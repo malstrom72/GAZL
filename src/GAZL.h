@@ -180,7 +180,10 @@ class Symbols {
 	protected:	typedef std::map<std::string, Symbol> SymbolMap;
 	public:		typedef SymbolMap::const_iterator Iterator;
 				
-	public:		void registerNative(const Char* name, Int index);
+	public:		void registerNative(const Char* name, Int index);														// full-contract native: may do anything a Processor* allows
+	public:		void registerNativeLeaf(const Char* name, Int index);													// LEAF native: a pure function of its param window - only accessParams, no accessMemory/pushCall/enterCall/run/resetTimeOut, returns OK. The JIT keeps caller registers live across it (partial flush). A debug gate enforces the contract.
+	public:		const unsigned char* nativeLeafFlags() const { return leafFlags.empty() ? 0 : &leafFlags[0]; }		// per-native-index leaf bit (1 = leaf); 0/absent = full. Carried into AssembledProgram by finalize().
+	public:		UInt nativeLeafCount() const { return static_cast<UInt>(leafFlags.size()); }
 	public:		Pointer findFunction(const Char* name) const;															/// Returns `NULL_POINTER` if not found.
 	public:		Pointer findGlobal(const Char* name, UInt& size) const;													/// Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
@@ -199,6 +202,7 @@ class Symbols {
 	protected:	void resolve(const Reference& ref, const Symbol& symbol);
 	protected:	SymbolMap symbols;						// TODO : try a C variation with a sorted array (fixed size strings) and bsearch or alternatively a hash table (nick the one from NuXScript)
 	protected:	std::vector<Reference> forwardRefs;		// TODO : move this to a Linker class (or some better name)? in assembler, the methods herein that needs forwardRefs only lookup things in Symbols so they can use lookup()
+	protected:	std::vector<unsigned char> leafFlags;	// native index -> 1 iff registered leaf (see registerNativeLeaf)
 };
 
 struct Operator;
@@ -229,6 +233,9 @@ struct AssembledProgram {
 	UInt memorySize;
 	UInt globalsSize;
 	UInt constsSize;
+	const unsigned char* nativeLeaf;	// per-native-index leaf bit (1 = leaf), or 0 for "no leaf info" (all full); see Symbols::registerNativeLeaf
+	UInt nativeLeafCount;				// length of nativeLeaf[]; a native ordinal >= this is treated as full
+	bool isNativeLeaf(UInt ordinal) const { return nativeLeaf != 0 && ordinal < nativeLeafCount && nativeLeaf[ordinal] != 0; }
 };
 
 /*
@@ -387,7 +394,26 @@ class Processor {
 	public:		virtual Status run();																					// `run()` and `enterCall()` are the only virtual methods (per-block / per-call, so vtable cost is nil).
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;
-	
+	public:		bool isNativeLeaf(UInt ordinal) const { return nativeLeaf != 0 && ordinal < nativeLeafCount && nativeLeaf[ordinal] != 0; }
+
+	/*
+		Leaf-native debug gate (see registerNativeLeaf). While a declared-leaf native runs, the contract-violating
+		Processor methods (accessMemory / accessConstMemory / resetTimeOut / pushCall / enterCall / run) assert. Compiles
+		to nothing in NDEBUG (release trusts the contract; the interp-vs-JIT differential is the release backstop).
+		accessParams is NOT gated - a leaf's whole license is its param window, which accessParams already bounds.
+	*/
+#ifndef NDEBUG
+	public:		bool leafActive() const { return leafGuardDepth > 0; }
+	public:		struct LeafScope {
+					const Processor* p;
+					LeafScope(const Processor* processor, bool leaf) : p(leaf ? processor : 0) { if (p != 0) { ++p->leafGuardDepth; } }
+					~LeafScope() { if (p != 0) { --p->leafGuardDepth; } }
+				};
+#else
+	public:		bool leafActive() const { return false; }
+	public:		struct LeafScope { LeafScope(const Processor*, bool) { } };
+#endif
+
 	protected:	UInt codeSize;
 	protected:	const Instruction* codeBase;
 	protected:	UInt functionCount;
@@ -406,19 +432,26 @@ class Processor {
 	protected:	CallStackEntry* ipsp;
 	protected:	void* userData;
 	protected:	void* resume;				// RESUME continuation (§5.7.5): native code address the JIT dispatcher jumps to; unused by the interpreter.
+	protected:	const unsigned char* nativeLeaf;	// per-native-index leaf bits (from the AssembledProgram; 0 = none), for the debug gate + JIT fast path
+	protected:	UInt nativeLeafCount;
+#ifndef NDEBUG
+	protected:	mutable int leafGuardDepth;			// >0 while a declared-leaf native executes (debug gate)
+#endif
 };
 
-inline void Processor::resetTimeOut(Int clockCycles) { clockCyclesLeft = clockCycles; }
+inline void Processor::resetTimeOut(Int clockCycles) { assert(!leafActive() && "leaf native called resetTimeOut - declare it registerNative (full)"); clockCyclesLeft = clockCycles; }
 inline int Processor::getClockCyclesLeft() const { return clockCyclesLeft; }
 
 inline const Value* Processor::accessConstMemory(Pointer pointer, UInt count) const {
 	assert(memoryBase != 0);
+	assert(!leafActive() && "leaf native called accessConstMemory - its license is accessParams only; declare it registerNative (full)");
 	return (count < memorySize && pointer - MEMORY_OFFSET <= memorySize - count)
 			? pointer - MEMORY_OFFSET + memoryBase : 0;
 }
 
 inline Value* Processor::accessMemory(Pointer pointer, UInt count) const {
 	assert(memoryBase != 0);
+	assert(!leafActive() && "leaf native called accessMemory - its license is accessParams only; declare it registerNative (full)");
 	return (count < rwMemorySize && pointer - MEMORY_OFFSET <= rwMemorySize - count)
 			? pointer - MEMORY_OFFSET + memoryBase : 0;
 }

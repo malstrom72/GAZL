@@ -712,7 +712,14 @@ int main(int argc, const char* argv[]) {
 				const std::string spec(std::string(",") + noNativeSpec + ",");
 				if (spec.find(std::string(",") + NATIVE_NAMES[i] + ",") != std::string::npos) continue;
 			}
-			globals.registerNative(NATIVE_NAMES[i], i);
+			// atan2/sqrt/log are pure functions of their param window -> leaf (the JIT keeps caller registers live
+			// across them; the debug gate enforces it). The rest (print/input/abort/... and the pushCall --forward
+			// slots) are full-contract natives.
+			if (strcmp(NATIVE_NAMES[i], "atan2") == 0 || strcmp(NATIVE_NAMES[i], "sqrt") == 0 || strcmp(NATIVE_NAMES[i], "log") == 0) {
+				globals.registerNativeLeaf(NATIVE_NAMES[i], i);
+			} else {
+				globals.registerNative(NATIVE_NAMES[i], i);
+			}
 		}
 
 		for (size_t i = 3; i + 2 <= pos.size(); i += 2) {

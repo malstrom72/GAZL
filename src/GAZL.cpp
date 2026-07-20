@@ -692,6 +692,12 @@ void Symbols::registerNative(const Char* name, Int index) {
 	define(name, NATIVE, v, 1);
 }
 
+void Symbols::registerNativeLeaf(const Char* name, Int index) {
+	registerNative(name, index);
+	if (static_cast<Int>(leafFlags.size()) <= index) { leafFlags.resize(index + 1, 0); }
+	leafFlags[index] = 1;
+}
+
 Pointer Symbols::findGlobal(const Char* name, UInt& size) const {
 	int types;
 	Value value;
@@ -898,6 +904,8 @@ void Assembler::finalize(AssembledProgram& program) {												// fill the who
 	program.functionTable = functionTable;
 	program.memory = memoryBase;
 	program.memorySize = (UInt)(memoryEnd - memoryBase);
+	program.nativeLeaf = globals.nativeLeafFlags();													// leaf bits live in globals (caller-owned, must outlive the program)
+	program.nativeLeafCount = globals.nativeLeafCount();
 }
 
 void Assembler::newUnit(const Char* unitName) { // FIX : use unitName (or not?)
@@ -1236,7 +1244,10 @@ const Char* Assembler::feed(const Char* line) {
 
 Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
 		, rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0), ip(0), dsp(0)
-		, ipsp(0), userData(0), clockCyclesLeft(0), resume(0) {
+		, ipsp(0), userData(0), clockCyclesLeft(0), resume(0), nativeLeaf(0), nativeLeafCount(0) {
+#ifndef NDEBUG
+	leafGuardDepth = 0;
+#endif
 }
 
 Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
@@ -1246,7 +1257,10 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(rwMemorySize)
 		, dataStackBase(memory + dataStackOffset), dataStackEnd(memory + dataStackOffset + dataStackSize)
 		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase)
-		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0) {
+		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0), nativeLeaf(0), nativeLeafCount(0) {
+#ifndef NDEBUG
+	leafGuardDepth = 0;
+#endif
 	assert(rwMemorySize <= memorySize);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(code != 0);
@@ -1261,7 +1275,10 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(memorySize - constsSize)
 		, dataStackBase(memory + globalsSize), dataStackEnd(memory + memorySize - constsSize), ipStackBase(ipStack)
 		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
-		, userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0) {
+		, userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0), nativeLeaf(0), nativeLeafCount(0) {
+#ifndef NDEBUG
+	leafGuardDepth = 0;
+#endif
 	assert(globalsSize + constsSize <= memorySize);
 	assert(code != 0);
 	assert(memory != 0);
@@ -1280,7 +1297,10 @@ Processor::Processor(const AssembledProgram& program, UInt ipStackSize, CallStac
 		, rwMemorySize(program.memorySize - program.constsSize), dataStackBase(program.memory + program.globalsSize)
 		, dataStackEnd(program.memory + program.memorySize - program.constsSize), ipStackBase(ipStack)
 		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(program.code), dsp(dataStackBase), ipsp(ipStackBase)
-		, userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0) {
+		, userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0), nativeLeaf(program.nativeLeaf), nativeLeafCount(program.nativeLeafCount) {
+#ifndef NDEBUG
+	leafGuardDepth = 0;
+#endif
 	assert(program.globalsSize + program.constsSize <= program.memorySize);
 	assert(program.code != 0);
 	assert(program.memory != 0);
@@ -1294,7 +1314,10 @@ Processor::Processor(const AssembledProgram& program, UInt rwMemorySize, UInt da
 		, rwMemorySize(rwMemorySize), dataStackBase(program.memory + dataStackOffset)
 		, dataStackEnd(program.memory + dataStackOffset + dataStackSize), ipStackBase(ipStack)
 		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(program.code), dsp(dataStackBase), ipsp(ipStackBase)
-		, userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0) {
+		, userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0), nativeLeaf(program.nativeLeaf), nativeLeafCount(program.nativeLeafCount) {
+#ifndef NDEBUG
+	leafGuardDepth = 0;
+#endif
 	assert(rwMemorySize <= program.memorySize);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(program.code != 0);
@@ -1312,6 +1335,7 @@ Processor::Processor(const AssembledProgram& program, UInt rwMemorySize, UInt da
 	#define CHECK_FLOAT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
 
 Int Processor::run() {
+	assert(!leafActive() && "leaf native called run() - declare it registerNative (full)");
 	assert(codeBase != 0);
 	
 	Int clockCyclesLeft = this->clockCyclesLeft;
@@ -1350,7 +1374,13 @@ Int Processor::run() {
 							this->ip = ip;
 							this->dsp = dsp + (UInt)(C1.i);
 							this->ipsp = ipsp;
-							if ((nativeError = (*natives[C0.i])(this)) != 0) { err = nativeError; goto ret; }
+							{
+								const bool leaf = isNativeLeaf(static_cast<UInt>(C0.i));								// leaf debug gate: arm around the call (compiles away in NDEBUG)
+								LeafScope leafScope(this, leaf);
+								nativeError = (*natives[C0.i])(this);
+								assert(!(leaf && nativeError != 0) && "leaf native returned non-OK (retry/error path needs a full native; declare registerNative)");
+							}
+							if (nativeError != 0) { err = nativeError; goto ret; }
 							clockCyclesLeft = this->clockCyclesLeft;
 							if (this->ip != ip) {
 								/*
@@ -1494,6 +1524,7 @@ ret:
 
 Status Processor::enterCall(Pointer functionPointer) {
 	assert(codeBase != 0);
+	assert(!leafActive() && "leaf native called enterCall - declare it registerNative (full)");
 	UInt ui = functionPointer - IP_OFFSET;						// ui = function ordinal
 	if (ui >= functionCount) return BAD_CALL;
 	ui = functionTable[ui];										// ui = code offset
@@ -1516,6 +1547,7 @@ Status Processor::enterCall(Pointer functionPointer) {
 */
 Value* Processor::pushCall(Pointer functionPointer) {
 	assert(codeBase != 0);
+	assert(!leafActive() && "leaf native called pushCall - declare it registerNative (full)");
 	UInt ui = functionPointer - IP_OFFSET;
 	if (ui >= functionCount) return 0;
 	const Instruction* func = codeBase + functionTable[ui];

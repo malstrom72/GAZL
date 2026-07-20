@@ -190,7 +190,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	// Compile the whole program once through the facade; the returned module owns the page (freed at scope exit) and
 	// backs every JitProcessor constructed below.
 	JitModule module;
-	const AssembledProgram program = { gCode, gCodeSize, gFunctionTable, gFunctionCount, gMemory, DATA_SIZE, gGlobalsSize, gConstsSize };	// USED size: the last function's extent ends here
+	const AssembledProgram program = { gCode, gCodeSize, gFunctionTable, gFunctionCount, gMemory, DATA_SIZE, gGlobalsSize, gConstsSize, 0, 0 };	// USED size: the last function's extent ends here; no leaf natives in these kernels
 	NativeJitCompiler compiler;
 	compiler.compile(program, module);							// always yields a compiled module (throws on host denial / a backend bug)
 	std::printf("  compiled %zu native words for %u function(s)\n", module.codeWords(), gFunctionCount);
