@@ -1230,6 +1230,24 @@ const typedPointerCases = [
 		].join("\n"),
 		expectError: null,
 	},
+	{
+		label: "a function may declare multiple return values",
+		source: "function polar(float m, float p) returns float x, float y { x = m * p; y = m - p; }",
+		expectError: null,
+	},
+	{
+		label: "calling a multi-return function in expression position is rejected",
+		source: [
+			"function two() returns int a, int b { a = 1; b = 2; }",
+			"function main() locals int z { z = two(); }",
+		].join("\n"),
+		expectError: "destructure the call",
+	},
+	{
+		label: "by-value struct returns are deferred",
+		source: ["struct S { int a }", "function make() returns S s { s.a = 1; }"].join("\n"),
+		expectError: "By-value struct returns are not yet supported",
+	},
 ];
 
 for (const testCase of typedPointerCases) {

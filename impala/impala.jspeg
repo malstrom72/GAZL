@@ -349,9 +349,21 @@
 
         var paramsText = renderParamList(signature.params);
         var hasReturn = (signature && signature.returns !== undefined);
-        var returnType = (signature.returnElem !== undefined
-                ? signatureCategoryForDesc(fullDescFor(signature.returns, signature.returnElem))
-                : signatureReturnCategory(signature.returns, hasReturn));
+        var returnType;
+        if (signature.returnCount > 1) {                          /* multiple return values → (t1, t2, …) */
+            var parts = [];
+            for (var _rri = 0; _rri < signature.returnList.length; ++_rri) {
+                var r = signature.returnList[_rri];
+                parts.push(r.elem !== undefined
+                        ? signatureCategoryForDesc(fullDescFor(r.type, r.elem))
+                        : signatureParamCategory(r.type));
+            }
+            returnType = '(' + parts.join(', ') + ')';
+        } else {
+            returnType = (signature.returnElem !== undefined
+                    ? signatureCategoryForDesc(fullDescFor(signature.returns, signature.returnElem))
+                    : signatureReturnCategory(signature.returns, hasReturn));
+        }
         var kind = (role ? role : 'func');
 
         var originName = (sourceName !== undefined ? sourceName : (signature ? signature.sourceName : undefined));
@@ -1178,6 +1190,26 @@
         if (line !== '') {
             $$parser.declare('DATA', 'globals', undefined, 'i', true, line, sourceCode, sourceOffset);
         }
+    };
+
+    /* record one `returns` declarator on a function entry (Step 4: multiple return values) */
+    $$parser.addReturn = function (entry, rawName, type, elem, size, sourceCode, sourceOffset) {
+        if (type === 'S') {
+            $$parser.fail('By-value struct returns are not yet supported (return a pointer for now)',
+                    sourceCode, sourceOffset, 'E430');
+        }
+        if (!entry.pendingReturns) {
+            entry.pendingReturns = [];
+        }
+        entry.pendingReturns.push({
+            name: '$' + rawName,
+            rawName: rawName,
+            type: type,
+            elem: elem,
+            size: (size !== undefined ? '*' + size : undefined),
+            sourceCode: sourceCode,
+            sourceOffset: sourceOffset
+        });
     };
 
     $$parser.findField = function (structName, fieldName) {
@@ -2409,20 +2441,25 @@ inp:ArgsDecl ')'_
                     RETURNS _ out:VarDecl                             {
                                                                          var entry = $$parser.symbols.functions[$id];
                                                                          if (entry) {
-                                                                             entry.pendingReturnDeclaration = {
-                                                                                 name: '$' + $out.name,
-                                                                                 type: $out.type,
-                                                                                 elem: $out.elem,
-                                                                                 size: ($out.size !== undefined ? '*' + $out.size : undefined),
-                                                                                 sourceCode: $$s,
-                                                                                 sourceOffset: $$i
-                                                                             };
+                                                                             entry.pendingReturns = undefined;
+                                                                             $$parser.addReturn(entry, $out.name, $out.type, $out.elem, $out.size, $$s, $$i);
                                                                          }
+                                                                     }
+                    ( ',' _ v:VarDecl                                 {
+                                                                         var entry = $$parser.symbols.functions[$id];
+                                                                         if (entry) $$parser.addReturn(entry, $v.name, $v.type, $v.elem, $v.size, $$s, $$i);
+                                                                     }
+                    )*
+                                                                     {
+                                                                         var entry = $$parser.symbols.functions[$id];
                                                                          if (entry && entry.signature) {
-                                                                             entry.signature.returns = $out.type;
-                                                                             entry.signature.returnElem = $out.elem;
-                                                                             entry.signature.returnName = $out.name;
-                                                                             $$parser.resolveFunctionReturnType($id, $out.type, $$s, $$i);
+                                                                             var rl = entry.pendingReturns;
+                                                                             entry.signature.returnList = rl;
+                                                                             entry.signature.returnCount = rl.length;
+                                                                             entry.signature.returns = rl[0].type;
+                                                                             entry.signature.returnElem = rl[0].elem;
+                                                                             entry.signature.returnName = rl[0].rawName;
+                                                                             $$parser.resolveFunctionReturnType($id, rl[0].type, $$s, $$i);
                                                                          }
                                                                      }
                     /
@@ -2433,6 +2470,7 @@ inp:ArgsDecl ')'_
                                                                            matches the historical PPEG layout. */
 								var entry = $$parser.symbols.functions[$id];
 								if (entry) {
+									entry.pendingReturns = undefined;
 									entry.pendingReturnPlaceholder = {
 										sourceCode: $$s,
 										sourceOffset: $$i
@@ -2442,6 +2480,8 @@ inp:ArgsDecl ')'_
 									entry.signature.returns = '?';
 									entry.signature.returnElem = undefined;
 									entry.signature.returnName = undefined;
+									entry.signature.returnCount = 0;
+									entry.signature.returnList = [];
 									$$parser.resolveFunctionReturnType($id, '?', $$s, $$i);
 								}
                                                                      }
@@ -2462,20 +2502,22 @@ inp:ArgsDecl ')'_
                                                                          }
                                                                 $$parser.emitFunctionSignature($id);
                                                                 if (entry) {
-                                                                        if (entry.pendingReturnDeclaration) {
-                                                                                var ret = entry.pendingReturnDeclaration;
-                                                                                $$parser.declare(
-                                                                                        'OUT?', 'locals',
-                                                                                        ret.name,
-                                                                                        ret.type,
-                                                                                        false,
-                                                                                        ret.size,
-                                                                                        ret.sourceCode,
-                                                                                        ret.sourceOffset,
-                                                                                        undefined,
-                                                                                        ret.elem
-                                                                                );
-                                                                                entry.pendingReturnDeclaration = undefined;
+                                                                        if (entry.pendingReturns && entry.pendingReturns.length > 0) {
+                                                                                for (var _ri = 0; _ri < entry.pendingReturns.length; ++_ri) {
+                                                                                        var ret = entry.pendingReturns[_ri];
+                                                                                        $$parser.declare(
+                                                                                                'OUT?', 'locals',
+                                                                                                ret.name,
+                                                                                                ret.type,
+                                                                                                false,
+                                                                                                ret.size,
+                                                                                                ret.sourceCode,
+                                                                                                ret.sourceOffset,
+                                                                                                undefined,
+                                                                                                ret.elem
+                                                                                        );
+                                                                                }
+                                                                                entry.pendingReturns = undefined;
                                                                         } else if (entry.pendingReturnPlaceholder) {
                                                                                 var placeholder = entry.pendingReturnPlaceholder;
                                                                                 $$parser.declare(
@@ -3083,6 +3125,13 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            if (entry && entry.kind === 'FUNC' && entry.signature) {
                                                                signature = entry.signature;
                                                            }
+                                                       }
+
+                                                       if (signature && signature.returnCount > 1 && !$$.destructuring) {
+                                                           $$parser.fail('Function ' + (calleeName || 'this call')
+                                                                   + ' returns ' + signature.returnCount
+                                                                   + ' values; destructure the call (a, b = ' + (calleeName || 'f') + '(...))',
+                                                                   $$s, $$i, 'E431');
                                                        }
 
                                                        if (signature) {
