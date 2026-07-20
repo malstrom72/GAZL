@@ -1339,6 +1339,55 @@ const typedPointerCases = [
 		].join("\n"),
 		expectError: "Argument type mismatch",
 	},
+	{
+		label: "a matching function assigns to a named funcptr type",
+		source: [
+			"functype BinOp(int a, int b) returns int",
+			"function add(int a, int b) returns int r { r = a + b; }",
+			"function main() locals BinOp cb, int n { cb = add; n = cb(2, 3); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a mismatched function is rejected by a named funcptr type",
+		source: [
+			"functype BinOp(int a, int b) returns int",
+			"function wrong(float x) returns float r { r = x; }",
+			"function main() locals BinOp cb { cb = wrong; }",
+		].join("\n"),
+		expectError: "does not match funcptr type",
+	},
+	{
+		label: "an indirect call through a funcptr type checks argument types",
+		source: [
+			"functype UnaryFn(int x) returns int",
+			"function id(int x) returns int r { r = x; }",
+			"function main() locals UnaryFn cb, float y { cb = id; cb(y); }",
+		].join("\n"),
+		expectError: "Argument type mismatch",
+	},
+	{
+		label: "nullfunc assigns to any funcptr type",
+		source: [
+			"functype BinOp(int a, int b) returns int",
+			"function main() locals BinOp cb { cb = nullfunc; }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a funcptr type name may not collide with a struct",
+		source: ["struct Foo { int a }", "functype Foo(int x) returns int"].join("\n"),
+		expectError: "already used by a struct",
+	},
+	{
+		label: "an array of funcptr types dispatches",
+		source: [
+			"functype BinOp(int a, int b) returns int",
+			"function add(int a, int b) returns int r { r = a + b; }",
+			"function main() locals BinOp array ops[1], int n { ops[0] = add; n = ops[0](1, 2); }",
+		].join("\n"),
+		expectError: null,
+	},
 ];
 
 for (const testCase of typedPointerCases) {

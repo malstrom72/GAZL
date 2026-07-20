@@ -149,6 +149,7 @@
     var $$parser.counters = { '%': 0,  '<': 0  };
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
     var $$parser.structs = {};                                    /// name → { fields:[{name,type,elem,offset,words}], words, complete }
+    var $$parser.functypes = {};                                  /// name → signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
     var $$parser.destructuring = false;                           /// true while parsing the call on the RHS of `a, b = f(...)`
@@ -212,8 +213,12 @@
         if (head === 'S') {                                       /* struct value: category is the struct itself */
             return signatureCategoryForDesc(tail);
         }
+        if (head === 'F') {                                       /* funcptr: the named type, or bare "funcptr" */
+            return (tail !== undefined ? tail : 'funcptr');
+        }
         if (tail === undefined) {
-            return ($$parser.isStructAtom(head) ? head : signatureParamCategory(head));
+            return (($$parser.isStructAtom(head) || $$parser.isFuncTypeAtom(head))
+                    ? head : signatureParamCategory(head));
         }
         return signatureCategoryForDesc(tail) + '-ptr';           /* head is a pointer level */
     }
@@ -1084,12 +1089,96 @@
                 && Object.prototype.hasOwnProperty.call($$parser.structs, atom);
     };
 
+    $$parser.isFuncTypeAtom = function (atom) {                   /// is `atom` a named funcptr type (Step 3)?
+        return atom !== undefined && $$parser.functypes
+                && Object.prototype.hasOwnProperty.call($$parser.functypes, atom);
+    };
+
+    /* --------------------------------------------------------- *
+     *  Named function-pointer types  (Impala 2 Step 3)          *
+     * --------------------------------------------------------- */
+
+    $$parser.beginFuncType = function (name, sourceCode, sourceOffset) {
+        if ($$parser.isFuncTypeAtom(name)) {
+            $$parser.fail('Function type already defined: ' + name, sourceCode, sourceOffset, 'E440');
+        }
+        if ($$parser.isStructAtom(name)) {
+            $$parser.fail('Type name already used by a struct: ' + name, sourceCode, sourceOffset, 'E440');
+        }
+        $$parser.functypes[name] = { params: [], returnList: [], returnCount: 0,
+                returns: '?', returnElem: undefined, returnStruct: undefined, returnWords: 0,
+                complete: false, sourceCode: sourceCode, sourceOffset: sourceOffset,
+                sourceName: $$parser.sourceName };
+    };
+
+    $$parser.addFuncTypeParam = function (name, type, elem, struct, words, pname) {
+        $$parser.functypes[name].params.push({ type: type, elem: elem,
+                struct: struct, words: words, name: pname });
+    };
+
+    $$parser.addFuncTypeReturn = function (name, type, elem, struct, words, sourceCode, sourceOffset) {
+        var ft = $$parser.functypes[name];
+        if (type === 'S' && ft.returnList.length > 0) {
+            $$parser.fail('A by-value struct return must be the only return value',
+                    sourceCode, sourceOffset, 'E430');
+        }
+        if (type !== 'S' && ft.returnList.length > 0 && ft.returnList[0].type === 'S') {
+            $$parser.fail('A by-value struct return must be the only return value',
+                    sourceCode, sourceOffset, 'E430');
+        }
+        ft.returnList.push({ type: type, elem: elem, struct: struct, words: words });
+    };
+
+    $$parser.endFuncType = function (name) {
+        var ft = $$parser.functypes[name];
+        ft.complete = true;
+        ft.returnCount = ft.returnList.length;
+        if (ft.returnCount > 0) {
+            ft.returns      = ft.returnList[0].type;
+            ft.returnElem   = ft.returnList[0].elem;
+            ft.returnStruct = ft.returnList[0].struct;
+            var rw = 0;
+            for (var i = 0; i < ft.returnList.length; ++i) {
+                rw += (ft.returnList[i].type === 'S' ? ft.returnList[i].words : 1);
+            }
+            ft.returnWords = rw;
+        } else {
+            ft.returns = '?';
+            ft.returnWords = 0;
+        }
+    };
+
+    /* Does a concrete function signature satisfy a named funcptr type? Compares arity, each
+       parameter's type (+ struct / pointer-element), and the return shape. */
+    $$parser.funcTypeMatches = function (ftName, signature) {
+        var ft = $$parser.functypes[ftName];
+        if (!ft || !signature) return true;                       /* unknown → don't over-report */
+        var fp = ft.params || [], sp = signature.params || [];
+        if (fp.length !== sp.length) return false;
+        for (var i = 0; i < fp.length; ++i) {
+            if (fp[i].type !== sp[i].type) return false;
+            if (fp[i].type === 'S' && fp[i].struct !== sp[i].struct) return false;
+            if (fp[i].type === 'p' && fp[i].elem !== undefined && sp[i].elem !== undefined
+                    && fp[i].elem !== sp[i].elem) return false;
+        }
+        var sc = (signature.returnCount === undefined ? (signature.returns === '?' ? 0 : 1)
+                                                      : signature.returnCount);
+        if ((ft.returnCount || 0) !== sc) return false;
+        if (ft.returns !== signature.returns) return false;
+        if (ft.returns === 'S' && ft.returnStruct !== signature.returnStruct) return false;
+        return true;
+    };
+
     $$parser.elemVerbose = function (desc) {                      /// 'p:i' → "int pointer"; 'p:Filter' → "Filter pointer"
         if (desc === undefined) return 'untyped';
         var head = $$parser.descHead(desc);
         var tail = $$parser.descTail(desc);
+        if (head === 'F') {                                       /* funcptr: named type or bare "funcptr" */
+            return (tail !== undefined ? tail : 'funcptr');
+        }
         if (tail === undefined) {
-            return ($$parser.isStructAtom(head) ? head : $$parser.VERBOSE_TYPES[head]);
+            return (($$parser.isStructAtom(head) || $$parser.isFuncTypeAtom(head))
+                    ? head : $$parser.VERBOSE_TYPES[head]);
         }
         return $$parser.elemVerbose(tail) + ' pointer';           /* head is a 'p' level */
     };
@@ -1451,6 +1540,25 @@
                         'use a cast: (' + $$parser.elemVerbose(leftx.elem) + ' pointer)');
             }
         }
+        if (leftx.type === 'F' && $$parser.isFuncTypeAtom(leftx.elem)) {   /* named funcptr type target: check the signature */
+            var rop = rightx.operands && rightx.operands[1];
+            if (rop === '&NULL' && rightx.operands[2] === undefined) {
+                return;                                           /* nullfunc is assignable to any funcptr type */
+            }
+            if (rop && (rop[0] === '&' || rop[0] === '^')) {      /* a direct function reference */
+                var fe = $$parser.symbols.functions[rop.substr(1)];
+                if (fe && fe.signature && !$$parser.funcTypeMatches(leftx.elem, fe.signature)) {
+                    $$parser.fail('Function ' + rop.substr(1) + " does not match funcptr type '"
+                            + leftx.elem + "'", sourceCode, sourceOffset, 'E441',
+                            'check the parameter and return types against ' + leftx.elem);
+                }
+            } else if (rightx.type === 'F' && rightx.elem !== undefined
+                    && $$parser.isFuncTypeAtom(rightx.elem) && rightx.elem !== leftx.elem) {
+                $$parser.fail("Funcptr type mismatch (expected '" + leftx.elem + "', got '"
+                        + rightx.elem + "')", sourceCode, sourceOffset, 'E441',
+                        'cast explicitly if this is intentional');
+            }
+        }
     };
 
     /* --------------------------------------------------------- *
@@ -1533,8 +1641,15 @@
 
         /* element-type propagation (Impala 2) */
         if (operator === '=[]' && lelem !== undefined) {
-            leftx.type = $$parser.descHead(lelem);                /* typed element read: no cast needed */
-            leftx.elem = $$parser.descTail(lelem);
+            var _eh = $$parser.descHead(lelem);                   /* typed element read: no cast needed */
+            var _et = $$parser.descTail(lelem);
+            if (_et === undefined && $$parser.isFuncTypeAtom(_eh)) {
+                leftx.type = 'F';                                 /* funcptr-array element carries its funcptr type */
+                leftx.elem = _eh;
+            } else {
+                leftx.type = _eh;
+                leftx.elem = _et;
+            }
         } else if ((operator === '+' || operator === '-') && leftx.type === 'p') {
             leftx.elem = lelem;                                   /* pointer arithmetic preserves element type */
         } else {
@@ -2452,6 +2567,7 @@
         $$parser.symbols.functions = {};
         $$parser.symbols.defines  = {};
         $$parser.structs          = {};
+        $$parser.functypes        = {};
 
         /* reset deferred string tables */
         $$parser.strings.s = [];
@@ -2504,7 +2620,7 @@
 #################
 
 root        <-  _                                                     { $$parser.start(); }
-                (FuncDecl / StructDecl / ExternDecl / ConstDecl
+                (FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
                 / GlobalDecl / ';'_)* !.                              { $$parser.end(); }
 
 # ------------------------------------------------------------------
@@ -2523,7 +2639,42 @@ StructDecl  <-  STRUCT _ id:Identifier                               { $sname = 
                 '}' _                                                { $$parser.endStruct($sname); }
 
 # ------------------------------------------------------------------
-#  function declaration                                         
+#  named function-pointer type   (Impala 2 Step 3)
+#    functype Name(params) [returns t1, t2, …]
+#  Emits nothing — it only registers a signature usable as a base type.
+# ------------------------------------------------------------------
+FuncTypeDecl <- FUNCTYPE _ id:Identifier                             { $ftname = $id; $$parser.beginFuncType($id, $$s, $$i); }
+                '(' _
+                ( p:TypeDeclr                                        { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name); }
+                  ( ',' _ p:TypeDeclr                                { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name); }
+                  )*
+                )?
+                ')' _
+                ( RETURNS _ r:TypeDeclr                              { $$parser.addFuncTypeReturn($ftname, $r.type, $r.elem, $r.struct, $r.words, $$s, $$i); }
+                  ( ',' _ r:TypeDeclr                                { $$parser.addFuncTypeReturn($ftname, $r.type, $r.elem, $r.struct, $r.words, $$s, $$i); }
+                  )*
+                )?                                                   { $$parser.endFuncType($ftname); }
+
+# A type with optional variable name (funcptr-type params & returns allow types-only).
+TypeDeclr   <-  base:TypeBase                                        { $desc = $base; }
+                ( POINTER _                                          { $desc = 'p:' + $desc; }
+                )*
+                ( id:Identifier                                      { $$.name = $id; }
+                )?                                                   {
+                                                                         var head = $$parser.descHead($desc);
+                                                                         var tail = $$parser.descTail($desc);
+                                                                         if (tail === undefined && $$parser.isStructAtom(head)) {
+                                                                             $$.type = 'S'; $$.struct = head; $$.elem = undefined;
+                                                                             $$.words = $$parser.structWords(head);
+                                                                         } else if (tail === undefined && $$parser.isFuncTypeAtom(head)) {
+                                                                             $$.type = 'F'; $$.elem = head; $$.struct = undefined; $$.words = 1;
+                                                                         } else {
+                                                                             $$.type = head; $$.elem = tail; $$.struct = undefined; $$.words = undefined;
+                                                                         }
+                                                                     }
+
+# ------------------------------------------------------------------
+#  function declaration
 # ------------------------------------------------------------------
 FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                          assert($$parser.validateStock('%'));
@@ -3111,7 +3262,7 @@ LocalsDecl  <-                                                        {
 # A leading type atom: a primitive keyword, or the name of a defined struct.
 TypeBase    <-  t:BASE_TYPE _                                         { $$ = $$parser.CASTS_TO_TYPES[$t]; }
               / id:Identifier                                        {
-                                                                         if (!$$parser.isStructAtom($id))
+                                                                         if (!$$parser.isStructAtom($id) && !$$parser.isFuncTypeAtom($id))
                                                                              $$parser.fail('Unknown type ' + $id, $$s, $$i, 'E413');
                                                                          $$ = $id;
                                                                      }
@@ -3127,6 +3278,11 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                              $$.struct = head;
                                                                              $$.elem = undefined;
                                                                              $$.words = $$parser.structWords(head);
+                                                                         } else if (tail === undefined && $$parser.isFuncTypeAtom(head)) {
+                                                                             $$.type = 'F';           /* named funcptr type → a funcptr carrying its type tag */
+                                                                             $$.elem = head;
+                                                                             $$.struct = undefined;
+                                                                             $$.words = undefined;    /* scalar funcptr: a single word, no size operand */
                                                                          } else {
                                                                              $$.type = head;
                                                                              $$.elem = tail;
@@ -3271,6 +3427,9 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            if (_e && _e.signature && _e.signature.returnWords !== undefined
                                                                    && _e.signature.returnWords > 1)
                                                                _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */
+                                                       } else if (_c.type === 'F' && $$parser.isFuncTypeAtom(_c.elem)) {
+                                                           var _ft = $$parser.functypes[_c.elem];   /* indirect call through a named funcptr type */
+                                                           if (_ft.returnWords > 1) _rs = _ft.returnWords;
                                                        }
                                                        $$.retSlots = _rs;
                                                        $$.words = 0;                            /* input words placed so far (struct args span >1) */
@@ -3303,6 +3462,8 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            if (entry && entry.kind === 'FUNC' && entry.signature) {
                                                                signature = entry.signature;
                                                            }
+                                                       } else if (callee.type === 'F' && $$parser.isFuncTypeAtom(callee.elem)) {
+                                                           signature = $$parser.functypes[callee.elem];   /* indirect call: check against the funcptr type */
                                                        }
 
                                                        if (signature && signature.returnCount > 1 && !$$parser.destructuring) {
@@ -3903,7 +4064,7 @@ IntegerLiteral  <-  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
 StringLiteral   <-  $$=( '"' ( !["\\\0-\37] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
 
 KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXTERN / FLOAT / FLOOR / FOR / FROM
-                / FTOI / FUNCPTR / FUNCTION / GLOBAL / GOTO / IF / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
+                / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
                 / POINTER / READONLY / RETURNS / SIZEOF / STRUCT / SWITCH / TEMPORARY / TO / WHILE
 
 ABS         <-  'abs' !SYMBOL_CHAR          ARRAY       <-  'array' !SYMBOL_CHAR
@@ -3915,6 +4076,7 @@ EXTERN      <-  'extern' !SYMBOL_CHAR       FLOAT       <-  'float' !SYMBOL_CHAR
 FLOOR       <-  'floor' !SYMBOL_CHAR        FOR         <-  'for' !SYMBOL_CHAR
 FROM        <-  'from' !SYMBOL_CHAR
 FTOI        <-  'ftoi' !SYMBOL_CHAR         FUNCPTR     <-  'funcptr' !SYMBOL_CHAR
+FUNCTYPE    <-  'functype' !SYMBOL_CHAR
 FUNCTION    <-  'function' !SYMBOL_CHAR     GLOBAL      <-  'global' !SYMBOL_CHAR
 GOTO        <-  'goto' !SYMBOL_CHAR         IF          <-  'if' !SYMBOL_CHAR
 INT         <-  'int' !SYMBOL_CHAR          ITOF        <-  'itof' !SYMBOL_CHAR

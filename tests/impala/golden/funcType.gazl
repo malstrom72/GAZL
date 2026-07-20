@@ -1,0 +1,119 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 12:1
+; signature extern native printInt() -> unknown @ 20:1
+; signature extern native printLF() -> unknown @ 22:1
+
+;-----------------------------------------------------------------------------
+doubleFirst:	FUNC	; signature func doubleFirst(int-ptr data) -> int @ 22:22
+	$r:	OUTi
+	$data:	INPp
+;-----------------------------------------------------------------------------
+		PEEK %0 $data #0	; r = data[0] * 2
+		MULi $r %0 #2
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+add:	FUNC	; signature func add(int a, int b) -> int @ 23:14
+	$r:	OUTi
+	$a:	INPi
+	$b:	INPi
+;-----------------------------------------------------------------------------
+		ADDi $r $a $b	; r = a + b
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+mul:	FUNC	; signature func mul(int a, int b) -> int @ 24:14
+	$r:	OUTi
+	$a:	INPi
+	$b:	INPi
+;-----------------------------------------------------------------------------
+		MULi $r $a $b	; r = a * b
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+make:	FUNC	; signature func make(int a, int b) -> P @ 25:15
+	$p:	PARA *2
+	$a:	INPi
+	$b:	INPi
+;-----------------------------------------------------------------------------
+		ADDi $p:0 $a $b	; p.x = a + b
+		SUBi $p:1 $a $b	; p.y = a - b
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+split:	FUNC	; signature func split(int n) -> (int, int) @ 26:16
+	$lo:	OUTi
+	$hi:	OUTi
+	$n:	INPi
+;-----------------------------------------------------------------------------
+		DIVi $lo $n #2	; lo = n / 2
+		DIVi %0 $n #2	; hi = n - n / 2
+		SUBi $hi $n %0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 28:15
+		PARA *1
+	$cb:	LOCp
+	$ops:	LOCA *2
+	$mk:	LOCp
+	$sp:	LOCp
+	$v:	LOCA *2
+	$buf:	LOCA *1
+	$a:	LOCi
+	$b:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $buf:0 #21 	; buf[0] = 21
+		MOVp $cb &doubleFirst 	; cb = doubleFirst
+		ADRL %2 $buf:0 *0	; printInt(cb(&buf[0]))
+		CALL $cb %1 *2	; expects function(ptr) -> int @ 33:22
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 33:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 33:34
+		MOVp $ops:0 &add 	; ops[0] = add
+		MOVp $ops:1 &mul 	; ops[1] = mul
+		MOVi $a #0 	; a = 0
+		MOVi %2 #6 	; printInt(ops[a](6, 7))
+		MOVi %3 #7 
+		GETL %4 $ops $a	; expects function(int, int) -> int @ 36:30
+		CALL %4 %1 *3
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 36:31
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 36:42
+		MOVi $a #1 	; a = 1
+		MOVi %2 #6 	; printInt(ops[a](6, 7))
+		MOVi %3 #7 
+		GETL %4 $ops $a	; expects function(int, int) -> int @ 37:30
+		CALL %4 %1 *3
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 37:31
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:42
+		MOVp $mk &make 	; mk = make
+		MOVi %2 #10 	; v = mk(10, 3)
+		MOVi %3 #3 
+		CALL $mk %0 *4	; expects function(int, int) -> P @ 39:26
+		ADRL %2 %0 *2
+		ADRL %3 $v *2
+		COPY %3 %2 *2
+		MOVi %1 $v:0 	; printInt(v.x)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:15
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:26
+		MOVi %1 $v:1 	; printInt(v.y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:15
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:26
+		MOVp $sp &split 	; sp = split
+		MOVi %2 #9 	; a, b = sp(9)
+		CALL $sp %0 *3	; expects function(int) -> int @ 43:26
+		MOVi $a %0 
+		MOVi $b %1 
+		MOVi %1 $a 	; printInt(a)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:24
+		MOVi %1 $b 	; printInt(b)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 45:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 45:24
+		RETU   	; }
