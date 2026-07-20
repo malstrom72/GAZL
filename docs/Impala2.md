@@ -329,10 +329,15 @@ regression, full stop. This is wired into the existing JSPEG parity harness
 
 ---
 
-## Step 2: Structs (proposed)
+## Step 2: Structs (partially implemented)
 
-> Proposed design — settled at the syntax/semantics level, not scheduled for implementation until
-> Step 1 lands. Recorded in full so decisions made here aren't relitigated by accident.
+> **Slice 1 implemented** (`tests/impala/sources/structPointers.impala`): `struct` definitions,
+> field layout, `sizeof(Type)`, struct-typed **pointers**, struct-pointer casts
+> `(Filter pointer) raw`, `->`/`.` field access to **scalar** fields through a pointer, and
+> `extern struct` forward declarations (mutual pointer types). Deferred to later slices — the
+> multi-word-value rework: struct **values** as locals/params/returns, nested inline field chains
+> (`fp->sub.field`), struct arrays, brace initializers, and by-value passing/return. The remainder
+> of this section is the settled design for those slices.
 
 A struct is a **named heterogeneous layout over words** — pure naming sugar over the offset
 constants firmware authors hand-roll today (`const int Filter_cutoff = 0` plus casts). It erases to
