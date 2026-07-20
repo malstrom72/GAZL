@@ -1,0 +1,27 @@
+ ; Compiled with Impala version 1.0
+
+ ; signatures version=1
+
+ ;-----------------------------------------------------------------------------
+ used:				FUNC		; signature func used(int x) -> int @ 2:15
+ 					$r:			OUTi
+ 					$x:			INPi
+ ;-----------------------------------------------------------------------------
+ 								ADDi $r $x #1					; r = x + 1
+ 								RETU   							; }
+
+
+ ;-----------------------------------------------------------------------------
+ ; signature extern native printInt() -> unknown @ 9:1
+ ; signature extern native printLF() -> unknown @ 10:1
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC		; signature export func main() -> void @ 10:22
+ 								PARA *1
+ ;-----------------------------------------------------------------------------
+ 								MOVi %2 #41 					; printInt(used(41))
+ 								CALL &used %1 *2				; expects used(int) -> int @ 10:43
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 10:44
+ 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ 10:55
+ 								RETU   							; }
+

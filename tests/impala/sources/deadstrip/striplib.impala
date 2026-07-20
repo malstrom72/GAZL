@@ -1,0 +1,2 @@
+function used(int x) returns int r { r = x + 1; }
+function unused(int x) returns int r { r = x + 999; }

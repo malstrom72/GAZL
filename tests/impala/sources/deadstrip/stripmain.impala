@@ -1,0 +1,5 @@
+const int DEBUG = 1
+import "striplib.impala"
+extern native printInt
+extern native printLF
+export function main() { printInt(used(41)); printLF(); }

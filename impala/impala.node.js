@@ -41,7 +41,7 @@ function readStdinLatin1Sync() {
 function usageAndExit() {
 	console.error('Usage:');
 	console.error('  node impala/impala.node.js compile [--legacy] [<input.impala>] [<output.gazl>|-] [<random id>]');
-	console.error('  node impala/impala.node.js build [--legacy] <root.impala> [<output.gazl>|-] [<random id>]');
+	console.error('  node impala/impala.node.js build [--legacy] [--dead-strip] <root.impala> [<output.gazl>|-] [<random id>]');
 	console.error('  node impala/impala.node.js run [--legacy] [<input.impala>]');
 	console.error('  --legacy downgrades Impala 2 strict-expression errors to warnings');
 	process.exit(1);
@@ -105,20 +105,124 @@ function concatenateClosure(rootPath) {
 	return { units, combined };
 }
 
+// --- Step 5: --dead-strip -----------------------------------------------------
+// Link-time dead-code elimination on the finished .gazl. Roots are `export`ed symbols (read
+// from the `; signature ... export ...` rows); any FUNC or labeled data/DEF block that is
+// neither exported nor reachable from an export is dropped. Conservative: anything it cannot
+// classify with confidence is kept, and it only runs when explicitly requested.
+const TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // a named top-level definition line
+const ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
+const SEPARATOR_RE = /^\s*;-{3,}/;
+const COMMENT_RE = /^\s*;/;
+const BLANK_RE = /^\s*$/;
+
+function stripComment(line) {
+	const at = line.indexOf(';');
+	return at >= 0 ? line.slice(0, at) : line;
+}
+
+function isFuncDef(line) {
+	const m = TOP_LABEL_RE.exec(line);
+	return m && /^FUNC\b/.test(m[2]) ? m[1] : null;
+}
+
+function isDataDef(line) {
+	const m = TOP_LABEL_RE.exec(line);
+	if (!m) return null;
+	return /^(?:DAT[ifps]?|DATA|GLOB|CNST|TEMP|!\s*DEF[ifp]?)\b/.test(m[2]) ? m[1] : null;
+}
+
+// A function body ends only at the next named definition or a standalone `; signature` row
+// (extern decls). Internal `;----` separators, `; expects` comments and blank lines stay in
+// the body — the code section of every function is preceded by its own `;----` separator.
+function isBoundary(line) {
+	return !!(isFuncDef(line) || isDataDef(line) || /^\s*;\s*signature\b/.test(line));
+}
+
+function collectRefs(text) {
+	const refs = [];
+	const re = /[&^#]([A-Za-z_]\w*)/g;   // &func/&global, ^native, #const — names only (numbers skip)
+	let m;
+	while ((m = re.exec(text)) !== null) refs.push(m[1]);
+	return refs;
+}
+
+function deadStrip(gazl) {
+	const lines = gazl.split('\n');
+	const blocks = [];   // { kind:'func'|'data'|'loose', name, start, end, refs:[], exported }
+	let i = 0;
+	while (i < lines.length) {
+		const line = lines[i];
+		const fname = isFuncDef(line);
+		if (fname) {
+			const start = i++;
+			while (i < lines.length && !isBoundary(lines[i])) i++;   // body: indented decls/instructions/blanks
+			blocks.push({ kind: 'func', name: fname, start, end: i });
+			continue;
+		}
+		const dname = isDataDef(line);
+		if (dname) {
+			// pull a preceding anonymous allocation line into this block so it strips together
+			let start = i;
+			const prev = blocks[blocks.length - 1];
+			if (prev && prev.kind === 'loose' && ANON_ALLOC_RE.test(lines[prev.start]) && prev.end === i) {
+				blocks.pop();
+				start = prev.start;
+			}
+			blocks.push({ kind: 'data', name: dname, start, end: i + 1 });
+			i++;
+			continue;
+		}
+		blocks.push({ kind: 'loose', start: i, end: i + 1 });
+		i++;
+	}
+
+	const byName = {};
+	const roots = [];
+	for (const b of blocks) {
+		if (b.kind === 'loose') continue;
+		byName[b.name] = b;
+		const defLine = lines[b.start];
+		b.refs = [];
+		for (let k = b.start; k < b.end; ++k) b.refs.push(...collectRefs(stripComment(lines[k])));
+		if (/;\s*signature\s+export\b/.test(defLine)) roots.push(b.name);
+	}
+
+	const reachable = new Set();
+	const work = roots.slice();
+	while (work.length) {
+		const name = work.pop();
+		if (reachable.has(name) || !byName[name]) continue;
+		reachable.add(name);
+		for (const r of byName[name].refs) if (byName[r]) work.push(r);
+	}
+
+	const kept = [];
+	for (const b of blocks) {
+		if (b.kind === 'loose' || reachable.has(b.name)) {
+			for (let k = b.start; k < b.end; ++k) kept.push(lines[k]);
+		}
+	}
+	return kept.join('\n');
+}
+
 // Build a linked .gazl program from a root unit. Exposed for tests.
 function buildProgram(rootPath, options = {}) {
 	const { combined, units } = concatenateClosure(rootPath);
-	const output = compileWithJsImpala(combined, {
+	let output = compileWithJsImpala(combined, {
 		randomId: options.randomId,
 		retabulate: true,
 		trailingNewline: true,
 		sourceName: rootPath,
 		legacy: options.legacy,
 	});
+	if (options.deadStrip) {
+		output = deadStrip(output);
+	}
 	return { output, unitCount: units.length };
 }
 
-function buildCommand(args, legacy) {
+function buildCommand(args, legacy, deadStrip) {
 	if (args.length === 0) {
 		console.error('build requires a root .impala file');
 		process.exit(1);
@@ -130,7 +234,7 @@ function buildCommand(args, legacy) {
 	let output;
 	let unitCount;
 	try {
-		const built = buildProgram(rootPath, { randomId, legacy });
+		const built = buildProgram(rootPath, { randomId, legacy, deadStrip });
 		output = built.output;
 		unitCount = built.unitCount;
 	} catch (err) {
@@ -265,13 +369,14 @@ function runCommand(args, legacy) {
 function main() {
 	const argv = process.argv.slice(2);
 	const legacy = argv.includes('--legacy');
-	const [cmd, ...rest] = argv.filter((arg) => arg !== '--legacy');
+	const deadStrip = argv.includes('--dead-strip');
+	const [cmd, ...rest] = argv.filter((arg) => arg !== '--legacy' && arg !== '--dead-strip');
 	if (!cmd) return usageAndExit();
 	switch (cmd) {
 		case 'compile':
 			return compileCommand(rest, legacy);
 		case 'build':
-			return buildCommand(rest, legacy);
+			return buildCommand(rest, legacy, deadStrip);
 		case 'run':
 			return runCommand(rest, legacy);
 		default:
@@ -279,7 +384,7 @@ function main() {
 	}
 }
 
-module.exports = { buildProgram, concatenateClosure, resolveImportClosure, scanImports };
+module.exports = { buildProgram, concatenateClosure, resolveImportClosure, scanImports, deadStrip };
 
 if (require.main === module) {
 	main();
