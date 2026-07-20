@@ -1234,9 +1234,29 @@
             $$parser.setPlace(x, bk, base, total, field.struct);
             return;
         }
-        if (field.type === 'A') {
-            $$parser.fail('Array field ' + fieldName + ' access is not yet supported',
-                    sourceCode, sourceOffset, 'E418');
+        if (field.type === 'A') {                                 /* array field decays to a typed pointer at base+offset */
+            if (bk === 'globalAddr') {
+                $$parser.makeMeta(x, ':=', 'p', undefined, base + (total ? ':' + total : ''), undefined);
+            } else if (bk === 'pointer') {
+                if (total === 0) {
+                    $$parser.makeMeta(x, ':=', 'p', undefined, base, undefined);
+                } else {
+                    var pt = $$parser.borrow('%');
+                    $$parser.emit('+', 'p', pt, base, '#' + total);
+                    $$parser.makeMeta(x, ':=', 'p', undefined, pt, undefined);
+                }
+            } else {                                              /* local: ADRL then optional add */
+                var lt = $$parser.borrow('%');
+                $$parser.emit('=&', 'p', lt, base, '*' + $$parser.structWords(structName));
+                if (total !== 0) {
+                    $$parser.emit('+', 'p', lt, lt, '#' + total);
+                }
+                $$parser.makeMeta(x, ':=', 'p', undefined, lt, undefined);
+            }
+            x.place = false;
+            x.type  = 'p';
+            $$parser.setElem(x, field.elem);
+            return;
         }
 
         /* terminal scalar field */

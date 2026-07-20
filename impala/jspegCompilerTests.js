@@ -1192,6 +1192,28 @@ const typedPointerCases = [
 		source: ["struct V { int n }", "const int N = 4", "global V array bank[N]"].join("\n"),
 		expectError: "must be a numeric literal",
 	},
+	{
+		label: "array fields inside a struct index correctly",
+		source: [
+			"struct F { float array state[4]; int taps }",
+			"global F gf",
+			"function p(F pointer f, int i, float x) { f->state[i] = x; }",
+			"function main() locals F lf, int i, float y {",
+			"\tlf.state[0] = 1.0; y = lf.state[2];",
+			"\tglobal gf.state[1] = 2.0;",
+			"}",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "struct array-of-struct field indexes to a nested place",
+		source: [
+			"struct Inner { float a }",
+			"struct Outer { Inner array items[3] }",
+			"function main() locals Outer o { o.items[1].a = 0.5; }",
+		].join("\n"),
+		expectError: null,
+	},
 ];
 
 for (const testCase of typedPointerCases) {

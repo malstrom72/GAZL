@@ -31,9 +31,11 @@ compare) were protecting. The one-word temporary invariant is never touched. Ris
 > `GLOB/LOCA *(count*sizeof)`; a struct array decays to a struct pointer, and subscripting a struct
 > pointer (`structSubscript`) yields a place — constant index folds `C*sizeof` into the offset,
 > dynamic index emits one `MULi` stride; global bases use `&name:off`, runtime pointers use
-> PEEK/POKE; struct-array size must be a numeric literal for now, E414). Deferred still: array-field
-> access (arrays *inside* a struct, E418), brace initializers (E421), by-VALUE params/returns.
-> Original design notes retained below.
+> PEEK/POKE; struct-array size must be a numeric literal for now, E414). Slice 7: **array fields**
+> inside a struct (`struct Filter { float array state[4] }` → `f.state[i]`) — the array field
+> decays to a typed pointer at base+offset (global `&v:off`, local ADRL+add, pointer base+add),
+> subscript handles the rest incl. arrays-of-structs inside a struct. Deferred still: brace
+> initializers (E421), by-VALUE params/returns. Original design notes retained below.
 
 
 A **place** is carried on the expression meta record:

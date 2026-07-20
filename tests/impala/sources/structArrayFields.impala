@@ -1,0 +1,38 @@
+/*
+	Impala 2 Step 2 (slice 7): array fields inside a struct (filter delay lines, the common
+	DSP shape). An array field decays to a typed pointer at base+offset; subscript then works
+	as usual — in local, global, and through-pointer struct places.
+	Expected when run (GAZLCmd structArrayFields.gazl main): 1.0 1.5 7.0 9.0.
+*/
+
+const int DEBUG = 1
+
+struct Filter {
+	float array state[4]
+	int taps
+}
+
+extern native printFloat
+extern native printLF
+
+global Filter gf
+
+function process(Filter pointer f, int i, float x)
+{
+	f->state[i] = x;					// array field through a pointer
+}
+
+function main()
+locals Filter lf, int i
+{
+	lf.taps = 4;
+	for (i = 0 to 4) lf.state[i] = itof(i) * 0.5;	// local struct array field, dynamic index
+	printFloat(lf.state[2]); printLF();
+	printFloat(lf.state[3]); printLF();
+
+	global gf.state[0] = 7.0;						// global struct array field
+	printFloat(global gf.state[0]); printLF();
+
+	process(&lf, 1, 9.0);
+	printFloat(lf.state[1]); printLF();
+}

@@ -1246,9 +1246,29 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             setPlace(x, bk, base, total, field.struct);
             return;
         }
-        if (field.type === 'A') {
-            fail('Array field ' + fieldName + ' access is not yet supported',
-                    sourceCode, sourceOffset, 'E418');
+        if (field.type === 'A') {                                 /* array field decays to a typed pointer at base+offset */
+            if (bk === 'globalAddr') {
+                makeMeta(x, ':=', 'p', undefined, base + (total ? ':' + total : ''), undefined);
+            } else if (bk === 'pointer') {
+                if (total === 0) {
+                    makeMeta(x, ':=', 'p', undefined, base, undefined);
+                } else {
+                    var pt = borrow('%');
+                    emit('+', 'p', pt, base, '#' + total);
+                    makeMeta(x, ':=', 'p', undefined, pt, undefined);
+                }
+            } else {                                              /* local: ADRL then optional add */
+                var lt = borrow('%');
+                emit('=&', 'p', lt, base, '*' + structWords(structName));
+                if (total !== 0) {
+                    emit('+', 'p', lt, lt, '#' + total);
+                }
+                makeMeta(x, ':=', 'p', undefined, lt, undefined);
+            }
+            x.place = false;
+            x.type  = 'p';
+            setElem(x, field.elem);
+            return;
         }
 
         /* terminal scalar field */
