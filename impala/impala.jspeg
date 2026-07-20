@@ -1147,6 +1147,38 @@
         slot.elem      = structName;
     };
 
+    /* structPtr[i]  →  a struct place at ptr + i*sizeof (struct arrays decay to struct pointers) */
+    $$parser.structSubscript = function (x, idx, sourceCode, sourceOffset) {
+        x = metaSlot(x);
+        idx = metaSlot(idx);
+        var structName = x.elem;
+        var sz = $$parser.structWords(structName);
+        var basePtr = $$parser.makeRValue(x);
+        var idxRV = $$parser.makeRValue(idx);
+
+        if (/^#[0-9]+$/.test(idxRV)) {                            /* constant index → fold into the place offset */
+            var off = parseInt(idxRV.substr(1), 10) * sz;
+            /* a global-address base (&name) stays in global memory (=* / &name:off);
+               a runtime pointer base uses PEEK/POKE. */
+            $$parser.setPlace(x, (basePtr[0] === '&' ? 'globalAddr' : 'pointer'), basePtr, off, structName);
+            $$parser.returnBack(idxRV);
+            return;
+        }
+
+        var addr = $$parser.borrow('%');                          /* dynamic index → ptr + i*sizeof (a runtime pointer) */
+        if (sz === 1) {
+            $$parser.emit('+', 'p', addr, basePtr, idxRV);
+        } else {
+            var scaled = $$parser.borrow('%');
+            $$parser.emit('*', 'i', scaled, idxRV, '#' + sz);
+            $$parser.emit('+', 'p', addr, basePtr, scaled);
+            $$parser.returnBack(scaled);
+        }
+        $$parser.returnBack(idxRV);
+        $$parser.returnBack(basePtr);
+        $$parser.setPlace(x, 'pointer', addr, 0, structName);
+    };
+
     /* materialize a place's address into a pointer operand (borrows a temp for locals) */
     $$parser.placeAddress = function (place) {
         place = metaSlot(place);
@@ -2411,7 +2443,7 @@ inp:ArgsDecl ')'_
                                                                                      '$' + v.name,
                                                                                      v.type,
                                                                                      false,
-                                                                                     (v.size !== undefined ? '*' + v.size : undefined),
+                                                                                     (v.words !== undefined ? '*' + v.words : undefined),
                                                                                      $$s, $$i,
                                                                                      undefined,
                                                                                      v.elem
@@ -2628,7 +2660,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 $a.name,
                                                                                 'A',
                                                                                 ($section === 'CNST'),
-                                                                                '*' + $a.size,
+                                                                                '*' + $a.words,
                                                                                 $$s, $$i,
                                                                                 $$parser.formatGlobalSignatureComment(
                                                                                     $section,
@@ -2786,15 +2818,22 @@ ArrayDecl   <-                                                        { $desc = 
                 ARRAY _ id:Identifier
                 '[' _ x:Expr ']' _                                    {
                                                                          $size = $$parser.makeConstant($x, 'i', $$s, $$i);
-                                                                         if ($desc !== undefined
-                                                                                 && $$parser.descTail($desc) === undefined
-                                                                                 && $$parser.isStructAtom($$parser.descHead($desc)))
-                                                                             $$parser.fail('Arrays of struct values are not yet supported'
-                                                                                     + ' (use a pointer element)', $$s, $$i, 'E414');
                                                                          $$.type = 'A';
                                                                          $$.elem = $desc;
                                                                          $$.name = $id;
                                                                          $$.size = $$parser.dropHash($size);
+                                                                         /* allocation words = count * element size (structs are multi-word) */
+                                                                         if ($desc !== undefined
+                                                                                 && $$parser.descTail($desc) === undefined
+                                                                                 && $$parser.isStructAtom($$parser.descHead($desc))) {
+                                                                             if (!/^[0-9]+$/.test('' + $$.size))
+                                                                                 $$parser.fail('A struct array size must be a numeric literal for now',
+                                                                                         $$s, $$i, 'E414');
+                                                                             $$.words = parseInt($$.size, 10)
+                                                                                     * $$parser.structWords($$parser.descHead($desc));
+                                                                         } else {
+                                                                             $$.words = $$.size;   /* scalar element: 1 word each */
+                                                                         }
                                                                          $$parser.returnBack($size);
                                                                      }
 
@@ -2874,8 +2913,13 @@ PrePost     <-  (op:PREFIX_OP _
                                                      } }
                 / Value (FuncCall / Subscript / FieldAccess)*
 
-Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry)
-                                                       $$parser.binaryOp('=[]', $$, $s, $$s, $$i); }
+Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry) {
+                                                       var sb = metaSlot($$);
+                                                       if (sb.type === 'p' && $$parser.isStructAtom(sb.elem))
+                                                           $$parser.structSubscript($$, $s, $$s, $$i);
+                                                       else
+                                                           $$parser.binaryOp('=[]', $$, $s, $$s, $$i);
+                                                     } }
 
 FieldAccess <-  '->'_ f:Identifier                 { if (!$$parser.dry)
                                                        $$parser.fieldAccess($$, $f, true, $$s, $$i); }

@@ -1164,6 +1164,34 @@ const typedPointerCases = [
 		source: ["struct S { int a }", "global S g = 0"].join("\n"),
 		expectError: "Struct initializers are not yet supported",
 	},
+	{
+		label: "struct arrays index to a struct place (constant and dynamic)",
+		source: [
+			"struct V { int n; float g }",
+			"global V array bank[4]",
+			"function main() locals V array loc[2], int i, float f {",
+			"\tglobal bank[0].n = 1; f = global bank[2].g;",
+			"\tfor (i = 0 to 4) global bank[i].n = i;",
+			"\tloc[1].g = 0.5;",
+			"}",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "address-of a struct array element is a typed pointer",
+		source: [
+			"struct V { int n }",
+			"global V array bank[3]",
+			"function use(V pointer p) { p->n = 9; }",
+			"function main() { use(&global bank[1]); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct array size must be a numeric literal",
+		source: ["struct V { int n }", "const int N = 4", "global V array bank[N]"].join("\n"),
+		expectError: "must be a numeric literal",
+	},
 ];
 
 for (const testCase of typedPointerCases) {

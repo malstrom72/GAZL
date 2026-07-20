@@ -1,0 +1,38 @@
+/*
+	Impala 2 Step 2 (slice 6): arrays of struct VALUES — voice banks, the common DSP shape.
+	Allocation is count*sizeof; a struct-array element indexes to a place with sizeof stride
+	(constant index folds into the offset; dynamic index emits one MULi). Works in global and
+	local memory, supports address-of an element and whole-struct element copy.
+	Expected when run (GAZLCmd structArrays.gazl main): 10 20 30 0.9 20 30.
+*/
+
+const int DEBUG = 1
+
+struct Voice { int note; float gain }
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global Voice array bank[3]
+
+function main()
+locals Voice array vlocals[2], int i, Voice pointer vp
+{
+	global bank[0].note = 10;
+	global bank[1].note = 20;
+	global bank[2].note = 30;
+	for (i = 0 to 3) {
+		printInt(global bank[i].note); printLF();	// dynamic index, sizeof stride
+	}
+
+	vlocals[0].gain = 0.5;
+	vlocals[1].gain = 0.9;
+	printFloat(vlocals[1].gain); printLF();			// local struct array, constant index
+
+	vp = &global bank[1];							// address of an array element
+	printInt(vp->note); printLF();
+
+	global bank[0] = global bank[2];				// whole-struct element copy
+	printInt(global bank[0].note); printLF();
+}

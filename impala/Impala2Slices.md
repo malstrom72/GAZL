@@ -27,8 +27,13 @@ compare) were protecting. The one-word temporary invariant is never touched. Ris
 > (materializes the place address; `&v.field` too), enabling `f(&v)` by-pointer calls. Slice 5:
 > struct-value **globals** (`global Voice voice` → zeroed `GLOB *sizeof`; `globalAddr` base kind —
 > field access `&name:off` in global memory, `&global v` addresses it, global↔local `COPY`). The
-> place model now covers all three base kinds. Deferred still: array-field access, struct arrays,
-> brace initializers (E421), by-VALUE params/returns. Original design notes retained below.
+> place model now covers all three base kinds. Slice 6: struct **arrays** (`Voice array bank[8]` →
+> `GLOB/LOCA *(count*sizeof)`; a struct array decays to a struct pointer, and subscripting a struct
+> pointer (`structSubscript`) yields a place — constant index folds `C*sizeof` into the offset,
+> dynamic index emits one `MULi` stride; global bases use `&name:off`, runtime pointers use
+> PEEK/POKE; struct-array size must be a numeric literal for now, E414). Deferred still: array-field
+> access (arrays *inside* a struct, E418), brace initializers (E421), by-VALUE params/returns.
+> Original design notes retained below.
 
 
 A **place** is carried on the expression meta record:
