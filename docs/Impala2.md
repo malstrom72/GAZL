@@ -510,28 +510,43 @@ codegen never depends on how the struct is used elsewhere in the function.
 
 ### Passing, returning, copying
 
-- **Convention: structs travel by pointer** — parameters and returns both; `&f` on a local struct
-  value is cheap (`ADRL`). This is a *choice*, not a VM constraint: GAZL supports multiple `OUT`
-  words per function and `PARA` sections cover multi-word input/output blocks, so by-value struct
-  parameters and returns are fully expressible. They are **deferred deliberately**: one convention
-  beats two, and adding by-value later is purely additive. The known counterargument, recorded for
-  that future decision: a small struct (a complex pair, a stereo frame) passed by value costs N
-  copied words at the call and then *free direct-operand access* inside the callee, versus one
-  `PEEK` per field access through a pointer — for hot inner loops, by-value small structs would be
-  strictly faster. Revisit when real firmware demonstrates the need. (Multiple scalar return
-  values ride the same multi-`OUT` capability — see
-  [Step 4: Multiple return values](#step-4-multiple-return-values-proposed).)
+**Both by-value and by-pointer are legal, chosen by the parameter/return declaration** *(decided
+2026-07-20)*. An earlier draft deferred by-value out of a vague "one convention beats two" instinct;
+the `a = b` decision already demolished that — a by-value struct is the *same* `COPY *sizeof`
+instruction at a call boundary, and by the project's own sugar rule the two modes are not two
+spellings of one thing: `f(v)` and `f(&v)` compile to different GAZL (an N-word copy vs one pointer
+word) with different semantics (isolation vs aliasing). Keeping both is the rule that killed `+=`
+working *for* us.
+
+- **By-value parameter** (`function tick(Filter f)`): the caller copies `sizeof(Filter)` words into
+  the callee's parameter window; inside the callee the fields are **direct, free window operands**
+  (no `PEEK`). The window is **read-only**, inheriting 1.0's `INP`/parameter semantics — you cannot
+  assign to `f` or a field of it, and you cannot take `&f` of a parameter (already illegal in 1.0).
+  This makes by-value the read-only, isolated, cache-friendly mode; it is *strictly faster* than a
+  pointer for hot inner loops on small structs (stereo frames, complex pairs, biquad coefficients).
+- **By-pointer parameter** (`function tick(Filter pointer f)`): one pointer word; fields are `PEEK`
+  through the pointer; the callee can mutate the caller's struct and alias it. This is the
+  mutation/aliasing mode.
+- **No decay in either direction.** `tick(v)` where the parameter is `Filter pointer` is an error
+  (`note: pass a pointer: &v`); `tick(&v)` where the parameter is `Filter` is an error
+  (`note: pass the value: v`). The call site therefore always shows which mode is in effect —
+  more marker-honest than C, where the same `f(v)` silently copies or not depending on the
+  callee. (Array *fields* still follow 1.0 array decay: `f.state` yields a typed pointer.)
+- **By-value return** (`returns Filter out`): N `OUT` words — a struct return *is* a multiple return
+  whose slots carry names and offsets. The callee writes `out.cutoff` as free direct `OUT`-slot
+  access; the caller consumes it into a struct place, statement-level (`v = makeFilter(...)`), the
+  same restriction as `a = b`. **This makes [Step 4 (multiple return values)](#step-4-multiple-return-values-proposed)
+  a prerequisite of struct returns** — same multi-`OUT` window layout, one implementation. By-value
+  *parameters* need only `PARA` sections and can land without Step 4; by-value *returns* need it.
 - **Whole-struct assignment `a = b` is allowed, statement-level only.** It lowers to exactly one
   `COPY *sizeof(T)` — the instruction one would hand-write — with the size known at compile time
   from the declared types. It is not an expression: a struct value does not fit an expression slot,
   so `a = b = c` and struct assignment nested in a larger expression are errors. `*dst = *src`
   (both typed struct pointers) is the same statement through places. Explicit `copy()` remains
   available and equivalent.
-- **Passing a value where a pointer is expected requires explicit `&`** *(decided)*:
-  `process(&f)`, never `process(f)`. This matches C exactly (arrays decay, structs do not) — the
-  expectation every agent carries — and keeps the value/pointer distinction the `.`/`->` split
-  already draws. The error carries a fix-it note: `note: pass a pointer: &f`. (Array *fields*
-  keep 1.0 array behavior: `f.state` decays to a typed pointer.)
+- **Cost model in one sentence:** a call copies `sizeof` words for each by-value struct argument
+  and each by-value return, exactly like `a = b`; a by-pointer argument copies one word and pays a
+  `PEEK` per field access. Both are visible at the call site.
 - **Whole-struct comparison is rejected.** GAZL has no multi-word compare; `a == b` on struct
   values is an error — compare fields, or compare pointers.
 
@@ -709,9 +724,11 @@ byte-identical. Purely additive; no gating needed.
 
 ### Interaction with structs
 
-Multi-return relieves pressure on by-value struct returns: the small-aggregate case
-(`returns float l, float r` for a stereo frame) is served directly by the calling convention,
-which makes Step 2's "structs travel by pointer, by-value deferred" decision easier to keep.
+A **by-value struct return *is* a multiple return** whose `OUT` slots carry names and offsets — the
+same window layout. Step 4 is therefore a **prerequisite of by-value struct returns** (Step 2): one
+multi-`OUT` implementation serves both `returns float l, float r` and `returns Filter out`. The
+small-aggregate case (a stereo frame, a complex pair) is expressible either way — as explicit
+scalars now, or as a named struct once Step 2 lands.
 
 ---
 
@@ -820,13 +837,60 @@ imports merely let them span files:
 | **By-value** struct containment cycle (`struct A { B b }` / `struct B { A a }`) | error (infinite size) — the mutual generalization of the self-reference rule |
 | By-pointer struct cycle | legal, exactly like self-reference |
 
+### Dead-code elimination and `export`
+
+Because an import-driven build owns the whole program graph, it *can* drop code nothing reaches —
+a firmware that `import "math.impala"` for `sqrt` need not ship `sin`/`cos`/`tan` and their tables.
+This is link-time dead-code elimination (`ld --gc-sections` / `-dead_strip`), **not** a runtime
+collector — Impala has no heap and nothing to collect at run time.
+
+The hazard is "reachable from *what*?": Impala has no in-language `main`, and hosts call entry
+points *by name* (`findFunction("process")`), so naive reachability would strip every firmware
+entry point. The resolution is a **compile-time flag, off by default** — mirroring `--legacy`:
+
+- **Default `impala build` trims nothing.** Every unit in the closure is emitted whole, exactly
+  like manual concatenation but tool-performed. An unmodified 1.0 firmware builds to a working
+  program with no annotations. **100% backward compatible** — no positional "root is special" rule,
+  no behavior that depends on which file is the build root.
+- **`--dead-strip` enables trimming**, uniformly across *all* units including the root: any symbol
+  that is neither `export`ed nor reachable from an `export`ed symbol is removed. This is the "I have
+  annotated my host surface, strip the rest" switch, flipped only when the smaller/faster program
+  is wanted. (Name honors Apple `ld`'s `-dead_strip`.)
+- **`export` marks host-visible symbols** — functions and globals the host looks up or pokes:
+
+  ```impala
+  export function process()                 // the host calls this
+  export global int array params[PARAM_COUNT]
+  ```
+
+  `export` is an additive keyword (zero corpus collisions) and is **always legal but only
+  load-bearing under `--dead-strip`**; without the flag it is pure machine-checked documentation of
+  the host contract (and rides the `; signature` metadata so tooling sees the retained surface).
+  Adding `export`s therefore never changes behavior until trimming is requested — additive all the
+  way down. It doubles as the answer to "which symbols does the host call?" — greppable, where
+  agents will look.
+- **Reachability is complete and static.** Impala has no name-based dispatch in-language, so the
+  edge set is exactly: direct calls, address-taken functions (`&f`, funcptr assignment), function
+  references in data (`DATA`/`! DEFp &f`), and global references. Same analysis as a linker's
+  `--gc-sections`, not compiler cleverness.
+- **Failure mode is loud, not silent.** Flip `--dead-strip`, forget an `export` on a host entry
+  point, and it is trimmed → `findFunction` fails at load. Ugly but immediate, fixed by one
+  `export`.
+- **Never in the legacy manual workflow.** Hand concatenation stays byte-faithful; trimming exists
+  only where the tool owns the link.
+
+One caveat worth stating: trimming changes the global-section layout between builds, which matters
+if host state serialization is layout-dependent — but *any* source edit already has that property,
+so `--dead-strip` introduces no new class of hazard.
+
 ### Compatibility
 
-`import` is a new reserved word with **zero** identifier collisions in the 78-file corpus
-(`include` has 8 uses as an identifier and is avoided for that reason). Same policy as `struct`
-and `sizeof`: a hypothetical wild source using `import` as an identifier fails loudly at parse
-with a rename as the mechanical fix. The statement form itself occupies previously rejected
-syntactic space.
+`import` and `export` are new reserved words with **zero** identifier collisions in the 78-file
+corpus (`include` has 8 uses and is avoided for that reason). Same policy as `struct` and `sizeof`:
+a hypothetical wild source using one as an identifier fails loudly at parse with a rename as the
+mechanical fix. The statement forms occupy previously rejected syntactic space, and both DCE and
+strict `export` semantics are gated behind the default-off `--dead-strip` flag, so no existing
+program's build behavior changes.
 
 ### What this unlocks
 
