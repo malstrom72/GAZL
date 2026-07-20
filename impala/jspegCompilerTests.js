@@ -1244,9 +1244,30 @@ const typedPointerCases = [
 		expectError: "destructure the call",
 	},
 	{
-		label: "by-value struct returns are deferred",
-		source: ["struct S { int a }", "function make() returns S s { s.a = 1; }"].join("\n"),
-		expectError: "By-value struct returns are not yet supported",
+		label: "a by-value struct return is accepted",
+		source: [
+			"struct S { int a }",
+			"function make() returns S s { s.a = 1; }",
+			"function main() locals S v { v = make(); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct return must be the only return value",
+		source: [
+			"struct S { int a }",
+			"function bad() returns S s, int n { s.a = 1; n = 2; }",
+		].join("\n"),
+		expectError: "must be the only return value",
+	},
+	{
+		label: "a returned struct cannot be field-accessed inline",
+		source: [
+			"struct S { int a }",
+			"function make() returns S s { s.a = 1; }",
+			"function main() locals int n { n = make().a; }",
+		].join("\n"),
+		expectError: "returned struct value",
 	},
 	{
 		label: "destructuring a multi-return call is accepted",

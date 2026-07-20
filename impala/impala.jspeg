@@ -363,6 +363,8 @@
                         : signatureParamCategory(r.type));
             }
             returnType = '(' + parts.join(', ') + ')';
+        } else if (signature.returns === 'S') {                   /* by-value struct return → the struct name */
+            returnType = (signature.returnStruct || 'unknown');
         } else {
             returnType = (signature.returnElem !== undefined
                     ? signatureCategoryForDesc(fullDescFor(signature.returns, signature.returnElem))
@@ -409,7 +411,9 @@
                 known = signature.returnResolved && signature.returns === '?';
             }
         }
-        var returnType = signatureReturnCategory(returnCode, known);
+        var returnType = (returnCode === 'S' && signature && signature.returnStruct
+                ? signature.returnStruct                          /* by-value struct return → the struct name */
+                : signatureReturnCategory(returnCode, known));
 
         return appendOrigin('expects ' + label + '(' + paramsText + ') -> ' + returnType,
                             sourceName, sourceCode, sourceOffset);
@@ -1211,14 +1215,20 @@
         }
     };
 
-    /* record one `returns` declarator on a function entry (Step 4: multiple return values) */
-    $$parser.addReturn = function (entry, rawName, type, elem, size, sourceCode, sourceOffset) {
-        if (type === 'S') {
-            $$parser.fail('By-value struct returns are not yet supported (return a pointer for now)',
-                    sourceCode, sourceOffset, 'E430');
-        }
+    /* record one `returns` declarator on a function entry (Step 4: multiple return values,
+       slice 2.5: by-value struct returns) */
+    $$parser.addReturn = function (entry, rawName, type, elem, size, sourceCode, sourceOffset, struct, words) {
         if (!entry.pendingReturns) {
             entry.pendingReturns = [];
+        }
+        if (type === 'S' && entry.pendingReturns.length > 0) {
+            $$parser.fail('A by-value struct return must be the only return value',
+                    sourceCode, sourceOffset, 'E430');
+        }
+        if (type !== 'S' && entry.pendingReturns.length > 0
+                && entry.pendingReturns[0].type === 'S') {
+            $$parser.fail('A by-value struct return must be the only return value',
+                    sourceCode, sourceOffset, 'E430');
         }
         entry.pendingReturns.push({
             name: '$' + rawName,
@@ -1226,6 +1236,8 @@
             type: type,
             elem: elem,
             size: (size !== undefined ? '*' + size : undefined),
+            struct: struct,
+            words: words,
             sourceCode: sourceCode,
             sourceOffset: sourceOffset
         });
@@ -1314,6 +1326,15 @@
        struct value in (experiment-verified: ADRL the window region, ADRL the source, COPY). */
     $$parser.copyStructArg = function (argMeta, winSlot, words) {
         argMeta = metaSlot(argMeta);
+        /* A struct-return result already sits in transient window slots. Nested calls slide
+           their windows so the inner result lands exactly where this argument belongs — then
+           there is nothing to copy (and self-copy would be undefined behaviour): adopt it. */
+        if (argMeta.winBase === winSlot && argMeta.winWords === words) {
+            $$parser.returnBack(argMeta.base);                    /* free the window-address pointer temp */
+            argMeta.winBase = undefined;                          /* slots are now the argument window (freed by the call) */
+            argMeta.winWords = undefined;
+            return;
+        }
         for (var k = 0; k < words; ++k) {                         /* reserve the window slots */
             $$parser.claimSlot(winSlot + k);
         }
@@ -1323,6 +1344,21 @@
         $$parser.emit('copy', '?', dst, src, '*' + words);           /* COPY dst src *words */
         $$parser.returnBack(src);
         $$parser.returnBack(dst);
+        $$parser.freeStructWindow(argMeta);                          /* if the source was a struct-return window, release it */
+    };
+
+    /* A struct-return call result lives in transient output-window slots that must be freed
+       once the value has been consumed (copied out / read). Named-place operands (locals,
+       globals, pointers) carry no window and are ignored. */
+    $$parser.freeStructWindow = function (place) {
+        place = metaSlot(place);
+        if (place.winBase !== undefined) {
+            for (var i = place.winWords - 1; i >= 0; --i) {
+                $$parser.returnBack('%' + (place.winBase + i));
+            }
+            place.winBase = undefined;
+            place.winWords = undefined;
+        }
     };
 
     /* fp->field, place.field, nested chains — Step 2 slices 1–2 */
@@ -1331,6 +1367,11 @@
 
         var bk, base, off, structName;
         if (x.place) {
+            if (x.winBase !== undefined) {
+                $$parser.fail("Cannot access a field directly on a returned struct value",
+                        sourceCode, sourceOffset, 'E423',
+                        'assign the call result to a local first, then read its fields');
+            }
             if (arrow) {
                 $$parser.fail("Use '.' — this is a struct value, not a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as .' + fieldName);
@@ -1598,6 +1639,7 @@
             $$parser.emitMeta(x);
             $$parser.returnBack(src);
             $$parser.returnBack(dst);
+            $$parser.freeStructWindow(rightx);                    /* release a struct-return window once copied out */
             $$parser.setPlace(x, savedBK, savedBase, savedOff, savedStruct);
             return;
         }
@@ -2523,12 +2565,12 @@ inp:ArgsDecl ')'_
                                                                          var entry = $$parser.symbols.functions[$id];
                                                                          if (entry) {
                                                                              entry.pendingReturns = undefined;
-                                                                             $$parser.addReturn(entry, $out.name, $out.type, $out.elem, $out.size, $$s, $$i);
+                                                                             $$parser.addReturn(entry, $out.name, $out.type, $out.elem, $out.size, $$s, $$i, $out.struct, $out.words);
                                                                          }
                                                                      }
                     ( ',' _ v:VarDecl                                 {
                                                                          var entry = $$parser.symbols.functions[$id];
-                                                                         if (entry) $$parser.addReturn(entry, $v.name, $v.type, $v.elem, $v.size, $$s, $$i);
+                                                                         if (entry) $$parser.addReturn(entry, $v.name, $v.type, $v.elem, $v.size, $$s, $$i, $v.struct, $v.words);
                                                                      }
                     )*
                                                                      {
@@ -2540,6 +2582,11 @@ inp:ArgsDecl ')'_
                                                                              entry.signature.returns = rl[0].type;
                                                                              entry.signature.returnElem = rl[0].elem;
                                                                              entry.signature.returnName = rl[0].rawName;
+                                                                             entry.signature.returnStruct = rl[0].struct;
+                                                                             var _rw = 0;                    /* total output-window words (struct returns span >1) */
+                                                                             for (var _wi = 0; _wi < rl.length; ++_wi)
+                                                                                 _rw += (rl[_wi].type === 'S' ? rl[_wi].words : 1);
+                                                                             entry.signature.returnWords = _rw;
                                                                              $$parser.resolveFunctionReturnType($id, rl[0].type, $$s, $$i);
                                                                          }
                                                                      }
@@ -2588,17 +2635,31 @@ inp:ArgsDecl ')'_
                                                                         if (entry.pendingReturns && entry.pendingReturns.length > 0) {
                                                                                 for (var _ri = 0; _ri < entry.pendingReturns.length; ++_ri) {
                                                                                         var ret = entry.pendingReturns[_ri];
-                                                                                        $$parser.declare(
-                                                                                                'OUT?', 'locals',
-                                                                                                ret.name,
-                                                                                                ret.type,
-                                                                                                false,
-                                                                                                ret.size,
-                                                                                                ret.sourceCode,
-                                                                                                ret.sourceOffset,
-                                                                                                undefined,
-                                                                                                ret.elem
-                                                                                        );
+                                                                                        if (ret.type === 'S') {  /* by-value struct return → leading output PARA *sizeof (a writable place) */
+                                                                                                $$parser.declare(
+                                                                                                        'PARA', 'locals',
+                                                                                                        ret.name,
+                                                                                                        'S',
+                                                                                                        false,
+                                                                                                        '*' + ret.words,
+                                                                                                        ret.sourceCode,
+                                                                                                        ret.sourceOffset,
+                                                                                                        undefined,
+                                                                                                        ret.struct
+                                                                                                );
+                                                                                        } else {
+                                                                                                $$parser.declare(
+                                                                                                        'OUT?', 'locals',
+                                                                                                        ret.name,
+                                                                                                        ret.type,
+                                                                                                        false,
+                                                                                                        ret.size,
+                                                                                                        ret.sourceCode,
+                                                                                                        ret.sourceOffset,
+                                                                                                        undefined,
+                                                                                                        ret.elem
+                                                                                                );
+                                                                                        }
                                                                                 }
                                                                                 entry.pendingReturns = undefined;
                                                                         } else if (entry.pendingReturnPlaceholder) {
@@ -3132,7 +3193,13 @@ Statement   <-                                                        {
                 /   Switch
                 /   While
                 /   Destructure
-                /   Expr ';' _                                        { $$parser.releaseMeta($$); }
+                /   Expr ';' _                                        {
+                                                                         if (metaSlot($$).winBase !== undefined) {     /* discarded struct-return value: free its window + base */
+                                                                             $$parser.returnBack(metaSlot($$).base);
+                                                                             $$parser.freeStructWindow($$);
+                                                                         }
+                                                                         $$parser.releaseMeta($$);
+                                                                     }
                 )
 
 Expr        <-  Bitwise ('='_ r:Expr               { if (!$$parser.dry)
@@ -3201,8 +3268,9 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        if (_c.operator === ':=' && _c.operands[1]
                                                                && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) {
                                                            var _e = $$parser.symbols.functions[_c.operands[1].substr(1)];
-                                                           if (_e && _e.signature && _e.signature.returnCount > 1)
-                                                               _rs = _e.signature.returnCount;
+                                                           if (_e && _e.signature && _e.signature.returnWords !== undefined
+                                                                   && _e.signature.returnWords > 1)
+                                                               _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */
                                                        }
                                                        $$.retSlots = _rs;
                                                        $$.words = 0;                            /* input words placed so far (struct args span >1) */
@@ -3339,7 +3407,13 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                          '%' + $$.base,
                                                                          undefined);
                                                        $$parser.setElem(callee, undefined);
-                                                       if ($$.retSlots > 1) {               /* multi-return: expose window for destructuring */
+                                                       if (signature && signature.returns === 'S') {   /* by-value struct return → a place over the output window */
+                                                           var _wp = $$parser.borrow('%');
+                                                           $$parser.emit('=&', 'p', _wp, '%' + $$.base, '*' + $$.retSlots);
+                                                           $$parser.setPlace(callee, 'pointer', _wp, 0, signature.returnStruct);
+                                                           callee.winBase  = $$.base;       /* output window slots to free once the value is consumed */
+                                                           callee.winWords = $$.retSlots;
+                                                       } else if ($$.retSlots > 1) {        /* multi-return: expose window for destructuring */
                                                            callee.multiBase = $$.base;
                                                            callee.multiCount = $$.retSlots;
                                                            callee.multiReturnList = signature.returnList;
