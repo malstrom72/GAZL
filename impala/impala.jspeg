@@ -2623,8 +2623,13 @@
 #################
 
 root        <-  _                                                     { $$parser.start(); }
-                (ExportDecl / FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
+                (ImportDecl / ExportDecl / FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
                 / GlobalDecl / ';'_)* !.                              { $$parser.end(); }
+
+# `import "path"` names a unit for the builder's link closure. The compiler itself treats it
+# as a no-op — `impala build` resolves the closure, concatenates the sources, and compiles the
+# whole program at once, so the import directives are already satisfied by that point.
+ImportDecl  <-  IMPORT _ path:StringLiteral _
 
 # An `export` prefix marks a definition host-visible (Step 5). It rides the `; signature`
 # metadata as a role prefix and is only load-bearing under the builder's `--dead-strip`.

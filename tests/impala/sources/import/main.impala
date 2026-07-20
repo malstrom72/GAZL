@@ -1,0 +1,27 @@
+/*
+	Impala 2 Step 5: import-as-linking. `impala build main.impala` walks the import closure,
+	concatenates the units in dependency order, and compiles the whole program at once. The
+	Vec2 struct and the functions live only in mathlib.impala — no header, no copy-paste.
+	Expected when run (GAZLCmd out.gazl main): 13 24 3 2.
+*/
+
+const int DEBUG = 1
+
+import "mathlib.impala"
+
+extern native printInt
+extern native printLF
+
+function main()
+locals Vec2 p, Vec2 q, Vec2 s, int qt, int rm
+{
+	p = makeVec(3, 4);
+	q = makeVec(10, 20);
+	s = addVec(p, q);				// struct-value params + struct return, across units
+	printInt(s.x); printLF();		// 13
+	printInt(s.y); printLF();		// 24
+
+	qt, rm = divmod(17, 5);			// multi-value return, across units
+	printInt(qt); printLF();		// 3
+	printInt(rm); printLF();		// 2
+}

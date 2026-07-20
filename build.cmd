@@ -28,6 +28,8 @@ node jspegCompilerTests.js
 IF ERRORLEVEL 1 EXIT /B 1
 node runJspegTests.js
 IF ERRORLEVEL 1 EXIT /B 1
+node importBuildTests.js
+IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
 REM Validate generated .gazl metadata for the JSPEG fixtures.

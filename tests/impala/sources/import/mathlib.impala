@@ -1,0 +1,26 @@
+/*
+	A shared library unit, imported by main.impala. Its struct type and functions become
+	available to importers with full typed signatures (this is the whole program compiled
+	together), so cross-unit struct-value params, struct returns, and multi-value returns all
+	codegen correctly.
+*/
+
+struct Vec2 { int x; int y }
+
+function makeVec(int x, int y) returns Vec2 v
+{
+	v.x = x;
+	v.y = y;
+}
+
+function addVec(Vec2 a, Vec2 b) returns Vec2 r
+{
+	r.x = a.x + b.x;
+	r.y = a.y + b.y;
+}
+
+function divmod(int a, int b) returns int q, int rem
+{
+	q = a / b;
+	rem = a - a / b * b;
+}

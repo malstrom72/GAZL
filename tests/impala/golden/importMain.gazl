@@ -1,0 +1,93 @@
+ ; Compiled with Impala version 1.0
+
+ ; signatures version=1
+
+ ;-----------------------------------------------------------------------------
+ makeVec:			FUNC		; signature func makeVec(int x, int y) -> Vec2 @ 11:18
+ 					$v:			PARA *2
+ 					$x:			INPi
+ 					$y:			INPi
+ ;-----------------------------------------------------------------------------
+ 								MOVi $v:0 $x 					; v.x = x
+ 								MOVi $v:1 $y 					; v.y = y
+ 								RETU   							; }
+
+
+ ;-----------------------------------------------------------------------------
+ addVec:			FUNC		; signature func addVec(Vec2 a, Vec2 b) -> Vec2 @ 17:17
+ 					$r:			PARA *2
+ 					$a:			PARA *2
+ 					$b:			PARA *2
+ ;-----------------------------------------------------------------------------
+ 								ADDi $r:0 $a:0 $b:0				; r.x = a.x + b.x
+ 								ADDi $r:1 $a:1 $b:1				; r.y = a.y + b.y
+ 								RETU   							; }
+
+
+ ;-----------------------------------------------------------------------------
+ divmod:			FUNC		; signature func divmod(int a, int b) -> (int, int) @ 23:17
+ 					$q:			OUTi
+ 					$rem:		OUTi
+ 					$a:			INPi
+ 					$b:			INPi
+ ;-----------------------------------------------------------------------------
+ 								DIVi $q $a $b					; q = a / b
+ 								DIVi %0 $a $b					; rem = a - a / b * b
+ 								MULi %0 %0 $b
+ 								SUBi $rem $a %0
+ 								RETU   							; }
+
+ DEBUG:				! DEFi #1	; signature const DEBUG : int @ 39:1
+ ; signature extern native printInt() -> unknown @ 42:1
+ ; signature extern native printLF() -> unknown @ 44:1
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC		; signature func main() -> void @ 44:15
+ 								PARA *1
+ 					$p:			LOCA *2
+ 					$q:			LOCA *2
+ 					$s:			LOCA *2
+ 					$qt:		LOCi
+ 					$rm:		LOCi
+ ;-----------------------------------------------------------------------------
+ 								MOVi %2 #3 						; p = makeVec(3, 4)
+ 								MOVi %3 #4 
+ 								CALL &makeVec %0 *4				; expects makeVec(int, int) -> Vec2 @ 47:19
+ 								ADRL %2 %0 *2
+ 								ADRL %3 $p *2
+ 								COPY %3 %2 *2
+ 								MOVi %2 #10 					; q = makeVec(10, 20)
+ 								MOVi %3 #20 
+ 								CALL &makeVec %0 *4				; expects makeVec(int, int) -> Vec2 @ 48:21
+ 								ADRL %2 %0 *2
+ 								ADRL %3 $q *2
+ 								COPY %3 %2 *2
+ 								ADRL %4 %2 *2					; s = addVec(p, q)
+ 								ADRL %5 $p *2
+ 								COPY %4 %5 *2
+ 								ADRL %6 %4 *2
+ 								ADRL %7 $q *2
+ 								COPY %6 %7 *2
+ 								CALL &addVec %0 *6				; expects addVec(Vec2, Vec2) -> Vec2 @ 49:18
+ 								ADRL %2 %0 *2
+ 								ADRL %3 $s *2
+ 								COPY %3 %2 *2
+ 								MOVi %1 $s:0 					; printInt(s.x)
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 50:15
+ 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ 50:26
+ 								MOVi %1 $s:1 					; printInt(s.y)
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 51:15
+ 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ 51:26
+ 								MOVi %2 #17 					; qt, rm = divmod(17, 5)
+ 								MOVi %3 #5 
+ 								CALL &divmod %0 *4				; expects divmod(int, int) -> int @ 53:24
+ 								MOVi $qt %0 
+ 								MOVi $rm %1 
+ 								MOVi %1 $qt 					; printInt(qt)
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 54:14
+ 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ 54:25
+ 								MOVi %1 $rm 					; printInt(rm)
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 55:14
+ 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ 55:25
+ 								RETU   							; }
+

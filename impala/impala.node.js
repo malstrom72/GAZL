@@ -41,9 +41,115 @@ function readStdinLatin1Sync() {
 function usageAndExit() {
 	console.error('Usage:');
 	console.error('  node impala/impala.node.js compile [--legacy] [<input.impala>] [<output.gazl>|-] [<random id>]');
+	console.error('  node impala/impala.node.js build [--legacy] <root.impala> [<output.gazl>|-] [<random id>]');
 	console.error('  node impala/impala.node.js run [--legacy] [<input.impala>]');
 	console.error('  --legacy downgrades Impala 2 strict-expression errors to warnings');
 	process.exit(1);
+}
+
+// --- Step 5: import-as-linking -------------------------------------------------
+// `import "path"` names a unit for the link closure (path relative to the importing file).
+// The builder walks the closure (visited-set by real path, cycles harmless), concatenates the
+// unit sources in dependency-first order, and compiles the whole program in one pass — so
+// cross-unit calls (including struct/multi-value returns) codegen correctly with no header drift.
+function scanImports(source) {
+	const re = /^[ \t]*import[ \t]+"([^"\r\n]*)"/gm;
+	const paths = [];
+	let m;
+	while ((m = re.exec(source)) !== null) {
+		paths.push(m[1]);
+	}
+	return paths;
+}
+
+function resolveImportClosure(rootPath) {
+	const visited = new Set();
+	const order = [];
+
+	function canonical(p) {
+		try { return fs.realpathSync(p); } catch (_) { return path.resolve(p); }
+	}
+
+	function visit(absPath, importChain) {
+		const key = canonical(absPath);
+		if (visited.has(key)) return;             // dedup diamonds; break import cycles
+		visited.add(key);
+
+		let source;
+		try {
+			source = readFileLatin1(absPath);
+		} catch (err) {
+			const via = importChain.length ? ` (imported from ${importChain[importChain.length - 1]})` : '';
+			console.error(`Error reading ${absPath}${via}: ${err && err.message ? err.message : String(err)}`);
+			process.exit(1);
+		}
+
+		const dir = path.dirname(absPath);
+		for (const rel of scanImports(source)) {
+			visit(path.resolve(dir, rel), importChain.concat(absPath));
+		}
+		order.push({ path: absPath, source });    // post-order → dependencies precede dependents
+	}
+
+	visit(path.resolve(rootPath), []);
+	return order;
+}
+
+// Resolve + concatenate the import closure of `rootPath` into one compilation-ready source.
+function concatenateClosure(rootPath) {
+	const units = resolveImportClosure(rootPath);
+	const rootDir = path.dirname(path.resolve(rootPath));
+	const combined = units
+		.map((u) => `// ==== unit: ${path.relative(rootDir, u.path).split(path.sep).join('/')} ====\n${u.source}`)
+		.join('\n');
+	return { units, combined };
+}
+
+// Build a linked .gazl program from a root unit. Exposed for tests.
+function buildProgram(rootPath, options = {}) {
+	const { combined, units } = concatenateClosure(rootPath);
+	const output = compileWithJsImpala(combined, {
+		randomId: options.randomId,
+		retabulate: true,
+		trailingNewline: true,
+		sourceName: rootPath,
+		legacy: options.legacy,
+	});
+	return { output, unitCount: units.length };
+}
+
+function buildCommand(args, legacy) {
+	if (args.length === 0) {
+		console.error('build requires a root .impala file');
+		process.exit(1);
+	}
+	const rootPath = args[0];
+	const outputPath = args[1] || '-';
+	const randomId = parseRandomId(args[2]);
+
+	let output;
+	let unitCount;
+	try {
+		const built = buildProgram(rootPath, { randomId, legacy });
+		output = built.output;
+		unitCount = built.unitCount;
+	} catch (err) {
+		const message = (err && err.message) ? err.message : String(err);
+		console.error(message.includes(': error[') || message.includes(': error:') ? message : `Error building ${rootPath}: ${message}`);
+		process.exit(1);
+	}
+
+	if (!outputPath || outputPath === '-') {
+		process.stdout.write(output);
+		return;
+	}
+	try {
+		writeFileLatin1(outputPath, output);
+		console.error(`Successfully built ${rootPath} (${unitCount} unit${unitCount === 1 ? '' : 's'})`);
+	} catch (err) {
+		console.error(`Error writing ${outputPath}: ${err && err.message ? err.message : String(err)}`);
+		process.exit(1);
+	}
 }
 
 function parseRandomId(arg) {
@@ -164,6 +270,8 @@ function main() {
 	switch (cmd) {
 		case 'compile':
 			return compileCommand(rest, legacy);
+		case 'build':
+			return buildCommand(rest, legacy);
 		case 'run':
 			return runCommand(rest, legacy);
 		default:
@@ -171,4 +279,8 @@ function main() {
 	}
 }
 
-main();
+module.exports = { buildProgram, concatenateClosure, resolveImportClosure, scanImports };
+
+if (require.main === module) {
+	main();
+}
