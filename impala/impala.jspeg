@@ -1127,17 +1127,39 @@
         return undefined;
     };
 
-    /* fp->field  /  place.field  (Step 2 slice 1: scalar fields through a struct pointer) */
+    /* A "place" names a struct sitting at (base + compile-time offset). Struct-typed
+       expressions are compile-time places; only terminal scalar fields emit instructions,
+       so struct values never enter the one-word expression temporaries. */
+    $$parser.setPlace = function (rec, baseKind, base, offset, structName) {
+        var slot = metaSlot(rec);
+        slot.operator  = '@place';
+        slot.type      = 'S';
+        slot.operands  = [ undefined, undefined, undefined ];
+        slot.place     = true;
+        slot.baseKind  = baseKind;                                /* 'local' | 'pointer' */
+        slot.base      = base;
+        slot.placeOff  = offset;
+        slot.struct    = structName;
+        slot.elem      = structName;
+    };
+
+    /* fp->field, place.field, nested chains — Step 2 slices 1–2 */
     $$parser.fieldAccess = function (x, fieldName, arrow, sourceCode, sourceOffset) {
         x = metaSlot(x);
 
-        var structName;
-        if (x.type === 'p' && $$parser.isStructAtom(x.elem)) {
+        var bk, base, off, structName;
+        if (x.place) {
+            if (arrow) {
+                $$parser.fail("Use '.' — this is a struct value, not a pointer", sourceCode,
+                        sourceOffset, 'E416', 'write ' + fieldName + ' as .' + fieldName);
+            }
+            bk = x.baseKind; base = x.base; off = x.placeOff; structName = x.struct;
+        } else if (x.type === 'p' && $$parser.isStructAtom(x.elem)) {
             if (!arrow) {
                 $$parser.fail("Use '->' to access a field through a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as ->' + fieldName);
             }
-            structName = x.elem;
+            bk = 'pointer'; base = $$parser.makeRValue(x); off = 0; structName = x.elem;
         } else {
             $$parser.fail("Field access requires a struct" + (arrow ? ' pointer' : ''),
                     sourceCode, sourceOffset, 'E415');
@@ -1148,18 +1170,26 @@
             $$parser.fail('Struct ' + structName + ' has no field ' + fieldName,
                     sourceCode, sourceOffset, 'E417');
         }
-        if (field.type === 'S' || field.type === 'A') {
-            $$parser.fail('Field ' + fieldName + ' of ' + structName
-                    + ' is a nested struct/array; that access is not yet supported',
+        var total = off + field.offset;
+
+        if (field.type === 'S') {                                 /* nested inline struct → another place */
+            $$parser.setPlace(x, bk, base, total, field.struct);
+            return;
+        }
+        if (field.type === 'A') {
+            $$parser.fail('Array field ' + fieldName + ' access is not yet supported',
                     sourceCode, sourceOffset, 'E418');
         }
 
-        /* lower as  x[field.offset]  then stamp the field's own type */
-        var idx = {};
-        $$parser.makeMeta(idx, ':=', 'i', undefined, '#' + field.offset, undefined);
-        $$parser.binaryOp('=[]', x, idx, sourceCode, sourceOffset);
-        x.type = field.type;
-        x.elem = field.elem;
+        /* terminal scalar field */
+        if (bk === 'local') {
+            $$parser.makeMeta(x, '=', field.type, undefined, base + ':' + total, undefined);
+        } else {                                                  /* pointer base: PEEK/POKE base #offset */
+            $$parser.makeMeta(x, '=[]', field.type, null, base, '#' + total);
+        }
+        x.place = false;
+        x.type  = field.type;
+        x.elem  = field.elem;
     };
 
     $$parser.checkPtrAssign = function (leftx, rightx, sourceCode, sourceOffset) {
@@ -1816,6 +1846,10 @@
         /* local  ------------------------------------------------*/
         if (!isGlobal && (p = sym.locals['$' + name])) {
 
+            if (p.type === 'S') {                                 /* struct value local → a place */
+                $$parser.setPlace(x, 'local', '$' + name, 0, p.elem);
+                return;
+            }
             if (p.type === 'A') {
                 $$parser.makeMeta(x, '=&', 'p', undefined,
                                   '$' + name, '*0');
@@ -2290,16 +2324,29 @@ inp:ArgsDecl ')'_
                 (
                     LOCALS _ loc:LocalsDecl                           {
                                                                          iterate($loc, function (v) {
-                                                                             $$parser.declare(
-                                                                                 'LOC?', 'locals',
-                                                                                 '$' + v.name,
-                                                                                 v.type,
-                                                                                 false,
-                                                                                 (v.size !== undefined ? '*' + v.size : undefined),
-                                                                                 $$s, $$i,
-                                                                                 undefined,
-                                                                                 v.elem
-                                                                             );
+                                                                             if (v.type === 'S') {         /* struct value local → LOCA *sizeof, remember struct */
+                                                                                 $$parser.declare(
+                                                                                     'LOCA', 'locals',
+                                                                                     '$' + v.name,
+                                                                                     'S',
+                                                                                     false,
+                                                                                     '*' + v.words,
+                                                                                     $$s, $$i,
+                                                                                     undefined,
+                                                                                     v.struct
+                                                                                 );
+                                                                             } else {
+                                                                                 $$parser.declare(
+                                                                                     'LOC?', 'locals',
+                                                                                     '$' + v.name,
+                                                                                     v.type,
+                                                                                     false,
+                                                                                     (v.size !== undefined ? '*' + v.size : undefined),
+                                                                                     $$s, $$i,
+                                                                                     undefined,
+                                                                                     v.elem
+                                                                                 );
+                                                                             }
                                                                          });
                                                                      }
                 )?                                                    { output(';-----------------------------------------------------------------------------'); }
@@ -2562,6 +2609,8 @@ ArgsDecl    <-                                                        {
                                                                              var entry = {};
                                                                              entry.type = $v.type;
                                                                              entry.elem = $v.elem;
+                                                                             entry.struct = $v.struct;
+                                                                             entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
                                                                              $$[$$.n++] = entry;
@@ -2570,6 +2619,8 @@ ArgsDecl    <-                                                        {
                                                                              var entry = {};
                                                                              entry.type = $v.type;
                                                                              entry.elem = $v.elem;
+                                                                             entry.struct = $v.struct;
+                                                                             entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
                                                                              $$[$$.n++] = entry;
@@ -2585,6 +2636,8 @@ LocalsDecl  <-                                                        {
                                                                              var entry = {};
                                                                              entry.type = $v.type;
                                                                              entry.elem = $v.elem;
+                                                                             entry.struct = $v.struct;
+                                                                             entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
                                                                              $$[$$.n++] = entry;
@@ -2593,6 +2646,8 @@ LocalsDecl  <-                                                        {
                                                                              var entry = {};
                                                                              entry.type = $v.type;
                                                                              entry.elem = $v.elem;
+                                                                             entry.struct = $v.struct;
+                                                                             entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
                                                                              $$[$$.n++] = entry;

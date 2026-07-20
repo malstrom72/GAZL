@@ -1061,6 +1061,38 @@ const typedPointerCases = [
 		source: ["struct S { int a }", "function f(S pointer s, float x) { s->a = x; }"].join("\n"),
 		expectError: "Incompatible types for assignment",
 	},
+	{
+		label: "struct value locals with nested field access compile",
+		source: [
+			"struct Inner { float a; float b }",
+			"struct Outer { int n; Inner mid; float g }",
+			"function main() locals Outer o, int x, float y { o.n = 1; o.mid.a = 2.0; o.g = 3.0; x = o.n; y = o.mid.b; }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "nested field access through a struct pointer compiles",
+		source: [
+			"struct Inner { float a }",
+			"struct Outer { Inner mid }",
+			"function f(Outer pointer o, float x) locals float y { o->mid.a = x; y = o->mid.a; }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "arrow on a struct value suggests dot",
+		source: [
+			"struct Inner { float a }",
+			"struct Outer { Inner mid }",
+			"function main() locals Outer o { o.mid->a = 1.0; }",
+		].join("\n"),
+		expectError: "this is a struct value, not a pointer",
+	},
+	{
+		label: "struct value field assignment is type-checked",
+		source: ["struct S { int a }", "function main() locals S s, float x { x = 1.0; s.a = x; }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
 ];
 
 for (const testCase of typedPointerCases) {

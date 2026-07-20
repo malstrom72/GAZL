@@ -1,0 +1,63 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
+; signature extern native printInt() -> unknown @ 24:1
+; signature extern native printFloat() -> unknown @ 25:1
+; signature extern native printLF() -> unknown @ 27:1
+store:	GLOB *8	; signature array store[8] : unknown @ 29:1
+
+;-----------------------------------------------------------------------------
+tweak:	FUNC	; signature func tweak(unknown-ptr-ptr-ptr v, float x) -> void @ 29:16
+		PARA *1
+	$v:	INPp
+	$x:	INPf
+;-----------------------------------------------------------------------------
+		POKE $v #1 $x	; v->lo.b0 = x
+		ADDf %0 $x #1.0	; v->hi.z1 = x + 1.0
+		POKE $v #4 %0
+		ADDf %0 $x #2.0	; v->gain = x + 2.0
+		POKE $v #5 %0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 36:15
+		PARA *1
+	$v:	LOCA *6
+	$p:	LOCp
+;-----------------------------------------------------------------------------
+		MOVi $v:0 #60 	; v.note = 60
+		MOVf $v:1 #0.5 	; v.lo.b0 = 0.5
+		MOVf $v:2 #0.1 	; v.lo.z1 = 0.1
+		MOVf $v:3 #0.9 	; v.hi.b0 = 0.9
+		MOVf $v:5 #2.0 	; v.gain = 2.0
+		MOVi %1 $v:0 	; printInt(v.note)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:29
+		MOVf %1 $v:1 	; printFloat(v.lo.b0)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 45:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 45:32
+		MOVf %1 $v:2 	; printFloat(v.lo.z1)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 46:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 46:32
+		MOVf %1 $v:3 	; printFloat(v.hi.b0)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 47:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:32
+		MOVf %1 $v:5 	; printFloat(v.gain)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 48:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 48:31
+		MOVp $p &store:0 	; p = (Voice pointer) &global store[0]
+		MOVp %1 $p 	; tweak(p, 0.5)
+		MOVf %2 #0.5 
+		CALL &tweak %0 *3	; expects tweak(ptr, float) -> void @ 51:15
+		PEEK %1 $p #1	; printFloat(p->lo.b0)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 52:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 52:33
+		PEEK %1 $p #4	; printFloat(p->hi.z1)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 53:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 53:33
+		PEEK %1 $p #5	; printFloat(p->gain)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 54:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 54:32
+		RETU   	; }
