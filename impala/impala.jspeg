@@ -151,6 +151,8 @@
     var $$parser.structs = {};                                    /// name → { fields:[{name,type,elem,offset,words}], words, complete }
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
+    var $$parser.destructuring = false;                           /// true while parsing the call on the RHS of `a, b = f(...)`
+    var $$parser.destTargets = [];                                /// collected LHS targets during a destructuring assignment
 
     /* 3  bulk-fill the lookup tables */
     map($$parser.META_TO_GAZL,
@@ -782,6 +784,19 @@
         /* duplicate-check, like the original assert(validate…)    */
         assert($$parser.validateStock('%'));
         return chosen;
+    };
+
+    /* reserve transient %number (used to hold multi-return output slots) */
+    $$parser.claimSlot = function (number) {
+        if ($$parser.counters['%'] === number) {
+            ++$$parser.counters['%'];
+        } else {
+            assert($$parser.counters['%'] > number);
+            var stk = $$parser.stock['%'];
+            for (var idx = stk.length - 1; idx >= 0 && stk[idx] !== '%' + number; --idx) {}
+            assert(idx >= 0, "transient %" + number + " must exist in stock");
+            stk.splice(idx, 1);
+        }
     };
 
     /* put a token back into its stock bucket */
@@ -1667,6 +1682,53 @@
             x.operands[keep],
             null
         );
+    };
+
+    /* -----------------------------------------------------------
+     *  Multi-return destructuring   a, b = f(...)
+     *  callMeta is the finished FuncCall meta whose output window
+     *  lives in %multiBase .. %multiBase+multiCount-1.
+     * -------------------------------------------------------- */
+    $$parser.finishDestructure = function (callMeta, targets, sourceCode, sourceOffset) {
+        callMeta = metaSlot(callMeta);
+        var base  = callMeta.multiBase;
+        var count = callMeta.multiCount;
+        var list  = callMeta.multiReturnList || [];
+
+        if (base === undefined || count === undefined || count < 2) {
+            $$parser.fail('Left side lists ' + targets.length
+                    + ' targets but the right side is not a multi-value function call',
+                    sourceCode, sourceOffset, 'E432');
+        }
+        if (targets.length !== count) {
+            $$parser.fail('Destructuring assignment expects ' + count
+                    + ' targets, got ' + targets.length,
+                    sourceCode, sourceOffset, 'E433');
+        }
+
+        for (var i = 0; i < count; ++i) {
+            var slot = '%' + (base + i);
+            var t    = targets[i];
+            var ret  = list[i] || {};
+
+            if (t.name === '_') {                     /* discard this return value */
+                $$parser.returnBack(slot);
+                continue;
+            }
+
+            var lv = { operator: undefined, type: '?',
+                       operands: [ undefined, undefined, undefined ] };
+            $$parser.lookup(lv, t.name, t.isGlobal, t.code, t.offset);
+
+            var rv = { operator: ':=', type: (ret.type || '?'),
+                       operands: [ undefined, slot, undefined ] };
+            $$parser.setElem(rv, ret.elem);
+
+            var res = { operator: undefined, type: '?',
+                        operands: [ undefined, undefined, undefined ] };
+            $$parser.assign(res, lv, rv, sourceCode, sourceOffset);
+            $$parser.releaseMeta(res);
+        }
     };
 
     /* -----------------------------------------------------------
@@ -3035,6 +3097,7 @@ Statement   <-                                                        {
                 /   If
                 /   Switch
                 /   While
+                /   Destructure
                 /   Expr ';' _                                        { $$parser.releaseMeta($$); }
                 )
 
@@ -3098,7 +3161,19 @@ FieldAccess <-  '->'_ f:Identifier                 { if (!$$parser.dry)
 
 FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.count = 0;
+                                                       /* how many leading output slots the callee expects (>1 = multi-return) */
+                                                       var _c = metaSlot($$);
+                                                       var _rs = 1;
+                                                       if (_c.operator === ':=' && _c.operands[1]
+                                                               && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) {
+                                                           var _e = $$parser.symbols.functions[_c.operands[1].substr(1)];
+                                                           if (_e && _e.signature && _e.signature.returnCount > 1)
+                                                               _rs = _e.signature.returnCount;
+                                                       }
+                                                       $$.retSlots = _rs;
                                                        $$.base  = $$parser.borrowForCall();
+                                                       for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */
+                                                           $$parser.claimSlot($$.base + _os);
                                                        $$.types = [];
                                                        $$.elems = [];
                                                        $$.nulls = [];
@@ -3127,7 +3202,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            }
                                                        }
 
-                                                       if (signature && signature.returnCount > 1 && !$$.destructuring) {
+                                                       if (signature && signature.returnCount > 1 && !$$parser.destructuring) {
                                                            $$parser.fail('Function ' + (calleeName || 'this call')
                                                                    + ' returns ' + signature.returnCount
                                                                    + ' values; destructure the call (a, b = ' + (calleeName || 'f') + '(...))',
@@ -3209,11 +3284,11 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$parser.emit('()', '?',
                                                                      func,
                                                                      '%' + $$.base,
-                                                                     '*' + ($$.count + 1));
+                                                                     '*' + ($$.count + $$.retSlots));
                                                        $$parser.returnBack(func);
 
-                                                       while ($$.count-- > 0) {
-                                                           $$parser.returnBack('%' + ($$.base + $$.count + 1));
+                                                       while ($$.count-- > 0) {              /* free the argument slots (past the output slots) */
+                                                           $$parser.returnBack('%' + ($$.base + $$.retSlots + $$.count));
                                                        }
 
                                                        $$parser.makeMeta(callee, ':=', callResultType,
@@ -3221,6 +3296,11 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                          '%' + $$.base,
                                                                          undefined);
                                                        $$parser.setElem(callee, undefined);
+                                                       if ($$.retSlots > 1) {               /* multi-return: expose window for destructuring */
+                                                           callee.multiBase = $$.base;
+                                                           callee.multiCount = $$.retSlots;
+                                                           callee.multiReturnList = signature.returnList;
+                                                       }
 
                                                        if (calleeName) {
                                                            callee.callInfo = {
@@ -3252,7 +3332,7 @@ Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                                && meta.operands[1] === '&NULL'
                                                                && meta.operands[2] === undefined);
                                                        }
-                                                       $$parser.makeArgValue($a, $$.base + $$.count);
+                                                       $$parser.makeArgValue($a, $$.base + $$.retSlots - 1 + $$.count);
                                                     } }
 
 Group       <-  '('_ Expr ')'_                      { if (!$$parser.dry)
@@ -3485,6 +3565,23 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                         $$parser.returnBack($length);
                                                         $$parser.releaseMeta(copyMeta);
                                                     }
+
+# ---------------------------------------------------------------------------
+#   Destructuring assignment for multi-value calls:  a, b = f(...)
+#   (needs >= 2 targets before '='; single `a = ...` falls through to Expr)
+# ---------------------------------------------------------------------------
+Destructure <-                                      { if (!$$parser.dry) $$parser.destTargets = []; }
+                DestTarget (','_ DestTarget)+ '='_  { $$parser.destructuring = true; }
+                call:Expr ';'_                      { $$parser.destructuring = false;
+                                                      if (!$$parser.dry)
+                                                          $$parser.finishDestructure($call, $$parser.destTargets, $$s, $$i); }
+
+DestTarget  <-                                      { $tgtGlobal = false; }
+                (GLOBAL _                           { $tgtGlobal = true; }
+                )?
+                id:Identifier                       { if (!$$parser.dry)
+                                                        $$parser.destTargets.push({ name: $id, isGlobal: $tgtGlobal,
+                                                                                    code: $$s, offset: $$i }); }
 
 # ---------------------------------------------------------------------------
 #   SWITCH (expr == from TO to) { … }

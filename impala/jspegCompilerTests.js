@@ -1248,6 +1248,47 @@ const typedPointerCases = [
 		source: ["struct S { int a }", "function make() returns S s { s.a = 1; }"].join("\n"),
 		expectError: "By-value struct returns are not yet supported",
 	},
+	{
+		label: "destructuring a multi-return call is accepted",
+		source: [
+			"function two() returns int a, int b { a = 1; b = 2; }",
+			"function main() locals int x, int y { x, y = two(); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "destructuring may discard a return value with _",
+		source: [
+			"function two() returns int a, int b { a = 1; b = 2; }",
+			"function main() locals int y { _, y = two(); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "destructuring can write globals",
+		source: [
+			"global int g",
+			"function two() returns int a, int b { a = 1; b = 2; }",
+			"function main() locals int x { x, global g = two(); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "destructuring arity must match the return count",
+		source: [
+			"function two() returns int a, int b { a = 1; b = 2; }",
+			"function main() locals int x, int y, int z { x, y, z = two(); }",
+		].join("\n"),
+		expectError: "expects 2 targets",
+	},
+	{
+		label: "destructuring a single-return call is rejected",
+		source: [
+			"function one() returns int a { a = 1; }",
+			"function main() locals int x, int y { x, y = one(); }",
+		].join("\n"),
+		expectError: "not a multi-value function call",
+	},
 ];
 
 for (const testCase of typedPointerCases) {

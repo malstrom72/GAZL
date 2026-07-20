@@ -1,0 +1,41 @@
+/*
+	Impala 2 Step 4 (slice 4b): destructuring the caller side of a multi-value function
+	call. The callee declares N `returns`; the caller writes `a, b = f(...)` and the N
+	output slots land in a leading window ahead of the arguments. `_` discards a slot; a
+	target may be a `global`. Single-return calls stay byte-identical to Impala 1.
+	Expected when run (GAZLCmd multiReturn.gazl main): 5 -1 7 20 200.
+*/
+
+const int DEBUG = 1
+
+extern native printInt
+extern native printLF
+
+global int gLast
+
+function sumdiff(int a, int b) returns int s, int d
+{
+	s = a + b;						// two OUT slots written directly as $s / $d
+	d = a - b;
+}
+
+function scale(int v, int k) returns int lo, int hi
+{
+	lo = v * k;
+	hi = v * k * 10;
+}
+
+function main()
+locals int p, int q, int r
+{
+	p, q = sumdiff(2, 3);			// s=2+3=5, d=2-3=-1
+	printInt(p); printLF();			// 5
+	printInt(q); printLF();			// -1
+
+	_, r = sumdiff(10, 3);			// discard the sum, keep the diff
+	printInt(r); printLF();			// 7
+
+	p, global gLast = scale(2, 10);	// second target is a global
+	printInt(p); printLF();			// 20
+	printInt(global gLast); printLF();	// 200
+}
