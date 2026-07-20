@@ -1,0 +1,77 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 12:1
+; signature extern native printInt() -> unknown @ 16:1
+; signature extern native printFloat() -> unknown @ 17:1
+; signature extern native printLF() -> unknown @ 19:1
+
+;-----------------------------------------------------------------------------
+consume:	FUNC	; signature func consume(P p) -> int @ 19:18
+	$s:	OUTi
+	$p:	PARA *2
+;-----------------------------------------------------------------------------
+		MOVi $p:0 #99 	; p.x = 99
+		ADDi $s $p:0 $p:1	; s = p.x + p.y
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+scaled:	FUNC	; signature func scaled(int k, P p) -> int @ 25:17
+	$s:	OUTi
+	$k:	INPi
+	$p:	PARA *2
+;-----------------------------------------------------------------------------
+		ADDi %0 $p:0 $p:1	; s = k * (p.x + p.y)
+		MULi $s $k %0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+nested:	FUNC	; signature func nested(Q q) -> float @ 30:17
+	$g:	OUTf
+	$q:	PARA *3
+;-----------------------------------------------------------------------------
+		MOVf $g $q:2 	; g = q.g
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 35:15
+		PARA *1
+	$v:	LOCA *2
+	$w:	LOCA *3
+	$r:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $v:0 #5 	; v.x = 5
+		MOVi $v:1 #7 	; v.y = 7
+		ADRL %3 %1 *2	; r = consume(v)
+		ADRL %4 $v *2
+		COPY %3 %4 *2
+		CALL &consume %0 *3	; expects consume(P) -> int @ 39:16
+		MOVi $r %0 
+		MOVi %1 $r 	; printInt(r)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:24
+		MOVi %1 $v:0 	; printInt(v.x)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:15
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:26
+		MOVi %1 #3 	; r = scaled(3, v)
+		ADRL %4 %2 *2
+		ADRL %5 $v *2
+		COPY %4 %5 *2
+		CALL &scaled %0 *4	; expects scaled(int, P) -> int @ 43:18
+		MOVi $r %0 
+		MOVi %1 $r 	; printInt(r)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:24
+		MOVi $w:0 #1 	; w.lo.x = 1
+		MOVi $w:1 #2 	; w.lo.y = 2
+		MOVf $w:2 #0.75 	; w.g = 0.75
+		ADRL %5 %2 *3	; printFloat(nested(w))
+		ADRL %6 $w *3
+		COPY %5 %6 *3
+		CALL &nested %1 *4	; expects nested(Q) -> float @ 47:22
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 47:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:34
+		RETU   	; }

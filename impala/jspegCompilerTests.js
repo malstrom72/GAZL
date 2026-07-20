@@ -1289,6 +1289,35 @@ const typedPointerCases = [
 		].join("\n"),
 		expectError: "not a multi-value function call",
 	},
+	{
+		label: "a by-value struct parameter is accepted",
+		source: [
+			"struct P { int x; int y }",
+			"extern native printInt",
+			"function sum(P p) returns int s { s = p.x + p.y; }",
+			"function main() locals P v { v.x = 1; v.y = 2; printInt(sum(v)); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "passing the wrong struct by value is rejected",
+		source: [
+			"struct P { int x }",
+			"struct Q { int y }",
+			"function take(P p) returns int s { s = p.x; }",
+			"function main() locals Q w { take(w); }",
+		].join("\n"),
+		expectError: "Struct type mismatch for argument",
+	},
+	{
+		label: "passing a scalar where a struct is expected is rejected",
+		source: [
+			"struct P { int x }",
+			"function take(P p) returns int s { s = p.x; }",
+			"function main() locals int n { take(n); }",
+		].join("\n"),
+		expectError: "Argument type mismatch",
+	},
 ];
 
 for (const testCase of typedPointerCases) {

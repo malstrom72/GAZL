@@ -1,0 +1,48 @@
+/*
+	Impala 2 slice 2.5 (part A): by-value struct PARAMETERS. A struct-value parameter is one
+	labeled input `PARA *sizeof`; the caller COPYs the struct value into the call window
+	(ADRL window + ADRL source + COPY). Because it is a copy, the callee mutating its
+	parameter leaves the caller's struct untouched. Mixed scalar+struct params and nested
+	struct fields both fold to direct `$p:offset` operands in the callee.
+	Expected when run (GAZLCmd structByValue.gazl main): 106 5 36 0.75.
+*/
+
+const int DEBUG = 1
+
+struct P { int x; int y }
+struct Q { P lo; float g }
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function consume(P p) returns int s
+{
+	p.x = 99;						// mutate the LOCAL copy only
+	s = p.x + p.y;					// 99 + 7
+}
+
+function scaled(int k, P p) returns int s
+{
+	s = k * (p.x + p.y);			// mixed scalar + struct param
+}
+
+function nested(Q q) returns float g
+{
+	g = q.g;						// nested struct field through a by-value param
+}
+
+function main()
+locals P v, Q w, int r
+{
+	v.x = 5; v.y = 7;
+	r = consume(v);
+	printInt(r); printLF();			// 106
+	printInt(v.x); printLF();		// 5   — original untouched (proves by-value copy)
+
+	r = scaled(3, v);
+	printInt(r); printLF();			// 36
+
+	w.lo.x = 1; w.lo.y = 2; w.g = 0.75;
+	printFloat(nested(w)); printLF();	// 0.75
+}

@@ -85,6 +85,14 @@ all base-kind combinations, and read-back verification after every write.
   checked against the field type, nested `{}` descends into struct/array fields, trailing
   omission zero-fills. Lowering is the flat `DATA` rows the braces describe.
 
+> **Step 4 DONE (VM-verified, `multiReturn.impala`).** 4a: comma `returns` → N `OUT`
+> slots, `signature.returnList/returnCount`, `-> (t1,t2)` metadata, E430/E431 guards. 4b:
+> caller side — `a, b = f(...)` destructuring. The call reserves a leading N-slot output
+> window (`claimSlot` past `borrowForCall`); args land after it (`base + retSlots-1 + i`),
+> `CALL … *(count+retSlots)`; each target read out via `assign` (`_` discards, `global g`
+> targets supported), single-return path byte-identical (golden 0/67). Remaining here:
+> slice 2.5 by-value struct params/returns on the same window convention.
+
 ## Step 4 + slice 2.5: returns and by-value — one window convention
 
 **Experiment 1 (decisive):** a labeled `PARA` section works as a first-class local:

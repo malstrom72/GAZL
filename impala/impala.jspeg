@@ -267,9 +267,11 @@
         var parts = [];
         for (var idx = 0; idx < params.length; ++idx) {
             var param = params[idx] || {};
-            var typeName = (param.elem !== undefined
-                    ? signatureCategoryForDesc(fullDescFor(param.type, param.elem))
-                    : signatureParamCategory(param.type));
+            var typeName = (param.type === 'S'
+                    ? (param.struct || 'unknown')                 /* by-value struct param → the struct name */
+                    : (param.elem !== undefined
+                        ? signatureCategoryForDesc(fullDescFor(param.type, param.elem))
+                        : signatureParamCategory(param.type)));
             var name = param.name;
             if (!name) {
                 name = 'arg' + idx;
@@ -385,7 +387,9 @@
         if (hasSignature) {
             var extracted = [];
             for (var i = 0; i < signature.params.length; ++i) {
-                extracted.push(signatureParamCategory(signature.params[i].type));
+                var _p = signature.params[i];
+                extracted.push(_p.type === 'S' ? (_p.struct || 'unknown')
+                                               : signatureParamCategory(_p.type));
             }
             paramsText = extracted.join(', ');
         } else {
@@ -1304,6 +1308,21 @@
             $$parser.emit('+', 'p', a, a, '#' + place.placeOff);
         }
         return a;
+    };
+
+    /* by-value struct argument: reserve `words` window slots at %winSlot and COPY the
+       struct value in (experiment-verified: ADRL the window region, ADRL the source, COPY). */
+    $$parser.copyStructArg = function (argMeta, winSlot, words) {
+        argMeta = metaSlot(argMeta);
+        for (var k = 0; k < words; ++k) {                         /* reserve the window slots */
+            $$parser.claimSlot(winSlot + k);
+        }
+        var dst = $$parser.borrow('%');
+        $$parser.emit('=&', 'p', dst, '%' + winSlot, '*' + words);   /* ADRL address of the window region */
+        var src = $$parser.placeAddress(argMeta);                    /* address of the source struct */
+        $$parser.emit('copy', '?', dst, src, '*' + words);           /* COPY dst src *words */
+        $$parser.returnBack(src);
+        $$parser.returnBack(dst);
     };
 
     /* fp->field, place.field, nested chains — Step 2 slices 1–2 */
@@ -2558,7 +2577,9 @@ inp:ArgsDecl ')'_
                                                                                      type: param.type,
                                                                                      elem: param.elem,
                                                                                      name: param.name,
-                                                                                     size: param.size
+                                                                                     size: param.size,
+                                                                                     struct: param.struct,
+                                                                                     words: param.words
                                                                                  });
                                                                              }
                                                                          }
@@ -2593,16 +2614,29 @@ inp:ArgsDecl ')'_
                                                                         }
                                                                 }
                                                                          iterate($inp, function (p) {
-                                                                             $$parser.declare(
-                                                                                 'INP?', 'locals',
-                                                                                 '$' + p.name,
-                                                                                 p.type,
-                                                                                 true,
-                                                                                 (p.size !== undefined ? '*' + p.size : undefined),
-                                                                                 $$s, $$i,
-                                                                                 undefined,
-                                                                                 p.elem
-                                                                             );
+                                                                             if (p.type === 'S') {         /* by-value struct param → labeled input PARA *sizeof (read-only place) */
+                                                                                 $$parser.declare(
+                                                                                     'PARA', 'locals',
+                                                                                     '$' + p.name,
+                                                                                     'S',
+                                                                                     true,
+                                                                                     '*' + p.words,
+                                                                                     $$s, $$i,
+                                                                                     undefined,
+                                                                                     p.struct
+                                                                                 );
+                                                                             } else {
+                                                                                 $$parser.declare(
+                                                                                     'INP?', 'locals',
+                                                                                     '$' + p.name,
+                                                                                     p.type,
+                                                                                     true,
+                                                                                     (p.size !== undefined ? '*' + p.size : undefined),
+                                                                                     $$s, $$i,
+                                                                                     undefined,
+                                                                                     p.elem
+                                                                                 );
+                                                                             }
                                                                          });
                                                                      }
                 (
@@ -3171,6 +3205,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                _rs = _e.signature.returnCount;
                                                        }
                                                        $$.retSlots = _rs;
+                                                       $$.words = 0;                            /* input words placed so far (struct args span >1) */
                                                        $$.base  = $$parser.borrowForCall();
                                                        for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */
                                                            $$parser.claimSlot($$.base + _os);
@@ -3241,6 +3276,14 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                        expected
                                                                    , 'E406');
                                                                }
+                                                               if (expected === 'S' && params[argIdx].struct !== undefined
+                                                                       && $$.elems[argIdx] !== params[argIdx].struct) {
+                                                                   $$parser.fail('Struct type mismatch for argument '
+                                                                           + (argIdx + 1) + ' when calling ' + label
+                                                                           + ' (expected ' + params[argIdx].struct
+                                                                           + ', got ' + ($$.elems[argIdx] || 'a non-struct value')
+                                                                           + ')', $$s, $$i, 'E421');
+                                                               }
                                                                var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */
                                                                if (expected === 'p' && expectedElem !== undefined
                                                                        && !$$.nulls[argIdx]
@@ -3284,11 +3327,11 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$parser.emit('()', '?',
                                                                      func,
                                                                      '%' + $$.base,
-                                                                     '*' + ($$.count + $$.retSlots));
+                                                                     '*' + ($$.words + $$.retSlots));
                                                        $$parser.returnBack(func);
 
-                                                       while ($$.count-- > 0) {              /* free the argument slots (past the output slots) */
-                                                           $$parser.returnBack('%' + ($$.base + $$.retSlots + $$.count));
+                                                       while ($$.words-- > 0) {              /* free the argument words (past the output slots) */
+                                                           $$parser.returnBack('%' + ($$.base + $$.retSlots + $$.words));
                                                        }
 
                                                        $$parser.makeMeta(callee, ':=', callResultType,
@@ -3332,7 +3375,15 @@ Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                                && meta.operands[1] === '&NULL'
                                                                && meta.operands[2] === undefined);
                                                        }
-                                                       $$parser.makeArgValue($a, $$.base + $$.retSlots - 1 + $$.count);
+                                                       var winSlot = $$.base + $$.retSlots + $$.words;
+                                                       if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */
+                                                           var w = $$parser.structWords(meta.struct);
+                                                           $$parser.copyStructArg($a, winSlot, w);
+                                                           $$.words += w;
+                                                       } else {
+                                                           $$parser.makeArgValue($a, winSlot);
+                                                           $$.words += 1;
+                                                       }
                                                     } }
 
 Group       <-  '('_ Expr ')'_                      { if (!$$parser.dry)
