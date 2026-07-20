@@ -201,15 +201,19 @@
 
     /* render a full element descriptor as a single metadata token: 'p:i' → "int-ptr",
        'p:p:i' → "int-ptr-ptr", 'i' → "int", 'p' → "ptr" (element-unknown pointer) */
-    function signatureCategoryForDesc(desc) {
+    function signatureCategoryForDesc(desc) {                     /// 'p:i'→"int-ptr", 'p:Filter'→"Filter-ptr"
         if (desc === undefined) {
             return 'unknown';
         }
-        var text = signatureParamCategory(desc[desc.length - 1]);
-        for (var wi = desc.length - 3; wi >= 0; wi -= 2) {
-            text += '-ptr';
+        var head = $$parser.descHead(desc);
+        var tail = $$parser.descTail(desc);
+        if (head === 'S') {                                       /* struct value: category is the struct itself */
+            return signatureCategoryForDesc(tail);
         }
-        return text;
+        if (tail === undefined) {
+            return ($$parser.isStructAtom(head) ? head : signatureParamCategory(head));
+        }
+        return signatureCategoryForDesc(tail) + '-ptr';           /* head is a pointer level */
     }
 
     /* full descriptor of a declared symbol: type char + optional element chain */

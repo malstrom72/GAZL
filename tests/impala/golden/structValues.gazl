@@ -8,7 +8,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
 store:	GLOB *8	; signature array store[8] : unknown @ 29:1
 
 ;-----------------------------------------------------------------------------
-tweak:	FUNC	; signature func tweak(unknown-ptr-ptr-ptr v, float x) -> void @ 29:16
+tweak:	FUNC	; signature func tweak(Voice-ptr v, float x) -> void @ 29:16
 		PARA *1
 	$v:	INPp
 	$x:	INPf

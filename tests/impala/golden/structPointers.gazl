@@ -9,7 +9,7 @@ FILTER_WORDS:	! DEFi #3	; signature const FILTER_WORDS : int @ 21:1
 store:	GLOB *6	; signature array store[6] : unknown @ 23:1
 
 ;-----------------------------------------------------------------------------
-setup:	FUNC	; signature func setup(unknown-ptr-ptr-ptr f, int m, float c) -> void @ 23:16
+setup:	FUNC	; signature func setup(Filter-ptr f, int m, float c) -> void @ 23:16
 		PARA *1
 	$f:	INPp
 	$m:	INPi
@@ -23,7 +23,7 @@ setup:	FUNC	; signature func setup(unknown-ptr-ptr-ptr f, int m, float c) -> voi
 
 
 ;-----------------------------------------------------------------------------
-copyMode:	FUNC	; signature func copyMode(unknown-ptr-ptr-ptr dst, unknown-ptr-ptr-ptr src) -> void @ 30:19
+copyMode:	FUNC	; signature func copyMode(Filter-ptr dst, Filter-ptr src) -> void @ 30:19
 		PARA *1
 	$dst:	INPp
 	$src:	INPp
