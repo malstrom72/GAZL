@@ -3097,7 +3097,7 @@ Value       <-  Group
                                                       } }
                 / s:StringLiteral                   { if (!$$parser.dry) {
                                                         $$parser.makeString('s', $$, evaluate($s), $$s, $$i);
-                                                        $$parser.setElem($$, undefined);
+                                                        $$parser.setElem($$, 'i');      /* string data is int words (Impala 2) */
                                                       } }
                 / NULL _                            { if (!$$parser.dry) {
                                                         $$parser.makeMeta($$, ':=', 'p', undefined, '&NULL', undefined);

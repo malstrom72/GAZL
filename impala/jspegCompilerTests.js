@@ -954,6 +954,16 @@ const typedPointerCases = [
 		expectError: "Element type mismatch with previous declaration",
 	},
 	{
+		label: "string literals are int pointers",
+		source: 'function main() locals int c, int pointer hex { c = ("0123456789abcdef")[11]; hex = "ABC"; c = *hex + hex[1]; }',
+		expectError: null,
+	},
+	{
+		label: "string literals do not assign into float pointers",
+		source: 'function main() locals float pointer fp { fp = "abc"; }',
+		expectError: "Pointer element type mismatch",
+	},
+	{
 		label: "typed pointer arguments match typed parameters",
 		source: [
 			"function f(int pointer v) returns int r { r = *v; }",

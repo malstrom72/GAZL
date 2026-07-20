@@ -112,7 +112,8 @@ locals int i
 
 Subscripts, dereferences (`*p`), pointer arithmetic (`p + i` keeps the element type), and
 `&` (address-of an `int` yields an `int pointer`; `&a[i]` of an `int array` likewise) all
-propagate element types. The boundary rules are asymmetric — *erasing is silent, assuming
+propagate element types. String literals are `int pointer` (their characters are word-sized
+ints), so `("0123456789abcdef")[v & 0xf]` needs no cast. The boundary rules are asymmetric — *erasing is silent, assuming
 is loud*:
 
 - typed → untyped (`pointer raw = p`, passing a typed buffer to a native): **implicit**;
