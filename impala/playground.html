@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<!--
+	Impala → GAZL live playground. A single static file: it loads the JSPEG-generated
+	Impala compiler (impalaCompiler.js) directly in the browser — no server, no build —
+	and recompiles on every keystroke. Open it from the `impala/` directory so the
+	relative <script> below resolves.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Impala → GAZL Playground</title>
+<style>
+	:root { --bg:#1e1f26; --panel:#262832; --ink:#e6e6ea; --dim:#8a8f9c; --accent:#7db6ff;
+		--err:#ff6b6b; --warn:#ffcf6b; --ok:#8ae234; }
+	* { box-sizing: border-box; }
+	html, body { height: 100%; margin: 0; }
+	body { background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, Segoe UI, Roboto, sans-serif; display: flex; flex-direction: column; }
+	header { padding: 10px 16px; border-bottom: 1px solid #33353f; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+	header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+	header h1 span { color: var(--accent); }
+	.opts { display: flex; align-items: center; gap: 14px; color: var(--dim); font-size: 13px; }
+	.opts label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+	.opts input[type=text] { width: 84px; background: #14151a; color: var(--ink); border: 1px solid #3a3d48; border-radius: 4px; padding: 2px 6px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+	#status { margin-left: auto; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+	#status.ok { color: var(--ok); } #status.bad { color: var(--err); }
+	main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+	.pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+	.pane + .pane { border-left: 1px solid #33353f; }
+	.pane .cap { padding: 6px 12px; color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid #2b2d37; }
+	textarea, pre { flex: 1; margin: 0; padding: 12px; background: var(--panel); color: var(--ink);
+		font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5;
+		border: 0; outline: none; overflow: auto; white-space: pre; tab-size: 4; }
+	textarea { resize: none; }
+	pre.diag { color: var(--err); }
+	.note { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+	<h1>Impala <span>&rarr;</span> GAZL</h1>
+	<div class="opts">
+		<label>seed <input id="seed" type="text" value="0x4d2" spellcheck="false" /></label>
+		<label><input id="retab" type="checkbox" checked /> align</label>
+		<label><input id="legacy" type="checkbox" /> --legacy</label>
+	</div>
+	<div id="status">&nbsp;</div>
+</header>
+<main>
+	<section class="pane">
+		<div class="cap">input.impala</div>
+		<textarea id="src" spellcheck="false" autocomplete="off"></textarea>
+	</section>
+	<section class="pane">
+		<div class="cap">output.gazl</div>
+		<pre id="out"></pre>
+	</section>
+</main>
+
+<script src="impalaCompiler.js"></script>
+<script>
+(function () {
+	"use strict";
+
+	var TAB_STOPS = [0, 20, 32, 64];   // matches impala.nuxjs.js / the CLI runner
+
+	// Pretty-align a tab-separated GAZL line onto the fixed tab stops (optional).
+	function retabulate(line) {
+		if (line.length === 0) return "";
+		var result = "", column = 0, tabIndex = 0, segs = line.split("\t");
+		for (var i = 0; i < segs.length; ++i) {
+			var stop = tabIndex < TAB_STOPS.length ? TAB_STOPS[tabIndex] : -1e9;
+			var target = Math.max(stop, column + 1);
+			while (column < target) {
+				var rem = column % 4, next = column + (rem === 0 ? 4 : 4 - rem);
+				if (next > target) break;
+				result += "\t"; column = next;
+			}
+			if (column < target) { result += " ".repeat(target - column); column = target; }
+			result += segs[i]; column += segs[i].length; ++tabIndex;
+		}
+		return result;
+	}
+
+	function lineCol(source, offset) {
+		if (!(offset >= 0)) offset = 0;
+		var line = 1, col = 1, end = Math.min(offset, source.length);
+		for (var i = 0; i < end; ++i) {
+			var ch = source[i];
+			if (ch === "\n") { ++line; col = 1; }
+			else if (ch !== "\r") ++col;
+		}
+		return { line: line, col: col };
+	}
+
+	function caretLine(source, offset) {
+		var lc = lineCol(source, offset);
+		var lines = source.split(/\r\n|\r|\n/);
+		var text = lines[lc.line - 1] || "";
+		var pointer = "";
+		for (var i = 0; i < lc.col - 1; ++i) pointer += text[i] === "\t" ? "\t" : " ";
+		return { lc: lc, text: text, pointer: pointer + "^" };
+	}
+
+	var srcEl = document.getElementById("src"),
+		outEl = document.getElementById("out"),
+		statusEl = document.getElementById("status"),
+		seedEl = document.getElementById("seed"),
+		retabEl = document.getElementById("retab"),
+		legacyEl = document.getElementById("legacy");
+
+	function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+	function compile() {
+		var source = srcEl.value;
+		var seed = parseInt(seedEl.value, seedEl.value.indexOf("0x") === 0 ? 16 : 10);
+		if (!isFinite(seed)) seed = 0x4d2;
+
+		var lines = [];
+		var warnings = [];
+		var opts = {
+			output: function (l) { lines.push(l); },
+			randomId: seed,
+			sourceName: "input.impala",
+			legacy: legacyEl.checked,
+			warn: function (message, offset, code, hint) {
+				var c = caretLine(source, offset);
+				var pos = "input.impala:" + c.lc.line + ":" + c.lc.col;
+				warnings.push(pos + ": warning" + (code ? "[" + code + "]" : "") + ": " + message
+					+ "\n" + c.text + "\n" + c.pointer
+					+ (hint ? "\n" + pos + ": note: " + hint : ""));
+			}
+		};
+
+		try {
+			var result = impalaCompiler(source, opts);
+			var body = lines.map(retabEl.checked ? retabulate : function (l) { return l; }).join("\n");
+			outEl.className = "";
+			outEl.innerHTML = (warnings.length ? '<span class="note">' + esc(warnings.join("\n\n")) + "</span>\n\n" : "") + esc(body);
+			statusEl.className = "ok";
+			statusEl.textContent = "✓ " + lines.length + " lines"
+				+ (warnings.length ? "  ·  " + warnings.length + " warning" + (warnings.length > 1 ? "s" : "") : "");
+		} catch (err) {
+			var out;
+			if (err && isFinite(err.impalaOffset)) {
+				var c = caretLine(source, err.impalaOffset);
+				var pos = "input.impala:" + c.lc.line + ":" + c.lc.col;
+				out = pos + ": error" + (err.impalaCode ? "[" + err.impalaCode + "]" : "") + ": "
+					+ (err.impalaMessage || "compile error") + "\n" + c.text + "\n" + c.pointer
+					+ (err.impalaHint ? "\n" + pos + ": note: " + err.impalaHint : "");
+			} else {
+				out = (err && err.message) ? err.message : String(err);
+			}
+			outEl.className = "diag";
+			outEl.textContent = out;
+			statusEl.className = "bad";
+			statusEl.textContent = "✗ error";
+		}
+	}
+
+	var timer = null;
+	function schedule() { clearTimeout(timer); timer = setTimeout(compile, 120); }
+	srcEl.addEventListener("input", schedule);
+	[seedEl, retabEl, legacyEl].forEach(function (el) { el.addEventListener("input", compile); el.addEventListener("change", compile); });
+
+	srcEl.value = [
+		"// Impala 2 — edit me; GAZL updates live.",
+		"struct Biquad { float b0; float z1 }",
+		"struct Voice  { int note; Biquad lo; float gain }",
+		"",
+		"extern native printFloat",
+		"extern native printLF",
+		"global array pool[8]",
+		"",
+		"function tick(Voice pointer v, float in)",
+		"returns float out",
+		"{",
+		"\tv->lo.z1 = in * v->lo.b0;      // nested field through a pointer",
+		"\tout = v->lo.z1 + v->gain;",
+		"}",
+		"",
+		"function main()",
+		"locals Voice v, Voice pointer p",
+		"{",
+		"\tv.note = 60;                   // struct value: direct $v:0 operand",
+		"\tv.lo.b0 = 0.5;",
+		"\tv.gain = 0.25;",
+		"\tp = (Voice pointer) &global pool[0];",
+		"\t*p = v;                        // whole-struct copy through a pointer",
+		"\tprintFloat(tick(p, 1.0)); printLF();",
+		"}",
+		""
+	].join("\n");
+
+	compile();
+})();
+</script>
+</body>
+</html>
