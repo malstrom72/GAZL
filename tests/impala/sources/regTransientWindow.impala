@@ -1,0 +1,40 @@
+/*
+	Regression (found by impala/fuzzImpala.js, seed 10024): a destructuring statement freed its
+	output-window slots low-to-high, leaving the per-unit transient pool with a hole below a live
+	temp. A later function that put a struct-value-argument call on the right of an arithmetic
+	operator then had its call window overlap the live left-operand temp — tripping the compiler's
+	`transient %1 must exist in stock` assertion. Fixed in borrowForCall: never seat a call base
+	below a live transient.
+	Expected when run (GAZLCmd regTransientWindow.gazl main): 3 1 73.
+*/
+
+const int DEBUG = 1
+
+struct Pair { int a; int b }
+
+extern native printInt
+extern native printLF
+
+function split(int n) returns int q, int r		// leaves the transient pool in the tricky state
+{
+	q = n / 2;
+	r = n - n / 2 * 2;
+}
+
+function combine(int k, int m, Pair p) returns int s
+{
+	s = k + m + p.a + p.b;
+}
+
+function main()
+locals Pair pr, int x, int y
+{
+	x, y = split(7);							// destructure: x=3, y=1
+	printInt(x); printLF();						// 3
+	printInt(y); printLF();						// 1
+
+	pr.a = 10; pr.b = 20;
+	// a live arithmetic partial on the left, a struct-value-argument call on the right
+	x = (((y - -12) - -17) + combine(pr.a, x, pr));	// (13-(-17)=30) + (10+3+10+20=43) = 73
+	printInt(x); printLF();						// 73
+}

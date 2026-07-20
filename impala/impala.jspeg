@@ -771,6 +771,21 @@
             return $$parser.counters['%']++;
         }
 
+        /* A call window grows UPWARD from its base slot. If a live transient sits above
+           the free pool (a freed hole below it), reusing a slot from that hole would let
+           the window overlap the live temp — so mint a fresh slot above everything instead.
+           (Normal code frees top-down, so the free pool reaches the top and this never
+           fires; it guards the cross-statement holes a destructure/struct window can leave —
+           fuzzer seed 10024.) */
+        var maxFree = -1;
+        for (var _k = 0; _k < stk.length; ++_k) {
+            var _v = parseInt(stk[_k].substr(1), 10);
+            if (_v > maxFree) maxFree = _v;
+        }
+        if (maxFree < $$parser.counters['%'] - 1) {
+            return $$parser.counters['%']++;
+        }
+
         /* sort in-place on the numeric suffix, ascending           */
         stk.sort(function (a, b) {
             return parseInt(a.substr(1), 10) - parseInt(b.substr(1), 10);
