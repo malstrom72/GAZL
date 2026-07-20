@@ -30,6 +30,8 @@ node runJspegTests.js
 IF ERRORLEVEL 1 EXIT /B 1
 node importBuildTests.js
 IF ERRORLEVEL 1 EXIT /B 1
+node fuzzImpala.js 3000 1
+IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
 REM Validate generated .gazl metadata for the JSPEG fixtures.
