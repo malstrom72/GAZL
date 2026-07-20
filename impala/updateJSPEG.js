@@ -112,7 +112,7 @@ function applyImpalaHardening(source) {
 				"\t'abs', 'array', 'assert', 'case', 'const', 'copy', 'default', 'do', 'else', 'extern',",
 				"\t'float', 'floor', 'for', 'from', 'ftoi', 'funcptr', 'function', 'global', 'goto', 'if',",
 				"\t'int', 'itof', 'locals', 'loop', 'native', 'null', 'nullfunc', 'pointer', 'readonly',",
-				"\t'returns', 'switch', 'temporary', 'to', 'while'",
+				"\t'returns', 'sizeof', 'struct', 'switch', 'temporary', 'to', 'while'",
 				"];",
 			].join("\n"),
 		);

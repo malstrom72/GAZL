@@ -1,0 +1,50 @@
+/*
+	Impala 2 Step 2 (slice 1): struct definitions, sizeof, and field access through
+	struct pointers. Struct values, initializers, and by-value passing come later.
+	Expected when run (GAZLCmd structPointers.gazl main): 3 2 0.5 0.75 7 (one per line).
+*/
+
+const int DEBUG = 1
+
+struct Filter {
+	int mode
+	float cutoff
+	float resonance
+}
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+const int FILTER_WORDS = sizeof(Filter)
+
+global array store[6]
+
+function setup(Filter pointer f, int m, float c)
+{
+	f->mode = m;
+	f->cutoff = c;
+	f->resonance = c + 0.25;
+}
+
+function copyMode(Filter pointer dst, Filter pointer src)
+{
+	dst->mode = src->mode + 5;					// read one struct pointer, write another
+}
+
+function main()
+locals Filter pointer a, Filter pointer b
+{
+	printInt(FILTER_WORDS); printLF();			// 3
+
+	a = (Filter pointer) &global store[0];
+	b = (Filter pointer) &global store[3];
+
+	setup(a, 2, 0.5);
+	printInt(a->mode); printLF();				// 2
+	printFloat(a->cutoff); printLF();			// 0.5
+	printFloat(a->resonance); printLF();		// 0.75
+
+	copyMode(b, a);
+	printInt(b->mode); printLF();				// 7
+}

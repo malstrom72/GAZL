@@ -1004,6 +1004,63 @@ const typedPointerCases = [
 		].join("\n"),
 		expectError: "Pointer element type mismatch for argument 1",
 	},
+	{
+		label: "struct field access through a pointer compiles",
+		source: [
+			"struct S { int a; float b }",
+			"function f(S pointer s) locals int x, float y { s->a = 3; x = s->a; y = s->b; }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "sizeof reports struct word count",
+		source: ["struct S { int a; float b; int c }", "const int N = sizeof(S)", "function main() { }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "struct-pointer cast retypes a raw pointer",
+		source: [
+			"struct S { int a }",
+			"global array store[2]",
+			"function main() locals S pointer s { s = (S pointer) &global store[0]; s->a = 1; }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "extern struct forward-declares mutual pointer types",
+		source: ["extern struct B", "struct A { B pointer nb }", "struct B { A pointer na }", "function main() { }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "-> requires a struct pointer",
+		source: "function f(int pointer p) { p->x = 1; }",
+		expectError: "Field access requires a struct",
+	},
+	{
+		label: "unknown struct field is rejected",
+		source: ["struct S { int a }", "function f(S pointer s) { s->b = 1; }"].join("\n"),
+		expectError: "has no field b",
+	},
+	{
+		label: "dot on a struct pointer suggests arrow",
+		source: ["struct S { int a }", "function f(S pointer s) { s.a = 1; }"].join("\n"),
+		expectError: "Use '->'",
+	},
+	{
+		label: "duplicate struct definition is rejected",
+		source: ["struct S { int a }", "struct S { int b }"].join("\n"),
+		expectError: "Struct already defined",
+	},
+	{
+		label: "duplicate struct field is rejected",
+		source: "struct S { int a; int a }",
+		expectError: "Duplicate field",
+	},
+	{
+		label: "struct field assignment is type-checked",
+		source: ["struct S { int a }", "function f(S pointer s, float x) { s->a = x; }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
 ];
 
 for (const testCase of typedPointerCases) {

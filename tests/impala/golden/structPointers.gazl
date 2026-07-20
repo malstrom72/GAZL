@@ -1,0 +1,67 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 9:1
+; signature extern native printInt() -> unknown @ 16:1
+; signature extern native printFloat() -> unknown @ 17:1
+; signature extern native printLF() -> unknown @ 19:1
+FILTER_WORDS:	! DEFi #3	; signature const FILTER_WORDS : int @ 21:1
+store:	GLOB *6	; signature array store[6] : unknown @ 23:1
+
+;-----------------------------------------------------------------------------
+setup:	FUNC	; signature func setup(unknown-ptr-ptr-ptr f, int m, float c) -> void @ 23:16
+		PARA *1
+	$f:	INPp
+	$m:	INPi
+	$c:	INPf
+;-----------------------------------------------------------------------------
+		POKE $f #0 $m	; f->mode = m
+		POKE $f #1 $c	; f->cutoff = c
+		ADDf %0 $c #0.25	; f->resonance = c + 0.25
+		POKE $f #2 %0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+copyMode:	FUNC	; signature func copyMode(unknown-ptr-ptr-ptr dst, unknown-ptr-ptr-ptr src) -> void @ 30:19
+		PARA *1
+	$dst:	INPp
+	$src:	INPp
+;-----------------------------------------------------------------------------
+		PEEK %0 $src #0	; dst->mode = src->mode + 5
+		ADDi %0 %0 #5
+		POKE $dst #0 %0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 35:15
+		PARA *1
+	$a:	LOCp
+	$b:	LOCp
+;-----------------------------------------------------------------------------
+		MOVi %1 #FILTER_WORDS 	; printInt(FILTER_WORDS)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:35
+		MOVp $a &store:0 	; a = (Filter pointer) &global store[0]
+		MOVp $b &store:3 	; b = (Filter pointer) &global store[3]
+		MOVp %1 $a 	; setup(a, 2, 0.5)
+		MOVi %2 #2 
+		MOVf %3 #0.5 
+		CALL &setup %0 *4	; expects setup(ptr, int, float) -> void @ 43:18
+		PEEK %1 $a #0	; printInt(a->mode)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:30
+		PEEK %1 $a #1	; printFloat(a->cutoff)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 45:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 45:34
+		PEEK %1 $a #2	; printFloat(a->resonance)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 46:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 46:37
+		MOVp %1 $b 	; copyMode(b, a)
+		MOVp %2 $a 
+		CALL &copyMode %0 *3	; expects copyMode(ptr, ptr) -> void @ 48:16
+		PEEK %1 $b #0	; printInt(b->mode)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 49:30
+		RETU   	; }
