@@ -45,12 +45,14 @@ These are the constraints every 2.0 feature is measured against.
 4. **Backward compatibility: never silent, and additive where possible.** Silently changing the
    meaning of any 1.0 construct is absolutely forbidden. New *syntax* is purely additive — every
    existing `.impala` source parses as before and compiles to byte-identical `.gazl` (a gate, not
-   an aspiration; see [Backward compatibility](#backward-compatibility)). New *strictness rules*
-   may reject old code, but only **loudly**, only with a **mechanical, meaning-preserving fix**
-   (byte-identical output after the edit), and always with a compile-time argument (`--legacy`)
-   that downgrades the errors to warnings. Behavior never varies per file: no version markers, no
-   pragmas, no dialect inference — one language, one set of rules, one escape flag at the
-   invocation.
+   an aspiration; see [Backward compatibility](#backward-compatibility)), with exactly one
+   sanctioned deviation: type refinement may upgrade an untyped `MOVE` to the typed variant of the
+   same operation (`MOVi`/`MOVf`/`MOVp`) — semantically identical instructions, verified
+   variant-only before regolding. New *strictness rules* may reject old code, but only **loudly**,
+   only with a **mechanical, meaning-preserving fix** (byte-identical output after the edit), and
+   always with a compile-time argument (`--legacy`) that downgrades the errors to warnings.
+   Behavior never varies per file: no version markers, no pragmas, no dialect inference — one
+   language, one set of rules, one escape flag at the invocation.
 
 ## Roadmap
 
@@ -242,23 +244,21 @@ beyond one cast would be punishment, not information.
 Initializers for typed arrays are element-checked: `global int array a[4] = { 1, 2.0 }` is a
 compile error on the float literal (new syntax, so no compatibility concern).
 
-One free upgrade enabled by the boundary rules:
+Two free upgrades enabled by the boundary rules:
 
 - **`&` becomes type-producing.** `&global aFloat` yields `float pointer` (previously: generic
   `pointer`); `&x` on an `int` local yields `int pointer`; `&a[i]` of an `int array` likewise.
-  All existing uses still compile because erase is implicit. *Implementation note:* type
-  refinement can upgrade a formerly-untyped result to a typed one inside a single expression
-  (e.g. `x = *(&global aFloat)` now emits `MOVf` where 1.0 emitted the untyped `MOVE`) — a
-  semantically identical instruction variant. No source in the corpus exhibits the pattern (the
-  byte-diff gate stays clean), but the guarantee is "semantically identical", not "byte-identical",
-  for this specific corner.
+  All existing uses still compile because erase is implicit.
+- **String literals become `int pointer`** (GAZL string data is int words via `DATs`).
+  `hexDigit = HEX_CHARS[v & 0xf]` needs no cast; passing a literal to `print(pointer)` is an
+  implicit erase.
 
-A second upgrade from earlier drafts is **withdrawn**: string literals do *not* become
-`int pointer`. Existing 1.0 sources subscript string literals (`("0123456789abcdef")[v & 0xf]`),
-and typing the literal would change their emitted instruction from untyped `MOVE` to `MOVi` —
-a guaranteed byte-diff-gate violation on real corpus code, unlike the `&` corner above. The
-earlier "zero codegen change" claim was simply wrong. String literals stay generic `pointer`;
-cast where element typing is wanted.
+Both upgrades share one compatibility consequence, **explicitly sanctioned** *(decided
+2026-07-20)*: type refinement can upgrade a formerly-untyped result inside an expression, so a
+line that emitted the untyped `MOVE` in 1.0 may now emit the typed variant of the same operation
+(`MOVi`/`MOVf`/`MOVp` — e.g. `x = ("0123456789abcdef")[v & 0xf]`). These are **semantically
+identical instruction variants**, and they are the *only* permitted deviation from byte-identity;
+every such golden change is verified to differ in MOV-variant mnemonics alone before regolding.
 
 ### Cross-unit checking
 
@@ -542,6 +542,11 @@ re-declaring it** in each source (the established copy-paste model). Nothing in 
 output forces the copies to agree — types erase completely — so offset drift between two copies of
 a struct is silent runtime garbage unless the metadata channel catches it. It does:
 
+**In an import-driven build (Step 5), the rule is stricter and simpler: a struct is defined
+exactly once in the closure** *(decided)* — a second definition anywhere is an error, agreeing or
+not. Single source of truth, enforced. Everything below applies only to the **legacy
+manual-concatenation workflow**, where units may still carry textual copies:
+
 **Identity is nominal, layout-verified.** The struct *name* is the identity. GAZL's namespace is
 already flat (function and global names collide across concatenated units today; struct names join
 that club), and every definition of the same struct name in a linked set must agree **exactly**:
@@ -590,11 +595,15 @@ opaque consumers interoperate.
 ## Step 3: Typed function pointers (proposed)
 
 Mirrors structs exactly: **named funcptr types that become base types** — the typedef the language
-never had. Signature syntax reuses the function-declaration grammar:
+never had. Type definitions are introduced by their own keyword, **`functype`** *(decided — an
+earlier draft reused `funcptr`, but `funcptr Name` already means a variable declaration, and a
+keyword that means "variable" in one position and "type" in another is exactly the kind of dual
+reading agents misparse; `functype` has zero identifier collisions in the corpus)*. The signature
+syntax reuses the function-declaration grammar:
 
 ```impala
-funcptr ProcessFn(int count, int pointer data) returns int    // a named funcptr TYPE
-funcptr TickFn(int phase)                                      // no `returns` = void
+functype ProcessFn(int count, int pointer data) returns int   // a named funcptr TYPE
+functype TickFn(int phase)                                     // no `returns` = void
 
 ProcessFn cb                        // a funcptr of that signature
 ProcessFn array handlers[8]         // composes with Step 1 modifiers for free
@@ -602,7 +611,8 @@ global TickFn onTick = tickHandler  // checked: tickHandler must match TickFn's 
 ```
 
 - **Bare `funcptr fp` stays valid** — untyped signature, 1.0 behaviour, the escape hatch parallel
-  to bare `pointer`/`array`.
+  to bare `pointer`/`array`. `funcptr` never introduces types; `functype` never declares
+  variables.
 - Parameter names are optional (types-only allowed), mirroring `extern`/`function`.
 - Assignments and indirect calls through a named type are checked against its signature; the
   contract rides the existing `; signature` metadata channel for cross-unit checking. `nullfunc`
@@ -687,7 +697,7 @@ skipped position.
 | Bare call statement | legal, discards all returns — consistent with 1.0's idiom for single returns. |
 | LHS forms | any lvalue: locals, `global x`, `arr[i]`, `fp->field` (if Step 2 is adopted). |
 | Single-return functions | completely unchanged — expressions, chaining, byte-identical output (N=1 *is* today's layout). |
-| Named funcptr types | signatures extend naturally: `funcptr SplitFn(float in) returns float lo, float hi` (if Step 3 is adopted). |
+| Named funcptr types | signatures extend naturally: `functype SplitFn(float in) returns float lo, float hi` (if Step 3 is adopted). |
 | Metadata | the `->` row grows a tuple form: `; signature func polarToRect(float, float) -> (float, float)`; the validator checks return arity and types cross-unit; `unknown` stays the legacy wildcard. |
 | Natives | host natives already write the window via `accessParams`, so multi-out natives are expressible; extend `docs/nativeCallbackSignatures.gazl` when a host wants one. |
 
@@ -721,34 +731,51 @@ instead of silent garbage, but managing the pain is not removing it.
 import "filter.impala"
 ```
 
-The imported file is a **normal compilable unit — not a header**. The compiler parses it in
-*interface mode* and takes its interface:
+The imported file is a **normal compilable unit — not a header**. The compiler parses it and takes
+its interface:
 
-- `struct`, `const`, and named `funcptr` type declarations enter scope directly;
+- `struct`, `const`, and `functype` declarations enter scope directly;
 - **function and global definitions are converted to typed extern declarations automatically**,
   with their full signatures (including multi-return, if Step 4 is adopted);
 - `extern` and `extern native` declarations pass through as-is;
 - its own `import`s are processed transitively;
-- **nothing is emitted** — the importing unit's `.gazl` output gains no code, data, or directives
-  from the import.
+- the importing unit's own `.gazl` output gains no code, data, or directives from the import —
+  imported units are emitted once, as themselves, by the build (below).
 
 There is exactly **one source of truth**: the struct and the functions live in `filter.impala` and
 nowhere else. No second artifact exists to drift.
 
-**Import is not linking.** Each unit is still compiled independently and the program is still
-assembled by concatenating `.gazl` files. `import "filter.impala"` gives the compiler the
-*interface*; you still compile `filter.impala` once and concatenate `filter.gazl`. Forgetting to
-do so surfaces as a missing definition at assembly/validation time, exactly like a missing unit
-today.
+**Import is linking** *(decided — an earlier draft separated them; the user's observation "it
+could be" is right, and the benefits compound)*. The `import` statements already describe the
+complete program graph, so making the programmer restate that graph as a manual concatenation
+list is redundancy with failure modes: a forgotten unit, a stale artifact, a wrong order. Instead,
+the build is driven from a root unit:
 
-**Rejected alternatives**, for the record:
+```
+impala build main.impala → main.gazl        (the complete, linked program)
+```
 
-- *C-style declaration files* (a hand-maintained `filter_types.impala` of declarations only):
-  the C header disease — a second artifact that drifts from the definitions it describes. Moves
-  the copy, doesn't kill it.
-- *Importing compiled `.gazl` metadata*: no second artifact, but creates a build-order dependency
-  and makes mutually-referencing units impossible — properties concatenation deliberately
-  provides. Disqualifying.
+The toolchain walks the import closure (visited-set, cycles legal), compiles each unit exactly
+once, and emits the concatenated program itself. **Concatenation still happens — the tool performs
+it.** The GAZL assembler and loader are untouched; the transliterator property is untouched.
+Consequences:
+
+- **Staleness vanishes** for source imports: everything is compiled from source, together.
+- `import "x.gazl"` drops a precompiled or hand-written unit into the closure as-is — its
+  interface read from the `; signature` rows (and structural facts: `! DEF` values, `GLOB`
+  sizes), its text emitted verbatim into the linked output. This is how third-party blobs,
+  hand-written GAZL, and a precompiled stdlib participate.
+- **The validator becomes internal to the build** — the link set *is* the closure, checked during
+  compilation. The standalone `gazl-validate` remains for the legacy workflow only.
+- **Single definition, enforced**: any symbol — and in particular any struct — defined more than
+  once in the closure is an error. The copy-paste model and its layout-agreement machinery apply
+  only to the legacy manual workflow.
+- The legacy workflow (compile units separately, concatenate by hand, run the validator) remains
+  fully supported — import-driven builds are the front door, not a replacement.
+
+**Rejected alternative**, for the record: *C-style declaration files* (a hand-maintained
+`filter_types.impala` of declarations only) — the C header disease; a second artifact that drifts
+from the definitions it describes. Moves the copy, doesn't kill it.
 
 ### Semantics
 
@@ -758,13 +785,14 @@ today.
   flat, as it already is for functions and globals across concatenated units). The same file
   reached via two paths is deduplicated by canonical path.
 - **Valued constants are inlined** at the importing side; only the defining unit emits its
-  `! DEF` directive. (Re-emitting `DEF`s from every importer would collide at concatenation.
+  `! DEF` directive. (Re-emitting `DEF`s from every importer would collide in the linked output.
   Consequence: retuning a shared constant by editing `.gazl` text is done in the defining unit's
-  output — where it belongs.) Host-supplied valueless constants (`const int DEBUG`) emit
+  section — where it belongs.) Host-supplied valueless constants (`const int DEBUG`) emit
   references by name, unchanged.
-- The `; signature` validator remains the link-time backstop: import guarantees agreement among
-  the *sources* you compiled today, but a stale `.gazl` compiled from an older version of an
-  imported file can still disagree — and the validator still catches it.
+- In an import-driven build there is nothing left for a separate validation step to check — the
+  closure is compiled together and linked by the tool. The standalone `; signature` validator
+  remains for the legacy manual-concatenation workflow, where stale artifacts and hand-assembled
+  link sets are still possible.
 
 ### Cycles
 
@@ -773,10 +801,10 @@ Import cycles are **legal**. Mutual dependency between units is a supported patt
 most shared interface surface — erroring on cycles would push them back to hand-written externs,
 the boilerplate this feature exists to kill.
 
-Cycles are harmless because import is interface extraction, not compilation: the compiler keeps a
-**visited set keyed by canonical path**, seeded with the unit being compiled. Each file in the
-import closure is parsed exactly once; an `import` naming an already-visited file is skipped. The
-self-import-via-cycle case (B importing the very unit being compiled) needs no special rule — the
+Cycles are harmless because the closure walk separates gathering from emission: the compiler keeps
+a **visited set keyed by canonical path**, seeded with the root unit. Each file in the import
+closure is parsed exactly once and emitted exactly once; an `import` naming an already-visited
+file is skipped. The self-import-via-cycle case (B importing the root) needs no special rule — the
 seeding handles it. Diamonds dedupe the same way. Name resolution runs after the whole closure is
 gathered, so mutually-referencing types resolve regardless of parse order.
 
@@ -803,21 +831,21 @@ syntactic space.
 ### What this unlocks
 
 The same mechanism is the standard-library story the snippets-`.txt` model never had:
-`import "math.impala"` plus one concatenated `math.gazl` replaces per-firmware copy-paste of
-`sin`/`sqrt`/`strlen` — discoverable by strangers and agents from the source itself.
+`import "math.impala"` in the root unit and `sin`/`sqrt`/`strlen` are declared, compiled, and
+linked in — discoverable by strangers and agents from the source itself, with no per-firmware
+copy-paste and no separate link list to maintain.
 
-### Future direction (under consideration): importing compiled units
+The two import forms follow one rule of thumb: *import the source of what you're building, import
+the artifact of what you're using.* `.gazl` imports read interfaces from the `; signature` rows —
+now carrying full element chains — so precompiled units participate with typed checking, and
+"import what you link" holds by construction since the build emits exactly what it imported.
 
-`import "filter.gazl"` — reading a compiled unit's interface from its `; signature` rows (plus
-structural facts: `! DEF` const values, `GLOB` sizes) — would complement source import rather than
-replace it: *import the source of what you're building, import the artifact of what you're using.*
-It covers hand-written `.gazl`, third-party blobs, and a precompiled stdlib (one file = interface
-*and* link input), and "import what you link" closes the source-vs-artifact staleness gap that
-source import cannot. With an import-time content hash recorded in metadata and verified at link
-time, the standalone validator shrinks to a residue (natives, duplicates, legacy units) small
-enough to live inside a validate-and-concatenate link script. Costs: metadata must carry element
-types beyond array rows, and `.gazl`-grade interfaces are category-grade unless the row format
-grows element chains. To be worked out when Step 5 is taken up.
+### Implementation coupling
+
+Step 5 should be implemented **with or before Step 2 (structs)**: structs are new syntax with no
+legacy copy-paste to protect, so if import lands first, the single-definition rule applies to
+structs from day one and the layout-agreement machinery for duplicated struct definitions only
+ever needs to exist in the legacy validator path.
 
 ---
 
