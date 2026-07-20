@@ -739,7 +739,15 @@ scalars now, or as a named struct once Step 2 lands.
 
 ---
 
-## Step 5: Import (proposed)
+## Step 5: Import (implemented)
+
+*(Implemented: `import "path"` + `impala build root.impala` walks the closure and compiles the
+concatenated units in one pass — cross-unit structs, struct/multi-value returns, and functypes all
+resolve with no header drift (visited-set dedups diamonds and breaks cycles). `export` marks
+host-visible symbols in the `; signature` metadata, and `--dead-strip` drops any FUNC/data block not
+reachable from an export. VM-verified in `tests/impala/sources/import/` and `tests/impala/sources/deadstrip/`.
+The one deviation from the design below: the builder concatenates and compiles the sources rather than
+emitting each unit separately, so `.gazl` (precompiled-blob) imports are not yet supported.)*
 
 ### The problem
 
