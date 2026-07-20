@@ -1705,6 +1705,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return;
         }
 
+        /* &structValue → a typed struct pointer (materialize the place's address) */
+        if (operator === '&' && expr.place) {
+            var structName = expr.struct;
+            var addr = placeAddress(expr);
+            makeMeta(expr, ':=', 'p', undefined, addr, undefined);
+            setElem(expr, structName);
+            return;
+        }
+
         var key      = '=' + operator;                // e.g. "=abs"
         var prevType = expr.type;                     /* for element-type propagation (Impala 2) */
         var prevElem = expr.elem;

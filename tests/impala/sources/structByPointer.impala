@@ -1,0 +1,39 @@
+/*
+	Impala 2 Step 2 (slice 4): address-of a struct value (`&v` → a typed struct pointer),
+	the spec-mandated way to hand a struct local to a pointer-taking function. Also `&`
+	of a scalar field.
+	Expected when run (GAZLCmd structByPointer.gazl main): 3 0.75 3 99.
+*/
+
+const int DEBUG = 1
+
+struct Filter { int mode; float cutoff }
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function configure(Filter pointer f, int m, float c)
+{
+	f->mode = m;
+	f->cutoff = c;
+}
+
+function bump(int pointer n)
+{
+	*n = 99;
+}
+
+function main()
+locals Filter v, Filter pointer p
+{
+	configure(&v, 3, 0.75);				// pass a struct local by pointer
+	printInt(v.mode); printLF();
+	printFloat(v.cutoff); printLF();
+
+	p = &v;								// &structValue → Filter pointer
+	printInt(p->mode); printLF();
+
+	bump(&v.mode);						// & of a scalar field → int pointer
+	printInt(v.mode); printLF();
+}

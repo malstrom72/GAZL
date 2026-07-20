@@ -23,8 +23,10 @@ compare) were protecting. The one-word temporary invariant is never touched. Ris
 > compile-time offset, struct); `lookup` → place; nested inline chains via offset accumulation
 > (`v.lo.z1` → direct `$v:2`; `p->lo.z1` → `PEEK $p #2`); `*structPtr` → pointer-base place;
 > whole-struct `a = b` → one `COPY *sizeof` with `placeAddress` (ADRL for locals + optional ADDp
-> for a field offset; pointer base used directly). Deferred still: `globalAddr` base kind (struct
-> globals), array-field access, struct arrays. Original design notes retained below.
+> for a field offset; pointer base used directly). Slice 4: `&structValue` → typed struct pointer
+> (materializes the place address; `&v.field` too), enabling `f(&v)` by-pointer calls. Deferred
+> still: `globalAddr` base kind (struct globals), array-field access, struct arrays, by-VALUE
+> params/returns. Original design notes retained below.
 
 
 A **place** is carried on the expression meta record:

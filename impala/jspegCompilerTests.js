@@ -1117,6 +1117,33 @@ const typedPointerCases = [
 		source: ["struct S { int a }", "function main() locals S s, int n { n = s; }"].join("\n"),
 		expectError: "needs a struct value on both sides",
 	},
+	{
+		label: "address-of a struct value yields a typed struct pointer",
+		source: [
+			"struct S { int a }",
+			"function use(S pointer p) { p->a = 1; }",
+			"function main() locals S s, S pointer q { use(&s); q = &s; }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "address-of a struct value element yields a typed pointer",
+		source: [
+			"struct S { int a; float b }",
+			"function take(float pointer f) { *f = 1.0; }",
+			"function main() locals S s { take(&s.b); }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "address-of a struct value respects element type at the call",
+		source: [
+			"struct S { int a }",
+			"function take(float pointer f) { *f = 1.0; }",
+			"function main() locals S s { take(&s); }",
+		].join("\n"),
+		expectError: "Pointer element type mismatch",
+	},
 ];
 
 for (const testCase of typedPointerCases) {
