@@ -612,10 +612,12 @@ opaque consumers interoperate.
 
 ---
 
-## Step 3: Typed function pointers (proposed)
+## Step 3: Typed function pointers (implemented)
 
 Mirrors structs exactly: **named funcptr types that become base types** — the typedef the language
-never had. Type definitions are introduced by their own keyword, **`functype`** *(decided — an
+never had. *(Implemented: `functype Name(params) [returns …]` registers a signature usable as a base
+type; funcptr variables carry the type tag, assignments and indirect calls are checked against it, and
+struct/multi-value returns flow through funcptrs. VM-verified in `tests/impala/sources/funcType.impala`.)* Type definitions are introduced by their own keyword, **`functype`** *(decided — an
 earlier draft reused `funcptr`, but `funcptr Name` already means a variable declaration, and a
 keyword that means "variable" in one position and "type" in another is exactly the kind of dual
 reading agents misparse; `functype` has zero identifier collisions in the corpus)*. The signature
