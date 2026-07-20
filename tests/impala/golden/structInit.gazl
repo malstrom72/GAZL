@@ -1,0 +1,43 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
+; signature extern native printInt() -> unknown @ 14:1
+; signature extern native printFloat() -> unknown @ 15:1
+; signature extern native printLF() -> unknown @ 17:1
+voice:	GLOB *4	; signature global voice : Voice @ 17:20
+	DATA #60 #0.5 #0.1 #2.0
+preset:	CNST *4	; signature readonly preset : Voice @ 18:23
+	DATA #7 #1.5 #0.0 #9.0
+bank:	CNST *8	; signature array bank[2] : Voice @ 19:30
+	DATA #1 #0.0 #0.0 #0.9 #2 #0.0 #0.0 #0.8
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 21:15
+		PARA *1
+;-----------------------------------------------------------------------------
+		PEEK %1 &voice:0 	; printInt(global voice.note)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 23:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 23:40
+		PEEK %1 &voice:1 	; printFloat(global voice.lo.b0)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 24:32
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 24:43
+		PEEK %1 &voice:2 	; printFloat(global voice.lo.z1)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 25:32
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 25:43
+		PEEK %1 &voice:3 	; printFloat(global voice.gain)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 26:31
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 26:42
+		PEEK %1 &preset:0 	; printInt((int) global preset.note)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 27:36
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 27:47
+		PEEK %1 &preset:1 	; printFloat(global preset.lo.b0)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 28:33
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:44
+		PEEK %1 &bank:4 	; printInt((int) global bank[1].note)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 29:37
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 29:48
+		PEEK %1 &bank:3 	; printFloat(global bank[0].gain)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:33
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:44
+		RETU   	; }

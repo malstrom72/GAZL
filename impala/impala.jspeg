@@ -1122,6 +1122,64 @@
         s.words += field.words;
     };
 
+    /* Walk a struct layout against a brace-tree of constants, producing the flat list of
+       constant operands (field order); trailing/omitted slots zero-fill. Recurses for
+       nested struct and array fields. `items` is an array of { op, type } | { braced:[...] }. */
+    $$parser.buildStructInit = function (structName, items, out, sourceCode, sourceOffset) {
+        var fields = $$parser.structs[structName].fields;
+        for (var fi = 0; fi < fields.length; ++fi) {
+            var f = fields[fi];
+            var item = (items && fi < items.length) ? items[fi] : undefined;
+            if (f.type === 'S') {
+                $$parser.buildStructInit(f.struct, (item && item.braced) || [], out, sourceCode, sourceOffset);
+            } else if (f.type === 'A') {
+                var arr = (item && item.braced) || [];
+                var structEl = $$parser.isStructAtom(f.elem);
+                for (var e = 0; e < f.size; ++e) {
+                    var ev = (e < arr.length) ? arr[e] : undefined;
+                    if (structEl) {
+                        $$parser.buildStructInit(f.elem, (ev && ev.braced) || [], out, sourceCode, sourceOffset);
+                    } else {
+                        $$parser.pushInitScalar(out, ev, f.elem, f.name, sourceCode, sourceOffset);
+                    }
+                }
+            } else {
+                $$parser.pushInitScalar(out, item, f.type, f.name, sourceCode, sourceOffset);
+            }
+        }
+    };
+
+    $$parser.pushInitScalar = function (out, item, type, fieldName, sourceCode, sourceOffset) {
+        if (item === undefined) {
+            out.push($$parser.ZEROES[type]);                      /* omitted → zero */
+            return;
+        }
+        if (item.braced !== undefined) {
+            $$parser.fail('Too many braces in initializer for field ' + fieldName,
+                    sourceCode, sourceOffset, 'E422');
+        }
+        if (item.type !== type) {
+            $$parser.typeError('Initializer type mismatch for field ' + fieldName + ' ({$type1} vs {$type2})',
+                    sourceCode, sourceOffset, item.type, type, 'E422');
+        }
+        out.push(item.op);
+    };
+
+    /* emit a flat constant list as one or more DATA rows (mirrors InitList chunking) */
+    $$parser.emitInitData = function (ops, sourceCode, sourceOffset) {
+        var line = '';
+        for (var i = 0; i < ops.length; ++i) {
+            if (line !== '' && (line + ' ' + ops[i]).length >= 55) {
+                $$parser.declare('DATA', 'globals', undefined, 'i', true, line, sourceCode, sourceOffset);
+                line = '';
+            }
+            line += (line === '' ? '' : ' ') + ops[i];
+        }
+        if (line !== '') {
+            $$parser.declare('DATA', 'globals', undefined, 'i', true, line, sourceCode, sourceOffset);
+        }
+    };
+
     $$parser.findField = function (structName, fieldName) {
         var s = $$parser.structs[structName];
         if (!s) return undefined;
@@ -2643,12 +2701,22 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                  $init = $$parser.ZEROES[$v.type];
                                                                              }
                                                                          }
-                         ( '=' _ x:Expr                               {
+                         ( '=' _
+                           ( d:Braced                              {
+                                                                             if (!$vStruct)
+                                                                                 $$parser.fail('Brace initializers are only for struct values',
+                                                                                         $$s, $$i, 'E422');
+                                                                             $binit = [];
+                                                                             $$parser.buildStructInit($v.struct, $d, $binit, $$s, $$i);
+                                                                             $$parser.emitInitData($binit, $$s, $$i);
+                                                                         }
+                           / x:Expr                                 {
                                                                              if ($vStruct)
-                                                                                 $$parser.fail('Struct initializers are not yet supported',
+                                                                                 $$parser.fail('A struct value needs a brace initializer',
                                                                                          $$s, $$i, 'E421');
                                                                              $init = $$parser.makeConstant($x, $v.type, $$s, $$i);
-                                                                         } )?
+                                                                         }
+                           ) )?
                                                                        {
                                                                             if (!$vStruct)
                                                                             $$parser.declare(
@@ -2695,13 +2763,53 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 ),
                                                                                 $a.elem
                                                                             );
+                                                                            $aStructEl = ($a.elem !== undefined
+                                                                                    && $$parser.descTail($a.elem) === undefined
+                                                                                    && $$parser.isStructAtom($$parser.descHead($a.elem)));
+                                                                            $aStruct = $a.elem;
+                                                                            $aCount = parseInt('' + $a.size, 10);
                                                                          }
-                         ( '=' _ d:InitList )?
+                         ( '=' _
+                           ( d:InitList                                {   /* flat list → scalar-element arrays only */
+                                                                            if ($aStructEl)
+                                                                                $$parser.fail('A struct-element array needs nested braces, one group per element',
+                                                                                        $$s, $$i, 'E422');
+                                                                         }
+                           / d:Braced                                  {   /* nested braces → struct-element arrays */
+                                                                            if (!$aStructEl)
+                                                                                $$parser.fail('Nested brace initializers are for struct-element arrays',
+                                                                                        $$s, $$i, 'E422');
+                                                                            var _arr = $d;
+                                                                            $binit = [];
+                                                                            for (var _ae = 0; _ae < $aCount; ++_ae) {
+                                                                                var _aev = (_ae < _arr.length) ? _arr[_ae] : undefined;
+                                                                                $$parser.buildStructInit($aStruct,
+                                                                                        (_aev && _aev.braced) || [], $binit, $$s, $$i);
+                                                                            }
+                                                                            $$parser.emitInitData($binit, $$s, $$i);
+                                                                         }
+                           ) )?
                  )
 
 # ------------------------------------------------------------------
 #  Initialiser list for arrays                                  
 # ------------------------------------------------------------------
+# Nested brace tree of compile-time constants, for struct initializers.
+Braced      <-  '{' _                                                { $$ = []; $$.n = 0; }
+                ( i:BracedItem                                       { $$[$$.n++] = $i; }
+                  ( ',' _ i:BracedItem                               { $$[$$.n++] = $i; }
+                  )*
+                )? '}' _
+
+BracedItem  <-  b:Braced                                             { $$ = { braced: $b }; }
+                / x:Expr                                             {
+                                                                        var m = metaSlot($x);
+                                                                        var op = $$parser.makeRValue(m, '#<&');
+                                                                        if (span(op[0] || '', '#<&') !== 1)
+                                                                            $$parser.fail('Initializer must be a constant', $$s, $$i, 'E407');
+                                                                        $$ = { op: op, type: m.type };
+                                                                    }
+
 InitList    <-  '{' _                                                 { $d = ' '; $type = undefined; }
                 ( x:Expr                                             {
                                                                             var xMeta = metaSlot($x);

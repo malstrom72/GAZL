@@ -1160,9 +1160,25 @@ const typedPointerCases = [
 		expectError: null,
 	},
 	{
-		label: "struct global initializers are rejected for now",
+		label: "struct global takes a nested brace initializer",
+		source: [
+			"struct Inner { float a; float b }",
+			"struct Outer { int n; Inner mid; float g }",
+			"global Outer g = { 1, { 0.5, 0.7 }, 2.0 }",
+			"readonly Outer preset = { 3, { 0.1, 0.2 }, 0.9 }",
+			"function main() { }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct value needs braces, not a bare initializer",
 		source: ["struct S { int a }", "global S g = 0"].join("\n"),
-		expectError: "Struct initializers are not yet supported",
+		expectError: "needs a brace initializer",
+	},
+	{
+		label: "struct initializer field type is checked",
+		source: ["struct S { int a; float b }", "global S g = { 1.0, 2.0 }"].join("\n"),
+		expectError: "Initializer type mismatch",
 	},
 	{
 		label: "struct arrays index to a struct place (constant and dynamic)",

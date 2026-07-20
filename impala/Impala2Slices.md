@@ -34,8 +34,11 @@ compare) were protecting. The one-word temporary invariant is never touched. Ris
 > PEEK/POKE; struct-array size must be a numeric literal for now, E414). Slice 7: **array fields**
 > inside a struct (`struct Filter { float array state[4] }` → `f.state[i]`) — the array field
 > decays to a typed pointer at base+offset (global `&v:off`, local ADRL+add, pointer base+add),
-> subscript handles the rest incl. arrays-of-structs inside a struct. Deferred still: brace
-> initializers (E421), by-VALUE params/returns. Original design notes retained below.
+> subscript handles the rest incl. arrays-of-structs inside a struct. Slice 8: **brace
+> initializers** for struct globals/readonly and struct arrays via recursive `buildStructInit` over
+> a `Braced` tree (per-field type check, trailing zero-fill, emits GLOB/CNST + DATA; InitList tried
+> first, backtracks on nested braces). **Structs feature-complete except by-value params/returns**
+> (returns need Step 4 first). Original design notes retained below.
 
 
 A **place** is carried on the expression meta record:
