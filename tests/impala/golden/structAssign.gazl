@@ -1,0 +1,47 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
+; signature extern native printInt() -> unknown @ 14:1
+; signature extern native printFloat() -> unknown @ 15:1
+; signature extern native printLF() -> unknown @ 17:1
+store:	GLOB *8	; signature array store[8] : unknown @ 19:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 19:15
+		PARA *1
+	$a:	LOCA *4
+	$b:	LOCA *4
+	$p:	LOCp
+	$bq:	LOCA *2
+;-----------------------------------------------------------------------------
+		MOVi $a:0 #7 	; a.note = 7
+		MOVf $a:1 #1.5 	; a.lo.b0 = 1.5
+		MOVf $a:2 #2.5 	; a.lo.z1 = 2.5
+		MOVf $a:3 #9.0 	; a.gain = 9.0
+		ADRL %0 $b *4	; b = a
+		ADRL %1 $a *4
+		COPY %0 %1 *4
+		MOVi %1 $b:0 	; printInt(b.note)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 28:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:29
+		MOVf %1 $b:1 	; printFloat(b.lo.b0)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 29:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 29:32
+		MOVf %1 $b:3 	; printFloat(b.gain)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:31
+		MOVp $p &store:0 	; p = (Voice pointer) &global store[0]
+		ADRL %0 $a *4	; *p = a
+		COPY $p %0 *4
+		PEEK %1 $p #2	; printFloat(p->lo.z1)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 34:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:33
+		ADRL %0 $bq *2	; bq = a.lo
+		ADRL %1 $a *2
+		ADDp %1 %1 #1
+		COPY %0 %1 *2
+		MOVf %1 $bq:0 	; printFloat(bq.b0)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 37:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:30
+		RETU   	; }

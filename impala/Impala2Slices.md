@@ -16,7 +16,16 @@ already-shipped spec decisions (statement-level `=`, no struct expressions, no w
 compare) were protecting. The one-word temporary invariant is never touched. Risk drops from
 "rework the bedrock" to "add a place representation and lower it correctly".
 
-## Slices 2.2 + 2.3: the place architecture (one slice, not two)
+## Slices 2.2 + 2.3: the place architecture — IMPLEMENTED
+
+> Done and VM-verified (`structValues.impala`, `structAssign.impala`): struct-value locals as
+> `LOCA *sizeof`; the place representation (`@place` meta with `baseKind` local|pointer, base,
+> compile-time offset, struct); `lookup` → place; nested inline chains via offset accumulation
+> (`v.lo.z1` → direct `$v:2`; `p->lo.z1` → `PEEK $p #2`); `*structPtr` → pointer-base place;
+> whole-struct `a = b` → one `COPY *sizeof` with `placeAddress` (ADRL for locals + optional ADDp
+> for a field offset; pointer base used directly). Deferred still: `globalAddr` base kind (struct
+> globals), array-field access, struct arrays. Original design notes retained below.
+
 
 A **place** is carried on the expression meta record:
 

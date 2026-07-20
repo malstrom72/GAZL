@@ -1143,6 +1143,25 @@
         slot.elem      = structName;
     };
 
+    /* materialize a place's address into a pointer operand (borrows a temp for locals) */
+    $$parser.placeAddress = function (place) {
+        place = metaSlot(place);
+        if (place.baseKind === 'pointer') {
+            if (place.placeOff === 0) {
+                return place.base;
+            }
+            var t = $$parser.borrow('%');
+            $$parser.emit('+', 'p', t, place.base, '#' + place.placeOff);
+            return t;
+        }
+        var a = $$parser.borrow('%');                             /* local: ADRL then optional add */
+        $$parser.emit('=&', 'p', a, place.base, '*' + $$parser.structWords(place.struct));
+        if (place.placeOff !== 0) {
+            $$parser.emit('+', 'p', a, a, '#' + place.placeOff);
+        }
+        return a;
+    };
+
     /* fp->field, place.field, nested chains — Step 2 slices 1–2 */
     $$parser.fieldAccess = function (x, fieldName, arrow, sourceCode, sourceOffset) {
         x = metaSlot(x);
@@ -1374,6 +1393,29 @@
         x      = metaSlot(x);
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
+
+        /* whole-struct assignment: one COPY *sizeof, statement value is the dest place */
+        if (leftx.type === 'S' || rightx.type === 'S') {
+            if (leftx.type !== 'S' || rightx.type !== 'S') {
+                $$parser.fail('Whole-struct assignment needs a struct value on both sides',
+                        sourceCode, sourceOffset, 'E420');
+            }
+            if (leftx.struct !== rightx.struct) {
+                $$parser.fail('Struct type mismatch in assignment (' + leftx.struct + ' = '
+                        + rightx.struct + ')', sourceCode, sourceOffset, 'E420');
+            }
+            var words   = $$parser.structWords(leftx.struct);
+            var savedBK = leftx.baseKind, savedBase = leftx.base,
+                savedOff = leftx.placeOff, savedStruct = leftx.struct;
+            var dst = $$parser.placeAddress(leftx);
+            var src = $$parser.placeAddress(rightx);
+            $$parser.makeMeta(x, 'copy', '?', dst, src, '*' + words);
+            $$parser.emitMeta(x);
+            $$parser.returnBack(src);
+            $$parser.returnBack(dst);
+            $$parser.setPlace(x, savedBK, savedBase, savedOff, savedStruct);
+            return;
+        }
 
         if (!leftx || leftx.operator === undefined) {
             throw new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));
@@ -1640,6 +1682,12 @@
     $$parser.unaryOp = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
+
+        /* *structPointer → a struct place (through-pointer field access / whole-struct assign) */
+        if (operator === '*' && expr.type === 'p' && $$parser.isStructAtom(expr.elem)) {
+            $$parser.setPlace(expr, 'pointer', $$parser.makeRValue(expr), 0, expr.elem);
+            return;
+        }
 
         var key      = '=' + operator;                // e.g. "=abs"
         var prevType = expr.type;                     /* for element-type propagation (Impala 2) */

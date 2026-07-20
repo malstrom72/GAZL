@@ -1093,6 +1093,30 @@ const typedPointerCases = [
 		source: ["struct S { int a }", "function main() locals S s, float x { x = 1.0; s.a = x; }"].join("\n"),
 		expectError: "Incompatible types for assignment",
 	},
+	{
+		label: "whole-struct assignment between locals compiles",
+		source: ["struct S { int a; float b }", "function main() locals S x, S y { x.a = 1; y = x; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "whole-struct assignment through a pointer place compiles",
+		source: [
+			"struct S { int a }",
+			"global array store[2]",
+			"function f(S pointer p) locals S x { x.a = 1; *p = x; }",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "whole-struct assignment requires matching struct types",
+		source: ["struct A { int x }", "struct B { int y }", "function main() locals A a, B b { a = b; }"].join("\n"),
+		expectError: "Struct type mismatch",
+	},
+	{
+		label: "struct cannot be assigned to a scalar",
+		source: ["struct S { int a }", "function main() locals S s, int n { n = s; }"].join("\n"),
+		expectError: "needs a struct value on both sides",
+	},
 ];
 
 for (const testCase of typedPointerCases) {
