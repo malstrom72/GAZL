@@ -1,0 +1,39 @@
+/*
+	Impala 2 Step 2 (slice 5): struct VALUES as globals — the third place base kind. DSP
+	state in real firmware lives in globals. A struct global is one zeroed GLOB *sizeof;
+	field access uses `&name:offset` in global memory, `&global v` addresses it, and a
+	global struct copies to/from locals with COPY.
+	Expected when run (GAZLCmd structGlobals.gazl main): 60 0.5 61 2.
+*/
+
+const int DEBUG = 1
+
+struct Biquad { float b0; float z1 }
+struct Voice { int note; Biquad lo; float gain }
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global Voice voice
+
+function bump(Voice pointer v)
+{
+	v->note = v->note + 1;
+}
+
+function main()
+locals Voice snapshot
+{
+	global voice.note = 60;			// &voice:0 in global memory
+	global voice.lo.b0 = 0.5;		// nested → &voice:1
+	global voice.gain = 2.0;		// &voice:3
+	printInt(global voice.note); printLF();
+	printFloat(global voice.lo.b0); printLF();
+
+	bump(&global voice);			// address-of a global struct
+	printInt(global voice.note); printLF();
+
+	snapshot = global voice;		// global → local whole-struct copy
+	printFloat(snapshot.gain); printLF();
+}

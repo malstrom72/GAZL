@@ -1144,6 +1144,26 @@ const typedPointerCases = [
 		].join("\n"),
 		expectError: "Pointer element type mismatch",
 	},
+	{
+		label: "struct globals: declaration, field access, address-of, copy",
+		source: [
+			"struct Inner { float a }",
+			"struct Outer { int n; Inner mid }",
+			"global Outer g",
+			"function use(Outer pointer o) { o->n = 1; }",
+			"function main() locals Outer local {",
+			"\tglobal g.n = 5; global g.mid.a = 1.0;",
+			"\tuse(&global g);",
+			"\tlocal = global g;",
+			"}",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "struct global initializers are rejected for now",
+		source: ["struct S { int a }", "global S g = 0"].join("\n"),
+		expectError: "Struct initializers are not yet supported",
+	},
 ];
 
 for (const testCase of typedPointerCases) {

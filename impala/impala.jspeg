@@ -1150,6 +1150,9 @@
     /* materialize a place's address into a pointer operand (borrows a temp for locals) */
     $$parser.placeAddress = function (place) {
         place = metaSlot(place);
+        if (place.baseKind === 'globalAddr') {                    /* global: &name(:off) is directly addressable */
+            return place.base + (place.placeOff ? ':' + place.placeOff : '');
+        }
         if (place.baseKind === 'pointer') {
             if (place.placeOff === 0) {
                 return place.base;
@@ -1207,6 +1210,8 @@
         /* terminal scalar field */
         if (bk === 'local') {
             $$parser.makeMeta(x, '=', field.type, undefined, base + ':' + total, undefined);
+        } else if (bk === 'globalAddr') {                         /* &name:off in global memory */
+            $$parser.makeMeta(x, '=*', field.type, undefined, base + ':' + total, undefined);
         } else {                                                  /* pointer base: PEEK/POKE base #offset */
             $$parser.makeMeta(x, '=[]', field.type, null, base, '#' + total);
         }
@@ -1929,6 +1934,10 @@
         /* global -----------------------------------------------*/
         if (isGlobal && (p = sym.globals[name])) {
 
+            if (p.type === 'S') {                                 /* struct value global → a place in global memory */
+                $$parser.setPlace(x, 'globalAddr', '&' + name, 0, p.elem);
+                return;
+            }
             if (p.type === 'A') {
                 $$parser.makeMeta(x, ':=', 'p', undefined,
                                   '&' + name, undefined);
@@ -2557,18 +2566,39 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                  (
                      # primitive variable --------------------------------
                      v:VarDecl                                        {
-                                                                             $$parser.declare(
-                                                                                 $section, 'globals',
-                                                                                 undefined,
-                                                                                 $v.type,
-                                                                                 ($section === 'CNST'),
-                                                                                 '*1',
-                                                                                 $$s, $$i
-                                                                             );
-                                                                             $init = $$parser.ZEROES[$v.type];
+                                                                             $vStruct = ($v.type === 'S');
+                                                                             if ($vStruct) {              /* struct value global → one zeroed GLOB/CNST/TEMP *sizeof */
+                                                                                 $$parser.declare(
+                                                                                     $section, 'globals',
+                                                                                     $v.name, 'S',
+                                                                                     ($section === 'CNST'),
+                                                                                     '*' + $v.words,
+                                                                                     $$s, $$i,
+                                                                                     $$parser.formatGlobalSignatureComment(
+                                                                                         $section, $v.name, 'S', undefined, undefined,
+                                                                                         $$parser.sourceName, $$s, $$i, $v.struct),
+                                                                                     $v.struct
+                                                                                 );
+                                                                             } else {
+                                                                                 $$parser.declare(
+                                                                                     $section, 'globals',
+                                                                                     undefined,
+                                                                                     $v.type,
+                                                                                     ($section === 'CNST'),
+                                                                                     '*1',
+                                                                                     $$s, $$i
+                                                                                 );
+                                                                                 $init = $$parser.ZEROES[$v.type];
+                                                                             }
                                                                          }
-                         ( '=' _ x:Expr                               { $init = $$parser.makeConstant($x, $v.type, $$s, $$i); } )?
+                         ( '=' _ x:Expr                               {
+                                                                             if ($vStruct)
+                                                                                 $$parser.fail('Struct initializers are not yet supported',
+                                                                                         $$s, $$i, 'E421');
+                                                                             $init = $$parser.makeConstant($x, $v.type, $$s, $$i);
+                                                                         } )?
                                                                        {
+                                                                            if (!$vStruct)
                                                                             $$parser.declare(
                                                                                 'DAT?', 'globals',
                                                                                 $v.name,

@@ -1,0 +1,45 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
+; signature extern native printInt() -> unknown @ 15:1
+; signature extern native printFloat() -> unknown @ 16:1
+; signature extern native printLF() -> unknown @ 18:1
+voice:	GLOB *4	; signature global voice : Voice @ 20:1
+
+;-----------------------------------------------------------------------------
+bump:	FUNC	; signature func bump(Voice-ptr v) -> void @ 20:15
+		PARA *1
+	$v:	INPp
+;-----------------------------------------------------------------------------
+		PEEK %0 $v #0	; v->note = v->note + 1
+		ADDi %0 %0 #1
+		POKE $v #0 %0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 25:15
+		PARA *1
+	$snapshot:	LOCA *4
+;-----------------------------------------------------------------------------
+		POKE &voice:0 #60 	; global voice.note = 60
+		POKE &voice:1 #0.5 	; global voice.lo.b0 = 0.5
+		POKE &voice:3 #2.0 	; global voice.gain = 2.0
+		PEEK %1 &voice:0 	; printInt(global voice.note)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 31:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 31:40
+		PEEK %1 &voice:1 	; printFloat(global voice.lo.b0)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 32:32
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:43
+		MOVp %1 &voice 	; bump(&global voice)
+		CALL &bump %0 *2	; expects bump(ptr) -> void @ 34:21
+		PEEK %1 &voice:0 	; printInt(global voice.note)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:40
+		ADRL %0 $snapshot *4	; snapshot = global voice
+		COPY %0 &voice *4
+		MOVf %1 $snapshot:3 	; printFloat(snapshot.gain)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 38:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:38
+		RETU   	; }

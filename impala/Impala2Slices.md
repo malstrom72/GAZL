@@ -24,9 +24,11 @@ compare) were protecting. The one-word temporary invariant is never touched. Ris
 > (`v.lo.z1` → direct `$v:2`; `p->lo.z1` → `PEEK $p #2`); `*structPtr` → pointer-base place;
 > whole-struct `a = b` → one `COPY *sizeof` with `placeAddress` (ADRL for locals + optional ADDp
 > for a field offset; pointer base used directly). Slice 4: `&structValue` → typed struct pointer
-> (materializes the place address; `&v.field` too), enabling `f(&v)` by-pointer calls. Deferred
-> still: `globalAddr` base kind (struct globals), array-field access, struct arrays, by-VALUE
-> params/returns. Original design notes retained below.
+> (materializes the place address; `&v.field` too), enabling `f(&v)` by-pointer calls. Slice 5:
+> struct-value **globals** (`global Voice voice` → zeroed `GLOB *sizeof`; `globalAddr` base kind —
+> field access `&name:off` in global memory, `&global v` addresses it, global↔local `COPY`). The
+> place model now covers all three base kinds. Deferred still: array-field access, struct arrays,
+> brace initializers (E421), by-VALUE params/returns. Original design notes retained below.
 
 
 A **place** is carried on the expression meta record:
