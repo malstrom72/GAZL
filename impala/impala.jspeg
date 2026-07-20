@@ -154,6 +154,7 @@
     var $$parser.noForward = false;
     var $$parser.destructuring = false;                           /// true while parsing the call on the RHS of `a, b = f(...)`
     var $$parser.destTargets = [];                                /// collected LHS targets during a destructuring assignment
+    var $$parser.exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
 
     /* 3  bulk-fill the lookup tables */
     map($$parser.META_TO_GAZL,
@@ -376,6 +377,7 @@
                     : signatureReturnCategory(signature.returns, hasReturn));
         }
         var kind = (role ? role : 'func');
+        if ($$parser.exportNext) kind = 'export ' + kind;         /* Step 5: host-visible marker */
 
         var originName = (sourceName !== undefined ? sourceName : (signature ? signature.sourceName : undefined));
         var originCode = (sourceCode !== undefined ? sourceCode : (signature ? signature.sourceCode : undefined));
@@ -552,7 +554,7 @@
             return undefined;
         }
 
-        var prefix = (flavor ? flavor + ' ' : '');
+        var prefix = ($$parser.exportNext ? 'export ' : '') + (flavor ? flavor + ' ' : '');
 
         if (type === 'A') {
             var extent = (size !== undefined ? '[' + size + ']' : '[]');
@@ -582,7 +584,7 @@
             return undefined;
         }
 
-        return appendOrigin('signature const ' + name + ' : '
+        return appendOrigin('signature ' + ($$parser.exportNext ? 'export ' : '') + 'const ' + name + ' : '
                             + signatureCategoryForDesc(fullDescFor(type, elem)),
                             sourceName, sourceCode, sourceOffset);
     };
@@ -2568,6 +2570,7 @@
         $$parser.symbols.defines  = {};
         $$parser.structs          = {};
         $$parser.functypes        = {};
+        $$parser.exportNext       = false;
 
         /* reset deferred string tables */
         $$parser.strings.s = [];
@@ -2620,8 +2623,13 @@
 #################
 
 root        <-  _                                                     { $$parser.start(); }
-                (FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
+                (ExportDecl / FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
                 / GlobalDecl / ';'_)* !.                              { $$parser.end(); }
+
+# An `export` prefix marks a definition host-visible (Step 5). It rides the `; signature`
+# metadata as a role prefix and is only load-bearing under the builder's `--dead-strip`.
+ExportDecl  <-  EXPORT _                                              { $$parser.exportNext = true; }
+                (FuncDecl / GlobalDecl / ConstDecl)                   { $$parser.exportNext = false; }
 
 # ------------------------------------------------------------------
 #  struct definition
@@ -4063,8 +4071,8 @@ FloatLiteral    <-  $$=([-+]? DIGIT+ "." DIGIT+ (("E" / "e") ([-+]? DIGIT+))?) _
 IntegerLiteral  <-  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
 StringLiteral   <-  $$=( '"' ( !["\\\0-\37] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
 
-KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXTERN / FLOAT / FLOOR / FOR / FROM
-                / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
+KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXPORT / EXTERN / FLOAT / FLOOR / FOR / FROM
+                / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / IMPORT / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
                 / POINTER / READONLY / RETURNS / SIZEOF / STRUCT / SWITCH / TEMPORARY / TO / WHILE
 
 ABS         <-  'abs' !SYMBOL_CHAR          ARRAY       <-  'array' !SYMBOL_CHAR
@@ -4072,6 +4080,7 @@ ASSERT      <-  'assert' !SYMBOL_CHAR       CASE        <-  'case' !SYMBOL_CHAR
 CONST       <-  'const' !SYMBOL_CHAR        COPY        <-  'copy' !SYMBOL_CHAR
 DEFAULT     <-  'default' !SYMBOL_CHAR
 DO          <-  'do' !SYMBOL_CHAR           ELSE        <-  'else' !SYMBOL_CHAR
+EXPORT      <-  'export' !SYMBOL_CHAR       IMPORT      <-  'import' !SYMBOL_CHAR
 EXTERN      <-  'extern' !SYMBOL_CHAR       FLOAT       <-  'float' !SYMBOL_CHAR
 FLOOR       <-  'floor' !SYMBOL_CHAR        FOR         <-  'for' !SYMBOL_CHAR
 FROM        <-  'from' !SYMBOL_CHAR

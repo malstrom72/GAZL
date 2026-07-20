@@ -109,9 +109,9 @@ function applyImpalaHardening(source) {
 			[
 				"var _hostOptions = _options || {};",
 				"var KEYWORD_WORDS = [",
-				"\t'abs', 'array', 'assert', 'case', 'const', 'copy', 'default', 'do', 'else', 'extern',",
+				"\t'abs', 'array', 'assert', 'case', 'const', 'copy', 'default', 'do', 'else', 'export', 'extern',",
 				"\t'float', 'floor', 'for', 'from', 'ftoi', 'funcptr', 'functype', 'function', 'global', 'goto', 'if',",
-				"\t'int', 'itof', 'locals', 'loop', 'native', 'null', 'nullfunc', 'pointer', 'readonly',",
+				"\t'import', 'int', 'itof', 'locals', 'loop', 'native', 'null', 'nullfunc', 'pointer', 'readonly',",
 				"\t'returns', 'sizeof', 'struct', 'switch', 'temporary', 'to', 'while'",
 				"];",
 			].join("\n"),

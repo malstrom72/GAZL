@@ -1388,7 +1388,33 @@ const typedPointerCases = [
 		].join("\n"),
 		expectError: null,
 	},
+	{
+		label: "export marks functions, globals, and consts",
+		source: [
+			"export const int GAIN = 4",
+			"export global int state",
+			"export global int array params[3]",
+			"export function process(int x) returns int r { r = x * GAIN; }",
+		].join("\n"),
+		expectError: null,
+	},
 ];
+
+/* Step 5: `export` rides the signature metadata as a role prefix, so --dead-strip can find roots. */
+(function () {
+	const out = compileWithJsImpala(
+		["export function process() { }", "function helper() { }"].join("\n") + "\n",
+		{ randomId: 42 }
+	);
+	if (!/signature export func process\b/.test(out)) {
+		console.error("export: process should be marked `export func` in signature metadata");
+		process.exit(1);
+	}
+	if (/signature export func helper\b/.test(out)) {
+		console.error("export: helper must NOT be marked export");
+		process.exit(1);
+	}
+})();
 
 for (const testCase of typedPointerCases) {
 	let observedError = null;
