@@ -241,12 +241,22 @@ static Status runEngine(Processor& engine, Pointer mainFn, Int fuel) {
 static void requireMatch(const char* which, const uint8_t* data, size_t size, Status refStatus, const Value* refImage
 		, Status gotStatus, const Value* gotImage) {
 	int diffWord = -1;
-	for (int i = 0; i < DATA_MEMORY_SIZE; ++i) { if (refImage[i].i != gotImage[i].i) { diffWord = i; break; } }
+	for (int i = 0; i < DATA_MEMORY_SIZE; ++i) {
+		if (refImage[i].i == gotImage[i].i) { continue; }
+		const float rf = refImage[i].f, gf = gotImage[i].f;
+		if (rf != rf && gf != gf) { continue; }				// both NaN: sign + payload are unspecified in IEEE 754, so two conforming engines may differ bit-wise (MSVC float vs the JIT's SSE) - not a miscompile
+		diffWord = i; break;
+	}
 	if (gotStatus == refStatus && diffWord < 0) { return; }
 	std::fprintf(stderr, "\n=== JIT/interp divergence (%s): interp status=%d got status=%d", which
 			, static_cast<int>(refStatus), static_cast<int>(gotStatus));
 	if (diffWord >= 0) { std::fprintf(stderr, "; word[%d] interp=%d got=%d", diffWord, refImage[diffWord].i, gotImage[diffWord].i); }
-	std::fprintf(stderr, " ===\n%.*s\n", static_cast<int>(size), reinterpret_cast<const char*>(data));
+	std::fprintf(stderr, " ===\n");
+	if (diffWord >= 0) {																						// neighborhood dump: locate the slot + see who wrote it
+		const int lo = diffWord - 6 < 0 ? 0 : diffWord - 6, hi = diffWord + 6 >= DATA_MEMORY_SIZE ? DATA_MEMORY_SIZE - 1 : diffWord + 6;
+		for (int i = lo; i <= hi; ++i) { std::fprintf(stderr, "  mem[%d] interp=%-12d got=%-12d %s\n", i, refImage[i].i, gotImage[i].i, i == diffWord ? "<<<" : ""); }
+	}
+	std::fprintf(stderr, "%.*s\n", static_cast<int>(size), reinterpret_cast<const char*>(data));
 	std::fflush(stderr);
 	std::abort();										// fuzzer harness: a found miscompile is a crash libFuzzer captures
 }
@@ -305,8 +315,15 @@ static void emitSimpleOp(std::string& p, Rng& r, std::string& pending) {
 		std::snprintf(buf, sizeof buf, " ANDi $idx $i%u #7\n", pick(r, NI)); putLine(p, pending, buf);	// divisor 0-7: ~1/8 traps
 		std::snprintf(buf, sizeof buf, " %s $i%u $i%u $idx\n", pick(r, 2) ? "DIVi" : "MODi", pick(r, NI), pick(r, NI));
 	} else if (choice < 9) {
-		const char* op = FOPS[pick(r, 4)];
-		std::snprintf(buf, sizeof buf, " %s $f%u $f%u $f%u\n", op, pick(r, NF), pick(r, NF), pick(r, NF));
+		const unsigned fop = pick(r, 4);
+		if (fop == 3) {																			// DIVf: force a finite divisor >= 1 (ABSf then +1) - avoids 0/0 (NaN, unspecified bits) and x/0 (Inf) and runaway growth
+			const unsigned dv = pick(r, NF);
+			std::snprintf(buf, sizeof buf, " ABSf $f%u $f%u\n", dv, dv); putLine(p, pending, buf);
+			std::snprintf(buf, sizeof buf, " ADDf $f%u $f%u #1.0\n", dv, dv); p += buf;
+			std::snprintf(buf, sizeof buf, " DIVf $f%u $f%u $f%u\n", pick(r, NF), pick(r, NF), dv);
+		} else {
+			std::snprintf(buf, sizeof buf, " %s $f%u $f%u $f%u\n", FOPS[fop], pick(r, NF), pick(r, NF), pick(r, NF));
+		}
 	} else if (choice == 9) {
 		std::snprintf(buf, sizeof buf, " %s $f%u $f%u\n", pick(r, 2) ? "ABSf" : "FLOf", pick(r, NF), pick(r, NF));
 	} else {
@@ -372,6 +389,7 @@ static void emitBody(std::string& p, Rng& r, std::string& pending, int stmts, in
 		} else if (kind == 3) {																	// native math call (identical C in both engines)
 			if (pick(r, 2)) {
 				std::snprintf(buf, sizeof buf, " MOVf %%1 $f%u\n", pick(r, NF)); putLine(p, pending, buf);
+				p += " ABSf %1 %1\n";								// sqrt domain guard: a negative arg yields a NaN whose SIGN/payload is unspecified (IEEE 754). If that NaN is later read as an integer (window-slot pun) and branched on, the two engines pick different NaN bits -> divergent control flow. Not a miscompile - keep the fuzzer on defined behavior.
 				p += " CALL ^sqrt %0 *2\n";
 				std::snprintf(buf, sizeof buf, " MOVf $f%u %%0\n", pick(r, NF)); p += buf;
 			} else {
@@ -429,6 +447,11 @@ static std::string buildProgram(Rng& r) {
 	for (int i = 0; i < NI; ++i) { std::snprintf(buf, sizeof buf, " MOVi $i%d #%d\n", i, static_cast<int>(r.word())); p += buf; }
 	for (int i = 0; i < NF; ++i) { std::snprintf(buf, sizeof buf, " MOVf $f%d #%d.%u\n", i, static_cast<int>(pick(r, 2000)) - 1000, pick(r, 1000)); p += buf; }
 	p += " ADRL $p $arr *0\n";
+	p += " MOVi $c0 #0\n";									// fully initialize the LOCA array: GETL/PEEK read every slot, so an
+	for (int i = 0; i < 8; ++i) {							// unwritten slot would be a read-before-write - UNSPECIFIED, and the
+		std::snprintf(buf, sizeof buf, " MOVi $idx #%d\n SETL $arr $idx $c0\n", i);	// interp (memory home) and JIT (register cache) legitimately read it
+		p += buf;											// differently. Defined init keeps the differential comparing only defined state.
+	}
 	std::string pending;
 	int label = 0;
 	emitBody(p, r, pending, 30 + static_cast<int>(pick(r, 60)), 0, label);
@@ -459,6 +482,7 @@ static void runDiff(const std::string& programText) {
 		for (size_t i = 0; i < sizeof (NATIVE_TABLE) / sizeof (*NATIVE_TABLE); ++i) { globals.registerNative(NATIVE_NAMES[i], static_cast<int>(i)); }
 
 		AssembledProgram program;
+		for (int i = 0; i < DATA_MEMORY_SIZE; ++i) { memory[i].i = 0; }	// clean slate before assembly: the frame-local region is otherwise stale residue from the previous program (platform- and stream-position-dependent), so an uninitialized-local read would be nondeterministic across engines/platforms
 		{
 			std::istringstream gazlStream(std::string(reinterpret_cast<const char*>(Data), reinterpret_cast<const char*>(Data) + Size));
 			Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable, DATA_MEMORY_SIZE, memory, globals);
@@ -591,7 +615,43 @@ void doOne(const char* fn) {
 int main(int argc, const char* argv[]) {
 #if defined(JITDIFF) && defined(GAZL_JIT)
 	if (argc >= 3 && strcmp(argv[1], "--gen1") == 0) {		// dump the generated program for a seed (repro / inspection)
+		if (argc >= 4 && strcmp(argv[3], "deep") == 0) { g_deepRecursion = true; }
 		fputs(generateProgram(static_cast<uint32_t>(strtoul(argv[2], 0, 10))).c_str(), stdout);
+		return 0;
+	}
+	if (argc >= 3 && strcmp(argv[1], "--file") == 0) {		// run a hand-written GAZL file through the 4-way differential (minimization / repro)
+		std::ifstream in(argv[2]);
+		std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+		runDiff(text);
+		fprintf(stderr, "--file: no divergence\n");
+		return 0;
+	}
+	if (argc >= 3 && strcmp(argv[1], "--ick") == 0) {		// interpreter-only checksum for a seed (localize interp-vs-JIT platform divergences)
+		const uint32_t seed = static_cast<uint32_t>(strtoul(argv[2], 0, 10));
+		if (argc >= 4 && strcmp(argv[3], "deep") == 0) { g_deepRecursion = true; }
+		const std::string programText = generateProgram(seed);
+		Symbols globals;
+		static const NativeFunc NT[] = { fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, gazlAtan2, gazlSqrt, gazlLog };
+		static const char* const NN[] = { "abort", "assertFail", "printInt", "printFloat", "print", "printLF", "input", "atan2", "sqrt", "log" };
+		for (size_t i = 0; i < sizeof (NT) / sizeof (*NT); ++i) { globals.registerNative(NN[i], static_cast<int>(i)); }
+		AssembledProgram program;
+		{
+			std::istringstream gazlStream(programText);
+			Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable, DATA_MEMORY_SIZE, memory, globals);
+			assem.newUnit("string");
+			std::string line;
+			while (!gazlStream.eof()) { getline(gazlStream, line); assem.feed(line.c_str()); }
+			assem.finalize(program);
+		}
+		const Pointer mainFunction = globals.findFunction("main");
+#ifdef FUZZ_POISON
+		for (UInt i = program.globalsSize; i + program.constsSize < program.memorySize; ++i) { memory[i].i = 0x7F7F7F7F; }
+#endif
+		Processor interp(program, CALL_STACK_SIZE, callStack, NT, 0);
+		const Status st = runEngine(interp, mainFunction, 10000000);
+		uint32_t sum = 2166136261u;
+		for (int i = 0; i < DATA_MEMORY_SIZE; ++i) { sum = (sum ^ static_cast<uint32_t>(memory[i].i)) * 16777619u; }
+		fprintf(stderr, "ick seed=%u status=%d word13=%d sum=%08x\n", seed, static_cast<int>(st), memory[13].i, sum);
 		return 0;
 	}
 	if (argc >= 2 && strcmp(argv[1], "--gen") == 0) {		// self-contained generative fuzzing: --gen COUNT [SEED0] [deep]
