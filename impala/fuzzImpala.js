@@ -29,20 +29,28 @@ const cp = require('child_process');
 
 const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32' ? 'GAZLCmd.exe' : 'GAZLCmd');
 
-// Run a compiled program on the VM. Returns null on clean exit, or a message on a VM fault -
-// a miscompile (structurally invalid or wrongly-linked GAZL crashing the loader/VM) is a
-// compiler bug. The generator avoids `/` and `%`, so no legitimate div-by-zero traps arise.
+// Run a compiled program on the VM. Returns null when there is no compiler fault, or a message when
+// the loader/assembler REJECTS the emitted GAZL - that means the compiler produced structurally
+// invalid or wrongly-linked output from a program it accepted, which is a real compiler bug.
+//
+// A non-zero exit is only a fault if it happens at LOAD time. The VM prints a "Code size: ...
+// functions: N" banner once the module assembles; if we see it, the module loaded fine and any
+// later non-zero status is a RUNTIME trap - the generated program's own undefined behaviour (a wild
+// pointer, a write through a string literal, an out-of-region index). That is the program's fault,
+// not the compiler's, and without a reference oracle we cannot call it a miscompile, so we ignore it.
+// The generator avoids `/` and `%` (no div-by-zero) and bounds its indices/pointer offsets to keep
+// runtime traps rare, but pointer/string undefined behaviour is inherent and expected here.
 function runOnVm(gazl) {
 	const tmp = path.join(os.tmpdir(), `fuzz-${process.pid}-${Math.floor(rnd() * 1e9)}.gazl`);
 	fs.writeFileSync(tmp, gazl, 'latin1');
 	try {
 		const res = cp.spawnSync(GAZLCMD, [tmp, 'main'], { encoding: 'latin1', timeout: 10000 });
-		if (res.error) return 'spawn: ' + res.error.message;
-		if (res.status !== 0) {
-			const err = (res.stderr || '') + (res.stdout || '');
-			return 'VM exit ' + res.status + ': ' + err.split('\n').find((l) => /error|fault|assert|invalid|Status: [^0]/i.test(l)) || ('VM exit ' + res.status);
-		}
-		return null;
+		if (res.error) return 'spawn/timeout: ' + res.error.message;
+		if (res.status === 0) return null;
+		const err = (res.stderr || '') + (res.stdout || '');
+		if (/Code size:|functions:\s*\d/.test(err)) return null;   // loaded OK -> runtime trap, program UB
+		const line = err.split('\n').find((l) => /error|fault|assert|invalid|already defined|out of bounds|Status: [^0]/i.test(l));
+		return 'load failure (exit ' + res.status + '): ' + (line || err.split('\n')[0] || '').trim();
 	} finally {
 		try { fs.unlinkSync(tmp); } catch (_) {}
 	}
@@ -73,13 +81,19 @@ function genProgram() {
 	const scalarTypes = ['i', 'f'];
 	const structNames = () => structs.map((s) => s.name);
 	// a value type usable for params/returns/locals
-	function someType(allowStruct) {
+	function someType(allowStruct, allowPtr) {
 		if (allowStruct && structs.length && chance(0.4)) return pick(structNames());
+		if (allowPtr && chance(0.25)) return 'p:' + pick(scalarTypes);
 		return pick(scalarTypes);
 	}
 	const isStruct = (t) => structs.some((s) => s.name === t);
 	const isFuncType = (t) => functypes.some((ft) => ft.name === t);
-	const decl = (t) => ((isStruct(t) || isFuncType(t)) ? t + ' ' : (t === 'i' ? 'int ' : 'float '));
+	const isPtr = (t) => typeof t === 'string' && t.slice(0, 2) === 'p:';   // 'p:i' / 'p:f'
+	const ptrElem = (t) => t.slice(2);
+	const decl = (t) =>
+		isPtr(t) ? (ptrElem(t) === 'i' ? 'int pointer ' : 'float pointer ')
+		: (isStruct(t) || isFuncType(t)) ? t + ' '
+		: t === 'i' ? 'int ' : 'float ';
 
 	// structs (0-3), each with 1-3 scalar/nested-struct fields (nested only from earlier structs)
 	const nStructs = ri(4);
@@ -107,18 +121,36 @@ function genProgram() {
 
 	// how a value is referenced: globals need the `global` keyword prefix
 	const ref = (e) => (e.isGlobal ? 'global ' + e.name : e.name);
+	// all `base.f...` access paths from a struct that reach a scalar field of `wantElem`, recursing
+	// through nested struct fields (depth-bounded) - exercises deep place-offset accumulation
+	function structScalarPaths(base, structName, wantElem, depth) {
+		const s = structs.find((x) => x.name === structName);
+		if (!s) return [];
+		let paths = [];
+		for (const fld of s.fields) {
+			if (fld.type === wantElem) paths.push(base + '.' + fld.name);
+			else if (isStruct(fld.type) && depth > 0) paths = paths.concat(structScalarPaths(base + '.' + fld.name, fld.type, wantElem, depth - 1));
+		}
+		return paths;
+	}
 	// an int index expression for array access (constant, or a scalar int in scope)
-	function genIdx(scope) {
-		if (chance(0.6)) return String(ri(8));
+	// An index expression. `size` is the target array's element count when indexing a NAMED array
+	// directly (`arr[k]`): a constant then stays in-bounds because the GAZL assembler statically
+	// bounds-checks constant array indices. Omit `size` for pointer derefs (`p[k]`), which are not
+	// statically checked - any constant is legal there, and dynamic out-of-bounds never traps.
+	function genIdx(scope, size) {
+		if (chance(0.6)) return String(ri(size || 8));
 		const ints = scope.locals.filter((l) => l.t === 'i').concat(scope.gscalars.filter((g) => g.elem === 'i'));
-		return ints.length ? ref(ints[ri(ints.length)]) : String(ri(8));
+		// a dynamic index is masked non-negative and small: a wild negative/huge offset escapes the VM
+		// memory region and traps, whereas a small overrun stays in-region (no trap) - keeps --vm defined
+		return ints.length ? '(' + ref(ints[ri(ints.length)]) + ' & 7)' : String(ri(size || 8));
 	}
 
 	// helper functions (2-5)
 	const nFuncs = 2 + ri(4);
 	for (let i = 0; i < nFuncs; ++i) {
 		const params = [];
-		for (let k = ri(4); k > 0; --k) params.push({ name: id('p'), t: someType(true) });
+		for (let k = ri(4); k > 0; --k) params.push({ name: id('p'), t: someType(true, true) });
 		let rets;
 		const roll = rnd();
 		if (roll < 0.3) rets = [];
@@ -152,6 +184,23 @@ function genProgram() {
 			}
 			return pick(cands).name;   // base case: always a real struct local
 		}
+		if (isPtr(want)) {
+			const e = ptrElem(want);
+			if (e === 'i' && chance(0.15)) {
+				// a string literal is typed as `int pointer` - exercises the constant-string path
+				let s = '';
+				for (let n = ri(8); n > 0; --n) s += String.fromCharCode(97 + ri(26));
+				return '"' + s + '"';
+			}
+			const ptrs = scope.locals.filter((l) => l.t === want);
+			if (depth > 0 && ptrs.length && chance(0.35)) {
+				// pointer arithmetic - offset masked small/non-negative so the result stays in-region
+				return '(' + ref(pick(ptrs)) + ' + (' + genExpr('i', depth - 1, scope) + ' & 7))';
+			}
+			if (ptrs.length && chance(0.5)) return ref(pick(ptrs));
+			const arr = pick(scope.localArrays.filter((a) => a.elem === e));   // guaranteed non-empty
+			return '&' + arr.name + '[' + genIdx(scope, arr.size) + ']';
+		}
 		// scalar want ('i' or 'f')
 		const lit = () => (want === 'i' ? String(ri(100) - 50) : (ri(1000) / 10).toFixed(1));
 		if (depth <= 0) {
@@ -170,17 +219,15 @@ function genProgram() {
 			return '(' + genExpr(want, depth - 1, scope) + ' ' + op + ' ' + genExpr(want, depth - 1, scope) + ')';
 		}
 		if (r < 0.68) {
-			// array element read (local or global array of this element type) - constant or dynamic index
-			const arrs = scope.arrays.filter((a) => a.elem === want);
-			if (arrs.length) return ref(pick(arrs)) + '[' + genIdx(scope) + ']';
+			// array element (in-bounds constant index) or pointer dereference read (unbounded index)
+			const srcs = scope.arrays.filter((a) => a.elem === want).map((a) => ({ r: ref(a), size: a.size }))
+				.concat(scope.locals.filter((l) => l.t === 'p:' + want).map((l) => ({ r: ref(l) })));
+			if (srcs.length) { const s = pick(srcs); return s.r + '[' + genIdx(scope, s.size) + ']'; }
 		}
 		if (r < 0.78) {
-			// scalar struct field read
+			// scalar struct field read - possibly a deep chain a.b.c through nested struct fields
 			const opts = [];
-			for (const l of scope.locals) if (isStruct(l.t)) {
-				const s = structs.find((x) => x.name === l.t);
-				for (const f of s.fields) if (f.type === want) opts.push(l.name + '.' + f.name);
-			}
+			for (const l of scope.locals) if (isStruct(l.t)) opts.push(...structScalarPaths(l.name, l.t, want, 2));
 			if (opts.length) return pick(opts);
 		}
 		if (r < 0.85) {
@@ -224,15 +271,26 @@ function genProgram() {
 		// non-struct array locals (0-2): int/float arrays with indexed access
 		const arrLocals = [];
 		for (let i = ri(3); i > 0; --i) arrLocals.push({ name: id('arr'), elem: pick(scalarTypes), size: 1 + ri(4), isArray: true });
-		// a dedicated int loop variable for bounded `for` loops (kept read-only in loop bodies so
-		// they can't defeat termination)
-		const loopVar = { name: id('fv'), t: 'i', loopVar: true };
-		locals.push(loopVar);
+		// pointer locals (0-2): int/float pointers, initialized to a matching array below
+		const ptrLocals = [];
+		for (let i = ri(3); i > 0; --i) ptrLocals.push({ name: id('ptr'), t: 'p:' + pick(scalarTypes) });
+		// guarantee a LOCAL int AND float array (a valid target for &arr[..], copy, and pointer inits)
+		for (const e of scalarTypes) {
+			if (!arrLocals.some((a) => a.elem === e)) arrLocals.push({ name: id('arr'), elem: e, size: 1 + ri(4), isArray: true });
+		}
+		// one dedicated int loop variable PER nesting level for bounded `for` loops - nested loops must
+		// use distinct counters (a shared one lets the inner loop reset the outer's counter forever ->
+		// an infinite loop). All are kept read-only in loop bodies so the body can't defeat termination.
+		const loopVars = [];
+		for (let d = 0; d < 2; ++d) { const lv = { name: id('fv'), t: 'i', loopVar: true }; loopVars.push(lv); locals.push(lv); }
+		for (const p of ptrLocals) locals.push(p);
 		// params are in scope too, but read-only (scalar INP params can't be assigned)
 		const scope = {
 			locals: locals.concat(f.params.map((p) => ({ name: p.name, t: p.t, ro: true }))),
 			arrays: arrLocals.concat(gArrays),
+			localArrays: arrLocals,
 			gscalars: gScalars,
+			loopVars: loopVars,
 			callable: callable,
 		};
 
@@ -244,6 +302,11 @@ function genProgram() {
 		const localDecl = localDeclList.length ? '\nlocals ' + localDeclList.join(', ') : '';
 
 		const body = [];
+		// initialize pointer locals to a valid local array so dereferences stay in VM memory
+		for (const p of ptrLocals) {
+			const arr = arrLocals.find((a) => a.elem === ptrElem(p.t));
+			if (arr) body.push('\t' + p.name + ' = &' + arr.name + '[0];');
+		}
 		const nStmt = 1 + ri(isMain ? 8 : 4);
 		for (let i = 0; i < nStmt; ++i) body.push(genStmt(scope, f, 0));
 		// give the function's own return/OUT vars something (harmless if omitted, but exercises OUT writes)
@@ -276,6 +339,26 @@ function genProgram() {
 		return '{\n' + stmts.join('\n') + '\n\t}';
 	}
 
+	// a `switch (intExpr == from to to) { case ...: { block }  default: { block } }` (bounded, VM-safe).
+	// Case bodies are braced blocks: a single Statement can't hold e.g. `copy(...);` (Copy leaves the `;`).
+	function genSwitch(scope, f, ctrlDepth) {
+		const parts = [];
+		const used = new Set();   // case labels must be distinct across the whole switch (else a duplicate GAZL label)
+		for (let c = 1 + ri(3); c > 0; --c) {
+			const labels = [];
+			for (let j = 1 + ri(2); j > 0; --j) {
+				let v = ri(12);
+				while (used.has(v)) v = (v + 1) % 12;
+				if (used.size >= 12) break;   // exhausted the label space
+				used.add(v);
+				labels.push(String(v));
+			}
+			if (labels.length) parts.push('\tcase ' + labels.join(', ') + ': ' + genBlock(scope, f, ctrlDepth));
+		}
+		if (chance(0.6)) parts.push('\tdefault: ' + genBlock(scope, f, ctrlDepth));
+		return '\tswitch (' + genExpr('i', 2, scope) + ' == 0 to ' + (1 + ri(8)) + ') {\n' + parts.join('\n') + '\n\t}';
+	}
+
 	function genStmt(scope, f, ctrlDepth) {
 		const roll = rnd();
 		// control flow (if / else / bounded for), depth-limited to keep programs small
@@ -284,17 +367,33 @@ function genProgram() {
 			const k = rnd();
 			if (k < 0.45) return '\tif (' + genCond(scope) + ') ' + genBlock(scope, f, cd);
 			if (k < 0.75) return '\tif (' + genCond(scope) + ') ' + genBlock(scope, f, cd) + ' else ' + genBlock(scope, f, cd);
-			// bounded `for (fv = 0 to N)` - dedicated loop var, read-only inside the body so it terminates
-			const lv = scope.locals.find((l) => l.loopVar);
+			if (k < 0.88) return genSwitch(scope, f, cd);
+			// bounded `for (fv = 0 to N)` - a loop var unique to this nesting level (so a nested loop
+			// can't reset an enclosing counter), read-only inside the body so it always terminates
+			const lv = scope.loopVars[ctrlDepth];
 			if (lv) {
 				const bodyScope = { ...scope, locals: scope.locals.map((l) => (l.loopVar ? { ...l, ro: true } : l)) };
 				return '\tfor (' + lv.name + ' = 0 to ' + (1 + ri(4)) + ') ' + genBlock(bodyScope, f, cd);
 			}
 		}
-		// array element write (local or global array; index constant or dynamic)
-		if (roll < 0.3 && scope.arrays.length) {
+		// pointer-dereference write through a writable pointer local
+		if (roll < 0.24) {
+			const ptrs = scope.locals.filter((l) => isPtr(l.t) && !l.ro);
+			if (ptrs.length) {
+				const p = pick(ptrs);
+				return '\t' + p.name + '[' + genIdx(scope) + '] = ' + genExpr(ptrElem(p.t), 3, scope) + ';';
+			}
+		}
+		// copy(N words from &a[0] to &b[0]) between two local arrays (N within bounds - VM-safe)
+		if (roll < 0.28 && scope.localArrays.length >= 2) {
+			const a = pick(scope.localArrays), b = pick(scope.localArrays);
+			const n = 1 + ri(Math.min(a.size, b.size));
+			return '\tcopy(' + n + ' from &' + a.name + '[0] to &' + b.name + '[0]);';
+		}
+		// array element write (local or global array; in-bounds constant or dynamic index)
+		if (roll < 0.34 && scope.arrays.length) {
 			const a = pick(scope.arrays);
-			return '\t' + ref(a) + '[' + genIdx(scope) + '] = ' + genExpr(a.elem, 3, scope) + ';';
+			return '\t' + ref(a) + '[' + genIdx(scope, a.size) + '] = ' + genExpr(a.elem, 3, scope) + ';';
 		}
 		// scalar global write
 		if (roll < 0.36 && scope.gscalars.length) {
@@ -334,16 +433,16 @@ function genProgram() {
 				}
 			}
 		}
-		// struct field assignment
+		// struct field assignment - a scalar leaf, possibly deep (a.b.c) through nested structs
 		if (roll < 0.5) {
 			const sLocals = scope.locals.filter((l) => isStruct(l.t));
 			if (sLocals.length) {
 				const l = pick(sLocals);
-				const s = structs.find((x) => x.name === l.t);
-				const scalarFields = s.fields.filter((fl) => !isStruct(fl.type));
-				if (scalarFields.length) {
-					const fld = pick(scalarFields);
-					return '\t' + l.name + '.' + fld.name + ' = ' + genExpr(fld.type, 3, scope) + ';';
+				const cands = [];
+				for (const e of scalarTypes) for (const pth of structScalarPaths(l.name, l.t, e, 2)) cands.push({ pth, e });
+				if (cands.length) {
+					const c = pick(cands);
+					return '\t' + c.pth + ' = ' + genExpr(c.e, 3, scope) + ';';
 				}
 			}
 		}
