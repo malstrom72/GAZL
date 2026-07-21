@@ -11,6 +11,10 @@ mkdir -p output
 # Build GAZLCmd release
 (cd tools && bash buildGAZLCmd.sh release)
 
+# Verify the checked-in Impala compiler is regenerated from the current grammar, so the
+# playground (impala/playground.html loads impala/impalaCompiler.js directly) never goes stale.
+node impala/updateJSPEG.js --check
+
 # Build Impala
 bash tools/BuildImpala.sh
 
