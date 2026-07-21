@@ -1,11 +1,11 @@
 # Impala 2.0 Design
 
-> **Status: partially implemented.** Step 1 (typed pointers and arrays) and the strict-expression
-> rules are implemented in the JSPEG compiler with `--legacy` gating; see `tests/impala/sources/`
-> (`typedPointers.impala`) and the regression suites. Element types are enforced within a unit at
-> assignments and call arguments (full depth), and across units via element chains in the
-> `; signature` channel (arrays, globals, consts, function params/returns; the validator errors on
-> mismatched chains and bridges bare `ptr` to any chain). Steps 2–5 remain proposals.
+> **Status: implemented.** Steps 1-5 (typed pointers/arrays, structs, typed function pointers, multiple
+> return values, import) plus the strict-expression rules and coded diagnostics are implemented in the
+> JSPEG compiler: VM-verified against fixtures in `tests/impala/sources/`, held to a byte-identical
+> golden gate, and fuzzed (`impala/fuzzImpala.js`). `--legacy` gates the strictness rules; `impala build`
+> drives import-as-linking with `export` and `--dead-strip`. The per-step sections below are the design
+> records; a few polish items remain (`.gazl` blob imports, typed `extern function`, richer parse errors).
 
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),
@@ -62,16 +62,16 @@ The features are ordered by dependency, not ambition:
    degenerate case of a struct (one repeated field type), so the "slots carry a type, and the
    compiler picks the typed instruction from the slot type" machinery must exist first.
 2. **Structs** — named heterogeneous layouts over words. Introduces the first multi-word elements,
-   which is what changes pointer stride. Proposed design in
-   [Step 2: Structs](#step-2-structs-proposed).
+   which is what changes pointer stride. Implemented; design in
+   [Step 2: Structs](#step-2-structs-implemented).
 3. **Typed function pointers** — named signature types for `funcptr`, riding the existing
-   `; signature` metadata channel. Proposed design in
-   [Step 3: Typed function pointers](#step-3-typed-function-pointers-proposed).
+   `; signature` metadata channel. Implemented; design in
+   [Step 3: Typed function pointers](#step-3-typed-function-pointers-implemented).
 4. **Multiple return values** — closing a known 1:1 gap: GAZL has supported multiple `OUT` words
-   per function since 1.0, and Impala never exposed it. Proposed design in
-   [Step 4: Multiple return values](#step-4-multiple-return-values-proposed).
-5. **Import** — sharing typed interfaces between units without textual copying. Proposed design in
-   [Step 5: Import](#step-5-import-proposed).
+   per function since 1.0, and Impala never exposed it. Implemented; design in
+   [Step 4: Multiple return values](#step-4-multiple-return-values-implemented).
+5. **Import** — sharing typed interfaces between units without textual copying. Implemented; design in
+   [Step 5: Import](#step-5-import-implemented).
 
 Cross-cutting decisions — strict expressions, the rejection of
 [compound assignment](#compound-assignment--rejected), and the [diagnostic format](#diagnostics) —
@@ -329,7 +329,7 @@ regression, full stop. This is wired into the existing JSPEG parity harness
 
 ---
 
-## Step 2: Structs (partially implemented)
+## Step 2: Structs (implemented)
 
 > **Slice 1 implemented** (`tests/impala/sources/structPointers.impala`): `struct` definitions,
 > field layout, `sizeof(Type)`, struct-typed **pointers**, struct-pointer casts
@@ -540,7 +540,7 @@ working *for* us.
 - **By-value return** (`returns Filter out`): N `OUT` words — a struct return *is* a multiple return
   whose slots carry names and offsets. The callee writes `out.cutoff` as free direct `OUT`-slot
   access; the caller consumes it into a struct place, statement-level (`v = makeFilter(...)`), the
-  same restriction as `a = b`. **This makes [Step 4 (multiple return values)](#step-4-multiple-return-values-proposed)
+  same restriction as `a = b`. **This makes [Step 4 (multiple return values)](#step-4-multiple-return-values-implemented)
   a prerequisite of struct returns** — same multi-`OUT` window layout, one implementation. By-value
   *parameters* need only `PARA` sections and can land without Step 4; by-value *returns* need it.
 - **Whole-struct assignment `a = b` is allowed, statement-level only.** It lowers to exactly one
@@ -646,7 +646,7 @@ global TickFn onTick = tickHandler  // checked: tickHandler must match TickFn's 
 
 ---
 
-## Step 4: Multiple return values (proposed)
+## Step 4: Multiple return values (implemented)
 
 Impala 1.0 supports a single return value while GAZL supports many — the demo has apologized for
 this since 2012 ("GAZL supports multiple 'OUT' variables per function and the intention is to
