@@ -6,7 +6,10 @@
 param([int]$Workers = 6, [double]$Hours = 48, [int]$Chunk = 1000000)
 $root = Split-Path -Parent $PSScriptRoot   # repo root = parent of tools\ (the dir holding this script) - never hardcode a user path
 $exe  = Join-Path $root "output\GAZLFuzz.exe"
-if (-not (Test-Path $exe)) { throw "build first: tools\buildGazlFuzz.cmd" }
+Write-Host "building output\GAZLFuzz.exe ..."
+Remove-Item -Force $exe -ErrorAction SilentlyContinue   # so a failed rebuild can't silently run a stale binary
+& (Join-Path $PSScriptRoot "buildGazlFuzz.cmd")
+if (-not (Test-Path $exe)) { throw "build failed: tools\buildGazlFuzz.cmd" }
 $logs = Join-Path $root "fuzzlogs"
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 $deadline = (Get-Date).AddHours($Hours)
