@@ -49,12 +49,13 @@ fi
 
 if [ "$standalone" = 1 ]; then
 	# Self-contained --gen driver: no libFuzzer runtime needed, so the default clang++ (incl. Apple's) is fine.
-	defopts="-O1 -g -DLIBFUZZ -DLIBFUZZ_STANDALONE -DGAZL_JIT -DJITDIFF"
+	defopts="-O1 -g -DLIBFUZZ -DLIBFUZZ_STANDALONE -DGAZL_JIT -DJITDIFF -DGAZL_CANONICAL_NAN"		# canonical NaN so interp/JIT agree bit-for-bit (unspecified NaN sign otherwise diverges on MSVC)
 	: "${CPP_COMPILER:=clang++}"
 else
 	# Coverage-guided libFuzzer, JIT differential (fat runtime: x86_64 + arm64).
 	pick_libfuzzer_clang
-	defopts="-fsanitize=fuzzer -DLIBFUZZ -DGAZL_JIT -DJITDIFF $libcxxflags"		# NOTE: no ,address - ASan's macOS re-exec silently no-ops the binary on macOS 26 + Homebrew clang 21 (exits 0, no fuzzing). Coverage guidance (fuzzer) is what we need; the diff + asserts are the bug-finders.
+	defopts="-fsanitize=fuzzer -DLIBFUZZ -DGAZL_JIT -DJITDIFF -DGAZL_CANONICAL_NAN $libcxxflags"		# canonical NaN (see standalone); no ,address - ASan's macOS re-exec silently no-ops the binary on macOS 26 + Homebrew clang 21.
+
 fi
 CPP_OPTIONS=${CPP_OPTIONS:-$defopts}
 

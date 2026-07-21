@@ -525,6 +525,21 @@ static int loadFloatOperandCached(X64Emitter& emitter, RegisterCache& cache, con
 // DIVf with a runtime divisor: match the interpreter's zero-divisor trap (GAZL.cpp CHECK_FLOAT_DIV_BY_ZERO). Test the
 // divisor's bits: (bits << 1) == 0 iff the value is +0.0 or -0.0 (matching `== 0.0f`; NaN/inf fall through). VVC (const
 // divisor) is assemble-time-checked, so it stays on emitBinaryFloat.
+#ifdef GAZL_CANONICAL_NAN
+// strict FP: force any NaN in xmm d to the canonical 0x7FC00000, matching the interpreter's canonicalNaN(), so a
+// NaN's sign/payload (unspecified by IEEE) is identical across interp and JIT. Off by default; only the fuzz build defines it.
+static void emitCanonicalizeNaN(X64Emitter& emitter, int d) {
+	Label notNaN = emitter.newLabel();
+	emitter.ucomiss(static_cast<Reg>(d), static_cast<Reg>(d));		// PF=1 iff d is unordered (NaN)
+	emitter.jcc(CC_NP, notNaN);
+	emitter.movssRip(static_cast<Reg>(d), emitter.floatLiteral(0x7FC00000u));
+	emitter.bind(notNaN);
+}
+#define EMIT_CANON_NAN(emitter, d) emitCanonicalizeNaN((emitter), (d))
+#else
+#define EMIT_CANON_NAN(emitter, d) ((void)0)
+#endif
+
 static void emitDivFChecked(X64Emitter& emitter, RegisterCache& cache, const Instruction& instruction, bool source1Const, std::vector<ColdTrap>& coldTraps) {
 	const int a = loadFloatOperandCached(emitter, cache, instruction.p1, source1Const);
 	const int b = loadFloatOperandCached(emitter, cache, instruction.p2, false);
@@ -544,6 +559,7 @@ static void emitDivFChecked(X64Emitter& emitter, RegisterCache& cache, const Ins
 		emitter.divss(static_cast<Reg>(t), static_cast<Reg>(b));
 		emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(t));
 	}
+	EMIT_CANON_NAN(emitter, d);
 	cache.endInstruction();
 }
 
@@ -561,6 +577,7 @@ static void emitBinaryFloat(X64Emitter& emitter, RegisterCache& cache, BinaryOp 
 		(emitter.*fop)(static_cast<Reg>(t), static_cast<Reg>(b));
 		emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(t));
 	}
+	EMIT_CANON_NAN(emitter, d);
 	cache.endInstruction();
 }
 

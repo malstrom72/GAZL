@@ -579,11 +579,29 @@ static int loadFloatOperand(Arm64Emitter& e, RegisterCache& cache, const Value& 
 	return s;
 }
 // `dst = s1 <fop> s2` on float slots/consts, through the register cache.
+#ifdef GAZL_CANONICAL_NAN
+// strict FP: force any NaN in float reg d to the canonical 0x7FC00000, matching the interpreter's canonicalNaN(), so a
+// NaN's sign/payload (unspecified by IEEE) is identical across interp and JIT. Off by default; only the fuzz build defines it.
+static void emitCanonicalizeNaN(Arm64Emitter& e, RegisterCache& cache, int d) {
+	const int w = cache.scratch(GENERAL_REGISTER);			// allocate BEFORE the branch: any spill it emits must be unconditional or the cache's register model desyncs
+	Label notNaN = e.newLabel();
+	e.fcmpS(static_cast<Reg>(d), static_cast<Reg>(d));		// NaN => unordered => V flag set
+	e.bcond(VC, notNaN);									// VC = ordered => not NaN => skip
+	e.movImm32(static_cast<Reg>(w), 0x7FC00000u);
+	e.fmovSW(static_cast<Reg>(d), static_cast<Reg>(w));
+	e.bind(notNaN);
+}
+#define EMIT_CANON_NAN(e, cache, d) emitCanonicalizeNaN((e), (cache), (d))
+#else
+#define EMIT_CANON_NAN(e, cache, d) ((void)0)
+#endif
+
 static void emitBinaryF(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitter::*fop)(Reg, Reg, Reg), const Instruction& in, bool s1Const, bool s2Const) {
 	const int a = loadFloatOperand(e, cache, in.p1, s1Const);
 	const int b = loadFloatOperand(e, cache, in.p2, s2Const);
 	const int d = cache.define(in.p0.i, FLOAT_REGISTER);
 	(e.*fop)(static_cast<Reg>(d), static_cast<Reg>(a), static_cast<Reg>(b));
+	EMIT_CANON_NAN(e, cache, d);
 	cache.endInstruction();
 }
 
@@ -601,6 +619,7 @@ static void emitDivFChecked(Arm64Emitter& e, RegisterCache& cache, const Instruc
 	coldTraps.push_back(trap);
 	const int d = cache.define(in.p0.i, FLOAT_REGISTER);
 	e.fdivS(static_cast<Reg>(d), static_cast<Reg>(a), static_cast<Reg>(b));
+	EMIT_CANON_NAN(e, cache, d);
 	cache.endInstruction();
 }
 
