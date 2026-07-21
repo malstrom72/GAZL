@@ -21,6 +21,8 @@ for a in "$@"; do
 	esac
 done
 
+[ "$cross" = 1 ] && standalone=1		# x64 libFuzzer can't link here (arm64-only libc++), so the cross build is always the --gen standalone driver
+
 # Resolve a libFuzzer-capable clang (Homebrew LLVM) and the flags to link ITS libc++ - the fuzzer runtime references
 # newer std::__1 symbols (__hash_memory) absent from Apple's system libc++, so the link needs <prefix>/lib/c++.
 libcxxflags=""
@@ -62,8 +64,8 @@ jitmem=../src/GAZLJitMemPosix.cpp
 if [ "$cross" = 1 ]; then
 	# Cross build for x86_64 (Rosetta). Direct compile: BuildCpp.sh's "native" tuning would fight -arch x86_64.
 	out=../output/GAZLFuzzX64
-	"$CPP_COMPILER" -arch x86_64 -std=c++11 $CPP_OPTIONS -I.. \
-			-o "$out" GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp ../src/GAZLJitX64.cpp "$jitmem"
+	"$CPP_COMPILER" -arch x86_64 -std=c++11 -O2 $CPP_OPTIONS -I.. \
+			-o "$out" GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp ../src/GAZLJitX64.cpp ../src/GAZLJitMemPosix.cpp
 else
 	case "$(uname -m)" in
 		arm64 | aarch64) backend=../src/GAZLJitArm64.cpp ;;
