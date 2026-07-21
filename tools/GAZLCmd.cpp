@@ -40,6 +40,83 @@
 	#include "../src/GAZLJit.h"		// JitProcessor + JitCompiler - arm64 only; enabled by the build on AArch64 hosts
 #endif
 
+// --- Deterministic FP runtime environment (ported from Numbstrict) --------------------------------------------
+// Round-to-nearest, all FP exceptions masked, FTZ/DAZ off - so interp and JIT run the differential under a known,
+// host-independent FP env instead of whatever the CRT/host left in MXCSR/FPCR. Restores on scope exit.
+#include <cassert>
+#include <cfenv>
+#if defined(_MSC_VER)
+#pragma fenv_access(on)
+#endif
+#if defined(__SSE2__) || defined(_M_X64) || defined(_M_IX86)
+#include <xmmintrin.h>
+#include <float.h>
+#endif
+class StandardFPEnvScope {
+public:
+	StandardFPEnvScope() {
+	#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+		const unsigned int COMMON = _EM_INEXACT|_EM_UNDERFLOW|_EM_OVERFLOW|_EM_ZERODIVIDE|_EM_INVALID|_EM_DENORMAL|_RC_NEAR;
+		unsigned int cur;
+	#if defined(_M_IX86)
+		{ int ok = __control87_2(0,0,&prevX87_,&prevMXCSR_); assert(ok); unsigned int t; ok = __control87_2(COMMON|_PC_53, _MCW_EM|_MCW_RC|_MCW_PC, &t, 0); assert(ok); }
+		cur = prevMXCSR_;
+	#else
+		prevMXCSR_ = _mm_getcsr(); cur = prevMXCSR_; prevX87_ = _control87(0,0); _control87(COMMON, _MCW_EM|_MCW_RC);
+	#endif
+		cur &= ~(_MM_FLUSH_ZERO_MASK|_MM_DENORMALS_ZERO_MASK);
+		cur = (cur & ~_MM_ROUND_MASK) | _MM_ROUND_NEAREST;
+		cur |= (_MM_MASK_INVALID|_MM_MASK_DENORM|_MM_MASK_DIV_ZERO|_MM_MASK_OVERFLOW|_MM_MASK_UNDERFLOW|_MM_MASK_INEXACT);	// x64 uses SSE/MXCSR: mask exceptions here, not just x87
+		_mm_setcsr(cur);
+	#elif defined(__aarch64__)
+		int r; r = fegetenv(&prevEnv_); assert(r==0); r = fesetenv(FE_DFL_ENV); assert(r==0); feholdexcept(&dummyEnv_);
+	#if defined(__has_builtin) && __has_builtin(__builtin_aarch64_get_fpcr) && __has_builtin(__builtin_aarch64_set_fpcr)
+		prevFPCR_ = __builtin_aarch64_get_fpcr(); unsigned long long cur = prevFPCR_; cur &= ~(1ull<<24); cur &= ~(3ull<<22); __builtin_aarch64_set_fpcr(cur);
+	#else
+		asm volatile("mrs %0, fpcr" : "=r"(prevFPCR_)); unsigned long long cur = prevFPCR_; cur &= ~(1ull<<24); cur &= ~(3ull<<22); asm volatile("msr fpcr, %0" :: "r"(cur));
+	#endif
+	#elif defined(__arm__)
+		int r; r = fegetenv(&prevEnv_); assert(r==0); r = fesetenv(FE_DFL_ENV); assert(r==0); feholdexcept(&dummyEnv_);
+		asm volatile("vmrs %0, fpscr" : "=r"(prevFPSCR_)); unsigned int cur = prevFPSCR_; cur &= ~(1u<<24); cur &= ~(3u<<22); asm volatile("vmsr fpscr, %0" :: "r"(cur));
+	#else
+		int r; r = fegetenv(&prevEnv_); assert(r==0); r = fesetenv(FE_DFL_ENV); assert(r==0); feholdexcept(&dummyEnv_);
+	#endif
+	}
+	~StandardFPEnvScope() {
+	#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+	#if defined(_M_IX86)
+		{ unsigned int t; __control87_2(prevX87_, _MCW_EM|_MCW_RC|_MCW_PC, &t, 0); }
+	#else
+		_control87(prevX87_, _MCW_EM|_MCW_RC);
+	#endif
+		_mm_setcsr(prevMXCSR_);
+	#elif defined(__aarch64__)
+	#if defined(__has_builtin) && __has_builtin(__builtin_aarch64_set_fpcr)
+		__builtin_aarch64_set_fpcr(prevFPCR_);
+	#else
+		asm volatile("msr fpcr, %0" :: "r"(prevFPCR_));
+	#endif
+		fesetenv(&prevEnv_);
+	#elif defined(__arm__)
+		asm volatile("vmsr fpscr, %0" :: "r"(prevFPSCR_)); fesetenv(&prevEnv_);
+	#else
+		fesetenv(&prevEnv_);
+	#endif
+	}
+private:
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+	unsigned int prevX87_, prevMXCSR_;
+#elif defined(__aarch64__)
+	fenv_t prevEnv_, dummyEnv_;
+	unsigned long long prevFPCR_;
+#elif defined(__arm__)
+	fenv_t prevEnv_, dummyEnv_;
+	unsigned int prevFPSCR_;
+#else
+	fenv_t prevEnv_, dummyEnv_;
+#endif
+};
+
 using namespace GAZL;
 
 class CmdException : public std::exception {
@@ -471,6 +548,7 @@ static std::string generateProgramFromBytes(const uint8_t* data, size_t size) {	
 
 /* Assemble one generated program and run the four-way diff; on divergence dump the program + abort. */
 static void runDiff(const std::string& programText) {
+	StandardFPEnvScope fpEnv;			// interp + JIT run this program under a known, host-independent FP env
 	const uint8_t* Data = reinterpret_cast<const uint8_t*>(programText.data());
 	const size_t Size = programText.size();
 	try {
