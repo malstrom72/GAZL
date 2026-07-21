@@ -74,7 +74,7 @@ else
 	esac
 	out=../output/GAZLFuzz
 	CPP_COMPILER="$CPP_COMPILER" CPP_OPTIONS="$CPP_OPTIONS" \
-			bash BuildCpp.sh release native "$out" \
+			bash BuildCpp.sh beta native "$out" \
 			-I.. GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp "$backend" "$jitmem"
 fi
 chmod +x "$out" 2>/dev/null || true
