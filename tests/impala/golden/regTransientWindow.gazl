@@ -1,12 +1,12 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 13:1
-; signature extern native printInt() -> unknown @ 16:1
-; signature extern native printLF() -> unknown @ 18:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 14:1
+; signature extern native printInt() -> unknown @ 17:1
+; signature extern native printLF() -> unknown @ 19:1
 
 ;-----------------------------------------------------------------------------
-split:	FUNC	; signature func split(int n) -> (int, int) @ 18:16
+split:	FUNC	; signature func split(int n) -> (int, int) @ 19:16
 	$q:	OUTi
 	$r:	OUTi
 	$n:	INPi
@@ -19,7 +19,7 @@ split:	FUNC	; signature func split(int n) -> (int, int) @ 18:16
 
 
 ;-----------------------------------------------------------------------------
-combine:	FUNC	; signature func combine(int k, int m, Pair p) -> int @ 24:18
+combine:	FUNC	; signature func combine(int k, int m, Pair p) -> int @ 25:18
 	$s:	OUTi
 	$k:	INPi
 	$m:	INPi
@@ -32,22 +32,22 @@ combine:	FUNC	; signature func combine(int k, int m, Pair p) -> int @ 24:18
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 29:15
+main:	FUNC	; signature func main() -> void @ 30:15
 		PARA *1
 	$pr:	LOCA *2
 	$x:	LOCi
 	$y:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi %2 #7 	; x, y = split(7)
-		CALL &split %0 *3	; expects split(int) -> int @ 32:17
+		CALL &split %0 *3	; expects split(int) -> int @ 33:17
 		MOVi $x %0 
 		MOVi $y %1 
 		MOVi %1 $x 	; printInt(x)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 33:13
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 33:24
-		MOVi %1 $y 	; printInt(y)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 34:13
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:24
+		MOVi %1 $y 	; printInt(y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:24
 		MOVi $pr:0 #10 	; pr.a = 10
 		MOVi $pr:1 #20 	; pr.b = 20
 		SUBi %0 $y #-12	; x = (((y - -12) - -17) + combine(pr.a, x, pr))
@@ -56,10 +56,10 @@ main:	FUNC	; signature func main() -> void @ 29:15
 		ADRL %6 %4 *2
 		ADRL %7 $pr *2
 		COPY %6 %7 *2
-		CALL &combine %1 *5	; expects combine(int, int, Pair) -> int @ 38:47
+		CALL &combine %1 *5	; expects combine(int, int, Pair) -> int @ 39:47
 		SUBi %0 %0 #-17
 		ADDi $x %0 %1
 		MOVi %1 $x 	; printInt(x)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 39:13
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 39:24
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:24
 		RETU   	; }

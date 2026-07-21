@@ -783,20 +783,21 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return counters['%']++;
         }
 
-        /* A call window grows UPWARD from its base slot. If a live transient sits above
-           the free pool (a freed hole below it), reusing a slot from that hole would let
-           the window overlap the live temp — so mint a fresh slot above everything instead.
-           (Normal code frees top-down, so the free pool reaches the top and this never
-           fires; it guards the cross-statement holes a destructure/struct window can leave —
-           fuzzer seed 10024.) */
+        /* INVARIANT (R1): a call window grows UPWARD from its base, so the reused base must sit
+           above every live transient — i.e. the free pool must reach the top (contain counters-1).
+           This holds because every multi-slot window is released high-to-low (LIFO): ordinary
+           expression temps, the argument window, the struct-return window (freeStructWindow) and
+           the destructure output window (finishDestructure) all do. A low-to-high release would
+           leave a freed hole below a live temp and break the reuse below — the fuzzer (seed 10024)
+           caught exactly that when finishDestructure released low-to-high. Assert it so any future
+           release-order regression fails loudly here instead of miscompiling. */
         var maxFree = -1;
         for (var _k = 0; _k < stk.length; ++_k) {
             var _v = parseInt(stk[_k].substr(1), 10);
             if (_v > maxFree) maxFree = _v;
         }
-        if (maxFree < counters['%'] - 1) {
-            return counters['%']++;
-        }
+        assert(maxFree === counters['%'] - 1,
+               'transient pool fragmented: a live temp sits above the free pool (release a window low-to-high?)');
 
         /* sort in-place on the numeric suffix, ascending           */
         stk.sort(function (a, b) {
@@ -1916,8 +1917,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             var t    = targets[i];
             var ret  = list[i] || {};
 
-            if (t.name === '_') {                     /* discard this return value */
-                returnBack(slot);
+            if (t.name === '_') {                     /* discard: slot freed in the release pass below */
                 continue;
             }
 
@@ -1931,8 +1931,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
             var res = { operator: undefined, type: '?',
                         operands: [ undefined, undefined, undefined ] };
-            assign(res, lv, rv, sourceCode, sourceOffset);
-            releaseMeta(res);
+            assign(res, lv, rv, sourceCode, sourceOffset);  /* reads %slot; leaves it allocated */
+        }
+
+        /* Release the output-window slots high-to-low, the LIFO order every other multi-slot
+           window (arg window, struct-return window) already uses. Freeing low-to-high left a
+           hole below a live temp, breaking borrowForCall's reuse (invariant R2 / fuzzer 10024). */
+        for (var j = count - 1; j >= 0; --j) {
+            returnBack('%' + (base + j));
         }
     };
 

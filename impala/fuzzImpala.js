@@ -16,8 +16,10 @@
 //   --vm also runs each compiled program on GAZLCmd and flags VM faults (miscompiles).
 // The runner reloads the compiler module per call, so keep a single process to <=~20k
 // iterations (chunk larger sweeps across processes: for s in 0 20000 40000; do ... done).
-// First find (seed 10024): a destructure left the transient pool with a hole below a live
-// temp, and a later struct-arg call's window overlapped it — fixed in borrowForCall.
+// First find (seed 10024): finishDestructure released its output window low-to-high (unlike every
+// other multi-slot window), leaving a freed hole below a live temp; a later struct-arg call's
+// window overlapped it. Fixed by releasing the window high-to-low; borrowForCall now asserts the
+// pool-reaches-the-top invariant, so a future release-order regression fails loudly here.
 
 const { compileWithJsImpala } = require('./impalaJsCompilerRunner.js');
 const fs = require('fs');
