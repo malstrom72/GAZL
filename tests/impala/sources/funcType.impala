@@ -1,5 +1,5 @@
 /*
-	Impala 2 Step 3: named function-pointer types. `functype Name(params) [returns …]` registers
+	Impala 2 Step 3: named function-pointer types. `functype Name(params) [returns ...]` registers
 	a signature that becomes a base type (composes with pointer/array modifiers like structs).
 	A funcptr variable is a single word (stored like `funcptr`) tagged with its type; assigning a
 	function checks its signature against the type, and an indirect call is checked + sized against
@@ -33,8 +33,8 @@ locals UnaryFn cb, BinOp array ops[2], MakeFn mk, SplitFn sp, P v, int array buf
 	printInt(cb(&buf[0])); printLF();		// 42
 
 	ops[0] = add; ops[1] = mul;				// a dispatch table of funcptrs
-	a = 0; printInt(ops[a](6, 7)); printLF();	// add → 13
-	a = 1; printInt(ops[a](6, 7)); printLF();	// mul → 42
+	a = 0; printInt(ops[a](6, 7)); printLF();	// add -> 13
+	a = 1; printInt(ops[a](6, 7)); printLF();	// mul -> 42
 
 	mk = make; v = mk(10, 3);				// struct-returning funcptr
 	printInt(v.x); printLF();				// 13

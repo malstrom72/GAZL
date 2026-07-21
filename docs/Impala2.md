@@ -615,7 +615,7 @@ opaque consumers interoperate.
 ## Step 3: Typed function pointers (implemented)
 
 Mirrors structs exactly: **named funcptr types that become base types** — the typedef the language
-never had. *(Implemented: `functype Name(params) [returns …]` registers a signature usable as a base
+never had. *(Implemented: `functype Name(params) [returns ...]` registers a signature usable as a base
 type; funcptr variables carry the type tag, assignments and indirect calls are checked against it, and
 struct/multi-value returns flow through funcptrs. VM-verified in `tests/impala/sources/funcType.impala`.)* Type definitions are introduced by their own keyword, **`functype`** *(decided — an
 earlier draft reused `funcptr`, but `funcptr Name` already means a variable declaration, and a
@@ -742,7 +742,7 @@ scalars now, or as a named struct once Step 2 lands.
 ## Step 5: Import (implemented)
 
 *(Implemented: `import "path"` + `impala build root.impala` walks the closure and compiles the
-concatenated units in one pass — cross-unit structs, struct/multi-value returns, and functypes all
+concatenated units in one pass - cross-unit structs, struct/multi-value returns, and functypes all
 resolve with no header drift (visited-set dedups diamonds and breaks cycles). `export` marks
 host-visible symbols in the `; signature` metadata, and `--dead-strip` drops any FUNC/data block not
 reachable from an export. VM-verified in `tests/impala/sources/import/` and `tests/impala/sources/deadstrip/`.

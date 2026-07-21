@@ -50,7 +50,7 @@ function usageAndExit() {
 // --- Step 5: import-as-linking -------------------------------------------------
 // `import "path"` names a unit for the link closure (path relative to the importing file).
 // The builder walks the closure (visited-set by real path, cycles harmless), concatenates the
-// unit sources in dependency-first order, and compiles the whole program in one pass — so
+// unit sources in dependency-first order, and compiles the whole program in one pass - so
 // cross-unit calls (including struct/multi-value returns) codegen correctly with no header drift.
 function scanImports(source) {
 	const re = /^[ \t]*import[ \t]+"([^"\r\n]*)"/gm;
@@ -88,7 +88,7 @@ function resolveImportClosure(rootPath) {
 		for (const rel of scanImports(source)) {
 			visit(path.resolve(dir, rel), importChain.concat(absPath));
 		}
-		order.push({ path: absPath, source });    // post-order → dependencies precede dependents
+		order.push({ path: absPath, source });    // post-order -> dependencies precede dependents
 	}
 
 	visit(path.resolve(rootPath), []);
@@ -134,14 +134,14 @@ function isDataDef(line) {
 
 // A function body ends only at the next named definition or a standalone `; signature` row
 // (extern decls). Internal `;----` separators, `; expects` comments and blank lines stay in
-// the body — the code section of every function is preceded by its own `;----` separator.
+// the body - the code section of every function is preceded by its own `;----` separator.
 function isBoundary(line) {
 	return !!(isFuncDef(line) || isDataDef(line) || /^\s*;\s*signature\b/.test(line));
 }
 
 function collectRefs(text) {
 	const refs = [];
-	const re = /[&^#]([A-Za-z_]\w*)/g;   // &func/&global, ^native, #const — names only (numbers skip)
+	const re = /[&^#]([A-Za-z_]\w*)/g;   // &func/&global, ^native, #const - names only (numbers skip)
 	let m;
 	while ((m = re.exec(text)) !== null) refs.push(m[1]);
 	return refs;

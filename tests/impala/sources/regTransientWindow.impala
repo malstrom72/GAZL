@@ -2,7 +2,7 @@
 	Regression (found by impala/fuzzImpala.js, seed 10024): a destructuring statement released its
 	output-window slots low-to-high, leaving the per-unit transient pool with a freed hole below a
 	live temp. A later function that put a struct-value-argument call on the right of an arithmetic
-	operator then had its call window overlap the live left-operand temp — tripping the compiler's
+	operator then had its call window overlap the live left-operand temp - tripping the compiler's
 	`transient %1 must exist in stock` assertion. Root cause: finishDestructure released the window
 	out of the LIFO order every other multi-slot window uses; fixed by releasing it high-to-low, and
 	borrowForCall now asserts the pool-reaches-the-top invariant so any future regression fails loudly.

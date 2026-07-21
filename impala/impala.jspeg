@@ -1,13 +1,13 @@
-## ————————————————————————————————
+## --------------------------------
 ##  Impala-JSPEG ES3 support (v3)
-## ————————————————————————————————
+## --------------------------------
 
 {
     /**
-     * map(target, k1, v1, k2, v2, …)
+     * map(target, k1, v1, k2, v2, ...)
      *   assigns target[k1]=v1, etc.
      */
-    function map(target /*, k1, v1, … */) {
+    function map(target /*, k1, v1, ... */) {
         for (var i = 1; i + 1 < arguments.length; i += 2) {
             target[ arguments[i] ] = arguments[i+1];
         }
@@ -33,7 +33,7 @@
     }
 
 
-    /** template baker: "Hello {name}" → eval expressions in {…} */
+    /** template baker: "Hello {name}" -> eval expressions in {...} */
     function bake(str) {
         // same pattern as /\{([^}]+)\}/g  but expressed as a string because poor jspeg parsing
         var re = new RegExp("\\{([^}]+)\\}", "g");
@@ -123,10 +123,10 @@
     }
 
 
-    /* ————————————————————————————————
+    /* --------------------------------
      *  Impala-JSPEG  ▸  core tables / helpers  (ES3)
      *  arrays now rely on .length / .push
-     * ———————————————————————————————— */
+     * -------------------------------- */
 
     /* 1  constants & simple flags */
     var $$parser.IMPALA_VERSION = '1.0';
@@ -148,8 +148,8 @@
     var $$parser.stock = { '%': [], '<': [] };
     var $$parser.counters = { '%': 0,  '<': 0  };
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
-    var $$parser.structs = {};                                    /// name → { fields:[{name,type,elem,offset,words}], words, complete }
-    var $$parser.functypes = {};                                  /// name → signature { params, returnList, returnCount, returns, returnWords, complete }
+    var $$parser.structs = {};                                    /// name -> { fields:[{name,type,elem,offset,words}], words, complete }
+    var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
     var $$parser.destructuring = false;                           /// true while parsing the call on the RHS of `a, b = f(...)`
@@ -203,9 +203,9 @@
         }
     }
 
-    /* render a full element descriptor as a single metadata token: 'p:i' → "int-ptr",
-       'p:p:i' → "int-ptr-ptr", 'i' → "int", 'p' → "ptr" (element-unknown pointer) */
-    function signatureCategoryForDesc(desc) {                     /// 'p:i'→"int-ptr", 'p:Filter'→"Filter-ptr"
+    /* render a full element descriptor as a single metadata token: 'p:i' -> "int-ptr",
+       'p:p:i' -> "int-ptr-ptr", 'i' -> "int", 'p' -> "ptr" (element-unknown pointer) */
+    function signatureCategoryForDesc(desc) {                     /// 'p:i'->"int-ptr", 'p:Filter'->"Filter-ptr"
         if (desc === undefined) {
             return 'unknown';
         }
@@ -274,7 +274,7 @@
         for (var idx = 0; idx < params.length; ++idx) {
             var param = params[idx] || {};
             var typeName = (param.type === 'S'
-                    ? (param.struct || 'unknown')                 /* by-value struct param → the struct name */
+                    ? (param.struct || 'unknown')                 /* by-value struct param -> the struct name */
                     : (param.elem !== undefined
                         ? signatureCategoryForDesc(fullDescFor(param.type, param.elem))
                         : signatureParamCategory(param.type)));
@@ -360,7 +360,7 @@
         var paramsText = renderParamList(signature.params);
         var hasReturn = (signature && signature.returns !== undefined);
         var returnType;
-        if (signature.returnCount > 1) {                          /* multiple return values → (t1, t2, …) */
+        if (signature.returnCount > 1) {                          /* multiple return values -> (t1, t2, ...) */
             var parts = [];
             for (var _rri = 0; _rri < signature.returnList.length; ++_rri) {
                 var r = signature.returnList[_rri];
@@ -369,7 +369,7 @@
                         : signatureParamCategory(r.type));
             }
             returnType = '(' + parts.join(', ') + ')';
-        } else if (signature.returns === 'S') {                   /* by-value struct return → the struct name */
+        } else if (signature.returns === 'S') {                   /* by-value struct return -> the struct name */
             returnType = (signature.returnStruct || 'unknown');
         } else {
             returnType = (signature.returnElem !== undefined
@@ -419,7 +419,7 @@
             }
         }
         var returnType = (returnCode === 'S' && signature && signature.returnStruct
-                ? signature.returnStruct                          /* by-value struct return → the struct name */
+                ? signature.returnStruct                          /* by-value struct return -> the struct name */
                 : signatureReturnCategory(returnCode, known));
 
         return appendOrigin('expects ' + label + '(' + paramsText + ') -> ' + returnType,
@@ -649,7 +649,7 @@
 
             switch (inst.operator) {
 
-                /* ———  branch on TRUE / FALSE  ——— */
+                /* ---  branch on TRUE / FALSE  --- */
                 case '?->': {           /* created by AND/OR, e.g.   F->FALSE L1: */
                     targetCond         = inst.type; // boolean
                     var lbl            = inst.operands[0];
@@ -663,7 +663,7 @@
                         t   = inst.type;            // false / true
                     inst.type = null;               // will no longer be needed
 
-                    if (target[t] != null) {        // label already chosen – make alias
+                    if (target[t] != null) {        // label already chosen - make alias
                         aliases[lbl] = target[t];
                         inst.operator = (lbl[2] !== 'a' ? null : '<--'); // keep assert labels
                     } else {
@@ -673,7 +673,7 @@
                     break;
                 }
 
-                /* ———  invert ( NOT )  ——— */
+                /* ---  invert ( NOT )  --- */
                 case '!':
                     var tmp    = target.false;
                     target.false = target.true;
@@ -682,11 +682,11 @@
                     inst.operator = null;
                     break;
 
-                /* comment – ignore */
+                /* comment - ignore */
                 case ';':
                     break;
 
-                /* ———  unconditional GOTO  ——— */
+                /* ---  unconditional GOTO  --- */
                 case '-->': {
                     var lbl   = inst.operands[0];
                     var final = (lbl in aliases ? aliases[lbl] : lbl);
@@ -701,7 +701,7 @@
                     }
                     break;
 
-                /* ———  comparison ops  ——— */
+                /* ---  comparison ops  --- */
                 case '<=': case '<': case '>=': case '>': case '!=': case '==': {
                     /* if we are targeting FALSE, invert comparison */
                     if (targetCond === false) inst.operator = '!' + inst.operator;
@@ -716,7 +716,7 @@
                     break;
                 }
 
-                /* ———  anything else breaks the chain  ——— */
+                /* ---  anything else breaks the chain  --- */
                 default:
                     target.false = target.true = currentGoto = null;
             }
@@ -724,7 +724,7 @@
     };
 
     /* ---------------------------------------------------------
-     *  Pool / stock handling for transients    (‘%’, ‘<…>’)
+     *  Pool / stock handling for transients    (‘%’, ‘<...>’)
      * --------------------------------------------------------- */
 
     /* assure no duplicates exist in a stock bucket */
@@ -759,7 +759,7 @@
         throw new Error("unknown stock class " + cls);
     };
 
-    /* smart borrow for CALL args – first free id in last consecutive run */
+    /* smart borrow for CALL args - first free id in last consecutive run */
     $$parser.borrowForCall = function () {
         /* same safety check the original did */
         assert($$parser.validateStock('%'));
@@ -772,11 +772,11 @@
         }
 
         /* INVARIANT (R1): a call window grows UPWARD from its base, so the reused base must sit
-           above every live transient — i.e. the free pool must reach the top (contain counters-1).
+           above every live transient - i.e. the free pool must reach the top (contain counters-1).
            This holds because every multi-slot window is released high-to-low (LIFO): ordinary
            expression temps, the argument window, the struct-return window (freeStructWindow) and
            the destructure output window (finishDestructure) all do. A low-to-high release would
-           leave a freed hole below a live temp and break the reuse below — the fuzzer (seed 10024)
+           leave a freed hole below a live temp and break the reuse below - the fuzzer (seed 10024)
            caught exactly that when finishDestructure released low-to-high. Assert it so any future
            release-order regression fails loudly here instead of miscompiling. */
         var maxFree = -1;
@@ -812,7 +812,7 @@
            original queue semantics. */
         stk.reverse();
 
-        /* duplicate-check, like the original assert(validate…)    */
+        /* duplicate-check, like the original assert(validate...)    */
         assert($$parser.validateStock('%'));
         return chosen;
     };
@@ -851,7 +851,7 @@
             var stk = $$parser.stock[c];
             if (!stockContains(stk, op)) stk.push(op);   // avoid dupes
         }
-        /* special case “…:<” suffix ---------------------------------
+        /* special case “...:<” suffix ---------------------------------
            original test:  op{len-4 : 2} == ':<'
            -> two chars beginning 4 from the end                       */
         else if (op.length >= 4 && op.substr(op.length - 4, 2) === ':<') {
@@ -1090,13 +1090,13 @@
      *  ('Filter', 'p:Filter') for typed struct pointers/arrays.  *
      * --------------------------------------------------------- */
 
-    $$parser.descHead = function (desc) {                         /// 'p:i' → 'p'; 'Filter' → 'Filter'
+    $$parser.descHead = function (desc) {                         /// 'p:i' -> 'p'; 'Filter' -> 'Filter'
         if (desc === undefined) return undefined;
         var colon = desc.indexOf(':');
         return (colon === -1 ? desc : desc.substr(0, colon));
     };
 
-    $$parser.descTail = function (desc) {                         /// 'p:i' → 'i'; 'i' → undefined
+    $$parser.descTail = function (desc) {                         /// 'p:i' -> 'i'; 'i' -> undefined
         if (desc === undefined) return undefined;
         var colon = desc.indexOf(':');
         return (colon === -1 ? undefined : desc.substr(colon + 1));
@@ -1170,7 +1170,7 @@
        parameter's type (+ struct / pointer-element), and the return shape. */
     $$parser.funcTypeMatches = function (ftName, signature) {
         var ft = $$parser.functypes[ftName];
-        if (!ft || !signature) return true;                       /* unknown → don't over-report */
+        if (!ft || !signature) return true;                       /* unknown -> don't over-report */
         var fp = ft.params || [], sp = signature.params || [];
         if (fp.length !== sp.length) return false;
         for (var i = 0; i < fp.length; ++i) {
@@ -1187,7 +1187,7 @@
         return true;
     };
 
-    $$parser.elemVerbose = function (desc) {                      /// 'p:i' → "int pointer"; 'p:Filter' → "Filter pointer"
+    $$parser.elemVerbose = function (desc) {                      /// 'p:i' -> "int pointer"; 'p:Filter' -> "Filter pointer"
         if (desc === undefined) return 'untyped';
         var head = $$parser.descHead(desc);
         var tail = $$parser.descTail(desc);
@@ -1293,7 +1293,7 @@
 
     $$parser.pushInitScalar = function (out, item, type, fieldName, sourceCode, sourceOffset) {
         if (item === undefined) {
-            out.push($$parser.ZEROES[type]);                      /* omitted → zero */
+            out.push($$parser.ZEROES[type]);                      /* omitted -> zero */
             return;
         }
         if (item.braced !== undefined) {
@@ -1375,7 +1375,7 @@
         slot.elem      = structName;
     };
 
-    /* structPtr[i]  →  a struct place at ptr + i*sizeof (struct arrays decay to struct pointers) */
+    /* structPtr[i]  ->  a struct place at ptr + i*sizeof (struct arrays decay to struct pointers) */
     $$parser.structSubscript = function (x, idx, sourceCode, sourceOffset) {
         x = metaSlot(x);
         idx = metaSlot(idx);
@@ -1384,7 +1384,7 @@
         var basePtr = $$parser.makeRValue(x);
         var idxRV = $$parser.makeRValue(idx);
 
-        if (/^#[0-9]+$/.test(idxRV)) {                            /* constant index → fold into the place offset */
+        if (/^#[0-9]+$/.test(idxRV)) {                            /* constant index -> fold into the place offset */
             var off = parseInt(idxRV.substr(1), 10) * sz;
             /* a global-address base (&name) stays in global memory (=* / &name:off);
                a runtime pointer base uses PEEK/POKE. */
@@ -1393,7 +1393,7 @@
             return;
         }
 
-        var addr = $$parser.borrow('%');                          /* dynamic index → ptr + i*sizeof (a runtime pointer) */
+        var addr = $$parser.borrow('%');                          /* dynamic index -> ptr + i*sizeof (a runtime pointer) */
         if (sz === 1) {
             $$parser.emit('+', 'p', addr, basePtr, idxRV);
         } else {
@@ -1434,7 +1434,7 @@
     $$parser.copyStructArg = function (argMeta, winSlot, words) {
         argMeta = metaSlot(argMeta);
         /* A struct-return result already sits in transient window slots. Nested calls slide
-           their windows so the inner result lands exactly where this argument belongs — then
+           their windows so the inner result lands exactly where this argument belongs - then
            there is nothing to copy (and self-copy would be undefined behaviour): adopt it. */
         if (argMeta.winBase === winSlot && argMeta.winWords === words) {
             $$parser.returnBack(argMeta.base);                    /* free the window-address pointer temp */
@@ -1468,7 +1468,7 @@
         }
     };
 
-    /* fp->field, place.field, nested chains — Step 2 slices 1–2 */
+    /* fp->field, place.field, nested chains - Step 2 slices 1-2 */
     $$parser.fieldAccess = function (x, fieldName, arrow, sourceCode, sourceOffset) {
         x = metaSlot(x);
 
@@ -1480,7 +1480,7 @@
                         'assign the call result to a local first, then read its fields');
             }
             if (arrow) {
-                $$parser.fail("Use '.' — this is a struct value, not a pointer", sourceCode,
+                $$parser.fail("Use '.' - this is a struct value, not a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as .' + fieldName);
             }
             bk = x.baseKind; base = x.base; off = x.placeOff; structName = x.struct;
@@ -1502,7 +1502,7 @@
         }
         var total = off + field.offset;
 
-        if (field.type === 'S') {                                 /* nested inline struct → another place */
+        if (field.type === 'S') {                                 /* nested inline struct -> another place */
             $$parser.setPlace(x, bk, base, total, field.struct);
             return;
         }
@@ -1580,7 +1580,7 @@
     };
 
     /* --------------------------------------------------------- *
-     *  Binary operations ( + – * / [] etc. )                    *
+     *  Binary operations ( + - * / [] etc. )                    *
      * --------------------------------------------------------- */
     $$parser.binaryOp = function (operator, leftx, rightx,
                                   sourceCode, sourceOffset) {
@@ -1645,7 +1645,7 @@
 
         } else {
 
-            /* pointer‐difference special-case “d” */
+            /* pointer-difference special-case “d” */
             if (operator === '-' && rightx.type === 'p') {
                 operator = 'd';
             }
@@ -1693,7 +1693,7 @@
                                leftx.type, rightx.type, 'E301');
         }
 
-        /* detect (itof X) * 1.0 → itof */
+        /* detect (itof X) * 1.0 -> itof */
         if (operator === '*' && leftx.operator === '=itof'
             && leftx.operands[2] === '#1.0') {
 
@@ -1939,11 +1939,11 @@
     $$parser.dereference = function (operator, expr, sourceCode, sourceOffset) {
         expr = metaSlot(expr);
         if (expr.operator === '+') {
-            /*  &a + i   →   PEEK (&a , i)  */
+            /*  &a + i   ->   PEEK (&a , i)  */
             expr.operator = '=[]';
         } else if (expr.operator === '-' && expr.operands[2] &&
                    expr.operands[2][0] === '#') {
-            /*  &a - #n  where n is const → adjust to negative literal */
+            /*  &a - #n  where n is const -> adjust to negative literal */
             expr.operator = '=[]';
             var num = parseFloat(expr.operands[2].substr(1));   // strip leading '#'
             expr.operands[2] = '#'+(-num);
@@ -1975,7 +1975,7 @@
             expr.operator = ':=';                    // treat as plain r-value
 
         } else if (expr.operator === '=[]') {        // array element
-            expr.operator = '+';                     // &a[i]  →  &a + i
+            expr.operator = '+';                     // &a[i]  ->  &a + i
 
         } else if (expr.operator === '=[]$') {       // local array element
             expr.operator = '=&';
@@ -2011,11 +2011,11 @@
             expr, '^', undefined,
             undefined,
             $$parser.makeRValue(expr),
-            '#-1'                                    // XOR with –1
+            '#-1'                                    // XOR with -1
         );
     };
 
-    /* ABS or FLOOR (unary) – operator is already '=abs' or '=floor' */
+    /* ABS or FLOOR (unary) - operator is already '=abs' or '=floor' */
     $$parser.absFloor = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
@@ -2026,7 +2026,7 @@
         );
     };
 
-    /* int → float */
+    /* int -> float */
     $$parser.intToFloatConvert = function (operator, expr) {
         expr = metaSlot(expr);
         $$parser.makeMeta(
@@ -2037,7 +2037,7 @@
         );
     };
 
-    /* float → int, with constant-fold special-case */
+    /* float -> int, with constant-fold special-case */
     $$parser.floatToIntConvert = function (operator, expr) {
 
         expr = metaSlot(expr);
@@ -2066,7 +2066,7 @@
      *  UNARY_OPS dispatch table
      * -------------------------------------------------------- */
 
-    $$parser.UNARY_OPS = {};          /* will hold “=xxx” → handler */
+    $$parser.UNARY_OPS = {};          /* will hold “=xxx” -> handler */
 
     /* no-op casts */
     function noop() {}
@@ -2095,13 +2095,13 @@
 
         expr = metaSlot(expr);
 
-        /* *structPointer → a struct place (through-pointer field access / whole-struct assign) */
+        /* *structPointer -> a struct place (through-pointer field access / whole-struct assign) */
         if (operator === '*' && expr.type === 'p' && $$parser.isStructAtom(expr.elem)) {
             $$parser.setPlace(expr, 'pointer', $$parser.makeRValue(expr), 0, expr.elem);
             return;
         }
 
-        /* &structValue → a typed struct pointer (materialize the place's address) */
+        /* &structValue -> a typed struct pointer (materialize the place's address) */
         if (operator === '&' && expr.place) {
             var structName = expr.struct;
             var addr = $$parser.placeAddress(expr);
@@ -2235,7 +2235,7 @@
             var op    = rec.operator;
 
             if (op == null) {
-                /* empty / removed meta – skip */
+                /* empty / removed meta - skip */
                 continue;
             }
 
@@ -2253,7 +2253,7 @@
             }
 
             /* -------------------------------------------------- */
-            /* comment pseudo-op (“; …”)                          */
+            /* comment pseudo-op (“; ...”)                          */
             /* -------------------------------------------------- */
             if (op === ';') {
                 nextComment = '\t; ' +
@@ -2315,7 +2315,7 @@
         /* local  ------------------------------------------------*/
         if (!isGlobal && (p = sym.locals['$' + name])) {
 
-            if (p.type === 'S') {                                 /* struct value local → a place */
+            if (p.type === 'S') {                                 /* struct value local -> a place */
                 $$parser.setPlace(x, 'local', '$' + name, 0, p.elem);
                 return;
             }
@@ -2337,7 +2337,7 @@
         /* global -----------------------------------------------*/
         if (isGlobal && (p = sym.globals[name])) {
 
-            if (p.type === 'S') {                                 /* struct value global → a place in global memory */
+            if (p.type === 'S') {                                 /* struct value global -> a place in global memory */
                 $$parser.setPlace(x, 'globalAddr', '&' + name, 0, p.elem);
                 return;
             }
@@ -2442,7 +2442,7 @@
         return (s[0] === '#') ? s.substr(1) : s;
     };
 
-    /* printable ASCII table (33–126) */
+    /* printable ASCII table (33-126) */
     $$parser.printable = '';
     for (var i = 33; i < 127; ++i) {
         $$parser.printable += char(i);
@@ -2550,7 +2550,7 @@
         }
     }
 
-    /* simple “foreach” — fn(element, index) */
+    /* simple “foreach” - fn(element, index) */
     function iterate(arr, fn) {
         for (var i = 0; i < arr.length; ++i) {
             fn(arr[i], i);
@@ -2648,7 +2648,7 @@ root        <-  _                                                     { $$parser
                 / GlobalDecl / ';'_)* !.                              { $$parser.end(); }
 
 # `import "path"` names a unit for the builder's link closure. The compiler itself treats it
-# as a no-op — `impala build` resolves the closure, concatenates the sources, and compiles the
+# as a no-op - `impala build` resolves the closure, concatenates the sources, and compiles the
 # whole program at once, so the import directives are already satisfied by that point.
 ImportDecl  <-  IMPORT _ path:StringLiteral _
 
@@ -2674,8 +2674,8 @@ StructDecl  <-  STRUCT _ id:Identifier                               { $sname = 
 
 # ------------------------------------------------------------------
 #  named function-pointer type   (Impala 2 Step 3)
-#    functype Name(params) [returns t1, t2, …]
-#  Emits nothing — it only registers a signature usable as a base type.
+#    functype Name(params) [returns t1, t2, ...]
+#  Emits nothing - it only registers a signature usable as a base type.
 # ------------------------------------------------------------------
 FuncTypeDecl <- FUNCTYPE _ id:Identifier                             { $ftname = $id; $$parser.beginFuncType($id, $$s, $$i); }
                 '(' _
@@ -2820,7 +2820,7 @@ inp:ArgsDecl ')'_
                                                                         if (entry.pendingReturns && entry.pendingReturns.length > 0) {
                                                                                 for (var _ri = 0; _ri < entry.pendingReturns.length; ++_ri) {
                                                                                         var ret = entry.pendingReturns[_ri];
-                                                                                        if (ret.type === 'S') {  /* by-value struct return → leading output PARA *sizeof (a writable place) */
+                                                                                        if (ret.type === 'S') {  /* by-value struct return -> leading output PARA *sizeof (a writable place) */
                                                                                                 $$parser.declare(
                                                                                                         'PARA', 'locals',
                                                                                                         ret.name,
@@ -2860,7 +2860,7 @@ inp:ArgsDecl ')'_
                                                                         }
                                                                 }
                                                                          iterate($inp, function (p) {
-                                                                             if (p.type === 'S') {         /* by-value struct param → labeled input PARA *sizeof (read-only place) */
+                                                                             if (p.type === 'S') {         /* by-value struct param -> labeled input PARA *sizeof (read-only place) */
                                                                                  $$parser.declare(
                                                                                      'PARA', 'locals',
                                                                                      '$' + p.name,
@@ -2888,7 +2888,7 @@ inp:ArgsDecl ')'_
                 (
                     LOCALS _ loc:LocalsDecl                           {
                                                                          iterate($loc, function (v) {
-                                                                             if (v.type === 'S') {         /* struct value local → LOCA *sizeof, remember struct */
+                                                                             if (v.type === 'S') {         /* struct value local -> LOCA *sizeof, remember struct */
                                                                                  $$parser.declare(
                                                                                      'LOCA', 'locals',
                                                                                      '$' + v.name,
@@ -3061,7 +3061,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                      # primitive variable --------------------------------
                      v:VarDecl                                        {
                                                                              $vStruct = ($v.type === 'S');
-                                                                             if ($vStruct) {              /* struct value global → one zeroed GLOB/CNST/TEMP *sizeof */
+                                                                             if ($vStruct) {              /* struct value global -> one zeroed GLOB/CNST/TEMP *sizeof */
                                                                                  $$parser.declare(
                                                                                      $section, 'globals',
                                                                                      $v.name, 'S',
@@ -3154,12 +3154,12 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                             $aCount = parseInt('' + $a.size, 10);
                                                                          }
                          ( '=' _
-                           ( d:InitList                                {   /* flat list → scalar-element arrays only */
+                           ( d:InitList                                {   /* flat list -> scalar-element arrays only */
                                                                             if ($aStructEl)
                                                                                 $$parser.fail('A struct-element array needs nested braces, one group per element',
                                                                                         $$s, $$i, 'E422');
                                                                          }
-                           / d:Braced                                  {   /* nested braces → struct-element arrays */
+                           / d:Braced                                  {   /* nested braces -> struct-element arrays */
                                                                             if (!$aStructEl)
                                                                                 $$parser.fail('Nested brace initializers are for struct-element arrays',
                                                                                         $$s, $$i, 'E422');
@@ -3313,7 +3313,7 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                              $$.elem = undefined;
                                                                              $$.words = $$parser.structWords(head);
                                                                          } else if (tail === undefined && $$parser.isFuncTypeAtom(head)) {
-                                                                             $$.type = 'F';           /* named funcptr type → a funcptr carrying its type tag */
+                                                                             $$.type = 'F';           /* named funcptr type -> a funcptr carrying its type tag */
                                                                              $$.elem = head;
                                                                              $$.struct = undefined;
                                                                              $$.words = undefined;    /* scalar funcptr: a single word, no size operand */
@@ -3418,7 +3418,7 @@ PrePost     <-  (op:PREFIX_OP _
                 / '('_ op:BASE_TYPE _               { $cdesc = $$parser.CASTS_TO_TYPES[$op]; }
                   ( POINTER _                       { $cdesc = 'p:' + $cdesc; $cmods = true; }
                   )* ')'_
-                / '('_ sid:Identifier               { $pdepth = 0; }   # struct-pointer cast: (Name pointer …)
+                / '('_ sid:Identifier               { $pdepth = 0; }   # struct-pointer cast: (Name pointer ...)
                   ( POINTER _                       { $pdepth = $pdepth + 1; }
                   )+ ')'_                           {
                                                       if (!$$parser.isStructAtom($sid))
@@ -3602,7 +3602,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                          '%' + $$.base,
                                                                          undefined);
                                                        $$parser.setElem(callee, undefined);
-                                                       if (signature && signature.returns === 'S') {   /* by-value struct return → a place over the output window */
+                                                       if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */
                                                            var _wp = $$parser.borrow('%');
                                                            $$parser.emit('=&', 'p', _wp, '%' + $$.base, '*' + $$.retSlots);
                                                            $$parser.setPlace(callee, 'pointer', _wp, 0, signature.returnStruct);
@@ -3783,7 +3783,7 @@ Loop        <-  LOOP _                              {
                                                     }
 
 # ---------------------------------------------------------------------------
-#   FOR … TO … loop
+#   FOR ... TO ... loop
 # ---------------------------------------------------------------------------
 For         <-  FOR _ '('_ var:Variable             {
                                                         /* loop-variable must be local, modifiable int / pointer */
@@ -3904,7 +3904,7 @@ DestTarget  <-                                      { $tgtGlobal = false; }
                                                                                     code: $$s, offset: $$i }); }
 
 # ---------------------------------------------------------------------------
-#   SWITCH (expr == from TO to) { … }
+#   SWITCH (expr == from TO to) { ... }
 # ---------------------------------------------------------------------------
 Switch      <-  SWITCH _ '('_ $$:Expr
                 '=='_ f:Expr TO _ t:Expr    {
@@ -3951,14 +3951,14 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                 ')'_ '{'_
                 (
                     ( CASE _                        {
-                                                            /* multiple CASE groups → fall-through handled here */
+                                                            /* multiple CASE groups -> fall-through handled here */
                                                             if ($progress !== undefined) {
                                                                 $$parser.emit('-->', undefined, $switchExit, undefined, undefined);
                                                             } else {
                                                                 $progress = 'gotCases';
                                                             }
 
-                                                            /* dump the literal “case …” comment */
+                                                            /* dump the literal “case ...” comment */
                                                             var snippet = $$s.substr($$i);
                                                             var pos     = find(snippet, ":\r\n");
                                                             if (pos >= 0) {
@@ -3990,7 +3990,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                 '}'_                                {
                                                         var ctx = $$parser.switchStack.pop() || metaSlot($$);
 
-                                                        /* no explicit “default” → hook it up now                        */
+                                                        /* no explicit “default” -> hook it up now                        */
                                                         if ($progress !== 'gotDefault') {
                                                             $$parser.emit('<--', undefined, ctx.switchLabel, undefined, undefined);
                                                         }
@@ -4000,10 +4000,10 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                     }
 
 # ---------------------------------------------------------------------------
-#   single “case …” inside a switch
+#   single “case ...” inside a switch
 # ---------------------------------------------------------------------------
 CaseExpr    <-  Expr                                {
-                                                        /* offset = constant(expr) – switch.from                         */
+                                                        /* offset = constant(expr) - switch.from                         */
                                                         var ctx      = $$parser.switchStack[$$parser.switchStack.length - 1];
                                                         var caseMeta = metaSlot($$);
                                                         var baseFrom = (ctx ? ctx.from : caseMeta.from);

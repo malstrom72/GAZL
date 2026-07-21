@@ -1,8 +1,8 @@
 /*
 	Impala 2 slice 2.5 (part B): by-value struct RETURNS. A struct-value return is a leading
 	output `PARA *sizeof`; the callee writes its fields as $out:offset. The caller reserves the
-	output window (retWords), then either COPYs it into the destination (`v = f()`) or — when the
-	call is itself a by-value argument — adopts the window in place (`g(f())`, no self-copy).
+	output window (retWords), then either COPYs it into the destination (`v = f()`) or - when the
+	call is itself a by-value argument - adopts the window in place (`g(f())`, no self-copy).
 	Expected when run (GAZLCmd structReturn.gazl main): 13 7 8 3 30.
 */
 
@@ -38,7 +38,7 @@ locals P v, Q w
 	printInt(v.x); printLF();		// 13
 	printInt(v.y); printLF();		// 7
 
-	printInt(sum(make(4, 1))); printLF();	// nested: struct return adopted as by-value arg → 8
+	printInt(sum(make(4, 1))); printLF();	// nested: struct return adopted as by-value arg -> 8
 
 	w = wrap(1, 2, 30);				// struct return holding a nested struct
 	printInt(w.inner.x); printLF();	// 3   (1+2)

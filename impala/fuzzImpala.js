@@ -29,7 +29,7 @@ const cp = require('child_process');
 
 const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32' ? 'GAZLCmd.exe' : 'GAZLCmd');
 
-// Run a compiled program on the VM. Returns null on clean exit, or a message on a VM fault —
+// Run a compiled program on the VM. Returns null on clean exit, or a message on a VM fault -
 // a miscompile (structurally invalid or wrongly-linked GAZL crashing the loader/VM) is a
 // compiler bug. The generator avoids `/` and `%`, so no legitimate div-by-zero traps arise.
 function runOnVm(gazl) {
@@ -64,9 +64,9 @@ const chance = (p) => rnd() < p;
 
 // ---- program generator -------------------------------------------------------
 function genProgram() {
-	const structs = [];   // { name, fields:[{name,type}] }  type ∈ {'i','f'} or a struct name
+	const structs = [];   // { name, fields:[{name,type}] }  type in {'i','f'} or a struct name
 	const functypes = []; // { name, params:[t], rets:[t] }
-	const funcs = [];     // { name, params:[{name,t}], rets:[t] }  t ∈ {'i','f',structName}
+	const funcs = [];     // { name, params:[{name,t}], rets:[t] }  t in {'i','f',structName}
 	let uid = 0;
 	const id = (p) => p + (uid++);
 
@@ -123,7 +123,7 @@ function genProgram() {
 
 	// expression generator toward a wanted type, depth-limited
 	function genExpr(want, depth, scope) {
-		// scope: { locals: [{name,t}] } — guaranteed to hold >=1 local of every struct type
+		// scope: { locals: [{name,t}] } - guaranteed to hold >=1 local of every struct type
 		if (isStruct(want)) {
 			const cands = scope.locals.filter((l) => l.t === want);
 			// only recurse into a struct-returning call while we still have depth budget
@@ -159,7 +159,7 @@ function genProgram() {
 			if (opts.length) return pick(opts);
 			return lit();
 		}
-		// a call returning this scalar (nested — struct args here exercise window sliding)
+		// a call returning this scalar (nested - struct args here exercise window sliding)
 		const callable = scope.callable.filter((f) => f.rets.length === 1 && f.rets[0] === want);
 		if (callable.length) return genCall(pick(callable), depth, scope);
 		return lit();
@@ -290,8 +290,8 @@ function genProgram() {
 }
 
 // ---- crash oracle ------------------------------------------------------------
-const CLEAN = /error\[E\d+\]/;                 // a coded diagnostic — acceptable
-const BENIGN = /compiler stopped at \d+/;      // partial parse — acceptable
+const CLEAN = /error\[E\d+\]/;                 // a coded diagnostic - acceptable
+const BENIGN = /compiler stopped at \d+/;      // partial parse - acceptable
 function classify(err) {
 	const msg = (err && err.message) ? err.message : String(err);
 	if (CLEAN.test(msg) || BENIGN.test(msg)) return null;

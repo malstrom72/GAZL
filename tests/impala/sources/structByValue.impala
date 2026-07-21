@@ -38,7 +38,7 @@ locals P v, Q w, int r
 	v.x = 5; v.y = 7;
 	r = consume(v);
 	printInt(r); printLF();			// 106
-	printInt(v.x); printLF();		// 5   — original untouched (proves by-value copy)
+	printInt(v.x); printLF();		// 5   - original untouched (proves by-value copy)
 
 	r = scaled(3, v);
 	printInt(r); printLF();			// 36

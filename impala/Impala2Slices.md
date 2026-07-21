@@ -85,15 +85,15 @@ all base-kind combinations, and read-back verification after every write.
   checked against the field type, nested `{}` descends into struct/array fields, trailing
   omission zero-fills. Lowering is the flat `DATA` rows the braces describe.
 
-> **Step 4 DONE (VM-verified, `multiReturn.impala`).** 4a: comma `returns` → N `OUT`
+> **Step 4 DONE (VM-verified, `multiReturn.impala`).** 4a: comma `returns` -> N `OUT`
 > slots, `signature.returnList/returnCount`, `-> (t1,t2)` metadata, E430/E431 guards. 4b:
-> caller side — `a, b = f(...)` destructuring. The call reserves a leading N-slot output
+> caller side - `a, b = f(...)` destructuring. The call reserves a leading N-slot output
 > window (`claimSlot` past `borrowForCall`); args land after it (`base + retSlots-1 + i`),
-> `CALL … *(count+retSlots)`; each target read out via `assign` (`_` discards, `global g`
+> `CALL ... *(count+retSlots)`; each target read out via `assign` (`_` discards, `global g`
 > targets supported), single-return path byte-identical (golden 0/67).
 >
-> **Slice 2.5 DONE too — by-value struct params + returns.** Struct param → input `PARA
-> *sizeof` (place, read-only-ish); struct return → leading output `PARA *sizeof`. Caller arg
+> **Slice 2.5 DONE too - by-value struct params + returns.** Struct param -> input `PARA
+> *sizeof` (place, read-only-ish); struct return -> leading output `PARA *sizeof`. Caller arg
 > machinery moved from per-arg count to a running-WORD counter (`copyStructArg` = reserve slots
 > + ADRL window + ADRL source + COPY; scalar-only path byte-identical). Struct return = a window
 > place (`winBase`/`winWords`) freed by `freeStructWindow` once consumed (assign / arg / discard);
