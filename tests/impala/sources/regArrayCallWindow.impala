@@ -1,0 +1,32 @@
+/*
+	Regression (found by impala/fuzzImpala.js): a LATENT Impala 1.0 allocator bug, not new to 2.0.
+	A dynamic-index array store (`a[i] = v`) frees the index temp low while the value temp is kept
+	high, leaving the transient pool fragmented (a freed hole below a live temp). A following
+	`b[i] = call(arg)` holds a live index temp when the call's window is seated, and the un-guarded
+	allocator seats the base at the low hole so the argument overlaps the live index temp - tripping
+	`transient %1 must exist in stock`. Reproduces on the original 1.0 allocator with these pure-1.0
+	constructs. Fixed in borrowForCall: never seat a call base below a live transient (mint fresh).
+	Expected when run (GAZLCmd regArrayCallWindow.gazl main): 1 2.
+*/
+
+const int DEBUG = 1
+
+global int gi
+
+extern native printInt
+extern native printLF
+
+function inc(int x) returns int r
+{
+	r = x + 1;
+}
+
+function main()
+locals int array a[2], int array b[2]
+{
+	global gi = 1;
+	a[global gi] = global gi;				// a[1] = 1; dynamic-index store fragments the transient pool
+	b[global gi] = inc(a[global gi]);		// b[1] = inc(a[1]) = 2; the call arg would overlap the live index temp
+	printInt(a[global gi]); printLF();		// 1
+	printInt(b[global gi]); printLF();		// 2
+}

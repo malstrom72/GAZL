@@ -3,9 +3,10 @@
 	output-window slots low-to-high, leaving the per-unit transient pool with a freed hole below a
 	live temp. A later function that put a struct-value-argument call on the right of an arithmetic
 	operator then had its call window overlap the live left-operand temp - tripping the compiler's
-	`transient %1 must exist in stock` assertion. Root cause: finishDestructure released the window
-	out of the LIFO order every other multi-slot window uses; fixed by releasing it high-to-low, and
-	borrowForCall now asserts the pool-reaches-the-top invariant so any future regression fails loudly.
+	`transient %1 must exist in stock` assertion. Two-part fix: finishDestructure now releases its
+	window high-to-low (so destructures never fragment the pool - cheap prevention at the source),
+	and borrowForCall never seats a call base below a live transient (a rare exception guard that
+	also fixes the latent 1.0 allocator bug in regArrayCallWindow.impala).
 	Expected when run (GAZLCmd regTransientWindow.gazl main): 3 1 73.
 */
 

@@ -95,6 +95,25 @@ function genProgram() {
 		structs.push({ name, fields });
 	}
 
+	// program globals (0-3): scalar or array, int/float. Available to every function.
+	const globals = [];
+	const nGlobals = ri(4);
+	for (let i = 0; i < nGlobals; ++i) {
+		const isArr = chance(0.4);
+		globals.push({ name: 'g' + i, elem: pick(scalarTypes), isArray: isArr, size: isArr ? 1 + ri(4) : 1, isGlobal: true });
+	}
+	const gScalars = globals.filter((g) => !g.isArray);
+	const gArrays = globals.filter((g) => g.isArray);
+
+	// how a value is referenced: globals need the `global` keyword prefix
+	const ref = (e) => (e.isGlobal ? 'global ' + e.name : e.name);
+	// an int index expression for array access (constant, or a scalar int in scope)
+	function genIdx(scope) {
+		if (chance(0.6)) return String(ri(8));
+		const ints = scope.locals.filter((l) => l.t === 'i').concat(scope.gscalars.filter((g) => g.elem === 'i'));
+		return ints.length ? ref(ints[ri(ints.length)]) : String(ri(8));
+	}
+
 	// helper functions (2-5)
 	const nFuncs = 2 + ri(4);
 	for (let i = 0; i < nFuncs; ++i) {
@@ -140,24 +159,40 @@ function genProgram() {
 			return cands.length && chance(0.5) ? pick(cands).name : lit();
 		}
 		const r = rnd();
-		if (r < 0.25) return lit();
-		if (r < 0.45) {
-			const cands = scope.locals.filter((l) => l.t === want);
-			return cands.length ? pick(cands).name : lit();
+		if (r < 0.2) return lit();
+		if (r < 0.35) {
+			// a scalar local or scalar global of this type
+			const cands = scope.locals.filter((l) => l.t === want).concat(scope.gscalars.filter((g) => g.elem === want));
+			return cands.length ? ref(pick(cands)) : lit();
 		}
-		if (r < 0.7) {
-			const op = want === 'i' ? pick(['+', '-', '*']) : pick(['+', '-', '*']);
+		if (r < 0.55) {
+			const op = pick(['+', '-', '*']);
 			return '(' + genExpr(want, depth - 1, scope) + ' ' + op + ' ' + genExpr(want, depth - 1, scope) + ')';
 		}
-		if (r < 0.85) {
-			// field read of a scalar field from a struct local
+		if (r < 0.68) {
+			// array element read (local or global array of this element type) - constant or dynamic index
+			const arrs = scope.arrays.filter((a) => a.elem === want);
+			if (arrs.length) return ref(pick(arrs)) + '[' + genIdx(scope) + ']';
+		}
+		if (r < 0.78) {
+			// scalar struct field read
 			const opts = [];
 			for (const l of scope.locals) if (isStruct(l.t)) {
 				const s = structs.find((x) => x.name === l.t);
 				for (const f of s.fields) if (f.type === want) opts.push(l.name + '.' + f.name);
 			}
 			if (opts.length) return pick(opts);
-			return lit();
+		}
+		if (r < 0.85) {
+			// numeric int<->float conversion: `ftoi` (float->int) / `itof` (int->float) prefix ops
+			return want === 'i'
+				? 'ftoi (' + genExpr('f', depth - 1, scope) + ')'
+				: 'itof (' + genExpr('i', depth - 1, scope) + ')';
+		}
+		if (r < 0.9 && want === 'i') {
+			// sizeof yields an int
+			const t = structs.length && chance(0.5) ? pick(structNames()) : pick(['int', 'float', 'pointer']);
+			return 'sizeof(' + t + ')';
 		}
 		// a call returning this scalar (nested - struct args here exercise window sliding)
 		const callable = scope.callable.filter((f) => f.rets.length === 1 && f.rets[0] === want);
@@ -186,17 +221,31 @@ function genProgram() {
 		for (const ft of functypes) {
 			if (chance(0.5)) locals.push({ name: id('cb'), t: ft.name });
 		}
+		// non-struct array locals (0-2): int/float arrays with indexed access
+		const arrLocals = [];
+		for (let i = ri(3); i > 0; --i) arrLocals.push({ name: id('arr'), elem: pick(scalarTypes), size: 1 + ri(4), isArray: true });
+		// a dedicated int loop variable for bounded `for` loops (kept read-only in loop bodies so
+		// they can't defeat termination)
+		const loopVar = { name: id('fv'), t: 'i', loopVar: true };
+		locals.push(loopVar);
 		// params are in scope too, but read-only (scalar INP params can't be assigned)
-		const scope = { locals: locals.concat(f.params.map((p) => ({ name: p.name, t: p.t, ro: true }))), callable: callable };
+		const scope = {
+			locals: locals.concat(f.params.map((p) => ({ name: p.name, t: p.t, ro: true }))),
+			arrays: arrLocals.concat(gArrays),
+			gscalars: gScalars,
+			callable: callable,
+		};
 
 		let header = 'function ' + f.name + '(' + f.params.map((p) => decl(p.t) + p.name).join(', ') + ')';
 		if (f.rets.length) header += ' returns ' + f.rets.map((t, i) => decl(t) + f.retNames[i]).join(', ');
 
-		const localDecl = locals.length ? '\nlocals ' + locals.map((l) => decl(l.t) + l.name).join(', ') : '';
+		const localDeclList = locals.map((l) => decl(l.t) + l.name)
+			.concat(arrLocals.map((a) => (a.elem === 'i' ? 'int' : 'float') + ' array ' + a.name + '[' + a.size + ']'));
+		const localDecl = localDeclList.length ? '\nlocals ' + localDeclList.join(', ') : '';
 
 		const body = [];
 		const nStmt = 1 + ri(isMain ? 8 : 4);
-		for (let i = 0; i < nStmt; ++i) body.push(genStmt(scope, f));
+		for (let i = 0; i < nStmt; ++i) body.push(genStmt(scope, f, 0));
 		// give the function's own return/OUT vars something (harmless if omitted, but exercises OUT writes)
 		for (let i = 0; i < f.rets.length; ++i) {
 			const t = f.rets[i];
@@ -210,8 +259,48 @@ function genProgram() {
 		return header + localDecl + '\n{\n' + body.join('\n') + '\n}\n';
 	}
 
-	function genStmt(scope, f) {
+	// a boolean condition: one comparison, sometimes two joined with && / ||
+	function genCond(scope) {
+		const one = () => {
+			const t = pick(scalarTypes);
+			return genExpr(t, 2, scope) + ' ' + pick(['<', '>', '<=', '>=', '==', '!=']) + ' ' + genExpr(t, 2, scope);
+		};
+		return chance(0.3) ? one() + ' ' + pick(['&&', '||']) + ' ' + one() : one();
+	}
+
+	// a braced block of 1-3 statements at the next control-nesting depth
+	function genBlock(scope, f, ctrlDepth) {
+		const n = 1 + ri(3);
+		const stmts = [];
+		for (let i = 0; i < n; ++i) stmts.push(genStmt(scope, f, ctrlDepth));
+		return '{\n' + stmts.join('\n') + '\n\t}';
+	}
+
+	function genStmt(scope, f, ctrlDepth) {
 		const roll = rnd();
+		// control flow (if / else / bounded for), depth-limited to keep programs small
+		if (roll < 0.18 && ctrlDepth < 2) {
+			const cd = ctrlDepth + 1;
+			const k = rnd();
+			if (k < 0.45) return '\tif (' + genCond(scope) + ') ' + genBlock(scope, f, cd);
+			if (k < 0.75) return '\tif (' + genCond(scope) + ') ' + genBlock(scope, f, cd) + ' else ' + genBlock(scope, f, cd);
+			// bounded `for (fv = 0 to N)` - dedicated loop var, read-only inside the body so it terminates
+			const lv = scope.locals.find((l) => l.loopVar);
+			if (lv) {
+				const bodyScope = { ...scope, locals: scope.locals.map((l) => (l.loopVar ? { ...l, ro: true } : l)) };
+				return '\tfor (' + lv.name + ' = 0 to ' + (1 + ri(4)) + ') ' + genBlock(bodyScope, f, cd);
+			}
+		}
+		// array element write (local or global array; index constant or dynamic)
+		if (roll < 0.3 && scope.arrays.length) {
+			const a = pick(scope.arrays);
+			return '\t' + ref(a) + '[' + genIdx(scope) + '] = ' + genExpr(a.elem, 3, scope) + ';';
+		}
+		// scalar global write
+		if (roll < 0.36 && scope.gscalars.length) {
+			const g = pick(scope.gscalars);
+			return '\tglobal ' + g.name + ' = ' + genExpr(g.elem, 3, scope) + ';';
+		}
 		// destructuring of a multi-return call
 		const multi = scope.callable.filter((fn) => fn.rets.length > 1);
 		if (roll < 0.2 && multi.length) {
@@ -283,6 +372,10 @@ function genProgram() {
 		out += 'functype ' + ft.name + '(' + ft.params.map((t) => decl(t) + id('a')).join(', ') + ')';
 		if (ft.rets.length) out += ' returns ' + ft.rets.map((t) => decl(t)).join(', ');
 		out += '\n';
+	}
+	for (const g of globals) {
+		const ty = g.elem === 'i' ? 'int' : 'float';
+		out += g.isArray ? 'global ' + ty + ' array ' + g.name + '[' + g.size + ']\n' : 'global ' + ty + ' ' + g.name + '\n';
 	}
 	for (let i = 0; i < funcs.length; ++i) out += renderFunc(funcs[i], false, funcs.slice(0, i));
 	out += renderFunc({ name: 'main', params: [], rets: [], retNames: [] }, true, funcs.slice());

@@ -783,21 +783,22 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return counters['%']++;
         }
 
-        /* INVARIANT (R1): a call window grows UPWARD from its base, so the reused base must sit
-           above every live transient - i.e. the free pool must reach the top (contain counters-1).
-           This holds because every multi-slot window is released high-to-low (LIFO): ordinary
-           expression temps, the argument window, the struct-return window (freeStructWindow) and
-           the destructure output window (finishDestructure) all do. A low-to-high release would
-           leave a freed hole below a live temp and break the reuse below - the fuzzer (seed 10024)
-           caught exactly that when finishDestructure released low-to-high. Assert it so any future
-           release-order regression fails loudly here instead of miscompiling. */
+        /* A call window grows UPWARD from its base, so the base must sit above every live
+           transient or the window would overlap one. The free pool is not always top-anchored:
+           an out-of-order release (e.g. `a[i] = v` frees the index temp low while the value temp
+           is kept high, or a destructure) can leave a freed hole below a live temp. When that
+           happens - the highest allocated transient is live rather than free - mint a fresh slot
+           above everything instead of reusing the hole. This is a latent allocator bug reachable
+           in 1.0 too (`a[i] = v; b[i] = f(arg)` crashes the un-guarded allocator); the fix is
+           byte-identical for the corpus, which never seats a call over a live temp. */
         var maxFree = -1;
         for (var _k = 0; _k < stk.length; ++_k) {
             var _v = parseInt(stk[_k].substr(1), 10);
             if (_v > maxFree) maxFree = _v;
         }
-        assert(maxFree === counters['%'] - 1,
-               'transient pool fragmented: a live temp sits above the free pool (release a window low-to-high?)');
+        if (maxFree < counters['%'] - 1) {
+            return counters['%']++;
+        }
 
         /* sort in-place on the numeric suffix, ascending           */
         stk.sort(function (a, b) {
