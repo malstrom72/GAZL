@@ -40,7 +40,7 @@ pick_libfuzzer_clang() {
 if [ "$text" = 1 ]; then
 	# GAZL source-text fuzzer: no JIT, no JITDIFF (the pre-JIT harness at GAZLCmd.cpp's `#else`); libFuzzer supplies main.
 	pick_libfuzzer_clang
-	CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer,address -DLIBFUZZ $libcxxflags"}
+	CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer -DLIBFUZZ $libcxxflags"}
 	out=../output/GAZLFuzzText
 	"$CPP_COMPILER" -std=c++11 -O1 -g $CPP_OPTIONS -I.. -o "$out" GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLCpp.cpp
 	chmod +x "$out" 2>/dev/null || true
@@ -54,7 +54,7 @@ if [ "$standalone" = 1 ]; then
 else
 	# Coverage-guided libFuzzer, JIT differential (fat runtime: x86_64 + arm64).
 	pick_libfuzzer_clang
-	defopts="-fsanitize=fuzzer,address -DLIBFUZZ -DGAZL_JIT -DJITDIFF $libcxxflags"
+	defopts="-fsanitize=fuzzer -DLIBFUZZ -DGAZL_JIT -DJITDIFF $libcxxflags"		# NOTE: no ,address - ASan's macOS re-exec silently no-ops the binary on macOS 26 + Homebrew clang 21 (exits 0, no fuzzing). Coverage guidance (fuzzer) is what we need; the diff + asserts are the bug-finders.
 fi
 CPP_OPTIONS=${CPP_OPTIONS:-$defopts}
 
