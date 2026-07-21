@@ -315,6 +315,7 @@ static Status runEngine(Processor& engine, Pointer mainFn, Int fuel) {
 	return s;
 }
 
+static uint32_t g_currentSeed = 0;		// set by the --gen loop before each program so a divergence names the EXACT seed (not the band start)
 static void requireMatch(const char* which, const uint8_t* data, size_t size, Status refStatus, const Value* refImage
 		, Status gotStatus, const Value* gotImage) {
 	int diffWord = -1;
@@ -325,8 +326,8 @@ static void requireMatch(const char* which, const uint8_t* data, size_t size, St
 		diffWord = i; break;
 	}
 	if (gotStatus == refStatus && diffWord < 0) { return; }
-	std::fprintf(stderr, "\n=== JIT/interp divergence (%s): interp status=%d got status=%d", which
-			, static_cast<int>(refStatus), static_cast<int>(gotStatus));
+	std::fprintf(stderr, "\n=== JIT/interp divergence (%s) SEED=%u: interp status=%d got status=%d", which
+			, g_currentSeed, static_cast<int>(refStatus), static_cast<int>(gotStatus));
 	if (diffWord >= 0) { std::fprintf(stderr, "; word[%d] interp=%d got=%d", diffWord, refImage[diffWord].i, gotImage[diffWord].i); }
 	std::fprintf(stderr, " ===\n");
 	if (diffWord >= 0) {																						// neighborhood dump: locate the slot + see who wrote it
@@ -738,6 +739,7 @@ int main(int argc, const char* argv[]) {
 		if (argc >= 5 && strcmp(argv[4], "deep") == 0) { g_deepRecursion = true; }	// some rec calls overflow the ipStack
 		for (uint32_t i = 0; i < count; ++i) {
 			if ((i % 5000) == 0) { fprintf(stderr, "gen %u/%u (seed %u)\n", i, count, seed0 + i); }
+			g_currentSeed = seed0 + i;				// so a divergence prints the EXACT seed
 			runDiff(generateProgram(seed0 + i));	// seed -> program -> diff; aborts on any JIT/interp divergence
 		}
 		fprintf(stderr, "gen %u programs, no divergence\n", count);
