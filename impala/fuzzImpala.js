@@ -90,8 +90,13 @@ function genProgram() {
 	const isFuncType = (t) => functypes.some((ft) => ft.name === t);
 	const isPtr = (t) => typeof t === 'string' && t.slice(0, 2) === 'p:';   // 'p:i' / 'p:f'
 	const ptrElem = (t) => t.slice(2);
+	// pointer to a named funcptr type, e.g. 'pF:FT0' -> `FT0 pointer`. Kept out of the scalar-pointer
+	// scheme (isPtr is false for it) so it is only ever dereferenced-and-called, never read as a scalar.
+	const isFptrPtr = (t) => typeof t === 'string' && t.slice(0, 3) === 'pF:';
+	const fptrElem = (t) => t.slice(3);
 	const decl = (t) =>
-		isPtr(t) ? (ptrElem(t) === 'i' ? 'int pointer ' : 'float pointer ')
+		isFptrPtr(t) ? fptrElem(t) + ' pointer '
+		: isPtr(t) ? (ptrElem(t) === 'i' ? 'int pointer ' : 'float pointer ')
 		: (isStruct(t) || isFuncType(t)) ? t + ' '
 		: t === 'i' ? 'int ' : 'float ';
 
@@ -265,8 +270,22 @@ function genProgram() {
 			}
 		}
 		// a funcptr local per functype, so funcptr assign/call statements have somewhere to land
+		const cbLocals = [];
 		for (const ft of functypes) {
-			if (chance(0.5)) locals.push({ name: id('cb'), t: ft.name });
+			if (chance(0.5)) { const cb = { name: id('cb'), t: ft.name }; cbLocals.push(cb); locals.push(cb); }
+		}
+		// funcptr-pointer locals: `FT pointer pf`, pointed at a same-typed funcptr local and
+		// dereferenced-and-called (`pf[0](...)`). Only when a callable function matches the type, so
+		// the target can be pre-assigned a real function (a null funcptr call would trap under --vm).
+		const fptrLocals = [];
+		for (const cb of cbLocals) {
+			const ft = functypes.find((x) => x.name === cb.t);
+			const match = callable.filter((fn) => funcMatches(fn, ft));
+			if (match.length && chance(0.6)) {
+				const pf = { name: id('pf'), t: 'pF:' + cb.t, target: cb, func: pick(match).name };
+				fptrLocals.push(pf);
+				locals.push(pf);
+			}
 		}
 		// non-struct array locals (0-2): int/float arrays with indexed access
 		const arrLocals = [];
@@ -291,6 +310,7 @@ function genProgram() {
 			localArrays: arrLocals,
 			gscalars: gScalars,
 			loopVars: loopVars,
+			fptrLocals: fptrLocals,
 			callable: callable,
 		};
 
@@ -306,6 +326,12 @@ function genProgram() {
 		for (const p of ptrLocals) {
 			const arr = arrLocals.find((a) => a.elem === ptrElem(p.t));
 			if (arr) body.push('\t' + p.name + ' = &' + arr.name + '[0];');
+		}
+		// assign each funcptr-pointer's target a real function, then point the pointer at it, so a
+		// later `pf[0](...)` dispatches to a valid function (exercises &funcptr -> FT pointer)
+		for (const pf of fptrLocals) {
+			body.push('\t' + pf.target.name + ' = ' + pf.func + ';');
+			body.push('\t' + pf.name + ' = &' + pf.target.name + ';');
 		}
 		const nStmt = 1 + ri(isMain ? 8 : 4);
 		for (let i = 0; i < nStmt; ++i) body.push(genStmt(scope, f, 0));
@@ -433,6 +459,21 @@ function genProgram() {
 				}
 			}
 		}
+		// deref-and-call through a funcptr-pointer: `pf[0](args)` (its target is a real function)
+		if (roll < 0.42 && scope.fptrLocals.length) {
+			const pf = pick(scope.fptrLocals);
+			const ft = functypes.find((x) => x.name === fptrElem(pf.t));
+			const args = ft.params.map((t) => genExpr(t, 2, scope));
+			const callee = pf.name + '[0](' + args.join(', ') + ')';
+			if (ft.rets.length === 1) {
+				const dst = scope.locals.filter((l) => l.t === ft.rets[0] && !l.ro)[0];
+				if (dst) return '\t' + dst.name + ' = ' + callee + ';';
+			} else if (ft.rets.length > 1) {
+				const targets = ft.rets.map((t) => (scope.locals.filter((l) => l.t === t && !l.ro)[0] || { name: '_' }).name);
+				return '\t' + targets.join(', ') + ' = ' + callee + ';';
+			}
+			return '\t' + callee + ';';
+		}
 		// struct field assignment - a scalar leaf, possibly deep (a.b.c) through nested structs
 		if (roll < 0.5) {
 			const sLocals = scope.locals.filter((l) => isStruct(l.t));
@@ -446,9 +487,10 @@ function genProgram() {
 				}
 			}
 		}
-		// whole-struct or scalar assignment to a local (funcptr locals + read-only params excluded)
+		// whole-struct or scalar assignment to a local (funcptr + funcptr-pointer locals and read-only
+		// params excluded - they are assigned only at body start / through their dedicated statements)
 		if (roll < 0.8) {
-			const assignable = scope.locals.filter((x) => !isFuncType(x.t) && !x.ro);
+			const assignable = scope.locals.filter((x) => !isFuncType(x.t) && !isFptrPtr(x.t) && !x.ro);
 			if (assignable.length) {
 				const l = pick(assignable);
 				return '\t' + l.name + ' = ' + genExpr(l.t, 3, scope) + ';';
@@ -491,6 +533,13 @@ function classify(err) {
 }
 
 function main() {
+	// `--print <seed>`: emit one generated program's source and exit (for inspecting coverage)
+	const printIdx = process.argv.indexOf('--print');
+	if (printIdx >= 0) {
+		rnd = mulberry32(parseInt(process.argv[printIdx + 1] || '1', 10));
+		process.stdout.write(genProgram() + '\n');
+		return;
+	}
 	const args = process.argv.slice(2).filter((a) => a !== '--vm');
 	const useVm = process.argv.includes('--vm');
 	const iterations = parseInt(args[0] || '2000', 10);
