@@ -2153,8 +2153,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 expr.elem = undefined;
             }
         } else if (key === '=&') {
-            expr.elem = (prevType === undefined ? undefined       /* &x yields a pointer to x's type */
-                    : prevType + (prevElem !== undefined ? ':' + prevElem : ''));
+            if (prevType === 'F' && isFuncTypeAtom(prevElem)) {
+                expr.elem = prevElem;                             /* &funcptr -> element is the named funcptr type
+                                                                     (its name already identifies it, like a struct) */
+            } else {
+                expr.elem = (prevType === undefined ? undefined   /* &x yields a pointer to x's type */
+                        : prevType + (prevElem !== undefined ? ':' + prevElem : ''));
+            }
         } else {
             expr.elem = undefined;                                /* casts and numeric ops erase */
         }

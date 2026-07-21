@@ -1,0 +1,37 @@
+/*
+	Impala 2 Step 3 + typed pointers: a pointer to a named function-pointer type. `&funcptrLocal`
+	yields a `<Fn> pointer`, dereferenced with `p[0]` to recover the funcptr and called through it.
+	Regression: address-of a funcptr encoded its element as `F:Fn` while a `Fn pointer` declaration
+	used `Fn`, so `pcb = &cb` (and passing `&cb` to a `Fn pointer` parameter) tripped a bogus
+	E201 "expected Fn elements, got Fn elements". Fixed in unaryOp so `&funcptr` yields the bare
+	funcptr-type element, matching declarations and the argument check.
+	Expected (GAZLCmd funcTypePointer.gazl main): 42 30.
+*/
+
+const int DEBUG = 1
+
+extern native printInt
+extern native printLF
+
+functype Fn(int x) returns int
+
+function dbl(int x) returns int r { r = x * 2; }
+function inc10(int x) returns int r { r = x + 10; }
+
+function callThrough(Fn pointer pf, int v) returns int r		// &funcptr passed as a Fn pointer argument
+{
+	r = pf[0](v);
+}
+
+function main()
+locals Fn cb, Fn pointer pcb, int y
+{
+	cb = dbl;
+	pcb = &cb;								// address-of a funcptr local -> Fn pointer
+	y = pcb[0](21);							// deref + indirect call: 21 * 2 = 42
+	printInt(y); printLF();					// 42
+
+	cb = inc10;
+	y = callThrough(&cb, 20);				// 20 + 10 = 30
+	printInt(y); printLF();					// 30
+}
