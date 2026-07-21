@@ -95,6 +95,15 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 inline int absolute(int i) { Int x = i >> (Int)(sizeof (Int) * 8 - 1); return (Int)(((UInt)i ^ (UInt)x) - (UInt)x); } // INT_MIN -> INT_MIN
 inline float absolute(float f) { return fabsf(f); }
 inline double absolute(double f) { return fabs(f); }
+#ifdef GAZL_CANONICAL_NAN
+inline Float canonicalNaN(Float f) {	// strict FP: collapse every NaN to one bit pattern. IEEE leaves NaN sign/payload unspecified, so the C++ interpreter and the JIT's SSE/NEON can produce different NaN bits for the same op; that only matters because a GAZL float word is bit-observable (compared / reinterpreted as int). Canonicalizing on the arithmetic ops makes interp and JIT agree bit-for-bit.
+	if (f != f) { const UInt bits = 0x7FC00000u; Float c; std::memcpy(&c, &bits, sizeof c); return c; }
+	return f;
+}
+#define CANON_F(x) (canonicalNaN(x))
+#else
+#define CANON_F(x) (x)
+#endif
 inline Int idiv(Int a, Int b) { return (b == -1) ? (Int)(0u - (UInt)a) : a / b; }	// caller guarantees b != 0; INT_MIN / -1 -> INT_MIN
 inline Int imod(Int a, Int b) { return (b == -1) ? 0 : a % b; }						// caller guarantees b != 0; INT_MIN % -1 -> 0
 inline Int iadd(Int a, Int b) { return (Int)((UInt)a + (UInt)b); }					// two's-complement wrap
@@ -1415,20 +1424,20 @@ Int Processor::run() {
 			case SHRU_VVV:	V0.i = lshr(V1.i, V2.i); break;
 			case SHRU_VVC:	V0.i = lshr(V1.i, C2.i); break;
 			case SHRU_VCV:	V0.i = lshr(C1.i, V2.i); break;
-			case ABSF_VV_:	V0.f = absolute(V1.f); break;
-			case FLOF_VV_:	V0.f = floorf(V1.f); break;
-			case ADDF_VVV:	V0.f = V1.f + V2.f; break;
-			case ADDF_VVC:	V0.f = V1.f + C2.f; break;
-			case SUBF_VVV:	V0.f = V1.f - V2.f; break;
-			case SUBF_VVC:	V0.f = V1.f - C2.f; break;
-			case SUBF_VCV:	V0.f = C1.f - V2.f; break;
-			case MULF_VVV:	V0.f = V1.f * V2.f; break;
-			case MULF_VVC:	V0.f = V1.f * C2.f; break;
-			case DIVF_VVV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = V1.f / V2.f; break;
-			case DIVF_VVC:	V0.f = V1.f / C2.f; break;
-			case DIVF_VCV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = C1.f / V2.f; break;
+			case ABSF_VV_:	V0.f = CANON_F(absolute(V1.f)); break;
+			case FLOF_VV_:	V0.f = CANON_F(floorf(V1.f)); break;
+			case ADDF_VVV:	V0.f = CANON_F(V1.f + V2.f); break;
+			case ADDF_VVC:	V0.f = CANON_F(V1.f + C2.f); break;
+			case SUBF_VVV:	V0.f = CANON_F(V1.f - V2.f); break;
+			case SUBF_VVC:	V0.f = CANON_F(V1.f - C2.f); break;
+			case SUBF_VCV:	V0.f = CANON_F(C1.f - V2.f); break;
+			case MULF_VVV:	V0.f = CANON_F(V1.f * V2.f); break;
+			case MULF_VVC:	V0.f = CANON_F(V1.f * C2.f); break;
+			case DIVF_VVV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = CANON_F(V1.f / V2.f); break;
+			case DIVF_VVC:	V0.f = CANON_F(V1.f / C2.f); break;
+			case DIVF_VCV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = CANON_F(C1.f / V2.f); break;
 			case FTOI_VVC:	V0.i = ftoi(V1.f * C2.f); break;
-			case ITOF_VVC:	V0.f = (Float)(V1.i) * C2.f; break;
+			case ITOF_VVC:	V0.f = CANON_F((Float)(V1.i) * C2.f); break;
 			// FIX : all constant addresses here should be checked compile-time, but then we would need to parse operand 2 first and have an option for forward linking where the size is added to the check.
 			case COPY_VVC:	ui = V0.i - MEMORY_OFFSET; ui2 = V1.i - MEMORY_OFFSET; goto copy;
 			case COPY_VCC:	ui = V0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
