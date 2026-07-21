@@ -4,7 +4,7 @@
 # GAZLFuzz.exe abort()s and dumps the offending program to the log). Logs: <repo>\fuzzlogs\fz<N>.log.
 #   powershell -ExecutionPolicy Bypass -File tools\fuzzSoak.ps1 -Workers 6 -Hours 48
 param([int]$Workers = 6, [double]$Hours = 48, [int]$Chunk = 1000000)
-$root = "C:\Users\ClaudeRunner\git\GAZL"
+$root = Split-Path -Parent $PSScriptRoot   # repo root = parent of tools\ (the dir holding this script) - never hardcode a user path
 $exe  = Join-Path $root "output\GAZLFuzz.exe"
 if (-not (Test-Path $exe)) { throw "build first: tools\buildGazlFuzz.cmd" }
 $logs = Join-Path $root "fuzzlogs"
