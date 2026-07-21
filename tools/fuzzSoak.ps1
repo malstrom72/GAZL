@@ -8,7 +8,7 @@ $root = Split-Path -Parent $PSScriptRoot   # repo root = parent of tools\ (the d
 $exe  = Join-Path $root "output\GAZLFuzz.exe"
 Write-Host "building output\GAZLFuzz.exe ..."
 Remove-Item -Force $exe -ErrorAction SilentlyContinue   # so a failed rebuild can't silently run a stale binary
-& (Join-Path $PSScriptRoot "buildGazlFuzz.cmd")
+cmd /c "`"$(Join-Path $PSScriptRoot 'buildGazlFuzz.cmd')`""   # via cmd so compiler stderr isn't treated as a PowerShell error
 if (-not (Test-Path $exe)) { throw "build failed: tools\buildGazlFuzz.cmd" }
 $logs = Join-Path $root "fuzzlogs"
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
@@ -23,7 +23,9 @@ for ($w = 0; $w -lt $Workers; $w++) {
     param($exe,$base,$span,$chunk,$deadline,$log)
     $seed = $base; $end = $base + $span
     while ((Get-Date) -lt $deadline -and $seed -lt $end) {
-      & $exe --gen $chunk $seed deep *>> $log
+      # Run through cmd so its redirection swallows the fuzzer's stderr progress; PowerShell otherwise turns
+      # every native stderr write into a NativeCommandError. $LASTEXITCODE is cmd's, i.e. the exe's exit code.
+      cmd /c "`"$exe`" --gen $chunk $seed deep >> `"$log`" 2>&1"
       if ($LASTEXITCODE -ne 0) { "STOP DIVERGENCE seed=$seed rc=$LASTEXITCODE" | Out-File -Append $log; break }
       $seed += $chunk
     }
