@@ -1477,7 +1477,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return;
         }
 
-        var tp    = descHead(elemDesc);                     /* scalar element type ('i' / 'f') */
+        var tp    = (elemDesc !== undefined) ? descHead(elemDesc) : '?';   /* untyped array element -> wildcard, as 1-D '=[]' does */
         /* row-major strides: a leading walk axis (one extra index) strides by the whole pointee. */
         var mults = (rvs.length > dims.length) ? dims : dims.slice(1);
 
@@ -1511,8 +1511,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 else                       makeMeta(x, '=[]$', tp, null, op1, acc);
             }
         }
-        x.type = descHead(elemDesc);
-        x.elem = descTail(elemDesc);
+        x.type = tp;
+        x.elem = (elemDesc !== undefined) ? descTail(elemDesc) : undefined;
         x.dims = undefined;                                          /* fully indexed -> a scalar element */
     };
 

@@ -2,7 +2,7 @@
 	Impala 2.0 multidimensional arrays (Slice 1): contiguous, row-major, comma syntax `int array a[H, W]`.
 	Element access `a[y, x]` folds to one row-major (Horner) offset then a normal scalar load/store, and
 	all-constant indices fold into the address. Covers local + global, int + float, 2-D + 3-D.
-	Expected (GAZLCmd multidimArrays.gazl main): 34 88 7 1 111 250.
+	Expected (GAZLCmd multidimArrays.gazl main): 34 88 7 1 111 250 7.
 */
 
 const int DEBUG = 1
@@ -13,7 +13,7 @@ extern native printInt
 extern native printLF
 
 function main()
-locals int array a[4, 5], int array c[2, 3, 4], float array f[2, 2], int y, int x
+locals int array a[4, 5], int array c[2, 3, 4], float array f[2, 2], array u[2, 3], int y, int x
 {
 	a[3, 4] = 34;							// constant indices fold into the address
 	printInt(a[3, 4]); printLF();			// 34
@@ -32,4 +32,7 @@ locals int array a[4, 5], int array c[2, 3, 4], float array f[2, 2], int y, int 
 
 	f[1, 1] = 2.5; f[0, 0] = 1.0;			// float matrix
 	printInt(ftoi (f[1, 1] * 100.0)); printLF();	// 250
+
+	u[1, 2] = 7;							// untyped multidimensional array (element is the wildcard type)
+	printInt(u[1, 2]); printLF();			// 7
 }

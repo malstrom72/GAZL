@@ -12,6 +12,7 @@ main:	FUNC	; signature func main() -> void @ 15:15
 	$a:	LOCA *20
 	$c:	LOCA *24
 	$f:	LOCA *4
+	$u:	LOCA *6
 	$y:	LOCi
 	$x:	LOCi
 ;-----------------------------------------------------------------------------
@@ -51,4 +52,8 @@ main:	FUNC	; signature func main() -> void @ 15:15
 		fTOi %1 $f:3 #100.0	; printInt(ftoi (f[1, 1] * 100.0))
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 34:34
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:45
+		MOVi $u:5 #7 	; u[1, 2] = 7
+		MOVE %1 $u:5 	; printInt(u[1, 2])
+		CALL ^printInt %0 *2	; expects printInt(unknown) -> unknown @ 37:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:30
 		RETU   	; }
