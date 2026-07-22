@@ -594,10 +594,15 @@ static void runDiff(const std::string& programText) {
 		// not an address range). So we exercise the assembler + the JIT compiler + BOTH engines to surface crashes,
 		// asserts and hard codegen traps on real / arbitrary programs, but we do NOT compare their results. Contract-
 		// abiding differential checking is lanes 1/2 - the structured generator, which never crosses realms by design.
+		// Bounded SINGLE run (not runEngine's resetTimeOut-on-TIME_OUT loop): we are crash-hunting, not comparing, so the
+		// program need not finish. A fixed step budget keeps throughput high - a pathological big-loop program otherwise
+		// runs tens of seconds and starves the lane (and its own corpus replay). Codegen crashes/asserts trip early, well
+		// inside this budget; running to completion adds no crash coverage.
+		const Int TEXT_FUEL = 2000000;
 		std::memcpy(memory, snapshot, sizeof (memory));
-		{ Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0); runEngine(interp, mainFunction, 10000000); }
+		{ Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0); if (interp.enterCall(mainFunction) == OK) { interp.resetTimeOut(TEXT_FUEL); interp.run(); } }
 		std::memcpy(memory, snapshot, sizeof (memory));
-		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); runEngine(jit, mainFunction, 10000000); }
+		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); if (jit.enterCall(mainFunction) == OK) { jit.resetTimeOut(TEXT_FUEL); jit.run(); } }
 #else
 		std::memcpy(memory, snapshot, sizeof (memory));
 		Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
