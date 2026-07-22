@@ -11,10 +11,12 @@ indexed in a way that is clear about what the memory actually is, and that does 
 array/pointer confusion.
 
 Non-goals for the first cut:
-- Function-parameter syntax for passing a matrix (explicitly deferred; see section 8).
-- Runtime-shaped (variable-length) arrays.
-- Slices / views with independent stride.
-- Whole-array assignment and pass/return by value (discussed as an open question, section 9).
+- Runtime-shaped (variable-length) arrays (C's `a[rows][cols]`); dimensions are compile-time constants.
+- Slices / views with independent stride (the `:` marker keeps whole axes only, not ranges - yet).
+
+Note: passing a matrix to a function needs NO special "array parameter" syntax - it is an ordinary
+`int array[W] pointer` parameter (section 8). Whole-array value semantics (copy/assign like structs) is
+decided but additive, so it may land in a later slice (section 7b).
 
 ## 2. What Impala already has
 
@@ -195,7 +197,7 @@ change (strict by default, `--legacy` lowers it). In 1.0 an array is NOT a point
 downcasts implicitly to one; 2.0 removes that implicit downcast:
 
 - 2.0 default (strict): a bare array does not implicitly convert to a pointer. To get a pointer you
-  write `&a` (whole array), `&a[y]` (row), or `&a[y, x]` / `&a[0, 0]` (element). Passing a bare array
+  write `&a` (whole array), `&a[y, :]` (row), or `&a[y, x]` / `&a[0, 0]` (element). Passing a bare array
   where a pointer is expected is a coded error with a fix-it note ("take its address: `&a`").
 - `--legacy`: the old implicit downcast is allowed, emitted as a warning in the same diagnostic shape.
 
@@ -208,12 +210,13 @@ Why this is the chosen approach:
 - Migration: fixtures that pass a bare array either add `&` or compile under `--legacy` - the same
   rollout the bitwise change used.
 
-SEPARATE, ADDITIVE, non-breaking (still open): whether fixed-shape arrays also become copyable VALUES
-like structs - `b = a` copies, and a by-value array parameter copies while a pointer parameter does not
-(so big buffers are never force-copied; the programmer chooses via the parameter type). This reuses the
-struct-by-value machinery (an array value is N contiguous words, like an anonymous struct). It does not
-gate multidimensional arrays and can be picked up independently. Removing implicit decay (above) is the
-load-bearing decision; copyable value semantics is a later enhancement.
+DECIDED (additive, non-breaking): fixed-shape arrays are copyable VALUES that work exactly like structs
+- `b = a` copies the whole array (identical shapes), a by-value array parameter copies, and a pointer
+  parameter does not (so big buffers are never force-copied; the programmer chooses via the parameter
+type). This reuses the struct-by-value machinery (an array value is N contiguous words, like an
+anonymous struct). It is additive and does not gate multidimensional arrays, so it can land in its own
+slice; removing implicit decay (above) is the load-bearing part. Net effect: a fixed-shape array IS a
+value type, essentially an anonymous struct of its elements.
 
 ## 8. Function parameters - dissolved into an ordinary pointer parameter
 
@@ -250,24 +253,30 @@ Consequences:
 ## 9. Open questions
 
 1. Syntax: DECIDED - comma shape `a[H, W]` / `a[y, x]` (section 5).
-2. `sizeof` and shape: current `sizeof` takes a TYPE (`sizeof(int)`, `sizeof(Struct)`), not an
-   expression. Do we (a) extend `sizeof` to accept an array-typed expression so `sizeof(a)` = H*W and
-   `sizeof(a[y])` = W, and/or (b) add a `length(a, dim)` or shape intrinsic? Predictability (principle
-   4) argues for doing at least one.
-3. `&a` / `&a[y]` / `&a[y, x]` types: DECIDED - each yields a distinct shape-carrying pointer type
+2. `sizeof` and shape: DECIDED - `sizeof` operates on a TYPE, and an array shape IS a type, so
+   `sizeof(int array[H, W])` = H*W*sizeof(int) and `sizeof(int array[W])` = W*sizeof(int). There is no
+   value-expression form: `sizeof(a[y])` is not written (it is both a value and a violation of the
+   write-every-axis rule); you spell the type. (The outer count of an `int array[W] pointer` parameter
+   is unknown at the callee, as with any pointer, so it is passed as a separate argument, not sized.)
+3. `&a` / `&a[y, :]` / `&a[y, x]` types: DECIDED - each yields a distinct shape-carrying pointer type
    (`int array[H, W] pointer` / `int array[W] pointer` / `int pointer`), striding by the whole object
    at that rung (section 6). Each array shape is its own type. (Whether the compiler's FIRST
    implementation slice emits the row/matrix pointer TYPES or only supports `&a[0, 0]` element pointers
    is an implementation-sequencing detail, not a semantic question.)
-4. Array value semantics: THE central decision - see section 7b. Make fixed-shape arrays value types
-   like structs (recommended), and if so, with what migration appetite (full switch / scoped /
-   struct-wrap only)?
-5. Element types: allow struct-element matrices (`Pixel array img[H, W]`)? The stride math already
-   generalizes (element size = structWords); mainly an initializer and type-check concern.
-6. Initializers: flat row-major (`int array a[2, 3] = { 1, 2, 3, 4, 5, 6 }`) is trivial to support and
-   probably enough for v1. Nested-brace per-row initializers are a later nicety.
+4. Array value semantics: DECIDED - fixed-shape arrays are copyable VALUES that work like structs
+   (section 7b). Additive and non-breaking; can land in its own slice.
+5. Element types: DECIDED - struct-element matrices are allowed (`Pixel array img[H, W]`), just as
+   arrays may already contain structs. Stride uses `structWords`; initializers nest per element.
+6. Initializers: DECIDED - nested braces that match the shape, exactly like struct initializers. A flat
+   list is NOT accepted:
 
-## 10. Implementation sketch (for when syntax is settled)
+       int array a[2, 3] = { {1, 2, 3}, {4, 5, 6} }        // correct: 2 rows of 3
+       int array a[2, 3] = { 1, 2, 3, 4, 5, 6 }            // rejected: shape not expressed
+
+   A `Pixel array img[H, W]` nests one more level (each element is a struct brace group). Zero-fill and
+   per-item type-checking follow the existing struct-initializer rules.
+
+## 10. Implementation sketch
 
 The machinery is mostly a generalization of paths that already exist (see the array/subscript map):
 
