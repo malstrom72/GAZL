@@ -1408,6 +1408,59 @@
         $$parser.setPlace(x, 'pointer', addr, 0, structName);
     };
 
+    /* Contiguous multidimensional element access. `rvs` are the already-materialized index operands
+       (captured immediately as each index is parsed, so their metas are still fresh - the same
+       discipline call arguments use). Fold them into one row-major (Horner) offset and then read/write
+       the scalar element exactly as a 1-D array would. */
+    $$parser.arraySubscriptFlat = function (x, rvs, sourceCode, sourceOffset) {
+        x = metaSlot(x);
+        var dims = x.dims;
+
+        if (dims === undefined || dims.length < 2) {
+            $$parser.fail('A comma-separated index list needs a multidimensional array',
+                    sourceCode, sourceOffset, 'E421');
+            return;
+        }
+        if (rvs.length !== dims.length) {
+            $$parser.fail('This array has ' + dims.length + ' dimensions but '
+                    + rvs.length + (rvs.length === 1 ? ' index was given' : ' indices were given')
+                    + ' (write every axis)', sourceCode, sourceOffset, 'E421');
+            while (rvs.length < dims.length) rvs.push('#0');          /* recover to keep parsing */
+        }
+        var lelem = x.elem;
+        var tp    = $$parser.descHead(lelem);                        /* scalar element type ('i' / 'f') */
+
+        /* flat = i0; flat = flat * dims[j] + ij   (row-major) */
+        var acc = rvs[0];
+        for (var j = 1; j < dims.length; ++j) {
+            var ij = rvs[j];
+            var dj = parseInt('' + dims[j], 10);
+            if (acc.charAt(0) === '#' && ij.charAt(0) === '#') {
+                acc = '#' + (parseInt(acc.substr(1), 10) * dj + parseInt(ij.substr(1), 10));
+            } else {
+                var t = $$parser.borrow('%');
+                $$parser.emit('*', 'i', t, acc, '#' + dj);
+                $$parser.emit('+', 'i', t, t, ij);
+                if (acc.charAt(0) === '%') $$parser.returnBack(acc);
+                if (ij.charAt(0)  === '%') $$parser.returnBack(ij);
+                acc = t;
+            }
+        }
+
+        /* element access at the flat offset (mirrors binaryOp '=[]': fold a constant, else PEEK/GETL) */
+        var op1 = x.operands[1];
+        if (x.operator === ':=' && op1.charAt(0) === '&') {          /* global array base &name */
+            if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=*',   tp, null, op1 + ':' + acc.substr(1), null);
+            else                       $$parser.makeMeta(x, '=[]',  tp, null, op1, acc);
+        } else {                                                     /* local array base $name ('=&') */
+            if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=',    tp, null, op1 + ':' + acc.substr(1), null);
+            else                       $$parser.makeMeta(x, '=[]$', tp, null, op1, acc);
+        }
+        x.type = $$parser.descHead(lelem);
+        x.elem = $$parser.descTail(lelem);
+        x.dims = undefined;                                          /* fully indexed -> a scalar element */
+    };
+
     /* materialize a place's address into a pointer operand (borrows a temp for locals) */
     $$parser.placeAddress = function (place) {
         place = metaSlot(place);
@@ -2157,7 +2210,7 @@
      *  Symbol declaration helper
      * -------------------------------------------------------- */
 
-    function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment, elem) {
+    function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment, elem, dims) {
         /* emit data / flush pending code */
         if (kind !== undefined) {
             $$parser.flushMetaCode('');
@@ -2203,6 +2256,7 @@
                 kind     = (kind     !== undefined ? kind     : prev.kind);
                 readonly = (readonly || prev.readonly);
                 elem     = (elem     !== undefined ? elem     : prev.elem);
+                dims     = (dims     !== undefined ? dims     : prev.dims);
             }
 
             /* store / update */
@@ -2210,6 +2264,7 @@
             table[name] = {
                 type: type,
                 elem: elem,
+                dims: dims,
                 readonly: !!readonly,
                 kind: kind,
                 signature: prev && prev.signature,
@@ -2328,6 +2383,7 @@
             if (p.type === 'A') {
                 $$parser.makeMeta(x, '=&', 'p', undefined,
                                   '$' + name, '*0');
+                metaSlot(x).dims = p.dims;                         /* carry the array shape for multi-dim subscript */
             } else {
                 $$parser.makeMeta(x,
                                   (p.readonly ? ':=' : '='),
@@ -2350,6 +2406,7 @@
             if (p.type === 'A') {
                 $$parser.makeMeta(x, ':=', 'p', undefined,
                                   '&' + name, undefined);
+                metaSlot(x).dims = p.dims;                         /* carry the array shape for multi-dim subscript */
             } else {
                 $$parser.makeMeta(x,
                                   (p.readonly ? ':=*' : '=*'),
@@ -2914,7 +2971,8 @@ inp:ArgsDecl ')'_
                                                                                      (v.words !== undefined ? '*' + v.words : undefined),
                                                                                      $$s, $$i,
                                                                                      undefined,
-                                                                                     v.elem
+                                                                                     v.elem,
+                                                                                     v.dims
                                                                                  );
                                                                              }
                                                                          });
@@ -3151,7 +3209,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     $$i,
                                                                                     $a.elem
                                                                                 ),
-                                                                                $a.elem
+                                                                                $a.elem,
+                                                                                $a.dims
                                                                             );
                                                                             $aStructEl = ($a.elem !== undefined
                                                                                     && $$parser.descTail($a.elem) === undefined
@@ -3254,6 +3313,7 @@ ArgsDecl    <-                                                        {
                                                                              entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
+                                                                             entry.dims = $v.dims;
                                                                              $$[$$.n++] = entry;
                                                                          }
                    ( ',' _ v:VarDecl                                  {
@@ -3264,6 +3324,7 @@ ArgsDecl    <-                                                        {
                                                                              entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
+                                                                             entry.dims = $v.dims;
                                                                              $$[$$.n++] = entry;
                                                                          }
                    )*
@@ -3281,6 +3342,7 @@ LocalsDecl  <-                                                        {
                                                                              entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
+                                                                             entry.dims = $v.dims;
                                                                              $$[$$.n++] = entry;
                                                                          }
                    ( ',' _ v:(VarDecl / ArrayDecl)                    {
@@ -3291,6 +3353,7 @@ LocalsDecl  <-                                                        {
                                                                              entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
+                                                                             entry.dims = $v.dims;
                                                                              $$[$$.n++] = entry;
                                                                          }
                    )*
@@ -3333,31 +3396,52 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                          $$.size = undefined;
                                                                      }
 
-ArrayDecl   <-                                                        { $desc = undefined; }
+ArrayDecl   <-                                                        { $desc = undefined; $dims = []; }
                 ( base:TypeBase                                      { $desc = $base; }
                   ( POINTER _                                         { $desc = 'p:' + $desc; }
                   )*
                 )?
                 ARRAY _ id:Identifier
-                '[' _ x:Expr ']' _                                    {
-                                                                         $size = $$parser.makeConstant($x, 'i', $$s, $$i);
+                ( '[' _ x:Expr ']' _                                  {   /* one or more dimensions: a[H], a[H, W], ... (comma form is one bracket, handled below) */
+                                                                         var _sz = $$parser.makeConstant($x, 'i', $$s, $$i);
+                                                                         $dims.push($$parser.dropHash(_sz));
+                                                                         $$parser.returnBack(_sz);
+                                                                     }
+                / '[' _ x:Expr                                        {   /* comma-separated dimensions: a[H, W, ...] */
+                                                                         var _sz0 = $$parser.makeConstant($x, 'i', $$s, $$i);
+                                                                         $dims.push($$parser.dropHash(_sz0));
+                                                                         $$parser.returnBack(_sz0);
+                                                                     }
+                  ( ',' _ x:Expr                                      {
+                                                                         var _szn = $$parser.makeConstant($x, 'i', $$s, $$i);
+                                                                         $dims.push($$parser.dropHash(_szn));
+                                                                         $$parser.returnBack(_szn);
+                                                                     }
+                  )+ ']' _
+                )                                                     {
                                                                          $$.type = 'A';
                                                                          $$.elem = $desc;
                                                                          $$.name = $id;
-                                                                         $$.size = $$parser.dropHash($size);
-                                                                         /* allocation words = count * element size (structs are multi-word) */
-                                                                         if ($desc !== undefined
+                                                                         $$.dims = $dims;
+                                                                         /* allocation words = (product of dimensions) * element size (structs are multi-word) */
+                                                                         var _isStructEl = ($desc !== undefined
                                                                                  && $$parser.descTail($desc) === undefined
-                                                                                 && $$parser.isStructAtom($$parser.descHead($desc))) {
-                                                                             if (!/^[0-9]+$/.test('' + $$.size))
-                                                                                 $$parser.fail('A struct array size must be a numeric literal for now',
+                                                                                 && $$parser.isStructAtom($$parser.descHead($desc)));
+                                                                         var _ew = _isStructEl ? $$parser.structWords($$parser.descHead($desc)) : 1;
+                                                                         var _count = 1;
+                                                                         for (var _di = 0; _di < $dims.length; ++_di) {
+                                                                             if (!/^[0-9]+$/.test('' + $dims[_di]) && (_isStructEl || $dims.length > 1))
+                                                                                 $$parser.fail('An array dimension must be a numeric literal for now',
                                                                                          $$s, $$i, 'E414');
-                                                                             $$.words = parseInt($$.size, 10)
-                                                                                     * $$parser.structWords($$parser.descHead($desc));
-                                                                         } else {
-                                                                             $$.words = $$.size;   /* scalar element: 1 word each */
+                                                                             _count *= parseInt($dims[_di], 10);
                                                                          }
-                                                                         $$parser.returnBack($size);
+                                                                         if ($dims.length === 1) {         /* preserve the original single-dimension output exactly */
+                                                                             $$.size = $dims[0];
+                                                                             $$.words = _isStructEl ? _count * _ew : $dims[0];
+                                                                         } else {                          /* contiguous multi-dim: flat element count, product-scaled words */
+                                                                             $$.size = '' + _count;
+                                                                             $$.words = _count * _ew;
+                                                                         }
                                                                      }
 
 # ------------------------------------------------------------------
@@ -3443,12 +3527,26 @@ PrePost     <-  (op:PREFIX_OP _
                                                      } }
                 / Value (FuncCall / Subscript / FieldAccess)*
 
-Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry) {
-                                                       var sb = metaSlot($$);
-                                                       if (sb.type === 'p' && $$parser.isStructAtom(sb.elem))
-                                                           $$parser.structSubscript($$, $s, $$s, $$i);
-                                                       else
-                                                           $$parser.binaryOp('=[]', $$, $s, $$s, $$i);
+Subscript   <-  '['_ s:Expr                        { if (!$$parser.dry) {
+                                                       $subNode = $s;      /* single-index path keeps the node */
+                                                       /* multi-dim only: capture each index value NOW, while its meta is fresh */
+                                                       $subMulti = (metaSlot($$).dims !== undefined && metaSlot($$).dims.length >= 2);
+                                                       $subRV = $subMulti ? [ $$parser.makeRValue(metaSlot($s)) ] : null;
+                                                     } }
+                ( ','_ sc:Expr                     { if (!$$parser.dry) {
+                                                       if (!$subMulti) { $subMulti = true; $subRV = [ $$parser.makeRValue(metaSlot($subNode)) ]; }
+                                                       $subRV.push($$parser.makeRValue(metaSlot($sc)));
+                                                     } }
+                )* ']'_                            { if (!$$parser.dry) {
+                                                       if ($subMulti) {
+                                                           $$parser.arraySubscriptFlat($$, $subRV, $$s, $$i);
+                                                       } else {
+                                                           var sb = metaSlot($$);
+                                                           if (sb.type === 'p' && $$parser.isStructAtom(sb.elem))
+                                                               $$parser.structSubscript($$, $subNode, $$s, $$i);
+                                                           else
+                                                               $$parser.binaryOp('=[]', $$, $subNode, $$s, $$i);
+                                                       }
                                                      } }
 
 FieldAccess <-  '->'_ f:Identifier                 { if (!$$parser.dry)
