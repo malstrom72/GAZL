@@ -31,7 +31,7 @@ Tasks referenced by #N are in the session task list. Commits are on branch `Impa
 | Destructure into lvalue targets | `a[1], b[2] = f()` is a syntax error - destructure targets are plain identifiers only. Extend `DestTarget` to accept array-element / field lvalues and have `finishDestructure` store through them. | #23 |
 | Return arrays by value | Functions cannot return an array; structs can. This is the deferred value-semantics work (arrays behave like structs). Doc section 7b of MultidimensionalArrays.md. | #18 |
 | Pass arrays by value | Cannot pass an array by value (copy) as a parameter; passing by POINTER works (`int array[W] pointer`, pass `&a` / `&a[0, :]`). By-value is the same value-semantics slice as returns. | #18 |
-| Constant-expression array dims | LOAD-BEARING, not optional. In 2.0 every array has a type IDENTITY (`&a`, typed pointers, element checks, struct arrays), so a calculated dimension MUST fold to its value or the identity is the broken `[<A>]`. Verified: `int array a[3*2]` allocates fine but `&a` yields `int array[<A>]` and will not match `int array[6]`. The current `E414` ("must be a numeric literal") is an over-restrictive STOPGAP - the real fix is a constant evaluator that folds a FROZEN const int expression to an integer, then lift the restriction. This is also a real 1.0-compat issue: 1.0 arrays decayed to pointers (no identity needed); the same code needs identities in 2.0. (Assembler-variable dims stay symbolic = a single named constant; see StructLayoutConstants.md.) | #20 |
+| Constant-expression array dims | ERGONOMIC SOFTENER, not load-bearing (downgraded - see docs/ArrayLengthIdentity.md). Length splits by ROLE: as-a-VALUE (allocate, index, copy-count) any expression is allowed, exactly as 1.0 (`int array a[c1 * c2]` compiles, indexes, `&a` decays to `int pointer`); as-a-TYPE (shape comparison: copy, by-value pass/return, shaped-pointer params) each dimension must be a single named constant or a folded frozen value. So folding a FROZEN expression (`3*2` -> `6`) is only needed to use such an array in a length-as-a-type position WITHOUT naming it - a safe convenience, never required for soundness (the assembler-variable case names, never folds). The evaluator is optional and scoped to frozen consts. E414 becomes "must be a literal, a folded frozen const, or a single named constant" (reject only multi-token expressions in TYPE positions, with a "name it: const int N = ..." hint). | #20 |
 | Extern prototypes / multi-return externs | Externs are name-only; cannot declare or destructure a multi-value extern. Allow (do not demand) full signatures, validated against the definition/manifest. Workaround today: out-parameters `foo(in, &a, &b)`. | #19, docs/ExternPrototypes.md |
 | Struct layout as GAZL constants | Emit `.offset.<Struct>.<field>` / `.sizeof.<Struct>` and reference them instead of baked immediates (macro-assembler; conditional fields adapt). Decouples struct INTERFACE (compile-time) from LAYOUT (assemble-time). Naming decided. | #24, docs/StructLayoutConstants.md |
 
@@ -41,6 +41,9 @@ Tasks referenced by #N are in the session task list. Commits are on branch `Impa
   `--legacy`, nested initializers, shape-aware `sizeof` still open).
 - docs/ExternPrototypes.md - extern signatures: allow + validate, drift vs verifiability.
 - docs/StructLayoutConstants.md - struct layout as GAZL constants; interface/layout decoupling.
+- docs/ArrayLengthIdentity.md - DECIDED: array length value-vs-type rule (any expression as a value;
+  single named constant / folded frozen value as a type). Resolves the calculated-dimension identity
+  thread; makes shape typing non-breaking vs 1.0 (which had no array params).
 
 ## Not yet re-derived from the review, worth a look later
 

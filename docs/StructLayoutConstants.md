@@ -88,6 +88,17 @@ as extern prototypes (see [[docs/ExternPrototypes.md]]).
 
 ## Type identity when a dimension/size is assembler-resolved (the hard part)
 
+> RESOLVED - see docs/ArrayLengthIdentity.md. The decision below (value-fold vs single-symbol as a
+> GLOBAL per-constant choice) was the WRONG framing: it either broke 1.0 (`int array a[c1 * c2]` was
+> legal) or was unsound (folding an assembler-variable const). The actual rule splits by ROLE, not by
+> constant: a length used AS A VALUE (allocate, index, copy-count) allows any expression (1.0-compatible);
+> a length used AS A TYPE (shape comparison: copy, by-value pass/return, shaped-pointer params) requires a
+> single named constant or a folded frozen value. Since 1.0 had no array-typed parameters, only pointers,
+> no 1.0 code sits in a length-as-a-type position, so the requirement is non-breaking. The text below is
+> kept for the reasoning about nominal vs value identity, which the resolution reuses; read it through the
+> value-vs-type lens.
+
+
 If a dimension or struct size is only resolved by the GAZL assembler (the macro-assembler goal), the
 compiler cannot use its VALUE for type identity. Type identity must be comparable at compile time
 (E201/E202 compare descriptor strings), so there are two models, per constant:
