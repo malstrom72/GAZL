@@ -588,10 +588,15 @@ static void runDiff(const std::string& programText) {
 
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); const Status s = runEngine(jit, mainFunction, 10000000); requireMatch("jit full-fuel", Data, Size, interpStatus, interpImage, s, memory); }
+#ifndef FUZZ_TEXT_INPUT
+		// tiny-fuel suspend/resume lanes: skipped for the text->JIT build - they re-enter run() thousands of times on
+		// the larger, arbitrary programs the text lane explores (seconds/unit), and the structured lane already covers
+		// suspend/resume on small programs. The text lane keeps only full-fuel interp-vs-JIT (its codegen-coverage value).
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); const Status s = runEngine(jit, mainFunction, 64); requireMatch("jit tiny-fuel", Data, Size, interpStatus, interpImage, s, memory); }
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ Processor it(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0); const Status s = runEngine(it, mainFunction, 64); requireMatch("interp tiny-fuel", Data, Size, interpStatus, interpImage, s, memory); }
+#endif
 	}
 	catch (GAZL::Exception& e) {
 #ifdef FUZZ_TRACE_SKIP
@@ -605,7 +610,13 @@ static void runDiff(const std::string& programText) {
 }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
-	runDiff(generateProgramFromBytes(Data, Size));	// libFuzzer bytes -> structured program -> diff (coverage-guided)
+#ifdef FUZZ_TEXT_INPUT
+	// text->JIT: feed the raw fuzz bytes to the assembler as GAZL SOURCE, then run the same interp-vs-JIT diff.
+	// Non-assembling / non-compiling inputs are caught inside runDiff and skipped, exactly like the structured lane.
+	runDiff(std::string(reinterpret_cast<const char*>(Data), reinterpret_cast<const char*>(Data) + Size));
+#else
+	runDiff(generateProgramFromBytes(Data, Size));	// libFuzzer bytes -> structured always-valid program -> diff
+#endif
 	return 0;
 }
 

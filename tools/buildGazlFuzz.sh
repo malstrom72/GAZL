@@ -3,10 +3,11 @@
 #   (no args)   coverage-guided libFuzzer, JIT-vs-interp differential (generator-driven) -> ../output/GAZLFuzz
 #   standalone  self-contained --gen driver for the differential fuzzer (no libFuzzer runtime) -> ../output/GAZLFuzz
 #   x64         the differential fuzzer on the x86_64 backend, run under Rosetta on Apple Silicon -> ../output/GAZLFuzzX64
-#   text        coverage-guided libFuzzer over GAZL SOURCE TEXT (mutates the assembler's input; no JIT) -> ../output/GAZLFuzzText
-# The differential modes decode the input bytes as a structured-generator choice stream (every input a valid program);
-# `text` is the original pre-JIT harness that feeds the raw bytes to the assembler - it fuzzes the assembler/interpreter,
-# not the JIT. libFuzzer needs a clang that ships the fuzzer runtime; Apple clang lacks it, so we prefer Homebrew LLVM.
+#   text        coverage-guided libFuzzer over GAZL SOURCE TEXT, assembled then diffed interp-vs-JIT -> ../output/GAZLFuzzText
+# The (no-arg)/standalone/x64 modes decode the input bytes as a structured-generator choice stream (every input a valid
+# program); `text` instead feeds the raw bytes to the assembler as source and runs the SAME interp-vs-JIT diff, so it
+# reaches arbitrary/real programs the generator can't. libFuzzer needs a clang that ships the fuzzer runtime; Apple
+# clang lacks it, so we prefer Homebrew LLVM.
 set -e -o pipefail -u
 cd "$(dirname "$0")"
 mkdir -p ../output
@@ -38,11 +39,21 @@ pick_libfuzzer_clang() {
 }
 
 if [ "$text" = 1 ]; then
-	# GAZL source-text fuzzer: no JIT, no JITDIFF (the pre-JIT harness at GAZLCmd.cpp's `#else`); libFuzzer supplies main.
+	# text->JIT differential: raw fuzz bytes are fed to the assembler as GAZL SOURCE, then diffed interp-vs-JIT
+	# (FUZZ_TEXT_INPUT). Same engine + JIT backend as the structured lane, but explores arbitrary/real programs the
+	# structured generator's fixed template can never emit. Also exercises the assembler on garbage (inputs that don't
+	# assemble are caught in runDiff and skipped). Native arm64 (or x64) JIT; canonical NaN on.
 	pick_libfuzzer_clang
-	CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer -DLIBFUZZ $libcxxflags"}
+	CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer -DLIBFUZZ -DGAZL_JIT -DJITDIFF -DFUZZ_TEXT_INPUT -DGAZL_CANONICAL_NAN $libcxxflags"}
+	case "$(uname -m)" in
+		arm64 | aarch64) backend=../src/GAZLJitArm64.cpp ;;
+		x86_64) backend=../src/GAZLJitX64.cpp ;;
+		*) echo "GAZLFuzzText: no JIT backend for '$(uname -m)'."; exit 1 ;;
+	esac
+	jitmem=../src/GAZLJitMemPosix.cpp
+	[ "$(uname -s)" = "Darwin" ] && jitmem=../src/GAZLJitMemMacOS.cpp
 	out=../output/GAZLFuzzText
-	"$CPP_COMPILER" -std=c++11 -O1 -g $CPP_OPTIONS -I.. -o "$out" GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLCpp.cpp
+	"$CPP_COMPILER" -std=c++11 -O1 -g $CPP_OPTIONS -I.. -o "$out" GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp "$backend" "$jitmem"
 	chmod +x "$out" 2>/dev/null || true
 	exit 0
 fi

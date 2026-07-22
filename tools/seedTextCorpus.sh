@@ -7,9 +7,12 @@ set -e -o pipefail -u
 cd "$(dirname "$0")/.."									# repo root
 CORPUS="${1:-output/fuzz/lane6_text/corpus}"
 mkdir -p "$CORPUS"
+# Only SMALL programs (< 8 KiB): the text->JIT differential runs each seed on interp + JIT incl. the tiny-fuel
+# resume lane, so a huge program (some impala goldens are 200 KB) takes tens of seconds per unit and starves fuzzing.
+# Small programs still give broad, diverse valid syntax; mutations grow coverage from there.
 n=0
 while IFS= read -r f; do
 	cp -f "$f" "$CORPUS/seed_$(printf '%03d' "$n")_$(basename "$f")"
 	n=$((n + 1))
-done < <(find tests src docs temp -type f -name '*.gazl' 2>/dev/null | grep -v '/output/')
-echo "seeded $n GAZL programs into $CORPUS"
+done < <(find tests src docs temp -type f -name '*.gazl' -size -8k 2>/dev/null | grep -v '/output/')
+echo "seeded $n small GAZL programs (<8KiB) into $CORPUS"

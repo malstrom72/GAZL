@@ -22,17 +22,19 @@ OUT="$(cd ../output && pwd)"
 FUZZ="$OUT/fuzz"
 rm -rf "$FUZZ"; mkdir -p "$FUZZ"			# clean slate every run - no stale lane dirs / logs / corpora piling up
 
-launch_libfuzzer() {   # <lane-dir-name> <binary-name> <job-count>
-	local dir="$FUZZ/$1" bin="$OUT/$2" n="$3"
+launch_libfuzzer() {   # <lane-dir-name> <binary-name> <job-count> [extra libFuzzer flags]
+	local dir="$FUZZ/$1" bin="$OUT/$2" n="$3" extra="${4:-}"
 	mkdir -p "$dir/corpus"
-	( cd "$dir" && nohup "$bin" -jobs="$n" -workers="$n" -max_total_time=$SECS -artifact_prefix=./ corpus > jobs.log 2>&1 & )
+	( cd "$dir" && nohup "$bin" -jobs="$n" -workers="$n" -max_total_time=$SECS -artifact_prefix=./ $extra corpus > jobs.log 2>&1 & )
 	echo "  $1: $n jobs -> live in output/fuzz/$1/fuzz-*.log   (corpus: output/fuzz/$1/corpus)"
 }
 
 echo "launching (${HOURS}h) ..."
 launch_libfuzzer lane1_arm64_diff GAZLFuzz     6
-mkdir -p "$FUZZ/lane6_text/corpus"; ./seedTextCorpus.sh "$FUZZ/lane6_text/corpus"		# real GAZL source so the assembler fuzzer mutates valid programs, not garbage
-launch_libfuzzer lane6_text       GAZLFuzzText 4
+mkdir -p "$FUZZ/lane6_text/corpus"; ./seedTextCorpus.sh "$FUZZ/lane6_text/corpus"		# real GAZL source so the text->JIT diff mutates valid programs, not garbage
+# -max_len caps mutated program size; -timeout drops a unit whose interp/JIT run doesn't finish in 25s (non-terminating
+# or pathologically slow program) so it can't stall the lane. A dropped unit becomes a timeout-* artifact.
+launch_libfuzzer lane6_text       GAZLFuzzText 4 "-max_len=8192 -timeout=25"
 
 # lane 2: --gen has no timer/corpus; loop disjoint seed bands until the deadline (prints live to stderr).
 ( cd "$FUZZ" && nohup bash -c '
