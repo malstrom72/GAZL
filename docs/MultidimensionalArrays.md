@@ -106,18 +106,34 @@ the open-axis marker `:` (below).
 ### Open-axis marker `:` and the "write every axis" rule
 
 Every subscript position must be filled (no silent partial indexing). Each position is either an index
-expression or the open-axis marker `:` ("this whole axis is kept"). The result's shape is the kept
-axes:
+expression or the open-axis marker `:` ("this whole axis is kept"). The result's shape is the kept axes:
 
     a[3, 5]     // element    -> int
-    a[3, :]     // row 3       -> int array[W]     (a view; axis 1 kept)
+    a[3, :]     // row 3       -> int array[W]     (contiguous sub-array; axis 1 kept)
     a[:, :]     // whole       -> int array[H, W]  (same as `a`)
 
-Taking the address of any of these yields the corresponding shape-carrying pointer (section 6):
-`&a[3, :]` is an `int array[W] pointer`. Requiring `:` for kept axes makes "row vs element" explicit at
-the use site - you cannot accidentally under-index. (`:` is DECIDED; alternatives considered were
-`...`, `_`, and an empty slot. `:` is the numpy/matlab convention, is precise per axis, scales to
-`a[i, :, :]`, and leaves room to grow into real range-slicing `a[2:5, :]` later.)
+`:` MUST BE TRAILING: once a position is `:`, every following position must also be `:`. So a subscript
+is a prefix of concrete indices followed by a suffix of `:`. This is not a mere convenience - it is what
+keeps a kept sub-array CONTIGUOUS. A trailing block of kept axes is row-major contiguous (`a[3, :]` is
+the W adjacent elements of row 3), so it is a real `int array[...]` value. A NON-trailing open axis,
+e.g. a column `a[:, x]`, would keep the outer axis and pin the inner one, giving strided,
+non-contiguous elements (`x, x+W, x+2W, ...`) - a slice/view with a stride, which is an explicit
+non-goal (section 1). `a[:, x]` is therefore a compile error; to walk a column you loop, or transpose
+into a new matrix. For N dims: `a[i, :, :]` -> `int array[D1, D2]` (a plane), `a[i, j, :]` ->
+`int array[D2]` (a row).
+
+Lowering is one offset, no strides: the sub-array address is `base + (Horner fold of the leading
+concrete indices) * (product of the trailing kept dims)`. Taking the address yields the corresponding
+shape-carrying pointer (section 6): `&a[3, :]` is an `int array[W] pointer`. Requiring `:` for kept axes
+makes "row vs element" explicit at the use site - you cannot accidentally under-index. (`:` is DECIDED;
+alternatives considered were `...`, `_`, and an empty slot. `:` is the numpy/matlab convention, is
+precise per axis, scales to `a[i, :, :]`, and leaves room to grow into real range-slicing `a[2:5, :]`
+later - which, being contiguous only when trailing, would obey the same trailing rule.)
+
+Slice assignment: because a trailing-`:` sub-array is a contiguous block of a known size (like a struct
+value), `a[3, :] = b[7, :]` copies a whole row via the existing struct-copy `COPY` instruction, and
+`a[:, :] = b[:, :]` copies a whole matrix. Both sides must have the SAME shape (same element type and
+same kept dims); a width mismatch is a compile error (distinct array types). See section 7b.
 
 ## 6. Semantics of each form
 
