@@ -306,6 +306,10 @@ int testCallback(Processor* p) {
 	JIT-vs-interpreter differential fuzzer (docs/JitFuzzPlan.md). Assemble the input, run the interpreter and the JIT
 	from an identical initial image, and require byte-identical final memory + status at full AND tiny fuel. A mismatch
 	is a miscompile: dump the program and abort so libFuzzer captures and minimizes it.
+
+	FUZZ_TEXT_INPUT (the text lane) is the exception: it feeds arbitrary/mutated source, which can legally break the
+	aliasing (realm) contract, so its runs are permitted to diverge and it does NOT compare - it is crash/assert
+	coverage of the assembler + JIT compiler + both engines only. See the FUZZ_TEXT_INPUT block below.
 */
 static Status fuzzStub(Processor*) { return OK; }			// abort / assertFail / input -> deterministic no-op (natives must be pure here)
 
@@ -577,21 +581,33 @@ static void runDiff(const std::string& programText) {
 		static Value interpImage[DATA_MEMORY_SIZE];
 		std::memcpy(snapshot, memory, sizeof (memory));					// clean post-assembly image; every run restores from it
 
+		NativeJitCompiler compiler;
+		JitModule module;
+		compiler.compile(program, module);								// throws JitException -> caught below
+
+#ifdef FUZZ_TEXT_INPUT
+		// TEXT LANE = crash / assert coverage ONLY, no differential comparison. Arbitrary / mutated source can legally
+		// break the aliasing (realm) contract - e.g. a global-provenance POKE whose out-of-array index reaches a frame
+		// slot the JIT holds in a register. Under the rules (docs/JitAliasingRegAlloc.md) the JIT is *permitted* to
+		// resolve that differently from the interpreter, so a memory / status diff here is a rule violation, not a
+		// miscompile, and a cheap address filter can't separate the two (cross-realm UB is a provenance/extent question,
+		// not an address range). So we exercise the assembler + the JIT compiler + BOTH engines to surface crashes,
+		// asserts and hard codegen traps on real / arbitrary programs, but we do NOT compare their results. Contract-
+		// abiding differential checking is lanes 1/2 - the structured generator, which never crosses realms by design.
+		std::memcpy(memory, snapshot, sizeof (memory));
+		{ Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0); runEngine(interp, mainFunction, 10000000); }
+		std::memcpy(memory, snapshot, sizeof (memory));
+		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); runEngine(jit, mainFunction, 10000000); }
+#else
 		std::memcpy(memory, snapshot, sizeof (memory));
 		Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 		const Status interpStatus = runEngine(interp, mainFunction, 10000000);	// the oracle
 		std::memcpy(interpImage, memory, sizeof (memory));
 
-		NativeJitCompiler compiler;
-		JitModule module;
-		compiler.compile(program, module);								// throws JitException -> caught below, no diff
-
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); const Status s = runEngine(jit, mainFunction, 10000000); requireMatch("jit full-fuel", Data, Size, interpStatus, interpImage, s, memory); }
-#ifndef FUZZ_TEXT_INPUT
-		// tiny-fuel suspend/resume lanes: skipped for the text->JIT build - they re-enter run() thousands of times on
-		// the larger, arbitrary programs the text lane explores (seconds/unit), and the structured lane already covers
-		// suspend/resume on small programs. The text lane keeps only full-fuel interp-vs-JIT (its codegen-coverage value).
+		// tiny-fuel suspend/resume lanes (structured lane only): re-enter run() thousands of times - seconds/unit on the
+		// larger text programs - and the small structured programs already cover suspend/resume.
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); const Status s = runEngine(jit, mainFunction, 64); requireMatch("jit tiny-fuel", Data, Size, interpStatus, interpImage, s, memory); }
 		std::memcpy(memory, snapshot, sizeof (memory));
