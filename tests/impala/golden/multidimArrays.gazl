@@ -2,7 +2,7 @@
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
-gm:	GLOB *12	; signature array gm[12] : int @ 12:1
+gm:	GLOB *12	; signature array gm[3, 4] : int @ 12:1
 ; signature extern native printInt() -> unknown @ 13:1
 ; signature extern native printLF() -> unknown @ 15:1
 

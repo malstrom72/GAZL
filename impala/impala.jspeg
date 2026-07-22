@@ -552,7 +552,7 @@
     }
 
     $$parser.formatGlobalSignatureComment = function (section, name, type, size, flavor,
-                                                      sourceName, sourceCode, sourceOffset, elem) {
+                                                      sourceName, sourceCode, sourceOffset, elem, dims) {
         if (!name) {
             return undefined;
         }
@@ -560,7 +560,8 @@
         var prefix = ($$parser.exportNext ? 'export ' : '') + (flavor ? flavor + ' ' : '');
 
         if (type === 'A') {
-            var extent = (size !== undefined ? '[' + size + ']' : '[]');
+            var extent = (dims !== undefined && dims.length > 0) ? '[' + dims.join(', ') + ']'   /* real shape, e.g. [3, 4] */
+                       : (size !== undefined ? '[' + size + ']' : '[]');
             var elemCategory = signatureCategoryForDesc(elem);    /* typed arrays advertise their element chain; */
                                                                   /* untyped arrays keep the `unknown` wildcard */
             return appendOrigin('signature ' + prefix + 'array ' + name + extent + ' : ' + elemCategory,
@@ -3365,7 +3366,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     $$parser.sourceName,
                                                                                     $$s,
                                                                                     $$i,
-                                                                                    $a.elem
+                                                                                    $a.elem,
+                                                                                    $a.dims
                                                                                 ),
                                                                                 $a.elem,
                                                                                 $a.dims
