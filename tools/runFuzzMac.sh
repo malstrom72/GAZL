@@ -6,8 +6,8 @@
 #   lane 7  x86_64/Rosetta text REPLAY of lane 6's corpus, crash-only (x64 backend coverage) -> output/GAZLFuzzTextX64
 #
 # libFuzzer lanes use libFuzzer's own -jobs/-workers: each job writes a live fuzz-N.log in its lane dir and
-# merges into the shared corpus/. ALL run output lives under output/fuzz/ (gitignored) and is WIPED at each
-# start, so nothing accumulates across runs.
+# merges into the shared corpus/. All run output lives under output/fuzz/ (gitignored). Restarting PRESERVES each
+# lane's corpus/ (it takes days to build); only stale logs + crash/slow/timeout artifacts are cleared.
 #   tools/runFuzzMac.sh [hours]      stop everything:  pkill -f 'GAZLFuzz'
 set -e -o pipefail -u
 cd "$(dirname "$0")"
@@ -22,7 +22,15 @@ echo "building lanes 1, 2, 6, 7 ..."
 
 OUT="$(cd ../output && pwd)"
 FUZZ="$OUT/fuzz"
-rm -rf "$FUZZ"; mkdir -p "$FUZZ"			# clean slate every run - no stale lane dirs / logs / corpora piling up
+mkdir -p "$FUZZ"
+# PRESERVE corpora across restarts - they take days to build and are gitignored (not recoverable from git). Only clear
+# stale logs + crash/slow/timeout artifacts; NEVER delete a lane's corpus/. (This used to `rm -rf "$FUZZ"`, which erased
+# the corpus on every restart - do not reintroduce that.)
+rm -f "$FUZZ"/*.log
+for d in "$FUZZ"/lane*/; do
+	[ -d "$d" ] || continue
+	rm -f "$d"fuzz-*.log "$d"jobs.log "$d"crash-* "$d"slow-unit-* "$d"timeout-* "$d"oom-* "$d"leak-*
+done
 
 launch_libfuzzer() {   # <lane-dir-name> <binary-name> <job-count> [extra libFuzzer flags]
 	local dir="$FUZZ/$1" bin="$OUT/$2" n="$3" extra="${4:-}"
