@@ -249,6 +249,10 @@ void Arm64Emitter::addX(Reg xd, Reg xn, Reg xm) {
 	emit(0x8B000000u | (static_cast<uint32_t>(xm) << 16) | (static_cast<uint32_t>(xn) << 5) | xd);
 }
 
+void Arm64Emitter::subX(Reg xd, Reg xn, Reg xm) {
+	emit(0xCB000000u | (static_cast<uint32_t>(xm) << 16) | (static_cast<uint32_t>(xn) << 5) | xd);
+}
+
 // --- float scalar (single precision) ---
 
 void Arm64Emitter::faddS(Reg sd, Reg sn, Reg sm) {
@@ -408,6 +412,19 @@ static void writebackState(Arm64Emitter& e, const Offsets& o) {
 	e.strX(X1, X0, o.dsp); e.strW(W3, X0, o.fuel); e.strX(X4, X0, o.ipsp);
 }
 static void matConst(Arm64Emitter& e, Reg r, Int v) { e.movImm32(r, static_cast<uint32_t>(v)); }
+/*
+	64-bit add/sub of a byte amount that may exceed the 12-bit add/sub-immediate range. dsp adjustments (FUNC prologue,
+	CALL arg windows) scale with the frame / window word offset, which a big LOCA array or a high transient index pushes
+	past 4095 bytes; the immediate form asserts (debug) or silently truncates (release), so fall back to materializing
+	the amount and using the register form - same shape as the prologue's localsSize path. W15 is fixed scratch, dead at
+	every dsp-adjust site.
+*/
+static void addImmXBig(Arm64Emitter& e, Reg xd, Reg xn, uint32_t imm) {
+	if (imm < 0x1000) { e.addImmX(xd, xn, imm); } else { matConst(e, W15, static_cast<Int>(imm)); e.addX(xd, xn, W15); }
+}
+static void subImmXBig(Arm64Emitter& e, Reg xd, Reg xn, uint32_t imm) {
+	if (imm < 0x1000) { e.subImmX(xd, xn, imm); } else { matConst(e, W15, static_cast<Int>(imm)); e.subX(xd, xn, W15); }
+}
 /*
 	Frame slots are Value-indices off dsp (x1). ldur/stur reach ±64 words; far slots (big frames / LOCA arrays) fall back
 	to a register-offset load (index in W13 - kept distinct from the W9..W12 operand scratches). See task #23.
@@ -713,7 +730,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	{																													// FUNC stack-overflow: if (dsp + paramsSize > dataStackEnd) DATA_STACK_OVERFLOW
 		const UInt paramsSize = static_cast<UInt>(code[funcIndex].p1.i);
 		Label sok = e.newLabel();
-		e.ldrX(X9, X0, o.dsend); e.addImmX(X10, X1, paramsSize * 4); e.cmpX(X10, X9);
+		e.ldrX(X9, X0, o.dsend); addImmXBig(e, X10, X1, paramsSize * 4); e.cmpX(X10, X9);
 		e.bcond(LS, sok); e.movn(W0, 4); e.b(exitLabel);																// > end → ~4 = -5 = DATA_STACK_OVERFLOW
 		e.bind(sok);
 	}
@@ -811,7 +828,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);												// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
 				e.movn(W0, 5); e.b(exitLabel); e.bind(iok);																// ~5 = -6
 				e.adr(X9, after); e.strX(X9, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);							// push {after, dsp}
-				if (window != 0) { e.addImmX(X1, X1, window * 4); }														// dsp += arg window
+				if (window != 0) { addImmXBig(e, X1, X1, window * 4); }														// dsp += arg window
 				e.b(entryLabels[callee]);																				// tail-branch to the callee entry (state stays live)
 				e.bind(after);																							// return lands here (hot; state live)
 				break;
@@ -827,7 +844,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.cmp(W9, W10); e.bcond(HS, trap);																		// ordinal >= functionCount → BAD_CALL
 				e.ldrX(X10, X0, o.funcentries); e.ldrXr(X9, X10, W9);													// entry = funcEntries[ordinal] (hot)
 				e.adr(X10, after); e.strX(X10, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);						// push {after, dsp}
-				if (window != 0) { e.addImmX(X1, X1, window * 4); }
+				if (window != 0) { addImmXBig(e, X1, X1, window * 4); }
 				e.br(X9);																								// tail-branch to the callee entry (state stays live)
 				e.bind(trap); e.movn(W0, 3); e.b(exitLabel);															// ~3 = -4 = BAD_CALL
 				e.bind(after);
@@ -847,7 +864,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const UInt window = static_cast<UInt>(in.p1.i);															// param-window offset (C1)
 				Label hot = e.newLabel(), retry = e.newLabel(), after = e.newLabel();
 				e.bind(hot);																							// re-entry for blocking retry / suspend-resume
-				if (window != 0) { e.addImmX(X1, X1, window * 4); }
+				if (window != 0) { addImmXBig(e, X1, X1, window * 4); }
 				e.strX(X1, X0, o.dsp); e.strW(W3, X0, o.fuel); e.strX(X4, X0, o.ipsp);									// publish window/fuel/ipsp (interpreter-shaped)
 				e.adr(X9, after); e.strX(X9, X0, o.nativeafter);														// redirectable OK continuation (pushCall retargets)
 				e.ldrX(X9, X0, o.natives); e.ldrX(X9, X9, ordinal * 8);													// natives[ordinal]
@@ -858,14 +875,14 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.ldrX(X9, X0, o.nativeafter); e.br(X9);																// OK: `after`, or the last-pushed callee's entry
 				e.bind(retry);
 				if (window != 0) {																						// publish the CALLER dsp (register AND ctx): the hot
-					e.subImmX(X1, X1, window * 4);																		// re-issue reloads ctx.dsp and advances it again
+					subImmXBig(e, X1, X1, window * 4);																		// re-issue reloads ctx.dsp and advances it again
 					e.strX(X1, X0, o.dsp);
 				}
 				e.adr(X9, hot); e.strX(X9, X0, o.resume);																// RESUME = call site (blocking retry / suspend re-issue)
 				e.mov(W0, W12); e.b(exitLabel);																			// nonzero (BLOCK_RETRY / TIME_OUT / trap): return to host
 				e.bind(after);
 				e.strX(XZR, X0, o.nativeafter);																			// re-arm the "only inside a native call" guard
-				if (window != 0) { e.subImmX(X1, X1, window * 4); }														// normalize to the caller frame base
+				if (window != 0) { subImmXBig(e, X1, X1, window * 4); }														// normalize to the caller frame base
 																	// state live; w3 holds ctx.fuel - a native that yielded via resetTimeOut(0) leaves it 0
 																	// and the MANDATORY fuel check at the next block leader suspends immediately.
 				break;

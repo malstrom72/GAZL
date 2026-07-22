@@ -137,6 +137,7 @@ class Arm64Emitter {
 		void subImmX(Reg xd, Reg xn, uint32_t imm12);			// `sub xd, xn, #imm12` (64-bit)
 		void cmpX(Reg xn, Reg xm);								// `cmp xn, xm` (64-bit, for pointer bounds)
 		void addX(Reg xd, Reg xn, Reg xm);						// `add xd, xn, xm` (64-bit register add)
+		void subX(Reg xd, Reg xn, Reg xm);						// `sub xd, xn, xm` (64-bit register sub)
 		void cbnzX(Reg xt, Label target);						// `cbnz xt, target` (64-bit)
 
 		// --- float scalar (single precision) ---
