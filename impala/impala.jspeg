@@ -221,6 +221,9 @@
             return (($$parser.isStructAtom(head) || $$parser.isFuncTypeAtom(head))
                     ? head : signatureParamCategory(head));
         }
+        if ($$parser.isArrayAtom(head)) {                         /* array-shape level: "<elem>-array-4x5" */
+            return signatureCategoryForDesc(tail) + '-array-' + $$parser.arrayAtomDims(head).join('x');
+        }
         return signatureCategoryForDesc(tail) + '-ptr';           /* head is a pointer level */
     }
 
@@ -1113,6 +1116,19 @@
                 && Object.prototype.hasOwnProperty.call($$parser.functypes, atom);
     };
 
+    /* Array-shape atom (Impala 2 multidim): '[4x5]' is a head atom whose tail is the element type,
+       so 'int array[4, 5]' is '[4x5]:i' and 'int array[4, 5] pointer' is 'p:[4x5]:i'. Bracket
+       delimiters can never collide with an identifier (struct/funcptr name). */
+    $$parser.isArrayAtom = function (atom) {
+        return atom !== undefined && atom.charAt(0) === '[';
+    };
+    $$parser.arrayAtomDims = function (atom) {                    /// '[4x5]' -> ['4','5']
+        return atom.substring(1, atom.length - 1).split('x');
+    };
+    $$parser.arrayDesc = function (dims, elem) {                  /// ([4,5],'i') -> '[4x5]:i'
+        return '[' + dims.join('x') + ']' + (elem !== undefined ? ':' + elem : '');
+    };
+
     /* --------------------------------------------------------- *
      *  Named function-pointer types  (Impala 2 Step 3)          *
      * --------------------------------------------------------- */
@@ -1198,6 +1214,9 @@
         if (tail === undefined) {
             return (($$parser.isStructAtom(head) || $$parser.isFuncTypeAtom(head))
                     ? head : $$parser.VERBOSE_TYPES[head]);
+        }
+        if ($$parser.isArrayAtom(head)) {                         /* array-shape level: "<elem> array[dims]" */
+            return $$parser.elemVerbose(tail) + ' array[' + $$parser.arrayAtomDims(head).join(', ') + ']';
         }
         return $$parser.elemVerbose(tail) + ' pointer';           /* head is a 'p' level */
     };
@@ -2161,6 +2180,17 @@
             var addr = $$parser.placeAddress(expr);
             $$parser.makeMeta(expr, ':=', 'p', undefined, addr, undefined);
             $$parser.setElem(expr, structName);
+            return;
+        }
+
+        /* &wholeArray -> a shape-carrying pointer to the whole array (Impala 2 multidim). Handled here,
+           before the generic element propagation below, which would otherwise overwrite the shape. */
+        if (operator === '&' && expr.dims !== undefined) {
+            var shapeDesc = $$parser.arrayDesc(expr.dims, expr.elem);
+            var arrAddr   = $$parser.makeRValue(expr);   /* ADRL for a local, &name for a global */
+            $$parser.makeMeta(expr, ':=', 'p', undefined, arrAddr, undefined);
+            $$parser.setElem(expr, shapeDesc);
+            metaSlot(expr).dims = undefined;             /* it is now a pointer value, not the array */
             return;
         }
 
@@ -3547,6 +3577,7 @@ Subscript   <-  '['_ s:Expr                        { if (!$$parser.dry) {
                                                            else
                                                                $$parser.binaryOp('=[]', $$, $subNode, $$s, $$i);
                                                        }
+                                                       metaSlot($$).dims = undefined;   /* a subscript result is no longer the whole array */
                                                      } }
 
 FieldAccess <-  '->'_ f:Identifier                 { if (!$$parser.dry)
