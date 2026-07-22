@@ -134,6 +134,18 @@
 
 		try {
 			var result = impalaCompiler(source, opts);
+			// impalaCompiler REPORTS a parse failure by return value, not by throwing: [ok, , index].
+			// A semantic error throws (handled below); a syntax error just stops - surface it here.
+			if (!result || !result[0] || result[2] !== source.length) {
+				var si = (result && isFinite(result[2])) ? result[2] : 0;
+				var sc = caretLine(source, si);
+				var spos = "input.impala:" + sc.lc.line + ":" + sc.lc.col;
+				outEl.className = "diag";
+				outEl.textContent = spos + ": error[E001]: syntax error\n" + sc.text + "\n" + sc.pointer;
+				statusEl.className = "bad";
+				statusEl.textContent = "✗ error";
+				return;
+			}
 			var body = lines.map(retabEl.checked ? retabulate : function (l) { return l; }).join("\n");
 			outEl.className = "";
 			outEl.innerHTML = (warnings.length ? '<span class="note">' + esc(warnings.join("\n\n")) + "</span>\n\n" : "") + esc(body);
@@ -157,6 +169,16 @@
 			statusEl.textContent = "✗ error";
 		}
 	}
+
+	// Tab inserts a tab character (indent) instead of moving focus out of the editor.
+	srcEl.addEventListener("keydown", function (e) {
+		if (e.key !== "Tab" || e.ctrlKey || e.altKey || e.metaKey) return;
+		e.preventDefault();
+		var start = srcEl.selectionStart, end = srcEl.selectionEnd, v = srcEl.value;
+		srcEl.value = v.slice(0, start) + "\t" + v.slice(end);
+		srcEl.selectionStart = srcEl.selectionEnd = start + 1;
+		schedule();
+	});
 
 	var timer = null;
 	function schedule() { clearTimeout(timer); timer = setTimeout(compile, 120); }
