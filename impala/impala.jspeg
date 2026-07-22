@@ -221,9 +221,6 @@
             return (($$parser.isStructAtom(head) || $$parser.isFuncTypeAtom(head))
                     ? head : signatureParamCategory(head));
         }
-        if ($$parser.isArrayAtom(head)) {                         /* array-shape level: "<elem>-array-4x5" */
-            return signatureCategoryForDesc(tail) + '-array-' + $$parser.arrayAtomDims(head).join('x');
-        }
         return signatureCategoryForDesc(tail) + '-ptr';           /* head is a pointer level */
     }
 
@@ -552,7 +549,7 @@
     }
 
     $$parser.formatGlobalSignatureComment = function (section, name, type, size, flavor,
-                                                      sourceName, sourceCode, sourceOffset, elem, dims) {
+                                                      sourceName, sourceCode, sourceOffset, elem) {
         if (!name) {
             return undefined;
         }
@@ -560,8 +557,7 @@
         var prefix = ($$parser.exportNext ? 'export ' : '') + (flavor ? flavor + ' ' : '');
 
         if (type === 'A') {
-            var extent = (dims !== undefined && dims.length > 0) ? '[' + dims.join(', ') + ']'   /* real shape, e.g. [3, 4] */
-                       : (size !== undefined ? '[' + size + ']' : '[]');
+            var extent = (size !== undefined ? '[' + size + ']' : '[]');
             var elemCategory = signatureCategoryForDesc(elem);    /* typed arrays advertise their element chain; */
                                                                   /* untyped arrays keep the `unknown` wildcard */
             return appendOrigin('signature ' + prefix + 'array ' + name + extent + ' : ' + elemCategory,
@@ -1117,19 +1113,6 @@
                 && Object.prototype.hasOwnProperty.call($$parser.functypes, atom);
     };
 
-    /* Array-shape atom (Impala 2 multidim): '[4x5]' is a head atom whose tail is the element type,
-       so 'int array[4, 5]' is '[4x5]:i' and 'int array[4, 5] pointer' is 'p:[4x5]:i'. Bracket
-       delimiters can never collide with an identifier (struct/funcptr name). */
-    $$parser.isArrayAtom = function (atom) {
-        return atom !== undefined && atom.charAt(0) === '[';
-    };
-    $$parser.arrayAtomDims = function (atom) {                    /// '[4x5]' -> ['4','5']
-        return atom.substring(1, atom.length - 1).split('x');
-    };
-    $$parser.arrayDesc = function (dims, elem) {                  /// ([4,5],'i') -> '[4x5]:i'
-        return '[' + dims.join('x') + ']' + (elem !== undefined ? ':' + elem : '');
-    };
-
     /* --------------------------------------------------------- *
      *  Named function-pointer types  (Impala 2 Step 3)          *
      * --------------------------------------------------------- */
@@ -1215,9 +1198,6 @@
         if (tail === undefined) {
             return (($$parser.isStructAtom(head) || $$parser.isFuncTypeAtom(head))
                     ? head : $$parser.VERBOSE_TYPES[head]);
-        }
-        if ($$parser.isArrayAtom(head)) {                         /* array-shape level: "<elem> array[dims]" */
-            return $$parser.elemVerbose(tail) + ' array[' + $$parser.arrayAtomDims(head).join(', ') + ']';
         }
         return $$parser.elemVerbose(tail) + ' pointer';           /* head is a 'p' level */
     };
@@ -1426,206 +1406,6 @@
         $$parser.returnBack(idxRV);
         $$parser.returnBack(basePtr);
         $$parser.setPlace(x, 'pointer', addr, 0, structName);
-    };
-
-    /* Contiguous multidimensional element access. `rvs` are the already-materialized index operands
-       (captured immediately as each index is parsed, so their metas are still fresh - the same
-       discipline call arguments use). Fold them into one row-major (Horner) offset and then read/write
-       the scalar element exactly as a 1-D array would. */
-    $$parser.arraySubscriptFlat = function (x, rvs, sourceCode, sourceOffset) {
-        x = metaSlot(x);
-
-        /* Shape pointer p:[dims]:elem. A pointer subscript strides by the POINTEE size: the first index
-           walks whole pointees, extra indices drill in. pointee-rank + 1 indices reach a scalar; fewer
-           yield a contiguous sub-array (a slice). E.g. for `int array[3] pointer p`: p[2] is the 3rd
-           int[3] (offset 6, a sub-array), p[2, x] is a scalar (offset 6 + x). */
-        if (x.type === 'p' && x.elem !== undefined && $$parser.isArrayAtom($$parser.descHead(x.elem))) {
-            var pdims = $$parser.arrayAtomDims($$parser.descHead(x.elem));
-            var pelem = $$parser.descTail(x.elem);
-            var pRank = pdims.length;
-            if (rvs.length < 1 || rvs.length > pRank + 1) {
-                $$parser.fail('this pointer points at a ' + pRank + '-dimensional block; index it with 1 to '
-                        + (pRank + 1) + ' subscripts, got ' + rvs.length, sourceCode, sourceOffset, 'E421');
-                return;
-            }
-            var within   = rvs.length - 1;                          /* first index walks; the rest index into the pointee */
-            var pHead     = $$parser.descHead(pelem);
-            var pWords    = (pelem !== undefined && $$parser.descTail(pelem) === undefined && $$parser.isStructAtom(pHead))
-                    ? $$parser.structWords(pHead) : 1;
-            /* Horner over the consumed axes: flat = rvs[0]; flat = flat * pdims[k-1] + rvs[k] */
-            var pacc = rvs[0];
-            for (var pk = 1; pk < rvs.length; ++pk) {
-                var pik = rvs[pk]; var pmk = parseInt(pdims[pk - 1], 10);
-                if (pacc.charAt(0) === '#' && pik.charAt(0) === '#') {
-                    pacc = '#' + (parseInt(pacc.substr(1), 10) * pmk + parseInt(pik.substr(1), 10));
-                } else {
-                    var pt = $$parser.borrow('%');
-                    $$parser.emit('*', 'i', pt, pacc, '#' + pmk);
-                    $$parser.emit('+', 'i', pt, pt, pik);
-                    if (pacc.charAt(0) === '%') $$parser.returnBack(pacc);
-                    if (pik.charAt(0)  === '%') $$parser.returnBack(pik);
-                    pacc = pt;
-                }
-            }
-            var remaining = pdims.slice(within);                    /* un-indexed trailing pointee dims */
-            var remWords  = pWords;
-            for (var rr = 0; rr < remaining.length; ++rr) remWords *= parseInt(remaining[rr], 10);
-            var pbase = $$parser.makeRValue(x);
-
-            if (remaining.length === 0) {                           /* fully indexed -> a scalar element (PEEK base + flat) */
-                var ptp = (pelem !== undefined) ? $$parser.descHead(pelem) : '?';
-                $$parser.makeMeta(x, '=[]', ptp, null, pbase, pacc);
-                x.type = ptp;
-                x.elem = (pelem !== undefined) ? $$parser.descTail(pelem) : undefined;
-                x.dims = undefined;
-                return;
-            }
-            /* partial -> a contiguous sub-array slice at base + flat * remWords */
-            var pWordOff;
-            if (pacc.charAt(0) === '#') {
-                pWordOff = '#' + (parseInt(pacc.substr(1), 10) * remWords);
-            } else {
-                var ptw = $$parser.borrow('%');
-                $$parser.emit('*', 'i', ptw, pacc, '#' + remWords);
-                if (pacc.charAt(0) === '%') $$parser.returnBack(pacc);
-                pWordOff = ptw;
-            }
-            var paddr;
-            if (pWordOff === '#0') {
-                paddr = pbase;
-            } else if (pWordOff.charAt(0) === '#' && pbase.charAt(0) === '&') {
-                paddr = pbase + ':' + pWordOff.substr(1);
-            } else {
-                paddr = $$parser.borrow('%');
-                $$parser.emit('+', 'p', paddr, pbase, pWordOff);
-                if (pbase.charAt(0)   === '%') $$parser.returnBack(pbase);
-                if (pWordOff.charAt(0) === '%') $$parser.returnBack(pWordOff);
-            }
-            $$parser.makeMeta(x, ':=', 'A', undefined, paddr, undefined);
-            $$parser.setElem(x, $$parser.arrayDesc(remaining, pelem));
-            metaSlot(x).slice = true;
-            metaSlot(x).sliceWords = remWords;
-            metaSlot(x).dims = undefined;
-            return;
-        }
-
-        /* a named multidimensional array: write every axis, always reaching a scalar element */
-        if (x.dims === undefined || x.dims.length < 2) {
-            $$parser.fail('A comma-separated index list needs a multidimensional array or a shape pointer',
-                    sourceCode, sourceOffset, 'E421');
-            return;
-        }
-        var dims = x.dims, elemDesc = x.elem;
-        if (rvs.length !== dims.length) {
-            $$parser.fail('This array has ' + dims.length + ' dimensions but ' + rvs.length
-                    + (rvs.length === 1 ? ' index was given' : ' indices were given') + ' (write every axis)',
-                    sourceCode, sourceOffset, 'E421');
-            while (rvs.length < dims.length) rvs.push('#0');
-            rvs = rvs.slice(0, dims.length);
-        }
-        var tp    = (elemDesc !== undefined) ? $$parser.descHead(elemDesc) : '?';   /* untyped element -> wildcard, as 1-D '=[]' */
-        var acc = rvs[0];
-        for (var k = 1; k < rvs.length; ++k) {                       /* flat = Horner(rvs, dims[1..]) */
-            var ik = rvs[k];
-            var mk = parseInt('' + dims[k], 10);
-            if (acc.charAt(0) === '#' && ik.charAt(0) === '#') {
-                acc = '#' + (parseInt(acc.substr(1), 10) * mk + parseInt(ik.substr(1), 10));
-            } else {
-                var t = $$parser.borrow('%');
-                $$parser.emit('*', 'i', t, acc, '#' + mk);
-                $$parser.emit('+', 'i', t, t, ik);
-                if (acc.charAt(0) === '%') $$parser.returnBack(acc);
-                if (ik.charAt(0)  === '%') $$parser.returnBack(ik);
-                acc = t;
-            }
-        }
-        var op1 = x.operands[1];                                     /* mirrors binaryOp '=[]': fold a constant, else PEEK/GETL */
-        if (x.operator === ':=' && op1.charAt(0) === '&') {          /* global array base &name */
-            if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=*',   tp, null, op1 + ':' + acc.substr(1), null);
-            else                       $$parser.makeMeta(x, '=[]',  tp, null, op1, acc);
-        } else {                                                     /* local array base $name ('=&') */
-            if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=',    tp, null, op1 + ':' + acc.substr(1), null);
-            else                       $$parser.makeMeta(x, '=[]$', tp, null, op1, acc);
-        }
-        x.type = tp;
-        x.elem = (elemDesc !== undefined) ? $$parser.descTail(elemDesc) : undefined;
-        x.dims = undefined;                                          /* fully indexed -> a scalar element */
-    };
-
-    /* A trailing-`:` slice: leading concrete indices select a contiguous sub-array of the trailing kept
-       dims. Produces a "slice place" (an address + a shape descriptor) that `&` turns into a
-       shape-carrying pointer and that whole-slice assignment copies (COPY). */
-    $$parser.arraySlice = function (x, concreteRvs, colonCount, sourceCode, sourceOffset) {
-        x = metaSlot(x);
-        var dims, elemDesc;
-        if (x.dims !== undefined) {
-            dims = x.dims; elemDesc = x.elem;
-        } else if (x.type === 'p' && x.elem !== undefined && $$parser.isArrayAtom($$parser.descHead(x.elem))) {
-            dims = $$parser.arrayAtomDims($$parser.descHead(x.elem)); elemDesc = $$parser.descTail(x.elem);
-        } else {
-            $$parser.fail("a `:` slice needs a multidimensional array or a shape pointer",
-                    sourceCode, sourceOffset, 'E421');
-            return;
-        }
-        var rank = dims.length;
-        var c    = concreteRvs.length;
-        if (c + colonCount !== rank) {
-            $$parser.fail('this array is ' + rank + '-dimensional but the slice names '
-                    + (c + colonCount) + ' axes (write every axis, indices then trailing `:`)',
-                    sourceCode, sourceOffset, 'E421');
-            return;
-        }
-        var trailing = dims.slice(c);                                /* the kept (trailing) dims */
-        var elemHead = $$parser.descHead(elemDesc);
-        var elemWords = ($$parser.descTail(elemDesc) === undefined && $$parser.isStructAtom(elemHead))
-                ? $$parser.structWords(elemHead) : 1;
-        var subWords = elemWords;
-        for (var i = 0; i < trailing.length; ++i) subWords *= parseInt(trailing[i], 10);
-
-        /* leadingFlat = Horner(concreteRvs, dims[1..c-1]); word offset = leadingFlat * subWords */
-        var lead = (c > 0) ? concreteRvs[0] : '#0';
-        for (var k = 1; k < c; ++k) {
-            var ck = concreteRvs[k]; var dk = parseInt(dims[k], 10);
-            if (lead.charAt(0) === '#' && ck.charAt(0) === '#') {
-                lead = '#' + (parseInt(lead.substr(1), 10) * dk + parseInt(ck.substr(1), 10));
-            } else {
-                var t = $$parser.borrow('%');
-                $$parser.emit('*', 'i', t, lead, '#' + dk);
-                $$parser.emit('+', 'i', t, t, ck);
-                if (lead.charAt(0) === '%') $$parser.returnBack(lead);
-                if (ck.charAt(0)  === '%') $$parser.returnBack(ck);
-                lead = t;
-            }
-        }
-        var wordOff;
-        if (lead.charAt(0) === '#') {
-            wordOff = '#' + (parseInt(lead.substr(1), 10) * subWords);
-        } else {
-            var tw = $$parser.borrow('%');
-            $$parser.emit('*', 'i', tw, lead, '#' + subWords);
-            if (lead.charAt(0) === '%') $$parser.returnBack(lead);
-            wordOff = tw;
-        }
-
-        /* slice address = base address + word offset */
-        var baseAddr = $$parser.makeRValue(x);
-        var addr;
-        if (wordOff === '#0') {
-            addr = baseAddr;
-        } else if (wordOff.charAt(0) === '#' && baseAddr.charAt(0) === '&') {
-            addr = baseAddr + ':' + wordOff.substr(1);              /* global &name:off */
-        } else {
-            addr = $$parser.borrow('%');
-            $$parser.emit('+', 'p', addr, baseAddr, wordOff);
-            if (baseAddr.charAt(0) === '%') $$parser.returnBack(baseAddr);
-            if (wordOff.charAt(0)  === '%') $$parser.returnBack(wordOff);
-        }
-
-        $$parser.makeMeta(x, ':=', 'A', undefined, addr, undefined);
-        $$parser.setElem(x, $$parser.arrayDesc(trailing, elemDesc));
-        metaSlot(x).slice = true;
-        metaSlot(x).sliceWords = subWords;
-        metaSlot(x).dims = undefined;
     };
 
     /* materialize a place's address into a pointer operand (borrows a temp for locals) */
@@ -1973,26 +1753,6 @@
         x      = metaSlot(x);
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
-
-        /* whole-slice assignment: a[y, :] = b[y, :] -> one COPY *words (both sides contiguous sub-arrays) */
-        if ((leftx.type === 'A' && leftx.slice) || (rightx.type === 'A' && rightx.slice)) {
-            if (!(leftx.type === 'A' && leftx.slice) || !(rightx.type === 'A' && rightx.slice)) {
-                $$parser.fail('a slice assignment needs an array slice on both sides',
-                        sourceCode, sourceOffset, 'E420');
-            } else if (leftx.elem !== rightx.elem) {
-                $$parser.fail('slice shape mismatch in assignment (' + $$parser.elemVerbose(leftx.elem)
-                        + ' = ' + $$parser.elemVerbose(rightx.elem) + ')', sourceCode, sourceOffset, 'E420');
-            }
-            var swords = leftx.sliceWords;
-            var sdst   = leftx.operands[1];
-            var ssrc   = rightx.operands[1];
-            $$parser.makeMeta(x, 'copy', '?', sdst, ssrc, '*' + swords);
-            $$parser.emitMeta(x);
-            if (ssrc.charAt(0) === '%') $$parser.returnBack(ssrc);
-            if (sdst.charAt(0) === '%') $$parser.returnBack(sdst);
-            $$parser.makeMeta(x, ':=', '?', undefined, undefined, undefined);   /* slice assignment has no useful value */
-            return;
-        }
 
         /* whole-struct assignment: one COPY *sizeof, statement value is the dest place */
         if (leftx.type === 'S' || rightx.type === 'S') {
@@ -2351,26 +2111,6 @@
             return;
         }
 
-        /* &slice -> a shape-carrying pointer to the sub-array (its address is already computed) */
-        if (operator === '&' && expr.slice) {
-            var sliceAddr = expr.operands[1];
-            var sliceElem = expr.elem;
-            $$parser.makeMeta(expr, ':=', 'p', undefined, sliceAddr, undefined);
-            $$parser.setElem(expr, sliceElem);
-            return;
-        }
-
-        /* &wholeArray -> a shape-carrying pointer to the whole array (Impala 2 multidim). Handled here,
-           before the generic element propagation below, which would otherwise overwrite the shape. */
-        if (operator === '&' && expr.dims !== undefined) {
-            var shapeDesc = $$parser.arrayDesc(expr.dims, expr.elem);
-            var arrAddr   = $$parser.makeRValue(expr);   /* ADRL for a local, &name for a global */
-            $$parser.makeMeta(expr, ':=', 'p', undefined, arrAddr, undefined);
-            $$parser.setElem(expr, shapeDesc);
-            metaSlot(expr).dims = undefined;             /* it is now a pointer value, not the array */
-            return;
-        }
-
         var key      = '=' + operator;                // e.g. "=abs"
         var prevType = expr.type;                     /* for element-type propagation (Impala 2) */
         var prevElem = expr.elem;
@@ -2417,7 +2157,7 @@
      *  Symbol declaration helper
      * -------------------------------------------------------- */
 
-    function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment, elem, dims) {
+    function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment, elem) {
         /* emit data / flush pending code */
         if (kind !== undefined) {
             $$parser.flushMetaCode('');
@@ -2463,7 +2203,6 @@
                 kind     = (kind     !== undefined ? kind     : prev.kind);
                 readonly = (readonly || prev.readonly);
                 elem     = (elem     !== undefined ? elem     : prev.elem);
-                dims     = (dims     !== undefined ? dims     : prev.dims);
             }
 
             /* store / update */
@@ -2471,7 +2210,6 @@
             table[name] = {
                 type: type,
                 elem: elem,
-                dims: dims,
                 readonly: !!readonly,
                 kind: kind,
                 signature: prev && prev.signature,
@@ -2590,7 +2328,6 @@
             if (p.type === 'A') {
                 $$parser.makeMeta(x, '=&', 'p', undefined,
                                   '$' + name, '*0');
-                metaSlot(x).dims = p.dims;                         /* carry the array shape for multi-dim subscript */
             } else {
                 $$parser.makeMeta(x,
                                   (p.readonly ? ':=' : '='),
@@ -2613,7 +2350,6 @@
             if (p.type === 'A') {
                 $$parser.makeMeta(x, ':=', 'p', undefined,
                                   '&' + name, undefined);
-                metaSlot(x).dims = p.dims;                         /* carry the array shape for multi-dim subscript */
             } else {
                 $$parser.makeMeta(x,
                                   (p.readonly ? ':=*' : '=*'),
@@ -3178,8 +2914,7 @@ inp:ArgsDecl ')'_
                                                                                      (v.words !== undefined ? '*' + v.words : undefined),
                                                                                      $$s, $$i,
                                                                                      undefined,
-                                                                                     v.elem,
-                                                                                     v.dims
+                                                                                     v.elem
                                                                                  );
                                                                              }
                                                                          });
@@ -3414,11 +3149,9 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     $$parser.sourceName,
                                                                                     $$s,
                                                                                     $$i,
-                                                                                    $a.elem,
-                                                                                    $a.dims
+                                                                                    $a.elem
                                                                                 ),
-                                                                                $a.elem,
-                                                                                $a.dims
+                                                                                $a.elem
                                                                             );
                                                                             $aStructEl = ($a.elem !== undefined
                                                                                     && $$parser.descTail($a.elem) === undefined
@@ -3521,7 +3254,6 @@ ArgsDecl    <-                                                        {
                                                                              entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
-                                                                             entry.dims = $v.dims;
                                                                              $$[$$.n++] = entry;
                                                                          }
                    ( ',' _ v:VarDecl                                  {
@@ -3532,7 +3264,6 @@ ArgsDecl    <-                                                        {
                                                                              entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
-                                                                             entry.dims = $v.dims;
                                                                              $$[$$.n++] = entry;
                                                                          }
                    )*
@@ -3550,7 +3281,6 @@ LocalsDecl  <-                                                        {
                                                                              entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
-                                                                             entry.dims = $v.dims;
                                                                              $$[$$.n++] = entry;
                                                                          }
                    ( ',' _ v:(VarDecl / ArrayDecl)                    {
@@ -3561,7 +3291,6 @@ LocalsDecl  <-                                                        {
                                                                              entry.words = $v.words;
                                                                              entry.name = $v.name;
                                                                              entry.size = $v.size;
-                                                                             entry.dims = $v.dims;
                                                                              $$[$$.n++] = entry;
                                                                          }
                    )*
@@ -3580,23 +3309,6 @@ TypeBase    <-  t:BASE_TYPE _                                         { $$ = $$p
 
 VarDecl     <-  base:TypeBase                                        { $desc = $base; }
                 ( POINTER _                                           { $desc = 'p:' + $desc; }
-                / ARRAY _ '[' _ x:Expr                                {   /* shape modifier `array[dims]`: prepends an array atom, e.g. int array[5] pointer -> p:[5]:i */
-                                                                         var _d = $$parser.makeConstant($x, 'i', $$s, $$i);
-                                                                         $vdims = [ $$parser.dropHash(_d) ];
-                                                                         $$parser.returnBack(_d);
-                                                                     }
-                  ( ','_ x:Expr                                       {
-                                                                         var _dn = $$parser.makeConstant($x, 'i', $$s, $$i);
-                                                                         $vdims.push($$parser.dropHash(_dn));
-                                                                         $$parser.returnBack(_dn);
-                                                                     }
-                  )* ']' _                                            {   /* the shape becomes a type identity, so dims must resolve to plain integers (no <pool> label) */
-                                                                         for (var _vi = 0; _vi < $vdims.length; ++_vi)
-                                                                             if (!/^[0-9]+$/.test('' + $vdims[_vi]))
-                                                                                 $$parser.fail('an array-shape dimension must be a numeric literal for now (got a non-constant or named constant)',
-                                                                                         $$s, $$i, 'E414');
-                                                                         $desc = '[' + $vdims.join('x') + ']:' + $desc;
-                                                                     }
                 )*
                 id:Identifier                                         {
                                                                          var head = $$parser.descHead($desc);
@@ -3611,10 +3323,6 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                              $$.elem = head;
                                                                              $$.struct = undefined;
                                                                              $$.words = undefined;    /* scalar funcptr: a single word, no size operand */
-                                                                         } else if ($$parser.isArrayAtom(head)) {
-                                                                             $$parser.fail('a shape array type must be a pointer here (write `... pointer`); use `type array name[dims]` for a value array',
-                                                                                     $$s, $$i, 'E414');
-                                                                             $$.type = 'p'; $$.elem = tail; $$.struct = undefined; $$.words = undefined;   /* recover */
                                                                          } else {
                                                                              $$.type = head;
                                                                              $$.elem = tail;
@@ -3625,52 +3333,31 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                          $$.size = undefined;
                                                                      }
 
-ArrayDecl   <-                                                        { $desc = undefined; $dims = []; }
+ArrayDecl   <-                                                        { $desc = undefined; }
                 ( base:TypeBase                                      { $desc = $base; }
                   ( POINTER _                                         { $desc = 'p:' + $desc; }
                   )*
                 )?
                 ARRAY _ id:Identifier
-                ( '[' _ x:Expr ']' _                                  {   /* one or more dimensions: a[H], a[H, W], ... (comma form is one bracket, handled below) */
-                                                                         var _sz = $$parser.makeConstant($x, 'i', $$s, $$i);
-                                                                         $dims.push($$parser.dropHash(_sz));
-                                                                         $$parser.returnBack(_sz);
-                                                                     }
-                / '[' _ x:Expr                                        {   /* comma-separated dimensions: a[H, W, ...] */
-                                                                         var _sz0 = $$parser.makeConstant($x, 'i', $$s, $$i);
-                                                                         $dims.push($$parser.dropHash(_sz0));
-                                                                         $$parser.returnBack(_sz0);
-                                                                     }
-                  ( ',' _ x:Expr                                      {
-                                                                         var _szn = $$parser.makeConstant($x, 'i', $$s, $$i);
-                                                                         $dims.push($$parser.dropHash(_szn));
-                                                                         $$parser.returnBack(_szn);
-                                                                     }
-                  )+ ']' _
-                )                                                     {
+                '[' _ x:Expr ']' _                                    {
+                                                                         $size = $$parser.makeConstant($x, 'i', $$s, $$i);
                                                                          $$.type = 'A';
                                                                          $$.elem = $desc;
                                                                          $$.name = $id;
-                                                                         $$.dims = $dims;
-                                                                         /* allocation words = (product of dimensions) * element size (structs are multi-word) */
-                                                                         var _isStructEl = ($desc !== undefined
+                                                                         $$.size = $$parser.dropHash($size);
+                                                                         /* allocation words = count * element size (structs are multi-word) */
+                                                                         if ($desc !== undefined
                                                                                  && $$parser.descTail($desc) === undefined
-                                                                                 && $$parser.isStructAtom($$parser.descHead($desc)));
-                                                                         var _ew = _isStructEl ? $$parser.structWords($$parser.descHead($desc)) : 1;
-                                                                         var _count = 1;
-                                                                         for (var _di = 0; _di < $dims.length; ++_di) {
-                                                                             if (!/^[0-9]+$/.test('' + $dims[_di]) && (_isStructEl || $dims.length > 1))
-                                                                                 $$parser.fail('An array dimension must be a numeric literal for now',
+                                                                                 && $$parser.isStructAtom($$parser.descHead($desc))) {
+                                                                             if (!/^[0-9]+$/.test('' + $$.size))
+                                                                                 $$parser.fail('A struct array size must be a numeric literal for now',
                                                                                          $$s, $$i, 'E414');
-                                                                             _count *= parseInt($dims[_di], 10);
+                                                                             $$.words = parseInt($$.size, 10)
+                                                                                     * $$parser.structWords($$parser.descHead($desc));
+                                                                         } else {
+                                                                             $$.words = $$.size;   /* scalar element: 1 word each */
                                                                          }
-                                                                         if ($dims.length === 1) {         /* preserve the original single-dimension output exactly */
-                                                                             $$.size = $dims[0];
-                                                                             $$.words = _isStructEl ? _count * _ew : $dims[0];
-                                                                         } else {                          /* contiguous multi-dim: flat element count, product-scaled words */
-                                                                             $$.size = '' + _count;
-                                                                             $$.words = _count * _ew;
-                                                                         }
+                                                                         $$parser.returnBack($size);
                                                                      }
 
 # ------------------------------------------------------------------
@@ -3756,47 +3443,12 @@ PrePost     <-  (op:PREFIX_OP _
                                                      } }
                 / Value (FuncCall / Subscript / FieldAccess)*
 
-Subscript   <-  '['_                               { if (!$$parser.dry) {
-                                                       var _sb = metaSlot($$);
-                                                       $subMulti = (_sb.dims !== undefined && _sb.dims.length >= 2)
-                                                               || (_sb.type === 'p' && _sb.elem !== undefined
-                                                                       && $$parser.isArrayAtom($$parser.descHead(_sb.elem)));
-                                                       $subRV = []; $subCols = 0; $subColSeen = false; $subNode = undefined;
-                                                     } }
-                ( ':' _                            { if (!$$parser.dry) {
-                                                       if (!$subMulti) { $subMulti = true; if ($subNode !== undefined && $subRV.length === 0) $subRV.push($$parser.makeRValue(metaSlot($subNode))); }
-                                                       $subCols++; $subColSeen = true;
-                                                     } }
-                / s:Expr                           { if (!$$parser.dry) {
-                                                       if ($subColSeen) $$parser.fail("an open axis ':' must be trailing (a column/strided slice is not a contiguous array)", $$s, $$i, 'E421');
-                                                       if ($subNode === undefined) $subNode = $s;
-                                                       if ($subMulti) $subRV.push($$parser.makeRValue(metaSlot($s)));
-                                                     } }
-                )
-                ( ','_
-                  ( ':' _                          { if (!$$parser.dry) {
-                                                       if (!$subMulti) { $subMulti = true; if ($subNode !== undefined && $subRV.length === 0) $subRV.push($$parser.makeRValue(metaSlot($subNode))); }
-                                                       $subCols++; $subColSeen = true;
-                                                     } }
-                  / s:Expr                         { if (!$$parser.dry) {
-                                                       if ($subColSeen) $$parser.fail("an open axis ':' must be trailing (a column/strided slice is not a contiguous array)", $$s, $$i, 'E421');
-                                                       if (!$subMulti) { $subMulti = true; if ($subNode !== undefined && $subRV.length === 0) $subRV.push($$parser.makeRValue(metaSlot($subNode))); }
-                                                       $subRV.push($$parser.makeRValue(metaSlot($s)));
-                                                     } }
-                  )
-                )* ']'_                            { if (!$$parser.dry) {
-                                                       if ($subCols > 0) {
-                                                           $$parser.arraySlice($$, $subRV, $subCols, $$s, $$i);
-                                                       } else if ($subMulti) {
-                                                           $$parser.arraySubscriptFlat($$, $subRV, $$s, $$i);
-                                                       } else {
-                                                           var sb = metaSlot($$);
-                                                           if (sb.type === 'p' && $$parser.isStructAtom(sb.elem))
-                                                               $$parser.structSubscript($$, $subNode, $$s, $$i);
-                                                           else
-                                                               $$parser.binaryOp('=[]', $$, $subNode, $$s, $$i);
-                                                       }
-                                                       metaSlot($$).dims = undefined;   /* a subscript result is no longer the whole array */
+Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry) {
+                                                       var sb = metaSlot($$);
+                                                       if (sb.type === 'p' && $$parser.isStructAtom(sb.elem))
+                                                           $$parser.structSubscript($$, $s, $$s, $$i);
+                                                       else
+                                                           $$parser.binaryOp('=[]', $$, $s, $$s, $$i);
                                                      } }
 
 FieldAccess <-  '->'_ f:Identifier                 { if (!$$parser.dry)
