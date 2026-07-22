@@ -3590,7 +3590,13 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                          $vdims.push($$parser.dropHash(_dn));
                                                                          $$parser.returnBack(_dn);
                                                                      }
-                  )* ']' _                                            { $desc = '[' + $vdims.join('x') + ']:' + $desc; }
+                  )* ']' _                                            {   /* the shape becomes a type identity, so dims must resolve to plain integers (no <pool> label) */
+                                                                         for (var _vi = 0; _vi < $vdims.length; ++_vi)
+                                                                             if (!/^[0-9]+$/.test('' + $vdims[_vi]))
+                                                                                 $$parser.fail('an array-shape dimension must be a numeric literal for now (got a non-constant or named constant)',
+                                                                                         $$s, $$i, 'E414');
+                                                                         $desc = '[' + $vdims.join('x') + ']:' + $desc;
+                                                                     }
                 )*
                 id:Identifier                                         {
                                                                          var head = $$parser.descHead($desc);
