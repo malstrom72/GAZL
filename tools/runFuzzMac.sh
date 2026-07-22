@@ -2,7 +2,8 @@
 # Build and launch the Mac fuzz lanes in the background for HOURS (default 48).
 #   lane 1  arm64 code-gen, coverage-guided libFuzzer JIT-vs-interp differential  -> output/GAZLFuzz
 #   lane 2  x86_64/Rosetta code-gen, --gen seed-walk differential (no libFuzzer)  -> output/GAZLFuzzX64
-#   lane 6  arm64 text-assembler, coverage-guided libFuzzer (assembler+interp)    -> output/GAZLFuzzText
+#   lane 6  arm64 text, coverage-guided libFuzzer, crash-only (assembler+JIT+both engines) -> output/GAZLFuzzText
+#   lane 7  x86_64/Rosetta text REPLAY of lane 6's corpus, crash-only (x64 backend coverage) -> output/GAZLFuzzTextX64
 #
 # libFuzzer lanes use libFuzzer's own -jobs/-workers: each job writes a live fuzz-N.log in its lane dir and
 # merges into the shared corpus/. ALL run output lives under output/fuzz/ (gitignored) and is WIPED at each
@@ -13,10 +14,11 @@ cd "$(dirname "$0")"
 HOURS=${1:-48}
 SECS=$(( HOURS * 3600 ))
 
-echo "building lanes 1, 2, 6 ..."
+echo "building lanes 1, 2, 6, 7 ..."
 ./buildGazlFuzz.sh
 ./buildGazlFuzz.sh text
 ./buildGazlFuzz.sh x64
+./buildGazlFuzz.sh text x64
 
 OUT="$(cd ../output && pwd)"
 FUZZ="$OUT/fuzz"
@@ -45,7 +47,19 @@ launch_libfuzzer lane6_text       GAZLFuzzText 4 "-max_len=8192 -timeout=25"
 	done' > lane2_x64_diff.log 2>&1 & )
 echo "  lane2_x64_diff: --gen seed walk -> output/fuzz/lane2_x64_diff.log"
 
+# lane 7: x64/Rosetta text REPLAY (crash-only). libFuzzer can't link x86_64 here, so instead of mutating this re-runs
+# lane 6's growing corpus through the x64 backend each pass - arm64 lane 6 discovers programs, x64 replays them for
+# x64-backend-specific crashes (an assembler/JIT-compiler crash the arm64 text lane can't see). A crash aborts the pass;
+# the last "Running:" line in the log names the offending file. Per-file stdout is dropped to keep the log readable.
+( cd "$FUZZ" && nohup bash -c '
+	end=$(( $(date +%s) + '"$SECS"' ))
+	while [ "$(date +%s)" -lt "$end" ]; do
+		arch -x86_64 '"$OUT"'/GAZLFuzzTextX64 lane6_text/corpus/ >/dev/null || { echo "=== x64 replay CRASH: see the last Running: line above ==="; break; }
+		sleep 30
+	done' > lane7_x64_text.log 2>&1 & )
+echo "  lane7_x64_text: replay lane6 corpus on x64 backend -> output/fuzz/lane7_x64_text.log"
+
 echo
-echo "watch:            tail -f $FUZZ/lane1_arm64_diff/fuzz-*.log $FUZZ/lane6_text/fuzz-*.log $FUZZ/lane2_x64_diff.log"
-echo "found a bug:      grep -rl 'JIT/interp divergence' $FUZZ  ;  crash inputs: $FUZZ/lane*/crash-*"
+echo "watch:            tail -f $FUZZ/lane1_arm64_diff/fuzz-*.log $FUZZ/lane6_text/fuzz-*.log $FUZZ/lane2_x64_diff.log $FUZZ/lane7_x64_text.log"
+echo "found a bug:      grep -rl 'JIT/interp divergence' $FUZZ  ;  crash inputs: $FUZZ/lane*/crash-*  ;  x64 replay crash: tail $FUZZ/lane7_x64_text.log"
 echo "stop everything:  pkill -f 'GAZLFuzz'"

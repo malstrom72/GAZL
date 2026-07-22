@@ -39,10 +39,22 @@ pick_libfuzzer_clang() {
 }
 
 if [ "$text" = 1 ]; then
-	# text->JIT differential: raw fuzz bytes are fed to the assembler as GAZL SOURCE, then diffed interp-vs-JIT
-	# (FUZZ_TEXT_INPUT). Same engine + JIT backend as the structured lane, but explores arbitrary/real programs the
-	# structured generator's fixed template can never emit. Also exercises the assembler on garbage (inputs that don't
-	# assemble are caught in runDiff and skipped). Native arm64 (or x64) JIT; canonical NaN on.
+	# text->JIT: raw fuzz bytes are fed to the assembler as GAZL SOURCE, then run interp + JIT (FUZZ_TEXT_INPUT). Arbitrary
+	# source can legally break the aliasing contract, so this lane does NOT diff - it is crash/assert coverage of the
+	# assembler + JIT compiler + both engines on real/arbitrary programs. Inputs that don't assemble are skipped.
+	if [ "$cross" = 1 ]; then
+		# Rosetta x86_64 text lane. libFuzzer can't link x86_64 here (see the standalone note above), so this is a
+		# STANDALONE corpus-REPLAY binary: point it at the arm64 text lane's corpus dir and it runs every program that
+		# lane discovered through the x64 backend. No mutation of its own - arm64 mutates + grows the corpus, x64 replays
+		# it for x64-backend-specific crashes (the arm64 text lane's blind spot). Default clang++ is fine (no fuzzer rt).
+		: "${CPP_COMPILER:=clang++}"
+		out=../output/GAZLFuzzTextX64
+		"$CPP_COMPILER" -arch x86_64 -std=c++11 -O1 -g \
+				-DLIBFUZZ -DLIBFUZZ_STANDALONE -DGAZL_JIT -DJITDIFF -DFUZZ_TEXT_INPUT -DGAZL_CANONICAL_NAN -I.. \
+				-o "$out" GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp ../src/GAZLJitX64.cpp ../src/GAZLJitMemPosix.cpp
+		chmod +x "$out" 2>/dev/null || true
+		exit 0
+	fi
 	pick_libfuzzer_clang
 	CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer -DLIBFUZZ -DGAZL_JIT -DJITDIFF -DFUZZ_TEXT_INPUT -DGAZL_CANONICAL_NAN $libcxxflags"}
 	case "$(uname -m)" in
