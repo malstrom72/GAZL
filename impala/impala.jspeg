@@ -1435,45 +1435,99 @@
     $$parser.arraySubscriptFlat = function (x, rvs, sourceCode, sourceOffset) {
         x = metaSlot(x);
 
-        var dims, elemDesc, ptrBase = false;
+        /* Shape pointer p:[dims]:elem. A pointer subscript strides by the POINTEE size: the first index
+           walks whole pointees, extra indices drill in. pointee-rank + 1 indices reach a scalar; fewer
+           yield a contiguous sub-array (a slice). E.g. for `int array[3] pointer p`: p[2] is the 3rd
+           int[3] (offset 6, a sub-array), p[2, x] is a scalar (offset 6 + x). */
+        if (x.type === 'p' && x.elem !== undefined && $$parser.isArrayAtom($$parser.descHead(x.elem))) {
+            var pdims = $$parser.arrayAtomDims($$parser.descHead(x.elem));
+            var pelem = $$parser.descTail(x.elem);
+            var pRank = pdims.length;
+            if (rvs.length < 1 || rvs.length > pRank + 1) {
+                $$parser.fail('this pointer points at a ' + pRank + '-dimensional block; index it with 1 to '
+                        + (pRank + 1) + ' subscripts, got ' + rvs.length, sourceCode, sourceOffset, 'E421');
+                return;
+            }
+            var within   = rvs.length - 1;                          /* first index walks; the rest index into the pointee */
+            var pHead     = $$parser.descHead(pelem);
+            var pWords    = (pelem !== undefined && $$parser.descTail(pelem) === undefined && $$parser.isStructAtom(pHead))
+                    ? $$parser.structWords(pHead) : 1;
+            /* Horner over the consumed axes: flat = rvs[0]; flat = flat * pdims[k-1] + rvs[k] */
+            var pacc = rvs[0];
+            for (var pk = 1; pk < rvs.length; ++pk) {
+                var pik = rvs[pk]; var pmk = parseInt(pdims[pk - 1], 10);
+                if (pacc.charAt(0) === '#' && pik.charAt(0) === '#') {
+                    pacc = '#' + (parseInt(pacc.substr(1), 10) * pmk + parseInt(pik.substr(1), 10));
+                } else {
+                    var pt = $$parser.borrow('%');
+                    $$parser.emit('*', 'i', pt, pacc, '#' + pmk);
+                    $$parser.emit('+', 'i', pt, pt, pik);
+                    if (pacc.charAt(0) === '%') $$parser.returnBack(pacc);
+                    if (pik.charAt(0)  === '%') $$parser.returnBack(pik);
+                    pacc = pt;
+                }
+            }
+            var remaining = pdims.slice(within);                    /* un-indexed trailing pointee dims */
+            var remWords  = pWords;
+            for (var rr = 0; rr < remaining.length; ++rr) remWords *= parseInt(remaining[rr], 10);
+            var pbase = $$parser.makeRValue(x);
 
-        if (x.dims !== undefined && x.dims.length >= 2) {            /* a named multidimensional array */
-            dims = x.dims;
-            elemDesc = x.elem;
-            if (rvs.length !== dims.length) {
-                $$parser.fail('This array has ' + dims.length + ' dimensions but ' + rvs.length
-                        + (rvs.length === 1 ? ' index was given' : ' indices were given') + ' (write every axis)',
-                        sourceCode, sourceOffset, 'E421');
-                while (rvs.length < dims.length) rvs.push('#0');
-                rvs = rvs.slice(0, dims.length);
+            if (remaining.length === 0) {                           /* fully indexed -> a scalar element (PEEK base + flat) */
+                var ptp = (pelem !== undefined) ? $$parser.descHead(pelem) : '?';
+                $$parser.makeMeta(x, '=[]', ptp, null, pbase, pacc);
+                x.type = ptp;
+                x.elem = (pelem !== undefined) ? $$parser.descTail(pelem) : undefined;
+                x.dims = undefined;
+                return;
             }
-        } else if (x.type === 'p' && x.elem !== undefined && $$parser.isArrayAtom($$parser.descHead(x.elem))) {
-            /* a shape pointer p:[dims]:elem - index WITHIN (rvs == rank) or WALK one outer axis (== rank+1) */
-            dims = $$parser.arrayAtomDims($$parser.descHead(x.elem));
-            elemDesc = $$parser.descTail(x.elem);
-            ptrBase = true;
-            if (rvs.length !== dims.length && rvs.length !== dims.length + 1) {
-                $$parser.fail('This shape pointer is ' + dims.length + '-dimensional; index it with '
-                        + dims.length + ' or ' + (dims.length + 1) + ' subscripts, got ' + rvs.length,
-                        sourceCode, sourceOffset, 'E421');
-                while (rvs.length < dims.length) rvs.push('#0');
-                rvs = rvs.slice(0, dims.length + 1);
+            /* partial -> a contiguous sub-array slice at base + flat * remWords */
+            var pWordOff;
+            if (pacc.charAt(0) === '#') {
+                pWordOff = '#' + (parseInt(pacc.substr(1), 10) * remWords);
+            } else {
+                var ptw = $$parser.borrow('%');
+                $$parser.emit('*', 'i', ptw, pacc, '#' + remWords);
+                if (pacc.charAt(0) === '%') $$parser.returnBack(pacc);
+                pWordOff = ptw;
             }
-        } else {
+            var paddr;
+            if (pWordOff === '#0') {
+                paddr = pbase;
+            } else if (pWordOff.charAt(0) === '#' && pbase.charAt(0) === '&') {
+                paddr = pbase + ':' + pWordOff.substr(1);
+            } else {
+                paddr = $$parser.borrow('%');
+                $$parser.emit('+', 'p', paddr, pbase, pWordOff);
+                if (pbase.charAt(0)   === '%') $$parser.returnBack(pbase);
+                if (pWordOff.charAt(0) === '%') $$parser.returnBack(pWordOff);
+            }
+            $$parser.makeMeta(x, ':=', 'A', undefined, paddr, undefined);
+            $$parser.setElem(x, $$parser.arrayDesc(remaining, pelem));
+            metaSlot(x).slice = true;
+            metaSlot(x).sliceWords = remWords;
+            metaSlot(x).dims = undefined;
+            return;
+        }
+
+        /* a named multidimensional array: write every axis, always reaching a scalar element */
+        if (x.dims === undefined || x.dims.length < 2) {
             $$parser.fail('A comma-separated index list needs a multidimensional array or a shape pointer',
                     sourceCode, sourceOffset, 'E421');
             return;
         }
-
-        var tp    = (elemDesc !== undefined) ? $$parser.descHead(elemDesc) : '?';   /* untyped array element -> wildcard, as 1-D '=[]' does */
-        /* row-major strides: a leading walk axis (one extra index) strides by the whole pointee. */
-        var mults = (rvs.length > dims.length) ? dims : dims.slice(1);
-
-        /* flat = rvs[0]; for each later index: flat = flat * mults[k-1] + rvs[k] */
+        var dims = x.dims, elemDesc = x.elem;
+        if (rvs.length !== dims.length) {
+            $$parser.fail('This array has ' + dims.length + ' dimensions but ' + rvs.length
+                    + (rvs.length === 1 ? ' index was given' : ' indices were given') + ' (write every axis)',
+                    sourceCode, sourceOffset, 'E421');
+            while (rvs.length < dims.length) rvs.push('#0');
+            rvs = rvs.slice(0, dims.length);
+        }
+        var tp    = (elemDesc !== undefined) ? $$parser.descHead(elemDesc) : '?';   /* untyped element -> wildcard, as 1-D '=[]' */
         var acc = rvs[0];
-        for (var k = 1; k < rvs.length; ++k) {
+        for (var k = 1; k < rvs.length; ++k) {                       /* flat = Horner(rvs, dims[1..]) */
             var ik = rvs[k];
-            var mk = parseInt('' + mults[k - 1], 10);
+            var mk = parseInt('' + dims[k], 10);
             if (acc.charAt(0) === '#' && ik.charAt(0) === '#') {
                 acc = '#' + (parseInt(acc.substr(1), 10) * mk + parseInt(ik.substr(1), 10));
             } else {
@@ -1485,19 +1539,13 @@
                 acc = t;
             }
         }
-
-        /* element access at the flat offset */
-        if (ptrBase) {                                               /* runtime pointer base -> PEEK/POKE base + flat */
-            $$parser.makeMeta(x, '=[]', tp, null, $$parser.makeRValue(x), acc);
-        } else {
-            var op1 = x.operands[1];                                 /* mirrors binaryOp '=[]': fold a constant, else PEEK/GETL */
-            if (x.operator === ':=' && op1.charAt(0) === '&') {      /* global array base &name */
-                if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=*',   tp, null, op1 + ':' + acc.substr(1), null);
-                else                       $$parser.makeMeta(x, '=[]',  tp, null, op1, acc);
-            } else {                                                 /* local array base $name ('=&') */
-                if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=',    tp, null, op1 + ':' + acc.substr(1), null);
-                else                       $$parser.makeMeta(x, '=[]$', tp, null, op1, acc);
-            }
+        var op1 = x.operands[1];                                     /* mirrors binaryOp '=[]': fold a constant, else PEEK/GETL */
+        if (x.operator === ':=' && op1.charAt(0) === '&') {          /* global array base &name */
+            if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=*',   tp, null, op1 + ':' + acc.substr(1), null);
+            else                       $$parser.makeMeta(x, '=[]',  tp, null, op1, acc);
+        } else {                                                     /* local array base $name ('=&') */
+            if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=',    tp, null, op1 + ':' + acc.substr(1), null);
+            else                       $$parser.makeMeta(x, '=[]$', tp, null, op1, acc);
         }
         x.type = tp;
         x.elem = (elemDesc !== undefined) ? $$parser.descTail(elemDesc) : undefined;

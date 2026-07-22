@@ -12,11 +12,11 @@ const int DEBUG = 1
 extern native printInt
 extern native printLF
 
-function matsum(int array[3, 4] pointer m) returns int r		// whole-matrix pointer, index within
+function matsum(int array[4] pointer rows) returns int r		// row pointer: first index walks whole rows
 locals int y, int x
 {
 	r = 0;
-	for (y = 0 to 3) { for (x = 0 to 4) { r = r + m[y, x]; } }
+	for (y = 0 to 3) { for (x = 0 to 4) { r = r + rows[y, x]; } }
 }
 
 function rowsum(int array[4] pointer row) returns int r			// row pointer
@@ -30,7 +30,7 @@ function main()
 locals int array a[3, 4], int array b[3, 4], int y, int x
 {
 	for (y = 0 to 3) { for (x = 0 to 4) { a[y, x] = y * 10 + x; } }
-	printInt(matsum(&a)); printLF();				// 138 - whole matrix via &a
+	printInt(matsum(&a[0, :])); printLF();			// 138 - all rows via a row pointer (first index walks rows)
 	printInt(rowsum(&a[1, :])); printLF();			// 46  - row 1 via &a[1, :]
 	b[0, :] = a[2, :];								// slice-copy row 2 of a into row 0 of b
 	printInt(b[0, 3]); printLF();					// 23
