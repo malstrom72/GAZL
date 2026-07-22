@@ -1937,6 +1937,26 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
 
+        /* whole-slice assignment: a[y, :] = b[y, :] -> one COPY *words (both sides contiguous sub-arrays) */
+        if ((leftx.type === 'A' && leftx.slice) || (rightx.type === 'A' && rightx.slice)) {
+            if (!(leftx.type === 'A' && leftx.slice) || !(rightx.type === 'A' && rightx.slice)) {
+                fail('a slice assignment needs an array slice on both sides',
+                        sourceCode, sourceOffset, 'E420');
+            } else if (leftx.elem !== rightx.elem) {
+                fail('slice shape mismatch in assignment (' + elemVerbose(leftx.elem)
+                        + ' = ' + elemVerbose(rightx.elem) + ')', sourceCode, sourceOffset, 'E420');
+            }
+            var swords = leftx.sliceWords;
+            var sdst   = leftx.operands[1];
+            var ssrc   = rightx.operands[1];
+            makeMeta(x, 'copy', '?', sdst, ssrc, '*' + swords);
+            emitMeta(x);
+            if (ssrc.charAt(0) === '%') returnBack(ssrc);
+            if (sdst.charAt(0) === '%') returnBack(sdst);
+            makeMeta(x, ':=', '?', undefined, undefined, undefined);   /* slice assignment has no useful value */
+            return;
+        }
+
         /* whole-struct assignment: one COPY *sizeof, statement value is the dest place */
         if (leftx.type === 'S' || rightx.type === 'S') {
             if (leftx.type !== 'S' || rightx.type !== 'S') {
