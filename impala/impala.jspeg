@@ -1503,6 +1503,82 @@
         x.dims = undefined;                                          /* fully indexed -> a scalar element */
     };
 
+    /* A trailing-`:` slice: leading concrete indices select a contiguous sub-array of the trailing kept
+       dims. Produces a "slice place" (an address + a shape descriptor) that `&` turns into a
+       shape-carrying pointer and that whole-slice assignment copies (COPY). */
+    $$parser.arraySlice = function (x, concreteRvs, colonCount, sourceCode, sourceOffset) {
+        x = metaSlot(x);
+        var dims, elemDesc;
+        if (x.dims !== undefined) {
+            dims = x.dims; elemDesc = x.elem;
+        } else if (x.type === 'p' && x.elem !== undefined && $$parser.isArrayAtom($$parser.descHead(x.elem))) {
+            dims = $$parser.arrayAtomDims($$parser.descHead(x.elem)); elemDesc = $$parser.descTail(x.elem);
+        } else {
+            $$parser.fail("a `:` slice needs a multidimensional array or a shape pointer",
+                    sourceCode, sourceOffset, 'E421');
+            return;
+        }
+        var rank = dims.length;
+        var c    = concreteRvs.length;
+        if (c + colonCount !== rank) {
+            $$parser.fail('this array is ' + rank + '-dimensional but the slice names '
+                    + (c + colonCount) + ' axes (write every axis, indices then trailing `:`)',
+                    sourceCode, sourceOffset, 'E421');
+            return;
+        }
+        var trailing = dims.slice(c);                                /* the kept (trailing) dims */
+        var elemHead = $$parser.descHead(elemDesc);
+        var elemWords = ($$parser.descTail(elemDesc) === undefined && $$parser.isStructAtom(elemHead))
+                ? $$parser.structWords(elemHead) : 1;
+        var subWords = elemWords;
+        for (var i = 0; i < trailing.length; ++i) subWords *= parseInt(trailing[i], 10);
+
+        /* leadingFlat = Horner(concreteRvs, dims[1..c-1]); word offset = leadingFlat * subWords */
+        var lead = (c > 0) ? concreteRvs[0] : '#0';
+        for (var k = 1; k < c; ++k) {
+            var ck = concreteRvs[k]; var dk = parseInt(dims[k], 10);
+            if (lead.charAt(0) === '#' && ck.charAt(0) === '#') {
+                lead = '#' + (parseInt(lead.substr(1), 10) * dk + parseInt(ck.substr(1), 10));
+            } else {
+                var t = $$parser.borrow('%');
+                $$parser.emit('*', 'i', t, lead, '#' + dk);
+                $$parser.emit('+', 'i', t, t, ck);
+                if (lead.charAt(0) === '%') $$parser.returnBack(lead);
+                if (ck.charAt(0)  === '%') $$parser.returnBack(ck);
+                lead = t;
+            }
+        }
+        var wordOff;
+        if (lead.charAt(0) === '#') {
+            wordOff = '#' + (parseInt(lead.substr(1), 10) * subWords);
+        } else {
+            var tw = $$parser.borrow('%');
+            $$parser.emit('*', 'i', tw, lead, '#' + subWords);
+            if (lead.charAt(0) === '%') $$parser.returnBack(lead);
+            wordOff = tw;
+        }
+
+        /* slice address = base address + word offset */
+        var baseAddr = $$parser.makeRValue(x);
+        var addr;
+        if (wordOff === '#0') {
+            addr = baseAddr;
+        } else if (wordOff.charAt(0) === '#' && baseAddr.charAt(0) === '&') {
+            addr = baseAddr + ':' + wordOff.substr(1);              /* global &name:off */
+        } else {
+            addr = $$parser.borrow('%');
+            $$parser.emit('+', 'p', addr, baseAddr, wordOff);
+            if (baseAddr.charAt(0) === '%') $$parser.returnBack(baseAddr);
+            if (wordOff.charAt(0)  === '%') $$parser.returnBack(wordOff);
+        }
+
+        $$parser.makeMeta(x, ':=', 'A', undefined, addr, undefined);
+        $$parser.setElem(x, $$parser.arrayDesc(trailing, elemDesc));
+        metaSlot(x).slice = true;
+        metaSlot(x).sliceWords = subWords;
+        metaSlot(x).dims = undefined;
+    };
+
     /* materialize a place's address into a pointer operand (borrows a temp for locals) */
     $$parser.placeAddress = function (place) {
         place = metaSlot(place);
@@ -2203,6 +2279,15 @@
             var addr = $$parser.placeAddress(expr);
             $$parser.makeMeta(expr, ':=', 'p', undefined, addr, undefined);
             $$parser.setElem(expr, structName);
+            return;
+        }
+
+        /* &slice -> a shape-carrying pointer to the sub-array (its address is already computed) */
+        if (operator === '&' && expr.slice) {
+            var sliceAddr = expr.operands[1];
+            var sliceElem = expr.elem;
+            $$parser.makeMeta(expr, ':=', 'p', undefined, sliceAddr, undefined);
+            $$parser.setElem(expr, sliceElem);
             return;
         }
 
@@ -3595,22 +3680,38 @@ PrePost     <-  (op:PREFIX_OP _
                                                      } }
                 / Value (FuncCall / Subscript / FieldAccess)*
 
-Subscript   <-  '['_ s:Expr                        { if (!$$parser.dry) {
-                                                       $subNode = $s;      /* single-index path keeps the node */
-                                                       /* a named multidim array OR a shape pointer (p:[dims]:elem) is flat-indexed;
-                                                          capture each index value NOW, while its meta is fresh */
+Subscript   <-  '['_                               { if (!$$parser.dry) {
                                                        var _sb = metaSlot($$);
                                                        $subMulti = (_sb.dims !== undefined && _sb.dims.length >= 2)
                                                                || (_sb.type === 'p' && _sb.elem !== undefined
                                                                        && $$parser.isArrayAtom($$parser.descHead(_sb.elem)));
-                                                       $subRV = $subMulti ? [ $$parser.makeRValue(metaSlot($s)) ] : null;
+                                                       $subRV = []; $subCols = 0; $subColSeen = false; $subNode = undefined;
                                                      } }
-                ( ','_ sc:Expr                     { if (!$$parser.dry) {
-                                                       if (!$subMulti) { $subMulti = true; $subRV = [ $$parser.makeRValue(metaSlot($subNode)) ]; }
-                                                       $subRV.push($$parser.makeRValue(metaSlot($sc)));
+                ( ':' _                            { if (!$$parser.dry) {
+                                                       if (!$subMulti) { $subMulti = true; if ($subNode !== undefined && $subRV.length === 0) $subRV.push($$parser.makeRValue(metaSlot($subNode))); }
+                                                       $subCols++; $subColSeen = true;
                                                      } }
+                / s:Expr                           { if (!$$parser.dry) {
+                                                       if ($subColSeen) $$parser.fail("an open axis ':' must be trailing (a column/strided slice is not a contiguous array)", $$s, $$i, 'E421');
+                                                       if ($subNode === undefined) $subNode = $s;
+                                                       if ($subMulti) $subRV.push($$parser.makeRValue(metaSlot($s)));
+                                                     } }
+                )
+                ( ','_
+                  ( ':' _                          { if (!$$parser.dry) {
+                                                       if (!$subMulti) { $subMulti = true; if ($subNode !== undefined && $subRV.length === 0) $subRV.push($$parser.makeRValue(metaSlot($subNode))); }
+                                                       $subCols++; $subColSeen = true;
+                                                     } }
+                  / s:Expr                         { if (!$$parser.dry) {
+                                                       if ($subColSeen) $$parser.fail("an open axis ':' must be trailing (a column/strided slice is not a contiguous array)", $$s, $$i, 'E421');
+                                                       if (!$subMulti) { $subMulti = true; if ($subNode !== undefined && $subRV.length === 0) $subRV.push($$parser.makeRValue(metaSlot($subNode))); }
+                                                       $subRV.push($$parser.makeRValue(metaSlot($s)));
+                                                     } }
+                  )
                 )* ']'_                            { if (!$$parser.dry) {
-                                                       if ($subMulti) {
+                                                       if ($subCols > 0) {
+                                                           $$parser.arraySlice($$, $subRV, $subCols, $$s, $$i);
+                                                       } else if ($subMulti) {
                                                            $$parser.arraySubscriptFlat($$, $subRV, $$s, $$i);
                                                        } else {
                                                            var sb = metaSlot($$);

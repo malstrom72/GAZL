@@ -1515,6 +1515,82 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         x.dims = undefined;                                          /* fully indexed -> a scalar element */
     };
 
+    /* A trailing-`:` slice: leading concrete indices select a contiguous sub-array of the trailing kept
+       dims. Produces a "slice place" (an address + a shape descriptor) that `&` turns into a
+       shape-carrying pointer and that whole-slice assignment copies (COPY). */
+    arraySlice = function (x, concreteRvs, colonCount, sourceCode, sourceOffset) {
+        x = metaSlot(x);
+        var dims, elemDesc;
+        if (x.dims !== undefined) {
+            dims = x.dims; elemDesc = x.elem;
+        } else if (x.type === 'p' && x.elem !== undefined && isArrayAtom(descHead(x.elem))) {
+            dims = arrayAtomDims(descHead(x.elem)); elemDesc = descTail(x.elem);
+        } else {
+            fail("a `:` slice needs a multidimensional array or a shape pointer",
+                    sourceCode, sourceOffset, 'E421');
+            return;
+        }
+        var rank = dims.length;
+        var c    = concreteRvs.length;
+        if (c + colonCount !== rank) {
+            fail('this array is ' + rank + '-dimensional but the slice names '
+                    + (c + colonCount) + ' axes (write every axis, indices then trailing `:`)',
+                    sourceCode, sourceOffset, 'E421');
+            return;
+        }
+        var trailing = dims.slice(c);                                /* the kept (trailing) dims */
+        var elemHead = descHead(elemDesc);
+        var elemWords = (descTail(elemDesc) === undefined && isStructAtom(elemHead))
+                ? structWords(elemHead) : 1;
+        var subWords = elemWords;
+        for (var i = 0; i < trailing.length; ++i) subWords *= parseInt(trailing[i], 10);
+
+        /* leadingFlat = Horner(concreteRvs, dims[1..c-1]); word offset = leadingFlat * subWords */
+        var lead = (c > 0) ? concreteRvs[0] : '#0';
+        for (var k = 1; k < c; ++k) {
+            var ck = concreteRvs[k]; var dk = parseInt(dims[k], 10);
+            if (lead.charAt(0) === '#' && ck.charAt(0) === '#') {
+                lead = '#' + (parseInt(lead.substr(1), 10) * dk + parseInt(ck.substr(1), 10));
+            } else {
+                var t = borrow('%');
+                emit('*', 'i', t, lead, '#' + dk);
+                emit('+', 'i', t, t, ck);
+                if (lead.charAt(0) === '%') returnBack(lead);
+                if (ck.charAt(0)  === '%') returnBack(ck);
+                lead = t;
+            }
+        }
+        var wordOff;
+        if (lead.charAt(0) === '#') {
+            wordOff = '#' + (parseInt(lead.substr(1), 10) * subWords);
+        } else {
+            var tw = borrow('%');
+            emit('*', 'i', tw, lead, '#' + subWords);
+            if (lead.charAt(0) === '%') returnBack(lead);
+            wordOff = tw;
+        }
+
+        /* slice address = base address + word offset */
+        var baseAddr = makeRValue(x);
+        var addr;
+        if (wordOff === '#0') {
+            addr = baseAddr;
+        } else if (wordOff.charAt(0) === '#' && baseAddr.charAt(0) === '&') {
+            addr = baseAddr + ':' + wordOff.substr(1);              /* global &name:off */
+        } else {
+            addr = borrow('%');
+            emit('+', 'p', addr, baseAddr, wordOff);
+            if (baseAddr.charAt(0) === '%') returnBack(baseAddr);
+            if (wordOff.charAt(0)  === '%') returnBack(wordOff);
+        }
+
+        makeMeta(x, ':=', 'A', undefined, addr, undefined);
+        setElem(x, arrayDesc(trailing, elemDesc));
+        metaSlot(x).slice = true;
+        metaSlot(x).sliceWords = subWords;
+        metaSlot(x).dims = undefined;
+    };
+
     /* materialize a place's address into a pointer operand (borrows a temp for locals) */
     placeAddress = function (place) {
         place = metaSlot(place);
@@ -2218,6 +2294,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return;
         }
 
+        /* &slice -> a shape-carrying pointer to the sub-array (its address is already computed) */
+        if (operator === '&' && expr.slice) {
+            var sliceAddr = expr.operands[1];
+            var sliceElem = expr.elem;
+            makeMeta(expr, ':=', 'p', undefined, sliceAddr, undefined);
+            setElem(expr, sliceElem);
+            return;
+        }
+
         /* &wholeArray -> a shape-carrying pointer to the whole array (Impala 2 multidim). Handled here,
            before the generic element propagation below, which would otherwise overwrite the shape. */
         if (operator === '&' && expr.dims !== undefined) {
@@ -2791,7 +2876,7 @@ function Bitwise($){var $first,$op=createParserContext(),$r=createParserContext(
 function AddSub($){var $op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return MulDiv($)&&((function(){while((function(){var _b=_i;return ADDSUB_OP($op)&&_($)&&MulDiv($r)&&(function(){ if (!dry) binaryOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function MulDiv($){var $op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return PrePost($)&&((function(){while((function(){var _b=_i;return MULDIV_OP($op)&&_($)&&PrePost($r)&&(function(){ if (!dry) mulDivOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function PrePost($){var $op=createParserContext(),$cdesc,$cmods,$sid=createParserContext(),$pdepth;return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(function(){ $cdesc = CASTS_TO_TYPES[$op._]; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $cdesc = 'p:' + $cdesc; $cmods = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&Identifier($sid)&&(function(){ $pdepth = 0; ; return true})()&&((function(){for(var _n=0;(function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $pdepth = $pdepth + 1; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})();++_n);return _n>0})())&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!isStructAtom($sid._)) fail('Unknown type ' + $sid._, _s, _i, 'E413'); $cdesc = $sid._; for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc; $cmods = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) { if ($cmods) { unaryOp('pointer', $._, _s, _i); setElem($._, descTail($cdesc)); } else { unaryOp($op._, $._, _s, _i); } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FieldAccess($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Subscript($){var $s=createParserContext(),$subNode,$subMulti,$subRV,$sc=createParserContext();return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(function(){ if (!dry) { $subNode = $s._;      /* single-index path keeps the node */ /* a named multidim array OR a shape pointer (p:[dims]:elem) is flat-indexed; capture each index value NOW, while its meta is fresh */ var _sb = metaSlot($._); $subMulti = (_sb.dims !== undefined && _sb.dims.length >= 2) || (_sb.type === 'p' && _sb.elem !== undefined && isArrayAtom(descHead(_sb.elem))); $subRV = $subMulti ? [ makeRValue(metaSlot($s._)) ] : null; } ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Expr($sc)&&(function(){ if (!dry) { if (!$subMulti) { $subMulti = true; $subRV = [ makeRValue(metaSlot($subNode)) ]; } $subRV.push(makeRValue(metaSlot($sc._))); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) { if ($subMulti) { arraySubscriptFlat($._, $subRV, _s, _i); } else { var sb = metaSlot($._); if (sb.type === 'p' && isStructAtom(sb.elem)) structSubscript($._, $subNode, _s, _i); else binaryOp('=[]', $._, $subNode, _s, _i); } metaSlot($._).dims = undefined;   /* a subscript result is no longer the whole array */ } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Subscript($){var $subMulti,$subRV,$subCols,$subColSeen,$subNode,$s=createParserContext();return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var _sb = metaSlot($._); $subMulti = (_sb.dims !== undefined && _sb.dims.length >= 2) || (_sb.type === 'p' && _sb.elem !== undefined && isArrayAtom(descHead(_sb.elem))); $subRV = []; $subCols = 0; $subColSeen = false; $subNode = undefined; } ; return true})()&&(function(){var _b=_i;return (_s[_i]===":")&&(++_i,true)&&_($)&&(function(){ if (!dry) { if (!$subMulti) { $subMulti = true; if ($subNode !== undefined && $subRV.length === 0) $subRV.push(makeRValue(metaSlot($subNode))); } $subCols++; $subColSeen = true; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($s)&&(function(){ if (!dry) { if ($subColSeen) fail("an open axis ':' must be trailing (a column/strided slice is not a contiguous array)", _s, _i, 'E421'); if ($subNode === undefined) $subNode = $s._; if ($subMulti) $subRV.push(makeRValue(metaSlot($s._))); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&(function(){var _b=_i;return (_s[_i]===":")&&(++_i,true)&&_($)&&(function(){ if (!dry) { if (!$subMulti) { $subMulti = true; if ($subNode !== undefined && $subRV.length === 0) $subRV.push(makeRValue(metaSlot($subNode))); } $subCols++; $subColSeen = true; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($s)&&(function(){ if (!dry) { if ($subColSeen) fail("an open axis ':' must be trailing (a column/strided slice is not a contiguous array)", _s, _i, 'E421'); if (!$subMulti) { $subMulti = true; if ($subNode !== undefined && $subRV.length === 0) $subRV.push(makeRValue(metaSlot($subNode))); } $subRV.push(makeRValue(metaSlot($s._))); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) { if ($subCols > 0) { arraySlice($._, $subRV, $subCols, _s, _i); } else if ($subMulti) { arraySubscriptFlat($._, $subRV, _s, _i); } else { var sb = metaSlot($._); if (sb.type === 'p' && isStructAtom(sb.elem)) structSubscript($._, $subNode, _s, _i); else binaryOp('=[]', $._, $subNode, _s, _i); } metaSlot($._).dims = undefined;   /* a subscript result is no longer the whole array */ } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FieldAccess($){var $f=createParserContext();return (function(){var _b=_i;return (_s.substr(_i,2)==="->")&&(_i+=2,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, true, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===".")&&(++_i,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, false, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; /* how many leading output slots the callee expects (>1 = multi-return) */ var _c = metaSlot($._); var _rs = 1; if (_c.operator === ':=' && _c.operands[1] && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) { var _e = symbols.functions[_c.operands[1].substr(1)]; if (_e && _e.signature && _e.signature.returnWords !== undefined && _e.signature.returnWords > 1) _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */ } else if (_c.type === 'F' && isFuncTypeAtom(_c.elem)) { var _ft = functypes[_c.elem];   /* indirect call through a named funcptr type */ if (_ft.returnWords > 1) _rs = _ft.returnWords; } $.retSlots = _rs; $.words = 0;                            /* input words placed so far (struct args span >1) */ $.base  = borrowForCall(); for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */ claimSlot($.base + _os); $.types = []; $.elems = []; $.nulls = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type , undefined, 'E408'); } if (callee.operator === ':=' && callee.operands[1] && (callee.operands[1][0] === '&' || callee.operands[1][0] === '^')) { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; if (entry && entry.kind === 'FUNC' && entry.signature) { signature = entry.signature; } } else if (callee.type === 'F' && isFuncTypeAtom(callee.elem)) { signature = functypes[callee.elem];   /* indirect call: check against the funcptr type */ } if (signature && signature.returnCount > 1 && !destructuring) { fail('Function ' + (calleeName || 'this call') + ' returns ' + signature.returnCount + ' values; destructure the call (a, b = ' + (calleeName || 'f') + '(...))', _s, _i, 'E431'); } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i , 'E405'); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { typeError( 'Argument type mismatch when calling ' + label + ' ({$type1} vs expected {$type2})', _s, _i, actual, expected , 'E406'); } if (expected === 'S' && params[argIdx].struct !== undefined && $.elems[argIdx] !== params[argIdx].struct) { fail('Struct type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + params[argIdx].struct + ', got ' + ($.elems[argIdx] || 'a non-struct value') + ')', _s, _i, 'E421'); } var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */ if (expected === 'p' && expectedElem !== undefined && !$.nulls[argIdx] && $.elems[argIdx] !== expectedElem) { fail('Pointer element type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + elemVerbose(expectedElem) + ' elements, got ' + elemVerbose($.elems[argIdx]) + ' elements)', _s, _i, 'E202', 'use a cast: (' + elemVerbose(expectedElem) + ' pointer)'); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.words + $.retSlots)); returnBack(func); while ($.words-- > 0) {              /* free the argument words (past the output slots) */ returnBack('%' + ($.base + $.retSlots + $.words)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); setElem(callee, undefined); if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */ var _wp = borrow('%'); emit('=&', 'p', _wp, '%' + $.base, '*' + $.retSlots); setPlace(callee, 'pointer', _wp, 0, signature.returnStruct); callee.winBase  = $.base;       /* output window slots to free once the value is consumed */ callee.winWords = $.retSlots; } else if ($.retSlots > 1) {        /* multi-return: expose window for destructuring */ callee.multiBase = $.base; callee.multiCount = $.retSlots; callee.multiReturnList = signature.returnList; } if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Argument($){var $a=createParserContext();return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if ($.types) { $.types.push(meta.type); } if ($.elems) {                       /* element chain + null-ness, captured */ $.elems.push(meta.elem);         /* before makeArgValue mutates the meta */ $.nulls.push(meta.type === 'p' && meta.operands[1] === '&NULL' && meta.operands[2] === undefined); } var winSlot = $.base + $.retSlots + $.words; if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */ var w = structWords(meta.struct); copyStructArg($a._, winSlot, w); $.words += w; } else { makeArgValue($a._, winSlot); $.words += 1; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
