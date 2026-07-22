@@ -104,19 +104,34 @@ Grammar cost is small: subscript becomes `'[' Expr (',' Expr)* ']'`.
 
 For `int array a[H, W]` (using Option B spelling):
 
-| Expression   | Meaning                        | Type                | Notes                              |
-|--------------|--------------------------------|---------------------|------------------------------------|
-| `a`          | the whole matrix               | `int array [H, W]`  | not a bare pointer                 |
-| `a[y]`       | row y                          | `int array [W]`     | view into the same block           |
-| `a[y, x]`    | element                        | `int`               |                                    |
-| `&a[y, x]`   | address of an element          | `int pointer`       | flat pointer, stride 1             |
-| `&a[y]`      | address of a row               | (see open question) | row pointer, stride W              |
-| `&a`         | address of the whole matrix    | (see open question) | stride H*W                         |
+Each array SHAPE is its own type, exactly like each struct definition is its own type. `int[H, W]`,
+`int[W]`, and `int[V]` are three distinct types; taking the address of any of them yields a distinct
+pointer type whose pointer arithmetic strides by that whole object. This is the "shape lives in the
+type" principle (section 3) made concrete, and it is what makes an array feel like a struct: a fixed
+shape is a nominal type.
 
-Explicit flattening: to obtain a plain `int pointer` walking the whole block, write `&a[0, 0]`. There
-is no implicit decay from `a` or `a[y]` to `int pointer`; the programmer asks for it. This directly
-resolves the user's confusion about "taking `a[3]` from `a[10][10]`": `a[3]` is a row, and if you want
-a flat pointer you write `&a[3, 0]` and you have said so.
+| Expression   | Meaning                        | Type                    | Pointer arithmetic stride    |
+|--------------|--------------------------------|-------------------------|------------------------------|
+| `a`          | the whole matrix               | `int array [H, W]`      | -                            |
+| `a[y]`       | row y                          | `int array [W]`         | -                            |
+| `a[y, x]`    | element                        | `int`                   | -                            |
+| `&a`         | address of the whole matrix    | `int array[H, W] pointer` | one whole matrix (H*W ints) |
+| `&a[y]`      | address of a row               | `int array[W] pointer`  | one row (W ints)             |
+| `&a[y, x]`   | address of an element          | `int pointer`           | one int                      |
+
+So `&a`, `&a[y]`, and `&a[y, x]` normally hold the same address for `y = x = 0`, but are three
+DIFFERENT pointer types with different strides - and the existing typed-pointer element checks
+(E201/E202) already refuse to cross element types, so they cannot be silently confused (C notes 3, 11).
+
+Explicit flattening: to obtain a plain `int pointer` walking the whole contiguous block, write
+`&a[0, 0]` (an element pointer; row-crossing within the one block is defined, section 6). There is no
+implicit decay from `a`, `a[y]`, or `&a` to a bare `int pointer`; the programmer asks for the exact
+pointer they want. This resolves the confusion about "taking `a[3]` from `a[10, 10]`": `a[3]` is a row
+of type `int array [10]`, `&a[3]` is an `int array[10] pointer`, and if you want a flat element pointer
+you write `&a[3, 0]` and you have said so.
+
+Note (1-D case): for `int array a[N]`, `a[0]` is a scalar, so `&a[0]` is a plain `int pointer` and `&a`
+is an `int array[N] pointer`. The ladder above degenerates correctly to one rung.
 
 Row-crossing arithmetic: because a matrix is ONE flat object (not C's per-row objects), a pointer
 obtained via `&a[y, 0]` that walks past index `W-1` is DEFINED to reach `a[y+1, 0]`, as long as it
@@ -158,29 +173,30 @@ silent array-to-pointer decay (and the resulting shape loss) is a known C wart, 
 not already feel like structs. The underlying capability - passing a large buffer by reference without
 copying - is necessary, but it should be the EXPLICIT case, not the silent default.
 
-Recommended direction: make fixed-shape arrays value types, exactly like structs.
-- `b = a` copies the whole array (same shape required).
-- A by-value array parameter copies; to pass by reference you use a pointer parameter and pass `&a`
-  (or `&a[0, 0]`). This is identical to how struct value vs struct-pointer parameters already work, so
-  big buffers are NOT force-copied - the programmer chooses via the parameter type.
-- Implementation reuses the existing struct-by-value machinery (transient windows + copy): an array
-  value is just N contiguous words, like an anonymous struct.
+DECIDED direction: remove the implicit array-to-pointer decay, gated exactly like the strict-expression
+change (strict by default, `--legacy` lowers it). In 1.0 an array is NOT a pointer - it merely
+downcasts implicitly to one; 2.0 removes that implicit downcast:
 
-This is the modern consensus (fixed arrays are values; slices/pointers are the explicit reference) and
-it removes the array/pointer conflation for good. The cost is real and must be weighed:
-- It is a breaking change to today's one-dimensional arrays, which decay. Existing code that passes a
-  bare array to a function/native now passes a value; buffer passes must become explicit (`&a` or a
-  pointer parameter).
-- The golden corpus (73 fixtures) regenerates.
+- 2.0 default (strict): a bare array does not implicitly convert to a pointer. To get a pointer you
+  write `&a` (whole array), `&a[y]` (row), or `&a[y, x]` / `&a[0, 0]` (element). Passing a bare array
+  where a pointer is expected is a coded error with a fix-it note ("take its address: `&a`").
+- `--legacy`: the old implicit downcast is allowed, emitted as a warning in the same diagnostic shape.
 
-Appetite options (open decision):
-1. Full switch: all arrays become value types, reference is explicit. Cleanest and matches the goal;
-   largest migration.
-2. Scoped: keep one-dimensional bare arrays reference-like (as today) and introduce multidimensional
-   matrices as value types. Avoids most breakage but splits array semantics by dimensionality (ugly).
-3. Struct-wrap only: leave arrays reference-like; the "contained object" is a struct wrapping an array
-   (`struct Mat { int cells[H, W] }`), which is already a by-value value today. No breakage; bare arrays
-   stay C-like.
+Why this is the chosen approach:
+- Backwards compatible: 1.0 code compiles under `--legacy`, identical to how mixed-bitwise was handled.
+- Uniform: one rule for ALL array ranks - no dimensionality split, no per-file dialects.
+- It is a type-system tightening (remove an implicit coercion), NOT a representation change: an array
+  is still N contiguous words; it just stops silently acting as a pointer. Localized to the coercion
+  path plus the diagnostic and its `--legacy` lowering.
+- Migration: fixtures that pass a bare array either add `&` or compile under `--legacy` - the same
+  rollout the bitwise change used.
+
+SEPARATE, ADDITIVE, non-breaking (still open): whether fixed-shape arrays also become copyable VALUES
+like structs - `b = a` copies, and a by-value array parameter copies while a pointer parameter does not
+(so big buffers are never force-copied; the programmer chooses via the parameter type). This reuses the
+struct-by-value machinery (an array value is N contiguous words, like an anonymous struct). It does not
+gate multidimensional arrays and can be picked up independently. Removing implicit decay (above) is the
+load-bearing decision; copyable value semantics is a later enhancement.
 
 ## 8. Function parameters (DEFERRED - do not implement yet)
 
@@ -214,9 +230,11 @@ of the same type (C note 6 is explicitly rejected).
    expression. Do we (a) extend `sizeof` to accept an array-typed expression so `sizeof(a)` = H*W and
    `sizeof(a[y])` = W, and/or (b) add a `length(a, dim)` or shape intrinsic? Predictability (principle
    4) argues for doing at least one.
-3. `&a[y]` and `&a` types: do we expose a first-class "row pointer" / "matrix pointer" type (stride W /
-   stride H*W), or only allow `&a[y, x]` (flat `int pointer`) for now and defer row-pointer types until
-   parameters are designed? Deferring keeps the first cut small.
+3. `&a` / `&a[y]` / `&a[y, x]` types: DECIDED - each yields a distinct shape-carrying pointer type
+   (`int array[H, W] pointer` / `int array[W] pointer` / `int pointer`), striding by the whole object
+   at that rung (section 6). Each array shape is its own type. (Whether the compiler's FIRST
+   implementation slice emits the row/matrix pointer TYPES or only supports `&a[0, 0]` element pointers
+   is an implementation-sequencing detail, not a semantic question.)
 4. Array value semantics: THE central decision - see section 7b. Make fixed-shape arrays value types
    like structs (recommended), and if so, with what migration appetite (full switch / scoped /
    struct-wrap only)?
