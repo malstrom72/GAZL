@@ -293,3 +293,47 @@ The machinery is mostly a generalization of paths that already exist (see the ar
 
 This keeps the 73 golden fixtures untouched for all existing (single-dimension) code, because the
 multi-dimension paths only engage when a second dimension is present.
+
+## 11. GAZL lowering (worked examples)
+
+No new VM instructions are needed. Multi-dimensional access is a row-major (Horner) flat-index
+computation that then bottoms out in the SAME primitives the compiler already emits for one-dimensional
+arrays and struct arrays. The primitives, taken from a real compile:
+
+    $a:   LOCA *10                     ; 1-D array, 10 words
+    $ps:  LOCA *16                     ; struct array, 8 * 2 words (Pair = 2 words)
+    a[i] = 7    ->  SETL $a $i #7      ; local-array store, stride 1
+    v = a[i]    ->  GETL $v $a $i      ; local-array load, stride 1
+    a[2] = 9    ->  MOVi $a:2 #9       ; constant index folds into the address
+    &a[i]       ->  ADRL %0 $a *0 ; ADDp $p %0 $i
+    ps[i].y = 5 ->  ADRL %0 $ps *0 ; MULi %2 $i #2 ; ADDp %1 %0 %2 ; POKE %1 #1 #5
+
+The struct-array path already performs the `MULi ... #stride ; ADDp` step; multidimensional access is
+that same step, once per outer axis. For `int array a[4, 5]` (inner width W = 5):
+
+    v = a[y, x]   ->  MULi %0 $y #5      ; y * W
+                      ADDi %0 %0 $x      ; + x
+                      GETL $v $a %0      ; same instruction as 1-D
+    a[y, x] = v   ->  MULi %0 $y #5 ; ADDi %0 %0 $x ; SETL $a %0 $v
+    v = a[2, 3]   ->  MOVi $v $a:13      ; all-constant index folds (2*5+3)
+    a[2, 3] = 9   ->  MOVi $a:13 #9
+
+    &a            ->  ADRL $p $a *0                         ; whole matrix, just the base
+    &a[y, :]      ->  ADRL %0 $a *0 ; MULi %1 $y #5 ; ADDp $p %0 %1        ; row = base + y*W
+    &a[y, x]      ->  ADRL %0 $a *0 ; MULi %1 $y #5 ; ADDp %0 %0 %1 ; ADDp $p %0 $x
+
+`&a`, `&a[0, :]`, and `&a[0, 0]` share an address but stop the offset computation at different points -
+which is exactly why they are different pointer types with different strides.
+
+Struct-element matrix `Pixel array img[4, 5]` (Pixel = k words) - flat index, times k, then the struct
+place (identical to the `ps[i].y` path with a 2-D index):
+
+    img[y, x].g   ->  MULi %0 $y #5 ; ADDi %0 %0 $x ; MULi %0 %0 #k
+                      ADRL %1 $img *0 ; ADDp %1 %1 %0 ; PEEK/POKE %1 #<field offset>
+
+Three dimensions `a[i, j, k]` with dims `[D0, D1, D2]` is just Horner (one MUL+ADD per extra axis):
+
+    MULi %0 $i #D1 ; ADDi %0 %0 $j ; MULi %0 %0 #D2 ; ADDi %0 %0 $k ; GETL/SETL ...
+
+So this is a front-end / type-system feature: constant indices fold to `$a:offset` (one instruction),
+dynamic indices cost one MUL+ADD per outer axis, and the backend is unchanged.
