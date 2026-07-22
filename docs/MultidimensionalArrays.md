@@ -1,8 +1,13 @@
 # Multidimensional Arrays in Impala 2.0 (design draft)
 
-Status: DRAFT / design discussion. Nothing here is implemented yet. The one-dimensional
-`type array name[N]` form and the jagged `type pointer array` form described under "What Impala
-already has" DO exist today; contiguous multidimensional arrays do not.
+Status: design agreed; slices 1 and 2 IMPLEMENTED. Working today: comma declaration `int array a[H, W]`
+(N-D), element access `a[y, x]`, the `:` open-axis marker (trailing-only) with row/slice values,
+shape-carrying pointers (`&a`, `&a[y, :]`, `&a[y, x]`) as distinct E201/E202-checked types, the
+`int array[dims] pointer` type in locals/params/returns, indexing shape pointers `m[y, x]`, and
+slice-copy `a[y, :] = b[y, :]`. NOT yet implemented: removing the implicit array->pointer decay behind
+`--legacy` (section 7b), array value semantics beyond slice-copy (section 7b), nested-brace
+initializers (section 9.6), struct-element matrix initializers, and shape-aware `sizeof` (section 9.2).
+The jagged `type pointer array` form under "What Impala already has" predates this work.
 
 ## 1. Goal and non-goals
 
