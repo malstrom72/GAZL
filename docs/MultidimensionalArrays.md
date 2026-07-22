@@ -86,38 +86,19 @@ Internally a matrix value (and each intermediate row) carries its remaining dime
 its type. That list is the moral equivalent of C's `int (*)[W]` stride, but it is part of the visible
 type rather than hidden in declarator syntax.
 
-## 5. Syntax options (the open decision)
+## 5. Syntax (DECIDED: comma shape)
 
-Two coherent schemes. The declaration keyword `array` and the element type stay as today; the question
-is how dimensions and indexing read.
-
-### Option A: bracket chain (C-like)
-
-    int array a[H][W]           // declaration
-    a[y][x] = 1                 // use
-
-Pros: familiar to C programmers; minimal new concepts.
-Cons: `a[y][x]` is visually identical to the jagged `rows[y][x]`, which is a completely different
-operation (two dependent pointer loads vs one computed offset). The memory model is invisible at the
-use site, which is precisely the confusion we are trying to remove.
-
-### Option B: comma shape (recommended)
+Declaration and indexing use a comma-separated dimension list inside a single bracket:
 
     int array a[H, W]           // declaration: one shaped object
     a[y, x] = 1                 // use: one indexing operation
+    a[y]                        // a partial index yields a row (see section 6)
 
-Pros: a contiguous matrix reads as a single shaped object indexed once, and is visually distinct from
-the jagged `rows[y][x]`. The memory model is legible at both declaration and use. `a[y]` (a partial
-index) is still meaningful and yields a row.
-Cons: a new subscript convention; `a[y]` vs `a[y, x]` mixes single- and multi-index forms (acceptable:
-`a[y]` is a row, `a[y, x]` is an element).
-
-Recommendation: Option B. It is the only option that keeps contiguous and jagged from looking
-identical at the use site, which is the root of the confusion the user called out. The grammar cost is
-small: subscript becomes `'[' Expr (',' Expr)* ']'`.
-
-Not recommended: mixing (bracket declaration with comma use, or vice versa) - inconsistency is worse
-than either pure form.
+This was chosen over the C-style bracket chain (`a[H][W]` / `a[y][x]`) deliberately: the bracket chain
+is visually identical to the jagged `rows[y][x]`, which is a completely different operation (two
+dependent pointer loads vs one computed offset). The comma form makes a contiguous matrix read as one
+shaped object indexed once, and keeps it distinct from the jagged form at both declaration and use.
+Grammar cost is small: subscript becomes `'[' Expr (',' Expr)* ']'`.
 
 ## 6. Semantics of each form
 
@@ -158,6 +139,49 @@ conversion between them:
 A matrix does not implicitly become a jagged array or a raw pointer, and vice versa. This is the
 anti-C invariant (C notes 7 and 16): the representation is always visible in the type.
 
+## 7b. Value vs reference semantics (the central question)
+
+The goal is for a multidimensional array to feel like a struct: one contained object. Today Impala's
+arrays are C-like reference values - a bare array name decays to a pointer, and passing an array to a
+function passes the pointer, not a copy. That is the single decision most in tension with the "contained
+object" goal, and it is worth revisiting rather than building matrices on top of it.
+
+Two consistent models exist; Impala already implements BOTH, just for different aggregates:
+
+- Value aggregate (structs today): assigned, passed, and returned whole (copied). A struct parameter
+  copies; to avoid the copy you pass a struct pointer explicitly. No silent decay.
+- Reference aggregate (arrays today): the name decays to a pointer; passing an array passes a pointer;
+  `sizeof` / shape is easily lost. This is exactly the C behavior the notes flag as lessons 1 and 6.
+
+Was the C-like array default a mistake? For the "contained object" goal, yes in one specific sense: the
+silent array-to-pointer decay (and the resulting shape loss) is a known C wart, and it is why arrays do
+not already feel like structs. The underlying capability - passing a large buffer by reference without
+copying - is necessary, but it should be the EXPLICIT case, not the silent default.
+
+Recommended direction: make fixed-shape arrays value types, exactly like structs.
+- `b = a` copies the whole array (same shape required).
+- A by-value array parameter copies; to pass by reference you use a pointer parameter and pass `&a`
+  (or `&a[0, 0]`). This is identical to how struct value vs struct-pointer parameters already work, so
+  big buffers are NOT force-copied - the programmer chooses via the parameter type.
+- Implementation reuses the existing struct-by-value machinery (transient windows + copy): an array
+  value is just N contiguous words, like an anonymous struct.
+
+This is the modern consensus (fixed arrays are values; slices/pointers are the explicit reference) and
+it removes the array/pointer conflation for good. The cost is real and must be weighed:
+- It is a breaking change to today's one-dimensional arrays, which decay. Existing code that passes a
+  bare array to a function/native now passes a value; buffer passes must become explicit (`&a` or a
+  pointer parameter).
+- The golden corpus (73 fixtures) regenerates.
+
+Appetite options (open decision):
+1. Full switch: all arrays become value types, reference is explicit. Cleanest and matches the goal;
+   largest migration.
+2. Scoped: keep one-dimensional bare arrays reference-like (as today) and introduce multidimensional
+   matrices as value types. Avoids most breakage but splits array semantics by dimensionality (ugly).
+3. Struct-wrap only: leave arrays reference-like; the "contained object" is a struct wrapping an array
+   (`struct Mat { int cells[H, W] }`), which is already a by-value value today. No breakage; bare arrays
+   stay C-like.
+
 ## 8. Function parameters (DEFERRED - do not implement yet)
 
 Per the current decision, parameter syntax is NOT being changed in this pass. This section records the
@@ -185,7 +209,7 @@ of the same type (C note 6 is explicitly rejected).
 
 ## 9. Open questions
 
-1. Syntax: Option A (bracket chain) or Option B (comma shape)? Recommendation: B.
+1. Syntax: DECIDED - comma shape `a[H, W]` / `a[y, x]` (section 5).
 2. `sizeof` and shape: current `sizeof` takes a TYPE (`sizeof(int)`, `sizeof(Struct)`), not an
    expression. Do we (a) extend `sizeof` to accept an array-typed expression so `sizeof(a)` = H*W and
    `sizeof(a[y])` = W, and/or (b) add a `length(a, dim)` or shape intrinsic? Predictability (principle
@@ -193,9 +217,9 @@ of the same type (C note 6 is explicitly rejected).
 3. `&a[y]` and `&a` types: do we expose a first-class "row pointer" / "matrix pointer" type (stride W /
    stride H*W), or only allow `&a[y, x]` (flat `int pointer`) for now and defer row-pointer types until
    parameters are designed? Deferring keeps the first cut small.
-4. Array value semantics: should fixed-shape arrays become first-class like structs (whole-array
-   `b = a` copy for identical shapes, and eventually pass/return by value)? Consistent with structs,
-   but copies can be large. Minimal first cut: no whole-array assignment; use `copy(...)`.
+4. Array value semantics: THE central decision - see section 7b. Make fixed-shape arrays value types
+   like structs (recommended), and if so, with what migration appetite (full switch / scoped /
+   struct-wrap only)?
 5. Element types: allow struct-element matrices (`Pixel array img[H, W]`)? The stride math already
    generalizes (element size = structWords); mainly an initializer and type-check concern.
 6. Initializers: flat row-major (`int array a[2, 3] = { 1, 2, 3, 4, 5, 6 }`) is trivial to support and
