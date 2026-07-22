@@ -116,6 +116,19 @@ This is a real language decision (a qualifier/keyword to mark link-time constant
 defined in linked GAZL is symbolic"). It also means #20 (evaluate dims) applies only to the frozen kind;
 the assembler-variable kind is never evaluated by the compiler at all - it flows through as a symbol.
 
+IMPORTANT - symbolic dimensions must be a SINGLE named constant, never an expression. A symbolic
+identity that carried an expression would be FORM-dependent: `[constant*125]` and `[125*constant]` are
+different strings and thus different types even though equal, and canonicalizing arbitrary integer
+expressions (commutativity, associativity, distributivity, `a*100 + a*25`, ...) is a bottomless pit. So:
+- frozen -> evaluate to a value; `constant*125` and `125*constant` both become `1000`; order irrelevant.
+- assembler-variable -> a single named symbol only. Arithmetic must be pre-named into another constant
+  (`const int ROW_STRIDE = constant * 125`, then `int array[ROW_STRIDE] pointer`), so the identity is the
+  single symbol `ROW_STRIDE` and matching is trivial. This is exactly the struct precedent: a struct's
+  size in a type is `.sizeof.Voice` - one named symbol, never an expression.
+
+So NEITHER mode needs expression normalization: the frozen mode reduces to a number, the symbolic mode
+reduces to a single symbol.
+
 ## Open questions
 
 1. `.sizeof` vs `.words` for the size tag.
