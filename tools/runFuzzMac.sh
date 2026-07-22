@@ -31,6 +31,7 @@ launch_libfuzzer() {   # <lane-dir-name> <binary-name> <job-count>
 
 echo "launching (${HOURS}h) ..."
 launch_libfuzzer lane1_arm64_diff GAZLFuzz     6
+mkdir -p "$FUZZ/lane6_text/corpus"; ./seedTextCorpus.sh "$FUZZ/lane6_text/corpus"		# real GAZL source so the assembler fuzzer mutates valid programs, not garbage
 launch_libfuzzer lane6_text       GAZLFuzzText 4
 
 # lane 2: --gen has no timer/corpus; loop disjoint seed bands until the deadline (prints live to stderr).
