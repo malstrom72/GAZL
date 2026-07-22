@@ -129,6 +129,32 @@ expressions (commutativity, associativity, distributivity, `a*100 + a*25`, ...) 
 So NEITHER mode needs expression normalization: the frozen mode reduces to a number, the symbolic mode
 reduces to a single symbol.
 
+### The fundamental limit (no free lunch)
+
+If a dimension's value is NOT known at compile time, its array type identity CANNOT be value-based -
+full stop. Folding only works for genuinely compile-time-fixed constants. For an assembler-variable
+constant (or `c1 * c2` of them), the compiler does not have the number, so `[6]`-style identity is
+impossible; identity becomes SYNTACTIC (compare the dimension expressions). Syntactic identity is
+inherently INCOMPLETE: you cannot decide equality of arbitrary integer expressions over unknown symbols
+(`[c1*c2]` vs `[c2*c1]` needs commutativity; `[a*125]` vs `[a*100 + a*25]` needs distributivity; in
+general it is the polynomial-identity problem). There is no way to have BOTH "write any calculation
+directly" AND "sound, complete type equivalence" when the values are unknown.
+
+The three-way choice for assembler-variable dimensions:
+1. Single named symbol (name the arithmetic): `const N = c1 * c2` then `int array[N] pointer`. Identity
+   is the lone symbol `N` - trivially decidable and sound; costs one `const` line. Matches structs
+   (`.sizeof.Voice` is one symbol, never an expression). RECOMMENDED.
+2. Allow inline expressions + a canonicalizer (polynomial/linear normal form over symbolic constants):
+   permits `[c1*c2]` and makes `[c1*c2]==[c2*c1]`, even `[a*100+a*25]==[a*125]` if implemented - but it is
+   real machinery and STILL incomplete once division or a non-polynomial op appears.
+3. Raw syntactic (any textual difference is a different type): the `c1*c2` vs `c2*c1` footgun. No.
+
+Also distinguish the two senses of "not compile-time known":
+- Assembler-resolved (fixed per build, unknown to the COMPILER) -> symbolic identity works (above).
+- Genuinely run-time variable (differs while the program runs) -> NO static shape exists; that is a
+  variable-length array (a non-goal). Drop to a raw `int pointer` + explicit stride; no type identity
+  can exist for a runtime-varying dimension.
+
 ## Open questions
 
 1. `.sizeof` vs `.words` for the size tag.
