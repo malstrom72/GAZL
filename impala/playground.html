@@ -177,15 +177,19 @@
 		var start = srcEl.selectionStart, end = srcEl.selectionEnd, v = srcEl.value;
 		srcEl.value = v.slice(0, start) + "\t" + v.slice(end);
 		srcEl.selectionStart = srcEl.selectionEnd = start + 1;
+		persist();
 		schedule();
 	});
 
+	var STORAGE_KEY = "impala.playground.src";
+	function persist() { try { localStorage.setItem(STORAGE_KEY, srcEl.value); } catch (e) {} }
+
 	var timer = null;
 	function schedule() { clearTimeout(timer); timer = setTimeout(compile, 120); }
-	srcEl.addEventListener("input", schedule);
+	srcEl.addEventListener("input", function () { persist(); schedule(); });
 	[seedEl, retabEl, legacyEl].forEach(function (el) { el.addEventListener("input", compile); el.addEventListener("change", compile); });
 
-	srcEl.value = [
+	var DEMO = [
 		"// Impala 2 — edit me; GAZL updates live.",
 		"struct Biquad { float b0; float z1 }",
 		"struct Voice  { int note; Biquad lo; float gain }",
@@ -213,6 +217,11 @@
 		"}",
 		""
 	].join("\n");
+
+	// Remember the editor text across visits; show the demo only when nothing is saved yet.
+	var saved = null;
+	try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+	srcEl.value = (saved !== null) ? saved : DEMO;
 
 	compile();
 })();
