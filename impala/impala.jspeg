@@ -1433,50 +1433,73 @@
        the scalar element exactly as a 1-D array would. */
     $$parser.arraySubscriptFlat = function (x, rvs, sourceCode, sourceOffset) {
         x = metaSlot(x);
-        var dims = x.dims;
 
-        if (dims === undefined || dims.length < 2) {
-            $$parser.fail('A comma-separated index list needs a multidimensional array',
+        var dims, elemDesc, ptrBase = false;
+
+        if (x.dims !== undefined && x.dims.length >= 2) {            /* a named multidimensional array */
+            dims = x.dims;
+            elemDesc = x.elem;
+            if (rvs.length !== dims.length) {
+                $$parser.fail('This array has ' + dims.length + ' dimensions but ' + rvs.length
+                        + (rvs.length === 1 ? ' index was given' : ' indices were given') + ' (write every axis)',
+                        sourceCode, sourceOffset, 'E421');
+                while (rvs.length < dims.length) rvs.push('#0');
+                rvs = rvs.slice(0, dims.length);
+            }
+        } else if (x.type === 'p' && x.elem !== undefined && $$parser.isArrayAtom($$parser.descHead(x.elem))) {
+            /* a shape pointer p:[dims]:elem - index WITHIN (rvs == rank) or WALK one outer axis (== rank+1) */
+            dims = $$parser.arrayAtomDims($$parser.descHead(x.elem));
+            elemDesc = $$parser.descTail(x.elem);
+            ptrBase = true;
+            if (rvs.length !== dims.length && rvs.length !== dims.length + 1) {
+                $$parser.fail('This shape pointer is ' + dims.length + '-dimensional; index it with '
+                        + dims.length + ' or ' + (dims.length + 1) + ' subscripts, got ' + rvs.length,
+                        sourceCode, sourceOffset, 'E421');
+                while (rvs.length < dims.length) rvs.push('#0');
+                rvs = rvs.slice(0, dims.length + 1);
+            }
+        } else {
+            $$parser.fail('A comma-separated index list needs a multidimensional array or a shape pointer',
                     sourceCode, sourceOffset, 'E421');
             return;
         }
-        if (rvs.length !== dims.length) {
-            $$parser.fail('This array has ' + dims.length + ' dimensions but '
-                    + rvs.length + (rvs.length === 1 ? ' index was given' : ' indices were given')
-                    + ' (write every axis)', sourceCode, sourceOffset, 'E421');
-            while (rvs.length < dims.length) rvs.push('#0');          /* recover to keep parsing */
-        }
-        var lelem = x.elem;
-        var tp    = $$parser.descHead(lelem);                        /* scalar element type ('i' / 'f') */
 
-        /* flat = i0; flat = flat * dims[j] + ij   (row-major) */
+        var tp    = $$parser.descHead(elemDesc);                     /* scalar element type ('i' / 'f') */
+        /* row-major strides: a leading walk axis (one extra index) strides by the whole pointee. */
+        var mults = (rvs.length > dims.length) ? dims : dims.slice(1);
+
+        /* flat = rvs[0]; for each later index: flat = flat * mults[k-1] + rvs[k] */
         var acc = rvs[0];
-        for (var j = 1; j < dims.length; ++j) {
-            var ij = rvs[j];
-            var dj = parseInt('' + dims[j], 10);
-            if (acc.charAt(0) === '#' && ij.charAt(0) === '#') {
-                acc = '#' + (parseInt(acc.substr(1), 10) * dj + parseInt(ij.substr(1), 10));
+        for (var k = 1; k < rvs.length; ++k) {
+            var ik = rvs[k];
+            var mk = parseInt('' + mults[k - 1], 10);
+            if (acc.charAt(0) === '#' && ik.charAt(0) === '#') {
+                acc = '#' + (parseInt(acc.substr(1), 10) * mk + parseInt(ik.substr(1), 10));
             } else {
                 var t = $$parser.borrow('%');
-                $$parser.emit('*', 'i', t, acc, '#' + dj);
-                $$parser.emit('+', 'i', t, t, ij);
+                $$parser.emit('*', 'i', t, acc, '#' + mk);
+                $$parser.emit('+', 'i', t, t, ik);
                 if (acc.charAt(0) === '%') $$parser.returnBack(acc);
-                if (ij.charAt(0)  === '%') $$parser.returnBack(ij);
+                if (ik.charAt(0)  === '%') $$parser.returnBack(ik);
                 acc = t;
             }
         }
 
-        /* element access at the flat offset (mirrors binaryOp '=[]': fold a constant, else PEEK/GETL) */
-        var op1 = x.operands[1];
-        if (x.operator === ':=' && op1.charAt(0) === '&') {          /* global array base &name */
-            if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=*',   tp, null, op1 + ':' + acc.substr(1), null);
-            else                       $$parser.makeMeta(x, '=[]',  tp, null, op1, acc);
-        } else {                                                     /* local array base $name ('=&') */
-            if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=',    tp, null, op1 + ':' + acc.substr(1), null);
-            else                       $$parser.makeMeta(x, '=[]$', tp, null, op1, acc);
+        /* element access at the flat offset */
+        if (ptrBase) {                                               /* runtime pointer base -> PEEK/POKE base + flat */
+            $$parser.makeMeta(x, '=[]', tp, null, $$parser.makeRValue(x), acc);
+        } else {
+            var op1 = x.operands[1];                                 /* mirrors binaryOp '=[]': fold a constant, else PEEK/GETL */
+            if (x.operator === ':=' && op1.charAt(0) === '&') {      /* global array base &name */
+                if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=*',   tp, null, op1 + ':' + acc.substr(1), null);
+                else                       $$parser.makeMeta(x, '=[]',  tp, null, op1, acc);
+            } else {                                                 /* local array base $name ('=&') */
+                if (acc.charAt(0) === '#') $$parser.makeMeta(x, '=',    tp, null, op1 + ':' + acc.substr(1), null);
+                else                       $$parser.makeMeta(x, '=[]$', tp, null, op1, acc);
+            }
         }
-        x.type = $$parser.descHead(lelem);
-        x.elem = $$parser.descTail(lelem);
+        x.type = $$parser.descHead(elemDesc);
+        x.elem = $$parser.descTail(elemDesc);
         x.dims = undefined;                                          /* fully indexed -> a scalar element */
     };
 
@@ -3402,6 +3425,17 @@ TypeBase    <-  t:BASE_TYPE _                                         { $$ = $$p
 
 VarDecl     <-  base:TypeBase                                        { $desc = $base; }
                 ( POINTER _                                           { $desc = 'p:' + $desc; }
+                / ARRAY _ '[' _ x:Expr                                {   /* shape modifier `array[dims]`: prepends an array atom, e.g. int array[5] pointer -> p:[5]:i */
+                                                                         var _d = $$parser.makeConstant($x, 'i', $$s, $$i);
+                                                                         $vdims = [ $$parser.dropHash(_d) ];
+                                                                         $$parser.returnBack(_d);
+                                                                     }
+                  ( ','_ x:Expr                                       {
+                                                                         var _dn = $$parser.makeConstant($x, 'i', $$s, $$i);
+                                                                         $vdims.push($$parser.dropHash(_dn));
+                                                                         $$parser.returnBack(_dn);
+                                                                     }
+                  )* ']' _                                            { $desc = '[' + $vdims.join('x') + ']:' + $desc; }
                 )*
                 id:Identifier                                         {
                                                                          var head = $$parser.descHead($desc);
@@ -3416,6 +3450,10 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                              $$.elem = head;
                                                                              $$.struct = undefined;
                                                                              $$.words = undefined;    /* scalar funcptr: a single word, no size operand */
+                                                                         } else if ($$parser.isArrayAtom(head)) {
+                                                                             $$parser.fail('a shape array type must be a pointer here (write `... pointer`); use `type array name[dims]` for a value array',
+                                                                                     $$s, $$i, 'E414');
+                                                                             $$.type = 'p'; $$.elem = tail; $$.struct = undefined; $$.words = undefined;   /* recover */
                                                                          } else {
                                                                              $$.type = head;
                                                                              $$.elem = tail;
@@ -3559,8 +3597,12 @@ PrePost     <-  (op:PREFIX_OP _
 
 Subscript   <-  '['_ s:Expr                        { if (!$$parser.dry) {
                                                        $subNode = $s;      /* single-index path keeps the node */
-                                                       /* multi-dim only: capture each index value NOW, while its meta is fresh */
-                                                       $subMulti = (metaSlot($$).dims !== undefined && metaSlot($$).dims.length >= 2);
+                                                       /* a named multidim array OR a shape pointer (p:[dims]:elem) is flat-indexed;
+                                                          capture each index value NOW, while its meta is fresh */
+                                                       var _sb = metaSlot($$);
+                                                       $subMulti = (_sb.dims !== undefined && _sb.dims.length >= 2)
+                                                               || (_sb.type === 'p' && _sb.elem !== undefined
+                                                                       && $$parser.isArrayAtom($$parser.descHead(_sb.elem)));
                                                        $subRV = $subMulti ? [ $$parser.makeRValue(metaSlot($s)) ] : null;
                                                      } }
                 ( ','_ sc:Expr                     { if (!$$parser.dry) {
