@@ -98,7 +98,24 @@ This was chosen over the C-style bracket chain (`a[H][W]` / `a[y][x]`) deliberat
 is visually identical to the jagged `rows[y][x]`, which is a completely different operation (two
 dependent pointer loads vs one computed offset). The comma form makes a contiguous matrix read as one
 shaped object indexed once, and keeps it distinct from the jagged form at both declaration and use.
-Grammar cost is small: subscript becomes `'[' Expr (',' Expr)* ']'`.
+Grammar cost is small: subscript becomes `'[' Sub (',' Sub)* ']'` where each `Sub` is an index Expr or
+the open-axis marker `:` (below).
+
+### Open-axis marker `:` and the "write every axis" rule
+
+Every subscript position must be filled (no silent partial indexing). Each position is either an index
+expression or the open-axis marker `:` ("this whole axis is kept"). The result's shape is the kept
+axes:
+
+    a[3, 5]     // element    -> int
+    a[3, :]     // row 3       -> int array[W]     (a view; axis 1 kept)
+    a[:, :]     // whole       -> int array[H, W]  (same as `a`)
+
+Taking the address of any of these yields the corresponding shape-carrying pointer (section 6):
+`&a[3, :]` is an `int array[W] pointer`. Requiring `:` for kept axes makes "row vs element" explicit at
+the use site - you cannot accidentally under-index. (`:` is DECIDED; alternatives considered were
+`...`, `_`, and an empty slot. `:` is the numpy/matlab convention, is precise per axis, scales to
+`a[i, :, :]`, and leaves room to grow into real range-slicing `a[2:5, :]` later.)
 
 ## 6. Semantics of each form
 
@@ -113,22 +130,22 @@ shape is a nominal type.
 | Expression   | Meaning                        | Type                    | Pointer arithmetic stride    |
 |--------------|--------------------------------|-------------------------|------------------------------|
 | `a`          | the whole matrix               | `int array [H, W]`      | -                            |
-| `a[y]`       | row y                          | `int array [W]`         | -                            |
+| `a[y, :]`    | row y                          | `int array [W]`         | -                            |
 | `a[y, x]`    | element                        | `int`                   | -                            |
 | `&a`         | address of the whole matrix    | `int array[H, W] pointer` | one whole matrix (H*W ints) |
-| `&a[y]`      | address of a row               | `int array[W] pointer`  | one row (W ints)             |
+| `&a[y, :]`   | address of a row               | `int array[W] pointer`  | one row (W ints)             |
 | `&a[y, x]`   | address of an element          | `int pointer`           | one int                      |
 
-So `&a`, `&a[y]`, and `&a[y, x]` normally hold the same address for `y = x = 0`, but are three
+So `&a`, `&a[y, :]`, and `&a[y, x]` normally hold the same address for `y = x = 0`, but are three
 DIFFERENT pointer types with different strides - and the existing typed-pointer element checks
 (E201/E202) already refuse to cross element types, so they cannot be silently confused (C notes 3, 11).
 
 Explicit flattening: to obtain a plain `int pointer` walking the whole contiguous block, write
 `&a[0, 0]` (an element pointer; row-crossing within the one block is defined, section 6). There is no
-implicit decay from `a`, `a[y]`, or `&a` to a bare `int pointer`; the programmer asks for the exact
-pointer they want. This resolves the confusion about "taking `a[3]` from `a[10, 10]`": `a[3]` is a row
-of type `int array [10]`, `&a[3]` is an `int array[10] pointer`, and if you want a flat element pointer
-you write `&a[3, 0]` and you have said so.
+implicit decay from `a`, `a[y, :]`, or `&a` to a bare `int pointer`; the programmer asks for the exact
+pointer they want. This resolves the confusion about "taking `a[3]` from `a[10, 10]`": `a[3, :]` is a
+row of type `int array [10]`, `&a[3, :]` is an `int array[10] pointer`, and if you want a flat element
+pointer you write `&a[3, 0]` and you have said so.
 
 Note (1-D case): for `int array a[N]`, `a[0]` is a scalar, so `&a[0]` is a plain `int pointer` and `&a`
 is an `int array[N] pointer`. The ladder above degenerates correctly to one rung.
@@ -198,30 +215,37 @@ struct-by-value machinery (an array value is N contiguous words, like an anonymo
 gate multidimensional arrays and can be picked up independently. Removing implicit decay (above) is the
 load-bearing decision; copyable value semantics is a later enhancement.
 
-## 8. Function parameters (DEFERRED - do not implement yet)
+## 8. Function parameters - dissolved into an ordinary pointer parameter
 
-Per the current decision, parameter syntax is NOT being changed in this pass. This section records the
-problem and the options so the eventual choice is deliberate.
+The C problem (notes 5, 6): to index a matrix parameter the callee must know the INNER dimensions (the
+stride) but not the outer count; C solves it by silently rewriting `int a[H][W]` to `int (*a)[W]` and
+by making `sizeof` inside the callee lie. We do NEITHER.
 
-The problem (C notes 5, 6): to index a matrix parameter, the callee must know the INNER dimensions
-(the stride), but not the outer one. C solves this by silently rewriting `int a[H][W]` to
-`int (*a)[W]` and by making `sizeof` inside the callee lie. We will not do the silent rewrite.
+The key realization: a matrix of unknown outer count is not a special "array parameter" - it is exactly
+a pointer to a row, which is an ordinary pointer parameter whose element carries the inner shape:
 
-Options to evaluate later (all keep the inner shape in the parameter's type, none silently rewrite):
-1. Shaped array parameter: `function f(int array a[, W])` - outer dimension omitted, inner dims
-   required. The argument must be a matrix whose inner dims match `W`.
-2. Named row-pointer parameter: `function f(int array[W] pointer a)` - C's `int (*)[W]`, but the row
-   type is spelled out. Most explicit about what is passed.
-3. Pass-by-reference of the whole fixed-shape matrix (requires deciding array value semantics first,
-   section 9).
+    function sum(int array[W] pointer m) returns int r   // pointer to an int array[W]
+    {
+        ... m[y, x] ...     // y walks rows (the pointer is the open outer axis), x in 0..W-1
+    }
+    sum(&a[0, :])           // &a[0, :] IS an int array[W] pointer
 
-Until one is chosen, a matrix can be passed the same way arrays are passed today: as a flat
-`int pointer` (via `&a[0, 0]`) plus the width as a separate argument, with the callee doing
-`p[y * W + x]`. This is explicit and honest, if verbose. The jagged `int pointer array` form is also
-available when the caller genuinely has row pointers.
+The parameter type equals the type of what is passed (`&a[0, :]` is `int array[W] pointer`) - full
+symmetry, no hidden decay, no array-that-is-secretly-a-pointer. The "unknown outer count" is inherent
+in pointer-ness (a pointer walks an unbounded sequence), so no `:` appears in the type; `:` is purely an
+index-expression marker (section 5) that BUILDS these pointers.
 
-Requirement for whatever we pick: `sizeof` / shape of a parameter must behave the same as for a local
-of the same type (C note 6 is explicitly rejected).
+Consequences:
+- No new "array parameter" syntax is required (this also honors the instruction not to change parameter
+  syntax): a matrix parameter is just an `int array[W] pointer` parameter. The only new capability is
+  allowing an `array[W]` element inside a pointer type - the shape-carrying pointer from section 4/6.
+- `sizeof` / shape of such a parameter is that of a pointer to `int array[W]`; it does not lie (C note 6
+  rejected), because it is not a disguised array.
+- Runtime-variable inner width (C's VLA `a[rows][cols]`) stays a non-goal; `W` is a compile-time
+  constant.
+- Open follow-on (safe, unlike C decay): may an `int array[H, W] pointer` (from `&a`) be passed where an
+  `int array[W] pointer` is expected - i.e. "forget the concrete outer count"? Element type and inner
+  shape still must match, so it is safe; decide when implementing parameters.
 
 ## 9. Open questions
 
