@@ -86,6 +86,36 @@ disagree. The gazl-validator can cross-check the interface's field types against
 emitted layout, so a mismatch is a build error, not a silent lie - the same "verifiable contract" theme
 as extern prototypes (see [[docs/ExternPrototypes.md]]).
 
+## Type identity when a dimension/size is assembler-resolved (the hard part)
+
+If a dimension or struct size is only resolved by the GAZL assembler (the macro-assembler goal), the
+compiler cannot use its VALUE for type identity. Type identity must be comparable at compile time
+(E201/E202 compare descriptor strings), so there are two models, per constant:
+
+- BY VALUE - `[6]`. The compiler evaluates the dimension to an integer; `SIX`, `3*2`, `6` all
+  canonicalize to `[6]` and unify. Sound ONLY if that constant is FIXED at compile time. If the
+  assembler can change it, the compiler type-checked against a value the assembler overrides -> unsound.
+- BY SYMBOL (nominal) - `[SIX]`. The compiler compares the dimension SYMBOL, never its value. Sound
+  under assembler changes (if `SIX` changes, every `[SIX]` type moves together and still matches).
+  Stricter: `[SIX]` and `[6]` are different types even when equal; the signature carries the symbol.
+
+Structs already prove the nominal model: `Voice` is identified by NAME, and its size `.sizeof.Voice` is
+derived from the name and resolvable by the assembler. Two `Voice`s always match because the name is the
+identity; the size never enters the comparison, so the assembler can change it freely. Extend this to
+dimensions: a dimension that is an assembler-resolved constant makes the array a nominal type keyed by
+that symbol (`int array[SIX]` has identity `[SIX]`, value is the assembler's business).
+
+Consequence: Impala must DISTINGUISH two kinds of constant, because you can only fold-and-unify the
+frozen ones:
+- compile-time-fixed const (`const int SIX = 6`, frozen) -> fold to a value (constant evaluator, #20),
+  value identity `[6]`, unifies with literals.
+- link/assembler-variable const (macro-assembler, conditional layout) -> stays symbolic, nominal
+  identity `[SIX]`, does NOT unify with `[6]`; the signature carries the symbol (e.g. `int-array-SIX-ptr`).
+
+This is a real language decision (a qualifier/keyword to mark link-time constants, or the rule "anything
+defined in linked GAZL is symbolic"). It also means #20 (evaluate dims) applies only to the frozen kind;
+the assembler-variable kind is never evaluated by the compiler at all - it flows through as a symbol.
+
 ## Open questions
 
 1. `.sizeof` vs `.words` for the size tag.
