@@ -160,6 +160,38 @@ disagree. The gazl-validator can cross-check the interface's field types against
 emitted layout, so a mismatch is a build error, not a silent lie - the same "verifiable contract" theme
 as extern prototypes (see [[docs/ExternPrototypes.md]]).
 
+## Host-owned struct layout (late-bound ABI) - a motivating future use case
+
+Because field offsets and struct size are symbols resolved at LOAD time, a HOST can define (and later
+REDEFINE) a struct's layout and the SAME Impala-compiled GAZL runs against it WITHOUT recompiling any
+Impala. This is late-bound ABI, and stronger than C's `offsetof` (which is compile-time): the host
+supplies `.o.*` / `.z.*` at load, the distributed GAZL re-assembles against them, and runs. GAZL is
+designed for this (per ImpalaDemo: "the size of an array can be a constant set just before executing").
+
+The boundary (what is late-bound vs baked) is the whole subtlety:
+- LATE-BOUND, host may change freely: offsets, struct size, field order, padding, and ADDING fields
+  Impala does not know about. All of this lives only in the `.o.*` / `.z.*` constants.
+- BAKED, host may NOT change without an Impala recompile: the field NAMES and their GAZL-level TYPES.
+  Instruction selection is compiled in (`MOVf` vs `MOVi`, pointer load, `COPY` for a by-value nested
+  field). Retyping a used field makes the baked instruction wrong; renaming/removing a used field makes
+  `.o.X.field` fail to LINK. The link failure is the GOOD failure mode - a load-time build error, not
+  silent corruption. (`.z.Inner`-driven `COPY` means resizing a nested struct is fine; retyping it is not.)
+
+So the host's contract is: the NAMES and WORD-TYPES of the fields Impala touches stay stable; everything
+else about the layout is the host's. Same discipline as C accessor headers, minus the recompile.
+
+Mechanism this needs (= open question 3, now motivated): for the HOST to own the layout, Impala must
+compile the struct in INTERFACE-ONLY mode - it knows field names+types (to select instructions and
+type-check) and emits REFERENCES to `.o.*` / `.z.*`, but does NOT emit the accumulator preamble that
+defines them; the host supplies the definitions at load. In the default mode Impala emits the layout and
+owns the ABI (host can read, not override - redefining a defined constant conflicts). The gazl-validator
+should cross-check the host's layout constants against Impala's expected interface (names+types) at
+assemble time, so drift is a build error.
+
+Caveat: clean only for GAZL-representable fields (word-sized int/float/ptr and nested word-structs). A
+host C struct with packed sub-word fields (char/short/bitfields) does not map onto GAZL's uniform-word
+model and cannot be exposed field-by-field this way, regardless of the offset scheme.
+
 ## Phase 1 spike - VERIFIED by running on GAZLCmd
 
 Hand-authored GAZL (no compiler changes) confirmed every inference above actually assembles and runs:
