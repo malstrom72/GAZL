@@ -955,6 +955,7 @@
         rec.base      = undefined;
         rec.offParts  = undefined;
         rec.root      = undefined;
+        rec.arrayOf   = undefined;
         rec.struct    = undefined;
         rec.winBase   = undefined;
         rec.winWords  = undefined;
@@ -981,6 +982,22 @@
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
+
+        /* a struct-element array place used WITHOUT a subscript decays to a pointer: materialize it */
+        if (expr.place && expr.arrayOf) {
+            var daoff = $$parser.foldOffset(expr.offParts);
+            var dt = $$parser.borrow('%');
+            if (expr.baseKind === 'local') {
+                $$parser.emit('=&', 'p', dt, expr.base + (daoff ? ':' + daoff : ''), '*0');
+            } else {
+                $$parser.emit('+', 'p', dt, expr.base, '#' + daoff);
+            }
+            if (daoff && ('' + daoff).charAt(0) === '<') $$parser.returnBack(daoff);
+            var delem = expr.arrayOf;
+            $$parser.makeMeta(expr, ':=', 'p', undefined, dt, undefined);
+            $$parser.setElem(expr, delem);
+            return dt;
+        }
 
         var op   = expr.operator;
         var op1  = expr.operands[1];
@@ -1522,6 +1539,57 @@
         $$parser.setPlace(x, 'pointer', addr, [], structName, structName);
     };
 
+    /* Subscript on a fold-able struct-element array place (`v->filters[k]`). A CONSTANT index folds
+       its stride `k*sizeof(elem)` into the offset parts (still zero runtime instructions - the whole
+       offset stays compile-time through the following `.field`). A DYNAMIC index has to materialize a
+       runtime pointer (the address genuinely depends on a run-time value). */
+    $$parser.arraySubscript = function (x, idx, sourceCode, sourceOffset) {
+        x = metaSlot(x);
+        idx = metaSlot(idx);
+        var elemStruct = x.arrayOf;
+        var sz = $$parser.structWords(elemStruct);            /* numeric (normal) or undefined (extern elem) */
+        var idxRV = $$parser.makeRValue(idx);
+
+        if (/^#[0-9]+$/.test(idxRV)) {                        /* constant index -> fold the stride, stay compile-time */
+            var k = parseInt(idxRV.substr(1), 10);
+            $$parser.returnBack(idxRV);
+            var parts = x.offParts.slice();
+            if (k !== 0) {
+                if (sz !== undefined) {
+                    parts.push('' + (k * sz));                /* numeric stride */
+                } else {
+                    var s = $$parser.borrow('<');             /* extern element: symbolic k*.z.Elem */
+                    $$parser.emit('<> *', 'i', s, '#' + k, '#.z.' + elemStruct);
+                    parts.push(s);
+                }
+            }
+            $$parser.setPlace(x, x.baseKind, x.base, parts, elemStruct, x.root);   /* now a struct place */
+            return;
+        }
+
+        /* dynamic index -> materialize element pointer (runtime address math is inherent here) */
+        var aoff = $$parser.foldOffset(x.offParts);
+        var arrPtr = $$parser.borrow('%');
+        if (x.baseKind === 'local') {
+            $$parser.emit('=&', 'p', arrPtr, x.base + (aoff ? ':' + aoff : ''), '*0');
+        } else {
+            $$parser.emit('+', 'p', arrPtr, x.base, '#' + aoff);
+        }
+        if (aoff && ('' + aoff).charAt(0) === '<') $$parser.returnBack(aoff);
+        var elemPtr = $$parser.borrow('%');
+        if (sz === 1) {
+            $$parser.emit('+', 'p', elemPtr, arrPtr, idxRV);
+        } else {
+            var scaled = $$parser.borrow('%');
+            $$parser.emit('*', 'i', scaled, idxRV, (sz !== undefined ? '#' + sz : '#.z.' + elemStruct));
+            $$parser.emit('+', 'p', elemPtr, arrPtr, scaled);
+            $$parser.returnBack(scaled);
+        }
+        $$parser.returnBack(idxRV);
+        $$parser.returnBack(arrPtr);
+        $$parser.setPlace(x, 'pointer', elemPtr, [], elemStruct, elemStruct);
+    };
+
     /* materialize a place's address into a pointer operand (borrows a temp for locals) */
     $$parser.placeAddress = function (place) {
         place = metaSlot(place);
@@ -1633,7 +1701,21 @@
             $$parser.setPlace(x, bk, base, newParts, field.struct, root);
             return;
         }
-        if (field.type === 'A') {                                 /* array field -> materialize a typed pointer for subscripting */
+        if (field.type === 'A' && $$parser.isStructAtom(field.elem)) {   /* struct-element array: keep a fold-able array place */
+            x.operator = '@place';
+            x.type     = 'p';
+            x.operands = [ undefined, undefined, undefined ];
+            x.place    = true;
+            x.arrayOf  = field.elem;                          /* element struct - a later [k] appends its stride */
+            x.baseKind = bk;
+            x.base     = base;
+            x.offParts = newParts;
+            x.root     = root;
+            x.struct   = undefined;
+            x.elem     = field.elem;
+            return;
+        }
+        if (field.type === 'A') {                                 /* scalar-element array -> materialize a typed pointer for subscripting */
             var aoff = $$parser.foldOffset(newParts);
             var aScr = (aoff !== null && ('' + aoff).charAt(0) === '<');
             if (bk === 'local') {                                 /* &($v at the field offset) */
@@ -3586,7 +3668,9 @@ PrePost     <-  (op:PREFIX_OP _
 
 Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry) {
                                                        var sb = metaSlot($$);
-                                                       if (sb.type === 'p' && $$parser.isStructAtom(sb.elem))
+                                                       if (sb.place && sb.arrayOf)
+                                                           $$parser.arraySubscript($$, $s, $$s, $$i);
+                                                       else if (sb.type === 'p' && $$parser.isStructAtom(sb.elem))
                                                            $$parser.structSubscript($$, $s, $$s, $$i);
                                                        else
                                                            $$parser.binaryOp('=[]', $$, $s, $$s, $$i);

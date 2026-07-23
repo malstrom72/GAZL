@@ -967,6 +967,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         rec.base      = undefined;
         rec.offParts  = undefined;
         rec.root      = undefined;
+        rec.arrayOf   = undefined;
         rec.struct    = undefined;
         rec.winBase   = undefined;
         rec.winWords  = undefined;
@@ -993,6 +994,22 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
+
+        /* a struct-element array place used WITHOUT a subscript decays to a pointer: materialize it */
+        if (expr.place && expr.arrayOf) {
+            var daoff = foldOffset(expr.offParts);
+            var dt = borrow('%');
+            if (expr.baseKind === 'local') {
+                emit('=&', 'p', dt, expr.base + (daoff ? ':' + daoff : ''), '*0');
+            } else {
+                emit('+', 'p', dt, expr.base, '#' + daoff);
+            }
+            if (daoff && ('' + daoff).charAt(0) === '<') returnBack(daoff);
+            var delem = expr.arrayOf;
+            makeMeta(expr, ':=', 'p', undefined, dt, undefined);
+            setElem(expr, delem);
+            return dt;
+        }
 
         var op   = expr.operator;
         var op1  = expr.operands[1];
@@ -1534,6 +1551,57 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         setPlace(x, 'pointer', addr, [], structName, structName);
     };
 
+    /* Subscript on a fold-able struct-element array place (`v->filters[k]`). A CONSTANT index folds
+       its stride `k*sizeof(elem)` into the offset parts (still zero runtime instructions - the whole
+       offset stays compile-time through the following `.field`). A DYNAMIC index has to materialize a
+       runtime pointer (the address genuinely depends on a run-time value). */
+    arraySubscript = function (x, idx, sourceCode, sourceOffset) {
+        x = metaSlot(x);
+        idx = metaSlot(idx);
+        var elemStruct = x.arrayOf;
+        var sz = structWords(elemStruct);            /* numeric (normal) or undefined (extern elem) */
+        var idxRV = makeRValue(idx);
+
+        if (/^#[0-9]+$/.test(idxRV)) {                        /* constant index -> fold the stride, stay compile-time */
+            var k = parseInt(idxRV.substr(1), 10);
+            returnBack(idxRV);
+            var parts = x.offParts.slice();
+            if (k !== 0) {
+                if (sz !== undefined) {
+                    parts.push('' + (k * sz));                /* numeric stride */
+                } else {
+                    var s = borrow('<');             /* extern element: symbolic k*.z.Elem */
+                    emit('<> *', 'i', s, '#' + k, '#.z.' + elemStruct);
+                    parts.push(s);
+                }
+            }
+            setPlace(x, x.baseKind, x.base, parts, elemStruct, x.root);   /* now a struct place */
+            return;
+        }
+
+        /* dynamic index -> materialize element pointer (runtime address math is inherent here) */
+        var aoff = foldOffset(x.offParts);
+        var arrPtr = borrow('%');
+        if (x.baseKind === 'local') {
+            emit('=&', 'p', arrPtr, x.base + (aoff ? ':' + aoff : ''), '*0');
+        } else {
+            emit('+', 'p', arrPtr, x.base, '#' + aoff);
+        }
+        if (aoff && ('' + aoff).charAt(0) === '<') returnBack(aoff);
+        var elemPtr = borrow('%');
+        if (sz === 1) {
+            emit('+', 'p', elemPtr, arrPtr, idxRV);
+        } else {
+            var scaled = borrow('%');
+            emit('*', 'i', scaled, idxRV, (sz !== undefined ? '#' + sz : '#.z.' + elemStruct));
+            emit('+', 'p', elemPtr, arrPtr, scaled);
+            returnBack(scaled);
+        }
+        returnBack(idxRV);
+        returnBack(arrPtr);
+        setPlace(x, 'pointer', elemPtr, [], elemStruct, elemStruct);
+    };
+
     /* materialize a place's address into a pointer operand (borrows a temp for locals) */
     placeAddress = function (place) {
         place = metaSlot(place);
@@ -1645,7 +1713,21 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             setPlace(x, bk, base, newParts, field.struct, root);
             return;
         }
-        if (field.type === 'A') {                                 /* array field -> materialize a typed pointer for subscripting */
+        if (field.type === 'A' && isStructAtom(field.elem)) {   /* struct-element array: keep a fold-able array place */
+            x.operator = '@place';
+            x.type     = 'p';
+            x.operands = [ undefined, undefined, undefined ];
+            x.place    = true;
+            x.arrayOf  = field.elem;                          /* element struct - a later [k] appends its stride */
+            x.baseKind = bk;
+            x.base     = base;
+            x.offParts = newParts;
+            x.root     = root;
+            x.struct   = undefined;
+            x.elem     = field.elem;
+            return;
+        }
+        if (field.type === 'A') {                                 /* scalar-element array -> materialize a typed pointer for subscripting */
             var aoff = foldOffset(newParts);
             var aScr = (aoff !== null && ('' + aoff).charAt(0) === '<');
             if (bk === 'local') {                                 /* &($v at the field offset) */
@@ -2802,7 +2884,7 @@ function Bitwise($){var $first,$op=createParserContext(),$r=createParserContext(
 function AddSub($){var $op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return MulDiv($)&&((function(){while((function(){var _b=_i;return ADDSUB_OP($op)&&_($)&&MulDiv($r)&&(function(){ if (!dry) binaryOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function MulDiv($){var $op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return PrePost($)&&((function(){while((function(){var _b=_i;return MULDIV_OP($op)&&_($)&&PrePost($r)&&(function(){ if (!dry) mulDivOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function PrePost($){var $op=createParserContext(),$cdesc,$cmods,$sid=createParserContext(),$pdepth;return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(function(){ $cdesc = CASTS_TO_TYPES[$op._]; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $cdesc = 'p:' + $cdesc; $cmods = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&Identifier($sid)&&(function(){ $pdepth = 0; ; return true})()&&((function(){for(var _n=0;(function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $pdepth = $pdepth + 1; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})();++_n);return _n>0})())&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!isStructAtom($sid._)) fail('Unknown type ' + $sid._, _s, _i, 'E413'); $cdesc = $sid._; for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc; $cmods = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) { if ($cmods) { unaryOp('pointer', $._, _s, _i); setElem($._, descTail($cdesc)); } else { unaryOp($op._, $._, _s, _i); } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FieldAccess($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Subscript($){var $s=createParserContext();return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var sb = metaSlot($._); if (sb.type === 'p' && isStructAtom(sb.elem)) structSubscript($._, $s._, _s, _i); else binaryOp('=[]', $._, $s._, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Subscript($){var $s=createParserContext();return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var sb = metaSlot($._); if (sb.place && sb.arrayOf) arraySubscript($._, $s._, _s, _i); else if (sb.type === 'p' && isStructAtom(sb.elem)) structSubscript($._, $s._, _s, _i); else binaryOp('=[]', $._, $s._, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FieldAccess($){var $f=createParserContext();return (function(){var _b=_i;return (_s.substr(_i,2)==="->")&&(_i+=2,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, true, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===".")&&(++_i,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, false, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; /* how many leading output slots the callee expects (>1 = multi-return) */ var _c = metaSlot($._); var _rs = 1; if (_c.operator === ':=' && _c.operands[1] && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) { var _e = symbols.functions[_c.operands[1].substr(1)]; if (_e && _e.signature && _e.signature.returnWords !== undefined && _e.signature.returnWords > 1) _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */ } else if (_c.type === 'F' && isFuncTypeAtom(_c.elem)) { var _ft = functypes[_c.elem];   /* indirect call through a named funcptr type */ if (_ft.returnWords > 1) _rs = _ft.returnWords; } $.retSlots = _rs; $.words = 0;                            /* input words placed so far (struct args span >1) */ $.base  = borrowForCall(); for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */ claimSlot($.base + _os); $.types = []; $.elems = []; $.nulls = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type , undefined, 'E408'); } if (callee.operator === ':=' && callee.operands[1] && (callee.operands[1][0] === '&' || callee.operands[1][0] === '^')) { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; if (entry && entry.kind === 'FUNC' && entry.signature) { signature = entry.signature; } } else if (callee.type === 'F' && isFuncTypeAtom(callee.elem)) { signature = functypes[callee.elem];   /* indirect call: check against the funcptr type */ } if (signature && signature.returnCount > 1 && !destructuring) { fail('Function ' + (calleeName || 'this call') + ' returns ' + signature.returnCount + ' values; destructure the call (a, b = ' + (calleeName || 'f') + '(...))', _s, _i, 'E431'); } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i , 'E405'); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { typeError( 'Argument type mismatch when calling ' + label + ' ({$type1} vs expected {$type2})', _s, _i, actual, expected , 'E406'); } if (expected === 'S' && params[argIdx].struct !== undefined && $.elems[argIdx] !== params[argIdx].struct) { fail('Struct type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + params[argIdx].struct + ', got ' + ($.elems[argIdx] || 'a non-struct value') + ')', _s, _i, 'E421'); } var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */ if (expected === 'p' && expectedElem !== undefined && !$.nulls[argIdx] && $.elems[argIdx] !== expectedElem) { fail('Pointer element type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + elemVerbose(expectedElem) + ' elements, got ' + elemVerbose($.elems[argIdx]) + ' elements)', _s, _i, 'E202', 'use a cast: (' + elemVerbose(expectedElem) + ' pointer)'); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.words + $.retSlots)); returnBack(func); while ($.words-- > 0) {              /* free the argument words (past the output slots) */ returnBack('%' + ($.base + $.retSlots + $.words)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); setElem(callee, undefined); if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */ var _wp = borrow('%'); emit('=&', 'p', _wp, '%' + $.base, '*' + $.retSlots); setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct); callee.winBase  = $.base;       /* output window slots to free once the value is consumed */ callee.winWords = $.retSlots; } else if ($.retSlots > 1) {        /* multi-return: expose window for destructuring */ callee.multiBase = $.base; callee.multiCount = $.retSlots; callee.multiReturnList = signature.returnList; } if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Argument($){var $a=createParserContext();return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if ($.types) { $.types.push(meta.type); } if ($.elems) {                       /* element chain + null-ness, captured */ $.elems.push(meta.elem);         /* before makeArgValue mutates the meta */ $.nulls.push(meta.type === 'p' && meta.operands[1] === '&NULL' && meta.operands[2] === undefined); } var winSlot = $.base + $.retSlots + $.words; if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */ var w = structWords(meta.struct); copyStructArg($a._, winSlot, w); $.words += w; } else { makeArgValue($a._, winSlot); $.words += 1; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
