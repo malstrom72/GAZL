@@ -160,6 +160,26 @@ disagree. The gazl-validator can cross-check the interface's field types against
 emitted layout, so a mismatch is a build error, not a silent lie - the same "verifiable contract" theme
 as extern prototypes (see [[docs/ExternPrototypes.md]]).
 
+## IMPLEMENTED (extern struct v1)
+
+`extern struct Name { fields }` is implemented and tested (tests/impala/sources/externStruct.impala).
+Impala emits symbolic `#.o.Name.field` offsets at field-access sites and `#.z.Name` for sizeof; it emits
+NO layout - the host supplies those constants at load. Verified end to end on GAZLCmd: the same compiled
+Impala GAZL ran correctly against two different host layouts (fields at different offsets) with no
+recompile. Normal structs are unchanged (byte-identical goldens); only the extern path is symbolic.
+
+v1 scope and guards:
+- Fields must be scalar or pointer (E418) - no by-value nested struct / array fields yet.
+- Access is via pointer (or a cast to `Name pointer`), read + write. Local/global by-value access also
+  emits symbolic offsets, but declaring an extern struct BY VALUE is rejected (E425, "use a pointer")
+  because by-value alloc/COPY sizing (`*.z.Name`) is not wired yet.
+- Nested field access into an extern struct (off != 0) is rejected (E424) - not yet supported.
+
+Deferred to v1.1: by-value extern instances (LOCA/PARA/GLOB/COPY using `*.z.Name`), nested extern
+fields, array/struct fields, and the gazl-validator cross-check of host layout vs declared interface.
+Separately, Phase 2a (converting NORMAL structs to the same `.o.*`/`.z.*` scheme, for the conditional-
+field benefit) is still open - it is the larger ~15-site change with full golden regeneration.
+
 ## Host-owned struct layout (late-bound ABI) - a motivating future use case
 
 Because field offsets and struct size are symbols resolved at LOAD time, a HOST can define (and later
