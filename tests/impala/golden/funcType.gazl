@@ -2,6 +2,12 @@
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 12:1
+	! MOVi <a> #0	; layout of struct P
+.o.P.x:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.P.y:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.P:	! DEFi #<a>
 ; signature extern native printInt() -> unknown @ 20:1
 ; signature extern native printLF() -> unknown @ 22:1
 
@@ -41,8 +47,8 @@ make:	FUNC	; signature func make(int a, int b) -> P @ 25:15
 	$a:	INPi
 	$b:	INPi
 ;-----------------------------------------------------------------------------
-		ADDi $p:0 $a $b	; p.x = a + b
-		SUBi $p:1 $a $b	; p.y = a - b
+		ADDi $p:.o.P.x $a $b	; p.x = a + b
+		SUBi $p:.o.P.y $a $b	; p.y = a - b
 		RETU   	; }
 
 
@@ -99,10 +105,10 @@ main:	FUNC	; signature func main() -> void @ 28:15
 		ADRL %2 %0 *2
 		ADRL %3 $v *2
 		COPY %3 %2 *2
-		MOVi %1 $v:0 	; printInt(v.x)
+		MOVi %1 $v:.o.P.x 	; printInt(v.x)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:26
-		MOVi %1 $v:1 	; printInt(v.y)
+		MOVi %1 $v:.o.P.y 	; printInt(v.y)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:26
 		MOVp $sp &split 	; sp = split

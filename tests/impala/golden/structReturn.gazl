@@ -2,6 +2,18 @@
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
+	! MOVi <a> #0	; layout of struct P
+.o.P.x:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.P.y:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.P:	! DEFi #<a>
+	! MOVi <a> #0	; layout of struct Q
+.o.Q.inner:	! DEFi #<a>
+	! ADDi <a> #<a> #.z.P
+.o.Q.scale:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Q:	! DEFi #<a>
 ; signature extern native printInt() -> unknown @ 15:1
 ; signature extern native printLF() -> unknown @ 17:1
 
@@ -11,8 +23,8 @@ make:	FUNC	; signature func make(int a, int b) -> P @ 17:15
 	$a:	INPi
 	$b:	INPi
 ;-----------------------------------------------------------------------------
-		ADDi $p:0 $a $b	; p.x = a + b
-		SUBi $p:1 $a $b	; p.y = a - b
+		ADDi $p:.o.P.x $a $b	; p.x = a + b
+		SUBi $p:.o.P.y $a $b	; p.y = a - b
 		RETU   	; }
 
 
@@ -21,7 +33,7 @@ sum:	FUNC	; signature func sum(P p) -> int @ 23:14
 	$s:	OUTi
 	$p:	PARA *2
 ;-----------------------------------------------------------------------------
-		ADDi $s $p:0 $p:1	; s = p.x + p.y
+		ADDi $s $p:.o.P.x $p:.o.P.y	; s = p.x + p.y
 		RETU   	; }
 
 
@@ -32,13 +44,14 @@ wrap:	FUNC	; signature func wrap(int a, int b, int k) -> Q @ 28:15
 	$b:	INPi
 	$k:	INPi
 ;-----------------------------------------------------------------------------
-		MOVi %2 $a 	; q.inner = make(a, b)
-		MOVi %3 $b 
-		CALL &make %0 *4	; expects make(int, int) -> P @ 30:22
-		ADRL %2 %0 *2
-		ADRL %3 $q *2
-		COPY %3 %2 *2
-		MOVi $q:2 $k 	; q.scale = k
+		ADRL %0 $q *3	; q.inner = make(a, b)
+		ADDp %0 %0 #.o.Q.inner
+		MOVi %3 $a 
+		MOVi %4 $b 
+		CALL &make %1 *4	; expects make(int, int) -> P @ 30:22
+		ADRL %3 %1 *2
+		COPY %0 %3 *2
+		MOVi $q:.o.Q.scale $k 	; q.scale = k
 		RETU   	; }
 
 
@@ -54,10 +67,10 @@ main:	FUNC	; signature func main() -> void @ 34:15
 		ADRL %2 %0 *2
 		ADRL %3 $v *2
 		COPY %3 %2 *2
-		MOVi %1 $v:0 	; printInt(v.x)
+		MOVi %1 $v:.o.P.x 	; printInt(v.x)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:26
-		MOVi %1 $v:1 	; printInt(v.y)
+		MOVi %1 $v:.o.P.y 	; printInt(v.y)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 39:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 39:26
 		MOVi %4 #4 	; printInt(sum(make(4, 1)))
@@ -74,10 +87,12 @@ main:	FUNC	; signature func main() -> void @ 34:15
 		ADRL %3 %0 *3
 		ADRL %4 $w *3
 		COPY %4 %3 *3
-		MOVi %1 $w:0 	; printInt(w.inner.x)
+		ADRL %1 $w *3	; printInt(w.inner.x)
+		ADDp %1 %1 #.o.Q.inner
+		PEEK %1 %1 #.o.P.x
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:32
-		MOVi %1 $w:2 	; printInt(w.scale)
+		MOVi %1 $w:.o.Q.scale 	; printInt(w.scale)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 45:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 45:30
 		RETU   	; }

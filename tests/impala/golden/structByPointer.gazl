@@ -2,6 +2,12 @@
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
+	! MOVi <a> #0	; layout of struct Filter
+.o.Filter.mode:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.Filter.cutoff:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Filter:	! DEFi #<a>
 ; signature extern native printInt() -> unknown @ 13:1
 ; signature extern native printFloat() -> unknown @ 14:1
 ; signature extern native printLF() -> unknown @ 16:1
@@ -13,8 +19,8 @@ configure:	FUNC	; signature func configure(Filter-ptr f, int m, float c) -> void
 	$m:	INPi
 	$c:	INPf
 ;-----------------------------------------------------------------------------
-		POKE $f #0 $m	; f->mode = m
-		POKE $f #1 $c	; f->cutoff = c
+		POKE $f #.o.Filter.mode $m	; f->mode = m
+		POKE $f #.o.Filter.cutoff $c	; f->cutoff = c
 		RETU   	; }
 
 
@@ -37,20 +43,20 @@ main:	FUNC	; signature func main() -> void @ 27:15
 		MOVi %2 #3 
 		MOVf %3 #0.75 
 		CALL &configure %0 *4	; expects configure(ptr, int, float) -> void @ 30:24
-		MOVi %1 $v:0 	; printInt(v.mode)
+		MOVi %1 $v:.o.Filter.mode 	; printInt(v.mode)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 31:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 31:29
-		MOVf %1 $v:1 	; printFloat(v.cutoff)
+		MOVf %1 $v:.o.Filter.cutoff 	; printFloat(v.cutoff)
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 32:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:33
 		ADRL %0 $v *2	; p = &v
 		MOVp $p %0 
-		PEEK %1 $p #0	; printInt(p->mode)
+		PEEK %1 $p #.o.Filter.mode	; printInt(p->mode)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:30
-		ADRL %1 $v:0 *0	; bump(&v.mode)
+		ADRL %1 $v:.o.Filter.mode *0	; bump(&v.mode)
 		CALL &bump %0 *2	; expects bump(ptr) -> void @ 37:15
-		MOVi %1 $v:0 	; printInt(v.mode)
+		MOVi %1 $v:.o.Filter.mode 	; printInt(v.mode)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:29
 		RETU   	; }

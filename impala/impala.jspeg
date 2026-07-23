@@ -1238,6 +1238,37 @@
 
     $$parser.endStruct = function (name) {
         $$parser.structs[name].complete = true;
+        $$parser.emitStructLayout(name);
+    };
+
+    /* Emit a struct's layout as GAZL compile-time constants: a rolling `<a>` accumulator that
+       snapshots each field offset into `.o.Name.field` and the total size into `.z.Name`. Field
+       access then references these symbols instead of baked numbers. Structs are defined in
+       dependency order (a by-value field's struct must be complete first, E412), so `#.z.Inner`
+       is always defined before an outer struct advances past it. Extern structs emit nothing
+       (the host owns their layout). See docs/StructLayoutConstants.md. */
+    $$parser.emitStructLayout = function (name) {
+        if ($$parser.dry) return;
+        if (typeof output !== 'function') return;
+        var s = $$parser.structs[name];
+        if (!s || s.extern) return;
+        var T = (typeof TAB !== 'undefined') ? TAB : '\t';
+        output(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
+        for (var i = 0; i < s.fields.length; ++i) {
+            var f = s.fields[i];
+            output('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
+            if (f.type === 'S') {                                 /* nested by-value struct */
+                output(T + '! ADDi <a> #<a> #.z.' + f.struct);
+            } else if (f.type === 'A' && $$parser.isStructAtom(f.elem)) {   /* struct-element array */
+                output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
+                output(T + '! ADDi <a> #<a> #<t>');
+            } else if (f.type === 'A') {                          /* scalar-element array */
+                output(T + '! ADDi <a> #<a> #' + f.size);
+            } else {                                              /* scalar (int/float/ptr/funcptr) */
+                output(T + '! ADDi <a> #<a> #1');
+            }
+        }
+        output('.z.' + name + ':' + T + '! DEFi #<a>');
     };
 
     $$parser.externStruct = function (name, sourceCode, sourceOffset) {   /// forward / opaque declaration
@@ -1410,12 +1441,17 @@
         var basePtr = $$parser.makeRValue(x);
         var idxRV = $$parser.makeRValue(idx);
 
-        if (/^#[0-9]+$/.test(idxRV)) {                            /* constant index -> fold into the place offset */
+        if (/^#[0-9]+$/.test(idxRV)) {                            /* constant index */
             var off = parseInt(idxRV.substr(1), 10) * sz;
-            /* a global-address base (&name) stays in global memory (=* / &name:off);
-               a runtime pointer base uses PEEK/POKE. */
-            $$parser.setPlace(x, (basePtr[0] === '&' ? 'globalAddr' : 'pointer'), basePtr, off, structName);
             $$parser.returnBack(idxRV);
+            if (off === 0) {                                      /* element 0 = the base; keep it addressable */
+                $$parser.setPlace(x, (basePtr[0] === '&' ? 'globalAddr' : 'pointer'), basePtr, 0, structName);
+                return;
+            }
+            var caddr = $$parser.borrow('%');                     /* base + i*sizeof -> a runtime pointer at offset 0 */
+            $$parser.emit('+', 'p', caddr, basePtr, '#' + off);
+            $$parser.returnBack(basePtr);
+            $$parser.setPlace(x, 'pointer', caddr, 0, structName);
             return;
         }
 
@@ -1526,39 +1562,33 @@
             $$parser.fail('Struct ' + structName + ' has no field ' + fieldName,
                     sourceCode, sourceOffset, 'E417');
         }
-        var total = off + field.offset;
-        /* extern struct: layout is host-owned, so emit a symbolic `.o.Name.field` offset instead of a
-           baked number. v1 handles direct (non-nested) scalar/pointer fields (off is 0). */
-        var externSt = $$parser.isExternStruct(structName);
-        if (externSt && off !== 0) {
-            $$parser.fail('Nested field access into an extern struct is not yet supported',
-                    sourceCode, sourceOffset, 'E424', 'access it through a pointer field instead');
-        }
-        var offOp = externSt ? ('.o.' + structName + '.' + fieldName) : ('' + total);
+        /* Symbolic field offset. Every struct (normal or extern) resolves a field to its
+           `.o.Struct.field` constant. Nested structs and array fields materialize the sub-object's
+           ADDRESS into a pointer place at offset 0, so every access uses a single symbol - no
+           runtime offset accumulation, no compile-time folding. (`off` is always 0 here because
+           places always carry a base address, never a pending numeric offset.) */
+        var offOp = '.o.' + structName + '.' + fieldName;
 
-        if (field.type === 'S') {                                 /* nested inline struct -> another place */
-            $$parser.setPlace(x, bk, base, total, field.struct);
+        if (field.type === 'S') {                                 /* nested struct -> pointer to it, continue as a pointer place */
+            var sp = $$parser.borrow('%');
+            if (bk === 'local') {
+                $$parser.emit('=&', 'p', sp, base, '*' + $$parser.structWords(structName));
+                $$parser.emit('+', 'p', sp, sp, '#' + offOp);
+            } else {                                              /* pointer or globalAddr: base + offset */
+                $$parser.emit('+', 'p', sp, base, '#' + offOp);
+            }
+            $$parser.setPlace(x, 'pointer', sp, 0, field.struct);
             return;
         }
         if (field.type === 'A') {                                 /* array field decays to a typed pointer at base+offset */
-            if (bk === 'globalAddr') {
-                $$parser.makeMeta(x, ':=', 'p', undefined, base + (total ? ':' + total : ''), undefined);
-            } else if (bk === 'pointer') {
-                if (total === 0) {
-                    $$parser.makeMeta(x, ':=', 'p', undefined, base, undefined);
-                } else {
-                    var pt = $$parser.borrow('%');
-                    $$parser.emit('+', 'p', pt, base, '#' + total);
-                    $$parser.makeMeta(x, ':=', 'p', undefined, pt, undefined);
-                }
-            } else {                                              /* local: ADRL then optional add */
-                var lt = $$parser.borrow('%');
-                $$parser.emit('=&', 'p', lt, base, '*' + $$parser.structWords(structName));
-                if (total !== 0) {
-                    $$parser.emit('+', 'p', lt, lt, '#' + total);
-                }
-                $$parser.makeMeta(x, ':=', 'p', undefined, lt, undefined);
+            var ap = $$parser.borrow('%');
+            if (bk === 'local') {
+                $$parser.emit('=&', 'p', ap, base, '*' + $$parser.structWords(structName));
+                $$parser.emit('+', 'p', ap, ap, '#' + offOp);
+            } else {
+                $$parser.emit('+', 'p', ap, base, '#' + offOp);
             }
+            $$parser.makeMeta(x, ':=', 'p', undefined, ap, undefined);
             x.place = false;
             x.type  = 'p';
             $$parser.setElem(x, field.elem);
@@ -4104,16 +4134,15 @@ While       <-  WHILE _                             {
 Value       <-  Group
                 / SIZEOF _ '('_ base:TypeBase        { if (!$$parser.dry) {
                                                         var head = $$parser.descHead($base);
-                                                        if ($$parser.isExternStruct(head)) {   /* host-owned size -> symbolic .z.Name */
+                                                        if ($$parser.isStructAtom(head)) {   /* struct size -> symbolic .z.Name */
+                                                            if (!$$parser.isExternStruct(head)
+                                                                    && $$parser.structWords(head) === undefined)
+                                                                $$parser.fail('sizeof of incomplete struct ' + head,
+                                                                        $$s, $$i, 'E419');
                                                             $$parser.makeMeta($$, ':=', 'i', undefined, '#.z.' + head, undefined);
                                                             $$parser.setElem($$, undefined);
                                                         } else {
-                                                            var words = ($$parser.isStructAtom(head)
-                                                                    ? $$parser.structWords(head) : 1);
-                                                            if (words === undefined)
-                                                                $$parser.fail('sizeof of incomplete struct ' + head,
-                                                                        $$s, $$i, 'E419');
-                                                            $$parser.makeMeta($$, ':=', 'i', undefined, '#' + words, undefined);
+                                                            $$parser.makeMeta($$, ':=', 'i', undefined, '#1', undefined);
                                                             $$parser.setElem($$, undefined);
                                                         }
                                                       } } ')'_

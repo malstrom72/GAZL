@@ -1250,6 +1250,37 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     endStruct = function (name) {
         structs[name].complete = true;
+        emitStructLayout(name);
+    };
+
+    /* Emit a struct's layout as GAZL compile-time constants: a rolling `<a>` accumulator that
+       snapshots each field offset into `.o.Name.field` and the total size into `.z.Name`. Field
+       access then references these symbols instead of baked numbers. Structs are defined in
+       dependency order (a by-value field's struct must be complete first, E412), so `#.z.Inner`
+       is always defined before an outer struct advances past it. Extern structs emit nothing
+       (the host owns their layout). See docs/StructLayoutConstants.md. */
+    emitStructLayout = function (name) {
+        if (dry) return;
+        if (typeof output !== 'function') return;
+        var s = structs[name];
+        if (!s || s.extern) return;
+        var T = (typeof TAB !== 'undefined') ? TAB : '\t';
+        output(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
+        for (var i = 0; i < s.fields.length; ++i) {
+            var f = s.fields[i];
+            output('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
+            if (f.type === 'S') {                                 /* nested by-value struct */
+                output(T + '! ADDi <a> #<a> #.z.' + f.struct);
+            } else if (f.type === 'A' && isStructAtom(f.elem)) {   /* struct-element array */
+                output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
+                output(T + '! ADDi <a> #<a> #<t>');
+            } else if (f.type === 'A') {                          /* scalar-element array */
+                output(T + '! ADDi <a> #<a> #' + f.size);
+            } else {                                              /* scalar (int/float/ptr/funcptr) */
+                output(T + '! ADDi <a> #<a> #1');
+            }
+        }
+        output('.z.' + name + ':' + T + '! DEFi #<a>');
     };
 
     externStruct = function (name, sourceCode, sourceOffset) {   /// forward / opaque declaration
@@ -1422,12 +1453,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var basePtr = makeRValue(x);
         var idxRV = makeRValue(idx);
 
-        if (/^#[0-9]+$/.test(idxRV)) {                            /* constant index -> fold into the place offset */
+        if (/^#[0-9]+$/.test(idxRV)) {                            /* constant index */
             var off = parseInt(idxRV.substr(1), 10) * sz;
-            /* a global-address base (&name) stays in global memory (=* / &name:off);
-               a runtime pointer base uses PEEK/POKE. */
-            setPlace(x, (basePtr[0] === '&' ? 'globalAddr' : 'pointer'), basePtr, off, structName);
             returnBack(idxRV);
+            if (off === 0) {                                      /* element 0 = the base; keep it addressable */
+                setPlace(x, (basePtr[0] === '&' ? 'globalAddr' : 'pointer'), basePtr, 0, structName);
+                return;
+            }
+            var caddr = borrow('%');                     /* base + i*sizeof -> a runtime pointer at offset 0 */
+            emit('+', 'p', caddr, basePtr, '#' + off);
+            returnBack(basePtr);
+            setPlace(x, 'pointer', caddr, 0, structName);
             return;
         }
 
@@ -1538,39 +1574,33 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             fail('Struct ' + structName + ' has no field ' + fieldName,
                     sourceCode, sourceOffset, 'E417');
         }
-        var total = off + field.offset;
-        /* extern struct: layout is host-owned, so emit a symbolic `.o.Name.field` offset instead of a
-           baked number. v1 handles direct (non-nested) scalar/pointer fields (off is 0). */
-        var externSt = isExternStruct(structName);
-        if (externSt && off !== 0) {
-            fail('Nested field access into an extern struct is not yet supported',
-                    sourceCode, sourceOffset, 'E424', 'access it through a pointer field instead');
-        }
-        var offOp = externSt ? ('.o.' + structName + '.' + fieldName) : ('' + total);
+        /* Symbolic field offset. Every struct (normal or extern) resolves a field to its
+           `.o.Struct.field` constant. Nested structs and array fields materialize the sub-object's
+           ADDRESS into a pointer place at offset 0, so every access uses a single symbol - no
+           runtime offset accumulation, no compile-time folding. (`off` is always 0 here because
+           places always carry a base address, never a pending numeric offset.) */
+        var offOp = '.o.' + structName + '.' + fieldName;
 
-        if (field.type === 'S') {                                 /* nested inline struct -> another place */
-            setPlace(x, bk, base, total, field.struct);
+        if (field.type === 'S') {                                 /* nested struct -> pointer to it, continue as a pointer place */
+            var sp = borrow('%');
+            if (bk === 'local') {
+                emit('=&', 'p', sp, base, '*' + structWords(structName));
+                emit('+', 'p', sp, sp, '#' + offOp);
+            } else {                                              /* pointer or globalAddr: base + offset */
+                emit('+', 'p', sp, base, '#' + offOp);
+            }
+            setPlace(x, 'pointer', sp, 0, field.struct);
             return;
         }
         if (field.type === 'A') {                                 /* array field decays to a typed pointer at base+offset */
-            if (bk === 'globalAddr') {
-                makeMeta(x, ':=', 'p', undefined, base + (total ? ':' + total : ''), undefined);
-            } else if (bk === 'pointer') {
-                if (total === 0) {
-                    makeMeta(x, ':=', 'p', undefined, base, undefined);
-                } else {
-                    var pt = borrow('%');
-                    emit('+', 'p', pt, base, '#' + total);
-                    makeMeta(x, ':=', 'p', undefined, pt, undefined);
-                }
-            } else {                                              /* local: ADRL then optional add */
-                var lt = borrow('%');
-                emit('=&', 'p', lt, base, '*' + structWords(structName));
-                if (total !== 0) {
-                    emit('+', 'p', lt, lt, '#' + total);
-                }
-                makeMeta(x, ':=', 'p', undefined, lt, undefined);
+            var ap = borrow('%');
+            if (bk === 'local') {
+                emit('=&', 'p', ap, base, '*' + structWords(structName));
+                emit('+', 'p', ap, ap, '#' + offOp);
+            } else {
+                emit('+', 'p', ap, base, '#' + offOp);
             }
+            makeMeta(x, ':=', 'p', undefined, ap, undefined);
             x.place = false;
             x.type  = 'p';
             setElem(x, field.elem);
@@ -2735,7 +2765,7 @@ function DestTarget($){var $tgtGlobal,$id=createParserContext();return (function
 function Switch($){var $f=createParserContext(),$t=createParserContext(),$size,$switcher,$,$switchExit,$progress,$stmt=createParserContext();return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($._); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i, 'E306'); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups -> fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case ...” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined', undefined, undefined, 'E409'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = switchStack.pop() || metaSlot($._); /* no explicit “default” -> hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) - switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot($._); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); $n = subConstInt( makeConstant(caseMeta, 'i', _s, _i), baseFrom ); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function While($){var $loopLabel,$exitLabel;return (function(){var _b=_i;return WHILE($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&BoolGroup($)&&(function(){ $exitLabel = newLabel('e'); emit('?->', false, $exitLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); emit('<-?', false, $exitLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Value($){var $base=createParserContext(),$f=createParserContext(),$i=createParserContext(),$s=createParserContext();return (function(){var _b=_i;return Group($)||(_im=(_i>_im?_i:_im),_i=_b,false)||SIZEOF($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&TypeBase($base)&&(function(){ if (!dry) { var head = descHead($base._); if (isExternStruct(head)) {   /* host-owned size -> symbolic .z.Name */ makeMeta($._, ':=', 'i', undefined, '#.z.' + head, undefined); setElem($._, undefined); } else { var words = (isStructAtom(head) ? structWords(head) : 1); if (words === undefined) fail('sizeof of incomplete struct ' + head, _s, _i, 'E419'); makeMeta($._, ':=', 'i', undefined, '#' + words, undefined); setElem($._, undefined); } } ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FloatLiteral($f)&&(function(){ if (!dry) { makeMeta($._, ':=', 'f', undefined, '#' + $f._, undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||IntegerLiteral($i)&&(function(){ if (!dry) { makeMeta($._, ':=', 'i', undefined, '#' + $i._, undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||StringLiteral($s)&&(function(){ if (!dry) { makeString('s', $._, evaluate($s._), _s, _i); setElem($._, 'i');      /* string data is int words (Impala 2) */ } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'p', undefined, '&NULL', undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'F', undefined, '&NULL', undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Value($){var $base=createParserContext(),$f=createParserContext(),$i=createParserContext(),$s=createParserContext();return (function(){var _b=_i;return Group($)||(_im=(_i>_im?_i:_im),_i=_b,false)||SIZEOF($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&TypeBase($base)&&(function(){ if (!dry) { var head = descHead($base._); if (isStructAtom(head)) {   /* struct size -> symbolic .z.Name */ if (!isExternStruct(head) && structWords(head) === undefined) fail('sizeof of incomplete struct ' + head, _s, _i, 'E419'); makeMeta($._, ':=', 'i', undefined, '#.z.' + head, undefined); setElem($._, undefined); } else { makeMeta($._, ':=', 'i', undefined, '#1', undefined); setElem($._, undefined); } } ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FloatLiteral($f)&&(function(){ if (!dry) { makeMeta($._, ':=', 'f', undefined, '#' + $f._, undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||IntegerLiteral($i)&&(function(){ if (!dry) { makeMeta($._, ':=', 'i', undefined, '#' + $i._, undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||StringLiteral($s)&&(function(){ if (!dry) { makeString('s', $._, evaluate($s._), _s, _i); setElem($._, 'i');      /* string data is int words (Impala 2) */ } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'p', undefined, '&NULL', undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'F', undefined, '&NULL', undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Variable($){var $global,$id=createParserContext();return (function(){var _b=_i;return (function(){ $global = false; ; return true})()&&((function(){var _b=_i;return GLOBAL($)&&_($)&&(function(){ $global = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Identifier($id)&&(function(){ if (!dry) { lookup($._, $id._, $global, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Identifier($){return (function(){var _b=_i;return (function(){var _l=_i,_x=KEYWORD($);_i=_l;return !_x})()&&(function(){var _m=_i;return (function(){var _b=_i;return (!!_s[_i]&&"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$".indexOf(_s[_i])>=0)&&(++_i,true)&&((function(){while(SYMBOL_CHAR($));})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FloatLiteral($){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())&&(_s[_i]===".")&&(++_i,true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())&&((function(){var _b=_i;return (function(){var _b=_i;return (_s[_i]==="E")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="e")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
