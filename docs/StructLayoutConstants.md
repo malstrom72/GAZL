@@ -66,18 +66,87 @@ Nuance: it is "interface without layout", not "nothing". Drop the interface too 
 territory (like a name-only extern) - you can reference `.offset.Voice.note` raw, but Impala no longer
 knows the field's type or that it is valid.
 
-## What GAZL must support (verify before building)
+## What GAZL supports (VERIFIED against src/GAZL.cpp)
 
-- A symbolic constant as an OFFSET operand: `PEEK $x $v .offset.Voice.gain`. Almost certainly fine
-  (the assembler already resolves symbolic data addresses like `&.s_...`).
-- Nested fields `v.lo.b0` = `.offset.Voice.lo + .offset.Biquad.b0` - a sum of two assembly-time symbols.
-  Either GAZL supports a constant-expression operand (fold the sum), OR the compiler emits two `ADDp`s
-  (one symbolic offset each). Both work; the first is tighter. Today this is a single baked `#total`.
-- Struct arrays `a[i]` = `base + i * .sizeof.Voice` - a runtime `MULi $i .sizeof.Voice` where the
-  constant is symbolic. Fine as long as a symbolic constant is a legal `MULi` operand.
+The feasibility question is answered: GAZL has a full COMPILE-TIME (assemble-time) instruction set - the
+`!`-prefixed lines. There is no infix; every calculation is a prefix three-address `!` instruction that
+writes a compile-time value. Confirmed from the assembler and src/UnitTest.gazl:
 
-So feasibility hinges on: can a GAZL operand be a symbolic constant (and ideally a small
-constant-expression over symbolic constants)? Check against the assembler.
+- Named compile-time constants: `NAME: ! DEFi #int` (also `! DEFf`, `! DEFp &address`). A label before
+  the `!` binds a persistent, referenceable symbol.
+- Scratch compile-time variables (registers): `<A>`, `<a>`, `<off>`, ... . `! MOVi <a> #0` writes one;
+  `#<a>` reads its value as a CONST_INT. `parseOperand` treats `#`, `<`, `&` all as constant-class, and
+  `#<a>` strips the `#` then parses `<a>`, so a slot value is a legal CONST_INT source ANYWHERE a
+  constant is accepted - including as the operand of `! DEFi`. So `NAME: ! DEFi #<a>` SNAPSHOTS the
+  accumulator into a named constant. This is the whole trick.
+- Compile-time arithmetic: `! ADDi <a> #<a> #n`, `! SUBi`, `! MULi`, `! DIVi`, `! MODi`, bitwise,
+  shifts, `! ADDp`/`! SUBp`/`! DIFp` for addresses. Operands may be literals, named constants
+  (`#.sizeof.Biquad`), or slots (`#<a>`) - all CONST_INT.
+- Conditional assembly: `! IFDF <sym> @label` / `! IFND <sym> @label` (defined / not-defined) plus
+  `! EQUi #a #b @label`, `! GOTO @label`, and compile-time labels `skip: !`. This is what makes fields
+  conditional (below).
+- Access side: `PEEK var(d) ptr #int` takes a `#int` offset, so `PEEK $x $v #.offset.Voice.gain`
+  resolves a symbolic constant offset directly (note the `#` - it is a constant, not an `&` address).
+
+## Rolling offset accumulator (how offsets are actually computed)
+
+The compiler does NOT bake `#0 / #2 / #6`; it emits ONE scratch accumulator per struct and walks the
+fields, snapshotting the running offset into each `.offset.*` and advancing by each field's size:
+
+    ; struct Voice { int note; Biquad lo; float gain }
+    ! MOVi <a> #0                              ; accumulator = 0
+    .offset.Voice.note: ! DEFi #<a>            ; note @ 0
+    ! ADDi <a> #<a> #1                         ; advance by sizeof(int) = 1 word
+    .offset.Voice.lo:   ! DEFi #<a>            ; lo @ 1
+    ! ADDi <a> #<a> #.sizeof.Biquad            ; advance by a SYMBOLIC struct size
+    .offset.Voice.gain: ! DEFi #<a>            ; gain @ 1 + sizeof(Biquad)
+    ! ADDi <a> #<a> #1                         ; advance by sizeof(float)
+    .sizeof.Voice:      ! DEFi #<a>            ; total size = final accumulator
+
+`<a>` is scratch and reused - each struct's block re-runs `! MOVi <a> #0` first (UnitTest.gazl reuses
+`<A>` across sections the same way). Scalar advances can be literals (`#1`) or symbolic (`#.sizeof.int`);
+nested-struct and array advances MUST be symbolic so they track the referenced definition.
+
+Field kinds and their advance line:
+- scalar (int/float/ptr): `! ADDi <a> #<a> #1` (the VM word-count of the scalar).
+- nested struct by value: `! ADDi <a> #<a> #.sizeof.Inner`.
+- scalar array `int d[128]`: `! ADDi <a> #<a> #128` (count * 1).
+- struct array `Voice bank[8]`: `! MULi <t> #8 #.sizeof.Voice` then `! ADDi <a> #<a> #<t>`.
+
+### The payoff: conditional fields adapt for free
+
+Wrap a field's TWO lines (snapshot + advance) in a conditional. When the flag is absent, the field's
+offset is never defined AND the accumulator never advances, so every later offset and the struct size
+shrink automatically - zero compiler involvement:
+
+    ! MOVi <a> #0
+    .offset.Voice.note: ! DEFi #<a>
+    ! ADDi <a> #<a> #1
+    ! IFND #WITH_FILTER @noLo                  ; if WITH_FILTER undefined, skip the whole field
+    .offset.Voice.lo:   ! DEFi #<a>
+    ! ADDi <a> #<a> #.sizeof.Biquad
+    noLo: !
+    .offset.Voice.gain: ! DEFi #<a>            ; slides down when lo is absent
+    ! ADDi <a> #<a> #1
+    .sizeof.Voice:      ! DEFi #<a>
+
+Referencing `.offset.Voice.lo` in a build where it was compiled out fails to link - which is correct:
+you cannot access a field that is not there. (Value-based toggles work too: `! EQUi #WITH_FILTER #0 @noLo`.)
+
+### Ordering constraint (the one real rule)
+
+`!` instructions execute during assembly IN SOURCE ORDER, so `#.sizeof.Biquad` must be defined before
+Voice's accumulator reaches the `lo` field. Therefore struct layout blocks must be emitted in
+TOPOLOGICAL order: a struct's `.sizeof` before any struct that embeds it BY VALUE. By-value nesting is
+acyclic (a cycle would be infinite size), so an order always exists. POINTER fields impose no ordering
+(a pointer is one word, no `.sizeof` dependency).
+
+### Nested-field access (`v.lo.b0`)
+
+Offset = `.offset.Voice.lo + .offset.Biquad.b0`, a sum of two compile-time constants. Two clean options:
+fold at the site into a scratch slot (`! ADDi <t> #.offset.Voice.lo #.offset.Biquad.b0` then
+`PEEK $x $v #<t>`) for a single load, or emit a runtime `ADDp $t $v #.offset.Voice.lo` then
+`PEEK $x $t #.offset.Biquad.b0`. No per-pair named constant needed (that would combinatorially explode).
 
 ## Drift / validation
 
@@ -89,9 +158,9 @@ as extern prototypes (see [[docs/ExternPrototypes.md]]).
 ## Open questions
 
 1. `.sizeof` vs `.words` for the size tag.
-2. Does GAZL allow a symbolic constant as an operand, and a constant-expression (sym + sym, i * sym)?
-   If not, nested-field and struct-array access lower to multiple instructions instead of one folded
-   offset - acceptable, but confirm.
+2. (ANSWERED - symbolic constants and compile-time arithmetic exist; see "What GAZL supports" and the
+   rolling-accumulator section. Symbolic const as operand: yes. Constant-expression: yes, via prefix
+   `!` instructions into scratch slots, not infix.)
 3. How does an Impala unit declare a struct INTERFACE without a full definition (so it can use the
    struct but defer layout)? A forward/opaque struct decl carrying field names + types? Or is this only
    via imports?
