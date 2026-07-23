@@ -1308,6 +1308,16 @@
         return !!(s && s.extern);
     };
 
+    /* The `*size` operand for a by-value struct ALLOCATION (LOCA / GLOB). An extern struct's real
+       size is host-owned, so use the symbolic `.z.Name` (resolved at load); a normal struct uses its
+       compiler-known word count. Frame/global allocation accepts a symbolic size, so by-value extern
+       locals/globals work. (Passing/returning a struct BY VALUE is different - it reserves a
+       compile-time-known number of transient VM slots, which a host-owned size cannot provide, so
+       those sites stay blocked; see E425.) */
+    $$parser.structAllocSize = function (structName, words) {
+        return $$parser.isExternStruct(structName) ? ('*.z.' + structName) : ('*' + words);
+    };
+
     $$parser.addStructField = function (name, field, sourceCode, sourceOffset) {
         var s = $$parser.structs[name];
         for (var i = 0; i < s.fields.length; ++i) {
@@ -2772,9 +2782,6 @@ TypeDeclr   <-  base:TypeBase                                        { $desc = $
                                                                          var head = $$parser.descHead($desc);
                                                                          var tail = $$parser.descTail($desc);
                                                                          if (tail === undefined && $$parser.isStructAtom(head)) {
-                                                                             if ($$parser.isExternStruct(head))
-                                                                                 $$parser.fail('An extern struct cannot be used by value yet; use a pointer ('
-                                                                                         + head + ' pointer)', $$s, $$i, 'E425');
                                                                              $$.type = 'S'; $$.struct = head; $$.elem = undefined;
                                                                              $$.words = $$parser.structWords(head);
                                                                          } else if (tail === undefined && $$parser.isFuncTypeAtom(head)) {
@@ -2898,6 +2905,10 @@ inp:ArgsDecl ')'_
                                                                                 for (var _ri = 0; _ri < entry.pendingReturns.length; ++_ri) {
                                                                                         var ret = entry.pendingReturns[_ri];
                                                                                         if (ret.type === 'S') {  /* by-value struct return -> leading output PARA *sizeof (a writable place) */
+                                                                                                if ($$parser.isExternStruct(ret.struct))
+                                                                                                        $$parser.fail('An extern struct cannot be returned by value (the return '
+                                                                                                                + 'window needs a compile-time size); return it through a pointer out-parameter',
+                                                                                                                ret.sourceCode, ret.sourceOffset, 'E425');
                                                                                                 $$parser.declare(
                                                                                                         'PARA', 'locals',
                                                                                                         ret.name,
@@ -2938,6 +2949,10 @@ inp:ArgsDecl ')'_
                                                                 }
                                                                          iterate($inp, function (p) {
                                                                              if (p.type === 'S') {         /* by-value struct param -> labeled input PARA *sizeof (read-only place) */
+                                                                                 if ($$parser.isExternStruct(p.struct))
+                                                                                     $$parser.fail('An extern struct cannot be a by-value parameter (the transient '
+                                                                                             + 'window needs a compile-time size); take it by pointer (' + p.struct + ' pointer)',
+                                                                                             $$s, $$i, 'E425');
                                                                                  $$parser.declare(
                                                                                      'PARA', 'locals',
                                                                                      '$' + p.name,
@@ -2971,7 +2986,7 @@ inp:ArgsDecl ')'_
                                                                                      '$' + v.name,
                                                                                      'S',
                                                                                      false,
-                                                                                     '*' + v.words,
+                                                                                     $$parser.structAllocSize(v.struct, v.words),
                                                                                      $$s, $$i,
                                                                                      undefined,
                                                                                      v.struct
@@ -3155,7 +3170,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                      $section, 'globals',
                                                                                      $v.name, 'S',
                                                                                      ($section === 'CNST'),
-                                                                                     '*' + $v.words,
+                                                                                     $$parser.structAllocSize($v.struct, $v.words),
                                                                                      $$s, $$i,
                                                                                      $$parser.formatGlobalSignatureComment(
                                                                                          $section, $v.name, 'S', undefined, undefined,
@@ -3397,9 +3412,6 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                          var head = $$parser.descHead($desc);
                                                                          var tail = $$parser.descTail($desc);
                                                                          if (tail === undefined && $$parser.isStructAtom(head)) {
-                                                                             if ($$parser.isExternStruct(head))
-                                                                                 $$parser.fail('An extern struct cannot be used by value yet; use a pointer ('
-                                                                                         + head + ' pointer)', $$s, $$i, 'E425');
                                                                              $$.type = 'S';
                                                                              $$.struct = head;
                                                                              $$.elem = undefined;
