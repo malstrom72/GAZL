@@ -1,0 +1,31 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 16:1
+	! MOVi <a> #0	; layout of struct Point
+.o.Point.x:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.Point.y:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Point:	! DEFi #<a>
+; signature extern native printInt() -> unknown @ 20:1
+; signature extern native printLF() -> unknown @ 22:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 22:15
+		PARA *1
+	$raw:	LOCA *8
+	$f:	LOCp
+;-----------------------------------------------------------------------------
+		ADRL $f $raw:0 *0	; f = (Frame pointer) &raw[0]
+		ADDp %0 $f #.o.Frame.origin	; f->origin.x = 3
+		POKE %0 #.o.Point.x #3
+		POKE $f #.o.Frame.w #7	; f->w = 7
+		ADDp %1 $f #.o.Frame.origin	; printInt(f->origin.x)
+		PEEK %1 %1 #.o.Point.x
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 28:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:34
+		PEEK %1 $f #.o.Frame.w	; printInt(f->w)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 29:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 29:27
+		RETU   	; }

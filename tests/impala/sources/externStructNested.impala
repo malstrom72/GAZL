@@ -1,0 +1,30 @@
+/*
+	extern struct with a nested (normal) struct field and a scalar field, accessed through a
+	pointer - proving extern structs use the SAME unified field-access path as normal structs
+	(no scalar/pointer-only restriction). Host provides `.o.Frame.*` / `.z.Frame`; the nested
+	Point's offsets come from Impala's own layout (Point is a normal struct).
+
+	Compile-only golden. To run: prepend a host header, e.g.
+	    .o.Frame.origin: ! DEFi #0
+	    .o.Frame.w:      ! DEFi #2
+	    .z.Frame:        ! DEFi #4
+	then GAZLCmd main -> prints 3 7.
+*/
+
+const int DEBUG = 1
+
+struct Point { int x; int y }
+extern struct Frame { Point origin; int w }
+
+extern native printInt
+extern native printLF
+
+function main()
+locals int array raw[8], Frame pointer f
+{
+	f = (Frame pointer) &raw[0];
+	f->origin.x = 3;					// nested field on an extern struct, through a pointer
+	f->w = 7;
+	printInt(f->origin.x); printLF();	// 3
+	printInt(f->w); printLF();			// 7
+}

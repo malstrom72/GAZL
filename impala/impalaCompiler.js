@@ -1332,11 +1332,6 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             fail('Field ' + field.name + ' has incomplete struct type ' + field.struct
                     + ' (define it, or use a pointer)', sourceCode, sourceOffset, 'E412');
         }
-        if (s.extern && (field.type === 'S' || field.type === 'A')) {
-            fail('An extern struct field must be a scalar or pointer for now (no by-value '
-                    + 'struct or array fields): ' + field.name, sourceCode, sourceOffset, 'E418',
-                    'use a pointer field, or make it a normal struct');
-        }
         field.offset = s.words;
         field.words = fieldWords(field);
         s.fields.push(field);
