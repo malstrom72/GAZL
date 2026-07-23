@@ -1,0 +1,44 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 22:1
+; signature extern native printInt() -> unknown @ 25:1
+; signature extern native printLF() -> unknown @ 27:1
+
+;-----------------------------------------------------------------------------
+setup:	FUNC	; signature func setup(AudioBuffer-ptr b, int n, int c) -> void @ 27:16
+		PARA *1
+	$b:	INPp
+	$n:	INPi
+	$c:	INPi
+;-----------------------------------------------------------------------------
+		POKE $b #.o.AudioBuffer.frames $n	; b->frames = n
+		POKE $b #.o.AudioBuffer.channels $c	; b->channels = c
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 33:15
+		PARA *1
+	$raw:	LOCA *8
+	$b:	LOCp
+	$x:	LOCi
+;-----------------------------------------------------------------------------
+		ADRL $b $raw:0 *0	; b = (AudioBuffer pointer)&raw[0]
+		MOVp %1 $b 	; setup(b, 42, 2)
+		MOVi %2 #42 
+		MOVi %3 #2 
+		CALL &setup %0 *4	; expects setup(ptr, int, int) -> void @ 37:17
+		PEEK %0 $b #.o.AudioBuffer.frames	; x = b->frames + b->channels
+		PEEK %1 $b #.o.AudioBuffer.channels
+		ADDi $x %0 %1
+		MOVi %1 $x 	; printInt(x)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 39:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 39:24
+		PEEK %1 $b #.o.AudioBuffer.frames	; printInt(b->frames)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:32
+		PEEK %1 $b #.o.AudioBuffer.channels	; printInt(b->channels)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:34
+		RETU   	; }

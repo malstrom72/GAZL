@@ -1247,6 +1247,26 @@
         }
     };
 
+    /* `extern struct Name { fields }`: host-owned layout. Impala knows the interface (field
+       names + types) and emits symbolic `.o.Name.field` / `.z.Name` references, but does NOT
+       emit the layout - the host supplies those constants at load. See docs/StructLayoutConstants.md. */
+    $$parser.beginExternStruct = function (name, sourceCode, sourceOffset) {
+        var prev = $$parser.structs[name];
+        if (prev && prev.complete) {
+            $$parser.fail('Struct already defined: ' + name, sourceCode, sourceOffset, 'E410');
+        }
+        if (!prev) {
+            $$parser.structs[name] = { fields: [], words: 0, complete: false,
+                    sourceCode: sourceCode, sourceOffset: sourceOffset };
+        }
+        $$parser.structs[name].extern = true;
+    };
+
+    $$parser.isExternStruct = function (name) {
+        var s = $$parser.structs[name];
+        return !!(s && s.extern);
+    };
+
     $$parser.addStructField = function (name, field, sourceCode, sourceOffset) {
         var s = $$parser.structs[name];
         for (var i = 0; i < s.fields.length; ++i) {
@@ -1258,6 +1278,11 @@
         if (field.type === 'S' && $$parser.structWords(field.struct) === undefined) {
             $$parser.fail('Field ' + field.name + ' has incomplete struct type ' + field.struct
                     + ' (define it, or use a pointer)', sourceCode, sourceOffset, 'E412');
+        }
+        if (s.extern && (field.type === 'S' || field.type === 'A')) {
+            $$parser.fail('An extern struct field must be a scalar or pointer for now (no by-value '
+                    + 'struct or array fields): ' + field.name, sourceCode, sourceOffset, 'E418',
+                    'use a pointer field, or make it a normal struct');
         }
         field.offset = s.words;
         field.words = $$parser.fieldWords(field);
@@ -1502,6 +1527,14 @@
                     sourceCode, sourceOffset, 'E417');
         }
         var total = off + field.offset;
+        /* extern struct: layout is host-owned, so emit a symbolic `.o.Name.field` offset instead of a
+           baked number. v1 handles direct (non-nested) scalar/pointer fields (off is 0). */
+        var externSt = $$parser.isExternStruct(structName);
+        if (externSt && off !== 0) {
+            $$parser.fail('Nested field access into an extern struct is not yet supported',
+                    sourceCode, sourceOffset, 'E424', 'access it through a pointer field instead');
+        }
+        var offOp = externSt ? ('.o.' + structName + '.' + fieldName) : ('' + total);
 
         if (field.type === 'S') {                                 /* nested inline struct -> another place */
             $$parser.setPlace(x, bk, base, total, field.struct);
@@ -1534,11 +1567,11 @@
 
         /* terminal scalar field */
         if (bk === 'local') {
-            $$parser.makeMeta(x, '=', field.type, undefined, base + ':' + total, undefined);
+            $$parser.makeMeta(x, '=', field.type, undefined, base + ':' + offOp, undefined);
         } else if (bk === 'globalAddr') {                         /* &name:off in global memory */
-            $$parser.makeMeta(x, '=*', field.type, undefined, base + ':' + total, undefined);
+            $$parser.makeMeta(x, '=*', field.type, undefined, base + ':' + offOp, undefined);
         } else {                                                  /* pointer base: PEEK/POKE base #offset */
-            $$parser.makeMeta(x, '=[]', field.type, null, base, '#' + total);
+            $$parser.makeMeta(x, '=[]', field.type, null, base, '#' + offOp);
         }
         x.place = false;
         x.type  = field.type;
@@ -2704,6 +2737,9 @@ TypeDeclr   <-  base:TypeBase                                        { $desc = $
                                                                          var head = $$parser.descHead($desc);
                                                                          var tail = $$parser.descTail($desc);
                                                                          if (tail === undefined && $$parser.isStructAtom(head)) {
+                                                                             if ($$parser.isExternStruct(head))
+                                                                                 $$parser.fail('An extern struct cannot be used by value yet; use a pointer ('
+                                                                                         + head + ' pointer)', $$s, $$i, 'E425');
                                                                              $$.type = 'S'; $$.struct = head; $$.elem = undefined;
                                                                              $$.words = $$parser.structWords(head);
                                                                          } else if (tail === undefined && $$parser.isFuncTypeAtom(head)) {
@@ -2935,8 +2971,20 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                 (
                     STRUCT _ id:Identifier                            {
                                                                          $$.structFwd = true;
-                                                                         $$parser.externStruct($id, $$s, $$i);
+                                                                         $sname = $id;
+                                                                         $$parser.beginExternStruct($id, $$s, $$i);
                                                                      }
+                    ( '{' _
+                      ( f:(ArrayDecl / VarDecl)                       {
+                                                                         $$parser.addStructField($sname,
+                                                                             { name: $f.name, type: $f.type, elem: $f.elem,
+                                                                               struct: $f.struct, size: $f.size },
+                                                                             $$s, $$i);
+                                                                     }
+                        ( ';' _ )?
+                      )*
+                      '}' _                                           { $$parser.endStruct($sname); }
+                    )?
                 /   (   FUNCTION                                      { $$.type  = 'U';  $$.scope = 'functions'; }
                     /   NATIVE                                        { $$.type  = 'N';  $$.scope = 'functions'; }
                     ) _ id:Identifier                                 { $$.name  = $id; }
@@ -3314,6 +3362,9 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                          var head = $$parser.descHead($desc);
                                                                          var tail = $$parser.descTail($desc);
                                                                          if (tail === undefined && $$parser.isStructAtom(head)) {
+                                                                             if ($$parser.isExternStruct(head))
+                                                                                 $$parser.fail('An extern struct cannot be used by value yet; use a pointer ('
+                                                                                         + head + ' pointer)', $$s, $$i, 'E425');
                                                                              $$.type = 'S';
                                                                              $$.struct = head;
                                                                              $$.elem = undefined;
@@ -4053,13 +4104,18 @@ While       <-  WHILE _                             {
 Value       <-  Group
                 / SIZEOF _ '('_ base:TypeBase        { if (!$$parser.dry) {
                                                         var head = $$parser.descHead($base);
-                                                        var words = ($$parser.isStructAtom(head)
-                                                                ? $$parser.structWords(head) : 1);
-                                                        if (words === undefined)
-                                                            $$parser.fail('sizeof of incomplete struct ' + head,
-                                                                    $$s, $$i, 'E419');
-                                                        $$parser.makeMeta($$, ':=', 'i', undefined, '#' + words, undefined);
-                                                        $$parser.setElem($$, undefined);
+                                                        if ($$parser.isExternStruct(head)) {   /* host-owned size -> symbolic .z.Name */
+                                                            $$parser.makeMeta($$, ':=', 'i', undefined, '#.z.' + head, undefined);
+                                                            $$parser.setElem($$, undefined);
+                                                        } else {
+                                                            var words = ($$parser.isStructAtom(head)
+                                                                    ? $$parser.structWords(head) : 1);
+                                                            if (words === undefined)
+                                                                $$parser.fail('sizeof of incomplete struct ' + head,
+                                                                        $$s, $$i, 'E419');
+                                                            $$parser.makeMeta($$, ':=', 'i', undefined, '#' + words, undefined);
+                                                            $$parser.setElem($$, undefined);
+                                                        }
                                                       } } ')'_
                 / f:FloatLiteral                    { if (!$$parser.dry) {
                                                         $$parser.makeMeta($$, ':=', 'f', undefined, '#' + $f, undefined);

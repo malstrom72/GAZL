@@ -1,0 +1,42 @@
+/*
+	Impala 2: extern struct (host-owned layout).
+
+	An `extern struct` declares the INTERFACE (field names + types) only. Impala type-checks and
+	selects instructions from it, and emits SYMBOLIC field offsets (`.o.AudioBuffer.frames`, ...)
+	plus size (`.z.AudioBuffer`) - it does NOT emit the layout. The HOST supplies those constants
+	at load, so the same compiled GAZL runs against any host layout (reorder / resize / extra
+	fields) with no Impala recompile. See docs/StructLayoutConstants.md.
+
+	This golden checks the symbolic emission is stable. To RUN it, prepend a host layout header, e.g.
+
+	    .o.AudioBuffer.data:     ! DEFi #1
+	    .o.AudioBuffer.frames:   ! DEFi #5
+	    .o.AudioBuffer.channels: ! DEFi #6
+	    .z.AudioBuffer:          ! DEFi #8
+
+	then `GAZLCmd main` -> prints 44 42 2 (independent of the chosen offsets).
+*/
+
+const int DEBUG = 1
+
+extern struct AudioBuffer { int frames; float pointer data; int channels }
+
+extern native printInt
+extern native printLF
+
+function setup(AudioBuffer pointer b, int n, int c)
+{
+	b->frames = n;
+	b->channels = c;
+}
+
+function main()
+locals int array raw[8], AudioBuffer pointer b, int x
+{
+	b = (AudioBuffer pointer)&raw[0];	// cast host-agnostic storage to the extern struct
+	setup(b, 42, 2);
+	x = b->frames + b->channels;
+	printInt(x); printLF();				// 44
+	printInt(b->frames); printLF();		// 42
+	printInt(b->channels); printLF();	// 2
+}
