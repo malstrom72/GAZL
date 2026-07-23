@@ -1522,27 +1522,27 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var sz = structWords(structName);
         var basePtr = makeRValue(x);
         var idxRV = makeRValue(idx);
+        var bk = (basePtr[0] === '&' ? 'globalAddr' : 'pointer');
 
-        if (/^#[0-9]+$/.test(idxRV)) {                            /* constant index */
-            var off = parseInt(idxRV.substr(1), 10) * sz;
+        if (/^#[0-9]+$/.test(idxRV)) {                            /* constant index -> SYMBOLIC stride in offParts (folds with the field) */
+            var k = parseInt(idxRV.substr(1), 10);
             returnBack(idxRV);
-            if (off === 0) {                                      /* element 0 = the base; keep it addressable */
-                setPlace(x, (basePtr[0] === '&' ? 'globalAddr' : 'pointer'), basePtr, [], structName, structName);
-                return;
+            var parts = [];
+            if (k !== 0) {
+                var s = borrow('<');
+                emit('<> *', 'i', s, '#' + k, '#.z.' + structName);
+                parts.push(s);
             }
-            var caddr = borrow('%');                     /* base + i*sizeof -> a runtime pointer (a fresh element root) */
-            emit('+', 'p', caddr, basePtr, '#' + off);
-            returnBack(basePtr);
-            setPlace(x, 'pointer', caddr, [], structName, structName);
+            setPlace(x, bk, basePtr, parts, structName, structName);
             return;
         }
 
-        var addr = borrow('%');                          /* dynamic index -> ptr + i*sizeof (a runtime pointer) */
-        if (sz === 1) {
+        var addr = borrow('%');                          /* dynamic index -> ptr + i*.z.Elem (a runtime pointer) */
+        if (sz === 1) {                                           /* 1-word element: stride is 1, no multiply */
             emit('+', 'p', addr, basePtr, idxRV);
         } else {
-            var scaled = borrow('%');
-            emit('*', 'i', scaled, idxRV, '#' + sz);
+            var scaled = borrow('%');                    /* SYMBOLIC stride .z.Elem */
+            emit('*', 'i', scaled, idxRV, '#.z.' + structName);
             emit('+', 'p', addr, basePtr, scaled);
             returnBack(scaled);
         }
@@ -1566,14 +1566,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             var k = parseInt(idxRV.substr(1), 10);
             returnBack(idxRV);
             var parts = x.offParts.slice();
-            if (k !== 0) {
-                if (sz !== undefined) {
-                    parts.push('' + (k * sz));                /* numeric stride */
-                } else {
-                    var s = borrow('<');             /* extern element: symbolic k*.z.Elem */
-                    emit('<> *', 'i', s, '#' + k, '#.z.' + elemStruct);
-                    parts.push(s);
-                }
+            if (k !== 0) {                                     /* stride is SYMBOLIC k*.z.Elem, so it adapts if the element size changes */
+                var s = borrow('<');
+                emit('<> *', 'i', s, '#' + k, '#.z.' + elemStruct);
+                parts.push(s);
             }
             setPlace(x, x.baseKind, x.base, parts, elemStruct, x.root);   /* now a struct place */
             return;
@@ -1589,11 +1585,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
         if (aoff && ('' + aoff).charAt(0) === '<') returnBack(aoff);
         var elemPtr = borrow('%');
-        if (sz === 1) {
+        if (sz === 1) {                                       /* 1-word element: stride is 1, no multiply */
             emit('+', 'p', elemPtr, arrPtr, idxRV);
         } else {
-            var scaled = borrow('%');
-            emit('*', 'i', scaled, idxRV, (sz !== undefined ? '#' + sz : '#.z.' + elemStruct));
+            var scaled = borrow('%');                /* SYMBOLIC stride .z.Elem (adapts to the element size) */
+            emit('*', 'i', scaled, idxRV, '#.z.' + elemStruct);
             emit('+', 'p', elemPtr, arrPtr, scaled);
             returnBack(scaled);
         }

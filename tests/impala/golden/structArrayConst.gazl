@@ -30,7 +30,7 @@ sumB0:	FUNC	; signature func sumB0(Voice-ptr v) -> float @ 14:16
 		MOVi $i #0 	; for (i = 0 to 3) s = s + v->filters[i].b0
 		GEQi #0 #3 @.e0
 	.l1:	ADDp %0 $v #.o.Voice.filters	; s = s + v->filters[i].b0
-		MULi %2 $i #2
+		MULi %2 $i #.z.Biquad
 		ADDp %1 %0 %2
 		PEEK %1 %1 #.o.Biquad.b0
 		ADDf $s $s %1
@@ -43,29 +43,34 @@ main:	FUNC	; signature func main() -> void @ 21:15
 		PARA *1
 	$v:	LOCA *8
 ;-----------------------------------------------------------------------------
-		! ADDi <A> #.o.Voice.filters #4	; v.filters[2].b0 = 0.5
-		! ADDi <A> #<A> #.o.Biquad.b0
-		MOVf $v:<A> #0.5 
-		! ADDi <A> #.o.Voice.filters #4	; v.filters[2].z1 = 1.5
-		! ADDi <A> #<A> #.o.Biquad.z1
-		MOVf $v:<A> #1.5 
-		! ADDi <A> #.o.Voice.filters #.o.Biquad.b0	; v.filters[0].b0 = 0.25
-		MOVf $v:<A> #0.25 
-		! ADDi <A> #.o.Voice.filters #2	; v.filters[1].b0 = 2.25
-		! ADDi <A> #<A> #.o.Biquad.b0
-		MOVf $v:<A> #2.25 
-		! ADDi <A> #.o.Voice.filters #4	; printFloat(v.filters[2].b0)
-		! ADDi <A> #<A> #.o.Biquad.b0
-		MOVf %1 $v:<A> 
+		! MULi <A> #2 #.z.Biquad	; v.filters[2].b0 = 0.5
+		! ADDi <B> #.o.Voice.filters #<A>
+		! ADDi <B> #<B> #.o.Biquad.b0
+		MOVf $v:<B> #0.5 
+		! MULi <B> #2 #.z.Biquad	; v.filters[2].z1 = 1.5
+		! ADDi <C> #.o.Voice.filters #<B>
+		! ADDi <C> #<C> #.o.Biquad.z1
+		MOVf $v:<C> #1.5 
+		! ADDi <C> #.o.Voice.filters #.o.Biquad.b0	; v.filters[0].b0 = 0.25
+		MOVf $v:<C> #0.25 
+		! MULi <C> #1 #.z.Biquad	; v.filters[1].b0 = 2.25
+		! ADDi <D> #.o.Voice.filters #<C>
+		! ADDi <D> #<D> #.o.Biquad.b0
+		MOVf $v:<D> #2.25 
+		! MULi <D> #2 #.z.Biquad	; printFloat(v.filters[2].b0)
+		! ADDi <E> #.o.Voice.filters #<D>
+		! ADDi <E> #<E> #.o.Biquad.b0
+		MOVf %1 $v:<E> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 28:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:40
-		! ADDi <A> #.o.Voice.filters #4	; printFloat(v.filters[2].z1)
-		! ADDi <A> #<A> #.o.Biquad.z1
-		MOVf %1 $v:<A> 
+		! MULi <E> #2 #.z.Biquad	; printFloat(v.filters[2].z1)
+		! ADDi <F> #.o.Voice.filters #<E>
+		! ADDi <F> #<F> #.o.Biquad.z1
+		MOVf %1 $v:<F> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 29:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 29:40
-		! ADDi <A> #.o.Voice.filters #.o.Biquad.b0	; printFloat(v.filters[0].b0)
-		MOVf %1 $v:<A> 
+		! ADDi <F> #.o.Voice.filters #.o.Biquad.b0	; printFloat(v.filters[0].b0)
+		MOVf %1 $v:<F> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:40
 		ADRL %2 $v *8	; printFloat(sumB0(&v))
