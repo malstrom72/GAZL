@@ -160,6 +160,28 @@ disagree. The gazl-validator can cross-check the interface's field types against
 emitted layout, so a mismatch is a build error, not a silent lie - the same "verifiable contract" theme
 as extern prototypes (see [[docs/ExternPrototypes.md]]).
 
+## Phase 1 spike - VERIFIED by running on GAZLCmd
+
+Hand-authored GAZL (no compiler changes) confirmed every inference above actually assembles and runs:
+
+- Took the real compiler output for a pointer-accessed struct (`Filter { int mode; float cutoff }`),
+  prepended a rolling-accumulator preamble (`! MOVi <a> #0` / `.o.Filter.mode: ! DEFi #<a>` /
+  `! ADDi <a> #<a> #1` / ... / `.z.Filter: ! DEFi #<a>`), and replaced the baked offsets with symbolic
+  ones. Output was byte-for-byte identical behaviour (`3 0.75 3 99`).
+- Global-scope compile-time arithmetic works: the accumulator preamble sits at top level (not inside a
+  FUNC) and assembles fine.
+- `! DEFi #<a>` snapshotting the accumulator into a named constant works - the whole trick is real.
+- Symbolic offsets resolve in EVERY operand position tried, not just PEEK/POKE: pointer access
+  (`POKE $f #.o.Filter.cutoff $c`, `PEEK %1 $p #.o.Filter.mode`), local-value access
+  (`MOVi %1 $v:.o.Filter.mode`), and the ADRL size hint (`ADRL %0 $v *.z.Filter`). All ran identically.
+- Conditional fields slide for free: a `Rec { int a; [int b if WITH_MID]; int c }` with `b` behind
+  `! IFND #WITH_MID @noB` printed `offset(c)=2, sizeof=3` with the flag defined and `offset(c)=1,
+  sizeof=2` without it - the later offset and the struct size recompute with no compiler involvement.
+
+Conclusion: the target fully supports the scheme. Remaining work is purely on the Impala emitter side
+(Phase 2): emit the per-struct accumulator preamble in topological order, and switch field-access
+lowering from baked `#offset` / `:offset` / `*size` to the `.o.*` / `.z.*` symbols.
+
 ## Open questions
 
 1. `.z` vs `.words` for the size tag.
