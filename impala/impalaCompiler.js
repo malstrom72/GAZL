@@ -959,6 +959,16 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             normaliseVoid(op1),
             normaliseVoid(op2)
         ];
+        /* A value meta is never a place. Meta slots are pooled and reused, so clear any leftover
+           place/window state from a previous use (e.g. `*p = v` leaves a struct place on the slot
+           that `p` is later looked up into) - otherwise fieldAccess mis-reads `p` as a struct value. */
+        rec.place     = false;
+        rec.baseKind  = undefined;
+        rec.base      = undefined;
+        rec.placeOff  = undefined;
+        rec.struct    = undefined;
+        rec.winBase   = undefined;
+        rec.winWords  = undefined;
         return rec;
     };
 

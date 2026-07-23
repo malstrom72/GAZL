@@ -1,0 +1,29 @@
+/*
+	Regression: a whole-struct copy `*p = v` must not leave stale "struct place" state on the
+	pooled meta slot, or the pointer `p` is mis-read as a struct value on the NEXT `p->field`
+	access (was error E416 "use '.'", and order-dependent - it only failed when the copy came
+	first). Root cause: makeMeta did not clear place/window flags on slot reuse.
+
+	Expected (GAZLCmd structPlaceReuse.gazl main): 5 1 7
+*/
+
+const int DEBUG = 1
+
+struct Biquad { float b0; float z1 }
+struct Voice  { int note; Biquad lo; float gain }
+
+extern native printInt
+extern native printLF
+
+function main()
+locals Voice v, Voice pointer p, int array raw[8]
+{
+	v.note = 5;
+	p = (Voice pointer) &raw[0];
+	*p = v;								// whole-struct copy FIRST (the failing order)
+	printInt(p->note); printLF();		// 5  - copied value, p still a pointer
+	p->note = 1;						// field write after the copy (was E416)
+	printInt(p->note); printLF();		// 1
+	p->note = p->note + 6;
+	printInt(p->note); printLF();		// 7
+}
