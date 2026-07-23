@@ -8,6 +8,10 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 16:1
 .o.Point.y:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Point:	! DEFi #<a>
+	! ADDi <t> #.o.Frame.origin #.o.Point.x
+.o.Frame.origin.x:	! DEFi #<t>
+	! ADDi <t> #.o.Frame.origin #.o.Point.y
+.o.Frame.origin.y:	! DEFi #<t>
 ; signature extern native printInt() -> unknown @ 20:1
 ; signature extern native printLF() -> unknown @ 22:1
 
@@ -18,11 +22,9 @@ main:	FUNC	; signature func main() -> void @ 22:15
 	$f:	LOCp
 ;-----------------------------------------------------------------------------
 		ADRL $f $raw:0 *0	; f = (Frame pointer) &raw[0]
-		ADDp %0 $f #.o.Frame.origin	; f->origin.x = 3
-		POKE %0 #.o.Point.x #3
+		POKE $f #.o.Frame.origin.x #3	; f->origin.x = 3
 		POKE $f #.o.Frame.w #7	; f->w = 7
-		ADDp %1 $f #.o.Frame.origin	; printInt(f->origin.x)
-		PEEK %1 %1 #.o.Point.x
+		PEEK %1 $f #.o.Frame.origin.x	; printInt(f->origin.x)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 28:23
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:34
 		PEEK %1 $f #.o.Frame.w	; printInt(f->w)

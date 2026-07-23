@@ -12,6 +12,10 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
 .o.Voice.note:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Voice.lo:	! DEFi #<a>
+	! ADDi <t> #<a> #.o.Biquad.b0
+.o.Voice.lo.b0:	! DEFi #<t>
+	! ADDi <t> #<a> #.o.Biquad.z1
+.o.Voice.lo.z1:	! DEFi #<t>
 	! ADDi <a> #<a> #.z.Biquad
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1
@@ -38,14 +42,12 @@ main:	FUNC	; signature func main() -> void @ 25:15
 	$snapshot:	LOCA *4
 ;-----------------------------------------------------------------------------
 		POKE &voice:.o.Voice.note #60 	; global voice.note = 60
-		ADDp %0 &voice #.o.Voice.lo	; global voice.lo.b0 = 0.5
-		POKE %0 #.o.Biquad.b0 #0.5
+		POKE &voice:.o.Voice.lo.b0 #0.5 	; global voice.lo.b0 = 0.5
 		POKE &voice:.o.Voice.gain #2.0 	; global voice.gain = 2.0
 		PEEK %1 &voice:.o.Voice.note 	; printInt(global voice.note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 31:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 31:40
-		ADDp %1 &voice #.o.Voice.lo	; printFloat(global voice.lo.b0)
-		PEEK %1 %1 #.o.Biquad.b0
+		PEEK %1 &voice:.o.Voice.lo.b0 	; printFloat(global voice.lo.b0)
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 32:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:43
 		MOVp %1 &voice 	; bump(&global voice)

@@ -12,6 +12,10 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 18:1
 .o.Voice.note:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Voice.lo:	! DEFi #<a>
+	! ADDi <t> #<a> #.o.Biquad.b0
+.o.Voice.lo.b0:	! DEFi #<t>
+	! ADDi <t> #<a> #.o.Biquad.z1
+.o.Voice.lo.z1:	! DEFi #<t>
 	! ADDi <a> #<a> #.z.Biquad
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1
@@ -26,15 +30,12 @@ tick:	FUNC	; signature func tick(Voice-ptr v, float in) -> float @ 25:15
 	$v:	INPp
 	$in:	INPf
 ;-----------------------------------------------------------------------------
-		ADDp %0 $v #.o.Voice.lo	; v->lo.z1 = in * v->lo.b0
-		ADDp %1 $v #.o.Voice.lo
-		PEEK %1 %1 #.o.Biquad.b0
-		MULf %1 $in %1
-		POKE %0 #.o.Biquad.z1 %1
-		ADDp %1 $v #.o.Voice.lo	; out = v->lo.z1 + v->gain
-		PEEK %1 %1 #.o.Biquad.z1
-		PEEK %0 $v #.o.Voice.gain
-		ADDf $out %1 %0
+		PEEK %0 $v #.o.Voice.lo.b0	; v->lo.z1 = in * v->lo.b0
+		MULf %0 $in %0
+		POKE $v #.o.Voice.lo.z1 %0
+		PEEK %0 $v #.o.Voice.lo.z1	; out = v->lo.z1 + v->gain
+		PEEK %1 $v #.o.Voice.gain
+		ADDf $out %0 %1
 		RETU   	; }
 
 
@@ -52,9 +53,7 @@ main:	FUNC	; signature func main() -> void @ 32:15
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 36:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 36:37
 		MOVi $v:.o.Voice.note #60 	; v.note = 60
-		ADRL %0 $v *4	; v.lo.b0 = 0.5
-		ADDp %0 %0 #.o.Voice.lo
-		POKE %0 #.o.Biquad.b0 #0.5
+		MOVf $v:.o.Voice.lo.b0 #0.5 	; v.lo.b0 = 0.5
 		MOVf $v:.o.Voice.gain #0.25 	; v.gain = 0.25
 		ADRL $p $pool:0 *0	; p = (Voice pointer) &pool[0]
 		ADRL %0 $v *4	; *p = v
@@ -64,9 +63,7 @@ main:	FUNC	; signature func main() -> void @ 32:15
 		CALL &tick %1 *3	; expects tick(ptr, float) -> float @ 42:25
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 42:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 42:37
-		ADRL %1 $v *4	; printFloat(v.lo.b0)
-		ADDp %1 %1 #.o.Voice.lo
-		PEEK %1 %1 #.o.Biquad.b0
+		MOVf %1 $v:.o.Voice.lo.b0 	; printFloat(v.lo.b0)
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 43:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 43:32
 		RETU   	; }
