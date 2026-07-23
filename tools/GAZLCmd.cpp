@@ -373,7 +373,7 @@ struct Rng {
 /* Bounded pick via multiply-shift on the full word: uses the high bits (full period), dodging LCG low-bit cycling. */
 static unsigned pick(Rng& r, unsigned n) { return static_cast<unsigned>((static_cast<uint64_t>(r.word()) * n) >> 32); }
 
-enum { NI = 8, NF = 4 };	// int / float scalar slots the generated frame provides
+enum { NI = 12, NF = 6, BIGN = 2048 };	// int/float scalar slots + a big LOCA (>4 KB frame) the generated frame provides
 
 /* Append one instruction line (leading space + text + '\n'), attaching+consuming a pending label prefix if present. */
 static void putLine(std::string& p, std::string& pending, const char* line) {
@@ -408,6 +408,13 @@ static void emitSimpleOp(std::string& p, Rng& r, std::string& pending) {
 		}
 	} else if (choice == 9) {
 		std::snprintf(buf, sizeof buf, " %s $f%u $f%u\n", pick(r, 2) ? "ABSf" : "FLOf", pick(r, NF), pick(r, NF));
+	} else if (pick(r, 2) == 0) {
+		// Big-LOCA (far-slot) access: index masked in-bounds to [0, BIGN). BIGN>1024 words puts the slot past the 12-bit
+		// immediate range, exercising the large-frame addressing path (the addImmX class) under the full differential.
+		std::snprintf(buf, sizeof buf, " ANDi $idx $i%u #%d\n", pick(r, NI), BIGN - 1); putLine(p, pending, buf);
+		const unsigned a = pick(r, NI);
+		if (pick(r, 2)) { std::snprintf(buf, sizeof buf, " SETL $bigarr $idx $i%u\n", a); }
+		else { std::snprintf(buf, sizeof buf, " GETL $i%u $bigarr $idx\n", a); }
 	} else {
 		std::snprintf(buf, sizeof buf, " ANDi $idx $i%u #7\n", pick(r, NI)); putLine(p, pending, buf);	// in-bounds index (size 8)
 		const unsigned a = pick(r, NI);
@@ -444,7 +451,7 @@ static bool g_deepRecursion = false;	// when set, some rec calls take a raw (pos
 
 static void emitBody(std::string& p, Rng& r, std::string& pending, int stmts, int depth, int& label) {
 	static const char* const CMP[] = { "LSSi", "LEQi", "GEQi", "EQUi", "NEQi" };
-	const int MAX_DEPTH = 2;
+	const int MAX_DEPTH = 3;
 	char buf[64];
 	for (int n = 0; n < stmts; ++n) {
 		unsigned kind = pick(r, 18);
@@ -453,9 +460,15 @@ static void emitBody(std::string& p, Rng& r, std::string& pending, int stmts, in
 			const int id = label++;
 			const int limit = 2 + static_cast<int>(pick(r, 38));
 			std::snprintf(buf, sizeof buf, " MOVi $c%d #0\n", depth); putLine(p, pending, buf);	// consumes any incoming label
-			std::string back = ".l" + std::to_string(id) + ":";									// rides the body's first op
-			emitBody(p, r, back, 1 + static_cast<int>(pick(r, 4)), depth + 1, label);
-			std::snprintf(buf, sizeof buf, " FORi $c%d #%d @.l%d\n", depth, limit, id); putLine(p, pending, buf);
+			const int body = static_cast<int>(pick(r, 5));										// 0 => empty self-loop: a degenerate/nested loop that stresses v2.2 residency capture/reconcile
+			if (body == 0) {
+				std::snprintf(buf, sizeof buf, " FORi $c%d #%d @.l%d\n", depth, limit, id);
+				std::string self = ".l" + std::to_string(id) + ":"; putLine(p, self, buf);	// label rides the FORi itself (empty body)
+			} else {
+				std::string back = ".l" + std::to_string(id) + ":";								// rides the body's first op
+				emitBody(p, r, back, body, depth + 1, label);
+				std::snprintf(buf, sizeof buf, " FORi $c%d #%d @.l%d\n", depth, limit, id); putLine(p, pending, buf);
+			}
 		} else if (kind == 1) {
 			const int id = label++;
 			std::snprintf(buf, sizeof buf, " %s $i%u $i%u @.s%d\n", CMP[pick(r, 5)], pick(r, NI), pick(r, NI), id); putLine(p, pending, buf);
@@ -524,7 +537,8 @@ static std::string buildProgram(Rng& r) {
 	p += "main: FUNC\n PARA *3\n";
 	for (int i = 0; i < NI; ++i) { p += " $i" + std::to_string(i) + ": LOCi\n"; }
 	for (int i = 0; i < NF; ++i) { p += " $f" + std::to_string(i) + ": LOCf\n"; }
-	p += " $arr: LOCA *8\n $p: LOCp\n $ps: LOCp\n $idx: LOCi\n $c0: LOCi\n $c1: LOCi\n";
+	p += " $arr: LOCA *8\n $p: LOCp\n $ps: LOCp\n $idx: LOCi\n $c0: LOCi\n $c1: LOCi\n $c2: LOCi\n";	// $c2: MAX_DEPTH=3
+	p += " $bigarr: LOCA *" + std::to_string(BIGN) + "\n $bi: LOCi\n";								// big frame (>4 KB): far-slot addressing + high CALL-window offsets, all under the differential
 	char buf[48];
 	for (int i = 0; i < NI; ++i) { std::snprintf(buf, sizeof buf, " MOVi $i%d #%d\n", i, static_cast<int>(r.word())); p += buf; }
 	for (int i = 0; i < NF; ++i) { std::snprintf(buf, sizeof buf, " MOVf $f%d #%d.%u\n", i, static_cast<int>(pick(r, 2000)) - 1000, pick(r, 1000)); p += buf; }
@@ -534,6 +548,11 @@ static std::string buildProgram(Rng& r) {
 		std::snprintf(buf, sizeof buf, " MOVi $idx #%d\n SETL $arr $idx $c0\n", i);	// interp (memory home) and JIT (register cache) legitimately read it
 		p += buf;											// differently. Defined init keeps the differential comparing only defined state.
 	}
+	// Fully initialize the big LOCA the same way (via a counted loop, so we don't emit thousands of lines): slot[k] = k.
+	// A read of any masked in-bounds index is then defined, so the diff over the big-frame region compares defined state.
+	p += " MOVi $bi #0\n";
+	p += ".binit: SETL $bigarr $bi $bi\n";
+	p += " FORi $bi #" + std::to_string(BIGN) + " @.binit\n";
 	std::string pending;
 	int label = 0;
 	emitBody(p, r, pending, 30 + static_cast<int>(pick(r, 60)), 0, label);
