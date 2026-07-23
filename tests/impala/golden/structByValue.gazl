@@ -10,10 +10,6 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 12:1
 .z.P:	! DEFi #<a>
 	! MOVi <a> #0	; layout of struct Q
 .o.Q.lo:	! DEFi #<a>
-	! ADDi <t> #<a> #.o.P.x
-.o.Q.lo.x:	! DEFi #<t>
-	! ADDi <t> #<a> #.o.P.y
-.o.Q.lo.y:	! DEFi #<t>
 	! ADDi <a> #<a> #.z.P
 .o.Q.g:	! DEFi #<a>
 	! ADDi <a> #<a> #1
@@ -81,8 +77,10 @@ main:	FUNC	; signature func main() -> void @ 35:15
 		MOVi %1 $r 	; printInt(r)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:13
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:24
-		MOVi $w:.o.Q.lo.x #1 	; w.lo.x = 1
-		MOVi $w:.o.Q.lo.y #2 	; w.lo.y = 2
+		! ADDi <A> #.o.Q.lo #.o.P.x	; w.lo.x = 1
+		MOVi $w:<A> #1 
+		! ADDi <A> #.o.Q.lo #.o.P.y	; w.lo.y = 2
+		MOVi $w:<A> #2 
 		MOVf $w:.o.Q.g #0.75 	; w.g = 0.75
 		ADRL %5 %2 *3	; printFloat(nested(w))
 		ADRL %6 $w *3

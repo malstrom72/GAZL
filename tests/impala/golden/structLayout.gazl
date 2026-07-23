@@ -12,10 +12,6 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 18:1
 .o.Voice.note:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Voice.lo:	! DEFi #<a>
-	! ADDi <t> #<a> #.o.Biquad.b0
-.o.Voice.lo.b0:	! DEFi #<t>
-	! ADDi <t> #<a> #.o.Biquad.z1
-.o.Voice.lo.z1:	! DEFi #<t>
 	! ADDi <a> #<a> #.z.Biquad
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1
@@ -30,10 +26,13 @@ tick:	FUNC	; signature func tick(Voice-ptr v, float in) -> float @ 25:15
 	$v:	INPp
 	$in:	INPf
 ;-----------------------------------------------------------------------------
-		PEEK %0 $v #.o.Voice.lo.b0	; v->lo.z1 = in * v->lo.b0
+		! ADDi <A> #.o.Voice.lo #.o.Biquad.z1	; v->lo.z1 = in * v->lo.b0
+		! ADDi <B> #.o.Voice.lo #.o.Biquad.b0
+		PEEK %0 $v #<B>
 		MULf %0 $in %0
-		POKE $v #.o.Voice.lo.z1 %0
-		PEEK %0 $v #.o.Voice.lo.z1	; out = v->lo.z1 + v->gain
+		POKE $v #<A> %0
+		! ADDi <C> #.o.Voice.lo #.o.Biquad.z1	; out = v->lo.z1 + v->gain
+		PEEK %0 $v #<C>
 		PEEK %1 $v #.o.Voice.gain
 		ADDf $out %0 %1
 		RETU   	; }
@@ -53,7 +52,8 @@ main:	FUNC	; signature func main() -> void @ 32:15
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 36:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 36:37
 		MOVi $v:.o.Voice.note #60 	; v.note = 60
-		MOVf $v:.o.Voice.lo.b0 #0.5 	; v.lo.b0 = 0.5
+		! ADDi <D> #.o.Voice.lo #.o.Biquad.b0	; v.lo.b0 = 0.5
+		MOVf $v:<D> #0.5 
 		MOVf $v:.o.Voice.gain #0.25 	; v.gain = 0.25
 		ADRL $p $pool:0 *0	; p = (Voice pointer) &pool[0]
 		ADRL %0 $v *4	; *p = v
@@ -63,7 +63,8 @@ main:	FUNC	; signature func main() -> void @ 32:15
 		CALL &tick %1 *3	; expects tick(ptr, float) -> float @ 42:25
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 42:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 42:37
-		MOVf %1 $v:.o.Voice.lo.b0 	; printFloat(v.lo.b0)
+		! ADDi <D> #.o.Voice.lo #.o.Biquad.b0	; printFloat(v.lo.b0)
+		MOVf %1 $v:<D> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 43:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 43:32
 		RETU   	; }

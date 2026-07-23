@@ -12,10 +12,6 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 12:1
 .o.Voice.note:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Voice.lo:	! DEFi #<a>
-	! ADDi <t> #<a> #.o.Biquad.b0
-.o.Voice.lo.b0:	! DEFi #<t>
-	! ADDi <t> #<a> #.o.Biquad.z1
-.o.Voice.lo.z1:	! DEFi #<t>
 	! ADDi <a> #<a> #.z.Biquad
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1

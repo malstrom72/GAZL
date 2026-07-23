@@ -953,7 +953,8 @@
         rec.place     = false;
         rec.baseKind  = undefined;
         rec.base      = undefined;
-        rec.symPath   = undefined;
+        rec.offParts  = undefined;
+        rec.root      = undefined;
         rec.struct    = undefined;
         rec.winBase   = undefined;
         rec.winWords  = undefined;
@@ -1282,36 +1283,13 @@
         if ($$parser.dry) return;
         if (typeof output !== 'function') return;
         var s = $$parser.structs[name];
-        if (!s) return;
+        if (!s || s.extern) return;                               /* extern: host provides all base offsets + .z */
         var T = (typeof TAB !== 'undefined') ? TAB : '\t';
-        if (s.extern) {
-            /* The host provides base field offsets + `.z.Name`. But Impala owns the internal layout
-               of any NESTED (normal) struct field, so it must emit the flattened nested-path offsets
-               itself: `.o.Name.field.inner` = host's `.o.Name.field` + the inner offset. */
-            for (var ei = 0; ei < s.fields.length; ++ei) {
-                var ef = s.fields[ei];
-                if (ef.type === 'S') {
-                    var einner = $$parser.structPaths(ef.struct);
-                    for (var ej = 0; ej < einner.length; ++ej) {
-                        output(T + '! ADDi <t> #.o.' + name + '.' + ef.name + ' #.o.' + ef.struct + '.' + einner[ej]);
-                        output('.o.' + name + '.' + ef.name + '.' + einner[ej] + ':' + T + '! DEFi #<t>');
-                    }
-                }
-            }
-            return;
-        }
         output(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
         for (var i = 0; i < s.fields.length; ++i) {
             var f = s.fields[i];
             output('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
             if (f.type === 'S') {                                 /* nested by-value struct */
-                /* flatten: one offset constant per reachable inner path, so `v.lo.z1` is a single
-                   symbol `.o.name.lo.z1` (= this offset + the inner path's offset). */
-                var inner = $$parser.structPaths(f.struct);
-                for (var j = 0; j < inner.length; ++j) {
-                    output(T + '! ADDi <t> #<a> #.o.' + f.struct + '.' + inner[j]);
-                    output('.o.' + name + '.' + f.name + '.' + inner[j] + ':' + T + '! DEFi #<t>');
-                }
                 output(T + '! ADDi <a> #<a> #.z.' + f.struct);
             } else if (f.type === 'A' && $$parser.isStructAtom(f.elem)) {   /* struct-element array */
                 output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
@@ -1323,6 +1301,21 @@
             }
         }
         output('.z.' + name + ':' + T + '! DEFi #<a>');
+    };
+
+    /* Fold a place's compile-time offset PARTS (field-offset symbols + constant strides) into one
+       operand, emitting inline `! ADDi` (assemble-time, zero runtime cost) only when there are 2+
+       parts. One part -> used bare; zero -> null (offset 0). The scratch is pool-managed (`<`),
+       returned when the consuming meta is released, so simultaneously-live reads never collide. */
+    $$parser.foldOffset = function (parts) {
+        if (!parts || parts.length === 0) return null;
+        if (parts.length === 1) return parts[0];
+        var o = $$parser.borrow('<');
+        $$parser.emit('<> +', 'i', o, '#' + parts[0], '#' + parts[1]);
+        for (var k = 2; k < parts.length; ++k) {
+            $$parser.emit('<> +', 'i', o, '#' + o, '#' + parts[k]);
+        }
+        return o;
     };
 
     $$parser.externStruct = function (name, sourceCode, sourceOffset) {   /// forward / opaque declaration
@@ -1478,7 +1471,7 @@
     /* A "place" names a struct sitting at (base + compile-time offset). Struct-typed
        expressions are compile-time places; only terminal scalar fields emit instructions,
        so struct values never enter the one-word expression temporaries. */
-    $$parser.setPlace = function (rec, baseKind, base, symPath, structName) {
+    $$parser.setPlace = function (rec, baseKind, base, offParts, structName, root) {
         var slot = metaSlot(rec);
         slot.operator  = '@place';
         slot.type      = 'S';
@@ -1486,19 +1479,10 @@
         slot.place     = true;
         slot.baseKind  = baseKind;                                /* 'local' | 'pointer' | 'globalAddr' */
         slot.base      = base;                                    /* the OUTERMOST variable / pointer */
-        slot.symPath   = symPath;                                 /* dotted path from the root struct, e.g. "Voice.lo" */
-        slot.struct    = structName;
+        slot.offParts  = offParts || [];                          /* compile-time offset PARTS (symbols) to sum */
+        slot.struct    = structName;                              /* current struct at this place */
+        slot.root      = root || structName;                      /* outermost struct (ADRL frame sizing) */
         slot.elem      = structName;
-    };
-
-    /* A place's offset within its root struct is the flattened symbol `.o.<path>` (null = the root
-       itself, offset 0). The root struct name is the first path segment (for ADRL frame sizing). */
-    $$parser.pathOffset = function (symPath) {
-        return (symPath && symPath.indexOf('.') >= 0) ? ('.o.' + symPath) : null;
-    };
-    $$parser.pathRoot = function (symPath) {
-        var d = symPath.indexOf('.');
-        return (d >= 0) ? symPath.substr(0, d) : symPath;
     };
 
     /* structPtr[i]  ->  a struct place at ptr + i*sizeof (struct arrays decay to struct pointers) */
@@ -1514,13 +1498,13 @@
             var off = parseInt(idxRV.substr(1), 10) * sz;
             $$parser.returnBack(idxRV);
             if (off === 0) {                                      /* element 0 = the base; keep it addressable */
-                $$parser.setPlace(x, (basePtr[0] === '&' ? 'globalAddr' : 'pointer'), basePtr, structName, structName);
+                $$parser.setPlace(x, (basePtr[0] === '&' ? 'globalAddr' : 'pointer'), basePtr, [], structName, structName);
                 return;
             }
             var caddr = $$parser.borrow('%');                     /* base + i*sizeof -> a runtime pointer (a fresh element root) */
             $$parser.emit('+', 'p', caddr, basePtr, '#' + off);
             $$parser.returnBack(basePtr);
-            $$parser.setPlace(x, 'pointer', caddr, structName, structName);
+            $$parser.setPlace(x, 'pointer', caddr, [], structName, structName);
             return;
         }
 
@@ -1535,29 +1519,34 @@
         }
         $$parser.returnBack(idxRV);
         $$parser.returnBack(basePtr);
-        $$parser.setPlace(x, 'pointer', addr, structName, structName);
+        $$parser.setPlace(x, 'pointer', addr, [], structName, structName);
     };
 
     /* materialize a place's address into a pointer operand (borrows a temp for locals) */
     $$parser.placeAddress = function (place) {
         place = metaSlot(place);
-        var off  = $$parser.pathOffset(place.symPath);            /* '.o.path' or null (root, offset 0) */
-        var root = $$parser.pathRoot(place.symPath);
-        if (place.baseKind === 'globalAddr') {                    /* global: &name(:off) is directly addressable */
-            return place.base + (off ? ':' + off : '');
-        }
+        var off = $$parser.foldOffset(place.offParts);            /* a single operand or null (offset 0) */
+        var isScratch = (off !== null && ('' + off).charAt(0) === '<');
         if (place.baseKind === 'pointer') {
-            if (!off) {
-                return place.base;
-            }
+            if (!off) return place.base;
             var t = $$parser.borrow('%');
             $$parser.emit('+', 'p', t, place.base, '#' + off);
+            if (isScratch) $$parser.returnBack(off);
             return t;
         }
+        if (place.baseKind === 'globalAddr') {                    /* &name at offset -> materialize a clean pointer */
+            if (!off) return place.base;
+            var g = $$parser.borrow('%');
+            $$parser.emit('+', 'p', g, place.base, '#' + off);
+            if (isScratch) $$parser.returnBack(off);
+            return g;
+        }
         var a = $$parser.borrow('%');                             /* local: ADRL the root frame, then optional add */
-        $$parser.emit('=&', 'p', a, place.base, $$parser.structAllocSize(root, $$parser.structWords(root)));
+        $$parser.emit('=&', 'p', a, place.base,
+                $$parser.structAllocSize(place.root, $$parser.structWords(place.root)));
         if (off) {
             $$parser.emit('+', 'p', a, a, '#' + off);
+            if (isScratch) $$parser.returnBack(off);
         }
         return a;
     };
@@ -1605,7 +1594,7 @@
     $$parser.fieldAccess = function (x, fieldName, arrow, sourceCode, sourceOffset) {
         x = metaSlot(x);
 
-        var bk, base, symPath, structName;
+        var bk, base, offParts, structName, root;
         if (x.place) {
             if (x.winBase !== undefined) {
                 $$parser.fail("Cannot access a field directly on a returned struct value",
@@ -1616,13 +1605,13 @@
                 $$parser.fail("Use '.' - this is a struct value, not a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as .' + fieldName);
             }
-            bk = x.baseKind; base = x.base; symPath = x.symPath; structName = x.struct;
+            bk = x.baseKind; base = x.base; offParts = x.offParts || []; structName = x.struct; root = x.root;
         } else if (x.type === 'p' && $$parser.isStructAtom(x.elem)) {
             if (!arrow) {
                 $$parser.fail("Use '->' to access a field through a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as ->' + fieldName);
             }
-            bk = 'pointer'; base = $$parser.makeRValue(x); symPath = x.elem; structName = x.elem;
+            bk = 'pointer'; base = $$parser.makeRValue(x); offParts = []; structName = x.elem; root = x.elem;
         } else {
             $$parser.fail("Field access requires a struct" + (arrow ? ' pointer' : ''),
                     sourceCode, sourceOffset, 'E415');
@@ -1633,34 +1622,38 @@
             $$parser.fail('Struct ' + structName + ' has no field ' + fieldName,
                     sourceCode, sourceOffset, 'E417');
         }
-        /* Flattened symbolic offset. The place carries the dotted path from the OUTERMOST struct
-           (root-inclusive), so a field resolves to the single constant `.o.<path>.<field>` against
-           the root base - one operand, no runtime address math. Nested structs just extend the path
-           (zero instructions); array fields decay to a typed pointer at that offset. */
-        var newPath = symPath + '.' + fieldName;
-        var offOp   = '.o.' + newPath;
+        /* The place carries a list of compile-time offset PARTS (field-offset symbols). A field just
+           appends its `.o.<struct>.<field>` part - nested structs accumulate parts with ZERO
+           instructions; the parts are folded (inline `! ADDi`, assemble-time) into one operand only at
+           a terminal access. Only accessed paths cost anything, and never at run time. */
+        var fieldSym = '.o.' + structName + '.' + fieldName;
+        var newParts = offParts.concat([fieldSym]);
 
-        if (field.type === 'S') {                                 /* nested struct -> extend the path, same base, NO instruction */
-            $$parser.setPlace(x, bk, base, newPath, field.struct);
+        if (field.type === 'S') {                                 /* nested struct -> accumulate the part, same base, NO instruction */
+            $$parser.setPlace(x, bk, base, newParts, field.struct, root);
             return;
         }
-        if (field.type === 'A') {                                 /* array field -> a typed pointer at base+offset (materialize, so it can be subscripted) */
+        if (field.type === 'A') {                                 /* array field -> materialize a typed pointer for subscripting */
+            var aoff = $$parser.foldOffset(newParts);
+            var aScr = (aoff !== null && ('' + aoff).charAt(0) === '<');
             if (bk === 'local') {                                 /* &($v at the field offset) */
                 var alt = $$parser.borrow('%');
-                $$parser.emit('=&', 'p', alt, base + ':' + offOp, '*0');
+                $$parser.emit('=&', 'p', alt, base + ':' + aoff, '*0');
                 $$parser.makeMeta(x, ':=', 'p', undefined, alt, undefined);
             } else {                                              /* pointer OR globalAddr: base + offset -> a clean pointer */
                 var apt = $$parser.borrow('%');
-                $$parser.emit('+', 'p', apt, base, '#' + offOp);
+                $$parser.emit('+', 'p', apt, base, '#' + aoff);
                 $$parser.makeMeta(x, ':=', 'p', undefined, apt, undefined);
             }
+            if (aScr) $$parser.returnBack(aoff);
             x.place = false;
             x.type  = 'p';
             $$parser.setElem(x, field.elem);
             return;
         }
 
-        /* terminal scalar field - one operand, no address math */
+        /* terminal scalar field - fold the parts into one operand (bare symbol if a single part) */
+        var offOp = $$parser.foldOffset(newParts);
         if (bk === 'local') {
             $$parser.makeMeta(x, '=', field.type, undefined, base + ':' + offOp, undefined);
         } else if (bk === 'globalAddr') {                         /* &name:off in global memory */
@@ -1894,7 +1887,7 @@
             }
             var words   = $$parser.structWords(leftx.struct);
             var savedBK = leftx.baseKind, savedBase = leftx.base,
-                savedPath = leftx.symPath, savedStruct = leftx.struct;
+                savedParts = leftx.offParts, savedStruct = leftx.struct, savedRoot = leftx.root;
             var dst = $$parser.placeAddress(leftx);
             var src = $$parser.placeAddress(rightx);
             $$parser.makeMeta(x, 'copy', '?', dst, src, $$parser.structAllocSize(leftx.struct, words));
@@ -1902,7 +1895,7 @@
             $$parser.returnBack(src);
             $$parser.returnBack(dst);
             $$parser.freeStructWindow(rightx);                    /* release a struct-return window once copied out */
-            $$parser.setPlace(x, savedBK, savedBase, savedPath, savedStruct);
+            $$parser.setPlace(x, savedBK, savedBase, savedParts, savedStruct, savedRoot);
             return;
         }
 
@@ -2226,7 +2219,7 @@
 
         /* *structPointer -> a struct place (through-pointer field access / whole-struct assign) */
         if (operator === '*' && expr.type === 'p' && $$parser.isStructAtom(expr.elem)) {
-            $$parser.setPlace(expr, 'pointer', $$parser.makeRValue(expr), expr.elem, expr.elem);
+            $$parser.setPlace(expr, 'pointer', $$parser.makeRValue(expr), [], expr.elem, expr.elem);
             return;
         }
 
@@ -2450,7 +2443,7 @@
         if (!isGlobal && (p = sym.locals['$' + name])) {
 
             if (p.type === 'S') {                                 /* struct value local -> a place */
-                $$parser.setPlace(x, 'local', '$' + name, p.elem, p.elem);
+                $$parser.setPlace(x, 'local', '$' + name, [], p.elem, p.elem);
                 return;
             }
             if (p.type === 'A') {
@@ -2472,7 +2465,7 @@
         if (isGlobal && (p = sym.globals[name])) {
 
             if (p.type === 'S') {                                 /* struct value global -> a place in global memory */
-                $$parser.setPlace(x, 'globalAddr', '&' + name, p.elem, p.elem);
+                $$parser.setPlace(x, 'globalAddr', '&' + name, [], p.elem, p.elem);
                 return;
             }
             if (p.type === 'A') {
@@ -3759,7 +3752,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */
                                                            var _wp = $$parser.borrow('%');
                                                            $$parser.emit('=&', 'p', _wp, '%' + $$.base, '*' + $$.retSlots);
-                                                           $$parser.setPlace(callee, 'pointer', _wp, signature.returnStruct, signature.returnStruct);
+                                                           $$parser.setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct);
                                                            callee.winBase  = $$.base;       /* output window slots to free once the value is consumed */
                                                            callee.winWords = $$.retSlots;
                                                        } else if ($$.retSlots > 1) {        /* multi-return: expose window for destructuring */
