@@ -762,7 +762,11 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		if (mainline.count(j)) {
 			std::map<UInt, UInt>::const_iterator loopIt = loopExtent.find(j);
 			bool gated = false;
-			if (loopIt != loopExtent.end()) {
+			// A loop header can also be an interior leader of an ENCLOSING resident loop, which already pre-populated its
+			// entry map via filterResidencyMap. Re-capturing it would assert (capture-once) and double-establish the
+			// residency; instead inherit that map like any interior leader (reconcile). Only a FRESH header captures.
+			const bool freshHeader = (loopIt != loopExtent.end() && entryMaps.count(j) == 0);
+			if (freshHeader) {
 				std::map<UInt, UInt>::const_iterator w0 = loopWeight.upper_bound(j);
 				const bool multiBlock = (w0 != loopWeight.end() && w0->first <= loopIt->second);
 				std::set<Int> readSlots, writtenSlots;
@@ -796,9 +800,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 					resident = !entryMaps[j].entries.empty(); residentEnd = loopIt->second;
 				}
 			}
-			if (loopIt == loopExtent.end() || gated) {
+			if (!freshHeader || gated) {
 				std::map<UInt, ResidencyMap>::const_iterator m = entryMaps.find(j);
-				if (m != entryMaps.end()) { cache.reconcileTo(m->second); }											// interior leader: re-establish the loop's entry state on fall-through
+				if (m != entryMaps.end()) { cache.reconcileTo(m->second); }											// interior leader (incl. a header inherited from an enclosing loop): re-establish its entry state
 				else { cache.barrier(); }																				// any other leader: starts empty as in v2.0
 			}
 			e.bind(mainline[j]);
