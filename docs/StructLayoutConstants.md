@@ -160,6 +160,25 @@ disagree. The gazl-validator can cross-check the interface's field types against
 emitted layout, so a mismatch is a build error, not a silent lie - the same "verifiable contract" theme
 as extern prototypes (see [[docs/ExternPrototypes.md]]).
 
+## IMPLEMENTED (Phase 2a - normal structs)
+
+Every non-extern struct now emits its layout as GAZL compile-time constants: a rolling `<a>`
+accumulator (`! MOVi <a> #0`; `.o.Struct.field: ! DEFi #<a>`; `! ADDi <a> #<a> #<size>`; `.z.Struct:
+! DEFi #<a>`), emitted at struct-definition time in dependency order (inner-before-outer, guaranteed by
+E412). Field access references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested struct and
+array fields MATERIALIZE the sub-object address into a pointer place at offset 0 (via `ADDp`/`ADRL`), so
+every access uses a SINGLE symbol - no runtime offset accumulation and no compile-time folding through
+the lazy-meta model. Allocation/copy SIZES (LOCA/PARA/GLOB/COPY/ADRL-hint) stay numeric; they equal the
+accumulator's value (same computation), so the program is consistent.
+
+Verified: the playground demo (`Voice`/`Biquad`, nested access, whole-struct copy) renders the DEFi
+accumulator and runs; the dedicated fixture tests/impala/sources/structLayout.impala prints `4 2 0.75
+0.5`; all 10 struct fixtures + funcType + regTransientWindow produce byte-identical RUNTIME output to the
+pre-change baseline (old committed goldens run and matched), and their compiled goldens were regenerated
+to the symbolic form. Cost: nested/array access adds an `ADDp` (or `ADRL`+`ADDp`) per level vs the old
+single folded offset - a small runtime cost traded for symbolic, host-adaptable offsets; can be
+optimized later. Extern structs (below) reference the same symbols but emit no accumulator (host owns it).
+
 ## IMPLEMENTED (extern struct v1)
 
 `extern struct Name { fields }` is implemented and tested (tests/impala/sources/externStruct.impala).
