@@ -1204,9 +1204,14 @@ const typedPointerCases = [
 		expectError: null,
 	},
 	{
-		label: "a struct array size must be a numeric literal",
+		label: "a struct array size may be a named constant",
 		source: ["struct V { int n }", "const int N = 4", "global V array bank[N]"].join("\n"),
-		expectError: "must be a numeric literal",
+		expectError: null,
+	},
+	{
+		label: "an initialized struct-element array still needs a literal size",
+		source: ["struct V { int n }", "const int N = 2", "global V array bank[N] = { { 1 }, { 2 } }"].join("\n"),
+		expectError: "literal size",
 	},
 	{
 		label: "array fields inside a struct index correctly",
