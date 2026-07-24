@@ -968,6 +968,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         rec.root      = undefined;
         rec.arrayOf   = undefined;
         rec.struct    = undefined;
+        rec.dynIndex  = undefined;
         rec.winBase   = undefined;
         rec.winWords  = undefined;
         return rec;
@@ -1506,7 +1507,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     /* A place names a struct (or struct array) at base + a sum of compile-time offset parts. Only a
        terminal scalar field emits code, so struct values never enter the word temporaries. */
-    setPlace = function (rec, baseKind, base, offParts, structName, root, arrayOf) {
+    setPlace = function (rec, baseKind, base, offParts, structName, root, arrayOf, dynIndex) {
         var slot = metaSlot(rec);
         slot.operator = '@place';
         slot.operands = [ undefined, undefined, undefined ];
@@ -1519,6 +1520,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         slot.type     = arrayOf ? 'p' : 'S';
         slot.root     = root || structName || arrayOf;
         slot.elem     = arrayOf || structName;
+        slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
     };
 
     /* structPtr[k] or arrayField[k] -> the element place. A constant index adds a symbolic stride to the
@@ -1540,11 +1542,20 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 emit('<> *', 'i', s, '#' + k, '#.z.' + elem);
                 x.offParts.push(s);
             }
-            setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root);
+            setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
             return;
         }
 
-        var arrPtr = placeAddress(x);                    /* base + folded parts -> the array address */
+        if (x.baseKind === 'local' && x.dynIndex === undefined) { /* a frame place with a single runtime index: keep it
+                                                                     frame-relative so a terminal .field emits one GETL/SETL
+                                                                     (dsp + constOff)[idx], not ADRL + ADDp + PEEK/POKE */
+            var frameIdx = borrow('%');
+            emit('*', 'i', frameIdx, idxRV, '#.z.' + elem);
+            returnBack(idxRV);
+            setPlace(x, 'local', x.base, x.offParts, elem, x.root, undefined, frameIdx);
+            return;
+        }
+        var arrPtr = placeAddress(x);                    /* pointer base or a second runtime index: materialize */
         var elemPtr = borrow('%'), scaled = borrow('%');
         emit('*', 'i', scaled, idxRV, '#.z.' + elem);
         emit('+', 'p', elemPtr, arrPtr, scaled);
@@ -1563,6 +1574,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             var sz = (place.struct && isStructAtom(place.struct)) ? structAllocSize(place.struct) : '*0';
             a = borrow('%');
             emit('=&', 'p', a, place.base + (off ? ':' + off : ''), sz);
+            if (place.dynIndex !== undefined) {                   /* fold the frame place's runtime index in (GETL/SETL fallback) */
+                emit('+', 'p', a, a, place.dynIndex);
+                returnBack(place.dynIndex);
+                place.dynIndex = undefined;
+            }
         } else {                                                  /* pointer / globalAddr */
             if (!off) return place.base;
             a = borrow('%');
@@ -1615,7 +1631,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     fieldAccess = function (x, fieldName, arrow, sourceCode, sourceOffset) {
         x = metaSlot(x);
 
-        var bk, base, offParts, structName, root;
+        var bk, base, offParts, structName, root, dynIndex;
         if (x.place) {
             if (x.winBase !== undefined) {
                 fail("Cannot access a field directly on a returned struct value",
@@ -1627,6 +1643,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                         sourceOffset, 'E416', 'write ' + fieldName + ' as .' + fieldName);
             }
             bk = x.baseKind; base = x.base; offParts = x.offParts || []; structName = x.struct; root = x.root;
+            dynIndex = x.dynIndex;
         } else if (x.type === 'p' && isStructAtom(x.elem)) {
             if (!arrow) {
                 fail("Use '->' to access a field through a pointer", sourceCode,
@@ -1651,13 +1668,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var newParts = offParts.concat([fieldSym]);
 
         if (field.type === 'S') {                                 /* nested struct -> accumulate the part, same base, NO instruction */
-            setPlace(x, bk, base, newParts, field.struct, root);
+            setPlace(x, bk, base, newParts, field.struct, root, undefined, dynIndex);
             return;
         }
         if (field.type === 'A') {                                 /* array field */
             var arrIsStruct = isStructAtom(field.elem);
             setPlace(x, bk, base, newParts, arrIsStruct ? undefined : field.elem, root,
-                    arrIsStruct ? field.elem : undefined);
+                    arrIsStruct ? field.elem : undefined, dynIndex);
             if (arrIsStruct) return;                              /* struct-element: a fold-able array place for the next [k] */
             var ptr = placeAddress(x);                  /* scalar-element: decay to a pointer now */
             makeMeta(x, ':=', 'p', undefined, ptr, undefined);
@@ -1667,7 +1684,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         /* terminal scalar field - fold the parts into one operand (bare symbol if a single part) */
         var offOp = foldOffset(newParts);
-        if (bk === 'local') {
+        if (bk === 'local' && dynIndex !== undefined) {           /* frame place + runtime index -> GETL/SETL: (dsp + base:off)[dynIndex] */
+            makeMeta(x, '=[]$', field.type, null, base + ':' + offOp, dynIndex);
+        } else if (bk === 'local') {
             makeMeta(x, '=', field.type, undefined, base + ':' + offOp, undefined);
         } else if (bk === 'globalAddr') {                         /* &name:off in global memory */
             makeMeta(x, '=*', field.type, undefined, base + ':' + offOp, undefined);
@@ -2239,7 +2258,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         /* &structValue -> a typed struct pointer (the place's address) */
         if (operator === '&' && expr.place) {
             var structName = expr.struct;
-            if (expr.baseKind === 'local' && (!expr.offParts || expr.offParts.length === 0)) {
+            if (expr.baseKind === 'local' && (!expr.offParts || expr.offParts.length === 0) && expr.dynIndex === undefined) {
                 /* a whole local's address is a single ADRL with no offset scratch - leave it DEFERRED as
                    '=&' so an assignment emits ADRL straight into its target ($p) instead of a temp + MOVp,
                    exactly like &scalar / &array[i] defer in reference() */
