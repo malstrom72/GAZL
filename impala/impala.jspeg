@@ -3311,6 +3311,9 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                             if (!$aStructEl)
                                                                                 $$parser.fail('Nested brace initializers are for struct-element arrays',
                                                                                         $$s, $$i, 'E422');
+                                                                            if (isNaN($aCount))
+                                                                                $$parser.fail('An initialized struct-element array needs a literal size',
+                                                                                        $$s, $$i, 'E414');
                                                                             var _arr = $d;
                                                                             $binit = [];
                                                                             for (var _ae = 0; _ae < $aCount; ++_ae) {
@@ -3486,19 +3489,8 @@ ArrayDecl   <-                                                        { $desc = 
                                                                          $$.type = 'A';
                                                                          $$.elem = $desc;
                                                                          $$.name = $id;
-                                                                         $$.size = $$parser.dropHash($size);
-                                                                         /* allocation words = count * element size (structs are multi-word) */
-                                                                         if ($desc !== undefined
-                                                                                 && $$parser.descTail($desc) === undefined
-                                                                                 && $$parser.isStructAtom($$parser.descHead($desc))) {
-                                                                             if (!/^[0-9]+$/.test('' + $$.size))
-                                                                                 $$parser.fail('A struct array size must be a numeric literal for now',
-                                                                                         $$s, $$i, 'E414');
-                                                                             $$.words = parseInt($$.size, 10)
-                                                                                     * $$parser.structWords($$parser.descHead($desc));
-                                                                         } else {
-                                                                             $$.words = $$.size;   /* scalar element: 1 word each */
-                                                                         }
+                                                                         $$.size = $$parser.dropHash($size);   /* element count - may be a symbolic const */
+                                                                         $$.words = $$.size;                   /* alloc size folds count*.z.Elem symbolically (arrayAllocSize) */
                                                                          $$parser.returnBack($size);
                                                                      }
 
