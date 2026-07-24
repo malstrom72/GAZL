@@ -43,14 +43,40 @@ These are the most important principles in the codebase. Get them wrong and the 
   test plus fuzzing, ideally a compile-time exhaustiveness check), remove the throw and drop to assert-only. A permanent
   hybrid advertises doubt in your own invariant.
 
-## 2. Naming
+## 2. Compactness and no duplicated functionality (PRIO 1)
+
+- **No duplicated functionality.** Two functions or branches that do substantially the same thing are a
+  defect, not a convenience: they drift apart and double every future fix. Before writing a function,
+  branch, or helper, find the existing one that already does most of the job and generalize it. If you
+  catch yourself writing a near-copy (a `fooArray` beside a `fooStruct`, a third size helper beside two
+  others), unify them instead.
+- **Compact by default.** Say it once, with the fewest moving parts. Prefer generalizing an existing path
+  over adding a parallel one, and a data-driven table over repeated branches. Delete dead and superseded
+  paths as you go; a change that adds a capability should still look for what it lets you remove.
+- **A refactor must REDUCE size.** Its success metric is fewer lines (or fewer functions, fields,
+  branches) with behavior unchanged and tests green. If a "refactor" grows the file it was the wrong
+  change: reconsider the shape rather than bolting more on.
+- **Do not let the data model accrete.** When a record keeps gaining a field to carry one more case,
+  reshape it; a struct that has doubled its members is telling you the abstraction moved.
+- **Minimizing the number of code paths is the single most important thing for correctness.** Every
+  extra branch is a combination that must be reasoned about and tested; two paths that could be one are
+  where bugs hide. Prefer one path that handles all cases over a special-case branch, and collapse
+  branches that differ only in a value into a table or a computed operand.
+- **Rewrite in three passes.** One: a prototype, thrown away. Two: the first real implementation, 100%
+  working. Three: rewrite it to the fewest lines and strongest structure. Do not ship stage two - the
+  experiments and the paths they left behind are the debt this section is about.
+- **Optimize only for a PROVEN win.** An optimization that adds lines or code paths is allowed only when
+  it buys a measured performance gain that matters. A speculative optimization is a net loss: it costs
+  the one thing (code paths) most worth protecting for a benefit you have not shown.
+
+## 3. Naming
 
 - **No abbreviations.** Full words: `functionCount` not `fnCount`, `memory` not `mem`, `natives` not `nat`,
   `registerClass` not `regClass`. Established short domain terms that read as words are fine (`dsp`, `ip`).
 - **Boolean queries are prefixed `isX()`**: `isCompiled()`, `isResident()`.
 - Wrap variable, parameter, class, and function names in back-ticks inside comment text: "`weight` is the block span".
 
-## 3. Class layout and headers
+## 4. Class layout and headers
 
 - **Hard encapsulation.** A class owns its representation and hides it completely. Data members are private; state changes
   only through methods that preserve the class invariant, which the constructor establishes (see RAII, §1). No client,
@@ -75,7 +101,7 @@ These are the most important principles in the codebase. Get them wrong and the 
   example, keeps its shipped headers and `.cpp` strict `-std=c++03`-clean - `0` not `nullptr`, `<stdint.h>` not
   `<cstdint>` - while its tools and tests use C++11.)
 
-## 4. Comments
+## 5. Comments
 
 - **Comment sparingly - few and short.** Every comment is a maintenance liability that drifts as the code moves out
   from under it, so minimize the surface that can go stale. A comment must earn its place: the non-obvious *why*, an
@@ -98,7 +124,7 @@ These are the most important principles in the codebase. Get them wrong and the 
 - **Never use en or em dashes** (the `-` and `--` characters) anywhere - in code, comments, docs, or commit messages.
   Plain ASCII hyphen only. Long dashes read as an AI giveaway; normal coders do not type them.
 
-## 5. Formatting
+## 6. Formatting
 
 - **Tabs for indentation, width 4.**
 - **Opening brace on the same line** as the control statement; closing brace on its own line.
@@ -120,7 +146,7 @@ These are the most important principles in the codebase. Get them wrong and the 
 - **Short inline function bodies may be a single line.** A function or method body of one or two simple statements
   may sit on one line when that reads more elegantly (`int size() const { return count; }`). This is about function
   bodies only, not the control-flow rule above - a control statement inside an inline body still follows that rule.
-- **Maximum line width 120 columns.** (A trailing `//` comment may start at column 120 and run past it - see §4.)
+- **Maximum line width 120 columns.** (A trailing `//` comment may start at column 120 and run past it - see §5.)
 - **`#if` / `#endif` sit one tab LEFT** of the surrounding code's indentation.
 - **Break long lines by leading with the operator**, indented two tabs from the original line - the double tab marks a
   continuation, distinct from a nested block:
