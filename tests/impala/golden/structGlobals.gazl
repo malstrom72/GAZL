@@ -19,7 +19,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
 ; signature extern native printInt() -> unknown @ 15:1
 ; signature extern native printFloat() -> unknown @ 16:1
 ; signature extern native printLF() -> unknown @ 18:1
-voice:	GLOB *4	; signature global voice : Voice @ 20:1
+voice:	GLOB *.z.Voice	; signature global voice : Voice @ 20:1
 
 ;-----------------------------------------------------------------------------
 bump:	FUNC	; signature func bump(Voice-ptr v) -> void @ 20:15
@@ -35,7 +35,7 @@ bump:	FUNC	; signature func bump(Voice-ptr v) -> void @ 20:15
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 25:15
 		PARA *1
-	$snapshot:	LOCA *4
+	$snapshot:	LOCA *.z.Voice
 ;-----------------------------------------------------------------------------
 		POKE &voice:.o.Voice.note #60 	; global voice.note = 60
 		! ADDi <A> #.o.Voice.lo #.o.Biquad.b0	; global voice.lo.b0 = 0.5
@@ -53,8 +53,8 @@ main:	FUNC	; signature func main() -> void @ 25:15
 		PEEK %1 &voice:.o.Voice.note 	; printInt(global voice.note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:40
-		ADRL %0 $snapshot *4	; snapshot = global voice
-		COPY %0 &voice *4
+		ADRL %0 $snapshot *.z.Voice	; snapshot = global voice
+		COPY %0 &voice *.z.Voice
 		MOVf %1 $snapshot:.o.Voice.gain 	; printFloat(snapshot.gain)
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 38:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:38

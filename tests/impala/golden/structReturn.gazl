@@ -48,9 +48,8 @@ wrap:	FUNC	; signature func wrap(int a, int b, int k) -> Q @ 28:15
 		MOVi %3 $b 
 		CALL &make %0 *4	; expects make(int, int) -> P @ 30:22
 		ADRL %2 %0 *2
-		ADRL %3 $q *3
-		ADDp %3 %3 #.o.Q.inner
-		COPY %3 %2 *2
+		ADRL %3 $q:.o.Q.inner *.z.Q
+		COPY %3 %2 *.z.P
 		MOVi $q:.o.Q.scale $k 	; q.scale = k
 		RETU   	; }
 
@@ -58,15 +57,15 @@ wrap:	FUNC	; signature func wrap(int a, int b, int k) -> Q @ 28:15
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 34:15
 		PARA *1
-	$v:	LOCA *2
-	$w:	LOCA *3
+	$v:	LOCA *.z.P
+	$w:	LOCA *.z.Q
 ;-----------------------------------------------------------------------------
 		MOVi %2 #10 	; v = make(10, 3)
 		MOVi %3 #3 
 		CALL &make %0 *4	; expects make(int, int) -> P @ 37:17
 		ADRL %2 %0 *2
-		ADRL %3 $v *2
-		COPY %3 %2 *2
+		ADRL %3 $v *.z.P
+		COPY %3 %2 *.z.P
 		MOVi %1 $v:.o.P.x 	; printInt(v.x)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:26
@@ -85,8 +84,8 @@ main:	FUNC	; signature func main() -> void @ 34:15
 		MOVi %5 #30 
 		CALL &wrap %0 *6	; expects wrap(int, int, int) -> Q @ 43:20
 		ADRL %3 %0 *3
-		ADRL %4 $w *3
-		COPY %4 %3 *3
+		ADRL %4 $w *.z.Q
+		COPY %4 %3 *.z.Q
 		! ADDi <A> #.o.Q.inner #.o.P.x	; printInt(w.inner.x)
 		MOVi %1 $w:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:21

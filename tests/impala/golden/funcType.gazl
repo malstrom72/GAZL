@@ -71,7 +71,7 @@ main:	FUNC	; signature func main() -> void @ 28:15
 	$ops:	LOCA *2
 	$mk:	LOCp
 	$sp:	LOCp
-	$v:	LOCA *2
+	$v:	LOCA *.z.P
 	$buf:	LOCA *1
 	$a:	LOCi
 	$b:	LOCi
@@ -103,8 +103,8 @@ main:	FUNC	; signature func main() -> void @ 28:15
 		MOVi %3 #3 
 		CALL $mk %0 *4	; expects function(int, int) -> P @ 39:26
 		ADRL %2 %0 *2
-		ADRL %3 $v *2
-		COPY %3 %2 *2
+		ADRL %3 $v *.z.P
+		COPY %3 %2 *.z.P
 		MOVi %1 $v:.o.P.x 	; printInt(v.x)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:26

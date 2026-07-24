@@ -51,14 +51,14 @@ nested:	FUNC	; signature func nested(Q q) -> float @ 30:17
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 35:15
 		PARA *1
-	$v:	LOCA *2
-	$w:	LOCA *3
+	$v:	LOCA *.z.P
+	$w:	LOCA *.z.Q
 	$r:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $v:.o.P.x #5 	; v.x = 5
 		MOVi $v:.o.P.y #7 	; v.y = 7
 		ADRL %3 %1 *2	; r = consume(v)
-		ADRL %4 $v *2
+		ADRL %4 $v *.z.P
 		COPY %3 %4 *2
 		CALL &consume %0 *3	; expects consume(P) -> int @ 39:16
 		MOVi $r %0 
@@ -70,7 +70,7 @@ main:	FUNC	; signature func main() -> void @ 35:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:26
 		MOVi %1 #3 	; r = scaled(3, v)
 		ADRL %4 %2 *2
-		ADRL %5 $v *2
+		ADRL %5 $v *.z.P
 		COPY %4 %5 *2
 		CALL &scaled %0 *4	; expects scaled(int, P) -> int @ 43:18
 		MOVi $r %0 
@@ -83,7 +83,7 @@ main:	FUNC	; signature func main() -> void @ 35:15
 		MOVi $w:<A> #2 
 		MOVf $w:.o.Q.g #0.75 	; w.g = 0.75
 		ADRL %5 %2 *3	; printFloat(nested(w))
-		ADRL %6 $w *3
+		ADRL %6 $w *.z.Q
 		COPY %5 %6 *3
 		CALL &nested %1 *4	; expects nested(Q) -> float @ 47:22
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 47:23

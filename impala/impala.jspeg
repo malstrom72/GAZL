@@ -1369,7 +1369,20 @@
        compile-time-known number of transient VM slots, which a host-owned size cannot provide, so
        those sites stay blocked; see E425.) */
     $$parser.structAllocSize = function (structName, words) {
-        return $$parser.isExternStruct(structName) ? ('*.z.' + structName) : ('*' + words);
+        return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
+    };
+
+    /* '*size' operand for allocating an ARRAY. A struct-element array is `count * .z.Elem` - kept
+       SYMBOLIC (a compile-time `! MULi` into a scratch) so the allocation tracks the element size,
+       exactly like the subscript stride. Scalar elements are one word each, so `*count`. */
+    $$parser.arrayAllocSize = function (elemDesc, count, words) {
+        if (elemDesc !== undefined && $$parser.descTail(elemDesc) === undefined
+                && $$parser.isStructAtom($$parser.descHead(elemDesc))) {
+            var s = $$parser.borrow('<');
+            $$parser.emit('<> *', 'i', s, '#' + count, '#.z.' + $$parser.descHead(elemDesc));
+            return '*' + s;
+        }
+        return '*' + words;
     };
 
     $$parser.addStructField = function (name, field, sourceCode, sourceOffset) {
@@ -1605,13 +1618,10 @@
             if (isScratch) $$parser.returnBack(off);
             return g;
         }
-        var a = $$parser.borrow('%');                             /* local: ADRL the root frame, then optional add */
-        $$parser.emit('=&', 'p', a, place.base,
-                $$parser.structAllocSize(place.root, $$parser.structWords(place.root)));
-        if (off) {
-            $$parser.emit('+', 'p', a, a, '#' + off);
-            if (isScratch) $$parser.returnBack(off);
-        }
+        var a = $$parser.borrow('%');                             /* local: ADRL $base(:off) - the offset folds into the operand, no ADDp */
+        $$parser.emit('=&', 'p', a, place.base + (off ? ':' + off : ''),
+                $$parser.structAllocSize(place.root, undefined));
+        if (isScratch) $$parser.returnBack(off);
         return a;
     };
 
@@ -3118,7 +3128,9 @@ inp:ArgsDecl ')'_
                                                                                      '$' + v.name,
                                                                                      v.type,
                                                                                      false,
-                                                                                     (v.words !== undefined ? '*' + v.words : undefined),
+                                                                                     (v.type === 'A'
+                                                                                         ? $$parser.arrayAllocSize(v.elem, v.size, v.words)
+                                                                                         : (v.words !== undefined ? '*' + v.words : undefined)),
                                                                                      $$s, $$i,
                                                                                      undefined,
                                                                                      v.elem
@@ -3357,7 +3369,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 $a.name,
                                                                                 'A',
                                                                                 ($section === 'CNST'),
-                                                                                '*' + $a.words,
+                                                                                $$parser.arrayAllocSize($a.elem, $a.size, $a.words),
                                                                                 $$s, $$i,
                                                                                 $$parser.formatGlobalSignatureComment(
                                                                                     $section,

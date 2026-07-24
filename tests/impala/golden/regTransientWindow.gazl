@@ -40,7 +40,7 @@ combine:	FUNC	; signature func combine(int k, int m, Pair p) -> int @ 26:18
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 31:15
 		PARA *1
-	$pr:	LOCA *2
+	$pr:	LOCA *.z.Pair
 	$x:	LOCi
 	$y:	LOCi
 ;-----------------------------------------------------------------------------
@@ -60,7 +60,7 @@ main:	FUNC	; signature func main() -> void @ 31:15
 		MOVi %2 $pr:.o.Pair.a 
 		MOVi %3 $x 
 		ADRL %6 %4 *2
-		ADRL %7 $pr *2
+		ADRL %7 $pr *.z.Pair
 		COPY %6 %7 *2
 		CALL &combine %1 *5	; expects combine(int, int, Pair) -> int @ 40:47
 		SUBi %0 %0 #-17

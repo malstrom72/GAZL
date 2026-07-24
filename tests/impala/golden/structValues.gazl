@@ -42,7 +42,7 @@ tweak:	FUNC	; signature func tweak(Voice-ptr v, float x) -> void @ 29:16
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 36:15
 		PARA *1
-	$v:	LOCA *6
+	$v:	LOCA *.z.Voice
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
 		MOVi $v:.o.Voice.note #60 	; v.note = 60

@@ -10,7 +10,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
 .z.Filter:	! DEFi #<a>
 ; signature extern native printFloat() -> unknown @ 16:1
 ; signature extern native printLF() -> unknown @ 18:1
-gf:	GLOB *5	; signature global gf : Filter @ 20:1
+gf:	GLOB *.z.Filter	; signature global gf : Filter @ 20:1
 
 ;-----------------------------------------------------------------------------
 process:	FUNC	; signature func process(Filter-ptr f, int i, float x) -> void @ 20:18
@@ -27,7 +27,7 @@ process:	FUNC	; signature func process(Filter-ptr f, int i, float x) -> void @ 2
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 25:15
 		PARA *1
-	$lf:	LOCA *5
+	$lf:	LOCA *.z.Filter
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $lf:.o.Filter.taps #4 	; lf.taps = 4
@@ -51,7 +51,7 @@ main:	FUNC	; signature func main() -> void @ 25:15
 		PEEK %1 %1 #0
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 34:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:43
-		ADRL %1 $lf *5	; process(&lf, 1, 9.0)
+		ADRL %1 $lf *.z.Filter	; process(&lf, 1, 9.0)
 		MOVi %2 #1 
 		MOVf %3 #9.0 
 		CALL &process %0 *4	; expects process(ptr, int, float) -> void @ 36:22
