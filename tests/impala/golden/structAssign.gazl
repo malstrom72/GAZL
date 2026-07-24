@@ -56,7 +56,7 @@ main:	FUNC	; signature func main() -> void @ 19:15
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 34:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:33
 		ADRL %0 $bq *.z.Biquad	; bq = a.lo
-		ADRL %1 $a:.o.Voice.lo *.z.Voice
+		ADRL %1 $a:.o.Voice.lo *.z.Biquad
 		COPY %0 %1 *.z.Biquad
 		MOVf %1 $bq:.o.Biquad.b0 	; printFloat(bq.b0)
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 37:19

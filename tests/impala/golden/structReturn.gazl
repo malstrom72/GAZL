@@ -48,7 +48,7 @@ wrap:	FUNC	; signature func wrap(int a, int b, int k) -> Q @ 28:15
 		MOVi %3 $b 
 		CALL &make %0 *4	; expects make(int, int) -> P @ 30:22
 		ADRL %2 %0 *2
-		ADRL %3 $q:.o.Q.inner *.z.Q
+		ADRL %3 $q:.o.Q.inner *.z.P
 		COPY %3 %2 *.z.P
 		MOVi $q:.o.Q.scale $k 	; q.scale = k
 		RETU   	; }

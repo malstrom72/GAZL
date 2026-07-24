@@ -1557,9 +1557,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         place = metaSlot(place);
         var off = foldOffset(place.offParts);
         var a;
-        if (place.baseKind === 'local') {
+        if (place.baseKind === 'local') {                         /* size hint = the pointed-at sub-object, not the enclosing frame */
+            var sz = (place.struct && isStructAtom(place.struct)) ? structAllocSize(place.struct) : '*0';
             a = borrow('%');
-            emit('=&', 'p', a, place.base + (off ? ':' + off : ''), structAllocSize(place.root));
+            emit('=&', 'p', a, place.base + (off ? ':' + off : ''), sz);
         } else {                                                  /* pointer / globalAddr */
             if (!off) return place.base;
             a = borrow('%');

@@ -1545,9 +1545,10 @@
         place = metaSlot(place);
         var off = $$parser.foldOffset(place.offParts);
         var a;
-        if (place.baseKind === 'local') {
+        if (place.baseKind === 'local') {                         /* size hint = the pointed-at sub-object, not the enclosing frame */
+            var sz = (place.struct && $$parser.isStructAtom(place.struct)) ? $$parser.structAllocSize(place.struct) : '*0';
             a = $$parser.borrow('%');
-            $$parser.emit('=&', 'p', a, place.base + (off ? ':' + off : ''), $$parser.structAllocSize(place.root));
+            $$parser.emit('=&', 'p', a, place.base + (off ? ':' + off : ''), sz);
         } else {                                                  /* pointer / globalAddr */
             if (!off) return place.base;
             a = $$parser.borrow('%');
