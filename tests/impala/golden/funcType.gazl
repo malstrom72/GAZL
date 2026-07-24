@@ -43,7 +43,7 @@ mul:	FUNC	; signature func mul(int a, int b) -> int @ 24:14
 
 ;-----------------------------------------------------------------------------
 make:	FUNC	; signature func make(int a, int b) -> P @ 25:15
-	$p:	PARA *2
+	$p:	PARA *.z.P
 	$a:	INPi
 	$b:	INPi
 ;-----------------------------------------------------------------------------
@@ -102,7 +102,7 @@ main:	FUNC	; signature func main() -> void @ 28:15
 		MOVi %2 #10 	; v = mk(10, 3)
 		MOVi %3 #3 
 		CALL $mk %0 *4	; expects function(int, int) -> P @ 39:26
-		ADRL %2 %0 *2
+		ADRL %2 %0 *.z.P
 		ADRL %3 $v *.z.P
 		COPY %3 %2 *.z.P
 		MOVi %1 $v:.o.P.x 	; printInt(v.x)

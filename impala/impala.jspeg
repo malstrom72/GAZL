@@ -1625,13 +1625,14 @@
             argMeta.winWords = undefined;
             return;
         }
-        for (var k = 0; k < words; ++k) {                         /* reserve the window slots */
+        for (var k = 0; k < words; ++k) {                         /* reserve the window slots (count is compile-time) */
             $$parser.claimSlot(winSlot + k);
         }
+        var sz = $$parser.structAllocSize(argMeta.struct);           /* symbolic *.z.Struct - never a baked word count */
         var dst = $$parser.borrow('%');
-        $$parser.emit('=&', 'p', dst, '%' + winSlot, '*' + words);   /* ADRL address of the window region */
+        $$parser.emit('=&', 'p', dst, '%' + winSlot, sz);            /* ADRL address of the window region */
         var src = $$parser.placeAddress(argMeta);                    /* address of the source struct */
-        $$parser.emit('copy', '?', dst, src, '*' + words);           /* COPY dst src *words */
+        $$parser.emit('copy', '?', dst, src, sz);                    /* COPY dst src *.z.Struct */
         $$parser.returnBack(src);
         $$parser.returnBack(dst);
         $$parser.freeStructWindow(argMeta);                          /* if the source was a struct-return window, release it */
@@ -3012,7 +3013,7 @@ inp:ArgsDecl ')'_
                                                                                                         ret.name,
                                                                                                         'S',
                                                                                                         false,
-                                                                                                        '*' + ret.words,
+                                                                                                        $$parser.structAllocSize(ret.struct),
                                                                                                         ret.sourceCode,
                                                                                                         ret.sourceOffset,
                                                                                                         undefined,
@@ -3056,7 +3057,7 @@ inp:ArgsDecl ')'_
                                                                                      '$' + p.name,
                                                                                      'S',
                                                                                      true,
-                                                                                     '*' + p.words,
+                                                                                     $$parser.structAllocSize(p.struct),
                                                                                      $$s, $$i,
                                                                                      undefined,
                                                                                      p.struct
@@ -3800,7 +3801,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$parser.setElem(callee, undefined);
                                                        if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */
                                                            var _wp = $$parser.borrow('%');
-                                                           $$parser.emit('=&', 'p', _wp, '%' + $$.base, '*' + $$.retSlots);
+                                                           $$parser.emit('=&', 'p', _wp, '%' + $$.base, $$parser.structAllocSize(signature.returnStruct));
                                                            $$parser.setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct);
                                                            callee.winBase  = $$.base;       /* output window slots to free once the value is consumed */
                                                            callee.winWords = $$.retSlots;
