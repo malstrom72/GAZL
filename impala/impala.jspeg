@@ -2841,6 +2841,11 @@ TypeDeclr   <-  base:TypeBase                                        { $desc = $
 FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                          assert($$parser.validateStock('%'));
                                                                          assert($$parser.validateStock('<'));
+                                                                         /* every compile-time scratch borrowed by the previous function/globals must be
+                                                                            back in the pool at this clean boundary - catches offset-scratch leaks at the source */
+                                                                         assert($$parser.stock['<'].length === $$parser.counters['<'],
+                                                                                 'compile-time scratch leak before ' + $id + ': '
+                                                                                 + ($$parser.counters['<'] - $$parser.stock['<'].length) + ' unreturned');
 
                                                                          output('');
                                                                          output(';-----------------------------------------------------------------------------');
