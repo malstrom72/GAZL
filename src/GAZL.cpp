@@ -85,6 +85,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , CONSTANT_DIVISION_BY_ZERO					*/	, "Constant zero divisor or modulus"
 	/* , EXPECTED_CONSTANT							*/	, "Expected constant"
 	/* , NOT_ENOUGH_FUNCTION_SPACE					*/	, "Not enough space for function table"
+	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -857,6 +858,15 @@ void Assembler::finalizeFunction() {
 	assert(functionStart->opcode == FUNC_CC_);
 	if (ip == codeBase || (ip[-1].opcode != RETU_C__ && ip[-1].opcode != GOTO_B__))
 		throw Exception(MISSING_RETURN_INSTRUCTION);
+	/*
+		A jump or switch may never reach a `FUNC` (`FUNC` is `CALL`-only). Branch targets resolve to local `BRANCH`
+		labels; a label left at the function boundary `ip` (a trailing elided `NOOP`) is where the next `FUNC` lands.
+	*/
+	for (Symbols::SymbolMap::const_iterator it = locals.symbols.begin(); it != locals.symbols.end(); ++it) {
+		if ((it->second.types & BRANCH) != 0 && it->second.value.p == static_cast<Pointer>(ip - codeBase)) {
+			throw Exception(LABEL_ON_FUNCTION);
+		}
+	}
 	functionStart->p0.i = localsSize;
 	functionStart->p1.i = paramsSize;
 	functionStart = 0;
