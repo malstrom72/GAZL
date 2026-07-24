@@ -49,8 +49,7 @@ main:	FUNC	; signature func main() -> void @ 27:15
 		MOVf %1 $v:.o.Filter.cutoff 	; printFloat(v.cutoff)
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 32:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:33
-		ADRL %0 $v *.z.Filter	; p = &v
-		MOVp $p %0 
+		ADRL $p $v *.z.Filter	; p = &v
 		PEEK %1 $p #.o.Filter.mode	; printInt(p->mode)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:30

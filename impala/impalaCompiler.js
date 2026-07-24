@@ -2236,11 +2236,18 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return;
         }
 
-        /* &structValue -> a typed struct pointer (materialize the place's address) */
+        /* &structValue -> a typed struct pointer (the place's address) */
         if (operator === '&' && expr.place) {
             var structName = expr.struct;
-            var addr = placeAddress(expr);
-            makeMeta(expr, ':=', 'p', undefined, addr, undefined);
+            if (expr.baseKind === 'local' && (!expr.offParts || expr.offParts.length === 0)) {
+                /* a whole local's address is a single ADRL with no offset scratch - leave it DEFERRED as
+                   '=&' so an assignment emits ADRL straight into its target ($p) instead of a temp + MOVp,
+                   exactly like &scalar / &array[i] defer in reference() */
+                var sz = isStructAtom(structName) ? structAllocSize(structName) : '*0';
+                makeMeta(expr, '=&', 'p', undefined, expr.base, sz);
+            } else {                                          /* offset fold or global/pointer base: materialize now */
+                makeMeta(expr, ':=', 'p', undefined, placeAddress(expr), undefined);
+            }
             setElem(expr, structName);
             return;
         }

@@ -2224,11 +2224,18 @@
             return;
         }
 
-        /* &structValue -> a typed struct pointer (materialize the place's address) */
+        /* &structValue -> a typed struct pointer (the place's address) */
         if (operator === '&' && expr.place) {
             var structName = expr.struct;
-            var addr = $$parser.placeAddress(expr);
-            $$parser.makeMeta(expr, ':=', 'p', undefined, addr, undefined);
+            if (expr.baseKind === 'local' && (!expr.offParts || expr.offParts.length === 0)) {
+                /* a whole local's address is a single ADRL with no offset scratch - leave it DEFERRED as
+                   '=&' so an assignment emits ADRL straight into its target ($p) instead of a temp + MOVp,
+                   exactly like &scalar / &array[i] defer in reference() */
+                var sz = $$parser.isStructAtom(structName) ? $$parser.structAllocSize(structName) : '*0';
+                $$parser.makeMeta(expr, '=&', 'p', undefined, expr.base, sz);
+            } else {                                          /* offset fold or global/pointer base: materialize now */
+                $$parser.makeMeta(expr, ':=', 'p', undefined, $$parser.placeAddress(expr), undefined);
+            }
             $$parser.setElem(expr, structName);
             return;
         }

@@ -36,8 +36,7 @@ main:	FUNC	; signature func main() -> void @ 13:15
 ;-----------------------------------------------------------------------------
 		! ADDi <A> #.o.Outer.in #.o.Inner.a	; o.in.a = 5
 		MOVi $o:<A> #5 
-		ADRL %0 $o *.z.Outer	; p = &o
-		MOVp $p %0 
+		ADRL $p $o *.z.Outer	; p = &o
 		! ADDi <A> #.o.Outer.in #.o.Inner.b	; p->in.b = 7
 		POKE $p #<A> #7
 		ADRL %1 $o:.o.Outer.in *.z.Inner	; bump(&o.in)
