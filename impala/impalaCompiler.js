@@ -1523,6 +1523,25 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
     };
 
+    /* A place resolved to a terminal SCALAR location (a scalar field, or a scalar array element) becomes a
+       value meta: local -> frame-relative MOV (GETL/SETL when a runtime index is present), global -> MOV*,
+       pointer -> PEEK/POKE base <index-or-#offset>. `parts` are the compile-time offset parts to fold. */
+    emitPlaceValue = function (x, bk, base, parts, dynIndex, type, elemTail) {
+        var offOp = foldOffset(parts);
+        if (bk === 'local' && dynIndex !== undefined) {           /* (dsp + base:off)[dynIndex] */
+            makeMeta(x, '=[]$', type, null, base + (offOp ? ':' + offOp : ''), dynIndex);
+        } else if (bk === 'local') {
+            makeMeta(x, '=', type, undefined, base + ':' + offOp, undefined);
+        } else if (bk === 'globalAddr') {                         /* &name:off in global memory */
+            makeMeta(x, '=*', type, undefined, base + ':' + offOp, undefined);
+        } else {                                                  /* pointer base: PEEK/POKE base <runtime index | #offset> */
+            makeMeta(x, '=[]', type, null, base, dynIndex !== undefined ? dynIndex : '#' + offOp);
+        }
+        x.place = false;
+        x.type  = type;
+        x.elem  = elemTail;
+    };
+
     /* structPtr[k] or arrayField[k] -> the element place. A constant index adds a symbolic stride to the
        offset parts (folds into the following .field, no runtime cost); a dynamic index materializes. */
     subscriptStruct = function (x, idx) {
@@ -1532,37 +1551,54 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             setPlace(x, (p[0] === '&' ? 'globalAddr' : 'pointer'), p, [], undefined, x.elem, x.elem);
         }
         var elem = x.arrayOf;
+        var elemStruct = isStructAtom(elem);            /* struct element -> stride .z.elem, a place for the next .field;
+                                                                    scalar element -> stride 1 word, this [k] IS the terminal value */
+        var eType = descHead(elem), eTail = descTail(elem);
         var idxRV = makeRValue(metaSlot(idx));
 
-        if (/^#[0-9]+$/.test(idxRV)) {
+        if (/^#[0-9]+$/.test(idxRV)) {                           /* constant index -> fold into the compile-time offset parts */
             var k = parseInt(idxRV.substr(1), 10);
             returnBack(idxRV);
             if (k !== 0) {
-                var s = borrow('<');
-                emit('<> *', 'i', s, '#' + k, '#.z.' + elem);
-                x.offParts.push(s);
+                if (elemStruct) {
+                    var s = borrow('<');
+                    emit('<> *', 'i', s, '#' + k, '#.z.' + elem);
+                    x.offParts.push(s);
+                } else {
+                    x.offParts.push('' + k);                     /* scalar stride is 1 word -> the offset is just k */
+                }
             }
-            setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
+            if (elemStruct) setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
+            else            emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
             return;
         }
 
         if (x.baseKind === 'local' && x.dynIndex === undefined) { /* a frame place with a single runtime index: keep it
-                                                                     frame-relative so a terminal .field emits one GETL/SETL
-                                                                     (dsp + constOff)[idx], not ADRL + ADDp + PEEK/POKE */
-            var frameIdx = borrow('%');
-            emit('*', 'i', frameIdx, idxRV, '#.z.' + elem);
-            returnBack(idxRV);
-            setPlace(x, 'local', x.base, x.offParts, elem, x.root, undefined, frameIdx);
+                                                                     frame-relative so it emits one GETL/SETL (dsp + constOff)[idx],
+                                                                     not ADRL + ADDp + PEEK/POKE (struct index is scaled; scalar is 1) */
+            if (elemStruct) {
+                var frameIdx = borrow('%');
+                emit('*', 'i', frameIdx, idxRV, '#.z.' + elem);
+                returnBack(idxRV);
+                setPlace(x, 'local', x.base, x.offParts, elem, x.root, undefined, frameIdx);
+            } else {
+                emitPlaceValue(x, 'local', x.base, x.offParts, idxRV, eType, eTail);
+            }
             return;
         }
+
         var arrPtr = placeAddress(x);                    /* pointer base or a second runtime index: materialize */
-        var elemPtr = borrow('%'), scaled = borrow('%');
-        emit('*', 'i', scaled, idxRV, '#.z.' + elem);
-        emit('+', 'p', elemPtr, arrPtr, scaled);
-        returnBack(scaled);
-        returnBack(idxRV);
-        returnBack(arrPtr);
-        setPlace(x, 'pointer', elemPtr, [], elem, elem);
+        if (elemStruct) {
+            var elemPtr = borrow('%'), scaled = borrow('%');
+            emit('*', 'i', scaled, idxRV, '#.z.' + elem);
+            emit('+', 'p', elemPtr, arrPtr, scaled);
+            returnBack(scaled);
+            returnBack(idxRV);
+            returnBack(arrPtr);
+            setPlace(x, 'pointer', elemPtr, [], elem, elem);
+        } else {                                                  /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
+            emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
+        }
     };
 
     /* a place's address: fold its offset parts into the base - ADRL for a local, ADDp for a pointer. */
@@ -1671,31 +1707,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             setPlace(x, bk, base, newParts, field.struct, root, undefined, dynIndex);
             return;
         }
-        if (field.type === 'A') {                                 /* array field */
-            var arrIsStruct = isStructAtom(field.elem);
-            setPlace(x, bk, base, newParts, arrIsStruct ? undefined : field.elem, root,
-                    arrIsStruct ? field.elem : undefined, dynIndex);
-            if (arrIsStruct) return;                              /* struct-element: a fold-able array place for the next [k] */
-            var ptr = placeAddress(x);                  /* scalar-element: decay to a pointer now */
-            makeMeta(x, ':=', 'p', undefined, ptr, undefined);
-            setElem(x, field.elem);
+        if (field.type === 'A') {                                 /* array field -> a fold-able array place for the next [k]
+                                                                     (struct OR scalar element; subscriptStruct terminates it) */
+            setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex);
             return;
         }
 
-        /* terminal scalar field - fold the parts into one operand (bare symbol if a single part) */
-        var offOp = foldOffset(newParts);
-        if (bk === 'local' && dynIndex !== undefined) {           /* frame place + runtime index -> GETL/SETL: (dsp + base:off)[dynIndex] */
-            makeMeta(x, '=[]$', field.type, null, base + ':' + offOp, dynIndex);
-        } else if (bk === 'local') {
-            makeMeta(x, '=', field.type, undefined, base + ':' + offOp, undefined);
-        } else if (bk === 'globalAddr') {                         /* &name:off in global memory */
-            makeMeta(x, '=*', field.type, undefined, base + ':' + offOp, undefined);
-        } else {                                                  /* pointer base: PEEK/POKE base #offset */
-            makeMeta(x, '=[]', field.type, null, base, '#' + offOp);
-        }
-        x.place = false;
-        x.type  = field.type;
-        x.elem  = field.elem;
+        /* terminal scalar field */
+        emitPlaceValue(x, bk, base, newParts, dynIndex, field.type, field.elem);
     };
 
     checkPtrAssign = function (leftx, rightx, sourceCode, sourceOffset) {
