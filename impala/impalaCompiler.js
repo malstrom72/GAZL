@@ -766,6 +766,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
         if (cls === '<') {
             var idx = counters['<']++;
+            assert(idx < 26, "compile-time scratch pool exhausted (expression too complex)");
             return '<' + String.fromCharCode('A'.charCodeAt(0) + idx) + '>';
         }
         throw new Error("unknown stock class " + cls);
