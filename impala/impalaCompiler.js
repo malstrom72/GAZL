@@ -995,17 +995,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         expr = metaSlot(expr);
 
-        /* a struct-element array place used WITHOUT a subscript decays to a pointer: materialize it */
-        if (expr.place && expr.arrayOf) {
-            var daoff = foldOffset(expr.offParts);
-            var dt = borrow('%');
-            if (expr.baseKind === 'local') {
-                emit('=&', 'p', dt, expr.base + (daoff ? ':' + daoff : ''), '*0');
-            } else {
-                emit('+', 'p', dt, expr.base, '#' + daoff);
-            }
-            if (daoff && ('' + daoff).charAt(0) === '<') returnBack(daoff);
+        if (expr.place && expr.arrayOf) {                         /* array place used without a subscript -> decay to a pointer */
             var delem = expr.arrayOf;
+            var dt = placeAddress(expr);
             makeMeta(expr, ':=', 'p', undefined, dt, undefined);
             setElem(expr, delem);
             return dt;
@@ -1380,7 +1372,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        locals/globals work. (Passing/returning a struct BY VALUE is different - it reserves a
        compile-time-known number of transient VM slots, which a host-owned size cannot provide, so
        those sites stay blocked; see E425.) */
-    structAllocSize = function (structName, words) {
+    structAllocSize = function (structName) {
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
 
@@ -1510,130 +1502,70 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return undefined;
     };
 
-    /* A "place" names a struct sitting at (base + compile-time offset). Struct-typed
-       expressions are compile-time places; only terminal scalar fields emit instructions,
-       so struct values never enter the one-word expression temporaries. */
-    setPlace = function (rec, baseKind, base, offParts, structName, root) {
+    /* A place names a struct (or struct array) at base + a sum of compile-time offset parts. Only a
+       terminal scalar field emits code, so struct values never enter the word temporaries. */
+    setPlace = function (rec, baseKind, base, offParts, structName, root, arrayOf) {
         var slot = metaSlot(rec);
-        slot.operator  = '@place';
-        slot.type      = 'S';
-        slot.operands  = [ undefined, undefined, undefined ];
-        slot.place     = true;
-        slot.baseKind  = baseKind;                                /* 'local' | 'pointer' | 'globalAddr' */
-        slot.base      = base;                                    /* the OUTERMOST variable / pointer */
-        slot.offParts  = offParts || [];                          /* compile-time offset PARTS (symbols) to sum */
-        slot.struct    = structName;                              /* current struct at this place */
-        slot.root      = root || structName;                      /* outermost struct (ADRL frame sizing) */
-        slot.elem      = structName;
+        slot.operator = '@place';
+        slot.operands = [ undefined, undefined, undefined ];
+        slot.place    = true;
+        slot.baseKind = baseKind;                                 /* 'local' | 'pointer' | 'globalAddr' */
+        slot.base     = base;
+        slot.offParts = offParts || [];
+        slot.arrayOf  = arrayOf;                                  /* set -> an array of `arrayOf`; a later [k] indexes it */
+        slot.struct   = arrayOf ? undefined : structName;
+        slot.type     = arrayOf ? 'p' : 'S';
+        slot.root     = root || structName || arrayOf;
+        slot.elem     = arrayOf || structName;
     };
 
-    /* structPtr[i]  ->  a struct place at ptr + i*sizeof (struct arrays decay to struct pointers) */
-    structSubscript = function (x, idx, sourceCode, sourceOffset) {
+    /* structPtr[k] or arrayField[k] -> the element place. A constant index adds a symbolic stride to the
+       offset parts (folds into the following .field, no runtime cost); a dynamic index materializes. */
+    subscriptStruct = function (x, idx) {
         x = metaSlot(x);
-        idx = metaSlot(idx);
-        var structName = x.elem;
-        var sz = structWords(structName);
-        var basePtr = makeRValue(x);
-        var idxRV = makeRValue(idx);
-        var bk = (basePtr[0] === '&' ? 'globalAddr' : 'pointer');
+        if (!x.arrayOf) {                                         /* a raw struct pointer: wrap it as an array place */
+            var p = makeRValue(x);
+            setPlace(x, (p[0] === '&' ? 'globalAddr' : 'pointer'), p, [], undefined, x.elem, x.elem);
+        }
+        var elem = x.arrayOf;
+        var idxRV = makeRValue(metaSlot(idx));
 
-        if (/^#[0-9]+$/.test(idxRV)) {                            /* constant index -> SYMBOLIC stride in offParts (folds with the field) */
+        if (/^#[0-9]+$/.test(idxRV)) {
             var k = parseInt(idxRV.substr(1), 10);
             returnBack(idxRV);
-            var parts = [];
             if (k !== 0) {
                 var s = borrow('<');
-                emit('<> *', 'i', s, '#' + k, '#.z.' + structName);
-                parts.push(s);
+                emit('<> *', 'i', s, '#' + k, '#.z.' + elem);
+                x.offParts.push(s);
             }
-            setPlace(x, bk, basePtr, parts, structName, structName);
+            setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root);
             return;
         }
 
-        var addr = borrow('%');                          /* dynamic index -> ptr + i*.z.Elem (a runtime pointer) */
-        if (sz === 1) {                                           /* 1-word element: stride is 1, no multiply */
-            emit('+', 'p', addr, basePtr, idxRV);
-        } else {
-            var scaled = borrow('%');                    /* SYMBOLIC stride .z.Elem */
-            emit('*', 'i', scaled, idxRV, '#.z.' + structName);
-            emit('+', 'p', addr, basePtr, scaled);
-            returnBack(scaled);
-        }
-        returnBack(idxRV);
-        returnBack(basePtr);
-        setPlace(x, 'pointer', addr, [], structName, structName);
-    };
-
-    /* Subscript on a fold-able struct-element array place (`v->filters[k]`). A CONSTANT index folds
-       its stride `k*sizeof(elem)` into the offset parts (still zero runtime instructions - the whole
-       offset stays compile-time through the following `.field`). A DYNAMIC index has to materialize a
-       runtime pointer (the address genuinely depends on a run-time value). */
-    arraySubscript = function (x, idx, sourceCode, sourceOffset) {
-        x = metaSlot(x);
-        idx = metaSlot(idx);
-        var elemStruct = x.arrayOf;
-        var sz = structWords(elemStruct);            /* numeric (normal) or undefined (extern elem) */
-        var idxRV = makeRValue(idx);
-
-        if (/^#[0-9]+$/.test(idxRV)) {                        /* constant index -> fold the stride, stay compile-time */
-            var k = parseInt(idxRV.substr(1), 10);
-            returnBack(idxRV);
-            var parts = x.offParts.slice();
-            if (k !== 0) {                                     /* stride is SYMBOLIC k*.z.Elem, so it adapts if the element size changes */
-                var s = borrow('<');
-                emit('<> *', 'i', s, '#' + k, '#.z.' + elemStruct);
-                parts.push(s);
-            }
-            setPlace(x, x.baseKind, x.base, parts, elemStruct, x.root);   /* now a struct place */
-            return;
-        }
-
-        /* dynamic index -> materialize element pointer (runtime address math is inherent here) */
-        var aoff = foldOffset(x.offParts);
-        var arrPtr = borrow('%');
-        if (x.baseKind === 'local') {
-            emit('=&', 'p', arrPtr, x.base + (aoff ? ':' + aoff : ''), '*0');
-        } else {
-            emit('+', 'p', arrPtr, x.base, '#' + aoff);
-        }
-        if (aoff && ('' + aoff).charAt(0) === '<') returnBack(aoff);
-        var elemPtr = borrow('%');
-        if (sz === 1) {                                       /* 1-word element: stride is 1, no multiply */
-            emit('+', 'p', elemPtr, arrPtr, idxRV);
-        } else {
-            var scaled = borrow('%');                /* SYMBOLIC stride .z.Elem (adapts to the element size) */
-            emit('*', 'i', scaled, idxRV, '#.z.' + elemStruct);
-            emit('+', 'p', elemPtr, arrPtr, scaled);
-            returnBack(scaled);
-        }
+        var arrPtr = placeAddress(x);                    /* base + folded parts -> the array address */
+        var elemPtr = borrow('%'), scaled = borrow('%');
+        emit('*', 'i', scaled, idxRV, '#.z.' + elem);
+        emit('+', 'p', elemPtr, arrPtr, scaled);
+        returnBack(scaled);
         returnBack(idxRV);
         returnBack(arrPtr);
-        setPlace(x, 'pointer', elemPtr, [], elemStruct, elemStruct);
+        setPlace(x, 'pointer', elemPtr, [], elem, elem);
     };
 
-    /* materialize a place's address into a pointer operand (borrows a temp for locals) */
+    /* a place's address: fold its offset parts into the base - ADRL for a local, ADDp for a pointer. */
     placeAddress = function (place) {
         place = metaSlot(place);
-        var off = foldOffset(place.offParts);            /* a single operand or null (offset 0) */
-        var isScratch = (off !== null && ('' + off).charAt(0) === '<');
-        if (place.baseKind === 'pointer') {
+        var off = foldOffset(place.offParts);
+        var a;
+        if (place.baseKind === 'local') {
+            a = borrow('%');
+            emit('=&', 'p', a, place.base + (off ? ':' + off : ''), structAllocSize(place.root));
+        } else {                                                  /* pointer / globalAddr */
             if (!off) return place.base;
-            var t = borrow('%');
-            emit('+', 'p', t, place.base, '#' + off);
-            if (isScratch) returnBack(off);
-            return t;
+            a = borrow('%');
+            emit('+', 'p', a, place.base, '#' + off);
         }
-        if (place.baseKind === 'globalAddr') {                    /* &name at offset -> materialize a clean pointer */
-            if (!off) return place.base;
-            var g = borrow('%');
-            emit('+', 'p', g, place.base, '#' + off);
-            if (isScratch) returnBack(off);
-            return g;
-        }
-        var a = borrow('%');                             /* local: ADRL $base(:off) - the offset folds into the operand, no ADDp */
-        emit('=&', 'p', a, place.base + (off ? ':' + off : ''),
-                structAllocSize(place.root, undefined));
-        if (isScratch) returnBack(off);
+        if (off && ('' + off).charAt(0) === '<') returnBack(off);
         return a;
     };
 
@@ -1719,35 +1651,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             setPlace(x, bk, base, newParts, field.struct, root);
             return;
         }
-        if (field.type === 'A' && isStructAtom(field.elem)) {   /* struct-element array: keep a fold-able array place */
-            x.operator = '@place';
-            x.type     = 'p';
-            x.operands = [ undefined, undefined, undefined ];
-            x.place    = true;
-            x.arrayOf  = field.elem;                          /* element struct - a later [k] appends its stride */
-            x.baseKind = bk;
-            x.base     = base;
-            x.offParts = newParts;
-            x.root     = root;
-            x.struct   = undefined;
-            x.elem     = field.elem;
-            return;
-        }
-        if (field.type === 'A') {                                 /* scalar-element array -> materialize a typed pointer for subscripting */
-            var aoff = foldOffset(newParts);
-            var aScr = (aoff !== null && ('' + aoff).charAt(0) === '<');
-            if (bk === 'local') {                                 /* &($v at the field offset) */
-                var alt = borrow('%');
-                emit('=&', 'p', alt, base + ':' + aoff, '*0');
-                makeMeta(x, ':=', 'p', undefined, alt, undefined);
-            } else {                                              /* pointer OR globalAddr: base + offset -> a clean pointer */
-                var apt = borrow('%');
-                emit('+', 'p', apt, base, '#' + aoff);
-                makeMeta(x, ':=', 'p', undefined, apt, undefined);
-            }
-            if (aScr) returnBack(aoff);
-            x.place = false;
-            x.type  = 'p';
+        if (field.type === 'A') {                                 /* array field */
+            var arrIsStruct = isStructAtom(field.elem);
+            setPlace(x, bk, base, newParts, arrIsStruct ? undefined : field.elem, root,
+                    arrIsStruct ? field.elem : undefined);
+            if (arrIsStruct) return;                              /* struct-element: a fold-able array place for the next [k] */
+            var ptr = placeAddress(x);                  /* scalar-element: decay to a pointer now */
+            makeMeta(x, ':=', 'p', undefined, ptr, undefined);
             setElem(x, field.elem);
             return;
         }
@@ -2890,7 +2800,7 @@ function Bitwise($){var $first,$op=createParserContext(),$r=createParserContext(
 function AddSub($){var $op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return MulDiv($)&&((function(){while((function(){var _b=_i;return ADDSUB_OP($op)&&_($)&&MulDiv($r)&&(function(){ if (!dry) binaryOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function MulDiv($){var $op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return PrePost($)&&((function(){while((function(){var _b=_i;return MULDIV_OP($op)&&_($)&&PrePost($r)&&(function(){ if (!dry) mulDivOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function PrePost($){var $op=createParserContext(),$cdesc,$cmods,$sid=createParserContext(),$pdepth;return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(function(){ $cdesc = CASTS_TO_TYPES[$op._]; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $cdesc = 'p:' + $cdesc; $cmods = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&Identifier($sid)&&(function(){ $pdepth = 0; ; return true})()&&((function(){for(var _n=0;(function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $pdepth = $pdepth + 1; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})();++_n);return _n>0})())&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!isStructAtom($sid._)) fail('Unknown type ' + $sid._, _s, _i, 'E413'); $cdesc = $sid._; for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc; $cmods = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) { if ($cmods) { unaryOp('pointer', $._, _s, _i); setElem($._, descTail($cdesc)); } else { unaryOp($op._, $._, _s, _i); } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FieldAccess($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Subscript($){var $s=createParserContext();return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var sb = metaSlot($._); if (sb.place && sb.arrayOf) arraySubscript($._, $s._, _s, _i); else if (sb.type === 'p' && isStructAtom(sb.elem)) structSubscript($._, $s._, _s, _i); else binaryOp('=[]', $._, $s._, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Subscript($){var $s=createParserContext();return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var sb = metaSlot($._); if ((sb.place && sb.arrayOf) || (sb.type === 'p' && isStructAtom(sb.elem))) subscriptStruct($._, $s._); else binaryOp('=[]', $._, $s._, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FieldAccess($){var $f=createParserContext();return (function(){var _b=_i;return (_s.substr(_i,2)==="->")&&(_i+=2,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, true, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===".")&&(++_i,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, false, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; /* how many leading output slots the callee expects (>1 = multi-return) */ var _c = metaSlot($._); var _rs = 1; if (_c.operator === ':=' && _c.operands[1] && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) { var _e = symbols.functions[_c.operands[1].substr(1)]; if (_e && _e.signature && _e.signature.returnWords !== undefined && _e.signature.returnWords > 1) _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */ } else if (_c.type === 'F' && isFuncTypeAtom(_c.elem)) { var _ft = functypes[_c.elem];   /* indirect call through a named funcptr type */ if (_ft.returnWords > 1) _rs = _ft.returnWords; } $.retSlots = _rs; $.words = 0;                            /* input words placed so far (struct args span >1) */ $.base  = borrowForCall(); for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */ claimSlot($.base + _os); $.types = []; $.elems = []; $.nulls = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type , undefined, 'E408'); } if (callee.operator === ':=' && callee.operands[1] && (callee.operands[1][0] === '&' || callee.operands[1][0] === '^')) { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; if (entry && entry.kind === 'FUNC' && entry.signature) { signature = entry.signature; } } else if (callee.type === 'F' && isFuncTypeAtom(callee.elem)) { signature = functypes[callee.elem];   /* indirect call: check against the funcptr type */ } if (signature && signature.returnCount > 1 && !destructuring) { fail('Function ' + (calleeName || 'this call') + ' returns ' + signature.returnCount + ' values; destructure the call (a, b = ' + (calleeName || 'f') + '(...))', _s, _i, 'E431'); } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i , 'E405'); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { typeError( 'Argument type mismatch when calling ' + label + ' ({$type1} vs expected {$type2})', _s, _i, actual, expected , 'E406'); } if (expected === 'S' && params[argIdx].struct !== undefined && $.elems[argIdx] !== params[argIdx].struct) { fail('Struct type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + params[argIdx].struct + ', got ' + ($.elems[argIdx] || 'a non-struct value') + ')', _s, _i, 'E421'); } var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */ if (expected === 'p' && expectedElem !== undefined && !$.nulls[argIdx] && $.elems[argIdx] !== expectedElem) { fail('Pointer element type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + elemVerbose(expectedElem) + ' elements, got ' + elemVerbose($.elems[argIdx]) + ' elements)', _s, _i, 'E202', 'use a cast: (' + elemVerbose(expectedElem) + ' pointer)'); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.words + $.retSlots)); returnBack(func); while ($.words-- > 0) {              /* free the argument words (past the output slots) */ returnBack('%' + ($.base + $.retSlots + $.words)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); setElem(callee, undefined); if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */ var _wp = borrow('%'); emit('=&', 'p', _wp, '%' + $.base, '*' + $.retSlots); setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct); callee.winBase  = $.base;       /* output window slots to free once the value is consumed */ callee.winWords = $.retSlots; } else if ($.retSlots > 1) {        /* multi-return: expose window for destructuring */ callee.multiBase = $.base; callee.multiCount = $.retSlots; callee.multiReturnList = signature.returnList; } if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Argument($){var $a=createParserContext();return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if ($.types) { $.types.push(meta.type); } if ($.elems) {                       /* element chain + null-ness, captured */ $.elems.push(meta.elem);         /* before makeArgValue mutates the meta */ $.nulls.push(meta.type === 'p' && meta.operands[1] === '&NULL' && meta.operands[2] === undefined); } var winSlot = $.base + $.retSlots + $.words; if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */ var w = structWords(meta.struct); copyStructArg($a._, winSlot, w); $.words += w; } else { makeArgValue($a._, winSlot); $.words += 1; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
