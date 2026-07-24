@@ -58,6 +58,16 @@ These are the most important principles in the codebase. Get them wrong and the 
   change: reconsider the shape rather than bolting more on.
 - **Do not let the data model accrete.** When a record keeps gaining a field to carry one more case,
   reshape it; a struct that has doubled its members is telling you the abstraction moved.
+- **Minimizing the number of code paths is the single most important thing for correctness.** Every
+  extra branch is a combination that must be reasoned about and tested; two paths that could be one are
+  where bugs hide. Prefer one path that handles all cases over a special-case branch, and collapse
+  branches that differ only in a value into a table or a computed operand.
+- **Rewrite in three passes.** One: a prototype, thrown away. Two: the first real implementation, 100%
+  working. Three: rewrite it to the fewest lines and strongest structure. Do not ship stage two - the
+  experiments and the paths they left behind are the debt this section is about.
+- **Optimize only for a PROVEN win.** An optimization that adds lines or code paths is allowed only when
+  it buys a measured performance gain that matters. A speculative optimization is a net loss: it costs
+  the one thing (code paths) most worth protecting for a benefit you have not shown.
 
 ## 3. Naming
 
