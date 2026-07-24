@@ -1625,14 +1625,17 @@
             argMeta.winWords = undefined;
             return;
         }
-        for (var k = 0; k < words; ++k) {                         /* reserve the window slots (count is compile-time) */
+        for (var k = 0; k < words; ++k) {                         /* reserve the window slots */
             $$parser.claimSlot(winSlot + k);
         }
-        var sz = $$parser.structAllocSize(argMeta.struct);           /* symbolic *.z.Struct - never a baked word count */
+        /* Size hints here stay NUMERIC on purpose (not *.z.Struct): the window is a fixed `words`-slot
+           block baked by the register allocator, and these must match it exactly - a symbolic size that
+           later resolved differently would overrun the window. By-value locks the size; extern structs,
+           whose size is host-owned, are blocked from by-value (E425). */
         var dst = $$parser.borrow('%');
-        $$parser.emit('=&', 'p', dst, '%' + winSlot, sz);            /* ADRL address of the window region */
+        $$parser.emit('=&', 'p', dst, '%' + winSlot, '*' + words);   /* ADRL address of the window region */
         var src = $$parser.placeAddress(argMeta);                    /* address of the source struct */
-        $$parser.emit('copy', '?', dst, src, sz);                    /* COPY dst src *.z.Struct */
+        $$parser.emit('copy', '?', dst, src, '*' + words);           /* COPY dst src *words (matches the window) */
         $$parser.returnBack(src);
         $$parser.returnBack(dst);
         $$parser.freeStructWindow(argMeta);                          /* if the source was a struct-return window, release it */
@@ -3013,7 +3016,7 @@ inp:ArgsDecl ')'_
                                                                                                         ret.name,
                                                                                                         'S',
                                                                                                         false,
-                                                                                                        $$parser.structAllocSize(ret.struct),
+                                                                                                        '*' + ret.words,   /* numeric: the by-value window is a fixed slot count */
                                                                                                         ret.sourceCode,
                                                                                                         ret.sourceOffset,
                                                                                                         undefined,
@@ -3057,7 +3060,7 @@ inp:ArgsDecl ')'_
                                                                                      '$' + p.name,
                                                                                      'S',
                                                                                      true,
-                                                                                     $$parser.structAllocSize(p.struct),
+                                                                                     '*' + p.words,   /* numeric: the by-value window is a fixed slot count */
                                                                                      $$s, $$i,
                                                                                      undefined,
                                                                                      p.struct
@@ -3801,7 +3804,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$parser.setElem(callee, undefined);
                                                        if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */
                                                            var _wp = $$parser.borrow('%');
-                                                           $$parser.emit('=&', 'p', _wp, '%' + $$.base, $$parser.structAllocSize(signature.returnStruct));
+                                                           $$parser.emit('=&', 'p', _wp, '%' + $$.base, '*' + $$.retSlots);   /* numeric: fixed output window (see copyStructArg) */
                                                            $$parser.setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct);
                                                            callee.winBase  = $$.base;       /* output window slots to free once the value is consumed */
                                                            callee.winWords = $$.retSlots;

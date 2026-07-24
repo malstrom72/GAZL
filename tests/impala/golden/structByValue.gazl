@@ -21,7 +21,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 12:1
 ;-----------------------------------------------------------------------------
 consume:	FUNC	; signature func consume(P p) -> int @ 19:18
 	$s:	OUTi
-	$p:	PARA *.z.P
+	$p:	PARA *2
 ;-----------------------------------------------------------------------------
 		MOVi $p:.o.P.x #99 	; p.x = 99
 		ADDi $s $p:.o.P.x $p:.o.P.y	; s = p.x + p.y
@@ -32,7 +32,7 @@ consume:	FUNC	; signature func consume(P p) -> int @ 19:18
 scaled:	FUNC	; signature func scaled(int k, P p) -> int @ 25:17
 	$s:	OUTi
 	$k:	INPi
-	$p:	PARA *.z.P
+	$p:	PARA *2
 ;-----------------------------------------------------------------------------
 		ADDi %0 $p:.o.P.x $p:.o.P.y	; s = k * (p.x + p.y)
 		MULi $s $k %0
@@ -42,7 +42,7 @@ scaled:	FUNC	; signature func scaled(int k, P p) -> int @ 25:17
 ;-----------------------------------------------------------------------------
 nested:	FUNC	; signature func nested(Q q) -> float @ 30:17
 	$g:	OUTf
-	$q:	PARA *.z.Q
+	$q:	PARA *3
 ;-----------------------------------------------------------------------------
 		MOVf $g $q:.o.Q.g 	; g = q.g
 		RETU   	; }
@@ -57,9 +57,9 @@ main:	FUNC	; signature func main() -> void @ 35:15
 ;-----------------------------------------------------------------------------
 		MOVi $v:.o.P.x #5 	; v.x = 5
 		MOVi $v:.o.P.y #7 	; v.y = 7
-		ADRL %3 %1 *.z.P	; r = consume(v)
+		ADRL %3 %1 *2	; r = consume(v)
 		ADRL %4 $v *.z.P
-		COPY %3 %4 *.z.P
+		COPY %3 %4 *2
 		CALL &consume %0 *3	; expects consume(P) -> int @ 39:16
 		MOVi $r %0 
 		MOVi %1 $r 	; printInt(r)
@@ -69,9 +69,9 @@ main:	FUNC	; signature func main() -> void @ 35:15
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:26
 		MOVi %1 #3 	; r = scaled(3, v)
-		ADRL %4 %2 *.z.P
+		ADRL %4 %2 *2
 		ADRL %5 $v *.z.P
-		COPY %4 %5 *.z.P
+		COPY %4 %5 *2
 		CALL &scaled %0 *4	; expects scaled(int, P) -> int @ 43:18
 		MOVi $r %0 
 		MOVi %1 $r 	; printInt(r)
@@ -82,9 +82,9 @@ main:	FUNC	; signature func main() -> void @ 35:15
 		! ADDi <A> #.o.Q.lo #.o.P.y	; w.lo.y = 2
 		MOVi $w:<A> #2 
 		MOVf $w:.o.Q.g #0.75 	; w.g = 0.75
-		ADRL %5 %2 *.z.Q	; printFloat(nested(w))
+		ADRL %5 %2 *3	; printFloat(nested(w))
 		ADRL %6 $w *.z.Q
-		COPY %5 %6 *.z.Q
+		COPY %5 %6 *3
 		CALL &nested %1 *4	; expects nested(Q) -> float @ 47:22
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 47:23
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:34
