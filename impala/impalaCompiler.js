@@ -2459,6 +2459,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 setPlace(x, 'local', '$' + name, [], p.elem, p.elem);
                 return;
             }
+            if (p.type === 'A' && isStructAtom(p.elem)) {   /* struct-element array -> a foldable local array place (base:offset, no ADRL) */
+                setPlace(x, 'local', '$' + name, [], undefined, p.elem, p.elem);
+                return;
+            }
             if (p.type === 'A') {
                 makeMeta(x, '=&', 'p', undefined,
                                   '$' + name, '*0');

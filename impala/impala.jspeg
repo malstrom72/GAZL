@@ -2447,6 +2447,10 @@
                 $$parser.setPlace(x, 'local', '$' + name, [], p.elem, p.elem);
                 return;
             }
+            if (p.type === 'A' && $$parser.isStructAtom(p.elem)) {   /* struct-element array -> a foldable local array place (base:offset, no ADRL) */
+                $$parser.setPlace(x, 'local', '$' + name, [], undefined, p.elem, p.elem);
+                return;
+            }
             if (p.type === 'A') {
                 $$parser.makeMeta(x, '=&', 'p', undefined,
                                   '$' + name, '*0');

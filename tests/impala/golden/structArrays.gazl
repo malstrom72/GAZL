@@ -37,16 +37,13 @@ main:	FUNC	; signature func main() -> void @ 19:15
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 26:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 26:43
 		FORi $i #3 @.l1	; }
-	.e0:	ADRL %0 $vlocals *0	; vlocals[0].gain = 0.5
-		POKE %0 #.o.Voice.gain #0.5
-		ADRL %0 $vlocals *0	; vlocals[1].gain = 0.9
-		! MULi <A> #1 #.z.Voice
+	.e0:	MOVf $vlocals:.o.Voice.gain #0.5 	; vlocals[0].gain = 0.5
+		! MULi <A> #1 #.z.Voice	; vlocals[1].gain = 0.9
 		! ADDi <B> #<A> #.o.Voice.gain
-		POKE %0 #<B> #0.9
-		ADRL %1 $vlocals *0	; printFloat(vlocals[1].gain)
-		! MULi <B> #1 #.z.Voice
+		MOVf $vlocals:<B> #0.9 
+		! MULi <B> #1 #.z.Voice	; printFloat(vlocals[1].gain)
 		! ADDi <A> #<B> #.o.Voice.gain
-		PEEK %1 %1 #<A>
+		MOVf %1 $vlocals:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 31:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 31:40
 		! MULi <A> #1 #.z.Voice	; vp = &global bank[1]
