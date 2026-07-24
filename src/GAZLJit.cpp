@@ -84,12 +84,25 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 		const Int op = code[j].opcode;
 		UInt target;
 		if (jitBranchTarget(code, j, target)) {
+			// A well-formed branch targets an in-function label. A corrupt target (outside [funcStart, endIndex]) is never
+			// a bound mainline leader -> it would finalize to a branch-to-unbound-label. The JIT can't lower an out-of-
+			// function branch; decline the function (degrade to the interpreter). Malformed input, not a backend bug - throw, don't assert.
+			if (target < funcStart || target > endIndex) { throw JitException("JIT: branch target outside the function"); }
 			leaders.insert(target);																						// branch/GOTO/FORi target begins a block
 			if (j + 1 <= endIndex) { leaders.insert(j + 1); }															// so does the fall-through after it
 		} else if (op == OP_SWCH) {
 			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
 			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
-			for (UInt k = 0; k < size; ++k) { leaders.insert(static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i)); }
+			for (UInt k = 0; k < size; ++k) {
+				const UInt t = static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i);
+				// A well-formed SWCH targets only in-function labels. A corrupt/garbage jump-table entry can point outside
+				// [funcStart, endIndex]; that target is never a bound mainline leader (the emit pass only binds in-range
+				// leaders), so it would finalize to a branch-to-unbound-label. The JIT cannot lower an out-of-function
+				// branch - decline the whole function (degrade to the interpreter). NOT an assert: malformed input, not a
+				// backend bug.
+				if (t < funcStart || t > endIndex) { throw JitException("JIT: SWCH jump-table target outside the function"); }
+				leaders.insert(t);
+			}
 			if (j + 1 <= endIndex) { leaders.insert(j + 1); }
 		} else if (op == OP_CALL_CVC || op == OP_CALL_VVC || op == OP_CALL_NVC) {
 			/*
