@@ -45,20 +45,20 @@ main:	FUNC	; signature func main() -> void @ 13:15
 		FORi $i #3 @.l3	; }
 	.e2:	NOOP
 		! MULi <C> #2 #.z.Cell	; printInt(b.cells[2].hi)
-		! ADDi <D> #.o.Bank.cells #<C>
-		! ADDi <D> #<D> #.o.Cell.hi
-		MOVi %1 $b:<D> 
+		! ADDi <B> #.o.Bank.cells #<C>
+		! ADDi <B> #<B> #.o.Cell.hi
+		MOVi %1 $b:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 19:25
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 19:36
-		! MULi <D> #1 #.z.Cell	; printInt(b.cells[1].lo)
-		! ADDi <E> #.o.Bank.cells #<D>
-		! ADDi <E> #<E> #.o.Cell.lo
-		MOVi %1 $b:<E> 
+		! MULi <B> #1 #.z.Cell	; printInt(b.cells[1].lo)
+		! ADDi <C> #.o.Bank.cells #<B>
+		! ADDi <C> #<C> #.o.Cell.lo
+		MOVi %1 $b:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 20:25
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 20:36
-		! MULi <E> #2 #.z.Cell	; printInt(global top[2].hi)
-		! ADDi <F> #<E> #.o.Cell.hi
-		PEEK %1 &top:<F> 
+		! MULi <C> #2 #.z.Cell	; printInt(global top[2].hi)
+		! ADDi <B> #<C> #.o.Cell.hi
+		PEEK %1 &top:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 21:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 21:39
 		RETU   	; }

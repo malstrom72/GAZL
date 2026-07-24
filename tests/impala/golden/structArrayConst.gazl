@@ -48,29 +48,29 @@ main:	FUNC	; signature func main() -> void @ 21:15
 		! ADDi <B> #<B> #.o.Biquad.b0
 		MOVf $v:<B> #0.5 
 		! MULi <B> #2 #.z.Biquad	; v.filters[2].z1 = 1.5
-		! ADDi <C> #.o.Voice.filters #<B>
-		! ADDi <C> #<C> #.o.Biquad.z1
-		MOVf $v:<C> #1.5 
-		! ADDi <C> #.o.Voice.filters #.o.Biquad.b0	; v.filters[0].b0 = 0.25
-		MOVf $v:<C> #0.25 
-		! MULi <C> #1 #.z.Biquad	; v.filters[1].b0 = 2.25
-		! ADDi <D> #.o.Voice.filters #<C>
-		! ADDi <D> #<D> #.o.Biquad.b0
-		MOVf $v:<D> #2.25 
-		! MULi <D> #2 #.z.Biquad	; printFloat(v.filters[2].b0)
-		! ADDi <E> #.o.Voice.filters #<D>
-		! ADDi <E> #<E> #.o.Biquad.b0
-		MOVf %1 $v:<E> 
+		! ADDi <A> #.o.Voice.filters #<B>
+		! ADDi <A> #<A> #.o.Biquad.z1
+		MOVf $v:<A> #1.5 
+		! ADDi <A> #.o.Voice.filters #.o.Biquad.b0	; v.filters[0].b0 = 0.25
+		MOVf $v:<A> #0.25 
+		! MULi <A> #1 #.z.Biquad	; v.filters[1].b0 = 2.25
+		! ADDi <B> #.o.Voice.filters #<A>
+		! ADDi <B> #<B> #.o.Biquad.b0
+		MOVf $v:<B> #2.25 
+		! MULi <B> #2 #.z.Biquad	; printFloat(v.filters[2].b0)
+		! ADDi <A> #.o.Voice.filters #<B>
+		! ADDi <A> #<A> #.o.Biquad.b0
+		MOVf %1 $v:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 28:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:40
-		! MULi <E> #2 #.z.Biquad	; printFloat(v.filters[2].z1)
-		! ADDi <F> #.o.Voice.filters #<E>
-		! ADDi <F> #<F> #.o.Biquad.z1
-		MOVf %1 $v:<F> 
+		! MULi <A> #2 #.z.Biquad	; printFloat(v.filters[2].z1)
+		! ADDi <B> #.o.Voice.filters #<A>
+		! ADDi <B> #<B> #.o.Biquad.z1
+		MOVf %1 $v:<B> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 29:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 29:40
-		! ADDi <F> #.o.Voice.filters #.o.Biquad.b0	; printFloat(v.filters[0].b0)
-		MOVf %1 $v:<F> 
+		! ADDi <B> #.o.Voice.filters #.o.Biquad.b0	; printFloat(v.filters[0].b0)
+		MOVf %1 $v:<B> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:40
 		ADRL %2 $v *.z.Voice	; printFloat(sumB0(&v))

@@ -1331,11 +1331,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        returned when the consuming meta is released, so simultaneously-live reads never collide. */
     foldOffset = function (parts) {
         if (!parts || parts.length === 0) return null;
-        if (parts.length === 1) return parts[0];
+        if (parts.length === 1) return parts[0];      /* a lone part (symbol or scratch) is returned as-is; its owner frees it */
         var o = borrow('<');
         emit('<> +', 'i', o, '#' + parts[0], '#' + parts[1]);
         for (var k = 2; k < parts.length; ++k) {
             emit('<> +', 'i', o, '#' + o, '#' + parts[k]);
+        }
+        for (var j = 0; j < parts.length; ++j) {      /* release borrowed stride scratches now folded into o */
+            if (('' + parts[j]).charAt(0) === '<') returnBack(parts[j]);
         }
         return o;
     };
