@@ -31,9 +31,9 @@ tweak:	FUNC	; signature func tweak(Voice-ptr v, float x) -> void @ 29:16
 ;-----------------------------------------------------------------------------
 		! ADDi <A> #.o.Voice.lo #.o.Biquad.b0	; v->lo.b0 = x
 		POKE $v #<A> $x
-		! ADDi <B> #.o.Voice.hi #.o.Biquad.z1	; v->hi.z1 = x + 1.0
+		! ADDi <A> #.o.Voice.hi #.o.Biquad.z1	; v->hi.z1 = x + 1.0
 		ADDf %0 $x #1.0
-		POKE $v #<B> %0
+		POKE $v #<A> %0
 		ADDf %0 $x #2.0	; v->gain = x + 2.0
 		POKE $v #.o.Voice.gain %0
 		RETU   	; }
@@ -46,26 +46,26 @@ main:	FUNC	; signature func main() -> void @ 36:15
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
 		MOVi $v:.o.Voice.note #60 	; v.note = 60
-		! ADDi <C> #.o.Voice.lo #.o.Biquad.b0	; v.lo.b0 = 0.5
-		MOVf $v:<C> #0.5 
-		! ADDi <C> #.o.Voice.lo #.o.Biquad.z1	; v.lo.z1 = 0.1
-		MOVf $v:<C> #0.1 
-		! ADDi <C> #.o.Voice.hi #.o.Biquad.b0	; v.hi.b0 = 0.9
-		MOVf $v:<C> #0.9 
+		! ADDi <A> #.o.Voice.lo #.o.Biquad.b0	; v.lo.b0 = 0.5
+		MOVf $v:<A> #0.5 
+		! ADDi <A> #.o.Voice.lo #.o.Biquad.z1	; v.lo.z1 = 0.1
+		MOVf $v:<A> #0.1 
+		! ADDi <A> #.o.Voice.hi #.o.Biquad.b0	; v.hi.b0 = 0.9
+		MOVf $v:<A> #0.9 
 		MOVf $v:.o.Voice.gain #2.0 	; v.gain = 2.0
 		MOVi %1 $v:.o.Voice.note 	; printInt(v.note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:29
-		! ADDi <C> #.o.Voice.lo #.o.Biquad.b0	; printFloat(v.lo.b0)
-		MOVf %1 $v:<C> 
+		! ADDi <A> #.o.Voice.lo #.o.Biquad.b0	; printFloat(v.lo.b0)
+		MOVf %1 $v:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 45:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 45:32
-		! ADDi <C> #.o.Voice.lo #.o.Biquad.z1	; printFloat(v.lo.z1)
-		MOVf %1 $v:<C> 
+		! ADDi <A> #.o.Voice.lo #.o.Biquad.z1	; printFloat(v.lo.z1)
+		MOVf %1 $v:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 46:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 46:32
-		! ADDi <C> #.o.Voice.hi #.o.Biquad.b0	; printFloat(v.hi.b0)
-		MOVf %1 $v:<C> 
+		! ADDi <A> #.o.Voice.hi #.o.Biquad.b0	; printFloat(v.hi.b0)
+		MOVf %1 $v:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 47:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:32
 		MOVf %1 $v:.o.Voice.gain 	; printFloat(v.gain)
@@ -75,12 +75,12 @@ main:	FUNC	; signature func main() -> void @ 36:15
 		MOVp %1 $p 	; tweak(p, 0.5)
 		MOVf %2 #0.5 
 		CALL &tweak %0 *3	; expects tweak(ptr, float) -> void @ 51:15
-		! ADDi <C> #.o.Voice.lo #.o.Biquad.b0	; printFloat(p->lo.b0)
-		PEEK %1 $p #<C>
+		! ADDi <A> #.o.Voice.lo #.o.Biquad.b0	; printFloat(p->lo.b0)
+		PEEK %1 $p #<A>
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 52:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 52:33
-		! ADDi <D> #.o.Voice.hi #.o.Biquad.z1	; printFloat(p->hi.z1)
-		PEEK %1 $p #<D>
+		! ADDi <A> #.o.Voice.hi #.o.Biquad.z1	; printFloat(p->hi.z1)
+		PEEK %1 $p #<A>
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 53:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 53:33
 		PEEK %1 $p #.o.Voice.gain	; printFloat(p->gain)

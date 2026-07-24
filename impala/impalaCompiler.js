@@ -860,16 +860,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
         var c = op[0];
 
-        /* ordinary transients / compile-time vars */
+        /* a bare transient / compile-time scratch */
         if (c === '%' || c === '<') {
             var stk = stock[c];
             if (!stockContains(stk, op)) stk.push(op);   // avoid dupes
         }
-        /* special case “...:<” suffix ---------------------------------
-           original test:  op{len-4 : 2} == ':<'
-           -> two chars beginning 4 from the end                       */
-        else if (op.length >= 4 && op.substr(op.length - 4, 2) === ':<') {
-            // recurse with everything from (len-3) to end
+        /* a compile-time scratch carried as the trailing `<X>` token of a compound operand:
+           `*<A>` (alloc size), `#<D>` (pointer offset), `&bank:<D>` / `$v:<D>` (base:offset) */
+        else if (op.length >= 3 && op.charAt(op.length - 1) === '>' && op.charAt(op.length - 3) === '<') {
             returnBack(op.substr(op.length - 3));
         }
     };

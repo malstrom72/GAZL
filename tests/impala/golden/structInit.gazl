@@ -34,12 +34,12 @@ main:	FUNC	; signature func main() -> void @ 21:15
 		PEEK %1 &voice:.o.Voice.note 	; printInt(global voice.note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 23:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 23:40
-		! ADDi <B> #.o.Voice.lo #.o.Biquad.b0	; printFloat(global voice.lo.b0)
-		PEEK %1 &voice:<B> 
+		! ADDi <A> #.o.Voice.lo #.o.Biquad.b0	; printFloat(global voice.lo.b0)
+		PEEK %1 &voice:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 24:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 24:43
-		! ADDi <B> #.o.Voice.lo #.o.Biquad.z1	; printFloat(global voice.lo.z1)
-		PEEK %1 &voice:<B> 
+		! ADDi <A> #.o.Voice.lo #.o.Biquad.z1	; printFloat(global voice.lo.z1)
+		PEEK %1 &voice:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 25:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 25:43
 		PEEK %1 &voice:.o.Voice.gain 	; printFloat(global voice.gain)
@@ -48,13 +48,13 @@ main:	FUNC	; signature func main() -> void @ 21:15
 		PEEK %1 &preset:.o.Voice.note 	; printInt((int) global preset.note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 27:36
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 27:47
-		! ADDi <B> #.o.Voice.lo #.o.Biquad.b0	; printFloat(global preset.lo.b0)
-		PEEK %1 &preset:<B> 
+		! ADDi <A> #.o.Voice.lo #.o.Biquad.b0	; printFloat(global preset.lo.b0)
+		PEEK %1 &preset:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 28:33
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:44
-		! MULi <B> #1 #.z.Voice	; printInt((int) global bank[1].note)
-		! ADDi <C> #<B> #.o.Voice.note
-		PEEK %1 &bank:<C> 
+		! MULi <A> #1 #.z.Voice	; printInt((int) global bank[1].note)
+		! ADDi <B> #<A> #.o.Voice.note
+		PEEK %1 &bank:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 29:37
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 29:48
 		PEEK %1 &bank:.o.Voice.gain 	; printFloat(global bank[0].gain)

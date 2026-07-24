@@ -31,8 +31,8 @@ main:	FUNC	; signature func main() -> void @ 17:15
 		ADRL $f $raw:0 *0	; f = (Frame pointer)&raw[0]
 		MOVp %1 $f 	; setup(f)
 		CALL &setup %0 *2	; expects setup(ptr) -> void @ 20:38
-		! ADDi <B> #.o.Frame.origin #.o.Point.x	; printInt(f->origin.x)
-		PEEK %1 $f #<B>
+		! ADDi <A> #.o.Frame.origin #.o.Point.x	; printInt(f->origin.x)
+		PEEK %1 $f #<A>
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 21:23
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 21:34
 		PEEK %1 $f #.o.Frame.w	; printInt(f->w)

@@ -21,8 +21,8 @@ main:	FUNC	; signature func main() -> void @ 22:15
 		! ADDi <A> #.o.Frame.origin #.o.Point.x	; f->origin.x = 3
 		POKE $f #<A> #3
 		POKE $f #.o.Frame.w #7	; f->w = 7
-		! ADDi <B> #.o.Frame.origin #.o.Point.x	; printInt(f->origin.x)
-		PEEK %1 $f #<B>
+		! ADDi <A> #.o.Frame.origin #.o.Point.x	; printInt(f->origin.x)
+		PEEK %1 $f #<A>
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 28:23
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:34
 		PEEK %1 $f #.o.Frame.w	; printInt(f->w)
