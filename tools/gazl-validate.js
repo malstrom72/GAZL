@@ -116,6 +116,7 @@ function createContext(options) {
 			arrays: new SimpleMap()
 		},
 		externStructs: new SimpleMap(),          // name -> [{ fields, location }]
+		structDefs: new SimpleMap(),             // name -> [{ fields, location }] from a real definition
 		layoutOffsets: new SimpleMap(),          // struct name -> [field names defined as .o.N.f]
 		layoutSizes: new SimpleMap(),            // struct name -> location of .z.N
 		calls: new SimpleMap(),
@@ -806,9 +807,12 @@ function recordSignature(ctx, parsed, loc) {
 			}
 			break;
 		case "struct":
-			if (parsed.extern) {                             // only extern structs are host-owned, so only they need checking
+			if (parsed.extern) {                             // a declaration: what this unit compiled against
 				if (!ctx.externStructs.has(parsed.name)) { ctx.externStructs.set(parsed.name, []); }
 				ctx.externStructs.get(parsed.name).push({ fields: parsed.fields, location: loc });
+			} else {                                         // a definition: the real, typed layout
+				if (!ctx.structDefs.has(parsed.name)) { ctx.structDefs.set(parsed.name, []); }
+				ctx.structDefs.get(parsed.name).push({ fields: parsed.fields, location: loc });
 			}
 			break;
 		case "array":
@@ -1259,6 +1263,26 @@ function validateExternStructs(ctx) {
 						]
 					});
 				}
+			}
+		}
+
+		// (b) a real definition of the same struct is authoritative: field names, order AND types
+		//     must match what this unit compiled against.
+		var realDefs = ctx.structDefs.get(name) || [];
+		for (var ri = 0; ri < realDefs.length; ++ri) {
+			for (var qi = 0; qi < decls.length; ++qi) {
+				if (describe(decls[qi].fields) === describe(realDefs[ri].fields)) { continue; }
+				ctx.diagnostics.push({
+					severity: "error",
+					message: "extern struct " + name + " does not match its definition: declared "
+						+ describe(decls[qi].fields) + " but definition provides " + describe(realDefs[ri].fields),
+					locations: [
+						{ label: "extern declaration", file: decls[qi].location.file,
+							line: decls[qi].location.line, origin: decls[qi].location.origin },
+						{ label: "definition", file: realDefs[ri].location.file,
+							line: realDefs[ri].location.line, origin: realDefs[ri].location.origin }
+					]
+				});
 			}
 		}
 

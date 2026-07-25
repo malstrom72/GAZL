@@ -8,6 +8,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
 .o.Filter.taps:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Filter:	! DEFi #<a>
+; signature struct Filter { state : float[4], taps : int } @ 15:1
 ; signature extern native printFloat() -> unknown @ 16:1
 ; signature extern native printLF() -> unknown @ 18:1
 gf:	GLOB *.z.Filter	; signature global gf : Filter @ 20:1

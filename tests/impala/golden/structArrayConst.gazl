@@ -8,6 +8,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 9:1
 .o.Biquad.z1:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Biquad:	! DEFi #<a>
+; signature struct Biquad { b0 : float, z1 : float } @ 10:1
 	! MOVi <a> #0	; layout of struct Voice
 .o.Voice.note:	! DEFi #<a>
 	! ADDi <a> #<a> #1
@@ -17,6 +18,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 9:1
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Voice:	! DEFi #<a>
+; signature struct Voice { note : int, filters : Biquad[3], gain : float } @ 11:1
 ; signature extern native printFloat() -> unknown @ 12:1
 ; signature extern native printLF() -> unknown @ 14:1
 

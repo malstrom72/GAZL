@@ -8,6 +8,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Voice:	! DEFi #<a>
+; signature struct Voice { note : int, gain : float } @ 13:1
 ; signature extern native printInt() -> unknown @ 14:1
 ; signature extern native printFloat() -> unknown @ 15:1
 ; signature extern native printLF() -> unknown @ 17:1

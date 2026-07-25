@@ -8,6 +8,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 .o.Cell.hi:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Cell:	! DEFi #<a>
+; signature struct Cell { lo : int, hi : int } @ 9:1
 	! MOVi <a> #0	; layout of struct Bank
 .o.Bank.cells:	! DEFi #<a>
 	! MULi <t> #3 #.z.Cell
@@ -15,6 +16,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 .o.Bank.n:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Bank:	! DEFi #<a>
+; signature struct Bank { cells : Cell[3], n : int } @ 10:1
 	! MULi <A> #3 #.z.Cell
 top:	GLOB *<A>	; signature array top[3] : Cell @ 11:1
 ; signature extern native printInt() -> unknown @ 12:1

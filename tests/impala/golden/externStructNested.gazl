@@ -8,6 +8,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 16:1
 .o.Point.y:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Point:	! DEFi #<a>
+; signature struct Point { x : int, y : int } @ 17:1
 ; signature extern struct Frame { origin : Point, w : int } @ 19:1
 ; signature extern native printInt() -> unknown @ 20:1
 ; signature extern native printLF() -> unknown @ 22:1

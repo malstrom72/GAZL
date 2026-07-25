@@ -737,6 +737,13 @@ runValidatorCase(
 	"extern declaration of printInt does not match its definition",
 );
 
+runValidatorCase(
+	"extern struct contradicting the real struct definition",
+	["struct-decl-typemismatch.gazl", "struct-def.gazl"],
+	1,
+	"extern struct Frame does not match its definition",
+);
+
 const validatorUnitTestScript = path.join(dir, "..", "tests", "gazl-validator-tests.js");
 const validatorUnitResult = childProcess.spawnSync(process.execPath, [validatorUnitTestScript], {
 	encoding: "utf8",

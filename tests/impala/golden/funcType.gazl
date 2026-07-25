@@ -8,6 +8,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 16:1
 .o.P.y:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.P:	! DEFi #<a>
+; signature struct P { x : int, y : int } @ 18:1
 ; signature extern native printInt() -> unknown @ 24:1
 ; signature extern native printLF() -> unknown @ 26:1
 

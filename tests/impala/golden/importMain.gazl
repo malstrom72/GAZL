@@ -7,6 +7,7 @@
  .o.Vec2.y:			! DEFi #<a>
  					! ADDi <a> #<a> #1
  .z.Vec2:			! DEFi #<a>
+ ; signature struct Vec2 { x : int, y : int } @ 14:1
 
  ;-----------------------------------------------------------------------------
  makeVec:			FUNC		; signature func makeVec(Vec2-ptr v, int x, int y) -> void @ 14:18

@@ -8,6 +8,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 .o.Buf.len:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Buf:	! DEFi #<a>
+; signature struct Buf { s : float[4], len : int } @ 9:1
 preset:	GLOB *.z.Buf	; signature global preset : Buf @ 9:19
 	DATA #1.0 #2.0 #3.0 #4.0 #4
 ; signature extern native printFloat() -> unknown @ 11:1

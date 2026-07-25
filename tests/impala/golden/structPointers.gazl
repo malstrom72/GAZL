@@ -10,6 +10,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 9:1
 .o.Filter.resonance:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Filter:	! DEFi #<a>
+; signature struct Filter { mode : int, cutoff : float, resonance : float } @ 15:1
 ; signature extern native printInt() -> unknown @ 16:1
 ; signature extern native printFloat() -> unknown @ 17:1
 ; signature extern native printLF() -> unknown @ 19:1

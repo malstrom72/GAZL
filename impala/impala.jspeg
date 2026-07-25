@@ -552,7 +552,15 @@
        compiled against, so the host-supplied layout (.o.Name.field / .z.Name) can be checked
        instead of silently trusted. Rendered as:
            ; signature extern struct Name { field : int, other : float-ptr } @ 12:1        */
+    $$parser.formatStructSignatureComment = function (name, sourceName, sourceCode, sourceOffset) {
+        return $$parser.structSignatureRow(name, false, sourceName, sourceCode, sourceOffset);
+    };
+
     $$parser.formatExternStructSignatureComment = function (name, sourceName, sourceCode, sourceOffset) {
+        return $$parser.structSignatureRow(name, true, sourceName, sourceCode, sourceOffset);
+    };
+
+    $$parser.structSignatureRow = function (name, isExtern, sourceName, sourceCode, sourceOffset) {
         var s = $$parser.structs[name];
         if (!s || !s.fields) {
             return undefined;
@@ -571,7 +579,8 @@
             }
             parts.push(f.name + ' : ' + cat);
         }
-        return appendOrigin('signature extern struct ' + name + ' { ' + parts.join(', ') + ' }',
+        return appendOrigin('signature ' + (isExtern ? 'extern ' : '') + 'struct ' + name
+                                    + ' { ' + parts.join(', ') + ' }',
                             sourceName, sourceCode, sourceOffset);
     };
 
@@ -2881,7 +2890,12 @@ StructDecl  <-  STRUCT _ id:Identifier                               { $sname = 
                                                                      }
                   ( ';' _ )?
                 )*
-                '}' _                                                { $$parser.endStruct($sname); }
+                '}' _                                                {   $$parser.endStruct($sname);
+                                                                         /* Publish the real layout with TYPES so gazl-validate can check an `extern struct`
+                                                                            declaration of the same name against it - the .o./.z. constants alone carry no types. */
+                                                                         emitStandaloneSignatureComment(
+                                                                             $$parser.formatStructSignatureComment($sname, $$parser.sourceName, $$s, $$i));
+                                                                     }
 
 # ------------------------------------------------------------------
 #  named function-pointer type   (Impala 2 Step 3)

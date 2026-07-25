@@ -8,6 +8,7 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
 .o.Filter.cutoff:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Filter:	! DEFi #<a>
+; signature struct Filter { mode : int, cutoff : float } @ 12:1
 ; signature extern native printInt() -> unknown @ 13:1
 ; signature extern native printFloat() -> unknown @ 14:1
 ; signature extern native printLF() -> unknown @ 16:1
