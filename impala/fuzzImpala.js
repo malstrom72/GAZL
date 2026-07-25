@@ -3,8 +3,10 @@
 // Generative fuzzer for the Impala compiler.
 //
 // It emits random, mostly type-valid Impala programs that lean on the intricate paths
-// (nested calls, struct-value params, struct/multi-value returns used as arguments,
-// destructuring, funcptr dispatch) and compiles each one. The oracle is robustness:
+// (nested calls, struct locals/fields/copies, arrays, pointers, funcptr dispatch) and compiles
+// each one. By-value struct params, struct returns, multi-value returns and destructuring are
+// parked for Impala 3.0 (see docs/ParkedFeatures.md) so they are no longer generated.
+// The oracle is robustness:
 //   - a clean coded diagnostic (`error[Exxx]`) is an ACCEPTABLE outcome (invalid program),
 //   - a raw JS exception or an internal `Assertion failed` (e.g. the transient-register
 //     `validateStock` checks) is a COMPILER BUG.
@@ -155,15 +157,11 @@ function genProgram() {
 	const nFuncs = 2 + ri(4);
 	for (let i = 0; i < nFuncs; ++i) {
 		const params = [];
-		for (let k = ri(4); k > 0; --k) params.push({ name: id('p'), t: someType(true, true) });
-		let rets;
-		const roll = rnd();
-		if (roll < 0.3) rets = [];
-		else if (roll < 0.6) rets = [pick(scalarTypes)];
-		else if (roll < 0.8) rets = [pick(scalarTypes), pick(scalarTypes)];
-		else rets = [someType(true)];   // possibly a struct return
-		// a struct return must be the only return value (enforced by the language)
-		if (rets.length > 1 && rets.some(isStruct)) rets = [pick(scalarTypes)];
+		// by-value struct params, struct returns and multi-value returns are parked for Impala 3.0
+		// (see docs/ParkedFeatures.md), so params stay scalar/pointer and there is at most one
+		// scalar return.
+		for (let k = ri(4); k > 0; --k) params.push({ name: id('p'), t: someType(false, true) });
+		const rets = rnd() < 0.35 ? [] : [pick(scalarTypes)];
 		funcs.push({ name: 'fn' + i, params, rets, retNames: rets.map(() => id('r')) });
 	}
 
@@ -426,16 +424,7 @@ function genProgram() {
 			const g = pick(scope.gscalars);
 			return '\tglobal ' + g.name + ' = ' + genExpr(g.elem, 3, scope) + ';';
 		}
-		// destructuring of a multi-return call
-		const multi = scope.callable.filter((fn) => fn.rets.length > 1);
-		if (roll < 0.2 && multi.length) {
-			const fn = pick(multi);
-			const targets = fn.rets.map((t) => {
-				const cands = scope.locals.filter((l) => l.t === t && !l.ro);   // '_' discards are always legal
-				return cands.length && chance(0.7) ? pick(cands).name : '_';
-			});
-			return '\t' + targets.join(', ') + ' = ' + genCall(fn, 3, scope) + ';';
-		}
+		// (destructuring of a multi-return call is parked for Impala 3.0 - see docs/ParkedFeatures.md)
 		// funcptr: assign a matching function to a funcptr local, then call through it
 		if (roll < 0.35) {
 			const cbLocals = scope.locals.filter((l) => isFuncType(l.t));
