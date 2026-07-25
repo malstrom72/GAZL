@@ -1194,6 +1194,43 @@ function validateCalls(ctx) {
 // struct differently, and where a layout IS supplied in the scanned set (.o.Name.field / .z.Name),
 // every declared field must have an offset constant and the size must exist. Without this a host
 // that renames, drops or re-types a field links fine and corrupts memory at run time.
+// An `extern` declaration is a CLAIM about a function implemented elsewhere; Impala compiles calls
+// from it (argument checks, casts, result type). Linking is where the claim must be confirmed. An
+// `extern native` declaration is also recorded as a fallback definition so calls to natives nobody
+// describes still resolve - but it must NOT certify itself: where an authoritative definition exists
+// (the native manifest, or a real definition in another scanned unit) the declaration has to match it.
+function validateExternDeclarations(ctx) {
+	function authoritative(def) {
+		return def.kind !== "extern native" && !(def.signature && def.signature.wildcard);
+	}
+	var entries = ctx.externs.functions.entries();
+	for (var ei = 0; ei < entries.length; ++ei) {
+		var name = entries[ei][0];
+		var decls = entries[ei][1];
+		var defs = (ctx.definitions.get(name) || []).filter(authoritative);
+		if (defs.length === 0) { continue; }          // nothing authoritative to check against
+		for (var di = 0; di < decls.length; ++di) {
+			var decl = decls[di];
+			if (decl.signature && decl.signature.wildcard) { continue; }   // name-only asserts nothing
+			for (var fi = 0; fi < defs.length; ++fi) {
+				if (functionSignaturesCompatible(decl.signature, defs[fi].signature)) { continue; }
+				ctx.diagnostics.push({
+					severity: "error",
+					message: "extern declaration of " + name + " does not match its definition: declared \""
+						+ formatSignatureForMessage(name, decl.signature) + "\" but definition provides \""
+						+ formatSignatureForMessage(name, defs[fi].signature) + "\"",
+					locations: [
+						{ label: "extern declaration", file: decl.location.file,
+							line: decl.location.line, origin: decl.location.origin },
+						{ label: "definition", file: defs[fi].location.file,
+							line: defs[fi].location.line, origin: defs[fi].location.origin }
+					]
+				});
+			}
+		}
+	}
+}
+
 function validateExternStructs(ctx) {
 	function describe(fields) {
 		var parts = [];
@@ -1293,6 +1330,7 @@ function validateContext(ctx) {
 		function (name) { return "No definition found for extern array " + name; }
 	);
 
+	validateExternDeclarations(ctx);
 	validateExternStructs(ctx);
 	validateCalls(ctx);
 }

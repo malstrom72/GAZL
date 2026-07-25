@@ -725,6 +725,18 @@ runValidatorCase(
 	"extern struct AudioBuffer has conflicting declarations",
 );
 
+runValidatorCase(
+	"extern native prototype matching the native manifest",
+	["extern-native-good.gazl"],
+	0,
+);
+runValidatorCase(
+	"extern native prototype contradicting the native manifest",
+	["extern-native-bad.gazl"],
+	1,
+	"extern declaration of printInt does not match its definition",
+);
+
 const validatorUnitTestScript = path.join(dir, "..", "tests", "gazl-validator-tests.js");
 const validatorUnitResult = childProcess.spawnSync(process.execPath, [validatorUnitTestScript], {
 	encoding: "utf8",
