@@ -15,13 +15,13 @@ extern native printLF
 function main()
 locals Vec2 p, Vec2 q, Vec2 s, int qt, int rm
 {
-	p = makeVec(3, 4);
-	q = makeVec(10, 20);
-	s = addVec(p, q);				// struct-value params + struct return, across units
+	makeVec(&p, 3, 4);
+	makeVec(&q, 10, 20);
+	addVec(&s, &p, &q);				// cross-unit struct type, through pointers
 	printInt(s.x); printLF();		// 13
 	printInt(s.y); printLF();		// 24
 
-	qt, rm = divmod(17, 5);			// multi-value return, across units
+	qt = divmod(17, 5, &rm);		// single return + pointer out-parameter, across units
 	printInt(qt); printLF();		// 3
 	printInt(rm); printLF();		// 2
 }

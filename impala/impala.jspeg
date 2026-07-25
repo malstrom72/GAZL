@@ -2866,7 +2866,11 @@ FuncTypeDecl <- FUNCTYPE _ id:Identifier                             { $ftname =
                 )?
                 ')' _
                 ( RETURNS _ r:TypeDeclr                              { $$parser.addFuncTypeReturn($ftname, $r.type, $r.elem, $r.struct, $r.words, $$s, $$i); }
-                  ( ',' _ r:TypeDeclr                                { $$parser.addFuncTypeReturn($ftname, $r.type, $r.elem, $r.struct, $r.words, $$s, $$i); }
+                  ( ',' _ r:TypeDeclr                                {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+                                                                       $$parser.fail('Multiple return values are not supported in Impala 2.0',
+                                                                               $$s, $$i, 'E428',
+                                                                               'declare a single return type for this funcptr type');
+                                                                     }
                   )*
                 )?                                                   { $$parser.endFuncType($ftname); }
 
@@ -2939,9 +2943,10 @@ inp:ArgsDecl ')'_
                                                                              $$parser.addReturn(entry, $out.name, $out.type, $out.elem, $out.size, $$s, $$i, $out.struct, $out.words);
                                                                          }
                                                                      }
-                    ( ',' _ v:VarDecl                                 {
-                                                                         var entry = $$parser.symbols.functions[$id];
-                                                                         if (entry) $$parser.addReturn(entry, $v.name, $v.type, $v.elem, $v.size, $$s, $$i, $v.struct, $v.words);
+                    ( ',' _ v:VarDecl                                 {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+                                                                         $$parser.fail('Multiple return values are not supported in Impala 2.0',
+                                                                                 $$s, $$i, 'E428',
+                                                                                 'return one value, or pass extra results back through pointer out-parameters');
                                                                      }
                     )*
                                                                      {
@@ -3006,22 +3011,10 @@ inp:ArgsDecl ')'_
                                                                         if (entry.pendingReturns && entry.pendingReturns.length > 0) {
                                                                                 for (var _ri = 0; _ri < entry.pendingReturns.length; ++_ri) {
                                                                                         var ret = entry.pendingReturns[_ri];
-                                                                                        if (ret.type === 'S') {  /* by-value struct return -> leading output PARA *sizeof (a writable place) */
-                                                                                                if ($$parser.isExternStruct(ret.struct))
-                                                                                                        $$parser.fail('An extern struct cannot be returned by value (the return '
-                                                                                                                + 'window needs a compile-time size); return it through a pointer out-parameter',
-                                                                                                                ret.sourceCode, ret.sourceOffset, 'E425');
-                                                                                                $$parser.declare(
-                                                                                                        'PARA', 'locals',
-                                                                                                        ret.name,
-                                                                                                        'S',
-                                                                                                        false,
-                                                                                                        '*' + ret.words,   /* numeric: the by-value window is a fixed slot count */
-                                                                                                        ret.sourceCode,
-                                                                                                        ret.sourceOffset,
-                                                                                                        undefined,
-                                                                                                        ret.struct
-                                                                                                );
+                                                                                        if (ret.type === 'S') {  /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+                                                                                                $$parser.fail('Returning a struct by value is not supported in Impala 2.0',
+                                                                                                        ret.sourceCode, ret.sourceOffset, 'E427',
+                                                                                                        'return it through a ' + ret.struct + ' pointer out-parameter');
                                                                                         } else {
                                                                                                 $$parser.declare(
                                                                                                         'OUT?', 'locals',
@@ -3050,21 +3043,10 @@ inp:ArgsDecl ')'_
                                                                         }
                                                                 }
                                                                          iterate($inp, function (p) {
-                                                                             if (p.type === 'S') {         /* by-value struct param -> labeled input PARA *sizeof (read-only place) */
-                                                                                 if ($$parser.isExternStruct(p.struct))
-                                                                                     $$parser.fail('An extern struct cannot be a by-value parameter (the transient '
-                                                                                             + 'window needs a compile-time size); take it by pointer (' + p.struct + ' pointer)',
-                                                                                             $$s, $$i, 'E425');
-                                                                                 $$parser.declare(
-                                                                                     'PARA', 'locals',
-                                                                                     '$' + p.name,
-                                                                                     'S',
-                                                                                     true,
-                                                                                     '*' + p.words,   /* numeric: the by-value window is a fixed slot count */
-                                                                                     $$s, $$i,
-                                                                                     undefined,
-                                                                                     p.struct
-                                                                                 );
+                                                                             if (p.type === 'S') {         /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+                                                                                 $$parser.fail('Passing a struct by value is not supported in Impala 2.0',
+                                                                                         $$s, $$i, 'E426',
+                                                                                         'take it by pointer: ' + p.struct + ' pointer ' + p.name);
                                                                              } else {
                                                                                  $$parser.declare(
                                                                                      'INP?', 'locals',
@@ -4091,10 +4073,10 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
 #   (needs >= 2 targets before '='; single `a = ...` falls through to Expr)
 # ---------------------------------------------------------------------------
 Destructure <-                                      { if (!$$parser.dry) $$parser.destTargets = []; }
-                DestTarget (','_ DestTarget)+ '='_  { $$parser.destructuring = true; }
-                call:Expr ';'_                      { $$parser.destructuring = false;
-                                                      if (!$$parser.dry)
-                                                          $$parser.finishDestructure($call, $$parser.destTargets, $$s, $$i); }
+                DestTarget (','_ DestTarget)+ '='_  {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+                                                      $$parser.fail('Destructuring assignment is not supported in Impala 2.0',
+                                                              $$s, $$i, 'E429',
+                                                              'assign one value per statement'); }
 
 DestTarget  <-                                      { $tgtGlobal = false; }
                 (GLOBAL _                           { $tgtGlobal = true; }

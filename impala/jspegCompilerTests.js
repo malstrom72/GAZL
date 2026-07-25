@@ -1236,113 +1236,34 @@ const typedPointerCases = [
 		expectError: null,
 	},
 	{
-		label: "a function may declare multiple return values",
+		label: "multiple return values are parked for Impala 3.0",
 		source: "function polar(float m, float p) returns float x, float y { x = m * p; y = m - p; }",
+		expectError: "Multiple return values are not supported",
+	},
+	{
+		label: "a multi-return funcptr type is parked for Impala 3.0",
+		source: "functype SplitFn(int n) returns int, int",
+		expectError: "Multiple return values are not supported",
+	},
+	{
+		label: "a by-value struct parameter is parked for Impala 3.0",
+		source: ["struct P { int x; int y }", "function sum(P p) returns int s { s = p.x + p.y; }"].join("\n"),
+		expectError: "Passing a struct by value is not supported",
+	},
+	{
+		label: "a by-value struct return is parked for Impala 3.0",
+		source: ["struct S { int a }", "function make() returns S s { s.a = 1; }"].join("\n"),
+		expectError: "Returning a struct by value is not supported",
+	},
+	{
+		label: "destructuring assignment is parked for Impala 3.0",
+		source: ["function one() returns int a { a = 1; }", "function main() locals int x, int y { x, y = one(); }"].join("\n"),
+		expectError: "Destructuring assignment is not supported",
+	},
+	{
+		label: "struct pointer params, out-params and whole-struct copy still work",
+		source: ["struct P { int x; int y }", "function fill(P pointer p, int v) { p->x = v; p->y = v + 1; }", "function half(int n, int pointer rem) returns int q { q = n / 2; *rem = n - n / 2 * 2; }", "function main() locals P a, P b, int q, int r { fill(&a, 5); b = a; q = half(7, &r); }"].join("\n"),
 		expectError: null,
-	},
-	{
-		label: "calling a multi-return function in expression position is rejected",
-		source: [
-			"function two() returns int a, int b { a = 1; b = 2; }",
-			"function main() locals int z { z = two(); }",
-		].join("\n"),
-		expectError: "destructure the call",
-	},
-	{
-		label: "a by-value struct return is accepted",
-		source: [
-			"struct S { int a }",
-			"function make() returns S s { s.a = 1; }",
-			"function main() locals S v { v = make(); }",
-		].join("\n"),
-		expectError: null,
-	},
-	{
-		label: "a struct return must be the only return value",
-		source: [
-			"struct S { int a }",
-			"function bad() returns S s, int n { s.a = 1; n = 2; }",
-		].join("\n"),
-		expectError: "must be the only return value",
-	},
-	{
-		label: "a returned struct cannot be field-accessed inline",
-		source: [
-			"struct S { int a }",
-			"function make() returns S s { s.a = 1; }",
-			"function main() locals int n { n = make().a; }",
-		].join("\n"),
-		expectError: "returned struct value",
-	},
-	{
-		label: "destructuring a multi-return call is accepted",
-		source: [
-			"function two() returns int a, int b { a = 1; b = 2; }",
-			"function main() locals int x, int y { x, y = two(); }",
-		].join("\n"),
-		expectError: null,
-	},
-	{
-		label: "destructuring may discard a return value with _",
-		source: [
-			"function two() returns int a, int b { a = 1; b = 2; }",
-			"function main() locals int y { _, y = two(); }",
-		].join("\n"),
-		expectError: null,
-	},
-	{
-		label: "destructuring can write globals",
-		source: [
-			"global int g",
-			"function two() returns int a, int b { a = 1; b = 2; }",
-			"function main() locals int x { x, global g = two(); }",
-		].join("\n"),
-		expectError: null,
-	},
-	{
-		label: "destructuring arity must match the return count",
-		source: [
-			"function two() returns int a, int b { a = 1; b = 2; }",
-			"function main() locals int x, int y, int z { x, y, z = two(); }",
-		].join("\n"),
-		expectError: "expects 2 targets",
-	},
-	{
-		label: "destructuring a single-return call is rejected",
-		source: [
-			"function one() returns int a { a = 1; }",
-			"function main() locals int x, int y { x, y = one(); }",
-		].join("\n"),
-		expectError: "not a multi-value function call",
-	},
-	{
-		label: "a by-value struct parameter is accepted",
-		source: [
-			"struct P { int x; int y }",
-			"extern native printInt",
-			"function sum(P p) returns int s { s = p.x + p.y; }",
-			"function main() locals P v { v.x = 1; v.y = 2; printInt(sum(v)); }",
-		].join("\n"),
-		expectError: null,
-	},
-	{
-		label: "passing the wrong struct by value is rejected",
-		source: [
-			"struct P { int x }",
-			"struct Q { int y }",
-			"function take(P p) returns int s { s = p.x; }",
-			"function main() locals Q w { take(w); }",
-		].join("\n"),
-		expectError: "Struct type mismatch for argument",
-	},
-	{
-		label: "passing a scalar where a struct is expected is rejected",
-		source: [
-			"struct P { int x }",
-			"function take(P p) returns int s { s = p.x; }",
-			"function main() locals int n { take(n); }",
-		].join("\n"),
-		expectError: "Argument type mismatch",
 	},
 	{
 		label: "a matching function assigns to a named funcptr type",
