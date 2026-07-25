@@ -1293,6 +1293,16 @@ const typedPointerCases = [
 		expectError: "Pointer element type mismatch",
 	},
 	{
+		label: "defining the same function twice is rejected",
+		source: ["function shared(int n) returns int r { r = n + 1; }", "function shared(int n) returns int r { r = n + 99; }"].join("\n"),
+		expectError: "Function shared is already defined",
+	},
+	{
+		label: "an extern declaration may still be defined locally",
+		source: ["extern function later", "function later() { }"].join("\n"),
+		expectError: null,
+	},
+	{
 		label: "an extern may declare a prototype",
 		source: ["extern native dm(int a, int b, int pointer r) returns int q", "function main() locals int r, int q { q = dm(17, 5, &r); }"].join("\n"),
 		expectError: null,

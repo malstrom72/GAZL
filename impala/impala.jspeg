@@ -519,10 +519,20 @@
         }
     };
 
-    $$parser.emitFunctionSignature = function (name) {
+    /* Called once per `function` DEFINITION, to emit the `name: FUNC` header. `kind === 'FUNC'` means a
+       header was already emitted for this name, i.e. the name is being defined twice - which used to
+       return silently, so the second body was emitted with NO header and the assembler reported the
+       baffling "Parameters and locals must be declared at top of FUNC". Two units of an import closure
+       defining the same function is the usual way in. */
+    $$parser.emitFunctionSignature = function (name, sourceCode, sourceOffset) {
         var entry = $$parser.symbols.functions[name];
-        if (!entry || entry.kind === 'FUNC') {
+        if (!entry) {
             return;
+        }
+        if (entry.kind === 'FUNC') {
+            $$parser.fail('Function ' + name + ' is already defined',
+                    sourceCode, sourceOffset, 'E401',
+                    'each function needs a unique name across the whole import closure');
         }
 
         var comment = $$parser.formatFunctionSignatureComment(name, entry.signature);
@@ -3050,7 +3060,7 @@ inp:ArgsDecl ')'_
                                                                                  });
                                                                              }
                                                                          }
-                                                                $$parser.emitFunctionSignature($id);
+                                                                $$parser.emitFunctionSignature($id, $$s, $$i);
                                                                 if (entry) {
                                                                         if (entry.pendingReturns && entry.pendingReturns.length > 0) {
                                                                                 for (var _ri = 0; _ri < entry.pendingReturns.length; ++_ri) {
