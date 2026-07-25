@@ -41,8 +41,8 @@ Related open item: a constant evaluator is load-bearing for any 2.0 array identi
 
 ## Parked: by-value struct params/returns, multi-return, destructuring
 
-    branch:   Impala3-byvalue-multireturn    (tip ed3c3a8)
-    removed:  the "Park ..." commits on Impala2 that name this branch
+    branch:   Impala3-byvalue-multireturn    (tip 985bdcc)
+    removed:  e6ad36d  "Park by-value struct params/returns, multi-return and destructuring"
     target:   Impala 3.0
 
 Contains three entangled features, which is why they share one branch:
@@ -64,6 +64,16 @@ Parked because they are the most special-cased machinery in the compiler - the t
 concentrated most of the complexity and most of the review findings, while nothing in the current corpus
 needs them. Confirmed before removal: zero Impala 1.0 corpus programs used either feature, so parking them
 cost no backward compatibility.
+
+Test fixtures retired with them (also only on the branch): `multiReturn`, `structByValue`, `structReturn`,
+`structValueSemantics`, and `regTransientWindow`. The last one was a fuzzer-found allocator regression whose
+trigger needed BOTH parked features at once; the half of its fix that still applies (borrowForCall never
+seating a call base below a live transient) stays covered by `regArrayCallWindow`. `funcType` and the
+`import/` pair were rewritten to keep their real coverage (funcptr types, import-as-linking) using pointers
+and out-parameters.
+
+Rejected now with: `E426` by-value struct parameter, `E427` by-value struct return, `E428` multiple return
+values (function or funcptr type), `E429` destructuring assignment. Each diagnostic carries a fix-it hint.
 
 
 ## Impala 3.0 wishlist
