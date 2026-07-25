@@ -102,6 +102,11 @@ all base-kind combinations, and read-back verification after every write.
 
 ## Step 4 + slice 2.5: returns and by-value — one window convention
 
+> **PARKED for Impala 3.0.** This slice shipped and was then removed; the work is preserved on the
+> `Impala3-byvalue-multireturn` branch. Impala 2.0 rejects multi-value returns (`E428`),
+> destructuring (`E429`) and by-value struct params/returns (`E426`, `E427`). Kept as the design and
+> experiment record. See `docs/ParkedFeatures.md`.
+
 **Experiment 1 (decisive):** a labeled `PARA` section works as a first-class local:
 
 ```gazl

@@ -1,11 +1,20 @@
 # Impala 2.0 Design
 
-> **Status: implemented.** Steps 1-5 (typed pointers/arrays, structs, typed function pointers, multiple
-> return values, import) plus the strict-expression rules and coded diagnostics are implemented in the
-> JSPEG compiler: VM-verified against fixtures in `tests/impala/sources/`, held to a byte-identical
-> golden gate, and fuzzed (`impala/fuzzImpala.js`). `--legacy` gates the strictness rules; `impala build`
-> drives import-as-linking with `export` and `--dead-strip`. The per-step sections below are the design
-> records; a few polish items remain (`.gazl` blob imports, typed `extern function`, richer parse errors).
+> **Status: implemented, with Step 4 parked.** Steps 1, 2, 3 and 5 (typed pointers/arrays, structs,
+> typed function pointers, import) plus the strict-expression rules and coded diagnostics are
+> implemented in the JSPEG compiler: VM-verified against fixtures in `tests/impala/sources/`, held to a
+> byte-identical golden gate, and fuzzed (`impala/fuzzImpala.js`). `--legacy` gates the strictness rules;
+> `impala build` drives import-as-linking with `export` and `--dead-strip`.
+>
+> **Step 4 (multiple return values), destructuring, and passing/returning STRUCTS BY VALUE were
+> implemented and then deliberately parked for Impala 3.0** - the work is preserved on the
+> `Impala3-byvalue-multireturn` branch. Impala 2.0 rejects them (`E426`-`E429`); results come back
+> through pointer out-parameters instead. Struct locals/globals, struct pointers, field access,
+> `sizeof`, whole-struct assignment and single named returns are all unaffected. See
+> [`docs/ParkedFeatures.md`](ParkedFeatures.md) for what is parked, where, and why.
+>
+> The per-step sections below are the design records; a few polish items remain (`.gazl` blob imports,
+> typed `extern function`, richer parse errors).
 
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),
@@ -67,9 +76,10 @@ The features are ordered by dependency, not ambition:
 3. **Typed function pointers** — named signature types for `funcptr`, riding the existing
    `; signature` metadata channel. Implemented; design in
    [Step 3: Typed function pointers](#step-3-typed-function-pointers-implemented).
-4. **Multiple return values** — closing a known 1:1 gap: GAZL has supported multiple `OUT` words
-   per function since 1.0, and Impala never exposed it. Implemented; design in
-   [Step 4: Multiple return values](#step-4-multiple-return-values-implemented).
+4. **Multiple return values** - closing a known 1:1 gap: GAZL has supported multiple `OUT` words
+   per function since 1.0, and Impala never exposed it. Implemented, then PARKED for Impala 3.0
+   (see [`docs/ParkedFeatures.md`](ParkedFeatures.md)); design record in
+   [Step 4: Multiple return values](#step-4-multiple-return-values-parked).
 5. **Import** — sharing typed interfaces between units without textual copying. Implemented; design in
    [Step 5: Import](#step-5-import-implemented).
 
@@ -515,6 +525,11 @@ codegen never depends on how the struct is used elsewhere in the function.
 
 ### Passing, returning, copying
 
+> **Passing and returning a struct BY VALUE is PARKED for Impala 3.0** (`E426`, `E427`); preserved on
+> the `Impala3-byvalue-multireturn` branch. Whole-struct assignment (`a = b`, `*p = v`), struct
+> locals/globals, struct pointers, field access and `sizeof` are all still supported. Pass and return
+> structs through pointers. See [`docs/ParkedFeatures.md`](ParkedFeatures.md).
+
 **Both by-value and by-pointer are legal, chosen by the parameter/return declaration** *(decided
 2026-07-20)*. An earlier draft deferred by-value out of a vague "one convention beats two" instinct;
 the `a = b` decision already demolished that — a by-value struct is the *same* `COPY *sizeof`
@@ -646,7 +661,12 @@ global TickFn onTick = tickHandler  // checked: tickHandler must match TickFn's 
 
 ---
 
-## Step 4: Multiple return values (implemented)
+## Step 4: Multiple return values (parked)
+
+> **PARKED for Impala 3.0.** Implemented and then removed; the work is preserved on the
+> `Impala3-byvalue-multireturn` branch. Impala 2.0 rejects a second return value (`E428`) and
+> destructuring assignment (`E429`). Return extra results through pointer out-parameters instead.
+> This section is kept as the design record. See [`docs/ParkedFeatures.md`](ParkedFeatures.md).
 
 Impala 1.0 supports a single return value while GAZL supports many — the demo has apologized for
 this since 2012 ("GAZL supports multiple 'OUT' variables per function and the intention is to
