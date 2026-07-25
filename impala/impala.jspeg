@@ -548,6 +548,33 @@
         }
     }
 
+    /* Declare an `extern struct` interface for gazl-validate: the field names and types Impala
+       compiled against, so the host-supplied layout (.o.Name.field / .z.Name) can be checked
+       instead of silently trusted. Rendered as:
+           ; signature extern struct Name { field : int, other : float-ptr } @ 12:1        */
+    $$parser.formatExternStructSignatureComment = function (name, sourceName, sourceCode, sourceOffset) {
+        var s = $$parser.structs[name];
+        if (!s || !s.fields) {
+            return undefined;
+        }
+        var parts = [];
+        for (var i = 0; i < s.fields.length; ++i) {
+            var f = s.fields[i];
+            var cat;
+            if (f.type === 'A') {                                 /* an array field advertises its extent + element */
+                cat = signatureCategoryForDesc(f.elem) + '[' + (f.size !== undefined ? f.size : '') + ']';
+            } else if (f.type === 'S') {
+                cat = f.struct;                                   /* a nested by-value struct field */
+            } else {
+                cat = (f.elem !== undefined ? signatureCategoryForDesc(fullDescFor(f.type, f.elem))
+                                            : signatureParamCategory(f.type));
+            }
+            parts.push(f.name + ' : ' + cat);
+        }
+        return appendOrigin('signature extern struct ' + name + ' { ' + parts.join(', ') + ' }',
+                            sourceName, sourceCode, sourceOffset);
+    };
+
     $$parser.formatGlobalSignatureComment = function (section, name, type, size, flavor,
                                                       sourceName, sourceCode, sourceOffset, elem) {
         if (!name) {
@@ -3123,7 +3150,14 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                      }
                         ( ';' _ )?
                       )*
-                      '}' _                                           { $$parser.endStruct($sname); }
+                      '}' _                                           {   $$parser.endStruct($sname);
+                                                                          /* Declare the host-owned interface so gazl-validate can check the layout
+                                                                             the host supplies (.o.Name.field / .z.Name) against what Impala assumed,
+                                                                             the way extern globals and function signatures are already checked. */
+                                                                          emitStandaloneSignatureComment(
+                                                                              $$parser.formatExternStructSignatureComment(
+                                                                                  $sname, $$parser.sourceName, $$s, $$i));
+                                                                      }
                     )?
                 /   (   FUNCTION                                      { $$.type  = 'U';  $$.scope = 'functions'; }
                     /   NATIVE                                        { $$.type  = 'N';  $$.scope = 'functions'; }

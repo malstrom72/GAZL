@@ -115,6 +115,9 @@ function createContext(options) {
 			consts: new SimpleMap(),
 			arrays: new SimpleMap()
 		},
+		externStructs: new SimpleMap(),          // name -> [{ fields, location }]
+		layoutOffsets: new SimpleMap(),          // struct name -> [field names defined as .o.N.f]
+		layoutSizes: new SimpleMap(),            // struct name -> location of .z.N
 		calls: new SimpleMap(),
 		definitions: new SimpleMap(),
 		diagnostics: [],
@@ -275,6 +278,27 @@ function parseSignatureComment(comment) {
 			wildcard: wildcard,
 			extern: roleInfo.extern,
 			native: roleInfo.native,
+			origin: split.origin
+		};
+	}
+
+	// `extern struct Name { field : int, other : float-ptr }` - the interface Impala compiled
+	// against. Checked before the value branch, whose `name : type` regex would swallow it.
+	var structMatch = split.body.match(/^(extern\s+)?struct\s+([^\s{]+)\s*\{\s*([^}]*)\}\s*$/);
+	if (structMatch) {
+		var structFields = [];
+		var rawFields = structMatch[3].split(",");
+		for (var __fi = 0; __fi < rawFields.length; ++__fi) {
+			var piece = rawFields[__fi].trim();
+			if (piece === "") { continue; }
+			var fm = piece.match(/^(\S+)\s*:\s*(\S+)$/);
+			structFields.push(fm ? { name: fm[1], type: fm[2].toLowerCase() } : { name: piece, type: "unknown" });
+		}
+		return {
+			kind: "struct",
+			name: structMatch[2],
+			fields: structFields,
+			extern: !!structMatch[1],
 			origin: split.origin
 		};
 	}
@@ -781,6 +805,12 @@ function recordSignature(ctx, parsed, loc) {
 				addConstExport(ctx, parsed, loc);
 			}
 			break;
+		case "struct":
+			if (parsed.extern) {                             // only extern structs are host-owned, so only they need checking
+				if (!ctx.externStructs.has(parsed.name)) { ctx.externStructs.set(parsed.name, []); }
+				ctx.externStructs.get(parsed.name).push({ fields: parsed.fields, location: loc });
+			}
+			break;
 		case "array":
 			if (parsed.extern) {
 				addArrayImport(ctx, parsed, loc);
@@ -814,6 +844,19 @@ function processFile(filePath, ctx) {
 			if (parsed) {
 				recordSignature(ctx, parsed, location(filePath, lineNumber, parsed.origin));
 			}
+		}
+
+		// Layout constants: `.o.Name.field: ! DEFi ...` and `.z.Name: ! DEFi ...`. Whoever supplies
+		// them (an Impala unit, or a host header) is asserting a struct layout, so an extern struct
+		// declaration can be checked against them.
+		var offMatch = line.match(/^\s*\.o\.([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\s*:/);
+		if (offMatch) {
+			if (!ctx.layoutOffsets.has(offMatch[1])) { ctx.layoutOffsets.set(offMatch[1], []); }
+			ctx.layoutOffsets.get(offMatch[1]).push(offMatch[2]);
+		}
+		var sizeMatch = line.match(/^\s*\.z\.([A-Za-z_$][\w$]*)\s*:/);
+		if (sizeMatch && !ctx.layoutSizes.has(sizeMatch[1])) {
+			ctx.layoutSizes.set(sizeMatch[1], location(filePath, lineNumber, undefined));
 		}
 
 		var expectsIdx = line.indexOf("; expects");
@@ -1146,6 +1189,73 @@ function validateCalls(ctx) {
 	}
 }
 
+// An `extern struct` says "the host owns this layout; here is the interface I compiled against".
+// Two things are checkable, and neither was before: two units must not declare the same extern
+// struct differently, and where a layout IS supplied in the scanned set (.o.Name.field / .z.Name),
+// every declared field must have an offset constant and the size must exist. Without this a host
+// that renames, drops or re-types a field links fine and corrupts memory at run time.
+function validateExternStructs(ctx) {
+	function describe(fields) {
+		var parts = [];
+		for (var i = 0; i < fields.length; ++i) { parts.push(fields[i].name + " : " + fields[i].type); }
+		return "{ " + parts.join(", ") + " }";
+	}
+
+	var entries = ctx.externStructs.entries();
+	for (var ei = 0; ei < entries.length; ++ei) {
+		var name = entries[ei][0];
+		var decls = entries[ei][1];
+
+		// (a) conflicting declarations of the same extern struct
+		for (var a = 0; a < decls.length; ++a) {
+			for (var b = a + 1; b < decls.length; ++b) {
+				if (describe(decls[a].fields) !== describe(decls[b].fields)) {
+					ctx.diagnostics.push({
+						severity: "error",
+						message: "extern struct " + name + " has conflicting declarations: "
+							+ describe(decls[a].fields) + " vs " + describe(decls[b].fields),
+						locations: [
+							{ label: "first declaration", file: decls[a].location.file,
+								line: decls[a].location.line, origin: decls[a].location.origin },
+							{ label: "second declaration", file: decls[b].location.file,
+								line: decls[b].location.line, origin: decls[b].location.origin }
+						]
+					});
+				}
+			}
+		}
+
+		// (b) check against a supplied layout, when one is in the scanned set
+		var offsets = ctx.layoutOffsets.get(name);
+		var hasSize = ctx.layoutSizes.has(name);
+		if (!offsets && !hasSize) { continue; }        // nothing supplied here: nothing to check against
+		var decl = decls[0];
+		var supplied = offsets || [];
+		for (var fi = 0; fi < decl.fields.length; ++fi) {
+			var fieldName = decl.fields[fi].name;
+			var found = false;
+			for (var si = 0; si < supplied.length; ++si) { if (supplied[si] === fieldName) { found = true; break; } }
+			if (!found) {
+				ctx.diagnostics.push({
+					severity: "error",
+					message: "extern struct " + name + " declares field \"" + fieldName
+						+ "\" but the supplied layout defines no .o." + name + "." + fieldName,
+					locations: [ { label: "declared here", file: decl.location.file,
+						line: decl.location.line, origin: decl.location.origin } ]
+				});
+			}
+		}
+		if (!hasSize) {
+			ctx.diagnostics.push({
+				severity: "error",
+				message: "extern struct " + name + " has offset constants but no .z." + name + " size constant",
+				locations: [ { label: "declared here", file: decl.location.file,
+					line: decl.location.line, origin: decl.location.origin } ]
+			});
+		}
+	}
+}
+
 function validateContext(ctx) {
 	compareExternSets(
 		"Function",
@@ -1183,6 +1293,7 @@ function validateContext(ctx) {
 		function (name) { return "No definition found for extern array " + name; }
 	);
 
+	validateExternStructs(ctx);
 	validateCalls(ctx);
 }
 

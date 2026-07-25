@@ -707,6 +707,24 @@ runValidatorCase(
 	"Array sharedInts does not match its definition",
 );
 
+runValidatorCase(
+	"extern struct matching a supplied host layout",
+	["struct-decl.gazl", "struct-layout-valid.gazl"],
+	0,
+);
+runValidatorCase(
+	"extern struct whose host layout drifted",
+	["struct-decl.gazl", "struct-layout-drift.gazl"],
+	1,
+	"extern struct AudioBuffer declares field \"channels\"",
+);
+runValidatorCase(
+	"extern struct declared differently in two units",
+	["struct-decl.gazl", "struct-decl-conflict.gazl"],
+	1,
+	"extern struct AudioBuffer has conflicting declarations",
+);
+
 const validatorUnitTestScript = path.join(dir, "..", "tests", "gazl-validator-tests.js");
 const validatorUnitResult = childProcess.spawnSync(process.execPath, [validatorUnitTestScript], {
 	encoding: "utf8",

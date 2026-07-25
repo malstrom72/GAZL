@@ -2,6 +2,7 @@
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 22:1
+; signature extern struct AudioBuffer { frames : int, data : float-ptr, channels : int } @ 24:1
 ; signature extern native printInt() -> unknown @ 25:1
 ; signature extern native printLF() -> unknown @ 27:1
 

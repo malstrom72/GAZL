@@ -1,0 +1,5 @@
+; a host that renamed `channels` to `chans` - links fine, corrupts memory at run time
+ .o.AudioBuffer.data:		! DEFi #1
+ .o.AudioBuffer.frames:		! DEFi #5
+ .o.AudioBuffer.chans:		! DEFi #6
+ .z.AudioBuffer:			! DEFi #8

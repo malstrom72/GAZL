@@ -1,0 +1,5 @@
+; a host header supplying exactly the layout the interface declared
+ .o.AudioBuffer.data:		! DEFi #1
+ .o.AudioBuffer.frames:		! DEFi #5
+ .o.AudioBuffer.channels:	! DEFi #6
+ .z.AudioBuffer:			! DEFi #8
