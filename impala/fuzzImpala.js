@@ -40,8 +40,11 @@ const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32
 // later non-zero status is a RUNTIME trap - the generated program's own undefined behaviour (a wild
 // pointer, a write through a string literal, an out-of-region index). That is the program's fault,
 // not the compiler's, and without a reference oracle we cannot call it a miscompile, so we ignore it.
-// The generator avoids `/` and `%` (no div-by-zero) and bounds its indices/pointer offsets to keep
-// runtime traps rare, but pointer/string undefined behaviour is inherent and expected here.
+// The generator avoids `/` and `%` (no div-by-zero), keeps every array/pointer index strictly IN
+// BOUNDS (see genIdx), and always points a pointer local at a real array, so runtime traps should be
+// rare. A HANG is therefore a genuine bug: all loops are bounded `for (v = 0 to N<=4)` with a
+// per-nesting-level counter that is read-only inside the body, so nothing can defeat termination
+// except a miscompile. Do not reclassify a timeout as benign - fix the cause.
 function runOnVm(gazl) {
 	const tmp = path.join(os.tmpdir(), `fuzz-${process.pid}-${Math.floor(rnd() * 1e9)}.gazl`);
 	fs.writeFileSync(tmp, gazl, 'latin1');
@@ -140,17 +143,21 @@ function genProgram() {
 		}
 		return paths;
 	}
-	// an int index expression for array access (constant, or a scalar int in scope)
-	// An index expression. `size` is the target array's element count when indexing a NAMED array
-	// directly (`arr[k]`): a constant then stays in-bounds because the GAZL assembler statically
-	// bounds-checks constant array indices. Omit `size` for pointer derefs (`p[k]`), which are not
-	// statically checked - any constant is legal there, and dynamic out-of-bounds never traps.
+	// An index expression for `arr[k]` / `p[k]`, ALWAYS in bounds. `size` is the target element
+	// count (a named array size, or a pointer pointee size). Out-of-bounds indices used to be
+	// generated on purpose, but GAZL places globals directly below the data stack and does NOT
+	// bounds-check runtime indices, so a stray write lands in a caller frame: one such write
+	// clobbered main's for-loop counter every iteration and hung the program (fuzz seed 655).
+	// That left the --vm oracle unable to tell a miscompile from the program own undefined
+	// behaviour, so indices now stay inside. A dynamic index is masked by the largest (2^k - 1)
+	// that keeps it below `size`.
+	const idxMask = (size) => { let m = 1; while (m * 2 <= size) m *= 2; return m - 1; };
 	function genIdx(scope, size) {
-		if (chance(0.6)) return String(ri(size || 8));
+		const n = (size !== undefined && size > 0) ? size : 1;
+		const mask = idxMask(n);
+		if (mask === 0 || chance(0.6)) return String(ri(n));
 		const ints = scope.locals.filter((l) => l.t === 'i').concat(scope.gscalars.filter((g) => g.elem === 'i'));
-		// a dynamic index is masked non-negative and small: a wild negative/huge offset escapes the VM
-		// memory region and traps, whereas a small overrun stays in-region (no trap) - keeps --vm defined
-		return ints.length ? '(' + ref(ints[ri(ints.length)]) + ' & 7)' : String(ri(size || 8));
+		return ints.length ? '(' + ref(ints[ri(ints.length)]) + ' & ' + mask + ')' : String(ri(n));
 	}
 
 	// helper functions (2-5)
@@ -197,8 +204,11 @@ function genProgram() {
 			}
 			const ptrs = scope.locals.filter((l) => l.t === want);
 			if (depth > 0 && ptrs.length && chance(0.35)) {
-				// pointer arithmetic - offset masked small/non-negative so the result stays in-region
-				return '(' + ref(pick(ptrs)) + ' + (' + genExpr('i', depth - 1, scope) + ' & 7))';
+			// pointer arithmetic - offset bounded by the pointee array so a deref stays in bounds
+			const pa = pick(ptrs);
+			const pm = idxMask(pa.pointeeSize || 1);
+			return pm === 0 ? ref(pa)
+				: '(' + ref(pa) + ' + (' + genExpr('i', depth - 1, scope) + ' & ' + pm + '))';
 			}
 			if (ptrs.length && chance(0.5)) return ref(pick(ptrs));
 			const arr = pick(scope.localArrays.filter((a) => a.elem === e));   // guaranteed non-empty
@@ -323,7 +333,7 @@ function genProgram() {
 		// initialize pointer locals to a valid local array so dereferences stay in VM memory
 		for (const p of ptrLocals) {
 			const arr = arrLocals.find((a) => a.elem === ptrElem(p.t));
-			if (arr) body.push('\t' + p.name + ' = &' + arr.name + '[0];');
+			if (arr) { p.pointeeSize = arr.size; body.push('\t' + p.name + ' = &' + arr.name + '[0];'); }
 		}
 		// assign each funcptr-pointer's target a real function, then point the pointer at it, so a
 		// later `pf[0](...)` dispatches to a valid function (exercises &funcptr -> FT pointer)
@@ -405,7 +415,7 @@ function genProgram() {
 			const ptrs = scope.locals.filter((l) => isPtr(l.t) && !l.ro);
 			if (ptrs.length) {
 				const p = pick(ptrs);
-				return '\t' + p.name + '[' + genIdx(scope) + '] = ' + genExpr(ptrElem(p.t), 3, scope) + ';';
+				return '\t' + p.name + '[' + genIdx(scope, p.pointeeSize) + '] = ' + genExpr(ptrElem(p.t), 3, scope) + ';';
 			}
 		}
 		// copy(N words from &a[0] to &b[0]) between two local arrays (N within bounds - VM-safe)
