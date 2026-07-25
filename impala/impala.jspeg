@@ -3902,7 +3902,10 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                          undefined,
                                                                          '%' + $$.base,
                                                                          undefined);
-                                                       $$parser.setElem(callee, undefined);
+                                                       /* Keep the RETURN's element type: `returns V pointer` must yield a V-pointer, not a
+                                                          bare one, or `*f()` cannot be recognised as a struct and typed-pointer assignment
+                                                          checks go blind. A funcptr type carries returnElem too, so indirect calls work. */
+                                                       $$parser.setElem(callee, signature ? signature.returnElem : undefined);
                                                        if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */
                                                            var _wp = $$parser.borrow('%');
                                                            $$parser.emit('=&', 'p', _wp, '%' + $$.base, '*' + $$.retSlots);   /* numeric: fixed output window (see copyStructArg) */

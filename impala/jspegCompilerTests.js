@@ -1273,6 +1273,26 @@ const typedPointerCases = [
 		expectError: null,
 	},
 	{
+		label: "dereferencing a returned struct pointer yields the struct",
+		source: ["struct V { int a }", "function f(V pointer x) returns V pointer y { y = x; }", "function main() locals V s, V d { s.a = 1; d = *f(&s); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a field can be read through a returned struct pointer",
+		source: ["struct V { int a }", "function f(V pointer x) returns V pointer y { y = x; }", "function main() locals V s, int n { s.a = 1; n = f(&s)->a; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "dereferencing a returned int pointer yields an int",
+		source: ["function f(int pointer x) returns int pointer y { y = x; }", "function main() locals int i, int n { i = 3; n = *f(&i); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a returned pointer keeps its element type for assignment checks",
+		source: ["struct V { int a }", "struct W { int b }", "function f(V pointer x) returns V pointer y { y = x; }", "function main() locals V s, W pointer w { w = f(&s); }"].join("\n"),
+		expectError: "Pointer element type mismatch",
+	},
+	{
 		label: "an extern may declare a prototype",
 		source: ["extern native dm(int a, int b, int pointer r) returns int q", "function main() locals int r, int q { q = dm(17, 5, &r); }"].join("\n"),
 		expectError: null,
