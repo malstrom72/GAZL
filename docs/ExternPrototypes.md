@@ -1,7 +1,25 @@
 # Extern prototypes / the extern linking model (design note)
 
-Status: DESIGN NOTE, not decided, not implemented. A place to collect the thinking on whether (and how)
-extern declarations should carry full signatures. Add to it as more cases surface.
+Status: **"allow + validate" IMPLEMENTED** (the recommendation below). `extern native f(int a) returns int q`
+is accepted; calls against a prototyped extern are argument-count and type-checked and get a real result
+type; the emitted row carries real types (`extern native printInt(int n) -> void`). Name-only externs are
+unchanged and still assert nothing (`() -> unknown`, a wildcard the validator skips), so prototypes are
+ALLOWED, never demanded. Fixture: `tests/impala/sources/externPrototype.impala`.
+
+Not done: the two nudge WARNINGS (name-only-but-verifiable, prototyped-but-unverifiable), and making the
+native manifest authoritative and complete (step 2 of the sequencing below) - so a prototype for an opaque
+host native is still a trusted claim rather than a checked one.
+
+Superseded: the multi-return trigger below. Multi-value returns are PARKED for Impala 3.0
+(see `docs/ParkedFeatures.md`), so a prototype declares at most one return (`E428` otherwise) and extra
+results come back through pointer out-parameters. The remaining motivation - argument type-checking for
+extern calls - is what got implemented.
+
+Related: an `extern struct` now emits `; signature extern struct Name { field : type, ... }` and
+gazl-validate checks it against the layout constants a host supplies (`.o.Name.field` / `.z.Name`), so a
+drifted or conflicting host layout is a build failure.
+
+The original note follows, as the design record.
 
 ## The trigger
 
