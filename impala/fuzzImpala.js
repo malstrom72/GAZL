@@ -3,10 +3,8 @@
 // Generative fuzzer for the Impala compiler.
 //
 // It emits random, mostly type-valid Impala programs that lean on the intricate paths
-// (nested calls, struct locals/fields/copies, arrays, pointers, funcptr dispatch) and compiles
-// each one. By-value struct params, struct returns, multi-value returns and destructuring are
-// parked for Impala 3.0 (see docs/ParkedFeatures.md) so they are no longer generated.
-// The oracle is robustness:
+// (nested calls, struct-value params, struct/multi-value returns used as arguments,
+// destructuring, funcptr dispatch) and compiles each one. The oracle is robustness:
 //   - a clean coded diagnostic (`error[Exxx]`) is an ACCEPTABLE outcome (invalid program),
 //   - a raw JS exception or an internal `Assertion failed` (e.g. the transient-register
 //     `validateStock` checks) is a COMPILER BUG.
@@ -42,20 +40,12 @@ const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32
 // not the compiler's, and without a reference oracle we cannot call it a miscompile, so we ignore it.
 // The generator avoids `/` and `%` (no div-by-zero) and bounds its indices/pointer offsets to keep
 // runtime traps rare, but pointer/string undefined behaviour is inherent and expected here.
-const TIMEOUT = { timeout: true };   // distinct from a fault: the program did not terminate in time
-
 function runOnVm(gazl) {
 	const tmp = path.join(os.tmpdir(), `fuzz-${process.pid}-${Math.floor(rnd() * 1e9)}.gazl`);
 	fs.writeFileSync(tmp, gazl, 'latin1');
 	try {
 		const res = cp.spawnSync(GAZLCMD, [tmp, 'main'], { encoding: 'latin1', timeout: 10000 });
-		// A generated program can fail to terminate (an unbounded loop is inherent to random code), which
-		// is the program's own doing just like a runtime trap. But a hang could ALSO be a miscompiled loop
-		// condition, so it is counted and reported separately rather than ignored or called a miscompile.
-		if (res.error) {
-			if (res.error.code === 'ETIMEDOUT') return TIMEOUT;
-			return 'spawn: ' + res.error.message;
-		}
+		if (res.error) return 'spawn/timeout: ' + res.error.message;
 		if (res.status === 0) return null;
 		const err = (res.stderr || '') + (res.stdout || '');
 		if (/Code size:|functions:\s*\d/.test(err)) return null;   // loaded OK -> runtime trap, program UB
@@ -165,11 +155,15 @@ function genProgram() {
 	const nFuncs = 2 + ri(4);
 	for (let i = 0; i < nFuncs; ++i) {
 		const params = [];
-		// by-value struct params, struct returns and multi-value returns are parked for Impala 3.0
-		// (see docs/ParkedFeatures.md), so params stay scalar/pointer and there is at most one
-		// scalar return.
-		for (let k = ri(4); k > 0; --k) params.push({ name: id('p'), t: someType(false, true) });
-		const rets = rnd() < 0.35 ? [] : [pick(scalarTypes)];
+		for (let k = ri(4); k > 0; --k) params.push({ name: id('p'), t: someType(true, true) });
+		let rets;
+		const roll = rnd();
+		if (roll < 0.3) rets = [];
+		else if (roll < 0.6) rets = [pick(scalarTypes)];
+		else if (roll < 0.8) rets = [pick(scalarTypes), pick(scalarTypes)];
+		else rets = [someType(true)];   // possibly a struct return
+		// a struct return must be the only return value (enforced by the language)
+		if (rets.length > 1 && rets.some(isStruct)) rets = [pick(scalarTypes)];
 		funcs.push({ name: 'fn' + i, params, rets, retNames: rets.map(() => id('r')) });
 	}
 
@@ -432,7 +426,16 @@ function genProgram() {
 			const g = pick(scope.gscalars);
 			return '\tglobal ' + g.name + ' = ' + genExpr(g.elem, 3, scope) + ';';
 		}
-		// (destructuring of a multi-return call is parked for Impala 3.0 - see docs/ParkedFeatures.md)
+		// destructuring of a multi-return call
+		const multi = scope.callable.filter((fn) => fn.rets.length > 1);
+		if (roll < 0.2 && multi.length) {
+			const fn = pick(multi);
+			const targets = fn.rets.map((t) => {
+				const cands = scope.locals.filter((l) => l.t === t && !l.ro);   // '_' discards are always legal
+				return cands.length && chance(0.7) ? pick(cands).name : '_';
+			});
+			return '\t' + targets.join(', ') + ' = ' + genCall(fn, 3, scope) + ';';
+		}
 		// funcptr: assign a matching function to a funcptr local, then call through it
 		if (roll < 0.35) {
 			const cbLocals = scope.locals.filter((l) => isFuncType(l.t));
@@ -545,7 +548,6 @@ function main() {
 	let compiled = 0;
 	let rejected = 0;
 	let vmRun = 0;
-	let timeouts = 0;
 	const codeTally = {};
 	for (let i = 0; i < iterations; ++i) {
 		const seed = startSeed + i;
@@ -563,10 +565,7 @@ function main() {
 			if (useVm) {
 				const vmFault = runOnVm(gazl);
 				vmRun++;
-				if (vmFault === TIMEOUT) {
-					timeouts++;
-					console.error(`(seed=${seed}: program did not terminate in 10s - not counted as a fault)`);
-				} else if (vmFault) {
+				if (vmFault) {
 					bugs++;
 					console.error(`\n=== VM FAULT seed=${seed}: ${vmFault} ===`);
 					console.error(src);
@@ -591,7 +590,7 @@ function main() {
 		}
 	}
 	const top = Object.entries(codeTally).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k}:${v}`).join(' ');
-	console.error(`fuzz: ${iterations} programs, ${compiled} compiled${useVm ? ` (${vmRun} run on VM)` : ''}, ${rejected} cleanly rejected, ${bugs} ${useVm ? 'FAULTS' : 'CRASHES'}${timeouts ? `, ${timeouts} non-terminating` : ''} (seeds ${startSeed}..${startSeed + iterations - 1})`);
+	console.error(`fuzz: ${iterations} programs, ${compiled} compiled${useVm ? ` (${vmRun} run on VM)` : ''}, ${rejected} cleanly rejected, ${bugs} ${useVm ? 'FAULTS' : 'CRASHES'} (seeds ${startSeed}..${startSeed + iterations - 1})`);
 	if (top) console.error(`rejection codes: ${top}`);
 	process.exit(bugs > 0 ? 1 : 0);
 }

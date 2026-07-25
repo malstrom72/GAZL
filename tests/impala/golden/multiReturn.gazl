@@ -1,0 +1,71 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
+; signature extern native printInt() -> unknown @ 12:1
+; signature extern native printLF() -> unknown @ 14:1
+	GLOB *1
+gLast:	DATi #0	; signature global gLast : int @ 16:1
+
+;-----------------------------------------------------------------------------
+sumdiff:	FUNC	; signature func sumdiff(int a, int b) -> (int, int) @ 16:18
+	$s:	OUTi
+	$d:	OUTi
+	$a:	INPi
+	$b:	INPi
+;-----------------------------------------------------------------------------
+		ADDi $s $a $b	; s = a + b
+		SUBi $d $a $b	; d = a - b
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+scale:	FUNC	; signature func scale(int v, int k) -> (int, int) @ 22:16
+	$lo:	OUTi
+	$hi:	OUTi
+	$v:	INPi
+	$k:	INPi
+;-----------------------------------------------------------------------------
+		MULi $lo $v $k	; lo = v * k
+		MULi %0 $v $k	; hi = v * k * 10
+		MULi $hi %0 #10
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 28:15
+		PARA *1
+	$p:	LOCi
+	$q:	LOCi
+	$r:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi %2 #2 	; p, q = sumdiff(2, 3)
+		MOVi %3 #3 
+		CALL &sumdiff %0 *4	; expects sumdiff(int, int) -> int @ 31:22
+		MOVi $p %0 
+		MOVi $q %1 
+		MOVi %1 $p 	; printInt(p)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 32:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:24
+		MOVi %1 $q 	; printInt(q)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 33:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 33:24
+		MOVi %2 #10 	; _, r = sumdiff(10, 3)
+		MOVi %3 #3 
+		CALL &sumdiff %0 *4	; expects sumdiff(int, int) -> int @ 35:23
+		MOVi $r %1 
+		MOVi %1 $r 	; printInt(r)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 36:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 36:24
+		MOVi %2 #2 	; p, global gLast = scale(2, 10)
+		MOVi %3 #10 
+		CALL &scale %0 *4	; expects scale(int, int) -> int @ 38:32
+		MOVi $p %0 
+		POKE &gLast %1 
+		MOVi %1 $p 	; printInt(p)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 39:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 39:24
+		PEEK %1 &gLast 	; printInt(global gLast)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:35
+		RETU   	; }
