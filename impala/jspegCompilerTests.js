@@ -1236,6 +1236,46 @@ const typedPointerCases = [
 		expectError: null,
 	},
 	{
+		label: "an extern may declare a prototype",
+		source: ["extern native dm(int a, int b, int pointer r) returns int q", "function main() locals int r, int q { q = dm(17, 5, &r); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a prototyped extern checks argument count",
+		source: ["extern native dm(int a, int b) returns int q", "function main() locals int q { q = dm(1); }"].join("\n"),
+		expectError: "Invalid argument count when calling dm",
+	},
+	{
+		label: "a prototyped extern checks argument types",
+		source: ["extern native dm(int a, int pointer p) returns int q", "function main() locals int q { q = dm(1, 2); }"].join("\n"),
+		expectError: "Argument type mismatch for argument 2",
+	},
+	{
+		label: "a prototyped extern gives its call a return type",
+		source: ["extern native dm(int a) returns int q", "function main() locals float f { f = dm(1); }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
+	{
+		label: "a name-only extern stays unchecked",
+		source: ["extern native anything", "function main() { anything(1, 2.5, 3); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "an extern prototype cannot take a struct by value",
+		source: ["struct V { int a }", "extern native f(V v)"].join("\n"),
+		expectError: "Passing a struct by value is not supported",
+	},
+	{
+		label: "an extern prototype cannot declare multiple returns",
+		source: "extern native f(int a) returns int q, int r",
+		expectError: "Multiple return values are not supported",
+	},
+	{
+		label: "a struct value passed where a pointer is wanted names the struct",
+		source: ["struct V { int a }", "function take(V pointer p) { p->a = 1; }", "function main() locals V v { take(v); }"].join("\n"),
+		expectError: "struct V vs expected pointer",
+	},
+	{
 		label: "multiple return values are parked for Impala 3.0",
 		source: "function polar(float m, float p) returns float x, float y { x = m * p; y = m - p; }",
 		expectError: "Multiple return values are not supported",

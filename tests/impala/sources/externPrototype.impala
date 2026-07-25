@@ -1,0 +1,40 @@
+/*
+	Impala 2: extern prototypes. An `extern native` / `extern function` may declare a full
+	parameter list and a single return, which turns the declaration into a CHECKABLE assertion:
+	calls get argument count/type checking, the call's result gets a real type, and the emitted
+	`; signature` row carries real types instead of the `() -> unknown` wildcard.
+
+	Name-only externs stay valid and unchanged - they assert nothing, so their calls stay
+	unchecked (the "I will not claim a shape I cannot verify" mode). Both forms are used here;
+	compare the two signature rows in the GAZL:
+
+	    ; signature extern native printInt(int) -> void      <- prototyped, checked
+	    ; signature extern native printLF() -> unknown       <- name-only, wildcard
+
+	Multi-value returns are parked for Impala 3.0, so a second result comes back through a
+	pointer out-parameter.
+
+	Expected (GAZLCmd externPrototype.gazl main): 3 2 42 0.5
+*/
+
+const int DEBUG = 1
+
+extern native printInt(int n)			// prototyped: calls are argument-checked
+extern native printFloat(float x)
+extern native printLF					// name-only: unchecked wildcard
+
+function divmod(int a, int b, int pointer rem) returns int q
+{
+	q = a / b;
+	*rem = a - a / b * b;
+}
+
+function main()
+locals int q, int r
+{
+	q = divmod(17, 5, &r);
+	printInt(q); printLF();				// 3
+	printInt(r); printLF();				// 2
+	printInt(42); printLF();			// 42
+	printFloat(0.5); printLF();			// 0.5
+}
