@@ -747,6 +747,27 @@ runValidatorCase(
 // An array extent in a signature row is compared only when BOTH sides state one. An extent that
 // folded to a compile-time scratch cannot be stated, so it emits the empty wildcard and is skipped
 // rather than compared as the (pool-recycled, meaningless) scratch name it used to print.
+// A valueless `const int N;` is external by omission of a value. It now emits a row, so it is
+// link-checked like every other extern kind - except for "no definition found", which cannot apply to a
+// host/run-time-supplied constant and would otherwise fire on hundreds of them across the corpus.
+runValidatorCase(
+	"valueless extern const with no definition anywhere",
+	["const-extern-decl.gazl"],
+	0,
+);
+runValidatorCase(
+	"valueless extern const declared with two different types",
+	["const-extern-decl.gazl", "const-extern-conflict.gazl"],
+	1,
+	"Const WORD_SIZE has conflicting extern declarations",
+);
+runValidatorCase(
+	"valueless extern const contradicting its real definition",
+	["const-extern-decl.gazl", "const-extern-def.gazl"],
+	1,
+	"Const WORD_SIZE does not match its definition",
+);
+
 runValidatorCase(
 	"extern struct whose array extents are unstated wildcards",
 	["struct-extent-wildcard.gazl", "struct-extent-def.gazl"],

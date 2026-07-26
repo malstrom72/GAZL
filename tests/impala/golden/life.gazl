@@ -1,6 +1,7 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
+; signature extern const DEBUG : int @ 9:1
 ; signature extern native output() -> unknown @ 9:21
 ; signature extern native abort() -> unknown @ 10:20
 ; signature extern native input() -> unknown @ 11:20
@@ -113,6 +114,7 @@ strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 65:18
 	done:	NOOP
 	.f0:	RETU   	; }
 
+; signature extern const GAZL_WORD_SIZE : int @ 90:1
 
 ;-----------------------------------------------------------------------------
 intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 90:22

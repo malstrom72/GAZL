@@ -6,6 +6,7 @@
 ; signature extern native clock() -> unknown @ 39:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 40:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 41:1
+; signature extern const DEBUG : int @ 43:1
 	! ADDi <A> #8 #2
 STRIDE:	! DEFi <A>	; signature const STRIDE : int @ 44:1
 	! ADDi <A> #8 #4

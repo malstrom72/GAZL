@@ -1,6 +1,7 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
+; signature extern const SOME_CONST : int @ 1:21
 ga:	GLOB *100	; signature array ga[100] : unknown @ 3:21
 
 ;-----------------------------------------------------------------------------

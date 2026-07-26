@@ -18,6 +18,7 @@ initedArray:	GLOB *10	; signature array initedArray[10] : unknown @ 78:30
 	TEMP *1
 forgetMe:	DATi #0	; signature temporary forgetMe : int @ 82:23
 SOME_COUNT:	! DEFi #4	; signature const SOME_COUNT : int @ 87:25
+; signature extern const GAZL_WORD_SIZE : int @ 91:25
 SOME_CONSTS:	CNST *SOME_COUNT	; signature array SOME_CONSTS[SOME_COUNT] : unknown @ 94:40
 	DATA #100 #200 #300 #400
 ; signature extern global defineMeLaterPlease : int @ 98:31

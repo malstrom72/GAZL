@@ -657,7 +657,12 @@ function addConstImport(ctx, parsed, loc) {
 	if (!ctx.externs.consts.has(parsed.name)) {
 		ctx.externs.consts.set(parsed.name, []);
 	}
-	ctx.externs.consts.get(parsed.name).push({ signature: record, location: loc });
+	// hostSupplied: a valueless `const int N;` is defined by the HOST or the GAZL run-time, so there is
+	// no GAZL definition to find and "no definition found" would be noise on every one of them (the
+	// corpus declares hundreds). The checks that do apply - two declarations disagreeing on type, and a
+	// declaration disagreeing with a real definition when one IS present - still run. Same reasoning as
+	// the existing `native` exemption.
+	ctx.externs.consts.get(parsed.name).push({ signature: record, location: loc, hostSupplied: true });
 }
 
 function addArrayExport(ctx, parsed, loc) {
@@ -985,7 +990,7 @@ function compareExternSets(kind, externMap, exportMap, ctx, comparator, mismatch
 			continue;
 		}
 
-		var skipMissing = entries.every(function (entry) { return entry.native; });
+		var skipMissing = entries.every(function (entry) { return entry.native || entry.hostSupplied; });
 		if (!skipMissing) {
 			ctx.diagnostics.push({
 				severity: "warning",

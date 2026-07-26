@@ -637,12 +637,18 @@
         }
     }
 
-    $$parser.formatConstSignatureComment = function (name, type, sourceName, sourceCode, sourceOffset, elem) {
+    /* `isExtern` marks a VALUELESS `const int N;` - external by omission of a value ("defined later by
+       the GAZL run-time"). It spells no `extern` keyword, so it used to emit no row at all and was the
+       one extern kind gazl-validate could not link-check (its compareExternSets("Const", ...) pass had
+       nothing to compare). Emitting the row turns that pass on without touching the spelling. */
+    $$parser.formatConstSignatureComment = function (name, type, sourceName, sourceCode, sourceOffset, elem,
+                                                     isExtern) {
         if (!name) {
             return undefined;
         }
 
-        return appendOrigin('signature ' + ($$parser.exportNext ? 'export ' : '') + 'const ' + name + ' : '
+        var prefix = (isExtern ? 'extern ' : ($$parser.exportNext ? 'export ' : ''));
+        return appendOrigin('signature ' + prefix + 'const ' + name + ' : '
                             + signatureCategoryForDesc(fullDescFor(type, elem)),
                             sourceName, sourceCode, sourceOffset);
     };
@@ -3389,6 +3395,17 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                                  $$s, $$i,
                                                                                  undefined,
                                                                                  $telem
+                                                                             );
+                                                                             emitStandaloneSignatureComment(  /* valueless -> host/runtime defines it: publish it as an extern so it links-checks */
+                                                                                 $$parser.formatConstSignatureComment(
+                                                                                     $id,
+                                                                                     $t,
+                                                                                     $$parser.sourceName,
+                                                                                     $$s,
+                                                                                     $$i,
+                                                                                     $telem,
+                                                                                     true
+                                                                                 )
                                                                              );
                                                                          }
                  )                                                     { $$parser.noForward = $nf; }

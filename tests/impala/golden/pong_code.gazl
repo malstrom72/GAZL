@@ -13,6 +13,35 @@ panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 19:33
 ; signature extern native yield() -> unknown @ 33:1
 ; signature extern native write() -> unknown @ 34:1
 ; signature extern native read() -> unknown @ 36:1
+; signature extern const DEBUG : int @ 38:1
+; signature extern const OPERATOR_1_NOP : int @ 39:1
+; signature extern const OPERATOR_1_AND : int @ 40:1
+; signature extern const OPERATOR_1_MUL : int @ 41:1
+; signature extern const OPERATOR_1_OSC : int @ 42:1
+; signature extern const OPERATOR_1_RND : int @ 43:1
+; signature extern const OPERATOR_1_COUNT : int @ 45:1
+; signature extern const OPERATOR_2_NOP : int @ 46:1
+; signature extern const OPERATOR_2_OR : int @ 47:1
+; signature extern const OPERATOR_2_XOR : int @ 48:1
+; signature extern const OPERATOR_2_MSK : int @ 49:1
+; signature extern const OPERATOR_2_SUB : int @ 50:1
+; signature extern const OPERATOR_2_COUNT : int @ 52:1
+; signature extern const SWITCHES_SYNC_MASK : int @ 53:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ 54:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ 55:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 56:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ 58:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 59:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ 60:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ 61:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 62:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 63:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ 64:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 65:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 66:1
+; signature extern const PARAM_COUNT : int @ 68:1
+; signature extern const POSITION_INT_BITS : int @ 69:1
+; signature extern const POSITION_FRACT_BITS : int @ 71:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 72:1
 params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 73:1
