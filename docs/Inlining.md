@@ -40,8 +40,8 @@ materialise everywhere else, rather than reach for a clever analysis.
   inner body already expanded into its own captured body.
 - Imported `inline` functions work, because an import closure concatenates the defining unit first.
 
-Rejected, each with its own diagnostic (section 6): recursion, taking the address, `export`, `extern`,
-forward declaration, and - in v1 - declaring `locals`.
+Rejected, each with its own diagnostic (section 7): recursion, taking the address, `export`, `extern`,
+forward declaration, and declaring an array or struct local.
 
 
 ## 3. What gets captured
@@ -160,7 +160,7 @@ Records are pushed through the existing `emit`/`emitMeta`, so `flushMetaCode` re
 | `export inline function f` | nothing to export; a caller needs the source, which is what `import` is for |
 | `extern inline` | meaningless |
 | calling an `inline` function before its definition | the body is not captured yet; `extern function f` gives no body either |
-| `inline` function declaring `locals` | v1 restriction, see below |
+| `inline` function declaring an array or struct local | needs frame space, see below |
 
 Mutual recursion needs no check: Impala is define-before-use, so `A` can only inline `B` if `B` was
 already complete, and `B` cannot have inlined `A`.
@@ -168,14 +168,10 @@ already complete, and `B` cannot have inlined `A`.
 
 ## 8. v1 restrictions
 
-**No `locals` in an inline function.** Frame declarations are emitted at the function head, before the
-body separator; there is no way to add one mid-body at an expansion site. Allowing locals would mean
-either re-declaring them in the caller's frame (wrong emission point) or mapping scalars onto borrowed
-transients and frame objects onto appended slots with a growth bound.
-
-This costs little: Impala already routes expression temporaries through transients, so
-`r = a * 3 + b` needs no declared local. A helper that genuinely needs one is a bigger helper and a
-weaker inlining candidate. Lifting this is the obvious v2 step.
+**Scalar locals only.** A scalar local becomes a borrowed transient at each expansion site, so
+`clamp`-shaped helpers work. An array or struct local needs FRAME space, and frame declarations are
+emitted at the function head while an expansion site is mid-body, so those are rejected (E433).
+Lifting that would mean appending slots to the caller frame with a growth bound - the v3 step.
 
 **No `--inline` flag.** Nothing is inlined unless the source says `inline`, and no existing source
 does, so the 84-file byte-diff gate is unaffected and there is nothing to gate.

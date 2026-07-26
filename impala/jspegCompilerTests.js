@@ -956,10 +956,18 @@ const inlineCases = [
 	["exporting an inline function",
 		"export inline function g(int a) returns int r { r = a; }\n"
 			+ "function main() locals int q { q = g(1); }\n", "cannot be exported"],
-	["an inline function declaring locals",
-		"inline function f(int a) returns int r\nlocals int t\n{ t = a; r = t; }\n"
-			+ "function main() locals int q { q = f(1); }\n", "cannot declare locals"],
+	// A scalar local becomes a transient per expansion. An aggregate would need frame space, and frame
+	// declarations are emitted at the function head while an expansion site is mid-body.
+	["an inline function declaring an array local",
+		"inline function f(int a) returns int r\nlocals int array t[2]\n{ t[0] = a; r = t[0]; }\n"
+			+ "function main() locals int q { q = f(1); }\n", "array or struct local"],
+	["an inline function declaring a struct local",
+		"struct S { int x }\ninline function f(int a) returns int r\nlocals S s\n{ s.x = a; r = s.x; }\n"
+			+ "function main() locals int q { q = f(1); }\n", "array or struct local"],
 	// and the shapes that must work
+	["an inline function declaring a scalar local",
+		"inline function f(int a) returns int r\nlocals int t\n{ t = a * 2; r = t + 1; }\n"
+			+ "function main() locals int q { q = f(1); }\n", null],
 	["a plain inline call", "inline function f(int a) returns int r { r = a * 2; }\n"
 		+ "function main() locals int q { q = f(3); }\n", null],
 	["nested inline expansion", "inline function f(int a) returns int r { r = a * 2; }\n"

@@ -137,6 +137,7 @@
     /* 2  make sure the buckets exist */
     var $$parser.META_TO_GAZL   = {};
     var $$parser.SUPPORTED_OPS  = {};
+    var $$parser.inlineLocals   = [];                            /// scalar locals of the inline function being parsed
     var $$parser.inlineMode     = false;                         /// true while parsing an `inline function` body - emit nothing
     var $$parser.INLINE_PURE    = {};                          /// operators whose write destination the compiler can NAME
     var $$parser.inlineCounter  = 0;                           /// per-expansion suffix, keeps inlined labels unique
@@ -1297,7 +1298,7 @@
         }
         var params = [];
         for (var p = 0; p < sig.params.length; ++p) params.push('$' + sig.params[p].name);
-        entry.inline = { body: body, params: params,
+        entry.inline = { body: body, params: params, locals: $$parser.inlineLocals,
                 ret: (sig.returnName !== undefined ? '$' + sig.returnName : undefined),
                 opaque: $$parser.bodyIsOpaque(body) };
     };
@@ -1328,6 +1329,12 @@
             subst[info.params[k]] = src;
         }
         if (info.ret !== undefined) subst[info.ret] = '%' + base;   /* the window's output slot */
+        var borrowedLocals = [];
+        for (k = 0; k < info.locals.length; ++k) {   /* a scalar local lives in a transient per expansion */
+            var lt = $$parser.borrow('%');
+            borrowedLocals.push(lt);
+            subst[info.locals[k]] = lt;
+        }
 
         var tag = '_i' + ($$parser.inlineCounter++);
         var remapped = {};
@@ -1353,6 +1360,7 @@
             $$parser.metacode.push(rec);
         }
         for (var r in remapped) { if (Object.prototype.hasOwnProperty.call(remapped, r)) $$parser.returnBack(remapped[r]); }
+        for (k = borrowedLocals.length - 1; k >= 0; --k) $$parser.returnBack(borrowedLocals[k]);
     };
 
     $$parser.endFuncType = function (name) {
@@ -3030,6 +3038,7 @@ FuncDecl    <-                                                        { $inl = f
                 )?
                 FUNCTION _ id:Identifier '('_                         {
                                                                          $$parser.inlineMode = $inl;
+                                                                         $$parser.inlineLocals = [];
                                                                          if ($inl && $$parser.exportNext) {
                                                                              $$parser.fail('An inline function cannot be exported',
                                                                                      $$s, $$i, 'E434',
@@ -3199,11 +3208,18 @@ inp:ArgsDecl ')'_
                 (
                     LOCALS _ loc:LocalsDecl                           {
                                                                          if ($$parser.inlineMode) {
-                                                                             /* v1: frame declarations are emitted at the function head, and an expansion site
-                                                                                is mid-body - there is nowhere to put them. See docs/Inlining.md section 8. */
-                                                                             $$parser.fail('An inline function cannot declare locals',
-                                                                                     $$s, $$i, 'E433',
-                                                                                     'use expressions, which route through transients, or drop `inline`');
+                                                                             /* A scalar local becomes a borrowed transient at each expansion site. An array or
+                                                                                struct needs FRAME space, and frame declarations are emitted at the function
+                                                                                head while an expansion site is mid-body. See docs/Inlining.md section 8. */
+                                                                             $$parser.inlineLocals = [];
+                                                                             iterate($loc, function (v) {
+                                                                                 if (v.type === 'A' || v.type === 'S') {
+                                                                                     $$parser.fail('An inline function cannot declare an array or struct local',
+                                                                                             $$s, $$i, 'E433',
+                                                                                             'scalar locals are fine; ' + v.name + ' needs frame space, so drop `inline`');
+                                                                                 }
+                                                                                 $$parser.inlineLocals.push('$' + v.name);
+                                                                             });
                                                                          }
                                                                          iterate($loc, function (v) {
                                                                              if (v.type === 'S') {         /* struct value local -> LOCA *sizeof, remember struct */

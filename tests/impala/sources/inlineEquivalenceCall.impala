@@ -1,7 +1,7 @@
 /*
-	The CALL half of the inlining oracle: byte-for-byte `inlineEquivalence.impala` with the three
-	`inline` keywords removed, so it compiles to ordinary out-of-line calls. Its Expected output must
-	match its twin exactly; a divergence is an inlining miscompile.
+	The CALL half of the inlining oracle: byte-for-byte `inlineEquivalence.impala` with the `inline`
+	keywords removed, so it compiles to ordinary out-of-line calls. Its Expected output must match its
+	twin exactly; a divergence is an inlining miscompile.
 
 	The interesting member is `clobber`: it writes the very global it is passed. Out of line, the
 	argument is copied into the call window BEFORE the body runs, so it returns the old value. An
@@ -12,7 +12,7 @@
 	`viaPointer` makes the body opaque (it writes through a pointer), which forces even a plain local
 	argument to be materialised. `pure` is transparent, so its arguments are substituted.
 
-	Expected (GAZLCmd inlineEquivalenceCall.gazl main): 31 1 99 5 7
+	Expected (GAZLCmd inlineEquivalenceCall.gazl main): 31 1 99 5 7 0 6 3
 */
 
 const int DEBUG = 1
@@ -28,6 +28,15 @@ function clobber(int a) returns int r
 {
 	global shared = 99;
 	r = a;
+}
+
+function clamp(int v, int lo, int hi) returns int r
+locals int t						// a scalar local becomes a transient per expansion
+{
+	t = v;
+	if (t < lo) { t = lo; }
+	if (t > hi) { t = hi; }
+	r = t;
 }
 
 function viaPointer(int pointer p, int a) returns int r
@@ -50,4 +59,8 @@ locals int t, int array cell[1]
 	t = 5;
 	printInt(viaPointer(&cell[0], t)); printLF();	// 5  - the returned parameter
 	printInt(cell[0]); printLF();					// 7  - written through the pointer
+
+	printInt(clamp(-4, 0, 6)); printLF();			// 0  - scalar local, expanded twice below
+	printInt(clamp(8, 0, 6)); printLF();			// 6
+	printInt(clamp(3, 0, 6)); printLF();			// 3
 }
