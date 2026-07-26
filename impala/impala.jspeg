@@ -561,14 +561,6 @@
        compiled against, so the host-supplied layout (.o.Name.field / .z.Name) can be checked
        instead of silently trusted. Rendered as:
            ; signature extern struct Name { field : int, other : float-ptr } @ 12:1        */
-    $$parser.formatStructSignatureComment = function (name, sourceName, sourceCode, sourceOffset) {
-        return $$parser.structSignatureRow(name, false, sourceName, sourceCode, sourceOffset);
-    };
-
-    $$parser.formatExternStructSignatureComment = function (name, sourceName, sourceCode, sourceOffset) {
-        return $$parser.structSignatureRow(name, true, sourceName, sourceCode, sourceOffset);
-    };
-
     /* An array extent in a signature row is a CLAIM the validator compares against the other side. A
        literal or a single named const is a real claim; an extent that folded to a `<X>` compile-time
        scratch is not - the name is pool-recycled, so two unrelated extents both render `<A>` and
@@ -1443,6 +1435,13 @@
             return '*' + s;
         }
         return '*' + words;
+    };
+
+    /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
+       is required, not tidiness: the declarator node is pooled and recycled by the parser, so anything
+       holding a reference would later see whichever declarator came last. */
+    $$parser.declEntry = function (type, elem, struct, words, name, size) {
+        return { type: type, elem: elem, struct: struct, words: words, name: name, size: size };
     };
 
     $$parser.addStructField = function (name, field, sourceCode, sourceOffset) {
@@ -2859,7 +2858,7 @@ StructDecl  <-  STRUCT _ id:Identifier                               { $sname = 
                                                                          /* Publish the real layout with TYPES so gazl-validate can check an `extern struct`
                                                                             declaration of the same name against it - the .o./.z. constants alone carry no types. */
                                                                          emitStandaloneSignatureComment(
-                                                                             $$parser.formatStructSignatureComment($sname, $$parser.sourceName, $$s, $$i));
+                                                                             $$parser.structSignatureRow($sname, false, $$parser.sourceName, $$s, $$i));
                                                                      }
 
 # ------------------------------------------------------------------
@@ -3130,8 +3129,8 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              the host supplies (.o.Name.field / .z.Name) against what Impala assumed,
                                                                              the way extern globals and function signatures are already checked. */
                                                                           emitStandaloneSignatureComment(
-                                                                              $$parser.formatExternStructSignatureComment(
-                                                                                  $sname, $$parser.sourceName, $$s, $$i));
+                                                                              $$parser.structSignatureRow(
+                                                                                  $sname, true, $$parser.sourceName, $$s, $$i));
                                                                       }
                     )?
                 /   (   FUNCTION                                      { $$.type  = 'U';  $$.scope = 'functions'; }
@@ -3506,26 +3505,8 @@ ArgsDecl    <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
-                 ( v:VarDecl                                          {
-                                                                             var entry = {};
-                                                                             entry.type = $v.type;
-                                                                             entry.elem = $v.elem;
-                                                                             entry.struct = $v.struct;
-                                                                             entry.words = $v.words;
-                                                                             entry.name = $v.name;
-                                                                             entry.size = $v.size;
-                                                                             $$[$$.n++] = entry;
-                                                                         }
-                   ( ',' _ v:VarDecl                                  {
-                                                                             var entry = {};
-                                                                             entry.type = $v.type;
-                                                                             entry.elem = $v.elem;
-                                                                             entry.struct = $v.struct;
-                                                                             entry.words = $v.words;
-                                                                             entry.name = $v.name;
-                                                                             entry.size = $v.size;
-                                                                             $$[$$.n++] = entry;
-                                                                         }
+                 ( v:VarDecl                                          { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
+                   ( ',' _ v:VarDecl                                  { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
                    )*
                  )?
 
@@ -3533,26 +3514,8 @@ LocalsDecl  <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
-                 ( v:(VarDecl / ArrayDecl)                            {
-                                                                             var entry = {};
-                                                                             entry.type = $v.type;
-                                                                             entry.elem = $v.elem;
-                                                                             entry.struct = $v.struct;
-                                                                             entry.words = $v.words;
-                                                                             entry.name = $v.name;
-                                                                             entry.size = $v.size;
-                                                                             $$[$$.n++] = entry;
-                                                                         }
-                   ( ',' _ v:(VarDecl / ArrayDecl)                    {
-                                                                             var entry = {};
-                                                                             entry.type = $v.type;
-                                                                             entry.elem = $v.elem;
-                                                                             entry.struct = $v.struct;
-                                                                             entry.words = $v.words;
-                                                                             entry.name = $v.name;
-                                                                             entry.size = $v.size;
-                                                                             $$[$$.n++] = entry;
-                                                                         }
+                 ( v:(VarDecl / ArrayDecl)                            { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
+                   ( ',' _ v:(VarDecl / ArrayDecl)                    { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
                    )*
                  )?
 
