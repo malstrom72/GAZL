@@ -1,0 +1,4 @@
+; The authoritative definition: `taps` states a comparable extent, `raw` cannot (its extent folded
+; from an expression, so the row carries the empty wildcard).
+; signatures version=1
+; signature struct Bank { taps : int[4], raw : float[], n : int } @ struct-extent-def.gazl:4:1

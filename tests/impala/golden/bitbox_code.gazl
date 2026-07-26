@@ -37,7 +37,7 @@ DRUM_COUNT:	! DEFi #3	; signature const DRUM_COUNT : int @ 123:25
 DRUM_PARAM_COUNT:	! DEFi #8	; signature const DRUM_PARAM_COUNT : int @ 124:31
 	! MULi <A> #DRUM_COUNT #SOUNDS_COUNT
 	! MULi <A> <A> #DRUM_PARAM_COUNT
-DRUM_PARAMS:	CNST *<A>	; signature array DRUM_PARAMS[<A>] : unknown @ 128:74
+DRUM_PARAMS:	CNST *<A>	; signature array DRUM_PARAMS[] : unknown @ 128:74
 	DATA #435 #94 #75535 #0 #0 #0 #0 #1523 #773 #136 #52429 #0
 	DATA #0 #0 #0 #523 #556 #58 #65535 #0 #0 #0 #0 #780 #267
 	DATA #10 #35643 #0 #0 #0 #0 #500 #0 #0 #0 #32790 #5233

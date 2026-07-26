@@ -20,7 +20,7 @@ lastConfig:	GLOB *256	; signature array lastConfig[256] : unknown @ 25:1
 patchCount:	DATi #-1	; signature global patchCount : int @ 26:1
 	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
 	! MULi <A> #MAX_PATCHES <A>
-patchNames:	GLOB *<A>	; signature array patchNames[<A>] : unknown @ 27:1
+patchNames:	GLOB *<A>	; signature array patchNames[] : unknown @ 27:1
 	GLOB *1
 displayedPatchingInfo:	DATi #FALSE	; signature global displayedPatchingInfo : int @ 29:1
 fileMemory:	GLOB *FILE_MEMORY_SIZE	; signature array fileMemory[FILE_MEMORY_SIZE] : unknown @ 31:1

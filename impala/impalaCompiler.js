@@ -583,6 +583,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return structSignatureRow(name, true, sourceName, sourceCode, sourceOffset);
     };
 
+    /* An array extent in a signature row is a CLAIM the validator compares against the other side. A
+       literal or a single named const is a real claim; an extent that folded to a `<X>` compile-time
+       scratch is not - the name is pool-recycled, so two unrelated extents both render `<A>` and
+       compare EQUAL. Render those as the empty extent instead, the same wildcard a sizeless `extern
+       array` already uses, which the validator skips rather than trusting. A row may state a fact or
+       state "unknown"; it must never state something that merely looks like a fact. */
+    function extentText(size) {
+        var text = (size === undefined ? '' : '' + size);
+        return '[' + (text.charAt(0) === '<' ? '' : text) + ']';
+    }
+
     structSignatureRow = function (name, isExtern, sourceName, sourceCode, sourceOffset) {
         var s = structs[name];
         if (!s || !s.fields) {
@@ -593,7 +604,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             var f = s.fields[i];
             var cat;
             if (f.type === 'A') {                                 /* an array field advertises its extent + element */
-                cat = signatureCategoryForDesc(f.elem) + '[' + (f.size !== undefined ? f.size : '') + ']';
+                cat = signatureCategoryForDesc(f.elem) + extentText(f.size);
             } else if (f.type === 'S') {
                 cat = f.struct;                                   /* a nested by-value struct field */
             } else {
@@ -616,7 +627,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var prefix = (exportNext ? 'export ' : '') + (flavor ? flavor + ' ' : '');
 
         if (type === 'A') {
-            var extent = (size !== undefined ? '[' + size + ']' : '[]');
+            var extent = extentText(size);
             var elemCategory = signatureCategoryForDesc(elem);    /* typed arrays advertise their element chain; */
                                                                   /* untyped arrays keep the `unknown` wildcard */
             return appendOrigin('signature ' + prefix + 'array ' + name + extent + ' : ' + elemCategory,

@@ -410,7 +410,7 @@ fRAN:	FUNC	; signature func fRAN(int RANGE) -> int @ 310:15
 		RETU   	; }
 
 	! MULi <A> #7 #2
-fMPINIT_RUNS:	CNST *<A>	; signature array fMPINIT_RUNS[<A>] : unknown @ 348:36
+fMPINIT_RUNS:	CNST *<A>	; signature array fMPINIT_RUNS[] : unknown @ 348:36
 	DATA #32 #34 #39 #46 #65 #90 #97 #122 #37 #37 #48 #57 #0
 	DATA #126
 

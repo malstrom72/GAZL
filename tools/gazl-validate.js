@@ -1242,6 +1242,26 @@ function validateExternStructs(ctx) {
 		return "{ " + parts.join(", ") + " }";
 	}
 
+	// An empty extent (`int[]`) is a declared "I cannot state this as a comparable constant" wildcard,
+	// which is what a folded expression extent emits. Compare the element type always, the extent only
+	// when BOTH sides state one - the same rule arraySignaturesCompatible applies to plain arrays. A
+	// stated extent that disagrees is still an error; an unstated one is skipped, never assumed equal.
+	function fieldTypesMatch(x, y) {
+		if (x === y) { return true; }
+		var ax = x.match(/^(.*)\[(.*)\]$/);
+		var ay = y.match(/^(.*)\[(.*)\]$/);
+		if (!ax || !ay || ax[1] !== ay[1]) { return false; }
+		return ax[2].trim() === "" || ay[2].trim() === "";
+	}
+
+	function fieldListsMatch(fa, fb) {
+		if (fa.length !== fb.length) { return false; }
+		for (var i = 0; i < fa.length; ++i) {
+			if (fa[i].name !== fb[i].name || !fieldTypesMatch(fa[i].type, fb[i].type)) { return false; }
+		}
+		return true;
+	}
+
 	var entries = ctx.externStructs.entries();
 	for (var ei = 0; ei < entries.length; ++ei) {
 		var name = entries[ei][0];
@@ -1250,7 +1270,7 @@ function validateExternStructs(ctx) {
 		// (a) conflicting declarations of the same extern struct
 		for (var a = 0; a < decls.length; ++a) {
 			for (var b = a + 1; b < decls.length; ++b) {
-				if (describe(decls[a].fields) !== describe(decls[b].fields)) {
+				if (!fieldListsMatch(decls[a].fields, decls[b].fields)) {
 					ctx.diagnostics.push({
 						severity: "error",
 						message: "extern struct " + name + " has conflicting declarations: "
@@ -1271,7 +1291,7 @@ function validateExternStructs(ctx) {
 		var realDefs = ctx.structDefs.get(name) || [];
 		for (var ri = 0; ri < realDefs.length; ++ri) {
 			for (var qi = 0; qi < decls.length; ++qi) {
-				if (describe(decls[qi].fields) === describe(realDefs[ri].fields)) { continue; }
+				if (fieldListsMatch(decls[qi].fields, realDefs[ri].fields)) { continue; }
 				ctx.diagnostics.push({
 					severity: "error",
 					message: "extern struct " + name + " does not match its definition: declared "

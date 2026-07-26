@@ -352,7 +352,7 @@ rrx:	DATf #0.0	; signature global rrx : float @ 281:1
 	GLOB *1
 rry:	DATf #0.0	; signature global rry : float @ 282:1
 	! MULi <A> #2 #BUFFER_SIZE
-buffer:	GLOB *<A>	; signature array buffer[<A>] : unknown @ 283:1
+buffer:	GLOB *<A>	; signature array buffer[] : unknown @ 283:1
 	GLOB *1
 bufferPointer:	DATp &buffer	; signature global bufferPointer : ptr @ 290:1
 

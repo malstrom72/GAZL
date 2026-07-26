@@ -149,7 +149,7 @@ LOG0_001:	! DEFf #-6.9077552789821	; signature const LOG0_001 : float @ 209:40
 	GLOB *1
 doReset:	DATi #TRUE	; signature global doReset : int @ 214:1
 	! MULi <A> #FILTER_PARAM_TABLE_SIZE #2
-filterParamTable:	GLOB *<A>	; signature array filterParamTable[<A>] : unknown @ 214:59
+filterParamTable:	GLOB *<A>	; signature array filterParamTable[] : unknown @ 214:59
 rateTable:	GLOB *256	; signature array rateTable[256] : unknown @ 215:28
 
 ;-----------------------------------------------------------------------------

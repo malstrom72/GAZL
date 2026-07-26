@@ -84,7 +84,7 @@ round:	FUNC	; signature func round(float x) -> float @ 51:16
 
 params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 58:1
 	! MULi <A> #BALL_COUNT #BALL_PARAMS_COUNT
-balls:	GLOB *<A>	; signature array balls[<A>] : unknown @ 60:1
+balls:	GLOB *<A>	; signature array balls[] : unknown @ 60:1
 
 ;-----------------------------------------------------------------------------
 tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 60:15

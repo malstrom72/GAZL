@@ -129,7 +129,7 @@ PIECE_VALUES:	CNST *7	; signature array PIECE_VALUES[7] : unknown @ 99:32
 	DATA <B>
 	DATA #QUEEN_VALUE #MAX_SCORE
 	! ADDi <B> #8 #4
-RANK_VALUES:	CNST *<B>	; signature array RANK_VALUES[<B>] : unknown @ 100:34
+RANK_VALUES:	CNST *<B>	; signature array RANK_VALUES[] : unknown @ 100:34
 	DATA #0 #0 #0 #30 #50 #60 #60 #50 #30 #0 #0 #0
 MAX_TARGET_SQUARES:	! DEFi #32	; signature const MAX_TARGET_SQUARES : int @ 103:1
 MAX_MOVES:	! DEFi #256	; signature const MAX_MOVES : int @ 104:1
@@ -241,15 +241,15 @@ HASH_TABLE_SIZE:	! DEFi <B>	; signature const HASH_TABLE_SIZE : int @ 148:1
 	! XORi <B> #0 #-1
 HASH_MASK:	! DEFi <B>	; signature const HASH_MASK : int @ 150:1
 	! MULi <B> #BOARD_SIZE #64
-pieceKeys:	GLOB *<B>	; signature array pieceKeys[<B>] : unknown @ 150:40
+pieceKeys:	GLOB *<B>	; signature array pieceKeys[] : unknown @ 150:40
 xCaptureKeys:	GLOB *256	; signature array xCaptureKeys[256] : unknown @ 151:31
 	! ADDi <B> #WHITE #1
-colorKeys:	GLOB *<B>	; signature array colorKeys[<B>] : unknown @ 152:34
+colorKeys:	GLOB *<B>	; signature array colorKeys[] : unknown @ 152:34
 hashTable:	GLOB *HASH_TABLE_SIZE	; signature array hashTable[HASH_TABLE_SIZE] : unknown @ 153:40
 	GLOB *1
 evalCounter:	DATi #0	; signature global evalCounter : int @ 154:27
 	! MULi <B> #HISTORY_SIZE #4
-history:	GLOB *<B>	; signature array history[<B>] : unknown @ 155:39
+history:	GLOB *<B>	; signature array history[] : unknown @ 155:39
 	GLOB *1
 historyCount:	DATi #0	; signature global historyCount : int @ 156:28
 	GLOB *1

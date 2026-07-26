@@ -17,7 +17,7 @@ config:	GLOB *CONFIG_STRING_MAX_SIZE	; signature array config[CONFIG_STRING_MAX_
 	GLOB *1
 configText:	DATp &.s_Enters_4d9	; signature global configText : ptr @ 58:88
 	! ADDi <A> #CONFIG_STRING_MAX_SIZE #20
-dynamicPanelTextRow:	GLOB *<A>	; signature array dynamicPanelTextRow[<A>] : unknown @ 59:62
+dynamicPanelTextRow:	GLOB *<A>	; signature array dynamicPanelTextRow[] : unknown @ 59:62
 	CNST *1
 clockFreqLimit:	DATi #88200	; signature readonly clockFreqLimit : int @ 61:1
 	CNST *1
@@ -1336,7 +1336,7 @@ amplitude3:	GLOB *256	; signature array amplitude3[256] : unknown @ 1295:29
 	GLOB *1
 oldtimetableindex:	DATi #0	; signature global oldtimetableindex : int @ 1298:33
 	! MULi <A> #5 #5
-timetable:	CNST *<A>	; signature array timetable[<A>] : unknown @ 1300:33
+timetable:	CNST *<A>	; signature array timetable[] : unknown @ 1300:33
 	DATA #162 #167 #167 #127 #128 #226 #60 #60 #0 #0 #225 #60
 	DATA #59 #0 #0 #200 #0 #0 #54 #55 #199 #0 #0 #54 #54
 

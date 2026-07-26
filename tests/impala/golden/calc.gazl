@@ -25,10 +25,10 @@ COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 29:33
 lastError:	DATp &NULL	; signature global lastError : ptr @ 31:25
 	! SUBi <A> #'z' #'a'
 	! ADDi <A> <A> #1
-memoryUsed:	GLOB *<A>	; signature array memoryUsed[<A>] : unknown @ 33:39
+memoryUsed:	GLOB *<A>	; signature array memoryUsed[] : unknown @ 33:39
 	! SUBi <A> #'z' #'a'
 	! ADDi <A> <A> #1
-memory:	GLOB *<A>	; signature array memory[<A>] : unknown @ 34:35
+memory:	GLOB *<A>	; signature array memory[] : unknown @ 34:35
 	GLOB *1
 lastResult:	DATf #0.0	; signature global lastResult : float @ 35:30
 
@@ -312,7 +312,7 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 238:15
 
 FUNCTION_COUNT:	! DEFi #10	; signature const FUNCTION_COUNT : int @ 244:30
 	! MULi <A> #FUNCTION_COUNT #2
-FUNCTIONS:	CNST *<A>	; signature array FUNCTIONS[<A>] : unknown @ 245:46
+FUNCTIONS:	CNST *<A>	; signature array FUNCTIONS[] : unknown @ 245:46
 	DATA &.s_ceil_4d4 &ceilFunc &.s_exp_4d5 &exp &.s_floor_4d6
 	DATA &floorFunc &.s_log_4d7 &log &.s_log2_4d8 &log2
 	DATA &.s_log10_4d9 &log10 &.s_sqrt_4da &sqrt &.s_cos_4db

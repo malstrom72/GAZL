@@ -27,7 +27,7 @@ N:	! DEFi #4	; signature const N : int @ 22:1
 .o.S.n:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.S:	! DEFi #<a>
-; signature struct S { a : int[<A>], b : int[<B>], p : Pair[<C>], c : int[2], n : int } @ 32:1
+; signature struct S { a : int[], b : int[], p : Pair[], c : int[2], n : int } @ 32:1
 ; signature extern native printInt() -> unknown @ 33:1
 ; signature extern native printLF() -> unknown @ 35:1
 

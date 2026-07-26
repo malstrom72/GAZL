@@ -297,7 +297,7 @@ COS_TABLE_BITS:	! DEFi #12	; signature const COS_TABLE_BITS : int @ 293:1
 COS_TABLE_SIZE:	! DEFi <A>	; signature const COS_TABLE_SIZE : int @ 294:1
 BATCH_SIZE:	! DEFi #77	; signature const BATCH_SIZE : int @ 294:26
 	! ADDi <A> #COS_TABLE_SIZE #1
-cosTable:	GLOB *<A>	; signature array cosTable[<A>] : unknown @ 299:1
+cosTable:	GLOB *<A>	; signature array cosTable[] : unknown @ 299:1
 pitchTable:	GLOB *32	; signature array pitchTable[32] : unknown @ 299:28
 	GLOB *1
 doReset:	DATi #FALSE	; signature global doReset : int @ 302:1

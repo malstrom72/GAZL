@@ -744,6 +744,21 @@ runValidatorCase(
 	"extern struct Frame does not match its definition",
 );
 
+// An array extent in a signature row is compared only when BOTH sides state one. An extent that
+// folded to a compile-time scratch cannot be stated, so it emits the empty wildcard and is skipped
+// rather than compared as the (pool-recycled, meaningless) scratch name it used to print.
+runValidatorCase(
+	"extern struct whose array extents are unstated wildcards",
+	["struct-extent-wildcard.gazl", "struct-extent-def.gazl"],
+	0,
+);
+runValidatorCase(
+	"extern struct stating an array extent that contradicts the definition",
+	["struct-extent-mismatch.gazl", "struct-extent-def.gazl"],
+	1,
+	"extern struct Bank does not match its definition",
+);
+
 const validatorUnitTestScript = path.join(dir, "..", "tests", "gazl-validator-tests.js");
 const validatorUnitResult = childProcess.spawnSync(process.execPath, [validatorUnitTestScript], {
 	encoding: "utf8",

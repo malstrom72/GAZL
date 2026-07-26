@@ -538,7 +538,7 @@ FX_PARAM_1_LSHIFT_10:	! DEFi #8	; signature const FX_PARAM_1_LSHIFT_10 : int @ 4
 FX_PARAM_MASK_10:	! DEFi #9	; signature const FX_PARAM_MASK_10 : int @ 450:31
 FX_PARAM_COUNT:	! DEFi #10	; signature const FX_PARAM_COUNT : int @ 451:30
 	! MULi <A> #FX_PARAM_COUNT #5
-FX_PARAMS:	GLOB *<A>	; signature array FX_PARAMS[<A>] : unknown @ 455:43
+FX_PARAMS:	GLOB *<A>	; signature array FX_PARAMS[] : unknown @ 455:43
 stepFXs:	GLOB *STEP_COUNT	; signature array stepFXs[STEP_COUNT] : unknown @ 457:1
 stepFXParams:	GLOB *STEP_COUNT	; signature array stepFXParams[STEP_COUNT] : unknown @ 457:38
 	GLOB *1

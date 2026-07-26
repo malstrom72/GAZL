@@ -72,7 +72,7 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 71:21
 		RETU   	; }
 
 	! ADDi <A> #FILE_BUFFER_SIZE #1
-fileBuffer:	GLOB *<A>	; signature array fileBuffer[<A>] : unknown @ 79:1
+fileBuffer:	GLOB *<A>	; signature array fileBuffer[] : unknown @ 79:1
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 79:15

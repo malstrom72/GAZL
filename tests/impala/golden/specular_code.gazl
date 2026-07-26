@@ -201,9 +201,9 @@ cRotateRe:	GLOB *256	; signature array cRotateRe[256] : unknown @ 220:28
 cRotateIm:	GLOB *256	; signature array cRotateIm[256] : unknown @ 221:28
 partialGains:	GLOB *8	; signature array partialGains[8] : unknown @ 222:29
 	! SUBi <A> #FFT_POWER #1
-fftWPRe:	GLOB *<A>	; signature array fftWPRe[<A>] : unknown @ 223:36
+fftWPRe:	GLOB *<A>	; signature array fftWPRe[] : unknown @ 223:36
 	! SUBi <A> #FFT_POWER #1
-fftWPIm:	GLOB *<A>	; signature array fftWPIm[<A>] : unknown @ 224:36
+fftWPIm:	GLOB *<A>	; signature array fftWPIm[] : unknown @ 224:36
 	GLOB *1
 threshold:	DATf #0.0	; signature global threshold : float @ 225:23
 	GLOB *1

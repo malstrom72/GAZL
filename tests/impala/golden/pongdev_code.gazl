@@ -864,7 +864,7 @@ TAP_STRUCT_SIZE:	! DEFi #4	; signature const TAP_STRUCT_SIZE : int @ 646:1
 	GLOB *1
 tapCount:	DATi #0	; signature global tapCount : int @ 647:1
 	! MULi <A> #TAP_STRUCT_SIZE #MAX_TAP_COUNT
-tapData:	GLOB *<A>	; signature array tapData[<A>] : unknown @ 654:1
+tapData:	GLOB *<A>	; signature array tapData[] : unknown @ 654:1
 
 ;-----------------------------------------------------------------------------
 init:	FUNC	; signature func init() -> void @ 654:15
@@ -1203,7 +1203,7 @@ update:	FUNC	; signature func update() -> void @ 745:17
 
 temp:	GLOB *2	; signature array temp[2] : unknown @ 910:21
 	! MULi <A> #BATCH_SIZE #2
-buffer:	GLOB *<A>	; signature array buffer[<A>] : unknown @ 911:36
+buffer:	GLOB *<A>	; signature array buffer[] : unknown @ 911:36
 
 ;-----------------------------------------------------------------------------
 process:	FUNC	; signature func process() -> void @ 928:18
