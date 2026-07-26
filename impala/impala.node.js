@@ -112,9 +112,6 @@ function concatenateClosure(rootPath) {
 // classify with confidence is kept, and it only runs when explicitly requested.
 const TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // a named top-level definition line
 const ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
-const SEPARATOR_RE = /^\s*;-{3,}/;
-const COMMENT_RE = /^\s*;/;
-const BLANK_RE = /^\s*$/;
 
 function stripComment(line) {
 	const at = line.indexOf(';');

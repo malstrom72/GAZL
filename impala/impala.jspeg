@@ -153,8 +153,6 @@
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
-    var $$parser.destructuring = false;                           /// true while parsing the call on the RHS of `a, b = f(...)`
-    var $$parser.destTargets = [];                                /// collected LHS targets during a destructuring assignment
     var $$parser.exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
 
     /* 3  bulk-fill the lookup tables */
@@ -1224,14 +1222,6 @@
 
     $$parser.addFuncTypeReturn = function (name, type, elem, struct, words, sourceCode, sourceOffset) {
         var ft = $$parser.functypes[name];
-        if (type === 'S' && ft.returnList.length > 0) {
-            $$parser.fail('A by-value struct return must be the only return value',
-                    sourceCode, sourceOffset, 'E430');
-        }
-        if (type !== 'S' && ft.returnList.length > 0 && ft.returnList[0].type === 'S') {
-            $$parser.fail('A by-value struct return must be the only return value',
-                    sourceCode, sourceOffset, 'E430');
-        }
         ft.returnList.push({ type: type, elem: elem, struct: struct, words: words });
     };
 
@@ -1349,27 +1339,6 @@
        dependency order (a by-value field's struct must be complete first, E412), so `#.z.Inner`
        is always defined before an outer struct advances past it. Extern structs emit nothing
        (the host owns their layout). See docs/StructLayoutConstants.md. */
-    /* Flattened dotted access-paths of a struct (memoized): every path that reaches a field,
-       recursing through nested by-value structs. Biquad -> ['b0','z1']; Voice ->
-       ['note','lo','lo.b0','lo.z1','gain']. Used to emit a single offset constant per reachable
-       nested path so field access is one symbolic operand (no runtime address math). */
-    $$parser.structPaths = function (name) {
-        var s = $$parser.structs[name];
-        if (!s) return [];
-        if (s.pathsCache) return s.pathsCache;
-        var paths = [];
-        for (var i = 0; i < s.fields.length; ++i) {
-            var f = s.fields[i];
-            paths.push(f.name);
-            if (f.type === 'S') {
-                var inner = $$parser.structPaths(f.struct);
-                for (var j = 0; j < inner.length; ++j) paths.push(f.name + '.' + inner[j]);
-            }
-        }
-        s.pathsCache = paths;
-        return paths;
-    };
-
     $$parser.emitStructLayout = function (name) {
         if ($$parser.dry) return;
         if (typeof output !== 'function') return;
@@ -1414,13 +1383,6 @@
             if (('' + parts[j]).charAt(0) === '<') $$parser.returnBack(parts[j]);
         }
         return o;
-    };
-
-    $$parser.externStruct = function (name, sourceCode, sourceOffset) {   /// forward / opaque declaration
-        if (!$$parser.structs[name]) {
-            $$parser.structs[name] = { fields: [], words: 0, complete: false,
-                    sourceCode: sourceCode, sourceOffset: sourceOffset };
-        }
     };
 
     /* `extern struct Name { fields }`: host-owned layout. Impala knows the interface (field
@@ -1547,15 +1509,6 @@
     $$parser.addReturn = function (entry, rawName, type, elem, size, sourceCode, sourceOffset, struct, words) {
         if (!entry.pendingReturns) {
             entry.pendingReturns = [];
-        }
-        if (type === 'S' && entry.pendingReturns.length > 0) {
-            $$parser.fail('A by-value struct return must be the only return value',
-                    sourceCode, sourceOffset, 'E430');
-        }
-        if (type !== 'S' && entry.pendingReturns.length > 0
-                && entry.pendingReturns[0].type === 'S') {
-            $$parser.fail('A by-value struct return must be the only return value',
-                    sourceCode, sourceOffset, 'E430');
         }
         entry.pendingReturns.push({
             name: '$' + rawName,
@@ -2127,58 +2080,6 @@
             x.operands[keep],
             null
         );
-    };
-
-    /* -----------------------------------------------------------
-     *  Multi-return destructuring   a, b = f(...)
-     *  callMeta is the finished FuncCall meta whose output window
-     *  lives in %multiBase .. %multiBase+multiCount-1.
-     * -------------------------------------------------------- */
-    $$parser.finishDestructure = function (callMeta, targets, sourceCode, sourceOffset) {
-        callMeta = metaSlot(callMeta);
-        var base  = callMeta.multiBase;
-        var count = callMeta.multiCount;
-        var list  = callMeta.multiReturnList || [];
-
-        if (base === undefined || count === undefined || count < 2) {
-            $$parser.fail('Left side lists ' + targets.length
-                    + ' targets but the right side is not a multi-value function call',
-                    sourceCode, sourceOffset, 'E432');
-        }
-        if (targets.length !== count) {
-            $$parser.fail('Destructuring assignment expects ' + count
-                    + ' targets, got ' + targets.length,
-                    sourceCode, sourceOffset, 'E433');
-        }
-
-        for (var i = 0; i < count; ++i) {
-            var slot = '%' + (base + i);
-            var t    = targets[i];
-            var ret  = list[i] || {};
-
-            if (t.name === '_') {                     /* discard: slot freed in the release pass below */
-                continue;
-            }
-
-            var lv = { operator: undefined, type: '?',
-                       operands: [ undefined, undefined, undefined ] };
-            $$parser.lookup(lv, t.name, t.isGlobal, t.code, t.offset);
-
-            var rv = { operator: ':=', type: (ret.type || '?'),
-                       operands: [ undefined, slot, undefined ] };
-            $$parser.setElem(rv, ret.elem);
-
-            var res = { operator: undefined, type: '?',
-                        operands: [ undefined, undefined, undefined ] };
-            $$parser.assign(res, lv, rv, sourceCode, sourceOffset);  /* reads %slot; leaves it allocated */
-        }
-
-        /* Release the output-window slots high-to-low, the LIFO order every other multi-slot
-           window (arg window, struct-return window) already uses. Freeing low-to-high left a
-           hole below a live temp, breaking borrowForCall's reuse (invariant R2 / fuzzer 10024). */
-        for (var j = count - 1; j >= 0; --j) {
-            $$parser.returnBack('%' + (base + j));
-        }
     };
 
     /* -----------------------------------------------------------
@@ -3873,13 +3774,6 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            signature = $$parser.functypes[callee.elem];   /* indirect call: check against the funcptr type */
                                                        }
 
-                                                       if (signature && signature.returnCount > 1 && !$$parser.destructuring) {
-                                                           $$parser.fail('Function ' + (calleeName || 'this call')
-                                                                   + ' returns ' + signature.returnCount
-                                                                   + ' values; destructure the call (a, b = ' + (calleeName || 'f') + '(...))',
-                                                                   $$s, $$i, 'E431');
-                                                       }
-
                                                        if (signature) {
                                                            var params = signature.params || [];
                                                            var actualCount = ($$.types ? $$.types.length : 0);
@@ -4275,8 +4169,9 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
 #   Destructuring assignment for multi-value calls:  a, b = f(...)
 #   (needs >= 2 targets before '='; single `a = ...` falls through to Expr)
 # ---------------------------------------------------------------------------
-Destructure <-                                      { if (!$$parser.dry) $$parser.destTargets = []; }
-                DestTarget (','_ DestTarget)+ '='_  {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+Destructure <-  DestTarget (','_ DestTarget)+ '='_  {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md.
+                                                         Kept only to recognise the shape and reject it well;
+                                                         the targets themselves are never needed. */
                                                       $$parser.fail('Destructuring assignment is not supported in Impala 2.0',
                                                               $$s, $$i, 'E429',
                                                               'assign one value per statement'); }
@@ -4284,9 +4179,7 @@ Destructure <-                                      { if (!$$parser.dry) $$parse
 DestTarget  <-                                      { $tgtGlobal = false; }
                 (GLOBAL _                           { $tgtGlobal = true; }
                 )?
-                id:Identifier                       { if (!$$parser.dry)
-                                                        $$parser.destTargets.push({ name: $id, isGlobal: $tgtGlobal,
-                                                                                    code: $$s, offset: $$i }); }
+                id:Identifier                       { $tgtName = $id; }
 
 # ---------------------------------------------------------------------------
 #   SWITCH (expr == from TO to) { ... }
