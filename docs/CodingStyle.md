@@ -121,8 +121,9 @@ These are the most important principles in the codebase. Get them wrong and the 
 - **No Doxygen.** No `///`, no `///<`, no `/** */`, no `@param`/`@return` tags. Plain `//` and `/* */` only. (NuXJS still
   carries the old Doxygen style; it is abandoned - do not copy it.)
 - **One declaration per line.**
-- **Never use en or em dashes** (the `-` and `--` characters) anywhere - in code, comments, docs, or commit messages.
-  Plain ASCII hyphen only. Long dashes read as an AI giveaway; normal coders do not type them.
+- **Never use en or em dashes** (U+2013 and U+2014). Plain ASCII hyphen only, everywhere: code, comments, docs, and
+  commit messages. Stick to characters that are on every keyboard and survive every encoding, so text stays greppable
+  and diffs stay clean.
 
 ## 6. Formatting
 
