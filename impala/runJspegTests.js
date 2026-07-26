@@ -73,7 +73,7 @@ function parseExpectedRun(source) {
         return { args: parts.slice(1), want: match[2].trim().split(/\s+/).filter(Boolean) };
 }
 
-function runGolden(name, goldenPath, expectedRun) {
+function runGolden(goldenPath, expectedRun) {
         const result = childProcess.spawnSync(gazlCmd,
                 [goldenPath].concat(expectedRun.args), { encoding: 'latin1', timeout: 30000 });
         if (result.error) {
@@ -174,7 +174,7 @@ function main() {
                         continue;
                 }
 
-                const failure = runGolden(name, goldenPath, expectedRun);
+                const failure = runGolden(goldenPath, expectedRun);
                 if (failure) {
                         console.error(`<<< ${failure} >>>`);
                         errorCount += 1;

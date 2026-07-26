@@ -1096,18 +1096,7 @@
         $$parser.returnBack(op2);
         $$parser.returnBack(op1);
 
-        /* remove %<number> from the free list if present */
-        if ($$parser.counters['%'] === number) {
-            ++$$parser.counters['%'];
-        } else {
-            assert($$parser.counters['%'] > number);
-            var stk = $$parser.stock['%'];
-            for (var idx = stk.length - 1;
-                 idx >= 0 && stk[idx] !== tgt;
-                 --idx) {}
-            assert(idx >= 0, "transient " + tgt + " must exist in stock");
-            stk.splice(idx, 1);
-        }
+        $$parser.claimSlot(number);           /* remove %<number> from the free list if present */
 
         expr.operands[0] = tgt;
         $$parser.emitMeta(expr);
@@ -1983,12 +1972,11 @@
                 $$parser.fail('Struct type mismatch in assignment (' + leftx.struct + ' = '
                         + rightx.struct + ')', sourceCode, sourceOffset, 'E420');
             }
-            var words   = $$parser.structWords(leftx.struct);
             var savedBK = leftx.baseKind, savedBase = leftx.base,
                 savedParts = leftx.offParts, savedStruct = leftx.struct, savedRoot = leftx.root;
             var dst = $$parser.placeAddress(leftx);
             var src = $$parser.placeAddress(rightx);
-            $$parser.makeMeta(x, 'copy', '?', dst, src, $$parser.structAllocSize(leftx.struct, words));
+            $$parser.makeMeta(x, 'copy', '?', dst, src, $$parser.structAllocSize(leftx.struct));
             $$parser.emitMeta(x);
             $$parser.returnBack(src);
             $$parser.returnBack(dst);
@@ -3072,7 +3060,7 @@ inp:ArgsDecl ')'_
                                                                                      '$' + v.name,
                                                                                      'S',
                                                                                      false,
-                                                                                     $$parser.structAllocSize(v.struct, v.words),
+                                                                                     $$parser.structAllocSize(v.struct),
                                                                                      $$s, $$i,
                                                                                      undefined,
                                                                                      v.struct
@@ -3328,7 +3316,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                      $section, 'globals',
                                                                                      $v.name, 'S',
                                                                                      ($section === 'CNST'),
-                                                                                     $$parser.structAllocSize($v.struct, $v.words),
+                                                                                     $$parser.structAllocSize($v.struct),
                                                                                      $$s, $$i,
                                                                                      $$parser.formatGlobalSignatureComment(
                                                                                          $section, $v.name, 'S', undefined, undefined,

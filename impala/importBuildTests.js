@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { buildProgram, resolveImportClosure } = require('./impala.node.js');
+const { buildProgram, resolveImportClosure, deadStrip } = require('./impala.node.js');
 
 const repoRoot = path.resolve(__dirname, '..');
 const rootUnit = path.join(repoRoot, 'tests', 'impala', 'sources', 'import', 'main.impala');
@@ -18,7 +18,7 @@ const RANDOM_ID = 0x4d2;
 const makeGold = process.argv.slice(2).some((a) => a === 'makegold' || a === '--makegold');
 
 function canonicalizeNewlines(text) {
-	return text.replace(/\r\n/g, '\n');
+	return text.replace(/\r\n?/g, '\n');   // also a lone CR, matching the other two harnesses
 }
 
 function fail(message) {
@@ -34,9 +34,10 @@ if (closure.length !== 2 || closure[0] !== 'mathlib.impala' || closure[1] !== 'm
 
 const { output } = buildProgram(rootUnit, { randomId: RANDOM_ID });
 
-// --dead-strip: exported main reaches `used`; `unused` must be dropped.
-const stripped = buildProgram(stripRoot, { randomId: RANDOM_ID, deadStrip: true }).output;
+// --dead-strip: exported main reaches `used`; `unused` must be dropped. Strip the ALREADY built
+// program rather than resolving and compiling the same closure a second time.
 const unstripped = buildProgram(stripRoot, { randomId: RANDOM_ID }).output;
+const stripped = deadStrip(unstripped);
 
 if (makeGold) {
 	fs.writeFileSync(goldenPath, output, 'latin1');

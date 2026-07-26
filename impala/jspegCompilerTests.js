@@ -210,6 +210,24 @@ function assert(condition, message) {
 	}
 }
 
+// Compile `source` and require it to fail with `expectError` in the message, or to succeed when
+// `expectError` is null. Every "this construct must be rejected" table goes through here, so the
+// convention (and the diagnostic on an unmet expectation) lives in one place.
+function expectCompileOutcome(group, label, source, expectError) {
+	let observed = null;
+	try {
+		compileWithJsImpala(source + "\n", { randomId: 42 });
+	} catch (err) {
+		observed = err && err.message ? err.message : String(err);
+	}
+	if (expectError === null || expectError === undefined) {
+		assert(observed === null, `${group}: ${label} unexpectedly failed\n${observed}`);
+	} else {
+		assert(observed !== null && observed.includes(expectError),
+			`${group}: ${label} did not raise "${expectError}"${observed === null ? "" : "\n" + observed}`);
+	}
+}
+
 function runParserCase(label, parser, input) {
 	let result;
 	try {
@@ -938,16 +956,7 @@ const byValueDoors = [
 	["functype return", "struct V { int a; int b }\nfunctype Cb() returns V\n", "Returning a struct by value"],
 ];
 for (const [label, source, expected] of byValueDoors) {
-	let observed = false;
-	try {
-		compileWithJsImpala(source, { randomId: 42 });
-	} catch (err) {
-		observed = !!(err && err.message && err.message.includes(expected));
-	}
-	if (!observed) {
-		console.error(`impala.jspeg compiler failed to reject a by-value struct as a ${label}`);
-		process.exit(1);
-	}
+	expectCompileOutcome("by-value struct", label, source, expected);
 }
 console.log("impala.jspeg compiler rejects by-value structs at every declaration door");
 
@@ -975,31 +984,19 @@ const arrayExtentCases = [
 		"Array g needs a size",
 	],
 ];
+// The legal counterparts live in the same table (expectError null), so the rule cannot be satisfied by
+// rejecting everything.
+arrayExtentCases.push(
+	["sizeless extern struct field",
+		"extern struct G { int n; int array a; float f }\n"
+			+ "function f(G pointer p) returns int r { r = p->a[2] + p->n; }\n", null],
+	["sized struct field",
+		"struct S { int array a[4] }\nfunction f(S pointer p) returns int r { r = p->a[0]; }\n", null],
+);
 for (const [label, source, expected] of arrayExtentCases) {
-	let observed = false;
-	try {
-		compileWithJsImpala(source, { randomId: 42 });
-	} catch (err) {
-		observed = !!(err && err.message && err.message.includes(expected));
-	}
-	if (!observed) {
-		console.error(`impala.jspeg compiler failed to reject ${label}`);
-		process.exit(1);
-	}
-	console.log(`impala.jspeg compiler rejects ${label}`);
+	expectCompileOutcome("array extent", label, source, expected);
 }
-
-// The legal counterparts, so the rule cannot be satisfied by rejecting everything.
-compileWithJsImpala(
-	"extern struct G { int n; int array a; float f }\n"
-		+ "function f(G pointer p) returns int r { r = p->a[2] + p->n; }\n",
-	{ randomId: 42 },
-);
-compileWithJsImpala(
-	"struct S { int array a[4] }\nfunction f(S pointer p) returns int r { r = p->a[0]; }\n",
-	{ randomId: 42 },
-);
-console.log("impala.jspeg compiler accepts a sizeless extern struct field and a sized struct field");
+console.log("impala.jspeg compiler requires an array extent everywhere except an extern struct field");
 
 let observedComparisonMixError = false;
 try {
@@ -1569,25 +1566,7 @@ const typedPointerCases = [
 })();
 
 for (const testCase of typedPointerCases) {
-	let observedError = null;
-	try {
-		compileWithJsImpala(testCase.source + "\n", { randomId: 42 });
-	} catch (err) {
-		observedError = err && err.message ? err.message : String(err);
-	}
-	if (testCase.expectError === null) {
-		if (observedError !== null) {
-			console.error(`typed pointers: ${testCase.label} unexpectedly failed`);
-			console.error(observedError);
-			process.exit(1);
-		}
-	} else if (observedError === null || !observedError.includes(testCase.expectError)) {
-		console.error(`typed pointers: ${testCase.label} did not raise "${testCase.expectError}"`);
-		if (observedError !== null) {
-			console.error(observedError);
-		}
-		process.exit(1);
-	}
+	expectCompileOutcome("typed pointers", testCase.label, testCase.source, testCase.expectError);
 }
 console.log("impala.jspeg compiler enforces typed pointer/array element rules");
 
