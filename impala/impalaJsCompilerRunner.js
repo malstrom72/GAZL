@@ -152,6 +152,22 @@ function loadCompilerModule(compilerSource, compilerFilename) {
 	return compilerModule.exports;
 }
 
+/* The generated bundle keeps ALL parser state inside impalaCompilerImpl (every `var $$parser.x = ...`
+   in the grammar becomes a per-call local), so one loaded copy is safe to reuse across compiles - and
+   re-reading + re-_compile-ing 200 KB per call also threw away V8's optimized code every time, which
+   cost ~5x on fuzz runs that compile thousands of programs. A caller supplying its own compilerSource
+   (a test comparing an alternate build) bypasses this and loads fresh. */
+const compilerModuleCache = new Map();
+
+function loadCompilerModuleCached(compilerPath) {
+	let cached = compilerModuleCache.get(compilerPath);
+	if (cached === undefined) {
+		cached = loadCompilerModule(fs.readFileSync(compilerPath, "utf8"), compilerPath);
+		compilerModuleCache.set(compilerPath, cached);
+	}
+	return cached;
+}
+
 function compileWithJsImpala(source, options = {}) {
 	const {
 		compilerPath: compilerPathOption,
@@ -165,10 +181,11 @@ function compileWithJsImpala(source, options = {}) {
 	} = options;
 
 	const compilerPath = compilerPathOption ? path.resolve(compilerPathOption) : path.join(__dirname, "impalaCompiler.js");
-	const compilerText = compilerSource ?? fs.readFileSync(compilerPath, "utf8");
 
 	const outputLines = [];
-	const compilerExports = loadCompilerModule(compilerText, compilerPath);
+	const compilerExports = compilerSource === undefined
+		? loadCompilerModuleCached(compilerPath)
+		: loadCompilerModule(compilerSource, compilerPath);
 	const compilerFn = resolveCompilerExport(compilerExports);
 	if (typeof compilerFn !== "function") {
 		throw new Error("JSPEG impala compiler did not export a function");
