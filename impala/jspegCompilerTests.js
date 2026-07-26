@@ -897,6 +897,56 @@ console.log("impala.jspeg compiler accepts parenthesized bitwise mixes identical
 compileWithJsImpala(sameOpChainSource, { randomId: 42 });
 console.log("impala.jspeg compiler accepts same-operator bitwise chains without parentheses");
 
+// An array extent belongs exactly where it is verifiable: an `extern struct` field must omit it (the
+// host owns that layout, as with a standalone `extern array`), and every other array must state it.
+const arrayExtentCases = [
+	[
+		"extern struct array field stating a size",
+		"extern struct G { int array a[4] }\nfunction f(G pointer p) returns int r { r = p->a[0]; }\n",
+		"extern struct array field must not state a size",
+	],
+	[
+		"struct array field omitting its size",
+		"struct S { int array a }\nfunction f(S pointer p) returns int r { r = p->a[0]; }\n",
+		"Array a needs a size",
+	],
+	[
+		"local array omitting its size",
+		"function f() returns int r\nlocals int array a\n{ r = a[0]; }\n",
+		"Array a needs a size",
+	],
+	[
+		"global array omitting its size",
+		"global int array g;\nfunction f() returns int r { r = 1; }\n",
+		"Array g needs a size",
+	],
+];
+for (const [label, source, expected] of arrayExtentCases) {
+	let observed = false;
+	try {
+		compileWithJsImpala(source, { randomId: 42 });
+	} catch (err) {
+		observed = !!(err && err.message && err.message.includes(expected));
+	}
+	if (!observed) {
+		console.error(`impala.jspeg compiler failed to reject ${label}`);
+		process.exit(1);
+	}
+	console.log(`impala.jspeg compiler rejects ${label}`);
+}
+
+// The legal counterparts, so the rule cannot be satisfied by rejecting everything.
+compileWithJsImpala(
+	"extern struct G { int n; int array a; float f }\n"
+		+ "function f(G pointer p) returns int r { r = p->a[2] + p->n; }\n",
+	{ randomId: 42 },
+);
+compileWithJsImpala(
+	"struct S { int array a[4] }\nfunction f(S pointer p) returns int r { r = p->a[0]; }\n",
+	{ randomId: 42 },
+);
+console.log("impala.jspeg compiler accepts a sizeless extern struct field and a sized struct field");
+
 let observedComparisonMixError = false;
 try {
 	compileWithJsImpala(comparisonMixSource, { randomId: 42 });

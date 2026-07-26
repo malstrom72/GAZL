@@ -3670,22 +3670,41 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                          $$.size = undefined;
                                                                      }
 
-ArrayDecl   <-                                                        { $desc = undefined; }
+ArrayDecl   <-                                                        { $desc = undefined; $extent = undefined; }
                 ( base:TypeBase                                      { $desc = $base; }
                   ( POINTER _                                         { $desc = 'p:' + $desc; }
                   )*
                 )?
                 ARRAY _ id:Identifier
-                '[' _ x:Expr ']' _                                    {
+                ( '[' _ x:Expr ']' _                                  {
                                                                          $size = $$parser.makeConstant($x, 'i', $$s, $$i);
-                                                                         $$.type = 'A';
-                                                                         $$.elem = $desc;
-                                                                         $$.name = $id;
-                                                                         $$.size = $$parser.dropHash($size);   /* element count - may be a symbolic const */
-                                                                         $$.words = $$.size;                   /* alloc size folds count*.z.Elem symbolically (arrayAllocSize) */
+                                                                         $extent = $$parser.dropHash($size);   /* element count - may be a symbolic const */
                                                                          if ($$parser.openStruct === undefined) {
                                                                              $$parser.returnBack($size);       /* a struct field's borrow outlives the decl - endStruct frees it */
                                                                          }
+                                                                     }
+                )?                                                    {
+                                                                         /* An `extern struct` field states NO extent, matching the
+                                                                            `extern array` rule: the host owns that layout, so a number
+                                                                            here would be an unverifiable claim Impala never reads
+                                                                            (offsets are host-supplied `.o.` symbols, 1-D stride is 1). */
+                                                                         var externField = ($$parser.openStruct !== undefined
+                                                                                 && $$parser.isExternStruct($$parser.openStruct));
+                                                                         if (externField && $extent !== undefined) {
+                                                                             $$parser.fail('An extern struct array field must not state a size',
+                                                                                     $$s, $$i, 'E430',
+                                                                                     'the host owns this layout - write `array ' + $id + '` without a size');
+                                                                         }
+                                                                         if (!externField && $extent === undefined) {
+                                                                             $$parser.fail('Array ' + $id + ' needs a size',
+                                                                                     $$s, $$i, 'E431',
+                                                                                     'only a sizeless `extern array` or `extern struct` field may omit it');
+                                                                         }
+                                                                         $$.type = 'A';
+                                                                         $$.elem = $desc;
+                                                                         $$.name = $id;
+                                                                         $$.size = $extent;
+                                                                         $$.words = $extent;                   /* alloc size folds count*.z.Elem symbolically (arrayAllocSize) */
                                                                      }
 
 # ------------------------------------------------------------------
