@@ -137,6 +137,9 @@
     /* 2  make sure the buckets exist */
     var $$parser.META_TO_GAZL   = {};
     var $$parser.SUPPORTED_OPS  = {};
+    var $$parser.inlineMode     = false;                         /// true while parsing an `inline function` body - emit nothing
+    var $$parser.INLINE_PURE    = {};                          /// operators whose write destination the compiler can NAME
+    var $$parser.inlineCounter  = 0;                           /// per-expansion suffix, keeps inlined labels unique
     var $$parser.CASTS_TO_TYPES = {};
     var $$parser.ZEROES = {};
     var $$parser.TYPE_SUFFIXES  = {};
@@ -532,6 +535,13 @@
             $$parser.fail('Function ' + name + ' is already defined',
                     sourceCode, sourceOffset, 'E401',
                     'each function needs a unique name across the whole import closure');
+        }
+
+        /* An `inline function` has no out-of-line copy, so it publishes neither a FUNC label nor a
+           signature row - there is nothing for a caller or the validator to link against. */
+        if ($$parser.inlineMode) {
+            entry.kind = 'FUNC';                          /* still claims the name (duplicate detection) */
+            return;
         }
 
         var comment = $$parser.formatFunctionSignatureComment(name, entry.signature);
@@ -1047,6 +1057,8 @@
 
         var op   = expr.operator;
         var op1  = expr.operands[1];
+
+        $$parser.rejectInlineAddress(op1);
         var op2  = expr.operands[2];
         var op1Prefix = (op1 ? op1[0] : '');
         var op2Prefix = (op2 ? op2[0] : '');
@@ -1221,6 +1233,126 @@
     $$parser.addFuncTypeReturn = function (name, type, elem, struct, words, sourceCode, sourceOffset) {
         $$parser.rejectByValueStruct(type, struct, name, true, sourceCode, sourceOffset);
         $$parser.functypes[name].returnList.push({ type: type, elem: elem, struct: struct, words: words });
+    };
+
+    /* --------------------------------------------------------- *
+     *  `inline function` expansion (see docs/Inlining.md)        *
+     * --------------------------------------------------------- */
+
+    /* Operators whose destination the compiler can NAME, so they cannot disturb a caller's local.
+       A POSITIVE list on purpose: an operator nobody classified defaults to opaque, so a write form
+       added later fails safe instead of silently making substitution unsound. */
+    map($$parser.INLINE_PURE,
+        '=',1, ':=',1, '=itof',1, '=ftoi',1, '=abs',1, '=floor',1,
+        '=[]',1, '=[]$',1, '=*',1, ':=*',1, '=&',1, '[]$=',1,
+        '|',1, '&',1, '^',1, '<<',1, '>>>',1, '>>',1,
+        '+',1, '-',1, '*',1, '/',1, '%',1, 'd',1,
+        '<=',1, '<',1, '>=',1, '>',1, '!=',1, '==',1,
+        '!<=',1, '!<',1, '!>=',1, '!>',1, '!!=',1, '!==',1,
+        '-->',1, '-->#',1, '...',1, '<--',1, '<-?',1, '?->',1, '!',1, ';',1,
+        '<> *',1, '<> +',1, '<> -',1, '<> ==',1
+    );
+
+    /* An `inline function` has no out-of-line copy, so its address does not exist. A direct call never
+       reaches these sites (FuncCall expands instead), so anything that does is an address-take. */
+    $$parser.rejectInlineAddress = function (operand) {
+        if (operand === undefined || ('' + operand).charAt(0) !== '&') return;
+        var name = ('' + operand).substr(1);
+        var fn = $$parser.symbols.functions[name];
+        if (fn !== undefined && fn.inline !== undefined) {
+            $$parser.fail('Cannot take the address of the inline function ' + name,
+                    undefined, undefined, 'E435',
+                    'an inline function has no out-of-line copy; drop `inline` to use it as a value');
+        }
+    };
+
+    $$parser.bodyIsOpaque = function (body) {
+        for (var i = 0; i < body.length; ++i) {
+            var op = body[i].operator;
+            if (op === '()' || op === 'copy') return true;     /* a call, or a computed-destination COPY */
+            if (op === '[]=' || op === '*=') {                 /* POKE: nameable only as `&global` */
+                if (('' + body[i].operands[0]).charAt(0) !== '&') return true;
+                continue;
+            }
+            if (!$$parser.INLINE_PURE[op]) return true;        /* unrecognised -> assume the worst */
+        }
+        return false;
+    };
+
+    /* Snapshot a body before flushMetaCode() clears it. Drops the trailing RETU and the `;` source
+       comments; keeps everything else, operand-for-operand. */
+    $$parser.captureInlineBody = function (name, sourceCode, sourceOffset) {
+        var entry = $$parser.symbols.functions[name];
+        var sig = entry.signature;
+        var body = [];
+        for (var i = 0; i < $$parser.metacode.length; ++i) {
+            var m = $$parser.metacode[i];
+            if (m.operator === undefined || m.operator === ';' || m.operator === '--^') continue;
+            if (m.operator === '()' && ('' + m.operands[0]) === '&' + name) {
+                $$parser.fail('An inline function cannot call itself', sourceCode, sourceOffset, 'E432',
+                        'inlining a recursive function would never terminate');
+            }
+            body.push({ operator: m.operator, type: m.type,
+                    operands: [ m.operands[0], m.operands[1], m.operands[2] ] });
+        }
+        var params = [];
+        for (var p = 0; p < sig.params.length; ++p) params.push('$' + sig.params[p].name);
+        entry.inline = { body: body, params: params,
+                ret: (sig.returnName !== undefined ? '$' + sig.returnName : undefined),
+                opaque: $$parser.bodyIsOpaque(body) };
+    };
+
+    /* Replay a captured body at a call site. The arguments are ALREADY marshalled into the call
+       window, so materialising is the default and substitution is a deletion: if the instruction that
+       filled a window slot is a plain move of a literal (or of a local, when the body is transparent),
+       drop it and use its source directly. Rules 2 and 4 of the spec then need no code at all - a
+       computed argument and a global argument both just keep their window slot. */
+    $$parser.expandInline = function (info, base, retSlots, argCount) {
+        var subst = {}, i, j, k;
+        for (k = 0; k < argCount; ++k) {
+            var slot = '%' + (base + retSlots + k);
+            var src = slot;
+            for (j = $$parser.metacode.length - 1; j >= 0; --j) {
+                var m = $$parser.metacode[j];
+                if (m.operator === undefined || m.operands[0] !== slot) continue;
+                if ((m.operator === '=' || m.operator === ':=') && m.operands[2] === undefined) {
+                    var o = '' + m.operands[1];
+                    var c = o.charAt(0);
+                    if (c === '#' || (c === '$' && !info.opaque)) {
+                        src = o;
+                        m.operator = undefined;                /* flushMetaCode skips a cleared record */
+                    }
+                }
+                break;
+            }
+            subst[info.params[k]] = src;
+        }
+        if (info.ret !== undefined) subst[info.ret] = '%' + base;   /* the window's output slot */
+
+        var tag = '_i' + ($$parser.inlineCounter++);
+        var remapped = {};
+        function mapOperand(op) {
+            if (op === undefined || op === null) return op;
+            var s = '' + op;
+            if (Object.prototype.hasOwnProperty.call(subst, s)) return subst[s];
+            if (s.charAt(0) === '%') {                          /* the callee's own temporaries */
+                if (!Object.prototype.hasOwnProperty.call(remapped, s)) remapped[s] = $$parser.borrow('%');
+                return remapped[s];
+            }
+            if (s.charAt(0) === '@') return s + tag;            /* labels: per-expansion suffix */
+            var colon = s.indexOf(':');                         /* `$name:offset` frame places */
+            if (colon > 0 && Object.prototype.hasOwnProperty.call(subst, s.substr(0, colon))) {
+                return subst[s.substr(0, colon)] + s.substr(colon);
+            }
+            return s;
+        }
+        for (i = 0; i < info.body.length; ++i) {
+            var b = info.body[i];
+            var rec = { operator: b.operator, type: b.type, operands: [
+                    mapOperand(b.operands[0]), mapOperand(b.operands[1]), mapOperand(b.operands[2]) ] };
+            $$parser.metacode.push(rec);
+        }
+        for (var r in remapped) { if (Object.prototype.hasOwnProperty.call(remapped, r)) $$parser.returnBack(remapped[r]); }
     };
 
     $$parser.endFuncType = function (name) {
@@ -1962,6 +2094,8 @@
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
 
+        $$parser.rejectInlineAddress(rightx.operands[1]);   /* `c = f` where f is inline */
+
         /* whole-struct assignment: one COPY *sizeof, statement value is the dest place */
         if (leftx.type === 'S' || rightx.type === 'S') {
             if (leftx.type !== 'S' || rightx.type !== 'S') {
@@ -2321,7 +2455,7 @@
 
     function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment, elem) {
         /* emit data / flush pending code */
-        if (kind !== undefined) {
+        if (kind !== undefined && !($$parser.inlineMode && scope === 'locals')) {
             $$parser.flushMetaCode('');
 
             if (typeof output === 'function') {
@@ -2891,7 +3025,16 @@ TypeDeclr   <-  base:TypeBase                                        { $desc = $
 # ------------------------------------------------------------------
 #  function declaration
 # ------------------------------------------------------------------
-FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
+FuncDecl    <-                                                        { $inl = false; }
+                ( INLINE _                                            { $inl = true; }
+                )?
+                FUNCTION _ id:Identifier '('_                         {
+                                                                         $$parser.inlineMode = $inl;
+                                                                         if ($inl && $$parser.exportNext) {
+                                                                             $$parser.fail('An inline function cannot be exported',
+                                                                                     $$s, $$i, 'E434',
+                                                                                     'there is no out-of-line copy to link against; a caller needs the source, via `import`');
+                                                                         }
                                                                          assert($$parser.validateStock('%'));
                                                                          assert($$parser.validateStock('<'));
                                                                          /* every compile-time scratch borrowed by the previous function/globals must be
@@ -2900,8 +3043,10 @@ FuncDecl    <-  FUNCTION _ id:Identifier '('_                         {
                                                                                  'compile-time scratch leak before ' + $id + ': '
                                                                                  + ($$parser.counters['<'] - $$parser.stock['<'].length) + ' unreturned');
 
-                                                                         output('');
-                                                                         output(';-----------------------------------------------------------------------------');
+                                                                         if (!$$parser.inlineMode) {
+                                                                             output('');
+                                                                             output(';-----------------------------------------------------------------------------');
+                                                                         }
 
                                                                          /* declare the function symbol */
                                                                          $$parser.declare(
@@ -3053,6 +3198,13 @@ inp:ArgsDecl ')'_
                                                                      }
                 (
                     LOCALS _ loc:LocalsDecl                           {
+                                                                         if ($$parser.inlineMode) {
+                                                                             /* v1: frame declarations are emitted at the function head, and an expansion site
+                                                                                is mid-body - there is nowhere to put them. See docs/Inlining.md section 8. */
+                                                                             $$parser.fail('An inline function cannot declare locals',
+                                                                                     $$s, $$i, 'E433',
+                                                                                     'use expressions, which route through transients, or drop `inline`');
+                                                                         }
                                                                          iterate($loc, function (v) {
                                                                              if (v.type === 'S') {         /* struct value local -> LOCA *sizeof, remember struct */
                                                                                  $$parser.declare(
@@ -3081,17 +3233,23 @@ inp:ArgsDecl ')'_
                                                                              }
                                                                          });
                                                                      }
-                )?                                                    { output(';-----------------------------------------------------------------------------'); }
+                )?                                                    { if (!$$parser.inlineMode) output(';-----------------------------------------------------------------------------'); }
                 Block                                                 {
                                                                          /* wrap-up body */
                                                                          $$parser.processBranches();
-                                                                         $$parser.emit('--^', undefined, undefined, undefined, undefined);
-                                                                         $$parser.flushMetaCode('\t');
+                                                                         if ($$parser.inlineMode) {                       /* no out-of-line copy: keep the body, emit nothing */
+                                                                             $$parser.captureInlineBody($id, $$s, $$i);
+                                                                             $$parser.metacode.length = 0;
+                                                                         } else {
+                                                                             $$parser.emit('--^', undefined, undefined, undefined, undefined);
+                                                                             $$parser.flushMetaCode('\t');
+                                                                         }
 
                                                                          prune($$parser.symbols.locals);
                                                                          $$parser.labelCounter = 0;
 
-                                                                         output('');
+                                                                         if (!$$parser.inlineMode) output('');
+                                                                         $$parser.inlineMode = false;
                                                                      }
 ExternDecl  <-  EXTERN _                                              { $$.scope = 'globals'; $$.structFwd = false;
                                                                         $$parser.pendingProto = undefined; }
@@ -3818,12 +3976,19 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            commentIndex = $$parser.metacode.length - 1;
                                                        }
 
+                                                       var inlineInfo = (calleeName !== null
+                                                               && $$parser.symbols.functions[calleeName]
+                                                               ? $$parser.symbols.functions[calleeName].inline : undefined);
+                                                       if (inlineInfo !== undefined) {   /* replay the body instead of calling it */
+                                                           $$parser.expandInline(inlineInfo, $$.base, $$.retSlots, $$.words);
+                                                       } else {
                                                        var func = $$parser.makeRValue(callee, '&^$%');
                                                        $$parser.emit('()', '?',
                                                                      func,
                                                                      '%' + $$.base,
                                                                      '*' + ($$.words + $$.retSlots));
                                                        $$parser.returnBack(func);
+                                                       }
 
                                                        while ($$.words-- > 0) {              /* free the argument words (past the output slots) */
                                                            $$parser.returnBack('%' + ($$.base + $$.retSlots + $$.words));
@@ -4336,7 +4501,7 @@ IntegerLiteral  <-  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
 StringLiteral   <-  $$=( '"' ( !["\\\0-\37] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
 
 KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXPORT / EXTERN / FLOAT / FLOOR / FOR / FROM
-                / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / IMPORT / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
+                / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / IMPORT / INLINE / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
                 / POINTER / READONLY / RETURNS / SIZEOF / STRUCT / SWITCH / TEMPORARY / TO / WHILE
 
 ABS         <-  'abs' !SYMBOL_CHAR          ARRAY       <-  'array' !SYMBOL_CHAR
@@ -4346,6 +4511,7 @@ DEFAULT     <-  'default' !SYMBOL_CHAR
 DO          <-  'do' !SYMBOL_CHAR           ELSE        <-  'else' !SYMBOL_CHAR
 EXPORT      <-  'export' !SYMBOL_CHAR       IMPORT      <-  'import' !SYMBOL_CHAR
 EXTERN      <-  'extern' !SYMBOL_CHAR       FLOAT       <-  'float' !SYMBOL_CHAR
+INLINE      <-  'inline' !SYMBOL_CHAR
 FLOOR       <-  'floor' !SYMBOL_CHAR        FOR         <-  'for' !SYMBOL_CHAR
 FROM        <-  'from' !SYMBOL_CHAR
 FTOI        <-  'ftoi' !SYMBOL_CHAR         FUNCPTR     <-  'funcptr' !SYMBOL_CHAR

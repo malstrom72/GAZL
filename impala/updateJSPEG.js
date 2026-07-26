@@ -111,7 +111,7 @@ function applyImpalaHardening(source) {
 				"var KEYWORD_WORDS = [",
 				"\t'abs', 'array', 'assert', 'case', 'const', 'copy', 'default', 'do', 'else', 'export', 'extern',",
 				"\t'float', 'floor', 'for', 'from', 'ftoi', 'funcptr', 'functype', 'function', 'global', 'goto', 'if',",
-				"\t'import', 'int', 'itof', 'locals', 'loop', 'native', 'null', 'nullfunc', 'pointer', 'readonly',",
+				"\t'import', 'inline', 'int', 'itof', 'locals', 'loop', 'native', 'null', 'nullfunc', 'pointer', 'readonly',",
 				"\t'returns', 'sizeof', 'struct', 'switch', 'temporary', 'to', 'while'",
 				"];",
 			].join("\n"),
