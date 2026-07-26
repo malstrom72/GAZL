@@ -943,6 +943,36 @@ console.log("impala.jspeg compiler accepts parenthesized bitwise mixes identical
 compileWithJsImpala(sameOpChainSource, { randomId: 42 });
 console.log("impala.jspeg compiler accepts same-operator bitwise chains without parentheses");
 
+// `inline function` has no out-of-line copy, so every use that needs one is an error rather than a
+// silent de-optimisation. The behavioural check lives in the inlineEquivalence fixture pair; these are
+// the cases that must not compile at all, plus the shapes that must.
+const inlineCases = [
+	["a recursive inline function",
+		"inline function f(int n) returns int r { if (n > 0) { r = f(n - 1); } else { r = 0; } }\n"
+			+ "function main() locals int q { q = f(3); }\n", "cannot call itself"],
+	["taking the address of an inline function",
+		"inline function f(int a) returns int r { r = a; }\nfunctype Cb(int a) returns int r\n"
+			+ "function main() locals Cb c, int q { c = f; q = c(1); }\n", "address of the inline function"],
+	["exporting an inline function",
+		"export inline function g(int a) returns int r { r = a; }\n"
+			+ "function main() locals int q { q = g(1); }\n", "cannot be exported"],
+	["an inline function declaring locals",
+		"inline function f(int a) returns int r\nlocals int t\n{ t = a; r = t; }\n"
+			+ "function main() locals int q { q = f(1); }\n", "cannot declare locals"],
+	// and the shapes that must work
+	["a plain inline call", "inline function f(int a) returns int r { r = a * 2; }\n"
+		+ "function main() locals int q { q = f(3); }\n", null],
+	["nested inline expansion", "inline function f(int a) returns int r { r = a * 2; }\n"
+		+ "inline function g(int a) returns int r { r = f(a) + 1; }\n"
+		+ "function main() locals int q { q = g(2); }\n", null],
+	["a void inline function", "global int s;\ninline function f(int a) { global s = a; }\n"
+		+ "function main() { f(3); }\n", null],
+];
+for (const [label, source, expected] of inlineCases) {
+	expectCompileOutcome("inline", label, source, expected);
+}
+console.log("impala.jspeg compiler enforces the inline-function rules");
+
 // By-value structs are parked, and EVERY door that can introduce one must say so. `functype` was
 // unguarded, so a by-value struct param/return reached the parked window machinery - and against an
 // `extern struct` it baked a numeric COPY size next to a symbolic `LOCA *.z.Name`, i.e. a truncating

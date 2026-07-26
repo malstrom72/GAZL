@@ -1,0 +1,53 @@
+/*
+	The CALL half of the inlining oracle: byte-for-byte `inlineEquivalence.impala` with the three
+	`inline` keywords removed, so it compiles to ordinary out-of-line calls. Its Expected output must
+	match its twin exactly; a divergence is an inlining miscompile.
+
+	The interesting member is `clobber`: it writes the very global it is passed. Out of line, the
+	argument is copied into the call window BEFORE the body runs, so it returns the old value. An
+	inliner that substituted the global would read it after the write and return the new one. So a
+	divergence between these two files is exactly the aliasing bug, caught numerically rather than by
+	inspecting GAZL.
+
+	`viaPointer` makes the body opaque (it writes through a pointer), which forces even a plain local
+	argument to be materialised. `pure` is transparent, so its arguments are substituted.
+
+	Expected (GAZLCmd inlineEquivalenceCall.gazl main): 31 1 99 5 7
+*/
+
+const int DEBUG = 1
+
+extern native printInt
+extern native printLF
+
+global int shared;
+
+function pure(int a, int b) returns int r { r = a * 3 + b; }
+
+function clobber(int a) returns int r
+{
+	global shared = 99;
+	r = a;
+}
+
+function viaPointer(int pointer p, int a) returns int r
+{
+	*p = 7;							// opaque: destination is a pointer VALUE
+	r = a;
+}
+
+function main()
+locals int t, int array cell[1]
+{
+	t = 10;
+	printInt(pure(t, 1)); printLF();		// 31
+
+	global shared = 1;
+	printInt(clobber(global shared)); printLF();	// 1  - value from BEFORE the body
+	printInt(global shared); printLF();				// 99 - the body ran
+
+	cell[0] = 0;
+	t = 5;
+	printInt(viaPointer(&cell[0], t)); printLF();	// 5  - the returned parameter
+	printInt(cell[0]); printLF();					// 7  - written through the pointer
+}
