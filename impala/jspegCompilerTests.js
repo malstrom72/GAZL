@@ -779,6 +779,13 @@ runValidatorCase(
 	1,
 	"extern struct Bank does not match its definition",
 );
+// A struct field goes through the same typesCompatible rule as a global or an array element, so a bare
+// `ptr` matches any pointer chain. It used to be compared as a raw string and rejected here only.
+runValidatorCase(
+	"extern struct field typing a pointer the definition leaves untyped",
+	["struct-field-ptrchain.gazl", "struct-field-ptrchain-def.gazl"],
+	0,
+);
 
 const validatorUnitTestScript = path.join(dir, "..", "tests", "gazl-validator-tests.js");
 const validatorUnitResult = childProcess.spawnSync(process.execPath, [validatorUnitTestScript], {

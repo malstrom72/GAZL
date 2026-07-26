@@ -1247,22 +1247,28 @@ function validateExternStructs(ctx) {
 		return "{ " + parts.join(", ") + " }";
 	}
 
-	// An empty extent (`int[]`) is a declared "I cannot state this as a comparable constant" wildcard,
-	// which is what a folded expression extent emits. Compare the element type always, the extent only
-	// when BOTH sides state one - the same rule arraySignaturesCompatible applies to plain arrays. A
-	// stated extent that disagrees is still an error; an unstated one is skipped, never assumed equal.
-	function fieldTypesMatch(x, y) {
-		if (x === y) { return true; }
-		var ax = x.match(/^(.*)\[(.*)\]$/);
-		var ay = y.match(/^(.*)\[(.*)\]$/);
-		if (!ax || !ay || ax[1] !== ay[1]) { return false; }
-		return ax[2].trim() === "" || ay[2].trim() === "";
+	// A field's rendered type packs an element category and an optional extent ("int", "int-ptr",
+	// "int[4]", "int[]"). Unpack it and reuse arraySignaturesCompatible, so a struct field obeys exactly
+	// the rule a plain array and a global already obey: element categories via typesCompatible (a bare
+	// "ptr" matches any pointer chain), and the extent only when BOTH sides state one - an empty extent
+	// is a declared "cannot state this as a comparable constant", skipped rather than assumed equal.
+	function fieldParts(text) {
+		var m = text.match(/^(.*)\[(.*)\]$/);
+		if (!m) { return { category: text, size: undefined }; }
+		var size = m[2].trim();
+		return { category: m[1], size: (size === "" ? undefined : size) };
 	}
 
 	function fieldListsMatch(fa, fb) {
 		if (fa.length !== fb.length) { return false; }
 		for (var i = 0; i < fa.length; ++i) {
-			if (fa[i].name !== fb[i].name || !fieldTypesMatch(fa[i].type, fb[i].type)) { return false; }
+			if (fa[i].name !== fb[i].name) { return false; }
+			var pa = fieldParts(fa[i].type);
+			var pb = fieldParts(fb[i].type);
+			// an array field and a scalar field of the same category are still different shapes
+			if ((pa.size === undefined) !== (pb.size === undefined)
+					&& /\[/.test(fa[i].type) !== /\[/.test(fb[i].type)) { return false; }
+			if (!arraySignaturesCompatible(pa, pb)) { return false; }
 		}
 		return true;
 	}
