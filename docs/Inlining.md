@@ -166,12 +166,30 @@ Mutual recursion needs no check: Impala is define-before-use, so `A` can only in
 already complete, and `B` cannot have inlined `A`.
 
 
-## 8. v1 restrictions
+## 8. Current restrictions
 
 **Scalar locals only.** A scalar local becomes a borrowed transient at each expansion site, so
-`clamp`-shaped helpers work. An array or struct local needs FRAME space, and frame declarations are
-emitted at the function head while an expansion site is mid-body, so those are rejected (E433).
-Lifting that would mean appending slots to the caller frame with a growth bound - the v3 step.
+`clamp`-shaped helpers work. An array or struct local is rejected (E433).
+
+The reason is DECLARATION FORM, not space. Both kinds occupy frame space; they differ in what has to be
+emitted:
+
+| | frame space | declaration |
+|---|---|---|
+| transient `%N`      | yes | none - the assembler infers the extent from use |
+| named local `LOCi` / `LOCA` | yes | one line, in the frame chain at the function head |
+
+Verified: `%20` and `%400` assemble under a bare `PARA *1`, and the two `main`s of the equivalence pair
+declare identical frames despite the inlined one using more transients. So a slot kind that needs no
+declaration line can be minted mid-body, and one that needs a line cannot - the head is long since
+emitted by the time an expansion runs.
+
+That makes the restriction an implementation gap, not a limit. An array local is N contiguous words, and
+`SETL`/`GETL` accept a TRANSIENT base (verified: `SETL %10 $i #99` and `GETL %1 %10 $i` both assemble),
+so an inlined array local could live in a run of borrowed transients just as a scalar does. It needs
+consecutive-run borrowing, which `borrowForCall` already implements for call windows. Struct locals
+would follow the same route via their symbolic `.z.` size. Not done because a helper big enough to need
+an aggregate local is a weak inlining candidate, not because it cannot work.
 
 **No `--inline` flag.** Nothing is inlined unless the source says `inline`, and no existing source
 does, so the 84-file byte-diff gate is unaffected and there is nothing to gate.
