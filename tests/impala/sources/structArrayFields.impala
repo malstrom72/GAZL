@@ -1,7 +1,7 @@
 /*
 	Impala 2 Step 2 (slice 7): array fields inside a struct (filter delay lines, the common
 	DSP shape). An array field decays to a typed pointer at base+offset; subscript then works
-	as usual — in local, global, and through-pointer struct places.
+	as usual - in local, global, and through-pointer struct places.
 	Expected when run (GAZLCmd structArrayFields.gazl main): 1.0 1.5 7.0 9.0.
 */
 

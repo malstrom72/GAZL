@@ -5,8 +5,8 @@
 # Each microbench is a tight loop whose body is K copies of a SINGLE target instruction,
 # chained through `acc` so nothing is dead-code eliminated. Loop overhead is amortised by
 # the unroll, so wall time is dominated by the target opcode. All operands are variables,
-# so the run-time opcode form (_VVV / _VV_ / _VVC) is exercised — the same paths the UB
-# helpers route through — never the compile-time constant folder.
+# so the run-time opcode form (_VVV / _VV_ / _VVC) is exercised - the same paths the UB
+# helpers route through - never the compile-time constant folder.
 #
 # `xor` is the CONTROL: bitwise XOR is explicitly untouched by the UB fix, so its timing
 # must NOT move across the change. It validates that the harness itself is stable.

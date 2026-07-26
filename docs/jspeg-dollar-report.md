@@ -27,14 +27,14 @@ yet supply or retrieve the container the way PPEG did. 【F:impala/jspeg.jspeg�
 The following ideas remain relevant for future evolution. Option 7 below is now implemented and documents the shipped `$$.` holder escape hatch for reference.
 
 ### 1. Introduce an Explicit Container Alias Inside Actions
-Add a second token in the `Variable` rule—e.g. `$$$` or `$container`—that rewrites to the bare `$` holder instead of `$._`. The action walker would allow property access on this alias without appending `._`, giving grammar authors a deliberate way to reach the container when needed while keeping existing `$$` behaviour intact. Implementation touches would include extending the `Variable` alternation and adjusting the `Action` rewrite branch that handles the `$$` prefix. 【F:impala/jspeg.jspeg†L73-L107】【F:impala/jspeg.jspeg†L189-L191】
+Add a second token in the `Variable` rule - e.g. `$$$` or `$container`-that rewrites to the bare `$` holder instead of `$._`. The action walker would allow property access on this alias without appending `._`, giving grammar authors a deliberate way to reach the container when needed while keeping existing `$$` behaviour intact. Implementation touches would include extending the `Variable` alternation and adjusting the `Action` rewrite branch that handles the `$$` prefix. 【F:impala/jspeg.jspeg†L73-L107】【F:impala/jspeg.jspeg†L189-L191】
 
 *Pros:* preserves backwards compatibility for grammars that rely on the value-only semantics; keeps the holder concept internal to JSPEG. *Cons:* introduces yet another sigil to document and remember; actions must opt in everywhere they need the container.
 
 ### 2. Swap the Meaning of `$$` and Add a New Value Shorthand
 Flip the mapping so that bare `$$` refers to the holder object and introduce an explicit value helper (for example `$$v`). The `Action` walker would stop appending `._` after every `$$`, and the new helper would take over the value rewrite logic. Generated parsers would still return `_o._`, but grammars could now use `$$` consistently for container operations just like PPEG’s `@$$`. 【F:impala/jspeg.jspeg†L73-L126】【F:impala/jspeg.jspeg†L19-L27】
 
-*Pros:* Restores conceptual parity with the PPEG container model; existing grammars that only mutate the value slot could switch to the new helper via find-and-replace. *Cons:* Risky for existing JSPEG grammars—`$$` would suddenly become an object, so arithmetic or string actions would break until migrated.
+*Pros:* Restores conceptual parity with the PPEG container model; existing grammars that only mutate the value slot could switch to the new helper via find-and-replace. *Cons:* Risky for existing JSPEG grammars-`$$` would suddenly become an object, so arithmetic or string actions would break until migrated.
 
 ### 3. Thread Parallel Holder and Value Variables
 Keep the current `$$` rewrite but augment the generated parser with an additional variable that always references the live holder (e.g. `var $h = $;`). The action rewriter could surface this binding under a dedicated sigil (such as `$$holder`) without changing existing rewrites. Both the `Variable` rule and the `root` wrapper would need to initialise and return this extra binding in lock-step so advanced grammars or host code can obtain the container when necessary. 【F:impala/jspeg.jspeg†L19-L27】【F:impala/jspeg.jspeg†L73-L126】【F:impala/jspeg.jspeg†L189-L191】
@@ -59,7 +59,7 @@ Extend the action rewriter with a deliberate escape hatch, such as recognising `
 ### 7. Interpret `$$.` as the Container Holder *(Implemented)*
 JSPEG now keeps the existing `$$`→`$._` rewrite while treating `$$.` as an escape hatch that emits the holder `$`. The action walker consumes the prefix, optionally re-inserting a dot so property accesses like `$$.foo` become `$.foo`, and the `Variable` rule maps `$$.` captures/tags to the same holder-aware form. The generated wrapper still returns `_o._`, preserving API compatibility for callers. 【F:impala/jspeg.jspeg†L80-L110】【F:impala/jspeg.jspeg†L204-L207】
 
-*Pros:* Simple mental model—`$$` stays the value, `$$.` reaches the container—and required only a localised tweak to the rewrite logic. Existing grammars that already used `$$.` property chains now target the holder automatically. *Cons:* Callers still cannot obtain the holder, and authors must remember to include the dot when they want container semantics.
+*Pros:* Simple mental model-`$$` stays the value, `$$.` reaches the container - and required only a localised tweak to the rewrite logic. Existing grammars that already used `$$.` property chains now target the holder automatically. *Cons:* Callers still cannot obtain the holder, and authors must remember to include the dot when they want container semantics.
 
 ## Recommendation
 With the `$$.` escape hatch in place, JSPEG once again lets grammars reach the holder without disturbing existing `$$` value semantics. Future exploration can focus on caller-facing improvements (such as exposing the holder through the parser API) or alternate ergonomics if container access needs to extend beyond actions.

@@ -66,7 +66,7 @@ The virtual machine and assembler are implemented in standard C++ in a single he
         - No need to support high-level language concepts like dynamic memory management, exceptions etc
 ```
 
-(See lines [10–33](../src/GAZL.h) in `GAZL.h`.)
+(See lines [10-33](../src/GAZL.h) in `GAZL.h`.)
 
 ## Using from C++
 

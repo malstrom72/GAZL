@@ -1,5 +1,5 @@
 /*
-	Impala 2 Step 2 (slice 6): arrays of struct VALUES — voice banks, the common DSP shape.
+	Impala 2 Step 2 (slice 6): arrays of struct VALUES - voice banks, the common DSP shape.
 	Allocation is count*sizeof; a struct-array element indexes to a place with sizeof stride
 	(constant index folds into the offset; dynamic index emits one MULi). Works in global and
 	local memory, supports address-of an element and whole-struct element copy.

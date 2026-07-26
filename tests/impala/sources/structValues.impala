@@ -1,7 +1,7 @@
 /*
 	Impala 2 Step 2 (slice 2): struct VALUES as locals, with nested inline fields, plus
 	nested field access through a struct pointer. Struct-value field access compiles to
-	direct `$v:offset` operands (no indirection — "dots are free"); pointer-based access
+	direct `$v:offset` operands (no indirection - "dots are free"); pointer-based access
 	folds the composed offset into a single PEEK/POKE.
 	Expected when run (GAZLCmd structValues.gazl main): 60 0.5 0.1 0.9 2 0.5 1.5 2.5.
 */

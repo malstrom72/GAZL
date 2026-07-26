@@ -1,6 +1,6 @@
 /*
 	Impala 2 Step 1 exercise: typed pointers and arrays.
-	Element types are a compile-time overlay — every construct here erases to the
+	Element types are a compile-time overlay - every construct here erases to the
 	same GAZL that hand-written casts would produce, but without the casts.
 	Expected output when run (GAZLCmd typedPointers.gazl main):
 	24 1 30 40 50 11 11 2.5 11 (one value per line)
@@ -41,20 +41,20 @@ locals int array data[4], int pointer p, int pointer pointer pp, float pointer f
 , int x, float f, pointer raw
 {
 	data[0] = 7; data[1] = 3; data[2] = 9; data[3] = 5;
-	printInt(sum(4, data)); printLF();				// 24 — typed array decays to typed pointer
+	printInt(sum(4, data)); printLF();				// 24 - typed array decays to typed pointer
 	printInt(findSmallest(4, data)); printLF();		// 1
 
 	global cursor = &global values[2];				// &element of int array is an int pointer
-	printInt(*global cursor); printLF();			// 30 — typed dereference, no cast
-	printInt(global cursor[1]); printLF();			// 40 — typed subscript
-	printInt(*(global cursor + 2)); printLF();		// 50 — pointer arithmetic preserves element type
+	printInt(*global cursor); printLF();			// 30 - typed dereference, no cast
+	printInt(global cursor[1]); printLF();			// 40 - typed subscript
+	printInt(*(global cursor + 2)); printLF();		// 50 - pointer arithmetic preserves element type
 
 	x = 11;
 	p = &x;											// & of an int local is an int pointer
 	printInt(*p); printLF();						// 11
 
 	pp = &p;										// pointer to (pointer to int)
-	printInt(*(*pp)); printLF();					// 11 — each * peels one level, typed all the way
+	printInt(*(*pp)); printLF();					// 11 - each * peels one level, typed all the way
 
 	fp = &global gains[0];
 	f = fp[1];										// typed float subscript, no cast

@@ -1,5 +1,5 @@
 /*
-	Impala 2 Step 2 (slice 5): struct VALUES as globals — the third place base kind. DSP
+	Impala 2 Step 2 (slice 5): struct VALUES as globals - the third place base kind. DSP
 	state in real firmware lives in globals. A struct global is one zeroed GLOB *sizeof;
 	field access uses `&name:offset` in global memory, `&global v` addresses it, and a
 	global struct copies to/from locals with COPY.

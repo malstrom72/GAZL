@@ -8,14 +8,14 @@ keeping output identical to the legacy toolchain.
 
 All files live under `impala/`:
 
-- `impala.jspeg` – Impala grammar with JavaScript actions.
-- `impalaCompiler.js` – generated Impala compiler produced by JSPEG.
-- `impala.nuxjs.js` – NuXJS command-line wrapper used by the normal build.
-- `impala.node.js` – Node CLI for compiler development and tests.
-- `impalaJsCompilerRunner.js` – Node adapter for loading `impalaCompiler.js` and
+- `impala.jspeg` - Impala grammar with JavaScript actions.
+- `impalaCompiler.js` - generated Impala compiler produced by JSPEG.
+- `impala.nuxjs.js` - NuXJS command-line wrapper used by the normal build.
+- `impala.node.js` - Node CLI for compiler development and tests.
+- `impalaJsCompilerRunner.js` - Node adapter for loading `impalaCompiler.js` and
   formatting output.
-- `runJspegTests.js` – Impala parity runner (compares compiled output to golden `.gazl`).
-- `testdata/` – small fixtures for parity checks.
+- `runJspegTests.js` - Impala parity runner (compares compiled output to golden `.gazl`).
+- `testdata/` - small fixtures for parity checks.
 
 For JSPEG internals, self-hosting, and regeneration, see `JSPEG.md`.
 
