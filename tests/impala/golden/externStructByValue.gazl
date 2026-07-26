@@ -1,22 +1,22 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 12:1
-; signature extern struct AudioBuffer { frames : int, channels : int } @ 13:1
-; signature extern native printInt() -> unknown @ 14:1
-; signature extern native printLF() -> unknown @ 15:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
+; signature extern struct AudioBuffer { frames : int, channels : int } @ 12:1
+; signature extern native printInt() -> unknown @ 13:1
+; signature extern native printLF() -> unknown @ 14:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 15:15
+main:	FUNC	; signature func main() -> void @ 14:15
 		PARA *1
 	$buf:	LOCA *.z.AudioBuffer
 ;-----------------------------------------------------------------------------
 		MOVi $buf:.o.AudioBuffer.frames #42 	; buf.frames = 42
 		MOVi $buf:.o.AudioBuffer.channels #2 	; buf.channels = 2
 		MOVi %1 $buf:.o.AudioBuffer.frames 	; printInt(buf.frames)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 20:22
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 20:33
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 19:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 19:33
 		MOVi %1 $buf:.o.AudioBuffer.channels 	; printInt(buf.channels)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 21:24
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 21:35
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 20:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 20:35
 		RETU   	; }

@@ -1,13 +1,13 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 22:1
-; signature extern struct AudioBuffer { frames : int, data : float-ptr, channels : int } @ 24:1
-; signature extern native printInt() -> unknown @ 25:1
-; signature extern native printLF() -> unknown @ 27:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 18:1
+; signature extern struct AudioBuffer { frames : int, data : float-ptr, channels : int } @ 20:1
+; signature extern native printInt() -> unknown @ 21:1
+; signature extern native printLF() -> unknown @ 23:1
 
 ;-----------------------------------------------------------------------------
-setup:	FUNC	; signature func setup(AudioBuffer-ptr b, int n, int c) -> void @ 27:16
+setup:	FUNC	; signature func setup(AudioBuffer-ptr b, int n, int c) -> void @ 23:16
 		PARA *1
 	$b:	INPp
 	$n:	INPi
@@ -19,7 +19,7 @@ setup:	FUNC	; signature func setup(AudioBuffer-ptr b, int n, int c) -> void @ 27
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 33:15
+main:	FUNC	; signature func main() -> void @ 29:15
 		PARA *1
 	$raw:	LOCA *8
 	$b:	LOCp
@@ -29,17 +29,17 @@ main:	FUNC	; signature func main() -> void @ 33:15
 		MOVp %1 $b 	; setup(b, 42, 2)
 		MOVi %2 #42 
 		MOVi %3 #2 
-		CALL &setup %0 *4	; expects setup(ptr, int, int) -> void @ 37:17
+		CALL &setup %0 *4	; expects setup(ptr, int, int) -> void @ 33:17
 		PEEK %0 $b #.o.AudioBuffer.frames	; x = b->frames + b->channels
 		PEEK %1 $b #.o.AudioBuffer.channels
 		ADDi $x %0 %1
 		MOVi %1 $x 	; printInt(x)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 39:13
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 39:24
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:24
 		PEEK %1 $b #.o.AudioBuffer.frames	; printInt(b->frames)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:21
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:32
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 36:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 36:32
 		PEEK %1 $b #.o.AudioBuffer.channels	; printInt(b->channels)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:23
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:34
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 37:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:34
 		RETU   	; }

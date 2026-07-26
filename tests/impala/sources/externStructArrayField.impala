@@ -8,11 +8,7 @@
 	The signature row carries `a : int[]`, the same "extent unknown" wildcard gazl-validate skips
 	rather than comparing.
 
-	Compile-only golden. To run: prepend a host header, e.g.
-	    .o.Grid.n:    ! DEFi #0
-	    .o.Grid.cells:! DEFi #1
-	    .o.Grid.tag:  ! DEFi #9
-	    .z.Grid:      ! DEFi #10
+	Expected (GAZLCmd externStructArrayField.gazl main .o.Grid.n 0 .o.Grid.cells 1 .o.Grid.tag 9 .z.Grid 10): 100 4 0.5
 */
 
 const int DEBUG = 1

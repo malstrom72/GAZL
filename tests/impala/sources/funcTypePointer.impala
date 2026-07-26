@@ -5,7 +5,7 @@
 	used `Fn`, so `pcb = &cb` (and passing `&cb` to a `Fn pointer` parameter) tripped a bogus
 	E201 "expected Fn elements, got Fn elements". Fixed in unaryOp so `&funcptr` yields the bare
 	funcptr-type element, matching declarations and the argument check.
-	Expected (GAZLCmd funcTypePointer.gazl main): 42 30.
+	Expected (GAZLCmd funcTypePointer.gazl main): 42 30
 */
 
 const int DEBUG = 1

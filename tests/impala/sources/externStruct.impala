@@ -7,14 +7,10 @@
 	at load, so the same compiled GAZL runs against any host layout (reorder / resize / extra
 	fields) with no Impala recompile. See docs/StructLayoutConstants.md.
 
-	This golden checks the symbolic emission is stable. To RUN it, prepend a host layout header, e.g.
+	This golden checks the symbolic emission is stable, and is also RUN against a host layout supplied
+	as GAZLCmd defines - the result is independent of the offsets chosen.
 
-	    .o.AudioBuffer.data:     ! DEFi #1
-	    .o.AudioBuffer.frames:   ! DEFi #5
-	    .o.AudioBuffer.channels: ! DEFi #6
-	    .z.AudioBuffer:          ! DEFi #8
-
-	then `GAZLCmd main` -> prints 44 42 2 (independent of the chosen offsets).
+	Expected (GAZLCmd externStruct.gazl main .o.AudioBuffer.data 1 .o.AudioBuffer.frames 5 .o.AudioBuffer.channels 6 .z.AudioBuffer 8): 44 42 2
 */
 
 const int DEBUG = 1

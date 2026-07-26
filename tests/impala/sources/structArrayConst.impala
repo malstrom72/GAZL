@@ -3,7 +3,7 @@
 	one PEEK/POKE with the whole offset (.o.Voice.filters + 2*sizeof(Biquad) + .o.Biquad.b0) built
 	by assemble-time ! ADDi - no runtime ADDp. A dynamic index still materializes (inherent).
 
-	Expected (GAZLCmd structArrayConst.gazl main): 0.5 1.5 0.25 3.0
+	Expected (GAZLCmd structArrayConst.gazl main): 0.5 1.5 0.25 3
 */
 const int DEBUG = 1
 struct Biquad { float b0; float z1 }

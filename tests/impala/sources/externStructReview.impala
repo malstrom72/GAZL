@@ -3,10 +3,7 @@
 	preamble for Frame (host owns it), but Impala DOES emit the flattened .o.Frame.origin.x
 	(it owns Point). #.o.Frame.w / #.z.Frame are referenced but host-defined.
 
-	Compile-only golden. To run, prepend this host header, then GAZLCmd main -> 3 7 3:
-	    .o.Frame.origin: ! DEFi #0
-	    .o.Frame.w:      ! DEFi #2
-	    .z.Frame:        ! DEFi #3
+	Expected (GAZLCmd externStructReview.gazl main .o.Frame.origin 0 .o.Frame.w 2 .z.Frame 3): 3 7 3
 */
 const int DEBUG = 1
 struct Point { int x; int y }
