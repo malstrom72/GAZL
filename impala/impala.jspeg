@@ -1215,14 +1215,31 @@
                 sourceName: $$parser.sourceName };
     };
 
-    $$parser.addFuncTypeParam = function (name, type, elem, struct, words, pname) {
+    /* By-value struct params/returns are PARKED for Impala 3.0 (docs/ParkedFeatures.md). Every door that
+       can introduce one rejects it HERE, so there is one owner instead of a copy per door - a `functype`
+       declarator was previously unguarded, which let the whole parked by-value path run and, for an
+       `extern struct`, baked a numeric COPY size against a host-owned layout. */
+    $$parser.rejectByValueStruct = function (type, struct, pname, isReturn, sourceCode, sourceOffset) {
+        if (type !== 'S') return;
+        if (isReturn) {
+            $$parser.fail('Returning a struct by value is not supported in Impala 2.0',
+                    sourceCode, sourceOffset, 'E427',
+                    'return it through a ' + struct + ' pointer out-parameter');
+        }
+        $$parser.fail('Passing a struct by value is not supported in Impala 2.0',
+                sourceCode, sourceOffset, 'E426',
+                'take it by pointer: ' + struct + ' pointer ' + pname);
+    };
+
+    $$parser.addFuncTypeParam = function (name, type, elem, struct, words, pname, sourceCode, sourceOffset) {
+        $$parser.rejectByValueStruct(type, struct, pname, false, sourceCode, sourceOffset);
         $$parser.functypes[name].params.push({ type: type, elem: elem,
                 struct: struct, words: words, name: pname });
     };
 
     $$parser.addFuncTypeReturn = function (name, type, elem, struct, words, sourceCode, sourceOffset) {
-        var ft = $$parser.functypes[name];
-        ft.returnList.push({ type: type, elem: elem, struct: struct, words: words });
+        $$parser.rejectByValueStruct(type, struct, name, true, sourceCode, sourceOffset);
+        $$parser.functypes[name].returnList.push({ type: type, elem: elem, struct: struct, words: words });
     };
 
     $$parser.endFuncType = function (name) {
@@ -2852,8 +2869,8 @@ StructDecl  <-  STRUCT _ id:Identifier                               { $sname = 
 # ------------------------------------------------------------------
 FuncTypeDecl <- FUNCTYPE _ id:Identifier                             { $ftname = $id; $$parser.beginFuncType($id, $$s, $$i); }
                 '(' _
-                ( p:TypeDeclr                                        { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name); }
-                  ( ',' _ p:TypeDeclr                                { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name); }
+                ( p:TypeDeclr                                        { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, $$s, $$i); }
+                  ( ',' _ p:TypeDeclr                                { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, $$s, $$i); }
                   )*
                 )?
                 ')' _
@@ -3003,11 +3020,8 @@ inp:ArgsDecl ')'_
                                                                         if (entry.pendingReturns && entry.pendingReturns.length > 0) {
                                                                                 for (var _ri = 0; _ri < entry.pendingReturns.length; ++_ri) {
                                                                                         var ret = entry.pendingReturns[_ri];
-                                                                                        if (ret.type === 'S') {  /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
-                                                                                                $$parser.fail('Returning a struct by value is not supported in Impala 2.0',
-                                                                                                        ret.sourceCode, ret.sourceOffset, 'E427',
-                                                                                                        'return it through a ' + ret.struct + ' pointer out-parameter');
-                                                                                        } else {
+                                                                                        $$parser.rejectByValueStruct(ret.type, ret.struct, ret.rawName, true, ret.sourceCode, ret.sourceOffset);
+                                                                                        {
                                                                                                 $$parser.declare(
                                                                                                         'OUT?', 'locals',
                                                                                                         ret.name,
@@ -3035,11 +3049,8 @@ inp:ArgsDecl ')'_
                                                                         }
                                                                 }
                                                                          iterate($inp, function (p) {
-                                                                             if (p.type === 'S') {         /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
-                                                                                 $$parser.fail('Passing a struct by value is not supported in Impala 2.0',
-                                                                                         $$s, $$i, 'E426',
-                                                                                         'take it by pointer: ' + p.struct + ' pointer ' + p.name);
-                                                                             } else {
+                                                                             $$parser.rejectByValueStruct(p.type, p.struct, p.name, false, $s, $i);
+                                                                             {
                                                                                  $$parser.declare(
                                                                                      'INP?', 'locals',
                                                                                      '$' + p.name,
@@ -3205,18 +3216,12 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                             var _pp = [];
                                                                             for (var _pi = 0; _pi < _proto.args.length; ++_pi) {
                                                                                 var _p = _proto.args[_pi];
-                                                                                if (_p.type === 'S')
-                                                                                    $$parser.fail('Passing a struct by value is not supported in Impala 2.0',
-                                                                                            $$s, $$i, 'E426',
-                                                                                            'take it by pointer: ' + _p.struct + ' pointer ' + _p.name);
+                                                                                $$parser.rejectByValueStruct(_p.type, _p.struct, _p.name, false, $s, $i);
                                                                                 _pp.push({ type: _p.type, elem: _p.elem, name: _p.name,
                                                                                            size: _p.size, struct: _p.struct, words: _p.words });
                                                                             }
                                                                             var _pr = _proto.ret;
-                                                                            if (_pr !== undefined && _pr.type === 'S')
-                                                                                $$parser.fail('Returning a struct by value is not supported in Impala 2.0',
-                                                                                        $$s, $$i, 'E427',
-                                                                                        'return it through a ' + _pr.struct + ' pointer out-parameter');
+                                                                            if (_pr !== undefined) $$parser.rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, $s, $i);
                                                                             placeholderSignature.params      = _pp;
                                                                             placeholderSignature.returns     = (_pr !== undefined ? _pr.type : '?');
                                                                             placeholderSignature.returnElem  = (_pr !== undefined ? _pr.elem : undefined);

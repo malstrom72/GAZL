@@ -918,6 +918,32 @@ console.log("impala.jspeg compiler accepts parenthesized bitwise mixes identical
 compileWithJsImpala(sameOpChainSource, { randomId: 42 });
 console.log("impala.jspeg compiler accepts same-operator bitwise chains without parentheses");
 
+// By-value structs are parked, and EVERY door that can introduce one must say so. `functype` was
+// unguarded, so a by-value struct param/return reached the parked window machinery - and against an
+// `extern struct` it baked a numeric COPY size next to a symbolic `LOCA *.z.Name`, i.e. a truncating
+// copy whenever the host's layout is wider.
+const byValueDoors = [
+	["function parameter", "struct V { int a; int b }\nfunction f(V v) { }\n", "Passing a struct by value"],
+	["function return", "struct V { int a; int b }\nfunction f() returns V v { }\n", "Returning a struct by value"],
+	["extern prototype parameter", "struct V { int a; int b }\nextern native n(V v)\n", "Passing a struct by value"],
+	["extern prototype return", "struct V { int a; int b }\nextern native n() returns V v\n", "Returning a struct by value"],
+	["functype parameter", "struct V { int a; int b }\nfunctype Cb(V v)\n", "Passing a struct by value"],
+	["functype return", "struct V { int a; int b }\nfunctype Cb() returns V\n", "Returning a struct by value"],
+];
+for (const [label, source, expected] of byValueDoors) {
+	let observed = false;
+	try {
+		compileWithJsImpala(source, { randomId: 42 });
+	} catch (err) {
+		observed = !!(err && err.message && err.message.includes(expected));
+	}
+	if (!observed) {
+		console.error(`impala.jspeg compiler failed to reject a by-value struct as a ${label}`);
+		process.exit(1);
+	}
+}
+console.log("impala.jspeg compiler rejects by-value structs at every declaration door");
+
 // An array extent belongs exactly where it is verifiable: an `extern struct` field must omit it (the
 // host owns that layout, as with a standalone `extern array`), and every other array must state it.
 const arrayExtentCases = [
