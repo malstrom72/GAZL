@@ -90,35 +90,6 @@ function applyImpalaHardening(source) {
 
 	patched = patched.replace(/\$[A-Za-z0-9_]*=\{\}/g, (match) => match.replace("={}", "=createParserContext()"));
 
-	const keywordFunctionRegex = /function KEYWORD\(\$\)\{[^\n]*\n/;
-	const keywordFunctionReplacement =
-		"function KEYWORD($){var _b=_i,_words=KEYWORD_WORDS,_word,_end,_x;" +
-		"for(var _k=0;_k<_words.length;++_k){" +
-		"_word=_words[_k];" +
-		"if(_s.substr(_i,_word.length)===_word){" +
-		"_i+=_word.length;" +
-		"_end=_i;" +
-		"_x=SYMBOL_CHAR($);" +
-		"_i=_end;" +
-		"if(!_x)return true;" +
-		"_i=_b;" +
-		"}}_im=(_i>_im?_i:_im);_i=_b;return false}\n";
-	if (keywordFunctionRegex.test(patched) && !patched.includes("KEYWORD_WORDS")) {
-		patched = patched.replace(
-			"var _hostOptions = _options || {};",
-			[
-				"var _hostOptions = _options || {};",
-				"var KEYWORD_WORDS = [",
-				"\t'abs', 'array', 'assert', 'case', 'const', 'copy', 'default', 'do', 'else', 'export', 'extern',",
-				"\t'float', 'floor', 'for', 'from', 'ftoi', 'funcptr', 'functype', 'function', 'global', 'goto', 'if',",
-				"\t'import', 'int', 'itof', 'locals', 'loop', 'native', 'null', 'nullfunc', 'pointer', 'readonly',",
-				"\t'returns', 'sizeof', 'struct', 'switch', 'temporary', 'to', 'while'",
-				"];",
-			].join("\n"),
-		);
-		patched = patched.replace(keywordFunctionRegex, keywordFunctionReplacement);
-	}
-
 	const failFunctionPattern =
 		"\tfail = function (error, source, offset) {\n" +
 		"\t\tfunction oneLine(s) { return replace(replace(replace(s,\"\\t\",' '),\"\\r\",' '),\"\\n\",' '); }\n" +
