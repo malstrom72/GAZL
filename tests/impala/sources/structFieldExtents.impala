@@ -1,0 +1,51 @@
+/*
+	A struct array field's extent may be a full constant EXPRESSION, not just a literal or a single
+	named const. Such an extent folds to a `<X>` compile-time scratch, and the layout block reads it,
+	so the fold must be emitted BEFORE the block and each field must own a distinct scratch.
+
+	Regression: emitStructLayout wrote its `! ADDi <a> #<a> #<A>` straight through output() while the
+	fold went out through the queued emit() channel and landed at the next FUNC - so `<A>` was used
+	before it was defined and the (successfully compiled) GAZL would not assemble:
+	"Incompatible / non-existing compile-time variable: <A>". A second such field then made it worse,
+	both folding into the same recycled `<A>`.
+
+	Covers the scalar-element branch, the struct-element branch (extent * .z.Elem), and a plain
+	literal extent alongside them.
+
+	Expected (GAZLCmd structFieldExtents.gazl main): 12 4 2 23 77 11 33 5
+*/
+
+const int DEBUG = 1
+const int H = 3
+const int N = 4
+
+struct Pair { int lo; int hi }
+
+struct S {
+	int array a[H * N];			// expression extent -> folded scratch
+	int array b[H + 1];			// a second one, must not share the scratch
+	Pair array p[N / 2];		// struct-element array: extent * .z.Pair
+	int array c[2];				// plain literal, unchanged
+	int n
+}
+
+extern native printInt
+extern native printLF
+
+function main()
+locals S s, int i
+{
+	printInt(H * N); printLF();				// 12  - the extents, for the record
+	printInt(H + 1); printLF();				// 4
+	printInt(N / 2); printLF();				// 2
+	printInt(sizeof(S)); printLF();			// 23 = 12 + 4 + 2*2 + 2 + 1
+
+	s.n = 77;
+	s.a[11] = 11;							// last element of the H*N field
+	s.b[3] = 33;							// last element of the H+1 field
+	s.p[1].hi = 5;							// last element of the struct-element field
+	printInt(s.n); printLF();				// 77
+	printInt(s.a[11]); printLF();			// 11
+	printInt(s.b[3]); printLF();			// 33
+	printInt(s.p[1].hi); printLF();			// 5
+}

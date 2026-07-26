@@ -149,6 +149,7 @@
     var $$parser.counters = { '%': 0,  '<': 0  };
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
     var $$parser.structs = {};                                    /// name -> { fields:[{name,type,elem,offset,words}], words, complete }
+    var $$parser.openStruct = undefined;                          /// struct whose field list is being parsed (its fields own their extent scratches)
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
@@ -1303,11 +1304,26 @@
         }
         $$parser.structs[name] = { fields: [], words: 0, complete: false,
                 sourceCode: sourceCode, sourceOffset: sourceOffset };
+        $$parser.openStruct = name;
     };
 
+    /* A field extent that needs folding lives in a `<X>` scratch that the layout block reads LATER, so
+       unlike every other ArrayDecl site the borrow must survive the declaration - otherwise a second
+       such field folds into the same scratch and silently overwrites the first one's extent. The struct
+       owns those borrows; they are released here, once the layout has consumed them. */
     $$parser.endStruct = function (name) {
-        $$parser.structs[name].complete = true;
+        var s = $$parser.structs[name];
+        s.complete = true;
         $$parser.emitStructLayout(name);
+        var held = {};
+        for (var i = 0; i < s.fields.length; ++i) {
+            var size = '' + s.fields[i].size;
+            if (size.charAt(0) !== '<') continue;
+            assert(!held[size], 'struct ' + name + ' reuses extent scratch ' + size);
+            held[size] = true;
+            $$parser.returnBack(s.fields[i].size);
+        }
+        $$parser.openStruct = undefined;
     };
 
     /* Emit a struct's layout as GAZL compile-time constants: a rolling `<a>` accumulator that
@@ -1343,6 +1359,10 @@
         var s = $$parser.structs[name];
         if (!s || s.extern) return;                               /* extern: host provides all base offsets + .z */
         var T = (typeof TAB !== 'undefined') ? TAB : '\t';
+        $$parser.flushMetaCode('');                                   /* a field extent that folded to a `<X>` scratch was
+                                                                         queued through emit(); drain it BEFORE the block so
+                                                                         the definition precedes the ! ADDi that reads it
+                                                                         (same rule declare() follows before its own output) */
         output(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
         for (var i = 0; i < s.fields.length; ++i) {
             var f = s.fields[i];
@@ -3165,7 +3185,9 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                          $sname = $id;
                                                                          $$parser.beginExternStruct($id, $$s, $$i);
                                                                      }
-                    ( '{' _
+                    ( '{' _                                           { /* a bodyless `extern struct G` never reaches
+                                                                           endStruct, so only the braced form opens */
+                                                                        $$parser.openStruct = $sname; }
                       ( f:(ArrayDecl / VarDecl)                       {
                                                                          $$parser.addStructField($sname,
                                                                              { name: $f.name, type: $f.type, elem: $f.elem,
@@ -3650,7 +3672,9 @@ ArrayDecl   <-                                                        { $desc = 
                                                                          $$.name = $id;
                                                                          $$.size = $$parser.dropHash($size);   /* element count - may be a symbolic const */
                                                                          $$.words = $$.size;                   /* alloc size folds count*.z.Elem symbolically (arrayAllocSize) */
-                                                                         $$parser.returnBack($size);
+                                                                         if ($$parser.openStruct === undefined) {
+                                                                             $$parser.returnBack($size);       /* a struct field's borrow outlives the decl - endStruct frees it */
+                                                                         }
                                                                      }
 
 # ------------------------------------------------------------------
