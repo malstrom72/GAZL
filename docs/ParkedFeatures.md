@@ -38,6 +38,27 @@ single named const as a type", which is non-breaking against 1.0 but still unsat
 
 Related open item: a constant evaluator is load-bearing for any 2.0 array identity.
 
+### Re-evaluated 2026-07-26: still OUT of Impala 2.0
+
+A deliberately MILDER revival was investigated: no by-value, no implicit decay, no multi-dim
+parameters, but a multi-dim array allowed as a struct field and passed around through a struct pointer.
+That shape does dodge the original trap - it occupies NO length-as-a-type position at all, so no shape
+comparison, no `[<A>]` descriptors, no constant evaluator, no `:` open-axis marker, and indexing reduces
+to `a[y*W + x]` folded into the existing single `dynIndex` place. It was still rejected, for reasons
+that are NOT the type-identity trap:
+
+1. Expression extents in struct array fields were BROKEN (see the ordering trap in
+   [[docs/StructLayoutConstants.md]]) - a prerequisite fix, not part of the feature.
+2. An `extern struct` array field states no extent (E430). An inner extent IS the stride, so a sizeless
+   field cannot be indexed at rank >= 2. "Extern array fields are sizeless" and "a matrix can be a
+   struct field" are mutually exclusive for host-owned structs.
+3. Therefore the whole selling point - "put a matrix in a struct and pass it that way" - cannot reach
+   host-owned structs. The feature costs grammar, place-model, validator and fuzzer work while
+   delivering materially less than proposed.
+
+Same call as by-value: the reach does not justify the surface. Do not treat multi-dim arrays as
+"nearly done" because the milder design looked clean on paper.
+
 
 ## Parked: by-value struct params/returns, multi-return, destructuring
 

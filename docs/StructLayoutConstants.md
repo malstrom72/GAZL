@@ -160,6 +160,35 @@ disagree. The gazl-validator can cross-check the interface's field types against
 emitted layout, so a mismatch is a build error, not a silent lie - the same "verifiable contract" theme
 as extern prototypes (see [[docs/ExternPrototypes.md]]).
 
+### Array extents in a signature row (DECIDED, IMPLEMENTED)
+
+A signature row may state a FACT or state UNKNOWN. It must never state a token that merely looks like a
+fact. So an array extent renders as:
+
+- `[4]` / `[H]` - a literal or a single named const. A real, comparable claim.
+- `[]` - the extent folded to a `<X>` compile-time scratch (any expression, e.g. `[H * N]`), or the
+  array is an `extern` whose extent Impala cannot know. An explicit "unknown".
+
+gazl-validate compares an extent only when BOTH sides state one; an unknown is skipped, never assumed
+equal. Same wildcard model as a name-only extern prototype (`() -> unknown`).
+
+The rule exists because rows used to print the scratch name itself (`int[<A>]`). Those names are
+POOL-RECYCLED, so two unrelated extents both rendered `[<A>]` and compared EQUAL - a false clean. It
+was inherited from Impala 1.0 and was live in shipped code (`LadderFilter.impala` emitted
+`array audioBuffers[<A>]`).
+
+Corollary for `extern struct`: an array field states NO extent at all (**E430** if it does), matching
+1.0's rule that "`extern array` declaration should not include array size". The host owns that layout -
+field positions come from host-supplied `.o.Name.field` and a 1-D element stride is 1 - so Impala never
+reads the extent, and a number there would be an unverifiable claim. Every other array MUST state one
+(**E431**).
+
+Ordering trap worth knowing: an extent that needs folding is emitted through the queued `emit()`
+channel, while the layout block is written with direct `output()`. `emitStructLayout` therefore has to
+`flushMetaCode('')` first - exactly as `declare()` already does - or the `! ADDi` reads a `<X>` that is
+defined later in the file and the (cleanly compiled) GAZL will not assemble. The struct also holds each
+field's extent borrow until `endStruct`, so two expression extents cannot fold into the same scratch.
+
 ## IMPLEMENTED (Phase 2a - normal structs)
 
 Every non-extern struct now emits its layout as GAZL compile-time constants: a rolling `<a>`
