@@ -331,6 +331,9 @@ void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<In
 		changed = false;
 		for (UInt j = from; j <= to; ++j) {
 			const Int op = code[j].opcode;
+			OperandRole roles[3];
+			operandRoles(op, roles);
+			if (roles[0] != OPERAND_SLOT_WRITE) { continue; }											// writes no slot -> nothing to stamp
 			int produced;
 			switch (op) {
 				case OP_ADRL: produced = REALM_MYFRAME; break;												// address of a local
@@ -341,8 +344,6 @@ void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<In
 					break;
 				}
 				case OP_ADDI_VVV: case OP_ADDI_VVC: case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV: {
-					OperandRole roles[3];
-					operandRoles(op, roles);
 					const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
 					produced = REALM_BOTTOM;																// pointer +/- int keeps the pointer's realm; join the slot reads
 					for (int k = 0; k < 3; ++k) {
@@ -353,17 +354,8 @@ void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<In
 					}
 					break;
 				}
-				default: {																				// loads, calls, native, and every non-pointer producer
-					OperandRole roles[3];
-					operandRoles(op, roles);
-					if (roles[0] != OPERAND_SLOT_WRITE) { continue; }									// writes no slot -> nothing to stamp
-					produced = REALM_UNKNOWN;
-					break;
-				}
+				default: produced = REALM_UNKNOWN; break;													// loads, calls, native, and every non-pointer producer
 			}
-			OperandRole roles[3];
-			operandRoles(op, roles);
-			if (roles[0] != OPERAND_SLOT_WRITE) { continue; }
 			const Int dst = code[j].p0.i;
 			const int merged = joinRealm(realm.count(dst) ? realm[dst] : REALM_BOTTOM, produced);
 			if (!realm.count(dst) || realm[dst] != merged) { realm[dst] = merged; changed = true; }
@@ -697,7 +689,8 @@ void RegisterCache::residencyCapacity(size_t& generalMax, size_t& floatMax) cons
 
 void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& wantedGeneral, const std::set<Int>& wantedFloat, const std::set<Int>& writtenInLoop) {
 	assert(map.entries.empty() && "a header's entry map is captured once");
-	const size_t RESIDENCY_HEADROOM = 3;																				// registers per class left free for the body's temps and constants (halved for small pools; keep in sync with residencyCapacity)
+	size_t classMax[2];
+	residencyCapacity(classMax[0], classMax[1]);																		// per-class keep limit (leaves headroom for the body's temps and constants)
 	size_t kept[2] = { 0, 0 };
 	std::set<Int> mapped[2];
 	for (int c = 0; c < 2; ++c) {																						// pass 1, BOTH classes: keep resident wanted lines, spill the rest
@@ -706,8 +699,7 @@ void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& wantedGenera
 		size_t count;
 		Line* lines = linesOf(registerClass, count);
 		const int* registers = registersOf(registerClass);
-		const size_t headroom = (RESIDENCY_HEADROOM < count / 2) ? RESIDENCY_HEADROOM : count / 2;
-		const size_t keepMax = count - headroom;
+		const size_t keepMax = classMax[c];
 		for (size_t i = 0; i < count; ++i) {
 			if (!lines[i].occupied) { continue; }
 			assert(!lines[i].pinned && !lines[i].scratchTemp && "capture between instructions only");
@@ -737,8 +729,7 @@ void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& wantedGenera
 		size_t count;
 		Line* lines = linesOf(registerClass, count);
 		const int* registers = registersOf(registerClass);
-		const size_t headroom = (RESIDENCY_HEADROOM < count / 2) ? RESIDENCY_HEADROOM : count / 2;
-		const size_t keepMax = count - headroom;
+		const size_t keepMax = classMax[c];
 		for (std::set<Int>::const_iterator s = wanted.begin(); s != wanted.end() && kept[c] < keepMax; ++s) {
 			if (mapped[c].count(*s) != 0) { continue; }
 			size_t i = 0;
@@ -863,8 +854,8 @@ Offsets JitProcessor::layout() {
 #endif
 	o.dsp = offsetof(JitProcessor, dsp); o.mb = offsetof(JitProcessor, memoryBase);
 	o.fuel = offsetof(JitProcessor, clockCyclesLeft); o.ipsp = offsetof(JitProcessor, ipsp);
-	o.resume = offsetof(JitProcessor, resume); o.saveddsp = offsetof(JitProcessor, savedDsp);
-	o.natives = offsetof(JitProcessor, natives); o.nativefn = offsetof(JitProcessor, nativeFn);
+	o.resume = offsetof(JitProcessor, resume);
+	o.natives = offsetof(JitProcessor, natives);
 	o.funcentries = offsetof(JitProcessor, funcEntries);
 	o.memsize = offsetof(JitProcessor, memorySize); o.rwmemsize = offsetof(JitProcessor, rwMemorySize);
 	o.dsend = offsetof(JitProcessor, dataStackEnd); o.ipsend = offsetof(JitProcessor, ipStackEnd);
@@ -927,7 +918,7 @@ Status JitProcessor::run() {
 */
 void JitProcessor::bindModule(const JitModule& module) {
 	assert(module.isCompiled() && "JitProcessor requires a compiled JitModule");
-	savedDsp = 0; nativeFn = 0; nativeAfter = 0;
+	nativeAfter = 0;
 	funcEntries = module.entryTable();
 	jitDispatch = module.dispatchEntry();
 }

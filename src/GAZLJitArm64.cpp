@@ -748,7 +748,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	std::map<UInt, UInt> loopExtent;
 	jitResidencyLeaders(code, funcIndex, retIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
 	std::map<UInt, std::set<Int> > liveIn;
-	buildLiveIn(code, funcIndex, retIndex, memory, liveIn);																													// v2.2 varying maps: leader maps sized by liveness
+	if (!loopExtent.empty()) {																							// only the resident-header path reads it
+		buildLiveIn(code, funcIndex, retIndex, memory, liveIn);															// v2.2 varying maps: leader maps sized by liveness
+	}
 	std::map<UInt, ResidencyMap> entryMaps;
 	std::vector<ColdTrap> coldTraps;																					// checked-op trap arms, emitted after the mainline
 	std::vector<ColdEdge> coldEdges;																					// loop-exit edge stubs (v2.2-full), same section
@@ -759,7 +761,8 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	for (UInt j = funcIndex; j <= retIndex; ++j) {
 		cache.setInstructionIndex(j);
 		if (resident && j > residentEnd) { resident = false; }
-		if (mainline.count(j)) {
+		const std::map<UInt, Label>::const_iterator mainlineIt = mainline.find(j);
+		if (mainlineIt != mainline.end()) {
 			std::map<UInt, UInt>::const_iterator loopIt = loopExtent.find(j);
 			bool gated = false;
 			// A loop header can also be an interior leader of an ENCLOSING resident loop, which already pre-populated its
@@ -805,9 +808,10 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				if (m != entryMaps.end()) { cache.reconcileTo(m->second); }											// interior leader (incl. a header inherited from an enclosing loop): re-establish its entry state
 				else { cache.barrier(); }																				// any other leader: starts empty as in v2.0
 			}
-			e.bind(mainline[j]);
+			e.bind(mainlineIt->second);
 		}
-		if (loopWeight.count(j)) { e.subsImm(W3, W3, loopWeight[j]); e.bcond(MI, suspendL[j]); }
+		const std::map<UInt, UInt>::const_iterator weightIt = loopWeight.find(j);
+		if (weightIt != loopWeight.end()) { e.subsImm(W3, W3, weightIt->second); e.bcond(MI, suspendL[j]); }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
 		if (!cacheLowered(op)) { cache.barrier(); }																		// uncached opcode: lower it as v1 over an empty cache

@@ -105,7 +105,7 @@ bool jitAvailable();
 
 // Byte offsets of the machine state a segment/dispatcher touches, within the (subclass) engine.
 struct Offsets {
-	uint32_t dsp, mb, fuel, ipsp, resume, saveddsp, natives, nativefn, funcentries, memsize, rwmemsize, dsend, ipsend,
+	uint32_t dsp, mb, fuel, ipsp, resume, natives, funcentries, memsize, rwmemsize, dsend, ipsend,
 		nativeafter;
 };
 
@@ -219,8 +219,6 @@ class JitProcessor : public Processor {
 		*/
 		void bindModule(const JitModule& module);
 
-		Value* savedDsp;					// (legacy scratch; the x64 sequence no longer uses it - post-call state derives from ctx.dsp)
-		void* nativeFn;						// resolved native fn pointer, blr'd by the native dispatcher
 		void* nativeAfter;					// the redirectable OK continuation of the ACTIVE native call: preset to the call site's `after` label, retargeted by pushCall, zeroed by `after` (doubles as the "inside a native call" guard); isolated across nested run() by JitProcessor::run
 		void* const* funcEntries;			// ordinal -> native entry (bound from the JitModule)
 		void* jitDispatch;					// the native dispatcher trampoline (bound from the JitModule)
