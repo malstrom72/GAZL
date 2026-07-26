@@ -4,7 +4,7 @@ Status: SPEC. Explicit `inline` keyword, no heuristics. Targets FUTURE firmware 
 the end for what this deliberately does not reach.
 
 Background measurements and the Impala-vs-assembler placement argument live in `docs/InliningInvestigation.md`
-(currently only on the `jit-compiler` branch).
+(brought onto this branch, with a status header recording what this work corrected).
 
 
 ## 1. Why the compiler and not the assembler
