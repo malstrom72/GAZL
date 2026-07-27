@@ -1067,7 +1067,6 @@
         var op   = expr.operator;
         var op1  = expr.operands[1];
 
-        $$parser.rejectInlineAddress(op1);
         var op2  = expr.operands[2];
         var op1Prefix = (op1 ? op1[0] : '');
         var op2Prefix = (op2 ? op2[0] : '');
@@ -1263,9 +1262,10 @@
     );
 
     /* An `inline function` has no out-of-line copy, so its address does not exist. A direct call never
-       reaches these sites (FuncCall expands instead), so anything that does is an address-take. */
+       emits `&name` at all (FuncCall expands the body instead), so ANY such operand reaching the output
+       is an address-take. Checked once where operands are rendered, so every consumer is covered. */
     $$parser.rejectInlineAddress = function (operand) {
-        if (operand === undefined || ('' + operand).charAt(0) !== '&') return;
+        if (operand == null || ('' + operand).charAt(0) !== '&') return;
         var name = ('' + operand).substr(1);
         var fn = $$parser.symbols.functions[name];
         if (fn !== undefined && fn.inline !== undefined) {
@@ -2191,8 +2191,6 @@
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
 
-        $$parser.rejectInlineAddress(rightx.operands[1]);   /* `c = f` where f is inline */
-
         /* whole-struct assignment: one COPY *sizeof, statement value is the dest place */
         if (leftx.type === 'S' || rightx.type === 'S') {
             if (leftx.type !== 'S' || rightx.type !== 'S') {
@@ -2637,6 +2635,8 @@
                 /* empty / removed meta - skip */
                 continue;
             }
+
+            for (var ia = 0; ia < 3; ++ia) $$parser.rejectInlineAddress(rec.operands[ia]);
 
             /* -------------------------------------------------- */
             /* handle a stand-alone label (“<--”)                 */
@@ -3305,17 +3305,8 @@ inp:ArgsDecl ')'_
                                                                              /* A scalar local becomes a borrowed transient at each expansion site. An array or
                                                                                 struct needs FRAME space, and frame declarations are emitted at the function
                                                                                 head while an expansion site is mid-body. See docs/Inlining.md section 8. */
-                                                                             $$parser.inlineLocals = [];
                                                                              iterate($loc, function (v) {
-                                                                                 var words = 1, per = 1;
-                                                                                 if (v.type === 'S') {
-                                                                                     words = $$parser.structWords(v.struct);
-                                                                                 } else if (v.type === 'A') {
-                                                                                     if ($$parser.isStructAtom(v.elem)) {
-                                                                                         per = $$parser.structWords(v.elem);
-                                                                                     }
-                                                                                     words = parseInt('' + v.size, 10) * per;
-                                                                                 }
+                                                                                 var words = $$parser.fieldWords(v);
                                                                                  /* the run occupies a COUNTED set of transients, so the total must be a number
                                                                                     here. Impala knows every non-extern struct's size; a folded or symbolic
                                                                                     array extent does not resolve until assembly. */
