@@ -1347,8 +1347,10 @@
                        literal dropped into the wrong position is rejected outright ("Did not expect
                        constant int", and SWCH refusing an immediate switch value). Materialising a
                        literal costs one MOV, measured at ~6% of the inlining win, which is a far
-                       better trade than tracking an operand class per instruction. */
-                    if (c === '$' && !info.opaque) {
+                       better trade than tracking an operand class per instruction. 
+                       A place operand (`$v:<A>`) is excluded too: it carries a scratch whose value the
+                       expansion can redefine before the deferred read. */
+                    if (c === '$' && o.indexOf(':') < 0 && !info.opaque) {
                         src = o;
                         m.operator = undefined;                /* flushMetaCode skips a cleared record */
                     }
