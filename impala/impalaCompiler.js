@@ -739,10 +739,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (metacode[i].operator === '<-?') joinAt[metacode[i].operands[0]] = i;
         }
         for (var i = 0; i < metacode.length; ++i) {
-            var rec = metacode[i], rewritable = (rec.operator === '?->' || rec.operator === '-->');
+            var rec = metacode[i];
+            if (rec.operator === '<-?') continue;       // its own operand 0 is the definition, not a reference
+            var rewritable = (rec.operator === '?->' || rec.operator === '-->');
             for (var k = 0; k < 3; ++k) {
                 var at = joinAt[rec.operands[k]];
-                if (at !== undefined && at !== i && (!rewritable || i > at)) pinned[rec.operands[k]] = true;
+                if (at !== undefined && (!rewritable || i > at)) pinned[rec.operands[k]] = true;
             }
         }
 
@@ -833,17 +835,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         /* POST-CONDITION. This pass OWNS every `@.` label - it mints them, aliases them and
            deletes them - so a reference left pointing at a name it also deleted is a bug HERE,
            and saying so beats the assembler's "Symbol not found" three layers downstream. A
-           user label (`@name`) is not ours to promise, and a `-->#` operand names a jump TABLE
-           whose entries spell `base#case`, so the bare base is never defined. */
+           user label (`@name`) is not ours to promise. */
         var defined = {};
         for (i = 0; i < metacode.length; ++i) {
-            if (metacode[i].operator === '<--') {
-                defined[metacode[i].operands[0]] = true;
-            }
+            if (metacode[i].operator === '<--') defined[metacode[i].operands[0]] = true;
         }
         for (i = 0; i < metacode.length; ++i) {
-            var rec = metacode[i], op = rec.operator;
-            if (op == null || op === ';' || op === '<--' || op === '-->#') continue;
+            var op = (rec = metacode[i]).operator;
+            if (op == null || op === ';' || op === '<--') continue;
             for (var k = 0; k < 3; ++k) {
                 var ref = rec.operands[k];
                 assert(typeof ref !== 'string' || ref.substr(0, 2) !== '@.' || defined[ref],
