@@ -3631,7 +3631,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                             var _pr = _proto.ret;
                                                                             if (_pr !== undefined) $$parser.rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, $s, $i);
                                                                             placeholderSignature.params      = _pp;
-                                                                            placeholderSignature.returns     = (_pr !== undefined ? _pr.type : '?');
+                                                                            placeholderSignature.returns     = (_pr !== undefined ? _pr.type : 'V');
                                                                             placeholderSignature.returnElem  = (_pr !== undefined ? _pr.elem : undefined);
                                                                             placeholderSignature.returnCount = (_pr !== undefined ? 1 : 0);
                                                                             placeholderSignature.returnWords = (_pr !== undefined ? 1 : 0);

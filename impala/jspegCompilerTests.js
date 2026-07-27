@@ -1691,6 +1691,21 @@ const typedPointerCases = [
 		source: ["function v() { }", "function main() locals int i { i = *(pointer)v(); }"].join("\n"),
 		expectError: "Invalid type",
 	},
+	{
+		label: "an extern prototype with no returns clause is void, not unknown",
+		source: ["extern function ext()", "function main() locals int i { i = ext(); }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
+	{
+		label: "a parametrized extern prototype with no returns clause is void",
+		source: ["extern native ext(int a)", "function main() locals int i { i = ext(1); }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
+	{
+		label: "a name-only extern stays an unknown-return wildcard",
+		source: ["extern function ext;", "function main() locals int i { i = ext(); }"].join("\n"),
+		expectError: null,
+	},
 ];
 
 /* Step 5: `export` rides the signature metadata as a role prefix, so --dead-strip can find roots. */
