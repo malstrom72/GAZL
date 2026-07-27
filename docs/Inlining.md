@@ -123,6 +123,22 @@ unbounded pointer reachability (a callee can load a pointer out of a global) doe
 `MATERIALISE` emits exactly the instruction the call already emitted (`MOVi %t $x` or `PEEK %t &g`)
 into a borrowed transient and uses that. It therefore never costs more than not inlining at all.
 
+**Finding the move to delete: the backward scan must stop at a CALL.** Substitution is implemented as a
+deletion - walk back from the end of the metacode to the call's `mark` for the instruction that filled
+window slot `%N`, and if it is a plain move, drop it and use its source. The trap is that a CALL writes
+its own window but names it in operand 1, not operand 0, so a scan testing only `operands[0] === slot`
+walks straight past it. Slot numbers are recycled by borrow/return, so what it finds next can be the
+marshalling of an unrelated earlier call:
+
+        CALL &fn2 %1 *2         ; its argument MOV into %2 gets deleted, far below
+        ...
+        CALL &fn1 %2 *4         ; %2 is THIS call's RESULT - the scan should stop here
+        <expansion>             ; instead: fTOi %<A> #1 #1.0   <- fn2's int argument, in a float operand
+
+That miscompiles silently unless the operand class happens to catch it, which here it did: the assembler
+refused with *"Did not expect constant int: 1"*. Found by the fuzzer, and present since the first version
+of the feature. The scan therefore breaks on any `()` record.
+
 **A literal may be substituted where the reading position accepts an immediate.** GAZL operand classes
 distinguish slots from immediates, and a literal dropped into the wrong position is rejected outright
 (`SWCH #0 *3`, and "Did not expect constant int: -33" from a fuzzed program). The first implementation
@@ -132,7 +148,20 @@ would be endless.
 It is not endless, because the question is much narrower than a full operand-class model: for each meta
 operator, WHICH SOURCE POSITIONS take a `#const`? That is the `INLINE_IMM_OK` table - a positive list in
 the same spirit as `INLINE_PURE`, so an operator that is not listed simply materialises, which is always
-correct. Position 0 never appears: no GAZL instruction writes to a constant.
+correct.
+
+Position 0 appears only for the COMPARISONS, and there it means something different: a comparison branches
+rather than producing a value, so operands 0 and 1 are both SOURCES (the label is operand 2) and both take
+a `#const` - the instruction set lists all four combinations for `LSSi` / `GEQi` / `EQUi` and their float
+and pointer forms. Every other operator writes position 0, and no GAZL instruction writes to a constant.
+`inlineFoldWidth` reads exactly that distinction off the same table: a source list starting at 0 marks an
+operator that neither yields a foldable value nor counts as straight line.
+
+Comparisons are worth more than they look, because bounds and guards are the classic inline arguments. In
+`clamp(v, lo, hi)` both bounds are only ever compared and then moved, so both substitute; the same goes
+for the loop bound in a `sumTo(n)` and the condition of an `assert`. When BOTH operands end up constant,
+GAZL resolves the branch at assemble time into a `GOTO` or a `NOOP` (the `YIELDS_GOTO` flag in
+`GAZL.cpp`), so it costs nothing at run time either - a three-call `clamp` went from 38 to 28 code words.
 
 The decision is per PARAMETER and is made once at capture (`paramTakesImmediate`): a parameter may carry
 a literal only if EVERY place the body reads it accepts one. One disqualifying use - a `SWCH` value, an

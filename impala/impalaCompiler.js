@@ -1281,17 +1281,29 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     );
 
     /* Which SOURCE operand positions accept an immediate (`#const`). A positive list like INLINE_PURE:
-       an operator missing here forces the argument to be materialised, which is always correct. The
-       destination (position 0) never appears - GAZL has no instruction that writes to a constant.
-       Verified one by one against the operand forms in docs/InstructionSet.md. */
+       an operator missing here forces the argument to be materialised, which is always correct.
+       Verified one by one against the operand forms in docs/InstructionSet.md. Position 0 appears only
+       for the COMPARISONS, whose operand 0 is a source (the branch target is operand 2) - every other
+       operator writes position 0, and GAZL has no instruction that writes to a constant. */
     INLINE_IMM_OK = {};
     map(INLINE_IMM_OK,
         '=',    '1',  ':=',     '1',                       /* MOVi   int(d) #int          */
         '=abs', '1',  '=floor', '1', '=itof', '1', '=ftoi', '1',   /* ABSi/FLOf/ITOF/FTOI  */
         '+',   '12',  '-',     '12', '*',    '12', '/',    '12', '%', '12',
         '|',   '12',  '&',     '12', '^',    '12',
-        '<<',  '12',  '>>',    '12', '>>>',  '12'
+        '<<',  '12',  '>>',    '12', '>>>',  '12',
+        '<',   '01',  '<=',    '01', '>',    '01', '>=',   '01', '==', '01', '!=', '01',
+        '!<',  '01',  '!<=',   '01', '!>',   '01', '!>=',  '01', '!==','01', '!!=','01'
     );
+
+    /* An operator that CALCULATES a value into position 0 from `n` immediates, or undefined. Derived
+       from the table above: a source list starting at position 0 means position 0 is read, not written,
+       which is the comparisons - they branch instead of producing a value, so they neither fold to a
+       `<X>` scratch nor count as straight line. */
+    inlineFoldWidth = function (op) {
+        var pos = INLINE_IMM_OK[op];
+        return (pos === undefined || pos.charAt(0) === '0' ? undefined : pos.length);
+    };
 
     /* May this parameter carry a literal? Only if EVERY place the body uses it is a position that
        accepts one - one bad use (a SWCH value, an array base, a POKE address) spoils the parameter,
@@ -1374,7 +1386,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var straightLine = true;
         for (var si = 0; si < body.length && straightLine; ++si) {
             straightLine = (body[si].operator === ';'
-                    || INLINE_IMM_OK[body[si].operator] !== undefined);
+                    || inlineFoldWidth(body[si].operator) !== undefined);
         }
         entry.inline = { body: body, params: params, litOK: litOK, straightLine: straightLine,
                 locals: inlineLocals, maxTransient: maxT,
@@ -1394,7 +1406,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             var src = slot;
             for (j = metacode.length - 1; j >= mark; --j) {   /* only THIS call's own marshalling */
                 var m = metacode[j];
-                if (m.operator === undefined || m.operands[0] !== slot) continue;
+                if (m.operator === undefined) continue;
+                /* A nested call WRITES its own window, and its base is operand 1, so the test below
+                   would walk straight past it and adopt a move belonging to that call instead. */
+                if (m.operator === '()') break;
+                if (m.operands[0] !== slot) continue;
                 if ((m.operator === '=' || m.operator === ':=') && m.operands[2] === undefined) {
                     var o = '' + m.operands[1];
                     var c = o.charAt(0);
@@ -1448,12 +1464,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             var c = (op === undefined ? '' : ('' + op).charAt(0));
             return (c === '#' || c === '<');
         }
-        function foldWidth(op) {                 /* 1 or 2 source operands, or undefined if not foldable */
-            var pos = INLINE_IMM_OK[op];
-            return (pos === undefined ? undefined : pos.length);
-        }
         function tempTakesImmediate(name) {      /* every READ must accept a `<X>` in its place. Position
-                                                    0 is skipped: that is the write we are replacing. */
+                                                    0 is skipped: only straight-line bodies fold, so every
+                                                    operator here writes it (see inlineFoldWidth). */
             for (var t = 0; t < info.body.length; ++t) {
                 if (info.body[t].operator === ';') continue;
                 var okPos = INLINE_IMM_OK[info.body[t].operator];
@@ -1525,8 +1538,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                assemble time and still emit a runtime MOVE to park the value (GAZL.cpp, "Const calc ->
                MOVE"), which is a whole instruction spent on a number we already know. */
             if (info.straightLine && !b.inlineFold && isConstOperand(s1)
-                    && foldWidth(b.operator) !== undefined
-                    && (foldWidth(b.operator) === 1 ? s2 === undefined : isConstOperand(s2))
+                    && inlineFoldWidth(b.operator) !== undefined
+                    && (inlineFoldWidth(b.operator) === 1 ? s2 === undefined : isConstOperand(s2))
                     && ('' + d0).charAt(0) === '%' && ('' + d0) !== '%' + base
                     && tempTakesImmediate('' + b.operands[0])) {
                 if (b.operator === '=' || b.operator === ':=') {

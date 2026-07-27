@@ -13,7 +13,14 @@
 	Also here: `assert` (a branch on TRUE, the inverse of an `if`), a `loop` with a `goto` to a
 	user-written label, and a `do`/`while`.
 
-	Expected (GAZLCmd inlineReviewControl.gazl main): 0 6 3 10 20 99 5 6 3 4 8
+	COMPARISONS TAKE IMMEDIATES in both source positions, so a literal argument that is only ever
+	compared substitutes: check that `clamp`'s bounds read `#0` / `#6` off the branch rather than
+	being parked in a window slot first, and likewise the loop bound in `sumTo` / `dbl` and the
+	`assert` in `chk`. `bare` goes one better - with no local to route through, BOTH operands of
+	its compares are constant, which GAZL resolves to a GOTO or a NOOP at assemble time (the
+	`YIELDS_GOTO` flag), so the branch costs nothing at run time either.
+
+	Expected (GAZLCmd inlineReviewControl.gazl main): 0 6 3 10 20 99 5 6 3 4 8 0 6 3
 */
 const int DEBUG = 1
 
@@ -27,6 +34,13 @@ locals int t
 	if (t < lo) { t = lo; }
 	if (t > hi) { t = hi; }
 	r = t;
+}
+
+inline function bare(int v, int lo, int hi) returns int r	/* no local: the compares go const/const */
+{
+	if (v < lo) { r = lo; }
+	else if (v > hi) { r = hi; }
+	else r = v;
 }
 
 inline function pick(int i) returns int r
@@ -57,4 +71,8 @@ function main()
 	printInt(sumTo(3)); printLF();			/* 3  - second expansion */
 	printInt(dbl(2)); printLF();			/* 4  - do/while */
 	printInt(dbl(4)); printLF();			/* 8 */
+
+	printInt(bare(-4, 0, 6)); printLF();	/* 0  - both compares fold away at assemble time */
+	printInt(bare(8, 0, 6)); printLF();		/* 6 */
+	printInt(bare(3, 0, 6)); printLF();		/* 3 */
 }

@@ -1,44 +1,38 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
-; signature extern native printInt() -> unknown @ 21:1
-; signature extern native printLF() -> unknown @ 23:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 27:1
+; signature extern native printInt() -> unknown @ 28:1
+; signature extern native printLF() -> unknown @ 30:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 45:15
+main:	FUNC	; signature func main() -> void @ 59:15
 		PARA *1
 ;-----------------------------------------------------------------------------
-		MOVi %3 #0 	; printInt(clamp(-4, 0, 6))
-		MOVi %4 #6 
 		MOVi %5 #-4 	; t = v
-		GEQi %5 %3 @.f0_i0	; if (t < lo) 
-		MOVi %5 %3 	; t = lo
-	.f0_i0:	LEQi %5 %4 @.f1_i0	; if (t > hi) 
-		MOVi %5 %4 	; t = hi
+		GEQi %5 #0 @.f0_i0	; if (t < lo) 
+		MOVi %5 #0 	; t = lo
+	.f0_i0:	LEQi %5 #6 @.f1_i0	; if (t > hi) 
+		MOVi %5 #6 	; t = hi
 	.f1_i0:	MOVi %1 %5 	; r = t
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:27
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:38
-		MOVi %3 #0 	; printInt(clamp(8, 0, 6))
-		MOVi %4 #6 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 61:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 61:38
 		MOVi %5 #8 	; t = v
-		GEQi %5 %3 @.f0_i1	; if (t < lo) 
-		MOVi %5 %3 	; t = lo
-	.f0_i1:	LEQi %5 %4 @.f1_i1	; if (t > hi) 
-		MOVi %5 %4 	; t = hi
+		GEQi %5 #0 @.f0_i1	; if (t < lo) 
+		MOVi %5 #0 	; t = lo
+	.f0_i1:	LEQi %5 #6 @.f1_i1	; if (t > hi) 
+		MOVi %5 #6 	; t = hi
 	.f1_i1:	MOVi %1 %5 	; r = t
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 48:26
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 48:37
-		MOVi %3 #0 	; printInt(clamp(3, 0, 6))
-		MOVi %4 #6 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 62:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 62:37
 		MOVi %5 #3 	; t = v
-		GEQi %5 %3 @.f0_i2	; if (t < lo) 
-		MOVi %5 %3 	; t = lo
-	.f0_i2:	LEQi %5 %4 @.f1_i2	; if (t > hi) 
-		MOVi %5 %4 	; t = hi
+		GEQi %5 #0 @.f0_i2	; if (t < lo) 
+		MOVi %5 #0 	; t = lo
+	.f0_i2:	LEQi %5 #6 @.f1_i2	; if (t > hi) 
+		MOVi %5 #6 	; t = hi
 	.f1_i2:	MOVi %1 %5 	; r = t
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:26
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 49:37
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 63:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 63:37
 		MOVi %2 #0 	; printInt(pick(0))
 		SWCH %2 *3 @.s0_i3	; switch (i == 0 to 3) 
 	.s0_i3#0:	MOVi %1 #10 	; r = 10
@@ -46,8 +40,8 @@ main:	FUNC	; signature func main() -> void @ 45:15
 	.s0_i3#1:	MOVi %1 #20 	; r = 20
 		GOTO @.e1_i3  
 	.s0_i3:	MOVi %1 #99 	; r = 99
-	.e1_i3:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 51:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 51:30
+	.e1_i3:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 65:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 65:30
 		MOVi %2 #1 	; printInt(pick(1))
 		SWCH %2 *3 @.s0_i4	; switch (i == 0 to 3) 
 	.s0_i4#0:	MOVi %1 #10 	; r = 10
@@ -55,8 +49,8 @@ main:	FUNC	; signature func main() -> void @ 45:15
 	.s0_i4#1:	MOVi %1 #20 	; r = 20
 		GOTO @.e1_i4  
 	.s0_i4:	MOVi %1 #99 	; r = 99
-	.e1_i4:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 52:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 52:30
+	.e1_i4:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 66:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 66:30
 		MOVi %2 #9 	; printInt(pick(9))
 		SWCH %2 *3 @.s0_i5	; switch (i == 0 to 3) 
 	.s0_i5#0:	MOVi %1 #10 	; r = 10
@@ -64,54 +58,79 @@ main:	FUNC	; signature func main() -> void @ 45:15
 	.s0_i5#1:	MOVi %1 #20 	; r = 20
 		GOTO @.e1_i5  
 	.s0_i5:	MOVi %1 #99 	; r = 99
-	.e1_i5:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 53:30
-		MOVi %2 #5 	; printInt(chk(5))
+	.e1_i5:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 67:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 67:30
 		! EQUi #DEBUG #0 @.a0_i6	; assert(a > 0)
-		GRTi %2 #0 @.a0_i6
+		GRTi #5 #0 @.a0_i6
 		MOVp %4 &.a_a0_4d2 
 		CALL ^assertFail %3 *1
-	.a0_i6:	MOVi %1 %2 	; r = a
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 55:18
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 55:29
-		MOVi %2 #4 	; printInt(sumTo(4))
+	.a0_i6:	MOVi %1 #5 	; r = a
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 69:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 69:29
 		MOVi %1 #0 	; r = 0
 		MOVi %3 #0 	; i = 0
 	.l0_i7:	ADDi %1 %1 %3	; r = r + i
 		ADDi %3 %3 #1	; i = i + 1
-		LSSi %3 %2 @.l0_i7	; if (i >= n) 
+		LSSi %3 #4 @.l0_i7	; if (i >= n) 
 		GOTO @done_i7  	; goto done
 		GOTO @.l0_i7  	; } done: r = r + 0
 	done_i7:	ADDi %1 %1 #0	; done: r = r + 0
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 56:20
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 56:31
-		MOVi %2 #3 	; printInt(sumTo(3))
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 70:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 70:31
 		MOVi %1 #0 	; r = 0
 		MOVi %3 #0 	; i = 0
 	.l0_i8:	ADDi %1 %1 %3	; r = r + i
 		ADDi %3 %3 #1	; i = i + 1
-		LSSi %3 %2 @.l0_i8	; if (i >= n) 
+		LSSi %3 #3 @.l0_i8	; if (i >= n) 
 		GOTO @done_i8  	; goto done
 		GOTO @.l0_i8  	; } done: r = r + 0
 	done_i8:	ADDi %1 %1 #0	; done: r = r + 0
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 57:20
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 57:31
-		MOVi %2 #2 	; printInt(dbl(2))
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 71:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 71:31
 		MOVi %1 #0 	; r = 0
 		MOVi %3 #0 	; i = 0
 	.l0_i9:	ADDi %1 %1 #2	; r = r + 2
 		ADDi %3 %3 #1	; i = i + 1
-		LSSi %3 %2 @.l0_i9	; } while (i < n)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 58:18
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 58:29
-		MOVi %2 #4 	; printInt(dbl(4))
+		LSSi %3 #2 @.l0_i9	; } while (i < n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 72:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 72:29
 		MOVi %1 #0 	; r = 0
 		MOVi %3 #0 	; i = 0
 	.l0_i10:	ADDi %1 %1 #2	; r = r + 2
 		ADDi %3 %3 #1	; i = i + 1
-		LSSi %3 %2 @.l0_i10	; } while (i < n)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 59:18
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 59:29
+		LSSi %3 #4 @.l0_i10	; } while (i < n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 73:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 73:29
+		GEQi #-4 #0 @.f0_i11	; if (v < lo) 
+		MOVi %1 #0 	; r = lo
+		GOTO @.e1_i11  	; }
+	.f0_i11:	LEQi #-4 #6 @.f2_i11	; if (v > hi) 
+		MOVi %1 #6 	; r = hi
+		GOTO @.e3_i11  	; }
+	.f2_i11:	MOVi %1 #-4 	; r = v
+	.e3_i11:	NOOP
+	.e1_i11:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 75:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 75:37
+		GEQi #8 #0 @.f0_i12	; if (v < lo) 
+		MOVi %1 #0 	; r = lo
+		GOTO @.e1_i12  	; }
+	.f0_i12:	LEQi #8 #6 @.f2_i12	; if (v > hi) 
+		MOVi %1 #6 	; r = hi
+		GOTO @.e3_i12  	; }
+	.f2_i12:	MOVi %1 #8 	; r = v
+	.e3_i12:	NOOP
+	.e1_i12:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 76:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 76:36
+		GEQi #3 #0 @.f0_i13	; if (v < lo) 
+		MOVi %1 #0 	; r = lo
+		GOTO @.e1_i13  	; }
+	.f0_i13:	LEQi #3 #6 @.f2_i13	; if (v > hi) 
+		MOVi %1 #6 	; r = hi
+		GOTO @.e3_i13  	; }
+	.f2_i13:	MOVi %1 #3 	; r = v
+	.e3_i13:	NOOP
+	.e1_i13:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 77:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 77:36
 		RETU   	; }
 
 	! EQUi #DEBUG #0 @.noAssertStrings
