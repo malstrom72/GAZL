@@ -20,89 +20,89 @@ main:	FUNC	; signature func main() -> void @ 57:15
 		MOVi %2 #10 	; printInt(sum3(10, 20, 30))
 		MOVi %3 #20 
 		MOVi %4 #30 
-		MOVi %5 %2 	; expects sum3(int, int, int) -> int @ 60:27
-		MOVi %6 %3 
-		MOVi %7 %4 
-		MOVi %1 #0 
-		MOVi %8 #0 
+		MOVi %5 %2 	; buf[0] = a
+		MOVi %6 %3 	; buf[1] = b
+		MOVi %7 %4 	; buf[2] = c
+		MOVi %1 #0 	; r = 0
+		MOVi %8 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i0
-	.l1_i0:	GETL %9 %5 %8
+	.l1_i0:	GETL %9 %5 %8	; r = r + buf[i]
 		ADDi %1 %1 %9
-		FORi %8 #3 @.l1_i0
+		FORi %8 #3 @.l1_i0	; } /* variable index -> GETL off the run base */
 	.e0_i0:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 60:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 60:39
 		MOVi %3 #1 	; printInt(sum3(sum3(1, 2, 3), 4, 5))
 		MOVi %4 #2 
 		MOVi %5 #3 
-		MOVi %6 %3 	; expects sum3(int, int, int) -> int @ 61:29
-		MOVi %7 %4 
-		MOVi %8 %5 
-		MOVi %2 #0 
-		MOVi %9 #0 
+		MOVi %6 %3 	; buf[0] = a
+		MOVi %7 %4 	; buf[1] = b
+		MOVi %8 %5 	; buf[2] = c
+		MOVi %2 #0 	; r = 0
+		MOVi %9 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i1
-	.l1_i1:	GETL %10 %6 %9
+	.l1_i1:	GETL %10 %6 %9	; r = r + buf[i]
 		ADDi %2 %2 %10
-		FORi %9 #3 @.l1_i1
-	.e0_i1:	MOVi %3 #4 
+		FORi %9 #3 @.l1_i1	; } /* variable index -> GETL off the run base */
+	.e0_i1:	MOVi %3 #4 	; }
 		MOVi %4 #5 
-		MOVi %5 %2 	; expects sum3(int, int, int) -> int @ 61:36
-		MOVi %6 %3 
-		MOVi %7 %4 
-		MOVi %1 #0 
-		MOVi %8 #0 
+		MOVi %5 %2 	; buf[0] = a
+		MOVi %6 %3 	; buf[1] = b
+		MOVi %7 %4 	; buf[2] = c
+		MOVi %1 #0 	; r = 0
+		MOVi %8 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i2
-	.l1_i2:	GETL %9 %5 %8
+	.l1_i2:	GETL %9 %5 %8	; r = r + buf[i]
 		ADDi %1 %1 %9
-		FORi %8 #3 @.l1_i2
+		FORi %8 #3 @.l1_i2	; } /* variable index -> GETL off the run base */
 	.e0_i2:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 61:37
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 61:48
 		MOVi $q #1 	; q = 1
-		MOVi %3 #5 	; expects pickOf(int) -> int @ 64:20
-		MOVi %4 #7 
-		MOVi %5 #9 
-		MOVi %6 #11 
-		GETL %1 %3 $q
+		MOVi %3 #5 	; t[0] = 5
+		MOVi %4 #7 	; t[1] = 7
+		MOVi %5 #9 	; t[2] = 9
+		MOVi %6 #11 	; t[3] = 11
+		GETL %1 %3 $q	; v = t[k]
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 64:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 64:32
 		MOVi %2 #2 	; printInt(pickOf(2))
-		MOVi %3 #5 	; expects pickOf(int) -> int @ 65:20
-		MOVi %4 #7 
-		MOVi %5 #9 
-		MOVi %6 #11 
-		GETL %1 %3 %2
+		MOVi %3 #5 	; t[0] = 5
+		MOVi %4 #7 	; t[1] = 7
+		MOVi %5 #9 	; t[2] = 9
+		MOVi %6 #11 	; t[3] = 11
+		GETL %1 %3 %2	; v = t[k]
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 65:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 65:32
 		MOVi %2 #3 	; printInt(pickOf(3))
-		MOVi %3 #5 	; expects pickOf(int) -> int @ 66:20
-		MOVi %4 #7 
-		MOVi %5 #9 
-		MOVi %6 #11 
-		GETL %1 %3 %2
+		MOVi %3 #5 	; t[0] = 5
+		MOVi %4 #7 	; t[1] = 7
+		MOVi %5 #9 	; t[2] = 9
+		MOVi %6 #11 	; t[3] = 11
+		GETL %1 %3 %2	; v = t[k]
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 66:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 66:32
 		MOVi %2 #1 	; printInt(dot(1, 2, 3, 4))
 		MOVi %3 #2 
 		MOVi %4 #3 
 		MOVi %5 #4 
-		! ADDi <A> #6 #.o.P.x	; expects dot(int, int, int, int) -> int @ 68:26
+		! ADDi <A> #6 #.o.P.x	; a.x = ax
 		MOVi %<A> %2 
-		! ADDi <B> #6 #.o.P.y
+		! ADDi <B> #6 #.o.P.y	; a.y = ay
 		MOVi %<B> %3 
-		! ADDi <C> #8 #.o.P.x
+		! ADDi <C> #8 #.o.P.x	; b.x = bx
 		MOVi %<C> %4 
-		! ADDi <D> #8 #.o.P.y
+		! ADDi <D> #8 #.o.P.y	; b.y = by
 		MOVi %<D> %5 
-		MULi %10 %<A> %<C>
+		MULi %10 %<A> %<C>	; r = a.x * b.x + a.y * b.y
 		MULi %11 %<B> %<D>
 		ADDi %1 %10 %11
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 68:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 68:38
 		MOVi %2 #3 	; printInt(counted(3))
-		MOVi %1 #0 	; expects counted(int) -> int @ 69:21
-		MOVi %3 #0 
+		MOVi %1 #0 	; c = 0
+		MOVi %3 #0 	; for (i = 0 to n) 
 		GEQi #0 %2 @.e0_i7
-	.l1_i7:	ADDi %1 %1 #1
-		FORi %3 %2 @.l1_i7
+	.l1_i7:	ADDi %1 %1 #1	; c = c + 1
+		FORi %3 %2 @.l1_i7	; }
 	.e0_i7:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 69:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 69:33
 		RETU   	; }

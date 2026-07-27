@@ -1303,6 +1303,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 if (('' + body[i].operands[0]).charAt(0) !== '&') return true;
                 continue;
             }
+            if (op === ';') continue;                          /* a source comment writes nothing */
             if (op.substr(0, 3) === '<> ') continue;           /* a constant fold writes a `<X>` scratch and
                                                                   nothing else, whatever the operator */
             if (!INLINE_PURE[op]) return true;        /* unrecognised -> assume the worst */
@@ -1318,8 +1319,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var body = [], maxT = -1;
         for (var i = 0; i < metacode.length; ++i) {
             var m = metacode[i];
-            if (m.operator === undefined || m.operator === null                 /* removed by processBranches */
-                    || m.operator === ';') continue;
+            if (m.operator === undefined || m.operator === null) continue;      /* removed by processBranches */
             if (m.operator === '()' && ('' + m.operands[0]) === '&' + name) {
                 fail('An inline function cannot call itself', sourceCode, sourceOffset, 'E432',
                         'inlining a recursive function would never terminate');
@@ -1441,6 +1441,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
         for (i = 0; i < info.body.length; ++i) {
             var b = info.body[i];
+            if (b.operator === ';') {               /* comment text is prose, not an operand to rewrite */
+                metacode.push({ operator: ';', type: b.type, settled: true,
+                        operands: [ b.operands[0], undefined, undefined ] });
+                continue;
+            }
             /* an inherited `! ADDi <X> #slot #offset` carries a callee SLOT NUMBER in operand 1, not an
                immediate, so that one shifts with the block instead of being mapped */
             metacode.push({ operator: b.operator, type: b.type, settled: true,
