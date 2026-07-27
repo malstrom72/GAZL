@@ -25,6 +25,7 @@ Do not delete these branches. They are the only copy.
 
     branch:   Impala2-multidim-arrays        (tip 4cd52f2)
     removed:  dda4129  "Roll back multidim arrays (slices 1-2) to pre-multidim compiler"
+    target:   Impala 3.0
 
 Contains slices 1-2 of multidimensional array support: shape types, multidim subscript lowering (each index
 walking by pointee size rather than stride-1), untyped multidim element typing, and a long design thread on
@@ -99,8 +100,9 @@ values (function or funcptr type), `E429` destructuring assignment. Each diagnos
 
 ## Impala 3.0 wishlist
 
-These belong together, because they are all changes to the same calling convention. Doing them in one pass
-is much cheaper than three separate ABI migrations.
+The first three belong together, because they are all changes to the same calling convention. Doing them in
+one pass is much cheaper than three separate ABI migrations. Multidimensional arrays are independent of the
+ABI work and can land on their own.
 
 ### Restore by-value structs, multi-return and destructuring
 
@@ -131,3 +133,11 @@ hold end to end instead of stopping at the call boundary.
 
 Note the dependency: this only matters once by-value structs are back. And the current numeric ABI is
 CORRECT, not a stopgap - see that document before "fixing" any by-value size to `*.z.V`.
+
+### Multidimensional arrays
+
+Restore from `Impala2-multidim-arrays`. Independent of the ABI work above - it needs no calling-convention
+change. Two things must be settled FIRST, and neither is part of the feature itself: array-dimension type
+identity (a constant evaluator is load-bearing here), and the expression-extent ordering trap in struct
+array fields. The 2026-07-26 re-evaluation above also stands: the "matrix as a struct field" shortcut does
+not reach `extern struct`, because a sizeless host-owned array field has no stride to index by.
