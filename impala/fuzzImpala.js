@@ -197,6 +197,20 @@ function genProgram() {
 		return ints.length ? '(' + ref(ints[ri(ints.length)]) + ' & ' + mask + ')' : String(ri(n));
 	}
 
+	// Two guaranteed inline helpers with FIXED bodies, declared first so every later function and main
+	// can call them: `fnW` writes through its pointer parameter, `fnA` is transparent and reads both of
+	// its. Together they are exactly what the aliasing shape in genCall needs, and the bodies are fixed
+	// because a random one would usually make `fnA` opaque - and then nothing is ever substituted.
+	// Guaranteed for the same reason a struct local and a local array are: assembled from the random
+	// population the shape needs about seven flips to line up and simply never appeared.
+	// (Bare `p`/`a`/`b`/`r` cannot collide with generated names, which all carry a digit suffix.)
+	const HELPERS = 'inline function fnW(int pointer p) returns int r { p[0] = 7; r = 0; }\n'
+			+ 'inline function fnA(int a, int b) returns int r { r = a + b; }\n';
+	funcs.push({ name: 'fnW', params: [{ name: 'p', t: 'p:i' }], rets: ['i'], retNames: ['r'],
+			inline: true, fixed: true, aliasWriter: true });
+	funcs.push({ name: 'fnA', params: [{ name: 'a', t: 'i' }, { name: 'b', t: 'i' }], rets: ['i'],
+			retNames: ['r'], inline: true, fixed: true });
+
 	// helper functions (2-5)
 	const nFuncs = 2 + ri(4);
 	for (let i = 0; i < nFuncs; ++i) {
@@ -221,8 +235,9 @@ function genProgram() {
 		&& fn.params.every((p, k) => p.t === ft.params[k])
 		&& fn.rets.length === ft.rets.length && fn.rets.every((t, k) => t === ft.rets[k]);
 
-	// expression generator toward a wanted type, depth-limited
-	function genExpr(want, depth, scope) {
+	// expression generator toward a wanted type, depth-limited. `need` (pointer wants only) is how many
+	// elements the result must SPAN; see the isPtr branch.
+	function genExpr(want, depth, scope, need) {
 		// scope: { locals: [{name,t}] } - guaranteed to hold >=1 local of every struct type
 		if (isStruct(want)) {
 			const cands = scope.locals.filter((l) => l.t === want);
@@ -234,24 +249,36 @@ function genProgram() {
 			return pick(cands).name;   // base case: always a real struct local
 		}
 		if (isPtr(want)) {
+			// A pointer local is REASSIGNABLE, so its declared extent must hold for every value it can
+			// ever receive - `need` is a requirement passed down, not a description of what comes back.
+			// (Without it `ptr = &arr[3]` could land in a local whose own derefs assume 4 elements.)
+			// Everywhere else - a call argument, and so a parameter - only element 0 is dereferenced.
+			// No string literal here, though one is typed `int pointer`: it is the one pointer the
+			// generator can produce that is NOT writable, and now that a callee may write through its
+			// pointer parameter, passing one is undefined behaviour - it traps, and a trapped run has
+			// no output for the inline differential to compare, so it silently costs coverage instead
+			// of finding anything. Constant-string codegen is byte-diff gated by 36 fixtures already.
 			const e = ptrElem(want);
-			if (e === 'i' && chance(0.15)) {
-				// a string literal is typed as `int pointer` - exercises the constant-string path
-				let s = '';
-				for (let n = ri(8); n > 0; --n) s += String.fromCharCode(97 + ri(26));
-				return '"' + s + '"';
-			}
-			const ptrs = scope.locals.filter((l) => l.t === want);
+			need = need || 1;
+			// The address of a scalar local: the only pointer that can ALIAS something the program also
+			// reads BY NAME, which is what makes a deferred argument read observable (Inlining.md 5).
+			// Loop counters are excluded outright - a write through one could defeat termination, and a
+			// hang is not distinguishable from the miscompile this is here to catch.
+			const scalars = scope.locals.filter((l) => l.t === e && !l.ro && !l.loopVar);
+			if (need === 1 && scalars.length && chance(0.3)) return '&' + pick(scalars).name;
+			const ptrs = scope.locals.filter((l) => l.t === want && (l.pointeeSize || 1) >= need);
 			if (depth > 0 && ptrs.length && chance(0.35)) {
-			// pointer arithmetic - offset bounded by the pointee array so a deref stays in bounds
+			// pointer arithmetic - offset bounded so `need` elements remain below the pointee's end
 			const pa = pick(ptrs);
-			const pm = idxMask(pa.pointeeSize || 1);
+			const pm = idxMask((pa.pointeeSize || 1) - need + 1);
 			return pm === 0 ? ref(pa)
 				: '(' + ref(pa) + ' + (' + genExpr('i', depth - 1, scope) + ' & ' + pm + '))';
 			}
 			if (ptrs.length && chance(0.5)) return ref(pick(ptrs));
-			const arr = pick(scope.localArrays.filter((a) => a.elem === e));   // guaranteed non-empty
-			return '&' + arr.name + '[' + genIdx(scope, arr.size) + ']';
+			// non-empty: every scalar type is guaranteed a local array, and `need` only ever comes from
+			// a pointer local's own extent, which was taken from one of these arrays in the first place
+			const arr = pick(scope.localArrays.filter((a) => a.elem === e && a.size >= need));
+			return '&' + arr.name + '[' + genIdx(scope, arr.size - need + 1) + ']';
 		}
 		// scalar want ('i' or 'f')
 		const lit = () => (want === 'i' ? String(ri(100) - 50) : (ri(1000) / 10).toFixed(1));
@@ -299,8 +326,23 @@ function genProgram() {
 		return lit();
 	}
 
+	// THE ALIASING SHAPE, built on purpose rather than left to chance: an INLINE call whose earlier
+	// argument is a bare local and whose later argument writes that same local through a pointer.
+	// The inliner may substitute the bare local, which DEFERS its read past the write, so the two
+	// builds only agree if the marshalling scan stops at the write (docs/Inlining.md 5).
+	// Assembled at random this needs about seven flips to line up - measured, only 1.3% of arguments
+	// are even a bare local - and it turned up in roughly one program in two hundred, which is why a
+	// real miscompile of exactly this shape survived a 1000-program sweep.
 	function genCall(f, depth, scope) {
 		const args = f.params.map((p) => genExpr(p.t, depth - 1, scope));
+		const ints = f.params.map((p, k) => (p.t === 'i' ? k : -1)).filter((k) => k >= 0);
+		const xs = scope.locals.filter((l) => l.t === 'i' && !l.ro && !l.loopVar);
+		const w = scope.callable.filter((fn) => fn.aliasWriter);
+		if (f.inline && ints.length >= 2 && xs.length && w.length && chance(0.5)) {
+			const x = pick(xs).name;
+			args[ints[0]] = x;
+			args[ints[1]] = w[0].name + '(&' + x + ')';
+		}
 		return f.name + '(' + args.join(', ') + ')';
 	}
 
@@ -481,9 +523,12 @@ function genProgram() {
 				return '\tfor (' + lv.name + ' = 0 to ' + (1 + ri(4)) + ') ' + genBlock(bodyScope, f, cd);
 			}
 		}
-		// pointer-dereference write through a writable pointer local
+		// pointer-dereference write through any pointer in scope. `ro` marks a local that cannot be
+		// REASSIGNED, which says nothing about writing through it - and a pointer PARAMETER is exactly
+		// how a callee reaches out and writes a caller's local, so excluding params here left the whole
+		// aliasing family ungenerated.
 		if (roll < 0.24) {
-			const ptrs = scope.locals.filter((l) => isPtr(l.t) && !l.ro);
+			const ptrs = scope.locals.filter((l) => isPtr(l.t));
 			if (ptrs.length) {
 				const p = pick(ptrs);
 				return '\t' + p.name + '[' + genIdx(scope, p.pointeeSize) + '] = ' + genExpr(ptrElem(p.t), 3, scope) + ';';
@@ -563,7 +608,7 @@ function genProgram() {
 			const assignable = scope.locals.filter((x) => !isFuncType(x.t) && !isFptrPtr(x.t) && !x.ro);
 			if (assignable.length) {
 				const l = pick(assignable);
-				return '\t' + l.name + ' = ' + genExpr(l.t, 3, scope) + ';';
+				return '\t' + l.name + ' = ' + genExpr(l.t, 3, scope, l.pointeeSize) + ';';
 			}
 		}
 		// a call for side effect (only functions defined earlier; a bare multi-return call is illegal)
@@ -588,7 +633,10 @@ function genProgram() {
 		const ty = g.elem === 'i' ? 'int' : 'float';
 		out += g.isArray ? 'global ' + ty + ' array ' + g.name + '[' + g.size + ']\n' : 'global ' + ty + ' ' + g.name + '\n';
 	}
-	for (let i = 0; i < funcs.length; ++i) out += renderFunc(funcs[i], false, funcs.slice(0, i));
+	out += HELPERS;
+	for (let i = 0; i < funcs.length; ++i) {
+		if (!funcs[i].fixed) out += renderFunc(funcs[i], false, funcs.slice(0, i));
+	}
 	out += renderFunc({ name: 'main', params: [], rets: [], retNames: [] }, true, funcs.slice());
 	return out;
 }
