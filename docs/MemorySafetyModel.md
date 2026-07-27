@@ -20,6 +20,8 @@ what is simply free space above it.
 - **Nothing above `dsp` is allocated or reserved.** The space up to `dataStackEnd` is yours to use.
 - A callee's frame begins wherever the CALLER's `CALL` window base says (`dsp += C1.i`, GAZL.cpp:1287).
   There is no separate allocation step for it.
+- **`dsp` only ever moves UP on the way in.** Both `CALL` and `FUNC` add to it, so your caller sits at
+  LOWER addresses than you and your callees at higher ones. This matters in section 7.
 
 So the only thing that ever advances the stack pointer is a function's own declared locals.
 
@@ -82,8 +84,10 @@ Line numbers below are `GAZL.cpp` unless marked `GAZL.h`.
 
 `POKE` is bounded by `rwMemorySize` rather than `memorySize`, so read-only memory really is read-only.
 
-Note the `SETL`/`GETL` row: they are bounded by the END OF THE STACK, not by the object they index. A
-dynamic index cannot be validated statically, so the only guarantee is containment, not correctness.
+Note the `SETL`/`GETL` row: they are bounded by the END OF THE STACK, not by the object they index. The
+index is compared unsigned, so it cannot run backwards below its base either - the reach is base up to
+`dataStackEnd` and no further. A dynamic index cannot be validated statically, so the only guarantee is
+containment, not correctness.
 
 
 ## 5. Why `*size` is not needed for containment
@@ -147,14 +151,25 @@ stack, whatever it does. Every way out is checked (section 4), so the worst case
 `BAD_PEEK`, `BAD_POKE`, or `DATA_STACK_OVERFLOW` - never a wild host pointer.
 
 The guarantee is NOT that an index stays inside the object it indexes. A frame is an allocation, not a
-fence: `SETL`/`GETL` are bounded by the end of the stack, so a modest overrun quietly lands on whatever
-the frame layout happened to put next. In practice that is the overrunning function's OWN variables
-first, then its caller's - a runaway loop usually destroys its own counter before it reaches anything
-else.
+fence, and a modest overrun quietly lands on whatever the frame layout happened to put next. Two
+different reaches are worth keeping apart:
 
-So a bad index is a correctness bug with a blast radius, not a sandbox escape. Anything that must be
-caught earlier than that has to be caught before the code runs, by whatever generates the GAZL. See
-`docs/CompileTimeHardening.md`.
+**A dynamic index (`SETL`/`GETL`) walks forward only.** The index goes into an UNSIGNED compare
+(`ui = V1.i`, cpp:1312-1313), so a negative index wraps huge and traps rather than stepping backwards.
+The base is an assembler-resolved offset in your own frame. So the reach is base .. `dataStackEnd`:
+the rest of your own locals, your transients, and then the unused space above `dsp` where your CALLEES'
+frames will be built. It cannot reach your caller - callers are at LOWER addresses (locals are negative
+offsets, cpp:850, and both `FUNC` and `CALL` only ever advance `dsp`).
+
+**A computed pointer reaches the whole RW region.** `ADRL` hands out a memory-block-relative pointer,
+`ADDp`/`SUBp` are unchecked, and `PEEK`/`POKE` test only against `memorySize`/`rwMemorySize`. The data
+stack lives INSIDE that RW region (see the memory map in `GAZL.h`), so a pointer walked far enough can
+read or write any frame, including the caller's, and every global. That is deliberate - it is how
+arrays and structs are passed - but it means pointer arithmetic is the wide door, not the array index.
+
+Either way the sandbox holds. A bad index or a stray pointer is a correctness bug with a blast radius,
+not an escape. Anything that must be caught tighter than that has to be caught before the code runs, by
+whatever generates the GAZL. See `docs/CompileTimeHardening.md`.
 
 
 ## 8. The short version
