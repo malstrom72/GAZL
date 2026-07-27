@@ -123,21 +123,36 @@ unbounded pointer reachability (a callee can load a pointer out of a global) doe
 `MATERIALISE` emits exactly the instruction the call already emitted (`MOVi %t $x` or `PEEK %t &g`)
 into a borrowed transient and uses that. It therefore never costs more than not inlining at all.
 
-**Finding the move to delete: the backward scan must stop at a CALL.** Substitution is implemented as a
-deletion - walk back from the end of the metacode to the call's `mark` for the instruction that filled
-window slot `%N`, and if it is a plain move, drop it and use its source. The trap is that a CALL writes
-its own window but names it in operand 1, not operand 0, so a scan testing only `operands[0] === slot`
-walks straight past it. Slot numbers are recycled by borrow/return, so what it finds next can be the
-marshalling of an unrelated earlier call:
+**Finding the move to delete: the backward scan stops at anything OPAQUE.** Substitution is implemented
+as a deletion - walk back from the end of the metacode to the call's `mark` for the instruction that
+filled window slot `%N`, and if it is a plain move, drop it and use its source. Deleting the move DEFERS
+the read to wherever the body uses it, so it is sound only if nothing emitted in between can write that
+source. Two different things break a naive `operands[0] === slot` scan:
+
+- **A CALL writes its own window but names the base in operand 1**, so the test walks straight past it.
+  Slot numbers are recycled by borrow/return, so what it finds next can be an unrelated earlier call's
+  marshalling:
 
         CALL &fn2 %1 *2         ; its argument MOV into %2 gets deleted, far below
         ...
-        CALL &fn1 %2 *4         ; %2 is THIS call's RESULT - the scan should stop here
+        CALL &fn1 %2 *4         ; %2 is THIS call's RESULT - the scan must stop here
         <expansion>             ; instead: fTOi %<A> #1 #1.0   <- fn2's int argument, in a float operand
 
-That miscompiles silently unless the operand class happens to catch it, which here it did: the assembler
-refused with *"Did not expect constant int: 1"*. Found by the fuzzer, and present since the first version
-of the feature. The scan therefore breaks on any `()` record.
+  Found by the fuzzer. It only surfaced because the operand class happened to catch it - the assembler
+  refused with *"Did not expect constant int: 1"*. A same-typed constant would have been silent.
+
+- **A sibling argument that is itself an inline call expands in place, emitting no CALL record at all.**
+  So testing for a call is not enough:
+
+        add(x, bump(&x))    with both inline, and bump doing `*p = 99`
+        ->  ADRL %4 $x *0 / POKE %4 #99 / ADDi %1 $x #0      ; reads x AFTER the poke: 99, not 1
+
+  Spelling `bump` without `inline` gave 1. One keyword apart, two answers.
+
+Both are the same question - "can this record write a location it does not NAME?" - which is exactly
+what section 4's transparency predicate already answers. `recordIsOpaque` is that predicate for a single
+record; `bodyIsOpaque` is a loop over it, and the scan breaks on it. One definition, so the two cannot
+drift apart, and an unclassified operator fails safe in both.
 
 **A literal may be substituted where the reading position accepts an immediate.** GAZL operand classes
 distinguish slots from immediates, and a literal dropped into the wrong position is rejected outright
@@ -150,12 +165,17 @@ operator, WHICH SOURCE POSITIONS take a `#const`? That is the `INLINE_IMM_OK` ta
 the same spirit as `INLINE_PURE`, so an operator that is not listed simply materialises, which is always
 correct.
 
-Position 0 appears only for the COMPARISONS, and there it means something different: a comparison branches
-rather than producing a value, so operands 0 and 1 are both SOURCES (the label is operand 2) and both take
-a `#const` - the instruction set lists all four combinations for `LSSi` / `GEQi` / `EQUi` and their float
-and pointer forms. Every other operator writes position 0, and no GAZL instruction writes to a constant.
-`inlineFoldWidth` reads exactly that distinction off the same table: a source list starting at 0 marks an
-operator that neither yields a foldable value nor counts as straight line.
+An entry also carries a leading `d` when position 0 is the DESTINATION, which every operator has except
+the COMPARISONS: a comparison branches rather than producing a value, so its operands 0 and 1 are both
+SOURCES (the label is operand 2) and both take a `#const` - the instruction set lists all four
+combinations for `LSSi` / `GEQi` / `EQUi` and their float and pointer forms.
+
+`inlineFoldWidth` reads that marker off the same table, and one derivation then serves both the constant
+fold and the straight-line test, so the two can never disagree about what "produces a value" means. The
+marker is written out rather than inferred from an absent `0` on purpose: the failure direction matters.
+Forgetting `d` on a new operator makes it read as "calculates nothing", which is conservative; inferring
+writer-ness from absence would make a mistyped branch read as straight-line and let constant propagation
+run across it, silently and with no diagnostic.
 
 Comparisons are worth more than they look, because bounds and guards are the classic inline arguments. In
 `clamp(v, lo, hi)` both bounds are only ever compared and then moved, so both substitute; the same goes
@@ -163,7 +183,7 @@ for the loop bound in a `sumTo(n)` and the condition of an `assert`. When BOTH o
 GAZL resolves the branch at assemble time into a `GOTO` or a `NOOP` (the `YIELDS_GOTO` flag in
 `GAZL.cpp`), so it costs nothing at run time either - a three-call `clamp` went from 38 to 28 code words.
 
-The decision is per PARAMETER and is made once at capture (`paramTakesImmediate`): a parameter may carry
+The decision is per PARAMETER and is made once at capture (`takesImmediate`): a parameter may carry
 a literal only if EVERY place the body reads it accepts one. One disqualifying use - a `SWCH` value, an
 array index, a POKE address - spoils the whole parameter, because materialising it for that one use
 would emit the MOV anyway.

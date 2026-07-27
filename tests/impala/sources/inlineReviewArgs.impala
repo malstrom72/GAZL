@@ -15,8 +15,15 @@
 	                                                could observe the argument's own storage)
 	  6 literal into a SWCH value  -> materialise  (that position rejects an immediate, so the
 	                                                whole parameter keeps its slot)
+	  7 local, but a LATER argument's expansion writes it -> materialise
 
-	Expected (GAZLCmd inlineReviewArgs.gazl main): 30 60 90 120 21 20
+	Case 7 is the one to look at hardest. Substitution DEFERS the read to where the body uses it, so
+	it is only sound if nothing emitted in between can write the source. A sibling argument that is
+	itself an inline call expands in place - no CALL record at all - so testing for a call is not
+	enough; the test is `recordIsOpaque`, the same predicate that decides body transparency. Check
+	that `poke(&w)` leaves `add`'s first argument materialised into a slot BEFORE the POKE.
+
+	Expected (GAZLCmd inlineReviewArgs.gazl main): 30 60 90 120 21 20 7
 */
 const int DEBUG = 1
 
@@ -29,6 +36,10 @@ inline function triple(int a) returns int r { r = a * 3; }
 
 inline function pick(int i) returns int r			/* i is read by SWCH: rejects an immediate */
 { switch (i == 0 to 3) { case 0: r = 10; case 1: r = 20; default: r = 99; } }
+
+inline function poke(int pointer p) returns int z { *p = 99; z = 0; }	/* writes through a pointer */
+
+inline function add(int a, int b) returns int r { r = a + b; }			/* transparent, so `a` wants to substitute */
 
 inline function viaPtr(int pointer p, int a) returns int r
 {
@@ -51,4 +62,7 @@ locals int w, int array cell[1]
 	w = 7;
 	printInt(viaPtr(&cell[0], w)); printLF();	/* 21  - case 5: opaque, materialised */
 	printInt(pick(1)); printLF();				/* 20  - case 6: literal, still materialised */
+
+	w = 7;
+	printInt(add(w, poke(&w))); printLF();		/* 7   - case 7: w read BEFORE poke sets it to 99 */
 }

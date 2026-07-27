@@ -1268,40 +1268,42 @@
         '-->',1, '-->#',1, '...',1, '<--',1
     );
 
-    /* Which SOURCE operand positions accept an immediate (`#const`). A positive list like INLINE_PURE:
-       an operator missing here forces the argument to be materialised, which is always correct.
-       Verified one by one against the operand forms in docs/InstructionSet.md. Position 0 appears only
-       for the COMPARISONS, whose operand 0 is a source (the branch target is operand 2) - every other
-       operator writes position 0, and GAZL has no instruction that writes to a constant. */
+    /* Which operand positions accept an immediate (`#const`), plus a leading `d` when position 0 is the
+       DESTINATION. A positive list like INLINE_PURE: an operator missing here forces the argument to be
+       materialised, which is always correct. Verified one by one against the operand forms in
+       docs/InstructionSet.md. The COMPARISONS are the only entries with no `d`, because they branch
+       instead of producing a value - their operands 0 and 1 are both sources and the label is operand 2.
+       Stating the destination rather than inferring it from an absent `0` keeps the failure direction
+       safe: forget the marker on a new operator and it reads as "not foldable", never as "straight line". */
     $$parser.INLINE_IMM_OK = {};
     map($$parser.INLINE_IMM_OK,
-        '=',    '1',  ':=',     '1',                       /* MOVi   int(d) #int          */
-        '=abs', '1',  '=floor', '1', '=itof', '1', '=ftoi', '1',   /* ABSi/FLOf/ITOF/FTOI  */
-        '+',   '12',  '-',     '12', '*',    '12', '/',    '12', '%', '12',
-        '|',   '12',  '&',     '12', '^',    '12',
-        '<<',  '12',  '>>',    '12', '>>>',  '12',
-        '<',   '01',  '<=',    '01', '>',    '01', '>=',   '01', '==', '01', '!=', '01',
-        '!<',  '01',  '!<=',   '01', '!>',   '01', '!>=',  '01', '!==','01', '!!=','01'
+        '=',    'd1',  ':=',     'd1',                     /* MOVi   int(d) #int          */
+        '=abs', 'd1',  '=floor', 'd1', '=itof', 'd1', '=ftoi', 'd1',  /* ABSi/FLOf/ITOF/FTOI */
+        '+',   'd12',  '-',     'd12', '*',    'd12', '/',    'd12', '%', 'd12',
+        '|',   'd12',  '&',     'd12', '^',    'd12',
+        '<<',  'd12',  '>>',    'd12', '>>>',  'd12',
+        '<',    '01',  '<=',     '01', '>',     '01', '>=',   '01', '==', '01', '!=', '01',
+        '!<',   '01',  '!<=',    '01', '!>',    '01', '!>=',  '01', '!==','01', '!!=','01'
     );
 
-    /* An operator that CALCULATES a value into position 0 from `n` immediates, or undefined. Derived
-       from the table above: a source list starting at position 0 means position 0 is read, not written,
-       which is the comparisons - they branch instead of producing a value, so they neither fold to a
-       `<X>` scratch nor count as straight line. */
+    /* How many immediate sources an operator CALCULATES into position 0, or undefined if it calculates
+       nothing - which is exactly the operators with no `d`. One derivation serves both the constant fold
+       and the straight-line test, so the two can never disagree about what "produces a value" means. */
     $$parser.inlineFoldWidth = function (op) {
         var pos = $$parser.INLINE_IMM_OK[op];
-        return (pos === undefined || pos.charAt(0) === '0' ? undefined : pos.length);
+        return (pos === undefined || pos.charAt(0) !== 'd' ? undefined : pos.length - 1);
     };
 
-    /* May this parameter carry a literal? Only if EVERY place the body uses it is a position that
-       accepts one - one bad use (a SWCH value, an array base, a POKE address) spoils the parameter,
-       and materialising it there while substituting elsewhere would need the MOV anyway. */
-    function paramTakesImmediate(body, name) {
+    /* May this operand carry an immediate in EVERY place the body uses it? One bad use - a SWCH value,
+       an array base, a POKE address - spoils it, and materialising it there while substituting elsewhere
+       would need the MOV anyway. For a folded TEMPORARY, a destination position 0 is the write being
+       replaced, so it is not a use; the `d` marker says so per operator rather than per call site. */
+    function takesImmediate(body, name, isTemp) {
         for (var i = 0; i < body.length; ++i) {
             if (body[i].operator === ';') continue;                /* comment prose, not operands */
             var okPos = $$parser.INLINE_IMM_OK[body[i].operator];
-            for (var k = 0; k < 3; ++k) {
-                if (('' + body[i].operands[k]) !== name) continue;
+            for (var k = (isTemp && ('' + okPos).charAt(0) === 'd' ? 1 : 0); k < 3; ++k) {
+                if (('' + body[i].operands[k]) !== '' + name) continue;
                 if (okPos === undefined || okPos.indexOf('' + k) < 0) return false;
             }
         }
@@ -1323,24 +1325,26 @@
         }
     };
 
-    $$parser.bodyIsOpaque = function (body) {
-        for (var i = 0; i < body.length; ++i) {
-            var op = body[i].operator;
-            if (op === '()' || op === 'copy') return true;     /* a call, or a computed-destination COPY */
-            if (op === '[]=' || op === '*=') {                 /* POKE: nameable only as `&global` */
-                if (('' + body[i].operands[0]).charAt(0) !== '&') return true;
-                continue;
-            }
-            if (op === ';') continue;                          /* a source comment writes nothing */
-            if (op.substr(0, 3) === '<> ') continue;           /* a constant fold writes a `<X>` scratch and
-                                                                  nothing else, whatever the operator */
-            if (!$$parser.INLINE_PURE[op]) return true;        /* unrecognised -> assume the worst */
+    /* Can this ONE record write a location it does not NAME? That is the whole soundness question, both
+       for a body (can it disturb a caller's local?) and for the marshalling scan below (can it disturb a
+       read we are about to defer past it?). One predicate, so the two cannot drift apart. */
+    $$parser.recordIsOpaque = function (m) {
+        var op = m.operator;
+        if (op === ';' || op.substr(0, 3) === '<> ') return false;  /* prose, or a fold writing only `<X>` */
+        if (op === '[]=' || op === '*=') {                          /* POKE: nameable only as `&global` */
+            return (('' + m.operands[0]).charAt(0) !== '&');
         }
+        return (op === '()' || op === 'copy'                        /* a call, or a computed-dest COPY */
+                || !$$parser.INLINE_PURE[op]);                      /* unrecognised -> assume the worst */
+    };
+
+    $$parser.bodyIsOpaque = function (body) {
+        for (var i = 0; i < body.length; ++i) if ($$parser.recordIsOpaque(body[i])) return true;
         return false;
     };
 
-    /* Snapshot a body before flushMetaCode() clears it. Drops the `;` source comments; keeps everything
-       else, operand-for-operand. (There is no RETU to drop: it is emitted after this runs.) */
+    /* Snapshot a body before flushMetaCode() clears it, operand-for-operand. The `;` source comments are
+       KEPT, so an expansion can re-emit them. (There is no RETU to drop: it is emitted after this runs.) */
     $$parser.captureInlineBody = function (name, sourceCode, sourceOffset) {
         var entry = $$parser.symbols.functions[name];
         var sig = entry.signature;
@@ -1365,7 +1369,7 @@
         var params = [], litOK = [];
         for (var p = 0; p < sig.params.length; ++p) {
             params.push('$' + sig.params[p].name);
-            litOK.push(paramTakesImmediate(body, params[p]));
+            litOK.push(takesImmediate(body, params[p], false));
         }
         /* Constant folding inside the body (see expandInline) propagates a value from one instruction
            to the next, which is only sound along a straight line: a label is a join point and a branch
@@ -1395,10 +1399,14 @@
             for (j = $$parser.metacode.length - 1; j >= mark; --j) {   /* only THIS call's own marshalling */
                 var m = $$parser.metacode[j];
                 if (m.operator === undefined) continue;
-                /* A nested call WRITES its own window, and its base is operand 1, so the test below
-                   would walk straight past it and adopt a move belonging to that call instead. */
-                if (m.operator === '()') break;
-                if (m.operands[0] !== slot) continue;
+                if (m.operands[0] !== slot) {
+                    /* Deferring the read past this record means the body sees whatever it did. A CALL
+                       writes its own window (naming the base at operand 1, so the test above misses it),
+                       a POKE writes through a pointer, and a nested inline expansion emits either inline
+                       with no CALL record at all. All of them are exactly `recordIsOpaque`. */
+                    if ($$parser.recordIsOpaque(m)) break;
+                    continue;
+                }
                 if ((m.operator === '=' || m.operator === ':=') && m.operands[2] === undefined) {
                     var o = '' + m.operands[1];
                     var c = o.charAt(0);
@@ -1452,19 +1460,6 @@
             var c = (op === undefined ? '' : ('' + op).charAt(0));
             return (c === '#' || c === '<');
         }
-        function tempTakesImmediate(name) {      /* every READ must accept a `<X>` in its place. Position
-                                                    0 is skipped: only straight-line bodies fold, so every
-                                                    operator here writes it (see inlineFoldWidth). */
-            for (var t = 0; t < info.body.length; ++t) {
-                if (info.body[t].operator === ';') continue;
-                var okPos = $$parser.INLINE_IMM_OK[info.body[t].operator];
-                for (var u = 1; u < 3; ++u) {
-                    if (('' + info.body[t].operands[u]) !== '' + name) continue;
-                    if (okPos === undefined || okPos.indexOf('' + u) < 0) return false;
-                }
-            }
-            return true;
-        }
         function mapOperand(op) {
             if (op === undefined || op === null) return op;
             var s = '' + op;
@@ -1516,7 +1511,7 @@
             }
             /* an inherited `! ADDi <X> #slot #offset` carries a callee SLOT NUMBER in operand 1, not an
                immediate, so that one shifts with the block instead of being mapped */
-            var d0 = mapOperand(b.operands[0]);
+            var d0 = mapOperand(b.operands[0]), fw = $$parser.inlineFoldWidth(b.operator);
             var s1 = (b.inlineFold ? '#' + (tBase + parseInt(('' + b.operands[1]).substr(1), 10))
                                    : constFold(mapOperand(b.operands[1])));
             var s2 = constFold(mapOperand(b.operands[2]));
@@ -1525,11 +1520,10 @@
                keep it in a `<X>` scratch instead of a transient. GAZL would otherwise fold the maths at
                assemble time and still emit a runtime MOVE to park the value (GAZL.cpp, "Const calc ->
                MOVE"), which is a whole instruction spent on a number we already know. */
-            if (info.straightLine && !b.inlineFold && isConstOperand(s1)
-                    && $$parser.inlineFoldWidth(b.operator) !== undefined
-                    && ($$parser.inlineFoldWidth(b.operator) === 1 ? s2 === undefined : isConstOperand(s2))
+            if (info.straightLine && !b.inlineFold && isConstOperand(s1) && fw !== undefined
+                    && (fw === 1 ? s2 === undefined : isConstOperand(s2))
                     && ('' + d0).charAt(0) === '%' && ('' + d0) !== '%' + base
-                    && tempTakesImmediate('' + b.operands[0])) {
+                    && takesImmediate(info.body, b.operands[0], true)) {
                 if (b.operator === '=' || b.operator === ':=') {
                     constMap['' + d0] = s1;            /* a move of a constant is pure propagation */
                 } else {
