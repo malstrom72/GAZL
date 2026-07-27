@@ -95,10 +95,49 @@ function runGolden(goldenPath, expectedRun) {
         return undefined;
 }
 
+/* A fixture with no run line is still fed to the assembler, because "compiles clean" and "loads"
+   are different claims and only the second one catches a label this compiler emitted but never
+   defined. Most such fixtures are firmware that links against a host, so an unresolved name that
+   is NOT module-local (a plain global, or the `.o.`/`.z.` layout symbols an extern struct leaves
+   to the host) means "out of scope here", not "broken". */
+const NEEDS_HOST = {};
+
+/* Goldens that cannot load under GAZLCmd for reasons that are not the compiler's: */
+const KNOWN_UNLOADABLE = {
+        calc: 'defines log(), which GAZLCmd itself provides as a native',
+        perfTest: 'defines log(), which GAZLCmd itself provides as a native',
+        switchtest: 'grammar torture fixture - case values deliberately outside the switch range'
+};
+
+/* GAZLCmd has no assemble-only mode: it defaults to entering `main`, which for a fixture that has
+   one means running a whole program nobody asked for (Priyome is an interactive chess game). Name
+   an entry point that cannot exist and it assembles, prints its banner, then stops. */
+const NO_ENTRY_POINT = '.no-entry-point';
+
+function assembleGolden(goldenPath) {
+        const result = childProcess.spawnSync(gazlCmd, [goldenPath, NO_ENTRY_POINT],
+                { encoding: 'latin1', timeout: 30000 });
+        if (result.error) {
+                return `could not run GAZLCmd: ${result.error.message}`;
+        }
+        const report = (result.stderr || '') + (result.stdout || '');
+        if (/Code size:/.test(report)) {               // assembled - it never reaches an entry point
+                return undefined;
+        }
+        const line = (report.split('\n').find((l) => l.trim()) || '(no output)').trim();
+        const symbol = (line.match(/:\s*(\S+)\s*$/) || ['', ''])[1];
+        if (/Symbol not (found|previously defined)/.test(line)
+                        && (symbol.charAt(0) !== '.' || /^\.[oz]\./.test(symbol))) {
+                return NEEDS_HOST;
+        }
+        return `did not assemble: ${line}`;
+}
+
 function main() {
         let totalFiles = 0;
         let errorCount = 0;
         let ranCount = 0;
+        let assembledCount = 0;
         const haveGazlCmd = fs.existsSync(gazlCmd);
         if (!haveGazlCmd && !makeGold && !skipRun) {
                 console.log(`(no ${path.relative(repoRoot, gazlCmd)} - skipping assemble+run checks)`);
@@ -168,8 +207,24 @@ function main() {
                 }
 
                 const expectedRun = parseExpectedRun(source);
-                if (!expectedRun || skipRun || !haveGazlCmd) {
+                if (skipRun || !haveGazlCmd) {
                         console.log('OK');
+                        totalFiles += 1;
+                        continue;
+                }
+
+                if (!expectedRun) {
+                        const verdict = (KNOWN_UNLOADABLE[name] !== undefined
+                                        ? NEEDS_HOST : assembleGolden(goldenPath));
+                        if (verdict === NEEDS_HOST) {
+                                console.log('OK (compile-only)');
+                        } else if (verdict !== undefined) {
+                                console.error(`<<< ${verdict} >>>`);
+                                errorCount += 1;
+                        } else {
+                                console.log('OK (assembled)');
+                                assembledCount += 1;
+                        }
                         totalFiles += 1;
                         continue;
                 }
@@ -188,6 +243,7 @@ function main() {
 
         console.log('');
         console.log(`Assembled and ran: ${ranCount}`);
+        console.log(`Assembled only: ${assembledCount}`);
         console.log(`Total errors: ${errorCount} / ${totalFiles}`);
 
         if (errorCount !== 0) {
