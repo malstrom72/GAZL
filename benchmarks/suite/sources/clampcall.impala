@@ -1,0 +1,39 @@
+// Call overhead in realistic company: a 3-argument helper with two branches, applied to every element of a global
+// array, 2000 passes. Unlike leafcall.impala the loop also does memory traffic and control flow, so the call is
+// diluted the way it is in real firmware code - this is the figure to plan with, not the leaf upper bound. The helper
+// is not straight-line on purpose: its branches must survive inlining with per-expansion label tags.
+//
+// A/B PAIR with clampinline.impala. Everything below this header comment must stay identical between the two apart
+// from the `inline` keyword - the whole point of the pair is that the timing delta has exactly one cause. Both print
+// the same checksum, so a drift that changes behaviour is caught; keep them in step by hand for one that does not.
+//
+// The checksum is the wrapped 32-bit accumulator: integer only, so it is bit-exact between the interpreter and the
+// JIT, and identical for the inlined and out-of-line lowerings.
+extern native printInt;
+
+const int W = 4096;
+const int PASSES = 2000;
+
+function clamp(int v, int lo, int hi)
+returns int r
+{
+	r = v;
+	if (r < lo) r = lo;
+	if (r > hi) r = hi;
+}
+
+global array data[4096];
+
+function main()
+locals int i, int j, int acc, int t
+{
+	for (i = 0 to W) global data[i] = i * 7919;
+	acc = 0;
+	for (j = 0 to PASSES) {
+		for (i = 0 to W) {
+			t = clamp((int) global data[i] + acc, -1000, 1000);
+			acc = acc + t;
+		}
+	}
+	printInt(acc);
+}

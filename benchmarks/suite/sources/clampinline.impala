@@ -1,0 +1,37 @@
+// The inlined half of the clampcall.impala A/B pair - see that file for what the pair measures. This one must stay
+// identical to it below this header comment apart from the `inline` keyword, so the timing delta has exactly one cause.
+//
+// The helper has two branches, so this also covers the non-straight-line expansion path: each expansion gets its own
+// label tags. The inner loop then contains no call, making it eligible for v2.2 JIT loop residency, which a CALL
+// barrier disqualifies.
+//
+// The checksum is the wrapped 32-bit accumulator: integer only, so it is bit-exact between the interpreter and the
+// JIT, and identical for the inlined and out-of-line lowerings.
+extern native printInt;
+
+const int W = 4096;
+const int PASSES = 2000;
+
+inline function clamp(int v, int lo, int hi)
+returns int r
+{
+	r = v;
+	if (r < lo) r = lo;
+	if (r > hi) r = hi;
+}
+
+global array data[4096];
+
+function main()
+locals int i, int j, int acc, int t
+{
+	for (i = 0 to W) global data[i] = i * 7919;
+	acc = 0;
+	for (j = 0 to PASSES) {
+		for (i = 0 to W) {
+			t = clamp((int) global data[i] + acc, -1000, 1000);
+			acc = acc + t;
+		}
+	}
+	printInt(acc);
+}

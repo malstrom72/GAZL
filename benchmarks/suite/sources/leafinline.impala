@@ -1,0 +1,26 @@
+// The inlined half of the leafcall.impala A/B pair - see that file for what the pair measures. This one must stay
+// identical to it below this header comment apart from the `inline` keyword, so the timing delta has exactly one cause.
+//
+// `inline` does more than delete the CALL: Impala substitutes the arguments, so the marshalling moves
+// (MOVi %1 $acc / MOVi %2 $i / CALL / MOVi $acc %0) collapse to the two instructions of the body itself. The loop then
+// contains no call, so it also becomes eligible for v2.2 JIT loop residency.
+//
+// The checksum is the wrapped 32-bit accumulator: integer only, so it is bit-exact between the interpreter and the
+// JIT, and identical for the inlined and out-of-line lowerings.
+extern native printInt;
+
+const int N = 20000000;
+
+inline function mix(int a, int b)
+returns int r
+{
+	r = a * 3 + b;
+}
+
+function main()
+locals int i, int acc
+{
+	acc = 0;
+	for (i = 0 to N) acc = mix(acc, i);
+	printInt(acc);
+}

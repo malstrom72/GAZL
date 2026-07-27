@@ -9,8 +9,8 @@ Background measurements and the Impala-vs-assembler placement argument live in `
 
 ## 1. Why the compiler and not the assembler
 
-Measured on this machine, one program, three lowerings, all verified to produce the same result
-(2-argument leaf helper `mix(int a, int b) { r = a * 3 + b; }` called 10M times in a loop):
+Measured on this machine with the INTERPRETER, one program, three lowerings, all verified to produce the
+same result (2-argument leaf helper `mix(int a, int b) { r = a * 3 + b; }` called 10M times in a loop):
 
 | lowering | min ms | ns/call saved | share of the prize |
 |----------|--------|---------------|--------------------|
@@ -26,6 +26,41 @@ rather than merely getting cheaper. That last 27% is the whole reason to do this
 Note the practical consequence for the rules below: materialising ONE argument costs about 6% of the
 prize. Materialising is cheap, so the rules should substitute only where it is unarguably safe and
 materialise everywhere else, rather than reach for a clever analysis.
+
+
+### 1.1 The prize on jitted code
+
+The table above is the interpreter. The JIT has already removed most of the call cost by the time
+inlining gets there, so the ABSOLUTE prize is far smaller - but the relative win survives, because the
+JIT shrank everything else too. Measured on real x64 hardware (Windows, MSVC /O2, best-of-5 fresh
+processes, JIT lanes stable to +/-0.3%) with the four `benchmarks/suite/` kernels added for this:
+
+| kernel / engine | call ms | inline ms | speedup | ns saved/call |
+|-----------------|---------|-----------|---------|---------------|
+| `leafcall` / `leafinline`, interpreter   | 162.27 | 59.40 | 2.73x | 5.14 |
+| `leafcall` / `leafinline`, JIT           |  30.51 | 14.97 | 2.04x | 0.78 |
+| `clampcall` / `clampinline`, interpreter |  94.83 | 68.09 | 1.39x | 3.26 |
+| `clampcall` / `clampinline`, JIT         |  15.68 | 11.01 | 1.42x | 0.57 |
+
+`leaf` is the bare 20M-iteration loop (call overhead maximised, an upper bound); `clamp` is a branching
+3-argument helper over a 4096-word global array, 8.19M calls, where memory traffic dilutes the call the
+way real firmware does. **Plan with the clamp figure: about 1.4x on jitted call-heavy code.** That is
+well above the 5-15% `InliningInvestigation.md` estimated for firmware, and it is on top of a JIT that
+is already 6x the interpreter.
+
+The interpreter rows are the control. They reproduce the section-1 table on a different program (5.14 vs
+5.18 ns/call), and they were taken from the same binaries, in the same session, as the JIT rows directly
+above them - so the JIT rows carry the same confidence.
+
+Two things worth keeping in mind:
+
+- **The JIT's lead over the interpreter SHRINKS when the leaf loop is inlined** (5.32x to 3.97x) and is
+  flat on the realistic one (6.05x to 6.18x). Not a regression - it means the JIT was already handling
+  calls better than the interpreter, so inlining takes proportionally more away from its lead.
+- **Do not measure this under Rosetta.** The inlined lanes are stable there to +/-0.2% but the CALL
+  lanes swing 43-83 ms run to run, and Rosetta understates the leaf win as 1.36x against the true 2.04x
+  (it inflates the inlined loop ~2.1x but the call loop only ~1.4x). `tools/bench.sh` already labels its
+  x64 lane "ratios only"; for call-vs-inline even the ratio is wrong.
 
 
 ## 2. Semantics of `inline`
