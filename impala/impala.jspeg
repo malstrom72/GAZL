@@ -1329,11 +1329,14 @@
             subst[info.params[k]] = src;
         }
         if (info.ret !== undefined) subst[info.ret] = '%' + base;   /* the window's output slot */
-        var borrowedLocals = [];
-        for (k = 0; k < info.locals.length; ++k) {   /* a scalar local lives in a transient per expansion */
-            var lt = $$parser.borrow('%');
-            borrowedLocals.push(lt);
-            subst[info.locals[k]] = lt;
+        var borrowedLocals = [];                    /* a local lives in transients, one expansion at a time */
+        for (k = 0; k < info.locals.length; ++k) {
+            var lw = info.locals[k].words;
+            var lb = (lw > 1 ? $$parser.borrowForCall()      /* an array needs its elements ADJACENT */
+                             : parseInt($$parser.borrow('%').substr(1), 10));
+            for (var ls = 1; ls < lw; ++ls) $$parser.claimSlot(lb + ls);   /* slot 0 is already claimed by the borrow */
+            for (ls = 0; ls < lw; ++ls) borrowedLocals.push('%' + (lb + ls));
+            subst[info.locals[k].name] = '%' + lb;
         }
 
         var tag = '_i' + ($$parser.inlineCounter++);
@@ -1349,7 +1352,13 @@
             if (s.charAt(0) === '@') return s + tag;            /* labels: per-expansion suffix */
             var colon = s.indexOf(':');                         /* `$name:offset` frame places */
             if (colon > 0 && Object.prototype.hasOwnProperty.call(subst, s.substr(0, colon))) {
-                return subst[s.substr(0, colon)] + s.substr(colon);
+                var mapped = subst[s.substr(0, colon)];
+                var off = s.substr(colon + 1);
+                if (mapped.charAt(0) !== '%') return mapped + ':' + off;
+                /* GAZL has no `%N:offset`, so a constant element offset folds into the slot number */
+                var n = parseInt(off, 10);
+                assert(!isNaN(n) && ('' + n) === off, 'inline: cannot fold offset ' + off + ' onto a transient');
+                return '%' + (parseInt(mapped.substr(1), 10) + n);
             }
             return s;
         }
@@ -3213,12 +3222,23 @@ inp:ArgsDecl ')'_
                                                                                 head while an expansion site is mid-body. See docs/Inlining.md section 8. */
                                                                              $$parser.inlineLocals = [];
                                                                              iterate($loc, function (v) {
-                                                                                 if (v.type === 'A' || v.type === 'S') {
-                                                                                     $$parser.fail('An inline function cannot declare an array or struct local',
+                                                                                 var words = 1;
+                                                                                 if (v.type === 'S' || (v.type === 'A' && $$parser.isStructAtom(v.elem))) {
+                                                                                     /* a struct field is reached by a SYMBOLIC offset (`$s:.o.S.f`), and a
+                                                                                        transient base takes no `:offset` at all - `%10:.o.S.f` is not GAZL */
+                                                                                     $$parser.fail('An inline function cannot declare a struct local',
                                                                                              $$s, $$i, 'E433',
-                                                                                             'scalar locals are fine; ' + v.name + ' needs frame space, so drop `inline`');
+                                                                                             'struct fields need a symbolic frame offset, which a transient cannot carry');
                                                                                  }
-                                                                                 $$parser.inlineLocals.push('$' + v.name);
+                                                                                 if (v.type === 'A') {
+                                                                                     words = parseInt('' + v.size, 10);
+                                                                                     if (!(words > 0)) {   /* a folded/symbolic extent has no number to lay out */
+                                                                                         $$parser.fail('An inline function needs a literal size for the array local '
+                                                                                                     + v.name, $$s, $$i, 'E433',
+                                                                                                 'the elements occupy transients, so the count must be known here');
+                                                                                     }
+                                                                                 }
+                                                                                 $$parser.inlineLocals.push({ name: '$' + v.name, words: words });
                                                                              });
                                                                          }
                                                                          iterate($loc, function (v) {

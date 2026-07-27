@@ -956,18 +956,28 @@ const inlineCases = [
 	["exporting an inline function",
 		"export inline function g(int a) returns int r { r = a; }\n"
 			+ "function main() locals int q { q = g(1); }\n", "cannot be exported"],
-	// A scalar local becomes a transient per expansion. An aggregate would need frame space, and frame
-	// declarations are emitted at the function head while an expansion site is mid-body.
-	["an inline function declaring an array local",
-		"inline function f(int a) returns int r\nlocals int array t[2]\n{ t[0] = a; r = t[0]; }\n"
-			+ "function main() locals int q { q = f(1); }\n", "array or struct local"],
+	// Locals live in transients, one expansion at a time. A struct field needs a SYMBOLIC frame offset
+	// (`$s:.o.S.f`) and GAZL has no `%N:offset`, so structs cannot follow; an array can, because a
+	// constant element offset folds into the slot number and a dynamic one uses SETL with a %N base.
 	["an inline function declaring a struct local",
 		"struct S { int x }\ninline function f(int a) returns int r\nlocals S s\n{ s.x = a; r = s.x; }\n"
-			+ "function main() locals int q { q = f(1); }\n", "array or struct local"],
+			+ "function main() locals int q { q = f(1); }\n", "cannot declare a struct local"],
+	["an inline function declaring an array of structs",
+		"struct S { int x }\ninline function f(int a) returns int r\nlocals S array s[2]\n"
+			+ "{ s[0].x = a; r = s[0].x; }\n"
+			+ "function main() locals int q { q = f(1); }\n", "cannot declare a struct local"],
+	["an inline function with a non-literal array size",
+		"const int H = 2\nconst int N = 2\ninline function f(int a) returns int r\n"
+			+ "locals int array t[H * N]\n{ t[0] = a; r = t[0]; }\n"
+			+ "function main() locals int q { q = f(1); }\n", "literal size"],
 	// and the shapes that must work
 	["an inline function declaring a scalar local",
 		"inline function f(int a) returns int r\nlocals int t\n{ t = a * 2; r = t + 1; }\n"
 			+ "function main() locals int q { q = f(1); }\n", null],
+	["an inline function declaring an array local",
+		"inline function f(int a) returns int r\nlocals int array t[3], int i\n"
+			+ "{ t[0] = a; t[1] = a; t[2] = a; r = 0; for (i = 0 to 3) r = r + t[i]; }\n"
+			+ "function main() locals int q { q = f(2); }\n", null],
 	["a plain inline call", "inline function f(int a) returns int r { r = a * 2; }\n"
 		+ "function main() locals int q { q = f(3); }\n", null],
 	["nested inline expansion", "inline function f(int a) returns int r { r = a * 2; }\n"

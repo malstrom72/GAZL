@@ -13,7 +13,7 @@
 	`viaPointer` makes the body opaque (it writes through a pointer), which forces even a plain local
 	argument to be materialised. `pure` is transparent, so its arguments are substituted.
 
-	Expected (GAZLCmd inlineEquivalence.gazl main): 31 1 99 5 7 0 6 3
+	Expected (GAZLCmd inlineEquivalence.gazl main): 31 1 99 5 7 0 6 3 60 15
 */
 
 const int DEBUG = 1
@@ -46,6 +46,14 @@ inline function viaPointer(int pointer p, int a) returns int r
 	r = a;
 }
 
+inline function sum3(int a, int b, int c) returns int r
+locals int array buf[3], int i		// an ARRAY local: a run of adjacent transients per expansion
+{
+	buf[0] = a; buf[1] = b; buf[2] = c;
+	r = 0;
+	for (i = 0 to 3) { r = r + buf[i]; }
+}
+
 function main()
 locals int t, int array cell[1]
 {
@@ -64,4 +72,7 @@ locals int t, int array cell[1]
 	printInt(clamp(-4, 0, 6)); printLF();			// 0  - scalar local, expanded twice below
 	printInt(clamp(8, 0, 6)); printLF();			// 6
 	printInt(clamp(3, 0, 6)); printLF();			// 3
+
+	printInt(sum3(10, 20, 30)); printLF();			// 60 - array local, two expansions
+	printInt(sum3(sum3(1, 2, 3), 4, 5)); printLF();	// 15 - nested, so two runs are live at once
 }

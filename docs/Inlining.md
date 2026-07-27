@@ -168,11 +168,11 @@ already complete, and `B` cannot have inlined `A`.
 
 ## 8. Current restrictions
 
-**Scalar locals only.** A scalar local becomes a borrowed transient at each expansion site, so
-`clamp`-shaped helpers work. An array or struct local is rejected (E433).
+Locals live in TRANSIENTS, one expansion at a time - a scalar takes one slot, an array takes a run of
+adjacent slots (`borrowForCall` for the base, `claimSlot` for the rest, released in reverse afterwards).
 
-The reason is DECLARATION FORM, not space. Both kinds occupy frame space; they differ in what has to be
-emitted:
+The reason locals cannot simply stay locals is DECLARATION FORM, not space. Both kinds occupy frame
+space; they differ in what has to be emitted:
 
 | | frame space | declaration |
 |---|---|---|
@@ -180,16 +180,22 @@ emitted:
 | named local `LOCi` / `LOCA` | yes | one line, in the frame chain at the function head |
 
 Verified: `%20` and `%400` assemble under a bare `PARA *1`, and the two `main`s of the equivalence pair
-declare identical frames despite the inlined one using more transients. So a slot kind that needs no
-declaration line can be minted mid-body, and one that needs a line cannot - the head is long since
+declare identical frames despite the inlined one using more transients. A slot kind that needs no
+declaration line can be minted mid-body; one that needs a line cannot, because the head is long since
 emitted by the time an expansion runs.
 
-That makes the restriction an implementation gap, not a limit. An array local is N contiguous words, and
-`SETL`/`GETL` accept a TRANSIENT base (verified: `SETL %10 $i #99` and `GETL %1 %10 $i` both assemble),
-so an inlined array local could live in a run of borrowed transients just as a scalar does. It needs
-consecutive-run borrowing, which `borrowForCall` already implements for call windows. Struct locals
-would follow the same route via their symbolic `.z.` size. Not done because a helper big enough to need
-an aggregate local is a weak inlining candidate, not because it cannot work.
+**Array element access.** GAZL has no `%N:offset` - `MOVi %10:0 #5` is rejected with *"Invalid number:
+:0"*. So a constant element index is FOLDED into the slot number (`$buf:2` with base `%5` becomes `%7`),
+while a dynamic index uses `SETL`/`GETL` with a transient base, which the assembler accepts (`SETL %10
+$i #99` and `GETL %1 %10 $i` both assemble).
+
+**Struct locals are rejected (E433)**, and so is an array whose element is a struct. A struct field is
+reached by a SYMBOLIC frame offset (`$s:.o.S.f`) which cannot be folded into a slot number and cannot
+ride on a transient base either. That one is a genuine limit of the addressing modes, not an
+implementation gap.
+
+**An array local needs a literal size** (E433 otherwise). The elements occupy a counted run of
+transients, so a folded or symbolic extent has no number to lay out.
 
 **No `--inline` flag.** Nothing is inlined unless the source says `inline`, and no existing source
 does, so the 84-file byte-diff gate is unaffected and there is nothing to gate.
