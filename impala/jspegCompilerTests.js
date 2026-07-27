@@ -1655,6 +1655,36 @@ const typedPointerCases = [
 		].join("\n"),
 		expectError: null,
 	},
+	{
+		label: "a void function called as a statement is fine",
+		source: ["function v() { }", "function main() { v(); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a void result cannot be assigned to an int",
+		source: ["function v() { }", "function main() locals int i { i = v(); }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
+	{
+		label: "a void result cannot be assigned to a float",
+		source: ["function v() { }", "function main() locals float f { f = v(); }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
+	{
+		label: "a void result cannot feed an operator",
+		source: ["function v() { }", "function main() locals int i { i = v() + 1; }"].join("\n"),
+		expectError: "Invalid types",
+	},
+	{
+		label: "a void result cannot be passed as an argument",
+		source: ["extern native printInt", "function v() { }", "function main() { printInt(v()); }"].join("\n"),
+		expectError: "Invalid type",
+	},
+	{
+		label: "a void result cannot be cast and dereferenced into a value",
+		source: ["function v() { }", "function main() locals int i { i = *(pointer)v(); }"].join("\n"),
+		expectError: "Invalid type",
+	},
 ];
 
 /* Step 5: `export` rides the signature metadata as a role prefix, so --dead-strip can find roots. */

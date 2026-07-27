@@ -20,9 +20,10 @@ extern native printLF;
 const int MINUS_FIVE = -5;
 global array gx[10];
 
-function test(int a, int b) {
+function test(int a, int b) returns int r {
 	printInt(a);
 	printInt(b);
+	r = a + b;
 }
 
 function main()

@@ -192,9 +192,10 @@
     map($$parser.CASTS_TO_TYPES, 'float','f','funcptr','F','int','i','pointer','p');
     map($$parser.ZEROES,         'f','#0.0','i','#0','p','&NULL','F','&NULL');
     map($$parser.TYPE_SUFFIXES,  'void','', 'i','i','f','f','p','p','F','p','U','',
-                                 'N','',   'A','A','?','E');
+                                 'N','',   'A','A','?','E', 'V','');
     map($$parser.VERBOSE_TYPES,  'i','int','f','float','p','pointer','F','funcptr',
-                                 'U','function','N','native','A','array','S','struct','?','untyped');
+                                 'U','function','N','native','A','array','S','struct','?','untyped',
+                                 'V','void');
 
     function signatureParamCategory(type) {
         switch (type) {
@@ -238,6 +239,7 @@
             case 'f': return 'float';
             case 'p': return 'ptr';
             case 'F': return 'funcptr';
+            case 'V': return 'void';
             case '?': return (known ? 'void' : 'unknown');
             default:  return 'unknown';
         }
@@ -1257,7 +1259,7 @@
             $$parser.fail('Type name already used by a struct: ' + name, sourceCode, sourceOffset, 'E440');
         }
         $$parser.functypes[name] = { params: [], returnList: [], returnCount: 0,
-                returns: '?', returnElem: undefined, returnStruct: undefined, returnWords: 0,
+                returns: 'V', returnElem: undefined, returnStruct: undefined, returnWords: 0,
                 complete: false, sourceCode: sourceCode, sourceOffset: sourceOffset,
                 sourceName: $$parser.sourceName };
     };
@@ -1603,7 +1605,7 @@
             }
             ft.returnWords = rw;
         } else {
-            ft.returns = '?';
+            ft.returns = 'V';
             ft.returnWords = 0;
         }
     };
@@ -3362,12 +3364,12 @@ inp:ArgsDecl ')'_
 									};
 								}
 								if (entry && entry.signature) {
-									entry.signature.returns = '?';
+									entry.signature.returns = 'V';
 									entry.signature.returnElem = undefined;
 									entry.signature.returnName = undefined;
 									entry.signature.returnCount = 0;
 									entry.signature.returnList = [];
-									$$parser.resolveFunctionReturnType($id, '?', $$s, $$i);
+									$$parser.resolveFunctionReturnType($id, 'V', $$s, $$i);
 								}
                                                                      }
                 )                                                     {
@@ -4297,6 +4299,12 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
 Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        ++$$.count;
                                                        var meta = metaSlot($a);
+                                                       if (meta.type === 'V') {
+                                                           $$parser.typeError(
+                                                               'Invalid type ({$type1})',
+                                                               $$s, $$i, meta.type
+                                                           );
+                                                       }
                                                        if ($$.types) {
                                                            $$.types.push(meta.type);
                                                        }
