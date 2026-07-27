@@ -53,6 +53,12 @@ Load effective address of local `var` into `ptr(d)` `*size` should hint how many
 `ptr(d)`, i.e. typically one for a single variable or the array size for arrays. It may be used to optimize stack frame
 sizes, for bounds checking etc. It is always legal to specify a size of zero if you do not know.
 
+> Nothing depends on `*size` for MEMORY SAFETY: at run time `ADRL` only computes an address, and the resulting pointer
+> is bounds-checked on every `PEEK`/`POKE`. Supply it anyway. It is added to the function's frame requirement, so a
+> declared span turns a stack exhaustion into a `DATA_STACK_OVERFLOW` at function entry - deterministic, and pointing at
+> the culprit - instead of a late `BAD_POKE` on whichever path happens to run. It is also what tells a compiling backend
+> that these slots are address-exposed and must live in real memory. See `docs/MemorySafetyModel.md`.
+
 ## ANDi
 - `int(d)          #int            #int`
 - `int(d)          #int            int`
@@ -73,6 +79,11 @@ Function call. %temp should specify the "transient" variable for the first param
 number of parameters (counting both input and output parameters). In GAZL 1.0 there is no compile-time check on the
 types and number of parameters passed to a function. The size operand is merely a hint that might be used to optimize
 stack frame sizes or for bounds checking etc.
+
+> Nothing depends on `*size` for MEMORY SAFETY here either: a GAZL callee re-checks its own frame in its `FUNC`
+> prologue, and a native callee declares the word count it wants when it reads the parameters, which is where that
+> bound is enforced. Supply it anyway, for the same reason as `ADRL`: it makes the caller's frame requirement cover the
+> call window, so an exhausted stack is reported at entry rather than deeper in. See `docs/MemorySafetyModel.md`.
 
 A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function declaration
 order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defined operations on a function pointer;
@@ -115,17 +126,17 @@ String constant data item
 ## DEFf
 - `#float`
 
-Define a compile‑time constant float
+Define a compile-time constant float
 
 ## DEFi
 - `#int`
 
-Define a compile‑time constant integer
+Define a compile-time constant integer
 
 ## DEFp
 - `&address`
 
-Define a compile‑time constant pointer
+Define a compile-time constant pointer
 ## COPY
 - `&address(w)     &address(r)     *size`
 - `&address(w)     ptr             *size`
@@ -221,6 +232,10 @@ Increment `ptr(d)` and branch to `@label` if it is less than `&address` / `ptr`
 
 Declares the beginning of a new function. Any previous function must have ended with either RETU or GOTO.
 
+The assembler attaches two computed constants to `FUNC`: the size of the declared frame (which advances the stack
+pointer) and the highest fixed offset the body reaches (which allocates nothing). Together they form a single entry-time
+stack check, which is why accesses at fixed offsets need no check of their own. See `docs/MemorySafetyModel.md`.
+
 ## GEQf
 - `#float          #float          @label`
 - `#float          float           @label`
@@ -249,6 +264,9 @@ Branch on greater or equal pointer
 - `var(d)          var             int`
 
 Get local variable `var` (any type) with offset `int`
+
+The offset is dynamic, so it is bounds-checked on every access, against the end of the data stack rather than the extent
+of `var`. See `SETL` and `docs/MemorySafetyModel.md`.
 
 ## GLOB
 - `*size`
@@ -519,6 +537,10 @@ Returns from function call.
 - `var(d)          int             var`
 
 Set local variable `var` (any type) with offset `int`
+
+The offset is dynamic, so it is bounds-checked on every access - but against the end of the data stack, not against the
+extent of `var`. An overrun stays inside the sandbox and typically corrupts the writing function's own frame first. See
+`docs/MemorySafetyModel.md`.
 
 ## SHLi
 - `int(d)          #int            #int`

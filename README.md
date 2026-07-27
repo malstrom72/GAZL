@@ -86,6 +86,7 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 - [Overview](docs/Overview.md) - general architecture and goals
 - [Impala Language Reference](docs/Impala.md) - the language and toolchain
 - [Instruction Set](docs/InstructionSet.md) - extracted opcode descriptions
+- [Memory Safety Model](docs/MemorySafetyModel.md) - stack frames, what is bounds-checked and when, what `*size` is for
 - [Usage Example](docs/UsageExample.md) - compile and run a simple program
 - [JSPEG Port](impala/JSPEG.md) - status and usage of the JavaScript PEG compiler
 

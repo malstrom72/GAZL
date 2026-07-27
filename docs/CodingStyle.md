@@ -121,9 +121,9 @@ These are the most important principles in the codebase. Get them wrong and the 
 - **No Doxygen.** No `///`, no `///<`, no `/** */`, no `@param`/`@return` tags. Plain `//` and `/* */` only. (NuXJS still
   carries the old Doxygen style; it is abandoned - do not copy it.)
 - **One declaration per line.**
-- **Never use en or em dashes** (U+2013 and U+2014). Plain ASCII hyphen only, everywhere: code, comments, docs, and
-  commit messages. Stick to characters that are on every keyboard and survive every encoding, so text stays greppable
-  and diffs stay clean.
+- **Never use en or em dashes** (U+2013 and U+2014), nor any other non-ASCII lookalike (U+2011 non-breaking hyphen,
+  curly quotes, U+00A0). Plain ASCII only, everywhere: code, comments, docs, and commit messages. Stick to characters
+  that are on every keyboard and survive every encoding, so text stays greppable and diffs stay clean.
 
 ## 6. Formatting
 
@@ -155,3 +155,19 @@ These are the most important principles in the codebase. Get them wrong and the 
   someCall(veryLongFirstArgument, secondArgument, thirdArgument
   		, fourthArgument, fifthArgument)
   ```
+
+## 7. Markdown
+
+- **Pad table cells so the pipes line up.** Markdown renders either way; we read the source far more often than the
+  rendering, so a table must be legible as plain ASCII. Pad every cell with trailing spaces to the width of its widest
+  cell, and make the separator row that same width in dashes. Every row then has identical length:
+  ```
+  | access                          | bound                     | enforced                         |
+  | ------------------------------- | ------------------------- | -------------------------------- |
+  | `%N`, `$x` (fixed offset)       | `localsSize + paramsSize` | once, at `FUNC` entry (cpp:1273) |
+  | `SETL` / `GETL` (dynamic index) | `dataStackEnd`            | every access (cpp:1312-1313)     |
+  ```
+  Tables obey the 120-column limit like everything else. If padding pushes past it, shorten the cells - abbreviate,
+  or move an aside into prose under the table - do not let the table sprawl.
+- **ASCII diagrams must actually align.** Count the columns; a caret or arrow that misses its target by one is worse
+  than no diagram. Generate the marker lines rather than eyeballing them.
