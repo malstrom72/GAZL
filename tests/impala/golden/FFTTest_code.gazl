@@ -652,7 +652,7 @@ init:	FUNC	; signature func init() -> void @ 467:15
 	$buf:	LOCA *256
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4d9 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 470:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 470:15
 		PEEK %2 &instance 	; trace(intToString(global instance, 10, 1, buf))
 		MOVi %3 #10 
 		MOVi %4 #1 
@@ -667,7 +667,7 @@ reset:	FUNC	; signature func reset() -> void @ 478:16
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4da 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 480:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 480:16
 		MOVp %1 &.s_params_4db 	; traceInts(" params: ", PARAM_COUNT, global params)
 		MOVi %2 #PARAM_COUNT 
 		MOVp %3 &params 

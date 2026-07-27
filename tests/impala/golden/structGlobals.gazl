@@ -51,7 +51,7 @@ main:	FUNC	; signature func main() -> void @ 25:15
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 32:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:43
 		MOVp %1 &voice 	; bump(&global voice)
-		CALL &bump %0 *2	; expects bump(ptr) -> void @ 34:21
+		CALL &bump %0 *2	; expects bump(Voice-ptr) -> void @ 34:21
 		PEEK %1 &voice:.o.Voice.note 	; printInt(global voice.note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:40

@@ -47,21 +47,21 @@ main:	FUNC	; signature func main() -> void @ 31:15
 		MOVp %1 $g 	; poke(g, 0, 10)
 		MOVi %2 #0 
 		MOVi %3 #10 
-		CALL &poke %0 *4	; expects poke(ptr, int, int) -> void @ 36:16
+		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ 36:16
 		MOVp %1 $g 	; poke(g, 1, 20)
 		MOVi %2 #1 
 		MOVi %3 #20 
-		CALL &poke %0 *4	; expects poke(ptr, int, int) -> void @ 36:32
+		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ 36:32
 		MOVp %1 $g 	; poke(g, 2, 30)
 		MOVi %2 #2 
 		MOVi %3 #30 
-		CALL &poke %0 *4	; expects poke(ptr, int, int) -> void @ 36:48
+		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ 36:48
 		MOVp %1 $g 	; poke(g, 3, 40)
 		MOVi %2 #3 
 		MOVi %3 #40 
-		CALL &poke %0 *4	; expects poke(ptr, int, int) -> void @ 36:64
+		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ 36:64
 		MOVp %2 $g 	; printInt(sum(g))
-		CALL &sum %1 *2	; expects sum(ptr) -> int @ 37:17
+		CALL &sum %1 *2	; expects sum(Grid-ptr) -> int @ 37:17
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 37:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:29
 		PEEK %1 $g #.o.Grid.n	; printInt(g->n)

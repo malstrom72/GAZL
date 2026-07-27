@@ -79,7 +79,7 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 71:21
 		MOVp %1 $s 	; output(s)
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 73:11
 		MOVp %1 &.s__4d2 	; output("\n")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 74:14
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 74:14
 		RETU   	; }
 
 	! ADDi <A> #FILE_BUFFER_SIZE #1
@@ -106,7 +106,7 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		MOVp %1 &.s_GAZLdi_4d3 	; outputLine("GAZL disassembler v2.1.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 84:39
 		MOVp %1 &.s_Disass_4d4 	; output("Disassemble file: ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 85:30
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 85:30
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
 		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 86:15
@@ -131,7 +131,7 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		GOTO @.e5  	; } else if ((int)strcmp(s, "permut8") == 0) 
 	.f4:	ADRL %1 $s *0	; if ((int)strcmp(s, "permut8") == 0) 
 		MOVp %2 &.s_permut_4d7 
-		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> unknown @ 94:41
+		CALL &strcmp %0 *3	; expects strcmp(ptr, int-ptr) -> unknown @ 94:41
 		NEQi %0 #0 @.f6
 		MOVp %1 &.s_Protec_4d8 	; outputLine("Protected file")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 95:33
@@ -178,7 +178,7 @@ main:	FUNC	; signature func main() -> void @ 79:15
 		POKE $p $c 	; (int)*p = c
 		MOVp $b $p 	; b = p
 		MOVp %1 &.s_Morey_4dc 	; output("More (y)? ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 124:30
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 124:30
 		MOVi %1 #63 	; input(63, yn)
 		ADRL %2 $yn *0
 		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 125:23

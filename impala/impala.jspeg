@@ -290,14 +290,16 @@
         return parts.join(', ');
     }
 
-    function renderTypeList(typeCodes) {
+    function renderTypeList(typeCodes, elems) {
         if (!typeCodes || typeCodes.length === 0) {
             return '';
         }
 
         var parts = [];
         for (var i = 0; i < typeCodes.length; ++i) {
-            parts.push(signatureParamCategory(typeCodes[i]));
+            parts.push(typeCodes[i] === 'S' && elems && elems[i] !== undefined
+                    ? elems[i]                              /* by-value struct: the struct name itself */
+                    : signatureCategoryForDesc(fullDescFor(typeCodes[i], elems ? elems[i] : undefined)));
         }
         return parts.join(', ');
     }
@@ -391,21 +393,24 @@
     };
 
     $$parser.formatCallExpectationComment = function (name, signature, actualTypes, callResultType,
-                                                      sourceName, sourceCode, sourceOffset) {
+                                                      sourceName, sourceCode, sourceOffset, actualElems) {
         var label = (name || 'function');
         var paramsText;
         var hasSignature = !!(signature && signature.params);
 
+        /* Element chains matter here: gazl-validate treats a bare `ptr` as element-UNKNOWN and lets it
+           match any chain, so flattening `V-ptr` to `ptr` would silently disarm the cross-unit check.
+           That is the only type record a name-only `extern function f` has. */
         if (hasSignature) {
             var extracted = [];
             for (var i = 0; i < signature.params.length; ++i) {
                 var _p = signature.params[i];
                 extracted.push(_p.type === 'S' ? (_p.struct || 'unknown')
-                                               : signatureParamCategory(_p.type));
+                                               : signatureCategoryForDesc(fullDescFor(_p.type, _p.elem)));
             }
             paramsText = extracted.join(', ');
         } else {
-            paramsText = renderTypeList(actualTypes);
+            paramsText = renderTypeList(actualTypes, actualElems);
         }
 
         var returnCode = callResultType;
@@ -423,7 +428,9 @@
         }
         var returnType = (returnCode === 'S' && signature && signature.returnStruct
                 ? signature.returnStruct                          /* by-value struct return -> the struct name */
-                : signatureReturnCategory(returnCode, known));
+                : (returnCode === 'p' && signature && signature.returnElem !== undefined
+                        ? signatureCategoryForDesc(fullDescFor(returnCode, signature.returnElem))
+                        : signatureReturnCategory(returnCode, known)));
 
         return appendOrigin('expects ' + label + '(' + paramsText + ') -> ' + returnType,
                             sourceName, sourceCode, sourceOffset);
@@ -449,7 +456,8 @@
             callResultType,
             args.sourceName,
             args.sourceCode,
-            args.sourceOffset
+            args.sourceOffset,
+            args.actualElems
         );
 
         if (!refreshed) {
@@ -4069,7 +4077,8 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            callResultType,
                                                            $$parser.sourceName,
                                                            $$s,
-                                                           $$i
+                                                           $$i,
+                                                           $$.elems
                                                        );
                                                        var commentIndex = -1;
                                                        if (callComment) {
@@ -4122,6 +4131,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                    name: calleeName,
                                                                    signature: signature,
                                                                    actualTypes: ($$.types ? $$.types.slice() : undefined),
+                                                                   actualElems: ($$.elems ? $$.elems.slice() : undefined),
                                                                    sourceName: $$parser.sourceName,
                                                                    sourceCode: $$s,
                                                                    sourceOffset: $$i

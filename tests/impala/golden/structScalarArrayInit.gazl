@@ -31,7 +31,7 @@ main:	FUNC	; signature func main() -> void @ 13:15
 		! ADDi <A> #.o.Buf.s #2	; b.s[2] = 0.5
 		MOVf $b:<A> #0.5 
 		ADRL %1 $b:.o.Buf.s *0	; sink(&b.s[0])
-		CALL &sink %0 *2	; expects sink(ptr) -> void @ 16:29
+		CALL &sink %0 *2	; expects sink(float-ptr) -> void @ 16:29
 		! ADDi <A> #.o.Buf.s #2	; printFloat(b.s[2])
 		MOVf %1 $b:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 17:20

@@ -30,7 +30,7 @@ main:	FUNC	; signature func main() -> void @ 32:15
 		MOVi %1 #17 	; q = divmod(17, 5, &r)
 		MOVi %2 #5 
 		ADRL %3 $r *0
-		CALL &divmod %0 *4	; expects divmod(int, int, ptr) -> int @ 35:23
+		CALL &divmod %0 *4	; expects divmod(int, int, int-ptr) -> int @ 35:23
 		MOVi $q %0 
 		MOVi %1 $q 	; printInt(q)
 		CALL ^printInt %0 *2	; expects printInt(int) -> void @ 36:13

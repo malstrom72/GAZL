@@ -53,7 +53,7 @@ main:	FUNC	; signature func main() -> void @ 25:15
 		ADRL %1 $lf *.z.Filter	; process(&lf, 1, 9.0)
 		MOVi %2 #1 
 		MOVf %3 #9.0 
-		CALL &process %0 *4	; expects process(ptr, int, float) -> void @ 36:22
+		CALL &process %0 *4	; expects process(Filter-ptr, int, float) -> void @ 36:22
 		! ADDi <A> #.o.Filter.state #1	; printFloat(lf.state[1])
 		MOVf %1 $lf:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 37:25

@@ -377,7 +377,7 @@ init:	FUNC	; signature func init() -> void @ 292:15
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4dd 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 294:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 294:15
 		RETU   	; }
 
 
@@ -392,7 +392,7 @@ reset:	FUNC	; signature func reset() -> void @ 301:16
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4de 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 304:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 304:16
 		MOVf $a #1024.0 	; a = 1024.0
 		! MULf <A> #TWICE_PI #440.0	; lr = TWICE_PI * 440.0 / 44100.0
 		! DIVf <A> <A> #44100.0
@@ -443,7 +443,7 @@ update:	FUNC	; signature func update() -> void @ 326:17
 	$buf:	LOCA *34
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update_4df 	; trace("update")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 329:17
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 329:17
 		PEEK %2 &params:OPERAND_2_PARAM_INDEX 	; trace(intToString(global params[OPERAND_2_PARAM_INDEX], 16, 1, buf))
 		MOVi %3 #16 
 		MOVi %4 #1 

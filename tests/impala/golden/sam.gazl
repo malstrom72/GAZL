@@ -2664,7 +2664,7 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		PEEK %0 $p 	; if ((int) *p == 0) 
 		NEQi %0 #0 @.f0
 		MOVp %1 &.s_Thisfi_4da 	; trace("This firmware requires a configuration string. E.g. \"reciter HI THERE!\"")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 2200:85
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 2200:85
 		CALL ^abort %0 *1	; expects abort() -> unknown @ 2201:10
 	.f0:	MOVp %1 &dynamicPanelTextRow 	; strcpy(global dynamicPanelTextRow, global panelTextRows[4])
 		PEEK %2 &panelTextRows:4 
@@ -2723,7 +2723,7 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		CALL &InitPlayback %0 *1	; expects InitPlayback() -> int @ 2228:27
 		NEQi %0 #0 @.f9
 		MOVp %1 &.s_Couldn_4de 	; trace("Couldn't initialize playback. Invalid input?")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 2229:56
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 2229:56
 		CALL ^abort %0 *1	; expects abort() -> unknown @ 2230:10
 	.f9:	RETU   	; }
 

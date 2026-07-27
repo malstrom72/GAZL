@@ -59,7 +59,7 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 45:21
 		MOVp %1 $s 	; output(s)
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 47:11
 		MOVp %1 &.s__4d2 	; output("\n")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 48:14
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 48:14
 		RETU   	; }
 
 
@@ -387,7 +387,7 @@ outputCellsAlive:	FUNC	; signature func outputCellsAlive(int dimX, int dimY, ptr
 		ADDi $n $n #1	; n = n + 1
 	.f2:	FORi $i %0 @.l1
 	.e0:	MOVp %1 &.s__4db 	; output("(")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 228:13
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 228:13
 		MOVi %1 $n 	; outputInt(n)
 		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 228:27
 		MOVp %1 &.s_cellsa_4dc 	; outputLine(" cells alive)")
@@ -435,7 +435,7 @@ main:	FUNC	; signature func main() -> void @ 239:15
 	$redraw:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Enterd_4dd 	; output("Enter dimensions (X,Y): ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 254:36
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 254:36
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
 		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 255:15
@@ -451,11 +451,11 @@ main:	FUNC	; signature func main() -> void @ 239:15
 	.f1:	GRTi $dimX #MAX_DIM_X @.t3	; if (dimX > MAX_DIM_X || dimY > MAX_DIM_Y) 
 		LEQi $dimY #MAX_DIM_Y @.f4
 	.t3:	MOVp %1 &.s_Toolar_4df 	; output("Too large. Max dimensions are ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 259:43
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 259:43
 		MOVi %1 #MAX_DIM_X 	; outputInt(MAX_DIM_X)
 		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 260:23
 		MOVp %1 &.s__4e0 	; output(",")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 261:14
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 261:14
 		MOVi %1 #MAX_DIM_Y 	; outputInt(MAX_DIM_Y)
 		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 262:23
 		MOVp %1 &.s__4e1 	; outputLine(".")
@@ -527,7 +527,7 @@ main:	FUNC	; signature func main() -> void @ 239:15
 		MOVi $firstTime #FALSE 	; firstTime = FALSE
 	.f22:	MOVi $redraw #FALSE 	; redraw = FALSE
 	.l23:	MOVp %1 &.s_life_4e2 	; output("life> ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 304:21
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 304:21
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
 		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 305:18
@@ -571,11 +571,11 @@ main:	FUNC	; signature func main() -> void @ 239:15
 		MOVi %4 $i 
 		CALL &randomize %0 *5	; expects randomize(int, int, ptr, int) -> void @ 317:38
 		MOVp %1 &.s_Random_4e7 	; output("Randomized with ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 318:33
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 318:33
 		MOVi %1 $i 	; outputInt(i)
 		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 319:19
 		MOVp %1 &.s__4e8 	; output(" %. ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 320:21
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 320:21
 		MOVi %1 $dimX 	; outputCellsAlive(dimX, dimY, cells)
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0
@@ -593,18 +593,18 @@ main:	FUNC	; signature func main() -> void @ 239:15
 		MOVi %4 $i 
 		CALL &run %0 *5	; expects run(int, int, ptr, int) -> void @ 327:33
 		MOVp %1 &.s_Ran_4e9 	; output("Ran ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 328:22
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 328:22
 		MOVi %1 $i 	; outputInt(i)
 		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 329:20
 		MOVp %1 &.s_genera_4ea 	; output(" generations. ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 330:32
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 330:32
 		MOVi %1 $dimX 	; outputCellsAlive(dimX, dimY, cells)
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0
 		CALL &outputCellsAlive %0 *4	; expects outputCellsAlive(int, int, ptr) -> int @ 331:43
 		GOTO @.e40  	; } else 
 	.f38:	MOVp %1 &.s_Maxgen_4eb 	; output("Max generations is ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 333:37
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 333:37
 		MOVi %1 #MAX_GENERATIONS 	; outputInt(MAX_GENERATIONS)
 		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 334:34
 		MOVp %1 &.s_Cleare_4e5:17 	; outputLine(".")
@@ -625,20 +625,20 @@ main:	FUNC	; signature func main() -> void @ 239:15
 		SETL $cells $i $c	; cells[i] = c
 		EQUi $c #0 @.f45	; if (c != 0) output("Set ")
 		MOVp %1 &.s_Set_4ec 	; output("Set ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 344:35
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 344:35
 		GOTO @.e46  
 	.f45:	MOVp %1 &.s_Reset_4ed 	; output("Reset ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 345:30
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 345:30
 	.e46:	MOVp %1 &.s_cell_4ee 	; output("cell ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 346:24
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 346:24
 		MOVi %1 $x 	; outputInt(x)
 		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 347:21
 		MOVp %1 &.s__4e0 	; output(",")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 348:20
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 348:20
 		MOVi %1 $y 	; outputInt(y)
 		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 349:21
 		MOVp %1 &.s_genera_4ea:12 	; output(". ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 350:21
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 350:21
 		MOVi %1 $dimX 	; outputCellsAlive(dimX, dimY, cells)
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0

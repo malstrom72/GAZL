@@ -726,6 +726,13 @@ runValidatorCase(
 );
 
 runValidatorCase(
+	"call site passing the wrong pointer element to a name-only extern",
+	["call-elem-def.gazl", "call-elem-mismatch.gazl"],
+	1,
+	'Signature mismatch for "takesIntPtr"',
+);
+
+runValidatorCase(
 	"extern struct matching a supplied host layout",
 	["struct-decl.gazl", "struct-layout-valid.gazl"],
 	0,

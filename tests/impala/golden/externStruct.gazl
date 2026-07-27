@@ -29,7 +29,7 @@ main:	FUNC	; signature func main() -> void @ 29:15
 		MOVp %1 $b 	; setup(b, 42, 2)
 		MOVi %2 #42 
 		MOVi %3 #2 
-		CALL &setup %0 *4	; expects setup(ptr, int, int) -> void @ 33:17
+		CALL &setup %0 *4	; expects setup(AudioBuffer-ptr, int, int) -> void @ 33:17
 		PEEK %0 $b #.o.AudioBuffer.frames	; x = b->frames + b->channels
 		PEEK %1 $b #.o.AudioBuffer.channels
 		ADDi $x %0 %1

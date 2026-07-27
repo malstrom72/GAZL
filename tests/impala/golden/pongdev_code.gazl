@@ -903,7 +903,7 @@ init:	FUNC	; signature func init() -> void @ 654:15
 	$buf:	LOCA *256
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4df 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 657:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 657:15
 		PEEK %2 &instance 	; trace(intToString(global instance, 10, 1, buf))
 		MOVi %3 #10 
 		MOVi %4 #1 
@@ -918,7 +918,7 @@ reset:	FUNC	; signature func reset() -> void @ 665:16
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4e0 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 667:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 667:16
 		MOVp %1 &.s_params_4e1 	; traceInts(" params: ", PARAM_COUNT, global params)
 		MOVi %2 #PARAM_COUNT 
 		MOVp %3 &params 
@@ -1128,7 +1128,7 @@ update:	FUNC	; signature func update() -> void @ 745:17
 	.f2:	FORi $i #CHECK_PARAMS_COUNT @.l1	; }
 	.e0:	EQUi $rebuild #FALSE @.f3	; if (rebuild != FALSE) 
 		MOVp %1 &.s_rebuil_4e5 	; trace("rebuilding")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 760:22
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 760:22
 		POKE &tapCount #0 	; global tapCount = 0
 		POKE &xorShiftRandomSeedX #123456789 	; global xorShiftRandomSeedX = 123456789
 		POKE &xorShiftRandomSeedY #362436069 	; global xorShiftRandomSeedY = 362436069

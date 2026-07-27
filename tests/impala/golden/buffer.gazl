@@ -380,7 +380,7 @@ init:	FUNC	; signature func init() -> void @ 290:15
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4dd 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 292:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 292:15
 		RETU   	; }
 
 
@@ -395,7 +395,7 @@ reset:	FUNC	; signature func reset() -> void @ 299:16
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4de 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 302:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 302:16
 		MOVf $a #0.5 	; a = 0.5
 		! MULf <A> #TWICE_PI #440.0	; lr = TWICE_PI * 440.0 / 44100.0
 		! DIVf <A> <A> #44100.0

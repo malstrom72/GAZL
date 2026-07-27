@@ -43,7 +43,7 @@ main:	FUNC	; signature func main() -> void @ 25:15
 		MOVi $src:.o.V.a #5 	; src.a = 5
 		MOVf $src:.o.V.b #1.5 	; src.b = 1.5
 		ADRL %1 $src *.z.V	; dst = *bump(&src)
-		CALL &bump %0 *2	; expects bump(ptr) -> ptr @ 29:19
+		CALL &bump %0 *2	; expects bump(V-ptr) -> V-ptr @ 29:19
 		ADRL %1 $dst *.z.V
 		COPY %1 %0 *.z.V
 		ADRL $p $raw:0 *0	; p = (V pointer)&raw[0]
@@ -63,7 +63,7 @@ main:	FUNC	; signature func main() -> void @ 25:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:27
 		MOVi $n #7 	; n = 7
 		ADRL %2 $n *0	; printInt(*pick(&n))
-		CALL &pick %1 *2	; expects pick(ptr) -> ptr @ 38:20
+		CALL &pick %1 *2	; expects pick(int-ptr) -> int-ptr @ 38:20
 		PEEK %1 %1 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:32

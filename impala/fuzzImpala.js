@@ -369,6 +369,21 @@ function genProgram() {
 		const localDecl = localDeclList.length ? '\nlocals ' + localDeclList.join(', ') : '';
 
 		const body = [];
+		// Locals are NOT zero-initialized (an out-of-line callee sees the previous call's leftovers),
+		// so reading one before writing it has no defined value. Inlining relocates a local from the
+		// frame into a transient, which relocates that garbage - a legitimate difference that would
+		// make the inline differential report false miscompiles. Seed every local first.
+		for (const l of locals) {
+			if (isStruct(l.t)) {
+				const s = structs.find((x) => x.name === l.t);
+				for (const fld of s.fields) if (!isStruct(fld.type)) body.push('\t' + l.name + '.' + fld.name + ' = ' + (fld.type === 'f' ? '0.0' : '0') + ';');
+			} else if (l.t === 'i' || l.t === 'f') {
+				body.push('\t' + l.name + ' = ' + (l.t === 'f' ? '0.0' : '0') + ';');
+			}
+		}
+		for (const a of arrLocals) {
+			for (let i = 0; i < a.size; ++i) body.push('\t' + a.name + '[' + i + '] = ' + (a.elem === 'f' ? '0.0' : '0') + ';');
+		}
 		// initialize pointer locals to a valid local array so dereferences stay in VM memory
 		for (const p of ptrLocals) {
 			const arr = arrLocals.find((a) => a.elem === ptrElem(p.t));

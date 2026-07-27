@@ -199,7 +199,7 @@ init:	FUNC	; signature func init() -> void @ 231:15
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4db 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 234:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 234:15
 		EQUi #CROSSFADE_SAMPLES #FALSE @.f0	; if (CROSSFADE_SAMPLES != FALSE) 
 		MOVi $i #0 	; for (i = 0 to 4097) 
 		GEQi #0 #4097 @.f0
@@ -226,7 +226,7 @@ reset:	FUNC	; signature func reset() -> void @ 251:16
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4dc 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 253:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 253:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
@@ -236,7 +236,7 @@ update:	FUNC	; signature func update() -> void @ 264:17
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update_4dd 	; trace("update")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 266:17
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 266:17
 		POKE &updateBits #TRUE 	; global updateBits = TRUE
 		RETU   	; }
 
@@ -350,7 +350,7 @@ process:	FUNC	; signature func process() -> void @ 285:18
 		PEEK %0 &updateBits 	; if (global updateBits != FALSE) 
 		EQUi %0 #FALSE @.f5
 		MOVp %1 &.s_bitsup_4de 	; trace("bits update")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 347:24
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 347:24
 		POKE &updateBits #FALSE 	; global updateBits = FALSE
 		MOVi $i #0 	; for (i = 0 to 16) 
 		GEQi #0 #16 @.e6

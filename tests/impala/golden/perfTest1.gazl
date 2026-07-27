@@ -49,7 +49,7 @@ main:	FUNC	; signature func main() -> void @ 19:15
 	.e2:	MOVi %1 $minj 	; printInt(minj)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 29:16
 		MOVp %1 &.s__4d2 	; print(": ")
-		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 30:13
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 30:13
 		PEEK %1 &a $minj	; printInt(global a[minj])
 		CALL ^printInt %0 *2	; expects printInt(unknown) -> unknown @ 31:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:11

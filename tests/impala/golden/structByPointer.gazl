@@ -43,7 +43,7 @@ main:	FUNC	; signature func main() -> void @ 27:15
 		ADRL %1 $v *.z.Filter	; configure(&v, 3, 0.75)
 		MOVi %2 #3 
 		MOVf %3 #0.75 
-		CALL &configure %0 *4	; expects configure(ptr, int, float) -> void @ 30:24
+		CALL &configure %0 *4	; expects configure(Filter-ptr, int, float) -> void @ 30:24
 		MOVi %1 $v:.o.Filter.mode 	; printInt(v.mode)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 31:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 31:29
@@ -55,7 +55,7 @@ main:	FUNC	; signature func main() -> void @ 27:15
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:30
 		ADRL %1 $v:.o.Filter.mode *0	; bump(&v.mode)
-		CALL &bump %0 *2	; expects bump(ptr) -> void @ 37:15
+		CALL &bump %0 *2	; expects bump(int-ptr) -> void @ 37:15
 		MOVi %1 $v:.o.Filter.mode 	; printInt(v.mode)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:29

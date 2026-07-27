@@ -84,7 +84,7 @@ main:	FUNC	; signature func main() -> void @ 32:15
 		MOVi $buf:0 #21 	; buf[0] = 21
 		MOVp $cb &doubleFirst 	; cb = doubleFirst
 		ADRL %2 $buf:0 *0	; printInt(cb(&buf[0]))
-		CALL $cb %1 *2	; expects function(ptr) -> int @ 37:22
+		CALL $cb %1 *2	; expects function(int-ptr) -> int @ 37:22
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 37:23
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:34
 		MOVp $ops:0 &add 	; ops[0] = add
@@ -107,7 +107,7 @@ main:	FUNC	; signature func main() -> void @ 32:15
 		ADRL %1 $v *.z.P	; mk(&v, 10, 3)
 		MOVi %2 #10 
 		MOVi %3 #3 
-		CALL $mk %0 *4	; expects function(ptr, int, int) -> unknown @ 43:26
+		CALL $mk %0 *4	; expects function(P-ptr, int, int) -> unknown @ 43:26
 		MOVi %1 $v:.o.P.x 	; printInt(v.x)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:26
@@ -117,7 +117,7 @@ main:	FUNC	; signature func main() -> void @ 32:15
 		MOVp $sp &split 	; sp = split
 		MOVi %1 #9 	; a = sp(9, &b)
 		ADRL %2 $b *0
-		CALL $sp %0 *3	; expects function(int, ptr) -> int @ 47:27
+		CALL $sp %0 *3	; expects function(int, int-ptr) -> int @ 47:27
 		MOVi $a %0 
 		MOVi %1 $a 	; printInt(a)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 48:13
