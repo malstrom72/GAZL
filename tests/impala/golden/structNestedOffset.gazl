@@ -1,0 +1,54 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
+	! MOVi <a> #0	; layout of struct Inner
+.o.Inner.a:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.Inner.b:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Inner:	! DEFi #<a>
+; signature struct Inner { a : int, b : int } @ 9:1
+	! MOVi <a> #0	; layout of struct Outer
+.o.Outer.pad:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.Outer.in:	! DEFi #<a>
+	! ADDi <a> #<a> #.z.Inner
+.z.Outer:	! DEFi #<a>
+; signature struct Outer { pad : int, in : Inner } @ 10:1
+; signature extern native printInt() -> unknown @ 11:1
+; signature extern native printLF() -> unknown @ 12:1
+
+;-----------------------------------------------------------------------------
+bump:	FUNC	; signature func bump(Inner-ptr q) -> void @ 12:15
+		PARA *1
+	$q:	INPp
+;-----------------------------------------------------------------------------
+		PEEK %0 $q #.o.Inner.a	; q->a = q->a + 1
+		ADDi %0 %0 #1
+		POKE $q #.o.Inner.a %0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 13:15
+		PARA *1
+	$o:	LOCA *.z.Outer
+	$p:	LOCp
+;-----------------------------------------------------------------------------
+		! ADDi <A> #.o.Outer.in #.o.Inner.a	; o.in.a = 5
+		MOVi $o:<A> #5 
+		ADRL $p $o *.z.Outer	; p = &o
+		! ADDi <A> #.o.Outer.in #.o.Inner.b	; p->in.b = 7
+		POKE $p #<A> #7
+		ADRL %1 $o:.o.Outer.in *.z.Inner	; bump(&o.in)
+		CALL &bump %0 *2	; expects bump(Inner-ptr) -> void @ 16:46
+		! ADDi <A> #.o.Outer.in #.o.Inner.a	; printInt(o.in.a)
+		MOVi %1 $o:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 17:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 17:29
+		! ADDi <A> #.o.Outer.in #.o.Inner.b	; printInt(p->in.b)
+		PEEK %1 $p #<A>
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 18:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 18:30
+		RETU   	; }

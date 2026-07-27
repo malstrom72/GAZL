@@ -1,0 +1,5 @@
+; signatures version=1
+
+; The definition side states a precise pointer element.
+takesIntPtr:	FUNC	; signature export func takesIntPtr(int-ptr a) -> int @ call-elem-def.gazl:4:1
+	RETU

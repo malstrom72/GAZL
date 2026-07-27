@@ -142,6 +142,32 @@ function main() {
 			"validator did not report expected native placeholder arity mismatch error"
 		);
 
+		const chainExportFile = writeFixture(tempDir, "chainExport.gazl", [
+			"; signatures version=1",
+			"FUNC touch\t; signature func touch(int-ptr v) -> int-ptr",
+			"\tRETU",
+			"cursor:\tGLOB *1\t; signature global cursor : int-ptr"
+		]);
+		const chainBridgeFile = writeFixture(tempDir, "chainBridge.gazl", [
+			"; signatures version=1",
+			"; signature extern global cursor : ptr",
+			"CALL touch\t; expects touch(ptr) -> ptr"
+		]);
+		const chainBridge = runValidator([chainExportFile, chainBridgeFile]);
+		assertCondition(chainBridge.status === 0, "bare ptr categories should bridge to element chains");
+		assertCondition(chainBridge.stdout.trim().length === 0, "validator reported diagnostics for bridged pointer chains");
+
+		const chainMismatchFile = writeFixture(tempDir, "chainMismatch.gazl", [
+			"; signatures version=1",
+			"; signature extern global cursor : float-ptr"
+		]);
+		const chainFailure = runValidator([chainExportFile, chainMismatchFile]);
+		assertCondition(chainFailure.status === 1, "validator should reject mismatched pointer element chains");
+		assertCondition(
+			/Global cursor does not match its definition/.test(chainFailure.stdout),
+			"validator did not report expected pointer chain mismatch error"
+		);
+
 		console.log("gazl-validator unit tests passed");
 	} finally {
 		fs.rmSync(tempDir, { recursive: true, force: true });

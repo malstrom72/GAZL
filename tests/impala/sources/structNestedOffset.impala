@@ -1,0 +1,19 @@
+/*
+	Review: nested struct with the inner NOT at offset 0. Look for the inline ! ADDi fold
+	(no runtime ADDp) for o.in.a / p->in.b, and &o.in -> ADRL $o:.o.Outer.in *.z.Inner
+	(the sub-object size, not .z.Outer).
+	Expected (GAZLCmd structNestedOffset.gazl main): 6 7
+*/
+const int DEBUG = 1
+struct Inner { int a; int b }
+struct Outer { int pad; Inner in }
+extern native printInt
+extern native printLF
+function bump(Inner pointer q) { q->a = q->a + 1; }
+function main()
+locals Outer o, Outer pointer p
+{
+	o.in.a = 5; p = &o; p->in.b = 7; bump(&o.in);
+	printInt(o.in.a); printLF();
+	printInt(p->in.b); printLF();
+}

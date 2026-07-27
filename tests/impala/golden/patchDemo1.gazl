@@ -20,6 +20,24 @@
 ; signature extern native getFrame() -> unknown @ 17:23
 ; signature extern native putFrame() -> unknown @ 18:23
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 20:42
+; signature extern const OPERATOR_1_NOP : int @ 22:25
+; signature extern const OPERATOR_1_AND : int @ 23:25
+; signature extern const OPERATOR_1_MUL : int @ 24:25
+; signature extern const OPERATOR_1_OSC : int @ 25:25
+; signature extern const OPERATOR_1_RND : int @ 26:25
+; signature extern const OPERATOR_2_NOP : int @ 27:25
+; signature extern const OPERATOR_2_OR : int @ 28:24
+; signature extern const OPERATOR_2_XOR : int @ 29:25
+; signature extern const OPERATOR_2_MSK : int @ 30:25
+; signature extern const OPERATOR_2_SUB : int @ 31:25
+; signature extern const CLOCK_FREQUENCY_PARAM_INDEX : int @ 33:38
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ 34:33
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 35:37
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 36:36
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ 37:33
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 38:37
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 39:36
+; signature extern const PARAM_COUNT : int @ 40:22
 PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 42:40
 FALSE:	! DEFi #0	; signature const FALSE : int @ 44:20
 TRUE:	! DEFi #1	; signature const TRUE : int @ 45:19
@@ -98,7 +116,7 @@ main:	FUNC	; signature func main() -> void @ 47:15
 		ADDf $r #1.0 $r	; r = (1.0 + r)
 	.f1:	ADRL %1 $left *0	; getFrame(&left, &right)
 		ADRL %2 $right *0
-		CALL ^getFrame %0 *3	; expects getFrame(ptr, ptr) -> unknown @ 69:26
+		CALL ^getFrame %0 *3	; expects getFrame(float-ptr, float-ptr) -> unknown @ 69:26
 		MULf %0 $left $r	; dxL = 0.5 * (dxzL + left * r)
 		ADDf %0 $dxzL %0
 		MULf $dxL #0.5 %0

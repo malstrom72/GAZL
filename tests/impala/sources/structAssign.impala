@@ -1,0 +1,38 @@
+/*
+	Impala 2 Step 2 (slice 3): whole-struct assignment. `a = b` lowers to a single
+	COPY *sizeof; it is statement-level. Works between struct-value locals, through a
+	struct pointer (`*p = a`), and for nested struct-value fields (`bq = a.lo`).
+	Expected when run (GAZLCmd structAssign.gazl main): 7 1.5 9 2.5 1.5.
+*/
+
+const int DEBUG = 1
+
+struct Biquad { float b0; float z1 }
+struct Voice { int note; Biquad lo; float gain }
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global array store[8]
+
+function main()
+locals Voice a, Voice b, Voice pointer p, Biquad bq
+{
+	a.note = 7;
+	a.lo.b0 = 1.5;
+	a.lo.z1 = 2.5;
+	a.gain = 9.0;
+
+	b = a;								// whole-struct local = local
+	printInt(b.note); printLF();
+	printFloat(b.lo.b0); printLF();
+	printFloat(b.gain); printLF();
+
+	p = (Voice pointer) &global store[0];
+	*p = a;								// whole struct through a pointer place
+	printFloat(p->lo.z1); printLF();
+
+	bq = a.lo;							// nested struct-value copy
+	printFloat(bq.b0); printLF();
+}

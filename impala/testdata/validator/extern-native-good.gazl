@@ -1,0 +1,3 @@
+; signatures version=1
+; a prototype that matches the native manifest (printInt(int value) -> void)
+; signature extern native printInt(int n) -> void @ extern-native-good.gazl:3:1

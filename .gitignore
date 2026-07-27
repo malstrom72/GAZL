@@ -9,3 +9,4 @@ externals/NuXJS/**/xcuserdata/
 /spike/jit-probe/.build
 
 temp/
+impala/fuzzCampaign.log

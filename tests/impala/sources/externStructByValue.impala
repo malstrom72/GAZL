@@ -1,0 +1,21 @@
+/*
+	By-value extern struct LOCAL: allocation uses the host-owned size symbol `*.z.Name`
+	(resolved at load), and field access uses the host offsets. Extern structs now have full
+	parity with normal structs for pointer use, field access (nested/array), sizeof, and
+	by-value locals/globals. The ONLY remaining pointer-only case is passing/returning by value
+	through a call (E425), where the transient VM window needs a compile-time-known slot count.
+
+	Expected (GAZLCmd externStructByValue.gazl main .o.AudioBuffer.frames 0 .o.AudioBuffer.channels 1 .z.AudioBuffer 2): 42 2
+*/
+const int DEBUG = 1
+extern struct AudioBuffer { int frames; int channels }
+extern native printInt
+extern native printLF
+function main()
+locals AudioBuffer buf
+{
+	buf.frames = 42;					// by-value extern local, direct field
+	buf.channels = 2;
+	printInt(buf.frames); printLF();	// 42
+	printInt(buf.channels); printLF();	// 2
+}

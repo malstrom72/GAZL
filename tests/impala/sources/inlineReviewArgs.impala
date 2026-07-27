@@ -1,0 +1,68 @@
+/*
+	REVIEW 1/5 - the per-argument decision (docs/Inlining.md section 5).
+
+	Every call passes exactly one argument, so the marshalling for it is unambiguous in the
+	listing. The question to check at each call site is whether the `MOV` that filled the call
+	window slot SURVIVED (materialised) or was DELETED and its source used directly
+	(substituted). A substituted call should show the body's arithmetic reading `$w` / `<A>`
+	straight off, with no window slot in sight.
+
+	  1 local + transparent body   -> SUBSTITUTE   (the whole point of the feature)
+	  2 literal + transparent body -> SUBSTITUTE   (when the reading position takes a `#const`)
+	  3 global + transparent body  -> materialise  (a global is a PEEK, not a slot)
+	  4 computed + transparent     -> materialise  (already in the slot, nothing to delete)
+	  5 local + OPAQUE body        -> materialise  (the body writes through a pointer, so it
+	                                                could observe the argument's own storage)
+	  6 literal into a SWCH value  -> materialise  (that position rejects an immediate, so the
+	                                                whole parameter keeps its slot)
+	  7 local, but a LATER argument's expansion writes it -> materialise
+
+	Case 7 is the one to look at hardest. Substitution DEFERS the read to where the body uses it, so
+	it is only sound if nothing emitted in between can write the source. A sibling argument that is
+	itself an inline call expands in place - no CALL record at all - so testing for a call is not
+	enough; the test is `recordIsOpaque`, the same predicate that decides body transparency. Check
+	that `poke(&w)` leaves `add`'s first argument materialised into a slot BEFORE the POKE.
+
+	Expected (GAZLCmd inlineReviewArgs.gazl main): 30 60 90 120 21 20 7
+*/
+const int DEBUG = 1
+
+extern native printInt
+extern native printLF
+
+global int g;
+
+inline function triple(int a) returns int r { r = a * 3; }
+
+inline function pick(int i) returns int r			/* i is read by SWCH: rejects an immediate */
+{ switch (i == 0 to 3) { case 0: r = 10; case 1: r = 20; default: r = 99; } }
+
+inline function poke(int pointer p) returns int z { *p = 99; z = 0; }	/* writes through a pointer */
+
+inline function add(int a, int b) returns int r { r = a + b; }			/* transparent, so `a` wants to substitute */
+
+inline function viaPtr(int pointer p, int a) returns int r
+{
+	*p = 1;						/* POKE to a pointer VALUE -> this body is OPAQUE */
+	r = a * 3;
+}
+
+function main()
+locals int w, int array cell[1]
+{
+	w = 10;
+	printInt(triple(w)); printLF();				/* 30  - case 1: substituted */
+	printInt(triple(20)); printLF();			/* 60  - case 2: literal, folded into MULi */
+
+	global g = 30;
+	printInt(triple(global g)); printLF();		/* 90  - case 3: global, materialised */
+	printInt(triple(w + 30)); printLF();		/* 120 - case 4: computed, materialised */
+
+	cell[0] = 0;
+	w = 7;
+	printInt(viaPtr(&cell[0], w)); printLF();	/* 21  - case 5: opaque, materialised */
+	printInt(pick(1)); printLF();				/* 20  - case 6: literal, still materialised */
+
+	w = 7;
+	printInt(add(w, poke(&w))); printLF();		/* 7   - case 7: w read BEFORE poke sets it to 99 */
+}

@@ -100,18 +100,26 @@ function renderErrorContext(lineText, pointerOffset) {
 	};
 }
 
-function formatErrorWithLocation(source, options, rawIndex, baseMessage, explicitLocationLabel) {
+function formatDiagnostic(source, options, rawIndex, severity, code, message, hint) {
 	const { index, line, lineStart, lineEnd, lineText } = getLineInfo(source, rawIndex);
 	const context = renderErrorContext(lineText, index - lineStart);
-	const locationLabel = explicitLocationLabel ?? (options && options.sourceName ? ` ${options.sourceName}` : " source");
-	const detail = context.displayLine.length > 0 || lineEnd > lineStart ? `\n${context.displayLine}\n${context.pointerLine}` : "\n^";
-	return `${baseMessage}${locationLabel} at line ${line}, column ${context.column}, offset ${index}.${detail}`;
+	const label = options && options.sourceName ? options.sourceName : "<source>";
+	const position = `${label}:${line}:${context.column}`;
+	const codeText = code ? `[${code}]` : "";
+	let text = `${position}: ${severity}${codeText}: ${message}`;
+	if (context.displayLine.length > 0 || lineEnd > lineStart) {
+		text += `\n${context.displayLine}\n${context.pointerLine}`;
+	}
+	if (hint) {
+		text += `\n${position}: note: ${hint}`;
+	}
+	return text;
 }
 
 function formatThrownCompilerError(err, source, options) {
 	if (err && typeof err === "object" && Number.isFinite(err.impalaOffset)) {
 		const baseMessage = err.impalaMessage || (err.message ? err.message.split(" : ")[0] : "JSPEG impala compiler error");
-		return formatErrorWithLocation(source, options, err.impalaOffset, baseMessage);
+		return formatDiagnostic(source, options, err.impalaOffset, "error", err.impalaCode, baseMessage, err.impalaHint);
 	}
 	if (err && err.message) {
 		return err.message;
@@ -144,6 +152,22 @@ function loadCompilerModule(compilerSource, compilerFilename) {
 	return compilerModule.exports;
 }
 
+/* The generated bundle keeps ALL parser state inside impalaCompilerImpl (every `var $$parser.x = ...`
+   in the grammar becomes a per-call local), so one loaded copy is safe to reuse across compiles - and
+   re-reading + re-_compile-ing 200 KB per call also threw away V8's optimized code every time, which
+   cost ~5x on fuzz runs that compile thousands of programs. A caller supplying its own compilerSource
+   (a test comparing an alternate build) bypasses this and loads fresh. */
+const compilerModuleCache = new Map();
+
+function loadCompilerModuleCached(compilerPath) {
+	let cached = compilerModuleCache.get(compilerPath);
+	if (cached === undefined) {
+		cached = loadCompilerModule(fs.readFileSync(compilerPath, "utf8"), compilerPath);
+		compilerModuleCache.set(compilerPath, cached);
+	}
+	return cached;
+}
+
 function compileWithJsImpala(source, options = {}) {
 	const {
 		compilerPath: compilerPathOption,
@@ -152,13 +176,16 @@ function compileWithJsImpala(source, options = {}) {
 		retabulate: shouldRetabulate = true,
 		trailingNewline,
 		randomId,
+		legacy,
+		onWarning,
 	} = options;
 
 	const compilerPath = compilerPathOption ? path.resolve(compilerPathOption) : path.join(__dirname, "impalaCompiler.js");
-	const compilerText = compilerSource ?? fs.readFileSync(compilerPath, "utf8");
 
 	const outputLines = [];
-	const compilerExports = loadCompilerModule(compilerText, compilerPath);
+	const compilerExports = compilerSource === undefined
+		? loadCompilerModuleCached(compilerPath)
+		: loadCompilerModule(compilerSource, compilerPath);
 	const compilerFn = resolveCompilerExport(compilerExports);
 	if (typeof compilerFn !== "function") {
 		throw new Error("JSPEG impala compiler did not export a function");
@@ -173,6 +200,17 @@ function compileWithJsImpala(source, options = {}) {
 	if (sourceName !== undefined) {
 		compilerOptions.sourceName = sourceName;
 	}
+	if (legacy) {
+		compilerOptions.legacy = true;
+	}
+	compilerOptions.warn = (message, offset, code, hint) => {
+		const formatted = formatDiagnostic(source, options, offset ?? 0, "warning", code, message, hint);
+		if (typeof onWarning === "function") {
+			onWarning(formatted, message, offset);
+		} else {
+			console.error(formatted);
+		}
+	};
 	let compileResult;
 	try {
 		compileResult = compilerFn(source, compilerOptions);
@@ -181,7 +219,7 @@ function compileWithJsImpala(source, options = {}) {
 	}
 	const [ok, , index] = compileResult;
 	if (!ok) {
-		throw new Error(formatErrorWithLocation(source, options, index, "JSPEG impala compiler failed to compile"));
+		throw new Error(formatDiagnostic(source, options, index, "error", "E001", "syntax error", undefined));
 	}
 	if (index !== source.length) {
 		throw new Error(`JSPEG impala compiler stopped at ${index} of ${source.length}`);

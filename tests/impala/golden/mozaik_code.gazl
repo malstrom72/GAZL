@@ -12,6 +12,21 @@ panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:33
 ; signature extern native yield() -> unknown @ 27:1
 ; signature extern native write() -> unknown @ 28:1
 ; signature extern native read() -> unknown @ 30:1
+; signature extern const DEBUG : int @ 32:1
+; signature extern const SWITCHES_SYNC_MASK : int @ 33:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ 34:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ 35:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 36:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ 38:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 39:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ 40:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ 41:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 42:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 43:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ 44:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 45:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 46:1
+; signature extern const PARAM_COUNT : int @ 48:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 49:1
 params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 50:1
@@ -418,22 +433,22 @@ process:	FUNC	; signature func process() -> void @ 244:18
 		MOVi $newRCL #TRUE 	; newRCL = TRUE
 		MOVi $newRCR #TRUE 	; newRCR = TRUE
 	.f25:	SUBi $blockCounter $blockCounter #1	; blockCounter = blockCounter - 1
-		SHRi %1 $playPosL #16	; read(rcStartL + ((playPosL >> 16) & rateCrushMask ^ reverseMask), 1, y2)
+		SHRi %1 $playPosL #16	; read(rcStartL + (((playPosL >> 16) & rateCrushMask) ^ reverseMask), 1, y2)
 		ANDi %1 %1 $rateCrushMask
 		XORi %1 %1 $reverseMask
 		ADDi %1 $rcStartL %1
 		MOVi %2 #1 
 		ADRL %3 $y2 *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 354:76
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 354:78
 		ANDi %0 $y2:0 $bitCrushMask	; global signal[0] = (int) y2[0] & bitCrushMask
 		POKE &signal:0 %0 
-		SHRi %1 $playPosR #16	; read(rcStartR + ((playPosR >> 16) & rateCrushMask ^ reverseMask), 1, y2)
+		SHRi %1 $playPosR #16	; read(rcStartR + (((playPosR >> 16) & rateCrushMask) ^ reverseMask), 1, y2)
 		ANDi %1 %1 $rateCrushMask
 		XORi %1 %1 $reverseMask
 		ADDi %1 $rcStartR %1
 		MOVi %2 #1 
 		ADRL %3 $y2 *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 356:76
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 356:78
 		ANDi %0 $y2:1 $bitCrushMask	; global signal[1] = (int) y2[1] & bitCrushMask
 		POKE &signal:1 %0 
 		ADDi $playPosL $playPosL $readRate	; playPosL = playPosL + readRate

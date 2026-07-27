@@ -1,0 +1,23 @@
+/*
+	Review: scalar struct layout + all three field-access kinds + sizeof + address-of.
+	Look for: .o.P.* / .z.P preamble; $v:.o.P.x (local), PEEK/POKE $p #.o.P.x (pointer),
+	&g:.o.P.y (global), ADRL ... *.z.P (&v), #.z.P (sizeof).
+	Expected (GAZLCmd structAccessKinds.gazl main): 10 2.5 4 2
+*/
+const int DEBUG = 1
+struct P { int x; float y }
+global P g
+extern native printInt
+extern native printFloat
+extern native printLF
+function main()
+locals P v, P pointer p
+{
+	v.x = 1; v.y = 2.5;
+	p = &v; p->x = p->x + 9;
+	global g.y = 4.0;
+	printInt(v.x); printLF();
+	printFloat(p->y); printLF();
+	printFloat(global g.y); printLF();
+	printInt(sizeof(P)); printLF();
+}

@@ -15,13 +15,13 @@ Always execute this command before committing changes to verify that the build a
 ## Repository layout
 The project uses a consistent folder structure. Build output is written to `output/` and no source files live there. Useful locations:
 
-- `tools/` – scripts for building and maintaining the code and documentation.
-- `projects/` – Xcode and Visual Studio project files.
-- `docs/` – documentation.
+- `tools/` - scripts for building and maintaining the code and documentation.
+- `projects/` - Xcode and Visual Studio project files.
+- `docs/` - documentation.
 - `externals/` - projects and source code from other repositories (only touch this content when explicitly asked to).
-- `src/` – C++ source code for the library. The library is distributed as source rather than prebuilt binaries.
-- `tests/` – regression tests.
-- `output/` – contains only build artifacts (and any runtime dependencies), no source files.
+- `src/` - C++ source code for the library. The library is distributed as source rather than prebuilt binaries.
+- `tests/` - regression tests.
+- `output/` - contains only build artifacts (and any runtime dependencies), no source files.
 
 Root-level `build.sh` and `build.cmd` (mirrored implementations) should build and test both the beta and release targets.
 
@@ -29,9 +29,8 @@ BuildCpp.sh and BuildCpp.cmd are copied from another repository. Only make chang
 
 ## Code style
 
-Naming, comments, class layout, formatting (tabs width 4, braces, 120-column lines, line continuations, `#if`
-indentation), and error handling are in [docs/CodingStyle.md](docs/CodingStyle.md) - the canonical cross-project style
-doc. Not duplicated here, to avoid drift. Commit conventions are below.
+Code style (indentation, braces, line width, comments, naming) is defined in
+[`docs/CodingStyle.md`](docs/CodingStyle.md). Only the operational hygiene note below is repo-specific.
 
 When handling files with command-line tools (which may break tab characters):
 - Always run `expand -t 4` on the file before processing.

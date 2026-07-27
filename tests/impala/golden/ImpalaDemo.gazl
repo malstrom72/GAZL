@@ -18,6 +18,7 @@ initedArray:	GLOB *10	; signature array initedArray[10] : unknown @ 78:30
 	TEMP *1
 forgetMe:	DATi #0	; signature temporary forgetMe : int @ 82:23
 SOME_COUNT:	! DEFi #4	; signature const SOME_COUNT : int @ 87:25
+; signature extern const GAZL_WORD_SIZE : int @ 91:25
 SOME_CONSTS:	CNST *SOME_COUNT	; signature array SOME_CONSTS[SOME_COUNT] : unknown @ 94:40
 	DATA #100 #200 #300 #400
 ; signature extern global defineMeLaterPlease : int @ 98:31
@@ -118,7 +119,7 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:18
 		MOVi $d #1234 	; d = 1234
 		MOVi $e #12 	; e = 12
 		ADDi $a $a #1	; a = a + 1
-		IORi %0 $a #250	; a = a | 250 & 120 ^ 60 << 3 >> 1
+		IORi %0 $a #250	; a = ((((a | 250) & 120) ^ 60) << 3) >> 1
 		ANDi %0 %0 #120
 		XORi %0 %0 #60
 		SHLi %0 %0 #3
@@ -239,7 +240,7 @@ main:	FUNC	; signature func main() -> void @ 283:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 288:63
 		CALL &showoff %0 *1	; expects showoff() -> void @ 289:11
 		MOVp %1 &.s_Bye_4d4 	; print("Bye!\n")
-		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 290:17
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 290:17
 		RETU   	; }
 
 .s_string_4d2:	CNST *8

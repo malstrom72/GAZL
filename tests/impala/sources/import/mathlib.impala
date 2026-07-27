@@ -1,0 +1,41 @@
+/*
+	A shared library unit, imported by main.impala. Its struct type and functions become
+	available to importers with full typed signatures (this is the whole program compiled
+	together), so cross-unit struct types, struct pointers and out-parameters all codegen
+	correctly.
+
+	Note: struct-value params, struct returns and multi-value returns are parked for
+	Impala 3.0 (see docs/ParkedFeatures.md), so results come back through pointers.
+*/
+
+struct Vec2 { int x; int y }
+
+/* An `inline` helper crosses a unit boundary because the closure concatenates the defining unit
+   first, so its body is captured before any importer can call it. It emits NO symbol - grep the
+   golden for `clampi:` and there is nothing. */
+inline function clampi(int v, int lo, int hi) returns int r
+locals int t
+{
+	t = v;
+	if (t < lo) { t = lo; }
+	if (t > hi) { t = hi; }
+	r = t;
+}
+
+function makeVec(Vec2 pointer v, int x, int y)
+{
+	v->x = x;
+	v->y = y;
+}
+
+function addVec(Vec2 pointer r, Vec2 pointer a, Vec2 pointer b)
+{
+	r->x = a->x + b->x;
+	r->y = a->y + b->y;
+}
+
+function divmod(int a, int b, int pointer rem) returns int q
+{
+	q = a / b;
+	*rem = a - a / b * b;
+}

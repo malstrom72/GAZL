@@ -1,0 +1,21 @@
+/*
+	Review: extern (host-owned) struct with a normal struct nested inside. No accumulator
+	preamble for Frame (host owns it), but Impala DOES emit the flattened .o.Frame.origin.x
+	(it owns Point). #.o.Frame.w / #.z.Frame are referenced but host-defined.
+
+	Expected (GAZLCmd externStructReview.gazl main .o.Frame.origin 0 .o.Frame.w 2 .z.Frame 3): 3 7 3
+*/
+const int DEBUG = 1
+struct Point { int x; int y }
+extern struct Frame { Point origin; int w }
+extern native printInt
+extern native printLF
+function setup(Frame pointer f) { f->origin.x = 3; f->w = 7; }
+function main()
+locals int array raw[8], Frame pointer f
+{
+	f = (Frame pointer)&raw[0]; setup(f);
+	printInt(f->origin.x); printLF();
+	printInt(f->w); printLF();
+	printInt(sizeof(Frame)); printLF();
+}

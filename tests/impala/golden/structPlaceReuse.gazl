@@ -1,0 +1,48 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 12:1
+	! MOVi <a> #0	; layout of struct Biquad
+.o.Biquad.b0:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.Biquad.z1:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Biquad:	! DEFi #<a>
+; signature struct Biquad { b0 : float, z1 : float } @ 13:1
+	! MOVi <a> #0	; layout of struct Voice
+.o.Voice.note:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.Voice.lo:	! DEFi #<a>
+	! ADDi <a> #<a> #.z.Biquad
+.o.Voice.gain:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Voice:	! DEFi #<a>
+; signature struct Voice { note : int, lo : Biquad, gain : float } @ 15:1
+; signature extern native printInt() -> unknown @ 16:1
+; signature extern native printLF() -> unknown @ 18:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 18:15
+		PARA *1
+	$v:	LOCA *.z.Voice
+	$p:	LOCp
+	$raw:	LOCA *8
+;-----------------------------------------------------------------------------
+		MOVi $v:.o.Voice.note #5 	; v.note = 5
+		ADRL $p $raw:0 *0	; p = (Voice pointer) &raw[0]
+		ADRL %0 $v *.z.Voice	; *p = v
+		COPY $p %0 *.z.Voice
+		PEEK %1 $p #.o.Voice.note	; printInt(p->note)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 24:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 24:30
+		POKE $p #.o.Voice.note #1	; p->note = 1
+		PEEK %1 $p #.o.Voice.note	; printInt(p->note)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 26:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 26:30
+		PEEK %0 $p #.o.Voice.note	; p->note = p->note + 6
+		ADDi %0 %0 #6
+		POKE $p #.o.Voice.note %0
+		PEEK %1 $p #.o.Voice.note	; printInt(p->note)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 28:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:30
+		RETU   	; }

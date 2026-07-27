@@ -27,7 +27,7 @@ yet supply or retrieve the container the way PPEG did. 【F:impala/jspeg.jspeg�
 The following ideas remain relevant for future evolution. Option 7 below is now implemented and documents the shipped `$$.` holder escape hatch for reference.
 
 ### 1. Introduce an Explicit Container Alias Inside Actions
-Add a second token in the `Variable` rule-e.g. `$$$` or `$container`-that rewrites to the bare `$` holder instead of `$._`. The action walker would allow property access on this alias without appending `._`, giving grammar authors a deliberate way to reach the container when needed while keeping existing `$$` behaviour intact. Implementation touches would include extending the `Variable` alternation and adjusting the `Action` rewrite branch that handles the `$$` prefix. 【F:impala/jspeg.jspeg†L73-L107】【F:impala/jspeg.jspeg†L189-L191】
+Add a second token in the `Variable` rule - e.g. `$$$` or `$container`-that rewrites to the bare `$` holder instead of `$._`. The action walker would allow property access on this alias without appending `._`, giving grammar authors a deliberate way to reach the container when needed while keeping existing `$$` behaviour intact. Implementation touches would include extending the `Variable` alternation and adjusting the `Action` rewrite branch that handles the `$$` prefix. 【F:impala/jspeg.jspeg†L73-L107】【F:impala/jspeg.jspeg†L189-L191】
 
 *Pros:* preserves backwards compatibility for grammars that rely on the value-only semantics; keeps the holder concept internal to JSPEG. *Cons:* introduces yet another sigil to document and remember; actions must opt in everywhere they need the container.
 
@@ -59,7 +59,7 @@ Extend the action rewriter with a deliberate escape hatch, such as recognising `
 ### 7. Interpret `$$.` as the Container Holder *(Implemented)*
 JSPEG now keeps the existing `$$`→`$._` rewrite while treating `$$.` as an escape hatch that emits the holder `$`. The action walker consumes the prefix, optionally re-inserting a dot so property accesses like `$$.foo` become `$.foo`, and the `Variable` rule maps `$$.` captures/tags to the same holder-aware form. The generated wrapper still returns `_o._`, preserving API compatibility for callers. 【F:impala/jspeg.jspeg†L80-L110】【F:impala/jspeg.jspeg†L204-L207】
 
-*Pros:* Simple mental model-`$$` stays the value, `$$.` reaches the container-and required only a localised tweak to the rewrite logic. Existing grammars that already used `$$.` property chains now target the holder automatically. *Cons:* Callers still cannot obtain the holder, and authors must remember to include the dot when they want container semantics.
+*Pros:* Simple mental model-`$$` stays the value, `$$.` reaches the container - and required only a localised tweak to the rewrite logic. Existing grammars that already used `$$.` property chains now target the holder automatically. *Cons:* Callers still cannot obtain the holder, and authors must remember to include the dot when they want container semantics.
 
 ## Recommendation
 With the `$$.` escape hatch in place, JSPEG once again lets grammars reach the holder without disturbing existing `$$` value semantics. Future exploration can focus on caller-facing improvements (such as exposing the holder through the parser API) or alternate ergonomics if container access needs to extend beyond actions.

@@ -1,0 +1,19 @@
+/*
+	Review: scalar-array struct field + array-field decay + brace initializer. Look for
+	! ADDi #4 in the Buf preamble, the brace-init data block for `preset`, and &b.s[0]
+	decaying to a plain float pointer.
+	Expected (GAZLCmd structScalarArrayInit.gazl main): 0.5 4
+*/
+const int DEBUG = 1
+struct Buf { float array s[4]; int len }
+global Buf preset = { { 1.0, 2.0, 3.0, 4.0 }, 4 }
+extern native printFloat
+extern native printLF
+function sink(float pointer fp) { *fp = 9.0; }
+function main()
+locals Buf b
+{
+	b.s[2] = 0.5; sink(&b.s[0]);
+	printFloat(b.s[2]); printLF();
+	printFloat(global preset.s[3]); printLF();
+}

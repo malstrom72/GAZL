@@ -1,0 +1,22 @@
+/*
+	Review: struct arrays - a struct-element array FIELD and a top-level global struct array,
+	each with a constant and a dynamic index. Look for ! MULi #N #.z.Cell (never a baked stride);
+	constant index folds into one POKE, dynamic index -> runtime MULi $i #.z.Cell + ADDp.
+	Expected (GAZLCmd structArraysMixed.gazl main): 7 1 2
+*/
+const int DEBUG = 1
+struct Cell { int lo; int hi }
+struct Bank { Cell array cells[3]; int n }
+global Cell array top[3]
+extern native printInt
+extern native printLF
+function main()
+locals Bank b, int i
+{
+	b.cells[2].hi = 7;
+	for (i = 0 to 3) { b.cells[i].lo = i; }
+	for (i = 0 to 3) { global top[i].hi = i; }
+	printInt(b.cells[2].hi); printLF();
+	printInt(b.cells[1].lo); printLF();
+	printInt(global top[2].hi); printLF();
+}

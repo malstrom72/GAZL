@@ -3211,7 +3211,7 @@ ACTSPK:	CNST *36	; signature array ACTSPK[36] : unknown @ 981:27
 	DATA #29 #110 #73 #75 #29 #61 #59 #59 #174 #109 #67 #61
 	DATA #147 #155 #195 #146 #110 #61 #61 #14 #195 #42 #61
 	! MULi <A> #21 #5
-HINTS:	CNST *<A>	; signature array HINTS[<A>] : unknown @ 986:30
+HINTS:	CNST *<A>	; signature array HINTS[] : unknown @ 986:30
 	DATA #0 #0 #0 #0 #0 #0 #4 #2 #62 #63 #0 #5 #2 #18 #19 #0
 	DATA #8 #2 #20 #21 #0 #75 #4 #176 #177 #0 #25 #5 #178 #179
 	DATA #0 #20 #3 #180 #181 #0 #8 #2 #243 #244 #0 #25 #2 #247

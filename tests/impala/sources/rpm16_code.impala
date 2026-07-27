@@ -153,7 +153,7 @@ locals	int tmp, int clock, array samps[4], int diff
 {
 	clock = 0;
 	loop {
-		if ((tmp = global clock) != clock & 0xFFFF) {
+		if ((tmp = global clock) != (clock & 0xFFFF)) {
 			clock = tmp;
 		}
 		diff = ((((clock / 2) & 0xFFFF) - (clock & 0xFFFF)) - 2) & 0xFFFF;

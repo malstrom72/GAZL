@@ -115,6 +115,10 @@ function createContext(options) {
 			consts: new SimpleMap(),
 			arrays: new SimpleMap()
 		},
+		externStructs: new SimpleMap(),          // name -> [{ fields, location }]
+		structDefs: new SimpleMap(),             // name -> [{ fields, location }] from a real definition
+		layoutOffsets: new SimpleMap(),          // struct name -> [field names defined as .o.N.f]
+		layoutSizes: new SimpleMap(),            // struct name -> location of .z.N
 		calls: new SimpleMap(),
 		definitions: new SimpleMap(),
 		diagnostics: [],
@@ -160,7 +164,7 @@ function parseParamTypes(paramText) {
 		if (!raw) {
 			continue;
 		}
-		var match = raw.match(/^[A-Za-z?][A-Za-z0-9?]*/);
+		var match = raw.match(/^[A-Za-z?][A-Za-z0-9?-]*/);   // hyphens: element chains like "int-ptr"
 		var token = match ? match[0] : raw;
 		result.push(token.toLowerCase());
 	}
@@ -279,11 +283,42 @@ function parseSignatureComment(comment) {
 		};
 	}
 
+	// `extern struct Name { field : int, other : float-ptr }` - the interface Impala compiled
+	// against. Checked before the value branch, whose `name : type` regex would swallow it.
+	var structMatch = split.body.match(/^(extern\s+)?struct\s+([^\s{]+)\s*\{\s*([^}]*)\}\s*$/);
+	if (structMatch) {
+		var structFields = [];
+		var rawFields = structMatch[3].split(",");
+		for (var __fi = 0; __fi < rawFields.length; ++__fi) {
+			var piece = rawFields[__fi].trim();
+			if (piece === "") { continue; }
+			var fm = piece.match(/^(\S+)\s*:\s*(\S+)$/);
+			structFields.push(fm ? { name: fm[1], type: fm[2].toLowerCase() } : { name: piece, type: "unknown" });
+		}
+		return {
+			kind: "struct",
+			name: structMatch[2],
+			fields: structFields,
+			extern: !!structMatch[1],
+			origin: split.origin
+		};
+	}
+
 	var valueMatch = split.body.match(/^(.*?)\s+([^:]+?)\s*:\s*(\S+)\s*$/);
 	if (valueMatch) {
 		var roleInfo = classifyRole(valueMatch[1]);
 		var type = valueMatch[3].toLowerCase();
 		var nameSpec = valueMatch[2].trim();
+		// The lazy role group leaves the role word attached to the name in extern rows such
+		// as "extern array name[] : unknown" or "extern global name : ptr"; strip it so
+		// extern declarations match their definitions.
+		var rolePrefix = nameSpec.match(/^(array|global|const)\s+(.+)$/);
+		if (rolePrefix) {
+			nameSpec = rolePrefix[2];
+			if (rolePrefix[1] !== "array") {
+				roleInfo = { extern: roleInfo.extern, native: roleInfo.native, role: rolePrefix[1] };
+			}
+		}
 		var arrayMatch = nameSpec.match(/^([^\[]+)\[(.*)\]$/);
 		if (arrayMatch) {
 			var sizeText = arrayMatch[2].trim();
@@ -622,7 +657,12 @@ function addConstImport(ctx, parsed, loc) {
 	if (!ctx.externs.consts.has(parsed.name)) {
 		ctx.externs.consts.set(parsed.name, []);
 	}
-	ctx.externs.consts.get(parsed.name).push({ signature: record, location: loc });
+	// hostSupplied: a valueless `const int N;` is defined by the HOST or the GAZL run-time, so there is
+	// no GAZL definition to find and "no definition found" would be noise on every one of them (the
+	// corpus declares hundreds). The checks that do apply - two declarations disagreeing on type, and a
+	// declaration disagreeing with a real definition when one IS present - still run. Same reasoning as
+	// the existing `native` exemption.
+	ctx.externs.consts.get(parsed.name).push({ signature: record, location: loc, hostSupplied: true });
 }
 
 function addArrayExport(ctx, parsed, loc) {
@@ -692,6 +732,10 @@ function addCallExpectation(ctx, parsed, loc, callInfo) {
 	});
 }
 
+function isPointerCategory(category) {
+	return category === "ptr" || category.length > 4 && category.substr(category.length - 4) === "-ptr";
+}
+
 function typesCompatible(a, b) {
 	if (a == null || b == null) {
 		return true;
@@ -699,7 +743,15 @@ function typesCompatible(a, b) {
 	if (a === "unknown" || b === "unknown") {
 		return true;
 	}
-	return a === b;
+	if (a === b) {
+		return true;
+	}
+	// Element-typed pointer chains ("int-ptr", "int-ptr-ptr"): a bare "ptr" is an
+	// element-unknown pointer and matches any chain; differing chains do not match.
+	if (isPointerCategory(a) && isPointerCategory(b) && (a === "ptr" || b === "ptr")) {
+		return true;
+	}
+	return false;
 }
 
 function functionSignaturesCompatible(a, b) {
@@ -759,6 +811,15 @@ function recordSignature(ctx, parsed, loc) {
 				addConstExport(ctx, parsed, loc);
 			}
 			break;
+		case "struct":
+			if (parsed.extern) {                             // a declaration: what this unit compiled against
+				if (!ctx.externStructs.has(parsed.name)) { ctx.externStructs.set(parsed.name, []); }
+				ctx.externStructs.get(parsed.name).push({ fields: parsed.fields, location: loc });
+			} else {                                         // a definition: the real, typed layout
+				if (!ctx.structDefs.has(parsed.name)) { ctx.structDefs.set(parsed.name, []); }
+				ctx.structDefs.get(parsed.name).push({ fields: parsed.fields, location: loc });
+			}
+			break;
 		case "array":
 			if (parsed.extern) {
 				addArrayImport(ctx, parsed, loc);
@@ -792,6 +853,19 @@ function processFile(filePath, ctx) {
 			if (parsed) {
 				recordSignature(ctx, parsed, location(filePath, lineNumber, parsed.origin));
 			}
+		}
+
+		// Layout constants: `.o.Name.field: ! DEFi ...` and `.z.Name: ! DEFi ...`. Whoever supplies
+		// them (an Impala unit, or a host header) is asserting a struct layout, so an extern struct
+		// declaration can be checked against them.
+		var offMatch = line.match(/^\s*\.o\.([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\s*:/);
+		if (offMatch) {
+			if (!ctx.layoutOffsets.has(offMatch[1])) { ctx.layoutOffsets.set(offMatch[1], []); }
+			ctx.layoutOffsets.get(offMatch[1]).push(offMatch[2]);
+		}
+		var sizeMatch = line.match(/^\s*\.z\.([A-Za-z_$][\w$]*)\s*:/);
+		if (sizeMatch && !ctx.layoutSizes.has(sizeMatch[1])) {
+			ctx.layoutSizes.set(sizeMatch[1], location(filePath, lineNumber, undefined));
 		}
 
 		var expectsIdx = line.indexOf("; expects");
@@ -916,7 +990,7 @@ function compareExternSets(kind, externMap, exportMap, ctx, comparator, mismatch
 			continue;
 		}
 
-		var skipMissing = entries.every(function (entry) { return entry.native; });
+		var skipMissing = entries.every(function (entry) { return entry.native || entry.hostSupplied; });
 		if (!skipMissing) {
 			ctx.diagnostics.push({
 				severity: "warning",
@@ -1124,6 +1198,156 @@ function validateCalls(ctx) {
 	}
 }
 
+// An `extern struct` says "the host owns this layout; here is the interface I compiled against".
+// Two things are checkable, and neither was before: two units must not declare the same extern
+// struct differently, and where a layout IS supplied in the scanned set (.o.Name.field / .z.Name),
+// every declared field must have an offset constant and the size must exist. Without this a host
+// that renames, drops or re-types a field links fine and corrupts memory at run time.
+// An `extern` declaration is a CLAIM about a function implemented elsewhere; Impala compiles calls
+// from it (argument checks, casts, result type). Linking is where the claim must be confirmed. An
+// `extern native` declaration is also recorded as a fallback definition so calls to natives nobody
+// describes still resolve - but it must NOT certify itself: where an authoritative definition exists
+// (the native manifest, or a real definition in another scanned unit) the declaration has to match it.
+function validateExternDeclarations(ctx) {
+	function authoritative(def) {
+		return def.kind !== "extern native" && !(def.signature && def.signature.wildcard);
+	}
+	var entries = ctx.externs.functions.entries();
+	for (var ei = 0; ei < entries.length; ++ei) {
+		var name = entries[ei][0];
+		var decls = entries[ei][1];
+		var defs = (ctx.definitions.get(name) || []).filter(authoritative);
+		if (defs.length === 0) { continue; }          // nothing authoritative to check against
+		for (var di = 0; di < decls.length; ++di) {
+			var decl = decls[di];
+			if (decl.signature && decl.signature.wildcard) { continue; }   // name-only asserts nothing
+			for (var fi = 0; fi < defs.length; ++fi) {
+				if (functionSignaturesCompatible(decl.signature, defs[fi].signature)) { continue; }
+				ctx.diagnostics.push({
+					severity: "error",
+					message: "extern declaration of " + name + " does not match its definition: declared \""
+						+ formatSignatureForMessage(name, decl.signature) + "\" but definition provides \""
+						+ formatSignatureForMessage(name, defs[fi].signature) + "\"",
+					locations: [
+						{ label: "extern declaration", file: decl.location.file,
+							line: decl.location.line, origin: decl.location.origin },
+						{ label: "definition", file: defs[fi].location.file,
+							line: defs[fi].location.line, origin: defs[fi].location.origin }
+					]
+				});
+			}
+		}
+	}
+}
+
+function validateExternStructs(ctx) {
+	function describe(fields) {
+		var parts = [];
+		for (var i = 0; i < fields.length; ++i) { parts.push(fields[i].name + " : " + fields[i].type); }
+		return "{ " + parts.join(", ") + " }";
+	}
+
+	// A field's rendered type packs an element category and an optional extent ("int", "int-ptr",
+	// "int[4]", "int[]"). Unpack it and reuse arraySignaturesCompatible, so a struct field obeys exactly
+	// the rule a plain array and a global already obey: element categories via typesCompatible (a bare
+	// "ptr" matches any pointer chain), and the extent only when BOTH sides state one - an empty extent
+	// is a declared "cannot state this as a comparable constant", skipped rather than assumed equal.
+	function fieldParts(text) {
+		var m = text.match(/^(.*)\[(.*)\]$/);
+		if (!m) { return { category: text, size: undefined }; }
+		var size = m[2].trim();
+		return { category: m[1], size: (size === "" ? undefined : size) };
+	}
+
+	function fieldListsMatch(fa, fb) {
+		if (fa.length !== fb.length) { return false; }
+		for (var i = 0; i < fa.length; ++i) {
+			if (fa[i].name !== fb[i].name) { return false; }
+			var pa = fieldParts(fa[i].type);
+			var pb = fieldParts(fb[i].type);
+			// an array field and a scalar field of the same category are still different shapes
+			if ((pa.size === undefined) !== (pb.size === undefined)
+					&& /\[/.test(fa[i].type) !== /\[/.test(fb[i].type)) { return false; }
+			if (!arraySignaturesCompatible(pa, pb)) { return false; }
+		}
+		return true;
+	}
+
+	var entries = ctx.externStructs.entries();
+	for (var ei = 0; ei < entries.length; ++ei) {
+		var name = entries[ei][0];
+		var decls = entries[ei][1];
+
+		// (a) conflicting declarations of the same extern struct
+		for (var a = 0; a < decls.length; ++a) {
+			for (var b = a + 1; b < decls.length; ++b) {
+				if (!fieldListsMatch(decls[a].fields, decls[b].fields)) {
+					ctx.diagnostics.push({
+						severity: "error",
+						message: "extern struct " + name + " has conflicting declarations: "
+							+ describe(decls[a].fields) + " vs " + describe(decls[b].fields),
+						locations: [
+							{ label: "first declaration", file: decls[a].location.file,
+								line: decls[a].location.line, origin: decls[a].location.origin },
+							{ label: "second declaration", file: decls[b].location.file,
+								line: decls[b].location.line, origin: decls[b].location.origin }
+						]
+					});
+				}
+			}
+		}
+
+		// (b) a real definition of the same struct is authoritative: field names, order AND types
+		//     must match what this unit compiled against.
+		var realDefs = ctx.structDefs.get(name) || [];
+		for (var ri = 0; ri < realDefs.length; ++ri) {
+			for (var qi = 0; qi < decls.length; ++qi) {
+				if (fieldListsMatch(decls[qi].fields, realDefs[ri].fields)) { continue; }
+				ctx.diagnostics.push({
+					severity: "error",
+					message: "extern struct " + name + " does not match its definition: declared "
+						+ describe(decls[qi].fields) + " but definition provides " + describe(realDefs[ri].fields),
+					locations: [
+						{ label: "extern declaration", file: decls[qi].location.file,
+							line: decls[qi].location.line, origin: decls[qi].location.origin },
+						{ label: "definition", file: realDefs[ri].location.file,
+							line: realDefs[ri].location.line, origin: realDefs[ri].location.origin }
+					]
+				});
+			}
+		}
+
+		// (b) check against a supplied layout, when one is in the scanned set
+		var offsets = ctx.layoutOffsets.get(name);
+		var hasSize = ctx.layoutSizes.has(name);
+		if (!offsets && !hasSize) { continue; }        // nothing supplied here: nothing to check against
+		var decl = decls[0];
+		var supplied = offsets || [];
+		for (var fi = 0; fi < decl.fields.length; ++fi) {
+			var fieldName = decl.fields[fi].name;
+			var found = false;
+			for (var si = 0; si < supplied.length; ++si) { if (supplied[si] === fieldName) { found = true; break; } }
+			if (!found) {
+				ctx.diagnostics.push({
+					severity: "error",
+					message: "extern struct " + name + " declares field \"" + fieldName
+						+ "\" but the supplied layout defines no .o." + name + "." + fieldName,
+					locations: [ { label: "declared here", file: decl.location.file,
+						line: decl.location.line, origin: decl.location.origin } ]
+				});
+			}
+		}
+		if (!hasSize) {
+			ctx.diagnostics.push({
+				severity: "error",
+				message: "extern struct " + name + " has offset constants but no .z." + name + " size constant",
+				locations: [ { label: "declared here", file: decl.location.file,
+					line: decl.location.line, origin: decl.location.origin } ]
+			});
+		}
+	}
+}
+
 function validateContext(ctx) {
 	compareExternSets(
 		"Function",
@@ -1161,6 +1385,8 @@ function validateContext(ctx) {
 		function (name) { return "No definition found for extern array " + name; }
 	);
 
+	validateExternDeclarations(ctx);
+	validateExternStructs(ctx);
 	validateCalls(ctx);
 }
 

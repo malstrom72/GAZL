@@ -2,11 +2,13 @@
 
 const fs = require('fs');
 const path = require('path');
+const childProcess = require('child_process');
 
 const { compileWithJsImpala } = require('./impalaJsCompilerRunner');
 
 const args = process.argv.slice(2);
 const makeGold = args.some((arg) => arg === 'makegold' || arg === '--makegold');
+const skipRun = args.some((arg) => arg === '--no-run');
 
 const IMPALA_ENCODING = 'latin1';
 const RANDOM_ID = 0x4d2;
@@ -52,9 +54,55 @@ function formatError(err) {
         return String(err);
 }
 
+const gazlCmd = path.join(repoRoot, 'output',
+        process.platform === 'win32' ? 'GAZLCmd.exe' : 'GAZLCmd');
+
+/* A fixture opts in to being ASSEMBLED AND RUN by declaring, in its header comment:
+        Expected (GAZLCmd <name>.gazl <entry> [<define> <value> ...]): <whitespace-separated output>
+   The trailing defines feed GAZLCmd's own `<define symbol> <define value>` arguments, which is how an
+   `extern struct` fixture supplies the host-owned layout it compiled against. Without such a line a
+   fixture is compile-only, so the byte-diff above is the whole check for it.
+
+   This exists because compiling clean does NOT mean the GAZL assembles: a struct field's folded extent
+   used to be emitted after the layout block that read it, which every golden and a million fuzzed
+   programs missed because nothing ever fed a golden to the assembler. */
+function parseExpectedRun(source) {
+        const match = source.match(/Expected \(GAZLCmd ([^)]*)\):[ \t]*(.*)/);
+        if (!match) { return undefined; }
+        const parts = match[1].trim().split(/\s+/);
+        return { args: parts.slice(1), want: match[2].trim().split(/\s+/).filter(Boolean) };
+}
+
+function runGolden(goldenPath, expectedRun) {
+        const result = childProcess.spawnSync(gazlCmd,
+                [goldenPath].concat(expectedRun.args), { encoding: 'latin1', timeout: 30000 });
+        if (result.error) {
+                return `could not run GAZLCmd: ${result.error.message}`;
+        }
+        /* GAZLCmd puts the PROGRAM's output on stdout and its own report (sizes, Status) on stderr. */
+        const report = result.stderr || '';
+        if (!/Code size:/.test(report)) {             // never reached the entry point -> assembly failed
+                const line = report.split('\n').find((l) => l.trim()) || '(no output)';
+                return `did not assemble: ${line.trim()}`;
+        }
+        const got = (result.stdout || '').trim().split(/\s+/).filter(Boolean);
+        if (got.join(' ') !== expectedRun.want.join(' ')) {
+                return `printed "${got.join(' ')}" but the fixture expects "${expectedRun.want.join(' ')}"`;
+        }
+        if (!/Status: 0\b/.test(report)) {
+                return `ran but exited non-zero: ${(report.match(/Status: .*/) || ['?'])[0]}`;
+        }
+        return undefined;
+}
+
 function main() {
         let totalFiles = 0;
         let errorCount = 0;
+        let ranCount = 0;
+        const haveGazlCmd = fs.existsSync(gazlCmd);
+        if (!haveGazlCmd && !makeGold && !skipRun) {
+                console.log(`(no ${path.relative(repoRoot, gazlCmd)} - skipping assemble+run checks)`);
+        }
 
         const sourceFiles = fs
                 .readdirSync(sourcesDir)
@@ -115,14 +163,31 @@ function main() {
                         writeImpalaFile(erroneousPath, output);
                         console.error(`Wrote actual output to ${path.relative(repoRoot, erroneousPath)}`);
                         errorCount += 1;
-                } else {
+                        totalFiles += 1;
+                        continue;
+                }
+
+                const expectedRun = parseExpectedRun(source);
+                if (!expectedRun || skipRun || !haveGazlCmd) {
                         console.log('OK');
+                        totalFiles += 1;
+                        continue;
+                }
+
+                const failure = runGolden(goldenPath, expectedRun);
+                if (failure) {
+                        console.error(`<<< ${failure} >>>`);
+                        errorCount += 1;
+                } else {
+                        console.log(`OK (ran: ${expectedRun.want.join(' ')})`);
+                        ranCount += 1;
                 }
 
                 totalFiles += 1;
         }
 
         console.log('');
+        console.log(`Assembled and ran: ${ranCount}`);
         console.log(`Total errors: ${errorCount} / ${totalFiles}`);
 
         if (errorCount !== 0) {

@@ -18,6 +18,11 @@ CALL buildGAZLCmd.cmd release
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
+REM Verify the checked-in Impala compiler is regenerated from the current grammar, so the
+REM playground (impala\playground.html loads impala\impalaCompiler.js directly) never goes stale.
+node impala\updateJSPEG.js --check
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM Build Impala
 CALL tools\BuildImpala.cmd
 IF ERRORLEVEL 1 EXIT /B 1
@@ -27,6 +32,10 @@ PUSHD impala
 node jspegCompilerTests.js
 IF ERRORLEVEL 1 EXIT /B 1
 node runJspegTests.js
+IF ERRORLEVEL 1 EXIT /B 1
+node importBuildTests.js
+IF ERRORLEVEL 1 EXIT /B 1
+node fuzzImpala.js 3000 1
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 

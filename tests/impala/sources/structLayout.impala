@@ -1,0 +1,44 @@
+/*
+	Impala 2 Phase 2a: struct layout emitted as GAZL constants.
+
+	Every (non-extern) struct emits its field offsets and total size as compile-time DEFi
+	constants via a rolling `<a>` accumulator: `.o.Struct.field: ! DEFi #<a>` per field and
+	`.z.Struct: ! DEFi #<a>` for the size. Field access references `#.o.Struct.field` and
+	sizeof references `#.z.Struct` instead of baked numbers. Nested fields materialize the
+	sub-object address, so every offset is a single symbol.
+
+	Exercises: sizeof (.z), direct fields, nested fields (through a pointer and a local),
+	whole-struct copy (COPY), and a struct pointer over raw storage.
+
+	Expected (GAZLCmd structLayout.gazl main): 4 2 0.75 0.5
+*/
+
+const int DEBUG = 1
+
+struct Biquad { float b0; float z1 }
+struct Voice  { int note; Biquad lo; float gain }
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function tick(Voice pointer v, float in)
+returns float out
+{
+	v->lo.z1 = in * v->lo.b0;			// nested field through a pointer
+	out = v->lo.z1 + v->gain;
+}
+
+function main()
+locals Voice v, Voice pointer p, int array pool[8]
+{
+	printInt(sizeof(Voice)); printLF();		// 4  = note(1) + Biquad(2) + gain(1)  -> .z.Voice
+	printInt(sizeof(Biquad)); printLF();	// 2  -> .z.Biquad
+	v.note = 60;
+	v.lo.b0 = 0.5;							// nested field on a local
+	v.gain = 0.25;
+	p = (Voice pointer) &pool[0];
+	*p = v;									// whole-struct copy (COPY *.z.Voice-worth)
+	printFloat(tick(p, 1.0)); printLF();	// 0.75 = 1.0*0.5 + 0.25
+	printFloat(v.lo.b0); printLF();			// 0.5
+}

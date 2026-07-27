@@ -1,0 +1,39 @@
+/*
+	A function's RETURN keeps its element type. `returns V pointer` yields a V-pointer, not a bare
+	pointer, so the result can be dereferenced into a struct value (`*f(...)`), field-accessed
+	(`f(...)->a`), and checked when assigned to another typed pointer.
+
+	Regression: the call result used to be typed `p` with its element chain thrown away, so
+	`dst = *bump(&src)` failed with E420 ("whole-struct assignment needs a struct value on both
+	sides") even though the pointee clearly was a struct - and a mismatched typed-pointer return
+	(assigning a `V pointer` result to a `W pointer`) was silently accepted.
+
+	Expected (GAZLCmd returnedPointerElem.gazl main): 5 1.5 105 7
+*/
+
+const int DEBUG = 1
+
+struct V { int a; float b }
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function bump(V pointer x) returns V pointer y { y = x; }
+function pick(int pointer x) returns int pointer y { y = x; }
+
+function main()
+locals V src, V dst, int array raw[4], V pointer p, int n
+{
+	src.a = 5; src.b = 1.5;
+	dst = *bump(&src);					// deref a returned struct pointer -> whole-struct copy
+	p = (V pointer)&raw[0];
+	*p = dst;
+	p->a = p->a + 100;
+	printInt(dst.a); printLF();			// 5
+	printFloat(dst.b); printLF();		// 1.5
+	printInt(p->a); printLF();			// 105
+
+	n = 7;
+	printInt(*pick(&n)); printLF();		// 7  - deref a returned int pointer
+}

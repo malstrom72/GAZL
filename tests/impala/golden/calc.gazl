@@ -1,6 +1,7 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
+; signature extern const DEBUG : int @ 7:16
 ; signature extern native output() -> unknown @ 9:21
 ; signature extern native input() -> unknown @ 10:20
 ; signature extern native abort() -> unknown @ 11:20
@@ -25,10 +26,10 @@ COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 29:33
 lastError:	DATp &NULL	; signature global lastError : ptr @ 31:25
 	! SUBi <A> #'z' #'a'
 	! ADDi <A> <A> #1
-memoryUsed:	GLOB *<A>	; signature array memoryUsed[<A>] : unknown @ 33:39
+memoryUsed:	GLOB *<A>	; signature array memoryUsed[] : unknown @ 33:39
 	! SUBi <A> #'z' #'a'
 	! ADDi <A> <A> #1
-memory:	GLOB *<A>	; signature array memory[<A>] : unknown @ 34:35
+memory:	GLOB *<A>	; signature array memory[] : unknown @ 34:35
 	GLOB *1
 lastResult:	DATf #0.0	; signature global lastResult : float @ 35:30
 
@@ -312,7 +313,7 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 238:15
 
 FUNCTION_COUNT:	! DEFi #10	; signature const FUNCTION_COUNT : int @ 244:30
 	! MULi <A> #FUNCTION_COUNT #2
-FUNCTIONS:	CNST *<A>	; signature array FUNCTIONS[<A>] : unknown @ 245:46
+FUNCTIONS:	CNST *<A>	; signature array FUNCTIONS[] : unknown @ 245:46
 	DATA &.s_ceil_4d4 &ceilFunc &.s_exp_4d5 &exp &.s_floor_4d6
 	DATA &floorFunc &.s_log_4d7 &log &.s_log2_4d8 &log2
 	DATA &.s_log10_4d9 &log10 &.s_sqrt_4da &sqrt &.s_cos_4db
@@ -962,7 +963,7 @@ main:	FUNC	; signature func main() -> void @ 620:15
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 	.l0:	MOVp %1 &.s_calc_4e5 	; output("calc> ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 631:19
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 631:19
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
 		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 632:16
@@ -1018,7 +1019,7 @@ main:	FUNC	; signature func main() -> void @ 620:15
 		ADRL %1 $s *0	; output(s)
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 658:14
 	.f9:	MOVp %1 &.s__4e7 	; output(" = ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 660:17
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 660:17
 		MOVf %2 $f 	; output(floatToString(f, 6, buffer))
 		MOVi %3 #6 
 		ADRL %4 $buffer *0
@@ -1028,7 +1029,7 @@ main:	FUNC	; signature func main() -> void @ 620:15
 		iTOf %0 $i #1.0
 		NEQf %0 $f @.f10
 		MOVp %1 &.s_0x_4e8 	; output("\n = 0x")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 663:22
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 663:22
 		MOVi %2 $i 	; output(intToHex(i, buffer))
 		ADRL %3 $buffer *0
 		CALL &intToHex %1 *3	; expects intToHex(int, ptr) -> ptr @ 664:31
@@ -1038,7 +1039,7 @@ main:	FUNC	; signature func main() -> void @ 620:15
 		POKE &memoryUsed $assignTo #1	; global memoryUsed[assignTo] = 1
 	.f11:	NOOP
 	.e8:	MOVp %1 &.s__4e9 	; output("\n")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 671:15
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 671:15
 		GOTO @.l0  	; }
 	quit:	RETU   	; }
 

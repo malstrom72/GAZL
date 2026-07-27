@@ -1,0 +1,5 @@
+; A valueless `const int WORD_SIZE;` - external by omission of a value, so the host or the GAZL
+; run-time defines it. No "missing definition" complaint is due (there is nothing to find), but the
+; TYPE is a claim, so it is checked against a real definition or another declaration.
+; signatures version=1
+; signature extern const WORD_SIZE : int @ const-extern-decl.gazl:4:1

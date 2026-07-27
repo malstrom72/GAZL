@@ -1,5 +1,27 @@
 # Assembler-level function inlining: opportunity probe (2026-07-19)
 
+> **Status update 2026-07-27.** The placement question at the bottom of this file ("OPEN DECISION") is
+> RESOLVED for the compiler half: Impala-level inlining is implemented behind an explicit `inline`
+> keyword. See `docs/Inlining.md` for the spec and the rules. Three findings from that work correct or
+> sharpen what is written below, all measured on x64/Windows with the GAZLCmd interpreter:
+>
+> 1. **The "roughly 60-70%" estimate for an assembler pass measures at 73%.** Same program, three
+>    lowerings, all verified to produce identical results: out-of-line call 84.66 ms, assembler-style
+>    inline (body copied literally, marshalling kept) 46.89 ms, Impala-level with argument substitution
+>    32.61 ms.
+> 2. **Materialising a single argument costs only about 6% of the prize** (36.76 ms vs 32.61 ms). That
+>    is what makes a deliberately conservative substitution rule affordable - there is no need for the
+>    window/last-use/back-edge analysis an aggressive inliner would want.
+> 3. **Impala needed no new IR.** `$$parser.metacode` is already a flat
+>    `{operator, type, operands[3]}` list; `flushMetaCode` renders it and then discards it with
+>    `metacode.length = 0`. Capturing a body is a snapshot before that line, not an AST project. Also,
+>    the "RETU -> GOTO end, handles multi-RETU callees" complication below **does not exist** in
+>    Impala: there is no `return` statement, so every function has exactly one RETU, at the end.
+>
+> The coverage argument below still stands and is the reason the assembler pass is not obsolete:
+> `vortex` (100 call sites), `reciter` (46) and `js80rmx` (22) have no Impala source on this branch, and
+> the host wrapper is generated GAZL. Impala-level inlining cannot reach any of them.
+
 Goal: inline CALL_CVC to small non-recursive GAZL functions at assembly/finalization, benefiting BOTH engines
 (interpreter drops FUNC/CALL/RETU dispatch + ipStack traffic; JIT additionally drops its CALL BARRIER, which
 today kills register residency in any loop containing a call).

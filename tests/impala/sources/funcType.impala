@@ -1,0 +1,50 @@
+/*
+	Impala 2 Step 3: named function-pointer types. `functype Name(params) [returns ...]` registers
+	a signature that becomes a base type (composes with pointer/array modifiers like structs).
+	A funcptr variable is a single word (stored like `funcptr`) tagged with its type; assigning a
+	function checks its signature against the type, and an indirect call is checked + sized against
+	it (so struct pointers and out-parameters work through a funcptr too).
+
+	Note: struct-value params, struct returns and multi-value returns are parked for Impala 3.0
+	(see docs/ParkedFeatures.md), so those cases go through pointers here.
+
+	Expected when run (GAZLCmd funcType.gazl main): 42 13 42 13 7 4 5.
+*/
+
+const int DEBUG = 1
+
+struct P { int x; int y }
+
+functype UnaryFn(int pointer data) returns int
+functype BinOp(int a, int b) returns int
+functype MakeFn(P pointer out, int a, int b)
+functype SplitFn(int n, int pointer hi) returns int
+
+extern native printInt
+extern native printLF
+
+function doubleFirst(int pointer data) returns int r { r = data[0] * 2; }
+function add(int a, int b) returns int r { r = a + b; }
+function mul(int a, int b) returns int r { r = a * b; }
+function make(P pointer out, int a, int b) { out->x = a + b; out->y = a - b; }
+function split(int n, int pointer hi) returns int lo { lo = n / 2; *hi = n - n / 2; }
+
+function main()
+locals UnaryFn cb, BinOp array ops[2], MakeFn mk, SplitFn sp, P v, int array buf[1], int a, int b
+{
+	buf[0] = 21;
+	cb = doubleFirst;
+	printInt(cb(&buf[0])); printLF();		// 42
+
+	ops[0] = add; ops[1] = mul;				// a dispatch table of funcptrs
+	a = 0; printInt(ops[a](6, 7)); printLF();	// add -> 13
+	a = 1; printInt(ops[a](6, 7)); printLF();	// mul -> 42
+
+	mk = make; mk(&v, 10, 3);				// funcptr filling a struct through a pointer
+	printInt(v.x); printLF();				// 13
+	printInt(v.y); printLF();				// 7
+
+	sp = split; a = sp(9, &b);				// funcptr with an out-parameter
+	printInt(a); printLF();					// 4
+	printInt(b); printLF();					// 5
+}

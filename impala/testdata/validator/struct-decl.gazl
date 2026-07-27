@@ -1,0 +1,2 @@
+; signatures version=1
+; signature extern struct AudioBuffer { frames : int, data : float-ptr, channels : int } @ struct-decl.gazl:2:1

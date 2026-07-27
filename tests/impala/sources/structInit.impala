@@ -1,0 +1,31 @@
+/*
+	Impala 2 Step 2 (slice 8): brace initializers for struct globals and readonly preset
+	tables. Nested braces map to field/element order; each value is type-checked against its
+	field; omitted trailing slots zero-fill. Lowers to GLOB/CNST *sizeof + DATA rows.
+	Expected when run (GAZLCmd structInit.gazl main): 60 0.5 0.1 2.0 7 1.5 2 0.9.
+*/
+
+const int DEBUG = 1
+
+struct Biquad { float b0; float z1 }
+struct Voice { int note; Biquad lo; float gain }
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global Voice voice = { 60, { 0.5, 0.1 }, 2.0 }
+readonly Voice preset = { 7, { 1.5, 0.0 }, 9.0 }
+readonly Voice array bank[2] = { { 1, { 0.0, 0.0 }, 0.9 }, { 2, { 0.0, 0.0 }, 0.8 } }
+
+function main()
+{
+	printInt(global voice.note); printLF();			// 60
+	printFloat(global voice.lo.b0); printLF();		// 0.5
+	printFloat(global voice.lo.z1); printLF();		// 0.1
+	printFloat(global voice.gain); printLF();		// 2.0
+	printInt((int) global preset.note); printLF();	// 7
+	printFloat(global preset.lo.b0); printLF();		// 1.5
+	printInt((int) global bank[1].note); printLF();	// 2
+	printFloat(global bank[0].gain); printLF();		// 0.9
+}

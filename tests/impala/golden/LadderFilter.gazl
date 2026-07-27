@@ -139,4 +139,4 @@ filter:	FUNC	; signature func filter(int hasSoundIn, ptr left, ptr right) -> int
 		RETU   	; }
 
 	! MULi <A> #BATCH_SIZE #2
-audioBuffers:	TEMP *<A>	; signature array audioBuffers[<A>] : unknown @ 72:45
+audioBuffers:	TEMP *<A>	; signature array audioBuffers[] : unknown @ 72:45

@@ -1,16 +1,27 @@
 /* Command-line Impala compiler for the NuXJS REPL.
 
    Usage:
-     NuXJS impala/impala.nuxjs.js source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
+     NuXJS impala/impala.nuxjs.js [--legacy] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
 
    NuXJS exposes global `arguments` as [script.js, arguments...]. With no output
    path, or output path `-`, this script emits compiled GAZL to stdout.
+   `--legacy` downgrades Impala 2 strict-expression errors to warnings (printed
+   as `;`-prefixed comment lines so stdout remains a valid GAZL stream).
 */
 
-var impalaNuxArgs = arguments;
+var impalaNuxRawArgs = arguments;
+var impalaNuxLegacy = false;
+var impalaNuxArgs = [];
+for (var impalaNuxArgIndex = 0; impalaNuxArgIndex < impalaNuxRawArgs.length; ++impalaNuxArgIndex) {
+	if ("" + impalaNuxRawArgs[impalaNuxArgIndex] === "--legacy") {
+		impalaNuxLegacy = true;
+	} else {
+		impalaNuxArgs[impalaNuxArgs.length] = impalaNuxRawArgs[impalaNuxArgIndex];
+	}
+}
 
 function usage() {
-	print("Usage: NuXJS impala/impala.nuxjs.js source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
+	print("Usage: NuXJS impala/impala.nuxjs.js [--legacy] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
 }
 
 function fail(message) {
@@ -120,18 +131,64 @@ loadCompilerPath(impalaNuxCompilerPath);
 
 var impalaNuxSource = read(impalaNuxSourcePath);
 var impalaNuxLines = [];
+function impalaNuxLineColumn(source, offset) {
+	var line = 1;
+	var column = 1;
+	var end = offset < source.length ? offset : source.length;
+	for (var i = 0; i < end; ++i) {
+		var ch = source[i];
+		if (ch === "\n") {
+			++line;
+			column = 1;
+		} else if (ch !== "\r") {
+			++column;
+		}
+	}
+	return line + ":" + column;
+}
+
+function impalaNuxDiagnostic(source, offset, severity, code, message) {
+	var position = impalaNuxSourceName + ":" + impalaNuxLineColumn(source, isFinite(offset) ? offset : 0);
+	return position + ": " + severity + (code ? "[" + code + "]" : "") + ": " + message;
+}
+
 var impalaNuxCompilerOptions = {
 	output: function (line) {
 		impalaNuxLines[impalaNuxLines.length] = line;
 	},
 	sourceName: impalaNuxSourceName,
+	warn: function (message, offset, code, hint) {
+		print("; " + impalaNuxDiagnostic(impalaNuxSource, offset, "warning", code, message));
+		if (hint) {
+			print("; " + impalaNuxDiagnostic(impalaNuxSource, offset, "note", undefined, hint));
+		}
+	},
 };
 if (impalaNuxHasRandomId) {
 	impalaNuxCompilerOptions.randomId = impalaNuxRandomId;
 }
-var impalaNuxResult = impalaCompiler(impalaNuxSource, impalaNuxCompilerOptions);
+if (impalaNuxLegacy) {
+	impalaNuxCompilerOptions.legacy = true;
+}
+var impalaNuxResult;
+try {
+	impalaNuxResult = impalaCompiler(impalaNuxSource, impalaNuxCompilerOptions);
+} catch (impalaNuxError) {
+	if (impalaNuxError && isFinite(impalaNuxError.impalaOffset)) {
+		print(impalaNuxDiagnostic(impalaNuxSource, impalaNuxError.impalaOffset, "error",
+				impalaNuxError.impalaCode, impalaNuxError.impalaMessage || "compile error"));
+		if (impalaNuxError.impalaHint) {
+			print(impalaNuxDiagnostic(impalaNuxSource, impalaNuxError.impalaOffset, "note",
+					undefined, impalaNuxError.impalaHint));
+		}
+		throw new Error("Impala compilation failed");
+	}
+	throw impalaNuxError;
+}
 
 if (!impalaNuxResult || !impalaNuxResult[0]) {
+	print(impalaNuxDiagnostic(impalaNuxSource, impalaNuxResult ? impalaNuxResult[2] : 0,
+			"error", "E001", "syntax error"));
 	throw new Error("Impala compilation failed");
 }
 

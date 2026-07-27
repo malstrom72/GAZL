@@ -207,8 +207,8 @@ locals int a, int b, int c, int d, int e, int ok
 												// Otherwise, Impala supports most of the operators that you are
 												// accustomed to.
 
-	a = a | 250 & 120 ^ 60 << 3 >> 1;			// Bitwise infix operators all have the same precedence (unlike the
-												// obscure precedence rules in C).
+	a = ((((a | 250) & 120) ^ 60) << 3) >> 1;	// Mixing different bitwise operators requires parentheses (Impala 2).
+												// Chains of the same operator are fine: `a | b | c`.
 
 	a = ~a >>> 10;								// Since there is no unsigned data type we use `>>>` to perform
 												// unsigned right-shifts (like in Java etc).

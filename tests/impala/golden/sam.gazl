@@ -1,9 +1,34 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
+; signature extern const DEBUG : int @ 8:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 9:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 10:1
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 12:1
+; signature extern const OPERATOR_1_NOP : int @ 13:1
+; signature extern const OPERATOR_1_AND : int @ 14:1
+; signature extern const OPERATOR_1_MUL : int @ 15:1
+; signature extern const OPERATOR_1_OSC : int @ 16:1
+; signature extern const OPERATOR_1_RND : int @ 18:1
+; signature extern const OPERATOR_2_NOP : int @ 19:1
+; signature extern const OPERATOR_2_OR : int @ 20:1
+; signature extern const OPERATOR_2_XOR : int @ 21:1
+; signature extern const OPERATOR_2_MSK : int @ 22:1
+; signature extern const OPERATOR_2_SUB : int @ 24:1
+; signature extern const SWITCHES_SYNC_MASK : int @ 25:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ 26:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ 27:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 28:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ 30:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 31:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ 32:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ 33:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 34:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 35:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ 36:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 37:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 38:1
+; signature extern const PARAM_COUNT : int @ 40:1
 panelTextRows:	GLOB *8	; signature array panelTextRows[8] : unknown @ 40:31
 	DATA &.s_5Khz_4d2 &.s_11_4d3 &.s_22_4d4 &.s_44SPEE_4d5
 	DATA &.s_ONCE_4d6 &.s_LOOPcl_4d7 &.s_LOOPcl_4d7:52
@@ -17,7 +42,7 @@ config:	GLOB *CONFIG_STRING_MAX_SIZE	; signature array config[CONFIG_STRING_MAX_
 	GLOB *1
 configText:	DATp &.s_Enters_4d9	; signature global configText : ptr @ 58:88
 	! ADDi <A> #CONFIG_STRING_MAX_SIZE #20
-dynamicPanelTextRow:	GLOB *<A>	; signature array dynamicPanelTextRow[<A>] : unknown @ 59:62
+dynamicPanelTextRow:	GLOB *<A>	; signature array dynamicPanelTextRow[] : unknown @ 59:62
 	CNST *1
 clockFreqLimit:	DATi #88200	; signature readonly clockFreqLimit : int @ 61:1
 	CNST *1
@@ -1336,7 +1361,7 @@ amplitude3:	GLOB *256	; signature array amplitude3[256] : unknown @ 1295:29
 	GLOB *1
 oldtimetableindex:	DATi #0	; signature global oldtimetableindex : int @ 1298:33
 	! MULi <A> #5 #5
-timetable:	CNST *<A>	; signature array timetable[<A>] : unknown @ 1300:33
+timetable:	CNST *<A>	; signature array timetable[] : unknown @ 1300:33
 	DATA #162 #167 #167 #127 #128 #226 #60 #60 #0 #0 #225 #60
 	DATA #59 #0 #0 #200 #0 #0 #54 #55 #199 #0 #0 #54 #54
 
@@ -2639,7 +2664,7 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		PEEK %0 $p 	; if ((int) *p == 0) 
 		NEQi %0 #0 @.f0
 		MOVp %1 &.s_Thisfi_4da 	; trace("This firmware requires a configuration string. E.g. \"reciter HI THERE!\"")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 2200:85
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 2200:85
 		CALL ^abort %0 *1	; expects abort() -> unknown @ 2201:10
 	.f0:	MOVp %1 &dynamicPanelTextRow 	; strcpy(global dynamicPanelTextRow, global panelTextRows[4])
 		PEEK %2 &panelTextRows:4 
@@ -2698,7 +2723,7 @@ init:	FUNC	; signature func init() -> void @ 2195:15
 		CALL &InitPlayback %0 *1	; expects InitPlayback() -> int @ 2228:27
 		NEQi %0 #0 @.f9
 		MOVp %1 &.s_Couldn_4de 	; trace("Couldn't initialize playback. Invalid input?")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 2229:56
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 2229:56
 		CALL ^abort %0 *1	; expects abort() -> unknown @ 2230:10
 	.f9:	RETU   	; }
 

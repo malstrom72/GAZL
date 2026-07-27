@@ -1,0 +1,42 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 14:1
+	GLOB *1
+gi:	DATi #0	; signature global gi : int @ 16:1
+; signature extern native printInt() -> unknown @ 17:1
+; signature extern native printLF() -> unknown @ 19:1
+
+;-----------------------------------------------------------------------------
+inc:	FUNC	; signature func inc(int x) -> int @ 19:14
+	$r:	OUTi
+	$x:	INPi
+;-----------------------------------------------------------------------------
+		ADDi $r $x #1	; r = x + 1
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 24:15
+		PARA *1
+	$a:	LOCA *2
+	$b:	LOCA *2
+;-----------------------------------------------------------------------------
+		POKE &gi #1 	; global gi = 1
+		PEEK %0 &gi 	; a[global gi] = global gi
+		PEEK %1 &gi 
+		SETL $a %0 %1
+		PEEK %1 &gi 	; b[global gi] = inc(a[global gi])
+		PEEK %0 &gi 
+		GETL %3 $a %0
+		CALL &inc %2 *2	; expects inc(int) -> int @ 29:34
+		SETL $b %1 %2
+		PEEK %1 &gi 	; printInt(a[global gi])
+		GETL %1 $a %1
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 30:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:35
+		PEEK %1 &gi 	; printInt(b[global gi])
+		GETL %1 $b %1
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 31:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 31:35
+		RETU   	; }

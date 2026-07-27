@@ -1,0 +1,70 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 16:1
+	! MOVi <a> #0	; layout of struct V
+.o.V.a:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.V.b:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.V:	! DEFi #<a>
+; signature struct V { a : int, b : float } @ 18:1
+; signature extern native printInt() -> unknown @ 19:1
+; signature extern native printFloat() -> unknown @ 20:1
+; signature extern native printLF() -> unknown @ 22:1
+
+;-----------------------------------------------------------------------------
+bump:	FUNC	; signature func bump(V-ptr x) -> V-ptr @ 22:15
+	$y:	OUTp
+	$x:	INPp
+;-----------------------------------------------------------------------------
+		MOVp $y $x 	; y = x
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+pick:	FUNC	; signature func pick(int-ptr x) -> int-ptr @ 23:15
+	$y:	OUTp
+	$x:	INPp
+;-----------------------------------------------------------------------------
+		MOVp $y $x 	; y = x
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 25:15
+		PARA *1
+	$src:	LOCA *.z.V
+	$dst:	LOCA *.z.V
+	$raw:	LOCA *4
+	$p:	LOCp
+	$n:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $src:.o.V.a #5 	; src.a = 5
+		MOVf $src:.o.V.b #1.5 	; src.b = 1.5
+		ADRL %1 $src *.z.V	; dst = *bump(&src)
+		CALL &bump %0 *2	; expects bump(V-ptr) -> V-ptr @ 29:19
+		ADRL %1 $dst *.z.V
+		COPY %1 %0 *.z.V
+		ADRL $p $raw:0 *0	; p = (V pointer)&raw[0]
+		ADRL %1 $dst *.z.V	; *p = dst
+		COPY $p %1 *.z.V
+		PEEK %1 $p #.o.V.a	; p->a = p->a + 100
+		ADDi %1 %1 #100
+		POKE $p #.o.V.a %1
+		MOVi %1 $dst:.o.V.a 	; printInt(dst.a)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 33:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 33:28
+		MOVf %1 $dst:.o.V.b 	; printFloat(dst.b)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 34:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:30
+		PEEK %1 $p #.o.V.a	; printInt(p->a)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:27
+		MOVi $n #7 	; n = 7
+		ADRL %2 $n *0	; printInt(*pick(&n))
+		CALL &pick %1 *2	; expects pick(int-ptr) -> int-ptr @ 38:20
+		PEEK %1 %1 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:32
+		RETU   	; }

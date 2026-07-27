@@ -1,0 +1,11 @@
+; signatures version=1
+
+; A name-only extern carries NO parameter types, so the call site's `expects` comment is the only
+; record of what is being passed. Impala used to flatten every pointer there to a bare `ptr`, which
+; typesCompatible treats as element-unknown and matches against any chain - so this mismatch was
+; accepted silently. The call must state `V-ptr` for the check to have anything to compare.
+; signature extern func takesIntPtr() -> unknown @ call-elem-mismatch.gazl:7:1
+
+caller:	FUNC	; signature func caller() -> void @ call-elem-mismatch.gazl:9:1
+	CALL &takesIntPtr %0 *2	; expects takesIntPtr(V-ptr) -> int @ 9:20
+	RETU

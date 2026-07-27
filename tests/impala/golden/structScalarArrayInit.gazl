@@ -1,0 +1,43 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
+	! MOVi <a> #0	; layout of struct Buf
+.o.Buf.s:	! DEFi #<a>
+	! ADDi <a> #<a> #4
+.o.Buf.len:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Buf:	! DEFi #<a>
+; signature struct Buf { s : float[4], len : int } @ 9:1
+preset:	GLOB *.z.Buf	; signature global preset : Buf @ 9:19
+	DATA #1.0 #2.0 #3.0 #4.0 #4
+; signature extern native printFloat() -> unknown @ 11:1
+; signature extern native printLF() -> unknown @ 12:1
+
+;-----------------------------------------------------------------------------
+sink:	FUNC	; signature func sink(float-ptr fp) -> void @ 12:15
+		PARA *1
+	$fp:	INPp
+;-----------------------------------------------------------------------------
+		POKE $fp #9.0 	; *fp = 9.0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 13:15
+		PARA *1
+	$b:	LOCA *.z.Buf
+;-----------------------------------------------------------------------------
+		! ADDi <A> #.o.Buf.s #2	; b.s[2] = 0.5
+		MOVf $b:<A> #0.5 
+		ADRL %1 $b:.o.Buf.s *0	; sink(&b.s[0])
+		CALL &sink %0 *2	; expects sink(float-ptr) -> void @ 16:29
+		! ADDi <A> #.o.Buf.s #2	; printFloat(b.s[2])
+		MOVf %1 $b:<A> 
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 17:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 17:31
+		! ADDi <A> #.o.Buf.s #3	; printFloat(global preset.s[3])
+		PEEK %1 &preset:<A> 
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 18:32
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 18:43
+		RETU   	; }

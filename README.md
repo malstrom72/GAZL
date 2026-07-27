@@ -33,10 +33,10 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 
 ## Architecture
 
-- `src/` – C++ VM implementation
-- `impala/` – Impala compiler and demo sources
-- `tools/` – build/maintenance scripts
-- `externals/` – third-party code such as `NuXJS`
+- `src/` - C++ VM implementation
+- `impala/` - Impala compiler and demo sources
+- `tools/` - build/maintenance scripts
+- `externals/` - third-party code such as `NuXJS`
 
 ### Getting Started
 
@@ -54,11 +54,11 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 
 ## Helper Scripts
 
-- `build.sh` / `build.cmd` – build all tools and run the full test + demo sequence
-- `tools/buildGAZLCmd.sh` / `.cmd` – build just `GAZLCmd` (VM executable)
-- `tools/BuildNuXJS.sh` / `.cmd` – build the NuXJS command-line JavaScript runtime
-- `tools/BuildImpala.sh` / `.cmd` – build NuXJS and stage the JSPEG Impala compiler into `output/`
-- `tools/buildGazlFuzz.sh` – build libFuzzer harness for `GAZLCmd` (shell only; no `.cmd`)
+- `build.sh` / `build.cmd` - build all tools and run the full test + demo sequence
+- `tools/buildGAZLCmd.sh` / `.cmd` - build just `GAZLCmd` (VM executable)
+- `tools/BuildNuXJS.sh` / `.cmd` - build the NuXJS command-line JavaScript runtime
+- `tools/BuildImpala.sh` / `.cmd` - build NuXJS and stage the JSPEG Impala compiler into `output/`
+- `tools/buildGazlFuzz.sh` - build libFuzzer harness for `GAZLCmd` (shell only; no `.cmd`)
 
 ## Building the fuzz target
 
@@ -83,11 +83,12 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 ## Documentation
 
-- [Overview](docs/Overview.md) – general architecture and goals
-- [Impala Language Reference](docs/Impala.md) – the language and toolchain
-- [Instruction Set](docs/InstructionSet.md) – extracted opcode descriptions
-- [Usage Example](docs/UsageExample.md) – compile and run a simple program
-- [JSPEG Port](impala/JSPEG.md) – status and usage of the JavaScript PEG compiler
+- [Overview](docs/Overview.md) - general architecture and goals
+- [Impala Language Reference](docs/Impala.md) - the language and toolchain
+- [Instruction Set](docs/InstructionSet.md) - extracted opcode descriptions
+- [Memory Safety Model](docs/MemorySafetyModel.md) - stack frames, what is bounds-checked and when, what `*size` is for
+- [Usage Example](docs/UsageExample.md) - compile and run a simple program
+- [JSPEG Port](impala/JSPEG.md) - status and usage of the JavaScript PEG compiler
 
 More technical notes are embedded in the Impala source files.
 

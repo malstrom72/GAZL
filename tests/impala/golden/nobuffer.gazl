@@ -2,6 +2,7 @@
 
 ; signatures version=1
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 8:1
+; signature extern const DEBUG : int @ 16:1
 PANEL_TEXT_ROWS:	CNST *8	; signature array PANEL_TEXT_ROWS[8] : unknown @ 16:35
 	DATA &.s_ABC888_4d2 &.s_ABC888_4d2 &.s_RM_4d3
 	DATA &.s_AMRATE_4d4 &.s_notuse_4d5 &.s_toollo_4d6
@@ -9,6 +10,23 @@ PANEL_TEXT_ROWS:	CNST *8	; signature array PANEL_TEXT_ROWS[8] : unknown @ 16:35
 ; signature extern native abort() -> unknown @ 28:1
 ; signature extern native trace() -> unknown @ 29:1
 ; signature extern native yield() -> unknown @ 31:1
+; signature extern const OPERATOR_1_NOP : int @ 32:1
+; signature extern const OPERATOR_1_AND : int @ 33:1
+; signature extern const OPERATOR_1_MUL : int @ 34:1
+; signature extern const OPERATOR_1_OSC : int @ 35:1
+; signature extern const OPERATOR_1_RND : int @ 36:1
+; signature extern const OPERATOR_2_NOP : int @ 37:1
+; signature extern const OPERATOR_2_OR : int @ 38:1
+; signature extern const OPERATOR_2_XOR : int @ 39:1
+; signature extern const OPERATOR_2_MSK : int @ 40:1
+; signature extern const OPERATOR_2_SUB : int @ 42:1
+; signature extern const CLOCK_FREQUENCY_PARAM_INDEX : int @ 43:1
+; signature extern const SYNC_PARAM_INDEX : int @ 44:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ 45:1
+; signature extern const OPERAND_1_PARAM_INDEX : int @ 46:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ 47:1
+; signature extern const OPERAND_2_PARAM_INDEX : int @ 48:1
+; signature extern const PARAM_COUNT : int @ 50:1
 	GLOB *1
 left:	DATi #0	; signature global left : int @ 51:1
 	GLOB *1
@@ -117,6 +135,7 @@ sin:	FUNC	; signature func sin(float x) -> float @ 121:14
 		MOVf $y %0 
 		RETU   	; }
 
+; signature extern const GAZL_WORD_SIZE : int @ 132:1
 
 ;-----------------------------------------------------------------------------
 intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 132:22
@@ -358,7 +377,7 @@ init:	FUNC	; signature func init() -> void @ 292:15
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4dd 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 294:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 294:15
 		RETU   	; }
 
 
@@ -373,7 +392,7 @@ reset:	FUNC	; signature func reset() -> void @ 301:16
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4de 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 304:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 304:16
 		MOVf $a #1024.0 	; a = 1024.0
 		! MULf <A> #TWICE_PI #440.0	; lr = TWICE_PI * 440.0 / 44100.0
 		! DIVf <A> <A> #44100.0
@@ -424,7 +443,7 @@ update:	FUNC	; signature func update() -> void @ 326:17
 	$buf:	LOCA *34
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update_4df 	; trace("update")
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 329:17
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 329:17
 		PEEK %2 &params:OPERAND_2_PARAM_INDEX 	; trace(intToString(global params[OPERAND_2_PARAM_INDEX], 16, 1, buf))
 		MOVi %3 #16 
 		MOVi %4 #1 

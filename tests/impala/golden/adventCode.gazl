@@ -365,7 +365,7 @@ fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:15
 	$numString:	LOCA *3
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Fatale_4d2 	; output("Fatal error ")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 299:24
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 299:24
 		DIVi %0 $NUM #10	; numString[0] = '0' + NUM / 10
 		ADDi $numString:0 #'0' %0
 		MODi %0 $NUM #10	; numString[1] = '0' + NUM % 10
@@ -374,7 +374,7 @@ fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:15
 		ADRL %1 $numString *0	; output(numString)
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 303:19
 		MOVp %1 &.s_Seesou_4d3 	; output(".  See source code for interpretation.\n")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 304:52
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 304:52
 		CALL ^abort %0 *1	; expects abort() -> unknown @ 305:9
 		RETU   	; }
 
@@ -410,7 +410,7 @@ fRAN:	FUNC	; signature func fRAN(int RANGE) -> int @ 310:15
 		RETU   	; }
 
 	! MULi <A> #7 #2
-fMPINIT_RUNS:	CNST *<A>	; signature array fMPINIT_RUNS[<A>] : unknown @ 348:36
+fMPINIT_RUNS:	CNST *<A>	; signature array fMPINIT_RUNS[] : unknown @ 348:36
 	DATA #32 #34 #39 #46 #65 #90 #97 #122 #37 #37 #48 #57 #0
 	DATA #126
 
@@ -738,7 +738,7 @@ fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
 		PEEK %1 &LNLENG 	; if(!(global LNLENG != 0)) 
 		NEQi %1 #0 @.f0
 		MOVp %1 &.s_Seesou_4d3:38 	; output("\n")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 577:15
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 577:15
 		GOTO @return  	; goto return
 	.f0:	PEEK %0 &MAP2:1 	; if((int)global MAP2[1] == 0)fMPINIT()
 		NEQi %0 #0 @.f1
@@ -758,7 +758,7 @@ fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
 		ADDp %1 &INLINE #1	; output(global INLINE+1)
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 586:25
 		MOVp %1 &.s_Seesou_4d3:38 	; output("\n")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 586:39
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 586:39
 	return:	RETU   	; }
 
 
@@ -3423,7 +3423,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ 1641:17
 		GOTO @.e7  	; }
 	.s6#29:	NOOP
 	.s6#30:	MOVp %1 &.s_SorryF_4d4 	; output("Sorry. File operationrs are disabled.\n")
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1960:55
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 1960:55
 		POKE &gK #NUL 	; global gK = NUL
 		MOVi $goValue #GOTO8 	; goValue = GOTO8
 		GOTO @return  	; goto return
