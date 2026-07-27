@@ -57,15 +57,13 @@ main:	FUNC	; signature func main() -> void @ 58:15
 		PEEK %1 &touched 	; printInt(global touched)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 75:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 75:37
-		MOVi %2 #1 	; printInt(scaled(1))
 		! DIVi <A> #K #2	; r = a * (K / 2)
-		MULi %1 %2 <A>
+		MULi %1 #1 <A>
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 76:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 76:32
 		MOVp $fp &timesThree 	; fp = timesThree
 		MOVp %2 $fp 	; printInt(callThrough(fp, 10))
-		MOVi %3 #10 
-		MOVi %5 %3 	; r = f(a)
+		MOVi %5 #10 	; r = f(a)
 		CALL %2 %4 *2	; expects function(int) -> int @ 53:10
 		MOVi %1 %4 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 79:31

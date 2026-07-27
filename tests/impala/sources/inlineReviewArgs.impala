@@ -8,13 +8,15 @@
 	straight off, with no window slot in sight.
 
 	  1 local + transparent body   -> SUBSTITUTE   (the whole point of the feature)
-	  2 literal + transparent body -> materialise  (only a SLOT may be substituted)
+	  2 literal + transparent body -> SUBSTITUTE   (when the reading position takes a `#const`)
 	  3 global + transparent body  -> materialise  (a global is a PEEK, not a slot)
 	  4 computed + transparent     -> materialise  (already in the slot, nothing to delete)
 	  5 local + OPAQUE body        -> materialise  (the body writes through a pointer, so it
 	                                                could observe the argument's own storage)
+	  6 literal into a SWCH value  -> materialise  (that position rejects an immediate, so the
+	                                                whole parameter keeps its slot)
 
-	Expected (GAZLCmd inlineReviewArgs.gazl main): 30 60 90 120 21
+	Expected (GAZLCmd inlineReviewArgs.gazl main): 30 60 90 120 21 20
 */
 const int DEBUG = 1
 
@@ -24,6 +26,9 @@ extern native printLF
 global int g;
 
 inline function triple(int a) returns int r { r = a * 3; }
+
+inline function pick(int i) returns int r			/* i is read by SWCH: rejects an immediate */
+{ switch (i == 0 to 3) { case 0: r = 10; case 1: r = 20; default: r = 99; } }
 
 inline function viaPtr(int pointer p, int a) returns int r
 {
@@ -36,7 +41,7 @@ locals int w, int array cell[1]
 {
 	w = 10;
 	printInt(triple(w)); printLF();				/* 30  - case 1: substituted */
-	printInt(triple(20)); printLF();			/* 60  - case 2: literal, materialised */
+	printInt(triple(20)); printLF();			/* 60  - case 2: literal, folded into MULi */
 
 	global g = 30;
 	printInt(triple(global g)); printLF();		/* 90  - case 3: global, materialised */
@@ -45,4 +50,5 @@ locals int w, int array cell[1]
 	cell[0] = 0;
 	w = 7;
 	printInt(viaPtr(&cell[0], w)); printLF();	/* 21  - case 5: opaque, materialised */
+	printInt(pick(1)); printLF();				/* 20  - case 6: literal, still materialised */
 }

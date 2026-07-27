@@ -9,10 +9,9 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
 main:	FUNC	; signature func main() -> void @ 45:15
 		PARA *1
 ;-----------------------------------------------------------------------------
-		MOVi %2 #-4 	; printInt(clamp(-4, 0, 6))
-		MOVi %3 #0 
+		MOVi %3 #0 	; printInt(clamp(-4, 0, 6))
 		MOVi %4 #6 
-		MOVi %5 %2 	; t = v
+		MOVi %5 #-4 	; t = v
 		GEQi %5 %3 @.f0_i0	; if (t < lo) 
 		MOVi %5 %3 	; t = lo
 	.f0_i0:	LEQi %5 %4 @.f1_i0	; if (t > hi) 
@@ -20,10 +19,9 @@ main:	FUNC	; signature func main() -> void @ 45:15
 	.f1_i0:	MOVi %1 %5 	; r = t
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:38
-		MOVi %2 #8 	; printInt(clamp(8, 0, 6))
-		MOVi %3 #0 
+		MOVi %3 #0 	; printInt(clamp(8, 0, 6))
 		MOVi %4 #6 
-		MOVi %5 %2 	; t = v
+		MOVi %5 #8 	; t = v
 		GEQi %5 %3 @.f0_i1	; if (t < lo) 
 		MOVi %5 %3 	; t = lo
 	.f0_i1:	LEQi %5 %4 @.f1_i1	; if (t > hi) 
@@ -31,10 +29,9 @@ main:	FUNC	; signature func main() -> void @ 45:15
 	.f1_i1:	MOVi %1 %5 	; r = t
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 48:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 48:37
-		MOVi %2 #3 	; printInt(clamp(3, 0, 6))
-		MOVi %3 #0 
+		MOVi %3 #0 	; printInt(clamp(3, 0, 6))
 		MOVi %4 #6 
-		MOVi %5 %2 	; t = v
+		MOVi %5 #3 	; t = v
 		GEQi %5 %3 @.f0_i2	; if (t < lo) 
 		MOVi %5 %3 	; t = lo
 	.f0_i2:	LEQi %5 %4 @.f1_i2	; if (t > hi) 

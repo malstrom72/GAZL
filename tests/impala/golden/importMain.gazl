@@ -95,10 +95,9 @@
  								MOVi %1 $rm 					; printInt(rm)
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 70:14
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ 70:25
- 								MOVi %2 #-5 					; printInt(clampi(-5, 0, 9))
- 								MOVi %3 #0 
+ 								MOVi %3 #0 						; printInt(clampi(-5, 0, 9))
  								MOVi %4 #9 
- 								MOVi %5 %2 						; t = v
+ 								MOVi %5 #-5 					; t = v
  								GEQi %5 %3 @.f0_i0				; if (t < lo) 
  								MOVi %5 %3 						; t = lo
  					.f0_i0:		LEQi %5 %4 @.f1_i0				; if (t > hi) 
@@ -106,10 +105,9 @@
  					.f1_i0:		MOVi %1 %5 						; r = t
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 72:28
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ 72:39
- 								MOVi %2 #20 					; printInt(clampi(20, 0, 9))
- 								MOVi %3 #0 
+ 								MOVi %3 #0 						; printInt(clampi(20, 0, 9))
  								MOVi %4 #9 
- 								MOVi %5 %2 						; t = v
+ 								MOVi %5 #20 					; t = v
  								GEQi %5 %3 @.f0_i1				; if (t < lo) 
  								MOVi %5 %3 						; t = lo
  					.f0_i1:		LEQi %5 %4 @.f1_i1				; if (t > hi) 
@@ -117,10 +115,9 @@
  					.f1_i1:		MOVi %1 %5 						; r = t
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 73:28
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ 73:39
- 								MOVi %2 #5 						; printInt(clampi(5, 0, 9))
- 								MOVi %3 #0 
+ 								MOVi %3 #0 						; printInt(clampi(5, 0, 9))
  								MOVi %4 #9 
- 								MOVi %5 %2 						; t = v
+ 								MOVi %5 #5 						; t = v
  								GEQi %5 %3 @.f0_i2				; if (t < lo) 
  								MOVi %5 %3 						; t = lo
  					.f0_i2:		LEQi %5 %4 @.f1_i2				; if (t > hi) 

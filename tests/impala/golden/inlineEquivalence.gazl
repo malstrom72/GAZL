@@ -30,9 +30,8 @@ main:	FUNC	; signature func main() -> void @ 80:15
 	$cell:	LOCA *1
 ;-----------------------------------------------------------------------------
 		MOVi $t #10 	; t = 10
-		MOVi %3 #1 	; printInt(pure(t, 1))
 		MULi %4 $t #3	; r = a * 3 + b
-		ADDi %1 %4 %3
+		ADDi %1 %4 #1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 84:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 84:33
 		POKE &shared #1 	; global shared = 1
@@ -55,10 +54,9 @@ main:	FUNC	; signature func main() -> void @ 80:15
 		MOVi %1 $cell:0 	; printInt(cell[0])
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 93:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 93:30
-		MOVi %2 #-4 	; printInt(clamp(-4, 0, 6))
-		MOVi %3 #0 
+		MOVi %3 #0 	; printInt(clamp(-4, 0, 6))
 		MOVi %4 #6 
-		MOVi %5 %2 	; t = v
+		MOVi %5 #-4 	; t = v
 		GEQi %5 %3 @.f0_i3	; if (t < lo) 
 		MOVi %5 %3 	; t = lo
 	.f0_i3:	LEQi %5 %4 @.f1_i3	; if (t > hi) 
@@ -66,10 +64,9 @@ main:	FUNC	; signature func main() -> void @ 80:15
 	.f1_i3:	MOVi %1 %5 	; r = t
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 95:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 95:38
-		MOVi %2 #8 	; printInt(clamp(8, 0, 6))
-		MOVi %3 #0 
+		MOVi %3 #0 	; printInt(clamp(8, 0, 6))
 		MOVi %4 #6 
-		MOVi %5 %2 	; t = v
+		MOVi %5 #8 	; t = v
 		GEQi %5 %3 @.f0_i4	; if (t < lo) 
 		MOVi %5 %3 	; t = lo
 	.f0_i4:	LEQi %5 %4 @.f1_i4	; if (t > hi) 
@@ -77,10 +74,9 @@ main:	FUNC	; signature func main() -> void @ 80:15
 	.f1_i4:	MOVi %1 %5 	; r = t
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 96:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 96:37
-		MOVi %2 #3 	; printInt(clamp(3, 0, 6))
-		MOVi %3 #0 
+		MOVi %3 #0 	; printInt(clamp(3, 0, 6))
 		MOVi %4 #6 
-		MOVi %5 %2 	; t = v
+		MOVi %5 #3 	; t = v
 		GEQi %5 %3 @.f0_i5	; if (t < lo) 
 		MOVi %5 %3 	; t = lo
 	.f0_i5:	LEQi %5 %4 @.f1_i5	; if (t > hi) 
@@ -88,12 +84,9 @@ main:	FUNC	; signature func main() -> void @ 80:15
 	.f1_i5:	MOVi %1 %5 	; r = t
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 97:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 97:37
-		MOVi %2 #10 	; printInt(sum3(10, 20, 30))
-		MOVi %3 #20 
-		MOVi %4 #30 
-		MOVi %5 %2 	; buf[0] = a
-		MOVi %6 %3 	; buf[1] = b
-		MOVi %7 %4 	; buf[2] = c
+		MOVi %5 #10 	; buf[0] = a
+		MOVi %6 #20 	; buf[1] = b
+		MOVi %7 #30 	; buf[2] = c
 		MOVi %1 #0 	; r = 0
 		MOVi %8 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i6
@@ -102,23 +95,18 @@ main:	FUNC	; signature func main() -> void @ 80:15
 		FORi %8 #3 @.l1_i6	; }
 	.e0_i6:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 99:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 99:39
-		MOVi %3 #1 	; printInt(sum3(sum3(1, 2, 3), 4, 5))
-		MOVi %4 #2 
-		MOVi %5 #3 
-		MOVi %6 %3 	; buf[0] = a
-		MOVi %7 %4 	; buf[1] = b
-		MOVi %8 %5 	; buf[2] = c
+		MOVi %6 #1 	; buf[0] = a
+		MOVi %7 #2 	; buf[1] = b
+		MOVi %8 #3 	; buf[2] = c
 		MOVi %2 #0 	; r = 0
 		MOVi %9 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i7
 	.l1_i7:	GETL %10 %6 %9	; r = r + buf[i]
 		ADDi %2 %2 %10
 		FORi %9 #3 @.l1_i7	; }
-	.e0_i7:	MOVi %3 #4 	; }
-		MOVi %4 #5 
-		MOVi %5 %2 	; buf[0] = a
-		MOVi %6 %3 	; buf[1] = b
-		MOVi %7 %4 	; buf[2] = c
+	.e0_i7:	MOVi %5 %2 	; buf[0] = a
+		MOVi %6 #4 	; buf[1] = b
+		MOVi %7 #5 	; buf[2] = c
 		MOVi %1 #0 	; r = 0
 		MOVi %8 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i8
@@ -127,42 +115,33 @@ main:	FUNC	; signature func main() -> void @ 80:15
 		FORi %8 #3 @.l1_i8	; }
 	.e0_i8:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 100:37
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 100:48
-		MOVi %2 #1 	; printInt(dot(1, 2, 3, 4))
-		MOVi %3 #2 
-		MOVi %4 #3 
-		MOVi %5 #4 
 		! ADDi <A> #6 #.o.P.x	; a.x = ax
-		MOVi %<A> %2 
+		MOVi %<A> #1 
 		! ADDi <B> #6 #.o.P.y	; a.y = ay
-		MOVi %<B> %3 
+		MOVi %<B> #2 
 		! ADDi <C> #8 #.o.P.x	; b.x = bx
-		MOVi %<C> %4 
+		MOVi %<C> #3 
 		! ADDi <D> #8 #.o.P.y	; b.y = by
-		MOVi %<D> %5 
+		MOVi %<D> #4 
 		MULi %10 %<A> %<C>	; r = a.x * b.x + a.y * b.y
 		MULi %11 %<B> %<D>
 		ADDi %1 %10 %11
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 102:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 102:38
-		MOVi %2 #2 	; printInt(dot(2, 2, 5, 5))
-		MOVi %3 #2 
-		MOVi %4 #5 
-		MOVi %5 #5 
 		! ADDi <D> #6 #.o.P.x	; a.x = ax
-		MOVi %<D> %2 
+		MOVi %<D> #2 
 		! ADDi <C> #6 #.o.P.y	; a.y = ay
-		MOVi %<C> %3 
+		MOVi %<C> #2 
 		! ADDi <B> #8 #.o.P.x	; b.x = bx
-		MOVi %<B> %4 
+		MOVi %<B> #5 
 		! ADDi <A> #8 #.o.P.y	; b.y = by
-		MOVi %<A> %5 
+		MOVi %<A> #5 
 		MULi %10 %<D> %<B>	; r = a.x * b.x + a.y * b.y
 		MULi %11 %<C> %<A>
 		ADDi %1 %10 %11
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 103:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 103:38
-		MOVi %2 #5 	; printInt(wrap(5))
-		MOVi %4 %2 	; r = helper(a) + 1
+		MOVi %4 #5 	; r = helper(a) + 1
 		CALL &helper %3 *2	; expects helper(int) -> int @ 69:59
 		ADDi %1 %3 #1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 105:19

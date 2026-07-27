@@ -17,12 +17,9 @@ main:	FUNC	; signature func main() -> void @ 57:15
 		PARA *1
 	$q:	LOCi
 ;-----------------------------------------------------------------------------
-		MOVi %2 #10 	; printInt(sum3(10, 20, 30))
-		MOVi %3 #20 
-		MOVi %4 #30 
-		MOVi %5 %2 	; buf[0] = a
-		MOVi %6 %3 	; buf[1] = b
-		MOVi %7 %4 	; buf[2] = c
+		MOVi %5 #10 	; buf[0] = a
+		MOVi %6 #20 	; buf[1] = b
+		MOVi %7 #30 	; buf[2] = c
 		MOVi %1 #0 	; r = 0
 		MOVi %8 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i0
@@ -31,23 +28,18 @@ main:	FUNC	; signature func main() -> void @ 57:15
 		FORi %8 #3 @.l1_i0	; } /* variable index -> GETL off the run base */
 	.e0_i0:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 60:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 60:39
-		MOVi %3 #1 	; printInt(sum3(sum3(1, 2, 3), 4, 5))
-		MOVi %4 #2 
-		MOVi %5 #3 
-		MOVi %6 %3 	; buf[0] = a
-		MOVi %7 %4 	; buf[1] = b
-		MOVi %8 %5 	; buf[2] = c
+		MOVi %6 #1 	; buf[0] = a
+		MOVi %7 #2 	; buf[1] = b
+		MOVi %8 #3 	; buf[2] = c
 		MOVi %2 #0 	; r = 0
 		MOVi %9 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i1
 	.l1_i1:	GETL %10 %6 %9	; r = r + buf[i]
 		ADDi %2 %2 %10
 		FORi %9 #3 @.l1_i1	; } /* variable index -> GETL off the run base */
-	.e0_i1:	MOVi %3 #4 	; }
-		MOVi %4 #5 
-		MOVi %5 %2 	; buf[0] = a
-		MOVi %6 %3 	; buf[1] = b
-		MOVi %7 %4 	; buf[2] = c
+	.e0_i1:	MOVi %5 %2 	; buf[0] = a
+		MOVi %6 #4 	; buf[1] = b
+		MOVi %7 #5 	; buf[2] = c
 		MOVi %1 #0 	; r = 0
 		MOVi %8 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i2
@@ -80,18 +72,14 @@ main:	FUNC	; signature func main() -> void @ 57:15
 		GETL %1 %3 %2	; v = t[k]
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 66:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 66:32
-		MOVi %2 #1 	; printInt(dot(1, 2, 3, 4))
-		MOVi %3 #2 
-		MOVi %4 #3 
-		MOVi %5 #4 
 		! ADDi <A> #6 #.o.P.x	; a.x = ax
-		MOVi %<A> %2 
+		MOVi %<A> #1 
 		! ADDi <B> #6 #.o.P.y	; a.y = ay
-		MOVi %<B> %3 
+		MOVi %<B> #2 
 		! ADDi <C> #8 #.o.P.x	; b.x = bx
-		MOVi %<C> %4 
+		MOVi %<C> #3 
 		! ADDi <D> #8 #.o.P.y	; b.y = by
-		MOVi %<D> %5 
+		MOVi %<D> #4 
 		MULi %10 %<A> %<C>	; r = a.x * b.x + a.y * b.y
 		MULi %11 %<B> %<D>
 		ADDi %1 %10 %11

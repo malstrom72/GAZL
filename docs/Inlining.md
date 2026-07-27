@@ -123,12 +123,29 @@ unbounded pointer reachability (a callee can load a pointer out of a global) doe
 `MATERIALISE` emits exactly the instruction the call already emitted (`MOVi %t $x` or `PEEK %t &g`)
 into a borrowed transient and uses that. It therefore never costs more than not inlining at all.
 
-**Only a SLOT may be substituted - not a literal.** The body was type-checked against `$param`, a frame
-slot, and GAZL operand classes distinguish slots from immediates. A literal dropped into the wrong
-position is rejected outright (`SWCH #0 *3`, and "Did not expect constant int: -33" from a fuzzed
-program). Tracking an operand class per instruction would be endless; materialising a literal costs one
-MOV, measured at about 6% of the win, so the whole hazard class is traded away for a known small cost.
-That drops the best case from 100% to ~94%, which is still well clear of the 73% assembler ceiling.
+**A literal may be substituted where the reading position accepts an immediate.** GAZL operand classes
+distinguish slots from immediates, and a literal dropped into the wrong position is rejected outright
+(`SWCH #0 *3`, and "Did not expect constant int: -33" from a fuzzed program). The first implementation
+banned literals outright for that reason, on the grounds that tracking an operand class per instruction
+would be endless.
+
+It is not endless, because the question is much narrower than a full operand-class model: for each meta
+operator, WHICH SOURCE POSITIONS take a `#const`? That is the `INLINE_IMM_OK` table - a positive list in
+the same spirit as `INLINE_PURE`, so an operator that is not listed simply materialises, which is always
+correct. Position 0 never appears: no GAZL instruction writes to a constant.
+
+The decision is per PARAMETER and is made once at capture (`paramTakesImmediate`): a parameter may carry
+a literal only if EVERY place the body reads it accepts one. One disqualifying use - a `SWCH` value, an
+array index, a POKE address - spoils the whole parameter, because materialising it for that one use
+would emit the MOV anyway.
+
+Opacity does not gate this. The transparency argument exists to stop the body observing a write to the
+argument's STORAGE; a literal has no storage, and nothing in a body writes the caller's argument window
+(the body's own temporaries are a separately borrowed run). So a literal is substituted even into an
+opaque body.
+
+Measured on the fixtures: `inlineEquivalence` 154 -> 133 instructions (-14%), `inlineFunctions` 33 -> 29
+(-12%). The earlier estimate that literals were worth only ~6% understated it.
 
 **Globals always materialise, and this is not a safety compromise - the instruction set forces it.**
 GAZL arithmetic has no memory operands: `MULi %0 &r #3` is rejected with *"Did not expect address:

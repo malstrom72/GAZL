@@ -1280,6 +1280,34 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         '-->',1, '-->#',1, '...',1, '<--',1
     );
 
+    /* Which SOURCE operand positions accept an immediate (`#const`). A positive list like INLINE_PURE:
+       an operator missing here forces the argument to be materialised, which is always correct. The
+       destination (position 0) never appears - GAZL has no instruction that writes to a constant.
+       Verified one by one against the operand forms in docs/InstructionSet.md. */
+    INLINE_IMM_OK = {};
+    map(INLINE_IMM_OK,
+        '=',    '1',  ':=',     '1',                       /* MOVi   int(d) #int          */
+        '=abs', '1',  '=floor', '1', '=itof', '1', '=ftoi', '1',   /* ABSi/FLOf/ITOF/FTOI  */
+        '+',   '12',  '-',     '12', '*',    '12', '/',    '12', '%', '12',
+        '|',   '12',  '&',     '12', '^',    '12',
+        '<<',  '12',  '>>',    '12', '>>>',  '12'
+    );
+
+    /* May this parameter carry a literal? Only if EVERY place the body uses it is a position that
+       accepts one - one bad use (a SWCH value, an array base, a POKE address) spoils the parameter,
+       and materialising it there while substituting elsewhere would need the MOV anyway. */
+    function paramTakesImmediate(body, name) {
+        for (var i = 0; i < body.length; ++i) {
+            if (body[i].operator === ';') continue;                /* comment prose, not operands */
+            var okPos = INLINE_IMM_OK[body[i].operator];
+            for (var k = 0; k < 3; ++k) {
+                if (('' + body[i].operands[k]) !== name) continue;
+                if (okPos === undefined || okPos.indexOf('' + k) < 0) return false;
+            }
+        }
+        return true;
+    }
+
     /* An `inline function` has no out-of-line copy, so its address does not exist. A direct call never
        emits `&name` at all (FuncCall expands the body instead), so ANY such operand reaching the output
        is an address-take. Checked once where operands are rendered, so every consumer is covered. */
@@ -1334,9 +1362,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 if (mn > maxT) maxT = mn;
             }
         }
-        var params = [];
-        for (var p = 0; p < sig.params.length; ++p) params.push('$' + sig.params[p].name);
-        entry.inline = { body: body, params: params, locals: inlineLocals, maxTransient: maxT,
+        var params = [], litOK = [];
+        for (var p = 0; p < sig.params.length; ++p) {
+            params.push('$' + sig.params[p].name);
+            litOK.push(paramTakesImmediate(body, params[p]));
+        }
+        entry.inline = { body: body, params: params, litOK: litOK,
+                locals: inlineLocals, maxTransient: maxT,
                 ret: (sig.returnName !== undefined ? '$' + sig.returnName : undefined),
                 opaque: bodyIsOpaque(body) };
     };
@@ -1357,15 +1389,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 if ((m.operator === '=' || m.operator === ':=') && m.operands[2] === undefined) {
                     var o = '' + m.operands[1];
                     var c = o.charAt(0);
-                    /* Only a SLOT may be substituted. The body was type-checked against `$param`, a
-                       frame slot, and GAZL operand classes distinguish slots from immediates - a
-                       literal dropped into the wrong position is rejected outright ("Did not expect
-                       constant int", and SWCH refusing an immediate switch value). Materialising a
-                       literal costs one MOV, measured at ~6% of the inlining win, which is a far
-                       better trade than tracking an operand class per instruction. 
-                       A place operand (`$v:<A>`) is excluded too: it carries a scratch whose value the
-                       expansion can redefine before the deferred read. */
-                    if (c === '$' && o.indexOf(':') < 0 && !info.opaque) {
+                    /* A SLOT may be substituted when the body cannot observe a write to the argument's
+                       storage (transparent), which is the aliasing argument in section 4 of the spec.
+                       A place operand (`$v:<A>`) is excluded: it carries a scratch whose value the
+                       expansion can redefine before the deferred read.
+                       A LITERAL may be substituted whenever every position that reads it accepts an
+                       immediate (litOK, decided at capture). Opacity does not apply to a literal: it has
+                       no storage to alias, and nothing in the body writes the argument window anyway. */
+                    if ((c === '$' && o.indexOf(':') < 0 && !info.opaque)
+                            || (c === '#' && info.litOK[k])) {
                         src = o;
                         m.operator = undefined;                /* flushMetaCode skips a cleared record */
                     }
