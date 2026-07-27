@@ -6,9 +6,7 @@ optimization, types are minimal, and most constructs map almost one-to-one to GA
 instructions. Think of it as a high-level assembler.
 
 This document is the language reference. For a feature-rich program with extensive
-inline commentary, see `impala/ImpalaDemo.impala`. For the host API exposed to
-Permut8 firmware (entry points, native functions, globals), see
-[Permut8 Firmware API](../../docs/Permut8%20Firmware%20API.md).
+inline commentary, see `impala/ImpalaDemo.impala`.
 
 The authoritative grammar is `impala/impala.jspeg`; this reference follows it.
 
