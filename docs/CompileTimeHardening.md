@@ -89,16 +89,38 @@ indexed write does not consult it. Purely a compile-time check on the symbol; no
 ### 3. Case label outside the switch range (task #33)
 
     switch (i == 0 to 3) { case 8: ... }        // silently unreachable dead code
+    switch (i == 5 to 9) { case -1: ... }       // emits `.s0.-6` - the module will not load at all
 
 `SWCH` clamps `min(value, count)`, and the assembler only resolves table entries `label.0 ..
 label.count-1`, so a `case 8:` in a `0 to 3` switch can never fire. The body is emitted as unreachable
 dead code with no warning, and the stray `.sN#8` labels make the GAZL confusing to read.
 
+A case BELOW `from` is worse than dead code. Its offset goes negative, the emitted `.sN#<X>` folds to
+`.sN.-6`, and `Symbols::link` rejects that as `Invalid identifier` - so the whole module fails to
+assemble, from a program the compiler accepted without a word. `tests/impala/golden/switchtest.gazl` is
+in exactly that state today (`case 23+57, -1, CONSTANT` against a `4+1 to 9` switch), which is why
+`runJspegTests.js` has to exempt it from the assemble check.
+
 - Numeric `from`/`to` -> compile-time error naming the range.
 - **Symbolic range** (`switch (x == 0 to sizeof(V))` folds to `SWCH ... *<A>`) -> Impala cannot know the
   extent; this is a natural fit for a deferred assertion, or leave unchecked.
 
-This one is a missing diagnostic, not a miscompile: codegen is faithful.
+Above the range this is a missing diagnostic and codegen is faithful. Below `from` it is a broken build,
+so that half is the one worth fixing first - and a negative case offset is decidable whenever `from` and
+the case value are both numeric, which is the common shape.
+
+### 4. `goto` to a label that is never defined
+
+    function f() { goto nowhere; }              // accepted; the assembler is what complains
+
+Emitted verbatim as `GOTO @nowhere`, with the first sign of trouble being
+`Symbol not found (in expected scope): nowhere` at load. Unlike everything above, this item has no
+symbolic escape hatch and so no need for a deferred assertion: a label is always local, always defined
+in the same function body, and the compiler holds the complete set by the time that body is parsed.
+`processBranches` already builds exactly that map for its own post-condition, which checks only
+compiler-minted `@.` labels and deliberately leaves user labels alone precisely because an undefined one
+is a user error that deserves a real diagnostic, not an internal assertion. A plain compile-time error
+naming the label is all this needs.
 
 
 ## Not in this list
