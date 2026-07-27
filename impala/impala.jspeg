@@ -1302,7 +1302,7 @@
                 $$parser.fail('An inline function cannot call itself', sourceCode, sourceOffset, 'E432',
                         'inlining a recursive function would never terminate');
             }
-            body.push({ operator: m.operator, type: m.type,
+            body.push({ operator: m.operator, type: m.type, inlineFold: m.inlineFold,
                     operands: [ m.operands[0], m.operands[1], m.operands[2] ] });
         }
         var params = [];
@@ -1331,19 +1331,24 @@
        filled a window slot is a plain move of a literal (or of a local, when the body is transparent),
        drop it and use its source directly. Rules 2 and 4 of the spec then need no code at all - a
        computed argument and a global argument both just keep their window slot. */
-    $$parser.expandInline = function (info, base, retSlots, argCount) {
+    $$parser.expandInline = function (info, base, retSlots, argCount, mark) {
         var subst = {}, i, j, k;
         for (k = 0; k < argCount; ++k) {
             var slot = '%' + (base + retSlots + k);
             var src = slot;
-            for (j = $$parser.metacode.length - 1; j >= 0; --j) {
+            for (j = $$parser.metacode.length - 1; j >= mark; --j) {   /* only THIS call's own marshalling */
                 var m = $$parser.metacode[j];
                 if (m.operator === undefined || m.operands[0] !== slot) continue;
                 if ((m.operator === '=' || m.operator === ':=') && m.operands[2] === undefined) {
                     var o = '' + m.operands[1];
                     var c = o.charAt(0);
-                    if ((c === '#' || (c === '$' && !info.opaque))
-                            && !Object.prototype.hasOwnProperty.call(info.needsSlot, info.params[k])) {
+                    /* Only a SLOT may be substituted. The body was type-checked against `$param`, a
+                       frame slot, and GAZL operand classes distinguish slots from immediates - a
+                       literal dropped into the wrong position is rejected outright ("Did not expect
+                       constant int", and SWCH refusing an immediate switch value). Materialising a
+                       literal costs one MOV, measured at ~6% of the inlining win, which is a far
+                       better trade than tracking an operand class per instruction. */
+                    if (c === '$' && !info.opaque) {
                         src = o;
                         m.operator = undefined;                /* flushMetaCode skips a cleared record */
                     }
@@ -1364,6 +1369,11 @@
         }
 
         var tag = '_i' + ($$parser.inlineCounter++);
+        var scratchMap = {};                    /* `<X>` folds carried in from an inner expansion */
+        function mapScratch(sc) {
+            if (!Object.prototype.hasOwnProperty.call(scratchMap, sc)) scratchMap[sc] = $$parser.borrow('<');
+            return scratchMap[sc];
+        }
         var tCount = info.maxTransient + 1;
         var tBase = -1, blockSlots = [];
         if (tCount > 0) {                       /* one run keeps every window inside the body intact */
@@ -1375,17 +1385,23 @@
             if (op === undefined || op === null) return op;
             var s = '' + op;
             if (Object.prototype.hasOwnProperty.call(subst, s)) return subst[s];
-            if (s.charAt(0) === '%') {                          /* the callee's own temporaries, shifted as a block */
-                return '%' + (tBase + parseInt(s.substr(1), 10));
+            if (s.charAt(0) === '%') {
+                if (s.charAt(1) === '<') return '%' + mapScratch(s.substr(1));   /* %<X>: rename only */
+                return '%' + (tBase + parseInt(s.substr(1), 10));   /* a slot number, shifted as a block */
             }
+            if (s.length === 3 && s.charAt(0) === '<') return mapScratch(s);   /* a bare `<X>` */
             if (s.charAt(0) === '@') {                          /* labels: per-expansion suffix */
                 var hh = s.indexOf('#');                        /* a switch case label is `<base>#<k>` */
                 return (hh < 0 ? s + tag : s.substr(0, hh) + tag + s.substr(hh));
             }
+            /* A frame place must be resolved BEFORE the compound-scratch rule below: a nested struct
+               field arrives as `$v:<A>` (base plus a folded offset scratch), and renaming the scratch
+               without mapping the base would leave a local the caller never declared. */
             var colon = s.indexOf(':');                         /* `$name:offset` frame places */
             if (colon > 0 && Object.prototype.hasOwnProperty.call(subst, s.substr(0, colon))) {
                 var mapped = subst[s.substr(0, colon)];
                 var off = s.substr(colon + 1);
+                if (off.length === 3 && off.charAt(0) === '<') off = mapScratch(off);
                 if (mapped.charAt(0) !== '%') return mapped + ':' + off;
                 /* GAZL has no `%N:offset`. A numeric element offset folds straight into the slot
                    number; a struct field's offset is a SYMBOL (`.o.S.f`) that only the assembler can
@@ -1395,11 +1411,15 @@
                 if (!isNaN(n) && ('' + n) === off) return '%' + (parseInt(mapped.substr(1), 10) + n);
                 if (!Object.prototype.hasOwnProperty.call(symOffsets, s)) {
                     var sc = $$parser.borrow('<');
-                    folds.push({ operator: '<> +', type: 'i', settled: true,
+                    folds.push({ operator: '<> +', type: 'i', settled: true, inlineFold: true,
                             operands: [ sc, '#' + mapped.substr(1), '#' + off ] });
                     symOffsets[s] = '%' + sc;
                 }
                 return symOffsets[s];
+            }
+            if (s.length > 3 && s.charAt(s.length - 1) === '>'  /* `*<A>`, `#<D>`, `&g:<D>` */
+                    && s.charAt(s.length - 3) === '<') {
+                return s.substr(0, s.length - 3) + mapScratch(s.substr(s.length - 3));
             }
             return s;
         }
@@ -1407,10 +1427,21 @@
         for (i = 0; i < info.body.length; ++i) {
             var b = info.body[i];
             folds.length = 0;
-            var rec = { operator: b.operator, type: b.type, settled: true, operands: [
-                    mapOperand(b.operands[0]), mapOperand(b.operands[1]), mapOperand(b.operands[2]) ] };
+            var rec;
+            if (b.inlineFold) {                 /* `! ADDi <X> #slot #offset` from an inner expansion */
+                rec = { operator: b.operator, type: b.type, settled: true, inlineFold: true, operands: [
+                        mapScratch(b.operands[0]),
+                        '#' + (tBase + parseInt(('' + b.operands[1]).substr(1), 10)),
+                        mapOperand(b.operands[2]) ] };   /* a nested field folds to `#<X>`, so rename it too */
+            } else {
+                rec = { operator: b.operator, type: b.type, settled: true, operands: [
+                        mapOperand(b.operands[0]), mapOperand(b.operands[1]), mapOperand(b.operands[2]) ] };
+            }
             for (var f = 0; f < folds.length; ++f) $$parser.metacode.push(folds[f]);
             $$parser.metacode.push(rec);
+        }
+        for (var sm in scratchMap) {
+            if (Object.prototype.hasOwnProperty.call(scratchMap, sm)) $$parser.returnBack(scratchMap[sm]);
         }
         for (var so in symOffsets) {
             if (Object.prototype.hasOwnProperty.call(symOffsets, so)) $$parser.returnBack(symOffsets[so]);
@@ -3942,6 +3973,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.retSlots = _rs;
                                                        $$.words = 0;                            /* input words placed so far (struct args span >1) */
                                                        $$.base  = $$parser.borrowForCall();
+                                                       $$.mark  = $$parser.metacode.length;     /* first meta of THIS call's arguments */
                                                        for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */
                                                            $$parser.claimSlot($$.base + _os);
                                                        $$.types = [];
@@ -4069,7 +4101,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                && $$parser.symbols.functions[calleeName]
                                                                ? $$parser.symbols.functions[calleeName].inline : undefined);
                                                        if (inlineInfo !== undefined) {   /* replay the body instead of calling it */
-                                                           $$parser.expandInline(inlineInfo, $$.base, $$.retSlots, $$.words);
+                                                           $$parser.expandInline(inlineInfo, $$.base, $$.retSlots, $$.words, $$.mark);
                                                        } else {
                                                        var func = $$parser.makeRValue(callee, '&^$%');
                                                        $$parser.emit('()', '?',

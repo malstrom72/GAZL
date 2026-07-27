@@ -61,6 +61,46 @@ function runOnVm(gazl) {
 	}
 }
 
+// Run a program and capture what it PRINTED, for the inline differential below. Returns null when
+// the module did not load cleanly or the run trapped - in that case there is nothing to compare.
+function runForOutput(gazl) {
+	const tmp = path.join(os.tmpdir(), `fuzzo-${process.pid}-${Math.floor(rnd() * 1e9)}.gazl`);
+	fs.writeFileSync(tmp, gazl, 'latin1');
+	try {
+		const res = cp.spawnSync(GAZLCMD, [tmp, 'main'], { encoding: 'latin1', timeout: 10000 });
+		if (res.error || res.status !== 0) return null;
+		if (!/Code size:/.test(res.stderr || '')) return null;
+		return (res.stdout || '');
+	} finally {
+		try { fs.unlinkSync(tmp); } catch (_) {}
+	}
+}
+
+// THE INLINE ORACLE. `inline` is a lowering, not a semantic change, so the same program with the
+// keyword stripped must print exactly the same thing. This is the only check here with a real
+// reference - the plain --vm oracle can just see that a module loads. It is what the three inline
+// miscompiles found by hand (call-window adjacency, switch case labels, double processBranches)
+// would each have failed, and all three were silent.
+function inlineDifferential(src, gazl) {
+	if (src.indexOf('inline function') < 0) return null;
+	const plain = src.split('inline function').join('function');
+	let plainGazl;
+	try {
+		plainGazl = compileWithJsImpala(plain + '\n', { randomId: 0x4d2, retabulate: true, trailingNewline: true });
+	} catch (e) {
+		return 'inline differential: the same program without `inline` failed to compile: '
+				+ ((e && e.message) || e);
+	}
+	const a = runForOutput(gazl);
+	const b = runForOutput(plainGazl);
+	if (a === null || b === null) return null;      // trapped or did not load: nothing to compare
+	if (a !== b) {
+		return 'inline differential: inlined printed ' + JSON.stringify(a.slice(0, 200))
+				+ ' but the out-of-line build printed ' + JSON.stringify(b.slice(0, 200));
+	}
+	return null;
+}
+
 function mulberry32(a) {
 	return function () {
 		a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -169,13 +209,16 @@ function genProgram() {
 		// scalar return.
 		for (let k = ri(4); k > 0; --k) params.push({ name: id('p'), t: someType(false, true) });
 		const rets = rnd() < 0.35 ? [] : [pick(scalarTypes)];
-		funcs.push({ name: 'fn' + i, params, rets, retNames: rets.map(() => id('r')) });
+		funcs.push({ name: 'fn' + i, params, rets, retNames: rets.map(() => id('r')),
+				inline: chance(0.35) });   // no symbol is emitted, so never a funcptr target
 	}
 
 	// functypes (0-2), each derived from a real function's signature so it has a valid target
 	const nFts = ri(3);
 	for (let i = 0; i < nFts && funcs.length; ++i) {
-		const src = pick(funcs);
+		const outOfLine = funcs.filter((f) => !f.inline);
+		if (!outOfLine.length) break;
+		const src = pick(outOfLine);
 		functypes.push({ name: 'FT' + i, params: src.params.map((p) => p.t), rets: src.rets.slice(), target: src.name });
 	}
 	const funcMatches = (fn, ft) => fn.params.length === ft.params.length
@@ -288,7 +331,7 @@ function genProgram() {
 		const fptrLocals = [];
 		for (const cb of cbLocals) {
 			const ft = functypes.find((x) => x.name === cb.t);
-			const match = callable.filter((fn) => funcMatches(fn, ft));
+			const match = callable.filter((fn) => funcMatches(fn, ft) && !fn.inline);
 			if (match.length && chance(0.6)) {
 				const pf = { name: id('pf'), t: 'pF:' + cb.t, target: cb, func: pick(match).name };
 				fptrLocals.push(pf);
@@ -322,7 +365,7 @@ function genProgram() {
 			callable: callable,
 		};
 
-		let header = 'function ' + f.name + '(' + f.params.map((p) => decl(p.t) + p.name).join(', ') + ')';
+		let header = (!isMain && f.inline ? 'inline ' : '') + 'function ' + f.name + '(' + f.params.map((p) => decl(p.t) + p.name).join(', ') + ')';
 		if (f.rets.length) header += ' returns ' + f.rets.map((t, i) => decl(t) + f.retNames[i]).join(', ');
 
 		const localDeclList = locals.map((l) => decl(l.t) + l.name)
@@ -441,7 +484,7 @@ function genProgram() {
 			if (cbLocals.length) {
 				const cb = pick(cbLocals);
 				const ft = functypes.find((x) => x.name === cb.t);
-				const match = scope.callable.filter((fn) => funcMatches(fn, ft));
+				const match = scope.callable.filter((fn) => funcMatches(fn, ft) && !fn.inline);
 				if (match.length) {
 					const assign = '\t' + cb.name + ' = ' + pick(match).name + ';';
 					// then an indirect call through the funcptr
@@ -562,7 +605,7 @@ function main() {
 			const gazl = compileWithJsImpala(src + '\n', { randomId: 0x4d2, retabulate: true, trailingNewline: true });
 			compiled++;
 			if (useVm) {
-				const vmFault = runOnVm(gazl);
+				const vmFault = runOnVm(gazl) || inlineDifferential(src, gazl);
 				vmRun++;
 				if (vmFault) {
 					bugs++;

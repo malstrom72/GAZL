@@ -117,10 +117,146 @@ unbounded pointer reachability (a callee can load a pointer out of a global) doe
 ## 5. Per-argument decision
 
     argumentPlan(argOperand, opaque):
-        if argOperand starts with '#':  return SUBSTITUTE   // literal or named constant
-        if argOperand starts with '%':  return SUBSTITUTE   // fresh scratch, private to this call
-        if argOperand starts with '&':  return MATERIALISE  // a global (see below)
-        return opaque ? MATERIALISE : SUBSTITUTE            // a caller local
+        if argOperand is a caller local ('
+
+`MATERIALISE` emits exactly the instruction the call already emitted (`MOVi %t $x` or `PEEK %t &g`)
+into a borrowed transient and uses that. It therefore never costs more than not inlining at all.
+
+**Only a SLOT may be substituted - not a literal.** The body was type-checked against `$param`, a frame
+slot, and GAZL operand classes distinguish slots from immediates. A literal dropped into the wrong
+position is rejected outright (`SWCH #0 *3`, and "Did not expect constant int: -33" from a fuzzed
+program). Tracking an operand class per instruction would be endless; materialising a literal costs one
+MOV, measured at about 6% of the win, so the whole hazard class is traded away for a known small cost.
+That drops the best case from 100% to ~94%, which is still well clear of the 73% assembler ceiling.
+
+**Globals always materialise, and this is not a safety compromise - the instruction set forces it.**
+GAZL arithmetic has no memory operands: `MULi %0 &r #3` is rejected with *"Did not expect address:
+&r"*. A global's value must pass through a `PEEK` into a slot, so there is no operand to substitute -
+only a choice of where the `PEEK` lives. Leaving it at the call site costs one `PEEK` and matches the
+call's ordering. Moving it into the body costs one `PEEK` if the parameter is used once (no gain), N
+`PEEK`s if used N times (a loss), and is precisely the move that introduces the aliasing bug. So the
+safe choice and the optimal choice coincide.
+
+The **return value** always goes to a borrowed transient, never straight to the destination local.
+That avoids the `q = f(q)` clobber, and it is free: the call already emitted `MOVi $q %0`.
+
+
+## 6. Expansion
+
+For each expansion, with a fresh sequence number N:
+
+| callee operand | becomes |
+|----------------|---------|
+| `$param`       | the substituted operand, or the materialised transient |
+| `$r`           | a borrowed transient |
+| `%k`           | a freshly borrowed transient (per distinct k) |
+| `@.label`      | `@.label_N` - **mandatory**; `labelCounter` resets per function so `.f0`/`.e1` collide |
+| `&g`, `#imm`   | unchanged |
+| trailing `RETU`| dropped |
+
+Records are pushed through the existing `emit`/`emitMeta`, so `flushMetaCode` renders them and
+`processBranches` sees the labels. No new emission path.
+
+
+**An expanded body is already SETTLED.** `processBranches` merges a comparison with its branch by
+shifting operands left, destructively. The callee ran it before capture, so the caller must not run it
+again - records an expansion contributes are flagged and skipped. Only a non-inverted comparison is
+exposed (an inverted one becomes `!<` and no longer matches), which is why `if` survived and `assert`
+came out with its operands shifted off the end.
+
+**Callee transients move as one contiguous BLOCK.** The callee numbers its temporaries from 0; the
+expansion shifts the whole range to a fresh base. Remapping them individually breaks any window inside
+the body - `CALL &helper %0 *2` needs `%0` and `%1` adjacent and in order, and per-slot borrowing
+scattered them to `%4` and `%3`, so the callee read garbage.
+
+**A switch case label is `<base>#<k>`**, and SWCH finds its arms by appending `#k` to its own target.
+The per-expansion tag therefore goes BEFORE the `#`: `.s0#0` becomes `.s0_i0#0`, not `.s0#0_i0`.
+
+**Some operand positions reject an immediate.** `SWCH` needs a value operand, so substituting a literal
+argument would emit `SWCH #0 *3`, which the assembler rejects. Parameters used that way are recorded at
+capture and keep their window slot instead of being substituted.
+
+## 7. Diagnostics
+
+| case | why |
+|------|-----|
+| `inline` function calls itself | would expand forever |
+| `&f`, or assigning `f` to a funcptr / `functype` | no symbol exists to take the address of |
+| `export inline function f` | nothing to export; a caller needs the source, which is what `import` is for |
+| `extern inline` | meaningless |
+| calling an `inline` function before its definition | the body is not captured yet; `extern function f` gives no body either |
+| forward-declaring an `inline` function (`extern function f`) | promises a symbol it never emits, and a call before the definition would lower to `CALL &f` |
+
+Mutual recursion needs no check: Impala is define-before-use, so `A` can only inline `B` if `B` was
+already complete, and `B` cannot have inlined `A`.
+
+
+## 8. Current restrictions
+
+Locals live in TRANSIENTS, one expansion at a time - a scalar takes one slot, an array takes a run of
+adjacent slots (`borrowForCall` for the base, `claimSlot` for the rest, released in reverse afterwards).
+
+The reason locals cannot simply stay locals is DECLARATION FORM, not space. Both kinds occupy frame
+space; they differ in what has to be emitted:
+
+| | frame space | declaration |
+|---|---|---|
+| transient `%N`      | yes | none - the assembler infers the extent from use |
+| named local `LOCi` / `LOCA` | yes | one line, in the frame chain at the function head |
+
+Verified: `%20` and `%400` assemble under a bare `PARA *1`, and the two `main`s of the equivalence pair
+declare identical frames despite the inlined one using more transients. A slot kind that needs no
+declaration line can be minted mid-body; one that needs a line cannot, because the head is long since
+emitted by the time an expansion runs.
+
+**Array element access.** GAZL has no `%N:offset` - `MOVi %10:0 #5` is rejected with *"Invalid number:
+:0"*. So a constant element index is FOLDED into the slot number (`$buf:2` with base `%5` becomes `%7`),
+while a dynamic index uses `SETL`/`GETL` with a transient base, which the assembler accepts (`SETL %10
+$i #99` and `GETL %1 %10 $i` both assemble).
+
+**Struct fields** are reached by a SYMBOLIC offset (`.o.S.f`) that only the assembler resolves, so it
+cannot fold into a slot number. It does not have to: **`%<X>` is legal GAZL**, so the base and the field
+offset are folded together at ASSEMBLE time and the transient is indexed symbolically:
+
+    ! ADDi <A> #6 #.o.P.x        ; base slot 6 plus the field offset, resolved at assembly
+    MOVi %<A> #1                 ; a symbolically indexed transient
+
+Every fold is a `!` directive, so this costs nothing at run time. Struct locals and arrays of structs
+both work this way.
+
+**A local needs a compile-time size** (E433 otherwise). The words occupy a counted run of transients, so
+the total must be a number while compiling. Impala knows every non-extern struct's word count; a folded
+or symbolic ARRAY extent does not resolve until assembly, so `int array t[H * N]` is rejected.
+
+**A `returnBack` ordering trap.** `%<A>` starts with `%` but is NOT a slot number. `returnBack` used to
+test the bare-token case first, so it pushed the whole compound string into the transient stock - losing
+the `<A>` scratch and poisoning the pool with a token no allocator can hand out. The compound
+trailing-`<X>` case must be tested BEFORE the bare-token case.
+
+**No `--inline` flag.** Nothing is inlined unless the source says `inline`, and no existing source
+does, so the 84-file byte-diff gate is unaffected and there is nothing to gate.
+
+
+## 9. Coverage - what this does not reach
+
+Only code that goes through Impala benefits. `vortex` (100 call sites), `reciter` (46) and `js80rmx`
+(22) have no Impala source on this branch, and the firmware host wrapper is generated GAZL text
+(`permut8Host.js`), so its per-frame `driver->process()` calls are invisible here. Those need the
+assembler-level pass described in `docs/InliningInvestigation.md`; the two compose rather than compete.
+
+
+## 10. Testing
+
+- A fixture using `inline` with an `Expected (GAZLCmd ...)` header line, so the assemble-and-run gate
+  covers it rather than only byte-comparing.
+- An **equivalence pair**: the same program written with and without `inline`, asserted to print
+  identical output. This is the real behavioural oracle, and it must include the aliasing case (a
+  helper that writes the same global it is passed).
+- The rejection cases from section 7, table-driven through `expectCompileOutcome`.
+- `fuzzImpala.js --vm` already compiles and runs generated programs; generating the with/without pair
+  form gives a differential oracle equivalent to the `--inline` toggle an assembler pass would use.
+) and not opaque:  return SUBSTITUTE
+        otherwise:                                             return MATERIALISE
 
 `MATERIALISE` emits exactly the instruction the call already emitted (`MOVi %t $x` or `PEEK %t &g`)
 into a borrowed transient and uses that. It therefore never costs more than not inlining at all.
