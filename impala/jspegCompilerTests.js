@@ -1081,6 +1081,31 @@ for (const [label, source, expected] of arrayExtentCases) {
 }
 console.log("impala.jspeg compiler requires an array extent everywhere except an extern struct field");
 
+// A `(` after a value is always a call, so the argument list must never backtrack: its prologue has
+// already borrowed the call window, and a backtrack leaks that window into whatever comes next. It
+// used to surface as `Assertion failed: transient %1 must exist in stock` for a nested call, or as a
+// bogus `int = funcptr` type error for a top-level one, instead of naming the broken syntax.
+const CALL_HDR = "extern native printInt\nfunction t(int a) returns int r { r = a * 3; }\nfunction v() { }\n";
+const argListCases = [
+	["a short-circuit boolean argument", "printInt(t((x > 0 || x > 1)));", "Malformed argument list"],
+	["a comparison argument", "printInt(t(x > 0));", "Malformed argument list"],
+	["a parenthesized comparison argument", "printInt(t((x > 0)));", "Malformed argument list"],
+	["a missing comma", "printInt(t(1 2));", "Malformed argument list"],
+	["a trailing comma", "printInt(t(1,));", "Malformed argument list"],
+	["an unclosed argument list", "printInt(t(1);", "Malformed argument list"],
+	["a malformed call at the top level", "x = t(1 2);", "Malformed argument list"],
+	// the legal counterparts, so the rule cannot be satisfied by rejecting every call
+	["a nested call", "printInt(t(t(1)));", null],
+	["a call inside a boolean group", "if ((t(x) > 0 || t(x) > 1)) { x = 1; }", null],
+	["a call with no arguments", "v();", null],
+	["an argument that is itself parenthesized", "printInt(t((x + 1)));", null],
+];
+for (const [label, body, expected] of argListCases) {
+	expectCompileOutcome("argument list", label,
+		`${CALL_HDR}function main() locals int x { x = 5; ${body} }\n`, expected);
+}
+console.log("impala.jspeg compiler names a malformed argument list instead of backtracking out of the call");
+
 let observedComparisonMixError = false;
 try {
 	compileWithJsImpala(comparisonMixSource, { randomId: 42 });

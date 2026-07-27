@@ -4072,7 +4072,18 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.elems = [];
                                                        $$.nulls = [];
                                                     } }
-                (Argument (','_ Argument)*)? ')'_  { if (!$$parser.dry) {
+                (Argument (','_ Argument)*)?
+                (   ')'_
+                /                                  {   /* a '(' after a value is always a call, so no valid parse ever
+                                                          backtracks out of one - and the prologue above already borrowed
+                                                          the call window, which a backtrack would leak into whatever
+                                                          diagnostic comes next. Reject here, where the syntax broke. */
+                                                       if (!$$parser.dry)
+                                                           $$parser.fail('Malformed argument list', $$s, $$i, 'E442',
+                                                                   'expected , or ) here - and note that a comparison or a && / || group is not a value in Impala');
+                                                    }
+                    !_                             # dry: nothing was borrowed, so plain backtracking is safe
+                )                                  { if (!$$parser.dry) {
                                                        var callee = metaSlot($$);
                                                        var callResultType = '?';
                                                        var signature = null;
