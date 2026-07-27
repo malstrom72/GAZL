@@ -38,7 +38,10 @@ materialise everywhere else, rather than reach for a clever analysis.
   call cannot be expanded, that is a diagnostic, not a de-optimisation.
 - Nested inlining works for free: an `inline` function that calls another `inline` function has the
   inner body already expanded into its own captured body.
-- Imported `inline` functions work, because an import closure concatenates the defining unit first.
+- Imported `inline` functions work, because an import closure concatenates the defining unit first, so
+  the body is captured before any importer can call it. Verified in the `import/` fixture: `clampi`
+  lives only in `mathlib.impala`, is called from `main.impala`, and emits no symbol in the linked GAZL.
+  Note this needs `impala build` (which resolves the closure), not `impala compile`.
 
 Rejected, each with its own diagnostic (section 7): recursion, taking the address, `export`, `extern`,
 forward declaration, and declaring an array or struct local.
