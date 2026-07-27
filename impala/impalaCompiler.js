@@ -974,6 +974,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
 
+        /* a binary result is never a verbatim call result; drop callInfo so
+           assign() cannot mistake it for one (see unaryOp for rationale). */
+        leftx.callInfo  = undefined;
+        rightx.callInfo = undefined;
+
         /* validate operand-type combination */
         var sig = operator + leftx.type + rightx.type;
         var tp  = SUPPORTED_OPS[sig];
@@ -1399,6 +1404,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         /* update resulting type */
         expr.type = rTyp;
+
+        /* a cast/deref/unary result is no longer a verbatim call result,
+           so drop any callInfo that would let assign() pin the callee's
+           return type to the l-value (e.g. *(pointer)f() must not make f
+           "expect" the deref's target type). */
+        expr.callInfo = undefined;
     };
 
     /* -----------------------------------------------------------

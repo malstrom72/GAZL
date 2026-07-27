@@ -573,6 +573,12 @@ const parityFixtures = [
 		expected: "inputTest.expected.gazl",
 		options: { randomId: 42, sourceName: "inputTest.impala" },
 	},
+	{
+		name: "derefCallContract",
+		source: "derefCallContract.impala",
+		expected: "derefCallContract.expected.gazl",
+		options: { randomId: 42, sourceName: "derefCallContract.impala" },
+	},
 ];
 
 const legacySourceDir = path.join(dir, "..", "tests", "impala", "sources");
