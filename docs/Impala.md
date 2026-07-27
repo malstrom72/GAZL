@@ -390,30 +390,6 @@ keyword (`copy`, `assert`) or a host-supplied `extern native` function.
 | `itof(n)` | convert `int` to `float` |
 | `ftoi(f)` | convert `float` to `int` |
 
-Trigonometric and exponential functions are **not** built in. Either precompute them into
-tables at load time (`ringmod_code.impala` builds a cosine table with a Taylor series in
-`init()`), or copy a ready-made implementation from the snippets library described below.
-
-### Standard snippets library
-
-Impala has no `#include` and no separate compilation units, so there is no linked
-standard library. Instead, [`examples/Firmwares/Impala Snippets.txt`](../../examples/Firmwares/Impala%20Snippets.txt)
-collects reusable, copy-paste functions and data. Copy only what a firmware needs. It
-includes:
-
-- **Math**: `exp`, `log`, `log2`, `log10`, `pow`, `sqrt`, `sin`, `cos`, `tan`, `trunc`,
-  `round`, `ceil`, `fmod`, `minInt`/`maxInt`, `minFloat`/`maxFloat`, the `xorShiftRandom`
-  generator, and constants such as `PI`, `E`, and `HALF_PI`.
-- **Strings**: `strlen`, `strcpy`, `strcat`, `strcmp`, `strncmp`, `stpcpy`.
-- **Conversion**: `intToString`, `floatToString`, `stringToFloat`.
-- **Tracing**: `traceInt`, `traceInts`, `traceFloat`, `traceFloats`, and `error`.
-- **Permut8 tables**: `EIGHT_BIT_EXP_TABLE` and `SEVEN_BIT_EXP_TABLE`, the exact
-  exponential tables used by the built-in operators (see
-  [Operand Scaling Conventions](../../docs/Operand%20Scaling%20Conventions.md)).
-
-(The other way to share code is to assemble each source separately and concatenate the
-resulting `.gazl` files, since linking is just concatenation.)
-
 ### Pointers and arrays
 
 `&` takes an address; `*` dereferences. Pointer arithmetic is supported: `pointer + int`
