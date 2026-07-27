@@ -728,6 +728,24 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var currentGoto = null;                        // last unconditional goto
         var aliases     = {};                          // label alias map
 
+        /* A `<-?` join may be DELETED only if this pass can still redirect every reference to it,
+           and the backward walk can only do that for a reference it has NOT visited yet - one at a
+           LOWER index. A reference from below (a `do`-while back-edge) had its operand fixed before
+           the alias existed, and one from an operator the walk never rewrites (the `<> ==` guard an
+           `assert` bakes its ok-label into) is never offered the alias at all. Either way the label
+           has to stay, so work out which ones up front instead of sniffing the tag letter. */
+        var pinned = {}, joinAt = {};
+        for (var i = 0; i < metacode.length; ++i) {
+            if (metacode[i].operator === '<-?') joinAt[metacode[i].operands[0]] = i;
+        }
+        for (var i = 0; i < metacode.length; ++i) {
+            var rec = metacode[i], rewritable = (rec.operator === '?->' || rec.operator === '-->');
+            for (var k = 0; k < 3; ++k) {
+                var at = joinAt[rec.operands[k]];
+                if (at !== undefined && at !== i && (!rewritable || i > at)) pinned[rec.operands[k]] = true;
+            }
+        }
+
         /* walk metacode bottom-to-top */
         for (var i = metacode.length - 1; i >= 0; --i) {
             var inst = metacode[i];
@@ -755,7 +773,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
                     if (target[t] != null) {        // label already chosen - make alias
                         aliases[lbl] = target[t];
-                        inst.operator = (lbl[2] !== 'a' ? null : '<--'); // keep assert labels
+                        inst.operator = (pinned[lbl] ? '<--' : null);
                     } else {
                         target[t]    = lbl;
                         inst.operator = '<--';      // we retain the label
@@ -809,6 +827,27 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 /* ---  anything else breaks the chain  --- */
                 default:
                     target.false = target.true = currentGoto = null;
+            }
+        }
+
+        /* POST-CONDITION. This pass OWNS every `@.` label - it mints them, aliases them and
+           deletes them - so a reference left pointing at a name it also deleted is a bug HERE,
+           and saying so beats the assembler's "Symbol not found" three layers downstream. A
+           user label (`@name`) is not ours to promise, and a `-->#` operand names a jump TABLE
+           whose entries spell `base#case`, so the bare base is never defined. */
+        var defined = {};
+        for (i = 0; i < metacode.length; ++i) {
+            if (metacode[i].operator === '<--') {
+                defined[metacode[i].operands[0]] = true;
+            }
+        }
+        for (i = 0; i < metacode.length; ++i) {
+            var rec = metacode[i], op = rec.operator;
+            if (op == null || op === ';' || op === '<--' || op === '-->#') continue;
+            for (var k = 0; k < 3; ++k) {
+                var ref = rec.operands[k];
+                assert(typeof ref !== 'string' || ref.substr(0, 2) !== '@.' || defined[ref],
+                        "branch to deleted label " + ref + " from " + op);
             }
         }
     };
