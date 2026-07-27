@@ -174,8 +174,8 @@ scattered them to `%4` and `%3`, so the callee read garbage.
 The per-expansion tag therefore goes BEFORE the `#`: `.s0#0` becomes `.s0_i0#0`, not `.s0#0_i0`.
 
 **Some operand positions reject an immediate.** `SWCH` needs a value operand, so substituting a literal
-argument would emit `SWCH #0 *3`, which the assembler rejects. Parameters used that way are recorded at
-capture and keep their window slot instead of being substituted.
+argument would emit `SWCH #0 *3`, which the assembler rejects. This needs no per-position bookkeeping:
+the blanket "only a slot may be substituted" rule above already keeps every literal in its window slot.
 
 ## 7. Diagnostics
 
@@ -184,7 +184,7 @@ capture and keep their window slot instead of being substituted.
 | `inline` function calls itself | would expand forever |
 | `&f`, or assigning `f` to a funcptr / `functype` | no symbol exists to take the address of |
 | `export inline function f` | nothing to export; a caller needs the source, which is what `import` is for |
-| `extern inline` | meaningless |
+| `extern inline` | meaningless; the grammar does not accept the pair at all, so this is a plain syntax error |
 | calling an `inline` function before its definition | the body is not captured yet; `extern function f` gives no body either |
 | forward-declaring an `inline` function (`extern function f`) | promises a symbol it never emits, and a call before the definition would lower to `CALL &f` |
 
@@ -256,3 +256,7 @@ assembler-level pass described in `docs/InliningInvestigation.md`; the two compo
 - The rejection cases from section 7, table-driven through `expectCompileOutcome`.
 - `fuzzImpala.js --vm` already compiles and runs generated programs; generating the with/without pair
   form gives a differential oracle equivalent to the `--inline` toggle an assembler pass would use.
+  **That oracle only works if the generated program PRINTS something.** `renderFunc` ends `main` with a
+  `printInt` of every reachable int local, array element and global for exactly this reason. Without it
+  both builds emit nothing, every comparison is `"" === ""`, and the oracle silently passes everything -
+  which is how it shipped at first, and it caught nothing until the dump was added.

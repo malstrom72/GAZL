@@ -1257,17 +1257,17 @@
         '+',1, '-',1, '*',1, '/',1, '%',1, 'd',1,
         '<=',1, '<',1, '>=',1, '>',1, '!=',1, '==',1,
         '!<=',1, '!<',1, '!>=',1, '!>',1, '!!=',1, '!==',1,
-        '-->',1, '-->#',1, '...',1, '<--',1, '<-?',1, '?->',1, '!',1, ';',1,
-        '<> *',1, '<> +',1, '<> -',1, '<> ==',1
+        '-->',1, '-->#',1, '...',1, '<--',1
     );
 
     /* An `inline function` has no out-of-line copy, so its address does not exist. A direct call never
        emits `&name` at all (FuncCall expands the body instead), so ANY such operand reaching the output
        is an address-take. Checked once where operands are rendered, so every consumer is covered. */
     $$parser.rejectInlineAddress = function (operand) {
-        if (operand == null || ('' + operand).charAt(0) !== '&') return;
-        var name = ('' + operand).substr(1);
-        var fn = $$parser.symbols.functions[name];
+        if (operand == null) return;
+        var name = '' + operand;
+        if (name.charAt(0) !== '&') return;
+        var fn = $$parser.symbols.functions[name = name.substr(1)];
         if (fn !== undefined && fn.inline !== undefined) {
             $$parser.fail('Cannot take the address of the inline function ' + name,
                     undefined, undefined, 'E435',
@@ -1283,45 +1283,40 @@
                 if (('' + body[i].operands[0]).charAt(0) !== '&') return true;
                 continue;
             }
+            if (op.substr(0, 3) === '<> ') continue;           /* a constant fold writes a `<X>` scratch and
+                                                                  nothing else, whatever the operator */
             if (!$$parser.INLINE_PURE[op]) return true;        /* unrecognised -> assume the worst */
         }
         return false;
     };
 
-    /* Snapshot a body before flushMetaCode() clears it. Drops the trailing RETU and the `;` source
-       comments; keeps everything else, operand-for-operand. */
+    /* Snapshot a body before flushMetaCode() clears it. Drops the `;` source comments; keeps everything
+       else, operand-for-operand. (There is no RETU to drop: it is emitted after this runs.) */
     $$parser.captureInlineBody = function (name, sourceCode, sourceOffset) {
         var entry = $$parser.symbols.functions[name];
         var sig = entry.signature;
-        var body = [];
+        var body = [], maxT = -1;
         for (var i = 0; i < $$parser.metacode.length; ++i) {
             var m = $$parser.metacode[i];
             if (m.operator === undefined || m.operator === null                 /* removed by processBranches */
-                    || m.operator === ';' || m.operator === '--^') continue;
+                    || m.operator === ';') continue;
             if (m.operator === '()' && ('' + m.operands[0]) === '&' + name) {
                 $$parser.fail('An inline function cannot call itself', sourceCode, sourceOffset, 'E432',
                         'inlining a recursive function would never terminate');
             }
             body.push({ operator: m.operator, type: m.type, inlineFold: m.inlineFold,
                     operands: [ m.operands[0], m.operands[1], m.operands[2] ] });
-        }
-        var params = [];
-        for (var p = 0; p < sig.params.length; ++p) params.push('$' + sig.params[p].name);
-        var needsSlot = {};                         /* operand positions that reject an immediate */
-        for (var ni = 0; ni < body.length; ++ni) {
-            if (body[ni].operator === '-->#') needsSlot['' + body[ni].operands[0]] = true;
-        }
-        var maxT = -1;                              /* the callee numbers its temporaries from 0 */
-        for (var mi = 0; mi < body.length; ++mi) {
-            for (var mo = 0; mo < 3; ++mo) {
-                var mv = body[mi].operands[mo];
+            for (var mo = 0; mo < 3; ++mo) {        /* the callee numbers its temporaries from 0; `%<X>`
+                                                       parses as NaN and so drops out of the compare */
+                var mv = m.operands[mo];
                 if (mv === undefined || ('' + mv).charAt(0) !== '%') continue;
                 var mn = parseInt(('' + mv).substr(1), 10);
                 if (mn > maxT) maxT = mn;
             }
         }
+        var params = [];
+        for (var p = 0; p < sig.params.length; ++p) params.push('$' + sig.params[p].name);
         entry.inline = { body: body, params: params, locals: $$parser.inlineLocals, maxTransient: maxT,
-                needsSlot: needsSlot,
                 ret: (sig.returnName !== undefined ? '$' + sig.returnName : undefined),
                 opaque: $$parser.bodyIsOpaque(body) };
     };
@@ -1360,14 +1355,17 @@
             subst[info.params[k]] = src;
         }
         if (info.ret !== undefined) subst[info.ret] = '%' + base;   /* the window's output slot */
-        var borrowedLocals = [];                    /* a local lives in transients, one expansion at a time */
-        for (k = 0; k < info.locals.length; ++k) {
-            var lw = info.locals[k].words;
-            var lb = (lw > 1 ? $$parser.borrowForCall()      /* an array needs its elements ADJACENT */
-                             : parseInt($$parser.borrow('%').substr(1), 10));
-            for (var ls = 1; ls < lw; ++ls) $$parser.claimSlot(lb + ls);   /* slot 0 is already claimed by the borrow */
-            for (ls = 0; ls < lw; ++ls) borrowedLocals.push('%' + (lb + ls));
-            subst[info.locals[k].name] = '%' + lb;
+        var runs = [];                              /* every run borrowed below, released in reverse at the end */
+        function borrowRun(n) {                     /* an array local and the callee's own temporaries both
+                                                       need their slots ADJACENT */
+            var b = (n > 1 ? $$parser.borrowForCall()
+                           : parseInt($$parser.borrow('%').substr(1), 10));
+            for (var q = 1; q < n; ++q) $$parser.claimSlot(b + q);   /* slot 0 came with the borrow */
+            runs.push([ b, n ]);
+            return b;
+        }
+        for (k = 0; k < info.locals.length; ++k) {  /* a local lives in transients, one expansion at a time */
+            subst[info.locals[k].name] = '%' + borrowRun(info.locals[k].words);
         }
 
         var tag = '_i' + ($$parser.inlineCounter++);
@@ -1376,13 +1374,9 @@
             if (!Object.prototype.hasOwnProperty.call(scratchMap, sc)) scratchMap[sc] = $$parser.borrow('<');
             return scratchMap[sc];
         }
-        var tCount = info.maxTransient + 1;
-        var tBase = -1, blockSlots = [];
-        if (tCount > 0) {                       /* one run keeps every window inside the body intact */
-            tBase = $$parser.borrowForCall();
-            for (var tb = 1; tb < tCount; ++tb) $$parser.claimSlot(tBase + tb);
-            for (tb = 0; tb < tCount; ++tb) blockSlots.push('%' + (tBase + tb));
-        }
+        var tCount = info.maxTransient + 1;      /* one run keeps every window inside the body intact */
+        var tBase = (tCount > 0 ? borrowRun(tCount) : -1);
+        var symOffsets = {};
         function mapOperand(op) {
             if (op === undefined || op === null) return op;
             var s = '' + op;
@@ -1412,8 +1406,8 @@
                 var n = parseInt(off, 10);
                 if (!isNaN(n) && ('' + n) === off) return '%' + (parseInt(mapped.substr(1), 10) + n);
                 if (!Object.prototype.hasOwnProperty.call(symOffsets, s)) {
-                    var sc = $$parser.borrow('<');
-                    folds.push({ operator: '<> +', type: 'i', settled: true, inlineFold: true,
+                    var sc = $$parser.borrow('<');   /* minted before the record that reads it, so push it now */
+                    $$parser.metacode.push({ operator: '<> +', type: 'i', settled: true, inlineFold: true,
                             operands: [ sc, '#' + mapped.substr(1), '#' + off ] });
                     symOffsets[s] = '%' + sc;
                 }
@@ -1425,22 +1419,15 @@
             }
             return s;
         }
-        var symOffsets = {}, folds = [];
         for (i = 0; i < info.body.length; ++i) {
             var b = info.body[i];
-            folds.length = 0;
-            var rec;
-            if (b.inlineFold) {                 /* `! ADDi <X> #slot #offset` from an inner expansion */
-                rec = { operator: b.operator, type: b.type, settled: true, inlineFold: true, operands: [
-                        mapScratch(b.operands[0]),
-                        '#' + (tBase + parseInt(('' + b.operands[1]).substr(1), 10)),
-                        mapOperand(b.operands[2]) ] };   /* a nested field folds to `#<X>`, so rename it too */
-            } else {
-                rec = { operator: b.operator, type: b.type, settled: true, operands: [
-                        mapOperand(b.operands[0]), mapOperand(b.operands[1]), mapOperand(b.operands[2]) ] };
-            }
-            for (var f = 0; f < folds.length; ++f) $$parser.metacode.push(folds[f]);
-            $$parser.metacode.push(rec);
+            /* an inherited `! ADDi <X> #slot #offset` carries a callee SLOT NUMBER in operand 1, not an
+               immediate, so that one shifts with the block instead of being mapped */
+            $$parser.metacode.push({ operator: b.operator, type: b.type, settled: true,
+                    inlineFold: b.inlineFold, operands: [ mapOperand(b.operands[0]),
+                    (b.inlineFold ? '#' + (tBase + parseInt(('' + b.operands[1]).substr(1), 10))
+                                  : mapOperand(b.operands[1])),
+                    mapOperand(b.operands[2]) ] });
         }
         for (var sm in scratchMap) {
             if (Object.prototype.hasOwnProperty.call(scratchMap, sm)) $$parser.returnBack(scratchMap[sm]);
@@ -1448,8 +1435,9 @@
         for (var so in symOffsets) {
             if (Object.prototype.hasOwnProperty.call(symOffsets, so)) $$parser.returnBack(symOffsets[so]);
         }
-        for (k = blockSlots.length - 1; k >= 0; --k) $$parser.returnBack(blockSlots[k]);
-        for (k = borrowedLocals.length - 1; k >= 0; --k) $$parser.returnBack(borrowedLocals[k]);
+        for (k = runs.length - 1; k >= 0; --k) {
+            for (var rs = runs[k][1] - 1; rs >= 0; --rs) $$parser.returnBack('%' + (runs[k][0] + rs));
+        }
     };
 
     $$parser.endFuncType = function (name) {
@@ -4090,18 +4078,16 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            commentIndex = $$parser.metacode.length - 1;
                                                        }
 
-                                                       var inlineInfo = (calleeName !== null
-                                                               && $$parser.symbols.functions[calleeName]
-                                                               ? $$parser.symbols.functions[calleeName].inline : undefined);
+                                                       var inlineInfo = (entry ? entry.inline : undefined);
                                                        if (inlineInfo !== undefined) {   /* replay the body instead of calling it */
                                                            $$parser.expandInline(inlineInfo, $$.base, $$.retSlots, $$.words, $$.mark);
                                                        } else {
-                                                       var func = $$parser.makeRValue(callee, '&^$%');
-                                                       $$parser.emit('()', '?',
-                                                                     func,
-                                                                     '%' + $$.base,
-                                                                     '*' + ($$.words + $$.retSlots));
-                                                       $$parser.returnBack(func);
+                                                           var func = $$parser.makeRValue(callee, '&^$%');
+                                                           $$parser.emit('()', '?',
+                                                                         func,
+                                                                         '%' + $$.base,
+                                                                         '*' + ($$.words + $$.retSlots));
+                                                           $$parser.returnBack(func);
                                                        }
 
                                                        while ($$.words-- > 0) {              /* free the argument words (past the output slots) */

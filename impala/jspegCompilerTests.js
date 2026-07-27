@@ -956,9 +956,8 @@ const inlineCases = [
 	["exporting an inline function",
 		"export inline function g(int a) returns int r { r = a; }\n"
 			+ "function main() locals int q { q = g(1); }\n", "cannot be exported"],
-	// Locals live in transients, one expansion at a time. A struct field needs a SYMBOLIC frame offset
-	// (`$s:.o.S.f`) and GAZL has no `%N:offset`, so structs cannot follow; an array can, because a
-	// constant element offset folds into the slot number and a dynamic one uses SETL with a %N base.
+	// Locals live in transients, one expansion at a time, so the WORD COUNT must be known while
+	// compiling - a folded or symbolic extent does not resolve until assembly.
 	["an inline function with a non-literal array size",
 		"const int H = 2\nconst int N = 2\ninline function f(int a) returns int r\n"
 			+ "locals int array t[H * N]\n{ t[0] = a; r = t[0]; }\n"

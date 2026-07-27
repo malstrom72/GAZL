@@ -1269,17 +1269,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         '+',1, '-',1, '*',1, '/',1, '%',1, 'd',1,
         '<=',1, '<',1, '>=',1, '>',1, '!=',1, '==',1,
         '!<=',1, '!<',1, '!>=',1, '!>',1, '!!=',1, '!==',1,
-        '-->',1, '-->#',1, '...',1, '<--',1, '<-?',1, '?->',1, '!',1, ';',1,
-        '<> *',1, '<> +',1, '<> -',1, '<> ==',1
+        '-->',1, '-->#',1, '...',1, '<--',1
     );
 
     /* An `inline function` has no out-of-line copy, so its address does not exist. A direct call never
        emits `&name` at all (FuncCall expands the body instead), so ANY such operand reaching the output
        is an address-take. Checked once where operands are rendered, so every consumer is covered. */
     rejectInlineAddress = function (operand) {
-        if (operand == null || ('' + operand).charAt(0) !== '&') return;
-        var name = ('' + operand).substr(1);
-        var fn = symbols.functions[name];
+        if (operand == null) return;
+        var name = '' + operand;
+        if (name.charAt(0) !== '&') return;
+        var fn = symbols.functions[name = name.substr(1)];
         if (fn !== undefined && fn.inline !== undefined) {
             fail('Cannot take the address of the inline function ' + name,
                     undefined, undefined, 'E435',
@@ -1295,45 +1295,40 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 if (('' + body[i].operands[0]).charAt(0) !== '&') return true;
                 continue;
             }
+            if (op.substr(0, 3) === '<> ') continue;           /* a constant fold writes a `<X>` scratch and
+                                                                  nothing else, whatever the operator */
             if (!INLINE_PURE[op]) return true;        /* unrecognised -> assume the worst */
         }
         return false;
     };
 
-    /* Snapshot a body before flushMetaCode() clears it. Drops the trailing RETU and the `;` source
-       comments; keeps everything else, operand-for-operand. */
+    /* Snapshot a body before flushMetaCode() clears it. Drops the `;` source comments; keeps everything
+       else, operand-for-operand. (There is no RETU to drop: it is emitted after this runs.) */
     captureInlineBody = function (name, sourceCode, sourceOffset) {
         var entry = symbols.functions[name];
         var sig = entry.signature;
-        var body = [];
+        var body = [], maxT = -1;
         for (var i = 0; i < metacode.length; ++i) {
             var m = metacode[i];
             if (m.operator === undefined || m.operator === null                 /* removed by processBranches */
-                    || m.operator === ';' || m.operator === '--^') continue;
+                    || m.operator === ';') continue;
             if (m.operator === '()' && ('' + m.operands[0]) === '&' + name) {
                 fail('An inline function cannot call itself', sourceCode, sourceOffset, 'E432',
                         'inlining a recursive function would never terminate');
             }
             body.push({ operator: m.operator, type: m.type, inlineFold: m.inlineFold,
                     operands: [ m.operands[0], m.operands[1], m.operands[2] ] });
-        }
-        var params = [];
-        for (var p = 0; p < sig.params.length; ++p) params.push('$' + sig.params[p].name);
-        var needsSlot = {};                         /* operand positions that reject an immediate */
-        for (var ni = 0; ni < body.length; ++ni) {
-            if (body[ni].operator === '-->#') needsSlot['' + body[ni].operands[0]] = true;
-        }
-        var maxT = -1;                              /* the callee numbers its temporaries from 0 */
-        for (var mi = 0; mi < body.length; ++mi) {
-            for (var mo = 0; mo < 3; ++mo) {
-                var mv = body[mi].operands[mo];
+            for (var mo = 0; mo < 3; ++mo) {        /* the callee numbers its temporaries from 0; `%<X>`
+                                                       parses as NaN and so drops out of the compare */
+                var mv = m.operands[mo];
                 if (mv === undefined || ('' + mv).charAt(0) !== '%') continue;
                 var mn = parseInt(('' + mv).substr(1), 10);
                 if (mn > maxT) maxT = mn;
             }
         }
+        var params = [];
+        for (var p = 0; p < sig.params.length; ++p) params.push('$' + sig.params[p].name);
         entry.inline = { body: body, params: params, locals: inlineLocals, maxTransient: maxT,
-                needsSlot: needsSlot,
                 ret: (sig.returnName !== undefined ? '$' + sig.returnName : undefined),
                 opaque: bodyIsOpaque(body) };
     };
@@ -1372,14 +1367,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             subst[info.params[k]] = src;
         }
         if (info.ret !== undefined) subst[info.ret] = '%' + base;   /* the window's output slot */
-        var borrowedLocals = [];                    /* a local lives in transients, one expansion at a time */
-        for (k = 0; k < info.locals.length; ++k) {
-            var lw = info.locals[k].words;
-            var lb = (lw > 1 ? borrowForCall()      /* an array needs its elements ADJACENT */
-                             : parseInt(borrow('%').substr(1), 10));
-            for (var ls = 1; ls < lw; ++ls) claimSlot(lb + ls);   /* slot 0 is already claimed by the borrow */
-            for (ls = 0; ls < lw; ++ls) borrowedLocals.push('%' + (lb + ls));
-            subst[info.locals[k].name] = '%' + lb;
+        var runs = [];                              /* every run borrowed below, released in reverse at the end */
+        function borrowRun(n) {                     /* an array local and the callee's own temporaries both
+                                                       need their slots ADJACENT */
+            var b = (n > 1 ? borrowForCall()
+                           : parseInt(borrow('%').substr(1), 10));
+            for (var q = 1; q < n; ++q) claimSlot(b + q);   /* slot 0 came with the borrow */
+            runs.push([ b, n ]);
+            return b;
+        }
+        for (k = 0; k < info.locals.length; ++k) {  /* a local lives in transients, one expansion at a time */
+            subst[info.locals[k].name] = '%' + borrowRun(info.locals[k].words);
         }
 
         var tag = '_i' + (inlineCounter++);
@@ -1388,13 +1386,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (!Object.prototype.hasOwnProperty.call(scratchMap, sc)) scratchMap[sc] = borrow('<');
             return scratchMap[sc];
         }
-        var tCount = info.maxTransient + 1;
-        var tBase = -1, blockSlots = [];
-        if (tCount > 0) {                       /* one run keeps every window inside the body intact */
-            tBase = borrowForCall();
-            for (var tb = 1; tb < tCount; ++tb) claimSlot(tBase + tb);
-            for (tb = 0; tb < tCount; ++tb) blockSlots.push('%' + (tBase + tb));
-        }
+        var tCount = info.maxTransient + 1;      /* one run keeps every window inside the body intact */
+        var tBase = (tCount > 0 ? borrowRun(tCount) : -1);
+        var symOffsets = {};
         function mapOperand(op) {
             if (op === undefined || op === null) return op;
             var s = '' + op;
@@ -1424,8 +1418,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 var n = parseInt(off, 10);
                 if (!isNaN(n) && ('' + n) === off) return '%' + (parseInt(mapped.substr(1), 10) + n);
                 if (!Object.prototype.hasOwnProperty.call(symOffsets, s)) {
-                    var sc = borrow('<');
-                    folds.push({ operator: '<> +', type: 'i', settled: true, inlineFold: true,
+                    var sc = borrow('<');   /* minted before the record that reads it, so push it now */
+                    metacode.push({ operator: '<> +', type: 'i', settled: true, inlineFold: true,
                             operands: [ sc, '#' + mapped.substr(1), '#' + off ] });
                     symOffsets[s] = '%' + sc;
                 }
@@ -1437,22 +1431,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             }
             return s;
         }
-        var symOffsets = {}, folds = [];
         for (i = 0; i < info.body.length; ++i) {
             var b = info.body[i];
-            folds.length = 0;
-            var rec;
-            if (b.inlineFold) {                 /* `! ADDi <X> #slot #offset` from an inner expansion */
-                rec = { operator: b.operator, type: b.type, settled: true, inlineFold: true, operands: [
-                        mapScratch(b.operands[0]),
-                        '#' + (tBase + parseInt(('' + b.operands[1]).substr(1), 10)),
-                        mapOperand(b.operands[2]) ] };   /* a nested field folds to `#<X>`, so rename it too */
-            } else {
-                rec = { operator: b.operator, type: b.type, settled: true, operands: [
-                        mapOperand(b.operands[0]), mapOperand(b.operands[1]), mapOperand(b.operands[2]) ] };
-            }
-            for (var f = 0; f < folds.length; ++f) metacode.push(folds[f]);
-            metacode.push(rec);
+            /* an inherited `! ADDi <X> #slot #offset` carries a callee SLOT NUMBER in operand 1, not an
+               immediate, so that one shifts with the block instead of being mapped */
+            metacode.push({ operator: b.operator, type: b.type, settled: true,
+                    inlineFold: b.inlineFold, operands: [ mapOperand(b.operands[0]),
+                    (b.inlineFold ? '#' + (tBase + parseInt(('' + b.operands[1]).substr(1), 10))
+                                  : mapOperand(b.operands[1])),
+                    mapOperand(b.operands[2]) ] });
         }
         for (var sm in scratchMap) {
             if (Object.prototype.hasOwnProperty.call(scratchMap, sm)) returnBack(scratchMap[sm]);
@@ -1460,8 +1447,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         for (var so in symOffsets) {
             if (Object.prototype.hasOwnProperty.call(symOffsets, so)) returnBack(symOffsets[so]);
         }
-        for (k = blockSlots.length - 1; k >= 0; --k) returnBack(blockSlots[k]);
-        for (k = borrowedLocals.length - 1; k >= 0; --k) returnBack(borrowedLocals[k]);
+        for (k = runs.length - 1; k >= 0; --k) {
+            for (var rs = runs[k][1] - 1; rs >= 0; --rs) returnBack('%' + (runs[k][0] + rs));
+        }
     };
 
     endFuncType = function (name) {
@@ -3080,7 +3068,7 @@ function MulDiv($){var $op=createParserContext(),$r=createParserContext();return
 function PrePost($){var $op=createParserContext(),$cdesc,$cmods,$sid=createParserContext(),$pdepth;return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(function(){ $cdesc = CASTS_TO_TYPES[$op._]; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $cdesc = 'p:' + $cdesc; $cmods = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&Identifier($sid)&&(function(){ $pdepth = 0; ; return true})()&&((function(){for(var _n=0;(function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $pdepth = $pdepth + 1; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})();++_n);return _n>0})())&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!isStructAtom($sid._)) fail('Unknown type ' + $sid._, _s, _i, 'E413'); $cdesc = $sid._; for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc; $cmods = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) { if ($cmods) { unaryOp('pointer', $._, _s, _i); setElem($._, descTail($cdesc)); } else { unaryOp($op._, $._, _s, _i); } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FieldAccess($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Subscript($){var $s=createParserContext();return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var sb = metaSlot($._); if ((sb.place && sb.arrayOf) || (sb.type === 'p' && isStructAtom(sb.elem))) subscriptStruct($._, $s._); else binaryOp('=[]', $._, $s._, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FieldAccess($){var $f=createParserContext();return (function(){var _b=_i;return (_s.substr(_i,2)==="->")&&(_i+=2,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, true, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===".")&&(++_i,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, false, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; /* how many leading output slots the callee expects (>1 = multi-return) */ var _c = metaSlot($._); var _rs = 1; if (_c.operator === ':=' && _c.operands[1] && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) { var _e = symbols.functions[_c.operands[1].substr(1)]; if (_e && _e.signature && _e.signature.returnWords !== undefined && _e.signature.returnWords > 1) _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */ } else if (_c.type === 'F' && isFuncTypeAtom(_c.elem)) { var _ft = functypes[_c.elem];   /* indirect call through a named funcptr type */ if (_ft.returnWords > 1) _rs = _ft.returnWords; } $.retSlots = _rs; $.words = 0;                            /* input words placed so far (struct args span >1) */ $.base  = borrowForCall(); $.mark  = metacode.length;     /* first meta of THIS call's arguments */ for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */ claimSlot($.base + _os); $.types = []; $.elems = []; $.nulls = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type , undefined, 'E408'); } if (callee.operator === ':=' && callee.operands[1] && (callee.operands[1][0] === '&' || callee.operands[1][0] === '^')) { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; /* an Impala-defined function, or an extern with a DECLARED prototype (name-only externs carry no `params` and stay unchecked - they assert nothing) */ if (entry && entry.signature && (entry.kind === 'FUNC' || entry.signature.params)) { signature = entry.signature; } } else if (callee.type === 'F' && isFuncTypeAtom(callee.elem)) { signature = functypes[callee.elem];   /* indirect call: check against the funcptr type */ } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i , 'E405'); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { /* Name the struct when the actual is a struct VALUE, and point at `&`: passing `v` where `V pointer` is wanted is the common slip now that by-value struct params are parked for Impala 3.0. */ var _actualText = ((actual === 'S' && $.elems && $.elems[argIdx]) ? 'struct ' + $.elems[argIdx] : '{$type1}'); typeError( 'Argument type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (' + _actualText + ' vs expected {$type2})', _s, _i, actual, expected , 'E406', ((actual === 'S' && expected === 'p') ? 'pass its address with & (by-value struct params are parked for Impala 3.0)' : undefined)); } if (expected === 'S' && params[argIdx].struct !== undefined && $.elems[argIdx] !== params[argIdx].struct) { fail('Struct type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + params[argIdx].struct + ', got ' + ($.elems[argIdx] || 'a non-struct value') + ')', _s, _i, 'E421'); } var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */ if (expected === 'p' && expectedElem !== undefined && !$.nulls[argIdx] && $.elems[argIdx] !== expectedElem) { fail('Pointer element type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + elemVerbose(expectedElem) + ' elements, got ' + elemVerbose($.elems[argIdx]) + ' elements)', _s, _i, 'E202', 'use a cast: (' + elemVerbose(expectedElem) + ' pointer)'); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var inlineInfo = (calleeName !== null && symbols.functions[calleeName] ? symbols.functions[calleeName].inline : undefined); if (inlineInfo !== undefined) {   /* replay the body instead of calling it */ expandInline(inlineInfo, $.base, $.retSlots, $.words, $.mark); } else { var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.words + $.retSlots)); returnBack(func); } while ($.words-- > 0) {              /* free the argument words (past the output slots) */ returnBack('%' + ($.base + $.retSlots + $.words)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); /* Keep the RETURN's element type: `returns V pointer` must yield a V-pointer, not a bare one, or `*f()` cannot be recognised as a struct and typed-pointer assignment checks go blind. A funcptr type carries returnElem too, so indirect calls work. */ setElem(callee, signature ? signature.returnElem : undefined); if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */ var _wp = borrow('%'); emit('=&', 'p', _wp, '%' + $.base, '*' + $.retSlots);   /* numeric: fixed output window (see copyStructArg) */ setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct); callee.winBase  = $.base;       /* output window slots to free once the value is consumed */ callee.winWords = $.retSlots; } else if ($.retSlots > 1) {        /* multi-return: expose window for destructuring */ callee.multiBase = $.base; callee.multiCount = $.retSlots; callee.multiReturnList = signature.returnList; } if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; /* how many leading output slots the callee expects (>1 = multi-return) */ var _c = metaSlot($._); var _rs = 1; if (_c.operator === ':=' && _c.operands[1] && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) { var _e = symbols.functions[_c.operands[1].substr(1)]; if (_e && _e.signature && _e.signature.returnWords !== undefined && _e.signature.returnWords > 1) _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */ } else if (_c.type === 'F' && isFuncTypeAtom(_c.elem)) { var _ft = functypes[_c.elem];   /* indirect call through a named funcptr type */ if (_ft.returnWords > 1) _rs = _ft.returnWords; } $.retSlots = _rs; $.words = 0;                            /* input words placed so far (struct args span >1) */ $.base  = borrowForCall(); $.mark  = metacode.length;     /* first meta of THIS call's arguments */ for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */ claimSlot($.base + _os); $.types = []; $.elems = []; $.nulls = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type , undefined, 'E408'); } if (callee.operator === ':=' && callee.operands[1] && (callee.operands[1][0] === '&' || callee.operands[1][0] === '^')) { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; /* an Impala-defined function, or an extern with a DECLARED prototype (name-only externs carry no `params` and stay unchecked - they assert nothing) */ if (entry && entry.signature && (entry.kind === 'FUNC' || entry.signature.params)) { signature = entry.signature; } } else if (callee.type === 'F' && isFuncTypeAtom(callee.elem)) { signature = functypes[callee.elem];   /* indirect call: check against the funcptr type */ } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i , 'E405'); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { /* Name the struct when the actual is a struct VALUE, and point at `&`: passing `v` where `V pointer` is wanted is the common slip now that by-value struct params are parked for Impala 3.0. */ var _actualText = ((actual === 'S' && $.elems && $.elems[argIdx]) ? 'struct ' + $.elems[argIdx] : '{$type1}'); typeError( 'Argument type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (' + _actualText + ' vs expected {$type2})', _s, _i, actual, expected , 'E406', ((actual === 'S' && expected === 'p') ? 'pass its address with & (by-value struct params are parked for Impala 3.0)' : undefined)); } if (expected === 'S' && params[argIdx].struct !== undefined && $.elems[argIdx] !== params[argIdx].struct) { fail('Struct type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + params[argIdx].struct + ', got ' + ($.elems[argIdx] || 'a non-struct value') + ')', _s, _i, 'E421'); } var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */ if (expected === 'p' && expectedElem !== undefined && !$.nulls[argIdx] && $.elems[argIdx] !== expectedElem) { fail('Pointer element type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + elemVerbose(expectedElem) + ' elements, got ' + elemVerbose($.elems[argIdx]) + ' elements)', _s, _i, 'E202', 'use a cast: (' + elemVerbose(expectedElem) + ' pointer)'); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var inlineInfo = (entry ? entry.inline : undefined); if (inlineInfo !== undefined) {   /* replay the body instead of calling it */ expandInline(inlineInfo, $.base, $.retSlots, $.words, $.mark); } else { var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.words + $.retSlots)); returnBack(func); } while ($.words-- > 0) {              /* free the argument words (past the output slots) */ returnBack('%' + ($.base + $.retSlots + $.words)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); /* Keep the RETURN's element type: `returns V pointer` must yield a V-pointer, not a bare one, or `*f()` cannot be recognised as a struct and typed-pointer assignment checks go blind. A funcptr type carries returnElem too, so indirect calls work. */ setElem(callee, signature ? signature.returnElem : undefined); if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */ var _wp = borrow('%'); emit('=&', 'p', _wp, '%' + $.base, '*' + $.retSlots);   /* numeric: fixed output window (see copyStructArg) */ setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct); callee.winBase  = $.base;       /* output window slots to free once the value is consumed */ callee.winWords = $.retSlots; } else if ($.retSlots > 1) {        /* multi-return: expose window for destructuring */ callee.multiBase = $.base; callee.multiCount = $.retSlots; callee.multiReturnList = signature.returnList; } if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Argument($){var $a=createParserContext();return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if ($.types) { $.types.push(meta.type); } if ($.elems) {                       /* element chain + null-ness, captured */ $.elems.push(meta.elem);         /* before makeArgValue mutates the meta */ $.nulls.push(meta.type === 'p' && meta.operands[1] === '&NULL' && meta.operands[2] === undefined); } var winSlot = $.base + $.retSlots + $.words; if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */ var w = structWords(meta.struct); copyStructArg($a._, winSlot, w); $.words += w; } else { makeArgValue($a._, winSlot); $.words += 1; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Group($){return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) stampBitwise($._, false); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BoolGroup($){var $label;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ $label = undefined; ; return true})()&&And($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="||")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('t'); } emit('?->', true, $label, undefined, undefined); ; return true})()&&And($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if ($label !== undefined) { emit('<-?', true, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

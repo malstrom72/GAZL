@@ -30,6 +30,9 @@ const path = require('path');
 const cp = require('child_process');
 
 const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32' ? 'GAZLCmd.exe' : 'GAZLCmd');
+// Both halves of the inline differential must compile under IDENTICAL settings or the oracle compares
+// two different programs.
+const COMPILE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true };
 
 // Run a compiled program on the VM. Returns null when there is no compiler fault, or a message when
 // the loader/assembler REJECTS the emitted GAZL - that means the compiler produced structurally
@@ -45,35 +48,29 @@ const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32
 // rare. A HANG is therefore a genuine bug: all loops are bounded `for (v = 0 to N<=4)` with a
 // per-nesting-level counter that is read-only inside the body, so nothing can defeat termination
 // except a miscompile. Do not reclassify a timeout as benign - fix the cause.
-function runOnVm(gazl) {
+function runGazl(gazl) {                            // write, run, delete; the caller classifies the result
 	const tmp = path.join(os.tmpdir(), `fuzz-${process.pid}-${Math.floor(rnd() * 1e9)}.gazl`);
 	fs.writeFileSync(tmp, gazl, 'latin1');
 	try {
-		const res = cp.spawnSync(GAZLCMD, [tmp, 'main'], { encoding: 'latin1', timeout: 10000 });
-		if (res.error) return 'spawn/timeout: ' + res.error.message;
-		if (res.status === 0) return null;
-		const err = (res.stderr || '') + (res.stdout || '');
-		if (/Code size:|functions:\s*\d/.test(err)) return null;   // loaded OK -> runtime trap, program UB
-		const line = err.split('\n').find((l) => /error|fault|assert|invalid|already defined|out of bounds|Status: [^0]/i.test(l));
-		return 'load failure (exit ' + res.status + '): ' + (line || err.split('\n')[0] || '').trim();
+		return cp.spawnSync(GAZLCMD, [tmp, 'main'], { encoding: 'latin1', timeout: 10000 });
 	} finally {
 		try { fs.unlinkSync(tmp); } catch (_) {}
 	}
 }
 
-// Run a program and capture what it PRINTED, for the inline differential below. Returns null when
-// the module did not load cleanly or the run trapped - in that case there is nothing to compare.
-function runForOutput(gazl) {
-	const tmp = path.join(os.tmpdir(), `fuzzo-${process.pid}-${Math.floor(rnd() * 1e9)}.gazl`);
-	fs.writeFileSync(tmp, gazl, 'latin1');
-	try {
-		const res = cp.spawnSync(GAZLCMD, [tmp, 'main'], { encoding: 'latin1', timeout: 10000 });
-		if (res.error || res.status !== 0) return null;
-		if (!/Code size:/.test(res.stderr || '')) return null;
-		return (res.stdout || '');
-	} finally {
-		try { fs.unlinkSync(tmp); } catch (_) {}
-	}
+function runOnVm(res) {
+	if (res.error) return 'spawn/timeout: ' + res.error.message;
+	if (res.status === 0) return null;
+	const err = (res.stderr || '') + (res.stdout || '');
+	if (/Code size:|functions:\s*\d/.test(err)) return null;   // loaded OK -> runtime trap, program UB
+	const line = err.split('\n').find((l) => /error|fault|assert|invalid|already defined|out of bounds|Status: [^0]/i.test(l));
+	return 'load failure (exit ' + res.status + '): ' + (line || err.split('\n')[0] || '').trim();
+}
+
+// What a program PRINTED, for the inline differential below. null when it did not load cleanly or
+// trapped - in that case there is nothing to compare.
+function outputOf(res) {
+	return (res.error || res.status !== 0 ? null : (res.stdout || ''));
 }
 
 // THE INLINE ORACLE. `inline` is a lowering, not a semantic change, so the same program with the
@@ -81,18 +78,18 @@ function runForOutput(gazl) {
 // reference - the plain --vm oracle can just see that a module loads. It is what the three inline
 // miscompiles found by hand (call-window adjacency, switch case labels, double processBranches)
 // would each have failed, and all three were silent.
-function inlineDifferential(src, gazl) {
+function inlineDifferential(src, res) {
 	if (src.indexOf('inline function') < 0) return null;
 	const plain = src.split('inline function').join('function');
 	let plainGazl;
 	try {
-		plainGazl = compileWithJsImpala(plain + '\n', { randomId: 0x4d2, retabulate: true, trailingNewline: true });
+		plainGazl = compileWithJsImpala(plain + '\n', COMPILE_OPTS);
 	} catch (e) {
 		return 'inline differential: the same program without `inline` failed to compile: '
 				+ ((e && e.message) || e);
 	}
-	const a = runForOutput(gazl);
-	const b = runForOutput(plainGazl);
+	const a = outputOf(res);                        // the inlined build already ran; do not run it twice
+	const b = outputOf(runGazl(plainGazl));
 	if (a === null || b === null) return null;      // trapped or did not load: nothing to compare
 	if (a !== b) {
 		return 'inline differential: inlined printed ' + JSON.stringify(a.slice(0, 200))
@@ -215,9 +212,8 @@ function genProgram() {
 
 	// functypes (0-2), each derived from a real function's signature so it has a valid target
 	const nFts = ri(3);
-	for (let i = 0; i < nFts && funcs.length; ++i) {
-		const outOfLine = funcs.filter((f) => !f.inline);
-		if (!outOfLine.length) break;
+	const outOfLine = funcs.filter((f) => !f.inline);   // an inline function has no address to point at
+	for (let i = 0; i < nFts && outOfLine.length; ++i) {
 		const src = pick(outOfLine);
 		functypes.push({ name: 'FT' + i, params: src.params.map((p) => p.t), rets: src.rets.slice(), target: src.name });
 	}
@@ -386,6 +382,23 @@ function genProgram() {
 		}
 		const nStmt = 1 + ri(isMain ? 8 : 4);
 		for (let i = 0; i < nStmt; ++i) body.push(genStmt(scope, f, 0));
+		// main ends by PRINTING every int-valued thing it can reach. Without this the program has no
+		// observable output, and the inline differential below compares "" against "" forever.
+		if (isMain) {
+			for (const l of locals) if (l.t === 'i') body.push('\tprintInt(' + l.name + '); printLF();');
+			for (const a of arrLocals) {
+				if (a.elem !== 'i') continue;
+				for (let i = 0; i < a.size; ++i) body.push('\tprintInt(' + a.name + '[' + i + ']); printLF();');
+			}
+			for (const g of globals) {
+				if (g.elem !== 'i') continue;
+				if (g.isArray) {
+					for (let i = 0; i < g.size; ++i) body.push('\tprintInt(global ' + g.name + '[' + i + ']); printLF();');
+				} else {
+					body.push('\tprintInt(global ' + g.name + '); printLF();');
+				}
+			}
+		}
 		// give the function's own return/OUT vars something (harmless if omitted, but exercises OUT writes)
 		for (let i = 0; i < f.rets.length; ++i) {
 			const t = f.rets[i];
@@ -547,7 +560,7 @@ function genProgram() {
 	}
 
 	// assemble
-	let out = 'const int DEBUG = 1\n';
+	let out = 'const int DEBUG = 1\nextern native printInt\nextern native printLF\n';
 	for (const s of structs) {
 		out += 'struct ' + s.name + ' { ' + s.fields.map((f) => decl(f.type) + f.name).join('; ') + ' }\n';
 	}
@@ -602,10 +615,11 @@ function main() {
 			continue;
 		}
 		try {
-			const gazl = compileWithJsImpala(src + '\n', { randomId: 0x4d2, retabulate: true, trailingNewline: true });
+			const gazl = compileWithJsImpala(src + '\n', COMPILE_OPTS);
 			compiled++;
 			if (useVm) {
-				const vmFault = runOnVm(gazl) || inlineDifferential(src, gazl);
+				const res = runGazl(gazl);
+				const vmFault = runOnVm(res) || inlineDifferential(src, res);
 				vmRun++;
 				if (vmFault) {
 					bugs++;
