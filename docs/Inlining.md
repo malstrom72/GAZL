@@ -147,6 +147,28 @@ opaque body.
 Measured on the fixtures: `inlineEquivalence` 154 -> 133 instructions (-14%), `inlineFunctions` 33 -> 29
 (-12%). The earlier estimate that literals were worth only ~6% understated it.
 
+**Substituted literals then STACK, and the intermediate must not cost a MOV.** Once both arguments of
+`z = x * y + x` are literals the multiply is compile-time, but writing it as `MULf %4 #15.0 #3.0` still
+costs a run-time instruction: the assembler computes the value and emits a `MOVE` to park it in the
+transient (`GAZL.cpp`, "Const calc -> MOVE"). The result is known, so it belongs in a `<X>` compile-time
+scratch instead, exactly like a struct offset fold:
+
+        MULf %4 #15.0 #3.0        ->    ! MULf <A> #15.0 #3.0     (assemble time, no run-time cost)
+        ADDf %1 %4 #15.0                ADDf %1 <A> #15.0
+
+Two run-time instructions become one. `expandInline` therefore propagates constants through the body:
+an all-constant calculation is emitted as `<> op` into a borrowed `<X>` and the destination is recorded
+in `constMap`, so later reads take the scratch; a move of a constant propagates with no instruction at
+all. Three conditions keep it sound:
+
+- **The body must be straight-line** (`straightLine`, computed at capture): every instruction a move or
+  a calculation. Propagation assumes the previous write happened, which a branch can skip and a label
+  can join around. Rather than model control flow, bodies containing any branch, label, call or memory
+  op simply do not fold - and pure arithmetic helpers are the ones worth folding anyway.
+- **Every READ of the folded value must accept an immediate**, by the same `INLINE_IMM_OK` table. The
+  destination position is skipped: that is the write being replaced.
+- **The return slot is never folded.** The caller reads `%base`, so the last instruction stays run-time.
+
 **Globals always materialise, and this is not a safety compromise - the instruction set forces it.**
 GAZL arithmetic has no memory operands: `MULi %0 &r #3` is rejected with *"Did not expect address:
 &r"*. A global's value must pass through a `PEEK` into a slot, so there is no operand to substitute -

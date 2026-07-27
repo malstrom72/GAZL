@@ -12,10 +12,12 @@
 	    `store` is opaque and its arguments are materialised.
 	  - A constant expression folds to a `<X>` compile-time scratch. Check the `! ADDi <A> ...`
 	    style fold lines and that each expansion borrows its OWN scratch letter, released after.
+	  - STACKED constants: `stack(15.0, 3.0)` computes `x * y` at ASSEMBLE time into `<X>` rather
+	    than emitting a run-time MOV to park it in a transient, leaving one run-time ADDf.
 	  - A `void` inline (no return value) should leave no output slot behind.
 	  - A funcptr PARAMETER is just a value: an inline body may call through it.
 
-	Expected (GAZLCmd inlineReviewTypes.gazl main): 7.5 25 42 4 99 12 30
+	Expected (GAZLCmd inlineReviewTypes.gazl main): 7.5 25 42 4 99 12 30 60
 */
 const int DEBUG = 1
 
@@ -31,6 +33,8 @@ global int touched;
 functype Op(int a) returns int r
 
 inline function halfOf(float x) returns float y { y = x * 0.5; }	/* float body */
+
+inline function stack(float x, float y) returns float z { z = x * y + x; }	/* stacked constants */
 
 inline function bumpG(int d)						/* writes a NAMED global -> transparent */
 {
@@ -77,4 +81,5 @@ locals float fv, int w, int array cell[1], Op fp
 
 	fp = timesThree;
 	printInt(callThrough(fp, 10)); printLF();	/* 30 - call through a funcptr param */
+	printFloat(stack(15.0, 3.0)); printLF();	/* 60 - `! MULf <X>` then one run-time ADDf */
 }

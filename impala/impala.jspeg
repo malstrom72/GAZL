@@ -1355,7 +1355,16 @@
             params.push('$' + sig.params[p].name);
             litOK.push(paramTakesImmediate(body, params[p]));
         }
-        entry.inline = { body: body, params: params, litOK: litOK,
+        /* Constant folding inside the body (see expandInline) propagates a value from one instruction
+           to the next, which is only sound along a straight line: a label is a join point and a branch
+           can skip the write. Rather than model that, only fold bodies that are PURE ARITHMETIC - every
+           instruction a move or a calculation. That is exactly the shape worth folding anyway. */
+        var straightLine = true;
+        for (var si = 0; si < body.length && straightLine; ++si) {
+            straightLine = (body[si].operator === ';'
+                    || $$parser.INLINE_IMM_OK[body[si].operator] !== undefined);
+        }
+        entry.inline = { body: body, params: params, litOK: litOK, straightLine: straightLine,
                 locals: $$parser.inlineLocals, maxTransient: maxT,
                 ret: (sig.returnName !== undefined ? '$' + sig.returnName : undefined),
                 opaque: $$parser.bodyIsOpaque(body) };
@@ -1417,6 +1426,32 @@
         var tCount = info.maxTransient + 1;      /* one run keeps every window inside the body intact */
         var tBase = (tCount > 0 ? borrowRun(tCount) : -1);
         var symOffsets = {};
+
+        var constMap = {}, foldScratch = [];     /* callee values that turned out to be compile-time */
+        function constFold(op) {                 /* read a value the fold above already resolved */
+            return (op !== undefined && Object.prototype.hasOwnProperty.call(constMap, '' + op)
+                    ? constMap['' + op] : op);
+        }
+        function isConstOperand(op) {            /* `#42` immediate, or `<A>` compile-time scratch */
+            var c = (op === undefined ? '' : ('' + op).charAt(0));
+            return (c === '#' || c === '<');
+        }
+        function foldWidth(op) {                 /* 1 or 2 source operands, or undefined if not foldable */
+            var pos = $$parser.INLINE_IMM_OK[op];
+            return (pos === undefined ? undefined : pos.length);
+        }
+        function tempTakesImmediate(name) {      /* every READ must accept a `<X>` in its place. Position
+                                                    0 is skipped: that is the write we are replacing. */
+            for (var t = 0; t < info.body.length; ++t) {
+                if (info.body[t].operator === ';') continue;
+                var okPos = $$parser.INLINE_IMM_OK[info.body[t].operator];
+                for (var u = 1; u < 3; ++u) {
+                    if (('' + info.body[t].operands[u]) !== '' + name) continue;
+                    if (okPos === undefined || okPos.indexOf('' + u) < 0) return false;
+                }
+            }
+            return true;
+        }
         function mapOperand(op) {
             if (op === undefined || op === null) return op;
             var s = '' + op;
@@ -1468,12 +1503,36 @@
             }
             /* an inherited `! ADDi <X> #slot #offset` carries a callee SLOT NUMBER in operand 1, not an
                immediate, so that one shifts with the block instead of being mapped */
+            var d0 = mapOperand(b.operands[0]);
+            var s1 = (b.inlineFold ? '#' + (tBase + parseInt(('' + b.operands[1]).substr(1), 10))
+                                   : constFold(mapOperand(b.operands[1])));
+            var s2 = constFold(mapOperand(b.operands[2]));
+
+            /* CONSTANT FOLDING. Sources that are all compile-time constants make the RESULT one too, so
+               keep it in a `<X>` scratch instead of a transient. GAZL would otherwise fold the maths at
+               assemble time and still emit a runtime MOVE to park the value (GAZL.cpp, "Const calc ->
+               MOVE"), which is a whole instruction spent on a number we already know. */
+            if (info.straightLine && !b.inlineFold && isConstOperand(s1)
+                    && foldWidth(b.operator) !== undefined
+                    && (foldWidth(b.operator) === 1 ? s2 === undefined : isConstOperand(s2))
+                    && ('' + d0).charAt(0) === '%' && ('' + d0) !== '%' + base
+                    && tempTakesImmediate('' + b.operands[0])) {
+                if (b.operator === '=' || b.operator === ':=') {
+                    constMap['' + d0] = s1;            /* a move of a constant is pure propagation */
+                } else {
+                    var fsc = $$parser.borrow('<');
+                    foldScratch.push(fsc);
+                    $$parser.metacode.push({ operator: '<> ' + b.operator, type: b.type, settled: true,
+                            operands: [ fsc, s1, s2 ] });
+                    constMap['' + d0] = fsc;
+                }
+                continue;
+            }
+            delete constMap['' + d0];                  /* written with a run-time value again */
             $$parser.metacode.push({ operator: b.operator, type: b.type, settled: true,
-                    inlineFold: b.inlineFold, operands: [ mapOperand(b.operands[0]),
-                    (b.inlineFold ? '#' + (tBase + parseInt(('' + b.operands[1]).substr(1), 10))
-                                  : mapOperand(b.operands[1])),
-                    mapOperand(b.operands[2]) ] });
+                    inlineFold: b.inlineFold, operands: [ d0, s1, s2 ] });
         }
+        for (k = 0; k < foldScratch.length; ++k) $$parser.returnBack(foldScratch[k]);
         for (var sm in scratchMap) {
             if (Object.prototype.hasOwnProperty.call(scratchMap, sm)) $$parser.returnBack(scratchMap[sm]);
         }

@@ -116,29 +116,21 @@ main:	FUNC	; signature func main() -> void @ 80:15
 	.e0_i8:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 100:37
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 100:48
 		! ADDi <A> #6 #.o.P.x	; a.x = ax
-		MOVi %<A> #1 
 		! ADDi <B> #6 #.o.P.y	; a.y = ay
-		MOVi %<B> #2 
 		! ADDi <C> #8 #.o.P.x	; b.x = bx
-		MOVi %<C> #3 
 		! ADDi <D> #8 #.o.P.y	; b.y = by
-		MOVi %<D> #4 
-		MULi %10 %<A> %<C>	; r = a.x * b.x + a.y * b.y
-		MULi %11 %<B> %<D>
-		ADDi %1 %10 %11
+		! MULi <E> #1 #3	; r = a.x * b.x + a.y * b.y
+		! MULi <F> #2 #4
+		ADDi %1 <E> <F>
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 102:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 102:38
 		! ADDi <D> #6 #.o.P.x	; a.x = ax
-		MOVi %<D> #2 
 		! ADDi <C> #6 #.o.P.y	; a.y = ay
-		MOVi %<C> #2 
 		! ADDi <B> #8 #.o.P.x	; b.x = bx
-		MOVi %<B> #5 
 		! ADDi <A> #8 #.o.P.y	; b.y = by
-		MOVi %<A> #5 
-		MULi %10 %<D> %<B>	; r = a.x * b.x + a.y * b.y
-		MULi %11 %<C> %<A>
-		ADDi %1 %10 %11
+		! MULi <F> #2 #5	; r = a.x * b.x + a.y * b.y
+		! MULi <E> #2 #5
+		ADDi %1 <F> <E>
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 103:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 103:38
 		MOVi %4 #5 	; r = helper(a) + 1
