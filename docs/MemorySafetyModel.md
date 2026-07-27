@@ -140,23 +140,21 @@ So the rule is: `*0` is always SAFE, and a correct `*size` is always BETTER. Emi
 know them.
 
 
-## 7. Consequence: the blast radius of a bad index
+## 7. What "safe" means here, and what it does not
 
-A frame is an allocation, not a fence. An out-of-range dynamic index writes into the stack above, which
-in practice means the program corrupts ITSELF first. Take a 2-word local array followed immediately by
-a loop counter, and a loop that writes 60 elements of it:
+The guarantee is CONTAINMENT: a GAZL program cannot touch anything outside its own memory block and data
+stack, whatever it does. Every way out is checked (section 4), so the worst case is a clean trap -
+`BAD_PEEK`, `BAD_POKE`, or `DATA_STACK_OVERFLOW` - never a wild host pointer.
 
-    slots 0..11 afterwards:  12345 12345 12346 3 0 0 0 0 0 0 0 0
-                             ^^^^^^^^^^^ ^^^^^
-                             the array   the loop counter
+The guarantee is NOT that an index stays inside the object it indexes. A frame is an allocation, not a
+fence: `SETL`/`GETL` are bounded by the end of the stack, so a modest overrun quietly lands on whatever
+the frame layout happened to put next. In practice that is the overrunning function's OWN variables
+first, then its caller's - a runaway loop usually destroys its own counter before it reaches anything
+else.
 
-The loop destroyed its own counter at index 2 and terminated after three iterations. It never reached
-another frame. Pushed far enough (index ~1e8) it trips `SETL`'s per-access check and returns `BAD_POKE`
-(status -3); deep recursion trips `DATA_STACK_OVERFLOW` (status -6). Both are clean traps.
-
-What is NOT diagnosed is the small overrun: index 7 into a 5-word array silently hits the neighbouring
-slot. That is the documented design - no per-access runtime bounds checks - and it is why a generator
-targeting GAZL should catch what it can at compile time. See `docs/CompileTimeHardening.md`.
+So a bad index is a correctness bug with a blast radius, not a sandbox escape. Anything that must be
+caught earlier than that has to be caught before the code runs, by whatever generates the GAZL. See
+`docs/CompileTimeHardening.md`.
 
 
 ## 8. The short version
