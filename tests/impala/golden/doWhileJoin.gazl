@@ -1,0 +1,44 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
+; signature extern native printInt() -> unknown @ 11:1
+; signature extern native printLF() -> unknown @ 13:1
+
+;-----------------------------------------------------------------------------
+nested:	FUNC	; signature func nested() -> int @ 13:17
+	$n:	OUTi
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $i #0 	; i = 0
+	.l0:	NOOP
+	.l1:	ADDi $i $i #1	; i = i + 1
+		LSSi $i #3 @.l1	; } while (i < 3)
+		LSSi $i #5 @.l0	; } while (i < 5)
+		MOVi $n $i 	; n = i
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+gotoFirst:	FUNC	; signature func gotoFirst() -> int @ 22:20
+	$n:	OUTi
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $i #0 	; i = 0
+	.l0:	GOTO @out  	; goto out
+		LSSi $i #9 @.l0	; } while (i < 9)
+	out:	ADDi $n $i #3	; out:
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 30:15
+		PARA *1
+;-----------------------------------------------------------------------------
+		CALL &nested %1 *1	; expects nested() -> int @ 32:19
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 32:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:31
+		CALL &gotoFirst %1 *1	; expects gotoFirst() -> int @ 33:22
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 33:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 33:34
+		RETU   	; }

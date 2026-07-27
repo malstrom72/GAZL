@@ -1,0 +1,34 @@
+/*
+	Regression: `do` emits its top label as a `<-?` join, and the short-circuit pass used to alias
+	that join away whenever a label was already pending - even though the back-edge BELOW it had
+	already been resolved to the very name being deleted, leaving a `@.lN` the assembler cannot
+	find. Two shapes reach it: two `do`s starting at the same address, and a `do` body whose first
+	statement is an unconditional jump. Both must keep their own `.lN:` in the golden.
+	Expected (GAZLCmd doWhileJoin.gazl main): 5 3
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printLF
+
+function nested() returns int n locals int i
+{
+	i = 0;
+	do {
+		do { i = i + 1; } while (i < 3);
+	} while (i < 5);
+	n = i;
+}
+
+function gotoFirst() returns int n locals int i
+{
+	i = 0;
+	do { goto out; } while (i < 9);
+	out:
+	n = i + 3;
+}
+
+function main()
+{
+	printInt(nested()); printLF();
+	printInt(gotoFirst()); printLF();
+}

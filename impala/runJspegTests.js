@@ -73,40 +73,52 @@ function parseExpectedRun(source) {
         return { args: parts.slice(1), want: match[2].trim().split(/\s+/).filter(Boolean) };
 }
 
-function runGolden(goldenPath, expectedRun) {
-        const result = childProcess.spawnSync(gazlCmd,
-                [goldenPath].concat(expectedRun.args), { encoding: 'latin1', timeout: 30000 });
-        if (result.error) {
-                return `could not run GAZLCmd: ${result.error.message}`;
-        }
+function runGazlCmd(goldenPath, cmdArgs) {
+        const result = childProcess.spawnSync(gazlCmd, [goldenPath].concat(cmdArgs),
+                { encoding: 'latin1', timeout: 30000 });
         /* GAZLCmd puts the PROGRAM's output on stdout and its own report (sizes, Status) on stderr. */
         const report = result.stderr || '';
-        if (!/Code size:/.test(report)) {             // never reached the entry point -> assembly failed
-                const line = report.split('\n').find((l) => l.trim()) || '(no output)';
-                return `did not assemble: ${line.trim()}`;
-        }
-        const got = (result.stdout || '').trim().split(/\s+/).filter(Boolean);
+        return {
+                failure: (result.error ? `could not run GAZLCmd: ${result.error.message}` : undefined),
+                assembled: /Code size:/.test(report),  // absent -> it never reached the entry point
+                line: (report.split('\n').find((l) => l.trim()) || '(no output)').trim(),
+                stdout: result.stdout || '',
+                report
+        };
+}
+
+function runGolden(goldenPath, expectedRun) {
+        const run = runGazlCmd(goldenPath, expectedRun.args);
+        if (run.failure) { return run.failure; }
+        if (!run.assembled) { return `did not assemble: ${run.line}`; }
+        const got = run.stdout.trim().split(/\s+/).filter(Boolean);
         if (got.join(' ') !== expectedRun.want.join(' ')) {
                 return `printed "${got.join(' ')}" but the fixture expects "${expectedRun.want.join(' ')}"`;
         }
-        if (!/Status: 0\b/.test(report)) {
-                return `ran but exited non-zero: ${(report.match(/Status: .*/) || ['?'])[0]}`;
+        if (!/Status: 0\b/.test(run.report)) {
+                return `ran but exited non-zero: ${(run.report.match(/Status: .*/) || ['?'])[0]}`;
         }
         return undefined;
 }
 
 /* A fixture with no run line is still fed to the assembler, because "compiles clean" and "loads"
    are different claims and only the second one catches a label this compiler emitted but never
-   defined. Most such fixtures are firmware that links against a host, so an unresolved name that
-   is NOT module-local (a plain global, or the `.o.`/`.z.` layout symbols an extern struct leaves
-   to the host) means "out of scope here", not "broken". */
+   defined. Most such fixtures are firmware that links against a host, so a symbol complaint about
+   a name that is NOT module-local (a plain global, or the `.o.`/`.z.` layout symbols an extern
+   struct leaves to the host) means "out of scope here", not "broken" - whether it is missing, or
+   already taken by a native GAZLCmd itself registers. A module-local `.` name is ours to answer
+   for, so `.l0` or a duplicate `.s4#6` still reds the build.
+
+   Known blind spot: GAZLCmd stops at the FIRST unresolved symbol, so a host name near the top of a
+   module waves the REST of it through unchecked - hence the separate summary count. Supplying the
+   missing names as `<define> <value>` pairs does not fix it: about as many fixtures define
+   `DEBUG`/`PARAM_COUNT` themselves and would then collide (measured: 22 linked -> 8). */
 const NEEDS_HOST = {};
+const HOST_SYMBOL = /Symbol (?:not found|not previously defined|already defined)[^:]*:\s*(\S+)$/;
 
 /* Goldens that cannot load under GAZLCmd for reasons that are not the compiler's: */
 const KNOWN_UNLOADABLE = {
-        calc: 'defines log(), which GAZLCmd itself provides as a native',
-        perfTest: 'defines log(), which GAZLCmd itself provides as a native',
-        switchtest: 'grammar torture fixture - case values deliberately outside the switch range'
+        switchtest: 'case values deliberately outside its own switch range - CompileTimeHardening.md item 3'
 };
 
 /* GAZLCmd has no assemble-only mode: it defaults to entering `main`, which for a fixture that has
@@ -115,22 +127,14 @@ const KNOWN_UNLOADABLE = {
 const NO_ENTRY_POINT = '.no-entry-point';
 
 function assembleGolden(goldenPath) {
-        const result = childProcess.spawnSync(gazlCmd, [goldenPath, NO_ENTRY_POINT],
-                { encoding: 'latin1', timeout: 30000 });
-        if (result.error) {
-                return `could not run GAZLCmd: ${result.error.message}`;
-        }
-        const report = (result.stderr || '') + (result.stdout || '');
-        if (/Code size:/.test(report)) {               // assembled - it never reaches an entry point
-                return undefined;
-        }
-        const line = (report.split('\n').find((l) => l.trim()) || '(no output)').trim();
-        const symbol = (line.match(/:\s*(\S+)\s*$/) || ['', ''])[1];
-        if (/Symbol not (found|previously defined)/.test(line)
-                        && (symbol.charAt(0) !== '.' || /^\.[oz]\./.test(symbol))) {
+        const run = runGazlCmd(goldenPath, [NO_ENTRY_POINT]);
+        if (run.failure) { return run.failure; }
+        if (run.assembled) { return undefined; }
+        const symbol = (run.line.match(HOST_SYMBOL) || [])[1];
+        if (symbol && (symbol.charAt(0) !== '.' || /^\.[oz]\./.test(symbol))) {
                 return NEEDS_HOST;
         }
-        return `did not assemble: ${line}`;
+        return `did not assemble: ${run.line}`;
 }
 
 function main() {
@@ -138,6 +142,7 @@ function main() {
         let errorCount = 0;
         let ranCount = 0;
         let assembledCount = 0;
+        let compileOnlyCount = 0;
         const haveGazlCmd = fs.existsSync(gazlCmd);
         if (!haveGazlCmd && !makeGold && !skipRun) {
                 console.log(`(no ${path.relative(repoRoot, gazlCmd)} - skipping assemble+run checks)`);
@@ -214,10 +219,13 @@ function main() {
                 }
 
                 if (!expectedRun) {
-                        const verdict = (KNOWN_UNLOADABLE[name] !== undefined
-                                        ? NEEDS_HOST : assembleGolden(goldenPath));
-                        if (verdict === NEEDS_HOST) {
+                        const excuse = KNOWN_UNLOADABLE[name];
+                        const verdict = (excuse ? NEEDS_HOST : assembleGolden(goldenPath));
+                        if (excuse) {
+                                console.log(`OK (not assembled - ${excuse})`);
+                        } else if (verdict === NEEDS_HOST) {
                                 console.log('OK (compile-only)');
+                                compileOnlyCount += 1;
                         } else if (verdict !== undefined) {
                                 console.error(`<<< ${verdict} >>>`);
                                 errorCount += 1;
@@ -244,6 +252,7 @@ function main() {
         console.log('');
         console.log(`Assembled and ran: ${ranCount}`);
         console.log(`Assembled only: ${assembledCount}`);
+        console.log(`Compiled but NOT link-checked (needs a host): ${compileOnlyCount}`);
         console.log(`Total errors: ${errorCount} / ${totalFiles}`);
 
         if (errorCount !== 0) {
