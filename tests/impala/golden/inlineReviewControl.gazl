@@ -1,0 +1,124 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
+; signature extern native printInt() -> unknown @ 21:1
+; signature extern native printLF() -> unknown @ 23:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 45:15
+		PARA *1
+;-----------------------------------------------------------------------------
+		MOVi %2 #-4 	; printInt(clamp(-4, 0, 6))
+		MOVi %3 #0 
+		MOVi %4 #6 
+		MOVi %5 %2 	; expects clamp(int, int, int) -> int @ 47:26
+		GEQi %5 %3 @.f0_i0
+		MOVi %5 %3 
+	.f0_i0:	LEQi %5 %4 @.f1_i0
+		MOVi %5 %4 
+	.f1_i0:	MOVi %1 %5 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:38
+		MOVi %2 #8 	; printInt(clamp(8, 0, 6))
+		MOVi %3 #0 
+		MOVi %4 #6 
+		MOVi %5 %2 	; expects clamp(int, int, int) -> int @ 48:25
+		GEQi %5 %3 @.f0_i1
+		MOVi %5 %3 
+	.f0_i1:	LEQi %5 %4 @.f1_i1
+		MOVi %5 %4 
+	.f1_i1:	MOVi %1 %5 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 48:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 48:37
+		MOVi %2 #3 	; printInt(clamp(3, 0, 6))
+		MOVi %3 #0 
+		MOVi %4 #6 
+		MOVi %5 %2 	; expects clamp(int, int, int) -> int @ 49:25
+		GEQi %5 %3 @.f0_i2
+		MOVi %5 %3 
+	.f0_i2:	LEQi %5 %4 @.f1_i2
+		MOVi %5 %4 
+	.f1_i2:	MOVi %1 %5 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 49:37
+		MOVi %2 #0 	; printInt(pick(0))
+		SWCH %2 *3 @.s0_i3	; expects pick(int) -> int @ 51:18
+	.s0_i3#0:	MOVi %1 #10 
+		GOTO @.e1_i3  
+	.s0_i3#1:	MOVi %1 #20 
+		GOTO @.e1_i3  
+	.s0_i3:	MOVi %1 #99 
+	.e1_i3:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 51:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 51:30
+		MOVi %2 #1 	; printInt(pick(1))
+		SWCH %2 *3 @.s0_i4	; expects pick(int) -> int @ 52:18
+	.s0_i4#0:	MOVi %1 #10 
+		GOTO @.e1_i4  
+	.s0_i4#1:	MOVi %1 #20 
+		GOTO @.e1_i4  
+	.s0_i4:	MOVi %1 #99 
+	.e1_i4:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 52:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 52:30
+		MOVi %2 #9 	; printInt(pick(9))
+		SWCH %2 *3 @.s0_i5	; expects pick(int) -> int @ 53:18
+	.s0_i5#0:	MOVi %1 #10 
+		GOTO @.e1_i5  
+	.s0_i5#1:	MOVi %1 #20 
+		GOTO @.e1_i5  
+	.s0_i5:	MOVi %1 #99 
+	.e1_i5:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 53:30
+		MOVi %2 #5 	; printInt(chk(5))
+		! EQUi #DEBUG #0 @.a0_i6	; expects chk(int) -> int @ 55:17
+		GRTi %2 #0 @.a0_i6
+		MOVp %4 &.a_a0_4d2 
+		CALL ^assertFail %3 *1
+	.a0_i6:	MOVi %1 %2 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 55:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 55:29
+		MOVi %2 #4 	; printInt(sumTo(4))
+		MOVi %1 #0 	; expects sumTo(int) -> int @ 56:19
+		MOVi %3 #0 
+	.l0_i7:	ADDi %1 %1 %3
+		ADDi %3 %3 #1
+		LSSi %3 %2 @.l0_i7
+		GOTO @done_i7  
+		GOTO @.l0_i7  
+	done_i7:	ADDi %1 %1 #0
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 56:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 56:31
+		MOVi %2 #3 	; printInt(sumTo(3))
+		MOVi %1 #0 	; expects sumTo(int) -> int @ 57:19
+		MOVi %3 #0 
+	.l0_i8:	ADDi %1 %1 %3
+		ADDi %3 %3 #1
+		LSSi %3 %2 @.l0_i8
+		GOTO @done_i8  
+		GOTO @.l0_i8  
+	done_i8:	ADDi %1 %1 #0
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 57:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 57:31
+		MOVi %2 #2 	; printInt(dbl(2))
+		MOVi %1 #0 	; expects dbl(int) -> int @ 58:17
+		MOVi %3 #0 
+	.l0_i9:	ADDi %1 %1 #2
+		ADDi %3 %3 #1
+		LSSi %3 %2 @.l0_i9
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 58:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 58:29
+		MOVi %2 #4 	; printInt(dbl(4))
+		MOVi %1 #0 	; expects dbl(int) -> int @ 59:17
+		MOVi %3 #0 
+	.l0_i10:	ADDi %1 %1 #2
+		ADDi %3 %3 #1
+		LSSi %3 %2 @.l0_i10
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 59:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 59:29
+		RETU   	; }
+
+	! EQUi #DEBUG #0 @.noAssertStrings
+.a_a0_4d2:	CNST *8
+	DATs (a > 0)
+	DATi #0
+.noAssertStrings:	!
