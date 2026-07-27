@@ -151,6 +151,18 @@ Records are pushed through the existing `emit`/`emitMeta`, so `flushMetaCode` re
 `processBranches` sees the labels. No new emission path.
 
 
+**Callee transients move as one contiguous BLOCK.** The callee numbers its temporaries from 0; the
+expansion shifts the whole range to a fresh base. Remapping them individually breaks any window inside
+the body - `CALL &helper %0 *2` needs `%0` and `%1` adjacent and in order, and per-slot borrowing
+scattered them to `%4` and `%3`, so the callee read garbage.
+
+**A switch case label is `<base>#<k>`**, and SWCH finds its arms by appending `#k` to its own target.
+The per-expansion tag therefore goes BEFORE the `#`: `.s0#0` becomes `.s0_i0#0`, not `.s0#0_i0`.
+
+**Some operand positions reject an immediate.** `SWCH` needs a value operand, so substituting a literal
+argument would emit `SWCH #0 *3`, which the assembler rejects. Parameters used that way are recorded at
+capture and keep their window slot instead of being substituted.
+
 ## 7. Diagnostics
 
 | case | why |

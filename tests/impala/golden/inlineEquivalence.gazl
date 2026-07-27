@@ -15,61 +15,70 @@ shared:	DATi #0	; signature global shared : int @ 24:18
 ; signature struct P { x : int, y : int } @ 28:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 67:15
+helper:	FUNC	; signature func helper(int a) -> int @ 67:17
+	$r:	OUTi
+	$a:	INPi
+;-----------------------------------------------------------------------------
+		MULi $r $a #2	; r = a * 2
+		RETU   	; }  // NOT inline: the body below calls it
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 74:15
 		PARA *1
 	$t:	LOCi
 	$cell:	LOCA *1
 ;-----------------------------------------------------------------------------
 		MOVi $t #10 	; t = 10
-		MULi %4 $t #3	; expects pure(int, int) -> int @ 71:21
+		MULi %4 $t #3	; expects pure(int, int) -> int @ 78:21
 		ADDi %1 %4 #1
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 71:22
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 71:33
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 78:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 78:33
 		POKE &shared #1 	; global shared = 1
 		PEEK %2 &shared 	; printInt(clobber(global shared))
-		POKE &shared #99 	; expects clobber(int) -> int @ 74:33
+		POKE &shared #99 	; expects clobber(int) -> int @ 81:33
 		MOVi %1 %2 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 74:34
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 74:45
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 81:34
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 81:45
 		PEEK %1 &shared 	; printInt(global shared)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 75:25
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 75:36
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 82:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 82:36
 		MOVi $cell:0 #0 	; cell[0] = 0
 		MOVi $t #5 	; t = 5
 		ADRL %2 $cell:0 *0	; printInt(viaPointer(&cell[0], t))
 		MOVi %3 $t 
-		POKE %2 #7 	; expects viaPointer(ptr, int) -> int @ 79:34
+		POKE %2 #7 	; expects viaPointer(ptr, int) -> int @ 86:34
 		MOVi %1 %3 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 79:35
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 79:46
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 86:35
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 86:46
 		MOVi %1 $cell:0 	; printInt(cell[0])
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 80:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 80:30
-		MOVi %5 #-4 	; expects clamp(int, int, int) -> int @ 82:26
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 87:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 87:30
+		MOVi %5 #-4 	; expects clamp(int, int, int) -> int @ 89:26
 		GEQi %5 #0 @.f0_i3
 		MOVi %5 #0 
 	.f0_i3:	LEQi %5 #6 @.f1_i3
 		MOVi %5 #6 
 	.f1_i3:	MOVi %1 %5 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 82:27
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 82:38
-		MOVi %5 #8 	; expects clamp(int, int, int) -> int @ 83:25
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 89:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 89:38
+		MOVi %5 #8 	; expects clamp(int, int, int) -> int @ 90:25
 		GEQi %5 #0 @.f0_i4
 		MOVi %5 #0 
 	.f0_i4:	LEQi %5 #6 @.f1_i4
 		MOVi %5 #6 
 	.f1_i4:	MOVi %1 %5 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 83:26
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 83:37
-		MOVi %5 #3 	; expects clamp(int, int, int) -> int @ 84:25
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 90:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 90:37
+		MOVi %5 #3 	; expects clamp(int, int, int) -> int @ 91:25
 		GEQi %5 #0 @.f0_i5
 		MOVi %5 #0 
 	.f0_i5:	LEQi %5 #6 @.f1_i5
 		MOVi %5 #6 
 	.f1_i5:	MOVi %1 %5 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 84:26
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 84:37
-		MOVi %5 #10 	; expects sum3(int, int, int) -> int @ 86:27
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 91:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 91:37
+		MOVi %5 #10 	; expects sum3(int, int, int) -> int @ 93:27
 		MOVi %6 #20 
 		MOVi %7 #30 
 		MOVi %1 #0 
@@ -78,9 +87,9 @@ main:	FUNC	; signature func main() -> void @ 67:15
 	.l1_i6:	GETL %9 %5 %8
 		ADDi %1 %1 %9
 		FORi %8 #3 @.l1_i6
-	.e0_i6:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 86:28
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 86:39
-		MOVi %6 #1 	; expects sum3(int, int, int) -> int @ 87:29
+	.e0_i6:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 93:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 93:39
+		MOVi %6 #1 	; expects sum3(int, int, int) -> int @ 94:29
 		MOVi %7 #2 
 		MOVi %8 #3 
 		MOVi %2 #0 
@@ -89,7 +98,7 @@ main:	FUNC	; signature func main() -> void @ 67:15
 	.l1_i7:	GETL %10 %6 %9
 		ADDi %2 %2 %10
 		FORi %9 #3 @.l1_i7
-	.e0_i7:	MOVi %5 %2 	; expects sum3(int, int, int) -> int @ 87:36
+	.e0_i7:	MOVi %5 %2 	; expects sum3(int, int, int) -> int @ 94:36
 		MOVi %6 #4 
 		MOVi %7 #5 
 		MOVi %1 #0 
@@ -98,9 +107,9 @@ main:	FUNC	; signature func main() -> void @ 67:15
 	.l1_i8:	GETL %9 %5 %8
 		ADDi %1 %1 %9
 		FORi %8 #3 @.l1_i8
-	.e0_i8:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 87:37
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 87:48
-		! ADDi <A> #6 #.o.P.x	; expects dot(int, int, int, int) -> int @ 89:26
+	.e0_i8:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 94:37
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 94:48
+		! ADDi <A> #6 #.o.P.x	; expects dot(int, int, int, int) -> int @ 96:26
 		MOVi %<A> #1 
 		! ADDi <B> #6 #.o.P.y
 		MOVi %<B> #2 
@@ -111,9 +120,9 @@ main:	FUNC	; signature func main() -> void @ 67:15
 		MULi %10 %<A> %<C>
 		MULi %11 %<B> %<D>
 		ADDi %1 %10 %11
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 89:27
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 89:38
-		! ADDi <D> #6 #.o.P.x	; expects dot(int, int, int, int) -> int @ 90:26
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 96:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 96:38
+		! ADDi <D> #6 #.o.P.x	; expects dot(int, int, int, int) -> int @ 97:26
 		MOVi %<D> #2 
 		! ADDi <C> #6 #.o.P.y
 		MOVi %<C> #2 
@@ -124,6 +133,38 @@ main:	FUNC	; signature func main() -> void @ 67:15
 		MULi %10 %<D> %<B>
 		MULi %11 %<C> %<A>
 		ADDi %1 %10 %11
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 90:27
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 90:38
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 97:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 97:38
+		MOVi %4 #5 	; expects wrap(int) -> int @ 99:18
+		CALL &helper %3 *2
+		ADDi %1 %3 #1
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 99:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 99:30
+		MOVi %2 #0 	; printInt(pick(0))
+		SWCH %2 *3 @.s0_i12	; expects pick(int) -> int @ 100:18
+	.s0_i12#0:	MOVi %1 #10 
+		GOTO @.e1_i12  
+	.s0_i12#1:	MOVi %1 #20 
+		GOTO @.e1_i12  
+	.s0_i12:	MOVi %1 #99 
+	.e1_i12:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 100:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 100:30
+		MOVi %2 #1 	; printInt(pick(1))
+		SWCH %2 *3 @.s0_i13	; expects pick(int) -> int @ 101:18
+	.s0_i13#0:	MOVi %1 #10 
+		GOTO @.e1_i13  
+	.s0_i13#1:	MOVi %1 #20 
+		GOTO @.e1_i13  
+	.s0_i13:	MOVi %1 #99 
+	.e1_i13:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 101:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 101:30
+		MOVi %2 #2 	; printInt(pick(2))
+		SWCH %2 *3 @.s0_i14	; expects pick(int) -> int @ 102:18
+	.s0_i14#0:	MOVi %1 #10 
+		GOTO @.e1_i14  
+	.s0_i14#1:	MOVi %1 #20 
+		GOTO @.e1_i14  
+	.s0_i14:	MOVi %1 #99 
+	.e1_i14:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 102:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 102:30
 		RETU   	; }

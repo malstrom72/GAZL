@@ -1313,7 +1313,21 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
         var params = [];
         for (var p = 0; p < sig.params.length; ++p) params.push('$' + sig.params[p].name);
-        entry.inline = { body: body, params: params, locals: inlineLocals,
+        var needsSlot = {};                         /* operand positions that reject an immediate */
+        for (var ni = 0; ni < body.length; ++ni) {
+            if (body[ni].operator === '-->#') needsSlot['' + body[ni].operands[0]] = true;
+        }
+        var maxT = -1;                              /* the callee numbers its temporaries from 0 */
+        for (var mi = 0; mi < body.length; ++mi) {
+            for (var mo = 0; mo < 3; ++mo) {
+                var mv = body[mi].operands[mo];
+                if (mv === undefined || ('' + mv).charAt(0) !== '%') continue;
+                var mn = parseInt(('' + mv).substr(1), 10);
+                if (mn > maxT) maxT = mn;
+            }
+        }
+        entry.inline = { body: body, params: params, locals: inlineLocals, maxTransient: maxT,
+                needsSlot: needsSlot,
                 ret: (sig.returnName !== undefined ? '$' + sig.returnName : undefined),
                 opaque: bodyIsOpaque(body) };
     };
@@ -1334,7 +1348,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 if ((m.operator === '=' || m.operator === ':=') && m.operands[2] === undefined) {
                     var o = '' + m.operands[1];
                     var c = o.charAt(0);
-                    if (c === '#' || (c === '$' && !info.opaque)) {
+                    if ((c === '#' || (c === '$' && !info.opaque))
+                            && !Object.prototype.hasOwnProperty.call(info.needsSlot, info.params[k])) {
                         src = o;
                         m.operator = undefined;                /* flushMetaCode skips a cleared record */
                     }
@@ -1355,16 +1370,24 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
 
         var tag = '_i' + (inlineCounter++);
-        var remapped = {};
+        var tCount = info.maxTransient + 1;
+        var tBase = -1, blockSlots = [];
+        if (tCount > 0) {                       /* one run keeps every window inside the body intact */
+            tBase = borrowForCall();
+            for (var tb = 1; tb < tCount; ++tb) claimSlot(tBase + tb);
+            for (tb = 0; tb < tCount; ++tb) blockSlots.push('%' + (tBase + tb));
+        }
         function mapOperand(op) {
             if (op === undefined || op === null) return op;
             var s = '' + op;
             if (Object.prototype.hasOwnProperty.call(subst, s)) return subst[s];
-            if (s.charAt(0) === '%') {                          /* the callee's own temporaries */
-                if (!Object.prototype.hasOwnProperty.call(remapped, s)) remapped[s] = borrow('%');
-                return remapped[s];
+            if (s.charAt(0) === '%') {                          /* the callee's own temporaries, shifted as a block */
+                return '%' + (tBase + parseInt(s.substr(1), 10));
             }
-            if (s.charAt(0) === '@') return s + tag;            /* labels: per-expansion suffix */
+            if (s.charAt(0) === '@') {                          /* labels: per-expansion suffix */
+                var hh = s.indexOf('#');                        /* a switch case label is `<base>#<k>` */
+                return (hh < 0 ? s + tag : s.substr(0, hh) + tag + s.substr(hh));
+            }
             var colon = s.indexOf(':');                         /* `$name:offset` frame places */
             if (colon > 0 && Object.prototype.hasOwnProperty.call(subst, s.substr(0, colon))) {
                 var mapped = subst[s.substr(0, colon)];
@@ -1398,7 +1421,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         for (var so in symOffsets) {
             if (Object.prototype.hasOwnProperty.call(symOffsets, so)) returnBack(symOffsets[so]);
         }
-        for (var r in remapped) { if (Object.prototype.hasOwnProperty.call(remapped, r)) returnBack(remapped[r]); }
+        for (k = blockSlots.length - 1; k >= 0; --k) returnBack(blockSlots[k]);
         for (k = borrowedLocals.length - 1; k >= 0; --k) returnBack(borrowedLocals[k]);
     };
 
