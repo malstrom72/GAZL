@@ -151,6 +151,12 @@ Records are pushed through the existing `emit`/`emitMeta`, so `flushMetaCode` re
 `processBranches` sees the labels. No new emission path.
 
 
+**An expanded body is already SETTLED.** `processBranches` merges a comparison with its branch by
+shifting operands left, destructively. The callee ran it before capture, so the caller must not run it
+again - records an expansion contributes are flagged and skipped. Only a non-inverted comparison is
+exposed (an inverted one becomes `!<` and no longer matches), which is why `if` survived and `assert`
+came out with its operands shifted off the end.
+
 **Callee transients move as one contiguous BLOCK.** The callee numbers its temporaries from 0; the
 expansion shifts the whole range to a fresh base. Remapping them individually breaks any window inside
 the body - `CALL &helper %0 *2` needs `%0` and `%1` adjacent and in order, and per-slot borrowing
@@ -172,7 +178,7 @@ capture and keep their window slot instead of being substituted.
 | `export inline function f` | nothing to export; a caller needs the source, which is what `import` is for |
 | `extern inline` | meaningless |
 | calling an `inline` function before its definition | the body is not captured yet; `extern function f` gives no body either |
-| `inline` function declaring an array or struct local | needs frame space, see below |
+| forward-declaring an `inline` function (`extern function f`) | promises a symbol it never emits, and a call before the definition would lower to `CALL &f` |
 
 Mutual recursion needs no check: Impala is define-before-use, so `A` can only inline `B` if `B` was
 already complete, and `B` cannot have inlined `A`.

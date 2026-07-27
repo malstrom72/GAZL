@@ -712,6 +712,11 @@
         for (var i = $$parser.metacode.length - 1; i >= 0; --i) {
             var inst = $$parser.metacode[i];
 
+            if (inst.settled) {                 /* already resolved when its inline body was captured */
+                target.false = target.true = currentGoto = null;
+                continue;
+            }
+
             switch (inst.operator) {
 
                 /* ---  branch on TRUE / FALSE  --- */
@@ -1291,7 +1296,8 @@
         var body = [];
         for (var i = 0; i < $$parser.metacode.length; ++i) {
             var m = $$parser.metacode[i];
-            if (m.operator === undefined || m.operator === ';' || m.operator === '--^') continue;
+            if (m.operator === undefined || m.operator === null                 /* removed by processBranches */
+                    || m.operator === ';' || m.operator === '--^') continue;
             if (m.operator === '()' && ('' + m.operands[0]) === '&' + name) {
                 $$parser.fail('An inline function cannot call itself', sourceCode, sourceOffset, 'E432',
                         'inlining a recursive function would never terminate');
@@ -1389,7 +1395,7 @@
                 if (!isNaN(n) && ('' + n) === off) return '%' + (parseInt(mapped.substr(1), 10) + n);
                 if (!Object.prototype.hasOwnProperty.call(symOffsets, s)) {
                     var sc = $$parser.borrow('<');
-                    folds.push({ operator: '<> +', type: 'i',
+                    folds.push({ operator: '<> +', type: 'i', settled: true,
                             operands: [ sc, '#' + mapped.substr(1), '#' + off ] });
                     symOffsets[s] = '%' + sc;
                 }
@@ -1401,7 +1407,7 @@
         for (i = 0; i < info.body.length; ++i) {
             var b = info.body[i];
             folds.length = 0;
-            var rec = { operator: b.operator, type: b.type, operands: [
+            var rec = { operator: b.operator, type: b.type, settled: true, operands: [
                     mapOperand(b.operands[0]), mapOperand(b.operands[1]), mapOperand(b.operands[2]) ] };
             for (var f = 0; f < folds.length; ++f) $$parser.metacode.push(folds[f]);
             $$parser.metacode.push(rec);
@@ -3089,6 +3095,11 @@ FuncDecl    <-                                                        { $inl = f
                 FUNCTION _ id:Identifier '('_                         {
                                                                          $$parser.inlineMode = $inl;
                                                                          $$parser.inlineLocals = [];
+                                                                         if ($inl && $$parser.symbols.functions[$id] !== undefined) {
+                                                                             $$parser.fail('The inline function ' + $id + ' was already declared',
+                                                                                     $$s, $$i, 'E436',
+                                                                                     'an inline function emits no symbol, so it cannot be forward declared or redeclared');
+                                                                         }
                                                                          if ($inl && $$parser.exportNext) {
                                                                              $$parser.fail('An inline function cannot be exported',
                                                                                      $$s, $$i, 'E434',

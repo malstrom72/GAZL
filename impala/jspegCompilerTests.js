@@ -963,7 +963,35 @@ const inlineCases = [
 		"const int H = 2\nconst int N = 2\ninline function f(int a) returns int r\n"
 			+ "locals int array t[H * N]\n{ t[0] = a; r = t[0]; }\n"
 			+ "function main() locals int q { q = f(1); }\n", "compile-time size"],
+	["an inline function that was forward declared",
+		"extern function later\ninline function later(int a) returns int r { r = a; }\n"
+			+ "function main() locals int q { q = later(1); }\n", "was already declared"],
+	["calling an inline function before its definition",
+		"function main() locals int q { q = f(1); }\ninline function f(int a) returns int r { r = a; }\n",
+			"Undeclared identifier"],
 	// and the shapes that must work
+	["an inline body containing a call",
+		"function helper(int a) returns int r { r = a * 2; }\n"
+			+ "inline function wrap(int a) returns int r { r = helper(a) + 1; }\n"
+			+ "function main() locals int q { q = wrap(5); }\n", null],
+	["an inline body containing a switch",
+		"inline function pick(int i) returns int r\n"
+			+ "{ switch (i == 0 to 3) { case 0: r = 10; default: r = 99; } }\n"
+			+ "function main() locals int q { q = pick(0); }\n", null],
+	["an inline body containing an assert",
+		"const int DEBUG = 1\ninline function chk(int a) returns int r { assert(a > 0); r = a; }\n"
+			+ "function main() locals int q { q = chk(5); }\n", null],
+	["an inline body containing a while loop",
+		"inline function count(int n) returns int r\nlocals int i\n"
+			+ "{ r = 0; i = 0; while (i < n) { r = r + i; i = i + 1; } }\n"
+			+ "function main() locals int q { q = count(4); }\n", null],
+	["an inline function with a pointer parameter",
+		"inline function dbl(int pointer p) returns int r { r = *p * 2; }\n"
+			+ "function main() locals int array c[1], int q { c[0] = 21; q = dbl(&c[0]); }\n", null],
+	["an inline function with float parameters",
+		"inline function scale(float v, float k) returns float r { r = v * k; }\n"
+			+ "function main() locals float f { f = scale(2.5, 4.0); }\n", null],
+
 	["an inline function declaring a struct local",
 		"struct P { int x; int y }\ninline function f(int v) returns int r\nlocals P a, P b\n"
 			+ "{ a.x = v; a.y = v; b.x = v; r = a.x + a.y + b.x; }\n"
