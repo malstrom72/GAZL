@@ -959,18 +959,19 @@ const inlineCases = [
 	// Locals live in transients, one expansion at a time. A struct field needs a SYMBOLIC frame offset
 	// (`$s:.o.S.f`) and GAZL has no `%N:offset`, so structs cannot follow; an array can, because a
 	// constant element offset folds into the slot number and a dynamic one uses SETL with a %N base.
-	["an inline function declaring a struct local",
-		"struct S { int x }\ninline function f(int a) returns int r\nlocals S s\n{ s.x = a; r = s.x; }\n"
-			+ "function main() locals int q { q = f(1); }\n", "cannot declare a struct local"],
-	["an inline function declaring an array of structs",
-		"struct S { int x }\ninline function f(int a) returns int r\nlocals S array s[2]\n"
-			+ "{ s[0].x = a; r = s[0].x; }\n"
-			+ "function main() locals int q { q = f(1); }\n", "cannot declare a struct local"],
 	["an inline function with a non-literal array size",
 		"const int H = 2\nconst int N = 2\ninline function f(int a) returns int r\n"
 			+ "locals int array t[H * N]\n{ t[0] = a; r = t[0]; }\n"
-			+ "function main() locals int q { q = f(1); }\n", "literal size"],
+			+ "function main() locals int q { q = f(1); }\n", "compile-time size"],
 	// and the shapes that must work
+	["an inline function declaring a struct local",
+		"struct P { int x; int y }\ninline function f(int v) returns int r\nlocals P a, P b\n"
+			+ "{ a.x = v; a.y = v; b.x = v; r = a.x + a.y + b.x; }\n"
+			+ "function main() locals int q { q = f(1) + f(2); }\n", null],
+	["an inline function declaring an array of structs",
+		"struct P { int x }\ninline function f(int v) returns int r\nlocals P array a[2]\n"
+			+ "{ a[0].x = v; a[1].x = v; r = a[0].x + a[1].x; }\n"
+			+ "function main() locals int q { q = f(1); }\n", null],
 	["an inline function declaring a scalar local",
 		"inline function f(int a) returns int r\nlocals int t\n{ t = a * 2; r = t + 1; }\n"
 			+ "function main() locals int q { q = f(1); }\n", null],

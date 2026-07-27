@@ -13,7 +13,7 @@
 	`viaPointer` makes the body opaque (it writes through a pointer), which forces even a plain local
 	argument to be materialised. `pure` is transparent, so its arguments are substituted.
 
-	Expected (GAZLCmd inlineEquivalence.gazl main): 31 1 99 5 7 0 6 3 60 15
+	Expected (GAZLCmd inlineEquivalence.gazl main): 31 1 99 5 7 0 6 3 60 15 11 20
 */
 
 const int DEBUG = 1
@@ -22,6 +22,8 @@ extern native printInt
 extern native printLF
 
 global int shared;
+
+struct P { int x; int y }
 
 inline function pure(int a, int b) returns int r { r = a * 3 + b; }
 
@@ -54,6 +56,14 @@ locals int array buf[3], int i		// an ARRAY local: a run of adjacent transients 
 	for (i = 0 to 3) { r = r + buf[i]; }
 }
 
+inline function dot(int ax, int ay, int bx, int by) returns int r
+locals P a, P b					// STRUCT locals: fields reach their slot via a folded %<X> index
+{
+	a.x = ax; a.y = ay;
+	b.x = bx; b.y = by;
+	r = a.x * b.x + a.y * b.y;
+}
+
 function main()
 locals int t, int array cell[1]
 {
@@ -75,4 +85,7 @@ locals int t, int array cell[1]
 
 	printInt(sum3(10, 20, 30)); printLF();			// 60 - array local, two expansions
 	printInt(sum3(sum3(1, 2, 3), 4, 5)); printLF();	// 15 - nested, so two runs are live at once
+
+	printInt(dot(1, 2, 3, 4)); printLF();			// 11 - struct locals, symbolic field offsets
+	printInt(dot(2, 2, 5, 5)); printLF();			// 20 - second expansion
 }

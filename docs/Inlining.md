@@ -189,13 +189,24 @@ emitted by the time an expansion runs.
 while a dynamic index uses `SETL`/`GETL` with a transient base, which the assembler accepts (`SETL %10
 $i #99` and `GETL %1 %10 $i` both assemble).
 
-**Struct locals are rejected (E433)**, and so is an array whose element is a struct. A struct field is
-reached by a SYMBOLIC frame offset (`$s:.o.S.f`) which cannot be folded into a slot number and cannot
-ride on a transient base either. That one is a genuine limit of the addressing modes, not an
-implementation gap.
+**Struct fields** are reached by a SYMBOLIC offset (`.o.S.f`) that only the assembler resolves, so it
+cannot fold into a slot number. It does not have to: **`%<X>` is legal GAZL**, so the base and the field
+offset are folded together at ASSEMBLE time and the transient is indexed symbolically:
 
-**An array local needs a literal size** (E433 otherwise). The elements occupy a counted run of
-transients, so a folded or symbolic extent has no number to lay out.
+    ! ADDi <A> #6 #.o.P.x        ; base slot 6 plus the field offset, resolved at assembly
+    MOVi %<A> #1                 ; a symbolically indexed transient
+
+Every fold is a `!` directive, so this costs nothing at run time. Struct locals and arrays of structs
+both work this way.
+
+**A local needs a compile-time size** (E433 otherwise). The words occupy a counted run of transients, so
+the total must be a number while compiling. Impala knows every non-extern struct's word count; a folded
+or symbolic ARRAY extent does not resolve until assembly, so `int array t[H * N]` is rejected.
+
+**A `returnBack` ordering trap.** `%<A>` starts with `%` but is NOT a slot number. `returnBack` used to
+test the bare-token case first, so it pushed the whole compound string into the transient stock - losing
+the `<A>` scratch and poisoning the pool with a token no allocator can hand out. The compound
+trailing-`<X>` case must be tested BEFORE the bare-token case.
 
 **No `--inline` flag.** Nothing is inlined unless the source says `inline`, and no existing source
 does, so the 84-file byte-diff gate is unaffected and there is nothing to gate.

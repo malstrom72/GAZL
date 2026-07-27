@@ -913,15 +913,18 @@
         }
         var c = op[0];
 
+        /* A compile-time scratch carried as the trailing `<X>` token of a COMPOUND operand:
+           `*<A>` (alloc size), `#<D>` (pointer offset), `&bank:<D>` / `$v:<D>` (base:offset), and
+           `%<A>` (a symbolically indexed transient). This must be tested BEFORE the bare-token case:
+           `%<A>` starts with '%' but is not a slot number, and pushing it into the transient stock
+           both loses the scratch and poisons the pool with a token no allocator can hand out. */
+        if (op.length > 3 && op.charAt(op.length - 1) === '>' && op.charAt(op.length - 3) === '<') {
+            $$parser.returnBack(op.substr(op.length - 3));
+        }
         /* a bare transient / compile-time scratch */
-        if (c === '%' || c === '<') {
+        else if (c === '%' || c === '<') {
             var stk = $$parser.stock[c];
             if (!stockContains(stk, op)) stk.push(op);   // avoid dupes
-        }
-        /* a compile-time scratch carried as the trailing `<X>` token of a compound operand:
-           `*<A>` (alloc size), `#<D>` (pointer offset), `&bank:<D>` / `$v:<D>` (base:offset) */
-        else if (op.length >= 3 && op.charAt(op.length - 1) === '>' && op.charAt(op.length - 3) === '<') {
-            $$parser.returnBack(op.substr(op.length - 3));
         }
     };
 
@@ -1355,18 +1358,33 @@
                 var mapped = subst[s.substr(0, colon)];
                 var off = s.substr(colon + 1);
                 if (mapped.charAt(0) !== '%') return mapped + ':' + off;
-                /* GAZL has no `%N:offset`, so a constant element offset folds into the slot number */
+                /* GAZL has no `%N:offset`. A numeric element offset folds straight into the slot
+                   number; a struct field's offset is a SYMBOL (`.o.S.f`) that only the assembler can
+                   resolve, so fold it there instead and index the transient symbolically - `%<X>` is
+                   legal, and the whole fold is assemble-time, costing nothing at run time. */
                 var n = parseInt(off, 10);
-                assert(!isNaN(n) && ('' + n) === off, 'inline: cannot fold offset ' + off + ' onto a transient');
-                return '%' + (parseInt(mapped.substr(1), 10) + n);
+                if (!isNaN(n) && ('' + n) === off) return '%' + (parseInt(mapped.substr(1), 10) + n);
+                if (!Object.prototype.hasOwnProperty.call(symOffsets, s)) {
+                    var sc = $$parser.borrow('<');
+                    folds.push({ operator: '<> +', type: 'i',
+                            operands: [ sc, '#' + mapped.substr(1), '#' + off ] });
+                    symOffsets[s] = '%' + sc;
+                }
+                return symOffsets[s];
             }
             return s;
         }
+        var symOffsets = {}, folds = [];
         for (i = 0; i < info.body.length; ++i) {
             var b = info.body[i];
+            folds.length = 0;
             var rec = { operator: b.operator, type: b.type, operands: [
                     mapOperand(b.operands[0]), mapOperand(b.operands[1]), mapOperand(b.operands[2]) ] };
+            for (var f = 0; f < folds.length; ++f) $$parser.metacode.push(folds[f]);
             $$parser.metacode.push(rec);
+        }
+        for (var so in symOffsets) {
+            if (Object.prototype.hasOwnProperty.call(symOffsets, so)) $$parser.returnBack(symOffsets[so]);
         }
         for (var r in remapped) { if (Object.prototype.hasOwnProperty.call(remapped, r)) $$parser.returnBack(remapped[r]); }
         for (k = borrowedLocals.length - 1; k >= 0; --k) $$parser.returnBack(borrowedLocals[k]);
@@ -3222,21 +3240,22 @@ inp:ArgsDecl ')'_
                                                                                 head while an expansion site is mid-body. See docs/Inlining.md section 8. */
                                                                              $$parser.inlineLocals = [];
                                                                              iterate($loc, function (v) {
-                                                                                 var words = 1;
-                                                                                 if (v.type === 'S' || (v.type === 'A' && $$parser.isStructAtom(v.elem))) {
-                                                                                     /* a struct field is reached by a SYMBOLIC offset (`$s:.o.S.f`), and a
-                                                                                        transient base takes no `:offset` at all - `%10:.o.S.f` is not GAZL */
-                                                                                     $$parser.fail('An inline function cannot declare a struct local',
-                                                                                             $$s, $$i, 'E433',
-                                                                                             'struct fields need a symbolic frame offset, which a transient cannot carry');
-                                                                                 }
-                                                                                 if (v.type === 'A') {
-                                                                                     words = parseInt('' + v.size, 10);
-                                                                                     if (!(words > 0)) {   /* a folded/symbolic extent has no number to lay out */
-                                                                                         $$parser.fail('An inline function needs a literal size for the array local '
-                                                                                                     + v.name, $$s, $$i, 'E433',
-                                                                                                 'the elements occupy transients, so the count must be known here');
+                                                                                 var words = 1, per = 1;
+                                                                                 if (v.type === 'S') {
+                                                                                     words = $$parser.structWords(v.struct);
+                                                                                 } else if (v.type === 'A') {
+                                                                                     if ($$parser.isStructAtom(v.elem)) {
+                                                                                         per = $$parser.structWords(v.elem);
                                                                                      }
+                                                                                     words = parseInt('' + v.size, 10) * per;
+                                                                                 }
+                                                                                 /* the run occupies a COUNTED set of transients, so the total must be a number
+                                                                                    here. Impala knows every non-extern struct's size; a folded or symbolic
+                                                                                    array extent does not resolve until assembly. */
+                                                                                 if (!(words > 0)) {
+                                                                                     $$parser.fail('An inline function needs a compile-time size for the local '
+                                                                                                 + v.name, $$s, $$i, 'E433',
+                                                                                             'its words occupy transients, so the count must be known while compiling');
                                                                                  }
                                                                                  $$parser.inlineLocals.push({ name: '$' + v.name, words: words });
                                                                              });
