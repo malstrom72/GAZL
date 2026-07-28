@@ -13,8 +13,11 @@
 > `sizeof`, whole-struct assignment and single named returns are all unaffected. See
 > [`docs/ParkedFeatures.md`](ParkedFeatures.md) for what is parked, where, and why.
 >
-> The per-step sections below are the design records; a few polish items remain (`.gazl` blob imports,
-> typed `extern function`, richer parse errors).
+> The per-step sections below are the design records. **The one substantive gap is import cycles**: they
+> are gathered correctly but only resolve in one direction, because the declaration pre-pass ("collect
+> mode") was designed and not built - see [Cycles](#cycles) for the current behaviour and
+> [Next: collect mode](#next-collect-mode-the-declaration-pre-pass) for the plan. Smaller items left:
+> `.gazl` blob imports, richer parse errors.
 
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),
@@ -80,11 +83,12 @@ The features are ordered by dependency, not ambition:
    per function since 1.0, and Impala never exposed it. Implemented, then PARKED for Impala 3.0
    (see [`docs/ParkedFeatures.md`](ParkedFeatures.md)); design record in
    [Step 4: Multiple return values](#step-4-multiple-return-values-parked).
-5. **Import** - sharing typed interfaces between units without textual copying. Implemented; design in
-   [Step 5: Import](#step-5-import-implemented).
+5. **Import** - sharing typed interfaces between units without textual copying. Implemented except
+   for cycle resolution; design in [Step 5: Import](#step-5-import-implemented-except-cycles), gap and
+   plan in [Next: collect mode](#next-collect-mode-the-declaration-pre-pass).
 
 Cross-cutting decisions - strict expressions, the rejection of
-[compound assignment](#compound-assignment--rejected), and the [diagnostic format](#diagnostics) -
+[compound assignment](#compound-assignment---rejected), and the [diagnostic format](#diagnostics) -
 have their own sections below.
 Other long-standing gaps (richer `for`) are out of scope for this document and tracked separately.
 
@@ -555,7 +559,7 @@ working *for* us.
 - **By-value return** (`returns Filter out`): N `OUT` words - a struct return *is* a multiple return
   whose slots carry names and offsets. The callee writes `out.cutoff` as free direct `OUT`-slot
   access; the caller consumes it into a struct place, statement-level (`v = makeFilter(...)`), the
-  same restriction as `a = b`. **This makes [Step 4 (multiple return values)](#step-4-multiple-return-values-implemented)
+  same restriction as `a = b`. **This makes [Step 4 (multiple return values)](#step-4-multiple-return-values-parked)
   a prerequisite of struct returns** - same multi-`OUT` window layout, one implementation. By-value
   *parameters* need only `PARA` sections and can land without Step 4; by-value *returns* need it.
 - **Whole-struct assignment `a = b` is allowed, statement-level only.** It lowers to exactly one
@@ -759,7 +763,7 @@ scalars now, or as a named struct once Step 2 lands.
 
 ---
 
-## Step 5: Import (implemented)
+## Step 5: Import (implemented, except cycles)
 
 *(Implemented: `import "path"` + `impala build root.impala` walks the closure and compiles the
 concatenated units in one pass - cross-unit structs, struct/multi-value returns, and functypes all
@@ -767,7 +771,9 @@ resolve with no header drift (visited-set dedups diamonds and breaks cycles). `e
 host-visible symbols in the `; signature` metadata, and `--dead-strip` drops any FUNC/data block not
 reachable from an export. VM-verified in `tests/impala/sources/import/` and `tests/impala/sources/deadstrip/`.
 The one deviation from the design below: the builder concatenates and compiles the sources rather than
-emitting each unit separately, so `.gazl` (precompiled-blob) imports are not yet supported.)*
+emitting each unit separately. Two consequences - `.gazl` (precompiled-blob) imports are not yet
+supported, and import cycles only half-resolve; see [Cycles](#cycles) and
+[Next: collect mode](#next-collect-mode-the-declaration-pre-pass).)*
 
 ### The problem
 
@@ -848,29 +854,95 @@ from the definitions it describes. Moves the copy, doesn't kill it.
 
 ### Cycles
 
-Import cycles are **legal**. Mutual dependency between units is a supported pattern today
+Import cycles are **legal** - though as of today only half-resolved; read the status box below
+before relying on this section. Mutual dependency between units is a supported pattern today
 (concatenation is order-independent), and mutually-dependent units are exactly the ones with the
 most shared interface surface - erroring on cycles would push them back to hand-written externs,
 the boilerplate this feature exists to kill.
 
-Cycles are harmless because the closure walk separates gathering from emission: the compiler keeps
-a **visited set keyed by canonical path**, seeded with the root unit. Each file in the import
-closure is parsed exactly once and emitted exactly once; an `import` naming an already-visited
-file is skipped. The self-import-via-cycle case (B importing the root) needs no special rule - the
-seeding handles it. Diamonds dedupe the same way. Name resolution runs after the whole closure is
-gathered, so mutually-referencing types resolve regardless of parse order.
+The closure *walk* delivers on this: the builder keeps a **visited set keyed by canonical path**,
+seeded with the root unit. Each file in the import closure is parsed exactly once and emitted
+exactly once; an `import` naming an already-visited file is skipped. The self-import-via-cycle case
+(B importing the root) needs no special rule - the seeding handles it. Diamonds dedupe the same way.
+
+> #### Status: cycles GATHER but do not fully RESOLVE (as of 2026-07-28)
+>
+> The design assumed name resolution runs after the whole closure is gathered. **It does not.**
+> The shipped builder concatenates the closure dependency-first and hands it to the
+> single-pass compiler in one piece (the deviation noted at the top of this step), so a unit can
+> only reference names that appear *earlier* in the concatenation. In a cycle no order satisfies
+> both directions, so one of them fails:
+>
+> - a cross-unit function call backwards across the cycle -> `E403 Undeclared identifier`
+> - a cross-unit struct type backwards across the cycle -> `E413 Unknown type`
+>
+> The asymmetry is the tell: the **same two files** build or fail depending only on which one you
+> name as the root, because that decides the concatenation order. Fixture:
+> `tests/impala/sources/importcycle/` (mutually recursive `isEven`/`isOdd`), both halves pinned in
+> `impala/importBuildTests.js`.
+>
+> The working-today workaround is a hand-written forward `extern` in whichever unit is emitted
+> first - the boilerplate this feature exists to kill, so treat it as a stopgap, not the model.
+> Since E437 it is at least checked against the real definition rather than silently trusted
+> (`docs/ExternPrototypes.md`).
+>
+> **Where this is heading: collect mode.** See "Next: collect mode" below.
 
 What *does* error is definitional cycles in content - which are errors within a single file too;
 imports merely let them span files:
 
 | Cycle kind | Verdict |
 |---|---|
-| Import cycle (A↔B, any depth) | **legal** - visited-set memoization, each file parsed once |
+| Import cycle (A↔B, any depth) | gathering: **legal** - visited-set memoization, each file parsed once. Resolution: **only one direction today** - the other needs a forward `extern` until collect mode lands |
 | Same file reached via two paths | legal - canonical-path dedup |
 | Same symbol from two different files | error - flat namespace, duplicate declaration |
 | Const *value* cycle across the closure | error, diagnostic cites the dependency chain |
 | **By-value** struct containment cycle (`struct A { B b }` / `struct B { A a }`) | error (infinite size) - the mutual generalization of the self-reference rule |
 | By-pointer struct cycle | legal, exactly like self-reference |
+
+### Next: collect mode (the declaration pre-pass)
+
+This is the one piece of Step 5 that was designed and not built, and it is what makes cycles work
+as promised above. The full plan is `impala/Impala2Slices.md:143-190`; the essentials:
+
+**It is NOT gated on the JSPEG rework.** `Impala2Slices.md:155-163` splits two-phase compilation in
+two, and only the cheap half is needed here:
+
+- *Declaration-level two-phase* - gather declarations across the closure, then resolve names.
+  Bounded, and it is all cycles need.
+- *Body-level two-phase* - the AST rework of `docs/JSPEGFuture.md` Problem 1. Cycles do **not**
+  need it; still deferred. `JSPEGFuture.md:39-46` mentions interface mode as something that rework
+  would unlock "as a trivial variant", which is easy to misread as a dependency. It is not one.
+
+**Shape.** `$$parser` already *is* the semantic-handler object the grammar dispatches to, so this
+is a mode on it rather than a second implementation of anything
+(`Impala2Slices.md:147-154`):
+
+- **emit mode** - today's codegen.
+- **collect mode** - declarations register in the symbol/struct/type tables **with type references
+  recorded by NAME, not eagerly resolved**; bodies are parsed but emit nothing.
+
+**What actually remains**, given what shipped:
+
+1. *Precondition, partly done* - finish thinning the remaining fat inline actions into `$$parser`
+   methods, so the mode switch covers all the semantics. Roughly a quarter of the rule region
+   dispatches to `$$parser.` today; the rest is still inline JS. `impala/RefactorPlan.md` is the
+   adjacent (return-style helper) cleanup on the same surface.
+2. *Suppress emission in collect mode* - the small half. Emission is already funnelled through a
+   handful of chokepoints (`output`, `declare`, `makeMeta`, `emit`).
+3. *Defer type resolution* - the expensive half. `declare`/`lookup` resolve types on the spot
+   today, which is exactly why a backwards struct reference dies with `E413`.
+
+**The shipped shortcut made this cheaper, not harder.** The original plan needed per-unit collect
+parsing, a merge into closure-wide tables, and per-unit random seeds (mandatory, per
+`Impala2Slices.md:174-179`, because two units sharing a seed collide on identical string
+constants). None of that applies now: the builder hands the compiler *one* concatenated source
+compiled *once*, so "gather" is a pre-scan of that single source and the seed-collision problem
+cannot arise.
+
+**Done when** `tests/impala/sources/importcycle/odd.impala` builds as a root, its
+`extern function isEven` can be deleted, and the negative assertion in `impala/importBuildTests.js`
+is rewritten as a positive one.
 
 ### Dead-code elimination and `export`
 

@@ -1,0 +1,16 @@
+/*
+	The other half of the cycle - imports even.impala, which imports this file right back.
+*/
+
+import "even.impala"
+
+/*  With even.impala as the root this unit is emitted FIRST, so `isEven` is not declared yet and the
+	single-pass compiler cannot see it. Hence this forward declaration - exactly the boilerplate
+	`import` exists to kill, and exactly what collect mode would make unnecessary. It is checked
+	against the real definition (E437), so it cannot silently drift. */
+extern function isEven(int n) returns int r
+
+function isOdd(int n) returns int r
+{
+	if (n == 0) { r = 0; } else { r = isEven(n - 1); }
+}

@@ -142,6 +142,18 @@ the two fix-it notes from the spec.
 
 ## Step 5: import-as-linking + `--dead-strip`
 
+> **PARTLY IMPLEMENTED (status added 2026-07-28).** `import`, `export`, `--dead-strip`, the closure
+> walk and per-unit dedup all shipped. **Collect mode did not.** The builder took a shortcut the plan
+> below does not describe: it concatenates the closure into one source and compiles it *once*, in
+> emit mode, rather than gather -> resolve -> codegen. That gets correct cross-unit codegen for free
+> and moots the per-unit seed requirement, but it leaves the compiler single-pass over the
+> concatenation - so the cycle claims further down are **not** true today. A backwards reference
+> across a cycle fails (`E403` for a function, `E413` for a struct type), and which direction fails
+> depends only on which unit is named as root. Fixture: `tests/impala/sources/importcycle/`, pinned
+> in `impala/importBuildTests.js`. Current behaviour and the route out are written up in
+> `docs/Impala2.md` under "Cycles" and "Next: collect mode"; the architecture in this section is
+> still the plan of record for that work.
+
 **Division of labor: the compiler gains a collect-only mode; the builder owns the closure.**
 
 **Architecture (revised 2026-07-20 per the thin-action/handler discussion): `$$parser` already IS
@@ -182,6 +194,9 @@ moves:
   forward-reference a type. (Bonus: cross-unit forward function references also resolve without
   `extern`, byte-safe - existing externs become redundant, not wrong. Whether to also make the
   standalone single-unit path gather-first is a separate, byte-safe option, not required here.)
+  **Unbuilt - this paragraph describes the target, not today.** Without collect mode the body
+  compiler *is* asked to forward-reference, and refuses; the `extern` is required rather than
+  redundant. See the status note at the top of this section.
 - **`--dead-strip` is a text-level `.gazl` transform in the builder, not compiler logic.** The
   output is line-structured: labeled `FUNC` blocks, labeled `GLOB`/`CNST`/`TEMP` data blocks,
   `! DEF` rows. Build a reference graph from operands (`&name`, `^name`, `#name`), roots from
@@ -197,6 +212,12 @@ moves:
 4. **2.5** - by-value params/returns on the window convention.
 5. **Step 3** - `functype` (independent, low risk).
 6. **Step 5** - builder + import + `export` + `--dead-strip`, with the cycle amendment.
+7. **Collect mode** - the one piece of Step 5 still outstanding, and the only thing standing between
+   the cycle amendment and reality. Precondition: finish thinning the fat inline actions into
+   `$$parser` (see the architecture note above, and `impala/RefactorPlan.md` for the adjacent
+   return-style cleanup on the same surface). Not gated on the JSPEG 2 AST rework - the split is in
+   "declaration-level vs body-level two-phase" above. Done when
+   `tests/impala/sources/importcycle/odd.impala` builds as a root with its `extern` deleted.
 
 Each lands as a separate commit behind the full gate (regenerate → jspegCompilerTests →
 runJspegTests golden → full build → VM-run fixtures).

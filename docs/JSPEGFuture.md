@@ -41,7 +41,10 @@ dry, once wet).
   the side-effect problem ceases to exist rather than being managed. This also unlocks: multi-error
   diagnostics, free lookahead for new syntax (destructuring `x, y = f()` vs expression statement),
   and Impala 2.0's `import` interface mode (parse, take declarations, emit nothing) as a trivial
-  variant instead of a special mode.
+  variant instead of a special mode. *That last one is a convenience, **not** a dependency: import
+  cycles need only declaration-level two-phase, which `impala/Impala2Slices.md:155-163` scopes as a
+  mode on `$$parser` and explicitly separates from this rework. Do not wait for JSPEG 2 to fix
+  cycles.*
   *Impact on `impala.jspeg`: rule structure unchanged; every action rewritten from emit-now to
   build-node. This is the "JSPEG 2" moment and should be done once, deliberately - not piecemeal.*
 
