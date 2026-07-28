@@ -2469,7 +2469,9 @@
 
         if (leftx.type !== '?' && rightx.type !== '?' && leftx.type !== rightx.type) {
             $$parser.typeError(
-                'Incompatible types for assignment ({$type1} = {$type2})',
+                /* Reads as a statement about the assignment, not as an equation: `(pointer = funcptr)`
+                   left people working out which side was which. Source first, destination second. */
+                'Incompatible types for assignment: cannot assign {$type2} to {$type1}',
                 sourceCode, sourceOffset,
                 leftx.type, rightx.type
             , 'E303');
