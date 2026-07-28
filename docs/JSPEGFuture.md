@@ -125,6 +125,27 @@ agents writing new 2.0 syntax will hit parse errors constantly.
 X, Y, or Z` (offset→line:col mapping is runner-side and trivial). Token rules get display names.
 Modest codegen change, no grammar changes, and it can land before any Impala 2.0 work.
 
+## Adjacent gap: the PikaScript emulation layer
+
+`impala.jspeg`'s prelude still runs on a shim of hand-ported PikaScript builtins - `bake`, `evaluate`,
+`replace`, `char`, `ordinal`, `args`, and the `resetQueue`/`pushBack`/`queueSize` wrappers over plain
+Arrays. They were the cheapest possible port from the PikaScript original, not a design, and they are
+dead weight now that the host is JavaScript: `replace(s, a, b)` is `s.split(a).join(b)` spelled longer,
+the queue wrappers are `[]`, `evaluate` is `JSON.parse`.
+
+**`bake` is the one that bites.** Every `$$parser.fail` message is passed through it, and it **`eval`s
+whatever sits between braces** - that is how `{$type1}` interpolation in `typeError` works. So any
+diagnostic whose text happens to contain braces is executed as JavaScript. A struct row
+(`struct S { a : int }`) in an error message throws `Unexpected token ':'` from deep inside `JSON.parse`,
+with nothing in the stack naming the real cause; `E438` has to render its rows with parentheses to dodge
+it. It is also an eval of compiler-controlled text on the error path, which is a poor place for one.
+
+**What it would take:** replace `bake` with an explicit substitution - `format(template, values)` over a
+`{name}` placeholder, no `eval` - and migrate the ~10 `typeError` call sites that rely on `{$type1}` /
+`{$type2}`. Then delete the rest of the shim in favour of the JS builtins. Mechanical, fixture-gated,
+and independent of everything else in this document; the messages are covered by
+`impala/jspegCompilerTests.js`, so drift shows up immediately.
+
 ## Sequencing
 
 **Nothing here gates Impala 2.0 Step 1.** Step 1 (typed declarations) and the strict-expression
@@ -134,7 +155,7 @@ fixtures.
 
 | When | Work | `impala.jspeg` impact | Ordering constraint |
 |---|---|---|---|
-| Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers | none / mechanical helper migration | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); neither blocks Step 1 |
+| Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers; retire the PikaScript emulation layer (`bake` first) | none / mechanical helper migration | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); none blocks Step 1 |
 | Before Steps 4/5, *if adopted* | Automatic `dry` for predicates in JSPEG; de-IIFE + char-class codegen | delete the dry toggles and ~16 guards; otherwise none | destructuring lookahead and import interface mode are the two features that lean on the side-effect weakness - the only real ordering edge in this document |
 | After 2.0 stabilizes, if ever ("JSPEG 2") | Two-phase AST + value-returning rules, in one deliberate breaking step | rules unchanged; all actions rewritten as node constructors; holders, `dry`, and the `$$` special-casing retired | none - optional end-state |
 
