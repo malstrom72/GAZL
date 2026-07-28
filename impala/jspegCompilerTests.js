@@ -1808,6 +1808,21 @@ const typedPointerCases = [
 			"function main() locals funcptr f { g(f); }"].join("\n"),
 		expectError: "Funcptr type mismatch for argument 1",
 	},
+	/* A GLOBAL read spells itself `&name`, exactly like a function reference, so testing the sigil
+	   instead of the lookup sent globals down the function-reference branch to find no function and
+	   fall out silently - past the very check that applied to them. */
+	{
+		label: "a global untyped funcptr is caught too, not just a local",
+		source: ["functype Cb(int a) returns int r", "global funcptr fp;",
+			"function main() locals Cb c { c = global fp; }"].join("\n"),
+		expectError: "got an untyped funcptr",
+	},
+	{
+		label: "a global of the named type still assigns freely",
+		source: ["functype Cb(int a) returns int r", "global Cb gc;",
+			"function main() locals Cb c { c = global gc; }"].join("\n"),
+		expectError: null,
+	},
 	{
 		label: "a (Cb) cast is what makes it explicit",
 		source: ["functype Cb(int a) returns int r", "function g(Cb c) { }",

@@ -2248,9 +2248,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (rop === '&NULL' && rightx.operands[2] === undefined) {
                 return;                                           /* nullfunc is assignable to any funcptr type */
             }
-            if (rop && (rop[0] === '&' || rop[0] === '^')) {      /* a direct function reference */
-                var fe = symbols.functions[rop.substr(1)];
-                if (fe && fe.signature && !funcTypeMatches(leftx.elem, fe.signature)) {
+            /* Gated on the LOOKUP, not on the sigil: reading a global spells itself `&name` too, so
+               `&`/`^` alone cannot tell a function reference from one, and testing the sigil sent
+               every global funcptr into this branch to find no function and silently fall out - past
+               the element check below, which is the one that applies to it. */
+            var fe = (rop && (rop.charAt(0) === '&' || rop.charAt(0) === '^')
+                    ? symbols.functions[rop.substr(1)] : undefined);
+            if (fe && fe.signature) {                             /* a direct function reference */
+                if (!funcTypeMatches(leftx.elem, fe.signature)) {
                     fail('Function ' + rop.substr(1) + " does not match funcptr type '"
                             + leftx.elem + "'", sourceCode, sourceOffset, 'E441',
                             'check the parameter and return types against ' + leftx.elem);
