@@ -6,6 +6,14 @@ type; the emitted row carries real types (`extern native printInt(int n) -> void
 unchanged and still assert nothing (`() -> unknown`, a wildcard the validator skips), so prototypes are
 ALLOWED, never demanded. Fixture: `tests/impala/sources/externPrototype.impala`.
 
+A prototype and a definition of the same name are two claims about one function, so where the compiler
+holds BOTH it now checks them against each other (**E437**) instead of letting whichever parsed last
+overwrite the other - which used to compile clean and emit contradictory `; signature` rows for
+gazl-validate to catch. This is not a linkage rule: a prototype for a name the closure never defines is
+still a promise only gazl-validate can settle, and a name-only extern still asserts nothing. It matters
+most under `import`, where the builder compiles the whole closure as one unit, so a stale hand-written
+prototype and the real definition routinely land in the same compilation.
+
 Not done: the two nudge WARNINGS (name-only-but-verifiable, prototyped-but-unverifiable), and making the
 native manifest authoritative and complete (step 2 of the sequencing below) - so a prototype for an opaque
 host native is still a trusted claim rather than a checked one.

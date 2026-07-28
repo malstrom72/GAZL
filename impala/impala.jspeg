@@ -306,6 +306,38 @@
         return parts.join(', ');
     }
 
+    /* Types only, no names: what a signature CLAIM actually asserts, and the only part two claims
+       about one name have to agree on. Element chains stay in - gazl-validate treats a bare `ptr` as
+       element-UNKNOWN and lets it match any chain, so flattening `V-ptr` to `ptr` would silently
+       disarm the cross-unit check. That is the only type record a name-only `extern function f` has. */
+    function renderParamTypes(params) {
+        var parts = [];
+        for (var idx = 0; idx < (params ? params.length : 0); ++idx) {
+            var param = params[idx] || {};
+            parts.push(param.type === 'S' ? (param.struct || 'unknown')
+                    : signatureCategoryForDesc(fullDescFor(param.type, param.elem)));
+        }
+        return parts.join(', ');
+    }
+
+    function renderReturnType(signature) {
+        if (signature.returnCount > 1) {                           /* multiple return values -> (t1, t2, ...) */
+            var parts = [];
+            for (var idx = 0; idx < signature.returnList.length; ++idx) {
+                var r = signature.returnList[idx];
+                parts.push(r.elem !== undefined ? signatureCategoryForDesc(fullDescFor(r.type, r.elem))
+                        : signatureParamCategory(r.type));
+            }
+            return '(' + parts.join(', ') + ')';
+        }
+        if (signature.returns === 'S') {                           /* by-value struct return -> the struct name */
+            return (signature.returnStruct || 'unknown');
+        }
+        return (signature.returnElem !== undefined
+                ? signatureCategoryForDesc(fullDescFor(signature.returns, signature.returnElem))
+                : signatureReturnCategory(signature.returns, signature.returns !== undefined));
+    }
+
     function computeOrigin(sourceName, sourceCode, sourceOffset) {
         if (!sourceCode || sourceOffset == null) {
             return undefined;
@@ -365,24 +397,7 @@
         }
 
         var paramsText = renderParamList(signature.params);
-        var hasReturn = (signature && signature.returns !== undefined);
-        var returnType;
-        if (signature.returnCount > 1) {                          /* multiple return values -> (t1, t2, ...) */
-            var parts = [];
-            for (var _rri = 0; _rri < signature.returnList.length; ++_rri) {
-                var r = signature.returnList[_rri];
-                parts.push(r.elem !== undefined
-                        ? signatureCategoryForDesc(fullDescFor(r.type, r.elem))
-                        : signatureParamCategory(r.type));
-            }
-            returnType = '(' + parts.join(', ') + ')';
-        } else if (signature.returns === 'S') {                   /* by-value struct return -> the struct name */
-            returnType = (signature.returnStruct || 'unknown');
-        } else {
-            returnType = (signature.returnElem !== undefined
-                    ? signatureCategoryForDesc(fullDescFor(signature.returns, signature.returnElem))
-                    : signatureReturnCategory(signature.returns, hasReturn));
-        }
+        var returnType = renderReturnType(signature);
         var kind = (role ? role : 'func');
         if ($$parser.exportNext) kind = 'export ' + kind;         /* Step 5: host-visible marker */
 
@@ -400,20 +415,8 @@
         var paramsText;
         var hasSignature = !!(signature && signature.params);
 
-        /* Element chains matter here: gazl-validate treats a bare `ptr` as element-UNKNOWN and lets it
-           match any chain, so flattening `V-ptr` to `ptr` would silently disarm the cross-unit check.
-           That is the only type record a name-only `extern function f` has. */
-        if (hasSignature) {
-            var extracted = [];
-            for (var i = 0; i < signature.params.length; ++i) {
-                var _p = signature.params[i];
-                extracted.push(_p.type === 'S' ? (_p.struct || 'unknown')
-                                               : signatureCategoryForDesc(fullDescFor(_p.type, _p.elem)));
-            }
-            paramsText = extracted.join(', ');
-        } else {
-            paramsText = renderTypeList(actualTypes, actualElems);
-        }
+        paramsText = (hasSignature ? renderParamTypes(signature.params)
+                                   : renderTypeList(actualTypes, actualElems));
 
         var returnCode = callResultType;
         var known = false;
@@ -547,6 +550,7 @@
                     sourceCode, sourceOffset, 'E401',
                     'each function needs a unique name across the whole import closure');
         }
+        $$parser.checkExternAgreement(name, entry, entry.signature, sourceCode, sourceOffset);
 
         /* An `inline function` has no out-of-line copy, so it publishes neither a FUNC label nor a
            signature row - there is nothing for a caller or the validator to link against. */
@@ -568,6 +572,26 @@
                          entry.sourceCode,
                          entry.sourceOffset,
                          comment);
+    };
+
+    /* An `extern` prototype and a definition are two claims about one name, and they must agree.
+       This does NOT police linkage: a prototype for a name the closure never defines is a promise
+       only gazl-validate can settle, and a name-only extern records no prototype and asserts
+       nothing. It fires exactly when the compiler is holding both claims itself - which an import
+       closure makes routine, since the builder compiles the whole closure as one unit. Names are
+       not compared, only types, matching functionSignaturesCompatible() in tools/gazl-validate.js. */
+    $$parser.checkExternAgreement = function (name, entry, defined, sourceCode, sourceOffset) {
+        var proto = (entry ? entry.externProto : undefined);
+        if (!proto || !defined) {
+            return;
+        }
+        function shape(sig) { return name + '(' + renderParamTypes(sig.params) + ') -> ' + renderReturnType(sig); }
+        if (shape(proto) !== shape(defined)) {
+            $$parser.fail('extern declaration of ' + name + ' does not match its definition: declared "'
+                    + shape(proto) + '" but definition provides "' + shape(defined) + '"',
+                    sourceCode, sourceOffset, 'E437',
+                    'the definition is authoritative - correct the prototype, or drop it and let the definition speak');
+        }
     };
 
     function signatureRoleForSection(section) {
@@ -2754,6 +2778,7 @@
                 readonly: !!readonly,
                 kind: kind,
                 signature: prev && prev.signature,
+                externProto: prev && prev.externProto,   /* survives the definition's signature reset */
                 sourceCode: sourceCode,
                 sourceOffset: sourceOffset,
                 sourceName: ($$parser.sourceName !== undefined ? $$parser.sourceName
@@ -3515,6 +3540,7 @@ inp:ArgsDecl ')'_
                                                                          $$parser.inlineMode = false;
                                                                      }
 ExternDecl  <-  EXTERN _                                              { $$.scope = 'globals'; $$.structFwd = false;
+                                                                        $at = $$i;   /* the declaration itself - end-of-rule positions have skipped past it */
                                                                         $$parser.pendingProto = undefined; }
                 (
                     STRUCT _ id:Identifier                            {
@@ -3607,7 +3633,9 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                                  signature.sourceOffset = $$i;
                                                                                  signature.sourceName = $$parser.sourceName;
                                                                              }
-                                                                             signature.returnResolved = false;
+                                                                             if (entry.kind !== 'FUNC') {  /* a definition here already resolved it - do not un-resolve it */
+                                                                                 signature.returnResolved = false;
+                                                                             }
                                                                         }
 
                                                                         var role = ($$.type === 'N' ? 'extern native' : 'extern func');
@@ -3636,13 +3664,18 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                             placeholderSignature.returnCount = (_pr !== undefined ? 1 : 0);
                                                                             placeholderSignature.returnWords = (_pr !== undefined ? 1 : 0);
                                                                             placeholderSignature.returnResolved = true;
-                                                                            if (entry) {                   /* publish it so call sites check against it */
-                                                                                entry.signature.params         = _pp;
-                                                                                entry.signature.returns        = placeholderSignature.returns;
-                                                                                entry.signature.returnElem     = placeholderSignature.returnElem;
-                                                                                entry.signature.returnCount    = placeholderSignature.returnCount;
-                                                                                entry.signature.returnWords    = placeholderSignature.returnWords;
-                                                                                entry.signature.returnResolved = true;
+                                                                            if (entry) {
+                                                                                entry.externProto = placeholderSignature;
+                                                                                if (entry.kind === 'FUNC') {   /* already defined here - the definition wins, the prototype is checked */
+                                                                                    $$parser.checkExternAgreement($$.name, entry, entry.signature, $$s, $at);
+                                                                                } else {                       /* publish it so call sites check against it */
+                                                                                    entry.signature.params         = _pp;
+                                                                                    entry.signature.returns        = placeholderSignature.returns;
+                                                                                    entry.signature.returnElem     = placeholderSignature.returnElem;
+                                                                                    entry.signature.returnCount    = placeholderSignature.returnCount;
+                                                                                    entry.signature.returnWords    = placeholderSignature.returnWords;
+                                                                                    entry.signature.returnResolved = true;
+                                                                                }
                                                                             }
                                                                         }
                                                                         emitStandaloneSignatureComment(

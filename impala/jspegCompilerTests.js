@@ -1706,6 +1706,26 @@ const typedPointerCases = [
 		source: ["extern function ext;", "function main() locals int i { i = ext(); }"].join("\n"),
 		expectError: null,
 	},
+	{
+		label: "an extern prototype contradicting a definition above it is an error",
+		source: ["function f() { }", "extern function f() returns int r"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "an extern prototype contradicting a definition below it is an error",
+		source: ["extern function f() returns float x", "function f() returns int r { r = 1; }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "an extern prototype contradicting a definition in a parameter is an error",
+		source: ["extern function f(float a)", "function f(int a) { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "an extern prototype agreeing with a definition is silent, and names are not compared",
+		source: ["extern function f(int a) returns int r", "function f(int b) returns int q { q = b; }"].join("\n"),
+		expectError: null,
+	},
 ];
 
 /* Step 5: `export` rides the signature metadata as a role prefix, so --dead-strip can find roots. */
