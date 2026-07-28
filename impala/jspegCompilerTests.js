@@ -1793,6 +1793,44 @@ const typedPointerCases = [
 		source: ["struct Cb { int a }", "functype Cb(int a)"].join("\n"),
 		expectError: "already used by a struct",
 	},
+	/* An untyped funcptr is not promoted into a named one, exactly as a bare `pointer` is not
+	   assignable to an `int pointer` (E201) - the named type exists to guarantee the shape of what
+	   gets called. `(Cb)` is the cast that says "I checked"; a functype needs no `pointer` modifier. */
+	{
+		label: "an untyped funcptr does not assign into a named functype",
+		source: ["functype Cb(int a) returns int r",
+			"function main() locals funcptr f, Cb c { c = f; }"].join("\n"),
+		expectError: "Funcptr type mismatch (expected 'Cb', got an untyped funcptr)",
+	},
+	{
+		label: "...nor pass as one",
+		source: ["functype Cb(int a) returns int r", "function g(Cb c) { }",
+			"function main() locals funcptr f { g(f); }"].join("\n"),
+		expectError: "Funcptr type mismatch for argument 1",
+	},
+	{
+		label: "a (Cb) cast is what makes it explicit",
+		source: ["functype Cb(int a) returns int r", "function g(Cb c) { }",
+			"function main() locals funcptr f, Cb c { c = (Cb)f; g((Cb)f); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a named funcptr type still widens to plain funcptr",
+		source: ["functype Cb(int a) returns int r",
+			"function main() locals funcptr f, Cb c { f = c; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a functype is castable through a pointer too",
+		source: ["functype Fn(int a) returns int r",
+			"function main() locals Fn pointer p, pointer q { p = (Fn pointer)q; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "relaxing the cast rule left parenthesized expressions alone",
+		source: ["function main() locals int a, int b, int i { i = (a) * (b) + (a); }"].join("\n"),
+		expectError: null,
+	},
 ];
 
 /* Step 5: `export` rides the signature metadata as a role prefix, so --dead-strip can find roots. */

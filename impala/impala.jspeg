@@ -2243,11 +2243,17 @@
                             + leftx.elem + "'", sourceCode, sourceOffset, 'E441',
                             'check the parameter and return types against ' + leftx.elem);
                 }
-            } else if (rightx.type === 'F' && rightx.elem !== undefined
-                    && $$parser.isFuncTypeAtom(rightx.elem) && rightx.elem !== leftx.elem) {
-                $$parser.fail("Funcptr type mismatch (expected '" + leftx.elem + "', got '"
-                        + rightx.elem + "')", sourceCode, sourceOffset, 'E441',
-                        'cast explicitly if this is intentional');
+            } else if (rightx.type === 'F' && rightx.elem !== leftx.elem) {
+                /* An UNTYPED funcptr is not silently promoted, for the same reason a bare `pointer`
+                   is not assignable to an `int pointer` (E201): the named type exists to guarantee
+                   the shape of what gets called, and an untyped source guarantees nothing. Say so
+                   with the cast that means "I checked" - a functype needs no `pointer` modifier,
+                   being one already. */
+                $$parser.fail("Funcptr type mismatch (expected '" + leftx.elem + "', got "
+                        + (rightx.elem !== undefined && $$parser.isFuncTypeAtom(rightx.elem)
+                                ? "'" + rightx.elem + "'" : 'an untyped funcptr') + ")",
+                        sourceCode, sourceOffset, 'E441',
+                        'use a cast: (' + leftx.elem + ')');
             }
         }
     };
@@ -4182,20 +4188,33 @@ MulDiv      <-  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
 
 PrePost     <-  (op:PREFIX_OP _
                 / '('_ op:BASE_TYPE _               { $cdesc = $$parser.CASTS_TO_TYPES[$op]; }
-                  ( POINTER _                       { $cdesc = 'p:' + $cdesc; $cmods = true; }
+                  ( POINTER _                       { $cdesc = 'p:' + $cdesc; $cmods = true; $ccast = 'pointer'; }
                   )* ')'_
-                / '('_ sid:Identifier               { $pdepth = 0; }   # struct-pointer cast: (Name pointer ...)
+                / '('_ sid:Identifier               { $pdepth = 0; }   # named-type cast: (Name pointer ...) / (Fn)
                   ( POINTER _                       { $pdepth = $pdepth + 1; }
-                  )+ ')'_                           {
-                                                      if (!$$parser.isStructAtom($sid))
-                                                          $$parser.fail('Unknown type ' + $sid, $$s, $$i, 'E413');
-                                                      $cdesc = $sid;
-                                                      for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc;
+                  )* ')'_                           {
+                                                      /* With no `pointer` this is only a cast when the name is a
+                                                         FUNCTYPE, which is already a pointer and so needs no
+                                                         modifier - a struct has no by-value cast, and anything else
+                                                         is a plain parenthesized expression. Backing out (rather
+                                                         than failing) lets Value parse `(x) + 1`; the test above is
+                                                         a pure lookup, so there is no side effect to undo. */
+                                                      if ($pdepth === 0) {
+                                                          if (!$$parser.isFuncTypeAtom($sid)) return false;
+                                                          $cdesc = 'F:' + $sid;
+                                                          $ccast = 'funcptr';
+                                                      } else {
+                                                          if (!$$parser.isStructAtom($sid) && !$$parser.isFuncTypeAtom($sid))
+                                                              $$parser.fail('Unknown type ' + $sid, $$s, $$i, 'E413');
+                                                          $cdesc = $sid;
+                                                          for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc;
+                                                          $ccast = 'pointer';
+                                                      }
                                                       $cmods = true;
                                                     }
                 ) PrePost                           { if (!$$parser.dry) {
                                                        if ($cmods) {
-                                                           $$parser.unaryOp('pointer', $$, $$s, $$i);
+                                                           $$parser.unaryOp($ccast, $$, $$s, $$i);
                                                            $$parser.setElem($$, $$parser.descTail($cdesc));
                                                        } else {
                                                            $$parser.unaryOp($op, $$, $$s, $$i);
@@ -4240,6 +4259,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.types = [];
                                                        $$.elems = [];
                                                        $$.nulls = [];
+                                                       $$.opnds = [];
                                                     } }
                 (Argument (','_ Argument)*)?
                 (   ')'_
@@ -4340,6 +4360,27 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                            + ' elements, got ' + $$parser.elemVerbose($$.elems[argIdx])
                                                                            + ' elements)', $$s, $$i, 'E202',
                                                                            'use a cast: (' + $$parser.elemVerbose(expectedElem) + ' pointer)');
+                                                               }
+                                                               /* Same rule for a named funcptr param as for assignment (E441): a direct
+                                                                  function reference is checked against the type, `nullfunc` suits any of
+                                                                  them, and anything else must already carry that exact type. */
+                                                               if (expected === 'F' && $$parser.isFuncTypeAtom(expectedElem)) {
+                                                                   var _aop = $$.opnds[argIdx];
+                                                                   var _afn = (_aop && _aop !== '&NULL' && (_aop.charAt(0) === '&' || _aop.charAt(0) === '^')
+                                                                           ? $$parser.symbols.functions[_aop.substr(1)] : undefined);
+                                                                   if (_afn && _afn.signature) {
+                                                                       if (!$$parser.funcTypeMatches(expectedElem, _afn.signature))
+                                                                           $$parser.fail('Function ' + _aop.substr(1) + " does not match funcptr type '"
+                                                                                   + expectedElem + "' for argument " + (argIdx + 1) + ' when calling '
+                                                                                   + label, $$s, $$i, 'E441',
+                                                                                   'check the parameter and return types against ' + expectedElem);
+                                                                   } else if (_aop !== '&NULL' && $$.elems[argIdx] !== expectedElem) {
+                                                                       $$parser.fail("Funcptr type mismatch for argument " + (argIdx + 1)
+                                                                               + ' when calling ' + label + " (expected '" + expectedElem + "', got "
+                                                                               + ($$.elems[argIdx] !== undefined && $$parser.isFuncTypeAtom($$.elems[argIdx])
+                                                                                       ? "'" + $$.elems[argIdx] + "'" : 'an untyped funcptr') + ')',
+                                                                               $$s, $$i, 'E441', 'use a cast: (' + expectedElem + ')');
+                                                                   }
                                                                }
                                                            }
 
@@ -4442,6 +4483,8 @@ Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                            $$.nulls.push(meta.type === 'p'
                                                                && meta.operands[1] === '&NULL'
                                                                && meta.operands[2] === undefined);
+                                                           $$.opnds.push(meta.operands[2] === undefined
+                                                               ? meta.operands[1] : undefined);   /* a bare `&f` / `&NULL`, for the funcptr-type check */
                                                        }
                                                        var winSlot = $$.base + $$.retSlots + $$.words;
                                                        if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */

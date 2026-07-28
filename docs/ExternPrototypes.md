@@ -62,12 +62,14 @@ Notes on the corners:
   spelled `extern`. Emitting nothing also means gazl-validate never sees a functype, so the compiler
   is the *only* place a disagreement can be caught.
 - Nothing *forces* a functype on you: the untyped `funcptr` is its opaque form and is accepted
-  everywhere a named one is - parameter, struct field, `extern struct` field, `extern` prototype - with
-  values crossing both ways uncast. Declaring the functype buys the check (**E441** when a function's
-  shape does not match the type it is assigned to); a bare `funcptr` asserts nothing and so cannot be
-  contradicted, the same wildcard model as a name-only prototype. Consequence to keep in mind for
-  `.gazl` blob imports: a blob can never carry a functype, so a source importing one and wanting the
-  typed form has to declare it locally - which is exactly what a repeatable declaration allows.
+  everywhere a named one is - parameter, struct field, `extern struct` field, `extern` prototype. But
+  it is opaque in the same direction a bare `pointer` is: a named type widens to `funcptr` freely,
+  and going the other way needs an explicit `(Cb)` cast (**E441**, for assignments and arguments
+  alike), because the named type exists to guarantee the shape of what gets called and an untyped
+  source guarantees nothing. A functype takes no `pointer` modifier in a cast, being a pointer
+  already; `(Cb pointer)` casts to a pointer *to* one. Consequence to keep in mind for `.gazl` blob
+  imports: a blob can never carry a functype, so a source importing one and wanting the typed form has
+  to declare it locally - which is exactly what a repeatable declaration allows.
 
 This matters under `import` for the reason E437 and E438 both exist: the builder compiles the whole
 closure as one unit, so a hand-copied `extern` and the real definition land in the same compilation.
