@@ -167,6 +167,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     var structs = {};                                    /// name -> { fields:[{name,type,elem,offset,words}], words, complete }
     var openStruct = undefined;                          /// struct whose field list is being parsed (its fields own their extent scratches)
     var shadowedStruct = undefined;                      /// a completed struct set aside while a re-DECLARATION of the same name parses
+    var shadowedFuncType = undefined;                    /// ditto for a functype, which may be re-declared as long as the shapes agree
     var functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var switchStack = [];
     var noForward = false;
@@ -1294,13 +1295,18 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
      *  Named function-pointer types  (Impala 2 Step 3)          *
      * --------------------------------------------------------- */
 
+    /* A functype emits NOTHING - no symbol, no layout, not even a `; signature` row - so unlike a
+       struct definition (which owns its `.o.`/`.z.` constants) or a function (which owns a FUNC
+       label) there is no artifact for a second declaration to collide with. Re-declaring one is
+       therefore free PROVIDED the two agree, which is what lets a unit declare the functypes it uses
+       and still be imported alongside another unit that declares the same ones. Set the earlier one
+       aside and let endFuncType compare; emitting nothing also means gazl-validate never sees a
+       functype, so this is the only place the disagreement can be caught at all. */
     beginFuncType = function (name, sourceCode, sourceOffset) {
-        if (isFuncTypeAtom(name)) {
-            fail('Function type already defined: ' + name, sourceCode, sourceOffset, 'E440');
-        }
         if (isStructAtom(name)) {
             fail('Type name already used by a struct: ' + name, sourceCode, sourceOffset, 'E440');
         }
+        shadowedFuncType = (isFuncTypeAtom(name) ? functypes[name] : undefined);
         functypes[name] = { params: [], returnList: [], returnCount: 0,
                 returns: 'V', returnElem: undefined, returnStruct: undefined, returnWords: 0,
                 complete: false, sourceCode: sourceCode, sourceOffset: sourceOffset,
@@ -1651,7 +1657,19 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             ft.returns = 'V';
             ft.returnWords = 0;
         }
+        var held = shadowedFuncType;
+        shadowedFuncType = undefined;
+        if (held && funcTypeShape(name, ft) !== funcTypeShape(name, held)) {
+            fail('functype ' + name + ' is already declared with a different shape: "'
+                    + funcTypeShape(name, ft) + '" vs "' + funcTypeShape(name, held) + '"',
+                    ft.sourceCode, ft.sourceOffset, 'E440',
+                    'one functype cannot have two shapes - make the declarations identical, or keep only one');
+        }
     };
+
+    function funcTypeShape(name, ft) {
+        return name + '(' + renderParamTypes(ft.params) + ') -> ' + renderReturnType(ft);
+    }
 
     /* Does a concrete function signature satisfy a named funcptr type? Compares arity, each
        parameter's type (+ struct / pointer-element), and the return shape. */

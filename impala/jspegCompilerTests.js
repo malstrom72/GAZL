@@ -1774,6 +1774,25 @@ const typedPointerCases = [
 			"extern struct S { int a }"].join("\n"),
 		expectError: null,
 	},
+	/* A functype emits no symbol at all, so a second identical declaration collides with nothing -
+	   which is what lets a unit declare the functypes it uses and still be imported next to a unit
+	   that declares the same ones. Disagreeing ones are still an error, and this is the only place
+	   that can be caught, since nothing about a functype reaches gazl-validate. */
+	{
+		label: "a functype may be re-declared identically",
+		source: ["functype Cb(int a) returns int r", "functype Cb(int a) returns int r"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a functype re-declared with a different shape is an error",
+		source: ["functype Cb(int a) returns int r", "functype Cb(float a) returns int r"].join("\n"),
+		expectError: "already declared with a different shape",
+	},
+	{
+		label: "a functype still cannot take a struct's name",
+		source: ["struct Cb { int a }", "functype Cb(int a)"].join("\n"),
+		expectError: "already used by a struct",
+	},
 ];
 
 /* Step 5: `export` rides the signature metadata as a role prefix, so --dead-strip can find roots. */

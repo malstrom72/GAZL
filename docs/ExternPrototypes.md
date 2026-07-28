@@ -41,7 +41,7 @@ That is the whole model, and it now holds uniformly:
 | struct | `extern struct S` (bodyless) | `extern struct S { int a }` | **E438** | E410 |
 | global | *(none - a type is always stated)* | `extern int g` | E402 | E401 |
 | array | `extern array a` (untyped) | `extern int array a` | E203 | E401 |
-| functype | *(no `extern functype`)* | - | - | E440 |
+| functype | *(no `extern functype`)* | the declaration itself | **E440** | *(re-declaring is legal if it matches)* |
 
 Notes on the corners:
 
@@ -55,9 +55,12 @@ Notes on the corners:
   wildcard model as a name-only prototype. An untyped `array` element type is likewise opaque.
 - Globals have no opaque form because `extern g` cannot be written without a type; that is a gap only
   in the sense that there is nothing to be opaque *about*.
-- `functype` has no extern form at all, and correctly so: it is a compile-time type with no runtime
-  symbol and no host-owned layout, so there is nothing to declare across a linkage boundary. Sharing
-  one means importing the unit that declares it.
+- `functype` has no extern form, and needs none: a functype **emits nothing** - no symbol, no layout,
+  not even a `; signature` row - so there is no artifact for a second declaration to collide with, and
+  the declaration is simply allowed to repeat as long as the shapes match. That is the difference from
+  a `struct`, whose definition owns real `.o.`/`.z.` constants and so must be unique with any second
+  mention spelled `extern`. Emitting nothing also means gazl-validate never sees a functype, so the
+  compiler is the *only* place a disagreement can be caught.
 
 This matters under `import` for the reason E437 and E438 both exist: the builder compiles the whole
 closure as one unit, so a hand-copied `extern` and the real definition land in the same compilation.
