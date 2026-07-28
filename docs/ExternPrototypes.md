@@ -27,15 +27,40 @@ Related: an `extern struct` now emits `; signature extern struct Name { field : 
 gazl-validate checks it against the layout constants a host supplies (`.o.Name.field` / `.z.Name`), so a
 drifted or conflicting host layout is a build failure.
 
-The same assert-nothing / must-agree split applies to structs (**E438**), because the same question is
-being asked. A **bodyless** `extern struct Name` is the analogue of a name-only extern prototype: an
-opaque handle claiming no layout, so it does not collide with a definition of that name and simply
-leaves it standing. A **bodied** one is a claim, so where the closure also defines that struct the two
-are compared field-by-field and a mismatch is an error, in either declaration order; the definition is
-authoritative and keeps ownership of the emitted layout. Two real `struct` definitions of one name still
-collide as before (**E410**). This matters under `import` for the same reason E437 does: the builder
-compiles the whole closure as one unit, so a hand-copied `extern struct` and the real definition land in
-the same compilation.
+## One rule for every kind of extern
+
+> **At most one DEFINITION of a name; any number of `extern` declarations, provided every claim agrees
+> - with the definition where the closure has one, and otherwise with each other. A declaration that
+> asserts nothing never collides with anything.** Order never matters.
+
+That is the whole model, and it now holds uniformly:
+
+| Kind | Opaque form (asserts nothing) | Claim form | Mismatch | Two definitions |
+|---|---|---|---|---|
+| function | `extern function f;` | `extern function f(int a) returns int r` | **E437** | E401 |
+| struct | `extern struct S` (bodyless) | `extern struct S { int a }` | **E438** | E410 |
+| global | *(none - a type is always stated)* | `extern int g` | E402 | E401 |
+| array | `extern array a` (untyped) | `extern int array a` | E203 | E401 |
+| functype | *(no `extern functype`)* | - | - | E440 |
+
+Notes on the corners:
+
+- The mismatch checks fire **declaration-against-declaration too**, not only against a definition -
+  with nothing to arbitrate, two disagreeing claims are both suspect, and the compiler generates calls
+  and field offsets from whichever it happened to keep. Message says so: *"extern declarations of f
+  disagree"* rather than blaming a definition that does not exist.
+- Where a definition IS present it is authoritative: it wins, it keeps ownership of the emitted struct
+  layout, and a re-declaration publishes no second `; signature` row.
+- An `extern array` states no extent by design (`E430`), so extents are never compared - the same
+  wildcard model as a name-only prototype. An untyped `array` element type is likewise opaque.
+- Globals have no opaque form because `extern g` cannot be written without a type; that is a gap only
+  in the sense that there is nothing to be opaque *about*.
+- `functype` has no extern form at all, and correctly so: it is a compile-time type with no runtime
+  symbol and no host-owned layout, so there is nothing to declare across a linkage boundary. Sharing
+  one means importing the unit that declares it.
+
+This matters under `import` for the reason E437 and E438 both exist: the builder compiles the whole
+closure as one unit, so a hand-copied `extern` and the real definition land in the same compilation.
 
 The original note follows, as the design record.
 

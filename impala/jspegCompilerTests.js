@@ -1756,6 +1756,24 @@ const typedPointerCases = [
 		source: ["struct S { int a }", "struct S { int a }"].join("\n"),
 		expectError: "Struct already defined",
 	},
+	/* With no definition anywhere the declarations still have to agree with EACH OTHER - nothing
+	   else can arbitrate, and the compiler generates calls and field offsets from whichever it kept. */
+	{
+		label: "two extern prototypes that disagree are an error even with no definition",
+		source: ["extern function f(int a)", "extern function f(float a)"].join("\n"),
+		expectError: "extern declarations of f disagree",
+	},
+	{
+		label: "two extern struct bodies that disagree are an error even with no definition",
+		source: ["extern struct S { int a }", "extern struct S { float a }"].join("\n"),
+		expectError: "extern declarations of struct S disagree",
+	},
+	{
+		label: "identical extern declarations are fine, however many",
+		source: ["extern function f(int a)", "extern function f(int a)", "extern struct S { int a }",
+			"extern struct S { int a }"].join("\n"),
+		expectError: null,
+	},
 ];
 
 /* Step 5: `export` rides the signature metadata as a role prefix, so --dead-strip can find roots. */

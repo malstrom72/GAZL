@@ -551,7 +551,7 @@
                     sourceCode, sourceOffset, 'E401',
                     'each function needs a unique name across the whole import closure');
         }
-        $$parser.checkExternAgreement(name, entry, entry.signature, sourceCode, sourceOffset);
+        $$parser.checkExternAgreement(name, entry.externProto, entry.signature, true, sourceCode, sourceOffset);
 
         /* An `inline function` has no out-of-line copy, so it publishes neither a FUNC label nor a
            signature row - there is nothing for a caller or the validator to link against. */
@@ -575,24 +575,30 @@
                          comment);
     };
 
-    /* An `extern` prototype and a definition are two claims about one name, and they must agree.
-       This does NOT police linkage: a prototype for a name the closure never defines is a promise
-       only gazl-validate can settle, and a name-only extern records no prototype and asserts
-       nothing. It fires exactly when the compiler is holding both claims itself - which an import
-       closure makes routine, since the builder compiles the whole closure as one unit. Names are
-       not compared, only types, matching functionSignaturesCompatible() in tools/gazl-validate.js. */
-    $$parser.checkExternAgreement = function (name, entry, defined, sourceCode, sourceOffset) {
-        var proto = (entry ? entry.externProto : undefined);
-        if (!proto || !defined) {
+    /* One name may have at most one DEFINITION but any number of `extern` declarations, so long as
+       every claim agrees: with the definition if the closure has one, and otherwise with each other.
+       This does NOT police linkage - a prototype for a name nothing defines is a promise only
+       gazl-validate can settle, and a name-only extern records no prototype and so asserts nothing.
+       It fires exactly when the compiler is holding two claims itself, which an import closure makes
+       routine since the builder compiles the whole closure as one unit. Names are not compared, only
+       types, matching functionSignaturesCompatible() in tools/gazl-validate.js. */
+    $$parser.checkExternAgreement = function (name, claim, prior, priorIsDefinition, sourceCode, sourceOffset) {
+        if (!claim || !prior) {
             return;
         }
         function shape(sig) { return name + '(' + renderParamTypes(sig.params) + ') -> ' + renderReturnType(sig); }
-        if (shape(proto) !== shape(defined)) {
+        if (shape(claim) === shape(prior)) {
+            return;
+        }
+        if (priorIsDefinition) {
             $$parser.fail('extern declaration of ' + name + ' does not match its definition: declared "'
-                    + shape(proto) + '" but definition provides "' + shape(defined) + '"',
+                    + shape(claim) + '" but definition provides "' + shape(prior) + '"',
                     sourceCode, sourceOffset, 'E437',
                     'the definition is authoritative - correct the prototype, or drop it and let the definition speak');
         }
+        $$parser.fail('extern declarations of ' + name + ' disagree: "' + shape(claim) + '" vs "'
+                + shape(prior) + '"', sourceCode, sourceOffset, 'E437',
+                'one function cannot have two shapes - make the prototypes identical, or keep only one');
     };
 
     function signatureRoleForSection(section) {
@@ -1727,6 +1733,12 @@
             /* fail() bakes its message, and bake() EVALS anything between braces (that is how
                `{$type1}` interpolation works), so a struct row's `{ a : int }` must not go in raw. */
             function shown(row) { return replace(replace(replace(row, 'signature ', ''), '{', '('), '}', ')'); }
+            if (parsed.extern && held.extern) {                   /* no definition in sight - two claims, both wrong until they agree */
+                $$parser.fail('extern declarations of struct ' + name + ' disagree: "' + shown(parsedRow)
+                        + '" vs "' + shown(heldRow) + '"',
+                        parsed.sourceCode, parsed.sourceOffset, 'E438',
+                        'one struct cannot have two layouts - make the declarations identical, or keep only one');
+            }
             $$parser.fail('extern declaration of struct ' + name + ' does not match its definition: declared "'
                     + shown(parsed.extern ? parsedRow : heldRow) + '" but definition provides "'
                     + shown(parsed.extern ? heldRow : parsedRow) + '"',
@@ -3716,10 +3728,12 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                             placeholderSignature.returnWords = (_pr !== undefined ? 1 : 0);
                                                                             placeholderSignature.returnResolved = true;
                                                                             if (entry) {
+                                                                                var _defined = (entry.kind === 'FUNC');
+                                                                                $$parser.checkExternAgreement($$.name, placeholderSignature,
+                                                                                        (_defined ? entry.signature : entry.externProto), _defined, $$s, $at);
                                                                                 entry.externProto = placeholderSignature;
-                                                                                if (entry.kind === 'FUNC') {   /* already defined here - the definition wins, the prototype is checked */
-                                                                                    $$parser.checkExternAgreement($$.name, entry, entry.signature, $$s, $at);
-                                                                                } else {                       /* publish it so call sites check against it */
+                                                                                if (!_defined) {               /* a definition here outranks it; otherwise publish
+                                                                                                                  it so call sites check against it */
                                                                                     entry.signature.params         = _pp;
                                                                                     entry.signature.returns        = placeholderSignature.returns;
                                                                                     entry.signature.returnElem     = placeholderSignature.returnElem;
