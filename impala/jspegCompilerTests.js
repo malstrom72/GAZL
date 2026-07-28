@@ -1726,6 +1726,36 @@ const typedPointerCases = [
 		source: ["extern function f(int a) returns int r", "function f(int b) returns int q { q = b; }"].join("\n"),
 		expectError: null,
 	},
+	{
+		label: "a bodyless extern struct claims no layout, so it cannot collide with a definition",
+		source: ["struct S { int a }", "extern struct S", "function main() locals S s { s.a = 1; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a bodyless extern struct before the definition is likewise silent",
+		source: ["extern struct S", "struct S { int a }", "function main() locals S s { s.a = 1; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "an extern struct body agreeing with the definition is silent",
+		source: ["struct S { int a; float b }", "extern struct S { int a; float b }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "an extern struct body contradicting the definition is an error",
+		source: ["struct S { int a; float b }", "extern struct S { int a; int b }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "an extern struct body contradicting a LATER definition is the same error",
+		source: ["extern struct S { int a; int b }", "struct S { int a; float b }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "two real struct definitions still collide",
+		source: ["struct S { int a }", "struct S { int a }"].join("\n"),
+		expectError: "Struct already defined",
+	},
 ];
 
 /* Step 5: `export` rides the signature metadata as a role prefix, so --dead-strip can find roots. */

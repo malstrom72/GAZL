@@ -27,6 +27,16 @@ Related: an `extern struct` now emits `; signature extern struct Name { field : 
 gazl-validate checks it against the layout constants a host supplies (`.o.Name.field` / `.z.Name`), so a
 drifted or conflicting host layout is a build failure.
 
+The same assert-nothing / must-agree split applies to structs (**E438**), because the same question is
+being asked. A **bodyless** `extern struct Name` is the analogue of a name-only extern prototype: an
+opaque handle claiming no layout, so it does not collide with a definition of that name and simply
+leaves it standing. A **bodied** one is a claim, so where the closure also defines that struct the two
+are compared field-by-field and a mismatch is an error, in either declaration order; the definition is
+authoritative and keeps ownership of the emitted layout. Two real `struct` definitions of one name still
+collide as before (**E410**). This matters under `import` for the same reason E437 does: the builder
+compiles the whole closure as one unit, so a hand-copied `extern struct` and the real definition land in
+the same compilation.
+
 The original note follows, as the design record.
 
 ## The trigger

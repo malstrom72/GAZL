@@ -154,6 +154,7 @@
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
     var $$parser.structs = {};                                    /// name -> { fields:[{name,type,elem,offset,words}], words, complete }
     var $$parser.openStruct = undefined;                          /// struct whose field list is being parsed (its fields own their extent scratches)
+    var $$parser.shadowedStruct = undefined;                      /// a completed struct set aside while a re-DECLARATION of the same name parses
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
@@ -1696,12 +1697,46 @@
 
     $$parser.beginStruct = function (name, sourceCode, sourceOffset) {
         var prev = $$parser.structs[name];
-        if (prev && prev.complete) {
+        if (prev && prev.complete && !prev.extern) {
             $$parser.fail('Struct already defined: ' + name, sourceCode, sourceOffset, 'E410');
         }
+        /* A completed `extern struct` is a CLAIM about a layout, not a second definition of it, so
+           set it aside and let endStruct compare the two rather than rejecting the definition it
+           describes. The definition wins either way. */
+        $$parser.shadowedStruct = (prev && prev.complete ? prev : undefined);
         $$parser.structs[name] = { fields: [], words: 0, complete: false,
                 sourceCode: sourceCode, sourceOffset: sourceOffset };
         $$parser.openStruct = name;
+    };
+
+    /* An `extern struct` declaration and a `struct` definition of one name are two claims about one
+       layout, and must agree - the E437 rule, for types. Whichever arrived second was parsed into a
+       fresh entry so the first stayed intact; the DEFINITION is authoritative in either order.
+       Returns true when the entry just parsed was the DECLARATION, i.e. it owns no layout to emit. */
+    $$parser.checkStructAgreement = function (name) {
+        var held = $$parser.shadowedStruct;
+        if (!held) {
+            return false;
+        }
+        $$parser.shadowedStruct = undefined;
+        var parsed = $$parser.structs[name];
+        var parsedRow = $$parser.structSignatureRow(name, false);
+        $$parser.structs[name] = held;
+        var heldRow = $$parser.structSignatureRow(name, false);
+        if (parsedRow !== heldRow) {
+            /* fail() bakes its message, and bake() EVALS anything between braces (that is how
+               `{$type1}` interpolation works), so a struct row's `{ a : int }` must not go in raw. */
+            function shown(row) { return replace(replace(replace(row, 'signature ', ''), '{', '('), '}', ')'); }
+            $$parser.fail('extern declaration of struct ' + name + ' does not match its definition: declared "'
+                    + shown(parsed.extern ? parsedRow : heldRow) + '" but definition provides "'
+                    + shown(parsed.extern ? heldRow : parsedRow) + '"',
+                    parsed.sourceCode, parsed.sourceOffset, 'E438',
+                    'the definition is authoritative - correct the declaration, or drop it and let the definition speak');
+        }
+        if (!parsed.extern) {
+            $$parser.structs[name] = parsed;                      /* a definition outranks the declaration it fulfils */
+        }
+        return !!parsed.extern;
     };
 
     /* A field extent that needs folding lives in a `<X>` scratch that the layout block reads LATER, so
@@ -1711,7 +1746,10 @@
     $$parser.endStruct = function (name) {
         var s = $$parser.structs[name];
         s.complete = true;
-        $$parser.emitStructLayout(name);
+        var redeclared = $$parser.checkStructAgreement(name);
+        if (!redeclared) {
+            $$parser.emitStructLayout(name);
+        }
         var held = {};
         for (var i = 0; i < s.fields.length; ++i) {
             var size = '' + s.fields[i].size;
@@ -1721,6 +1759,7 @@
             $$parser.returnBack(s.fields[i].size);
         }
         $$parser.openStruct = undefined;
+        return redeclared;
     };
 
     /* Emit a struct's layout as GAZL compile-time constants: a rolling `<a>` accumulator that
@@ -1778,12 +1817,15 @@
     /* `extern struct Name { fields }`: host-owned layout. Impala knows the interface (field
        names + types) and emits symbolic `.o.Name.field` / `.z.Name` references, but does NOT
        emit the layout - the host supplies those constants at load. See docs/StructLayoutConstants.md. */
+    /* Never rejects: the body has not been parsed yet, so it is not yet known whether this
+       declaration asserts anything at all. A BODYLESS `extern struct N` is the struct analogue of a
+       name-only `extern function f` - an opaque handle making no layout claim - so it must not
+       collide with a definition the closure already has; ExternDecl simply puts that definition
+       back. A bodied one IS a claim, parsed alongside the definition and compared by endStruct. */
     $$parser.beginExternStruct = function (name, sourceCode, sourceOffset) {
         var prev = $$parser.structs[name];
-        if (prev && prev.complete) {
-            $$parser.fail('Struct already defined: ' + name, sourceCode, sourceOffset, 'E410');
-        }
-        if (!prev) {
+        $$parser.shadowedStruct = (prev && prev.complete ? prev : undefined);
+        if (!prev || prev.complete) {
             $$parser.structs[name] = { fields: [], words: 0, complete: false,
                     sourceCode: sourceCode, sourceOffset: sourceOffset };
         }
@@ -3559,13 +3601,16 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                      }
                         ( ';' _ )?
                       )*
-                      '}' _                                           {   $$parser.endStruct($sname);
-                                                                          /* Declare the host-owned interface so gazl-validate can check the layout
+                      '}' _                                           {   /* Declare the host-owned interface so gazl-validate can check the layout
                                                                              the host supplies (.o.Name.field / .z.Name) against what Impala assumed,
-                                                                             the way extern globals and function signatures are already checked. */
-                                                                          emitStandaloneSignatureComment(
-                                                                              $$parser.structSignatureRow(
-                                                                                  $sname, true, $$parser.sourceName, $$s, $$i));
+                                                                             the way extern globals and function signatures are already checked. A
+                                                                             re-declaration of a struct DEFINED here describes no host layout, so it
+                                                                             publishes no row - the definition already published the real one. */
+                                                                          if (!$$parser.endStruct($sname)) {
+                                                                              emitStandaloneSignatureComment(
+                                                                                  $$parser.structSignatureRow(
+                                                                                      $sname, true, $$parser.sourceName, $$s, $$i));
+                                                                          }
                                                                       }
                     )?
                 /   (   FUNCTION                                      { $$.type  = 'U';  $$.scope = 'functions'; }
@@ -3605,7 +3650,13 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                      }
                 /   VarDecl
                 )                                                     {
-                                                                        if ($$.structFwd) return true;
+                                                                        if ($$.structFwd) {
+                                                                            if ($$parser.shadowedStruct) {   /* bodyless: claims no layout, so it cannot conflict */
+                                                                                $$parser.structs[$sname] = $$parser.shadowedStruct;
+                                                                                $$parser.shadowedStruct = undefined;
+                                                                            }
+                                                                            return true;
+                                                                        }
                                                                          $$parser.declare(
                                                                              undefined,                 // no section for extern
                                                                              $$.scope,
