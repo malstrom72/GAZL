@@ -102,5 +102,13 @@ if (otherRootError === null || otherRootError.indexOf('E403') < 0) {
 	fail('odd.impala as root should still fail with E403 (single-pass cannot forward-reference across '
 			+ 'the cycle). If collect mode landed, make this a positive build - got: ' + otherRootError);
 }
+// ...and while it does fail, it must fail LEGIBLY: blaming the root unit on a line number that only
+// indexes the concatenation sent people looking in the wrong file.
+if (otherRootError.indexOf('even.impala:') !== 0) {
+	fail('cycle error must name the unit the text came from, not the root: ' + otherRootError);
+}
+if (otherRootError.indexOf('isOdd is defined later, at odd.impala:') < 0) {
+	fail('cycle error should point at the definition it cannot see yet: ' + otherRootError);
+}
 
 console.log('import build + dead-strip + cycle tests passed.');

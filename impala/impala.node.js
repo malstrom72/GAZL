@@ -96,13 +96,20 @@ function resolveImportClosure(rootPath) {
 }
 
 // Resolve + concatenate the import closure of `rootPath` into one compilation-ready source.
+// `spans` records where each unit's text landed, so a diagnostic can name the file it came from
+// instead of the root unit and a line number that only means something in the concatenation.
 function concatenateClosure(rootPath) {
 	const units = resolveImportClosure(rootPath);
 	const rootDir = path.dirname(path.resolve(rootPath));
-	const combined = units
-		.map((u) => `// ==== unit: ${path.relative(rootDir, u.path).split(path.sep).join('/')} ====\n${u.source}`)
-		.join('\n');
-	return { units, combined };
+	const spans = [];
+	let combined = '';
+	for (const unit of units) {
+		const name = path.relative(rootDir, unit.path).split(path.sep).join('/');
+		combined += `${combined.length > 0 ? '\n' : ''}// ==== unit: ${name} ====\n`;
+		spans.push({ name, start: combined.length, end: combined.length + unit.source.length });
+		combined += unit.source;
+	}
+	return { units, combined, spans };
 }
 
 // --- Step 5: --dead-strip -----------------------------------------------------
@@ -205,12 +212,13 @@ function deadStrip(gazl) {
 
 // Build a linked .gazl program from a root unit. Exposed for tests.
 function buildProgram(rootPath, options = {}) {
-	const { combined, units } = concatenateClosure(rootPath);
+	const { combined, units, spans } = concatenateClosure(rootPath);
 	let output = compileWithJsImpala(combined, {
 		randomId: options.randomId,
 		retabulate: true,
 		trailingNewline: true,
 		sourceName: rootPath,
+		units: spans,
 		legacy: options.legacy,
 	});
 	if (options.deadStrip) {

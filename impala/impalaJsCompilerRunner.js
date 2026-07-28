@@ -100,11 +100,61 @@ function renderErrorContext(lineText, pointerOffset) {
 	};
 }
 
+// An `impala build` compiles the whole import closure as ONE concatenated source, so a raw line
+// number indexes the concatenation and the file name is always the root unit - which points at the
+// wrong file, on the wrong line, for everything past the first unit. `options.units` (spans handed
+// over by the builder) maps an offset back to the unit that owns it.
+function locateInUnit(source, options, index) {
+	const spans = (options && options.units) || [];
+	for (const span of spans) {
+		if (index >= span.start && index <= span.end) {
+			return { name: span.name, line: source.slice(span.start, index).split(LINE_BREAK_PATTERN).length };
+		}
+	}
+	return undefined;
+}
+
+// "Undeclared identifier: f" reads as a lie when `f` is defined further down - the name is right
+// there in the file. It is the single-pass compiler: a name must be declared before it is USED, and
+// across an import closure "before" means "in an earlier unit", which no ordering can give both
+// halves of a cycle. Say where the definition actually is and what unblocks it.
+const FORWARD_REF_PATTERN = /^(?:Undeclared identifier: |Unknown type )(\w+)$/;
+
+function forwardReferenceHint(source, options, index, message) {
+	const matched = FORWARD_REF_PATTERN.exec(message);
+	if (!matched) {
+		return undefined;
+	}
+	const name = matched[1];
+	const ahead = source.slice(index).search(new RegExp(
+		"^[ \\t]*(?:export[ \\t]+)?(?:(?:inline[ \\t]+)?(?:function|struct|functype)[ \\t]+" + name + "\\b"
+			+ "|(?:global|readonly|temporary)[ \\t]+[^\\n]*\\b" + name + "\\b)", "m"));
+	if (ahead < 0) {
+		return undefined;                     // genuinely undeclared, not merely declared too late
+	}
+	const at = index + ahead;
+	const where = locateInUnit(source, options, at);
+	const site = (where ? `${where.name}:${where.line}` : `line ${getLineInfo(source, at).line}`);
+	// A function or global can be forward-declared; a TYPE cannot - `extern struct` declares a
+	// host-owned layout, a different thing entirely - so it has to be defined earlier, full stop.
+	const remedy = (message.indexOf("Unknown type") === 0
+		? "a type cannot be forward-declared, so its unit has to be compiled first - break the import"
+			+ " cycle so the defining unit is a plain dependency"
+		: `add a forward \`extern\` for ${name} above this point`);
+	return `${name} is defined later, at ${site} - this compiler is single-pass, so a name must be`
+		+ ` declared before it is used; ${remedy}`
+		+ (options && options.units ? ' (import cycles: see docs/Impala2.md "Cycles")' : "");
+}
+
 function formatDiagnostic(source, options, rawIndex, severity, code, message, hint) {
 	const { index, line, lineStart, lineEnd, lineText } = getLineInfo(source, rawIndex);
 	const context = renderErrorContext(lineText, index - lineStart);
-	const label = options && options.sourceName ? options.sourceName : "<source>";
-	const position = `${label}:${line}:${context.column}`;
+	const where = locateInUnit(source, options, index);
+	const label = where ? where.name : (options && options.sourceName ? options.sourceName : "<source>");
+	const position = `${label}:${where ? where.line : line}:${context.column}`;
+	if (!hint) {
+		hint = forwardReferenceHint(source, options, index, message);
+	}
 	const codeText = code ? `[${code}]` : "";
 	let text = `${position}: ${severity}${codeText}: ${message}`;
 	if (context.displayLine.length > 0 || lineEnd > lineStart) {

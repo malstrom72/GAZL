@@ -881,6 +881,11 @@ exactly once; an `import` naming an already-visited file is skipped. The self-im
 > `tests/impala/sources/importcycle/` (mutually recursive `isEven`/`isOdd`), both halves pinned in
 > `impala/importBuildTests.js`.
 >
+> The diagnostic names the unit the text actually came from (multi-unit builds used to report the
+> root unit and a line number that only indexed the concatenation) and adds a note pointing at the
+> definition it cannot see yet, with the remedy that applies - a forward `extern` for a function or
+> global, and for a type, that there isn't one short of breaking the cycle.
+>
 > The working-today workaround is a hand-written forward `extern` in whichever unit is emitted
 > first - the boilerplate this feature exists to kill, so treat it as a stopgap, not the model.
 > Since E437 it is at least checked against the real definition rather than silently trusted
