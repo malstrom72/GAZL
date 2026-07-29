@@ -175,6 +175,7 @@ var impalaNuxCompilerOptions = {
 		impalaNuxLines[impalaNuxLines.length] = line;
 	},
 	sourceName: impalaNuxSourceName,
+	units: impalaNuxSpans,
 	warn: function (message, offset, code, hint) {
 		print("; " + impalaNuxDiagnostic(impalaNuxSource, offset, "warning", code, message));
 		if (hint) {

@@ -246,6 +246,9 @@ function compileWithJsImpala(source, options = {}) {
 	if (sourceName !== undefined) {
 		compilerOptions.sourceName = sourceName;
 	}
+	if (options.units !== undefined) {
+		compilerOptions.units = options.units;   // origins name the unit that owns the text, not the root
+	}
 	if (legacy) {
 		compilerOptions.legacy = true;
 	}

@@ -145,6 +145,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     var dry            = false;
     var legacyMode     = (typeof _hostOptions !== 'undefined' && _hostOptions != null
             && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings
+    var units          = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
+            && _hostOptions.units) || undefined);               /// import-closure spans {name,start,end}[], for origins
 
     /* 2  make sure the buckets exist */
     var META_TO_GAZL   = {};
@@ -371,6 +373,23 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 : signatureReturnCategory(signature.returns, signature.returns !== undefined));
     }
 
+    /* Compiling an import closure means ONE concatenated source, so a raw offset gives a line that
+       indexes the concatenation and a name that is always the root unit - the wrong file, on the
+       wrong line, for everything past the first. The spans recorded by the closure walk map the
+       offset back to the unit that owns it. A lone unit is left exactly as it was: no name, no
+       shift, so a source that imports nothing keeps emitting the bytes it always did. */
+    function originUnit(offset) {                                 /* no local alias: `var units = units` rewrites to `var units = units` */
+        if (!units || units.length <= 1) {
+            return undefined;
+        }
+        for (var i = 0; i < units.length; ++i) {
+            if (offset >= units[i].start && offset <= units[i].end) {
+                return units[i];
+            }
+        }
+        return undefined;
+    }
+
     function computeOrigin(sourceName, sourceCode, sourceOffset) {
         if (!sourceCode || sourceOffset == null) {
             return undefined;
@@ -384,9 +403,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             offset = sourceCode.length;
         }
 
+        var unit = originUnit(offset);
         var line = 1;
         var column = 1;
-        for (var idx = 0; idx < offset; ++idx) {
+        for (var idx = (unit ? unit.start : 0); idx < offset; ++idx) {
             var ch = sourceCode.charAt(idx);
             if (ch === '\r') {
                 if (idx + 1 < sourceCode.length && sourceCode.charAt(idx + 1) === '\n') {
@@ -405,8 +425,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
 
         var origin = line + ':' + column;
-        if (sourceName) {
-            origin = sourceName + ':' + origin;
+        var name = (unit ? unit.name : sourceName);
+        if (name) {
+            origin = name + ':' + origin;
         }
         return origin;
     }
