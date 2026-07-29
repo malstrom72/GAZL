@@ -75,10 +75,10 @@ if (canonicalizeNewlines(strippedGold) !== canonicalizeNewlines(stripped)) {
 // `extern`. The two assertions below pin that asymmetry: the SAME sources build or fail purely by
 // which unit is named as root.
 //
-// WHEN COLLECT MODE LANDS (impala/Impala2Slices.md:155-163, docs/Impala2.md "Cycles") the LAST
-// assertion is the one that flips - `odd.impala` as root must build too, and odd.impala's
-// `extern function isEven` becomes redundant rather than required. Turn it into a positive
-// build-and-compare then, and delete this note.
+// This is the 2.0 RULE, not a known gap: collect mode is deferred to Impala 3.0
+// (docs/ParkedFeatures.md). If it ever lands the LAST assertion is the one that flips - `odd.impala`
+// as root must build too, and odd.impala's `extern function isEven` becomes redundant rather than
+// required. Turn it into a positive build-and-compare then, and delete this note.
 const cycleDir = path.join(repoRoot, 'tests', 'impala', 'sources', 'importcycle');
 const cycleClosure = resolveImportClosure(path.join(cycleDir, 'even.impala')).map((u) => path.basename(u.path));
 if (cycleClosure.length !== 2 || cycleClosure[0] !== 'odd.impala' || cycleClosure[1] !== 'even.impala') {

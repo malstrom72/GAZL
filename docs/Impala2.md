@@ -13,11 +13,13 @@
 > `sizeof`, whole-struct assignment and single named returns are all unaffected. See
 > [`docs/ParkedFeatures.md`](ParkedFeatures.md) for what is parked, where, and why.
 >
-> The per-step sections below are the design records. **The one substantive gap is import cycles**: they
-> are gathered correctly but only resolve in one direction, because the declaration pre-pass ("collect
-> mode") was designed and not built - see [Cycles](#cycles) for the current behaviour and
-> [Next: collect mode](#next-collect-mode-the-declaration-pre-pass) for the plan. Smaller items left:
-> `.gazl` blob imports, richer parse errors.
+> The per-step sections below are the design records. **Import cycles resolve in one direction only**: a
+> backwards cross-cycle reference needs a forward `extern`, because the declaration pre-pass ("collect
+> mode") was designed and then DEFERRED TO IMPALA 3.0 (2026-07-29) rather than held up 2.0 - `extern`
+> covers the function and global cases and adding the pre-pass later only removes the need for it, so
+> this is a relaxation waiting to happen, not a compatibility question. See [Cycles](#cycles) for the
+> rule and [Deferred to 3.0: collect mode](#deferred-to-30-collect-mode-the-declaration-pre-pass) for the
+> design. Smaller items left: `.gazl` blob imports, richer parse errors.
 
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),
@@ -83,9 +85,9 @@ The features are ordered by dependency, not ambition:
    per function since 1.0, and Impala never exposed it. Implemented, then PARKED for Impala 3.0
    (see [`docs/ParkedFeatures.md`](ParkedFeatures.md)); design record in
    [Step 4: Multiple return values](#step-4-multiple-return-values-parked).
-5. **Import** - sharing typed interfaces between units without textual copying. Implemented except
-   for cycle resolution; design in [Step 5: Import](#step-5-import-implemented-except-cycles), gap and
-   plan in [Next: collect mode](#next-collect-mode-the-declaration-pre-pass).
+5. **Import** - sharing typed interfaces between units without textual copying. Implemented; full cycle
+   resolution deferred to 3.0. Design in [Step 5: Import](#step-5-import-implemented-except-cycles), rule
+   and design in [Deferred to 3.0: collect mode](#deferred-to-30-collect-mode-the-declaration-pre-pass).
 
 Cross-cutting decisions - strict expressions, the rejection of
 [compound assignment](#compound-assignment---rejected), and the [diagnostic format](#diagnostics) -
@@ -773,7 +775,7 @@ reachable from an export. VM-verified in `tests/impala/sources/import/` and `tes
 The one deviation from the design below: the builder concatenates and compiles the sources rather than
 emitting each unit separately. Two consequences - `.gazl` (precompiled-blob) imports are not yet
 supported, and import cycles only half-resolve; see [Cycles](#cycles) and
-[Next: collect mode](#next-collect-mode-the-declaration-pre-pass).)*
+[Deferred to 3.0: collect mode](#deferred-to-30-collect-mode-the-declaration-pre-pass).)*
 
 ### The problem
 
@@ -854,18 +856,23 @@ from the definitions it describes. Moves the copy, doesn't kill it.
 
 ### Cycles
 
-Import cycles are **legal** - though as of today only half-resolved; read the status box below
-before relying on this section. Mutual dependency between units is a supported pattern today
-(concatenation is order-independent), and mutually-dependent units are exactly the ones with the
-most shared interface surface - erroring on cycles would push them back to hand-written externs,
-the boilerplate this feature exists to kill.
+Import cycles are **legal to write, and resolve in one direction** - the backwards reference needs a
+forward `extern`. Read the rule box below before relying on this section. Cycles are not rejected
+because mutual dependency is a supported pattern (concatenation is order-independent) and
+mutually-dependent units are exactly the ones with the most shared interface surface - erroring on
+them would push those units back to hand-written externs wholesale, the boilerplate this feature
+exists to kill. Requiring one `extern` at the cycle edge keeps the rest of that saving.
 
 The closure *walk* delivers on this: the builder keeps a **visited set keyed by canonical path**,
 seeded with the root unit. Each file in the import closure is parsed exactly once and emitted
 exactly once; an `import` naming an already-visited file is skipped. The self-import-via-cycle case
 (B importing the root) needs no special rule - the seeding handles it. Diamonds dedupe the same way.
 
-> #### Status: cycles GATHER but do not fully RESOLVE (as of 2026-07-28)
+> #### The 2.0 rule: cycles GATHER but do not fully RESOLVE
+>
+> Settled 2026-07-29: this is Impala 2.0 behaviour, not a temporary state. The pre-pass that would
+> lift it is deferred to 3.0 (below), because `extern` covers the cases that matter and lifting it
+> later breaks nothing.
 >
 > The design assumed name resolution runs after the whole closure is gathered. **It does not.**
 > The shipped builder concatenates the closure dependency-first and hands it to the
@@ -886,29 +893,35 @@ exactly once; an `import` naming an already-visited file is skipped. The self-im
 > definition it cannot see yet, with the remedy that applies - a forward `extern` for a function or
 > global, and for a type, that there isn't one short of breaking the cycle.
 >
-> The working-today workaround is a hand-written forward `extern` in whichever unit is emitted
-> first - the boilerplate this feature exists to kill, so treat it as a stopgap, not the model.
-> Since E437 it is at least checked against the real definition rather than silently trusted
-> (`docs/ExternPrototypes.md`).
+> **The 2.0 answer is a hand-written forward `extern`** in whichever unit is emitted first. It is
+> the one place this feature does not remove boilerplate, but it is boilerplate 1.0 users already
+> write, and since E437 it is checked against the real definition rather than silently trusted
+> (`docs/ExternPrototypes.md`). A cross-cycle *struct type* is the one case with no workaround
+> short of breaking the cycle.
 >
-> **Where this is heading: collect mode.** See "Next: collect mode" below.
+> **Where this is heading: collect mode, in 3.0.** See "Deferred to 3.0: collect mode" below. An
+> `extern` written today stays valid and keeps compiling once it lands - the pre-pass makes it
+> unnecessary, never wrong.
 
 What *does* error is definitional cycles in content - which are errors within a single file too;
 imports merely let them span files:
 
 | Cycle kind | Verdict |
 |---|---|
-| Import cycle (A↔B, any depth) | gathering: **legal** - visited-set memoization, each file parsed once. Resolution: **only one direction today** - the other needs a forward `extern` until collect mode lands |
+| Import cycle (A↔B, any depth) | gathering: **legal** - visited-set memoization, each file parsed once. Resolution: **one direction in 2.0** - the other needs a forward `extern`; lifted in 3.0 by collect mode |
 | Same file reached via two paths | legal - canonical-path dedup |
 | Same symbol from two different files | error - flat namespace, duplicate declaration |
 | Const *value* cycle across the closure | error, diagnostic cites the dependency chain |
 | **By-value** struct containment cycle (`struct A { B b }` / `struct B { A a }`) | error (infinite size) - the mutual generalization of the self-reference rule |
 | By-pointer struct cycle | legal, exactly like self-reference |
 
-### Next: collect mode (the declaration pre-pass)
+### Deferred to 3.0: collect mode (the declaration pre-pass)
 
-This is the one piece of Step 5 that was designed and not built, and it is what makes cycles work
-as promised above. The full plan is `impala/Impala2Slices.md:143-190`; the essentials:
+This is the one piece of Step 5 that was designed and not built, and it is what would let a cycle
+resolve in both directions. **Deferred to Impala 3.0 on 2026-07-29** (`docs/ParkedFeatures.md`):
+`extern` covers the function and global cases, and landing the pre-pass later only *removes* the
+need for those externs, so waiting costs nothing a 2.0 program has to unlearn. The design stands as
+written - the full plan is `impala/Impala2Slices.md:143-190`; the essentials:
 
 **It is NOT gated on the JSPEG rework.** `Impala2Slices.md:155-163` splits two-phase compilation in
 two, and only the cheap half is needed here:

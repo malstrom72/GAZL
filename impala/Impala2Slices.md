@@ -151,8 +151,14 @@ the two fix-it notes from the spec.
 > across a cycle fails (`E403` for a function, `E413` for a struct type), and which direction fails
 > depends only on which unit is named as root. Fixture: `tests/impala/sources/importcycle/`, pinned
 > in `impala/importBuildTests.js`. Current behaviour and the route out are written up in
-> `docs/Impala2.md` under "Cycles" and "Next: collect mode"; the architecture in this section is
-> still the plan of record for that work.
+> `docs/Impala2.md` under "Cycles" and "Deferred to 3.0: collect mode"; the architecture in this
+> section is still the plan of record for that work.
+>
+> **Collect mode DEFERRED to Impala 3.0 (2026-07-29)** - see `docs/ParkedFeatures.md`. Half-resolved
+> cycles are the shipped 2.0 rule, not a pending fix: a backwards cross-cycle reference takes a
+> forward `extern`, which covers functions and globals (a cross-cycle struct type does not, and has
+> no workaround short of breaking the cycle). Landing the pre-pass later makes those externs
+> unnecessary without making them wrong, so the deferral raises no compatibility question.
 
 **Division of labor: the compiler gains a collect-only mode; the builder owns the closure.**
 
@@ -171,8 +177,8 @@ moves:
 
 - *Declaration-level two-phase* (gather decls across the closure, then resolve names): cheap,
   bounded, unlocks cycles. Delivered by collect-mode + deferred resolution.
-- *Body-level two-phase* (AST of expressions, resolve/emit later): the JSPEG 2 rework; cycles do
-  **not** need it; still deferred.
+- *Body-level two-phase* (AST of expressions, resolve/emit later): an `impala.jspeg` action rewrite
+  (`docs/JSPEGFuture.md` Problem 1), not a JSPEG change; cycles do **not** need it; still deferred.
 
 - Grammar gains only: `import "path"` and the `export` declaration modifier (`export` emitted as a
   role prefix in the `; signature` rows; validator's `classifyRole` extended to accept it).
@@ -212,10 +218,12 @@ moves:
 4. **2.5** - by-value params/returns on the window convention.
 5. **Step 3** - `functype` (independent, low risk).
 6. **Step 5** - builder + import + `export` + `--dead-strip`, with the cycle amendment.
-7. **Collect mode** - the one piece of Step 5 still outstanding, and the only thing standing between
-   the cycle amendment and reality. Precondition: finish thinning the fat inline actions into
+7. **Collect mode** - ~~the one piece of Step 5 still outstanding~~ **DEFERRED to Impala 3.0**
+   (2026-07-29, `docs/ParkedFeatures.md`); half-resolved cycles are the 2.0 rule and `extern` is the
+   answer. Kept here as the plan of record. Precondition: finish thinning the fat inline actions into
    `$$parser` (see the architecture note above, and `impala/RefactorPlan.md` for the adjacent
-   return-style cleanup on the same surface). Not gated on the JSPEG 2 AST rework - the split is in
+   return-style cleanup on the same surface) - worth doing on its own, since it also shrinks what a
+   later "JSPEG 2" would have to migrate. Not gated on the body-level AST rework - the split is in
    "declaration-level vs body-level two-phase" above. Done when
    `tests/impala/sources/importcycle/odd.impala` builds as a root with its `extern` deleted.
 

@@ -5,8 +5,8 @@
 import "even.impala"
 
 /*  With even.impala as the root this unit is emitted FIRST, so `isEven` is not declared yet and the
-	single-pass compiler cannot see it. Hence this forward declaration - exactly the boilerplate
-	`import` exists to kill, and exactly what collect mode would make unnecessary. It is checked
+	single-pass compiler cannot see it. Hence this forward declaration - the 2.0 answer at a cycle
+	edge, and exactly what collect mode would make unnecessary (deferred to 3.0). It is checked
 	against the real definition (E437), so it cannot silently drift. */
 extern function isEven(int n) returns int r
 
