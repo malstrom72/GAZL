@@ -5,6 +5,7 @@ const vm = require("vm");
 
 const { wrapCompilerSource, applyImpalaHardening } = require("./updateJSPEG.js");
 const { compileWithJsImpala } = require("./impalaJsCompilerRunner");
+const { haveGazlCmd, assembleOnly, NEEDS_HOST } = require("./gazlAssembleCheck");
 
 const dir = __dirname;
 const IMPALA_ENCODING = "latin1";
@@ -668,6 +669,30 @@ function runParityFixture(fixture) {
 		process.exit(1);
 	}
 	console.log(`impala.jspeg compiler matches ${fixture.name} fixture output`);
+	if (!fixture.expectedDir) {
+		assembleFixture(fixture.name, expectedPath);
+	}
+}
+
+/* The `impala/testdata` fixtures used to get `; signature` validation and nothing else, so a label
+   this compiler emitted but never defined - a duplicate `.sN#K` from two identical `case` values,
+   say - would sail through on the shapes only testdata covers (return contracts, extern assignment).
+   Same gate the goldens get, same rule: a host or companion-unit symbol is out of scope here, a
+   module-local `.` name is ours. Fixtures carrying an `expectedDir` are goldens, which runJspegTests
+   already assembles - with its own exemption list - so they are skipped rather than checked twice. */
+function assembleFixture(name, gazlPath) {
+	if (!haveGazlCmd()) {
+		return;
+	}
+	const verdict = assembleOnly(gazlPath);
+	if (verdict === NEEDS_HOST) {
+		console.log(`${name} compiled but NOT link-checked (needs a host)`);
+	} else if (verdict !== undefined) {
+		console.error(`${name} fixture ${verdict}`);
+		process.exit(1);
+	} else {
+		console.log(`${name} fixture assembles`);
+	}
 }
 
 function resolveValidatorFixture(name) {
