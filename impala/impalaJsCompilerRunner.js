@@ -4,6 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const Module = require("module");
 
+const { locateInUnit: locateOffsetInUnit } = require("./impalaImportClosure");
+
 const OUTPUT_TAB_WIDTH = 4;
 const INPUT_TAB_STOPS = [0, 20, 32, 64];
 const LINE_BREAK_PATTERN = /\r\n|\r|\n/;
@@ -100,18 +102,12 @@ function renderErrorContext(lineText, pointerOffset) {
 	};
 }
 
-// An `impala build` compiles the whole import closure as ONE concatenated source, so a raw line
-// number indexes the concatenation and the file name is always the root unit - which points at the
-// wrong file, on the wrong line, for everything past the first unit. `options.units` (spans handed
-// over by the builder) maps an offset back to the unit that owns it.
+// A compile of an import closure sees ONE concatenated source, so a raw line number indexes the
+// concatenation and the file name is always the root unit - the wrong file, on the wrong line, for
+// everything past the first unit. `options.units` (the spans the closure walk handed over) maps an
+// offset back to the unit that owns it; the NuXJS front end resolves diagnostics the same way.
 function locateInUnit(source, options, index) {
-	const spans = (options && options.units) || [];
-	for (const span of spans) {
-		if (index >= span.start && index <= span.end) {
-			return { name: span.name, line: source.slice(span.start, index).split(LINE_BREAK_PATTERN).length };
-		}
-	}
-	return undefined;
+	return locateOffsetInUnit((options && options.units) || [], source, index);
 }
 
 // "Undeclared identifier: f" reads as a lie when `f` is defined further down - the name is right

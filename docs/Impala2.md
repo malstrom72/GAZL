@@ -4,7 +4,7 @@
 > typed function pointers, import) plus the strict-expression rules and coded diagnostics are
 > implemented in the JSPEG compiler: VM-verified against fixtures in `tests/impala/sources/`, held to a
 > byte-identical golden gate, and fuzzed (`impala/fuzzImpala.js`). `--legacy` gates the strictness rules;
-> `impala build` drives import-as-linking with `export` and `--dead-strip`.
+> `impala compile` drives import-as-linking with `export` and `--dead-strip`.
 >
 > **Step 4 (multiple return values), destructuring, and passing/returning STRUCTS BY VALUE were
 > implemented and then deliberately parked for Impala 3.0** - the work is preserved on the
@@ -767,7 +767,7 @@ scalars now, or as a named struct once Step 2 lands.
 
 ## Step 5: Import (implemented, except cycles)
 
-*(Implemented: `import "path"` + `impala build root.impala` walks the closure and compiles the
+*(Implemented: `import "path"` + `impala compile root.impala` walks the closure and compiles the
 concatenated units in one pass - cross-unit structs, struct/multi-value returns, and functypes all
 resolve with no header drift (visited-set dedups diamonds and breaks cycles). `export` marks
 host-visible symbols in the `; signature` metadata, and `--dead-strip` drops any FUNC/data block not
@@ -812,7 +812,7 @@ list is redundancy with failure modes: a forgotten unit, a stale artifact, a wro
 the build is driven from a root unit:
 
 ```
-impala build main.impala → main.gazl        (the complete, linked program)
+impala compile main.impala → main.gazl      (the complete, linked program)
 ```
 
 The toolchain walks the import closure (visited-set, cycles legal), compiles each unit exactly
@@ -973,7 +973,7 @@ The hazard is "reachable from *what*?": Impala has no in-language `main`, and ho
 points *by name* (`findFunction("process")`), so naive reachability would strip every firmware
 entry point. The resolution is a **compile-time flag, off by default** - mirroring `--legacy`:
 
-- **Default `impala build` trims nothing.** Every unit in the closure is emitted whole, exactly
+- **By default `impala compile` trims nothing.** Every unit in the closure is emitted whole, exactly
   like manual concatenation but tool-performed. An unmodified 1.0 firmware builds to a working
   program with no annotations. **100% backward compatible** - no positional "root is special" rule,
   no behavior that depends on which file is the build root.

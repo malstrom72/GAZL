@@ -182,7 +182,7 @@ moves:
 
 - Grammar gains only: `import "path"` and the `export` declaration modifier (`export` emitted as a
   role prefix in the `; signature` rows; validator's `classifyRole` extended to accept it).
-- The **builder** (`impala build` in `impala.node.js`): (1) **gather** - walk the import closure
+- The **builder** (the closure walk behind `impala compile`): (1) **gather** - walk the import closure
   (visited-set by canonical path), parse every unit in collect mode, merge declarations into one
   closure-wide interface with names still symbolic; (2) **resolve** - resolve all type/name
   references against the merged interface (by-value containment cycles caught here as infinite

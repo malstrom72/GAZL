@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { buildProgram, resolveImportClosure, deadStrip } = require('./impala.node.js');
+const { compileProgram, resolveImportClosure, deadStrip } = require('./impala.node.js');
 
 const repoRoot = path.resolve(__dirname, '..');
 const rootUnit = path.join(repoRoot, 'tests', 'impala', 'sources', 'import', 'main.impala');
@@ -32,11 +32,11 @@ if (closure.length !== 2 || closure[0] !== 'mathlib.impala' || closure[1] !== 'm
 	fail('import closure order wrong: ' + JSON.stringify(closure));
 }
 
-const { output } = buildProgram(rootUnit, { randomId: RANDOM_ID });
+const { output } = compileProgram(rootUnit, { randomId: RANDOM_ID });
 
 // --dead-strip: exported main reaches `used`; `unused` must be dropped. Strip the ALREADY built
 // program rather than resolving and compiling the same closure a second time.
-const unstripped = buildProgram(stripRoot, { randomId: RANDOM_ID }).output;
+const unstripped = compileProgram(stripRoot, { randomId: RANDOM_ID }).output;
 const stripped = deadStrip(unstripped);
 
 if (makeGold) {
@@ -85,7 +85,7 @@ if (cycleClosure.length !== 2 || cycleClosure[0] !== 'odd.impala' || cycleClosur
 	fail('import cycle closure wrong (want each file once, dependency-first): ' + JSON.stringify(cycleClosure));
 }
 
-const cycleOutput = buildProgram(path.join(cycleDir, 'even.impala'), { randomId: RANDOM_ID }).output;
+const cycleOutput = compileProgram(path.join(cycleDir, 'even.impala'), { randomId: RANDOM_ID }).output;
 for (const needle of ['isEven:', 'isOdd:', 'main:']) {
 	if (cycleOutput.indexOf(needle) < 0) {
 		fail('cycle build missing expected symbol: ' + needle);
@@ -94,7 +94,7 @@ for (const needle of ['isEven:', 'isOdd:', 'main:']) {
 
 let otherRootError = null;
 try {
-	buildProgram(path.join(cycleDir, 'odd.impala'), { randomId: RANDOM_ID });
+	compileProgram(path.join(cycleDir, 'odd.impala'), { randomId: RANDOM_ID });
 } catch (err) {
 	otherRootError = (err && err.message) || String(err);
 }

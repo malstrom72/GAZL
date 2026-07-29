@@ -12,6 +12,8 @@ All files live under `impala/`:
 - `impalaCompiler.js` - generated Impala compiler produced by JSPEG.
 - `impala.nuxjs.js` - NuXJS command-line wrapper used by the normal build.
 - `impala.node.js` - Node CLI for compiler development and tests.
+- `impalaImportClosure.js` - `import` closure walk, concatenation and `--dead-strip`, shared by
+  both front ends (written in the ES5 subset NuXJS accepts).
 - `impalaJsCompilerRunner.js` - Node adapter for loading `impalaCompiler.js` and
   formatting output.
 - `runJspegTests.js` - Impala parity runner (compares compiled output to golden `.gazl`).
@@ -32,7 +34,16 @@ node impala/impala.node.js compile path/to/source.impala path/to/output.gazl 42
 
 # From stdin to stdout
 cat path/to/source.impala | node impala/impala.node.js compile
+
+# Drop everything unreachable from an `export`
+node impala/impala.node.js compile --dead-strip path/to/root.impala out.gazl 0x4d2
 ```
+
+`compile` resolves the source's `import` closure and emits one linked program; a source that
+imports nothing is a closure of one and compiles to exactly what it always did. Import paths are
+relative to the importing file, or to the current directory when the source comes from stdin.
+The same closure walk runs under NuXJS - `impala.nuxjs.js` and `impala.node.js` share
+`impalaImportClosure.js` and produce identical bytes.
 
 Run a compiled program through the GAZL VM (requires `output/GAZLCmd`, built via `build.sh`):
 

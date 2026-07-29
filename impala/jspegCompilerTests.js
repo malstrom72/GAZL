@@ -438,6 +438,7 @@ function testStringLabelFloatLiteralCollision() {
 
 function testNuXJSCommandCompilerScript(compilerSource) {
 	const scriptSource = fs.readFileSync(path.join(dir, "impala.nuxjs.js"), "utf8");
+	const closureSource = fs.readFileSync(path.join(dir, "impalaImportClosure.js"), "utf8");
 	const sourcePath = "smoke.impala";
 	const sourceText = fs.readFileSync(path.join(dir, "testdata", "smoke.impala"), IMPALA_ENCODING);
 
@@ -459,6 +460,12 @@ function testNuXJSCommandCompilerScript(compilerSource) {
 				throw new Error(`Unexpected read path for ${label}: ${file}`);
 			},
 			load: (file) => {
+				// The script also load()s its closure helper, from the real file - it is staged
+				// alongside impala.nuxjs.js and is what makes `import` work on the NuXJS path.
+				if (/impalaImportClosure\.js$/.test(file)) {
+					new vm.Script(closureSource, { filename: file }).runInContext(context);
+					return;
+				}
 				if (!acceptedCompilerPaths[file]) {
 					throw new Error(`Unexpected load path for ${label}: ${file}`);
 				}
