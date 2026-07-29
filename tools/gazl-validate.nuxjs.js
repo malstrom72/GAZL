@@ -1,5 +1,8 @@
 /* GAZL signature validator. Runs under NuXJS, NOT node - `node tools/gazl-validate.nuxjs.js` dies on
-   `print is not defined`. Invoke it through tools/gazl-validate.sh or .cmd.
+   `printErr is not defined`. Invoke it through tools/gazl-validate.sh or .cmd.
+
+   Diagnostics go to stderr via printErr, so stdout stays empty and a caller can pipe it without
+   filtering. The test harnesses assert on stderr for that reason.
 
    This is NOT an assembler. It cross-checks `; signature` metadata between units and is built to run on
    modules whose externs are deliberately unresolved - exactly what the assembler refuses to load. The
@@ -12,7 +15,7 @@ for (var hostArgIndex = 1; arguments && hostArgIndex < arguments.length; ++hostA
 }
 
 function hostError(message) {
-	print("" + message);
+	printErr("" + message);
 }
 function hostRead(filePath) {
 	return read(filePath);

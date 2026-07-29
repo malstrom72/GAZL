@@ -724,7 +724,7 @@ function runValidatorCase(label, fixtureNames, expectedExitCode, expectedMessage
 		process.exit(1);
 	}
 
-	const validatorOutput = result.stdout || "";
+	const validatorOutput = result.stderr || "";
 	if (expectedMessageSubstring) {
 		if (!validatorOutput.includes(expectedMessageSubstring)) {
 			console.error(`gazl-validate output for ${label} did not include expected message: ${expectedMessageSubstring}`);

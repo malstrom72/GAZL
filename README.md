@@ -36,7 +36,8 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 - `src/` - C++ VM implementation
 - `impala/` - Impala compiler and demo sources
 - `tools/` - build/maintenance scripts
-- `externals/` - third-party code such as `NuXJS`
+- `externals/` - vendored code from separate repositories, currently just `NuXJS` (also BSD 2-Clause, also
+  Magnus Lidström - see [`externals/NuXJS/VENDOR.md`](externals/NuXJS/VENDOR.md) for the upstream pin)
 
 ### Getting Started
 
