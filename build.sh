@@ -38,3 +38,6 @@ bash tools/gazl-validate.sh \
 ./output/NuXJS output/impala.nuxjs.js \
 	impala/ImpalaDemo.impala output/ImpalaDemo.gazl 0x4d2 impala/ImpalaDemo.impala
 ./output/GAZLCmd output/ImpalaDemo.gazl main
+
+# ImpalaDemo imports nothing, so it cannot tell whether the closure walk survived staging.
+bash tools/run-nuxjs-impala-smoke.sh

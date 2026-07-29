@@ -55,3 +55,7 @@ output\NuXJS.exe output\impala.nuxjs.js ^
 IF ERRORLEVEL 1 EXIT /B 1
 output\GAZLCmd.exe output\ImpalaDemo.gazl main
 IF ERRORLEVEL 1 EXIT /B 1
+
+REM ImpalaDemo imports nothing, so it cannot tell whether the closure walk survived staging.
+CALL tools\run-nuxjs-impala-smoke.cmd
+IF ERRORLEVEL 1 EXIT /B 1
