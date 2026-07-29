@@ -127,22 +127,35 @@ while `subscriptStruct` folds `! MULi <A> #1 #.z.S`. On a `S pointer` into `bank
 `docs/Impala2.md:159-164` promises the opposite, and `docs/Impala.md:451` states `p[i]` is equivalent to
 `*(p + i)`. Either scale by `.z.T` or hard-error on arithmetic over a struct pointer.
 
-### C4. Shifts bind looser than `+`/`-`, and E101 does not catch it **[V]** — HIGH
+### C4. Shift-vs-additive precedence — INVESTIGATED, NOT A BUG **[V]**
 
-`x = a << n + 1` compiles silently as `a << (n + 1)`:
+Kept in the list because it looks like one, was reported as one, and cost a round trip to disprove.
+
+`x = a << n + 1` compiles as `a << (n + 1)`:
 
 ```gazl
 ADDi %0 $n #1      ; x = a << n + 1
 SHLi $x $a %0
 ```
 
-`BITWISE_OP` (`:5002`) lumps `<< >> >>>` in with `& ^ |` at one level below `AddSub`; `mixedBitwise` only
-fires when two *different* `BITWISE_OP`s meet, and an additive operand never trips it. This is the exact
-silent-C-divergence the strictness rule was built to prevent — and **both docs claim it cannot happen**
-(`docs/Impala.md:375`, `docs/Impala2.md:1044`: "Arithmetic-vs-bitwise actually agrees with C"). True for
-`& ^ |`; false for shifts, which C puts *above* `+`.
+**That is what C does too.** C ranks additive (level 4) *tighter* than shift (level 5), so `a << n + 1` is
+`a << (n + 1)` there as well. Verified on both sides: Impala prints 64 for `a = 8, n = 2`, and so do C and
+JS, which share the precedence table. `1 << 2 + 3 == 32` is a well-known C pitfall precisely because the
+language really does bind it that way.
 
-Fix shape: extend E101 to "a shift with an unparenthesized `AddSub` on either side".
+So `docs/Impala.md:375` and `docs/Impala2.md:1044` ("Arithmetic-vs-bitwise actually agrees with C") are
+**correct as written** - do not "fix" them.
+
+The whole picture, since it is easy to half-check and conclude wrongly: Impala puts `<< >> >>> & ^ |` at
+ONE level below `AddSub`; C spreads them across levels 5, 8, 9 and 10, all still below additive. The
+relationship *to arithmetic* is therefore identical. Where the two differ is *among themselves* - C reads
+`a | b & c` as `a | (b & c)` where Impala left-associates - and that is exactly what **E101** already
+rejects: any two DIFFERENT bitwise operators at one parenthesization level. A same-operator chain
+left-associates identically in both. On precedence Impala therefore either matches C or hard-errors, which
+is the design goal met rather than missed.
+
+Lesson worth keeping: the codegen above was verified, and the *conclusion drawn from it* was not. `[V]`
+on an observation does not transfer to the claim built on top of it.
 
 ### C5. `E403 Undeclared identifier` on a global that plainly exists **[V]** — HIGH FREQUENCY
 
@@ -363,11 +376,11 @@ Emit a generated-file banner from `updateJSPEG.js` into `impalaCompiler.js`. Ren
 Data-bearing fixture first, then the block extent and `collectRefs` fixes, then an assert that no `DATA` row
 is ever loose. Verify by revert.
 
-### Batch 2 - the silent divergences
+### Batch 2 - the silent divergence
 **2a** scale `+`, `-`-with-int and pointer difference by element size (see the decision above); fixtures
-walking a struct array by pointer vs by index, which must agree. **2b** `E103` for a shift with an
-unparenthesized `AddSub` operand, routed through `strictError` so `--legacy` lowers it - this is breaking
-for real 1.0 code (`x >> n - 1`) and must be gated exactly like E101/E102.
+walking a struct array by pointer vs by index, which must agree.
+
+**2b was dropped**: the reported shift-precedence divergence does not exist (see C4). Batch 2 is 2a only.
 
 ### Batch 3 - one diagnostics pass
 Duplicate `case`, `case` outside the range, `goto` to an undefined label, `readonly` array element write,
