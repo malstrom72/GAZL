@@ -136,6 +136,7 @@
     var $$parser.units          = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
             && _hostOptions.units) || undefined);               /// import-closure spans {name,start,end}[], for origins
     var $$parser.declOffset     = 0;                            /// offset of the declaration being parsed - see `root`
+    var $$parser.declSource     = '';                           /// its source text, so deferred checks can still render a caret
 
     /* 2  make sure the buckets exist */
     var $$parser.META_TO_GAZL   = {};
@@ -1393,7 +1394,8 @@
         }
         $$parser.fail('Passing a struct by value is not supported in Impala 2.0',
                 sourceCode, sourceOffset, 'E426',
-                'take it by pointer: ' + struct + ' pointer ' + pname);
+                'take it by pointer: ' + struct + ' pointer '
+                        + (pname !== undefined ? pname : struct.charAt(0).toLowerCase()));
     };
 
     $$parser.addFuncTypeParam = function (name, type, elem, struct, words, pname, sourceCode, sourceOffset) {
@@ -1476,7 +1478,7 @@
         var fn = $$parser.symbols.functions[name = name.substr(1)];
         if (fn !== undefined && fn.inline !== undefined) {
             $$parser.fail('Cannot take the address of the inline function ' + name,
-                    undefined, undefined, 'E435',
+                    $$parser.declSource, $$parser.declOffset, 'E435',
                     'an inline function has no out-of-line copy; drop `inline` to use it as a value');
         }
     };
@@ -3464,7 +3466,7 @@
 # origin taken there names the wrong line. Each declaration records where it STARTED instead;
 # every emit site reports `$$parser.declOffset`, error sites keep using the precise `$$i`.
 root        <-  _                                                     { $$parser.start(); }
-                ( { $$parser.declOffset = $$i; }
+                ( { $$parser.declOffset = $$i; $$parser.declSource = $$s; }
                   (ImportDecl / ExportDecl / FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
                   / GlobalDecl / ';'_) )* !.                          { $$parser.end(); }
 
@@ -3702,7 +3704,7 @@ inp:ArgsDecl ')'_
                                                                         }
                                                                 }
                                                                          iterate($inp, function (p) {
-                                                                             $$parser.rejectByValueStruct(p.type, p.struct, p.name, false, $s, $i);
+                                                                             $$parser.rejectByValueStruct(p.type, p.struct, p.name, false, $$s, $$i);
                                                                              {
                                                                                  $$parser.declare(
                                                                                      'INP?', 'locals',
@@ -3901,12 +3903,12 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                             var _pp = [];
                                                                             for (var _pi = 0; _pi < _proto.args.length; ++_pi) {
                                                                                 var _p = _proto.args[_pi];
-                                                                                $$parser.rejectByValueStruct(_p.type, _p.struct, _p.name, false, $s, $i);
+                                                                                $$parser.rejectByValueStruct(_p.type, _p.struct, _p.name, false, $$s, $$i);
                                                                                 _pp.push({ type: _p.type, elem: _p.elem, name: _p.name,
                                                                                            size: _p.size, struct: _p.struct, words: _p.words });
                                                                             }
                                                                             var _pr = _proto.ret;
-                                                                            if (_pr !== undefined) $$parser.rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, $s, $i);
+                                                                            if (_pr !== undefined) $$parser.rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, $$s, $$i);
                                                                             placeholderSignature.params      = _pp;
                                                                             placeholderSignature.returns     = (_pr !== undefined ? _pr.type : 'V');
                                                                             placeholderSignature.returnElem  = (_pr !== undefined ? _pr.elem : undefined);
@@ -4618,7 +4620,8 @@ Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        if (meta.type === 'V') {
                                                            $$parser.typeError(
                                                                'Invalid type ({$type1})',
-                                                               $$s, $$i, meta.type
+                                                               $$s, $$i, meta.type, undefined, 'E406',
+                                                               'a function with no `returns` clause produces no value'
                                                            );
                                                        }
                                                        if ($$.types) {
@@ -4969,7 +4972,8 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                       (','_ CaseExpr)*
                     / DEFAULT _                     {
                                                             if ($progress === 'gotDefault') {
-                                                                $$parser.fail('Default case already defined', undefined, undefined, 'E409');
+                                                                $$parser.fail('Default case already defined', $$s, $$i, 'E409',
+                                                                        'a switch has at most one `default` arm');
                                                             } else if ($progress !== undefined) {
                                                                 $$parser.emit('-->', undefined, $switchExit, undefined, undefined);
                                                             }

@@ -226,6 +226,11 @@ function expectCompileOutcome(group, label, source, expectError) {
 	} else {
 		assert(observed !== null && observed.includes(expectError),
 			`${group}: ${label} did not raise "${expectError}"${observed === null ? "" : "\n" + observed}`);
+		// The message alone is not the diagnostic. Three doors carried the right text while passing a
+		// bogus source position, so they rendered with no code, no line and no caret - and every test
+		// here still passed. Require the rendered shape, not just the wording.
+		assert(/^[^\n]*:\d+:\d+: error\[E\d+\]: /m.test(observed),
+			`${group}: ${label} raised an unrendered diagnostic (no file:line:col or error code)\n${observed}`);
 	}
 }
 
