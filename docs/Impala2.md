@@ -215,10 +215,13 @@ A cast names a type using the same grammar, so it extends naturally:
 
 ```impala
 p = (int pointer) raw          // reinterpret raw words as a pointer to int
-h = (funcptr array) table      // ... and (Filter pointer) once structs exist
+q = (Filter pointer) raw       // a struct type is a type name like any other
 ```
 
 `(pointer)` and `(int)` continue to mean exactly what they mean in 1.0 (the zero-modifier cases).
+
+**`array` is not a cast modifier.** `pointer` is the only one, so `(funcptr array) table` is `E001` -
+a cast never produces an array type. Cast to a pointer and index that instead.
 
 ### The typed-untyped boundary
 
@@ -427,7 +430,10 @@ outside float literals, so the member operator is collision-free too.
 *(decided)* Global and readonly struct variables (and struct arrays) take **nested-brace
 initializers**, one brace group per struct or array field, each value checked against the field's
 type. Values must be compile-time constants, as for 1.0 globals; trailing fields may be omitted
-and are zero-filled (the 1.0 array rule). Uninitialized struct storage is zero-filled.
+and are zero-filled (the 1.0 array rule). Uninitialized **global** struct storage is zero-filled - the
+globals and consts regions are cleared once at load (`src/GAZL.cpp:880`). **Locals are not.** A `call`
+only bumps the frame pointer, so an uninitialized struct local holds whatever the previous frame left
+there. Initialize struct locals before reading them.
 
 ```impala
 global Filter voice = { 0.5, 0.7, { 0.0, 0.0, 0.0, 0.0 }, 2, null }
@@ -470,8 +476,8 @@ it is a cost annotation with exact GAZL meaning):
 
 Combined with the existing markers, every memory access in an expression is visible in the source:
 
-> **Instruction count = marker count.** Each `global`, `*`, `->`, and `[]`-on-a-pointer costs one
-> load. Dots are free.
+> **Cost is predictable from the declared types.** Each `global`, `*`, `->`, and `[]`-on-a-pointer
+> costs one load. Dots are free.
 
 ```impala
 f.cutoff                    // 0 loads - direct operand
@@ -481,8 +487,16 @@ global gfp->cutoff          // 2 loads - one for the global pointer, one through
 head->next->next->value     // 3 loads - each hop visible
 ```
 
-(The one grandfathered exception: 1.0's `p[i]` PEEKs without a distinct marker vs `a[i]`'s local
-access - nailed by backward compatibility. New syntax is held to the stricter rule.)
+The principle used to be stated as "instruction count = marker count", which is no longer literally
+true and was reworded for that reason. Two exceptions:
+
+- **1.0's `p[i]`** PEEKs without a distinct marker, unlike `a[i]`'s local access - grandfathered by
+  backward compatibility. New syntax is held to the stricter rule.
+- **An `inline` call site carries no marker at all** yet expands to an arbitrary number of
+  instructions, and argument substitution deletes marshalling moves a normal call would emit. Counting
+  markers in the expression cannot tell you what a call costs. Inlining is opt-in per callee and
+  visible at the declaration, so the cost is still *predictable* - it is just not countable from the
+  call site. See "Inline functions" below.
 
 ### Verified lowering
 
@@ -578,23 +592,50 @@ working *for* us.
 
 ### Identity across concatenation
 
-Impala has no `#include`: sharing a struct between separately compiled units means **textually
-re-declaring it** in each source (the established copy-paste model). Nothing in the assembled
-output forces the copies to agree - types erase completely - so offset drift between two copies of
-a struct is silent runtime garbage unless the metadata channel catches it. It does:
+Impala has no `#include`, so a struct shared between separately compiled units has to be spelled in
+each source. **A struct is defined exactly once in a linked set** *(decided)* - in an import-driven
+build (Step 5) that is the closure; under manual concatenation it is the set of units you assemble
+together. Every other unit declares it `extern`.
 
-**In an import-driven build (Step 5), the rule is stricter and simpler: a struct is defined
-exactly once in the closure** *(decided)* - a second definition anywhere is an error, agreeing or
-not. Single source of truth, enforced. Everything below applies only to the **legacy
-manual-concatenation workflow**, where units may still carry textual copies:
+This is no longer just a rule, it is the only thing that links. The **1.0 copy-paste model - textually
+re-declaring the same `struct` in each unit - is dead**, because since Phase 2a every non-extern
+`struct` emits `! DEFi` layout rows:
+
+```gazl
+                    ! MOVi <a> #0            ; layout of struct Filter
+.o.Filter.cutoff:   ! DEFi #<a>
+                    ! ADDi <a> #<a> #1
+.o.Filter.mode:     ! DEFi #<a>
+                    ! ADDi <a> #<a> #1
+.z.Filter:          ! DEFi #<a>
+```
+
+Two units carrying byte-identical copies of that struct now fail to assemble at all, with
+`Symbol already defined: .o.Filter.cutoff`. Agreement is not the question; the second copy never gets
+that far.
+
+**The working pattern.** Exactly one unit writes the definition; the others write a **body-carrying
+`extern struct`**:
+
+```impala
+// filter.impala - the one definition
+struct Filter { float cutoff; int mode }
+
+// voice.impala - every other unit
+extern struct Filter { float cutoff; int mode }
+```
+
+The `extern` form emits no layout rows - only a `; signature extern struct Filter { cutoff : float,
+mode : int }` row plus symbolic references to `.o.Filter.*` and `.z.Filter` - so it cannot collide, and
+it adapts if the definition's layout changes. It is the same mechanism as a host-owned layout
+(`docs/StructLayoutConstants.md`), pointed at another Impala unit instead of at a host.
 
 **Identity is nominal, layout-verified.** The struct *name* is the identity. GAZL's namespace is
 already flat (function and global names collide across concatenated units today; struct names join
-that club), and every definition of the same struct name in a linked set must agree **exactly**:
-field count, field order, per-field name, per-field type, and array sizes. Any disagreement is a
-validator error citing both source locations. Field *names* are deliberately part of the match: in
-a copy-paste culture, a renamed field is drift evidence even when the layout still happens to
-agree.
+that club), and every `extern struct` declaration of a name must agree **exactly** with the definition
+and with every other declaration of it: field count, field order, per-field name, per-field type, and
+array sizes. Any disagreement is `E438`, citing both source locations. Field *names* are deliberately
+part of the match: a renamed field is drift evidence even when the layout still happens to agree.
 
 Structural identity (same layout ⇒ same type, names irrelevant) is rejected: a `Filter` and a
 `Voice` that both happen to be `{float, float, int}` must not silently interchange - accidental
@@ -656,7 +697,10 @@ global TickFn onTick = tickHandler  // checked: tickHandler must match TickFn's 
 - **Bare `funcptr fp` stays valid** - untyped signature, 1.0 behaviour, the escape hatch parallel
   to bare `pointer`/`array`. `funcptr` never introduces types; `functype` never declares
   variables.
-- Parameter names are optional (types-only allowed), mirroring `extern`/`function`.
+- Parameter names are optional (types-only allowed). This is the one place they are: `function` and
+  `extern function` require a name on **every parameter and on the return**, so `function f(int)` and
+  `function h(int a) returns int` are both `E001`. The three signature grammars do **not** mirror each
+  other, and a `functype` is the only types-only form.
 - Assignments and indirect calls through a named type are checked against its signature; the
   contract rides the existing `; signature` metadata channel for cross-unit checking. `nullfunc`
   remains assignable and testable.
@@ -1038,6 +1082,53 @@ ever needs to exist in the legacy validator path.
 
 ---
 
+## Inline functions (implemented)
+
+`inline` before `function` makes a function expand at each call site instead of being emitted once and
+called:
+
+```impala
+inline function clamp(int v, int lo, int hi) returns int r {
+	r = v;
+	if (r < lo) r = lo;
+	if (r > hi) r = hi;
+}
+```
+
+The declaration is the whole interface. There is **no out-of-line copy** - no `FUNC` label, no body, no
+`; signature` row - so the name exists only to expand. Every direct call is replaced by the captured
+body; there is no size budget, no heuristic and no fall back to a real call. A call that cannot expand
+is a diagnostic, never a silent reversion.
+
+This is why `inline` does not violate design principle #1 ("2.0 adds no hidden optimization passes"):
+it is an optimization pass, but it is opt-in by keyword and stated at the callee, not inferred. It is
+also the reason the cost model above is worded as *predictable* rather than *countable* - see "The cost
+model: dots are free".
+
+Arguments are **substituted** where that is safe (literals, transparent caller locals) and
+**materialized** otherwise; a global still pays its `PEEK`, and a computed argument keeps its window
+slot. Locals become caller transients, which is what forces the compile-time size rule below. Nesting
+is free - an inner inline is already expanded inside the outer's captured body - and an inline function
+imported from another unit works, because the closure concatenates the defining unit first.
+
+What is rejected:
+
+| Shape | Code |
+|---|---|
+| Direct recursion | `E432` an inline function cannot call itself |
+| `&f`, or using it as a funcptr value | `E435` cannot take the address of an inline function |
+| `export inline function` | `E434` an inline function cannot be exported |
+| Forward-declared, redeclared, or also declared `extern` | `E436` the inline function was already declared |
+| A local whose array extent is not a literal | `E433` needs a compile-time size for the local |
+| A call placed **before** the definition | `E403` undeclared identifier - there is no forward form to add |
+
+Struct locals and array locals are fine; only a *non-literal* extent is not. The design spec is
+[`docs/Inlining.md`](Inlining.md); the behavioural oracle is the fixture pair
+`tests/impala/sources/inlineEquivalence.impala` and `inlineEquivalenceCall.impala`, which must produce
+identical output inlined and not.
+
+---
+
 ## Strict expressions: mixed bitwise operators
 
 1.0 flattens `<< >> >>> & ^ |` into a single left-associative level; C ladders them internally
@@ -1130,7 +1221,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 - **First-error stop.** The compiler is single-pass with immediate code generation; error recovery
   in that architecture produces cascading nonsense. One correct error beats five speculative ones.
 - A structured `--json` output mode can be added later if tooling demands it; the line format is
-  the contract.
+  the contract. **It does not exist today** - the complete flag set is `--legacy` and `--dead-strip`.
 
 ### Code registry
 
@@ -1157,6 +1248,42 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E407 | constant expression expected |
 | E408 | invalid type for function call |
 | E409 | `default` case already defined |
+| E410 | struct already defined |
+| E411 | duplicate field in struct |
+| E412 | field has an incomplete struct type (define it, or use a pointer) |
+| E413 | unknown type |
+| E414 | an initialized struct-element array needs a literal size |
+| E415 | field access requires a struct or struct pointer |
+| E416 | wrong field operator (`.` on a pointer, or `->` on a value) |
+| E417 | struct has no such field |
+| E419 | `sizeof` of an incomplete struct |
+| E420 | whole-struct assignment needs a struct on both sides / struct type mismatch |
+| E421 | a struct value needs a brace initializer / struct type mismatch in a call argument |
+| E422 | malformed brace initializer (too many braces, type mismatch, or missing nesting) |
+| E423 | cannot access a field directly on a returned struct value |
+| E426 | passing a struct by value is not supported in Impala 2.0 |
+| E427 | returning a struct by value is not supported in Impala 2.0 |
+| E428 | multiple return values are not supported in Impala 2.0 |
+| E429 | destructuring assignment is not supported in Impala 2.0 |
+| E430 | an `extern struct` array field must not state a size |
+| E431 | array needs a size |
+| E432 | an inline function cannot call itself |
+| E433 | an inline function needs a compile-time size for a local |
+| E434 | an inline function cannot be exported |
+| E435 | cannot take the address of an inline function |
+| E436 | the inline function was already declared |
+| E437 | `extern` declaration of a function disagrees with its definition, or with another `extern` |
+| E438 | `extern struct` declarations disagree, or disagree with the definition |
+| E440 | type name already used by a struct / `functype` redeclared with a different shape |
+| E441 | function or value does not match the funcptr type |
+| E442 | malformed argument list |
+| E443 | duplicate `case` value |
+| E444 | `case` value outside the switch range |
+| E445 | `goto` to an undefined label |
+
+E418, E424, E425 and E439 are **not allocated to anything that fires**. E418/E424/E425 were reserved for
+extern-struct guards that were never needed once the features shipped (`docs/StructLayoutConstants.md`
+records the correction); they stay burned rather than reused, per "stable error codes, never reused".
 
 ---
 

@@ -70,8 +70,10 @@ today" except that one.
    the stride.
 4. **The diagnostics backlog** (`docs/CompileTimeHardening.md`) — five shapes the compiler accepts that the
    assembler then rejects, naming a compiler-minted GAZL symbol instead of the `.impala` line.
-5. **Implicit array→pointer decay is still live and it is decided to go.** Write `&a` today; it is correct
-   under both rules and costs nothing now. See section C for why this is the only forward-compat item.
+5. **Implicit array→pointer decay is still live and it is decided to go.** Write `&a[0]` today — it is
+   correct under both rules and costs nothing now. (An earlier draft of this line said `&a`; that is wrong,
+   `&a` is `E404 Invalid lvalue` today, which also means blocking decay is not a pure removal. Recorded in
+   `docs/ParkedFeatures.md`.) See section C for why this is the only forward-compat item.
 6. Numeric-only by-value call windows (E425 — currently a dead diagnostic), the mandatory reserved return
    transient (an ABI change), and dead-arm elimination after a compile-time branch. None reachable today.
 
@@ -202,7 +204,7 @@ largest DX defect: an agent iterating against diagnostics gets a caret and nothi
 | `return r;` / `break;` / `continue;` | not keywords → `E403 Undeclared identifier: return` |
 | `int i;` inside a body | no declaration statement; all locals in the `locals` clause |
 | `copy(dst, src, n)` | `copy(N from SRC to DST)` — count first, and src/dst reversed vs `memcpy` |
-| `abs(x)` used as a function | `abs`/`floor`/`itof`/`ftoi` are prefix operators; `y = abs x` |
+| `abs x - 1` read as `abs(x - 1)` | `abs`/`floor`/`itof`/`ftoi` are prefix operators, so this is `(abs x) - 1`. (`abs(x)` does compile — the parens are just a parenthesized expression — but `abs()` and `abs(x, 2)` do not.) |
 | `function f(int array a)` | array parameters do not exist (but `locals` accepts arrays — the two lists differ) |
 | `1e6` | `FloatLiteral` requires `DIGIT+ "." DIGIT+` first |
 | `&arrayName`, `&funcName` | `E404 Invalid lvalue`; write `a` / `&a[0]` and `fp = g` |
@@ -392,6 +394,22 @@ Deliberately **not** in this batch: definite-assignment on named returns, and `c
 checking. Both are real silent-garbage classes and both are decidable, but each is its own analysis rather
 than a symbol-table lookup. They deserve their own batch.
 
-### Batch 5 - docs
+### Batch 5 - docs (DONE)
 Everything in section C9 and D, plus the "which tool does what" box promoted out of
-`impala/gazlAssembleCheck.js:1-10`, the reworded cost principle, and a new `impala/README.md`.
+`impala/gazlAssembleCheck.js`, the reworded cost principle, and a new `impala/README.md`.
+
+Re-verifying the C9/D claims against the tree as it stood AFTER batches 1-4 changed four of them:
+
+- **`abs(x)` is legal** (C7 above, corrected). The operator-vs-function distinction is real but the
+  paren spelling the docs use is not an error.
+- **`docs/Impala.md`'s `p[i]` text was already correct** - there is no stale "not equivalent" note to
+  remove; Batch 2a made the existing sentence true.
+- **`&a` does not compile** (`E404`), so B5's "write `&a` today" was wrong advice - `&a[0]` is the
+  forward-proof spelling, and blocking decay is not a pure removal. Recorded in `ParkedFeatures.md`.
+- **The hardening E-codes map differently than assumed**: item 3 is E444 and item 5 is E443, not the
+  other way round. Item 1 is still open, and `&a[k]` out of bounds is unchecked by compiler *and*
+  assembler - a sharper edge than the doc's original claim about locals vs globals, which was false.
+
+Also found while checking: a named `const` upper bound defeats the E444 range check, E445's caret
+points one statement late, and `docs/StructLayoutConstants.md` understated its own design so badly
+that it claimed a per-level `ADDp` cost for what is actually assemble-time folding.

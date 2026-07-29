@@ -44,7 +44,9 @@ materialise everywhere else, rather than reach for a clever analysis.
   `impala compile` resolves the closure, so this needs no separate step.
 
 Rejected, each with its own diagnostic (section 7): recursion, taking the address, `export`, `extern`,
-forward declaration, and declaring an array or struct local.
+and forward declaration. Array and struct locals are **allowed** - only a local whose array extent is
+not a compile-time literal is rejected (E433), because locals become caller transients and must be
+sized. The fixtures pin both shapes as must-compile.
 
 
 ## 3. What gets captured

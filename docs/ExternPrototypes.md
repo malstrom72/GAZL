@@ -24,8 +24,20 @@ results come back through pointer out-parameters. The remaining motivation - arg
 extern calls - is what got implemented.
 
 Related: an `extern struct` now emits `; signature extern struct Name { field : type, ... }` and
-gazl-validate checks it against the layout constants a host supplies (`.o.Name.field` / `.z.Name`), so a
-drifted or conflicting host layout is a build failure.
+gazl-validate checks it against the layout constants a host supplies (`.o.Name.field` / `.z.Name`).
+
+Be precise about what that check is, because the name invites over-trust. The scanner records **field
+names only** - it reads the `.o.Name.field:` labels and checks that `.z.Name` exists. It never reads the
+`! DEFi` values and stores no types. So it fails the build on a **renamed or dropped field**, a **missing
+`.z.` size**, two `extern struct` declarations that **disagree with each other**, or a declaration that
+disagrees with a real `struct` definition in the scanned set. It does **not** catch a host layout that
+reorders fields, moves them to overlapping offsets, retypes them, or adds fields the interface never
+declared - all of those pass clean. And in this repo's actual host workflow the constants arrive as
+GAZLCmd command-line arguments at load, which gazl-validate never sees at all.
+
+Layout drift is caught by the fact that offsets are symbolic, not by this linter. The full cross-check of
+host layout against declared interface is still deferred - see
+[`StructLayoutConstants.md`](StructLayoutConstants.md).
 
 ## One rule for every kind of extern
 
@@ -51,8 +63,10 @@ Notes on the corners:
   disagree"* rather than blaming a definition that does not exist.
 - Where a definition IS present it is authoritative: it wins, it keeps ownership of the emitted struct
   layout, and a re-declaration publishes no second `; signature` row.
-- An `extern array` states no extent by design (`E430`), so extents are never compared - the same
-  wildcard model as a name-only prototype. An untyped `array` element type is likewise opaque.
+- An extern array field states no extent by design, so extents are never compared - the same wildcard
+  model as a name-only prototype. An untyped `array` element type is likewise opaque. (`E430` is
+  specifically the `extern struct` array *field* case; a standalone `extern int array aa[4]` is a plain
+  `E001` syntax error, not E430.)
 - Globals have no opaque form because `extern g` cannot be written without a type; that is a gap only
   in the sense that there is nothing to be opaque *about*.
 - `functype` has no extern form, and needs none. A functype **emits nothing** - no symbol, no layout,

@@ -31,6 +31,11 @@ Contains slices 1-2 of multidimensional array support: shape types, multidim sub
 walking by pointee size rather than stride-1), untyped multidim element typing, and a long design thread on
 array-dimension TYPE IDENTITY.
 
+Two documents live only on this branch and are deleted from `Impala2`: `docs/MultidimensionalArrays.md`
+(the design, including the array->pointer decay decision now restated below) and `docs/Impala2OpenItems.md`
+(a whole backlog). Read them there - `git show Impala2-multidim-arrays:docs/Impala2OpenItems.md` - rather
+than assuming those items were dropped.
+
 Parked because the type-identity question has no clean answer. An array's dimensions want to be part of its
 type so calls can be checked, but dimensions can be arbitrary expressions resolved by the assembler. That
 forces either syntactic (form-dependent, incomplete) identity or numeric-literal-only dimensions. The
@@ -141,6 +146,36 @@ change. Two things must be settled FIRST, and neither is part of the feature its
 identity (a constant evaluator is load-bearing here), and the expression-extent ordering trap in struct
 array fields. The 2026-07-26 re-evaluation above also stands: the "matrix as a struct field" shortcut does
 not reach `extern struct`, because a sizeless host-owned array field has no stride to index by.
+
+### Block implicit array->pointer decay
+
+**No park branch - this one was never built.** It is a decided *restriction*, not a parked feature, and it
+is the only item on this page a 2.0 user should act on today.
+
+    decided:  2026-07 (re-verified 2026-07-29, still unimplemented)
+    status:   decay is LIVE (`impala/impala.jspeg:1183`); `docs/Impala2.md:168` correctly says so
+    target:   Impala 3.0
+
+The rule when it lands: an aggregate never implicitly becomes a pointer. You take the address of an array
+explicitly, exactly as you already do for a struct; a bare `a` in a value context becomes an error.
+`--legacy` will keep 1.0-style decay so existing `foo(a)` code still builds.
+
+Two reasons, and note that neither is type safety. Since shape-carrying array pointer types were dropped
+with the multidim work above, an explicit address and a decayed `a` are both plain `int pointer`, so decay
+is no longer unsound - it is merely inconsistent:
+
+1. **One rule for all aggregates.** Structs already require the `&`. Arrays not requiring it is a wart a
+   reader has to memorize.
+2. **Forward compatibility.** Keeping bare `a` an error leaves the syntax free to mean something else later
+   (an array value, a copy, a bounds-carrying slice) without a breaking change.
+
+**What to do today: write `&a[0]`, not `&a`.** `&a[0]` compiles now, is unaffected by decay, and stays
+correct under the future rule, so it is the forward-proof spelling. `&a` is **not** - it is `E404 Invalid
+lvalue` today (verified 2026-07-29), because taking the address of a whole array was never made an lvalue
+form. That is the sting in this item: blocking decay is not a pure removal. `&a` has to become legal in the
+same change, or the rule would leave no way to spell what `foo(a)` spells now.
+
+`docs/ExternPrototypes.md` notes the interaction with extern prototypes that take arrays or pointers.
 
 ### Full import-cycle resolution (collect mode)
 

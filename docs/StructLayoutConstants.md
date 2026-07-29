@@ -194,19 +194,21 @@ field's extent borrow until `endStruct`, so two expression extents cannot fold i
 Every non-extern struct now emits its layout as GAZL compile-time constants: a rolling `<a>`
 accumulator (`! MOVi <a> #0`; `.o.Struct.field: ! DEFi #<a>`; `! ADDi <a> #<a> #<size>`; `.z.Struct:
 ! DEFi #<a>`), emitted at struct-definition time in dependency order (inner-before-outer, guaranteed by
-E412). Field access references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested struct and
-array fields MATERIALIZE the sub-object address into a pointer place at offset 0 (via `ADDp`/`ADRL`), so
-every access uses a SINGLE symbol - no runtime offset accumulation and no compile-time folding through
-the lazy-meta model. Allocation/copy SIZES (LOCA/PARA/GLOB/COPY/ADRL-hint) stay numeric; they equal the
-accumulator's value (same computation), so the program is consistent.
+E412). Field access references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested and array
+field offsets are ACCUMULATED AT ASSEMBLE TIME into a `<X>` scratch (`! ADDi <A> #.o.D.outer
+#.o.C.mid`, ...), so an access at any depth resolves to a single operand offset. Allocation/copy SIZES
+(LOCA/PARA/GLOB/COPY/ADRL-hint) stay numeric; they equal the accumulator's value (same computation), so
+the program is consistent.
 
 Verified: the playground demo (`Voice`/`Biquad`, nested access, whole-struct copy) renders the DEFi
 accumulator and runs; the dedicated fixture tests/impala/sources/structLayout.impala prints `4 2 0.75
 0.5`; all 10 struct fixtures + funcType + regTransientWindow produce byte-identical RUNTIME output to the
 pre-change baseline (old committed goldens run and matched), and their compiled goldens were regenerated
-to the symbolic form. Cost: nested/array access adds an `ADDp` (or `ADRL`+`ADDp`) per level vs the old
-single folded offset - a small runtime cost traded for symbolic, host-adaptable offsets; can be
-optimized later. Extern structs (below) reference the same symbols but emit no accumulator (host owns it).
+to the symbolic form. Cost: **none**. `d.outer.mid.inner.q`, four levels deep, emits three `! ADDi`
+assemble-time folds and one `MOVi` - the same single instruction a flat field costs. A dynamic index adds
+one `MULi` for the stride, which is what `a[i]` always paid. Symbolic, host-adaptable offsets turned out
+to be free rather than a trade. Extern structs (below) reference the same symbols but emit no accumulator
+(host owns it).
 
 ## IMPLEMENTED (extern struct v1)
 
@@ -216,15 +218,24 @@ NO layout - the host supplies those constants at load. Verified end to end on GA
 Impala GAZL ran correctly against two different host layouts (fields at different offsets) with no
 recompile. Normal structs are unchanged (byte-identical goldens); only the extern path is symbolic.
 
-v1 scope and guards:
-- Fields must be scalar or pointer (E418) - no by-value nested struct / array fields yet.
-- Access is via pointer (or a cast to `Name pointer`), read + write. Local/global by-value access also
-  emits symbolic offsets, but declaring an extern struct BY VALUE is rejected (E425, "use a pointer")
-  because by-value alloc/COPY sizing (`*.z.Name`) is not wired yet.
-- Nested field access into an extern struct (off != 0) is rejected (E424) - not yet supported.
+v1 scope and guards. **Corrected 2026-07-29** - this list described planned guards that were never
+needed, because the features they were guarding against all shipped:
 
-Deferred to v1.1: by-value extern instances (LOCA/PARA/GLOB/COPY using `*.z.Name`), nested extern
-fields, array/struct fields, and the gazl-validator cross-check of host layout vs declared interface.
+- ~~Fields must be scalar or pointer (E418)~~ - **wrong.** Array fields and by-value nested struct
+  fields both work (`tests/impala/sources/externStructArrayField.impala`, `externStructNested.impala`).
+- ~~Declaring an extern struct BY VALUE is rejected (E425)~~ - **wrong.** By-value extern instances work
+  (`externStructByValue.impala`). Access is via pointer, a cast to `Name pointer`, or by value; read and
+  write.
+- ~~Nested field access at a non-zero offset is rejected (E424)~~ - **wrong.** `f->origin.y` compiles and
+  runs.
+
+**E418, E424 and E425 have no fail site and never did** - grep `impala/impala.jspeg` and they appear only
+in comments. The one real restriction is generic rather than extern-specific: passing or returning ANY
+struct by value is `E426`/`E427` (see [`ParkedFeatures.md`](ParkedFeatures.md)). The dead codes stay
+burned, not reused.
+
+Still deferred: the gazl-validator cross-check of host layout vs declared interface (see
+[`ExternPrototypes.md`](ExternPrototypes.md) for what it does and does not catch today).
 Separately, Phase 2a (converting NORMAL structs to the same `.o.*`/`.z.*` scheme, for the conditional-
 field benefit) is still open - it is the larger ~15-site change with full golden regeneration.
 

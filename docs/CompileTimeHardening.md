@@ -7,11 +7,37 @@ Impala 2.0 turned a lot of silent runtime garbage into diagnostics (typed pointe
 expressions, extern/struct link checking). What follows is the remaining list, and how to implement it
 without breaking the thing that makes GAZL interesting.
 
-Read the list as a DIAGNOSTIC-QUALITY backlog, not a soundness one. Verified 2026-07-29 against
-`output/GAZLCmd.exe`: the assembler already rejects items 1, 2 and 5, and item 3 below `from`. What is
-wrong is WHERE the error points - at a symbol and a line in generated GAZL, not at the `.impala` line
-that caused it. Only item 3 above the range, and item 4, reach a running program. Check claims against
-the assembler; `tools/gazl-validate.sh` is a JS-side linter that passes every item here.
+Read the list as a DIAGNOSTIC-QUALITY backlog, not a soundness one. The assembler already rejected most of
+these; what was wrong is WHERE the error points - at a symbol and a line in generated GAZL, not at the
+`.impala` line that caused it. Check claims against the assembler, not against `tools/gazl-validate.sh`,
+which is a JS-side metadata linter that passes every item here.
+
+**Status 2026-07-29: items 2-5 are CLOSED**, by one diagnostics pass. Item 1 is the only one left.
+
+| Item | Status | Code |
+|---|---|---|
+| 1. Constant array index out of bounds | **OPEN** | - |
+| 2. Write to a readonly array element | closed | `E404` |
+| 3. Case label outside the switch range | closed | `E444` |
+| 4. `goto` to an undefined label | closed | `E445` |
+| 5. Duplicate `case` labels | closed | `E443` |
+
+Note the numbering is not in code order - E443 closes item 5 and E444 closes item 3, because the duplicate
+check and the range check landed in that order.
+
+Three things the pass did NOT reach, all verified 2026-07-29:
+
+- **`&a[k]` is unchecked at every level.** `p = &a[7]` on a 4-element array emits `ADRL $p $a:7 *0`, which
+  compiles, assembles and runs. Taking the address of an out-of-bounds element escapes both Impala and the
+  assembler, for locals and globals alike - so a constant-OOB pointer still reaches a running program. This
+  is the sharpest remaining edge of item 1.
+- **A named `const` defeats the range check.** `const int N = 3; switch (i == 0 to N) { case 8: ... }`
+  compiles AND assembles clean. `$$parser.constInt` returns `undefined` for `#N`, so rule 1 below correctly
+  declines to reject - but it means the escape hatch is not exotic (a host `! DEFi` or `.z.Struct`); an
+  ordinary named constant is enough. This is what the deferred assertion below is for.
+- **E445 points one statement late.** `goto nowhere;` on line 3 reports line 4, because the position is
+  consumed in the post-condition loop after the body is parsed. E443/E444 land on the `:` after the case
+  value, which is benign; this one names the wrong statement.
 
 
 ## The constraint: a constant is not always a number Impala knows
