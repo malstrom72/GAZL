@@ -1,0 +1,15 @@
+ ; Compiled with Impala version 1.0
+
+ ; signatures version=1
+ ; signature extern func tezt() -> unknown @ 5:21
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC		; signature func main() -> void @ 7:15
+ 								PARA *1
+ 					$p:			LOCp
+ 					$i:			LOCi
+ ;-----------------------------------------------------------------------------
+ 								CALL &tezt %0 *1				; expects tezt() -> unknown @ 10:22
+ 								PEEK $i %0 
+ 								RETU   							; }
+

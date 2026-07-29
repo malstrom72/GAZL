@@ -591,6 +591,12 @@ const parityFixtures = [
 		expected: "inputTest.expected.gazl",
 		options: { randomId: 42, sourceName: "inputTest.impala" },
 	},
+	{
+		name: "derefCallContract",
+		source: "derefCallContract.impala",
+		expected: "derefCallContract.expected.gazl",
+		options: { randomId: 42, sourceName: "derefCallContract.impala" },
+	},
 ];
 
 const legacySourceDir = path.join(dir, "..", "tests", "impala", "sources");
@@ -1653,6 +1659,51 @@ const typedPointerCases = [
 			"export global int array params[3]",
 			"export function process(int x) returns int r { r = x * GAIN; }",
 		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a void function called as a statement is fine",
+		source: ["function v() { }", "function main() { v(); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a void result cannot be assigned to an int",
+		source: ["function v() { }", "function main() locals int i { i = v(); }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
+	{
+		label: "a void result cannot be assigned to a float",
+		source: ["function v() { }", "function main() locals float f { f = v(); }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
+	{
+		label: "a void result cannot feed an operator",
+		source: ["function v() { }", "function main() locals int i { i = v() + 1; }"].join("\n"),
+		expectError: "Invalid types",
+	},
+	{
+		label: "a void result cannot be passed as an argument",
+		source: ["extern native printInt", "function v() { }", "function main() { printInt(v()); }"].join("\n"),
+		expectError: "Invalid type",
+	},
+	{
+		label: "a void result cannot be cast and dereferenced into a value",
+		source: ["function v() { }", "function main() locals int i { i = *(pointer)v(); }"].join("\n"),
+		expectError: "Invalid type",
+	},
+	{
+		label: "an extern prototype with no returns clause is void, not unknown",
+		source: ["extern function ext()", "function main() locals int i { i = ext(); }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
+	{
+		label: "a parametrized extern prototype with no returns clause is void",
+		source: ["extern native ext(int a)", "function main() locals int i { i = ext(1); }"].join("\n"),
+		expectError: "Incompatible types for assignment",
+	},
+	{
+		label: "a name-only extern stays an unknown-return wildcard",
+		source: ["extern function ext;", "function main() locals int i { i = ext(); }"].join("\n"),
 		expectError: null,
 	},
 ];

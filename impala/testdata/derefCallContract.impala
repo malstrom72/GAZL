@@ -1,0 +1,11 @@
+// Regression: casting + dereferencing an unknown-return call must NOT let the
+// assignment pin the callee's return type to the l-value type. `*(pointer)tezt()`
+// dereferences a pointer returned by tezt, so tezt's inferred return stays
+// unknown (it is used as a pointer), not `int` from the target `i`.
+extern function tezt;
+
+function main()
+locals pointer p, int i
+{
+	i = *(pointer)tezt();
+}

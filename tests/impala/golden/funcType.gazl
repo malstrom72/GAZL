@@ -107,7 +107,7 @@ main:	FUNC	; signature func main() -> void @ 32:15
 		ADRL %1 $v *.z.P	; mk(&v, 10, 3)
 		MOVi %2 #10 
 		MOVi %3 #3 
-		CALL $mk %0 *4	; expects function(P-ptr, int, int) -> unknown @ 43:26
+		CALL $mk %0 *4	; expects function(P-ptr, int, int) -> void @ 43:26
 		MOVi %1 $v:.o.P.x 	; printInt(v.x)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:26
