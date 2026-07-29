@@ -7,6 +7,12 @@ Impala 2.0 turned a lot of silent runtime garbage into diagnostics (typed pointe
 expressions, extern/struct link checking). What follows is the remaining list, and how to implement it
 without breaking the thing that makes GAZL interesting.
 
+Read the list as a DIAGNOSTIC-QUALITY backlog, not a soundness one. Verified 2026-07-29 against
+`output/GAZLCmd.exe`: the assembler already rejects items 1, 2 and 5, and item 3 below `from`. What is
+wrong is WHERE the error points - at a symbol and a line in generated GAZL, not at the `.impala` line
+that caused it. Only item 3 above the range, and item 4, reach a running program. Check claims against
+the assembler; `tools/gazl-validate.sh` is a JS-side linter that passes every item here.
+
 
 ## The constraint: a constant is not always a number Impala knows
 
@@ -81,10 +87,11 @@ global with a constant offset GAZL does catch it, so behaviour is inconsistent b
 ### 2. Writes to a readonly array element (task #21)
 
     readonly int array table[4] = { 1, 2, 3, 4 }
-    table[0] = 9;          // not caught today
+    table[0] = 9;          // not caught by Impala; GAZL says `Incompatible types: table`
 
 `readonly` is tracked on the symbol (`declare(..., readonly, ...)`) and is honoured for scalars, but an
-indexed write does not consult it. Purely a compile-time check on the symbol; no assembly-time subtlety.
+indexed write does not consult it. Purely a compile-time check on the symbol; no assembly-time subtlety -
+the readonly array lands in the const region, so the `POKE` is rejected there as a backstop.
 
 ### 3. Case label outside the switch range (task #33)
 
@@ -121,6 +128,16 @@ in the same function body, and the compiler holds the complete set by the time t
 compiler-minted `@.` labels and deliberately leaves user labels alone precisely because an undefined one
 is a user error that deserves a real diagnostic, not an internal assertion. A plain compile-time error
 naming the label is all this needs.
+
+### 5. Duplicate `case` labels (fuzzer-found)
+
+    switch (i == 0 to 3) { case 0: { i = 1; } case 0: { i = 2; } }
+
+Both arms are emitted, each under its own `.s0#0:`, and the assembler rejects the second with
+`Symbol already defined: .s0.0`. So the build does fail - but on a compiler-minted label the user never
+wrote, which is the worst possible way to report "you listed case 0 twice". Fully decidable at compile
+time whenever the case values are numeric, exactly like item 3, and it wants the same pass: collect the
+arm values for a switch, then reject a repeat naming the value and both source positions.
 
 
 ## Not in this list
