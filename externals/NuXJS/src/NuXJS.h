@@ -24,6 +24,8 @@
 #ifndef NuXJS_h
 #define NuXJS_h
 
+#define NUXJS_VERSION 101
+
 #include "assert.h"
 #include <algorithm>
 #include <string>
@@ -513,7 +515,6 @@ class Table {
 		UInt32 rebuild(UInt32 newN);
 
 		Vector<Bucket, 1U << TABLE_BUILT_IN_N> buckets;
-		int bockets[123];
 		UInt32 loadCount;													///< Count of buckets with defined keys.
 };
 
@@ -1790,6 +1791,13 @@ class Compiler : public GCItem {
 			bool inDeadCode() const { return stackDepth == DEAD_CODE_STACK_DEPTH; };
 			Int32 codeOffset;
 			Int32 stackDepth;
+		};
+
+		/// RAII guard bounding compile-time recursion depth; throws a RangeError if `MAX_NESTED_COMPILE_DEPTH` is reached.
+		struct NestGuard {
+			NestGuard(Compiler& compiler);
+			~NestGuard();
+			Compiler& compiler;
 		};
 
 		struct ExpressionResult;

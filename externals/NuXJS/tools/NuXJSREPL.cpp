@@ -30,8 +30,9 @@
 	  * stdout  - program-visible output: anything printed by the script via print(), and the `!!!!`
 	              lines reporting compile/runtime errors (and their stack traces). The test runner captures
 	              and compares this stream.
-	  * stderr  - REPL meta only: the interactive `\t=<result>` echo (shown only in interactive mode, and
-	              suppressed there with -s) and the timing / memory figures (-t).
+	  * stderr  - REPL meta (the interactive `\t=<result>` echo, shown only in interactive mode and
+	              suppressed there with -s, plus the timing / memory figures from -t) and anything the
+	              script writes via printErr(), which is deliberately kept off the compared stdout stream.
 
 	Do not move script-visible output or `!!!!` reporting to stderr without regenerating the .io fixtures.
 */
@@ -231,6 +232,16 @@ struct PrintFunction : public Function {
 		if (capture != 0) {
 			pushIOLines('<', *s);
 		}
+		return Value::UNDEFINED;
+	}
+};
+
+// printErr() is print()'s stderr twin: it writes to the diagnostic stream and, being off the recorded
+// stdout transcript, is never captured for #save or compared by the golden .io tests.
+struct PrintErrFunction : public Function {
+	virtual Value invoke(Runtime& rt, Processor& processor, UInt32 argc, const Value* argv, Object* thisObject) {
+		const String* s = (argc >= 1 ? argv[0].toString(rt.getHeap()) : &EMPTY_STRING);
+		std::wcerr << s->toWideString().c_str() << std::endl;
 		return Value::UNDEFINED;
 	}
 };
@@ -451,6 +462,8 @@ Var help(Runtime& rt, const Var& thisVar, const VarList& args) {
 	(void)args;
 	std::wcout << L"Available REPL helpers:" << std::endl
 			<< L"  quit()             - exit the REPL" << std::endl
+			<< L"  print(text)        - print text to stdout" << std::endl
+			<< L"  printErr(text)     - print text to stderr" << std::endl
 			<< L"  read(file)         - return UTF-8 file as string" << std::endl
 			<< L"  write(file, text)  - write text to a UTF-8 file" << std::endl
 			<< L"  load(file)         - execute a UTF-8 JavaScript file" << std::endl
@@ -794,6 +807,9 @@ int replMain(int argc, const char* argv[]) {
 		printFunction.capture = (scriptMode ? 0 : &ioLines);
 		const String PRINT_STRING("print");
 		globals.setOwnProperty(rt, &PRINT_STRING, &printFunction, DONT_ENUM_FLAG);
+		PrintErrFunction printErrFunction;
+		const String PRINT_ERR_STRING("printErr");
+		globals.setOwnProperty(rt, &PRINT_ERR_STRING, &printErrFunction, DONT_ENUM_FLAG);
 		GCFunction gcFunction;
 		const String GC_STRING("gc");
 		globals.setOwnProperty(rt, &GC_STRING, &gcFunction, DONT_ENUM_FLAG);
