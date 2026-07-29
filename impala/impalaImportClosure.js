@@ -164,6 +164,7 @@ function locateInUnit(spans, source, index) {
    confidence is kept, and it only runs when explicitly requested. */
 var TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // a named top-level definition line
 var ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
+var DATA_ROW_RE = /^\s*(?:DAT[ifps]?|DATA)\s/;        // an unlabeled initializer continuation row
 
 function stripComment(line) {
 	var at = line.indexOf(";");
@@ -191,7 +192,10 @@ function isBoundary(line) {
 }
 
 function collectRefs(text, into) {
-	var re = /[&^#]([A-Za-z_]\w*)/g;   // &func/&global, ^native, #const - names only (numbers skip)
+	// &func/&global, ^native, #const, *size - names only (numbers skip). `*` is load-bearing: a const
+	// used ONLY as an array extent (`GLOB *BUF_SIZE`) has no other reference shape, and dropping its
+	// `! DEFi` row is how `global int array buf[N]` - the canonical firmware idiom - stopped assembling.
+	var re = /[&^#*]([A-Za-z_]\w*)/g;
 	var m;
 	while ((m = re.exec(text)) !== null) {
 		into[into.length] = m[1];
@@ -222,9 +226,18 @@ function deadStrip(gazl) {
 				blocks.length = blocks.length - 1;
 				dataStart = prev.start;
 			}
-			blocks[blocks.length] = { kind: "data", name: dname, start: dataStart, end: i + 1 };
+			// ...and trailing unlabeled `DATA` rows are this block's initializer, not free-standing
+			// lines. Left loose they were kept unconditionally, so stripping the header handed the
+			// values to whichever block came before - silently, whenever they fit its zero-fill slack.
 			i++;
+			while (i < lines.length && DATA_ROW_RE.test(lines[i])) {
+				i++;
+			}
+			blocks[blocks.length] = { kind: "data", name: dname, start: dataStart, end: i };
 			continue;
+		}
+		if (DATA_ROW_RE.test(lines[i])) {
+			throw new Error("dead-strip: initializer row belongs to no data block: " + lines[i].trim());
 		}
 		blocks[blocks.length] = { kind: "loose", start: i, end: i + 1 };
 		i++;

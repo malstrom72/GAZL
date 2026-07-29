@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { compileProgram, resolveImportClosure, deadStrip } = require('./impala.node.js');
+const { haveGazlCmd, runExpected } = require('./gazlAssembleCheck');
 
 const repoRoot = path.resolve(__dirname, '..');
 const rootUnit = path.join(repoRoot, 'tests', 'impala', 'sources', 'import', 'main.impala');
@@ -66,6 +67,22 @@ if (stripped.indexOf('main:') < 0) fail('--dead-strip must keep the exported `ma
 const strippedGold = fs.readFileSync(strippedGolden, 'latin1');
 if (canonicalizeNewlines(strippedGold) !== canonicalizeNewlines(stripped)) {
 	fail('--dead-strip output differs from golden ' + path.relative(repoRoot, strippedGolden));
+}
+
+/* A byte-compare cannot prove this one: dropping a data block used to leave its unlabelled `DATA`
+   continuation rows behind, where the PRECEDING block silently adopted them - so the golden would just
+   record the corruption. Stripping must not change what the program prints, so run both. */
+if (haveGazlCmd()) {
+	const want = { args: ['main'], want: '42 9 9 0 0 0 7'.split(' ') };
+	for (const [label, gazl] of [['unstripped', unstripped], ['stripped', stripped]]) {
+		const gazlPath = path.join(repoRoot, 'output', `deadstrip-${label}.gazl`);
+		fs.writeFileSync(gazlPath, gazl, 'latin1');
+		const failure = runExpected(gazlPath, want);
+		fs.unlinkSync(gazlPath);
+		if (failure) {
+			fail(`--dead-strip changed program behaviour (${label}): ${failure}`);
+		}
+	}
 }
 
 // --- import cycles: gathered, but only half-resolved --------------------------

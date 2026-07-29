@@ -2,4 +2,20 @@ const int DEBUG = 1
 import "striplib.impala"
 extern native printInt
 extern native printLF
-export function main() { printInt(used(41)); printLF(); }
+
+/* KEPT is initialized SHORT of its extent, so its trailing words are zero-fill and DEAD's initializer
+   fits exactly in that slack - which is how a stripped DEAD used to be adopted by KEPT with no error
+   anywhere. BUF_SIZE is referenced only as an array extent (`GLOB *BUF_SIZE`), the one reference shape
+   the reachability scan used to miss. Neither is provable by a byte-compare against a golden, so
+   importBuildTests RUNS this program and checks what it prints. */
+const int BUF_SIZE = 2
+readonly int array KEPT[5] = { 9, 9 }
+readonly int array DEAD[3] = { 1, 2, 3 }
+global int array buf[BUF_SIZE]
+
+export function main() locals int i {
+	printInt(used(41)); printLF();
+	for (i = 0 to 5) { printInt(global KEPT[i]); printLF(); }
+	global buf[0] = 7;
+	printInt(global buf[0]); printLF();
+}

@@ -14,14 +14,29 @@
  ;-----------------------------------------------------------------------------
  ; signature extern native printInt() -> unknown @ stripmain.impala:3:1
  ; signature extern native printLF() -> unknown @ stripmain.impala:4:1
+ BUF_SIZE:			! DEFi #2	; signature const BUF_SIZE : int @ stripmain.impala:11:1
+ KEPT:				CNST *5		; signature array KEPT[5] : int @ stripmain.impala:12:1
+ 					DATA #9 #9
+ buf:				GLOB *BUF_SIZE ; signature array buf[BUF_SIZE] : int @ stripmain.impala:14:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature export func main() -> void @ stripmain.impala:5:1
+ main:				FUNC		; signature export func main() -> void @ stripmain.impala:16:1
  								PARA *1
+ 					$i:			LOCi
  ;-----------------------------------------------------------------------------
  								MOVi %2 #41 					; printInt(used(41))
- 								CALL &used %1 *2				; expects used(int) -> int @ stripmain.impala:5:43
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ stripmain.impala:5:44
- 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ stripmain.impala:5:55
+ 								CALL &used %1 *2				; expects used(int) -> int @ stripmain.impala:17:19
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ stripmain.impala:17:20
+ 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ stripmain.impala:17:31
+ 								MOVi $i #0 						; for (i = 0 to 5) 
+ 								GEQi #0 #5 @.e0
+ 					.l1:		PEEK %1 &KEPT $i				; printInt(global KEPT[i])
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ stripmain.impala:18:45
+ 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ stripmain.impala:18:56
+ 								FORi $i #5 @.l1					; }
+ 					.e0:		POKE &buf:0 #7 					; global buf[0] = 7
+ 								PEEK %1 &buf:0 					; printInt(global buf[0])
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ stripmain.impala:20:25
+ 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ stripmain.impala:20:36
  								RETU   							; }
 
