@@ -1,13 +1,13 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native print() -> unknown @ 1:20
-; signature extern native printLF() -> unknown @ 2:22
-; signature extern native input() -> unknown @ 3:20
-; signature extern native printInt() -> unknown @ 4:23
+; signature extern native print() -> unknown @ 1:1
+; signature extern native printLF() -> unknown @ 2:1
+; signature extern native input() -> unknown @ 3:1
+; signature extern native printInt() -> unknown @ 4:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 6:15
+main:	FUNC	; signature func main() -> void @ 6:1
 		PARA *1
 	$buffer:	LOCA *1024
 ;-----------------------------------------------------------------------------

@@ -1,12 +1,12 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 13:1
-; signature extern native printInt() -> unknown @ 14:1
-; signature extern native printLF() -> unknown @ 16:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
+; signature extern native printInt() -> unknown @ 13:1
+; signature extern native printLF() -> unknown @ 14:1
 
 ;-----------------------------------------------------------------------------
-dbl:	FUNC	; signature func dbl(int x) -> int @ 18:14
+dbl:	FUNC	; signature func dbl(int x) -> int @ 18:1
 	$r:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
@@ -15,7 +15,7 @@ dbl:	FUNC	; signature func dbl(int x) -> int @ 18:14
 
 
 ;-----------------------------------------------------------------------------
-inc10:	FUNC	; signature func inc10(int x) -> int @ 19:16
+inc10:	FUNC	; signature func inc10(int x) -> int @ 19:1
 	$r:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
@@ -24,7 +24,7 @@ inc10:	FUNC	; signature func inc10(int x) -> int @ 19:16
 
 
 ;-----------------------------------------------------------------------------
-callThrough:	FUNC	; signature func callThrough(Fn-ptr pf, int v) -> int @ 21:22
+callThrough:	FUNC	; signature func callThrough(Fn-ptr pf, int v) -> int @ 21:1
 	$r:	OUTi
 	$pf:	INPp
 	$v:	INPi
@@ -37,7 +37,7 @@ callThrough:	FUNC	; signature func callThrough(Fn-ptr pf, int v) -> int @ 21:22
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 26:15
+main:	FUNC	; signature func main() -> void @ 26:1
 		PARA *1
 	$cb:	LOCp
 	$pcb:	LOCp

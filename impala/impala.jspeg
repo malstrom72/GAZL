@@ -135,6 +135,7 @@
             && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings
     var $$parser.units          = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
             && _hostOptions.units) || undefined);               /// import-closure spans {name,start,end}[], for origins
+    var $$parser.declOffset     = 0;                            /// offset of the declaration being parsed - see `root`
 
     /* 2  make sure the buckets exist */
     var $$parser.META_TO_GAZL   = {};
@@ -3345,9 +3346,14 @@
 #    Grammar    #
 #################
 
+# A `; signature` row is emitted once the whole declaration has parsed, and by then the parse
+# position has run past its trailing whitespace and comments onto the NEXT declaration - so an
+# origin taken there names the wrong line. Each declaration records where it STARTED instead;
+# every emit site reports `$$parser.declOffset`, error sites keep using the precise `$$i`.
 root        <-  _                                                     { $$parser.start(); }
-                (ImportDecl / ExportDecl / FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
-                / GlobalDecl / ';'_)* !.                              { $$parser.end(); }
+                ( { $$parser.declOffset = $$i; }
+                  (ImportDecl / ExportDecl / FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
+                  / GlobalDecl / ';'_) )* !.                          { $$parser.end(); }
 
 # `import "path"` names a unit for the builder's link closure. The compiler itself treats it
 # as a no-op - `impala build` resolves the closure, concatenates the sources, and compiles the
@@ -3376,7 +3382,7 @@ StructDecl  <-  STRUCT _ id:Identifier                               { $sname = 
                                                                          /* Publish the real layout with TYPES so gazl-validate can check an `extern struct`
                                                                             declaration of the same name against it - the .o./.z. constants alone carry no types. */
                                                                          emitStandaloneSignatureComment(
-                                                                             $$parser.structSignatureRow($sname, false, $$parser.sourceName, $$s, $$i));
+                                                                             $$parser.structSignatureRow($sname, false, $$parser.sourceName, $$s, $$parser.declOffset));
                                                                      }
 
 # ------------------------------------------------------------------
@@ -3470,7 +3476,7 @@ FuncDecl    <-                                                        { $inl = f
                                                                              entry.signature.returnElem = undefined;
                                                                              entry.signature.returnName = undefined;
                                                                              entry.signature.sourceCode = $$s;
-                                                                             entry.signature.sourceOffset = $$i;
+                                                                             entry.signature.sourceOffset = $$parser.declOffset;
                                                                              entry.signature.sourceName = $$parser.sourceName;
                                                                              entry.signature.returnResolved = false;
                                                                              entry.pendingReturnPlaceholder = undefined;
@@ -3691,7 +3697,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                           if (!$$parser.endStruct($sname)) {
                                                                               emitStandaloneSignatureComment(
                                                                                   $$parser.structSignatureRow(
-                                                                                      $sname, true, $$parser.sourceName, $$s, $$i));
+                                                                                      $sname, true, $$parser.sourceName, $$s, $$parser.declOffset));
                                                                           }
                                                                       }
                     )?
@@ -3760,7 +3766,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              }
                                                                              if (signature.sourceCode === undefined) {
                                                                                  signature.sourceCode = $$s;
-                                                                                 signature.sourceOffset = $$i;
+                                                                                 signature.sourceOffset = $$parser.declOffset;
                                                                                  signature.sourceName = $$parser.sourceName;
                                                                              }
                                                                              if (entry.kind !== 'FUNC') {  /* a definition here already resolved it - do not un-resolve it */
@@ -3774,7 +3780,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                             returns: undefined,
                                                                             sourceName: $$parser.sourceName,
                                                                             sourceCode: $$s,
-                                                                            sourceOffset: $$i,
+                                                                            sourceOffset: $$parser.declOffset,
                                                                         };
                                                                                                                                                 var _proto = $$parser.pendingProto;
                                                                         $$parser.pendingProto = undefined;
@@ -3817,7 +3823,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                                 role,
                                                                                 $$parser.sourceName,
                                                                                 $$s,
-                                                                                $$i
+                                                                                $$parser.declOffset
                                                                             )
                                                                         );
                                                                          } else if ($$.scope === 'globals') {
@@ -3830,7 +3836,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                                     'extern',
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i,
+                                                                                    $$parser.declOffset,
                                                                                     $$.elem
                                                                                 )
                                                                             );
@@ -3860,7 +3866,7 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                                     $t,
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i,
+                                                                                    $$parser.declOffset,
                                                                                     $telem
                                                                                 ),
                                                                                 $telem
@@ -3881,7 +3887,7 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                                      $t,
                                                                                      $$parser.sourceName,
                                                                                      $$s,
-                                                                                     $$i,
+                                                                                     $$parser.declOffset,
                                                                                      $telem,
                                                                                      true
                                                                                  )
@@ -3906,7 +3912,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                      $$s, $$i,
                                                                                      $$parser.formatGlobalSignatureComment(
                                                                                          $section, $v.name, 'S', undefined, undefined,
-                                                                                         $$parser.sourceName, $$s, $$i, $v.struct),
+                                                                                         $$parser.sourceName, $$s, $$parser.declOffset, $v.struct),
                                                                                      $v.struct
                                                                                  );
                                                                              } else {
@@ -3954,7 +3960,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     undefined,
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i,
+                                                                                    $$parser.declOffset,
                                                                                     $v.elem
                                                                                 ),
                                                                                 $v.elem
@@ -3978,7 +3984,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     undefined,
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i,
+                                                                                    $$parser.declOffset,
                                                                                     $a.elem
                                                                                 ),
                                                                                 $a.elem
@@ -4428,7 +4434,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            callResultType,
                                                            $$parser.sourceName,
                                                            $$s,
-                                                           $$i,
+                                                           $$i,                 /* the CALL SITE, not the enclosing declaration */
                                                            $$.elems
                                                        );
                                                        var commentIndex = -1;

@@ -1,26 +1,26 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native findFirmwarePatch() -> unknown @ 9:1
-FILE_TYPE_COUNT:	! DEFi #4	; signature const FILE_TYPE_COUNT : int @ 10:1
-FILE_TYPE_EXE:	! DEFi #0	; signature const FILE_TYPE_EXE : int @ 11:1
-FILE_TYPE_SYS:	! DEFi #1	; signature const FILE_TYPE_SYS : int @ 12:1
-FILE_TYPE_TXT:	! DEFi #2	; signature const FILE_TYPE_TXT : int @ 13:1
-FILE_TYPE_BIN:	! DEFi #3	; signature const FILE_TYPE_BIN : int @ 14:1
-FILE_TYPE_STRINGS:	CNST *FILE_TYPE_COUNT	; signature array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] : unknown @ 14:51
+; signature extern native findFirmwarePatch() -> unknown @ 7:1
+FILE_TYPE_COUNT:	! DEFi #4	; signature const FILE_TYPE_COUNT : int @ 9:1
+FILE_TYPE_EXE:	! DEFi #0	; signature const FILE_TYPE_EXE : int @ 10:1
+FILE_TYPE_SYS:	! DEFi #1	; signature const FILE_TYPE_SYS : int @ 11:1
+FILE_TYPE_TXT:	! DEFi #2	; signature const FILE_TYPE_TXT : int @ 12:1
+FILE_TYPE_BIN:	! DEFi #3	; signature const FILE_TYPE_BIN : int @ 13:1
+FILE_TYPE_STRINGS:	CNST *FILE_TYPE_COUNT	; signature array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] : unknown @ 14:1
 	DATA &.s_exe_4d2 &.s_sys_4d3 &.s_txt_4d4 &.s_bin_4d5
-FILE_FIELD_NAME:	! DEFi #0	; signature const FILE_FIELD_NAME : int @ 19:1
-FILE_FIELD_TYPE:	! DEFi #1	; signature const FILE_FIELD_TYPE : int @ 20:1
-FILE_FIELD_SIZE:	! DEFi #2	; signature const FILE_FIELD_SIZE : int @ 21:1
-FILE_FIELD_DATE:	! DEFi #3	; signature const FILE_FIELD_DATE : int @ 22:1
-FILE_FIELD_COUNT:	! DEFi #4	; signature const FILE_FIELD_COUNT : int @ 24:1
-MAX_FILE_COUNT:	! DEFi #100	; signature const MAX_FILE_COUNT : int @ 25:1
-MAX_FILE_NAME_LENGTH:	! DEFi #31	; signature const MAX_FILE_NAME_LENGTH : int @ 26:1
-BUILT_IN_FILE_COUNT:	! DEFi #14	; signature const BUILT_IN_FILE_COUNT : int @ 27:1
+FILE_FIELD_NAME:	! DEFi #0	; signature const FILE_FIELD_NAME : int @ 18:1
+FILE_FIELD_TYPE:	! DEFi #1	; signature const FILE_FIELD_TYPE : int @ 19:1
+FILE_FIELD_SIZE:	! DEFi #2	; signature const FILE_FIELD_SIZE : int @ 20:1
+FILE_FIELD_DATE:	! DEFi #3	; signature const FILE_FIELD_DATE : int @ 21:1
+FILE_FIELD_COUNT:	! DEFi #4	; signature const FILE_FIELD_COUNT : int @ 22:1
+MAX_FILE_COUNT:	! DEFi #100	; signature const MAX_FILE_COUNT : int @ 24:1
+MAX_FILE_NAME_LENGTH:	! DEFi #31	; signature const MAX_FILE_NAME_LENGTH : int @ 25:1
+BUILT_IN_FILE_COUNT:	! DEFi #14	; signature const BUILT_IN_FILE_COUNT : int @ 26:1
 	GLOB *1
-fileCount:	DATi #BUILT_IN_FILE_COUNT	; signature global fileCount : int @ 29:1
+fileCount:	DATi #BUILT_IN_FILE_COUNT	; signature global fileCount : int @ 27:1
 	! MULi <A> #MAX_FILE_COUNT #FILE_FIELD_COUNT
-FILES:	GLOB *<A>	; signature array FILES[] : unknown @ 29:55
+FILES:	GLOB *<A>	; signature array FILES[] : unknown @ 29:1
 	DATA &.s_about_4d6 #FILE_TYPE_TXT #2 &.s_111384_4d7
 	DATA &.s_advent_4d8 #FILE_TYPE_EXE #91 &.s_22178_4d9
 	DATA &.s_blupri_4da #FILE_TYPE_TXT #2 &.s_6579_4db
@@ -37,14 +37,14 @@ FILES:	GLOB *<A>	; signature array FILES[] : unknown @ 29:55
 	DATA &.s_versio_4ef #FILE_TYPE_TXT #1 &.s_111384_4d7
 	! ADDi <A> #MAX_FILE_NAME_LENGTH #1
 	! MULi <A> #MAX_FILE_COUNT <A>
-FILE_NAMES:	GLOB *<A>	; signature array FILE_NAMES[] : unknown @ 45:69
+FILE_NAMES:	GLOB *<A>	; signature array FILE_NAMES[] : unknown @ 45:1
 	! MULi <A> #MAX_FILE_COUNT #9
-FILE_DATES:	GLOB *<A>	; signature array FILE_DATES[] : unknown @ 46:44
+FILE_DATES:	GLOB *<A>	; signature array FILE_DATES[] : unknown @ 46:1
 	GLOB *1
-filesAreInited:	DATi #0	; signature global filesAreInited : int @ 48:30
+filesAreInited:	DATi #0	; signature global filesAreInited : int @ 48:1
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 50:17
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 50:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -66,7 +66,7 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 50:17
 
 
 ;-----------------------------------------------------------------------------
-sortFiles:	FUNC	; signature func sortFiles() -> void @ 62:20
+sortFiles:	FUNC	; signature func sortFiles() -> void @ 62:1
 		PARA *1
 	$i:	LOCi
 	$j:	LOCi
@@ -111,7 +111,7 @@ sortFiles:	FUNC	; signature func sortFiles() -> void @ 62:20
 
 
 ;-----------------------------------------------------------------------------
-initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ 80:31
+initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ 80:1
 		PARA *1
 	$index:	LOCi
 	$size:	LOCi
@@ -177,7 +177,7 @@ initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ 80:
 
 
 ;-----------------------------------------------------------------------------
-findFile:	FUNC	; signature func findFile(ptr s0) -> int @ 112:19
+findFile:	FUNC	; signature func findFile(ptr s0) -> int @ 112:1
 	$file:	OUTi
 	$s0:	INPp
 ;-----------------------------------------------------------------------------
@@ -198,7 +198,7 @@ findFile:	FUNC	; signature func findFile(ptr s0) -> int @ 112:19
 
 
 ;-----------------------------------------------------------------------------
-lower:	FUNC	; signature func lower(ptr s) -> void @ 122:16
+lower:	FUNC	; signature func lower(ptr s) -> void @ 122:1
 		PARA *1
 	$s:	INPp
 	$p:	LOCp

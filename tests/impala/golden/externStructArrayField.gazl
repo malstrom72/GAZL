@@ -1,14 +1,14 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 16:1
-; signature extern struct Grid { n : int, cells : int[], tag : float } @ 18:1
-; signature extern native printInt() -> unknown @ 19:1
-; signature extern native printFloat() -> unknown @ 20:1
-; signature extern native printLF() -> unknown @ 22:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 14:1
+; signature extern struct Grid { n : int, cells : int[], tag : float } @ 16:1
+; signature extern native printInt() -> unknown @ 18:1
+; signature extern native printFloat() -> unknown @ 19:1
+; signature extern native printLF() -> unknown @ 20:1
 
 ;-----------------------------------------------------------------------------
-sum:	FUNC	; signature func sum(Grid-ptr g) -> int @ 22:14
+sum:	FUNC	; signature func sum(Grid-ptr g) -> int @ 22:1
 	$total:	OUTi
 	$g:	INPp
 	$i:	LOCi
@@ -24,7 +24,7 @@ sum:	FUNC	; signature func sum(Grid-ptr g) -> int @ 22:14
 
 
 ;-----------------------------------------------------------------------------
-poke:	FUNC	; signature func poke(Grid-ptr g, int i, int v) -> void @ 29:15
+poke:	FUNC	; signature func poke(Grid-ptr g, int i, int v) -> void @ 29:1
 		PARA *1
 	$g:	INPp
 	$i:	INPi
@@ -36,7 +36,7 @@ poke:	FUNC	; signature func poke(Grid-ptr g, int i, int v) -> void @ 29:15
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 31:15
+main:	FUNC	; signature func main() -> void @ 31:1
 		PARA *1
 	$raw:	LOCA *10
 	$g:	LOCp

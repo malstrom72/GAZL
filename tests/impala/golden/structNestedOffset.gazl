@@ -1,26 +1,26 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 7:1
 	! MOVi <a> #0	; layout of struct Inner
 .o.Inner.a:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Inner.b:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Inner:	! DEFi #<a>
-; signature struct Inner { a : int, b : int } @ 9:1
+; signature struct Inner { a : int, b : int } @ 8:1
 	! MOVi <a> #0	; layout of struct Outer
 .o.Outer.pad:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Outer.in:	! DEFi #<a>
 	! ADDi <a> #<a> #.z.Inner
 .z.Outer:	! DEFi #<a>
-; signature struct Outer { pad : int, in : Inner } @ 10:1
-; signature extern native printInt() -> unknown @ 11:1
-; signature extern native printLF() -> unknown @ 12:1
+; signature struct Outer { pad : int, in : Inner } @ 9:1
+; signature extern native printInt() -> unknown @ 10:1
+; signature extern native printLF() -> unknown @ 11:1
 
 ;-----------------------------------------------------------------------------
-bump:	FUNC	; signature func bump(Inner-ptr q) -> void @ 12:15
+bump:	FUNC	; signature func bump(Inner-ptr q) -> void @ 12:1
 		PARA *1
 	$q:	INPp
 ;-----------------------------------------------------------------------------
@@ -31,7 +31,7 @@ bump:	FUNC	; signature func bump(Inner-ptr q) -> void @ 12:15
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 13:15
+main:	FUNC	; signature func main() -> void @ 13:1
 		PARA *1
 	$o:	LOCA *.z.Outer
 	$p:	LOCp

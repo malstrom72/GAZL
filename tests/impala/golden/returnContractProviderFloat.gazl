@@ -3,7 +3,7 @@
 ; signatures version=1
 
 ;-----------------------------------------------------------------------------
-returnsNumber:	FUNC	; signature func returnsNumber() -> float @ 1:24
+returnsNumber:	FUNC	; signature func returnsNumber() -> float @ 1:1
 	$value:	OUTf
 ;-----------------------------------------------------------------------------
 		MOVf $value #1.5 	; value = 1.5

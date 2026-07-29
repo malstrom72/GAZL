@@ -3,7 +3,7 @@
 ; signatures version=1
 
 ;-----------------------------------------------------------------------------
-x:	FUNC	; signature func x() -> void @ 1:12
+x:	FUNC	; signature func x() -> void @ 1:1
 		PARA *1
 	$i:	LOCi
 	$j:	LOCi
@@ -23,10 +23,10 @@ x:	FUNC	; signature func x() -> void @ 1:12
 	.s0#33:	MOVi $k $j 	; k = j
 	.e1:	RETU   	; }
 
-CONSTANT:	! DEFi #2949	; signature const CONSTANT : int @ 10:26
+CONSTANT:	! DEFi #2949	; signature const CONSTANT : int @ 10:1
 
 ;-----------------------------------------------------------------------------
-y:	FUNC	; signature func y() -> void @ 11:12
+y:	FUNC	; signature func y() -> void @ 11:1
 		PARA *1
 	$i:	LOCi
 	$a:	LOCA *5
@@ -71,13 +71,13 @@ y:	FUNC	; signature func y() -> void @ 11:12
 	.s6#<A>:	GETL $i $a $i	; i = (int) a[i]
 	.e7:	RETU   	; }
 
-; signature extern native printInt() -> unknown @ 18:23
-; signature extern native printLF() -> unknown @ 19:22
-MINUS_FIVE:	! DEFi #-5	; signature const MINUS_FIVE : int @ 20:26
-gx:	GLOB *10	; signature array gx[10] : unknown @ 21:20
+; signature extern native printInt() -> unknown @ 18:1
+; signature extern native printLF() -> unknown @ 19:1
+MINUS_FIVE:	! DEFi #-5	; signature const MINUS_FIVE : int @ 20:1
+gx:	GLOB *10	; signature array gx[10] : unknown @ 21:1
 
 ;-----------------------------------------------------------------------------
-test:	FUNC	; signature func test(int a, int b) -> int @ 23:15
+test:	FUNC	; signature func test(int a, int b) -> int @ 23:1
 	$r:	OUTi
 	$a:	INPi
 	$b:	INPi
@@ -91,7 +91,7 @@ test:	FUNC	; signature func test(int a, int b) -> int @ 23:15
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 29:15
+main:	FUNC	; signature func main() -> void @ 29:1
 		PARA *1
 	$i:	LOCi
 	$a:	LOCi

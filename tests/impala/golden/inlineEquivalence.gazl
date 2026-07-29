@@ -1,21 +1,21 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 21:1
-; signature extern native printInt() -> unknown @ 22:1
-; signature extern native printLF() -> unknown @ 24:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 19:1
+; signature extern native printInt() -> unknown @ 21:1
+; signature extern native printLF() -> unknown @ 22:1
 	GLOB *1
-shared:	DATi #0	; signature global shared : int @ 24:18
+shared:	DATi #0	; signature global shared : int @ 24:1
 	! MOVi <a> #0	; layout of struct P
 .o.P.x:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.P.y:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.P:	! DEFi #<a>
-; signature struct P { x : int, y : int } @ 28:1
+; signature struct P { x : int, y : int } @ 26:1
 
 ;-----------------------------------------------------------------------------
-helper:	FUNC	; signature func helper(int a) -> int @ 67:17
+helper:	FUNC	; signature func helper(int a) -> int @ 67:1
 	$r:	OUTi
 	$a:	INPi
 ;-----------------------------------------------------------------------------
@@ -24,7 +24,7 @@ helper:	FUNC	; signature func helper(int a) -> int @ 67:17
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 80:15
+main:	FUNC	; signature func main() -> void @ 80:1
 		PARA *1
 	$t:	LOCi
 	$cell:	LOCA *1

@@ -1,42 +1,42 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 20:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 21:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 29:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 29:33
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 19:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 20:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 21:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 29:1
 	DATA &.s_MUTEst_4d2 &.s_REPEAT_4d3 &.s_SKIPst_4d4
 	DATA &.s_HOLDst_4d5 &.s_ACCENT_4d6 &.s_STUTTE_4d7
 	DATA &.s_REVERS_4d8 &.s_TAPEST_4d9
-; signature extern native abort() -> unknown @ 41:1
-; signature extern native trace() -> unknown @ 42:1
-; signature extern native yield() -> unknown @ 43:1
-; signature extern native write() -> unknown @ 44:1
-; signature extern native read() -> unknown @ 46:1
-; signature extern const DEBUG : int @ 48:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 49:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 50:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 51:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 52:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 54:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 55:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 56:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 57:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 58:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 59:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 60:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 61:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 62:1
-; signature extern const PARAM_COUNT : int @ 64:1
-; signature extern const POSITION_INT_BITS : int @ 65:1
-; signature extern const POSITION_FRACT_BITS : int @ 67:1
+; signature extern native abort() -> unknown @ 40:1
+; signature extern native trace() -> unknown @ 41:1
+; signature extern native yield() -> unknown @ 42:1
+; signature extern native write() -> unknown @ 43:1
+; signature extern native read() -> unknown @ 44:1
+; signature extern const DEBUG : int @ 46:1
+; signature extern const SWITCHES_SYNC_MASK : int @ 48:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ 49:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ 50:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 51:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ 52:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 54:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ 55:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ 56:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 57:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 58:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ 59:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 60:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 61:1
+; signature extern const PARAM_COUNT : int @ 62:1
+; signature extern const POSITION_INT_BITS : int @ 64:1
+; signature extern const POSITION_FRACT_BITS : int @ 65:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 68:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 69:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 70:1
+clock:	DATi #0	; signature global clock : int @ 67:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 68:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 69:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 71:1
-signal:	GLOB *2	; signature array signal[2] : unknown @ 72:1
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 70:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 71:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -49,36 +49,36 @@ signal:	GLOB *2	; signature array signal[2] : unknown @ 72:1
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int @ 81:1
-NOP:	! DEFi #0	; signature const NOP : int @ 82:1
-MUTE:	! DEFi #1	; signature const MUTE : int @ 83:1
-REPEAT:	! DEFi #2	; signature const REPEAT : int @ 84:1
-SKIP:	! DEFi #3	; signature const SKIP : int @ 85:1
-HOLD:	! DEFi #4	; signature const HOLD : int @ 86:1
-ACCENT:	! DEFi #1	; signature const ACCENT : int @ 87:1
-STUTTER:	! DEFi #2	; signature const STUTTER : int @ 88:1
-REVERSE:	! DEFi #3	; signature const REVERSE : int @ 89:1
-TAPE_STOP:	! DEFi #4	; signature const TAPE_STOP : int @ 91:1
-LOOKAHEAD:	! DEFi #0x80	; signature const LOOKAHEAD : int @ 95:1
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 72:1
+NOP:	! DEFi #0	; signature const NOP : int @ 81:1
+MUTE:	! DEFi #1	; signature const MUTE : int @ 82:1
+REPEAT:	! DEFi #2	; signature const REPEAT : int @ 83:1
+SKIP:	! DEFi #3	; signature const SKIP : int @ 84:1
+HOLD:	! DEFi #4	; signature const HOLD : int @ 85:1
+ACCENT:	! DEFi #1	; signature const ACCENT : int @ 86:1
+STUTTER:	! DEFi #2	; signature const STUTTER : int @ 87:1
+REVERSE:	! DEFi #3	; signature const REVERSE : int @ 88:1
+TAPE_STOP:	! DEFi #4	; signature const TAPE_STOP : int @ 89:1
+LOOKAHEAD:	! DEFi #0x80	; signature const LOOKAHEAD : int @ 91:1
 	GLOB *1
-bottomOperator:	DATi #0	; signature global bottomOperator : int @ 96:1
-steps:	GLOB *16	; signature array steps[16] : unknown @ 97:1
-gains:	GLOB *16	; signature array gains[16] : unknown @ 97:23
-holds:	GLOB *16	; signature array holds[16] : unknown @ 98:23
-sfxs:	GLOB *16	; signature array sfxs[16] : unknown @ 99:22
+bottomOperator:	DATi #0	; signature global bottomOperator : int @ 95:1
+steps:	GLOB *16	; signature array steps[16] : unknown @ 96:1
+gains:	GLOB *16	; signature array gains[16] : unknown @ 97:1
+holds:	GLOB *16	; signature array holds[16] : unknown @ 98:1
+sfxs:	GLOB *16	; signature array sfxs[16] : unknown @ 99:1
 	GLOB *1
-lastInStep:	DATi #-1	; signature global lastInStep : int @ 101:1
+lastInStep:	DATi #-1	; signature global lastInStep : int @ 100:1
 	GLOB *1
-currentOutStep:	DATi #0	; signature global currentOutStep : int @ 102:1
+currentOutStep:	DATi #0	; signature global currentOutStep : int @ 101:1
 	GLOB *1
-stopIndex:	DATi #0	; signature global stopIndex : int @ 103:1
+stopIndex:	DATi #0	; signature global stopIndex : int @ 102:1
 	GLOB *1
-stopRate:	DATi #0	; signature global stopRate : int @ 104:1
+stopRate:	DATi #0	; signature global stopRate : int @ 103:1
 	GLOB *1
-currentGain:	DATi #0	; signature global currentGain : int @ 108:1
+currentGain:	DATi #0	; signature global currentGain : int @ 104:1
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 108:16
+reset:	FUNC	; signature func reset() -> void @ 108:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		POKE &lastInStep #-1 	; global lastInStep = -1
@@ -87,7 +87,7 @@ reset:	FUNC	; signature func reset() -> void @ 108:16
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 114:17
+update:	FUNC	; signature func update() -> void @ 114:1
 		PARA *1
 	$topOperator:	LOCi
 	$bottomOperator:	LOCi
@@ -190,7 +190,7 @@ update:	FUNC	; signature func update() -> void @ 114:17
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 178:18
+process:	FUNC	; signature func process() -> void @ 178:1
 		PARA *1
 	$localClock:	LOCi
 	$inStep:	LOCi

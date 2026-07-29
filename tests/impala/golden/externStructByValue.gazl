@@ -1,13 +1,13 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
-; signature extern struct AudioBuffer { frames : int, channels : int } @ 12:1
-; signature extern native printInt() -> unknown @ 13:1
-; signature extern native printLF() -> unknown @ 14:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
+; signature extern struct AudioBuffer { frames : int, channels : int } @ 11:1
+; signature extern native printInt() -> unknown @ 12:1
+; signature extern native printLF() -> unknown @ 13:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 14:15
+main:	FUNC	; signature func main() -> void @ 14:1
 		PARA *1
 	$buf:	LOCA *.z.AudioBuffer
 ;-----------------------------------------------------------------------------

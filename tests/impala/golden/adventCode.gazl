@@ -1,179 +1,179 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native output() -> unknown @ 9:21
-; signature extern native abort() -> unknown @ 10:20
-; signature extern native exit() -> unknown @ 11:19
-; signature extern native input() -> unknown @ 12:20
-; signature extern native inputEOF() -> unknown @ 13:23
-; signature extern native clock() -> unknown @ 14:20
-FALSE:	! DEFi #0	; signature const FALSE : int @ 16:20
-TRUE:	! DEFi #1	; signature const TRUE : int @ 17:19
-GOTO2:	! DEFi #0	; signature const GOTO2 : int @ 19:20
-GOTO8:	! DEFi #1	; signature const GOTO8 : int @ 20:20
-GOTO2000:	! DEFi #2	; signature const GOTO2000 : int @ 21:23
-GOTO2009:	! DEFi #3	; signature const GOTO2009 : int @ 22:23
-GOTO2010:	! DEFi #4	; signature const GOTO2010 : int @ 23:23
-GOTO2011:	! DEFi #5	; signature const GOTO2011 : int @ 24:23
-GOTO2012:	! DEFi #6	; signature const GOTO2012 : int @ 25:23
-GOTO2600:	! DEFi #7	; signature const GOTO2600 : int @ 26:23
-GOTO2607:	! DEFi #8	; signature const GOTO2607 : int @ 27:23
-GOTO2630:	! DEFi #9	; signature const GOTO2630 : int @ 28:23
-GOTO2800:	! DEFi #10	; signature const GOTO2800 : int @ 29:24
-GOTO8000:	! DEFi #11	; signature const GOTO8000 : int @ 30:24
-GOTO18999:	! DEFi #12	; signature const GOTO18999 : int @ 31:25
-GOTO19000:	! DEFi #13	; signature const GOTO19000 : int @ 32:25
-CLSMAX:	! DEFi #12	; signature const CLSMAX : int @ 34:22
-HNTSIZ:	! DEFi #20	; signature const HNTSIZ : int @ 35:22
-LINSIZ:	! DEFi #12500	; signature const LINSIZ : int @ 36:25
-LOCSIZ:	! DEFi #185	; signature const LOCSIZ : int @ 37:23
-MESH:	! DEFi #123456789	; signature const MESH : int @ 38:27
-RTXSIZ:	! DEFi #277	; signature const RTXSIZ : int @ 39:23
-TRVSIZ:	! DEFi #885	; signature const TRVSIZ : int @ 40:23
-VRBSIZ:	! DEFi #35	; signature const VRBSIZ : int @ 41:22
-VRSION:	! DEFi #25	; signature const VRSION : int @ 42:22
-TRNSIZ:	! DEFi #5	; signature const TRNSIZ : int @ 43:21
-MAXTRS:	! DEFi #79	; signature const MAXTRS : int @ 44:22
-TABSIZ:	! DEFi #330	; signature const TABSIZ : int @ 45:23
-CHLOC:	! DEFi #114	; signature const CHLOC : int @ 46:20
-CHLOC2:	! DEFi #142	; signature const CHLOC2 : int @ 47:21
+; signature extern native output() -> unknown @ 9:1
+; signature extern native abort() -> unknown @ 10:1
+; signature extern native exit() -> unknown @ 11:1
+; signature extern native input() -> unknown @ 12:1
+; signature extern native inputEOF() -> unknown @ 13:1
+; signature extern native clock() -> unknown @ 14:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 16:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 17:1
+GOTO2:	! DEFi #0	; signature const GOTO2 : int @ 19:1
+GOTO8:	! DEFi #1	; signature const GOTO8 : int @ 20:1
+GOTO2000:	! DEFi #2	; signature const GOTO2000 : int @ 21:1
+GOTO2009:	! DEFi #3	; signature const GOTO2009 : int @ 22:1
+GOTO2010:	! DEFi #4	; signature const GOTO2010 : int @ 23:1
+GOTO2011:	! DEFi #5	; signature const GOTO2011 : int @ 24:1
+GOTO2012:	! DEFi #6	; signature const GOTO2012 : int @ 25:1
+GOTO2600:	! DEFi #7	; signature const GOTO2600 : int @ 26:1
+GOTO2607:	! DEFi #8	; signature const GOTO2607 : int @ 27:1
+GOTO2630:	! DEFi #9	; signature const GOTO2630 : int @ 28:1
+GOTO2800:	! DEFi #10	; signature const GOTO2800 : int @ 29:1
+GOTO8000:	! DEFi #11	; signature const GOTO8000 : int @ 30:1
+GOTO18999:	! DEFi #12	; signature const GOTO18999 : int @ 31:1
+GOTO19000:	! DEFi #13	; signature const GOTO19000 : int @ 32:1
+CLSMAX:	! DEFi #12	; signature const CLSMAX : int @ 34:1
+HNTSIZ:	! DEFi #20	; signature const HNTSIZ : int @ 35:1
+LINSIZ:	! DEFi #12500	; signature const LINSIZ : int @ 36:1
+LOCSIZ:	! DEFi #185	; signature const LOCSIZ : int @ 37:1
+MESH:	! DEFi #123456789	; signature const MESH : int @ 38:1
+RTXSIZ:	! DEFi #277	; signature const RTXSIZ : int @ 39:1
+TRVSIZ:	! DEFi #885	; signature const TRVSIZ : int @ 40:1
+VRBSIZ:	! DEFi #35	; signature const VRBSIZ : int @ 41:1
+VRSION:	! DEFi #25	; signature const VRSION : int @ 42:1
+TRNSIZ:	! DEFi #5	; signature const TRNSIZ : int @ 43:1
+MAXTRS:	! DEFi #79	; signature const MAXTRS : int @ 44:1
+TABSIZ:	! DEFi #330	; signature const TABSIZ : int @ 45:1
+CHLOC:	! DEFi #114	; signature const CHLOC : int @ 46:1
+CHLOC2:	! DEFi #142	; signature const CHLOC2 : int @ 47:1
 	! SHLi <A> #1 #11
-CONDS:	! DEFi <A>	; signature const CONDS : int @ 48:28
-DALTLC:	! DEFi #18	; signature const DALTLC : int @ 49:22
-ABB:	GLOB *186	; signature array ABB[186] : unknown @ 51:22
-ATLOC:	GLOB *186	; signature array ATLOC[186] : unknown @ 52:24
-DLOC:	GLOB *7	; signature array DLOC[7] : unknown @ 53:21
-FIXED:	GLOB *101	; signature array FIXED[101] : unknown @ 54:24
-LINK:	GLOB *201	; signature array LINK[201] : unknown @ 55:23
-PARMS:	GLOB *26	; signature array PARMS[26] : unknown @ 56:23
-PLACE:	GLOB *101	; signature array PLACE[101] : unknown @ 57:24
-INLINE:	GLOB *101	; signature array INLINE[101] : unknown @ 59:25
-MAP1:	GLOB *129	; signature array MAP1[129] : unknown @ 60:23
-MAP2:	GLOB *129	; signature array MAP2[129] : unknown @ 61:23
-DSEEN:	GLOB *7	; signature array DSEEN[7] : unknown @ 63:22
-HINTED:	GLOB *21	; signature array HINTED[21] : unknown @ 64:24
-HINTLC:	GLOB *21	; signature array HINTLC[21] : unknown @ 65:24
-ODLOC:	GLOB *7	; signature array ODLOC[7] : unknown @ 66:22
-TK:	GLOB *21	; signature array TK[21] : unknown @ 67:20
-PROP:	GLOB *101	; signature array PROP[101] : unknown @ 68:23
+CONDS:	! DEFi <A>	; signature const CONDS : int @ 48:1
+DALTLC:	! DEFi #18	; signature const DALTLC : int @ 49:1
+ABB:	GLOB *186	; signature array ABB[186] : unknown @ 51:1
+ATLOC:	GLOB *186	; signature array ATLOC[186] : unknown @ 52:1
+DLOC:	GLOB *7	; signature array DLOC[7] : unknown @ 53:1
+FIXED:	GLOB *101	; signature array FIXED[101] : unknown @ 54:1
+LINK:	GLOB *201	; signature array LINK[201] : unknown @ 55:1
+PARMS:	GLOB *26	; signature array PARMS[26] : unknown @ 56:1
+PLACE:	GLOB *101	; signature array PLACE[101] : unknown @ 57:1
+INLINE:	GLOB *101	; signature array INLINE[101] : unknown @ 59:1
+MAP1:	GLOB *129	; signature array MAP1[129] : unknown @ 60:1
+MAP2:	GLOB *129	; signature array MAP2[129] : unknown @ 61:1
+DSEEN:	GLOB *7	; signature array DSEEN[7] : unknown @ 63:1
+HINTED:	GLOB *21	; signature array HINTED[21] : unknown @ 64:1
+HINTLC:	GLOB *21	; signature array HINTLC[21] : unknown @ 65:1
+ODLOC:	GLOB *7	; signature array ODLOC[7] : unknown @ 66:1
+TK:	GLOB *21	; signature array TK[21] : unknown @ 67:1
+PROP:	GLOB *101	; signature array PROP[101] : unknown @ 68:1
 	GLOB *1
-BLKLIN:	DATi #TRUE	; signature global BLKLIN : int @ 70:25
+BLKLIN:	DATi #TRUE	; signature global BLKLIN : int @ 70:1
 	GLOB *1
-HOLDNG:	DATi #0	; signature global HOLDNG : int @ 71:22
+HOLDNG:	DATi #0	; signature global HOLDNG : int @ 71:1
 	GLOB *1
-ABBNUM:	DATi #5	; signature global ABBNUM : int @ 72:22
+ABBNUM:	DATi #5	; signature global ABBNUM : int @ 72:1
 	GLOB *1
-TRNDEX:	DATi #1	; signature global TRNDEX : int @ 73:22
+TRNDEX:	DATi #1	; signature global TRNDEX : int @ 73:1
 	GLOB *1
-TRNLUZ:	DATi #0	; signature global TRNLUZ : int @ 74:22
+TRNLUZ:	DATi #0	; signature global TRNLUZ : int @ 74:1
 	GLOB *1
-TURNS:	DATi #0	; signature global TURNS : int @ 75:21
+TURNS:	DATi #0	; signature global TURNS : int @ 75:1
 	GLOB *1
-CLOSNG:	DATi #FALSE	; signature global CLOSNG : int @ 76:26
+CLOSNG:	DATi #FALSE	; signature global CLOSNG : int @ 76:1
 	GLOB *1
-BONUS:	DATi #0	; signature global BONUS : int @ 77:21
+BONUS:	DATi #0	; signature global BONUS : int @ 77:1
 	GLOB *1
-NOVICE:	DATi #FALSE	; signature global NOVICE : int @ 78:26
+NOVICE:	DATi #FALSE	; signature global NOVICE : int @ 78:1
 	GLOB *1
-CLSHNT:	DATi #FALSE	; signature global CLSHNT : int @ 79:26
+CLSHNT:	DATi #FALSE	; signature global CLSHNT : int @ 79:1
 	GLOB *1
-CLOSED:	DATi #FALSE	; signature global CLOSED : int @ 80:26
+CLOSED:	DATi #FALSE	; signature global CLOSED : int @ 80:1
 	GLOB *1
-NUMDIE:	DATi #0	; signature global NUMDIE : int @ 81:22
+NUMDIE:	DATi #0	; signature global NUMDIE : int @ 81:1
 	GLOB *1
-SAVED:	DATi #0	; signature global SAVED : int @ 82:21
+SAVED:	DATi #0	; signature global SAVED : int @ 82:1
 	GLOB *1
-WZDARK:	DATi #FALSE	; signature global WZDARK : int @ 83:26
+WZDARK:	DATi #FALSE	; signature global WZDARK : int @ 83:1
 	GLOB *1
-LMWARN:	DATi #FALSE	; signature global LMWARN : int @ 84:26
+LMWARN:	DATi #FALSE	; signature global LMWARN : int @ 84:1
 	GLOB *1
-FOOBAR:	DATi #0	; signature global FOOBAR : int @ 85:22
+FOOBAR:	DATi #0	; signature global FOOBAR : int @ 85:1
 	GLOB *1
-CLOCK1:	DATi #30	; signature global CLOCK1 : int @ 86:23
+CLOCK1:	DATi #30	; signature global CLOCK1 : int @ 86:1
 	GLOB *1
-CLOCK2:	DATi #50	; signature global CLOCK2 : int @ 87:23
+CLOCK2:	DATi #50	; signature global CLOCK2 : int @ 87:1
 	GLOB *1
-DETAIL:	DATi #0	; signature global DETAIL : int @ 88:22
+DETAIL:	DATi #0	; signature global DETAIL : int @ 88:1
 	GLOB *1
-DKILL:	DATi #0	; signature global DKILL : int @ 89:21
+DKILL:	DATi #0	; signature global DKILL : int @ 89:1
 	GLOB *1
-IGO:	DATi #0	; signature global IGO : int @ 90:19
+IGO:	DATi #0	; signature global IGO : int @ 90:1
 	GLOB *1
-KNFLOC:	DATi #0	; signature global KNFLOC : int @ 91:22
+KNFLOC:	DATi #0	; signature global KNFLOC : int @ 91:1
 	GLOB *1
-IWEST:	DATi #0	; signature global IWEST : int @ 92:21
+IWEST:	DATi #0	; signature global IWEST : int @ 92:1
 	GLOB *1
-PANIC:	DATi #FALSE	; signature global PANIC : int @ 93:25
+PANIC:	DATi #FALSE	; signature global PANIC : int @ 93:1
 	GLOB *1
-gK:	DATi #0	; signature global gK : int @ 95:14
+gK:	DATi #0	; signature global gK : int @ 95:1
 	GLOB *1
-gOBJ:	DATi #0	; signature global gOBJ : int @ 96:16
+gOBJ:	DATi #0	; signature global gOBJ : int @ 96:1
 	GLOB *1
-gLOC:	DATi #0	; signature global gLOC : int @ 97:16
+gLOC:	DATi #0	; signature global gLOC : int @ 97:1
 	GLOB *1
-DFLAG:	DATi #0	; signature global DFLAG : int @ 99:17
+DFLAG:	DATi #0	; signature global DFLAG : int @ 99:1
 	GLOB *1
-LNLENG:	DATi #0	; signature global LNLENG : int @ 100:18
+LNLENG:	DATi #0	; signature global LNLENG : int @ 100:1
 	GLOB *1
-LNPOSN:	DATi #0	; signature global LNPOSN : int @ 101:18
+LNPOSN:	DATi #0	; signature global LNPOSN : int @ 101:1
 	GLOB *1
-VERB:	DATi #0	; signature global VERB : int @ 102:16
+VERB:	DATi #0	; signature global VERB : int @ 102:1
 	GLOB *1
-ZZWORD:	DATi #0	; signature global ZZWORD : int @ 103:18
+ZZWORD:	DATi #0	; signature global ZZWORD : int @ 103:1
 	GLOB *1
-SCORE:	DATi #0	; signature global SCORE : int @ 104:17
+SCORE:	DATi #0	; signature global SCORE : int @ 104:1
 	GLOB *1
-MAXDIE:	DATi #0	; signature global MAXDIE : int @ 105:18
+MAXDIE:	DATi #0	; signature global MAXDIE : int @ 105:1
 	GLOB *1
-MXSCOR:	DATi #0	; signature global MXSCOR : int @ 106:18
+MXSCOR:	DATi #0	; signature global MXSCOR : int @ 106:1
 	GLOB *1
-TALLY:	DATi #0	; signature global TALLY : int @ 107:17
+TALLY:	DATi #0	; signature global TALLY : int @ 107:1
 	GLOB *1
-THRESH:	DATi #0	; signature global THRESH : int @ 108:18
+THRESH:	DATi #0	; signature global THRESH : int @ 108:1
 	GLOB *1
-NEWLOC:	DATi #0	; signature global NEWLOC : int @ 109:18
+NEWLOC:	DATi #0	; signature global NEWLOC : int @ 109:1
 	GLOB *1
-LIMIT:	DATi #0	; signature global LIMIT : int @ 110:17
+LIMIT:	DATi #0	; signature global LIMIT : int @ 110:1
 	GLOB *1
-OLDLC2:	DATi #0	; signature global OLDLC2 : int @ 111:18
+OLDLC2:	DATi #0	; signature global OLDLC2 : int @ 111:1
 	GLOB *1
-OLDLOC:	DATi #0	; signature global OLDLOC : int @ 112:18
+OLDLOC:	DATi #0	; signature global OLDLOC : int @ 112:1
 	GLOB *1
-DTOTAL:	DATi #0	; signature global DTOTAL : int @ 113:18
+DTOTAL:	DATi #0	; signature global DTOTAL : int @ 113:1
 	GLOB *1
-SPK:	DATi #0	; signature global SPK : int @ 114:15
+SPK:	DATi #0	; signature global SPK : int @ 114:1
 	GLOB *1
-WD1:	DATi #0	; signature global WD1 : int @ 115:15
+WD1:	DATi #0	; signature global WD1 : int @ 115:1
 	GLOB *1
-WD1X:	DATi #0	; signature global WD1X : int @ 116:16
+WD1X:	DATi #0	; signature global WD1X : int @ 116:1
 	GLOB *1
-WD2:	DATi #0	; signature global WD2 : int @ 117:15
+WD2:	DATi #0	; signature global WD2 : int @ 117:1
 	GLOB *1
-WD2X:	DATi #0	; signature global WD2X : int @ 118:16
-LINUSE:	! DEFi #12482	; signature const LINUSE : int @ 120:25
-TRVS:	! DEFi #879	; signature const TRVS : int @ 121:21
-CLSSES:	! DEFi #10	; signature const CLSSES : int @ 122:22
-TRNVLS:	! DEFi #4	; signature const TRNVLS : int @ 123:21
-TABNDX:	! DEFi #326	; signature const TABNDX : int @ 124:23
-HNTMAX:	! DEFi #10	; signature const HNTMAX : int @ 125:22
-; signature extern array PTEXT[] : unknown @ 127:19
-; signature extern array RTEXT[] : unknown @ 128:19
-; signature extern array CTEXT[] : unknown @ 129:19
-; signature extern array STEXT[] : unknown @ 130:19
-; signature extern array LTEXT[] : unknown @ 131:19
-; signature extern array KEY[] : unknown @ 132:17
-; signature extern array LOCSND[] : unknown @ 133:20
-; signature extern array LINES[] : unknown @ 134:19
-; signature extern array CVAL[] : unknown @ 135:18
-; signature extern array TTEXT[] : unknown @ 136:19
-; signature extern array TRNVAL[] : unknown @ 137:20
-; signature extern array TRAVEL[] : unknown @ 138:20
-; signature extern array KTAB[] : unknown @ 139:18
-; signature extern array PLAC[] : unknown @ 140:18
-; signature extern array FIXD[] : unknown @ 141:18
-; signature extern array ACTSPK[] : unknown @ 142:20
-; signature extern array HINTS[] : unknown @ 143:19
-ATAB:	GLOB *331	; signature array ATAB[331] : unknown @ 145:24
+WD2X:	DATi #0	; signature global WD2X : int @ 118:1
+LINUSE:	! DEFi #12482	; signature const LINUSE : int @ 120:1
+TRVS:	! DEFi #879	; signature const TRVS : int @ 121:1
+CLSSES:	! DEFi #10	; signature const CLSSES : int @ 122:1
+TRNVLS:	! DEFi #4	; signature const TRNVLS : int @ 123:1
+TABNDX:	! DEFi #326	; signature const TABNDX : int @ 124:1
+HNTMAX:	! DEFi #10	; signature const HNTMAX : int @ 125:1
+; signature extern array PTEXT[] : unknown @ 127:1
+; signature extern array RTEXT[] : unknown @ 128:1
+; signature extern array CTEXT[] : unknown @ 129:1
+; signature extern array STEXT[] : unknown @ 130:1
+; signature extern array LTEXT[] : unknown @ 131:1
+; signature extern array KEY[] : unknown @ 132:1
+; signature extern array LOCSND[] : unknown @ 133:1
+; signature extern array LINES[] : unknown @ 134:1
+; signature extern array CVAL[] : unknown @ 135:1
+; signature extern array TTEXT[] : unknown @ 136:1
+; signature extern array TRNVAL[] : unknown @ 137:1
+; signature extern array TRAVEL[] : unknown @ 138:1
+; signature extern array KTAB[] : unknown @ 139:1
+; signature extern array PLAC[] : unknown @ 140:1
+; signature extern array FIXD[] : unknown @ 141:1
+; signature extern array ACTSPK[] : unknown @ 142:1
+; signature extern array HINTS[] : unknown @ 143:1
+ATAB:	GLOB *331	; signature array ATAB[331] : unknown @ 145:1
 	DATA #0 #576501649 #407342340 #358494005 #627590956
 	DATA #342272582 #375946497 #376088268 #325880787
 	DATA #527121725 #305669668 #575365029 #575505951
@@ -256,7 +256,7 @@ ATAB:	GLOB *331	; signature array ATAB[331] : unknown @ 145:24
 	DATA #540281369 #426091588 #644153937 #474943296
 	DATA #475114733 #645429828 #709109173 #741757328
 	DATA #557397993 #0 #0 #0 #0 #0
-COND:	GLOB *186	; signature array COND[186] : unknown @ 168:24
+COND:	GLOB *186	; signature array COND[186] : unknown @ 168:1
 	DATA #0 #5 #1 #5 #5 #1 #131089 #5 #1050625 #1 #1 #0 #0
 	DATA #4096 #0 #1048576 #0 #0 #0 #8192 #0 #0 #0 #0 #6 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #4 #0 #0 #0 #16400
@@ -274,92 +274,92 @@ COND:	GLOB *186	; signature array COND[186] : unknown @ 168:24
 	DATA #262161 #262161 #262161 #262161 #262161 #262161
 	DATA #262161 #1 #4 #4 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0
-OBJSND:	GLOB *101	; signature array OBJSND[101] : unknown @ 182:26
+OBJSND:	GLOB *101	; signature array OBJSND[101] : unknown @ 182:1
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #3 #0 #0 #2 #0 #0 #1 #2 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #6 #0 #0 #0 #0 #0 #0 #4 #0 #3 #0 #0
 	DATA #0 #0 #0 #0 #0 #1 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
-OBJTXT:	GLOB *101	; signature array OBJTXT[101] : unknown @ 191:26
+OBJTXT:	GLOB *101	; signature array OBJTXT[101] : unknown @ 191:1
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #1 #0 #0 #1 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #1 #0 #1 #0 #0 #0 #0 #0 #0 #0 #0 #1 #1 #1 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
-AXE:	! DEFi #28	; signature const AXE : int @ 200:19
-BATTER:	! DEFi #39	; signature const BATTER : int @ 201:22
-BEAR:	! DEFi #35	; signature const BEAR : int @ 202:20
-BIRD:	! DEFi #8	; signature const BIRD : int @ 203:19
-BLOOD:	! DEFi #44	; signature const BLOOD : int @ 204:21
-BOTTLE:	! DEFi #20	; signature const BOTTLE : int @ 205:22
-CAGE:	! DEFi #4	; signature const CAGE : int @ 206:19
-CAVITY:	! DEFi #43	; signature const CAVITY : int @ 207:22
-CHASM:	! DEFi #32	; signature const CHASM : int @ 208:21
-CLAM:	! DEFi #14	; signature const CLAM : int @ 209:20
-DOOR:	! DEFi #9	; signature const DOOR : int @ 210:19
-DRAGON:	! DEFi #31	; signature const DRAGON : int @ 211:22
-DWARF:	! DEFi #17	; signature const DWARF : int @ 212:21
-FISSUR:	! DEFi #12	; signature const FISSUR : int @ 213:22
-FOOD:	! DEFi #19	; signature const FOOD : int @ 214:20
-GRATE:	! DEFi #3	; signature const GRATE : int @ 215:20
-KEYS:	! DEFi #1	; signature const KEYS : int @ 216:19
-KNIFE:	! DEFi #18	; signature const KNIFE : int @ 217:21
-LAMP:	! DEFi #2	; signature const LAMP : int @ 218:19
-MAGZIN:	! DEFi #16	; signature const MAGZIN : int @ 219:22
-MESSAG:	! DEFi #36	; signature const MESSAG : int @ 220:22
-MIRROR:	! DEFi #23	; signature const MIRROR : int @ 221:22
-OGRE:	! DEFi #41	; signature const OGRE : int @ 222:20
-OIL:	! DEFi #22	; signature const OIL : int @ 223:19
-OYSTER:	! DEFi #15	; signature const OYSTER : int @ 224:22
-PILLOW:	! DEFi #10	; signature const PILLOW : int @ 225:22
-PLANT:	! DEFi #24	; signature const PLANT : int @ 226:21
-PLANT2:	! DEFi #25	; signature const PLANT2 : int @ 227:22
-RESER:	! DEFi #45	; signature const RESER : int @ 228:21
-ROD:	! DEFi #5	; signature const ROD : int @ 229:18
-ROD2:	! DEFi #6	; signature const ROD2 : int @ 230:19
-gSIGN:	! DEFi #49	; signature const gSIGN : int @ 231:21
-SNAKE:	! DEFi #11	; signature const SNAKE : int @ 232:21
-STEPS:	! DEFi #7	; signature const STEPS : int @ 233:20
-TROLL:	! DEFi #33	; signature const TROLL : int @ 234:21
-TROLL2:	! DEFi #34	; signature const TROLL2 : int @ 235:22
-URN:	! DEFi #42	; signature const URN : int @ 236:19
-VEND:	! DEFi #38	; signature const VEND : int @ 237:20
-VOLCAN:	! DEFi #37	; signature const VOLCAN : int @ 238:22
-WATER:	! DEFi #21	; signature const WATER : int @ 239:21
-AMBER:	! DEFi #67	; signature const AMBER : int @ 240:21
-CHAIN:	! DEFi #64	; signature const CHAIN : int @ 241:21
-CHEST:	! DEFi #55	; signature const CHEST : int @ 242:21
-COINS:	! DEFi #54	; signature const COINS : int @ 243:21
-EGGS:	! DEFi #56	; signature const EGGS : int @ 244:20
-EMRALD:	! DEFi #59	; signature const EMRALD : int @ 245:22
-JADE:	! DEFi #66	; signature const JADE : int @ 246:20
-NUGGET:	! DEFi #50	; signature const NUGGET : int @ 247:22
-PEARL:	! DEFi #61	; signature const PEARL : int @ 248:21
-PYRAM:	! DEFi #60	; signature const PYRAM : int @ 249:21
-RUBY:	! DEFi #65	; signature const RUBY : int @ 250:20
-RUG:	! DEFi #62	; signature const RUG : int @ 251:19
-SAPPH:	! DEFi #68	; signature const SAPPH : int @ 252:21
-TRIDNT:	! DEFi #57	; signature const TRIDNT : int @ 253:22
-VASE:	! DEFi #58	; signature const VASE : int @ 254:20
-BACK:	! DEFi #8	; signature const BACK : int @ 255:19
-CAVE:	! DEFi #67	; signature const CAVE : int @ 256:20
-DPRSSN:	! DEFi #63	; signature const DPRSSN : int @ 257:22
-ENTER:	! DEFi #3	; signature const ENTER : int @ 258:20
-ENTRNC:	! DEFi #64	; signature const ENTRNC : int @ 259:22
-LOOK:	! DEFi #57	; signature const LOOK : int @ 260:20
-NUL:	! DEFi #21	; signature const NUL : int @ 261:19
-STREAM:	! DEFi #14	; signature const STREAM : int @ 262:22
-FIND:	! DEFi #19	; signature const FIND : int @ 263:20
-INVENT:	! DEFi #20	; signature const INVENT : int @ 264:22
-LOCK:	! DEFi #6	; signature const LOCK : int @ 265:19
-SAY:	! DEFi #3	; signature const SAY : int @ 266:18
-THROW:	! DEFi #17	; signature const THROW : int @ 267:21
-; signature extern func score() -> unknown @ 269:22
+AXE:	! DEFi #28	; signature const AXE : int @ 200:1
+BATTER:	! DEFi #39	; signature const BATTER : int @ 201:1
+BEAR:	! DEFi #35	; signature const BEAR : int @ 202:1
+BIRD:	! DEFi #8	; signature const BIRD : int @ 203:1
+BLOOD:	! DEFi #44	; signature const BLOOD : int @ 204:1
+BOTTLE:	! DEFi #20	; signature const BOTTLE : int @ 205:1
+CAGE:	! DEFi #4	; signature const CAGE : int @ 206:1
+CAVITY:	! DEFi #43	; signature const CAVITY : int @ 207:1
+CHASM:	! DEFi #32	; signature const CHASM : int @ 208:1
+CLAM:	! DEFi #14	; signature const CLAM : int @ 209:1
+DOOR:	! DEFi #9	; signature const DOOR : int @ 210:1
+DRAGON:	! DEFi #31	; signature const DRAGON : int @ 211:1
+DWARF:	! DEFi #17	; signature const DWARF : int @ 212:1
+FISSUR:	! DEFi #12	; signature const FISSUR : int @ 213:1
+FOOD:	! DEFi #19	; signature const FOOD : int @ 214:1
+GRATE:	! DEFi #3	; signature const GRATE : int @ 215:1
+KEYS:	! DEFi #1	; signature const KEYS : int @ 216:1
+KNIFE:	! DEFi #18	; signature const KNIFE : int @ 217:1
+LAMP:	! DEFi #2	; signature const LAMP : int @ 218:1
+MAGZIN:	! DEFi #16	; signature const MAGZIN : int @ 219:1
+MESSAG:	! DEFi #36	; signature const MESSAG : int @ 220:1
+MIRROR:	! DEFi #23	; signature const MIRROR : int @ 221:1
+OGRE:	! DEFi #41	; signature const OGRE : int @ 222:1
+OIL:	! DEFi #22	; signature const OIL : int @ 223:1
+OYSTER:	! DEFi #15	; signature const OYSTER : int @ 224:1
+PILLOW:	! DEFi #10	; signature const PILLOW : int @ 225:1
+PLANT:	! DEFi #24	; signature const PLANT : int @ 226:1
+PLANT2:	! DEFi #25	; signature const PLANT2 : int @ 227:1
+RESER:	! DEFi #45	; signature const RESER : int @ 228:1
+ROD:	! DEFi #5	; signature const ROD : int @ 229:1
+ROD2:	! DEFi #6	; signature const ROD2 : int @ 230:1
+gSIGN:	! DEFi #49	; signature const gSIGN : int @ 231:1
+SNAKE:	! DEFi #11	; signature const SNAKE : int @ 232:1
+STEPS:	! DEFi #7	; signature const STEPS : int @ 233:1
+TROLL:	! DEFi #33	; signature const TROLL : int @ 234:1
+TROLL2:	! DEFi #34	; signature const TROLL2 : int @ 235:1
+URN:	! DEFi #42	; signature const URN : int @ 236:1
+VEND:	! DEFi #38	; signature const VEND : int @ 237:1
+VOLCAN:	! DEFi #37	; signature const VOLCAN : int @ 238:1
+WATER:	! DEFi #21	; signature const WATER : int @ 239:1
+AMBER:	! DEFi #67	; signature const AMBER : int @ 240:1
+CHAIN:	! DEFi #64	; signature const CHAIN : int @ 241:1
+CHEST:	! DEFi #55	; signature const CHEST : int @ 242:1
+COINS:	! DEFi #54	; signature const COINS : int @ 243:1
+EGGS:	! DEFi #56	; signature const EGGS : int @ 244:1
+EMRALD:	! DEFi #59	; signature const EMRALD : int @ 245:1
+JADE:	! DEFi #66	; signature const JADE : int @ 246:1
+NUGGET:	! DEFi #50	; signature const NUGGET : int @ 247:1
+PEARL:	! DEFi #61	; signature const PEARL : int @ 248:1
+PYRAM:	! DEFi #60	; signature const PYRAM : int @ 249:1
+RUBY:	! DEFi #65	; signature const RUBY : int @ 250:1
+RUG:	! DEFi #62	; signature const RUG : int @ 251:1
+SAPPH:	! DEFi #68	; signature const SAPPH : int @ 252:1
+TRIDNT:	! DEFi #57	; signature const TRIDNT : int @ 253:1
+VASE:	! DEFi #58	; signature const VASE : int @ 254:1
+BACK:	! DEFi #8	; signature const BACK : int @ 255:1
+CAVE:	! DEFi #67	; signature const CAVE : int @ 256:1
+DPRSSN:	! DEFi #63	; signature const DPRSSN : int @ 257:1
+ENTER:	! DEFi #3	; signature const ENTER : int @ 258:1
+ENTRNC:	! DEFi #64	; signature const ENTRNC : int @ 259:1
+LOOK:	! DEFi #57	; signature const LOOK : int @ 260:1
+NUL:	! DEFi #21	; signature const NUL : int @ 261:1
+STREAM:	! DEFi #14	; signature const STREAM : int @ 262:1
+FIND:	! DEFi #19	; signature const FIND : int @ 263:1
+INVENT:	! DEFi #20	; signature const INVENT : int @ 264:1
+LOCK:	! DEFi #6	; signature const LOCK : int @ 265:1
+SAY:	! DEFi #3	; signature const SAY : int @ 266:1
+THROW:	! DEFi #17	; signature const THROW : int @ 267:1
+; signature extern func score() -> unknown @ 269:1
 
 ;-----------------------------------------------------------------------------
-fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:15
+fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:1
 		PARA *1
 	$NUM:	INPi
 	$numString:	LOCA *3
@@ -379,10 +379,10 @@ fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:15
 		RETU   	; }
 
 	GLOB *1
-fRAN_R:	DATi #0	; signature global fRAN_R : int @ 308:22
+fRAN_R:	DATi #0	; signature global fRAN_R : int @ 308:1
 
 ;-----------------------------------------------------------------------------
-fRAN:	FUNC	; signature func fRAN(int RANGE) -> int @ 310:15
+fRAN:	FUNC	; signature func fRAN(int RANGE) -> int @ 310:1
 	$RAN:	OUTi
 	$RANGE:	INPi
 	$D:	LOCi
@@ -410,12 +410,12 @@ fRAN:	FUNC	; signature func fRAN(int RANGE) -> int @ 310:15
 		RETU   	; }
 
 	! MULi <A> #7 #2
-fMPINIT_RUNS:	CNST *<A>	; signature array fMPINIT_RUNS[] : unknown @ 348:36
+fMPINIT_RUNS:	CNST *<A>	; signature array fMPINIT_RUNS[] : unknown @ 348:1
 	DATA #32 #34 #39 #46 #65 #90 #97 #122 #37 #37 #48 #57 #0
 	DATA #126
 
 ;-----------------------------------------------------------------------------
-fMPINIT:	FUNC	; signature func fMPINIT() -> void @ 350:18
+fMPINIT:	FUNC	; signature func fMPINIT() -> void @ 350:1
 		PARA *1
 	$FIRST:	LOCi
 	$I:	LOCi
@@ -470,7 +470,7 @@ fMPINIT:	FUNC	; signature func fMPINIT() -> void @ 350:18
 
 
 ;-----------------------------------------------------------------------------
-fMAPLIN:	FUNC	; signature func fMAPLIN(int FIL) -> void @ 380:18
+fMAPLIN:	FUNC	; signature func fMAPLIN(int FIL) -> void @ 380:1
 		PARA *1
 	$FIL:	INPi
 	$I:	LOCi
@@ -513,10 +513,10 @@ fMAPLIN:	FUNC	; signature func fMAPLIN(int FIL) -> void @ 380:18
 	.f9:	RETU   	; }
 
 	GLOB *1
-fGETTXT_SPLITTING:	DATi #-1	; signature global fGETTXT_SPLITTING : int @ 437:34
+fGETTXT_SPLITTING:	DATi #-1	; signature global fGETTXT_SPLITTING : int @ 437:1
 
 ;-----------------------------------------------------------------------------
-fGETTXT:	FUNC	; signature func fGETTXT(int SKIP, int ONEWRD, int UPPER, int HASH) -> int @ 439:18
+fGETTXT:	FUNC	; signature func fGETTXT(int SKIP, int ONEWRD, int UPPER, int HASH) -> int @ 439:1
 	$GETTXT:	OUTi
 	$SKIP:	INPi
 	$ONEWRD:	INPi
@@ -590,7 +590,7 @@ fGETTXT:	FUNC	; signature func fGETTXT(int SKIP, int ONEWRD, int UPPER, int HASH
 
 
 ;-----------------------------------------------------------------------------
-fMAKEWD:	FUNC	; signature func fMAKEWD(int LETTRS) -> int @ 486:18
+fMAKEWD:	FUNC	; signature func fMAKEWD(int LETTRS) -> int @ 486:1
 	$MAKEWD:	OUTi
 	$LETTRS:	INPi
 	$I:	LOCi
@@ -620,7 +620,7 @@ fMAKEWD:	FUNC	; signature func fMAKEWD(int LETTRS) -> int @ 486:18
 
 
 ;-----------------------------------------------------------------------------
-fSHFTXT:	FUNC	; signature func fSHFTXT(int FROM, int DELTA) -> void @ 510:18
+fSHFTXT:	FUNC	; signature func fSHFTXT(int FROM, int DELTA) -> void @ 510:1
 		PARA *1
 	$FROM:	INPi
 	$DELTA:	INPi
@@ -651,7 +651,7 @@ fSHFTXT:	FUNC	; signature func fSHFTXT(int FROM, int DELTA) -> void @ 510:18
 
 
 ;-----------------------------------------------------------------------------
-fPUTTXT:	FUNC	; signature func fPUTTXT(int WORD, ptr sTATE, int CASE, int HASH) -> void @ 528:18
+fPUTTXT:	FUNC	; signature func fPUTTXT(int WORD, ptr sTATE, int CASE, int HASH) -> void @ 528:1
 		PARA *1
 	$WORD:	INPi
 	$sTATE:	INPp
@@ -730,7 +730,7 @@ fPUTTXT:	FUNC	; signature func fPUTTXT(int WORD, ptr sTATE, int CASE, int HASH) 
 
 
 ;-----------------------------------------------------------------------------
-fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
+fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:1
 		PARA *1
 	$I:	LOCi
 	$VAL:	LOCi
@@ -763,7 +763,7 @@ fTYPE:	FUNC	; signature func fTYPE() -> void @ 569:16
 
 
 ;-----------------------------------------------------------------------------
-fTYPE0:	FUNC	; signature func fTYPE0() -> void @ 590:17
+fTYPE0:	FUNC	; signature func fTYPE0() -> void @ 590:1
 		PARA *1
 	$TEMP:	LOCi
 ;-----------------------------------------------------------------------------
@@ -775,7 +775,7 @@ fTYPE0:	FUNC	; signature func fTYPE0() -> void @ 590:17
 
 
 ;-----------------------------------------------------------------------------
-fSPEAK:	FUNC	; signature func fSPEAK(int N) -> void @ 602:17
+fSPEAK:	FUNC	; signature func fSPEAK(int N) -> void @ 602:1
 		PARA *1
 	$N:	INPi
 	$BLANK:	LOCi
@@ -973,7 +973,7 @@ fSPEAK:	FUNC	; signature func fSPEAK(int N) -> void @ 602:17
 
 
 ;-----------------------------------------------------------------------------
-fPSPEAK:	FUNC	; signature func fPSPEAK(int MSG, int SKIP) -> void @ 715:18
+fPSPEAK:	FUNC	; signature func fPSPEAK(int MSG, int SKIP) -> void @ 715:1
 		PARA *1
 	$MSG:	INPi
 	$SKIP:	INPi
@@ -997,7 +997,7 @@ fPSPEAK:	FUNC	; signature func fPSPEAK(int MSG, int SKIP) -> void @ 715:18
 
 
 ;-----------------------------------------------------------------------------
-fRSPEAK:	FUNC	; signature func fRSPEAK(int I) -> void @ 731:18
+fRSPEAK:	FUNC	; signature func fRSPEAK(int I) -> void @ 731:1
 		PARA *1
 	$I:	INPi
 ;-----------------------------------------------------------------------------
@@ -1008,7 +1008,7 @@ fRSPEAK:	FUNC	; signature func fRSPEAK(int I) -> void @ 731:18
 
 
 ;-----------------------------------------------------------------------------
-fSETPRM:	FUNC	; signature func fSETPRM(int FIRST, int P1, int P2) -> void @ 737:18
+fSETPRM:	FUNC	; signature func fSETPRM(int FIRST, int P1, int P2) -> void @ 737:1
 		PARA *1
 	$FIRST:	INPi
 	$P1:	INPi
@@ -1024,7 +1024,7 @@ fSETPRM:	FUNC	; signature func fSETPRM(int FIRST, int P1, int P2) -> void @ 737:
 
 
 ;-----------------------------------------------------------------------------
-fGETIN:	FUNC	; signature func fGETIN(ptr wORD1, ptr wORD1X, ptr wORD2, ptr wORD2X) -> void @ 748:17
+fGETIN:	FUNC	; signature func fGETIN(ptr wORD1, ptr wORD1X, ptr wORD2, ptr wORD2X) -> void @ 748:1
 		PARA *1
 	$wORD1:	INPp
 	$wORD1X:	INPp
@@ -1094,7 +1094,7 @@ fGETIN:	FUNC	; signature func fGETIN(ptr wORD1, ptr wORD1X, ptr wORD2, ptr wORD2
 
 
 ;-----------------------------------------------------------------------------
-fYES:	FUNC	; signature func fYES(int X, int Y, int Z) -> int @ 779:15
+fYES:	FUNC	; signature func fYES(int X, int Y, int Z) -> int @ 779:1
 	$YES:	OUTi
 	$X:	INPi
 	$Y:	INPi
@@ -1138,7 +1138,7 @@ fYES:	FUNC	; signature func fYES(int X, int Y, int Z) -> int @ 779:15
 
 
 ;-----------------------------------------------------------------------------
-score:	FUNC	; signature func score(int MODE) -> void @ 808:16
+score:	FUNC	; signature func score(int MODE) -> void @ 808:1
 		PARA *1
 	$MODE:	INPi
 	$I:	LOCi
@@ -1340,7 +1340,7 @@ score:	FUNC	; signature func score(int MODE) -> void @ 808:16
 
 
 ;-----------------------------------------------------------------------------
-fVOCAB:	FUNC	; signature func fVOCAB(int ID, int INIT) -> int @ 924:17
+fVOCAB:	FUNC	; signature func fVOCAB(int ID, int INIT) -> int @ 924:1
 	$VOCAB:	OUTi
 	$ID:	INPi
 	$INIT:	INPi
@@ -1378,7 +1378,7 @@ fVOCAB:	FUNC	; signature func fVOCAB(int ID, int INIT) -> int @ 924:17
 
 
 ;-----------------------------------------------------------------------------
-fCARRY:	FUNC	; signature func fCARRY(int OBJECT, int WHERE) -> void @ 955:17
+fCARRY:	FUNC	; signature func fCARRY(int OBJECT, int WHERE) -> void @ 955:1
 		PARA *1
 	$OBJECT:	INPi
 	$WHERE:	INPi
@@ -1408,7 +1408,7 @@ fCARRY:	FUNC	; signature func fCARRY(int OBJECT, int WHERE) -> void @ 955:17
 
 
 ;-----------------------------------------------------------------------------
-fDROP:	FUNC	; signature func fDROP(int OBJECT, int WHERE) -> void @ 979:16
+fDROP:	FUNC	; signature func fDROP(int OBJECT, int WHERE) -> void @ 979:1
 		PARA *1
 	$OBJECT:	INPi
 	$WHERE:	INPi
@@ -1431,7 +1431,7 @@ fDROP:	FUNC	; signature func fDROP(int OBJECT, int WHERE) -> void @ 979:16
 
 
 ;-----------------------------------------------------------------------------
-fMOVE:	FUNC	; signature func fMOVE(int OBJECT, int WHERE) -> void @ 995:16
+fMOVE:	FUNC	; signature func fMOVE(int OBJECT, int WHERE) -> void @ 995:1
 		PARA *1
 	$OBJECT:	INPi
 	$WHERE:	INPi
@@ -1454,7 +1454,7 @@ fMOVE:	FUNC	; signature func fMOVE(int OBJECT, int WHERE) -> void @ 995:16
 
 
 ;-----------------------------------------------------------------------------
-fDSTROY:	FUNC	; signature func fDSTROY(int OBJECT) -> void @ 1011:18
+fDSTROY:	FUNC	; signature func fDSTROY(int OBJECT) -> void @ 1011:1
 		PARA *1
 	$OBJECT:	INPi
 ;-----------------------------------------------------------------------------
@@ -1465,7 +1465,7 @@ fDSTROY:	FUNC	; signature func fDSTROY(int OBJECT) -> void @ 1011:18
 
 
 ;-----------------------------------------------------------------------------
-fJUGGLE:	FUNC	; signature func fJUGGLE(int OBJECT) -> void @ 1017:18
+fJUGGLE:	FUNC	; signature func fJUGGLE(int OBJECT) -> void @ 1017:1
 		PARA *1
 	$OBJECT:	INPi
 	$I:	LOCi
@@ -1483,7 +1483,7 @@ fJUGGLE:	FUNC	; signature func fJUGGLE(int OBJECT) -> void @ 1017:18
 
 
 ;-----------------------------------------------------------------------------
-fPUT:	FUNC	; signature func fPUT(int OBJECT, int WHERE, int PVAL) -> int @ 1029:15
+fPUT:	FUNC	; signature func fPUT(int OBJECT, int WHERE, int PVAL) -> int @ 1029:1
 	$PUT:	OUTi
 	$OBJECT:	INPi
 	$WHERE:	INPi
@@ -1497,7 +1497,7 @@ fPUT:	FUNC	; signature func fPUT(int OBJECT, int WHERE, int PVAL) -> int @ 1029:
 
 
 ;-----------------------------------------------------------------------------
-fATDWRF:	FUNC	; signature func fATDWRF(int WHERE) -> int @ 1039:18
+fATDWRF:	FUNC	; signature func fATDWRF(int WHERE) -> int @ 1039:1
 	$ATDWRF:	OUTi
 	$WHERE:	INPi
 	$I:	LOCi
@@ -1523,7 +1523,7 @@ fATDWRF:	FUNC	; signature func fATDWRF(int WHERE) -> int @ 1039:18
 
 
 ;-----------------------------------------------------------------------------
-fRNDVOC:	FUNC	; signature func fRNDVOC(int CHAR, int FORCE) -> int @ 1060:18
+fRNDVOC:	FUNC	; signature func fRNDVOC(int CHAR, int FORCE) -> int @ 1060:1
 	$RNDVOC:	OUTi
 	$CHAR:	INPi
 	$FORCE:	INPi
@@ -1569,7 +1569,7 @@ fRNDVOC:	FUNC	; signature func fRNDVOC(int CHAR, int FORCE) -> int @ 1060:18
 
 
 ;-----------------------------------------------------------------------------
-initialise:	FUNC	; signature func initialise() -> void @ 1100:21
+initialise:	FUNC	; signature func initialise() -> void @ 1100:1
 		PARA *1
 	$I:	LOCi
 	$K:	LOCi
@@ -1676,7 +1676,7 @@ initialise:	FUNC	; signature func initialise() -> void @ 1100:21
 
 
 ;-----------------------------------------------------------------------------
-TOTING:	FUNC	; signature func TOTING(int OBJ) -> int @ 1218:17
+TOTING:	FUNC	; signature func TOTING(int OBJ) -> int @ 1218:1
 	$r:	OUTi
 	$OBJ:	INPi
 ;-----------------------------------------------------------------------------
@@ -1688,7 +1688,7 @@ TOTING:	FUNC	; signature func TOTING(int OBJ) -> int @ 1218:17
 
 
 ;-----------------------------------------------------------------------------
-AT:	FUNC	; signature func AT(int OBJ, int LOC) -> int @ 1219:13
+AT:	FUNC	; signature func AT(int OBJ, int LOC) -> int @ 1219:1
 	$r:	OUTi
 	$OBJ:	INPi
 	$LOC:	INPi
@@ -1703,7 +1703,7 @@ AT:	FUNC	; signature func AT(int OBJ, int LOC) -> int @ 1219:13
 
 
 ;-----------------------------------------------------------------------------
-HERE:	FUNC	; signature func HERE(int OBJ, int LOC) -> int @ 1220:15
+HERE:	FUNC	; signature func HERE(int OBJ, int LOC) -> int @ 1220:1
 	$r:	OUTi
 	$OBJ:	INPi
 	$LOC:	INPi
@@ -1721,7 +1721,7 @@ HERE:	FUNC	; signature func HERE(int OBJ, int LOC) -> int @ 1220:15
 
 
 ;-----------------------------------------------------------------------------
-LIQ2:	FUNC	; signature func LIQ2(int PBOTL) -> int @ 1221:15
+LIQ2:	FUNC	; signature func LIQ2(int PBOTL) -> int @ 1221:1
 	$r:	OUTi
 	$PBOTL:	INPi
 ;-----------------------------------------------------------------------------
@@ -1735,7 +1735,7 @@ LIQ2:	FUNC	; signature func LIQ2(int PBOTL) -> int @ 1221:15
 
 
 ;-----------------------------------------------------------------------------
-LIQ:	FUNC	; signature func LIQ() -> int @ 1222:14
+LIQ:	FUNC	; signature func LIQ() -> int @ 1222:1
 	$r:	OUTi
 ;-----------------------------------------------------------------------------
 		PEEK %0 &PROP:BOTTLE 	; if ((int)global PROP[BOTTLE]<0) r = -1-(int)global PROP[BOTTLE]
@@ -1751,7 +1751,7 @@ LIQ:	FUNC	; signature func LIQ() -> int @ 1222:14
 
 
 ;-----------------------------------------------------------------------------
-LIQLOC:	FUNC	; signature func LIQLOC(int LOC) -> int @ 1223:17
+LIQLOC:	FUNC	; signature func LIQLOC(int LOC) -> int @ 1223:1
 	$r:	OUTi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
@@ -1771,7 +1771,7 @@ LIQLOC:	FUNC	; signature func LIQLOC(int LOC) -> int @ 1223:17
 
 
 ;-----------------------------------------------------------------------------
-CNDBIT:	FUNC	; signature func CNDBIT(int L, int N) -> int @ 1224:17
+CNDBIT:	FUNC	; signature func CNDBIT(int L, int N) -> int @ 1224:1
 	$r:	OUTi
 	$L:	INPi
 	$N:	INPi
@@ -1786,7 +1786,7 @@ CNDBIT:	FUNC	; signature func CNDBIT(int L, int N) -> int @ 1224:17
 
 
 ;-----------------------------------------------------------------------------
-DARK:	FUNC	; signature func DARK(int LOC) -> int @ 1225:15
+DARK:	FUNC	; signature func DARK(int LOC) -> int @ 1225:1
 	$r:	OUTi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
@@ -1806,7 +1806,7 @@ DARK:	FUNC	; signature func DARK(int LOC) -> int @ 1225:15
 
 
 ;-----------------------------------------------------------------------------
-GSTONE:	FUNC	; signature func GSTONE(int OBJ) -> int @ 1226:17
+GSTONE:	FUNC	; signature func GSTONE(int OBJ) -> int @ 1226:1
 	$r:	OUTi
 	$OBJ:	INPi
 ;-----------------------------------------------------------------------------
@@ -1820,7 +1820,7 @@ GSTONE:	FUNC	; signature func GSTONE(int OBJ) -> int @ 1226:17
 
 
 ;-----------------------------------------------------------------------------
-FOREST:	FUNC	; signature func FOREST(int LOC) -> int @ 1227:17
+FOREST:	FUNC	; signature func FOREST(int LOC) -> int @ 1227:1
 	$r:	OUTi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
@@ -1832,7 +1832,7 @@ FOREST:	FUNC	; signature func FOREST(int LOC) -> int @ 1227:17
 
 
 ;-----------------------------------------------------------------------------
-OUTSID:	FUNC	; signature func OUTSID(int LOC) -> int @ 1235:17
+OUTSID:	FUNC	; signature func OUTSID(int LOC) -> int @ 1235:1
 	$r:	OUTi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
@@ -1850,7 +1850,7 @@ OUTSID:	FUNC	; signature func OUTSID(int LOC) -> int @ 1235:17
 
 
 ;-----------------------------------------------------------------------------
-INDEEP:	FUNC	; signature func INDEEP(int LOC) -> int @ 1236:17
+INDEEP:	FUNC	; signature func INDEEP(int LOC) -> int @ 1236:1
 	$r:	OUTi
 	$LOC:	INPi
 ;-----------------------------------------------------------------------------
@@ -1865,7 +1865,7 @@ INDEEP:	FUNC	; signature func INDEEP(int LOC) -> int @ 1236:17
 
 
 ;-----------------------------------------------------------------------------
-discard:	FUNC	; signature func discard(int just_do_it) -> int @ 1242:18
+discard:	FUNC	; signature func discard(int just_do_it) -> int @ 1242:1
 	$goValue:	OUTi
 	$just_do_it:	INPi
 	$lK:	LOCi
@@ -2060,7 +2060,7 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ 1242:18
 
 
 ;-----------------------------------------------------------------------------
-fill:	FUNC	; signature func fill(int OBJ) -> int @ 1315:15
+fill:	FUNC	; signature func fill(int OBJ) -> int @ 1315:1
 	$goValue:	OUTi
 	$OBJ:	INPi
 	$lK:	LOCi
@@ -2167,7 +2167,7 @@ fill:	FUNC	; signature func fill(int OBJ) -> int @ 1315:15
 
 
 ;-----------------------------------------------------------------------------
-carry:	FUNC	; signature func carry() -> int @ 1361:16
+carry:	FUNC	; signature func carry() -> int @ 1361:1
 	$goValue:	OUTi
 	$lK:	LOCi
 	$lLOC:	LOCi
@@ -2312,7 +2312,7 @@ carry:	FUNC	; signature func carry() -> int @ 1361:16
 
 
 ;-----------------------------------------------------------------------------
-attack:	FUNC	; signature func attack() -> int @ 1421:17
+attack:	FUNC	; signature func attack() -> int @ 1421:1
 	$goValue:	OUTi
 	$I:	LOCi
 	$lK:	LOCi
@@ -2546,7 +2546,7 @@ attack:	FUNC	; signature func attack() -> int @ 1421:17
 
 
 ;-----------------------------------------------------------------------------
-feed:	FUNC	; signature func feed(int OBJ) -> int @ 1515:15
+feed:	FUNC	; signature func feed(int OBJ) -> int @ 1515:1
 	$goValue:	OUTi
 	$OBJ:	INPi
 	$lLOC:	LOCi
@@ -2630,7 +2630,7 @@ feed:	FUNC	; signature func feed(int OBJ) -> int @ 1515:15
 
 
 ;-----------------------------------------------------------------------------
-doThrow:	FUNC	; signature func doThrow() -> int @ 1570:18
+doThrow:	FUNC	; signature func doThrow() -> int @ 1570:1
 	$goValue:	OUTi
 	$I:	LOCi
 	$lLOC:	LOCi
@@ -2766,7 +2766,7 @@ doThrow:	FUNC	; signature func doThrow() -> int @ 1570:18
 
 
 ;-----------------------------------------------------------------------------
-action:	FUNC	; signature func action(int STARTAT) -> int @ 1641:17
+action:	FUNC	; signature func action(int STARTAT) -> int @ 1641:1
 	$goValue:	OUTi
 	$STARTAT:	INPi
 	$I:	LOCi
@@ -3934,7 +3934,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ 1641:17
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 2207:15
+main:	FUNC	; signature func main() -> void @ 2207:1
 		PARA *1
 	$gotoChoice:	LOCi
 	$I:	LOCi

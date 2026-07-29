@@ -1,83 +1,83 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 2:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 3:1
-DEBUG:	! DEFi #0	; signature const DEBUG : int @ 5:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 1:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 2:1
+DEBUG:	! DEFi #0	; signature const DEBUG : int @ 3:1
 	! ADDi <A> #8 #2
-STRIDE:	! DEFi <A>	; signature const STRIDE : int @ 6:1
+STRIDE:	! DEFi <A>	; signature const STRIDE : int @ 5:1
 	! ADDi <A> #8 #4
 	! MULi <A> <A> #STRIDE
-BOARD_SIZE:	! DEFi <A>	; signature const BOARD_SIZE : int @ 7:1
+BOARD_SIZE:	! DEFi <A>	; signature const BOARD_SIZE : int @ 6:1
 	! MULi <A> #STRIDE #2
-RANK_1:	! DEFi <A>	; signature const RANK_1 : int @ 8:1
+RANK_1:	! DEFi <A>	; signature const RANK_1 : int @ 7:1
 	! MULi <A> #STRIDE #3
-RANK_2:	! DEFi <A>	; signature const RANK_2 : int @ 9:1
+RANK_2:	! DEFi <A>	; signature const RANK_2 : int @ 8:1
 	! MULi <A> #STRIDE #4
-RANK_3:	! DEFi <A>	; signature const RANK_3 : int @ 10:1
+RANK_3:	! DEFi <A>	; signature const RANK_3 : int @ 9:1
 	! MULi <A> #STRIDE #5
-RANK_4:	! DEFi <A>	; signature const RANK_4 : int @ 11:1
+RANK_4:	! DEFi <A>	; signature const RANK_4 : int @ 10:1
 	! MULi <A> #STRIDE #6
-RANK_5:	! DEFi <A>	; signature const RANK_5 : int @ 12:1
+RANK_5:	! DEFi <A>	; signature const RANK_5 : int @ 11:1
 	! MULi <A> #STRIDE #7
-RANK_6:	! DEFi <A>	; signature const RANK_6 : int @ 13:1
+RANK_6:	! DEFi <A>	; signature const RANK_6 : int @ 12:1
 	! MULi <A> #STRIDE #8
-RANK_7:	! DEFi <A>	; signature const RANK_7 : int @ 14:1
+RANK_7:	! DEFi <A>	; signature const RANK_7 : int @ 13:1
 	! MULi <A> #STRIDE #9
-RANK_8:	! DEFi <A>	; signature const RANK_8 : int @ 16:1
-OFFBOARD:	! DEFi #-1	; signature const OFFBOARD : int @ 17:1
-EMPTY:	! DEFi #0	; signature const EMPTY : int @ 18:1
-PAWN:	! DEFi #1	; signature const PAWN : int @ 19:1
-ROOK:	! DEFi #2	; signature const ROOK : int @ 20:1
-KNIGHT:	! DEFi #3	; signature const KNIGHT : int @ 21:1
-BISHOP:	! DEFi #4	; signature const BISHOP : int @ 22:1
-QUEEN:	! DEFi #5	; signature const QUEEN : int @ 23:1
-KING:	! DEFi #6	; signature const KING : int @ 24:1
-BLACK:	! DEFi #8	; signature const BLACK : int @ 25:1
-WHITE:	! DEFi #16	; signature const WHITE : int @ 26:1
-PIECE_MASK:	! DEFi #7	; signature const PIECE_MASK : int @ 27:1
+RANK_8:	! DEFi <A>	; signature const RANK_8 : int @ 14:1
+OFFBOARD:	! DEFi #-1	; signature const OFFBOARD : int @ 16:1
+EMPTY:	! DEFi #0	; signature const EMPTY : int @ 17:1
+PAWN:	! DEFi #1	; signature const PAWN : int @ 18:1
+ROOK:	! DEFi #2	; signature const ROOK : int @ 19:1
+KNIGHT:	! DEFi #3	; signature const KNIGHT : int @ 20:1
+BISHOP:	! DEFi #4	; signature const BISHOP : int @ 21:1
+QUEEN:	! DEFi #5	; signature const QUEEN : int @ 22:1
+KING:	! DEFi #6	; signature const KING : int @ 23:1
+BLACK:	! DEFi #8	; signature const BLACK : int @ 24:1
+WHITE:	! DEFi #16	; signature const WHITE : int @ 25:1
+PIECE_MASK:	! DEFi #7	; signature const PIECE_MASK : int @ 26:1
 	! IORi <A> #BLACK #WHITE
-COLOR_MASK:	! DEFi <A>	; signature const COLOR_MASK : int @ 28:1
+COLOR_MASK:	! DEFi <A>	; signature const COLOR_MASK : int @ 27:1
 	! XORi <A> #BLACK #WHITE
-COLOR_SWITCH_XOR:	! DEFi <A>	; signature const COLOR_SWITCH_XOR : int @ 29:1
-MOVED_MASK:	! DEFi #32	; signature const MOVED_MASK : int @ 30:1
+COLOR_SWITCH_XOR:	! DEFi <A>	; signature const COLOR_SWITCH_XOR : int @ 28:1
+MOVED_MASK:	! DEFi #32	; signature const MOVED_MASK : int @ 29:1
 	! IORi <A> #PIECE_MASK #MOVED_MASK
-PIECE_AND_MOVED_MASK:	! DEFi <A>	; signature const PIECE_AND_MOVED_MASK : int @ 31:1
-MAX_PIECE_AND_MOVED_VALUE:	! DEFi #64	; signature const MAX_PIECE_AND_MOVED_VALUE : int @ 33:1
-MIN_DEPTH:	! DEFi #4	; signature const MIN_DEPTH : int @ 34:1
-MAX_DEPTH:	! DEFi #16	; signature const MAX_DEPTH : int @ 35:1
-QUIESCENCE_DEPTH:	! DEFi #8	; signature const QUIESCENCE_DEPTH : int @ 36:1
-TO_SHIFT:	! DEFi #8	; signature const TO_SHIFT : int @ 37:1
-SCORE_SHIFT:	! DEFi #16	; signature const SCORE_SHIFT : int @ 38:1
-MOVE_MASK:	! DEFi #0x0000FFFF	; signature const MOVE_MASK : int @ 39:1
-FROM_MASK:	! DEFi #0x000000FF	; signature const FROM_MASK : int @ 40:1
-TO_MASK:	! DEFi #0x0000FF00	; signature const TO_MASK : int @ 41:1
+PIECE_AND_MOVED_MASK:	! DEFi <A>	; signature const PIECE_AND_MOVED_MASK : int @ 30:1
+MAX_PIECE_AND_MOVED_VALUE:	! DEFi #64	; signature const MAX_PIECE_AND_MOVED_VALUE : int @ 31:1
+MIN_DEPTH:	! DEFi #4	; signature const MIN_DEPTH : int @ 33:1
+MAX_DEPTH:	! DEFi #16	; signature const MAX_DEPTH : int @ 34:1
+QUIESCENCE_DEPTH:	! DEFi #8	; signature const QUIESCENCE_DEPTH : int @ 35:1
+TO_SHIFT:	! DEFi #8	; signature const TO_SHIFT : int @ 36:1
+SCORE_SHIFT:	! DEFi #16	; signature const SCORE_SHIFT : int @ 37:1
+MOVE_MASK:	! DEFi #0x0000FFFF	; signature const MOVE_MASK : int @ 38:1
+FROM_MASK:	! DEFi #0x000000FF	; signature const FROM_MASK : int @ 39:1
+TO_MASK:	! DEFi #0x0000FF00	; signature const TO_MASK : int @ 40:1
 	! XORi <A> #MOVE_MASK #-1
-SCORE_MASK:	! DEFi <A>	; signature const SCORE_MASK : int @ 42:1
-CHECKMATE:	! DEFi #0xFFFF	; signature const CHECKMATE : int @ 43:1
-STALEMATE:	! DEFi #0xFFFE	; signature const STALEMATE : int @ 44:1
-IN_CHECK:	! DEFi #0xFFFD	; signature const IN_CHECK : int @ 45:1
-VALID_MOVE:	! DEFi #0xFFFC	; signature const VALID_MOVE : int @ 46:1
-INVALID_MOVE:	! DEFi #-1	; signature const INVALID_MOVE : int @ 47:1
-MAX_SCORE:	! DEFi #10000	; signature const MAX_SCORE : int @ 48:1
+SCORE_MASK:	! DEFi <A>	; signature const SCORE_MASK : int @ 41:1
+CHECKMATE:	! DEFi #0xFFFF	; signature const CHECKMATE : int @ 42:1
+STALEMATE:	! DEFi #0xFFFE	; signature const STALEMATE : int @ 43:1
+IN_CHECK:	! DEFi #0xFFFD	; signature const IN_CHECK : int @ 44:1
+VALID_MOVE:	! DEFi #0xFFFC	; signature const VALID_MOVE : int @ 45:1
+INVALID_MOVE:	! DEFi #-1	; signature const INVALID_MOVE : int @ 46:1
+MAX_SCORE:	! DEFi #10000	; signature const MAX_SCORE : int @ 47:1
 	! SUBi <A> #0 #MAX_SCORE
-MIN_SCORE:	! DEFi <A>	; signature const MIN_SCORE : int @ 49:1
-PAWN_VALUE:	! DEFi #100	; signature const PAWN_VALUE : int @ 50:1
+MIN_SCORE:	! DEFi <A>	; signature const MIN_SCORE : int @ 48:1
+PAWN_VALUE:	! DEFi #100	; signature const PAWN_VALUE : int @ 49:1
 	! MULi <A> #9 #PAWN_VALUE
-QUEEN_VALUE:	! DEFi <A>	; signature const QUEEN_VALUE : int @ 51:1
+QUEEN_VALUE:	! DEFi <A>	; signature const QUEEN_VALUE : int @ 50:1
 	! SUBi <A> #QUEEN_VALUE #PAWN_VALUE
-PROMOTION_SCORE:	! DEFi <A>	; signature const PROMOTION_SCORE : int @ 52:1
+PROMOTION_SCORE:	! DEFi <A>	; signature const PROMOTION_SCORE : int @ 51:1
 	! SUBi <A> #MAX_SCORE #MAX_DEPTH
-CAPTURE_KING_MIN_SCORE:	! DEFi <A>	; signature const CAPTURE_KING_MIN_SCORE : int @ 53:1
+CAPTURE_KING_MIN_SCORE:	! DEFi <A>	; signature const CAPTURE_KING_MIN_SCORE : int @ 52:1
 	! DIVi <A> #PAWN_VALUE #10
-RANDOM_AMOUNT:	! DEFi <A>	; signature const RANDOM_AMOUNT : int @ 54:1
+RANDOM_AMOUNT:	! DEFi <A>	; signature const RANDOM_AMOUNT : int @ 53:1
 	! DIVi <A> #PAWN_VALUE #10
-PAWN_ADVANCE_SCORE:	! DEFi <A>	; signature const PAWN_ADVANCE_SCORE : int @ 55:1
+PAWN_ADVANCE_SCORE:	! DEFi <A>	; signature const PAWN_ADVANCE_SCORE : int @ 54:1
 	! DIVi <A> #PAWN_VALUE #2
-CASTLING_SCORE:	! DEFi <A>	; signature const CASTLING_SCORE : int @ 56:1
-CASTLING_MASK:	! DEFi #0x80	; signature const CASTLING_MASK : int @ 57:1
-HISTORY_SIZE:	! DEFi #256	; signature const HISTORY_SIZE : int @ 59:1
-DIRS:	CNST *8	; signature array DIRS[8] : unknown @ 59:24
+CASTLING_SCORE:	! DEFi <A>	; signature const CASTLING_SCORE : int @ 55:1
+CASTLING_MASK:	! DEFi #0x80	; signature const CASTLING_MASK : int @ 56:1
+HISTORY_SIZE:	! DEFi #256	; signature const HISTORY_SIZE : int @ 57:1
+DIRS:	CNST *8	; signature array DIRS[8] : unknown @ 59:1
 	! ADDi <A> #STRIDE #1
 	DATA #STRIDE
 	DATA <A>
@@ -93,7 +93,7 @@ DIRS:	CNST *8	; signature array DIRS[8] : unknown @ 59:24
 	! SUBi <A> #STRIDE #1
 	DATA #-1
 	DATA <A>
-KNIGHT_MOVES:	CNST *8	; signature array KNIGHT_MOVES[8] : unknown @ 60:32
+KNIGHT_MOVES:	CNST *8	; signature array KNIGHT_MOVES[8] : unknown @ 60:1
 	! MULi <A> #STRIDE #2
 	! ADDi <A> <A> #1
 	! ADDi <B> #2 #STRIDE
@@ -117,7 +117,7 @@ KNIGHT_MOVES:	CNST *8	; signature array KNIGHT_MOVES[8] : unknown @ 60:32
 	! SUBi <B> <B> #1
 	DATA <A>
 	DATA <B>
-PIECE_VALUES:	CNST *7	; signature array PIECE_VALUES[7] : unknown @ 61:32
+PIECE_VALUES:	CNST *7	; signature array PIECE_VALUES[7] : unknown @ 61:1
 	! MULi <B> #5 #PAWN_VALUE
 	DATA #0 #PAWN_VALUE
 	! MULi <A> #3 #PAWN_VALUE
@@ -127,12 +127,12 @@ PIECE_VALUES:	CNST *7	; signature array PIECE_VALUES[7] : unknown @ 61:32
 	DATA <B>
 	DATA #QUEEN_VALUE #MAX_SCORE
 	! ADDi <B> #8 #4
-RANK_VALUES:	CNST *<B>	; signature array RANK_VALUES[] : unknown @ 62:34
+RANK_VALUES:	CNST *<B>	; signature array RANK_VALUES[] : unknown @ 62:1
 	DATA #0 #0 #0 #30 #50 #60 #60 #50 #30 #0 #0 #0
-MAX_TARGET_SQUARES:	! DEFi #32	; signature const MAX_TARGET_SQUARES : int @ 65:1
-MAX_MOVES:	! DEFi #256	; signature const MAX_MOVES : int @ 66:1
-MAX_CAPTURES:	! DEFi #32	; signature const MAX_CAPTURES : int @ 69:1
-INIT_BOARD:	CNST *BOARD_SIZE	; signature array INIT_BOARD[BOARD_SIZE] : unknown @ 69:39
+MAX_TARGET_SQUARES:	! DEFi #32	; signature const MAX_TARGET_SQUARES : int @ 64:1
+MAX_MOVES:	! DEFi #256	; signature const MAX_MOVES : int @ 65:1
+MAX_CAPTURES:	! DEFi #32	; signature const MAX_CAPTURES : int @ 66:1
+INIT_BOARD:	CNST *BOARD_SIZE	; signature array INIT_BOARD[BOARD_SIZE] : unknown @ 69:1
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
@@ -220,45 +220,45 @@ INIT_BOARD:	CNST *BOARD_SIZE	; signature array INIT_BOARD[BOARD_SIZE] : unknown 
 	DATi #32
 	DATs PRNBQK  prnbqk
 	DATi #32 #0
-PIECE_CHARS:	! DEFp &.s_PRNBQK_4d2	; signature const PIECE_CHARS : ptr @ 84:47
-PIECE_NAMES:	CNST *8	; signature array PIECE_NAMES[8] : unknown @ 85:31
+PIECE_CHARS:	! DEFp &.s_PRNBQK_4d2	; signature const PIECE_CHARS : ptr @ 84:1
+PIECE_NAMES:	CNST *8	; signature array PIECE_NAMES[8] : unknown @ 85:1
 	DATA &.s_PRNBQK_4d2:16 &.s_pawn_4d2 &.s_rook_4d3
 	DATA &.s_knight_4d4 &.s_bishop_4d5 &.s_queen_4d6
 	DATA &.s_king_4d7
-board:	GLOB *BOARD_SIZE	; signature array board[BOARD_SIZE] : unknown @ 87:31
-nextPiece:	GLOB *BOARD_SIZE	; signature array nextPiece[BOARD_SIZE] : unknown @ 88:35
-prevPiece:	GLOB *BOARD_SIZE	; signature array prevPiece[BOARD_SIZE] : unknown @ 89:35
+board:	GLOB *BOARD_SIZE	; signature array board[BOARD_SIZE] : unknown @ 87:1
+nextPiece:	GLOB *BOARD_SIZE	; signature array nextPiece[BOARD_SIZE] : unknown @ 88:1
+prevPiece:	GLOB *BOARD_SIZE	; signature array prevPiece[BOARD_SIZE] : unknown @ 89:1
 	GLOB *1
-xCapture:	DATi #0	; signature global xCapture : int @ 90:20
+xCapture:	DATi #0	; signature global xCapture : int @ 90:1
 	GLOB *1
-turnColor:	DATi #0	; signature global turnColor : int @ 91:21
+turnColor:	DATi #0	; signature global turnColor : int @ 91:1
 	GLOB *1
-boardHash:	DATi #0	; signature global boardHash : int @ 92:21
+boardHash:	DATi #0	; signature global boardHash : int @ 92:1
 	! MULi <B> #64 #1024
-HASH_TABLE_SIZE:	! DEFi <B>	; signature const HASH_TABLE_SIZE : int @ 110:1
+HASH_TABLE_SIZE:	! DEFi <B>	; signature const HASH_TABLE_SIZE : int @ 109:1
 	! XORi <B> #0 #-1
-HASH_MASK:	! DEFi <B>	; signature const HASH_MASK : int @ 112:1
+HASH_MASK:	! DEFi <B>	; signature const HASH_MASK : int @ 110:1
 	! MULi <B> #BOARD_SIZE #64
-pieceKeys:	GLOB *<B>	; signature array pieceKeys[] : unknown @ 112:40
-xCaptureKeys:	GLOB *256	; signature array xCaptureKeys[256] : unknown @ 113:31
+pieceKeys:	GLOB *<B>	; signature array pieceKeys[] : unknown @ 112:1
+xCaptureKeys:	GLOB *256	; signature array xCaptureKeys[256] : unknown @ 113:1
 	! ADDi <B> #WHITE #1
-colorKeys:	GLOB *<B>	; signature array colorKeys[] : unknown @ 114:34
-hashTable:	GLOB *HASH_TABLE_SIZE	; signature array hashTable[HASH_TABLE_SIZE] : unknown @ 115:40
+colorKeys:	GLOB *<B>	; signature array colorKeys[] : unknown @ 114:1
+hashTable:	GLOB *HASH_TABLE_SIZE	; signature array hashTable[HASH_TABLE_SIZE] : unknown @ 115:1
 	GLOB *1
-evalCounter:	DATi #0	; signature global evalCounter : int @ 116:27
+evalCounter:	DATi #0	; signature global evalCounter : int @ 116:1
 	! MULi <B> #HISTORY_SIZE #4
-history:	GLOB *<B>	; signature array history[] : unknown @ 117:39
+history:	GLOB *<B>	; signature array history[] : unknown @ 117:1
 	GLOB *1
-historyCount:	DATi #0	; signature global historyCount : int @ 118:28
+historyCount:	DATi #0	; signature global historyCount : int @ 118:1
 	GLOB *1
-minEvals:	DATi #10000	; signature global minEvals : int @ 119:28
+minEvals:	DATi #10000	; signature global minEvals : int @ 119:1
 	GLOB *1
-randPX:	DATi #123456789	; signature global randPX : int @ 121:30
+randPX:	DATi #123456789	; signature global randPX : int @ 121:1
 	GLOB *1
-randPY:	DATi #362436069	; signature global randPY : int @ 122:30
+randPY:	DATi #362436069	; signature global randPY : int @ 122:1
 
 ;-----------------------------------------------------------------------------
-nextRandom:	FUNC	; signature func nextRandom() -> int @ 124:21
+nextRandom:	FUNC	; signature func nextRandom() -> int @ 124:1
 	$y:	OUTi
 	$x:	LOCi
 	$t:	LOCi
@@ -279,7 +279,7 @@ nextRandom:	FUNC	; signature func nextRandom() -> int @ 124:21
 
 
 ;-----------------------------------------------------------------------------
-initGlobals:	FUNC	; signature func initGlobals() -> void @ 139:22
+initGlobals:	FUNC	; signature func initGlobals() -> void @ 139:1
 		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
@@ -302,7 +302,7 @@ initGlobals:	FUNC	; signature func initGlobals() -> void @ 139:22
 
 
 ;-----------------------------------------------------------------------------
-isOnBoard:	FUNC	; signature func isOnBoard(int square) -> int @ 157:20
+isOnBoard:	FUNC	; signature func isOnBoard(int square) -> int @ 157:1
 	$b:	OUTi
 	$square:	INPi
 ;-----------------------------------------------------------------------------
@@ -316,7 +316,7 @@ isOnBoard:	FUNC	; signature func isOnBoard(int square) -> int @ 157:20
 
 
 ;-----------------------------------------------------------------------------
-isValidColor:	FUNC	; signature func isValidColor(int color) -> int @ 166:23
+isValidColor:	FUNC	; signature func isValidColor(int color) -> int @ 166:1
 	$b:	OUTi
 	$color:	INPi
 ;-----------------------------------------------------------------------------
@@ -328,7 +328,7 @@ isValidColor:	FUNC	; signature func isValidColor(int color) -> int @ 166:23
 
 
 ;-----------------------------------------------------------------------------
-isValidMove:	FUNC	; signature func isValidMove(int move) -> int @ 175:22
+isValidMove:	FUNC	; signature func isValidMove(int move) -> int @ 175:1
 	$b:	OUTi
 	$move:	INPi
 ;-----------------------------------------------------------------------------
@@ -347,7 +347,7 @@ isValidMove:	FUNC	; signature func isValidMove(int move) -> int @ 175:22
 
 
 ;-----------------------------------------------------------------------------
-isValidPiece:	FUNC	; signature func isValidPiece(int piece) -> int @ 184:23
+isValidPiece:	FUNC	; signature func isValidPiece(int piece) -> int @ 184:1
 	$b:	OUTi
 	$piece:	INPi
 ;-----------------------------------------------------------------------------
@@ -366,7 +366,7 @@ isValidPiece:	FUNC	; signature func isValidPiece(int piece) -> int @ 184:23
 
 
 ;-----------------------------------------------------------------------------
-moveFrom:	FUNC	; signature func moveFrom(int move) -> int @ 194:19
+moveFrom:	FUNC	; signature func moveFrom(int move) -> int @ 194:1
 	$f:	OUTi
 	$move:	INPi
 ;-----------------------------------------------------------------------------
@@ -381,7 +381,7 @@ moveFrom:	FUNC	; signature func moveFrom(int move) -> int @ 194:19
 
 
 ;-----------------------------------------------------------------------------
-moveTo:	FUNC	; signature func moveTo(int move) -> int @ 201:17
+moveTo:	FUNC	; signature func moveTo(int move) -> int @ 201:1
 	$t:	OUTi
 	$move:	INPi
 ;-----------------------------------------------------------------------------
@@ -396,7 +396,7 @@ moveTo:	FUNC	; signature func moveTo(int move) -> int @ 201:17
 
 
 ;-----------------------------------------------------------------------------
-makeMove:	FUNC	; signature func makeMove(int fromCol, int fromRow, int toCol, int toRow) -> int @ 208:19
+makeMove:	FUNC	; signature func makeMove(int fromCol, int fromRow, int toCol, int toRow) -> int @ 208:1
 	$m:	OUTi
 	$fromCol:	INPi
 	$fromRow:	INPi
@@ -417,7 +417,7 @@ makeMove:	FUNC	; signature func makeMove(int fromCol, int fromRow, int toCol, in
 
 
 ;-----------------------------------------------------------------------------
-switchColor:	FUNC	; signature func switchColor(int color) -> int @ 214:22
+switchColor:	FUNC	; signature func switchColor(int color) -> int @ 214:1
 	$c:	OUTi
 	$color:	INPi
 ;-----------------------------------------------------------------------------
@@ -426,7 +426,7 @@ switchColor:	FUNC	; signature func switchColor(int color) -> int @ 214:22
 
 
 ;-----------------------------------------------------------------------------
-checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 220:25
+checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 220:1
 	$b:	OUTi
 	! IORi <B> #BLACK #WHITE
 	! ADDi <B> <B> #1
@@ -611,7 +611,7 @@ checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 220:25
 
 
 ;-----------------------------------------------------------------------------
-putPiece:	FUNC	; signature func putPiece(int square, int piece) -> void @ 276:19
+putPiece:	FUNC	; signature func putPiece(int square, int piece) -> void @ 276:1
 		PARA *1
 	$square:	INPi
 	$piece:	INPi
@@ -655,7 +655,7 @@ putPiece:	FUNC	; signature func putPiece(int square, int piece) -> void @ 276:19
 
 
 ;-----------------------------------------------------------------------------
-liftPiece:	FUNC	; signature func liftPiece(int square) -> void @ 293:20
+liftPiece:	FUNC	; signature func liftPiece(int square) -> void @ 293:1
 		PARA *1
 	$square:	INPi
 	$piece:	LOCi
@@ -689,7 +689,7 @@ liftPiece:	FUNC	; signature func liftPiece(int square) -> void @ 293:20
 
 
 ;-----------------------------------------------------------------------------
-movePiece:	FUNC	; signature func movePiece(int frm, int t, int newPiece) -> void @ 308:20
+movePiece:	FUNC	; signature func movePiece(int frm, int t, int newPiece) -> void @ 308:1
 		PARA *1
 	$frm:	INPi
 	$t:	INPi
@@ -759,7 +759,7 @@ movePiece:	FUNC	; signature func movePiece(int frm, int t, int newPiece) -> void
 
 
 ;-----------------------------------------------------------------------------
-restart:	FUNC	; signature func restart() -> void @ 330:18
+restart:	FUNC	; signature func restart() -> void @ 330:1
 		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
@@ -798,7 +798,7 @@ restart:	FUNC	; signature func restart() -> void @ 330:18
 
 
 ;-----------------------------------------------------------------------------
-squareCapturesCastlingKing:	FUNC	; signature func squareCapturesCastlingKing(int square) -> int @ 353:37
+squareCapturesCastlingKing:	FUNC	; signature func squareCapturesCastlingKing(int square) -> int @ 353:1
 	$b:	OUTi
 	$square:	INPi
 ;-----------------------------------------------------------------------------
@@ -816,7 +816,7 @@ squareCapturesCastlingKing:	FUNC	; signature func squareCapturesCastlingKing(int
 
 
 ;-----------------------------------------------------------------------------
-squareCapturesKing:	FUNC	; signature func squareCapturesKing(int square) -> int @ 369:29
+squareCapturesKing:	FUNC	; signature func squareCapturesKing(int square) -> int @ 369:1
 	$b:	OUTi
 	$square:	INPi
 ;-----------------------------------------------------------------------------
@@ -838,7 +838,7 @@ squareCapturesKing:	FUNC	; signature func squareCapturesKing(int square) -> int 
 
 
 ;-----------------------------------------------------------------------------
-doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> int @ 394:17
+doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> int @ 394:1
 	$score:	OUTi
 	$frm:	INPi
 	$t:	INPi
@@ -1083,7 +1083,7 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 
 
 ;-----------------------------------------------------------------------------
-undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> void @ 565:19
+undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> void @ 565:1
 		PARA *1
 	$frm:	INPi
 	$t:	INPi
@@ -1216,7 +1216,7 @@ undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captu
 
 
 ;-----------------------------------------------------------------------------
-traceRBQ:	FUNC	; signature func traceRBQ(int color, int frm, int toCount, ptr tos, int start, int step) -> int @ 643:19
+traceRBQ:	FUNC	; signature func traceRBQ(int color, int frm, int toCount, ptr tos, int start, int step) -> int @ 643:1
 	$newToCount:	OUTi
 	$color:	INPi
 	$frm:	INPi
@@ -1260,7 +1260,7 @@ traceRBQ:	FUNC	; signature func traceRBQ(int color, int frm, int toCount, ptr to
 
 
 ;-----------------------------------------------------------------------------
-listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @ 670:20
+listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @ 670:1
 	$toCount:	OUTi
 	$color:	INPi
 	$frm:	INPi
@@ -1422,7 +1422,7 @@ listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @
 
 
 ;-----------------------------------------------------------------------------
-canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 757:25
+canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 757:1
 	$b:	OUTi
 	$color:	INPi
 	$tos:	LOCA *MAX_TARGET_SQUARES
@@ -1457,10 +1457,10 @@ canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 757:25
 	.e2:	NOOP
 	returnNow:	RETU   	; }
 
-; signature extern func search() -> unknown @ 777:23
+; signature extern func search() -> unknown @ 777:1
 
 ;-----------------------------------------------------------------------------
-findBestMove:	FUNC	; signature func findBestMove(int lowestScore, int alpha, int beta, int depth, int score, int movesCount, ptr moves) -> int @ 779:23
+findBestMove:	FUNC	; signature func findBestMove(int lowestScore, int alpha, int beta, int depth, int score, int movesCount, ptr moves) -> int @ 779:1
 	$bestMove:	OUTi
 	$lowestScore:	INPi
 	$alpha:	INPi
@@ -1537,7 +1537,7 @@ findBestMove:	FUNC	; signature func findBestMove(int lowestScore, int alpha, int
 
 
 ;-----------------------------------------------------------------------------
-searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int depth, int score, int firstMove) -> int @ 819:25
+searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int depth, int score, int firstMove) -> int @ 819:1
 	$bestMove:	OUTi
 	$alpha:	INPi
 	$beta:	INPi
@@ -1628,7 +1628,7 @@ searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int de
 
 
 ;-----------------------------------------------------------------------------
-searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int score, int firstMove) -> int @ 867:20
+searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int score, int firstMove) -> int @ 867:1
 	$bestMove:	OUTi
 	$alpha:	INPi
 	$beta:	INPi
@@ -1736,7 +1736,7 @@ searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int s
 
 
 ;-----------------------------------------------------------------------------
-search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, int capturesOnly) -> int @ 934:17
+search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, int capturesOnly) -> int @ 934:1
 	$result:	OUTi
 	$alpha:	INPi
 	$beta:	INPi
@@ -1846,7 +1846,7 @@ search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, 
 
 
 ;-----------------------------------------------------------------------------
-executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1015:22
+executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1015:1
 	$status:	OUTi
 	$move:	INPi
 	$tos:	LOCA *MAX_TARGET_SQUARES
@@ -1939,13 +1939,13 @@ executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1015:22
 	.e2:	MOVi $status #INVALID_MOVE 	; status = INVALID_MOVE
 	returnNow:	RETU   	; }
 
-; signature extern native print() -> unknown @ 1053:20
-; signature extern native printInt() -> unknown @ 1054:23
-; signature extern native printLF() -> unknown @ 1055:22
-; signature extern native input() -> unknown @ 1056:20
+; signature extern native print() -> unknown @ 1053:1
+; signature extern native printInt() -> unknown @ 1054:1
+; signature extern native printLF() -> unknown @ 1055:1
+; signature extern native input() -> unknown @ 1056:1
 
 ;-----------------------------------------------------------------------------
-getComputerMove:	FUNC	; signature func getComputerMove() -> int @ 1061:26
+getComputerMove:	FUNC	; signature func getComputerMove() -> int @ 1061:1
 	$move:	OUTi
 	$d:	LOCi
 	$m:	LOCi
@@ -1992,17 +1992,17 @@ getComputerMove:	FUNC	; signature func getComputerMove() -> int @ 1061:26
 	.a6:	ANDi $move $m #MOVE_MASK	; move = (m & MOVE_MASK)
 		RETU   	; }
 
-LET_COMPUTER_PLAY:	! DEFi #-1	; signature const LET_COMPUTER_PLAY : int @ 1088:1
-TAKE_BACK:	! DEFi #-2	; signature const TAKE_BACK : int @ 1089:1
-NEW_GAME:	! DEFi #-3	; signature const NEW_GAME : int @ 1090:1
-QUIT:	! DEFi #-4	; signature const QUIT : int @ 1091:1
-SYNTAX_ERROR:	! DEFi #-5	; signature const SYNTAX_ERROR : int @ 1092:1
-MATE:	! DEFi #-6	; signature const MATE : int @ 1093:1
-SET_MAXIMUM_LEVEL:	! DEFi #-93	; signature const SET_MAXIMUM_LEVEL : int @ 1094:1
-SET_MINIMUM_LEVEL:	! DEFi #-101	; signature const SET_MINIMUM_LEVEL : int @ 1096:1
+LET_COMPUTER_PLAY:	! DEFi #-1	; signature const LET_COMPUTER_PLAY : int @ 1087:1
+TAKE_BACK:	! DEFi #-2	; signature const TAKE_BACK : int @ 1088:1
+NEW_GAME:	! DEFi #-3	; signature const NEW_GAME : int @ 1089:1
+QUIT:	! DEFi #-4	; signature const QUIT : int @ 1090:1
+SYNTAX_ERROR:	! DEFi #-5	; signature const SYNTAX_ERROR : int @ 1091:1
+MATE:	! DEFi #-6	; signature const MATE : int @ 1092:1
+SET_MAXIMUM_LEVEL:	! DEFi #-93	; signature const SET_MAXIMUM_LEVEL : int @ 1093:1
+SET_MINIMUM_LEVEL:	! DEFi #-101	; signature const SET_MINIMUM_LEVEL : int @ 1094:1
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 1096:17
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 1096:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -2024,7 +2024,7 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 1096:17
 
 
 ;-----------------------------------------------------------------------------
-strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 1108:18
+strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 1108:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -2054,7 +2054,7 @@ strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 1108:18
 
 
 ;-----------------------------------------------------------------------------
-toupper:	FUNC	; signature func toupper(int c) -> int @ 1128:18
+toupper:	FUNC	; signature func toupper(int c) -> int @ 1128:1
 	$u:	OUTi
 	$c:	INPi
 ;-----------------------------------------------------------------------------
@@ -2067,7 +2067,7 @@ toupper:	FUNC	; signature func toupper(int c) -> int @ 1128:18
 
 
 ;-----------------------------------------------------------------------------
-getUserMove:	FUNC	; signature func getUserMove() -> int @ 1137:22
+getUserMove:	FUNC	; signature func getUserMove() -> int @ 1137:1
 	$result:	OUTi
 	$level:	LOCi
 	$s:	LOCA *256
@@ -2167,7 +2167,7 @@ getUserMove:	FUNC	; signature func getUserMove() -> int @ 1137:22
 
 
 ;-----------------------------------------------------------------------------
-printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1175:21
+printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1175:1
 		PARA *1
 	$frm:	INPi
 	$t:	INPi
@@ -2248,7 +2248,7 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1175:21
 
 
 ;-----------------------------------------------------------------------------
-registerMove:	FUNC	; signature func registerMove(int move, int piece, int captured, int xCapture) -> void @ 1216:23
+registerMove:	FUNC	; signature func registerMove(int move, int piece, int captured, int xCapture) -> void @ 1216:1
 		PARA *1
 	$move:	INPi
 	$piece:	INPi
@@ -2287,7 +2287,7 @@ registerMove:	FUNC	; signature func registerMove(int move, int piece, int captur
 
 
 ;-----------------------------------------------------------------------------
-takeBackMove:	FUNC	; signature func takeBackMove() -> int @ 1233:23
+takeBackMove:	FUNC	; signature func takeBackMove() -> int @ 1233:1
 	$move:	OUTi
 	$i:	LOCi
 	$frm:	LOCi
@@ -2323,7 +2323,7 @@ takeBackMove:	FUNC	; signature func takeBackMove() -> int @ 1233:23
 
 
 ;-----------------------------------------------------------------------------
-setLevel:	FUNC	; signature func setLevel(int level) -> void @ 1249:19
+setLevel:	FUNC	; signature func setLevel(int level) -> void @ 1249:1
 		PARA *1
 	$level:	INPi
 	$i:	LOCi
@@ -2339,7 +2339,7 @@ setLevel:	FUNC	; signature func setLevel(int level) -> void @ 1249:19
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 1256:15
+main:	FUNC	; signature func main() -> void @ 1256:1
 		PARA *1
 	$lastFrom:	LOCi
 	$lastTo:	LOCi

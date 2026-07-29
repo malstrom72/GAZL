@@ -7,10 +7,10 @@
  .o.Vec2.y:			! DEFi #<a>
  					! ADDi <a> #<a> #1
  .z.Vec2:			! DEFi #<a>
- ; signature struct Vec2 { x : int, y : int } @ mathlib.impala:16:1
+ ; signature struct Vec2 { x : int, y : int } @ mathlib.impala:11:1
 
  ;-----------------------------------------------------------------------------
- makeVec:			FUNC		; signature func makeVec(Vec2-ptr v, int x, int y) -> void @ mathlib.impala:25:18
+ makeVec:			FUNC		; signature func makeVec(Vec2-ptr v, int x, int y) -> void @ mathlib.impala:25:1
  								PARA *1
  					$v:			INPp
  					$x:			INPi
@@ -22,7 +22,7 @@
 
 
  ;-----------------------------------------------------------------------------
- addVec:			FUNC		; signature func addVec(Vec2-ptr r, Vec2-ptr a, Vec2-ptr b) -> void @ mathlib.impala:31:17
+ addVec:			FUNC		; signature func addVec(Vec2-ptr r, Vec2-ptr a, Vec2-ptr b) -> void @ mathlib.impala:31:1
  								PARA *1
  					$r:			INPp
  					$a:			INPp
@@ -40,7 +40,7 @@
 
 
  ;-----------------------------------------------------------------------------
- divmod:			FUNC		; signature func divmod(int a, int b, int-ptr rem) -> int @ mathlib.impala:37:17
+ divmod:			FUNC		; signature func divmod(int a, int b, int-ptr rem) -> int @ mathlib.impala:37:1
  					$q:			OUTi
  					$a:			INPi
  					$b:			INPi
@@ -53,12 +53,12 @@
  								POKE $rem %0 
  								RETU   							; }
 
- DEBUG:				! DEFi #1	; signature const DEBUG : int @ main.impala:10:1
- ; signature extern native printInt() -> unknown @ main.impala:13:1
- ; signature extern native printLF() -> unknown @ main.impala:15:1
+ DEBUG:				! DEFi #1	; signature const DEBUG : int @ main.impala:8:1
+ ; signature extern native printInt() -> unknown @ main.impala:12:1
+ ; signature extern native printLF() -> unknown @ main.impala:13:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ main.impala:15:15
+ main:				FUNC		; signature func main() -> void @ main.impala:15:1
  								PARA *1
  					$p:			LOCA *.z.Vec2
  					$q:			LOCA *.z.Vec2

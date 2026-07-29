@@ -1,12 +1,12 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
-; signature extern native printInt() -> unknown @ 11:1
-; signature extern native printLF() -> unknown @ 13:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 9:1
+; signature extern native printInt() -> unknown @ 10:1
+; signature extern native printLF() -> unknown @ 11:1
 
 ;-----------------------------------------------------------------------------
-nested:	FUNC	; signature func nested() -> int @ 13:17
+nested:	FUNC	; signature func nested() -> int @ 13:1
 	$n:	OUTi
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
@@ -20,7 +20,7 @@ nested:	FUNC	; signature func nested() -> int @ 13:17
 
 
 ;-----------------------------------------------------------------------------
-gotoFirst:	FUNC	; signature func gotoFirst() -> int @ 22:20
+gotoFirst:	FUNC	; signature func gotoFirst() -> int @ 22:1
 	$n:	OUTi
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
@@ -32,7 +32,7 @@ gotoFirst:	FUNC	; signature func gotoFirst() -> int @ 22:20
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 30:15
+main:	FUNC	; signature func main() -> void @ 30:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		CALL &nested %1 *1	; expects nested() -> int @ 32:19

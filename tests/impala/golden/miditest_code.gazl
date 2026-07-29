@@ -1,55 +1,55 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 18:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 19:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 27:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:33
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
+panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
 	DATA &.s__4d2 &.s__4d2 &.s__4d2 &.s_LEFTDE_4d3 &.s__4d2
 	DATA &.s__4d2 &.s__4d2 &.s_RINGMO_4d4
-; signature extern native abort() -> unknown @ 39:1
-; signature extern native trace() -> unknown @ 40:1
-; signature extern native yield() -> unknown @ 41:1
-; signature extern native write() -> unknown @ 42:1
-; signature extern native read() -> unknown @ 44:1
-; signature extern const DEBUG : int @ 46:1
-; signature extern const OPERATOR_1_NOP : int @ 47:1
-; signature extern const OPERATOR_1_AND : int @ 48:1
-; signature extern const OPERATOR_1_MUL : int @ 49:1
-; signature extern const OPERATOR_1_OSC : int @ 50:1
-; signature extern const OPERATOR_1_RND : int @ 51:1
-; signature extern const OPERATOR_1_COUNT : int @ 53:1
-; signature extern const OPERATOR_2_NOP : int @ 54:1
-; signature extern const OPERATOR_2_OR : int @ 55:1
-; signature extern const OPERATOR_2_XOR : int @ 56:1
-; signature extern const OPERATOR_2_MSK : int @ 57:1
-; signature extern const OPERATOR_2_SUB : int @ 58:1
-; signature extern const OPERATOR_2_COUNT : int @ 60:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 61:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 62:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 63:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 64:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 66:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 67:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 68:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 69:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 70:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 71:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 72:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 73:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 74:1
-; signature extern const PARAM_COUNT : int @ 76:1
-; signature extern const POSITION_INT_BITS : int @ 77:1
-; signature extern const POSITION_FRACT_BITS : int @ 79:1
+; signature extern native abort() -> unknown @ 38:1
+; signature extern native trace() -> unknown @ 39:1
+; signature extern native yield() -> unknown @ 40:1
+; signature extern native write() -> unknown @ 41:1
+; signature extern native read() -> unknown @ 42:1
+; signature extern const DEBUG : int @ 44:1
+; signature extern const OPERATOR_1_NOP : int @ 46:1
+; signature extern const OPERATOR_1_AND : int @ 47:1
+; signature extern const OPERATOR_1_MUL : int @ 48:1
+; signature extern const OPERATOR_1_OSC : int @ 49:1
+; signature extern const OPERATOR_1_RND : int @ 50:1
+; signature extern const OPERATOR_1_COUNT : int @ 51:1
+; signature extern const OPERATOR_2_NOP : int @ 53:1
+; signature extern const OPERATOR_2_OR : int @ 54:1
+; signature extern const OPERATOR_2_XOR : int @ 55:1
+; signature extern const OPERATOR_2_MSK : int @ 56:1
+; signature extern const OPERATOR_2_SUB : int @ 57:1
+; signature extern const OPERATOR_2_COUNT : int @ 58:1
+; signature extern const SWITCHES_SYNC_MASK : int @ 60:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ 61:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ 62:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 63:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ 64:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 66:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ 67:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ 68:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 69:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 70:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ 71:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 72:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 73:1
+; signature extern const PARAM_COUNT : int @ 74:1
+; signature extern const POSITION_INT_BITS : int @ 76:1
+; signature extern const POSITION_FRACT_BITS : int @ 77:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 80:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 81:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 82:1
+clock:	DATi #0	; signature global clock : int @ 79:1
+params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 80:1
+displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 81:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int @ 83:1
+instance:	DATi #0	; signature global instance : int @ 82:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 86:1
-signal:	GLOB *2	; signature array signal[2] : unknown @ 88:1
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 83:1
+signal:	GLOB *2	; signature array signal[2] : unknown @ 86:1
 	CNST *1
 	! SHLi <A> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
@@ -60,8 +60,8 @@ signal:	GLOB *2	; signature array signal[2] : unknown @ 88:1
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #SWITCHES_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int @ 95:1
-EIGHT_BIT_EXP_TABLE:	CNST *256	; signature array EIGHT_BIT_EXP_TABLE[256] : unknown @ 95:41
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 88:1
+EIGHT_BIT_EXP_TABLE:	CNST *256	; signature array EIGHT_BIT_EXP_TABLE[256] : unknown @ 95:1
 	DATA #0x0 #0x1 #0x2 #0x3 #0x4 #0x5 #0x6 #0x7 #0x8 #0x9
 	DATA #0xa #0xb #0xc #0xd #0xe #0xf #0x10 #0x11 #0x12 #0x13
 	DATA #0x14 #0x15 #0x16 #0x17 #0x18 #0x19 #0x1a #0x1b #0x1c
@@ -96,18 +96,18 @@ EIGHT_BIT_EXP_TABLE:	CNST *256	; signature array EIGHT_BIT_EXP_TABLE[256] : unkn
 	DATA #0x7c00 #0x8000 #0x8800 #0x9000 #0x9800 #0xa000
 	DATA #0xa800 #0xb000 #0xb800 #0xc000 #0xc800 #0xd000
 	DATA #0xd800 #0xe000 #0xe800 #0xf000 #0xffff
-LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 130:1
-LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 131:1
-LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 132:1
-E:	! DEFf #2.71828182845904523536	; signature const E : float @ 133:1
-HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 134:1
-PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 135:1
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 129:1
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 130:1
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 131:1
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ 132:1
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 133:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 134:1
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 136:1
-COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 138:1
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 135:1
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 136:1
 
 ;-----------------------------------------------------------------------------
-stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 138:17
+stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 138:1
 	$a:	OUTp
 	$d:	INPp
 	$s:	INPp
@@ -123,10 +123,10 @@ stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 138:17
 		GOTO @.l0  	; }
 	.e1:	RETU   	; }
 
-; signature extern const GAZL_WORD_SIZE : int @ 157:1
+; signature extern const GAZL_WORD_SIZE : int @ 156:1
 
 ;-----------------------------------------------------------------------------
-intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 157:22
+intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 157:1
 	$p:	OUTp
 	$i:	INPi
 	$radix:	INPi
@@ -173,7 +173,7 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 
 
 ;-----------------------------------------------------------------------------
-traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 175:20
+traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 175:1
 		PARA *1
 	$text:	INPp
 	$n:	INPi
@@ -211,7 +211,7 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 
 
 ;-----------------------------------------------------------------------------
-traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 191:19
+traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 191:1
 		PARA *1
 	$text:	INPp
 	$i:	INPi
@@ -226,7 +226,7 @@ traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 191:19
 
 
 ;-----------------------------------------------------------------------------
-error:	FUNC	; signature func error(ptr s) -> void @ 198:16
+error:	FUNC	; signature func error(ptr s) -> void @ 198:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
@@ -237,7 +237,7 @@ error:	FUNC	; signature func error(ptr s) -> void @ 198:16
 
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC	; signature func trunc(float x) -> float @ 204:16
+trunc:	FUNC	; signature func trunc(float x) -> float @ 204:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
@@ -251,7 +251,7 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 204:16
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 211:15
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 211:1
 	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
@@ -268,7 +268,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 211:15
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC	; signature func cos(float x) -> float @ 229:14
+cos:	FUNC	; signature func cos(float x) -> float @ 229:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -300,7 +300,7 @@ cos:	FUNC	; signature func cos(float x) -> float @ 229:14
 
 
 ;-----------------------------------------------------------------------------
-exp:	FUNC	; signature func exp(float x) -> float @ 270:14
+exp:	FUNC	; signature func exp(float x) -> float @ 270:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -322,28 +322,28 @@ exp:	FUNC	; signature func exp(float x) -> float @ 270:14
 		DIVf $y #1.0 $y	; y = 1.0 / y
 	.f1:	RETU   	; }
 
-COS_TABLE_BITS:	! DEFi #12	; signature const COS_TABLE_BITS : int @ 293:1
+COS_TABLE_BITS:	! DEFi #12	; signature const COS_TABLE_BITS : int @ 292:1
 	! SHLi <A> #1 #COS_TABLE_BITS
-COS_TABLE_SIZE:	! DEFi <A>	; signature const COS_TABLE_SIZE : int @ 294:1
-BATCH_SIZE:	! DEFi #77	; signature const BATCH_SIZE : int @ 294:26
+COS_TABLE_SIZE:	! DEFi <A>	; signature const COS_TABLE_SIZE : int @ 293:1
+BATCH_SIZE:	! DEFi #77	; signature const BATCH_SIZE : int @ 294:1
 	! ADDi <A> #COS_TABLE_SIZE #1
-cosTable:	GLOB *<A>	; signature array cosTable[] : unknown @ 299:1
-pitchTable:	GLOB *32	; signature array pitchTable[32] : unknown @ 299:28
+cosTable:	GLOB *<A>	; signature array cosTable[] : unknown @ 298:1
+pitchTable:	GLOB *32	; signature array pitchTable[32] : unknown @ 299:1
 	GLOB *1
-doReset:	DATi #FALSE	; signature global doReset : int @ 302:1
+doReset:	DATi #FALSE	; signature global doReset : int @ 301:1
 	GLOB *1
-rate:	DATi #0	; signature global rate : int @ 303:1
+rate:	DATi #0	; signature global rate : int @ 302:1
 	GLOB *1
-diff:	DATi #0	; signature global diff : int @ 304:1
+diff:	DATi #0	; signature global diff : int @ 303:1
 	GLOB *1
-delayL:	DATi #0	; signature global delayL : int @ 305:1
+delayL:	DATi #0	; signature global delayL : int @ 304:1
 	GLOB *1
-delayR:	DATi #0	; signature global delayR : int @ 306:1
+delayR:	DATi #0	; signature global delayR : int @ 305:1
 	GLOB *1
-syncBit:	DATi #0	; signature global syncBit : int @ 315:1
+syncBit:	DATi #0	; signature global syncBit : int @ 306:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 315:15
+init:	FUNC	; signature func init() -> void @ 315:1
 		PARA *1
 	$i:	LOCi
 	$buf:	LOCA *256
@@ -382,7 +382,7 @@ init:	FUNC	; signature func init() -> void @ 315:15
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 334:16
+reset:	FUNC	; signature func reset() -> void @ 334:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4d8 	; trace("reset")
@@ -396,7 +396,7 @@ reset:	FUNC	; signature func reset() -> void @ 334:16
 
 
 ;-----------------------------------------------------------------------------
-displayDelayValue:	FUNC	; signature func displayDelayValue(int x) -> int @ 341:28
+displayDelayValue:	FUNC	; signature func displayDelayValue(int x) -> int @ 341:1
 	$y:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
@@ -407,7 +407,7 @@ displayDelayValue:	FUNC	; signature func displayDelayValue(int x) -> int @ 341:2
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 354:17
+update:	FUNC	; signature func update() -> void @ 354:1
 		PARA *1
 	$buf:	LOCA *256
 	$params:	LOCA *PARAM_COUNT
@@ -444,7 +444,7 @@ update:	FUNC	; signature func update() -> void @ 354:17
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 385:18
+process:	FUNC	; signature func process() -> void @ 385:1
 		PARA *1
 	$i:	LOCi
 	$s:	LOCi

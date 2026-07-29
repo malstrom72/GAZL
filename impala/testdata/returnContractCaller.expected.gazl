@@ -1,11 +1,11 @@
  ; Compiled with Impala version 1.0
 
  ; signatures version=1
- ; signature extern func returnsNumber() -> unknown @ 1:30
- ; signature extern native printFloat() -> unknown @ 2:25
+ ; signature extern func returnsNumber() -> unknown @ 1:1
+ ; signature extern native printFloat() -> unknown @ 2:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ 4:15
+ main:				FUNC		; signature func main() -> void @ 4:1
  								PARA *1
  					$value:		LOCf
  ;-----------------------------------------------------------------------------

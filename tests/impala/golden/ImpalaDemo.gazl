@@ -1,41 +1,41 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 53:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 40:1
 	GLOB *1
-uninited:	DATi #0	; signature global uninited : int @ 60:1
+uninited:	DATi #0	; signature global uninited : int @ 53:1
 	GLOB *1
-inited:	DATi #23	; signature global inited : int @ 60:23
+inited:	DATi #23	; signature global inited : int @ 60:1
 	GLOB *1
-aFloat:	DATf #0.0	; signature global aFloat : float @ 63:20
+aFloat:	DATf #0.0	; signature global aFloat : float @ 63:1
 	GLOB *1
-aPointer:	DATp &aFloat	; signature global aPointer : ptr @ 65:41
+aPointer:	DATp &aFloat	; signature global aPointer : ptr @ 65:1
 	GLOB *1
-aFuncPointer:	DATp &NULL	; signature global aFuncPointer : funcptr @ 68:28
-defaultArray:	GLOB *100	; signature array defaultArray[100] : unknown @ 73:31
-initedArray:	GLOB *10	; signature array initedArray[10] : unknown @ 78:30
+aFuncPointer:	DATp &NULL	; signature global aFuncPointer : funcptr @ 68:1
+defaultArray:	GLOB *100	; signature array defaultArray[100] : unknown @ 73:1
+initedArray:	GLOB *10	; signature array initedArray[10] : unknown @ 78:1
 	DATA #1 #2.0 &defaultArray:0 #4
 	TEMP *1
-forgetMe:	DATi #0	; signature temporary forgetMe : int @ 82:23
-SOME_COUNT:	! DEFi #4	; signature const SOME_COUNT : int @ 87:25
-; signature extern const GAZL_WORD_SIZE : int @ 91:25
-SOME_CONSTS:	CNST *SOME_COUNT	; signature array SOME_CONSTS[SOME_COUNT] : unknown @ 94:40
+forgetMe:	DATi #0	; signature temporary forgetMe : int @ 82:1
+SOME_COUNT:	! DEFi #4	; signature const SOME_COUNT : int @ 87:1
+; signature extern const GAZL_WORD_SIZE : int @ 91:1
+SOME_CONSTS:	CNST *SOME_COUNT	; signature array SOME_CONSTS[SOME_COUNT] : unknown @ 94:1
 	DATA #100 #200 #300 #400
-; signature extern global defineMeLaterPlease : int @ 98:31
-; signature extern array futureArray[] : unknown @ 101:25
-; signature extern func thisFunctionInAnotherSource() -> unknown @ 103:44
-; signature extern native abort() -> unknown @ 107:20
+; signature extern global defineMeLaterPlease : int @ 98:1
+; signature extern array futureArray[] : unknown @ 101:1
+; signature extern func thisFunctionInAnotherSource() -> unknown @ 103:1
+; signature extern native abort() -> unknown @ 107:1
 .s_Welcom_4d2:	CNST *20
 	DATs Welcome to Impala!
 	DATi #10 #0
-WELCOME:	! DEFp &.s_Welcom_4d2	; signature const WELCOME : ptr @ 116:1
-VARIOUS_LITERALS:	CNST *15	; signature array VARIOUS_LITERALS[15] : unknown @ 116:37
+WELCOME:	! DEFp &.s_Welcom_4d2	; signature const WELCOME : ptr @ 110:1
+VARIOUS_LITERALS:	CNST *15	; signature array VARIOUS_LITERALS[15] : unknown @ 116:1
 	DATA #123 #-393 #+494 #0xAA55 #-0x1F2E3C4D #'A' #-''
 	DATA #'ROFL' #34.0 #-123.0e10 #256.11E-10 &.s_string_4d2
 	DATA &.s_allesc_4d3 &NULL &NULL
 
 ;-----------------------------------------------------------------------------
-abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void @ 138:22
+abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void @ 138:1
 		PARA *1
 	$v:	INPi
 ;-----------------------------------------------------------------------------
@@ -45,7 +45,7 @@ abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void @ 138:22
 
 
 ;-----------------------------------------------------------------------------
-fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int @ 143:25
+fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int @ 143:1
 	$fetched:	OUTi
 	$index:	INPi
 ;-----------------------------------------------------------------------------
@@ -54,7 +54,7 @@ fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int @ 143:25
 
 
 ;-----------------------------------------------------------------------------
-findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int @ 156:23
+findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int @ 156:1
 	$j:	OUTi
 	$n:	INPi
 	$vector:	INPp
@@ -70,13 +70,13 @@ findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int @ 156
 	.f2:	FORi $i $n @.l1
 	.e0:	RETU   	; }
 
-TEST_SIZE:	! DEFi #50	; signature const TEST_SIZE : int @ 166:25
-; signature extern func myrand() -> unknown @ 167:23
-; signature extern native printInt() -> unknown @ 168:23
-; signature extern native printLF() -> unknown @ 169:22
+TEST_SIZE:	! DEFi #50	; signature const TEST_SIZE : int @ 166:1
+; signature extern func myrand() -> unknown @ 167:1
+; signature extern native printInt() -> unknown @ 168:1
+; signature extern native printLF() -> unknown @ 169:1
 
 ;-----------------------------------------------------------------------------
-test:	FUNC	; signature func test() -> void @ 171:15
+test:	FUNC	; signature func test() -> void @ 171:1
 		PARA *1
 	$i:	LOCi
 	$mydata:	LOCA *TEST_SIZE
@@ -98,10 +98,10 @@ test:	FUNC	; signature func test() -> void @ 171:15
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 181:43
 		RETU   	; }
 
-; signature extern native printFloat() -> unknown @ 191:25
+; signature extern native printFloat() -> unknown @ 191:1
 
 ;-----------------------------------------------------------------------------
-showoff:	FUNC	; signature func showoff() -> void @ 193:18
+showoff:	FUNC	; signature func showoff() -> void @ 193:1
 		PARA *1
 	$a:	LOCi
 	$b:	LOCi
@@ -202,13 +202,13 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:18
 	.f12:	RETU   	; }
 
 	GLOB *1
-defineMeLaterPlease:	DATi #0	; signature global defineMeLaterPlease : int @ 266:31
-futureArray:	GLOB *10	; signature array futureArray[10] : unknown @ 267:29
+defineMeLaterPlease:	DATi #0	; signature global defineMeLaterPlease : int @ 266:1
+futureArray:	GLOB *10	; signature array futureArray[10] : unknown @ 267:1
 	GLOB *1
-myrand_seed:	DATi #2463534242	; signature global myrand_seed : int @ 269:36
+myrand_seed:	DATi #2463534242	; signature global myrand_seed : int @ 269:1
 
 ;-----------------------------------------------------------------------------
-myrand:	FUNC	; signature func myrand() -> int @ 270:17
+myrand:	FUNC	; signature func myrand() -> int @ 270:1
 	$y:	OUTi
 ;-----------------------------------------------------------------------------
 		PEEK $y &myrand_seed 	; y = global myrand_seed
@@ -221,11 +221,11 @@ myrand:	FUNC	; signature func myrand() -> int @ 270:17
 		POKE &myrand_seed $y 	; global myrand_seed = y
 		RETU   	; }
 
-anInt:	! DEFi #4	; signature const anInt : int @ 280:20
-; signature extern native print() -> unknown @ 282:20
+anInt:	! DEFi #4	; signature const anInt : int @ 280:1
+; signature extern native print() -> unknown @ 282:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 283:15
+main:	FUNC	; signature func main() -> void @ 283:1
 		PARA *1
 	$myFloat:	LOCf
 ;-----------------------------------------------------------------------------

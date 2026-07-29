@@ -3,7 +3,7 @@
  ; signatures version=1
 
  ;-----------------------------------------------------------------------------
- used:				FUNC		; signature func used(int x) -> int @ striplib.impala:1:15
+ used:				FUNC		; signature func used(int x) -> int @ striplib.impala:1:1
  					$r:			OUTi
  					$x:			INPi
  ;-----------------------------------------------------------------------------
@@ -12,11 +12,11 @@
 
 
  ;-----------------------------------------------------------------------------
- ; signature extern native printInt() -> unknown @ stripmain.impala:4:1
- ; signature extern native printLF() -> unknown @ stripmain.impala:5:1
+ ; signature extern native printInt() -> unknown @ stripmain.impala:3:1
+ ; signature extern native printLF() -> unknown @ stripmain.impala:4:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature export func main() -> void @ stripmain.impala:5:22
+ main:				FUNC		; signature export func main() -> void @ stripmain.impala:5:1
  								PARA *1
  ;-----------------------------------------------------------------------------
  								MOVi %2 #41 					; printInt(used(41))

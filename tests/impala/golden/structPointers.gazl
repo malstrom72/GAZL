@@ -1,7 +1,7 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 9:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 7:1
 	! MOVi <a> #0	; layout of struct Filter
 .o.Filter.mode:	! DEFi #<a>
 	! ADDi <a> #<a> #1
@@ -10,15 +10,15 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 9:1
 .o.Filter.resonance:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Filter:	! DEFi #<a>
-; signature struct Filter { mode : int, cutoff : float, resonance : float } @ 15:1
-; signature extern native printInt() -> unknown @ 16:1
-; signature extern native printFloat() -> unknown @ 17:1
-; signature extern native printLF() -> unknown @ 19:1
-FILTER_WORDS:	! DEFi #.z.Filter	; signature const FILTER_WORDS : int @ 21:1
-store:	GLOB *6	; signature array store[6] : unknown @ 23:1
+; signature struct Filter { mode : int, cutoff : float, resonance : float } @ 9:1
+; signature extern native printInt() -> unknown @ 15:1
+; signature extern native printFloat() -> unknown @ 16:1
+; signature extern native printLF() -> unknown @ 17:1
+FILTER_WORDS:	! DEFi #.z.Filter	; signature const FILTER_WORDS : int @ 19:1
+store:	GLOB *6	; signature array store[6] : unknown @ 21:1
 
 ;-----------------------------------------------------------------------------
-setup:	FUNC	; signature func setup(Filter-ptr f, int m, float c) -> void @ 23:16
+setup:	FUNC	; signature func setup(Filter-ptr f, int m, float c) -> void @ 23:1
 		PARA *1
 	$f:	INPp
 	$m:	INPi
@@ -32,7 +32,7 @@ setup:	FUNC	; signature func setup(Filter-ptr f, int m, float c) -> void @ 23:16
 
 
 ;-----------------------------------------------------------------------------
-copyMode:	FUNC	; signature func copyMode(Filter-ptr dst, Filter-ptr src) -> void @ 30:19
+copyMode:	FUNC	; signature func copyMode(Filter-ptr dst, Filter-ptr src) -> void @ 30:1
 		PARA *1
 	$dst:	INPp
 	$src:	INPp
@@ -44,7 +44,7 @@ copyMode:	FUNC	; signature func copyMode(Filter-ptr dst, Filter-ptr src) -> void
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 35:15
+main:	FUNC	; signature func main() -> void @ 35:1
 		PARA *1
 	$a:	LOCp
 	$b:	LOCp

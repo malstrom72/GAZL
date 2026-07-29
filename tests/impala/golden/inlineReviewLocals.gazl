@@ -1,19 +1,19 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 22:1
-; signature extern native printInt() -> unknown @ 23:1
-; signature extern native printLF() -> unknown @ 25:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
+; signature extern native printInt() -> unknown @ 22:1
+; signature extern native printLF() -> unknown @ 23:1
 	! MOVi <a> #0	; layout of struct P
 .o.P.x:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.P.y:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.P:	! DEFi #<a>
-; signature struct P { x : int, y : int } @ 27:1
+; signature struct P { x : int, y : int } @ 25:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 57:15
+main:	FUNC	; signature func main() -> void @ 57:1
 		PARA *1
 	$q:	LOCi
 ;-----------------------------------------------------------------------------
