@@ -27,15 +27,15 @@ check and the range check landed in that order.
 
 Two things the pass did NOT reach, both verified 2026-07-29:
 
-- **A named `const` defeats the switch range check.** `const int N = 3; switch (i == 0 to N) { case 8: }`
-  compiles AND assembles clean, as silently unreachable code. `$$parser.constInt` returns `undefined` for
-  `#N`, so rule 1 below correctly declines to reject - but the escape hatch is not exotic (a host `! DEFi`
-  or `.z.Struct`); an ordinary named constant is enough. **This is the one place the deferred assertion
-  below actually earns its keep**, because unlike an out-of-range array offset, the assembler does not
-  catch this on its own.
 - **E445 points one statement late.** `goto nowhere;` on line 3 reports line 4, because the position is
   consumed in the post-condition loop after the body is parsed. E443/E444 land on the `:` after the case
-  value, which is benign; this one names the wrong statement.
+  value, which is benign; this one names the wrong statement. This is the only genuine defect left here.
+
+**A symbolic switch range is not on this list, by design.** `const int N = 3; switch (i == 0 to N) {
+case 8: }` compiles and assembles clean, with the arm unreachable. That is correct: a build configuration
+may legitimately narrow the range, and the surplus arms are then dead code in the same way an arm behind a
+compile-time-false branch is dead (see [`FutureOptimizations.md`](FutureOptimizations.md)). Rejecting it
+would make a valid configuration unbuildable. Unreachable is not wrong.
 
 **`&a[k]` out of bounds is not on this list, by design.** `p = &a[7]` compiles, assembles and runs, and
 should: forming a pointer is not a memory access, and one-past-the-end is a standard idiom -
@@ -57,15 +57,24 @@ rules follow, and every check below must obey them:
 1. **Only reject on a value Impala genuinely knows.** If the operand folded to a numeric literal, check
    it. If it is a symbol, Impala has no grounds to reject.
 2. **Never silently pass a symbolic value off as checked.** Not knowing is not the same as being fine.
-3. **Prefer DEFERRING the check to assembly time** where the mechanism exists (below). That is strictly
-   better than giving up: the check still happens, just later, and it still fails the build.
+3. **First ask whether the symbolic case is even wrong.** Usually it is not. A host-supplied size or a
+   config-dependent `const` is a legitimate reason for an index or a case arm to be out of range in one
+   build and in range in another; the surplus arm is dead code, not an error, and rejecting it would make
+   a valid configuration unbuildable. Deferring the check to assembly time (below) is only worth doing
+   when the shape is genuinely wrong in every configuration - which, as it turns out, none of the items
+   here are.
 
 Existing precedent: GAZL already rejects a CONSTANT out-of-range offset into a global
 (`POKE &g0:6` with `g0` 2 words -> `Offset out of bounds: g0`), but it does NOT bounds-check a RUNTIME
 index (`POKE &g0 %0`). So partial coverage already exists at the assembler level.
 
 
-## The deferred assertion (verified)
+## The deferred assertion (verified, but currently unused)
+
+**No item in this document needs this.** It is recorded because the capability is real and was verified,
+not because it is planned. Every symbolic case here turned out to be either already covered by the
+assembler (item 1) or legitimately configuration-dependent and therefore not an error at all (item 3).
+Before reaching for it, re-read rule 3 above.
 
 GAZL has compile-time comparisons that branch (`! LSSi`, `! GEQi`, `! EQUi`, `! NEQi`, ... `_ccb`) and
 `! GOTO`. Branching to a label that does not exist is an assembly error. Together that is an
@@ -152,13 +161,13 @@ assemble, from a program the compiler accepted without a word. `tests/impala/gol
 in exactly that state today (`case 23+57, -1, CONSTANT` against a `4+1 to 9` switch), which is why
 `runJspegTests.js` has to exempt it from the assemble check.
 
-- Numeric `from`/`to` -> compile-time error naming the range.
-- **Symbolic range** (`switch (x == 0 to sizeof(V))` folds to `SWCH ... *<A>`) -> Impala cannot know the
-  extent; this is a natural fit for a deferred assertion, or leave unchecked.
+CLOSED by `E444`, on the terms below:
 
-Above the range this is a missing diagnostic and codegen is faithful. Below `from` it is a broken build,
-so that half is the one worth fixing first - and a negative case offset is decidable whenever `from` and
-the case value are both numeric, which is the common shape.
+- Numeric `from`/`to` -> compile-time error naming the range. Implemented.
+- **Symbolic range** (`switch (x == 0 to sizeof(V))`, or a plain `const int N`) -> **left unchecked, and
+  that is the right answer, not a shortfall.** A configuration may narrow the range legitimately, leaving
+  surplus arms dead; erroring would make that configuration unbuildable. Below `from` the negative offset
+  still fails assembly, which self-reports.
 
 ### 4. `goto` to a label that is never defined
 
