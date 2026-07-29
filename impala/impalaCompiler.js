@@ -1960,8 +1960,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        size is host-owned, so use the symbolic `.z.Name` (resolved at load); a normal struct uses its
        compiler-known word count. Frame/global allocation accepts a symbolic size, so by-value extern
        locals/globals work. (Passing/returning a struct BY VALUE is different - it reserves a
-       compile-time-known number of transient VM slots, which a host-owned size cannot provide, so
-       those sites stay blocked; see E425.) */
+       compile-time-known number of transient VM slots, which a host-owned size cannot provide. That
+       is moot today: E426/E427 block by-value params/returns for EVERY struct, extern or not. There
+       is no extern-specific guard - E425 was reserved for one and never written.) */
     structAllocSize = function (structName) {
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
@@ -2256,8 +2257,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
         /* Size hints here stay NUMERIC on purpose (not *.z.Struct): the window is a fixed `words`-slot
            block baked by the register allocator, and these must match it exactly - a symbolic size that
-           later resolved differently would overrun the window. By-value locks the size; extern structs,
-           whose size is host-owned, are blocked from by-value (E425). */
+           later resolved differently would overrun the window. By-value locks the size. A host-owned
+           extern size could not satisfy that, but no extern-specific check exists: E426/E427 reject
+           by-value params/returns for every struct alike. */
         var dst = borrow('%');
         emit('=&', 'p', dst, '%' + winSlot, '*' + words);   /* ADRL address of the window region */
         var src = placeAddress(argMeta);                    /* address of the source struct */

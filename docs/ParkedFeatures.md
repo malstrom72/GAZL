@@ -132,9 +132,10 @@ This touches every call site, so it wants to land with the other ABI work, not b
 
 See `docs/GAZLSymbolicWindows.md`. GAZL already supports everything needed (symbolically-indexed transients
 `%<A>`, symbolic `PARA`/`CALL` extents); the blocker is that Impala's transient allocator keys slots by
-integer index. Making it symbolic would let by-value structs adapt to a re-packed layout, lift `E425` so
-extern (host-owned) structs can be passed and returned by value, and make the modifiable-layout promise
-hold end to end instead of stopping at the call boundary.
+integer index. Making it symbolic would let by-value structs adapt to a re-packed layout, let extern
+(host-owned) structs be passed and returned by value, and make the modifiable-layout promise hold end to
+end instead of stopping at the call boundary. (Not "lift E425" - there is no E425; by-value params and
+returns are blocked for every struct alike by E426/E427.)
 
 Note the dependency: this only matters once by-value structs are back. And the current numeric ABI is
 CORRECT, not a stopgap - see that document before "fixing" any by-value size to `*.z.V`.

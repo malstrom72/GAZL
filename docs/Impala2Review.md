@@ -74,7 +74,7 @@ today" except that one.
    correct under both rules and costs nothing now. (An earlier draft of this line said `&a`; that is wrong,
    `&a` is `E404 Invalid lvalue` today, which also means blocking decay is not a pure removal. Recorded in
    `docs/ParkedFeatures.md`.) See section C for why this is the only forward-compat item.
-6. Numeric-only by-value call windows (E425 — currently a dead diagnostic), the mandatory reserved return
+6. Numeric-only by-value call windows (E425 — not a dead diagnostic but a never-written one), the mandatory reserved return
    transient (an ABI change), and dead-arm elimination after a compile-time branch. None reachable today.
 
 ### Undocumented 3.0 direction
