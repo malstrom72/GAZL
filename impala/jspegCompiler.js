@@ -1,3 +1,4 @@
+/* GENERATED from impala/jspeg.jspeg by `node impala/updateJSPEG.js` -- do not edit by hand. */
 var compileJSPEG = (function(_s) {
 {
         function dqEscape(s) {

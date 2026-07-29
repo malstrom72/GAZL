@@ -190,10 +190,17 @@ function write(file, contents) {
 	fs.writeFileSync(resolve(file), contents);
 }
 
+/* Both outputs are git-tracked, so without a banner they read as hand-maintained sources. It goes here
+   rather than at the write, because jspegCompilerTests.js byte-compares its own wrapCompilerSource() call
+   against the file on disk - one copy is the only way the gate and the generator cannot disagree. Keep it
+   deterministic: a timestamp would fail --check on every run. */
+const GRAMMAR_OF = { compileJSPEG: "jspeg.jspeg", impalaCompiler: "impala.jspeg" };
+
 function wrapCompilerSource(exportName, generated, options = {}) {
 	const body = generated.trimEnd();
 	const { prelude, exposeSourceNameOption } = options;
-	const lines = [];
+	const lines = [`/* GENERATED from impala/${GRAMMAR_OF[exportName]} by \`node impala/updateJSPEG.js\``
+		+ " -- do not edit by hand. */"];
 	if (prelude) {
 		const entries = Array.isArray(prelude) ? prelude : [prelude];
 		entries.forEach((line) => {

@@ -1,6 +1,11 @@
-/* GAZL signature validator for NuXJS. */
+/* GAZL signature validator. Runs under NuXJS, NOT node - `node tools/gazl-validate.nuxjs.js` dies on
+   `print is not defined`. Invoke it through tools/gazl-validate.sh or .cmd.
 
-var hostScriptPath = arguments && arguments.length > 0 ? "" + arguments[0] : "gazl-validate.js";
+   This is NOT an assembler. It cross-checks `; signature` metadata between units and is built to run on
+   modules whose externs are deliberately unresolved - exactly what the assembler refuses to load. The
+   assembler is output/GAZLCmd; impala/gazlAssembleCheck.js wraps it for the test gates. */
+
+var hostScriptPath = arguments && arguments.length > 0 ? "" + arguments[0] : "gazl-validate.nuxjs.js";
 var hostArgs = [];
 for (var hostArgIndex = 1; arguments && hostArgIndex < arguments.length; ++hostArgIndex) {
 	hostArgs.push("" + arguments[hostArgIndex]);

@@ -1,3 +1,4 @@
+/* GENERATED from impala/impala.jspeg by `node impala/updateJSPEG.js` -- do not edit by hand. */
 var $$parser = {};
 var impalaCompilerImpl = (function(_s, _options) {
 var _hostOptions = _options || {};
@@ -635,7 +636,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        gazl-validate can settle, and a name-only extern records no prototype and so asserts nothing.
        It fires exactly when the compiler is holding two claims itself, which an import closure makes
        routine since the builder compiles the whole closure as one unit. Names are not compared, only
-       types, matching functionSignaturesCompatible() in tools/gazl-validate.js. */
+       types, matching functionSignaturesCompatible() in tools/gazl-validate.nuxjs.js. */
     checkExternAgreement = function (name, claim, prior, priorIsDefinition, sourceCode, sourceOffset) {
         if (!claim || !prior) {
             return;

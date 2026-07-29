@@ -9,7 +9,7 @@ const { haveGazlCmd, assembleOnly, NEEDS_HOST } = require("./gazlAssembleCheck")
 
 const dir = __dirname;
 const IMPALA_ENCODING = "latin1";
-const validatorScript = path.join(dir, "..", "tools", "gazl-validate.js");
+const validatorScript = path.join(dir, "..", "tools", "gazl-validate.nuxjs.js");
 const nuxjsExe = path.join(dir, "..", "output", process.platform === "win32" ? "NuXJS.exe" : "NuXJS");
 const validatorFixturesDir = path.join(dir, "testdata", "validator");
 

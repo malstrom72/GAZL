@@ -623,7 +623,7 @@
        gazl-validate can settle, and a name-only extern records no prototype and so asserts nothing.
        It fires exactly when the compiler is holding two claims itself, which an import closure makes
        routine since the builder compiles the whole closure as one unit. Names are not compared, only
-       types, matching functionSignaturesCompatible() in tools/gazl-validate.js. */
+       types, matching functionSignaturesCompatible() in tools/gazl-validate.nuxjs.js. */
     $$parser.checkExternAgreement = function (name, claim, prior, priorIsDefinition, sourceCode, sourceOffset) {
         if (!claim || !prior) {
             return;

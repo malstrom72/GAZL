@@ -7,7 +7,7 @@ const os = require("os");
 const { spawnSync } = require("child_process");
 
 const repoRoot = path.resolve(__dirname, "..");
-const validatorScript = path.join(repoRoot, "tools", "gazl-validate.js");
+const validatorScript = path.join(repoRoot, "tools", "gazl-validate.nuxjs.js");
 const nuxjsExe = path.join(repoRoot, "output", process.platform === "win32" ? "NuXJS.exe" : "NuXJS");
 
 function assertCondition(condition, message) {
