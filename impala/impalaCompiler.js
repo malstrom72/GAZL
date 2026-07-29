@@ -1933,6 +1933,35 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return '*' + words;
     };
 
+    /* The struct atom a pointer/array element descriptor points at, or undefined for anything whose
+       stride is one word. `int pointer` and untyped `pointer` both land in the undefined case, which is
+       why scaling changes nothing for them. */
+    strideStruct = function (elemDesc) {
+        if (elemDesc === undefined || descTail(elemDesc) !== undefined) {
+            return undefined;
+        }
+        var head = descHead(elemDesc);
+        return isStructAtom(head) ? head : undefined;
+    };
+
+    /* An offset in ELEMENTS -> an offset in WORDS, for pointer arithmetic. Same stride rule and same
+       symbolic `.z.Name` as subscriptStruct, so `p + 1` and `&p[1]` cannot disagree - they are two
+       spellings of one thing. A constant folds at ASSEMBLY time into a `<` scratch, so it costs nothing
+       at run time; only a runtime offset pays a MULi, exactly as `a[i]` already does. */
+    scaleByElem = function (elem, rv) {
+        var s;
+        if (/^#[0-9]+$/.test(rv)) {
+            s = borrow('<');
+            emit('<> *', 'i', s, rv, '#.z.' + elem);
+            returnBack(rv);
+            return '#' + s;
+        }
+        s = borrow('%');
+        emit('*', 'i', s, rv, '#.z.' + elem);
+        returnBack(rv);
+        return s;
+    };
+
     /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
        is required, not tidiness: the declarator node is pooled and recycled by the parser, so anything
        holding a reference would later see whichever declarator came last. */
@@ -2388,15 +2417,26 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         } else {
 
             /* pointer-difference special-case “d” */
-            if (operator === '-' && rightx.type === 'p') {
+            var diff = (operator === '-' && rightx.type === 'p');
+            if (diff) {
                 operator = 'd';
             }
 
-            makeMeta(
-                leftx, operator, tp, null,
-                makeRValue(leftx),
-                makeRValue(rightx)
-            );
+            /* Pointer arithmetic is in ELEMENTS, so a struct pointer strides by its size in both
+               directions: an offset is scaled going in, a difference is unscaled coming out. Without
+               this `p + 1` moved one WORD while `p[1]` moved one struct - two spellings of the same C
+               idea, silently disagreeing. See docs/Impala2Review.md for why scaling beat rejecting. */
+            var stride = (leftx.type === 'p' ? strideStruct(lelem) : undefined);
+            var lrv = makeRValue(leftx);
+            var rrv = makeRValue(rightx);
+            if (stride !== undefined && !diff) {
+                rrv = scaleByElem(stride, rrv);
+            }
+            makeMeta(leftx, operator, tp, null, lrv, rrv);
+            if (stride !== undefined && diff) {
+                makeMeta(leftx, '/', 'i', null,
+                                  makeRValue(leftx), '#.z.' + stride);
+            }
         }
 
         /* element-type propagation (Impala 2) */
