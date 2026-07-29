@@ -10,6 +10,9 @@ the resolved value, so any transform keyed on it can only happen here. That sing
 
 Related but separate: [`docs/FutureOptimizations.md`](FutureOptimizations.md) covers Impala-side
 candidates (dead-arm elimination after a compile-time branch, and the `expandInline` folding restriction).
+[`docs/TailCalls.md`](TailCalls.md) covers the one case that needs a NEW instruction rather than a
+peephole - `CALL f; RETU` cannot be collapsed here, because no GAZL form can enter a function without
+pushing a frame.
 
 
 ## What the assembler already does

@@ -178,6 +178,14 @@ same change, or the rule would leave no way to spell what `foo(a)` spells now.
 
 `docs/ExternPrototypes.md` notes the interaction with extern prototypes that take arrays or pointers.
 
+### Tail calls
+
+**No park branch - never built.** Recursion works but is never eliminated, so a tail-recursive
+accumulator traps on frame depth. It needs a new GAZL instruction (no existing form enters a function
+without pushing a frame) *and* Impala syntax, which is why it is neither a peephole nor a grammar tweak.
+Designed in [`TailCalls.md`](TailCalls.md), including a cheaper self-recursion-only first increment that
+needs no ISA change.
+
 ### Full import-cycle resolution (collect mode)
 
 **No park branch - this one was never built.** Unlike everything above, collect mode is a design that was
