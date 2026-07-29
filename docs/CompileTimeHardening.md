@@ -25,19 +25,22 @@ which is a JS-side metadata linter that passes every item here.
 Note the numbering is not in code order - E443 closes item 5 and E444 closes item 3, because the duplicate
 check and the range check landed in that order.
 
-Three things the pass did NOT reach, all verified 2026-07-29:
+Two things the pass did NOT reach, both verified 2026-07-29:
 
-- **`&a[k]` is unchecked at every level.** `p = &a[7]` on a 4-element array emits `ADRL $p $a:7 *0`, which
-  compiles, assembles and runs. Taking the address of an out-of-bounds element escapes both Impala and the
-  assembler, for locals and globals alike - so a constant-OOB pointer still reaches a running program. This
-  is the sharpest remaining edge of item 1.
-- **A named `const` defeats the range check.** `const int N = 3; switch (i == 0 to N) { case 8: ... }`
-  compiles AND assembles clean. `$$parser.constInt` returns `undefined` for `#N`, so rule 1 below correctly
-  declines to reject - but it means the escape hatch is not exotic (a host `! DEFi` or `.z.Struct`); an
-  ordinary named constant is enough. This is what the deferred assertion below is for.
+- **A named `const` defeats the switch range check.** `const int N = 3; switch (i == 0 to N) { case 8: }`
+  compiles AND assembles clean, as silently unreachable code. `$$parser.constInt` returns `undefined` for
+  `#N`, so rule 1 below correctly declines to reject - but the escape hatch is not exotic (a host `! DEFi`
+  or `.z.Struct`); an ordinary named constant is enough. **This is the one place the deferred assertion
+  below actually earns its keep**, because unlike an out-of-range array offset, the assembler does not
+  catch this on its own.
 - **E445 points one statement late.** `goto nowhere;` on line 3 reports line 4, because the position is
   consumed in the post-condition loop after the body is parsed. E443/E444 land on the `:` after the case
   value, which is benign; this one names the wrong statement.
+
+**`&a[k]` out of bounds is not on this list, by design.** `p = &a[7]` compiles, assembles and runs, and
+should: forming a pointer is not a memory access, and one-past-the-end is a standard idiom -
+`e = &a[4]` on a 4-element array is how you write a loop bound, and it works today. A bounds check on
+address-of would reject the idiom while catching nothing real. Only the dereference matters.
 
 
 ## The constraint: a constant is not always a number Impala knows
@@ -103,11 +106,26 @@ flag, or only when the operand is symbolic (compile-time-known cases being rejec
     int array a[4]
     a[7] = 1;              // accepted today
 
-Today this compiles. For a LOCAL array the emitted access is frame-relative, so nothing catches it; for a
-global with a constant offset GAZL does catch it, so behaviour is inconsistent between storage classes.
+Today Impala compiles this; the **assembler rejects it**, for locals and globals alike:
+
+    Offset out of bounds: $a
+    Line 11:  MOVi $a:7 #1   ; a[7] = 1
+
+(An earlier version of this note claimed locals escaped the check while globals were caught. That was
+wrong - both fail identically, and the doc's own preamble already said so.)
+
+So the entire remaining value of this item is WHERE the error points. And even that is modest, because the
+GAZL line carries the original source text as a trailing comment, so the offending expression is already
+in front of you; what is missing is `foo.impala:11:2` and a caret.
 
 - Numeric index and numeric extent -> plain compile-time error, with the extent in the message.
-- Symbolic extent (`extern struct` array field, host-defined size) -> deferred assertion, or silence.
+- **Symbolic extent -> do nothing.** Not a deferred assertion: the assembler resolves the symbol before it
+  checks the offset, so it catches this case natively. Verified with `const int N = 4; int array a[N];
+  a[7] = 1;` -> `Offset out of bounds: $a`. Emitting `! LSSi`/`! GOTO` scaffolding to re-check what the
+  assembler checks for free would be strictly worse than silence.
+
+**Priority: low.** This is caret placement on an error that already names the source expression, and it is
+the whole of what is left. Do not let its position at the top of this list imply otherwise.
 - Runtime index -> out of scope; that is a bounds-check-at-runtime question, deliberately not Impala's model.
 
 ### 2. Writes to a readonly array element (task #21)
