@@ -118,14 +118,14 @@ function locateInUnit(source, options, index) {
 // there in the file. It is the single-pass compiler: a name must be declared before it is USED, and
 // across an import closure "before" means "in an earlier unit", which no ordering can give both
 // halves of a cycle. Say where the definition actually is and what unblocks it.
-const FORWARD_REF_PATTERN = /^(?:Undeclared identifier: |Unknown type )(\w+)$/;
+const FORWARD_REF_PATTERN = /^(Undeclared identifier|Unknown type):? (\w+)$/;
 
 function forwardReferenceHint(source, options, index, message) {
 	const matched = FORWARD_REF_PATTERN.exec(message);
 	if (!matched) {
 		return undefined;
 	}
-	const name = matched[1];
+	const name = matched[2];
 	const ahead = source.slice(index).search(new RegExp(
 		"^[ \\t]*(?:export[ \\t]+)?(?:(?:inline[ \\t]+)?(?:function|struct|functype)[ \\t]+" + name + "\\b"
 			+ "|(?:global|readonly|temporary)[ \\t]+[^\\n]*\\b" + name + "\\b)", "m"));
@@ -137,7 +137,7 @@ function forwardReferenceHint(source, options, index, message) {
 	const site = (where ? `${where.name}:${where.line}` : `line ${getLineInfo(source, at).line}`);
 	// A function or global can be forward-declared; a TYPE cannot - `extern struct` declares a
 	// host-owned layout, a different thing entirely - so it has to be defined earlier, full stop.
-	const remedy = (message.indexOf("Unknown type") === 0
+	const remedy = (matched[1] === "Unknown type"
 		? "a type cannot be forward-declared, so its unit has to be compiled first - break the import"
 			+ " cycle so the defining unit is a plain dependency"
 		: `add a forward \`extern\` for ${name} above this point`);

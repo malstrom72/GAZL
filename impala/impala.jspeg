@@ -154,8 +154,6 @@
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
     var $$parser.structs = {};                                    /// name -> { fields:[{name,type,elem,offset,words}], words, complete }
     var $$parser.openStruct = undefined;                          /// struct whose field list is being parsed (its fields own their extent scratches)
-    var $$parser.shadowedStruct = undefined;                      /// a completed struct set aside while a re-DECLARATION of the same name parses
-    var $$parser.shadowedFuncType = undefined;                    /// ditto for a functype, which may be re-declared as long as the shapes agree
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
@@ -313,13 +311,34 @@
        element-UNKNOWN and lets it match any chain, so flattening `V-ptr` to `ptr` would silently
        disarm the cross-unit check. That is the only type record a name-only `extern function f` has. */
     function renderParamTypes(params) {
-        var parts = [];
-        for (var idx = 0; idx < (params ? params.length : 0); ++idx) {
+        var parts = [], count = (params ? params.length : 0);
+        for (var idx = 0; idx < count; ++idx) {
             var param = params[idx] || {};
             parts.push(param.type === 'S' ? (param.struct || 'unknown')
                     : signatureCategoryForDesc(fullDescFor(param.type, param.elem)));
         }
         return parts.join(', ');
+    }
+
+    /* The comparable shape of anything callable - a function signature, an extern prototype or a
+       `functype`, which all carry the same params/returns fields. */
+    function signatureShape(name, sig) {
+        return name + '(' + renderParamTypes(sig.params) + ') -> ' + renderReturnType(sig);
+    }
+
+    /* Two claims about one name that do not agree - `got` arrived second. A DEFINITION outranks a
+       declaration, so it is named as authoritative where the closure has one; with none in sight the
+       claims are only judgeable against each other, and blaming a definition would cite no file. */
+    function failDisagreement(what, got, had, code, priorIsDefinition, noun, plural, sourceCode, sourceOffset) {
+        if (priorIsDefinition) {
+            $$parser.fail('extern declaration of ' + what + ' does not match its definition: declared "'
+                    + got + '" but definition provides "' + had + '"', sourceCode, sourceOffset, code,
+                    'the definition is authoritative - correct the declaration, or drop it and let the definition speak');
+        }
+        $$parser.fail('extern declarations of ' + what + ' disagree: "' + got + '" vs "' + had + '"',
+                sourceCode, sourceOffset, code,
+                'one ' + noun + ' cannot have two ' + plural
+                        + ' - make the declarations identical, or keep only one');
     }
 
     function renderReturnType(signature) {
@@ -587,19 +606,11 @@
         if (!claim || !prior) {
             return;
         }
-        function shape(sig) { return name + '(' + renderParamTypes(sig.params) + ') -> ' + renderReturnType(sig); }
-        if (shape(claim) === shape(prior)) {
-            return;
+        var got = signatureShape(name, claim), had = signatureShape(name, prior);
+        if (got !== had) {
+            failDisagreement(name, got, had, 'E437', priorIsDefinition, 'function', 'shapes',
+                    sourceCode, sourceOffset);
         }
-        if (priorIsDefinition) {
-            $$parser.fail('extern declaration of ' + name + ' does not match its definition: declared "'
-                    + shape(claim) + '" but definition provides "' + shape(prior) + '"',
-                    sourceCode, sourceOffset, 'E437',
-                    'the definition is authoritative - correct the prototype, or drop it and let the definition speak');
-        }
-        $$parser.fail('extern declarations of ' + name + ' disagree: "' + shape(claim) + '" vs "'
-                + shape(prior) + '"', sourceCode, sourceOffset, 'E437',
-                'one function cannot have two shapes - make the prototypes identical, or keep only one');
     };
 
     function signatureRoleForSection(section) {
@@ -1294,8 +1305,8 @@
         if ($$parser.isStructAtom(name)) {
             $$parser.fail('Type name already used by a struct: ' + name, sourceCode, sourceOffset, 'E440');
         }
-        $$parser.shadowedFuncType = ($$parser.isFuncTypeAtom(name) ? $$parser.functypes[name] : undefined);
-        $$parser.functypes[name] = { params: [], returnList: [], returnCount: 0,
+        var shadowed = ($$parser.isFuncTypeAtom(name) ? $$parser.functypes[name] : undefined);
+        $$parser.functypes[name] = { shadowed: shadowed, params: [], returnList: [], returnCount: 0,
                 returns: 'V', returnElem: undefined, returnStruct: undefined, returnWords: 0,
                 complete: false, sourceCode: sourceCode, sourceOffset: sourceOffset,
                 sourceName: $$parser.sourceName };
@@ -1645,19 +1656,16 @@
             ft.returns = 'V';
             ft.returnWords = 0;
         }
-        var held = $$parser.shadowedFuncType;
-        $$parser.shadowedFuncType = undefined;
-        if (held && funcTypeShape(name, ft) !== funcTypeShape(name, held)) {
-            $$parser.fail('functype ' + name + ' is already declared with a different shape: "'
-                    + funcTypeShape(name, ft) + '" vs "' + funcTypeShape(name, held) + '"',
-                    ft.sourceCode, ft.sourceOffset, 'E440',
-                    'one functype cannot have two shapes - make the declarations identical, or keep only one');
+        var held = ft.shadowed;
+        if (held) {
+            var got = signatureShape(name, ft), had = signatureShape(name, held);
+            if (got !== had) {                                    /* never a definition: a functype has only declarations */
+                $$parser.fail('functype ' + name + ' is already declared with a different shape: "'
+                        + got + '" vs "' + had + '"', ft.sourceCode, ft.sourceOffset, 'E440',
+                        'one functype cannot have two shapes - make the declarations identical, or keep only one');
+            }
         }
     };
-
-    function funcTypeShape(name, ft) {
-        return name + '(' + renderParamTypes(ft.params) + ') -> ' + renderReturnType(ft);
-    }
 
     /* Does a concrete function signature satisfy a named funcptr type? Compares arity, each
        parameter's type (+ struct / pointer-element), and the return shape. */
@@ -1727,8 +1735,8 @@
         /* A completed `extern struct` is a CLAIM about a layout, not a second definition of it, so
            set it aside and let endStruct compare the two rather than rejecting the definition it
            describes. The definition wins either way. */
-        $$parser.shadowedStruct = (prev && prev.complete ? prev : undefined);
-        $$parser.structs[name] = { fields: [], words: 0, complete: false,
+        $$parser.structs[name] = { shadowed: (prev && prev.complete ? prev : undefined),
+                fields: [], words: 0, complete: false,
                 sourceCode: sourceCode, sourceOffset: sourceOffset };
         $$parser.openStruct = name;
     };
@@ -1738,12 +1746,10 @@
        fresh entry so the first stayed intact; the DEFINITION is authoritative in either order.
        Returns true when the entry just parsed was the DECLARATION, i.e. it owns no layout to emit. */
     $$parser.checkStructAgreement = function (name) {
-        var held = $$parser.shadowedStruct;
+        var parsed = $$parser.structs[name], held = parsed.shadowed;
         if (!held) {
             return false;
         }
-        $$parser.shadowedStruct = undefined;
-        var parsed = $$parser.structs[name];
         var parsedRow = $$parser.structSignatureRow(name, false);
         $$parser.structs[name] = held;
         var heldRow = $$parser.structSignatureRow(name, false);
@@ -1751,17 +1757,10 @@
             /* fail() bakes its message, and bake() EVALS anything between braces (that is how
                `{$type1}` interpolation works), so a struct row's `{ a : int }` must not go in raw. */
             function shown(row) { return replace(replace(replace(row, 'signature ', ''), '{', '('), '}', ')'); }
-            if (parsed.extern && held.extern) {                   /* no definition in sight - two claims, both wrong until they agree */
-                $$parser.fail('extern declarations of struct ' + name + ' disagree: "' + shown(parsedRow)
-                        + '" vs "' + shown(heldRow) + '"',
-                        parsed.sourceCode, parsed.sourceOffset, 'E438',
-                        'one struct cannot have two layouts - make the declarations identical, or keep only one');
-            }
-            $$parser.fail('extern declaration of struct ' + name + ' does not match its definition: declared "'
-                    + shown(parsed.extern ? parsedRow : heldRow) + '" but definition provides "'
-                    + shown(parsed.extern ? heldRow : parsedRow) + '"',
-                    parsed.sourceCode, parsed.sourceOffset, 'E438',
-                    'the definition is authoritative - correct the declaration, or drop it and let the definition speak');
+            failDisagreement('struct ' + name, shown(parsed.extern ? parsedRow : heldRow),
+                    shown(parsed.extern ? heldRow : parsedRow), 'E438',
+                    !(parsed.extern && held.extern),              /* both extern -> no definition to arbitrate */
+                    'struct', 'layouts', parsed.sourceCode, parsed.sourceOffset);
         }
         if (!parsed.extern) {
             $$parser.structs[name] = parsed;                      /* a definition outranks the declaration it fulfils */
@@ -1854,12 +1853,21 @@
        back. A bodied one IS a claim, parsed alongside the definition and compared by endStruct. */
     $$parser.beginExternStruct = function (name, sourceCode, sourceOffset) {
         var prev = $$parser.structs[name];
-        $$parser.shadowedStruct = (prev && prev.complete ? prev : undefined);
         if (!prev || prev.complete) {
-            $$parser.structs[name] = { fields: [], words: 0, complete: false,
+            $$parser.structs[name] = { shadowed: (prev && prev.complete ? prev : undefined),
+                    fields: [], words: 0, complete: false,
                     sourceCode: sourceCode, sourceOffset: sourceOffset };
         }
         $$parser.structs[name].extern = true;
+    };
+
+    /* A BODYLESS `extern struct N` never reaches endStruct, so nothing compares it - and with no body
+       it claims no layout, so there is nothing to compare. Give back whatever it was parsed beside. */
+    $$parser.cancelStructRedeclaration = function (name) {
+        var s = $$parser.structs[name];
+        if (s && s.shadowed) {
+            $$parser.structs[name] = s.shadowed;
+        }
     };
 
     $$parser.isExternStruct = function (name) {
@@ -2231,35 +2239,45 @@
                         'use a cast: (' + $$parser.elemVerbose(leftx.elem) + ' pointer)');
             }
         }
-        if (leftx.type === 'F' && $$parser.isFuncTypeAtom(leftx.elem)) {   /* named funcptr type target: check the signature */
-            var rop = rightx.operands && rightx.operands[1];
-            if (rop === '&NULL' && rightx.operands[2] === undefined) {
-                return;                                           /* nullfunc is assignable to any funcptr type */
+        if (leftx.type === 'F' && $$parser.isFuncTypeAtom(leftx.elem)) {   /* named funcptr type target */
+            $$parser.checkFuncPtrTarget(leftx.elem, bareOperand(rightx), rightx.type, rightx.elem,
+                    '', sourceCode, sourceOffset);
+        }
+    };
+
+    /* The lone operand of a one-operand meta - a direct `&f` / `^f` reference or `&NULL` - and
+       undefined for anything compound, which is neither. */
+    function bareOperand(x) {
+        return (x.operands && x.operands[2] === undefined ? x.operands[1] : undefined);
+    }
+
+    /* A named funcptr target, at an assignment or at an argument (`at` names which): `nullfunc` suits
+       any type, a direct function reference is checked against it, and anything else must ALREADY
+       carry that exact type. An untyped funcptr is not silently promoted, for the same reason a bare
+       `pointer` is not assignable to an `int pointer` (E201) - it guarantees nothing about the shape
+       of what gets called. The cast that says "I checked" needs no `pointer`, a functype being one. */
+    $$parser.checkFuncPtrTarget = function (expected, operand, actualType, actualElem, at,
+                                            sourceCode, sourceOffset) {
+        if (operand === '&NULL') {
+            return;
+        }
+        /* Gated on the LOOKUP, not on the sigil: reading a global spells itself `&name` too, so
+           `&`/`^` alone cannot tell a function reference from one, and testing the sigil sent every
+           global funcptr into this branch to find no function and silently fall out - past the
+           element check below, which is the one that applies to it. */
+        var fe = (operand && (operand.charAt(0) === '&' || operand.charAt(0) === '^')
+                ? $$parser.symbols.functions[operand.substr(1)] : undefined);
+        if (fe && fe.signature) {                                 /* a direct function reference */
+            if (!$$parser.funcTypeMatches(expected, fe.signature)) {
+                $$parser.fail('Function ' + operand.substr(1) + " does not match funcptr type '"
+                        + expected + "'" + at, sourceCode, sourceOffset, 'E441',
+                        'check the parameter and return types against ' + expected);
             }
-            /* Gated on the LOOKUP, not on the sigil: reading a global spells itself `&name` too, so
-               `&`/`^` alone cannot tell a function reference from one, and testing the sigil sent
-               every global funcptr into this branch to find no function and silently fall out - past
-               the element check below, which is the one that applies to it. */
-            var fe = (rop && (rop.charAt(0) === '&' || rop.charAt(0) === '^')
-                    ? $$parser.symbols.functions[rop.substr(1)] : undefined);
-            if (fe && fe.signature) {                             /* a direct function reference */
-                if (!$$parser.funcTypeMatches(leftx.elem, fe.signature)) {
-                    $$parser.fail('Function ' + rop.substr(1) + " does not match funcptr type '"
-                            + leftx.elem + "'", sourceCode, sourceOffset, 'E441',
-                            'check the parameter and return types against ' + leftx.elem);
-                }
-            } else if (rightx.type === 'F' && rightx.elem !== leftx.elem) {
-                /* An UNTYPED funcptr is not silently promoted, for the same reason a bare `pointer`
-                   is not assignable to an `int pointer` (E201): the named type exists to guarantee
-                   the shape of what gets called, and an untyped source guarantees nothing. Say so
-                   with the cast that means "I checked" - a functype needs no `pointer` modifier,
-                   being one already. */
-                $$parser.fail("Funcptr type mismatch (expected '" + leftx.elem + "', got "
-                        + (rightx.elem !== undefined && $$parser.isFuncTypeAtom(rightx.elem)
-                                ? "'" + rightx.elem + "'" : 'an untyped funcptr') + ")",
-                        sourceCode, sourceOffset, 'E441',
-                        'use a cast: (' + leftx.elem + ')');
-            }
+        } else if (actualType === 'F' && actualElem !== expected) {
+            $$parser.fail('Funcptr type mismatch' + at + " (expected '" + expected + "', got "
+                    + (actualElem !== undefined && $$parser.isFuncTypeAtom(actualElem)
+                            ? "'" + actualElem + "'" : 'an untyped funcptr') + ')',
+                    sourceCode, sourceOffset, 'E441', 'use a cast: (' + expected + ')');
         }
     };
 
@@ -3694,10 +3712,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                 /   VarDecl
                 )                                                     {
                                                                         if ($$.structFwd) {
-                                                                            if ($$parser.shadowedStruct) {   /* bodyless: claims no layout, so it cannot conflict */
-                                                                                $$parser.structs[$sname] = $$parser.shadowedStruct;
-                                                                                $$parser.shadowedStruct = undefined;
-                                                                            }
+                                                                            $$parser.cancelStructRedeclaration($sname);
                                                                             return true;
                                                                         }
                                                                          $$parser.declare(
@@ -4193,7 +4208,7 @@ MulDiv      <-  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
 
 PrePost     <-  (op:PREFIX_OP _
                 / '('_ op:BASE_TYPE _               { $cdesc = $$parser.CASTS_TO_TYPES[$op]; }
-                  ( POINTER _                       { $cdesc = 'p:' + $cdesc; $cmods = true; $ccast = 'pointer'; }
+                  ( POINTER _                       { $cdesc = 'p:' + $cdesc; $ccast = 'pointer'; }
                   )* ')'_
                 / '('_ sid:Identifier               { $pdepth = 0; }   # named-type cast: (Name pointer ...) / (Fn)
                   ( POINTER _                       { $pdepth = $pdepth + 1; }
@@ -4215,10 +4230,9 @@ PrePost     <-  (op:PREFIX_OP _
                                                           for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc;
                                                           $ccast = 'pointer';
                                                       }
-                                                      $cmods = true;
                                                     }
                 ) PrePost                           { if (!$$parser.dry) {
-                                                       if ($cmods) {
+                                                       if ($ccast) {          /* a named/pointer cast; a bare BASE_TYPE cast has no $ccast */
                                                            $$parser.unaryOp($ccast, $$, $$s, $$i);
                                                            $$parser.setElem($$, $$parser.descTail($cdesc));
                                                        } else {
@@ -4263,7 +4277,6 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            $$parser.claimSlot($$.base + _os);
                                                        $$.types = [];
                                                        $$.elems = [];
-                                                       $$.nulls = [];
                                                        $$.opnds = [];
                                                     } }
                 (Argument (','_ Argument)*)?
@@ -4357,7 +4370,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                }
                                                                var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */
                                                                if (expected === 'p' && expectedElem !== undefined
-                                                                       && !$$.nulls[argIdx]
+                                                                       && $$.opnds[argIdx] !== '&NULL'
                                                                        && $$.elems[argIdx] !== expectedElem) {
                                                                    $$parser.fail('Pointer element type mismatch for argument '
                                                                            + (argIdx + 1) + ' when calling ' + label
@@ -4366,26 +4379,14 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                            + ' elements)', $$s, $$i, 'E202',
                                                                            'use a cast: (' + $$parser.elemVerbose(expectedElem) + ' pointer)');
                                                                }
-                                                               /* Same rule for a named funcptr param as for assignment (E441): a direct
-                                                                  function reference is checked against the type, `nullfunc` suits any of
-                                                                  them, and anything else must already carry that exact type. */
+                                                               /* Same rule for a named funcptr param as for assignment, so the same check:
+                                                                  `expected` is already 'F' here, which is what the assign path derives from
+                                                                  the r-value's own type. */
                                                                if (expected === 'F' && $$parser.isFuncTypeAtom(expectedElem)) {
-                                                                   var _aop = $$.opnds[argIdx];
-                                                                   var _afn = (_aop && _aop !== '&NULL' && (_aop.charAt(0) === '&' || _aop.charAt(0) === '^')
-                                                                           ? $$parser.symbols.functions[_aop.substr(1)] : undefined);
-                                                                   if (_afn && _afn.signature) {
-                                                                       if (!$$parser.funcTypeMatches(expectedElem, _afn.signature))
-                                                                           $$parser.fail('Function ' + _aop.substr(1) + " does not match funcptr type '"
-                                                                                   + expectedElem + "' for argument " + (argIdx + 1) + ' when calling '
-                                                                                   + label, $$s, $$i, 'E441',
-                                                                                   'check the parameter and return types against ' + expectedElem);
-                                                                   } else if (_aop !== '&NULL' && $$.elems[argIdx] !== expectedElem) {
-                                                                       $$parser.fail("Funcptr type mismatch for argument " + (argIdx + 1)
-                                                                               + ' when calling ' + label + " (expected '" + expectedElem + "', got "
-                                                                               + ($$.elems[argIdx] !== undefined && $$parser.isFuncTypeAtom($$.elems[argIdx])
-                                                                                       ? "'" + $$.elems[argIdx] + "'" : 'an untyped funcptr') + ')',
-                                                                               $$s, $$i, 'E441', 'use a cast: (' + expectedElem + ')');
-                                                                   }
+                                                                   $$parser.checkFuncPtrTarget(expectedElem, $$.opnds[argIdx], 'F',
+                                                                           $$.elems[argIdx],
+                                                                           ' for argument ' + (argIdx + 1) + ' when calling ' + label,
+                                                                           $$s, $$i);
                                                                }
                                                            }
 
@@ -4485,11 +4486,7 @@ Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        }
                                                        if ($$.elems) {                       /* element chain + null-ness, captured */
                                                            $$.elems.push(meta.elem);         /* before makeArgValue mutates the meta */
-                                                           $$.nulls.push(meta.type === 'p'
-                                                               && meta.operands[1] === '&NULL'
-                                                               && meta.operands[2] === undefined);
-                                                           $$.opnds.push(meta.operands[2] === undefined
-                                                               ? meta.operands[1] : undefined);   /* a bare `&f` / `&NULL`, for the funcptr-type check */
+                                                           $$.opnds.push(bareOperand(meta));  /* `&NULL` marks a null/nullfunc literal */
                                                        }
                                                        var winSlot = $$.base + $$.retSlots + $$.words;
                                                        if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */
