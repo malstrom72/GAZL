@@ -1119,6 +1119,52 @@ for (const [label, source, expected] of arrayExtentCases) {
 }
 console.log("impala.jspeg compiler requires an array extent everywhere except an extern struct field");
 
+// Shapes the compiler used to accept and hand to the assembler, which then failed the build naming a
+// compiler-minted symbol (`.s0.0`, `.s0.-6`, `nowhere`) instead of the source line. Each is decidable
+// here whenever the values are numeric; a SYMBOLIC range or extent stays unchecked on purpose, because
+// not knowing is not the same as being fine. See docs/CompileTimeHardening.md.
+const SW = (range, body) => `function f() locals int i { i = 1; switch (i == ${range}) { ${body} } }`;
+const acceptedThenRejected = [
+	["duplicate case value", SW("0 to 3", "case 0: { i=1; } case 0: { i=2; }"), "Duplicate case value 0"],
+	["duplicate inside one list", SW("0 to 3", "case 1, 1: { i=1; }"), "Duplicate case value 1"],
+	["case above the range", SW("0 to 3", "case 8: { i=1; }"), "outside the switch range 0 to 3"],
+	["case at the exclusive bound", SW("0 to 3", "case 3: { i=1; }"), "outside the switch range 0 to 3"],
+	// Below `from` is the one that produced an UNLOADABLE module: the offset folds to `.s0.-6`, which
+	// the assembler rejects as an invalid identifier. `from` is non-zero here on purpose - the offset
+	// is then an assemble-time `! SUBi <A>`, so the check cannot read it off the emitted operand.
+	["case below the range", SW("5 to 9", "case -1: { i=1; }"), "outside the switch range 5 to 9"],
+	["case just below from", SW("5 to 9", "case 4: { i=1; }"), "outside the switch range 5 to 9"],
+	["in-range cases", SW("5 to 9", "case 5, 8: { i=1; } default: { i=2; }"), null],
+	["goto an undefined label", "function f() { goto nowhere; }", "goto to undefined label nowhere"],
+	["goto a defined label", "function f() locals int i { i = 0; if (i < 3) goto top; top: ; }", null],
+	["write to a readonly array element",
+		"readonly int array T[4] = { 1,2,3,4 }\nfunction f() { global T[0] = 9; }",
+		"Cannot assign to an element of a readonly array"],
+	["read a readonly array element",
+		"readonly int array T[4] = { 1,2,3,4 }\nfunction f() locals int x { x = global T[2]; }", null],
+	["write to a writable array element",
+		"global int array W[4]\nfunction f() { global W[0] = 9; }", null],
+];
+for (const [label, source, expected] of acceptedThenRejected) {
+	expectCompileOutcome("accepted-then-rejected", label, source, expected);
+}
+console.log("impala.jspeg compiler rejects the shapes that used to fail at assembly time");
+
+// `global` is a mandatory prefix at every use site, so mixing it up is the first error most newcomers
+// and code generators hit - and a bare "Undeclared identifier" points away from the one-word fix.
+const namespaceHints = [
+	["global read without the keyword", "global int G = 5\nfunction f() locals int x { x = G; }",
+		"G is a global - write `global G`"],
+	["local read with the keyword", "function f() locals int x { x = 1; global x = 2; }",
+		"x is a local - drop the `global` keyword"],
+];
+// The note travels as a rendered `note:` line in the formatted message, not as a property - the runner
+// re-throws a plain Error - so match the text a user actually sees.
+for (const [label, source, expectedHint] of namespaceHints) {
+	expectCompileOutcome("E403 hint", label, source, "note: " + expectedHint);
+}
+console.log("impala.jspeg compiler names the fix when global/local are confused");
+
 // A `(` after a value is always a call, so the argument list must never backtrack: its prologue has
 // already borrowed the call window, and a backtrack leaks that window into whatever comes next. It
 // used to surface as `Assertion failed: transient %1 must exist in stock` for a nested call, or as a

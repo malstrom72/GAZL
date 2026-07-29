@@ -3,7 +3,7 @@
 ; signatures version=1
 
 ;-----------------------------------------------------------------------------
-x:	FUNC	; signature func x() -> void @ 1:1
+x:	FUNC	; signature func x() -> void @ 6:1
 		PARA *1
 	$i:	LOCi
 	$j:	LOCi
@@ -15,18 +15,18 @@ x:	FUNC	; signature func x() -> void @ 1:1
 	.s0#2:	NOOP
 	.s0#3:	MOVi $j $i 	; j = i
 		GOTO @.e1  
-	.s0#5:	CALL &x %0 *1	; expects x() -> void @ 4:13
+	.s0#5:	CALL &x %0 *1	; expects x() -> void @ 9:13
 		GOTO @.e1  
 	.s0:	MOVi $i $j 	; i = j
 		GOTO @.e1  
-	.s0#11:	NOOP
-	.s0#33:	MOVi $k $j 	; k = j
+	.s0#6:	NOOP
+	.s0#8:	MOVi $k $j 	; k = j
 	.e1:	RETU   	; }
 
-CONSTANT:	! DEFi #2949	; signature const CONSTANT : int @ 10:1
+CONSTANT:	! DEFi #29	; signature const CONSTANT : int @ 15:1
 
 ;-----------------------------------------------------------------------------
-y:	FUNC	; signature func y() -> void @ 11:1
+y:	FUNC	; signature func y() -> void @ 16:1
 		PARA *1
 	$i:	LOCi
 	$a:	LOCA *5
@@ -42,14 +42,14 @@ y:	FUNC	; signature func y() -> void @ 11:1
 		SWCH %0 *<B> @.s2
 	.s2:	NOOP
 	.e3:	NOOP
-		! ADDi <A> #4 #1	; switch (i == 4+1 to 9) 
-		! SUBi <B> #9 <A>
+		! ADDi <A> #4 #1	; switch (i == 4+1 to 130) 
+		! SUBi <B> #130 <A>
 		SUBi %0 $i <A>
 		SWCH %0 *<B> @.s4
-		! ADDi <B> #23 #57	; case 23+57, -1, CONSTANT
+		! ADDi <B> #23 #57	; case 23+57, 5, CONSTANT
 		! SUBi <B> <B> <A>
 	.s4#<B>:	NOOP
-		! SUBi <B> #-1 <A>
+		! SUBi <B> #5 <A>
 	.s4#<B>:	NOOP
 		! SUBi <B> #CONSTANT <A>
 	.s4#<B>:	ADDi $i $i #1234	; i=i+1234
@@ -62,36 +62,36 @@ y:	FUNC	; signature func y() -> void @ 11:1
 	.s4:	NOOP
 	.e5:	SUBi %0 $i #10	; switch (i == 10 to 100) 
 		SWCH %0 *90 @.s6
-	.s6#90:	CALL &x %0 *1	; expects x() -> void @ 15:41
+	.s6#89:	CALL &x %0 *1	; expects x() -> void @ 20:40
 		GOTO @.e7  
 	.s6:	GOTO @.e7  	; 
-	.s6#190:	ADDi $i $i #1	; i = i + 1
+	.s6#10:	ADDi $i $i #1	; i = i + 1
 		GOTO @.e7  
-		! SUBi <A> #'zzz' #10	; case 'zzz'
+		! SUBi <A> #'a' #10	; case 'a'
 	.s6#<A>:	GETL $i $a $i	; i = (int) a[i]
 	.e7:	RETU   	; }
 
-; signature extern native printInt() -> unknown @ 18:1
-; signature extern native printLF() -> unknown @ 19:1
-MINUS_FIVE:	! DEFi #-5	; signature const MINUS_FIVE : int @ 20:1
-gx:	GLOB *10	; signature array gx[10] : unknown @ 21:1
+; signature extern native printInt() -> unknown @ 23:1
+; signature extern native printLF() -> unknown @ 24:1
+MINUS_FIVE:	! DEFi #-5	; signature const MINUS_FIVE : int @ 25:1
+gx:	GLOB *10	; signature array gx[10] : unknown @ 26:1
 
 ;-----------------------------------------------------------------------------
-test:	FUNC	; signature func test(int a, int b) -> int @ 23:1
+test:	FUNC	; signature func test(int a, int b) -> int @ 28:1
 	$r:	OUTi
 	$a:	INPi
 	$b:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi %1 $a 	; printInt(a)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 24:13
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 29:13
 		MOVi %1 $b 	; printInt(b)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 25:13
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 30:13
 		ADDi $r $a $b	; r = a + b
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 29:1
+main:	FUNC	; signature func main() -> void @ 34:1
 		PARA *1
 	$i:	LOCi
 	$a:	LOCi
@@ -108,26 +108,26 @@ main:	FUNC	; signature func main() -> void @ 29:1
 		ADDi %1 %1 $a
 		ADDi %1 %1 #1
 		MOVi %2 $b 
-		CALL &test %0 *3	; expects test(int, int) -> int @ 36:22
+		CALL &test %0 *3	; expects test(int, int) -> int @ 41:22
 		ADDi %1 #1 $b	; test(a+1+2/(1+b), b)
 		ADDi %2 $a #1
 		DIVi %1 #2 %1
 		ADDi %1 %2 %1
 		MOVi %2 $b 
-		CALL &test %0 *3	; expects test(int, int) -> int @ 37:22
+		CALL &test %0 *3	; expects test(int, int) -> int @ 42:22
 		ADDi %1 #1 $b	; test(a+1+2/(1+b)+(int)(test(3,1)), a+1+2/(1+b))
 		ADDi %2 $a #1
 		DIVi %1 #2 %1
 		MOVi %4 #3 
 		MOVi %5 #1 
-		CALL &test %3 *3	; expects test(int, int) -> int @ 38:34
+		CALL &test %3 *3	; expects test(int, int) -> int @ 43:34
 		ADDi %2 %2 %1
 		ADDi %1 %2 %3
 		ADDi %2 #1 $b
 		ADDi %3 $a #1
 		DIVi %2 #2 %2
 		ADDi %2 %3 %2
-		CALL &test %0 *3	; expects test(int, int) -> int @ 38:49
+		CALL &test %0 *3	; expects test(int, int) -> int @ 43:49
 		MOVi $i #-5 	; for (i = -5 to 20) 
 		GEQi #-5 #20 @.e0
 	.l1:	NOOP
@@ -136,35 +136,35 @@ main:	FUNC	; signature func main() -> void @ 29:1
 		! SUBi <B> <B> <A>
 		SUBi %0 $i <A>
 		SWCH %0 *<B> @.s2
-		! SUBi <B> #-2 <A>	; case -2
+		! SUBi <B> #2 <A>	; case 2
 	.s2#<B>:	MOVi %1 #-2 	; printInt(-2)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 42:25
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:24
 		GOTO @.e3  
 		! SUBi <B> #11 #1	; case 11-1
 		! SUBi <B> <B> <A>
 	.s2#<B>:	MOVi %1 #10 	; printInt(10)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 43:27
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 48:27
 		GOTO @.e3  
 		! SUBi <B> #'a' #'a'	; case 'a'-'a'
 		! SUBi <B> <B> <A>
 	.s2#<B>:	MOVi %1 #0 	; printInt(0)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:29
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:29
 		GOTO @.e3  
 	.s2:	MULi %0 $i #2	; switch (i * 2 == 0 to 6) 
 		SWCH %0 *6 @.s4
 	.s4:	MOVi %1 #-1000 	; printInt(-1000)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:34
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 52:34
 		GOTO @.e3  
 	.s4#2:	MOVi %1 #11111 	; printInt(11111)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 48:30
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:30
 		GOTO @.e3  
 	.s4#5:	NEQi #1 #1 @.e3	; if (1 == 1) printInt(5555)
 		MOVi %1 #5555 	; printInt(5555)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:41
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 54:41
 	.e5:	GOTO @.e3  	; }
 		! SUBi <B> #5 <A>	; case 5
 	.s2#<B>:	MOVi %1 #5 	; printInt(5)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:23
-	.e3:	CALL ^printLF %0 *1	; expects printLF() -> unknown @ 55:12
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 58:23
+	.e3:	CALL ^printLF %0 *1	; expects printLF() -> unknown @ 60:12
 		FORi $i #20 @.l1	; }
 	.e0:	RETU   	; }

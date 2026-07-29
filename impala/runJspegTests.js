@@ -55,10 +55,10 @@ function formatError(err) {
         return String(err);
 }
 
-/* Goldens that cannot load under GAZLCmd for reasons that are not the compiler's: */
-const KNOWN_UNLOADABLE = {
-        switchtest: 'case values deliberately outside its own switch range - CompileTimeHardening.md item 3'
-};
+/* Goldens that cannot load under GAZLCmd for reasons that are not the compiler's. Empty since E444
+   made an out-of-range `case` a compile error: switchtest was the sole entry, and it was here because
+   the compiler accepted case values that folded to labels the assembler then rejected. */
+const KNOWN_UNLOADABLE = {};
 
 function main() {
         let totalFiles = 0;

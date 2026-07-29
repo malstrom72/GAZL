@@ -902,8 +902,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         /* POST-CONDITION. This pass OWNS every `@.` label - it mints them, aliases them and
            deletes them - so a reference left pointing at a name it also deleted is a bug HERE,
-           and saying so beats the assembler's "Symbol not found" three layers downstream. A
-           user label (`@name`) is not ours to promise. */
+           and saying so beats the assembler's "Symbol not found" three layers downstream.
+           A user label (`@name`) is not ours to promise, but it IS decidable: a label is always
+           local to the function body, and by the time this runs the body is fully parsed, so the
+           map below is the complete set. An undefined one is a user error, not an internal bug,
+           so it gets a diagnostic at the `goto` rather than an assert. */
         var defined = {};
         for (i = 0; i < metacode.length; ++i) {
             if (metacode[i].operator === '<--') defined[metacode[i].operands[0]] = true;
@@ -913,8 +916,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (op == null || op === ';' || op === '<--') continue;
             for (var k = 0; k < 3; ++k) {
                 var ref = rec.operands[k];
-                assert(typeof ref !== 'string' || ref.substr(0, 2) !== '@.' || defined[ref],
-                        "branch to deleted label " + ref + " from " + op);
+                if (typeof ref !== 'string' || ref.charAt(0) !== '@' || defined[ref]) continue;
+                if (ref.charAt(1) === '.') {
+                    assert(false, "branch to deleted label " + ref + " from " + op);
+                } else if (rec.gotoOffset !== undefined) {
+                    fail('goto to undefined label ' + ref.substr(1),
+                            rec.gotoSource, rec.gotoOffset, 'E445',
+                            'a label is local to its function - define it as `' + ref.substr(1)
+                                    + ': ;` in this body, or remove the goto');
+                }
             }
         }
     };
@@ -1158,6 +1168,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         rec.dynIndex  = undefined;
         rec.winBase   = undefined;
         rec.winWords  = undefined;
+        rec.readonly  = false;        /* pooled slots: never inherit a previous symbol's writability */
         return rec;
     };
 
@@ -1275,6 +1286,41 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         } else if (typeof _hostOptions !== 'undefined' && _hostOptions != null
                 && typeof _hostOptions.warn === 'function') {
             _hostOptions.warn(message, offset, code, hint);
+        }
+    };
+
+    /* The integer behind a folded operand, or undefined when it is symbolic (`<A>`, a host `! DEFi`, an
+       `extern struct` size). EVERY compile-time check gates on this: Impala may only reject a value it
+       genuinely knows, and not knowing is not the same as being fine - so a symbolic operand is passed
+       over in silence rather than guessed at. See docs/CompileTimeHardening.md. */
+    constInt = function (operand) {
+        return (typeof operand === 'string' && /^#-?[0-9]+$/.test(operand))
+                ? parseInt(operand.substr(1), 10) : undefined;
+    };
+
+    /* `SWCH` resolves table entries 0..size-1 only, so a case outside that window is unreachable - and a
+       NEGATIVE offset folds to `.sN.-6`, which the assembler rejects as an invalid identifier, failing a
+       build the compiler accepted without a word. A repeated value mints the same `.sN#K` label twice and
+       trips `Symbol already defined` on a name the user never wrote. Both are decidable here whenever the
+       range and the value are numeric, which is the common shape. */
+    checkCaseValue = function (ctx, value, source, offset) {
+        if (ctx === undefined || ctx.fromNum === undefined || value === undefined) {
+            return;
+        }
+        /* Subtract here rather than reading the emitted offset: `subConstInt` defers to an assemble-time
+           `! SUBi <A>` whenever `from` is non-zero, so the offset operand is symbolic in exactly the
+           `switch (i == 5 to 9)` shape that produces the unloadable `.sN.-6`. */
+        var off = value - ctx.fromNum;
+        if (ctx.caseSeen[off] === true) {
+            fail('Duplicate case value ' + value, source, offset, 'E443',
+                    'each case value may appear once in a switch');
+        }
+        ctx.caseSeen[off] = true;
+        if (ctx.sizeNum !== undefined && (off < 0 || off >= ctx.sizeNum)) {
+            fail('Case value ' + value + ' is outside the switch range '
+                    + ctx.fromNum + ' to ' + (ctx.fromNum + ctx.sizeNum), source, offset, 'E444',
+                    'the upper bound is exclusive, so the last reachable case is '
+                            + (ctx.fromNum + ctx.sizeNum - 1));
         }
     };
 
@@ -2355,6 +2401,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         rightx = metaSlot(rightx);
 
         var lelem = leftx.elem;                                   /* element type of the base (Impala 2) */
+        var lro   = leftx.readonly;                               /* a readonly array's element is readonly too */
 
         /* a binary result is never a verbatim call result; drop callInfo so
            assign() cannot mistake it for one (see unaryOp for rationale). */
@@ -2438,6 +2485,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                                   makeRValue(leftx), '#.z.' + stride);
             }
         }
+
+        leftx.readonly = lro;                                     /* survives the makeMeta calls above */
 
         /* element-type propagation (Impala 2) */
         if (operator === '=[]' && lelem !== undefined) {
@@ -2582,6 +2631,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
 
         checkPtrAssign(leftx, rightx, sourceCode, sourceOffset);
+
+        /* `readonly` was honoured for scalars and silently ignored for an indexed write, which left the
+           assembler to catch it as `Incompatible types` against the const region - if at all. */
+        if (leftx.readonly === true) {
+            fail('Cannot assign to an element of a readonly array',
+                    sourceCode, sourceOffset, 'E404',
+                    'declare it `global` instead of `readonly` if it has to be written');
+        }
 
         /* fast path: constant expression on RHS */
         var op1 = rightx.operands[1];
@@ -3100,6 +3157,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (p.type === 'A') {
                 makeMeta(x, ':=', 'p', undefined,
                                   '&' + name, undefined);
+                /* A scalar `readonly` is rejected by its `:=*` operator having no assign() branch, but an
+                   ARRAY decays to the same `:=` address meta whether or not it is writable - so carry the
+                   flag and let assign() consult it once the subscript has been folded in. */
+                x.readonly = (p.readonly === true);
             } else {
                 makeMeta(x,
                                   (p.readonly ? ':=*' : '=*'),
@@ -3135,8 +3196,18 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
 
         /* not found --------------------------------------------*/
+        /* Before giving up, look in the OTHER namespace. `global` is a mandatory prefix at every use
+           site, so reading a global without it - or a local/const with it - is the first error most
+           newcomers and code generators hit, and a bare "Undeclared identifier" points away from the
+           one-word fix. The symbol tables already hold the answer; say it. */
+        var hint;
+        if (!isGlobal && sym.globals[name]) {
+            hint = name + ' is a global - write `global ' + name + '`';
+        } else if (isGlobal && sym.locals['$' + name]) {
+            hint = name + ' is a local - drop the `global` keyword';
+        }
         fail('Undeclared identifier: ' + name,
-                      sourceCode, sourceOffset, 'E403');
+                      sourceCode, sourceOffset, 'E403', hint);
     };
 
     /* -----------------------------------------------------------
@@ -3429,7 +3500,7 @@ function And($){var $label;return (function(){var _b=_i;return (function(){ $lab
 function Comp($){var $op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return (_s[_i]==="!")&&(++_i,true)&&_($)&&Comp($)&&(function(){ emit('!', undefined, undefined, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ dry = true; ; return true})()&&(function(){var _l=_i,_x=Group($);_i=_l;return !_x})()&&(function(){ dry = false; ; return true})()&&BoolGroup($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ dry = false; ; return true})()&&Expr($)&&COMP_OP($op)&&_($)&&Expr($r)&&(function(){ checkCompMix($._, $r._, _s, _i); binaryOp($op._, $._, $r._, _s, _i); emitMeta($._); releaseMeta($._); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Assert($){var $okLabel,$start,$exprText,$str=createParserContext(),$;return (function(){var _b=_i;return ASSERT($)&&_($)&&(function(){ $okLabel = newLabel('a'); emit('<> ==', 'i', '#DEBUG', '#0', $okLabel); $start    = _i; $exprText = ''; ; return true})()&&BoolGroup($str)&&(function(){ $exprText = _s.substring($start, _i); $exprText = $exprText.replace(/[ \t\r\n]+$/, ''); ; return true})()&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ emit('?->', true, $okLabel, undefined, undefined); var r = borrowForCall(); /* store the assert-string constant */ makeString('a', $str._, $exprText, _s, _i); /* argument goes into %<r+1> */ makeArgValue($str._, r + 1); /* call the failure handler */ emit('()', '?', '^assertFail', '%' + r, '*1'); /* tidy temporaries */ returnBack('%' + (r + 1)); returnBack('%' +  r); /* continue after OK-label */ emit('<-?', true, $okLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Block($){return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while(Statement($));})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Goto($){var $label=createParserContext();return (function(){var _b=_i;return GOTO($)&&_($)&&Identifier($label)&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ emit('-->', undefined, '@' + $label._, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Goto($){var $label=createParserContext();return (function(){var _b=_i;return GOTO($)&&_($)&&Identifier($label)&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ emit('-->', undefined, '@' + $label._, undefined, undefined); /* carry the source position so processBranches can name the `.impala` line if this label is never defined (E445) */ var g = metacode[metacode.length - 1]; g.gotoSource = _s; g.gotoOffset = _i; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function If($){var $dontLabel,$doneLabel;return (function(){var _b=_i;return IF($)&&_($)&&BoolGroup($)&&(function(){ $dontLabel = newLabel('f'); emit('?->', false, $dontLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){var _b=_i;return ELSE($)&&_($)&&(function(){ $doneLabel = newLabel('e'); emit('-->', undefined, $doneLabel, undefined, undefined); emit('<-?',  false, $dontLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('<--', undefined, $doneLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ emit('<-?', false, $dontLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function DoWhile($){var $loopLabel;return (function(){var _b=_i;return DO($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<-?', false, $loopLabel, undefined, undefined); ; return true})()&&Statement($)&&WHILE($)&&_($)&&BoolGroup($)&&(function(){ emit('?->', true, $loopLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Loop($){var $loopLabel;return (function(){var _b=_i;return LOOP($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
@@ -3437,8 +3508,8 @@ function For($){var $var=createParserContext(),$gotInit,$init=createParserContex
 function Copy($){var $l=createParserContext(),$f=createParserContext(),$t=createParserContext(),$length,$type,$;return (function(){var _b=_i;return COPY($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($l)&&FROM($)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ var fromMeta = metaSlot($f._); var toMeta   = metaSlot($t._); $length = makeConstant($l._, 'i', _s, _i); var lengthHash = dropHash($length); if (fromMeta.type + toMeta.type !== 'pp') { returnBack($length); typeError( 'Invalid types ({$type1} and {$type2})', _s, _i, fromMeta.type, toMeta.type , 'E301'); } var copyMeta = metaSlot($l._); makeMeta( copyMeta, 'copy', '?', makeRValue(toMeta, '&$%'), makeRValue(fromMeta, '&$%'), '*' + lengthHash ); emitMeta(copyMeta); returnBack($length); releaseMeta(copyMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Destructure($){return (function(){var _b=_i;return DestTarget($)&&((function(){for(var _n=0;(function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&DestTarget($)||(_im=(_i>_im?_i:_im),_i=_b,false)})();++_n);return _n>0})())&&(_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md. Kept only to recognise the shape and reject it well; the targets themselves are never needed. */ fail('Destructuring assignment is not supported in Impala 2.0', _s, _i, 'E429', 'assign one value per statement'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function DestTarget($){var $tgtGlobal,$id=createParserContext(),$tgtName;return (function(){var _b=_i;return (function(){ $tgtGlobal = false; ; return true})()&&((function(){var _b=_i;return GLOBAL($)&&_($)&&(function(){ $tgtGlobal = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Identifier($id)&&(function(){ $tgtName = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Switch($){var $f=createParserContext(),$t=createParserContext(),$size,$switcher,$,$switchExit,$progress,$stmt=createParserContext();return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($._); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i, 'E306'); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups -> fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case ...” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined', undefined, undefined, 'E409'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = switchStack.pop() || metaSlot($._); /* no explicit “default” -> hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) - switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot($._); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); $n = subConstInt( makeConstant(caseMeta, 'i', _s, _i), baseFrom ); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Switch($){var $f=createParserContext(),$t=createParserContext(),$size,$switcher,$,$switchExit,$progress,$stmt=createParserContext();return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($._); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i, 'E306'); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); /* snapshot the range as plain numbers now: the operands are handed back to the scratch pool below, and a case is only checkable while both ends are known. */ switchMeta.fromNum = constInt(switchMeta.from); switchMeta.sizeNum = constInt($size); switchMeta.caseSeen = {}; switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups -> fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case ...” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined', undefined, undefined, 'E409'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = switchStack.pop() || metaSlot($._); /* no explicit “default” -> hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) - switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot($._); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); var caseConst = makeConstant(caseMeta, 'i', _s, _i); checkCaseValue(ctx, constInt(caseConst), _s, _i); $n = subConstInt(caseConst, baseFrom); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function While($){var $loopLabel,$exitLabel;return (function(){var _b=_i;return WHILE($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&BoolGroup($)&&(function(){ $exitLabel = newLabel('e'); emit('?->', false, $exitLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); emit('<-?', false, $exitLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Value($){var $base=createParserContext(),$f=createParserContext(),$i=createParserContext(),$s=createParserContext();return (function(){var _b=_i;return Group($)||(_im=(_i>_im?_i:_im),_i=_b,false)||SIZEOF($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&TypeBase($base)&&(function(){ if (!dry) { var head = descHead($base._); if (isStructAtom(head)) {   /* struct size -> symbolic .z.Name */ if (!isExternStruct(head) && structWords(head) === undefined) fail('sizeof of incomplete struct ' + head, _s, _i, 'E419'); makeMeta($._, ':=', 'i', undefined, '#.z.' + head, undefined); setElem($._, undefined); } else { makeMeta($._, ':=', 'i', undefined, '#1', undefined); setElem($._, undefined); } } ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FloatLiteral($f)&&(function(){ if (!dry) { makeMeta($._, ':=', 'f', undefined, '#' + $f._, undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||IntegerLiteral($i)&&(function(){ if (!dry) { makeMeta($._, ':=', 'i', undefined, '#' + $i._, undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||StringLiteral($s)&&(function(){ if (!dry) { makeString('s', $._, evaluate($s._), _s, _i); setElem($._, 'i');      /* string data is int words (Impala 2) */ } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'p', undefined, '&NULL', undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'F', undefined, '&NULL', undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Variable($){var $global,$id=createParserContext();return (function(){var _b=_i;return (function(){ $global = false; ; return true})()&&((function(){var _b=_i;return GLOBAL($)&&_($)&&(function(){ $global = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Identifier($id)&&(function(){ if (!dry) { lookup($._, $id._, $global, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
