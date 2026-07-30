@@ -315,7 +315,13 @@ and there is no single command for them. Largest missed opportunity in the repo.
   "impala" exactly once.
 
 
-## Decision: pointer arithmetic scales by element size (2026-07-29)
+## Decision: pointer arithmetic scales by element size (2026-07-29) - SUPERSEDED
+
+> **Superseded 2026-07-30** by "the scaled subscript is spelled `[[ ]]`" at the end of this document.
+> This decision was reached without knowing F1 and F2 below: the elements rule leaks into pointer
+> comparison, where there must be no unit at all, and cannot reach `for`, where `FORp` has no room for a
+> stride. It is kept in full because its reasoning about the *unit* still holds and the replacement builds
+> on it.
 
 Settled after arguing it in both directions. **One rule, no exceptions: pointer arithmetic is in
 elements.** `p + n`, `p - n` and `p - q` all scale by the pointee size. Untyped `pointer` and word-sized
@@ -380,11 +386,15 @@ is ever loose. Verify by revert.
 **2a** scale `+`, `-`-with-int and pointer difference by element size (see the decision above); fixtures
 walking a struct array by pointer vs by index, which must agree.
 
+> **Shipped and superseded.** 2a landed in `a7fac42` and introduced F1 while leaving F2 unfixed. Replaced
+> by the `[[ ]]` decision at the end of this document.
+
 **2b was dropped**: the reported shift-precedence divergence does not exist (see C4). Batch 2 is 2a only.
 
 ### Batch 3 - one diagnostics pass
 Duplicate `case`, `case` outside the range, `goto` to an undefined label, `readonly` array element write,
-constant index OOB, plus the `E403` fix-it note for globals. Reject only on values Impala genuinely knows;
+constant index OOB **on a dereference only, never on address formation - see F3**, plus the `E403` fix-it
+note for globals. Reject only on values Impala genuinely knows;
 stay silent on symbolic ones. Payoff is measurable: `switchtest` comes off `KNOWN_UNLOADABLE`
 (`impala/runJspegTests.js:59`) and `CompileTimeHardening.md` closes.
 
@@ -395,3 +405,179 @@ than a symbol-table lookup. They deserve their own batch.
 ### Batch 5 - docs
 Everything in section C9 and D, plus the "which tool does what" box promoted out of
 `impala/gazlAssembleCheck.js:1-10`, the reworded cost principle, and a new `impala/README.md`.
+
+
+# Follow-up (2026-07-30)
+
+Batch 2a shipped (`74f6862`..`a7fac42`) and is wrong in two ways that the `pointerStride` fixture does not
+reach. Both were reproduced on this machine against the committed `Impala2` branch.
+
+## F1. Every comparison between two struct pointers emits invalid GAZL **[V]** - CRITICAL - REGRESSION
+
+The scaling branch (`impala/impala.jspeg:2463-2468`) keys on "the left operand is a struct pointer" and
+fires for **every** operator, not just `+` and `-`. A comparison has no unit, so scaling either side is
+meaningless, and the result is a `MULi` on a pointer operand that the assembler rejects:
+
+```impala
+struct S { int a; int b; int c }
+global S array bank[3]
+export function main() locals S pointer p, S pointer q, int n {
+	p = &global bank[0]; q = &global bank[2];
+	if (p < q) { n = 1; }
+}
+```
+
+```gazl
+MULi %0 $q #.z.S        ; <- pointer operand
+```
+
+`GAZLCmd` refuses to load it: `Incompatible types: $q`. Reproduced for all six of `<`, `<=`, `>`, `>=`,
+`==`, `!=`. **Comparing two struct pointers is currently impossible in Impala.** The JS gates are green
+only because no fixture compares two struct pointers - `pointerStride.impala` covers `+`, `-` and
+difference, and nothing else does.
+
+Loud rather than silent, since the assembler catches it, but it removes the operation that the
+pointer-walk idiom is built on.
+
+## F2. `for` over a struct pointer is silently wrong, and `FORp` cannot express the fix **[V]** - CRITICAL
+
+```impala
+struct S { int a; int b; int c }
+global S array bank[3] = { { 10, 0, 0 }, { 20, 0, 0 }, { 30, 0, 0 } }
+for (p = &global bank[0] to &global bank[3]) { printInt(p->a); printLF(); }
+```
+
+prints `10 0 0 20 0 0 30 0 0` - nine iterations, not three. The bound scales correctly to
+`&bank + 3*.z.S`, and then `FORp` steps one word:
+
+```gazl
+! MULi <A> #3 #.z.S
+ADDp %0 &bank #<A>
+.l1:	PEEK %2 $p #.o.S.a
+	FORp $p %0 @.l1
+```
+
+This is the same row the C3 table listed as broken, and batch 2a did not fix it. It **cannot** be fixed
+under the elements rule: `FORp ptr(d) &address @label` is already three operands, and GAZL is a 3-operand
+ISA (see "No GAZL instruction is missing here" above, which established the same constraint for
+`ADDp`/`DIFp`). The only lowerings available are to reject the construct or to abandon `FORp` for
+`ADDp`+`LSSp`+`GOTO`, which is three instructions where the language promises one.
+
+F1 and F2 together mean the 2026-07-29 decision does not describe a reachable design. "Elements
+everywhere, one rule, no exceptions" leaks into comparison, where there must be no unit, and cannot reach
+`for`, where the unit cannot be represented.
+
+## F3. The constant-index OOB check must be scoped to dereference, not address formation
+
+Planned in batch 3 above as a bare "constant index OOB", and in `CompileTimeHardening.md:75-84` as task
+#22. As worded it would reject `&a[N]`, and that is wrong on principle and stricter than the target
+machine. Verified on `global int array a[4]`:
+
+```gazl
+MOVp $e &a:4        ; e = &global a[4]   one past the end
+MOVp $f &a:9        ; f = &global a[9]   far past the end
+```
+
+Both assemble and run. GAZL's `Offset out of bounds` check (`MemorySafetyModel.md:78`, cpp:619) fires on
+constant-offset **access** operands, not on address-taking. An out-of-range address is a value like any
+other; the guarantee comes from every dereference being bounds-checked at run time (`PEEK` against
+`memorySize`, `POKE` against `rwMemorySize`, `GETL`/`SETL` against `dataStackEnd`). A transliterator must
+not invent a restriction its target does not have.
+
+Correct scope, which neither write-up states:
+
+- **Dereference with a known out-of-range constant index** (`a[7]`, `a[7] = 1`, `p[9].a` as a value) -
+  compile error. It is a guaranteed trap, so catching it early loses nothing.
+- **Address formation** (`&a[7]`, `&a[N]`, `&p[[i]]`) - always legal, never checked.
+
+`CompileTimeHardening.md`'s motivating example is `a[7] = 1`, a store, so the check as *motivated* is
+already correctly scoped; only the wording generalises past it. Note this leaves Impala **simpler** than
+C, not looser: C needs an explicit carve-out making one-past-the-end valid and two-past undefined, while
+Impala needs no carve-out at all.
+
+
+# Decision: the scaled subscript is spelled `[[ ]]` (2026-07-30)
+
+Supersedes the 2026-07-29 decision. **A subscript that scales by the element size is written `[[i]]`, and
+it is the only construct that moves a struct pointer.** Arithmetic on struct pointers is rejected.
+
+| form | on unit-stride (`int pointer`, untyped `pointer`, `int array`) | on struct array / struct pointer |
+|---|---|---|
+| `a[i]` | one instruction, stride 1 | **error**, fix-it to `a[[i]]` |
+| `a[[i]]` | error, fix-it to `a[i]` | one instruction + one `MULi`, stride `sizeof(elem)` |
+| `p + i`, `p += i`, `p - i` | unchanged, stride 1 | **error**, fix-it to `&p[[i]]` |
+| `q - p` | unchanged, bare `DIFp` | **error**, fix-it to `((pointer)q - (pointer)p) / sizeof(S)` |
+| `for (p = a to b)` | unchanged, `FORp` | **error**, fix-it to the `while` form |
+| `p < q` and the other five | bare comparison | bare comparison (F1 fix) |
+
+```impala
+struct Voice { int note; float phase; float gain }
+global Voice array voices[16]
+
+v = &global voices[[0]];
+end = &global voices[[16]];         // one past the end - legal, see F3
+while (v < end) {
+	v->gain = 0.0;                  // 1 instruction, marked by ->
+	v = &v[[1]];                    // 1 ADDp, stride folded at assemble time
+}
+voices[[i]].gain = 0.0;             // 2 instructions, marked by [[ ]]
+```
+
+## Why this and not the alternatives
+
+Four designs were weighed. All four respect `p + (q - p) == q` and `p[i] == *(p + i)`, which are not
+negotiable: pointer arithmetic is an affine space, so `+`, `-`, difference and `[]` share one unit or the
+language is incoherent.
+
+1. **Elements everywhere** (the superseded decision). Dead on F1 and F2 - not a reachable design.
+2. **Words everywhere, `[]` included.** Coherent and perfectly 1:1, but `[]` must then also be words, so
+   `bank[1].a` means the second *word* and every struct access becomes `bank[i * sizeof(S)].a`.
+3. **Reject arithmetic, keep plain `[]` on struct arrays.** Coherent, no division anywhere, and the
+   identities hold vacuously because the expressions do not exist. This was the frontrunner and `[[ ]]` is
+   a strict improvement on it, at the cost of one new spelling.
+4. **`[[ ]]`, this decision.** 3, plus the cost is visible at the use site.
+
+What decides it in favour of 4 over 3: `docs/Impala2.md:472-485` promised **instruction count = marker
+count**, and struct subscripting broke it. The 2026-07-29 decision responded by retreating to "cost is
+predictable from the declared types". `[[ ]]` makes the original sentence true again - `[[ ]]` is the
+marker for the multiply, exactly as `->` is the marker for the load - instead of weakening it. Restoring
+a principle beats rewording it.
+
+The objection that killed this idea on the first pass was that a second subscript operator means two
+spellings for one idea, which `docs/Impala2.md:1102` rejects elsewhere. It does not apply: `[]` and
+`[[ ]]` are **not** interchangeable. Each is an error where the other is correct, so there is exactly one
+legal spelling per access and nothing to dilute.
+
+The second objection was breaking existing code. There is none - `struct` appears zero times as a language
+feature in the 1.0 spec (`docs/Impala.md`; its four "struct" hits are substrings of "constructs" and
+"instructions"), and exactly 24 files in `tests/impala/sources` carry a struct declaration, all of them
+2.0 fixtures written for this feature.
+
+## What it costs
+
+A non-C spelling on the most common struct operation. C programmers and LLM-authored code will write
+`[]` and `p + 1`, and will keep doing so. Every one of those is a compile error with a fix-it, never wrong
+behaviour, which is the trade this language makes everywhere else - but it is permanent friction and it is
+the honest price.
+
+## What it buys
+
+No hidden multiplication and no hidden division anywhere in the language. Every `MULi` sits behind a
+bracket pair the author typed; every `DIVi` is one the author wrote. The residual multiply on `a[[i]]` is
+the **floor**, not overhead: the address of element `i` of a 3-word struct genuinely is `base + i*3`, and
+no language or ISA can produce it without a multiply. That is the principled place to stop, and it is a
+lower bound rather than a preference:
+
+> **Impala emits no arithmetic beyond what the operation mathematically requires, and where it emits any,
+> a marker in the source says so.** `[[ ]]` costs one load plus one multiply; `[]` and `.` cost no
+> arithmetic; `->` costs one load.
+
+Two footnotes shrink the residual further: a constant index folds at assembly time (`! MULi <A> #1 #.z.S`,
+`pointerStride.gazl:37-39`), so it costs nothing at run time, and the degenerate one-word struct case
+(`MULi %0 $i #1`) is already queued as `IDENTITY_OP` in `GAZLAssemblerOptimizations.md`.
+
+## When to revisit
+
+If Impala ever gains a non-word-sized **scalar** element type, scaling stops being struct-only and becomes
+pervasive, and the balance between `[]` and `[[ ]]` should be re-argued from scratch. Same if the parked
+multidim-array work (`docs/ParkedFeatures.md`) lands, since a 2-D subscript scales on both axes.

@@ -84,6 +84,15 @@ global with a constant offset GAZL does catch it, so behaviour is inconsistent b
 - Symbolic extent (`extern struct` array field, host-defined size) -> deferred assertion, or silence.
 - Runtime index -> out of scope; that is a bounds-check-at-runtime question, deliberately not Impala's model.
 
+**Scope: dereference only, never address formation.** The example above is a store, and the check applies
+to that shape - `a[7]`, `a[7] = 1`, `p[9].a` as a value. It must NOT reject `&a[7]`, `&a[N]` or `&p[[i]]`.
+An out-of-range address is a value like any other, and GAZL itself accepts it: `MOVp $e &a:9` on a 4-word
+`a` assembles and runs, because the `Offset out of bounds` check fires on constant-offset *access*
+operands only. Containment is guaranteed by every dereference being bounds-checked at run time (see
+`docs/MemorySafetyModel.md`), so rejecting address arithmetic would make Impala stricter than the machine
+it transliterates to, and would outlaw the one-past-the-end pointer that every walk loop needs. See F3 in
+`docs/Impala2Review.md`.
+
 ### 2. Writes to a readonly array element (task #21)
 
     readonly int array table[4] = { 1, 2, 3, 4 }
