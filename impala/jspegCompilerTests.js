@@ -234,6 +234,20 @@ function expectCompileOutcome(group, label, source, expectError) {
 	}
 }
 
+// `expectCompileOutcome` only proves SOME position rendered, which is what let a whole class of carets drift
+// onto the next line or the next declaration unnoticed. Pin the exact `line:col: error[code]` instead.
+function expectDiagnosticAt(label, source, expected) {
+	let observed = null;
+	try {
+		compileWithJsImpala(source, { randomId: 42 });
+	} catch (err) {
+		observed = err && err.message ? err.message : String(err);
+	}
+	assert(observed !== null, `caret: ${label} unexpectedly compiled`);
+	assert(observed.includes(expected),
+		`caret: ${label} did not report at ${expected}\n${observed}`);
+}
+
 // A strict-expression error must downgrade to exactly one warning under --legacy, carrying the same wording.
 // Three checks (mixed bitwise, comparison mix, `!` precedence) verify this identically; share the shape.
 function expectSingleLegacyWarning(source, fragment, description) {
@@ -1300,6 +1314,42 @@ console.log("impala.jspeg compiler reserves return/break/continue with dedicated
 // idiom, downgrading the E449 to a single warning so old code still compiles.
 expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break: ; }\n",
 	"'break' is a reserved word", "a reserved-word label");
+
+// Caret placement, pinned per code. Each of these used to point at the token AFTER the mistake - the next
+// line for E445, the next declaration for E422 - which is worse than useless when the construct spans lines.
+const caretCases = [
+	["E445 names the label, not the following line",
+		"function f() locals int x {\n\tx = 1;\n\tgoto nowhere;\n\tx = 2;\n}\n", "3:10: error[E445]"],
+	["E403 names the identifier, not the next token",
+		"function f() locals int x {\n\tx = undeclaredName + 1;\n}\n", "2:9: error[E403]"],
+	["E305 names the loop variable",
+		"function f(int p) locals int x {\n\tfor (p = 0 to 3) { x = 1; }\n}\n", "2:10: error[E305]"],
+	["E422 names the initializer, not the next declaration",
+		"struct S { int a; int b }\nglobal S array bank[1] = { 1, 2 }\nglobal int later = 3\n",
+		"2:26: error[E422]"],
+	["E428 names the signature it belongs to",
+		"function g() returns int a, int b {\n\ta = 1;\n}\nglobal int later = 3\n", "1:35: error[E428]"],
+	["E451 names the stray `;`, not the `else` after it",
+		"function f() locals int x {\n\tif (x == 1) { x = 2; };\n\telse { x = 3; }\n}\n", "2:27: error[E451]"],
+];
+for (const [label, source, expected] of caretCases) {
+	expectDiagnosticAt(label, source, expected);
+}
+console.log("impala.jspeg compiler points its carets at the offending token");
+
+// The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
+const caretNonCases = [
+	["if/else with a semicolon-terminated then-branch",
+		"function f() locals int x { if (x == 1) x = 2; else x = 3; }"],
+	["if with no else, followed by an empty statement",
+		"function f() locals int x { if (x == 1) { x = 2; }; x = 4; }"],
+	["a local named elsewhere is not the `else` keyword",
+		"function f() locals int elsewhere { if (elsewhere == 1) { elsewhere = 2; }; elsewhere = 3; }"],
+];
+for (const [label, source] of caretNonCases) {
+	expectCompileOutcome("caret non-case", label, source, null);
+}
+console.log("impala.jspeg compiler does not mistake a legitimate `;` for a dangling else");
 
 expectSingleLegacyWarning("function f() locals int x { x = 1; if (!x == 2) { x = 3; } }\n",
 	"'!' binds below comparison", "the `!`-precedence error");

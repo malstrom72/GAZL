@@ -4147,19 +4147,23 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                             $aStruct = $a.elem;
                                                                             $aCount = parseInt('' + $a.size, 10);
                                                                          }
-                         ( '=' _
+                         ( '=' _                                       {   /* the list is fully consumed before these
+                                                                              checks run, so $$i would land on the NEXT
+                                                                              declaration - name the initializer itself */
+                                                                            $initStart = $$i;
+                                                                         }
                            ( d:InitList                                {   /* flat list -> scalar-element arrays only */
                                                                             if ($aStructEl)
                                                                                 $$parser.fail('A struct-element array needs nested braces, one group per element',
-                                                                                        $$s, $$i, 'E422');
+                                                                                        $$s, $initStart, 'E422');
                                                                          }
                            / d:Braced                                  {   /* nested braces -> struct-element arrays */
                                                                             if (!$aStructEl)
                                                                                 $$parser.fail('Nested brace initializers are for struct-element arrays',
-                                                                                        $$s, $$i, 'E422');
+                                                                                        $$s, $initStart, 'E422');
                                                                             if (isNaN($aCount))
                                                                                 $$parser.fail('An initialized struct-element array needs a literal size',
-                                                                                        $$s, $$i, 'E414');
+                                                                                        $$s, $initStart, 'E414');
                                                                             var _arr = $d;
                                                                             $binit = [];
                                                                             for (var _ae = 0; _ae < $aCount; ++_ae) {
@@ -4792,13 +4796,15 @@ Assert      <-  ASSERT _                            {
 Block       <-  '{'_ Statement* '}'_
 
 
-Goto        <-  GOTO _ label:Identifier ';'_        {
+Goto        <-  GOTO _                              { $gotoStart = $$i; }  # before `';'_` swallows the trailing
+                                                                           # newline, which put E445 on the next line
+                label:Identifier ';'_               {
                                                         $$parser.emit('-->', undefined, '@' + $label._, undefined, undefined);
                                                         /* carry the source position so processBranches can name the
                                                            `.impala` line if this label is never defined (E445) */
                                                         var g = $$parser.metacode[$$parser.metacode.length - 1];
                                                         g.gotoSource = $$s;
-                                                        g.gotoOffset = $$i;
+                                                        g.gotoOffset = $gotoStart;
                                                     }
 
 
@@ -4836,7 +4842,18 @@ If          <-  IF _ BoolGroup                      {
                                                         $dontLabel = $$parser.newLabel('f');
                                                         $$parser.emit('?->', false, $dontLabel, undefined, undefined); 
                                                     }
-                Statement (ELSE _                   { 
+                Statement                           {   /* `if (c) { } ; else` - the `;` is a complete empty statement, so
+                                                           the `if` ends there and `else` is left dangling. That fell through
+                                                           to a bare E001 pointing PAST the `else`; name the real culprit.
+                                                           Guard on the `;` first so the window scan is not per-statement. */
+                                                        if ($$s.charAt($$i) === ';'
+                                                                && /^;[ \t\r\n]*else(?![A-Za-z_$0-9])/.test($$s.substr($$i, 32))) {
+                                                            $$parser.fail('a `;` here ends the `if`, leaving the `else` with nothing to attach to',
+                                                                $$s, $$i, 'E451',
+                                                                'remove the `;` before `else` - a block or statement body takes no extra terminator');
+                                                        }
+                                                    }
+                (ELSE _                             {
                                                         $doneLabel = $$parser.newLabel('e');
                                                         $$parser.emit('-->', undefined, $doneLabel, undefined, undefined);
                                                         $$parser.emit('<-?',  false, $dontLabel, undefined, undefined); 
@@ -4871,14 +4888,16 @@ Loop        <-  LOOP _                              {
 # ---------------------------------------------------------------------------
 #   FOR ... TO ... loop
 # ---------------------------------------------------------------------------
-For         <-  FOR _ '('_ var:Variable             {
+For         <-  FOR _ '('_                          { $varStart = $$i; }   # name the variable, not the token after it
+                var:Variable                        {
                                                         /* loop-variable must be local, modifiable int / pointer */
                                                         var varMeta = metaSlot($var);
                                                         if (varMeta.operator !== '=' || span(varMeta.type, "ip") === 0) {
                                                             $$parser.fail(
                                                                 'For variable must be a local modifiable int or pointer variable',
-                                                                $$s, $$i
-                                                            , 'E305');
+                                                                $$s, $varStart
+                                                            , 'E305',
+                                                                'a parameter, global or non-scalar cannot be the loop variable - copy it into a `locals` int or pointer and loop over that');
                                                         }
                                                         $gotInit = false;            /* flag to detect an explicit start value */
                                                     }
@@ -5204,8 +5223,10 @@ Value       <-  Group
 Variable    <-                                      { $global = false; }
                 (GLOBAL _                           { $global = true; }
                 )?
+                                                    { $idStart = $$i; }   # `Identifier` eats trailing space, so
+                                                                          # $$i would name the NEXT token (E403)
                 id:Identifier                       { if (!$$parser.dry) {
-                                                        $$parser.lookup($$, $id, $global, $$s, $$i);
+                                                        $$parser.lookup($$, $id, $global, $$s, $idStart);
                                                       } }
 
 

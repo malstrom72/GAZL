@@ -206,18 +206,30 @@ downgrades to a single warning so 1.x sources still build. The corpus itself was
 (`return` to bare `return;`, the `break:` labels renamed to `broke:`) so the strict-default test run stays
 clean, and a unit test pins the legacy warning.
 
-### Caret defects
+### Caret defects - FIXED
 
-| Code | Defect |
-|---|---|
-| `E445` | position recorded after `';'_` consumed trailing whitespace - lands on the next line |
-| `E403` | lands on the token *after* the identifier |
-| `E305` | lands after the loop variable, and the message never says parameters are non-modifiable |
-| `E422`, `E428` | land on line 1 column 1 of the **next declaration** |
-| `E001` before `else` | lands on the space after `else`, not on the offending `;` |
+All of these are now pinned by `caretCases` in `jspegCompilerTests.js`, which asserts the exact
+`line:col: error[code]` rather than merely that *a* position rendered - the weakness that let the whole
+class drift unnoticed.
 
-The `E422`/`E428` class is the one `$$parser.declOffset` was introduced to solve for the metadata path
-(`impala/impala.jspeg:3464-3466`); it was never applied to these error paths.
+| Code | Defect | Now |
+|---|---|---|
+| `E445` | position recorded after `';'_` consumed trailing whitespace - lands on the next line | names the label |
+| `E403` | lands on the token *after* the identifier | names the identifier |
+| `E305` | lands after the loop variable, and the message never says parameters are non-modifiable | names the variable, and a note names parameters/globals |
+| `E422` | lands on line 1 column 1 of the **next declaration** | names the initializer |
+| `E428` | (same claim) | was **already correct** - it names the signature; the row was stale |
+| `E001` before `else` | lands on the space after `else`, not on the offending `;` | now `E451`, naming the `;` |
+
+Each was the same defect: the position was read *after* the construct (and its trailing whitespace) had
+been consumed, so it named whatever came next. The fix is to record the offset before the consuming term -
+the `gotoSource`/`gotoOffset` carry already in the tree - not `$$parser.declOffset`, which points at the
+start of the whole declaration and would have been coarser than the initializer that is actually wrong.
+
+`E001` before `else` was not a caret defect at all: `if (c) { } ;` is a *complete* statement, so the `else`
+is genuinely dangling and no position on the `;` was ever recorded. It became its own diagnostic (`E451`)
+naming the `;`, guarded so that a semicolon-terminated then-branch (`if (c) x = 1; else x = 2;`) and a
+plain trailing empty statement still compile.
 
 
 ## 6. Suggested order
@@ -229,7 +241,9 @@ The `E422`/`E428` class is the one `$$parser.declOffset` was introduced to solve
    `--legacy` label hatch; the corpus was migrated off the `goto return;`/`goto break;` idiom.
 3. ~~**1.5** (difference)~~ and ~~**1.7**~~ - DONE. 1.6 is WON'T FIX (needs a `const` modifier). The
    `const` type grammar and `copy` terminator (section 3) were done in the same pass.
-4. The caret defects in section 5, as one pass.
+4. ~~The caret defects in section 5, as one pass.~~ - DONE (`E445`/`E403`/`E305`/`E422`, plus the new
+   `E451` for the dangling `else`; `E428` turned out to be already correct). Carets are now pinned by
+   exact position in `jspegCompilerTests.js`.
 5. The arbitrary separator/ordering items in section 3 - cheap individually, but each is a grammar change
    with fixture churn, and none of them produces wrong output. Worth doing only alongside a diagnostics
    pass that makes the current rules explain themselves.
