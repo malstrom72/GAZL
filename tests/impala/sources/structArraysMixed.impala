@@ -13,10 +13,10 @@ extern native printLF
 function main()
 locals Bank b, int i
 {
-	b.cells[2].hi = 7;
-	for (i = 0 to 3) { b.cells[i].lo = i; }
-	for (i = 0 to 3) { global top[i].hi = i; }
-	printInt(b.cells[2].hi); printLF();
-	printInt(b.cells[1].lo); printLF();
-	printInt(global top[2].hi); printLF();
+	b.cells[[2]].hi = 7;
+	for (i = 0 to 3) { b.cells[[i]].lo = i; }
+	for (i = 0 to 3) { global top[[i]].hi = i; }
+	printInt(b.cells[[2]].hi); printLF();
+	printInt(b.cells[[1]].lo); printLF();
+	printInt(global top[[2]].hi); printLF();
 }

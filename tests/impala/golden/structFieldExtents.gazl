@@ -54,7 +54,7 @@ main:	FUNC	; signature func main() -> void @ 35:1
 		MOVi $s:<C> #11 
 		! ADDi <C> #.o.S.b #3	; s.b[3] = 33
 		MOVi $s:<C> #33 
-		! MULi <C> #1 #.z.Pair	; s.p[1].hi = 5
+		! MULi <C> #1 #.z.Pair	; s.p[[1]].hi = 5
 		! ADDi <B> #.o.S.p #<C>
 		! ADDi <B> #<B> #.o.Pair.hi
 		MOVi $s:<B> #5 
@@ -69,10 +69,10 @@ main:	FUNC	; signature func main() -> void @ 35:1
 		MOVi %1 $s:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 49:29
-		! MULi <B> #1 #.z.Pair	; printInt(s.p[1].hi)
+		! MULi <B> #1 #.z.Pair	; printInt(s.p[[1]].hi)
 		! ADDi <C> #.o.S.p #<B>
 		! ADDi <C> #<C> #.o.Pair.hi
 		MOVi %1 $s:<C> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 50:21
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 50:32
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 50:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 50:34
 		RETU   	; }

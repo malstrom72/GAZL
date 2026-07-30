@@ -160,7 +160,8 @@ function findSmallest(int n, int pointer vector) returns int j locals int i { /*
   `pointer int`, `pointer float`, and `pointer pointer` all have **stride 1 word**. Typed pointers
   therefore change pointer arithmetic **not at all** - `p + 3` is still three words. (Stride only
   stops being 1 when elements become multi-word, i.e. structs - which is precisely why structs come
-  later.)
+  later. A struct pointer does not do arithmetic at all: it moves by scaled subscript, `&p[[3]]`.
+  See the cost model below.)
 - **The compiler selects the typed instruction from the element type.** Reading `a[i]` where `a` is
   `int array` yields an `int` and emits the int-typed peek; where `a` is `float array` it yields a
   `float` and emits the float-typed peek. No cast required, and the result type flows into
@@ -471,7 +472,7 @@ it is a cost annotation with exact GAZL meaning):
 Combined with the existing markers, every memory access in an expression is visible in the source:
 
 > **Instruction count = marker count.** Each `global`, `*`, `->`, and `[]`-on-a-pointer costs one
-> load. Dots are free.
+> load. Each `[[ ]]` costs one load plus one `MULi`. Dots are free.
 
 ```impala
 f.cutoff                    // 0 loads - direct operand
@@ -483,6 +484,23 @@ head->next->next->value     // 3 loads - each hop visible
 
 (The one grandfathered exception: 1.0's `p[i]` PEEKs without a distinct marker vs `a[i]`'s local
 access - nailed by backward compatibility. New syntax is held to the stricter rule.)
+
+Structs are what makes a subscript able to cost more than one instruction, and that is exactly why
+they get their own bracket. `[i]` strides one word; `[[i]]` strides `sizeof(element)` and pays one
+`MULi` for it. Each is an error where the other is correct, so there is one legal spelling per access
+and the stride is never something you have to look up:
+
+```impala
+words[i]                    // 1 instruction  - stride 1
+voices[[i]]                 // 2 instructions - stride sizeof(Voice)
+&voices[[i]]                // the only way to move a Voice pointer
+```
+
+The residual multiply is the **floor**, not overhead: the address of element `i` of a 3-word struct
+genuinely is `base + i*3`, and no language or ISA can form it without a multiply. A constant index
+folds at assembly time (`! MULi`), so it costs nothing at run time. See `docs/Impala2Review.md`,
+"the scaled subscript is spelled `[[ ]]`", for why arithmetic on a struct pointer is rejected rather
+than scaled.
 
 ### Verified lowering
 
@@ -500,8 +518,8 @@ MOVf $x  $f:1              ; x = f.resonance
 ; B) local struct array, dynamic index - GETL with the field offset folded into the
 ;    BASE OPERAND (precedent: UnitTest.gazl:794 "GETL i0 lArray:4 i1"). No ADDi.
 $voices: LOCA *64
-MULi %0 $i #8              ; i * sizeof(Filter) - the stride multiply
-GETL $x $voices:6 %0      ; x = voices[i].mode   (constant :6 rides the operand)
+MULi %0 $i #8              ; i * sizeof(Filter) - the stride multiply, marked by [[ ]]
+GETL $x $voices:6 %0      ; x = voices[[i]].mode   (constant :6 rides the operand)
 
 ; C) through a pointer - one real load, constant offset immediate
 PEEK $x $fp #6            ; x = fp->mode
@@ -1142,12 +1160,17 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E201 | pointer element type mismatch in assignment |
 | E202 | pointer element type mismatch in call argument |
 | E203 | element type mismatch with previous declaration |
+| E204 | plain `[]` on a struct element - write `[[ ]]` |
+| E205 | scaled `[[ ]]` on a one-word element - write `[]` |
 | E301 | invalid operand types for operator |
 | E302 | invalid operand type for unary operator |
 | E303 | incompatible types for assignment |
 | E304 | return type disagreement (mismatch / conflicting expectations / previous uses) |
 | E305 | `for` variable must be a local modifiable int or pointer |
 | E306 | `switch` expression must be int |
+| E307 | arithmetic on a struct pointer - move it with `&p[[i]]` |
+| E308 | difference between struct pointers - divide by `sizeof` yourself |
+| E309 | `for` variable is a struct pointer - `FORp` cannot stride |
 | E401 | identifier already declared |
 | E402 | type mismatch with previous declaration |
 | E403 | undeclared identifier |

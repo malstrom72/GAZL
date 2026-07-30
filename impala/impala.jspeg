@@ -1977,22 +1977,20 @@
         return $$parser.isStructAtom(head) ? head : undefined;
     };
 
-    /* An offset in ELEMENTS -> an offset in WORDS, for pointer arithmetic. Same stride rule and same
-       symbolic `.z.Name` as subscriptStruct, so `p + 1` and `&p[1]` cannot disagree - they are two
-       spellings of one thing. A constant folds at ASSEMBLY time into a `<` scratch, so it costs nothing
-       at run time; only a runtime offset pays a MULi, exactly as `a[i]` already does. */
-    $$parser.scaleByElem = function (elem, rv) {
-        var s;
-        if (/^#[0-9]+$/.test(rv)) {
-            s = $$parser.borrow('<');
-            $$parser.emit('<> *', 'i', s, rv, '#.z.' + elem);
-            $$parser.returnBack(rv);
-            return '#' + s;
+    /* Does a subscript on this slot stride by a struct size rather than by one word? That is exactly the
+       question `[i]` vs `[[i]]` asks, so both the Subscript rule and the pointer-arithmetic diagnostics
+       ask it here. Note a SCALAR array field inside a struct (`s.v[k]`) reaches subscriptStruct too but
+       strides one word, so the predicate is the element type, never which code path handles it. */
+    $$parser.subscriptScales = function (slot) {
+        var elem;
+        if (slot.place && slot.arrayOf) {
+            elem = slot.arrayOf;
+        } else if (slot.type === 'p') {
+            elem = slot.elem;
+        } else {
+            return false;
         }
-        s = $$parser.borrow('%');
-        $$parser.emit('*', 'i', s, rv, '#.z.' + elem);
-        $$parser.returnBack(rv);
-        return s;
+        return $$parser.strideStruct(elem) !== undefined;
     };
 
     /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
@@ -2456,21 +2454,24 @@
                 operator = 'd';
             }
 
-            /* Pointer arithmetic is in ELEMENTS, so a struct pointer strides by its size in both
-               directions: an offset is scaled going in, a difference is unscaled coming out. Without
-               this `p + 1` moved one WORD while `p[1]` moved one struct - two spellings of the same C
-               idea, silently disagreeing. See docs/Impala2Review.md for why scaling beat rejecting. */
+            /* Arithmetic on a struct pointer is REJECTED, because `+` and `-` carry no marker for the
+               multiply they would need, and the scaled subscript already spells it: `&p[[i]]`. Scaling
+               them instead was tried and reverted - it leaked into comparison (no unit there at all) and
+               `for` could not honour it, `FORp` having no room for a stride. See docs/Impala2Review.md,
+               "the scaled subscript is spelled `[[ ]]`". Comparisons fall through untouched: they are
+               unit-free and are what the `while` walk is built on. */
             var stride = (leftx.type === 'p' ? $$parser.strideStruct(lelem) : undefined);
-            var lrv = $$parser.makeRValue(leftx);
-            var rrv = $$parser.makeRValue(rightx);
-            if (stride !== undefined && !diff) {
-                rrv = $$parser.scaleByElem(stride, rrv);
+            if (stride !== undefined && (operator === '+' || operator === '-')) {
+                $$parser.fail('Arithmetic on a ' + stride + ' pointer', sourceCode, sourceOffset,
+                        'E307', 'a struct pointer moves by scaled subscript only - write `&p[[i]]`');
             }
-            $$parser.makeMeta(leftx, operator, tp, null, lrv, rrv);
             if (stride !== undefined && diff) {
-                $$parser.makeMeta(leftx, '/', 'i', null,
-                                  $$parser.makeRValue(leftx), '#.z.' + stride);
+                $$parser.fail('Difference between ' + stride + ' pointers', sourceCode, sourceOffset,
+                        'E308', 'the element count is `((pointer)q - (pointer)p) / sizeof('
+                                + stride + ')`');
             }
+            $$parser.makeMeta(leftx, operator, tp, null,
+                              $$parser.makeRValue(leftx), $$parser.makeRValue(rightx));
         }
 
         leftx.readonly = lro;                                     /* survives the makeMeta calls above */
@@ -4379,8 +4380,24 @@ PrePost     <-  (op:PREFIX_OP _
                                                      } }
                 / Value (FuncCall / Subscript / FieldAccess)*
 
-Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry) {
+# Two subscripts, never interchangeable: `[i]` strides one word and costs one instruction, `[[i]]`
+# strides sizeof(element) and costs one more. Each is an error where the other is correct, so the
+# spelling states the cost at the use site - the same job `->` does for a load. `[[` is tried first;
+# there is no ambiguity with a nested `a[b[i]]` because no Expr can begin with `[`.
+Subscript   <-  '[['_ s:Expr ']]'_                 { if (!$$parser.dry) {
+                                                       var sbs = metaSlot($$);
+                                                       if (!$$parser.subscriptScales(sbs))
+                                                           $$parser.fail('Scaled subscript on a one-word element',
+                                                                   $$s, $$i, 'E205',
+                                                                   '`[[ ]]` scales by the element size - this element is one word, so write `[ ]`');
+                                                       $$parser.subscriptStruct($$, $s);
+                                                     } }
+                / '['_ s:Expr ']'_                 { if (!$$parser.dry) {
                                                        var sb = metaSlot($$);
+                                                       if ($$parser.subscriptScales(sb))
+                                                           $$parser.fail('Plain subscript on a struct element',
+                                                                   $$s, $$i, 'E204',
+                                                                   'this element is a struct, so the index scales - write `[[ ]]`');
                                                        if ((sb.place && sb.arrayOf) || (sb.type === 'p' && $$parser.isStructAtom(sb.elem)))
                                                            $$parser.subscriptStruct($$, $s);
                                                        else
@@ -4780,6 +4797,15 @@ For         <-  FOR _ '('_ var:Variable             {
                                                                 'For variable must be a local modifiable int or pointer variable',
                                                                 $$s, $$i
                                                             , 'E305');
+                                                        }
+                                                        /* `FORp` steps exactly one WORD and is already a 3-operand form, so a
+                                                           struct pointer has nowhere to put its stride. Scaling only the bound
+                                                           silently ran sizeof(S) times too many (F2 in docs/Impala2Review.md). */
+                                                        if ($$parser.strideStruct(varMeta.elem) !== undefined) {
+                                                            $$parser.fail(
+                                                                'For variable must not be a struct pointer',
+                                                                $$s, $$i, 'E309',
+                                                                'FORp cannot stride by a struct - use `while (p < end) { ...; p = &p[[1]]; }`');
                                                         }
                                                         $gotInit = false;            /* flag to detect an explicit start value */
                                                     }

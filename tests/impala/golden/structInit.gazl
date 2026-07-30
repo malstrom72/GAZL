@@ -54,12 +54,12 @@ main:	FUNC	; signature func main() -> void @ 21:1
 		PEEK %1 &preset:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 28:33
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:44
-		! MULi <A> #1 #.z.Voice	; printInt((int) global bank[1].note)
+		! MULi <A> #1 #.z.Voice	; printInt((int) global bank[[1]].note)
 		! ADDi <B> #<A> #.o.Voice.note
 		PEEK %1 &bank:<B> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 29:37
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 29:48
-		PEEK %1 &bank:.o.Voice.gain 	; printFloat(global bank[0].gain)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:33
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:44
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 29:39
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 29:50
+		PEEK %1 &bank:.o.Voice.gain 	; printFloat(global bank[[0]].gain)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:35
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:46
 		RETU   	; }
