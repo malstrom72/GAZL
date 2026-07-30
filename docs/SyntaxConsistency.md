@@ -167,7 +167,12 @@ the keyword did nothing.
 
 **`export` on a valueless `const` is silently dropped.** `export const int C;` and `const int C;` emit
 byte-identical output. The two keywords are contradictory - `export` says "I provide this", a valueless
-const says "someone else does" - so this should be an error, not a no-op.
+const says "someone else does" - so this should be an error, not a no-op. FIXED: `E453`, a hard error in
+both modes - unlike `E449`/`E452` there is no legacy idiom to preserve, because the keyword never did
+anything. `formatConstSignatureComment` publishes a valueless const with an `extern` prefix that wins over
+`export`, so `exportNext` was structurally unreachable there. A **valued** `export const int C = 1;` stays
+legal and is load-bearing: its row reads `; signature export const C : int`, which is what `--dead-strip`
+consults.
 
 
 ## 4. Forced differences worth documenting

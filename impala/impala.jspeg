@@ -4014,6 +4014,8 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                                                                          } else {
                                                                              $t = chead; $telem = ctail;
                                                                          }
+                                                                         $cStart = $$i;   /* `Identifier` eats trailing space, so $$i
+                                                                                             would name the NEXT declaration (E453) */
                                                                       }
                  id:Identifier
                  (   '=' _ x:Expr                                     {
@@ -4034,6 +4036,15 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                                                                             );
                                                                          }
                  /                                                     {
+                                                                             /* `export` says "this unit provides it"; a valueless const says
+                                                                                "someone else does". The row below publishes it as an extern
+                                                                                either way, so the keyword was silently dropped. */
+                                                                             if ($$parser.exportNext) {
+                                                                                 $$parser.fail('`export` contradicts a valueless `const` - '
+                                                                                         + $id + ' is provided elsewhere, not by this unit',
+                                                                                         $$s, $cStart, 'E453',
+                                                                                         'give it a value to export it, or drop `export`');
+                                                                             }
                                                                              $$parser.declare(
                                                                                  undefined, 'defines',
                                                                                  $id, $t, true,

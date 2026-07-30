@@ -1334,6 +1334,20 @@ console.log("impala.jspeg compiler rejects a `global` prefix on a function or a 
 expectSingleLegacyWarning("const int C = 1\nfunction f() locals int x { x = global C; }\n",
 	"C is a constant", "a `global` prefix on a const");
 
+// `export` claims "this unit provides it"; a valueless `const` says "someone else does". The pair used to
+// compile to output byte-identical to the un-exported form, silently dropping the keyword. A VALUED
+// `export const` is meaningful - the signature row carries it for --dead-strip - so it stays legal.
+const exportConstCases = [
+	["export on a valueless const is rejected", "export const int C\nfunction main() { }",
+		"contradicts a valueless `const`"],
+	["export on a valued const is fine", "export const int C = 1\nfunction main() { }", null],
+	["a valueless const without export is fine", "const int C\nfunction main() { }", null],
+];
+for (const [label, source, expected] of exportConstCases) {
+	expectCompileOutcome("export const", label, source, expected);
+}
+console.log("impala.jspeg compiler rejects `export` on a valueless const");
+
 // Caret placement, pinned per code. Each of these used to point at the token AFTER the mistake - the next
 // line for E445, the next declaration for E422 - which is worse than useless when the construct spans lines.
 const caretCases = [
@@ -1350,6 +1364,8 @@ const caretCases = [
 		"function g() returns int a, int b {\n\ta = 1;\n}\nglobal int later = 3\n", "1:35: error[E428]"],
 	["E451 names the stray `;`, not the `else` after it",
 		"function f() locals int x {\n\tif (x == 1) { x = 2; };\n\telse { x = 3; }\n}\n", "2:27: error[E451]"],
+	["E453 names the const, not the next declaration",
+		"export const int C\nglobal int later = 3\nfunction main() { }\n", "1:18: error[E453]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);
