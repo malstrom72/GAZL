@@ -1312,7 +1312,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E451 | a `;` after an `if` body leaves the following `else` with nothing to attach to |
 | E452 | a `global` prefix on a function or a const (a warning under `--legacy`) |
 | E453 | `export` on a valueless `const`; the two contradict (a valued `export const` is fine) |
-| E454 | a brace initializer over a struct array field whose extent is symbolic (it resolves at assembly) |
+| E454 | a struct field initialized after one whose symbolic extent makes its offset uncountable |
 
 E418, E424, E425 and E439 are **not allocated to anything that fires**. E418/E424/E425 were reserved for
 extern-struct guards that were never needed once the features shipped (`docs/StructLayoutConstants.md`

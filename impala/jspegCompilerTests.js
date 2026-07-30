@@ -1316,14 +1316,25 @@ expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break:
 	"'break' is a reserved word", "a reserved-word label");
 
 // A struct's real size is emitted as assemble-time arithmetic (`! ADDi <a> #<a> #N`), so a symbolic array
-// extent lays out fine and every consumer below must keep working. The one thing that CANNOT be done
-// symbolically is filling a brace initializer, because those DATA words are placed here, at compile time.
-// `fieldWords` used to multiply the extent OPERAND by a number, hand back NaN, and let the initializer loop
-// run zero times - emitting a short, misaligned DATA row with no diagnostic at all.
+// extent lays out fine and every consumer below must keep working. A brace initializer can still FILL one:
+// a DATA row may define fewer words than its region holds and the rest zero-fills, so the values given land
+// at the front either way. What has no compile-time answer is the offset of anything AFTER it - that alone
+// is E454. `fieldWords` used to multiply the extent OPERAND by a number, hand back NaN, and let the
+// initializer loop run zero times, so `{ 1, { 7, 8, 9 }, 2 }` emitted `DATA #1 #2` - z's 2 landing in v[0].
 const SYM_STRUCT = "const int N = 3\nstruct S { int a; int array v[N]; int z }\n";
+const SYM_TAIL = "const int N = 3\nstruct S { int a; int array v[N] }\n";
 const symbolicExtentCases = [
-	["a brace initializer over a symbolic extent is rejected",
-		SYM_STRUCT + "global S s = { 1, { 7, 8, 9 }, 2 }\nfunction main() { }", "symbolic extent"],
+	["filling a trailing symbolic array is fine",
+		SYM_TAIL + "global S s = { 1, { 7, 8, 9 } }\nfunction main() { }", null],
+	["under-filling a trailing symbolic array is fine",
+		SYM_TAIL + "global S s = { 1, { 7 } }\nfunction main() { }", null],
+	["a field after a symbolic extent may be omitted",
+		SYM_STRUCT + "global S s = { 1, { 7, 8, 9 } }\nfunction main() { }", null],
+	["a field after a symbolic extent may not be initialized",
+		SYM_STRUCT + "global S s = { 1, { 7, 8, 9 }, 2 }\nfunction main() { }", "cannot be initialized"],
+	["the block reaches out through a nested struct",
+		"const int N = 3\nstruct Inner { int array v[N] }\nstruct Outer { Inner i; int z }\n"
+			+ "global Outer o = { { { 7, 8 } }, 2 }\nfunction main() { }", "cannot be initialized"],
 	["the same struct with no initializer is fine", SYM_STRUCT + "global S s\nfunction main() { }", null],
 	["sizeof of a symbolically sized struct is fine",
 		SYM_STRUCT + "function main() locals int q { q = sizeof(S); }", null],
@@ -1338,12 +1349,16 @@ for (const [label, source, expected] of symbolicExtentCases) {
 	expectCompileOutcome("symbolic extent", label, source, expected);
 }
 
-// The corruption signature was a SHORT data row, so pin the full one for the literal-extent case.
+// The corruption signature was a SHORT data row, so pin the exact words rather than just pass/fail.
 const litInit = compileWithJsImpala(
 	"struct S { int a; int array v[3]; int z }\nglobal S s = { 1, { 7, 8, 9 }, 2 }\nfunction main() { }\n",
 	{ randomId: 42 });
 assert(/DATA #1 #7 #8 #9 #2/.test(litInit),
 	`a literal-extent struct initializer must emit all five words\n${litInit}`);
+const symInit = compileWithJsImpala(
+	SYM_TAIL + "global S s = { 1, { 7, 8, 9 } }\nfunction main() { }\n", { randomId: 42 });
+assert(/DATA #1 #7 #8 #9(\s|$)/.test(symInit),
+	`a trailing symbolic array must still take the words it was given\n${symInit}`);
 console.log("impala.jspeg compiler lays out symbolic struct extents and rejects only what it cannot fill");
 
 // `global` names a storage table. A function and a const are in neither, so the prefix used to be accepted
@@ -1398,7 +1413,7 @@ const caretCases = [
 	["E453 names the const, not the next declaration",
 		"export const int C\nglobal int later = 3\nfunction main() { }\n", "1:18: error[E453]"],
 	["E454 names the initializer, not the next declaration",
-		"const int N = 3\nstruct S { int a; int array v[N] }\nglobal S s = { 1, { 7, 8, 9 } }\n"
+		"const int N = 3\nstruct S { int a; int array v[N]; int z }\nglobal S s = { 1, { 7, 8, 9 }, 2 }\n"
 			+ "function main() { }\n", "3:14: error[E454]"],
 ];
 for (const [label, source, expected] of caretCases) {

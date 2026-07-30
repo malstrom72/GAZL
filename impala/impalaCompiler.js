@@ -2067,21 +2067,30 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         for (var fi = 0; fi < fields.length; ++fi) {
             var f = fields[fi];
             var item = (items && fi < items.length) ? items[fi] : undefined;
+            if (out.blocked !== undefined) {   /* nothing past a symbolic extent has a countable offset */
+                if (item !== undefined) {
+                    fail('Field ' + f.name + ' cannot be initialized: it follows ' + out.blocked
+                            + ', whose extent resolves at assembly time',
+                            sourceCode, sourceOffset, 'E454',
+                            'Impala cannot count the words before it - drop this initializer (the field '
+                                    + 'zero-fills anyway), or give ' + out.blocked + ' a literal size');
+                }
+                continue;                      /* omitted -> the region zero-fills it */
+            }
             if (f.type === 'S') {
                 buildStructInit(f.struct, (item && item.braced) || [], out, sourceCode, sourceOffset);
             } else if (f.type === 'A') {
                 var arr = (item && item.braced) || [];
                 var structEl = isStructAtom(f.elem);
-                /* The DATA rows are laid out here, word by word, so a slot count that only the
-                   assembler knows cannot be filled - the loop below used to compare against the
-                   extent OPERAND, get NaN, run zero times and silently emit a short, misaligned row. */
+                /* A symbolic extent still takes the values it was GIVEN: a DATA row may define fewer
+                   words than its region holds and the rest zero-fills (docs/InstructionSet.md). What
+                   it cannot do is give a LATER field a countable offset, so this is the last field
+                   that may carry data. The loop used to compare against the extent OPERAND, get NaN,
+                   run zero times, and emit a short row that shifted every later field. */
                 var count = constInt('#' + f.size);
-                if (count === undefined) {
-                    fail('Field ' + f.name + ' has a symbolic extent (' + f.size
-                            + '), so a brace initializer cannot be laid out',
-                            sourceCode, sourceOffset, 'E454',
-                            'the extent resolves at assembly time - give the array a literal size, '
-                                    + 'or drop the initializer and fill it at run time');
+                var symbolic = (count === undefined);
+                if (symbolic) {
+                    count = arr.length;
                 }
                 for (var e = 0; e < count; ++e) {
                     var ev = (e < arr.length) ? arr[e] : undefined;
@@ -2090,6 +2099,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                     } else {
                         pushInitScalar(out, ev, f.elem, f.name, sourceCode, sourceOffset);
                     }
+                }
+                if (symbolic) {
+                    out.blocked = f.name;
                 }
             } else {
                 pushInitScalar(out, item, f.type, f.name, sourceCode, sourceOffset);

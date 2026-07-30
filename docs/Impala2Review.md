@@ -195,10 +195,18 @@ code-generating agent hits and the message points the wrong way. The symbol tabl
   returned NaN, which flowed unchecked into `s.words`; `buildStructInit`'s `e < f.size` then compared
   against NaN and ran zero times. Note the *layout* was never wrong — `emitStructLayout` emits
   `! ADDi <a> #<a> #N` and the assembler resolves it, so allocation, nesting, struct arrays, locals, field
-  access, `COPY` and `sizeof` were all correct throughout. Only compile-time DATA placement is undoable
-  symbolically, so that alone is now an error. `fieldWords` returns `undefined` rather than NaN, and the
-  two checks that read `structWords(...) === undefined` as "incomplete" now ask `structDefined` instead —
-  otherwise a symbolically-sized struct could not be nested by value or passed to `sizeof`.
+  access, `COPY` and `sizeof` were all correct throughout. `fieldWords` returns `undefined` rather than
+  NaN, and the two checks that read `structWords(...) === undefined` as "incomplete" now ask
+  `structDefined` instead — otherwise a symbolically-sized struct could not be nested by value or passed
+  to `sizeof`.
+  **A symbolic extent can still be initialized**, and the first fix wrongly rejected that. `DATA` may
+  define FEWER words than its region holds, with the remainder zeroed (`docs/InstructionSet.md:96-99`), so
+  the values given simply land at the front: `struct S { int a; int array v[N] }` with `{ 1, {7,8,9} }`
+  emits `DATA #1 #7 #8 #9` and assembles. What has no compile-time answer is the offset of a field placed
+  *after* the symbolic one — `DATA` is positional and there is no symbolic skip or fill — so `E454` fires
+  only there, and only when that later field is actually given a value (omitted, it zero-fills like any
+  other). Over-filling is left to the assembler, which names it: `Not enough space in data section: s`.
+  That follows `docs/CompileTimeHardening.md` rule 1 — Impala does not know `N`, so it must not guess.
 - **Duplicate `case` labels** and **out-of-range `case` labels** are both accepted silently; a case *below*
   the low bound emits `.s0.-6` and the module will not load at all.
 - **`switch (x == lo to hi)`: `hi` is exclusive**, and `docs/Impala.md:328` says inclusive.
