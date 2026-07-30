@@ -234,6 +234,28 @@ function expectCompileOutcome(group, label, source, expectError) {
 	}
 }
 
+// A strict-expression error must downgrade to exactly one warning under --legacy, carrying the same wording.
+// Three checks (mixed bitwise, comparison mix, `!` precedence) verify this identically; share the shape.
+function expectSingleLegacyWarning(source, fragment, description) {
+	const warnings = [];
+	try {
+		compileWithJsImpala(source, {
+			randomId: 42,
+			legacy: true,
+			onWarning: (formatted, message) => warnings.push(message),
+		});
+	} catch (err) {
+		console.error(`impala.jspeg compiler rejected ${description} under --legacy`);
+		console.error(err && err.message ? err.message : String(err));
+		process.exit(1);
+	}
+	if (warnings.length !== 1 || !warnings[0].includes(fragment)) {
+		console.error(`impala.jspeg compiler did not emit exactly one ${description} warning under --legacy`);
+		process.exit(1);
+	}
+	console.log(`impala.jspeg compiler downgrades ${description} to a warning under --legacy`);
+}
+
 function runParserCase(label, parser, input) {
 	let result;
 	try {
@@ -964,23 +986,7 @@ if (!observedMixedBitwiseError) {
 }
 console.log("impala.jspeg compiler rejects unparenthesized mixed bitwise operators");
 
-const legacyWarnings = [];
-try {
-	compileWithJsImpala(mixedBitwiseSource, {
-		randomId: 42,
-		legacy: true,
-		onWarning: (formatted, message) => legacyWarnings.push(message),
-	});
-} catch (err) {
-	console.error("impala.jspeg compiler rejected mixed bitwise operators under --legacy");
-	console.error(err && err.message ? err.message : String(err));
-	process.exit(1);
-}
-if (legacyWarnings.length !== 1 || !legacyWarnings[0].includes("Mixed bitwise operators")) {
-	console.error("impala.jspeg compiler did not emit exactly one mixed-bitwise warning under --legacy");
-	process.exit(1);
-}
-console.log("impala.jspeg compiler downgrades mixed bitwise operators to a warning under --legacy");
+expectSingleLegacyWarning(mixedBitwiseSource, "Mixed bitwise operators", "mixed bitwise operators");
 
 const strictParenthesized = compileWithJsImpala(parenthesizedBitwiseSource, { randomId: 42 });
 const legacyParenthesized = compileWithJsImpala(parenthesizedBitwiseSource, { randomId: 42, legacy: true });
@@ -1142,6 +1148,11 @@ const acceptedThenRejected = [
 	["in-range cases", SW("5 to 9", "case 5, 8: { i=1; } default: { i=2; }"), null],
 	["goto an undefined label", "function f() { goto nowhere; }", "goto to undefined label nowhere"],
 	["goto a defined label", "function f() locals int i { i = 0; if (i < 3) goto top; top: ; }", null],
+	// A label written twice mints two identical GAZL labels; the assembler rejected "Symbol already
+	// defined" against a name and line the user never wrote. The label map in processBranches decides it.
+	["a label defined twice in one function", "function f() locals int i { i = 0; lbl: ; lbl: ; }",
+		"Duplicate label lbl"],
+	["the same label name in two functions", "function f() locals int i { i=0; lbl: ; }\nfunction g() locals int i { i=0; lbl: ; }", null],
 	["write to a readonly array element",
 		"readonly int array T[4] = { 1,2,3,4 }\nfunction f() { global T[0] = 9; }",
 		"Cannot assign to an element of a readonly array"],
@@ -1149,6 +1160,24 @@ const acceptedThenRejected = [
 		"readonly int array T[4] = { 1,2,3,4 }\nfunction f() locals int x { x = global T[2]; }", null],
 	["write to a writable array element",
 		"global int array W[4]\nfunction f() { global W[0] = 9; }", null],
+	// A string literal lives in a readonly section; the store used to compile and fail at GAZL load
+	// naming `.s_abc_...`. Marked readonly so the same E404 element-write check catches it here.
+	["write to a string literal element", `function f() { "abc"[0] = 1; }`,
+		"Cannot assign to an element of a readonly array"],
+	["read a string literal element", `function f() locals int c { c = "abc"[0]; }`, null],
+	// A pointer difference counts elements (DIFp, then a divide by the stride), so it only means anything
+	// when both sides walk the same element type. `ip - fp` used to slip through and divide by the wrong size.
+	["difference across element types",
+		"function f() locals int pointer ip, float pointer fp, int n { n = ip - fp; }",
+		"matching element types"],
+	["difference within one element type",
+		"function f() locals int pointer p, int pointer q, int n { n = p - q; }", null],
+	// `copy` used not to consume its terminator, so `copy(...) i = 1;` was two statements with nothing between.
+	["copy without its terminator",
+		"function f() locals int array a[4], int array b[4], int i { copy (4 from &a[0] to &b[0]) i = 1; }",
+		"syntax error"],
+	["copy with its terminator",
+		"function f() locals int array a[4], int array b[4], int i { copy (4 from &a[0] to &b[0]); i = 1; }", null],
 ];
 for (const [label, source, expected] of acceptedThenRejected) {
 	expectCompileOutcome("accepted-then-rejected", label, source, expected);
@@ -1208,26 +1237,60 @@ if (!observedComparisonMixError) {
 }
 console.log("impala.jspeg compiler rejects unparenthesized bitwise operators against comparisons");
 
-const comparisonWarnings = [];
-try {
-	compileWithJsImpala(comparisonMixSource, {
-		randomId: 42,
-		legacy: true,
-		onWarning: (formatted, message) => comparisonWarnings.push(message),
-	});
-} catch (err) {
-	console.error("impala.jspeg compiler rejected bitwise-vs-comparison mix under --legacy");
-	console.error(err && err.message ? err.message : String(err));
-	process.exit(1);
-}
-if (comparisonWarnings.length !== 1 || !comparisonWarnings[0].includes("Comparison mixed with bitwise")) {
-	console.error("impala.jspeg compiler did not emit exactly one comparison-mix warning under --legacy");
-	process.exit(1);
-}
-console.log("impala.jspeg compiler downgrades comparison mixes to a warning under --legacy");
+expectSingleLegacyWarning(comparisonMixSource, "Comparison mixed with bitwise", "comparison mixes");
 
 compileWithJsImpala(comparisonParenthesizedSource, { randomId: 42 });
 console.log("impala.jspeg compiler accepts parenthesized bitwise-vs-comparison conditions");
+
+// `!` sits BELOW comparison, so `!x == 2` means `!(x == 2)` - the opposite of the C reading. It must be
+// rejected unless its operand is parenthesised; like the bitwise mixes, --legacy keeps the old meaning
+// with a warning. `--x` is not a decrement (it folds to `-(-x)`, a silent no-op) and must be rejected too.
+const notPrecedenceCases = [
+	["! on a bare comparison", "function f() locals int x { x = 1; if (!x == 2) { x = 3; } }",
+		"'!' binds below comparison"],
+	["! on a parenthesised comparison", "function f() locals int x { x = 1; if (!(x == 2)) { x = 3; } }", null],
+	["nested ! on a group", "function f() locals int x { x = 1; if (!!(x == 2)) { x = 3; } }", null],
+	["-- is not a decrement", "function f() locals int x, int y { x = 1; y = --x; }", "syntax error"],
+	["- -x double negation is fine", "function f() locals int x, int y { x = 1; y = - -x; }", null],
+];
+for (const [label, source, expected] of notPrecedenceCases) {
+	expectCompileOutcome("! precedence", label, source, expected);
+}
+console.log("impala.jspeg compiler rejects an unparenthesized `!` operand and the unspaced `--`");
+
+// A const is an assembler-level constant, so it reads the same type grammar (TypeBase) as every other
+// declarator: struct pointers and named functypes are addresses and so are constable. A struct VALUE is
+// the one shape with no scalar/address form.
+const CONST_HDR = "struct S { int a; int b }\nfunctype Fn(int a) returns int r\n";
+const constTypeCases = [
+	["a struct pointer const", "const S pointer SP;", null],
+	["a named functype const", "const Fn CB;", null],
+	["a plain int pointer const", "const int pointer CP;", null],
+	["an untyped funcptr const", "const funcptr FC;", null],
+	["a struct value const", "const S SV;", "A const cannot be a struct value"],
+];
+for (const [label, decl, expected] of constTypeCases) {
+	expectCompileOutcome("const type", label, `${CONST_HDR}${decl}\nfunction main() { }`, expected);
+}
+console.log("impala.jspeg compiler accepts const struct pointers and named functypes");
+
+// `return` is a reserved word. Bare `return;` is an early exit (RETU); Impala returns through its named
+// return variable, so `return expr;` is E448 pointing at that model. `return` is no longer a usable label.
+const returnCases = [
+	["bare return is an early exit", "function f() locals int x { x = 1; return; x = 2; }", null],
+	["return in a returns function", "function g() returns int r { r = 1; return; }", null],
+	["return with a value is rejected", "function g() returns int r { return 1; }", "assign to the return variable"],
+	["return with an expression is rejected", "function g() returns int r locals int x { x = 1; return x + 1; }",
+		"return does not take a value"],
+	["return is no longer a label", "function f() locals int x { x = 1; goto return; return: ; }", "syntax error"],
+];
+for (const [label, source, expected] of returnCases) {
+	expectCompileOutcome("return keyword", label, source, expected);
+}
+console.log("impala.jspeg compiler treats `return` as a reserved early-exit keyword");
+
+expectSingleLegacyWarning("function f() locals int x { x = 1; if (!x == 2) { x = 3; } }\n",
+	"'!' binds below comparison", "the `!`-precedence error");
 
 // --- Impala 2 Step 1: typed pointers and arrays -----------------------------
 

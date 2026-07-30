@@ -18,7 +18,10 @@ Three verdicts are used:
 
 ## 1. Bugs
 
-### 1.1 `for` over a pointer does not stride - SILENT WRONG DATA
+**1.1-1.4 are FIXED** (see the diagnostics table in `docs/Impala2.md`; `pointerStride.impala` pins 1.1,
+and `jspegCompilerTests.js` pins 1.2-1.4). The descriptions below are kept as the record of what was wrong.
+
+### 1.1 `for` over a pointer does not stride - FIXED (was SILENT WRONG DATA)
 
 ```impala
 struct S { int a; int b; int c }
@@ -40,7 +43,7 @@ so the fix is to stop emitting `FORp` for a typed pointer with a multi-word elem
 element sizes that are broken today. A one-word element (`int pointer`) and an untyped `pointer` are
 already correct and should keep using `FORp`.
 
-### 1.2 `!` inverts the C reading - SILENT WRONG BRANCH
+### 1.2 `!` inverts the C reading - FIXED (was SILENT WRONG BRANCH)
 
 `!` is not a unary operator. It lives at the *condition* level (`Comp <- '!' Comp`), BELOW comparison, so
 `!x` alone is a syntax error but `!x == 2` parses as `!(x == 2)`. With `x = 1`, C evaluates `(!1) == 2` to
@@ -49,32 +52,36 @@ false; Impala takes the branch. Verified at runtime.
 The fix shape already exists: this is what `E101`/`E102` do for mixed bitwise operators. Require
 parentheses - `!(a == b)` or `(!a) == b` - and reuse the strict-expression machinery.
 
-### 1.3 `--x` is a silent no-op
+### 1.3 `--x` is a silent no-op - FIXED
 
 `--x` parses as `-(-x)` and compiles to two negations. A C programmer typing a decrement gets identity,
 with no diagnostic. `x++`, `++x` and `x += 1` are all bare `E001`. Rejecting the unspaced `--` (accepting
 `- -x`) costs nothing and catches a real mistake.
 
-### 1.4 Duplicate label in one function
+### 1.4 Duplicate label in one function - FIXED
 
 Accepted by the compiler; the assembler then fails at load with `Symbol already defined: x` and a GAZL
 line number. Same class as the diagnostics closed in `docs/CompileTimeHardening.md`, and fully decidable -
 the label map already exists in `processBranches`.
 
-### 1.5 Element types unchecked in pointer difference and comparison
+### 1.5 Element types unchecked in pointer difference - FIXED (difference only)
 
-`ip - fp` (int-element minus float-element) and `ip == fp` are accepted with no check, while `ip = fp` is
-correctly `E201`. The element-type rule is enforced on assignment and call arguments but not on these.
+`ip - fp` (int-element minus float-element) and `ip == fp` were accepted with no check, while `ip = fp` is
+correctly `E201`. The difference now requires matching element types (`E201`), because it counts elements
+and would otherwise divide a span by the wrong stride. Comparison is left as-is by design: it reads a raw
+address either way, so the mismatch is harmless there.
 
-### 1.6 `&` defeats `readonly`
+### 1.6 `&` defeats `readonly` - WON'T FIX
 
 `global k = 1` on a `readonly int` is `E404`, but `p = &global k` is accepted and writes through `p` are
-unchecked. Same for `&global ro[0]`.
+unchecked. Same for `&global ro[0]`. Left as-is: it faults at run time, and tracking write-through-pointer
+would require a `const` modifier the language deliberately does not have.
 
-### 1.7 A string literal is a writable lvalue
+### 1.7 A string literal is a writable lvalue - FIXED
 
-`"abc"[0] = 1;` compiles. It fails at GAZL *load* with `Incompatible types: .s_abc_...` - no source
-location, no code.
+`"abc"[0] = 1;` used to compile and fail at GAZL *load* with `Incompatible types: .s_abc_...` - no source
+location, no code. A string literal is now marked readonly, so the store is rejected at the source line
+with `E404` (the same check that guards a `readonly` array element). Reading `"abc"[0]` is still fine.
 
 
 ## 2. Silent differences from C (accepted, different meaning)
@@ -117,15 +124,19 @@ slot you assign); required in an `extern` prototype is arbitrary - it has no bod
 *omitting the initializer* (`const int C;`), and `extern const int C;` is `E001`.
 
 **`const` accepts a narrower type grammar than every other position** - no struct, no struct pointer, no
-named functype. `ConstDecl` reads `BASE_TYPE` where its siblings moved to `TypeBase`.
+named functype. `ConstDecl` reads `BASE_TYPE` where its siblings moved to `TypeBase`. FIXED: `ConstDecl`
+now reads `TypeBase`, so `const S pointer` and `const Fn` (a named functype) work - a const is an
+assembler-level address/scalar constant, and those two are addresses. A struct *value* has no such form
+and is `E447`.
 
 **`sizeof` takes only a parenthesized bare type name.** Not an expression, not a modified type
 (`sizeof(int pointer)` is `E001`), and not an array variable - `sizeof(a)` reports `Unknown type a`. There
 is no way to get an array's word count, which is the main thing C programmers reach for `sizeof` to do.
 
 **`assert(c);` and `goto l;` swallow their own `;`; `copy(n from p to q)` does not.** Three call-shaped
-builtins, two terminator rules. `copy` also uses the keywords `from`/`to` where every other argument list
-uses `,`.
+builtins, two terminator rules. FIXED: `copy` now swallows its own `;` like the other two, so
+`copy(...) i = 1;` (two statements with nothing between) is no longer accepted. (`copy` still uses the
+keywords `from`/`to` where every other argument list uses `,` - left as-is, it is not a bug.)
 
 **Keyword ordering.** Of ~45 rejected orderings tested, **none is forced by parsing** - PEG ordered choice
 could accept either form in every case. Note that `global`/`readonly`/`temporary` are not an ordering
@@ -167,7 +178,7 @@ The three tokens a newcomer or a code generator is most likely to emit all land 
 
 | Typed | Diagnostic |
 |---|---|
-| `return v;` | `E403 Undeclared identifier: return`, caret on `v` |
+| `return v;` | FIXED: `E448` "return does not take a value - assign to the return variable instead", caret on the value |
 | `break;` in a loop | `E403 Undeclared identifier: break`, caret on the `;` |
 | `break;` in a `case` arm | bare `E001` - **a different diagnostic for the same mistake** |
 | `continue;` | `E403 Undeclared identifier: continue` |
@@ -178,6 +189,14 @@ The three tokens a newcomer or a code generator is most likely to emit all land 
 
 Making these reserved words with dedicated messages is the single highest-value change available, and it
 is independent of every other item here.
+
+**`return` is now reserved** (see the diagnostics table in `docs/Impala2.md`; `jspegCompilerTests.js` pins
+it). Bare `return;` is an early exit that emits `RETU`; `return expr;` is `E448` pointing at the
+assign-to-the-named-return-variable model. This assumption in the table above - that `return` is an
+undeclared identifier - held only because no corpus file declared it; two did. `adventCode.impala` and
+`patch.impala` used `return` as a *label* with a `goto return;` early-exit idiom (a label sitting at the
+function's end, so the jump just fell into the implicit `RETU`). Both were migrated to bare `return;`, which
+is byte-for-byte the same exit and reads as what it is. `break`/`continue` are still in the second group.
 
 ### Caret defects
 
@@ -195,12 +214,14 @@ The `E422`/`E428` class is the one `$$parser.declOffset` was introduced to solve
 
 ## 6. Suggested order
 
-1. **1.1 `for` stride** - silent wrong data, and it breaks an invariant the project has already ratified.
-2. **`return` / `break` / `continue` as reserved words** with real messages (see `docs/ParkedFeatures.md`
-   for the `return` design question - bare `return;` only, because 3.0 restores multi-return).
-3. **1.2 `!` precedence** - reuse the `E101` paren requirement.
-4. **1.4-1.7** - small, each decidable at compile time.
-5. The caret defects in section 5, as one pass.
-6. The arbitrary separator/ordering items in section 3 - cheap individually, but each is a grammar change
+1. ~~**1.1 `for` stride**~~ - DONE. ~~**1.2 `!` precedence**~~, ~~**1.3 `--`**~~ and ~~**1.4 duplicate
+   label**~~ - DONE in the same pass.
+2. ~~**`return` as a reserved word**~~ - DONE (`E448`; bare `return;` only, because 3.0 restores
+   multi-return - see `docs/ParkedFeatures.md`). **`break` / `continue`** still want the same treatment
+   with real messages.
+3. ~~**1.5** (difference)~~ and ~~**1.7**~~ - DONE. 1.6 is WON'T FIX (needs a `const` modifier). The
+   `const` type grammar and `copy` terminator (section 3) were done in the same pass.
+4. The caret defects in section 5, as one pass.
+5. The arbitrary separator/ordering items in section 3 - cheap individually, but each is a grammar change
    with fixture churn, and none of them produces wrong output. Worth doing only alongside a diagnostics
    pass that makes the current rules explain themselves.

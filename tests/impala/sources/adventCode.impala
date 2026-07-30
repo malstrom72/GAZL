@@ -1,5 +1,5 @@
 /*
-return\((.*?)\); -> { goValue = \1; goto return; }
+return\((.*?)\); -> { goValue = \1; return; }
 ([A-Z]+?\[[^]]*?\] +[=!<>][= ]) -> (int)\1
 
 ([^( ]+?\([^() ]*?\) \!\= FALSE)
@@ -451,7 +451,7 @@ locals int CHAR, int I
 	if(global LNPOSN != global fGETTXT_SPLITTING)global fGETTXT_SPLITTING = -1;
 	GETTXT= -1;
 L10:
-	if(global LNPOSN > global LNLENG) goto return;
+	if(global LNPOSN > global LNLENG) return;
 	if(!((SKIP==FALSE) || (int)global INLINE[global LNPOSN] != 0)) {
 		global LNPOSN=global LNPOSN+1;
 		goto L10;
@@ -480,7 +480,6 @@ L10:
 	} /* end loop */
 
 	if(HASH != FALSE)GETTXT=GETTXT+((HASH*13579+5432)%97531)*12345+HASH;
-return: ;
 }
 
 function fMAKEWD(int LETTRS)
@@ -547,7 +546,7 @@ locals int ALPH1, int ALPH2, int BYTE, int DIV, int I, int W
 	W=WORD;
 	if(HASH!=0)W=W-((HASH*13579+5432)%97531)*12345-HASH;
 	for (I=1 to 5+1) {
-		if(W <= 0 && (int)(*sTATE) == 0 && abs(CASE) <= 1) goto return;
+		if(W <= 0 && (int)(*sTATE) == 0 && abs(CASE) <= 1) return;
 		BYTE=W/DIV;
 		if(!((int)(*sTATE) != 0 || BYTE != 63)) {
 			(int)(*sTATE)=63;
@@ -561,7 +560,6 @@ locals int ALPH1, int ALPH2, int BYTE, int DIV, int I, int W
 		}
 		W=(W-BYTE*DIV)*64;
 	} /* end loop */
-return: ;
 }
 
 /*  I/O ROUTINES (SPEAK, PSPEAK, RSPEAK, SETPRM, GETIN, YES) */
@@ -575,7 +573,7 @@ locals int I, int VAL
 
 	if(!(global LNLENG != 0)) {
 		output("\n");
-		goto return;
+		return;
 	}
 	if((int)global MAP2[1] == 0)fMPINIT();
 	for (I=1 to global LNLENG+1) {
@@ -584,7 +582,6 @@ locals int I, int VAL
 	} /* end loop */
 	global INLINE[global LNLENG+1]=0;
 	output(global INLINE+1); output("\n");
-return: ;
 }
 
 function fTYPE0()
@@ -606,7 +603,7 @@ locals int BLANK, int CASE, int I, int K, int L, int NEG, int NPARMS, int PARM, 
 	/*  PRINT THE MESSAGE WHICH STARTS AT LINES(N).  PRECEDE IT WITH A BLANK LINE
 	 *  UNLESS BLKLIN IS FALSE. */
 
-	if(N == 0) goto return;
+	if(N == 0) return;
 	BLANK=global BLKLIN;
 	K=N;
 	NPARMS=1;
@@ -635,7 +632,7 @@ L32:
 	 *  WITH A WORD OF -1, 65-73 (1-9) = NUMBER USING THAT MANY CHARACTERS,
 	 *  12 (B) = VARIABLE NUMBER OF BLANKS. */
 	 
-	if(PRMTYP == 1) goto return;
+	if(PRMTYP == 1) return;
 	if(PRMTYP == 29) goto L320;
 	if(PRMTYP == 30) goto L340;
 	if(PRMTYP == 12) goto L360;
@@ -709,7 +706,6 @@ L40:
 	K=L+1;
 	if((int)global LINES[K] >= 0) goto L10;
 	
-return: ;
 }
 
 function fPSPEAK(int MSG, int SKIP)
@@ -770,10 +766,9 @@ L10:
 	do {
 		JUNK=(int)fGETTXT(FALSE,TRUE,TRUE,0);
 	} while (JUNK > 0);
-	if((int)fGETTXT(TRUE,TRUE,TRUE,0) <= 0)goto return;
+	if((int)fGETTXT(TRUE,TRUE,TRUE,0) <= 0)return;
 	fRSPEAK(53);
 	goto L10;
-return: ;
 }
 
 function fYES(int X,int Y,int Z)
@@ -789,16 +784,15 @@ L1:
 	if(REPLY == (int)fMAKEWD(250519) || REPLY == (int)fMAKEWD(25)) {
 		YES=TRUE;
 		fRSPEAK(Y);
-		goto return;
+		return;
 	}
 	if(REPLY == (int)fMAKEWD(1415) || REPLY == (int)fMAKEWD(14)) {
 		YES=FALSE;
 		fRSPEAK(Z);
-		goto return;
+		return;
 	}
 	fRSPEAK(185);
 	goto L1;
-return: ;
 }
 
 /*
@@ -890,7 +884,7 @@ locals int I, int K
 
 /*  RETURN TO global SCORE COMMAND IF THAT'S WHERE WE CAME FROM. */
 
-	if(MODE < 0) goto return;
+	if(MODE < 0) return;
 
 /*  THAT SHOULD BE GOOD ENOUGH.  LET'S TELL HIM ALL ABOUT IT. */
 
@@ -916,7 +910,6 @@ locals int I, int K
 	fRSPEAK(global SPK);
 	exit(0);
 
-return: ;
 }
 
 /*  DATA STRUC. ROUTINES (VOCAB, DSTROY, JUGGLE, MOVE, PUT, CARRY, DROP, ATDWRF) */
@@ -936,7 +929,7 @@ locals int HASH, int I
 	for (I=1 to TABSIZ+1) {
 		if((int)global KTAB[I] == -1) {
 			VOCAB= -1;
-			if(INIT < 0) goto return;
+			if(INIT < 0) return;
 			fBUG(5);
 		}
 		HASH=HASH+7;
@@ -944,12 +937,11 @@ locals int HASH, int I
 			if((int)global ATAB[I] == ID+HASH*HASH) {
 				VOCAB=(int)global KTAB[I];
 				if(INIT >= 0)VOCAB=((VOCAB)%1000);
-				goto return;
+				return;
 			}
 		}
 	} /* end loop */
 	fBUG(21);
-return: ;
 }
 
 function fCARRY(int OBJECT,int WHERE)
@@ -960,20 +952,19 @@ locals int TEMP
 	 *  (MOVING "FIXED" SECOND LOC), DON'T CHANGE PLACE OR HOLDNG. */
 
 	if(OBJECT <= 100) {
-		if((int)global PLACE[OBJECT] == -1) goto return;
+		if((int)global PLACE[OBJECT] == -1) return;
 		global PLACE[OBJECT]= -1;
 		global HOLDNG=global HOLDNG+1;
 	}
 	if((int)global ATLOC[WHERE] == OBJECT) {
 		global ATLOC[WHERE]=global LINK[OBJECT];
-		goto return;
+		return;
 	}
 	TEMP=(int)global ATLOC[WHERE];
 	while ((int)global LINK[TEMP] != OBJECT) {
 		TEMP=(int)global LINK[TEMP];
 	}
 	global LINK[TEMP]=global LINK[OBJECT];
-return: ;
 }
 
 function fDROP(int OBJECT,int WHERE) {
@@ -1045,16 +1036,15 @@ locals int I
 	 *  THE PIRATE (6TH DWARF). */
 
 	ATDWRF=0;
-	if(global DFLAG < 2) goto return;
+	if(global DFLAG < 2) return;
 	ATDWRF= -1;
 	for (I=1 to 5+1) {
 		if((int)global DLOC[I] == WHERE) {
 			ATDWRF=I;
-			goto return;
+			return;
 		}
 		if((int)global DLOC[I] != 0)ATDWRF=0;
 	} /* end loop */
-return: ;
 }
 
 function fRNDVOC(int CHAR,int FORCE)
@@ -1080,11 +1070,10 @@ locals int DIV, int I, int J
 		J=J+7;
 		if(((((int)global ATAB[I]-J*J)/DIV)%64) == CHAR) {
 			(int)global ATAB[I]=RNDVOC+J*J;
-			goto return;
+			return;
 		}
 	} /* end loop */
 	fBUG(5);
-return: ;
 }
 
 /*  FINISH CONSTRUCTING INTERNAL DATA FORMAT */
@@ -1247,10 +1236,10 @@ locals int lK, int lLOC, int lOBJ
 	lOBJ = global gOBJ;
 	if(just_do_it == FALSE) {
 		if((int)TOTING(ROD2) != FALSE && lOBJ == ROD && (int)TOTING(ROD) == FALSE) { lOBJ=ROD2; global gOBJ = lOBJ; }
-		if((int)TOTING(lOBJ) == FALSE) { goValue = GOTO2011; goto return; }
+		if((int)TOTING(lOBJ) == FALSE) { goValue = GOTO2011; return; }
 		else if(!(lOBJ != BIRD || (int)HERE(SNAKE, lLOC) == FALSE)) {
 			fRSPEAK(30);
-			if(global CLOSED != FALSE) { goValue = GOTO19000; goto return; }
+			if(global CLOSED != FALSE) { goValue = GOTO19000; return; }
 			fDSTROY(SNAKE);
 		/*  SET PROP FOR USE BY TRAVEL OPTIONS */
 			global PROP[SNAKE]=1;
@@ -1274,12 +1263,12 @@ locals int lK, int lLOC, int lOBJ
 			fDSTROY(COINS);
 			fDROP(BATTER,lLOC);
 			fPSPEAK(BATTER,0);
-			{ goValue = GOTO2012; goto return; }
+			{ goValue = GOTO2012; return; }
 		} else if(!(lOBJ != BIRD || (int)AT(DRAGON, lLOC) == FALSE || (int)global PROP[DRAGON] != 0)) {
 			fRSPEAK(154);
 			fDSTROY(BIRD);
 			global PROP[BIRD]=0;
-			{ goValue = GOTO2012; goto return; }
+			{ goValue = GOTO2012; return; }
 		} else if(!(lOBJ != BEAR || (int)AT(TROLL, lLOC) == FALSE)) {
 			fRSPEAK(163);
 			fMOVE(TROLL,0);
@@ -1303,11 +1292,10 @@ locals int lK, int lLOC, int lOBJ
 	if(lOBJ == BOTTLE && lK != 0)global PLACE[lK]=0;
 	if(lOBJ == CAGE && (int)global PROP[BIRD] == 1)fDROP(BIRD,lLOC);
 	fDROP(lOBJ,lLOC);
-	if(lOBJ != BIRD) { goValue = GOTO2012; goto return; }
+	if(lOBJ != BIRD) { goValue = GOTO2012; return; }
 	global PROP[BIRD]=0;
 	if((int)FOREST(lLOC) != FALSE)global PROP[BIRD]=2;
-	{ goValue = GOTO2012; goto return; }
-return: ;
+	{ goValue = GOTO2012; return; }
 }
 
 /*  FILL.  BOTTLE OR URN MUST BE EMPTY, AND LIQUID AVAILABLE.  (VASE IS NASTY.) */
@@ -1320,38 +1308,37 @@ locals int lK, int lLOC
 	if(OBJ != VASE) {
 		if(OBJ == URN) {
 			global SPK=213;
-			if((int)global PROP[URN] != 0) { goValue = GOTO2011; goto return; }
+			if((int)global PROP[URN] != 0) { goValue = GOTO2011; return; }
 			global SPK=144;
 			lK=(int)LIQ(); global gK = lK;
-			if(lK == 0 || (int)HERE(BOTTLE, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+			if(lK == 0 || (int)HERE(BOTTLE, lLOC) == FALSE) { goValue = GOTO2011; return; }
 			global PLACE[lK]=0;
 			global PROP[BOTTLE]=1;
 			if(lK == OIL)global PROP[URN]=1;
 			global SPK=211+(int)global PROP[URN];
-			{ goValue = GOTO2011; goto return; }
+			{ goValue = GOTO2011; return; }
 		}
-		if(OBJ != 0 && OBJ != BOTTLE) { goValue = GOTO2011; goto return; }
-		if(OBJ == 0 && (int)HERE(BOTTLE, lLOC) == FALSE) { goValue = GOTO8000; goto return; }
+		if(OBJ != 0 && OBJ != BOTTLE) { goValue = GOTO2011; return; }
+		if(OBJ == 0 && (int)HERE(BOTTLE, lLOC) == FALSE) { goValue = GOTO8000; return; }
 		global SPK=107;
 		if((int)LIQLOC(lLOC) == 0)global SPK=106;
 		if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] != 0)global SPK=214;
 		if((int)LIQ() != 0)global SPK=105;
-		if(global SPK != 107) { goValue = GOTO2011; goto return; }
+		if(global SPK != 107) { goValue = GOTO2011; return; }
 		global PROP[BOTTLE]=(((int)global COND[lLOC])%4)/2*2;
 		lK=(int)LIQ(); global gK = lK;
 		if((int)TOTING(BOTTLE) != FALSE)global PLACE[lK]= -1;
 		if(lK == OIL)global SPK=108;
-		{ goValue = GOTO2011; goto return; }
+		{ goValue = GOTO2011; return; }
 	} else {
 		global SPK=29;
 		if((int)LIQLOC(lLOC) == 0)global SPK=144;
-		if((int)LIQLOC(lLOC) == 0 || (int)TOTING(VASE) == FALSE) { goValue = GOTO2011; goto return; }
+		if((int)LIQLOC(lLOC) == 0 || (int)TOTING(VASE) == FALSE) { goValue = GOTO2011; return; }
 		fRSPEAK(145);
 		global PROP[VASE]=2;
 		global FIXED[VASE]= -1;
-		{ goValue = (int)discard(TRUE); goto return; }
+		{ goValue = (int)discard(TRUE); return; }
 	}
-return: ;
 }
 
 /*  CARRY AN OBJECT.  SPECIAL CASES FOR BIRD AND CAGE (IF BIRD IN CAGE, CAN'T
@@ -1365,7 +1352,7 @@ locals int lK, int lLOC, int lOBJ
 	lK = global gK;
 	lOBJ = global gOBJ;
 	lLOC = global gLOC;
-	if((int)TOTING(lOBJ) != FALSE) { goValue = GOTO2011; goto return; }
+	if((int)TOTING(lOBJ) != FALSE) { goValue = GOTO2011; return; }
 	global SPK=25;
 	if(lOBJ == PLANT && (int)global PROP[PLANT] <= 0)global SPK=115;
 	if(lOBJ == BEAR && (int)global PROP[BEAR] == 1)global SPK=169;
@@ -1379,39 +1366,38 @@ locals int lK, int lLOC, int lOBJ
 		global SPK=190;
 		fDSTROY(MESSAG);
 	}
-	if((int)global FIXED[lOBJ] != 0) { goValue = GOTO2011; goto return; }
+	if((int)global FIXED[lOBJ] != 0) { goValue = GOTO2011; return; }
 	if(!(lOBJ != WATER && lOBJ != OIL)) {
 		lK=lOBJ; global gK = lOBJ;
 		lOBJ=BOTTLE; global gOBJ = BOTTLE;
 		if(!((int)HERE(BOTTLE, lLOC) != FALSE && (int)LIQ() == lK)) {
-			if((int)TOTING(BOTTLE) != FALSE && (int)global PROP[BOTTLE] == 1) { goValue = (int)fill(lOBJ); goto return; }
+			if((int)TOTING(BOTTLE) != FALSE && (int)global PROP[BOTTLE] == 1) { goValue = (int)fill(lOBJ); return; }
 			if((int)global PROP[BOTTLE] != 1)global SPK=105;
 			if((int)TOTING(BOTTLE) == FALSE)global SPK=104;
-			{ goValue = GOTO2011; goto return; }
+			{ goValue = GOTO2011; return; }
 		}
 	}
 	global SPK=92;
-	if(global HOLDNG >= 7) { goValue = GOTO2011; goto return; }
+	if(global HOLDNG >= 7) { goValue = GOTO2011; return; }
 	if(!(lOBJ != BIRD || (int)global PROP[BIRD] == 1 || -1-(int)global PROP[BIRD] == 1)) {
 		if((int)global PROP[BIRD] == 2) {
 			global SPK=238;
 			fDSTROY(BIRD);
-			{ goValue = GOTO2011; goto return; }
+			{ goValue = GOTO2011; return; }
 		}
 		if((int)TOTING(CAGE) == FALSE)global SPK=27;
 		if((int)TOTING(ROD) != FALSE)global SPK=26;
-		if(global SPK/2 == 13) { goValue = GOTO2011; goto return; }
+		if(global SPK/2 == 13) { goValue = GOTO2011; return; }
 		global PROP[BIRD]=1;
 	}
 	if((lOBJ == BIRD || lOBJ == CAGE) && ((int)global PROP[BIRD] == 1 || -1-(int)global PROP[BIRD] == 1))fCARRY(BIRD+CAGE-lOBJ,lLOC);
 	fCARRY(lOBJ,lLOC);
 	lK=(int)LIQ(); global gK = lK;
 	if(lOBJ == BOTTLE && lK != 0)global PLACE[lK]= -1;
-	if((int)GSTONE(lOBJ) == FALSE || (int)global PROP[lOBJ] == 0) { goValue = GOTO2009; goto return; }
+	if((int)GSTONE(lOBJ) == FALSE || (int)global PROP[lOBJ] == 0) { goValue = GOTO2009; return; }
 	global PROP[lOBJ]=0;
 	global PROP[CAVITY]=1;
-	{ goValue = GOTO2009; goto return; }
-return: ;
+	{ goValue = GOTO2009; return; }
 }
 
 /*  ATTACK.  ASSUME TARGET IF UNAMBIGUOUS.  "THROW" ALSO LINKS HERE.  ATTACKABLE
@@ -1432,19 +1418,19 @@ locals int I, int lK, int lLOC, int lOBJ
 		if((int)AT(TROLL, lLOC) != FALSE) { lOBJ=lOBJ*100+TROLL; global gOBJ = lOBJ; }
 		if((int)AT(OGRE, lLOC) != FALSE) { lOBJ=lOBJ*100+OGRE; global gOBJ = lOBJ; }
 		if((int)HERE(BEAR, lLOC) != FALSE && (int)global PROP[BEAR] == 0) { lOBJ=lOBJ*100+BEAR; global gOBJ = lOBJ; }
-		if(lOBJ > 100) { goValue = GOTO8000; goto return; }
+		if(lOBJ > 100) { goValue = GOTO8000; return; }
 		if(lOBJ == 0) {
 		/*  CAN'T ATTACK BIRD OR MACHINE BY THROWING AXE. */
 			if((int)HERE(BIRD, lLOC) != FALSE && global VERB != THROW) { lOBJ=BIRD; global gOBJ = lOBJ; }
 			if((int)HERE(VEND, lLOC) != FALSE && global VERB != THROW) { lOBJ=lOBJ*100+VEND; global gOBJ = lOBJ; }
 		/*  CLAM AND OYSTER BOTH TREATED AS CLAM FOR INTRANSITIVE CASE; NO HARM DONE. */
 			if((int)HERE(CLAM, lLOC) != FALSE || (int)HERE(OYSTER, lLOC) != FALSE) { lOBJ=100*lOBJ+CLAM; global gOBJ = lOBJ; }
-			if(lOBJ > 100) { goValue = GOTO8000; goto return; }
+			if(lOBJ > 100) { goValue = GOTO8000; return; }
 		}
 	}
 	if(lOBJ == BIRD) {
 		global SPK=137;
-		if(global CLOSED != FALSE) { goValue = GOTO2011; goto return; }
+		if(global CLOSED != FALSE) { goValue = GOTO2011; return; }
 		fDSTROY(BIRD);
 		global PROP[BIRD]=0;
 		global SPK=45;
@@ -1452,19 +1438,19 @@ locals int I, int lK, int lLOC, int lOBJ
 	if(lOBJ == VEND) {
 		fPSPEAK(VEND,(int)global PROP[VEND]+2);
 		global PROP[VEND]=3-(int)global PROP[VEND];
-		 { goValue = GOTO2012; goto return; }
+		 { goValue = GOTO2012; return; }
 	}
 	if(lOBJ == 0)global SPK=44;
 	if(lOBJ == CLAM || lOBJ == OYSTER)global SPK=150;
 	if(lOBJ == SNAKE)global SPK=46;
 	if(lOBJ == DWARF)global SPK=49;
-	if(lOBJ == DWARF && global CLOSED != FALSE) { goValue = GOTO19000; goto return; }
+	if(lOBJ == DWARF && global CLOSED != FALSE) { goValue = GOTO19000; return; }
 	if(lOBJ == DRAGON)global SPK=167;
 	if(lOBJ == TROLL)global SPK=157;
 	if(lOBJ == OGRE)global SPK=203;
 	if(!(lOBJ == OGRE && I > 0)) {
 		if(lOBJ == BEAR)global SPK=165+((int)global PROP[BEAR]+1)/2;
-		if(lOBJ != DRAGON || (int)global PROP[DRAGON] != 0) { goValue = GOTO2011; goto return; }
+		if(lOBJ != DRAGON || (int)global PROP[DRAGON] != 0) { goValue = GOTO2011; return; }
 	/*  FUN STUFF FOR DRAGON.  IF HE INSISTS ON ATTACKING IT, WIN!  SET PROP TO DEAD,
 	 *  MOVE DRAGON TO CENTRAL LOC (STILL FIXED), MOVE RUG THERE (NOT FIXED), AND
 	 *  MOVE HIM THERE, TOO.  THEN DO A NULL MOTION TO GET NEW DESCRIPTION. */
@@ -1472,7 +1458,7 @@ locals int I, int lK, int lLOC, int lOBJ
 		global VERB=0;
 		lOBJ=0; global gOBJ=0;
 		fGETIN(&global WD1,&global WD1X,&global WD2,&global WD2X);
-		if(global WD1 != (int)fMAKEWD(25) && global WD1 != (int)fMAKEWD(250519)) { goValue = GOTO2607; goto return; }
+		if(global WD1 != (int)fMAKEWD(25) && global WD1 != (int)fMAKEWD(250519)) { goValue = GOTO2607; return; }
 		fPSPEAK(DRAGON,3);
 		global PROP[DRAGON]=1;
 		global PROP[RUG]=0;
@@ -1488,7 +1474,7 @@ locals int I, int lK, int lLOC, int lOBJ
 		global gOBJ = lOBJ;
 		global gLOC=lK;
 		global gK = NUL;
-		{ goValue = GOTO8; goto return; }
+		{ goValue = GOTO8; return; }
 	}
 	
 	fRSPEAK(global SPK);
@@ -1504,8 +1490,7 @@ locals int I, int lK, int lLOC, int lOBJ
 	} /* end loop */
 	global gK = lK;
 	global SPK=global SPK+1+1/lK;;
-	{ goValue = GOTO2011; goto return; }
-return: ;
+	{ goValue = GOTO2011; return; }
 }
 
 
@@ -1519,47 +1504,46 @@ locals int lLOC
 	lLOC = global gLOC;
 	if(OBJ == BIRD) {
 		global SPK=100;
-		{ goValue = GOTO2011; goto return; }
+		{ goValue = GOTO2011; return; }
 	}
 
 	if(!(OBJ != SNAKE && OBJ != DRAGON && OBJ != TROLL)) {
 		global SPK=102;
 		if(OBJ == DRAGON && (int)global PROP[DRAGON] != 0)global SPK=110;
 		if(OBJ == TROLL)global SPK=182;
-		if(OBJ != SNAKE || global CLOSED != FALSE || (int)HERE(BIRD, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+		if(OBJ != SNAKE || global CLOSED != FALSE || (int)HERE(BIRD, lLOC) == FALSE) { goValue = GOTO2011; return; }
 		global SPK=101;
 		fDSTROY(BIRD);
 		global PROP[BIRD]=0;
-		{ goValue = GOTO2011; goto return; }
+		{ goValue = GOTO2011; return; }
 	}
 
 	if(OBJ == DWARF) {
-		if((int)HERE(FOOD, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+		if((int)HERE(FOOD, lLOC) == FALSE) { goValue = GOTO2011; return; }
 		global DFLAG=global DFLAG+2;
 		global SPK=103;
-		{ goValue = GOTO2011; goto return; }
+		{ goValue = GOTO2011; return; }
 	}
 
 	if(OBJ == BEAR) {
 		if((int)global PROP[BEAR] == 0)global SPK=102;
 		if((int)global PROP[BEAR] == 3)global SPK=110;
-		if((int)HERE(FOOD, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+		if((int)HERE(FOOD, lLOC) == FALSE) { goValue = GOTO2011; return; }
 		fDSTROY(FOOD);
 		global PROP[BEAR]=1;
 		global FIXED[AXE]=0;
 		global PROP[AXE]=0;
 		global SPK=168;
-		{ goValue = GOTO2011; goto return; }
+		{ goValue = GOTO2011; return; }
 	}
 
 	if(OBJ == OGRE) {
 		if((int)HERE(FOOD, lLOC) != FALSE)global SPK=202;
-		{ goValue = GOTO2011; goto return; }
+		{ goValue = GOTO2011; return; }
 	}
 	
 	global SPK=14;
-	{ goValue = GOTO2011; goto return; }
-return: ;
+	{ goValue = GOTO2011; return; }
 }
 
 
@@ -1574,7 +1558,7 @@ locals int I, int lLOC, int lOBJ
 	lLOC = global gLOC;
 	lOBJ = global gOBJ;
 	if((int)TOTING(ROD2) != FALSE && lOBJ == ROD && (int)TOTING(ROD) == FALSE) { lOBJ=ROD2; global gOBJ = ROD2; }
-	if((int)TOTING(lOBJ) == FALSE) { goValue = GOTO2011; goto return; }
+	if((int)TOTING(lOBJ) == FALSE) { goValue = GOTO2011; return; }
 	if(lOBJ >= 50 && lOBJ <= MAXTRS && (int)AT(TROLL, lLOC) != FALSE) {
 	/*  SNARF A TREASURE FOR THE TROLL. */
 		global SPK=159;
@@ -1584,14 +1568,14 @@ locals int I, int lLOC, int lOBJ
 		fDROP(TROLL2,global PLAC[TROLL]);
 		fDROP(TROLL2+100,(int)global FIXD[TROLL]);
 		fJUGGLE(CHASM);
-		{ goValue = GOTO2011; goto return; }
+		{ goValue = GOTO2011; return; }
 	}
 	if(lOBJ == FOOD && (int)HERE(BEAR, lLOC) != FALSE) {
 		/*  BUT THROWING FOOD IS ANOTHER STORY. */
 		lOBJ=BEAR; global gOBJ = BEAR;
-		{ goValue = (int)feed(lOBJ); goto return; }
+		{ goValue = (int)feed(lOBJ); return; }
 	}
-	if(lOBJ != AXE) { goValue = (int)discard(FALSE); goto return; }
+	if(lOBJ != AXE) { goValue = (int)discard(FALSE); return; }
 	I=(int)fATDWRF(lLOC);
 	if(I <= 0) {
 		global SPK=152;
@@ -1607,10 +1591,10 @@ locals int I, int lLOC, int lOBJ
 			global FIXED[AXE]= -1;
 			global PROP[AXE]=1;
 			fJUGGLE(BEAR);
-			{ goValue = GOTO2011; goto return; }
+			{ goValue = GOTO2011; return; }
 		}
 		lOBJ=0; global gOBJ = 0;
-		{ goValue = (int)attack(); goto return; }
+		{ goValue = (int)attack(); return; }
 	}
 	global SPK=48;
 	if((int)fRAN(7) >= global DFLAG) {
@@ -1624,8 +1608,7 @@ L9175:
 	fRSPEAK(global SPK);
 	fDROP(AXE,lLOC);
 	global gK = NUL;
-	{ goValue = GOTO8; goto return; }
-return: ;
+	{ goValue = GOTO8; return; }
 }
 
 
@@ -1650,7 +1633,7 @@ locals int I, int lK, int lLOC, int lOBJ
 	   case 0: {
 			global VERB=lK;
 			global SPK=(int)global ACTSPK[global VERB];
-			if(global WD2 > 0 && global VERB != SAY) { goValue = GOTO2800; goto return; }
+			if(global WD2 > 0 && global VERB != SAY) { goValue = GOTO2800; return; }
 			if(global VERB == SAY) { lOBJ=global WD2; global gOBJ = lOBJ; }
 			if(lOBJ > 0) goto L4090;
 
@@ -1664,14 +1647,14 @@ locals int I, int lK, int lLOC, int lOBJ
 				case 0: {
 					/*  CARRY, NO OBJECT GIVEN YET.  OK IF ONLY ONE OBJECT PRESENT. */
 
-					if((int)global ATLOC[lLOC] == 0 || (int)global LINK[(int)global ATLOC[lLOC]] != 0 || (int)fATDWRF(lLOC) > 0) { goValue = GOTO8000; goto return; }
+					if((int)global ATLOC[lLOC] == 0 || (int)global LINK[(int)global ATLOC[lLOC]] != 0 || (int)fATDWRF(lLOC) > 0) { goValue = GOTO8000; return; }
 					lOBJ=(int)global ATLOC[lLOC]; global gOBJ = lOBJ;
 
 					/*  TRANSITIVE CARRY/DROP ARE IN SEPARATE FILE. */
 
-					{ goValue = (int)carry(); goto return; }
+					{ goValue = (int)carry(); return; }
 				}
-				case 1, 8, 9, 2, 15, 16, 18, 20, 27, 28: { goValue = GOTO8000; goto return; }
+				case 1, 8, 9, 2, 15, 16, 18, 20, 27, 28: { goValue = GOTO8000; return; }
 				case 3, 5: {
 					/*  LOCK, UNLOCK, NO OBJECT GIVEN.  ASSUME VARIOUS THINGS IF PRESENT. */
 
@@ -1680,9 +1663,9 @@ locals int I, int lK, int lLOC, int lOBJ
 					if((int)HERE(OYSTER, lLOC) != FALSE) { lOBJ=OYSTER; global gOBJ = OYSTER; }
 					if((int)AT(DOOR, lLOC) != FALSE) { lOBJ=DOOR; global gOBJ = DOOR; }
 					if((int)AT(GRATE, lLOC) != FALSE) { lOBJ=GRATE; global gOBJ = GRATE; }
-					if(lOBJ != 0 && (int)HERE(CHAIN, lLOC) != FALSE) { goValue = GOTO8000; goto return; }
+					if(lOBJ != 0 && (int)HERE(CHAIN, lLOC) != FALSE) { goValue = GOTO8000; return; }
 					if((int)HERE(CHAIN, lLOC) != FALSE) { lOBJ=CHAIN; global gOBJ = CHAIN; }
-					if(lOBJ == 0) { goValue = GOTO2011; goto return; }
+					if(lOBJ == 0) { goValue = GOTO2011; return; }
 
 					/*  LOCK, UNLOCK OBJECT.  SPECIAL STUFF FOR OPENING CLAM/OYSTER AND FOR CHAIN. */
 
@@ -1693,41 +1676,41 @@ locals int I, int lK, int lLOC, int lOBJ
 						if(lOBJ == CAGE)global SPK=32;
 						if(lOBJ == KEYS)global SPK=55;
 						if(lOBJ == GRATE || lOBJ == CHAIN)global SPK=31;
-						if(global SPK != 31 || (int)HERE(KEYS, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+						if(global SPK != 31 || (int)HERE(KEYS, lLOC) == FALSE) { goValue = GOTO2011; return; }
 						if(lOBJ == CHAIN) {
 							if(global VERB == LOCK) {
 								global SPK=172;
 								if((int)global PROP[CHAIN] != 0)global SPK=34;
 								if(lLOC != (int)global PLAC[CHAIN])global SPK=173;
 								
-								if(global SPK != 172) { goValue = GOTO2011; goto return; }
+								if(global SPK != 172) { goValue = GOTO2011; return; }
 								global PROP[CHAIN]=2;
 								if((int)TOTING(CHAIN) != FALSE)fDROP(CHAIN,lLOC);
 								global FIXED[CHAIN]= -1;
-								{ goValue = GOTO2011; goto return; }
+								{ goValue = GOTO2011; return; }
 							}
 							global SPK=171;
 							if((int)global PROP[BEAR] == 0)global SPK=41;
 							if((int)global PROP[CHAIN] == 0)global SPK=37;
 							
-							if(global SPK != 171) { goValue = GOTO2011; goto return; }
+							if(global SPK != 171) { goValue = GOTO2011; return; }
 							global PROP[CHAIN]=0;
 							global FIXED[CHAIN]=0;
 							if((int)global PROP[BEAR] != 3)global PROP[BEAR]=2;
 							global FIXED[BEAR]=2-(int)global PROP[BEAR];
-							{ goValue = GOTO2011; goto return; }
+							{ goValue = GOTO2011; return; }
 						}
 						if(global CLOSNG != FALSE) {
 							lK=130; global gK = 130;
 							if(global PANIC == FALSE)global CLOCK2=15;
 							global PANIC=TRUE;
-							{ goValue = GOTO2010; goto return; }
+							{ goValue = GOTO2010; return; }
 						}
 						lK=34+(int)global PROP[GRATE]; global gK = lK;
 						global PROP[GRATE]=1;
 						if(global VERB == LOCK)global PROP[GRATE]=0;
 						lK=lK+2*(int)global PROP[GRATE]; global gK = lK;
-						{ goValue = GOTO2010; goto return; }
+						{ goValue = GOTO2010; return; }
 					}
 					
 					/*  CLAM/OYSTER. */
@@ -1738,36 +1721,36 @@ locals int I, int lK, int lLOC, int lOBJ
 					if((int)TOTING(TRIDNT) == FALSE)global SPK=122+lK;
 					if(global VERB == LOCK)global SPK=61;
 					
-					if(global SPK != 124) { goValue = GOTO2011; goto return; }
+					if(global SPK != 124) { goValue = GOTO2011; return; }
 					fDSTROY(CLAM);
 					fDROP(OYSTER,lLOC);
 					fDROP(PEARL,105);
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
 				
-				case 4: { goValue = GOTO2009; goto return; }
+				case 4: { goValue = GOTO2009; return; }
 				case 6: {
 					/*  LIGHT.  APPLICABLE ONLY TO LAMP AND URN. */
 
 					if((int)HERE(LAMP, lLOC) != FALSE && (int)global PROP[LAMP] == 0 && global LIMIT >= 0) { lOBJ=LAMP; global gOBJ = lOBJ; }
 					if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 1) { lOBJ=lOBJ*100+URN; global gOBJ = lOBJ; }
-					if(lOBJ == 0 || lOBJ > 100) { goValue = GOTO8000; goto return; }
+					if(lOBJ == 0 || lOBJ > 100) { goValue = GOTO8000; return; }
 
 				L9070:
 					if(lOBJ != URN) {
-						if(lOBJ != LAMP) { goValue = GOTO2011; goto return; }
+						if(lOBJ != LAMP) { goValue = GOTO2011; return; }
 						global SPK=184;
-						if(global LIMIT < 0) { goValue = GOTO2011; goto return; }
+						if(global LIMIT < 0) { goValue = GOTO2011; return; }
 						global PROP[LAMP]=1;
 						fRSPEAK(39);
-						if(global WZDARK != FALSE) { goValue = GOTO2000; goto return; }
-						{ goValue = GOTO2012; goto return; }
+						if(global WZDARK != FALSE) { goValue = GOTO2000; return; }
+						{ goValue = GOTO2012; return; }
 					}
 					global SPK=38;
-					if((int)global PROP[URN] == 0) { goValue = GOTO2011; goto return; }
+					if((int)global PROP[URN] == 0) { goValue = GOTO2011; return; }
 					global SPK=209;
 					global PROP[URN]=2;
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
 				
 				case 7: {
@@ -1775,7 +1758,7 @@ locals int I, int lK, int lLOC, int lOBJ
 
 					if((int)HERE(LAMP, lLOC) != FALSE && (int)global PROP[LAMP] == 1) { lOBJ=LAMP; global gOBJ = lOBJ; }
 					if((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 2) { lOBJ=lOBJ*100+URN; global gOBJ = lOBJ; }
-					if(lOBJ == 0 || lOBJ > 100) { goValue = GOTO8000; goto return; }
+					if(lOBJ == 0 || lOBJ > 100) { goValue = GOTO8000; return; }
 
 				L9080:
 					if(lOBJ != URN) {
@@ -1783,18 +1766,18 @@ locals int I, int lK, int lLOC, int lOBJ
 							global PROP[LAMP]=0;
 							fRSPEAK(40);
 							if((int)DARK(lLOC) != FALSE)fRSPEAK(16);
-							{ goValue = GOTO2012; goto return; }
+							{ goValue = GOTO2012; return; }
 						}
 						if(lOBJ == DRAGON || lOBJ == VOLCAN)global SPK=146;
-						{ goValue = GOTO2011; goto return; }
+						{ goValue = GOTO2011; return; }
 					}
 					global PROP[URN]=(int)global PROP[URN]/2;
 					global SPK=210;
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
 				
-				case 10: { goValue = GOTO2011; goto return; }
-				case 11: { goValue = (int)attack(); goto return; }
+				case 10: { goValue = GOTO2011; return; }
+				case 11: { goValue = (int)attack(); return; }
 				case 12: {
 					/*  POUR.  IF NO OBJECT, OR OBJECT IS BOTTLE, ASSUME CONTENTS OF BOTTLE.
 					 *  SPECIAL TESTS FOR POURING WATER OR OIL ON PLANT OR RUSTY DOOR. */
@@ -1802,43 +1785,43 @@ locals int I, int lK, int lLOC, int lOBJ
 				L9130:
 					if(lOBJ == BOTTLE || lOBJ == 0)lOBJ=(int)LIQ();
 					global gOBJ = lOBJ;
-					if(lOBJ == 0) { goValue = GOTO8000; goto return; }
-					if((int)TOTING(lOBJ) == FALSE) { goValue = GOTO2011; goto return; }
+					if(lOBJ == 0) { goValue = GOTO8000; return; }
+					if((int)TOTING(lOBJ) == FALSE) { goValue = GOTO2011; return; }
 					global SPK=78;
-					if(lOBJ != OIL && lOBJ != WATER) { goValue = GOTO2011; goto return; }
+					if(lOBJ != OIL && lOBJ != WATER) { goValue = GOTO2011; return; }
 					if(!((int)HERE(URN, lLOC) != FALSE && (int)global PROP[URN] == 0)) {
 						global PROP[BOTTLE]=1;
 						global PLACE[lOBJ]=0;
 						global SPK=77;
-						if(!((int)AT(PLANT, lLOC) != FALSE || (int)AT(DOOR, lLOC) != FALSE)) { goValue = GOTO2011; goto return; }
+						if(!((int)AT(PLANT, lLOC) != FALSE || (int)AT(DOOR, lLOC) != FALSE)) { goValue = GOTO2011; return; }
 
 						if(!((int)AT(DOOR, lLOC) != FALSE)) {
 							global SPK=112;
-							if(lOBJ != WATER) { goValue = GOTO2011; goto return; }
+							if(lOBJ != WATER) { goValue = GOTO2011; return; }
 							fPSPEAK(PLANT,(int)global PROP[PLANT]+3);
 							global PROP[PLANT]=(((int)global PROP[PLANT]+1)%3);
 							global PROP[PLANT2]=global PROP[PLANT];
 							lK=NUL; global gK = NUL;
-							{ goValue = GOTO8; goto return; }
+							{ goValue = GOTO8; return; }
 						}
 
 						global PROP[DOOR]=0;
 						if(lOBJ == OIL)global PROP[DOOR]=1;
 						global SPK=113+(int)global PROP[DOOR];
-						{ goValue = GOTO2011; goto return; }
+						{ goValue = GOTO2011; return; }
 					}
 
 					lOBJ=URN; global gOBJ = URN;
-					{ goValue = (int)fill(lOBJ); goto return; }
+					{ goValue = (int)fill(lOBJ); return; }
 				}
 				
 				case 13: {
 					/*  EAT.  INTRANSITIVE: ASSUME FOOD IF PRESENT, ELSE ASK WHAT. */
 
-					if((int)HERE(FOOD, lLOC) == FALSE) { goValue = GOTO8000; goto return; }
+					if((int)HERE(FOOD, lLOC) == FALSE) { goValue = GOTO8000; return; }
 					fDSTROY(FOOD);
 					global SPK=72;
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
 				case 14: {
 					/*  DRINK.  IF NO OBJECT, ASSUME WATER AND LOOK FOR IT HERE.  IF WATER IS IN
@@ -1846,27 +1829,27 @@ locals int I, int lK, int lLOC, int lOBJ
 
 				L9150:
 					if(lOBJ == 0 && (int)LIQLOC(lLOC) != WATER && ((int)LIQ() != WATER || (int)HERE(BOTTLE, lLOC) == FALSE))
-						{ goValue = GOTO8000; goto return; }
+						{ goValue = GOTO8000; return; }
 					if(lOBJ != BLOOD) {
 						if(lOBJ != 0 && lOBJ != WATER)global SPK=110;
-						if(global SPK == 110 || (int)LIQ() != WATER || (int)HERE(BOTTLE, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+						if(global SPK == 110 || (int)LIQ() != WATER || (int)HERE(BOTTLE, lLOC) == FALSE) { goValue = GOTO2011; return; }
 						global PROP[BOTTLE]=1;
 						global PLACE[WATER]=0;
 						global SPK=74;
-						{ goValue = GOTO2011; goto return; }
+						{ goValue = GOTO2011; return; }
 					}
 
 					fDSTROY(BLOOD);
 					global PROP[DRAGON]=2;
 					global OBJSND[BIRD]=(int)global OBJSND[BIRD]+3;
 					global SPK=240;
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
 				case 17: {
 					/*  QUIT.  INTRANSITIVE ONLY.  VERIFY INTENT AND EXIT IF THAT'S WHAT HE WANTS. */
 
 					if((int)fYES(22,54,54) != FALSE) score(1);
-					{ goValue = GOTO2012; goto return; }
+					{ goValue = GOTO2012; return; }
 				}
 				case 19: {
 					/*  INVENTORY.  IF OBJECT, TREAT SAME AS FIND.  ELSE REPORT ON CURRENT BURDEN. */
@@ -1882,14 +1865,14 @@ locals int I, int lK, int lLOC, int lOBJ
 						}
 					} /* end loop */
 					if((int)TOTING(BEAR) != FALSE)global SPK=141;
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
-				case 21: { goValue = (int)fill(lOBJ); goto return; }
+				case 21: { goValue = (int)fill(lOBJ); return; }
 				case 22: {
 					/*  BLAST.  NO EFFECT UNLESS YOU'VE GOT DYNAMITE, WHICH IS A NEAT TRICK! */
 				
 				L9230:
-					if((int)global PROP[ROD2] < 0 || global CLOSED == FALSE) { goValue = GOTO2011; goto return; }
+					if((int)global PROP[ROD2] < 0 || global CLOSED == FALSE) { goValue = GOTO2011; return; }
 					global BONUS=133;
 					if(lLOC == 115)global BONUS=134;
 					if((int)HERE(ROD2, lLOC) != FALSE)global BONUS=135;
@@ -1903,7 +1886,7 @@ locals int I, int lK, int lLOC, int lOBJ
 					fSETPRM(1,global SCORE,global MXSCOR);
 					fSETPRM(3,global TURNS,global TURNS);
 					fRSPEAK(259);
-					{ goValue = GOTO2012; goto return; }
+					{ goValue = GOTO2012; return; }
 				}
 				case 24: {
 					/*  FEE FIE FOE FOO (AND FUM).  ADVANCE TO NEXT STATE IF GIVEN IN PROPER ORDER.
@@ -1914,12 +1897,12 @@ locals int I, int lK, int lLOC, int lOBJ
 					global SPK=42;
 					if(global FOOBAR != 1-lK) {
 						if(global FOOBAR != 0)global SPK=151;
-						{ goValue = GOTO2011; goto return; }
+						{ goValue = GOTO2011; return; }
 					}
 					global FOOBAR=lK;
-					if(lK != 4) { goValue = GOTO2009; goto return; }
+					if(lK != 4) { goValue = GOTO2009; return; }
 					global FOOBAR=0;
-					if((int)global PLACE[EGGS] == (int)global PLAC[EGGS] || ((int)TOTING(EGGS) != FALSE && lLOC == (int)global PLAC[EGGS])) { goValue = GOTO2011; goto return; }
+					if((int)global PLACE[EGGS] == (int)global PLAC[EGGS] || ((int)TOTING(EGGS) != FALSE && lLOC == (int)global PLAC[EGGS])) { goValue = GOTO2011; return; }
 				/*  BRING BACK TROLL IF WE STEAL THE EGGS BACK FROM HIM BEFORE CROSSING. */
 					if((int)global PLACE[EGGS] == 0 && (int)global PLACE[TROLL] == 0 && (int)global PROP[TROLL] == 0)global PROP[TROLL]=1;
 					lK=2; global gK = 2;
@@ -1927,7 +1910,7 @@ locals int I, int lK, int lLOC, int lOBJ
 					if(lLOC == (int)global PLAC[EGGS]) { lK=0; global gK = 0; }
 					fMOVE(EGGS,global PLAC[EGGS]);
 					fPSPEAK(EGGS,lK);
-					{ goValue = GOTO2012; goto return; }
+					{ goValue = GOTO2012; return; }
 				}
 				case 25: {
 					/*  BRIEF.  INTRANSITIVE ONLY.  SUPPRESS LONG DESCRIPTIONS AFTER FIRST TIME. */
@@ -1935,7 +1918,7 @@ locals int I, int lK, int lLOC, int lOBJ
 					global ABBNUM=10000;
 					global DETAIL=3;
 					global SPK=156;
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
 				case 26: {
 					/*  READ.  PRINT STUFF BASED ON OBJTXT.  OYSTER (?) IS SPECIAL CASE. */
@@ -1943,43 +1926,43 @@ locals int I, int lK, int lLOC, int lOBJ
 					for (I=1 to 100+1) {
 						if((int)HERE(I, lLOC) != FALSE && (int)global OBJTXT[I] != 0 && (int)global PROP[I] >= 0) { lOBJ=lOBJ*100+I; global gOBJ = lOBJ; }
 					} /* end loop */
-					if(lOBJ > 100 || lOBJ == 0 || (int)DARK(lLOC) != FALSE) { goValue = GOTO8000; goto return; }
+					if(lOBJ > 100 || lOBJ == 0 || (int)DARK(lLOC) != FALSE) { goValue = GOTO8000; return; }
 
 				L9270:
 					if((int)DARK(lLOC) != FALSE) goto L5190;
-					if((int)global OBJTXT[lOBJ] == 0 || (int)global PROP[lOBJ] < 0) { goValue = GOTO2011; goto return; }
+					if((int)global OBJTXT[lOBJ] == 0 || (int)global PROP[lOBJ] < 0) { goValue = GOTO2011; return; }
 					if(!(lOBJ == OYSTER && global CLSHNT == FALSE)) {
 						fPSPEAK(lOBJ,(int)global OBJTXT[lOBJ]+(int)global PROP[lOBJ]);
-						{ goValue = GOTO2012; goto return; }
+						{ goValue = GOTO2012; return; }
 					}
 
 					global CLSHNT=(int)fYES(192,193,54);
-					{ goValue = GOTO2012; goto return; }
+					{ goValue = GOTO2012; return; }
 				}
 				case 29, 30: {
 					output("Sorry. File operationrs are disabled.\n");
 					global gK = NUL;
-					{ goValue = GOTO8; goto return; }
+					{ goValue = GOTO8; return; }
 				}
 				case 31: {
 					/*  FLY.  SNIDE REMARKS UNLESS HOVERING RUG IS HERE. */
 
 					if((int)global PROP[RUG] != 2)global SPK=224;
 					if((int)HERE(RUG, lLOC) == FALSE)global SPK=225;
-					if(global SPK/2 == 112) { goValue = GOTO2011; goto return; }
+					if(global SPK/2 == 112) { goValue = GOTO2011; return; }
 					lOBJ=RUG; global gOBJ = RUG;
 
 				L9320:
-					if(lOBJ != RUG) { goValue = GOTO2011; goto return; }
+					if(lOBJ != RUG) { goValue = GOTO2011; return; }
 					global SPK=223;
-					if((int)global PROP[RUG] != 2) { goValue = GOTO2011; goto return; }
+					if((int)global PROP[RUG] != 2) { goValue = GOTO2011; return; }
 					global OLDLC2=global OLDLOC;
 					global OLDLOC=lLOC;
 					global NEWLOC=(int)global PLACE[RUG]+(int)global FIXED[RUG]-lLOC;
 					global SPK=226;
 					if((int)global PROP[SAPPH] >= 0)global SPK=227;
 					fRSPEAK(global SPK);
-					{ goValue = GOTO2; goto return; }
+					{ goValue = GOTO2; return; }
 				}
 				case 32: {
 					/*  LISTEN.  INTRANSITIVE ONLY.  PRINT STUFF BASED ON OBJSND/LOCSND. */
@@ -1988,7 +1971,7 @@ locals int I, int lK, int lLOC, int lOBJ
 					lK=(int)global LOCSND[lLOC]; global gK = lK;
 					if(lK != 0) {
 						fRSPEAK(abs(lK));
-						if(lK < 0) { goValue = GOTO2012; goto return; }
+						if(lK < 0) { goValue = GOTO2012; return; }
 						global SPK=0;
 					}
 
@@ -2000,21 +1983,21 @@ locals int I, int lK, int lLOC, int lOBJ
 							if(I == BIRD && (int)global OBJSND[I]+(int)global PROP[I] == 8)fDSTROY(BIRD);
 						}
 					} /* end loop */
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
 				
 				case 33: {
 					/*  Z'ZZZ (WORD GETS RECOMPUTED AT STARTUP; DIFFERENT EACH GAME). */
 
 				L8340:
-					if((int)AT(RESER, lLOC) == FALSE && lLOC != (int)global FIXED[RESER]-1) { goValue = GOTO2011; goto return; }
+					if((int)AT(RESER, lLOC) == FALSE && lLOC != (int)global FIXED[RESER]-1) { goValue = GOTO2011; return; }
 					fPSPEAK(RESER,(int)global PROP[RESER]+1);
 					global PROP[RESER]=1-(int)global PROP[RESER];
-					if((int)AT(RESER, lLOC) != FALSE) { goValue = GOTO2012; goto return; }
+					if((int)AT(RESER, lLOC) != FALSE) { goValue = GOTO2012; return; }
 					global OLDLC2=lLOC;
 					global NEWLOC=0;
 					fRSPEAK(241);
-					{ goValue = GOTO2; goto return; }
+					{ goValue = GOTO2; return; }
 				}
 			}
 			fBUG(23);
@@ -2028,8 +2011,8 @@ locals int I, int lK, int lLOC, int lOBJ
 		 *	     FEED FILL BLST SCOR  FOO  BRF READ BREK WAKE SUSP
 		 *	     RESU FLY  LSTN ZZZZ */
 			switch (global VERB-1 == 0 to 34) {
-				case 0: { goValue = (int)carry(); goto return; }
-				case 1: { goValue = (int)discard(FALSE); goto return; }
+				case 0: { goValue = (int)carry(); return; }
+				case 1: { goValue = (int)discard(FALSE); return; }
 				case 2: {
 					/*  SAY.  ECHO WD2 (OR WD1 IF NO WD2 (SAY WHAT?, ETC.).)  MAGIC WORDS OVERRIDE. */
 
@@ -2039,42 +2022,42 @@ locals int I, int lK, int lLOC, int lOBJ
 					I=(int)fVOCAB(global WD1,-1);
 					if(!(I == 62 || I == 65 || I == 71 || I == 2025 || I == 2034)) {
 						fRSPEAK(258);
-						{ goValue = GOTO2012; goto return; }
+						{ goValue = GOTO2012; return; }
 					}
 
 					global WD2=0;
 					lOBJ=0; global gOBJ = 0;
-					{ goValue = GOTO2630; goto return; }
+					{ goValue = GOTO2630; return; }
 				}
 				
 				case 3, 5: goto L9040;
-				case 4: { goValue = GOTO2009; goto return; }
+				case 4: { goValue = GOTO2009; return; }
 				case 6: goto L9070;
 				case 7: goto L9080;
 				case 8: {
 					/*  WAVE.  NO EFFECT UNLESS WAVING ROD AT FISSURE OR AT BIRD. */
 	
 					if(((int)TOTING(lOBJ) == FALSE) && (lOBJ != ROD || (int)TOTING(ROD2) == FALSE))global SPK=29;
-					if(lOBJ != ROD || (int)TOTING(lOBJ) == FALSE || ((int)HERE(BIRD, lLOC) == FALSE && (global CLOSNG != FALSE || (int)AT(FISSUR, lLOC) == FALSE))) { goValue = GOTO2011; goto return; }
+					if(lOBJ != ROD || (int)TOTING(lOBJ) == FALSE || ((int)HERE(BIRD, lLOC) == FALSE && (global CLOSNG != FALSE || (int)AT(FISSUR, lLOC) == FALSE))) { goValue = GOTO2011; return; }
 					if((int)HERE(BIRD, lLOC) != FALSE)global SPK=206+(((int)global PROP[BIRD])%2);
 					if(!(global SPK == 206 && lLOC == (int)global PLACE[STEPS] && (int)global PROP[JADE] < 0)) {
-						if(global CLOSED != FALSE) { goValue = GOTO18999; goto return; }
-						if(global CLOSNG != FALSE || (int)AT(FISSUR, lLOC) == FALSE) { goValue = GOTO2011; goto return; }
+						if(global CLOSED != FALSE) { goValue = GOTO18999; return; }
+						if(global CLOSNG != FALSE || (int)AT(FISSUR, lLOC) == FALSE) { goValue = GOTO2011; return; }
 						if((int)HERE(BIRD, lLOC) != FALSE)fRSPEAK(global SPK);
 						global PROP[FISSUR]=1-(int)global PROP[FISSUR];
 						fPSPEAK(FISSUR,2-(int)global PROP[FISSUR]);
-						{ goValue = GOTO2012; goto return; }
+						{ goValue = GOTO2012; return; }
 					}
 					
 					fDROP(JADE,lLOC);
 					global PROP[JADE]=0;
 					global TALLY=global TALLY-1;
 					global SPK=208;
-					{ goValue = GOTO2011; goto return; }	
+					{ goValue = GOTO2011; return; }	
 				}
 				
-				case 9, 10, 17, 23, 24, 25, 29, 30, 32: { goValue = GOTO2011; goto return; }
-				case 11: { goValue = (int)attack(); goto return; }
+				case 9, 10, 17, 23, 24, 25, 29, 30, 32: { goValue = GOTO2011; return; }
+				case 11: { goValue = (int)attack(); return; }
 				case 12: goto L9130;
 				case 13: {
 					/* EAT TRANSITIVE: FOOD OK, SOME THINGS LOSE APPETITE, REST ARE RIDICULOUS. */
@@ -2082,12 +2065,12 @@ locals int I, int lK, int lLOC, int lOBJ
 					if(lOBJ == FOOD) {
 						fDSTROY(FOOD);
 						global SPK=72;
-						{ goValue = GOTO2011; goto return; }
+						{ goValue = GOTO2011; return; }
 					}
 					if(lOBJ == BIRD || lOBJ == SNAKE || lOBJ == CLAM || lOBJ == OYSTER || lOBJ ==
 						DWARF || lOBJ == DRAGON || lOBJ == TROLL || lOBJ == BEAR || lOBJ ==
 						OGRE) global SPK=71;
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
 				
 				case 14: goto L9150;
@@ -2095,17 +2078,17 @@ locals int I, int lK, int lLOC, int lOBJ
 					/*  RUB.  YIELDS VARIOUS SNIDE REMARKS EXCEPT FOR LIT URN. */
 
 					if(lOBJ != LAMP)global SPK=76;
-					if(lOBJ != URN || (int)global PROP[URN] != 2) { goValue = GOTO2011; goto return; }
+					if(lOBJ != URN || (int)global PROP[URN] != 2) { goValue = GOTO2011; return; }
 					fDSTROY(URN);
 					fDROP(AMBER,lLOC);
 					global PROP[AMBER]=1;
 					global TALLY=global TALLY-1;
 					fDROP(CAVITY,lLOC);
 					global SPK=216;
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
 				
-				case 16: { goValue = (int)doThrow(); goto return; }
+				case 16: { goValue = (int)doThrow(); return; }
 				case 18, 19: {
 					/*  FIND.  MIGHT BE CARRYING IT, OR IT MIGHT BE HERE.  ELSE GIVE CAVEAT. */
 
@@ -2113,10 +2096,10 @@ locals int I, int lK, int lLOC, int lOBJ
 						DWARF && (int)fATDWRF(lLOC) > 0))global SPK=94;
 					if(global CLOSED != FALSE)global SPK=138;
 					if((int)TOTING(lOBJ) != FALSE)global SPK=24;
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
-				case 20: { goValue = (int)feed(lOBJ); goto return; }
-				case 21: { goValue = (int)fill(lOBJ); goto return; }
+				case 20: { goValue = (int)feed(lOBJ); return; }
+				case 21: { goValue = (int)fill(lOBJ); return; }
 				case 22: goto L9230;
 				case 26: goto L9270;
 				case 27: {
@@ -2124,23 +2107,23 @@ locals int I, int lK, int lLOC, int lOBJ
 
 					if(lOBJ == MIRROR)global SPK=148;
 					if(!(lOBJ == VASE && (int)global PROP[VASE] == 0)) {
-						if(lOBJ != MIRROR || global CLOSED == FALSE) { goValue = GOTO2011; goto return; }
+						if(lOBJ != MIRROR || global CLOSED == FALSE) { goValue = GOTO2011; return; }
 						global SPK=197;
-						{ goValue = GOTO18999; goto return; }
+						{ goValue = GOTO18999; return; }
 					}
 
 					global SPK=198;
 					if((int)TOTING(VASE) != FALSE)fDROP(VASE,lLOC);
 					global PROP[VASE]=2;
 					global FIXED[VASE]= -1;
-					{ goValue = GOTO2011; goto return; }
+					{ goValue = GOTO2011; return; }
 				}
 				case 28: {
 					/*  WAKE.  ONLY USE IS TO DISTURB THE DWARVES. */
 
-					if(lOBJ != DWARF || global CLOSED == FALSE) { goValue = GOTO2011; goto return; }
+					if(lOBJ != DWARF || global CLOSED == FALSE) { goValue = GOTO2011; return; }
 					global SPK=199;
-					{ goValue = GOTO18999; goto return; }
+					{ goValue = GOTO18999; return; }
 				}
 				case 31: goto L9320;
 				case 33: goto L8340;
@@ -2158,17 +2141,17 @@ locals int I, int lK, int lLOC, int lOBJ
 			lOBJ=lK; global gOBJ = lK;
 			if((int)HERE(lK, lLOC) != FALSE) {
 			L5010:
-				if(global WD2 > 0) { goValue = GOTO2800; goto return; }
+				if(global WD2 > 0) { goValue = GOTO2800; return; }
 				if(global VERB != 0) goto L4090;
 				fSETPRM(1,global WD1,global WD1X);
 				fRSPEAK(255);
-				{ goValue = GOTO2600; goto return; }
+				{ goValue = GOTO2600; return; }
 			}
 			
 			if(lK == GRATE) {
 				if(lLOC == 1 || lLOC == 4 || lLOC == 7) { lK=DPRSSN; global gK = lK; }
 				if(lLOC > 9 && lLOC < 15) { lK=ENTRNC; global gK = lK; }
-				if(lK != GRATE) { goValue = GOTO8; goto return; }
+				if(lK != GRATE) { goValue = GOTO8; return; }
 			}
 			if(lK == DWARF && (int)fATDWRF(lLOC) > 0) goto L5010;
 			if(((int)LIQ() == lK && (int)HERE(BOTTLE, lLOC) != FALSE) || lK == (int)LIQLOC(lLOC)) goto L5010;
@@ -2183,7 +2166,7 @@ locals int I, int lK, int lLOC, int lOBJ
 			if(!(lOBJ != KNIFE || global KNFLOC != lLOC)) {
 				global KNFLOC= -1;
 				global SPK=116;
-				{ goValue = GOTO2011; goto return; }
+				{ goValue = GOTO2011; return; }
 			}
 			if(lOBJ != ROD || (int)HERE(ROD2, lLOC) == FALSE) goto L5190;
 			lOBJ=ROD2; global gOBJ = ROD2;
@@ -2192,12 +2175,11 @@ locals int I, int lK, int lLOC, int lOBJ
 			if((global VERB == FIND || global VERB == INVENT) && global WD2 <= 0) goto L5010;
 			fSETPRM(1,global WD1,global WD1X);
 			fRSPEAK(256);
-			{ goValue = GOTO2012; goto return; }
+			{ goValue = GOTO2012; return; }
 	   }
 	}
 	fBUG(99);
 	goValue = GOTO8000;
-return: ;
 }
 
 /*

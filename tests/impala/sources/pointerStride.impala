@@ -2,7 +2,7 @@
    disagree: `+` strided one WORD while `[]` strided one struct, so `q = p + 1; q->a` silently read
    p[0].b. Every pair below is the two spellings of one address and must print the same value.
 
-   Expected (GAZLCmd pointerStride.gazl main): 20 20 30 30 3 3 3 4 4
+   Expected (GAZLCmd pointerStride.gazl main): 20 20 30 30 3 3 3 4 4 10 20 30 1 2 3
 */
 extern native printInt
 extern native printLF
@@ -38,4 +38,11 @@ export function main() locals S pointer p, S pointer q, int pointer w, int point
 	v = w + 3;
 	printInt(*v); printLF();
 	printInt(w[3]); printLF();
+
+	/* `for` over a typed struct pointer must step one ELEMENT, matching p + 1 and p[i] - it used to
+	   step one word and read .b/.c as .a (10 0 0 20 0 0 30 0 0). Prints 10 20 30. */
+	for (p = &global bank[0] to &global bank[3]) { printInt(p->a); printLF(); }
+
+	/* a one-word element still rides FORp unchanged. Prints 1 2 3. */
+	for (w = &global words[0] to &global words[3]) { printInt(*w); printLF(); }
 }

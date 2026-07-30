@@ -13,7 +13,7 @@
 .z.S:	! DEFi #<a>
 ; signature struct S { a : int, b : int, c : int } @ 10:1
 	! MULi <A> #4 #.z.S
-bank:	GLOB *<A>	; signature array bank[4] : unknown @ 12:1
+bank:	GLOB *<A>	; signature array bank[4] : S @ 12:1
 	DATA #10 #0 #0 #20 #0 #0 #30 #0 #0 #40 #0 #0
 words:	GLOB *6	; signature array words[6] : int @ 13:1
 	DATA #1 #2 #3 #4 #4 #4
@@ -80,4 +80,19 @@ main:	FUNC	; signature export func main() -> void @ 15:1
 		PEEK %1 $w #3	; printInt(w[3])
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:16
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:27
-		RETU   	; }
+		MOVp $p &bank 	; for (p = &global bank[0] to &global bank[3]) 
+		! MULi <B> #3 #.z.S
+		ADDp %0 &bank #<B>
+		GEQp &bank %0 @.e0
+	.l1:	PEEK %2 $p #.o.S.a	; printInt(p->a)
+		CALL ^printInt %1 *2	; expects printInt(int) -> unknown @ 44:63
+		CALL ^printLF %1 *1	; expects printLF() -> unknown @ 44:74
+		ADDp $p $p #.z.S	; }
+		LSSp $p %0 @.l1
+	.e0:	MOVp $w &words:0 	; for (w = &global words[0] to &global words[3]) 
+		GEQp &words:0 &words:3 @.e2
+	.l3:	PEEK %1 $w 	; printInt(*w)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:63
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:74
+		FORp $w &words:3 @.l3	; }
+	.e2:	RETU   	; }

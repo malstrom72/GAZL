@@ -219,7 +219,10 @@
         }
         var head = $$parser.descHead(desc);
         var tail = $$parser.descTail(desc);
-        if (head === 'S') {                                       /* struct value: category is the struct itself */
+        if (head === 'S' && tail !== undefined) {                 /* struct-value marker (`S:name`) - the name is the tail.
+                                                                     The marker ALWAYS carries a tail, so a bare `S` here is a
+                                                                     struct NAMED "S", not a marker - fall through to resolve it
+                                                                     as a name, else it (and `S pointer`) render "unknown". */
             return signatureCategoryForDesc(tail);
         }
         if (head === 'F') {                                       /* funcptr: the named type, or bare "funcptr" */
@@ -897,7 +900,17 @@
            so it gets a diagnostic at the `goto` rather than an assert. */
         var defined = {};
         for (i = 0; i < $$parser.metacode.length; ++i) {
-            if ($$parser.metacode[i].operator === '<--') defined[$$parser.metacode[i].operands[0]] = true;
+            if ($$parser.metacode[i].operator !== '<--') continue;
+            var name = $$parser.metacode[i].operands[0];
+            /* A user label (`@name`, never `@.` - those are ours and always unique) written twice
+               mints two identical GAZL labels; the assembler then rejects "Symbol already defined"
+               against a name and line the user never wrote. Decidable here - the map already exists. */
+            if (defined[name] && name.charAt(1) !== '.' && $$parser.metacode[i].labelOffset !== undefined) {
+                $$parser.fail('Duplicate label ' + name.substr(1),
+                        $$parser.metacode[i].labelSource, $$parser.metacode[i].labelOffset, 'E446',
+                        'a label may be defined once per function');
+            }
+            defined[name] = true;
         }
         for (i = 0; i < $$parser.metacode.length; ++i) {
             var op = (rec = $$parser.metacode[i]).operator;
@@ -2458,6 +2471,17 @@
             var diff = (operator === '-' && rightx.type === 'p');
             if (diff) {
                 operator = 'd';
+                /* The difference counts ELEMENTS (DIFp, then DIVi by the stride), so it only means
+                   anything when both pointers walk the same element type - `ip - fp` would divide a
+                   float-strided span by the int size. Same rule as assignment (E201); comparison is
+                   left alone, it reads a raw address either way. */
+                if (lelem !== rightx.elem) {
+                    $$parser.fail('Pointer difference needs matching element types ('
+                            + $$parser.elemVerbose(lelem) + ' and '
+                            + $$parser.elemVerbose(rightx.elem) + ')',
+                            sourceCode, sourceOffset, 'E201',
+                            'subtract pointers into the same array, or cast one to match');
+                }
             }
 
             /* Pointer arithmetic is in ELEMENTS, so a struct pointer strides by its size in both
@@ -3958,16 +3982,29 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                         }
                                                                     }
 
-ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
-                                                                         $desc = $$parser.CASTS_TO_TYPES[$type];
+ConstDecl   <-  CONST _ base:TypeBase                                 {
+                                                                         /* Same type grammar as every other declarator (TypeBase, not
+                                                                            bare BASE_TYPE), so a const can name a struct pointer or a
+                                                                            named functype - a const is an assembler-level address/scalar
+                                                                            constant, and those two are just addresses. A struct VALUE is
+                                                                            the one shape that has no scalar constant form. */
+                                                                         $desc = $base;
                                                                          $nf = $$parser.noForward;
                                                                          $$parser.noForward = true;
                                                                      }
                  ( POINTER _                                          { $desc = 'p:' + $desc; }
                  )*
                                                                       {
-                                                                         $t     = $$parser.descHead($desc);
-                                                                         $telem = $$parser.descTail($desc);
+                                                                         var chead = $$parser.descHead($desc);
+                                                                         var ctail = $$parser.descTail($desc);
+                                                                         if (ctail === undefined && $$parser.isStructAtom(chead)) {
+                                                                             $$parser.fail('A const cannot be a struct value - use a struct pointer ('
+                                                                                     + 'const ' + chead + ' pointer)', $$s, $$i, 'E447');
+                                                                         } else if (ctail === undefined && $$parser.isFuncTypeAtom(chead)) {
+                                                                             $t = 'F'; $telem = chead;      /* named funcptr type constant */
+                                                                         } else {
+                                                                             $t = chead; $telem = ctail;
+                                                                         }
                                                                       }
                  id:Identifier
                  (   '=' _ x:Expr                                     {
@@ -4303,6 +4340,11 @@ Statement   <-                                                        {
                     label:Identifier ':' _                            {
                                                                             $$parser.emitMeta({ operator:'<--', type:undefined,
                                                                                                 operands:[ '@' + $label._, undefined, undefined ] });
+                                                                            /* carry the source position so processBranches can
+                                                                               name the `.impala` line if this label is a duplicate */
+                                                                            var lbl = $$parser.metacode[$$parser.metacode.length - 1];
+                                                                            lbl.labelSource = $$s;
+                                                                            lbl.labelOffset = $$i;
                                                                         }
                 )*
                 (   ';' _
@@ -4313,6 +4355,7 @@ Statement   <-                                                        {
                 /   Loop
                 /   For
                 /   Goto
+                /   Return
                 /   If
                 /   Switch
                 /   While
@@ -4674,8 +4717,20 @@ And         <-                                      { $label = undefined; }
                                                     }
 
 
-Comp        <-  '!'_ Comp                           { 
-                                                        $$parser.emit('!', undefined, undefined, undefined, undefined); 
+Comp        <-  '!'_                                {
+                                                        /* `!` sits BELOW comparison, so `!x == 2` means `!(x == 2)` -
+                                                           the opposite of the C reading. Require its operand to be
+                                                           parenthesised (or another `!`); reuse the strict-expression
+                                                           machinery so `--legacy` keeps the old meaning with a warning. */
+                                                        var c = $$s.charAt($$i);
+                                                        if (c !== '!' && c !== '(')
+                                                            $$parser.strictError(
+                                                                "'!' binds below comparison; parenthesise its operand",
+                                                                $$s, $$i, 'E103',
+                                                                'write !(a == b), or to negate a value use (a) != b');
+                                                    }
+                    Comp                            {
+                                                        $$parser.emit('!', undefined, undefined, undefined, undefined);
                                                     }
                 /                                   { $$parser.dry = true; }
                     !Group                          { $$parser.dry = false; }
@@ -4734,6 +4789,19 @@ Goto        <-  GOTO _ label:Identifier ';'_        {
                                                         g.gotoSource = $$s;
                                                         g.gotoOffset = $$i;
                                                     }
+
+
+Return      <-  RETURN _
+                (   ';'_                             {   /* bare `return;` is an early exit - RETU returns whatever the slot holds */
+                                                        $$parser.emit('--^', undefined, undefined, undefined, undefined);
+                                                    }
+                /                                   {   /* `return expr;` - Impala returns via the named return variable.
+                                                           The failed `';'_` reset the cursor, so $$i is back at the value. */
+                                                        $$parser.fail('return does not take a value - assign to the return variable instead',
+                                                            $$s, $$i, 'E448',
+                                                            'a `returns T r` function returns whatever `r` holds; write `r = expr;` then `return;`');
+                                                    }
+                )
 
 
 # TODO : if full jump-optimisation is implemented we could always
@@ -4830,14 +4898,30 @@ For         <-  FOR _ '('_ var:Variable             {
                 body:Statement                      {
                                                         var varMeta = metaSlot($var);
 
-                                                        /* increment + jump back */
-                                                        $$parser.emit(
-                                                            '...',
-                                                            varMeta.type,
-                                                            varMeta.operands[1],        /* address of loop variable */
-                                                            $to,
-                                                            $loopLabel
-                                                        );
+                                                        /* A struct pointer must step one ELEMENT per iteration, but `FORp`
+                                                           increments one WORD - so `for (p to end)` would read `.b`/`.c` as
+                                                           `.a`, disagreeing with `p + 1` and `p[i]`. Stride it by hand for a
+                                                           multi-word element; `int pointer` / untyped `pointer` keep `FORp`. */
+                                                        var stride = (varMeta.type === 'p'
+                                                                          ? $$parser.strideStruct(varMeta.elem) : undefined);
+
+                                                        if (stride !== undefined) {
+                                                            /* struct pointer: ADDp one element, then compare-branch back */
+                                                            $$parser.emit('+', 'p', varMeta.operands[1],
+                                                                          varMeta.operands[1], '#.z.' + stride);
+                                                            $$parser.emit('<', varMeta.type, undefined,
+                                                                          varMeta.operands[1], $to);
+                                                            $$parser.emit('?->', true, $loopLabel, undefined, undefined);
+                                                        } else {
+                                                            /* one-word element: FORp increments + jumps back in one instruction */
+                                                            $$parser.emit(
+                                                                '...',
+                                                                varMeta.type,
+                                                                varMeta.operands[1],        /* address of loop variable */
+                                                                $to,
+                                                                $loopLabel
+                                                            );
+                                                        }
                                                         $$parser.emit('<-?', false, $noLoopLabel, undefined, undefined);
 
                                                         $$parser.returnBack($to);
@@ -4877,6 +4961,9 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                         $$parser.returnBack($length);
                                                         $$parser.releaseMeta(copyMeta);
                                                     }
+                # like `assert` and `goto`, `copy` swallows its own terminator - otherwise
+                # `copy(...) i = 1;` is two statements with nothing between them
+                ';'_
 
 # ---------------------------------------------------------------------------
 #   Destructuring assignment for multi-value calls:  a, b = f(...)
@@ -5070,6 +5157,10 @@ Value       <-  Group
                 / s:StringLiteral                   { if (!$$parser.dry) {
                                                         $$parser.makeString('s', $$, evaluate($s), $$s, $$i);
                                                         $$parser.setElem($$, 'i');      /* string data is int words (Impala 2) */
+                                                        /* string data lives in a readonly section, so `"abc"[0] = 1` used to
+                                                           compile and fail at GAZL load - mark it readonly so the E404
+                                                           element-write check catches the store at the source line */
+                                                        metaSlot($$).readonly = true;
                                                       } }
                 / NULL _                            { if (!$$parser.dry) {
                                                         $$parser.makeMeta($$, ':=', 'p', undefined, '&NULL', undefined);
@@ -5103,7 +5194,7 @@ StringLiteral   <-  $$=( '"' ( !["\\\0-\37] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX
 
 KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXPORT / EXTERN / FLOAT / FLOOR / FOR / FROM
                 / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / IMPORT / INLINE / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
-                / POINTER / READONLY / RETURNS / SIZEOF / STRUCT / SWITCH / TEMPORARY / TO / WHILE
+                / POINTER / READONLY / RETURN / RETURNS / SIZEOF / STRUCT / SWITCH / TEMPORARY / TO / WHILE
 
 ABS         <-  'abs' !SYMBOL_CHAR          ARRAY       <-  'array' !SYMBOL_CHAR
 ASSERT      <-  'assert' !SYMBOL_CHAR       CASE        <-  'case' !SYMBOL_CHAR
@@ -5124,7 +5215,8 @@ LOCALS      <-  'locals' !SYMBOL_CHAR       LOOP        <-  'loop' !SYMBOL_CHAR
 NATIVE      <-  'native' !SYMBOL_CHAR       NULL        <-  'null' !SYMBOL_CHAR
 NULLFUNC    <-  'nullfunc' !SYMBOL_CHAR
 POINTER     <-  'pointer' !SYMBOL_CHAR      READONLY    <-  'readonly' !SYMBOL_CHAR
-RETURNS     <-  'returns' !SYMBOL_CHAR      SWITCH      <-  'switch' !SYMBOL_CHAR
+RETURN      <-  'return' !SYMBOL_CHAR       RETURNS     <-  'returns' !SYMBOL_CHAR
+SWITCH      <-  'switch' !SYMBOL_CHAR
 SIZEOF      <-  'sizeof' !SYMBOL_CHAR       STRUCT      <-  'struct' !SYMBOL_CHAR
 TEMPORARY   <-  'temporary' !SYMBOL_CHAR    TO          <-  'to' !SYMBOL_CHAR
 WHILE       <-  'while' !SYMBOL_CHAR
@@ -5138,7 +5230,7 @@ BASE_TYPE   <-  INT                               { $._ = 'int'; }
             /  FUNCPTR                            { $._ = 'funcptr'; }
             /  POINTER                            { $._ = 'pointer'; }
 BUILT_IN    <-  $$=( 'abs' / 'floor' / 'itof' / 'ftoi' )
-PREFIX_OP   <-  $$=( '-' !("'" / DIGIT)
+PREFIX_OP   <-  $$=( '-' !("'" / DIGIT / '-')   # `--x` is not a decrement; reject the unspaced pair, accept `- -x`
                    / '~'
                    / '&'
                    / '*'

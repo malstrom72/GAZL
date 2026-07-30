@@ -21,9 +21,11 @@ which is a JS-side metadata linter that passes every item here.
 | 3. Case label outside the switch range | closed | `E444` |
 | 4. `goto` to an undefined label | closed | `E445` |
 | 5. Duplicate `case` labels | closed | `E443` |
+| 6. Duplicate label in one function | closed | `E446` |
 
 Note the numbering is not in code order - E443 closes item 5 and E444 closes item 3, because the duplicate
-check and the range check landed in that order.
+check and the range check landed in that order. E446 (item 6) reuses the label map `processBranches`
+already builds for item 4, so it landed in the same place.
 
 Two things the pass did NOT reach, both verified 2026-07-29:
 

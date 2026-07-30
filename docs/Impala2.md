@@ -1230,6 +1230,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E001 | syntax error (parse failure; expected-set reporting is future JSPEG work) |
 | E101 | mixed bitwise operators require parentheses |
 | E102 | comparison mixed with bitwise operators requires parentheses |
+| E103 | `!` binds below comparison; its operand must be parenthesised (`!(a == b)`) |
 | E201 | pointer element type mismatch in assignment |
 | E202 | pointer element type mismatch in call argument |
 | E203 | element type mismatch with previous declaration |
@@ -1280,6 +1281,9 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E443 | duplicate `case` value |
 | E444 | `case` value outside the switch range |
 | E445 | `goto` to an undefined label |
+| E446 | a label is defined twice in one function |
+| E447 | a `const` cannot be a struct value (use a struct pointer) |
+| E448 | `return` does not take a value; assign to the named return variable, then `return;` |
 
 E418, E424, E425 and E439 are **not allocated to anything that fires**. E418/E424/E425 were reserved for
 extern-struct guards that were never needed once the features shipped (`docs/StructLayoutConstants.md`
