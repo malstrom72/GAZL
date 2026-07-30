@@ -21,7 +21,15 @@ Three verdicts are used:
 **1.1-1.4 are FIXED** (see the diagnostics table in `docs/Impala2.md`; `pointerStride.impala` pins 1.1,
 and `jspegCompilerTests.js` pins 1.2-1.4). The descriptions below are kept as the record of what was wrong.
 
-### 1.1 `for` over a pointer does not stride - FIXED (was SILENT WRONG DATA)
+### 1.1 `for` over a pointer does not stride - FIXED, but NOT as described below
+
+> **Superseded 2026-07-30.** The stride-by-hand fix below was implemented and then **reverted**. It was
+> the wrong half of the fork: the elements rule it rests on turned out to be unreachable (it leaks into
+> pointer comparison, where there is no unit at all), and `ADDp` + compare is three instructions where
+> the language promises one. `for` over a struct pointer is now **rejected** (`E309`) with a fix-it to
+> the `while (p < end) { ...; p = &p[[1]]; }` walk, and struct pointers move only by the scaled
+> subscript `[[i]]`. See "the scaled subscript is spelled `[[ ]]`" in `docs/Impala2Review.md`.
+> The bug below was real; only the prescription was wrong.
 
 ```impala
 struct S { int a; int b; int c }
@@ -67,9 +75,14 @@ the label map already exists in `processBranches`.
 ### 1.5 Element types unchecked in pointer difference - FIXED (difference only)
 
 `ip - fp` (int-element minus float-element) and `ip == fp` were accepted with no check, while `ip = fp` is
-correctly `E201`. The difference now requires matching element types (`E201`), because it counts elements
-and would otherwise divide a span by the wrong stride. Comparison is left as-is by design: it reads a raw
-address either way, so the mismatch is harmless there.
+correctly `E201`. The difference now requires matching element types (`E201`): subtracting pointers into
+two differently-typed arrays is a type confusion whatever the stride happens to be. Comparison is left
+as-is by design: it reads a raw address either way, so the mismatch is harmless there.
+
+(The original rationale here - "it counts elements and would otherwise divide a span by the wrong
+stride" - was overtaken on 2026-07-30. Difference between *struct* pointers is now rejected outright
+(`E308`, divide by `sizeof` yourself), and on unit-stride pointers it is a bare `DIFp` with no division
+at all, so no stride can be misapplied. The `E201` check stands on the type confusion alone.)
 
 ### 1.6 `&` defeats `readonly` - WON'T FIX
 

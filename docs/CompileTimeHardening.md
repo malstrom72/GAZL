@@ -27,11 +27,12 @@ Note the numbering is not in code order - E443 closes item 5 and E444 closes ite
 check and the range check landed in that order. E446 (item 6) reuses the label map `processBranches`
 already builds for item 4, so it landed in the same place.
 
-Two things the pass did NOT reach, both verified 2026-07-29:
+One thing the pass did NOT reach, verified 2026-07-29 and **since FIXED**:
 
-- **E445 points one statement late.** `goto nowhere;` on line 3 reports line 4, because the position is
-  consumed in the post-condition loop after the body is parsed. E443/E444 land on the `:` after the case
-  value, which is benign; this one names the wrong statement. This is the only genuine defect left here.
+- ~~**E445 points one statement late.**~~ `goto nowhere;` on line 3 reported line 4, because the position
+  was recorded after `';'_` had swallowed the trailing newline. Fixed by recording the label's offset
+  before that term; E445 now names the label itself, and `jspegCompilerTests.js` pins the exact position.
+  E443/E444 land on the `:` after the case value, which is benign.
 
 **A symbolic switch range is not on this list, by design.** `const int N = 3; switch (i == 0 to N) {
 case 8: }` compiles and assembles clean, with the arm unreachable. That is correct: a build configuration
@@ -138,6 +139,15 @@ in front of you; what is missing is `foo.impala:11:2` and a caret.
 **Priority: low.** This is caret placement on an error that already names the source expression, and it is
 the whole of what is left. Do not let its position at the top of this list imply otherwise.
 - Runtime index -> out of scope; that is a bounds-check-at-runtime question, deliberately not Impala's model.
+
+**Scope: dereference only, never address formation.** The example above is a store, and the check applies
+to that shape - `a[7]`, `a[7] = 1`, `p[9].a` as a value. It must NOT reject `&a[7]`, `&a[N]` or `&p[[i]]`.
+An out-of-range address is a value like any other, and GAZL itself accepts it: `MOVp $e &a:9` on a 4-word
+`a` assembles and runs, because the `Offset out of bounds` check fires on constant-offset *access*
+operands only. Containment is guaranteed by every dereference being bounds-checked at run time (see
+`docs/MemorySafetyModel.md`), so rejecting address arithmetic would make Impala stricter than the machine
+it transliterates to, and would outlaw the one-past-the-end pointer that every walk loop needs. See F3 in
+`docs/Impala2Review.md`.
 
 ### 2. Writes to a readonly array element (task #21)
 

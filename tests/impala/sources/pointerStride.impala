@@ -1,8 +1,10 @@
-/* Pointer arithmetic is in ELEMENTS, so `p + n` and `&p[n]` must land on the same struct. They used to
-   disagree: `+` strided one WORD while `[]` strided one struct, so `q = p + 1; q->a` silently read
-   p[0].b. Every pair below is the two spellings of one address and must print the same value.
+/* The scaled subscript `[[i]]` is the only thing that moves a struct pointer, so `&p[[n]]` and `p[[n]]`
+   must land on the same struct. Arithmetic on a struct pointer is rejected outright (E307/E308): `+` and
+   `-` carry no marker for the multiply they would need, and scaling them silently instead broke pointer
+   comparison and `for`. See docs/Impala2Review.md, "the scaled subscript is spelled `[[ ]]`". Every pair
+   below is two spellings of one address and must print the same value.
 
-   Expected (GAZLCmd pointerStride.gazl main): 20 20 30 30 3 3 3 4 4 10 20 30 1 2 3
+   Expected (GAZLCmd pointerStride.gazl main): 20 20 30 30 3 3 4 4 10 20 30 40
 */
 extern native printInt
 extern native printLF
@@ -12,37 +14,37 @@ struct S { int a; int b; int c }
 global S array bank[4] = { { 10, 0, 0 }, { 20, 0, 0 }, { 30, 0, 0 }, { 40, 0, 0 } }
 global int array words[6] = { 1, 2, 3, 4, 4, 4 }
 
-export function main() locals S pointer p, S pointer q, int pointer w, int pointer v, int n, int i {
-	p = &global bank[0];
+export function main() locals S pointer p, S pointer q, S pointer end, int pointer w, int pointer v,
+		int n, int i {
+	p = &global bank[[0]];
 
-	q = p + 1;                          // constant offset: folds to `! MULi` + one ADDp, no runtime cost
+	q = &p[[1]];                        // constant offset: folds to `! MULi` + one ADDp, no runtime cost
 	printInt(q->a); printLF();
-	printInt(p[1].a); printLF();
+	printInt(p[[1]].a); printLF();
 
 	i = 2;
-	q = p + i;                          // runtime offset: one real MULi, same as `a[i]` already pays
+	q = &p[[i]];                        // runtime offset: one real MULi, the floor for a 3-word element
 	printInt(q->a); printLF();
-	printInt(p[i].a); printLF();
+	printInt(p[[i]].a); printLF();
 
-	q = &global bank[3];
-	n = q - p;                          // difference comes back in elements: DIFp then DIVi #.z.S
+	q = &global bank[[3]];
+	n = ((pointer) q - (pointer) p) / sizeof(S);            // the divide is WRITTEN, never hidden in `-`
 	printInt(n); printLF();
-	n = q - &global bank[0];
-	printInt(n); printLF();
-	q = p - 1 + 4;                      // subtraction scales too
-	n = q - p;
+	n = ((pointer) q - (pointer) &global bank[[0]]) / sizeof(S);
 	printInt(n); printLF();
 
-	/* A word-sized element strides by one, so these emit a bare ADDp/DIFp exactly as they always did. */
+	/* A word-sized element strides by one, so plain `[]` and bare pointer arithmetic are untouched. */
 	w = &global words[0];
 	v = w + 3;
 	printInt(*v); printLF();
 	printInt(w[3]); printLF();
 
-	/* `for` over a typed struct pointer must step one ELEMENT, matching p + 1 and p[i] - it used to
-	   step one word and read .b/.c as .a (10 0 0 20 0 0 30 0 0). Prints 10 20 30. */
-	for (p = &global bank[0] to &global bank[3]) { printInt(p->a); printLF(); }
-
-	/* a one-word element still rides FORp unchanged. Prints 1 2 3. */
-	for (w = &global words[0] to &global words[3]) { printInt(*w); printLF(); }
+	/* The canonical walk, replacing `for (p = ... to ...)` which FORp cannot stride. The comparison is
+	   unit-free and emits a bare LSSp; the step folds to a single ADDp. */
+	p = &global bank[[0]];
+	end = &global bank[[4]];            // one past the end - an address, never dereferenced
+	while (p < end) {
+		printInt(p->a); printLF();
+		p = &p[[1]];
+	}
 }

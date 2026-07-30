@@ -1067,7 +1067,7 @@ const inlineCases = [
 			+ "function main() locals int q { q = f(1) + f(2); }\n", null],
 	["an inline function declaring an array of structs",
 		"struct P { int x }\ninline function f(int v) returns int r\nlocals P array a[2]\n"
-			+ "{ a[0].x = v; a[1].x = v; r = a[0].x + a[1].x; }\n"
+			+ "{ a[[0]].x = v; a[[1]].x = v; r = a[[0]].x + a[[1]].x; }\n"
 			+ "function main() locals int q { q = f(1); }\n", null],
 	["an inline function declaring a scalar local",
 		"inline function f(int a) returns int r\nlocals int t\n{ t = a * 2; r = t + 1; }\n"
@@ -1661,9 +1661,9 @@ const typedPointerCases = [
 			"struct V { int n; float g }",
 			"global V array bank[4]",
 			"function main() locals V array loc[2], int i, float f {",
-			"\tglobal bank[0].n = 1; f = global bank[2].g;",
-			"\tfor (i = 0 to 4) global bank[i].n = i;",
-			"\tloc[1].g = 0.5;",
+			"\tglobal bank[[0]].n = 1; f = global bank[[2]].g;",
+			"\tfor (i = 0 to 4) global bank[[i]].n = i;",
+			"\tloc[[1]].g = 0.5;",
 			"}",
 		].join("\n"),
 		expectError: null,
@@ -1674,7 +1674,7 @@ const typedPointerCases = [
 			"struct V { int n }",
 			"global V array bank[3]",
 			"function use(V pointer p) { p->n = 9; }",
-			"function main() { use(&global bank[1]); }",
+			"function main() { use(&global bank[[1]]); }",
 		].join("\n"),
 		expectError: null,
 	},
@@ -1706,8 +1706,76 @@ const typedPointerCases = [
 		source: [
 			"struct Inner { float a }",
 			"struct Outer { Inner array items[3] }",
-			"function main() locals Outer o { o.items[1].a = 0.5; }",
+			"function main() locals Outer o { o.items[[1]].a = 0.5; }",
 		].join("\n"),
+		expectError: null,
+	},
+	/* The `[[ ]]` rule: the spelling states the stride, so each bracket form is an error where the other
+	   is correct, and a struct pointer moves by scaled subscript only. See docs/Impala2Review.md. */
+	{
+		label: "a plain subscript on a struct element is rejected",
+		source: ["struct V { int n; int m }", "global V array bank[4]", "function main() locals int i { i = global bank[1].n; }"].join("\n"),
+		expectError: "Plain subscript on a struct element",
+	},
+	{
+		label: "a plain subscript through a struct pointer is rejected",
+		source: ["struct V { int n; int m }", "function main() locals V pointer p, int i { i = p[1].n; }"].join("\n"),
+		expectError: "Plain subscript on a struct element",
+	},
+	{
+		label: "a scaled subscript on a one-word element is rejected",
+		source: ["global int array w[4]", "function main() locals int i { i = global w[[1]]; }"].join("\n"),
+		expectError: "Scaled subscript on a one-word element",
+	},
+	{
+		label: "a scaled subscript on a scalar array field is rejected",
+		source: ["struct F { float array state[4] }", "function main() locals F f, float x { x = f.state[[1]]; }"].join("\n"),
+		expectError: "Scaled subscript on a one-word element",
+	},
+	{
+		label: "arithmetic on a struct pointer is rejected",
+		source: ["struct V { int n; int m }", "function main() locals V pointer p, int i { p = p + i; }"].join("\n"),
+		expectError: "Arithmetic on a V pointer",
+	},
+	{
+		label: "subtracting an int from a struct pointer is rejected",
+		source: ["struct V { int n; int m }", "function main() locals V pointer p { p = p - 1; }"].join("\n"),
+		expectError: "Arithmetic on a V pointer",
+	},
+	{
+		label: "the difference of two struct pointers is rejected",
+		source: ["struct V { int n; int m }", "function main() locals V pointer p, V pointer q, int n { n = q - p; }"].join("\n"),
+		expectError: "Difference between V pointers",
+	},
+	{
+		label: "for over a struct pointer is rejected (FORp cannot stride)",
+		source: [
+			"struct V { int n; int m }",
+			"global V array bank[4]",
+			"function main() locals V pointer p, int i { for (p = &global bank[[0]] to &global bank[[3]]) i = p->n; }",
+		].join("\n"),
+		expectError: "For variable must not be a struct pointer",
+	},
+	{
+		label: "struct pointers still compare without scaling",
+		source: [
+			"struct V { int n; int m }",
+			"global V array bank[4]",
+			"function main() locals V pointer p, V pointer e, int i {",
+			"\tp = &global bank[[0]]; e = &global bank[[4]];",
+			"\twhile (p < e) { i = p->n; p = &p[[1]]; }",
+			"}",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "an out-of-range constant index is legal when only an address is formed",
+		source: ["struct V { int n }", "global V array bank[4]", "function main() locals V pointer e { e = &global bank[[9]]; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "unit-stride pointer arithmetic is untouched",
+		source: ["global int array w[4]", "function main() locals int pointer v, int n { v = &global w[0]; v = v + 2; n = v - &global w[0]; }"].join("\n"),
 		expectError: null,
 	},
 	{
