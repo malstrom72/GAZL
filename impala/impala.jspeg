@@ -1798,14 +1798,25 @@
         return (s && s.complete ? s.words : undefined);
     };
 
+    $$parser.structDefined = function (name) {                    /// layout is known - the SIZE may still be symbolic
+        var s = $$parser.structs[name];
+        return !!(s && s.complete);
+    };
+
+    /* Words occupied by one field, or undefined when that is not a number Impala knows - a symbolic
+       extent (`int array v[N]`) or an element struct that has one. The EMITTED layout is symbolic
+       either way (see emitStructLayout), so undefined means "the assembler knows this, we do not",
+       never "incomplete" - structDefined is the test for that. This used to multiply the extent
+       OPERAND ('N') by a number and hand back NaN, which flowed into s.words unchecked. */
     $$parser.fieldWords = function (field) {                      /// words occupied by one field
         if (field.type === 'S') {
             return $$parser.structWords(field.struct);
         }
         if (field.type === 'A') {
+            var count = $$parser.constInt('#' + field.size);
             var per = ($$parser.isStructAtom(field.elem)
                     ? $$parser.structWords(field.elem) : 1);
-            return field.size * per;
+            return (count === undefined || per === undefined) ? undefined : count * per;
         }
         return 1;                                                 /* scalar i/f/p/F */
     };
@@ -2024,14 +2035,15 @@
                         sourceCode, sourceOffset, 'E411');
             }
         }
-        if (field.type === 'S' && $$parser.structWords(field.struct) === undefined) {
+        if (field.type === 'S' && !$$parser.structDefined(field.struct)) {   /* DEFINED, not numerically sized -
+                                                                               a symbolic size nests fine (#.z.Inner) */
             $$parser.fail('Field ' + field.name + ' has incomplete struct type ' + field.struct
                     + ' (define it, or use a pointer)', sourceCode, sourceOffset, 'E412');
         }
-        field.offset = s.words;
         field.words = $$parser.fieldWords(field);
         s.fields.push(field);
-        s.words += field.words;
+        s.words = (s.words === undefined || field.words === undefined)
+                ? undefined : s.words + field.words;              /* one symbolic field and the total is unknown */
     };
 
     /* Walk a struct layout against a brace-tree of constants, producing the flat list of
@@ -2047,7 +2059,18 @@
             } else if (f.type === 'A') {
                 var arr = (item && item.braced) || [];
                 var structEl = $$parser.isStructAtom(f.elem);
-                for (var e = 0; e < f.size; ++e) {
+                /* The DATA rows are laid out here, word by word, so a slot count that only the
+                   assembler knows cannot be filled - the loop below used to compare against the
+                   extent OPERAND, get NaN, run zero times and silently emit a short, misaligned row. */
+                var count = $$parser.constInt('#' + f.size);
+                if (count === undefined) {
+                    $$parser.fail('Field ' + f.name + ' has a symbolic extent (' + f.size
+                            + '), so a brace initializer cannot be laid out',
+                            sourceCode, sourceOffset, 'E454',
+                            'the extent resolves at assembly time - give the array a literal size, '
+                                    + 'or drop the initializer and fill it at run time');
+                }
+                for (var e = 0; e < count; ++e) {
                     var ev = (e < arr.length) ? arr[e] : undefined;
                     if (structEl) {
                         $$parser.buildStructInit(f.elem, (ev && ev.braced) || [], out, sourceCode, sourceOffset);
@@ -4099,14 +4122,15 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                  $init = $$parser.ZEROES[$v.type];
                                                                              }
                                                                          }
-                         ( '=' _
+                         ( '=' _                                      { $initStart = $$i; }   # `Braced` eats trailing space, so
+                                                                                              # $$i would name the NEXT declaration
                            ( d:Braced                              {
                                                                              if (!$vStruct)
                                                                                  $$parser.fail('Brace initializers are only for struct values',
-                                                                                         $$s, $$i, 'E422');
+                                                                                         $$s, $initStart, 'E422');
                                                                              $binit = [];
-                                                                             $$parser.buildStructInit($v.struct, $d, $binit, $$s, $$i);
-                                                                             $$parser.emitInitData($binit, $$s, $$i);
+                                                                             $$parser.buildStructInit($v.struct, $d, $binit, $$s, $initStart);
+                                                                             $$parser.emitInitData($binit, $$s, $initStart);
                                                                          }
                            / x:Expr                                 {
                                                                              if ($vStruct)
@@ -5212,7 +5236,7 @@ Value       <-  Group
                                                         var head = $$parser.descHead($base);
                                                         if ($$parser.isStructAtom(head)) {   /* struct size -> symbolic .z.Name */
                                                             if (!$$parser.isExternStruct(head)
-                                                                    && $$parser.structWords(head) === undefined)
+                                                                    && !$$parser.structDefined(head))
                                                                 $$parser.fail('sizeof of incomplete struct ' + head,
                                                                         $$s, $$i, 'E419');
                                                             $$parser.makeMeta($$, ':=', 'i', undefined, '#.z.' + head, undefined);

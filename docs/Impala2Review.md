@@ -188,6 +188,17 @@ code-generating agent hits and the message points the wrong way. The symbol tabl
   item's own type and never consults `$a.elem`. Global initializers likewise bypass the pointer-element,
   funcptr-signature and inline-address checks that the same statement gets inside a function — and
   `global funcptr fp = inlineFn` emits `DATp &f` for a symbol that is never emitted.
+- ~~**A brace initializer over a symbolically-sized struct field emits a short, misaligned DATA row.**~~
+  FIXED (`E454`). `struct S { int a; int array v[N]; int z }` with `N` a const gave `DATA #1 #2` where the
+  literal `[3]` gave `DATA #1 #7 #8 #9 #2` — the `2` meant for `z` landed in `v[0]`, with the `GLOB` still
+  correctly sized `*.z.S`. Root cause: `fieldWords` multiplied the extent OPERAND (`'N'`) by a number and
+  returned NaN, which flowed unchecked into `s.words`; `buildStructInit`'s `e < f.size` then compared
+  against NaN and ran zero times. Note the *layout* was never wrong — `emitStructLayout` emits
+  `! ADDi <a> #<a> #N` and the assembler resolves it, so allocation, nesting, struct arrays, locals, field
+  access, `COPY` and `sizeof` were all correct throughout. Only compile-time DATA placement is undoable
+  symbolically, so that alone is now an error. `fieldWords` returns `undefined` rather than NaN, and the
+  two checks that read `structWords(...) === undefined` as "incomplete" now ask `structDefined` instead —
+  otherwise a symbolically-sized struct could not be nested by value or passed to `sizeof`.
 - **Duplicate `case` labels** and **out-of-range `case` labels** are both accepted silently; a case *below*
   the low bound emits `.s0.-6` and the module will not load at all.
 - **`switch (x == lo to hi)`: `hi` is exclusive**, and `docs/Impala.md:328` says inclusive.

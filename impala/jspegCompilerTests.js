@@ -1315,6 +1315,37 @@ console.log("impala.jspeg compiler reserves return/break/continue with dedicated
 expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break: ; }\n",
 	"'break' is a reserved word", "a reserved-word label");
 
+// A struct's real size is emitted as assemble-time arithmetic (`! ADDi <a> #<a> #N`), so a symbolic array
+// extent lays out fine and every consumer below must keep working. The one thing that CANNOT be done
+// symbolically is filling a brace initializer, because those DATA words are placed here, at compile time.
+// `fieldWords` used to multiply the extent OPERAND by a number, hand back NaN, and let the initializer loop
+// run zero times - emitting a short, misaligned DATA row with no diagnostic at all.
+const SYM_STRUCT = "const int N = 3\nstruct S { int a; int array v[N]; int z }\n";
+const symbolicExtentCases = [
+	["a brace initializer over a symbolic extent is rejected",
+		SYM_STRUCT + "global S s = { 1, { 7, 8, 9 }, 2 }\nfunction main() { }", "symbolic extent"],
+	["the same struct with no initializer is fine", SYM_STRUCT + "global S s\nfunction main() { }", null],
+	["sizeof of a symbolically sized struct is fine",
+		SYM_STRUCT + "function main() locals int q { q = sizeof(S); }", null],
+	["nesting one by value is fine (not 'incomplete')",
+		SYM_STRUCT + "struct Outer { S inner; int t }\nglobal Outer o\nfunction main() { }", null],
+	["an array of them is fine", SYM_STRUCT + "global S array bank[2]\nfunction main() { }", null],
+	["a local of that type is fine", SYM_STRUCT + "function main() locals S s { s.a = 1; }", null],
+	["a genuinely undefined struct type is still E412",
+		"struct Outer { Missing inner }\nfunction main() { }", "Unknown type Missing"],
+];
+for (const [label, source, expected] of symbolicExtentCases) {
+	expectCompileOutcome("symbolic extent", label, source, expected);
+}
+
+// The corruption signature was a SHORT data row, so pin the full one for the literal-extent case.
+const litInit = compileWithJsImpala(
+	"struct S { int a; int array v[3]; int z }\nglobal S s = { 1, { 7, 8, 9 }, 2 }\nfunction main() { }\n",
+	{ randomId: 42 });
+assert(/DATA #1 #7 #8 #9 #2/.test(litInit),
+	`a literal-extent struct initializer must emit all five words\n${litInit}`);
+console.log("impala.jspeg compiler lays out symbolic struct extents and rejects only what it cannot fill");
+
 // `global` names a storage table. A function and a const are in neither, so the prefix used to be accepted
 // and silently discarded there - a third, undiagnosed state next to "required" (globals) and E403 (locals).
 const globalPrefixCases = [
@@ -1366,6 +1397,9 @@ const caretCases = [
 		"function f() locals int x {\n\tif (x == 1) { x = 2; };\n\telse { x = 3; }\n}\n", "2:27: error[E451]"],
 	["E453 names the const, not the next declaration",
 		"export const int C\nglobal int later = 3\nfunction main() { }\n", "1:18: error[E453]"],
+	["E454 names the initializer, not the next declaration",
+		"const int N = 3\nstruct S { int a; int array v[N] }\nglobal S s = { 1, { 7, 8, 9 } }\n"
+			+ "function main() { }\n", "3:14: error[E454]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);
