@@ -3202,6 +3202,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return;
         }
 
+        /* `global` names a storage table, and neither a function nor a const is in one - so the two
+           branches below used to ignore the flag entirely and the keyword was silently discarded. */
+        if (isGlobal && (sym.functions[name] || sym.defines[name])) {
+            strictError('`global` is only for global variables - ' + name + ' is a '
+                            + (sym.functions[name] ? 'function' : 'constant'),
+                    sourceCode, sourceOffset, 'E452', 'drop the `global` keyword');
+        }
+
         /* function ---------------------------------------------*/
         if ((p = sym.functions[name])) {
             if (p.type === 'N') {

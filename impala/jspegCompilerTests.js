@@ -1315,6 +1315,25 @@ console.log("impala.jspeg compiler reserves return/break/continue with dedicated
 expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break: ; }\n",
 	"'break' is a reserved word", "a reserved-word label");
 
+// `global` names a storage table. A function and a const are in neither, so the prefix used to be accepted
+// and silently discarded there - a third, undiagnosed state next to "required" (globals) and E403 (locals).
+const globalPrefixCases = [
+	["global on a const is rejected", "const int C = 1\nfunction f() locals int x { x = global C; }",
+		"C is a constant"],
+	["global on a function is rejected", "function g() { }\nfunctype Fn()\n"
+		+ "function f() locals Fn c { c = global g; }", "g is a function"],
+	["global on a global variable stays required", "global int v\nfunction f() locals int x { x = global v; }", null],
+	["a const without the prefix is fine", "const int C = 1\nfunction f() locals int x { x = C; }", null],
+];
+for (const [label, source, expected] of globalPrefixCases) {
+	expectCompileOutcome("global prefix", label, source, expected);
+}
+console.log("impala.jspeg compiler rejects a `global` prefix on a function or a const");
+
+// Old sources carry the no-op prefix, so --legacy keeps compiling them with a warning.
+expectSingleLegacyWarning("const int C = 1\nfunction f() locals int x { x = global C; }\n",
+	"C is a constant", "a `global` prefix on a const");
+
 // Caret placement, pinned per code. Each of these used to point at the token AFTER the mistake - the next
 // line for E445, the next declaration for E422 - which is worse than useless when the construct spans lines.
 const caretCases = [

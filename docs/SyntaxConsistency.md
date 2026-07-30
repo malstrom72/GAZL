@@ -157,7 +157,13 @@ question at all: they name mutually exclusive GAZL sections, so no order can be 
 
 **`global` is required, forbidden, or a silent no-op** depending on which table a name is in: required for
 globals/readonly/temporary/extern data, `E403` for locals, and **silently accepted and ignored** for
-functions, natives and consts. The third state is never diagnosed.
+functions, natives and consts. The third state is never diagnosed. FIXED: `lookup` consulted the flag in
+its locals and globals branches but not in its function and const branches, so the keyword was discarded
+there; those two now raise `E452` (a warning under `--legacy`). `global` names a storage table, and a
+function or a const is in neither. The corpus carried the no-op prefix in exactly two places
+(`chess.impala`, `Priyome.impala`, both `global PIECE_CHARS`); dropping it left all 94 goldens
+instruction-identical, changing only the source text echoed in the trailing comment - which is what proves
+the keyword did nothing.
 
 **`export` on a valueless `const` is silently dropped.** `export const int C;` and `const int C;` emit
 byte-identical output. The two keywords are contradictory - `export` says "I provide this", a valueless

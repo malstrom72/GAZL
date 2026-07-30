@@ -1310,6 +1310,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E449 | `return`/`break`/`continue` is a reserved word and cannot name a label (a warning under `--legacy`) |
 | E450 | `break`/`continue` is not supported; exit or repeat a loop with `goto` to a label |
 | E451 | a `;` after an `if` body leaves the following `else` with nothing to attach to |
+| E452 | a `global` prefix on a function or a const (a warning under `--legacy`) |
 
 E418, E424, E425 and E439 are **not allocated to anything that fires**. E418/E424/E425 were reserved for
 extern-struct guards that were never needed once the features shipped (`docs/StructLayoutConstants.md`

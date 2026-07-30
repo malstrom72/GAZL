@@ -2211,7 +2211,7 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1175:1
 	.f7:	MOVi $buffer:0 $c 	; buffer[0] = c
 		ADRL %1 $buffer *0	; print(buffer)
 		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 1195:17
-		PEEK %0 &board $i	; c = (int) global PIECE_CHARS[(int) global board[i] & (PIECE_MASK | BLACK)]
+		PEEK %0 &board $i	; c = (int) PIECE_CHARS[(int) global board[i] & (PIECE_MASK | BLACK)]
 		! IORi <B> #PIECE_MASK #BLACK
 		ANDi %0 %0 <B>
 		PEEK $c #PIECE_CHARS %0
