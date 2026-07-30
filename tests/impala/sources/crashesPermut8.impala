@@ -203,7 +203,7 @@ locals float x, float y, int e, float g, pointer dp, pointer pp, pointer ep, int
 				x = x * 0.1;
 			}
 						
-			if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break;
+			if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto broke;
 			
 			// Exponential treatment of very small or large values.
 
@@ -217,7 +217,7 @@ locals float x, float y, int e, float g, pointer dp, pointer pp, pointer ep, int
 				y = y * 0.1;
 			}
 		}
-	break:
+	broke:
 		
 		// For values < 1, spit out leading 0's and increase precision.
 

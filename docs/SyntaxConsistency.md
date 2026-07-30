@@ -179,9 +179,9 @@ The three tokens a newcomer or a code generator is most likely to emit all land 
 | Typed | Diagnostic |
 |---|---|
 | `return v;` | FIXED: `E448` "return does not take a value - assign to the return variable instead", caret on the value |
-| `break;` in a loop | `E403 Undeclared identifier: break`, caret on the `;` |
-| `break;` in a `case` arm | bare `E001` - **a different diagnostic for the same mistake** |
-| `continue;` | `E403 Undeclared identifier: continue` |
+| `break;` in a loop | FIXED: `E450` "'break' is not supported: ... a loop is left with `goto` to a label after it" |
+| `break;` in a `case` arm | FIXED: `E450` - **now the same message everywhere**, replacing the loop/arm `E403`/`E001` split |
+| `continue;` | FIXED: `E450` "'continue' is not supported: jump to a label ... with `goto`" |
 | `int i;` in a body | bare `E001`, caret on the space after `int`, no mention of `locals` |
 | `if (x)` | bare `E001`, caret on `)` |
 | `x += 1` / `x++` | bare `E001` - the rejection is deliberate and reasoned in `docs/Impala2.md`, and none of that reaches the user |
@@ -190,13 +190,21 @@ The three tokens a newcomer or a code generator is most likely to emit all land 
 Making these reserved words with dedicated messages is the single highest-value change available, and it
 is independent of every other item here.
 
-**`return` is now reserved** (see the diagnostics table in `docs/Impala2.md`; `jspegCompilerTests.js` pins
-it). Bare `return;` is an early exit that emits `RETU`; `return expr;` is `E448` pointing at the
-assign-to-the-named-return-variable model. This assumption in the table above - that `return` is an
-undeclared identifier - held only because no corpus file declared it; two did. `adventCode.impala` and
-`patch.impala` used `return` as a *label* with a `goto return;` early-exit idiom (a label sitting at the
-function's end, so the jump just fell into the implicit `RETU`). Both were migrated to bare `return;`, which
-is byte-for-byte the same exit and reads as what it is. `break`/`continue` are still in the second group.
+**`return`, `break` and `continue` are now reserved words** (see the diagnostics table in `docs/Impala2.md`;
+`jspegCompilerTests.js` pins them). Bare `return;` is an early exit that emits `RETU`; `return expr;` is
+`E448` (assign to the named return slot). `break;`/`continue;` are unsupported and get `E450` with the
+`goto` idiom in the note - the same message in a loop and in a `case` arm, closing the `E403`-vs-`E001`
+split. Naming a label with any of the three is `E449`.
+
+These words were *reserved semantically, not lexically*: they stay ordinary identifiers to the tokenizer,
+so the reservation is enforced at the label-definition and statement sites rather than by `!KEYWORD`. That
+is what buys the **`--legacy` hatch** - the table's assumption that these were undeclared identifiers held
+only because the corpus used them as *labels*, not that they were free. `adventCode.impala`/`patch.impala`
+used `return` and six files (`buffer`, `calc`, `crashesPermut8`, `nobuffer`, `phaser_code`, `pongdev_code`)
+used `break` in the `goto break;` early-exit idiom. Under strict this is `E449`; under `--legacy` it
+downgrades to a single warning so 1.x sources still build. The corpus itself was migrated off the idiom
+(`return` to bare `return;`, the `break:` labels renamed to `broke:`) so the strict-default test run stays
+clean, and a unit test pins the legacy warning.
 
 ### Caret defects
 
@@ -216,9 +224,9 @@ The `E422`/`E428` class is the one `$$parser.declOffset` was introduced to solve
 
 1. ~~**1.1 `for` stride**~~ - DONE. ~~**1.2 `!` precedence**~~, ~~**1.3 `--`**~~ and ~~**1.4 duplicate
    label**~~ - DONE in the same pass.
-2. ~~**`return` as a reserved word**~~ - DONE (`E448`; bare `return;` only, because 3.0 restores
-   multi-return - see `docs/ParkedFeatures.md`). **`break` / `continue`** still want the same treatment
-   with real messages.
+2. ~~**`return` / `break` / `continue` as reserved words**~~ - DONE (`E448`/`E449`/`E450`; bare `return;`
+   only, because 3.0 restores multi-return - see `docs/ParkedFeatures.md`). Reserved semantically with a
+   `--legacy` label hatch; the corpus was migrated off the `goto return;`/`goto break;` idiom.
 3. ~~**1.5** (difference)~~ and ~~**1.7**~~ - DONE. 1.6 is WON'T FIX (needs a `const` modifier). The
    `const` type grammar and `copy` terminator (section 3) were done in the same pass.
 4. The caret defects in section 5, as one pass.

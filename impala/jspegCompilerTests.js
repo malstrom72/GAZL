@@ -1274,20 +1274,32 @@ for (const [label, decl, expected] of constTypeCases) {
 }
 console.log("impala.jspeg compiler accepts const struct pointers and named functypes");
 
-// `return` is a reserved word. Bare `return;` is an early exit (RETU); Impala returns through its named
-// return variable, so `return expr;` is E448 pointing at that model. `return` is no longer a usable label.
-const returnCases = [
+// `return`/`break`/`continue` are reserved words. Bare `return;` is an early exit (RETU); `return expr;` is
+// E448 (assign to the named return slot). `break;`/`continue;` are E450 - unsupported, with the `goto` idiom
+// in the note. Naming a label with any of the three is E449 under strict, a warning under --legacy (below).
+const reservedWordCases = [
 	["bare return is an early exit", "function f() locals int x { x = 1; return; x = 2; }", null],
 	["return in a returns function", "function g() returns int r { r = 1; return; }", null],
 	["return with a value is rejected", "function g() returns int r { return 1; }", "assign to the return variable"],
 	["return with an expression is rejected", "function g() returns int r locals int x { x = 1; return x + 1; }",
 		"return does not take a value"],
-	["return is no longer a label", "function f() locals int x { x = 1; goto return; return: ; }", "syntax error"],
+	["break statement is unsupported", "function f() locals int x { x = 1; break; }", "'break' is not supported"],
+	["continue statement is unsupported", "function f() locals int x { x = 1; continue; }", "'continue' is not supported"],
+	["breakage stays an ordinary identifier", "function f() locals int breakage { breakage = 1; }", null],
+	["return as a label is reserved", "function f() locals int x { x = 1; goto return; return: ; }",
+		"'return' is a reserved word"],
+	["break as a label is reserved", "function f() locals int x { x = 1; goto break; break: ; }",
+		"'break' is a reserved word"],
 ];
-for (const [label, source, expected] of returnCases) {
-	expectCompileOutcome("return keyword", label, source, expected);
+for (const [label, source, expected] of reservedWordCases) {
+	expectCompileOutcome("reserved words", label, source, expected);
 }
-console.log("impala.jspeg compiler treats `return` as a reserved early-exit keyword");
+console.log("impala.jspeg compiler reserves return/break/continue with dedicated diagnostics");
+
+// The reserved-word LABEL rejection is the strict default; --legacy keeps the 1.x `goto break;` early-exit
+// idiom, downgrading the E449 to a single warning so old code still compiles.
+expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break: ; }\n",
+	"'break' is a reserved word", "a reserved-word label");
 
 expectSingleLegacyWarning("function f() locals int x { x = 1; if (!x == 2) { x = 3; } }\n",
 	"'!' binds below comparison", "the `!`-precedence error");

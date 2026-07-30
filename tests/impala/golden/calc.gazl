@@ -525,10 +525,10 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		ADDp $pp $pp #1	; pp = pp + 1
 		MULf $x $x #0.1	; x = x * 0.1
 		GOTO @.l7  	; }
-	.e9:	GEQp $pp $ep @.f11	; if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break
+	.e9:	GEQp $pp $ep @.f11	; if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto broke
 		LEQf $y #SMALL_FLOAT @.f11
 		GEQf $y #LARGE_FLOAT @.f11
-		GOTO @break  	; goto break
+		GOTO @broke  	; goto broke
 	.f11:	MOVf $g $y 	; g = y
 	.l12:	GEQf $y #1.0 @.e13	; while (y < 1.0) 
 		SUBi $e $e #1	; e = e - 1
@@ -540,7 +540,7 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		MULf $y $y #0.1	; y = y * 0.1
 		GOTO @.l14  	; }
 		GOTO @.l6  	; }
-	break:	ADDp $dp $buffer #2	; break:
+	broke:	ADDp $dp $buffer #2	; broke:
 	.l16:	GEQf $x #1.0 @.e18	; while (x < 1.0 && dp < buffer + 32) 
 		ADDp %0 $buffer #32
 		GEQp $dp %0 @.e18

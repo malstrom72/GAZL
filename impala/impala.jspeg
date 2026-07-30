@@ -4337,6 +4337,7 @@ Statement   <-                                                        {
                                                                                             operands:[ txt, undefined, undefined ] });
                                                                      }
                 (
+                    { $lblStart = $$i; }
                     label:Identifier ':' _                            {
                                                                             $$parser.emitMeta({ operator:'<--', type:undefined,
                                                                                                 operands:[ '@' + $label._, undefined, undefined ] });
@@ -4345,6 +4346,14 @@ Statement   <-                                                        {
                                                                             var lbl = $$parser.metacode[$$parser.metacode.length - 1];
                                                                             lbl.labelSource = $$s;
                                                                             lbl.labelOffset = $$i;
+                                                                            /* `return`/`break`/`continue` are reserved words; naming a
+                                                                               label with one is an error by default, a warning under
+                                                                               --legacy (the 1.x `goto break;` early-exit idiom). */
+                                                                            if ($label._ === 'return' || $label._ === 'break' || $label._ === 'continue') {
+                                                                                $$parser.strictError("'" + $label._ + "' is a reserved word, not a label name",
+                                                                                    $$s, $lblStart, 'E449',
+                                                                                    'rename the label; --legacy still accepts a reserved word here');
+                                                                            }
                                                                         }
                 )*
                 (   ';' _
@@ -4356,6 +4365,8 @@ Statement   <-                                                        {
                 /   For
                 /   Goto
                 /   Return
+                /   Break
+                /   Continue
                 /   If
                 /   Switch
                 /   While
@@ -4804,6 +4815,21 @@ Return      <-  RETURN _
                 )
 
 
+# `break`/`continue` are reserved but unsupported - there is no valid lowering, so the statement form is a
+# hard error in both modes (unlike a reserved-word LABEL, which --legacy still accepts). `!SYMBOL_CHAR`
+# keeps `breakage`/`continued` as ordinary identifiers.
+Break       <-  { $start = $$i; } 'break' !SYMBOL_CHAR _ ';'_    {
+                                                        $$parser.fail("'break' is not supported: a switch arm already does not fall through, and a loop is left with `goto` to a label after it",
+                                                            $$s, $start, 'E450',
+                                                            'replace `break;` with `goto` to a label placed after the loop');
+                                                    }
+Continue    <-  { $start = $$i; } 'continue' !SYMBOL_CHAR _ ';'_ {
+                                                        $$parser.fail("'continue' is not supported: jump to a label at the end of the loop body with `goto`",
+                                                            $$s, $start, 'E450',
+                                                            'replace `continue;` with `goto` to a label at the loop-body end');
+                                                    }
+
+
 # TODO : if full jump-optimisation is implemented we could always
 #        fold the “empty else” block here.
 If          <-  IF _ BoolGroup                      { 
@@ -5194,7 +5220,7 @@ StringLiteral   <-  $$=( '"' ( !["\\\0-\37] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX
 
 KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXPORT / EXTERN / FLOAT / FLOOR / FOR / FROM
                 / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / IMPORT / INLINE / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
-                / POINTER / READONLY / RETURN / RETURNS / SIZEOF / STRUCT / SWITCH / TEMPORARY / TO / WHILE
+                / POINTER / READONLY / RETURNS / SIZEOF / STRUCT / SWITCH / TEMPORARY / TO / WHILE
 
 ABS         <-  'abs' !SYMBOL_CHAR          ARRAY       <-  'array' !SYMBOL_CHAR
 ASSERT      <-  'assert' !SYMBOL_CHAR       CASE        <-  'case' !SYMBOL_CHAR
