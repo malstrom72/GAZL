@@ -28,6 +28,41 @@ main:	FUNC	; signature func main() -> void @ 80:1
 		PARA *1
 	$t:	LOCi
 	$cell:	LOCA *1
+		SCOP
+	$t_i3:	LOCi
+		ENDS
+		SCOP
+	$t_i4:	LOCi
+		ENDS
+		SCOP
+	$t_i5:	LOCi
+		ENDS
+		SCOP
+	$buf_i6:	LOCA *3
+	$i_i6:	LOCi
+		ENDS
+		SCOP
+	$buf_i7:	LOCA *3
+	$i_i7:	LOCi
+		ENDS
+		SCOP
+	$buf_i8:	LOCA *3
+	$i_i8:	LOCi
+		ENDS
+		SCOP
+	$a_i9:	LOCA *.z.P
+	$b_i9:	LOCA *.z.P
+		ENDS
+		SCOP
+	$a_i10:	LOCA *.z.P
+	$b_i10:	LOCA *.z.P
+		ENDS
+		SCOP
+	$i_i17:	LOCi
+		ENDS
+		SCOP
+	$i_i18:	LOCi
+		ENDS
 ;-----------------------------------------------------------------------------
 		MOVi $t #10 	; t = 10
 		MULi %4 $t #3	; r = a * 3 + b
@@ -54,77 +89,77 @@ main:	FUNC	; signature func main() -> void @ 80:1
 		MOVi %1 $cell:0 	; printInt(cell[0])
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 93:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 93:30
-		MOVi %5 #-4 	; t = v
-		GEQi %5 #0 @.f0_i3	; if (t < lo) 
-		MOVi %5 #0 	; t = lo
-	.f0_i3:	LEQi %5 #6 @.f1_i3	; if (t > hi) 
-		MOVi %5 #6 	; t = hi
-	.f1_i3:	MOVi %1 %5 	; r = t
+		MOVi $t_i3 #-4 	; t = v
+		GEQi $t_i3 #0 @.f0_i3	; if (t < lo) 
+		MOVi $t_i3 #0 	; t = lo
+	.f0_i3:	LEQi $t_i3 #6 @.f1_i3	; if (t > hi) 
+		MOVi $t_i3 #6 	; t = hi
+	.f1_i3:	MOVi %1 $t_i3 	; r = t
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 95:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 95:38
-		MOVi %5 #8 	; t = v
-		GEQi %5 #0 @.f0_i4	; if (t < lo) 
-		MOVi %5 #0 	; t = lo
-	.f0_i4:	LEQi %5 #6 @.f1_i4	; if (t > hi) 
-		MOVi %5 #6 	; t = hi
-	.f1_i4:	MOVi %1 %5 	; r = t
+		MOVi $t_i4 #8 	; t = v
+		GEQi $t_i4 #0 @.f0_i4	; if (t < lo) 
+		MOVi $t_i4 #0 	; t = lo
+	.f0_i4:	LEQi $t_i4 #6 @.f1_i4	; if (t > hi) 
+		MOVi $t_i4 #6 	; t = hi
+	.f1_i4:	MOVi %1 $t_i4 	; r = t
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 96:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 96:37
-		MOVi %5 #3 	; t = v
-		GEQi %5 #0 @.f0_i5	; if (t < lo) 
-		MOVi %5 #0 	; t = lo
-	.f0_i5:	LEQi %5 #6 @.f1_i5	; if (t > hi) 
-		MOVi %5 #6 	; t = hi
-	.f1_i5:	MOVi %1 %5 	; r = t
+		MOVi $t_i5 #3 	; t = v
+		GEQi $t_i5 #0 @.f0_i5	; if (t < lo) 
+		MOVi $t_i5 #0 	; t = lo
+	.f0_i5:	LEQi $t_i5 #6 @.f1_i5	; if (t > hi) 
+		MOVi $t_i5 #6 	; t = hi
+	.f1_i5:	MOVi %1 $t_i5 	; r = t
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 97:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 97:37
-		MOVi %5 #10 	; buf[0] = a
-		MOVi %6 #20 	; buf[1] = b
-		MOVi %7 #30 	; buf[2] = c
+		MOVi $buf_i6:0 #10 	; buf[0] = a
+		MOVi $buf_i6:1 #20 	; buf[1] = b
+		MOVi $buf_i6:2 #30 	; buf[2] = c
 		MOVi %1 #0 	; r = 0
-		MOVi %8 #0 	; for (i = 0 to 3) 
+		MOVi $i_i6 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i6
-	.l1_i6:	GETL %9 %5 %8	; r = r + buf[i]
-		ADDi %1 %1 %9
-		FORi %8 #3 @.l1_i6	; }
+	.l1_i6:	GETL %5 $buf_i6 $i_i6	; r = r + buf[i]
+		ADDi %1 %1 %5
+		FORi $i_i6 #3 @.l1_i6	; }
 	.e0_i6:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 99:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 99:39
-		MOVi %6 #1 	; buf[0] = a
-		MOVi %7 #2 	; buf[1] = b
-		MOVi %8 #3 	; buf[2] = c
+		MOVi $buf_i7:0 #1 	; buf[0] = a
+		MOVi $buf_i7:1 #2 	; buf[1] = b
+		MOVi $buf_i7:2 #3 	; buf[2] = c
 		MOVi %2 #0 	; r = 0
-		MOVi %9 #0 	; for (i = 0 to 3) 
+		MOVi $i_i7 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i7
-	.l1_i7:	GETL %10 %6 %9	; r = r + buf[i]
-		ADDi %2 %2 %10
-		FORi %9 #3 @.l1_i7	; }
-	.e0_i7:	MOVi %5 %2 	; buf[0] = a
-		MOVi %6 #4 	; buf[1] = b
-		MOVi %7 #5 	; buf[2] = c
+	.l1_i7:	GETL %6 $buf_i7 $i_i7	; r = r + buf[i]
+		ADDi %2 %2 %6
+		FORi $i_i7 #3 @.l1_i7	; }
+	.e0_i7:	MOVi $buf_i8:0 %2 	; buf[0] = a
+		MOVi $buf_i8:1 #4 	; buf[1] = b
+		MOVi $buf_i8:2 #5 	; buf[2] = c
 		MOVi %1 #0 	; r = 0
-		MOVi %8 #0 	; for (i = 0 to 3) 
+		MOVi $i_i8 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i8
-	.l1_i8:	GETL %9 %5 %8	; r = r + buf[i]
-		ADDi %1 %1 %9
-		FORi %8 #3 @.l1_i8	; }
+	.l1_i8:	GETL %5 $buf_i8 $i_i8	; r = r + buf[i]
+		ADDi %1 %1 %5
+		FORi $i_i8 #3 @.l1_i8	; }
 	.e0_i8:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 100:37
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 100:48
-		! ADDi <A> #6 #.o.P.x	; a.x = ax
-		! ADDi <B> #6 #.o.P.y	; a.y = ay
-		! ADDi <C> #8 #.o.P.x	; b.x = bx
-		! ADDi <D> #8 #.o.P.y	; b.y = by
-		! MULi <E> #1 #3	; r = a.x * b.x + a.y * b.y
-		! MULi <F> #2 #4
-		ADDi %1 <E> <F>
+		MOVi $a_i9:.o.P.x #1 	; a.x = ax
+		MOVi $a_i9:.o.P.y #2 	; a.y = ay
+		MOVi $b_i9:.o.P.x #3 	; b.x = bx
+		MOVi $b_i9:.o.P.y #4 	; b.y = by
+		MULi %6 $a_i9:.o.P.x $b_i9:.o.P.x	; r = a.x * b.x + a.y * b.y
+		MULi %7 $a_i9:.o.P.y $b_i9:.o.P.y
+		ADDi %1 %6 %7
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 102:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 102:38
-		! ADDi <D> #6 #.o.P.x	; a.x = ax
-		! ADDi <C> #6 #.o.P.y	; a.y = ay
-		! ADDi <B> #8 #.o.P.x	; b.x = bx
-		! ADDi <A> #8 #.o.P.y	; b.y = by
-		! MULi <F> #2 #5	; r = a.x * b.x + a.y * b.y
-		! MULi <E> #2 #5
-		ADDi %1 <F> <E>
+		MOVi $a_i10:.o.P.x #2 	; a.x = ax
+		MOVi $a_i10:.o.P.y #2 	; a.y = ay
+		MOVi $b_i10:.o.P.x #5 	; b.x = bx
+		MOVi $b_i10:.o.P.y #5 	; b.y = by
+		MULi %6 $a_i10:.o.P.x $b_i10:.o.P.x	; r = a.x * b.x + a.y * b.y
+		MULi %7 $a_i10:.o.P.y $b_i10:.o.P.y
+		ADDi %1 %6 %7
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 103:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 103:38
 		MOVi %4 #5 	; r = helper(a) + 1
@@ -174,20 +209,20 @@ main:	FUNC	; signature func main() -> void @ 80:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 111:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 111:29
 		MOVi %1 #0 	; r = 0
-		MOVi %3 #0 	; i = 0
-	.l0_i17:	ADDi %1 %1 %3	; r = r + i
-		ADDi %3 %3 #1	; i = i + 1
-		LSSi %3 #4 @.l0_i17	; if (i >= n) 
+		MOVi $i_i17 #0 	; i = 0
+	.l0_i17:	ADDi %1 %1 $i_i17	; r = r + i
+		ADDi $i_i17 $i_i17 #1	; i = i + 1
+		LSSi $i_i17 #4 @.l0_i17	; if (i >= n) 
 		GOTO @done_i17  	; goto done
 		GOTO @.l0_i17  	; } done: r = r + 0
 	done_i17:	ADDi %1 %1 #0	; done: r = r + 0
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 112:20
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 112:31
 		MOVi %1 #0 	; r = 0
-		MOVi %3 #0 	; i = 0
-	.l0_i18:	ADDi %1 %1 %3	; r = r + i
-		ADDi %3 %3 #1	; i = i + 1
-		LSSi %3 #3 @.l0_i18	; if (i >= n) 
+		MOVi $i_i18 #0 	; i = 0
+	.l0_i18:	ADDi %1 %1 $i_i18	; r = r + i
+		ADDi $i_i18 $i_i18 #1	; i = i + 1
+		LSSi $i_i18 #3 @.l0_i18	; if (i >= n) 
 		GOTO @done_i18  	; goto done
 		GOTO @.l0_i18  	; } done: r = r + 0
 	done_i18:	ADDi %1 %1 #0	; done: r = r + 0

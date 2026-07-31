@@ -65,6 +65,15 @@
  					$s:			LOCA *.z.Vec2
  					$qt:		LOCi
  					$rm:		LOCi
+ 								SCOP
+ 					$t_i0:		LOCi
+ 								ENDS
+ 								SCOP
+ 					$t_i1:		LOCi
+ 								ENDS
+ 								SCOP
+ 					$t_i2:		LOCi
+ 								ENDS
  ;-----------------------------------------------------------------------------
  								ADRL %1 $p *.z.Vec2				; makeVec(&p, 3, 4)
  								MOVi %2 #3 
@@ -95,28 +104,28 @@
  								MOVi %1 $rm 					; printInt(rm)
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:26:14
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:26:25
- 								MOVi %5 #-5 					; t = v
- 								GEQi %5 #0 @.f0_i0				; if (t < lo) 
- 								MOVi %5 #0 						; t = lo
- 					.f0_i0:		LEQi %5 #9 @.f1_i0				; if (t > hi) 
- 								MOVi %5 #9 						; t = hi
- 					.f1_i0:		MOVi %1 %5 						; r = t
+ 								MOVi $t_i0 #-5 					; t = v
+ 								GEQi $t_i0 #0 @.f0_i0			; if (t < lo) 
+ 								MOVi $t_i0 #0 					; t = lo
+ 					.f0_i0:		LEQi $t_i0 #9 @.f1_i0			; if (t > hi) 
+ 								MOVi $t_i0 #9 					; t = hi
+ 					.f1_i0:		MOVi %1 $t_i0 					; r = t
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:28:28
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:28:39
- 								MOVi %5 #20 					; t = v
- 								GEQi %5 #0 @.f0_i1				; if (t < lo) 
- 								MOVi %5 #0 						; t = lo
- 					.f0_i1:		LEQi %5 #9 @.f1_i1				; if (t > hi) 
- 								MOVi %5 #9 						; t = hi
- 					.f1_i1:		MOVi %1 %5 						; r = t
+ 								MOVi $t_i1 #20 					; t = v
+ 								GEQi $t_i1 #0 @.f0_i1			; if (t < lo) 
+ 								MOVi $t_i1 #0 					; t = lo
+ 					.f0_i1:		LEQi $t_i1 #9 @.f1_i1			; if (t > hi) 
+ 								MOVi $t_i1 #9 					; t = hi
+ 					.f1_i1:		MOVi %1 $t_i1 					; r = t
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:29:28
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:29:39
- 								MOVi %5 #5 						; t = v
- 								GEQi %5 #0 @.f0_i2				; if (t < lo) 
- 								MOVi %5 #0 						; t = lo
- 					.f0_i2:		LEQi %5 #9 @.f1_i2				; if (t > hi) 
- 								MOVi %5 #9 						; t = hi
- 					.f1_i2:		MOVi %1 %5 						; r = t
+ 								MOVi $t_i2 #5 					; t = v
+ 								GEQi $t_i2 #0 @.f0_i2			; if (t < lo) 
+ 								MOVi $t_i2 #0 					; t = lo
+ 					.f0_i2:		LEQi $t_i2 #9 @.f1_i2			; if (t > hi) 
+ 								MOVi $t_i2 #9 					; t = hi
+ 					.f1_i2:		MOVi %1 $t_i2 					; r = t
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:30:27
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:30:38
  								RETU   							; }

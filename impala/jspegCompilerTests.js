@@ -1001,12 +1001,14 @@ const inlineCases = [
 	["exporting an inline function",
 		"export inline function g(int a) returns int r { r = a; }\n"
 			+ "function main() locals int q { q = g(1); }\n", "cannot be exported"],
-	// Locals live in transients, one expansion at a time, so the WORD COUNT must be known while
-	// compiling - a folded or symbolic extent does not resolve until assembly.
-	["an inline function with a non-literal array size",
+	// Each expansion re-declares the callee's locals in its own SCOP at the CALLER's head, so an
+	// extent has to be a token that still means the same thing there. `H * N` folds to a `<X>`
+	// scratch, which is pool-recycled and whose `!` line belongs to the callee, so it is rejected.
+	// A literal, a named const and sizeof(Struct) all survive the move and are accepted.
+	["an inline function with a folded array size",
 		"const int H = 2\nconst int N = 2\ninline function f(int a) returns int r\n"
 			+ "locals int array t[H * N]\n{ t[0] = a; r = t[0]; }\n"
-			+ "function main() locals int q { q = f(1); }\n", "compile-time size"],
+			+ "function main() locals int q { q = f(1); }\n", "folded expression"],
 	["an inline function that was forward declared",
 		"extern function later\ninline function later(int a) returns int r { r = a; }\n"
 			+ "function main() locals int q { q = later(1); }\n", "was already declared"],

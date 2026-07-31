@@ -1613,11 +1613,46 @@
             runs.push([ b, n ]);
             return b;
         }
-        for (k = 0; k < info.locals.length; ++k) {  /* a local lives in transients, one expansion at a time */
-            subst[info.locals[k].name] = '%' + borrowRun(info.locals[k].words);
+        var tag = '_i' + ($$parser.inlineCounter++);
+
+        /*
+            The callee's declared locals become REAL frame locals of the caller, bracketed by
+            SCOP / ENDS (GAZL 2). The assembler then owns their placement, exactly as it does for
+            an ordinary local - which is the whole point: it resolves `*.z.Struct` before assigning
+            offsets, so a host-owned size lands correctly, whereas a compile-time slot count could
+            only ever be Impala's guess at it.
+
+            Sibling expansions overlay, so the frame cost is the LARGEST expansion in a function,
+            not the sum. That is sound because an expansion's locals are dead once its body ends:
+            the result leaves through the call window, never through a local.
+
+            The transient block below is a different matter and stays transient - it carries the
+            body's own `%k` slots, including CALL windows, whose base must be a transient.
+        */
+        if (info.locals.length > 0) {
+            var _tab = (typeof TAB !== 'undefined' ? TAB : '\t');    /* same shape declare() renders */
+            emitLine(_tab + '\tSCOP');
+            for (k = 0; k < info.locals.length; ++k) {
+                var lv = info.locals[k];
+                var lname = lv.name + tag;                      /* `$tmp` -> `$tmp_i3`, unique per expansion */
+                var lsize = lv.size;
+                if (lv.elemStruct !== undefined) {
+                    /* An array of structs is `count * .z.Struct`, and only the ASSEMBLER can multiply
+                       those - the struct may be an `extern struct` whose size the host owns. Render the
+                       fold into this caller's head, immediately above the declaration that reads it. */
+                    var lsc = $$parser.borrow('<');
+                    emitLine(_tab + '\t! MULi ' + lsc + ' #' + lv.count + ' #.z.' + lv.elemStruct);
+                    lsize = '*' + lsc;
+                    $$parser.returnBack(lsc);                   /* safe: the LOCA reading it is the very next line */
+                }
+                emitLine(_tab + lname + ':\t'
+                        + replace(lv.kind, '?', $$parser.TYPE_SUFFIXES[lv.type] || '')
+                        + (lsize !== undefined ? ' ' + lsize : ''));
+                subst[lv.name] = lname;
+            }
+            emitLine(_tab + '\tENDS');
         }
 
-        var tag = '_i' + ($$parser.inlineCounter++);
         var scratchMap = {};                    /* `<X>` folds carried in from an inner expansion */
         function mapScratch(sc) {
             if (!Object.prototype.hasOwnProperty.call(scratchMap, sc)) scratchMap[sc] = $$parser.borrow('<');
@@ -3741,52 +3776,43 @@ inp:ArgsDecl ')'_
                                                                      }
                 (
                     LOCALS _ loc:LocalsDecl                           {
-                                                                         if ($$parser.inlineMode) {
-                                                                             /* A scalar local becomes a borrowed transient at each expansion site. An array or
-                                                                                struct needs FRAME space, and frame declarations are emitted at the function
-                                                                                head while an expansion site is mid-body. See docs/Inlining.md section 8. */
-                                                                             iterate($loc, function (v) {
-                                                                                 var words = $$parser.fieldWords(v);
-                                                                                 /* the run occupies a COUNTED set of transients, so the total must be a number
-                                                                                    here. Impala knows every non-extern struct's size; a folded or symbolic
-                                                                                    array extent does not resolve until assembly. */
-                                                                                 if (!(words > 0)) {
-                                                                                     $$parser.fail('An inline function needs a compile-time size for the local '
-                                                                                                 + v.name, $$s, $$i, 'E433',
-                                                                                             'its words occupy transients, so the count must be known while compiling');
-                                                                                 }
-                                                                                 $$parser.inlineLocals.push({ name: '$' + v.name, words: words });
-                                                                             });
-                                                                         }
                                                                          iterate($loc, function (v) {
-                                                                             if (v.type === 'S') {         /* struct value local -> LOCA *sizeof, remember struct */
-                                                                                 $$parser.declare(
-                                                                                     'LOCA', 'locals',
-                                                                                     '$' + v.name,
-                                                                                     'S',
-                                                                                     false,
-                                                                                     $$parser.structAllocSize(v.struct),
-                                                                                     $$s, $$i,
-                                                                                     undefined,
-                                                                                     v.struct
-                                                                                 );
-                                                                             } else {
-                                                                                 $$parser.declare(
-                                                                                     'LOC?', 'locals',
-                                                                                     '$' + v.name,
-                                                                                     v.type,
-                                                                                     false,
-                                                                                     (v.type === 'A'
+                                                                             /* Compute the allocation size ONCE: the declaration below needs it, and for an
+                                                                                `inline` function so does every expansion site, which re-declares the local
+                                                                                inside its own SCOP. Calling arrayAllocSize twice would borrow two scratches. */
+                                                                             var isStruct = (v.type === 'S');
+                                                                             var kind = (isStruct ? 'LOCA' : 'LOC?');
+                                                                             var type = (isStruct ? 'S' : v.type);
+                                                                             var elem = (isStruct ? v.struct : v.elem);
+                                                                             var size = (isStruct
+                                                                                     ? $$parser.structAllocSize(v.struct)
+                                                                                     : (v.type === 'A'
                                                                                          ? $$parser.arrayAllocSize(v.elem, v.size, v.words)
-                                                                                         : (v.words !== undefined ? '*' + v.words : undefined)),
-                                                                                     $$s, $$i,
-                                                                                     undefined,
-                                                                                     v.elem
-                                                                                 );
+                                                                                         : (v.words !== undefined ? '*' + v.words : undefined)));
+                                                                             if ($$parser.inlineMode) {
+                                                                                 /* Each expansion re-declares this local at the CALLER's head, so record what
+                                                                                    the size is MADE OF rather than the operand folded here: `size` may name a
+                                                                                    `<X>` scratch that is pool-recycled and whose `!` line belongs to this
+                                                                                    function. An array of structs is re-rendered per expansion (below); anything
+                                                                                    else must already be a self-contained token. */
+                                                                                 var elemStruct = (v.type === 'A' ? $$parser.strideStruct(v.elem) : undefined);
+                                                                                 var ownSize = (elemStruct !== undefined ? undefined : size);
+                                                                                 if (ownSize !== undefined && ('' + ownSize).indexOf('<') >= 0) {
+                                                                                     $$parser.fail('An inline function cannot size the local ' + v.name
+                                                                                                 + ' from a folded expression', $$s, $$i, 'E433',
+                                                                                             'each expansion re-declares it, so write the extent as a literal, a named const or sizeof(Struct)');
+                                                                                 }
+                                                                                 $$parser.inlineLocals.push({ name: '$' + v.name, kind: kind,
+                                                                                         type: type, size: ownSize, elem: elem,
+                                                                                         elemStruct: elemStruct, count: v.size });
                                                                              }
+                                                                             $$parser.declare(kind, 'locals', '$' + v.name, type, false, size,
+                                                                                     $$s, $$i, undefined, elem);
                                                                          });
                                                                      }
-                )?                                                    { if (!$$parser.inlineMode) emitLine(';-----------------------------------------------------------------------------'); }
+                )?                                                    { /* The head/body separator is emitted at the REPLAY below, not here: an inline
+                                                                           expansion appends its SCOP block to the head while the body is being parsed,
+                                                                           so anything written here would end up above those declarations. */ }
                 Block                                                 {
                                                                          /* wrap-up body */
                                                                          $$parser.processBranches();
@@ -3796,6 +3822,9 @@ inp:ArgsDecl ')'_
                                                                          $$parser.headSink = null;
                                                                          if (_head !== null) {
                                                                              for (var _h = 0; _h < _head.length; ++_h) emitLine(_head[_h]);
+                                                                         }
+                                                                         if (!$$parser.inlineMode) {
+                                                                             emitLine(';-----------------------------------------------------------------------------');
                                                                          }
                                                                          if ($$parser.inlineMode) {                       /* no out-of-line copy: keep the body, emit nothing */
                                                                              $$parser.captureInlineBody($id, $$s, $$i);
