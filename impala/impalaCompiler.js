@@ -2067,16 +2067,6 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         for (var fi = 0; fi < fields.length; ++fi) {
             var f = fields[fi];
             var item = (items && fi < items.length) ? items[fi] : undefined;
-            if (out.blocked !== undefined) {   /* nothing past a symbolic extent has a countable offset */
-                if (item !== undefined) {
-                    fail('Field ' + f.name + ' cannot be initialized: it follows ' + out.blocked
-                            + ', whose extent resolves at assembly time',
-                            sourceCode, sourceOffset, 'E454',
-                            'Impala cannot count the words before it - drop this initializer (the field '
-                                    + 'zero-fills anyway), or give ' + out.blocked + ' a literal size');
-                }
-                continue;                      /* omitted -> the region zero-fills it */
-            }
             if (f.type === 'S') {
                 buildStructInit(f.struct, (item && item.braced) || [], out, sourceCode, sourceOffset);
             } else if (f.type === 'A') {
@@ -2100,8 +2090,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                         pushInitScalar(out, ev, f.elem, f.name, sourceCode, sourceOffset);
                     }
                 }
-                if (symbolic) {
-                    out.blocked = f.name;
+                if (symbolic && out.tailFrom === undefined) {   /* the FIRST such field bounds the row */
+                    out.tailFrom = out.length;
+                    out.tailAfter = f.name;
                 }
             } else {
                 pushInitScalar(out, item, f.type, f.name, sourceCode, sourceOffset);
@@ -2127,6 +2118,25 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     /* emit a flat constant list as one or more DATA rows (mirrors InitList chunking) */
     emitInitData = function (ops, sourceCode, sourceOffset) {
+        /* A DATA row may stop short of its region and the rest zero-fills, but GAZL has no way to SKIP a
+           symbolic number of words: there is no fill directive, and a backward `! GOTO` does not assemble
+           (`Compile time label not found`), so no assemble-time loop can emit them. Words past a symbolic
+           extent therefore have no countable offset - which is fine as long as they are all zero, because
+           then dropping them lands exactly where the zero-fill would. */
+        if (ops.tailFrom !== undefined) {
+            var Z = ZEROES;
+            for (var t = ops.tailFrom; t < ops.length; ++t) {
+                if (ops[t] !== Z.i && ops[t] !== Z.f && ops[t] !== Z.p && ops[t] !== Z.F) {
+                    fail('Initializer value ' + ops[t] + ' falls after ' + ops.tailAfter
+                            + ', whose extent is not known until assembly',
+                            sourceCode, sourceOffset, 'E454',
+                            'a DATA row can stop short (the rest zero-fills) but cannot skip a symbolic '
+                                    + 'number of words - give ' + ops.tailAfter + ' a literal size, or '
+                                    + 'leave every field after it zero');
+                }
+            }
+            ops.length = ops.tailFrom;                        /* the region zero-fills the remainder */
+        }
         var line = '';
         for (var i = 0; i < ops.length; ++i) {
             if (line !== '' && (line + ' ' + ops[i]).length >= 55) {
