@@ -178,6 +178,10 @@ Divide ints. Division truncates towards zero (also for negative numbers); this i
 requires. `INT_MIN / -1` is defined to yield `INT_MIN` (no trap). Division by 0 is considered illegal and generates a
 run-time error (or compile-time error if 0 is a constant).
 
+## ENDS
+
+Closes the innermost `SCOP` (GAZL 2 and later). See [SCOP](#scop).
+
 ## EQUf
 - `#float          #float          @label`
 - `#float          float           @label`
@@ -531,6 +535,36 @@ Write a value to random access memory with an optional integer offset.
 ## RETU
 
 Returns from function call.
+
+## SCOP
+
+Opens a local scope (GAZL 2 and later). Like `LOC` / `PARA` declarations, `SCOP` and its matching `ENDS` must appear
+after a `FUNC` declaration but before any real instruction.
+
+Declarations inside a scope are released by `ENDS`, so the NEXT sibling scope reuses the same frame offsets while a
+NESTED scope stacks on top. A function's frame is therefore the DEEPEST nesting chain, not the sum of every
+declaration. Use it for groups whose lifetimes do not overlap - an expanded inline body being the motivating case,
+including inlines within inlines.
+
+    $g:     LOCi            ; outlives everything - declared before any scope
+            SCOP
+    $a:     LOCA *SIZE_A    ; offset 1
+            SCOP
+    $b:     LOCi            ; offset 1 + SIZE_A  (nested: stacks)
+            ENDS
+            ENDS
+            SCOP
+    $c:     LOCA *SIZE_C    ; offset 1 again     (sibling: overlays $a and $b)
+            ENDS
+
+Sizes are resolved before offsets are assigned, so `LOCA *SOME_CONSTANT` overlays correctly even when only the host
+knows the value - which is what makes this usable for a host-owned struct size. Anything that must outlive a scope has
+to be declared BEFORE the first `SCOP`; a declaration placed after `ENDS` reuses the released space.
+
+Unbalanced `SCOP` / `ENDS` is an error, as is nesting deeper than 32.
+
+Guard uses of this with `! GEQi #GAZL_VERSION #2 @label` (never `! EQUi`) so the same source can still assemble on a
+GAZL 1 engine - a skipped conditional region is not parsed for mnemonics, so the scoped variant is ignored entirely.
 
 ## SETL
 - `var(d)          int             #const`
