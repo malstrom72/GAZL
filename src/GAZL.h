@@ -126,7 +126,8 @@ enum AssemblerError {
 	, EXPECTED_CONSTANT = 31
 	, NOT_ENOUGH_FUNCTION_SPACE = 32
 	, LABEL_ON_FUNCTION = 33
-	, ASSEMBLER_ERROR_COUNT = 34
+	, UNBALANCED_LOCAL_SCOPE = 34
+	, ASSEMBLER_ERROR_COUNT = 35
 };
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
@@ -241,7 +242,11 @@ class Assembler {
 	protected:	Instruction* ip;
 	protected:	Instruction* functionStart;
 	protected:	UInt functionCount;					// Running ordinal; assigned to each `FUNC` in declaration order.
-	protected:	UInt localsSize;
+	protected:	UInt localsSize;					// Running bump within the innermost SCOP; the final frame size is `maxLocalsSize`.
+	protected:	UInt maxLocalsSize;					// Frame high-water mark. SCOP / ENDS let sibling scopes OVERLAY, so the frame is the max over nesting chains, not the sum.
+	protected:	UInt localScopeDepth;
+	protected:	enum { MAX_LOCAL_SCOPE_DEPTH = 32 };
+	protected:	UInt localScopeStack[MAX_LOCAL_SCOPE_DEPTH];
 	protected:	UInt paramsSize;
 	protected:	Value* globalsPointer;
 	protected:	Value* constantsPointer;
