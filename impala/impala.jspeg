@@ -4,6 +4,25 @@
 
 {
     /**
+     * emitLine(line) - every GAZL line leaves through here.
+     *
+     * A function's frame declarations are emitted as its head is parsed, but an inline expansion
+     * happens mid-body and needs to ADD declarations to that head (GAZL requires them before the
+     * first real instruction). So while a function body is being parsed, head lines are buffered in
+     * `$$parser.headSink` and replayed once the body - and therefore every expansion in it - is
+     * known. Outside a function the sink is null and lines go straight out, unchanged.
+     */
+    function emitLine(line) {
+        if ($$parser.headSink !== null) {
+            $$parser.headSink.push(line);
+            return;
+        }
+        if (typeof output === 'function') {
+            output(line);
+        }
+    }
+
+    /**
      * map(target, k1, v1, k2, v2, ...)
      *   assigns target[k1]=v1, etc.
      */
@@ -144,6 +163,7 @@
     var $$parser.inlineMode     = false;                         /// true while parsing an `inline function` body - emit nothing
     var $$parser.INLINE_PURE    = {};                          /// operators whose write destination the compiler can NAME
     var $$parser.inlineCounter  = 0;                           /// per-expansion suffix, keeps inlined labels unique
+    var $$parser.headSink       = null;                        /// while a function body is parsed, its head lines buffer here (see emitLine)
     var $$parser.CASTS_TO_TYPES = {};
     var $$parser.ZEROES = {};
     var $$parser.TYPE_SUFFIXES  = {};
@@ -709,7 +729,7 @@
         }
 
         if (typeof output === 'function') {
-            output('; ' + comment);
+            emitLine('; ' + comment);
         }
     }
 
@@ -1875,22 +1895,22 @@
                                                                          queued through emit(); drain it BEFORE the block so
                                                                          the definition precedes the ! ADDi that reads it
                                                                          (same rule declare() follows before its own output) */
-        output(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
+        emitLine(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
         for (var i = 0; i < s.fields.length; ++i) {
             var f = s.fields[i];
-            output('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
+            emitLine('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
             if (f.type === 'S') {                                 /* nested by-value struct */
-                output(T + '! ADDi <a> #<a> #.z.' + f.struct);
+                emitLine(T + '! ADDi <a> #<a> #.z.' + f.struct);
             } else if (f.type === 'A' && $$parser.isStructAtom(f.elem)) {   /* struct-element array */
-                output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
-                output(T + '! ADDi <a> #<a> #<t>');
+                emitLine(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
+                emitLine(T + '! ADDi <a> #<a> #<t>');
             } else if (f.type === 'A') {                          /* scalar-element array */
-                output(T + '! ADDi <a> #<a> #' + f.size);
+                emitLine(T + '! ADDi <a> #<a> #' + f.size);
             } else {                                              /* scalar (int/float/ptr/funcptr) */
-                output(T + '! ADDi <a> #<a> #1');
+                emitLine(T + '! ADDi <a> #<a> #1');
             }
         }
-        output('.z.' + name + ':' + T + '! DEFi #<a>');
+        emitLine('.z.' + name + ':' + T + '! DEFi #<a>');
     };
 
     /* Fold a place's compile-time offset PARTS (field-offset symbols + constant strides) into one
@@ -2959,7 +2979,7 @@
                 if (value !== undefined) line += ' ' + value;
                 if (comment)             line += '\t; ' + comment;
 
-                output( line );
+                emitLine( line );
             }
         }
 
@@ -3043,7 +3063,7 @@
                 assert(rec.operands[0][0] === '@',
                        "label must start with '@'");
                 if (nextLabel !== TABstr) {
-                    output(prefix + nextLabel + 'NOOP');
+                    emitLine(prefix + nextLabel + 'NOOP');
                 }
                 nextLabel = rec.operands[0].substr(1) + ':' + TABstr;
                 continue;
@@ -3064,7 +3084,7 @@
             if (op.substr(0, 3) === '<> ') {
 
                 if (nextLabel !== TABstr) {
-                    output(prefix + nextLabel + 'NOOP');
+                    emitLine(prefix + nextLabel + 'NOOP');
                 }
                 nextLabel = TABstr;
 
@@ -3072,7 +3092,7 @@
                 gop      = replace(gop, '?',
                                    $$parser.TYPE_SUFFIXES[ rec.type ]);
 
-                output(prefix + '\t! ' + gop + ' ' +
+                emitLine(prefix + '\t! ' + gop + ' ' +
                        formatOperand(rec.operands[0]) + ' '   +
                        formatOperand(rec.operands[1]) + ' '   +
                        formatOperand(rec.operands[2]) + nextComment);
@@ -3088,7 +3108,7 @@
             gInstr     = replace(gInstr, '?',
                                  $$parser.TYPE_SUFFIXES[ rec.type ]);
 
-            output(prefix + nextLabel + gInstr + ' ' +
+            emitLine(prefix + nextLabel + gInstr + ' ' +
                    formatOperand(rec.operands[0]) + ' ' +
                    formatOperand(rec.operands[1]) + ' ' +
                    formatOperand(rec.operands[2]) + nextComment);
@@ -3428,9 +3448,9 @@
 
         /* banner */
         var LF = '\n';
-        output('; Compiled with Impala version ' +
+        emitLine('; Compiled with Impala version ' +
                $$parser.IMPALA_VERSION + LF);
-        output('; signatures version=1');
+        emitLine('; signatures version=1');
     };
 
     $$parser.end = function () {
@@ -3443,13 +3463,13 @@
         /* dump assert strings only if present */
         if ($$parser.strings.a.length > 0) {
 
-            output('\t! EQUi #DEBUG #0 @.noAssertStrings');
+            emitLine('\t! EQUi #DEBUG #0 @.noAssertStrings');
 
             iterate($$parser.strings.a, function (rec) {
                 $$parser.dumpString(rec.name, rec.data);
             });
 
-            output('.noAssertStrings:\t!');
+            emitLine('.noAssertStrings:\t!');
         }
     };
 }
@@ -3564,9 +3584,12 @@ FuncDecl    <-                                                        { $inl = f
                                                                                  + ($$parser.counters['<'] - $$parser.stock['<'].length) + ' unreturned');
 
                                                                          if (!$$parser.inlineMode) {
-                                                                             output('');
-                                                                             output(';-----------------------------------------------------------------------------');
+                                                                             emitLine('');
+                                                                             emitLine(';-----------------------------------------------------------------------------');
                                                                          }
+                                                                         /* Buffer this function's head until the body is parsed - see emitLine. Nothing is
+                                                                            added to it yet, so the replay below is byte-identical to emitting directly. */
+                                                                         $$parser.headSink = [];
 
                                                                          /* declare the function symbol */
                                                                          $$parser.declare(
@@ -3763,10 +3786,17 @@ inp:ArgsDecl ')'_
                                                                              }
                                                                          });
                                                                      }
-                )?                                                    { if (!$$parser.inlineMode) output(';-----------------------------------------------------------------------------'); }
+                )?                                                    { if (!$$parser.inlineMode) emitLine(';-----------------------------------------------------------------------------'); }
                 Block                                                 {
                                                                          /* wrap-up body */
                                                                          $$parser.processBranches();
+                                                                         /* The body (and every inline expansion in it) is now known, so the head is
+                                                                            final: replay it, then let flushMetaCode write the body straight out. */
+                                                                         var _head = $$parser.headSink;
+                                                                         $$parser.headSink = null;
+                                                                         if (_head !== null) {
+                                                                             for (var _h = 0; _h < _head.length; ++_h) emitLine(_head[_h]);
+                                                                         }
                                                                          if ($$parser.inlineMode) {                       /* no out-of-line copy: keep the body, emit nothing */
                                                                              $$parser.captureInlineBody($id, $$s, $$i);
                                                                              $$parser.metacode.length = 0;
@@ -3778,7 +3808,7 @@ inp:ArgsDecl ')'_
                                                                          prune($$parser.symbols.locals);
                                                                          $$parser.labelCounter = 0;
 
-                                                                         if (!$$parser.inlineMode) output('');
+                                                                         if (!$$parser.inlineMode) emitLine('');
                                                                          $$parser.inlineMode = false;
                                                                      }
 ExternDecl  <-  EXTERN _                                              { $$.scope = 'globals'; $$.structFwd = false;
