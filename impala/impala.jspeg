@@ -1528,41 +1528,23 @@
         CALLER's head, above the body - so each local takes the records it depends on and the rest of
         metacode is left alone.
 
-        Ambiguity to respect: scratches are pool-recycled, so two folded extents in one function can BOTH
-        be named `<A>` and a backward walk cannot tell whose writer is whose. That case (and only that
-        case) is still refused, because guessing would silently mis-size a frame.
+        Ownership is POSITIONAL, from the `codeAt` mark each extent records before its expression is
+        parsed. Asking instead "which record wrote `<A>`" would be wrong: scratches are pool-recycled, so
+        two extents in one function can both be named `<A>`, and the last writer of an intermediate is
+        not necessarily the one this extent meant.
     */
-    $$parser.captureInlineExtents = function (sourceCode, sourceOffset) {
-        var locals = $$parser.inlineLocals, folded = [], i, k;
-        for (i = 0; i < locals.length; ++i) {
-            if (locals[i].size !== undefined && ('' + locals[i].size).indexOf('<') >= 0) folded.push(locals[i]);
-        }
-        if (folded.length === 0) return;
-        if (folded.length > 1) {
-            $$parser.fail('An inline function can fold only one local extent: ' + folded[0].name.substr(1)
-                        + ' and ' + folded[1].name.substr(1) + ' both need one',
-                    sourceCode, sourceOffset, 'E433',
-                    'compile-time scratches are recycled, so two folded extents cannot be told apart here - give one a named const');
-        }
-        var want = {}, taken = [], m = ('' + folded[0].size).match(/<[^>]*>/);
-        want[m[0]] = true;
-        for (i = $$parser.metacode.length - 1; i >= 0; --i) {          /* last writer of each wanted scratch */
-            var rec = $$parser.metacode[i];
-            if (!rec || rec.operator === undefined) continue;
-            var dst = '' + rec.operands[0];
-            if (want[dst] !== true) continue;
-            taken.unshift(rec);
-            want[dst] = false;
-            for (k = 1; k < 3; ++k) {
-                var mm = (rec.operands[k] == null ? null : ('' + rec.operands[k]).match(/<[^>]*>/));
-                if (mm && want[mm[0]] === undefined) want[mm[0]] = true;
+    $$parser.captureInlineExtents = function (decls) {
+        var order = [], i, from;
+        iterate(decls, function (v) { order.push(v); });
+        var end = $$parser.metacode.length;      /* every extent is parsed before this runs */
+        for (i = order.length - 1; i >= 0; --i) {        /* backwards: each extent ends where the next begins */
+            from = order[i].codeAt;
+            if (from === undefined) continue;            /* a scalar, or an extent that emitted nothing */
+            if (from < end) {
+                order[i].code = $$parser.metacode.slice(from, end);
+                $$parser.metacode.splice(from, end - from);   /* the captured body must not re-run them */
             }
-        }
-        folded[0].code = taken;
-        for (i = $$parser.metacode.length - 1; i >= 0; --i) {          /* the body must not re-run them */
-            for (k = 0; k < taken.length; ++k) {
-                if ($$parser.metacode[i] === taken[k]) { $$parser.metacode.splice(i, 1); break; }
-            }
+            end = from;
         }
     };
 
@@ -2106,8 +2088,8 @@
     /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
        is required, not tidiness: the declarator node is pooled and recycled by the parser, so anything
        holding a reference would later see whichever declarator came last. */
-    $$parser.declEntry = function (type, elem, struct, words, name, size) {
-        return { type: type, elem: elem, struct: struct, words: words, name: name, size: size };
+    $$parser.declEntry = function (type, elem, struct, words, name, size, codeAt) {
+        return { type: type, elem: elem, struct: struct, words: words, name: name, size: size, codeAt: codeAt };
     };
 
     $$parser.addStructField = function (name, field, sourceCode, sourceOffset) {
@@ -3831,6 +3813,9 @@ inp:ArgsDecl ')'_
                                                                      }
                 (
                     LOCALS _ loc:LocalsDecl                           {
+                                                                         if ($$parser.inlineMode) {
+                                                                             $$parser.captureInlineExtents($loc);
+                                                                         }
                                                                          iterate($loc, function (v) {
                                                                              /* Compute the allocation size ONCE: the declaration below needs it, and for an
                                                                                 `inline` function so does every expansion site, which re-declares the local
@@ -3854,14 +3839,12 @@ inp:ArgsDecl ')'_
                                                                                  var ownSize = (elemStruct !== undefined ? undefined : size);
                                                                                  $$parser.inlineLocals.push({ name: '$' + v.name, kind: kind,
                                                                                          type: type, size: ownSize, elem: elem,
-                                                                                         elemStruct: elemStruct, count: v.size });
+                                                                                         elemStruct: elemStruct, count: v.size,
+                                                                                         code: v.code });
                                                                              }
                                                                              $$parser.declare(kind, 'locals', '$' + v.name, type, false, size,
                                                                                      $$s, $$i, undefined, elem);
                                                                          });
-                                                                         if ($$parser.inlineMode) {
-                                                                             $$parser.captureInlineExtents($$s, $$i);
-                                                                         }
                                                                      }
                 )?                                                    { /* The head/body separator is emitted at the REPLAY below, not here: an inline
                                                                            expansion appends its SCOP block to the head while the body is being parsed,
@@ -4309,8 +4292,8 @@ ArgsDecl    <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
-                 ( v:VarDecl                                          { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
-                   ( ',' _ v:VarDecl                                  { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
+                 ( v:VarDecl                                          { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.codeAt); }
+                   ( ',' _ v:VarDecl                                  { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.codeAt); }
                    )*
                  )?
 
@@ -4318,8 +4301,8 @@ LocalsDecl  <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
-                 ( v:(VarDecl / ArrayDecl)                            { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
-                   ( ',' _ v:(VarDecl / ArrayDecl)                    { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
+                 ( v:(VarDecl / ArrayDecl)                            { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.codeAt); }
+                   ( ',' _ v:(VarDecl / ArrayDecl)                    { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.codeAt); }
                    )*
                  )?
 
@@ -4366,7 +4349,13 @@ ArrayDecl   <-                                                        { $desc = 
                   )*
                 )?
                 ARRAY _ id:Identifier
-                ( '[' _ x:Expr ']' _                                  {
+                ( '[' _                                               {
+                                                                         /* Where this extent's `!` records begin. An `inline` function replays them at
+                                                                            each expansion site, and ownership has to be POSITIONAL: compile-time
+                                                                            scratches are recycled, so asking "who wrote <A>" cannot answer it. */
+                                                                         $codeAt = $$parser.metacode.length;
+                                                                     }
+                  x:Expr ']' _                                        {
                                                                          $size = $$parser.makeConstant($x, 'i', $$s, $$i);
                                                                          $extent = $$parser.dropHash($size);   /* element count - may be a symbolic const */
                                                                          if ($$parser.openStruct === undefined) {
@@ -4394,6 +4383,7 @@ ArrayDecl   <-                                                        { $desc = 
                                                                          $$.elem = $desc;
                                                                          $$.name = $id;
                                                                          $$.size = $extent;
+                                                                         $$.codeAt = $codeAt;                  /* start of this extent's records (see above) */
                                                                          $$.words = $extent;                   /* alloc size folds count*.z.Elem symbolically (arrayAllocSize) */
                                                                      }
 
