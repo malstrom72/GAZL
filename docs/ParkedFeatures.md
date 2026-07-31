@@ -121,7 +121,8 @@ feature and carried it forward rather than freezing it. It is a working line, no
 
 Rejected now with `E439`, whose hint points at GAZL 2 and at dropping the keyword. The feature's own
 codes are retired with it and must not be reused: `E432` recursive expansion, `E433` non-literal local
-extent (which the `.x.` rework deleted outright), `E434` exported inline, `E436` redeclared inline.
+extent (which the `.x.` rework deleted outright), `E434` exported inline, `E435` address of an inline
+function, `E436` redeclared inline.
 
 Retired with it: fixtures `inlineEquivalence`, `inlineEquivalenceCall`, `inlineFunctions`,
 `inlineReviewArgs`, `inlineReviewCompose`, `inlineReviewControl`, `inlineReviewLocals`,

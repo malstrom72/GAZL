@@ -2,22 +2,27 @@
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 9:1
+PAIRS:	! DEFi #2	; signature const PAIRS : int @ 11:1
 	! MOVi <a> #0	; layout of struct Voice
 .o.Voice.note:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Voice:	! DEFi #<a>
-; signature struct Voice { note : int, gain : float } @ 11:1
-; signature extern native printInt() -> unknown @ 13:1
-; signature extern native printFloat() -> unknown @ 14:1
-; signature extern native printLF() -> unknown @ 15:1
+; signature struct Voice { note : int, gain : float } @ 13:1
+; signature extern native printInt() -> unknown @ 15:1
+; signature extern native printFloat() -> unknown @ 16:1
+; signature extern native printLF() -> unknown @ 17:1
 	! MULi <A> #3 #.z.Voice
 .x.bank:	! DEFi #<A>
-bank:	GLOB *.x.bank	; signature array bank[3] : Voice @ 17:1
+bank:	GLOB *.x.bank	; signature array bank[3] : Voice @ 19:1
+	! MULi <A> #PAIRS #2
+	! MULi <B> #<A> #.z.Voice
+.x.pairs:	! DEFi #<B>
+pairs:	GLOB *.x.pairs	; signature array pairs[] : Voice @ 24:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 19:1
+main:	FUNC	; signature func main() -> void @ 26:1
 		PARA *1
 	! MULi <A> #2 #.z.Voice
 .x.main.vlocals:	! DEFi #<A>
@@ -37,8 +42,8 @@ main:	FUNC	; signature func main() -> void @ 19:1
 	.l1:	MULi %2 $i #.z.Voice	; printInt(global bank[[i]].note)
 		ADDp %1 &bank %2
 		PEEK %1 %1 #.o.Voice.note
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 26:34
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 26:45
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 33:34
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 33:45
 		FORi $i #3 @.l1	; }
 	.e0:	MOVf $vlocals:.o.Voice.gain #0.5 	; vlocals[[0]].gain = 0.5
 		! MULi <A> #1 #.z.Voice	; vlocals[[1]].gain = 0.9
@@ -47,18 +52,26 @@ main:	FUNC	; signature func main() -> void @ 19:1
 		! MULi <B> #1 #.z.Voice	; printFloat(vlocals[[1]].gain)
 		! ADDi <A> #<B> #.o.Voice.gain
 		MOVf %1 $vlocals:<A> 
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 31:31
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 31:42
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 38:31
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:42
 		! MULi <A> #1 #.z.Voice	; vp = &global bank[[1]]
 		ADDp %0 &bank #<A>
 		MOVp $vp %0 
 		PEEK %1 $vp #.o.Voice.note	; printInt(vp->note)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 34:20
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:31
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:31
 		! MULi <A> #2 #.z.Voice	; global bank[[0]] = global bank[[2]]
 		ADDp %0 &bank #<A>
 		COPY &bank %0 *.z.Voice
 		PEEK %1 &bank:.o.Voice.note 	; printInt(global bank[[0]].note)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 37:33
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:44
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:33
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:44
+		! MULi <A> #3 #.z.Voice	; global pairs[[3]].note = 7
+		! ADDi <B> #<A> #.o.Voice.note
+		POKE &pairs:<B> #7 
+		! MULi <B> #3 #.z.Voice	; printInt(global pairs[[3]].note)
+		! ADDi <A> #<B> #.o.Voice.note
+		PEEK %1 &pairs:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:34
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:45
 		RETU   	; }

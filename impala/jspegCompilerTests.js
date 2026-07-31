@@ -990,19 +990,11 @@ console.log("impala.jspeg compiler accepts same-operator bitwise chains without 
 
 // `inline` is PARKED for Impala 3.0 (docs/ParkedFeatures.md): an expansion needs GAZL 2 `SCOP` / `ENDS`
 // to place its locals, and Impala 2 has to stay usable on GAZL 1.0 engines. The keyword stays reserved
-// so the door says why rather than reading as an unknown identifier.
-const inlineCases = [
-	["a plain inline function", "inline function f(int a) returns int r { r = a * 2; }\n"
-		+ "function main() locals int q { q = f(3); }\n", "not supported in Impala 2.0"],
-	["an exported inline function", "export inline function g(int a) returns int r { r = a; }\n",
-		"not supported in Impala 2.0"],
-	["the same function without `inline`", "function f(int a) returns int r { r = a * 2; }\n"
-		+ "function main() locals int q { q = f(3); }\n", null],
-];
-for (const [label, source, expected] of inlineCases) {
-	expectCompileOutcome("inline", label, source, expected);
-}
-console.log("impala.jspeg compiler parks inline functions behind a diagnostic");
+// so the door says why rather than reading as an unknown identifier. One case is the whole surface: the
+// rejection is the first action of FuncDecl, before anything else about the function is looked at.
+expectCompileOutcome("inline", "an inline function",
+	"inline function f(int a) returns int r { r = a * 2; }\n"
+		+ "function main() locals int q { q = f(3); }\n", "not supported in Impala 2.0");
 
 // By-value structs are parked, and EVERY door that can introduce one must say so. `functype` was
 // unguarded, so a by-value struct param/return reached the parked window machinery - and against an

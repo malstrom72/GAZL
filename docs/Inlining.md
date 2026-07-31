@@ -286,23 +286,41 @@ Mutual recursion needs no check: Impala is define-before-use, so `A` can only in
 already complete, and `B` cannot have inlined `A`.
 
 
-## 8. Current restrictions
+## 8. Locals are real frame locals (GAZL 2)
 
-Locals live in TRANSIENTS, one expansion at a time - a scalar takes one slot, an array takes a run of
-adjacent slots (`borrowForCall` for the base, `claimSlot` for the rest, released in reverse afterwards).
+A callee's declared locals become REAL named locals of the caller, bracketed by `SCOP` / `ENDS`. The
+assembler owns their placement, exactly as it does for an ordinary local - which is the point: it
+resolves `*.z.Struct` and `*.x.f.name` before assigning offsets, so a host-owned size lands correctly,
+where a compile-time slot count could only ever have been Impala's guess at it.
 
-The reason locals cannot simply stay locals is DECLARATION FORM, not space. Both kinds occupy frame
-space; they differ in what has to be emitted:
+Sibling expansions overlay, so a function's frame cost is its LARGEST expansion, not the sum. That is
+sound because an expansion's locals are dead once its body ends: the result leaves through the call
+window, never through a local.
 
-| | frame space | declaration |
-|---|---|---|
-| transient `%N`      | yes | none - the assembler infers the extent from use |
-| named local `LOCi` / `LOCA` | yes | one line, in the frame chain at the function head |
+Two things had to exist first. **`SCOP` / `ENDS`** (GAZL 2, `docs/InstructionSet.md`) so the frame is a
+max over nesting chains rather than a sum. And a **buffered function head**, because GAZL wants every
+declaration before the first instruction while an expansion happens mid-body - so head lines accumulate
+in `headSink` and are replayed once the body, and therefore every expansion in it, is known.
 
-Verified: `%20` and `%400` assemble under a bare `PARA *1`, and the two `main`s of the equivalence pair
-declare identical frames despite the inlined one using more transients. A slot kind that needs no
-declaration line can be minted mid-body; one that needs a line cannot, because the head is long since
-emitted by the time an expansion runs.
+The callee's own temporaries still move as transients; only DECLARED locals become frame locals. A
+CALL window's base must be a transient, so that block cannot be anything else.
+
+### What an expansion emits for a local
+
+Nothing but a declaration line repeating the size operand verbatim:
+
+    SCOP
+    $buf_i0:	LOCA *.x.sum3.buf
+    $i_i0:	LOCi
+    ENDS
+
+Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.x.f.name` for
+an array (see `docs/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
+by folding (`t[H * N]`, or `count * .z.Ext` for an extern struct) lives in a recycled `<X>` scratch that
+belongs to wherever it was folded, so it can NOT be repeated at an expansion site - naming it once, at
+the callee's declaration, is what lets every site refer to it.
+
+This is why there is no longer an E433. The extent never has to be a number Impala knows.
 
 **Array element access.** GAZL has no `%N:offset` - `MOVi %10:0 #5` is rejected with *"Invalid number:
 :0"*. So a constant element index is FOLDED into the slot number (`$buf:2` with base `%5` becomes `%7`),
@@ -318,10 +336,6 @@ offset are folded together at ASSEMBLE time and the transient is indexed symboli
 
 Every fold is a `!` directive, so this costs nothing at run time. Struct locals and arrays of structs
 both work this way.
-
-**A local needs a compile-time size** (E433 otherwise). The words occupy a counted run of transients, so
-the total must be a number while compiling. Impala knows every non-extern struct's word count; a folded
-or symbolic ARRAY extent does not resolve until assembly, so `int array t[H * N]` is rejected.
 
 **A `returnBack` ordering trap.** `%<A>` starts with `%` but is NOT a slot number. `returnBack` used to
 test the bare-token case first, so it pushed the whole compound string into the transient stock - losing

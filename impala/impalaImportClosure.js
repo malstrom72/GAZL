@@ -165,8 +165,13 @@ function locateInUnit(spans, source, index) {
 var TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // a named top-level definition line
 var ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
 var DATA_ROW_RE = /^\s*(?:DAT[ifps]?|DATA)\s/;        // an unlabeled initializer continuation row
-var EXTENT_DEF_RE = /^\s*\.x\.[\w.]+:\s+!/;           // the `.x.name: ! DEFi` naming an array's extent
-var META_DIRECTIVE_RE = /^\s*!\s*\w+/;                // an unlabeled compile-time directive
+// A compile-time line that computes or names a data definition's extent: the `.x.name: ! DEFi` itself,
+// or an unlabeled `!` fold feeding it. Anything LABELED with an ordinary identifier is a definition in
+// its own right (isDataDef sees it) and ends the run, which is what keeps a neighbouring const or
+// struct-layout block from being swallowed. That a bare `!` line is never something else immediately
+// above a data definition is a property of the emitter, not of this pattern - the assert guard
+// `! EQUi #DEBUG #0 @.noAssertStrings` is always followed by a DOT-labeled block, never an ASCII one.
+var EXTENT_LINE_RE = /^\s*(?:\.x\.[\w.]+:\s+)?!\s*\w+/;
 
 function stripComment(line) {
 	var at = line.indexOf(";");
@@ -238,8 +243,7 @@ function deadStrip(gazl) {
 			// is never swallowed.
 			while (blocks.length > 0) {
 				prev = blocks[blocks.length - 1];
-				if (prev.kind !== "loose" || prev.end !== dataStart
-						|| !(EXTENT_DEF_RE.test(lines[prev.start]) || META_DIRECTIVE_RE.test(lines[prev.start]))) {
+				if (prev.kind !== "loose" || prev.end !== dataStart || !EXTENT_LINE_RE.test(lines[prev.start])) {
 					break;
 				}
 				blocks.length = blocks.length - 1;
@@ -266,6 +270,12 @@ function deadStrip(gazl) {
 	var work = [];
 	for (i = 0; i < blocks.length; ++i) {
 		if (blocks[i].kind === "loose") {
+			/* A loose line is KEPT unconditionally, so whatever it names has to survive too - otherwise
+			   the strip leaves a reference with nothing behind it. That is the general form of the bug
+			   the `.x.` absorption above fixes specifically: `! DEFi #BUF_SIZE` outliving BUF_SIZE. It
+			   also covers every other compiler-minted dotted line, which `TOP_LABEL_RE` cannot match
+			   and which therefore all land here. Roots only ever ADD reachability, never remove it. */
+			collectRefs(stripComment(lines[blocks[i].start]), work);
 			continue;
 		}
 		byName[blocks[i].name] = blocks[i];

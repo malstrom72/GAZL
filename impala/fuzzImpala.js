@@ -197,9 +197,8 @@ function genProgram() {
 
 	// functypes (0-2), each derived from a real function's signature so it has a valid target
 	const nFts = ri(3);
-	const outOfLine = funcs;                           // `inline` is parked; every function has an address
-	for (let i = 0; i < nFts && outOfLine.length; ++i) {
-		const src = pick(outOfLine);
+	for (let i = 0; i < nFts; ++i) {                   // `inline` is parked; every function has an address
+		const src = pick(funcs);
 		functypes.push({ name: 'FT' + i, params: src.params.map((p) => p.t), rets: src.rets.slice(), target: src.name });
 	}
 	const funcMatches = (fn, ft) => fn.params.length === ft.params.length
