@@ -25,7 +25,8 @@ main:	FUNC	; signature func main() -> void @ 62:1
 		PARA *1
 	$fv:	LOCf
 	$w:	LOCi
-	$cell:	LOCA *1
+.x.main.cell:	! DEFi #1
+	$cell:	LOCA *.x.main.cell
 	$fp:	LOCp
 ;-----------------------------------------------------------------------------
 		MOVf $fv #15.0 	; fv = 15.0

@@ -40,22 +40,38 @@ CHLOC2:	! DEFi #142	; signature const CHLOC2 : int @ 47:1
 	! SHLi <A> #1 #11
 CONDS:	! DEFi <A>	; signature const CONDS : int @ 48:1
 DALTLC:	! DEFi #18	; signature const DALTLC : int @ 49:1
-ABB:	GLOB *186	; signature array ABB[186] : unknown @ 51:1
-ATLOC:	GLOB *186	; signature array ATLOC[186] : unknown @ 52:1
-DLOC:	GLOB *7	; signature array DLOC[7] : unknown @ 53:1
-FIXED:	GLOB *101	; signature array FIXED[101] : unknown @ 54:1
-LINK:	GLOB *201	; signature array LINK[201] : unknown @ 55:1
-PARMS:	GLOB *26	; signature array PARMS[26] : unknown @ 56:1
-PLACE:	GLOB *101	; signature array PLACE[101] : unknown @ 57:1
-INLINE:	GLOB *101	; signature array INLINE[101] : unknown @ 59:1
-MAP1:	GLOB *129	; signature array MAP1[129] : unknown @ 60:1
-MAP2:	GLOB *129	; signature array MAP2[129] : unknown @ 61:1
-DSEEN:	GLOB *7	; signature array DSEEN[7] : unknown @ 63:1
-HINTED:	GLOB *21	; signature array HINTED[21] : unknown @ 64:1
-HINTLC:	GLOB *21	; signature array HINTLC[21] : unknown @ 65:1
-ODLOC:	GLOB *7	; signature array ODLOC[7] : unknown @ 66:1
-TK:	GLOB *21	; signature array TK[21] : unknown @ 67:1
-PROP:	GLOB *101	; signature array PROP[101] : unknown @ 68:1
+.x.ABB:	! DEFi #186
+ABB:	GLOB *.x.ABB	; signature array ABB[186] : unknown @ 51:1
+.x.ATLOC:	! DEFi #186
+ATLOC:	GLOB *.x.ATLOC	; signature array ATLOC[186] : unknown @ 52:1
+.x.DLOC:	! DEFi #7
+DLOC:	GLOB *.x.DLOC	; signature array DLOC[7] : unknown @ 53:1
+.x.FIXED:	! DEFi #101
+FIXED:	GLOB *.x.FIXED	; signature array FIXED[101] : unknown @ 54:1
+.x.LINK:	! DEFi #201
+LINK:	GLOB *.x.LINK	; signature array LINK[201] : unknown @ 55:1
+.x.PARMS:	! DEFi #26
+PARMS:	GLOB *.x.PARMS	; signature array PARMS[26] : unknown @ 56:1
+.x.PLACE:	! DEFi #101
+PLACE:	GLOB *.x.PLACE	; signature array PLACE[101] : unknown @ 57:1
+.x.INLINE:	! DEFi #101
+INLINE:	GLOB *.x.INLINE	; signature array INLINE[101] : unknown @ 59:1
+.x.MAP1:	! DEFi #129
+MAP1:	GLOB *.x.MAP1	; signature array MAP1[129] : unknown @ 60:1
+.x.MAP2:	! DEFi #129
+MAP2:	GLOB *.x.MAP2	; signature array MAP2[129] : unknown @ 61:1
+.x.DSEEN:	! DEFi #7
+DSEEN:	GLOB *.x.DSEEN	; signature array DSEEN[7] : unknown @ 63:1
+.x.HINTED:	! DEFi #21
+HINTED:	GLOB *.x.HINTED	; signature array HINTED[21] : unknown @ 64:1
+.x.HINTLC:	! DEFi #21
+HINTLC:	GLOB *.x.HINTLC	; signature array HINTLC[21] : unknown @ 65:1
+.x.ODLOC:	! DEFi #7
+ODLOC:	GLOB *.x.ODLOC	; signature array ODLOC[7] : unknown @ 66:1
+.x.TK:	! DEFi #21
+TK:	GLOB *.x.TK	; signature array TK[21] : unknown @ 67:1
+.x.PROP:	! DEFi #101
+PROP:	GLOB *.x.PROP	; signature array PROP[101] : unknown @ 68:1
 	GLOB *1
 BLKLIN:	DATi #TRUE	; signature global BLKLIN : int @ 70:1
 	GLOB *1
@@ -173,7 +189,8 @@ HNTMAX:	! DEFi #10	; signature const HNTMAX : int @ 125:1
 ; signature extern array FIXD[] : unknown @ 141:1
 ; signature extern array ACTSPK[] : unknown @ 142:1
 ; signature extern array HINTS[] : unknown @ 143:1
-ATAB:	GLOB *331	; signature array ATAB[331] : unknown @ 145:1
+.x.ATAB:	! DEFi #331
+ATAB:	GLOB *.x.ATAB	; signature array ATAB[331] : unknown @ 145:1
 	DATA #0 #576501649 #407342340 #358494005 #627590956
 	DATA #342272582 #375946497 #376088268 #325880787
 	DATA #527121725 #305669668 #575365029 #575505951
@@ -256,7 +273,8 @@ ATAB:	GLOB *331	; signature array ATAB[331] : unknown @ 145:1
 	DATA #540281369 #426091588 #644153937 #474943296
 	DATA #475114733 #645429828 #709109173 #741757328
 	DATA #557397993 #0 #0 #0 #0 #0
-COND:	GLOB *186	; signature array COND[186] : unknown @ 168:1
+.x.COND:	! DEFi #186
+COND:	GLOB *.x.COND	; signature array COND[186] : unknown @ 168:1
 	DATA #0 #5 #1 #5 #5 #1 #131089 #5 #1050625 #1 #1 #0 #0
 	DATA #4096 #0 #1048576 #0 #0 #0 #8192 #0 #0 #0 #0 #6 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #4 #0 #0 #0 #16400
@@ -274,14 +292,16 @@ COND:	GLOB *186	; signature array COND[186] : unknown @ 168:1
 	DATA #262161 #262161 #262161 #262161 #262161 #262161
 	DATA #262161 #1 #4 #4 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0
-OBJSND:	GLOB *101	; signature array OBJSND[101] : unknown @ 182:1
+.x.OBJSND:	! DEFi #101
+OBJSND:	GLOB *.x.OBJSND	; signature array OBJSND[101] : unknown @ 182:1
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #3 #0 #0 #2 #0 #0 #1 #2 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #6 #0 #0 #0 #0 #0 #0 #4 #0 #3 #0 #0
 	DATA #0 #0 #0 #0 #0 #1 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
-OBJTXT:	GLOB *101	; signature array OBJTXT[101] : unknown @ 191:1
+.x.OBJTXT:	! DEFi #101
+OBJTXT:	GLOB *.x.OBJTXT	; signature array OBJTXT[101] : unknown @ 191:1
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #1 #0 #0 #1 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #1 #0 #1 #0 #0 #0 #0 #0 #0 #0 #0 #1 #1 #1 #0 #0 #0 #0
@@ -362,7 +382,8 @@ THROW:	! DEFi #17	; signature const THROW : int @ 267:1
 fBUG:	FUNC	; signature func fBUG(int NUM) -> void @ 271:1
 		PARA *1
 	$NUM:	INPi
-	$numString:	LOCA *3
+.x.fBUG.numString:	! DEFi #3
+	$numString:	LOCA *.x.fBUG.numString
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Fatale_4d2 	; output("Fatal error ")
 		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 299:24
@@ -410,7 +431,8 @@ fRAN:	FUNC	; signature func fRAN(int RANGE) -> int @ 310:1
 		RETU   	; }
 
 	! MULi <A> #7 #2
-fMPINIT_RUNS:	CNST *<A>	; signature array fMPINIT_RUNS[] : unknown @ 348:1
+.x.fMPINIT_RUNS:	! DEFi #<A>
+fMPINIT_RUNS:	CNST *.x.fMPINIT_RUNS	; signature array fMPINIT_RUNS[] : unknown @ 348:1
 	DATA #32 #34 #39 #46 #65 #90 #97 #122 #37 #37 #48 #57 #0
 	DATA #126
 

@@ -38,7 +38,8 @@ poke:	FUNC	; signature func poke(Grid-ptr g, int i, int v) -> void @ 29:1
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 31:1
 		PARA *1
-	$raw:	LOCA *10
+.x.main.raw:	! DEFi #10
+	$raw:	LOCA *.x.main.raw
 	$g:	LOCp
 ;-----------------------------------------------------------------------------
 		ADRL $g $raw:0 *0	; g = (Grid pointer)&raw[0]

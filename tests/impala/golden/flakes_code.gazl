@@ -4,7 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
+.x.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
 	DATA &.s_SAMPLE_4d2 &.s_SQUARE_4d3 &.s_GRAIN_4d4
 	DATA &.s_COMBCC_4d5 &.s_MIDIMo_4d6 &.s_Oct2_4d7
 	DATA &.s_ARPTri_4d8 &.s_RNDEuc_4d9
@@ -44,11 +45,14 @@ panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
 ; signature extern const POSITION_FRACT_BITS : int @ 77:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 79:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 80:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 81:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
+.x.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
 	CNST *1
 clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 83:1
-signal:	GLOB *2	; signature array signal[2] : unknown @ 86:1
+.x.signal:	! DEFi #2
+signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 86:1
 	CNST *1
 	! SHLi <A> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
@@ -173,7 +177,8 @@ KEY_LOW_MODE:	! DEFi #1	; signature const KEY_LOW_MODE : int @ 199:1
 KEY_HIGH_MODE:	! DEFi #2	; signature const KEY_HIGH_MODE : int @ 200:1
 ARPEG_MODE:	! DEFi #3	; signature const ARPEG_MODE : int @ 201:1
 RANDOM_MODE:	! DEFi #4	; signature const RANDOM_MODE : int @ 202:1
-EUCLIDEAN:	CNST *16	; signature array EUCLIDEAN[16] : unknown @ 203:1
+.x.EUCLIDEAN:	! DEFi #16
+EUCLIDEAN:	CNST *.x.EUCLIDEAN	; signature array EUCLIDEAN[16] : unknown @ 203:1
 	DATA #0x8000 #0x8080 #0x8420 #0x8888 #0x9248 #0x9494
 	DATA #0x952a #0xaaaa #0xb56a #0xb5b5 #0xb6db #0xbbbb
 	DATA #0xbdef #0xbfbf #0xfffe #0xffff
@@ -186,8 +191,10 @@ SLOW_RELEASE:	! DEFi #0x40	; signature const SLOW_RELEASE : int @ 212:1
 FAST_RELEASE:	! DEFi #0x800	; signature const FAST_RELEASE : int @ 213:1
 STANDARD_ATTACK:	! DEFi #0x2000	; signature const STANDARD_ATTACK : int @ 214:1
 COMB_ATTACK:	! DEFi #0xA000	; signature const COMB_ATTACK : int @ 215:1
-NOTE_RATES:	GLOB *64	; signature array NOTE_RATES[64] : unknown @ 219:1
-SQRT_TABLE:	GLOB *4097	; signature array SQRT_TABLE[4097] : unknown @ 220:1
+.x.NOTE_RATES:	! DEFi #64
+NOTE_RATES:	GLOB *.x.NOTE_RATES	; signature array NOTE_RATES[64] : unknown @ 219:1
+.x.SQRT_TABLE:	! DEFi #4097
+SQRT_TABLE:	GLOB *.x.SQRT_TABLE	; signature array SQRT_TABLE[4097] : unknown @ 220:1
 	GLOB *1
 doReset:	DATi #TRUE	; signature global doReset : int @ 221:1
 	GLOB *1
@@ -265,17 +272,21 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	$bL:	LOCi
 	$bR:	LOCi
 	$clock:	LOCi
-	$bSamples:	LOCA *4
-	$aSamples:	LOCA *4
+.x.process.bSamples:	! DEFi #4
+	$bSamples:	LOCA *.x.process.bSamples
+.x.process.aSamples:	! DEFi #4
+	$aSamples:	LOCA *.x.process.aSamples
 	$step:	LOCi
 	$nextStep:	LOCi
 	$subStep:	LOCi
 	$xpose:	LOCi
 	$noteBits:	LOCi
 	$euclideanBits:	LOCi
-	$semisList:	LOCA *12
+.x.process.semisList:	! DEFi #12
+	$semisList:	LOCA *.x.process.semisList
 	$semisCount:	LOCi
-	$octsList:	LOCA *4
+.x.process.octsList:	! DEFi #4
+	$octsList:	LOCA *.x.process.octsList
 	$octsCount:	LOCi
 	$op1LowBits:	LOCi
 	$op1HighBits:	LOCi
@@ -290,10 +301,14 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	$midiMode:	LOCi
 	$lastMidiNote:	LOCi
 	$midiNote:	LOCi
-	$stepTrigs:	LOCA *16
-	$stepTies:	LOCA *16
-	$stepSemis:	LOCA *16
-	$stepOcts:	LOCA *16
+.x.process.stepTrigs:	! DEFi #16
+	$stepTrigs:	LOCA *.x.process.stepTrigs
+.x.process.stepTies:	! DEFi #16
+	$stepTies:	LOCA *.x.process.stepTies
+.x.process.stepSemis:	! DEFi #16
+	$stepSemis:	LOCA *.x.process.stepSemis
+.x.process.stepOcts:	! DEFi #16
+	$stepOcts:	LOCA *.x.process.stepOcts
 	$env:	LOCi
 	$gk:	LOCi
 	$g0:	LOCi

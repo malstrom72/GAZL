@@ -4,7 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 10:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 12:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 20:1
+.x.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 20:1
 	DATA &.s__4d2 &.s__4d2 &.s__4d2 &.s_ROOMSI_4d3 &.s__4d2
 	DATA &.s__4d2 &.s__4d2 &.s_FEEDBA_4d4
 ; signature extern native abort() -> unknown @ 31:1
@@ -39,9 +40,12 @@ panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 20:1
 ; signature extern const PARAM_COUNT : int @ 65:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 67:1
-signal:	GLOB *2	; signature array signal[2] : unknown @ 68:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 69:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 70:1
+.x.signal:	! DEFi #2
+signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 68:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 69:1
+.x.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 70:1
 	GLOB *1
 instance:	DATi #0	; signature global instance : int @ 71:1
 	CNST *1
@@ -73,7 +77,8 @@ TR:	! DEFi #9	; signature const TR : int @ 95:1
 feedback:	DATi #0	; signature global feedback : int @ 99:1
 	GLOB *1
 damping:	DATi #0	; signature global damping : int @ 100:1
-taps:	GLOB *TAPS_COUNT	; signature array taps[TAPS_COUNT] : unknown @ 102:1
+.x.taps:	! DEFi #TAPS_COUNT
+taps:	GLOB *.x.taps	; signature array taps[TAPS_COUNT] : unknown @ 102:1
 
 ;-----------------------------------------------------------------------------
 displayBarValue:	FUNC	; signature func displayBarValue(int x) -> int @ 106:1
@@ -90,8 +95,10 @@ displayBarValue:	FUNC	; signature func displayBarValue(int x) -> int @ 106:1
 ;-----------------------------------------------------------------------------
 update:	FUNC	; signature func update() -> void @ 116:1
 		PARA *1
-	$params:	LOCA *PARAM_COUNT
-	$taps:	LOCA *TAPS_COUNT
+.x.update.params:	! DEFi #PARAM_COUNT
+	$params:	LOCA *.x.update.params
+.x.update.taps:	! DEFi #TAPS_COUNT
+	$taps:	LOCA *.x.update.taps
 	$size:	LOCi
 	$predelay:	LOCi
 	$damping:	LOCi
@@ -169,8 +176,10 @@ process:	FUNC	; signature func process() -> void @ 163:1
 	$tr:	LOCi
 	$p:	LOCp
 	$b:	LOCp
-	$taps:	LOCA *TAPS_COUNT
-	$buffers:	LOCA *<A>
+.x.process.taps:	! DEFi #TAPS_COUNT
+	$taps:	LOCA *.x.process.taps
+.x.process.buffers:	! DEFi #<A>
+	$buffers:	LOCA *.x.process.buffers
 ;-----------------------------------------------------------------------------
 	.l0:	ADRL %0 $taps *0	; copy (TAPS_COUNT from global taps to taps)
 		COPY %0 &taps *TAPS_COUNT

@@ -177,6 +177,7 @@
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
     var $$parser.structs = {};                                    /// name -> { fields:[{name,type,elem,offset,words}], words, complete }
     var $$parser.openStruct = undefined;                          /// struct whose field list is being parsed (its fields own their extent scratches)
+    var $$parser.openDeclList = false;                            /// true inside a `locals` clause (its declarators own their extent scratches, same reason)
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
@@ -1519,35 +1520,6 @@
         return false;
     };
 
-    /*
-        Detach the `!` records that define an inline function's local extents.
-
-        A folded extent (`t[H * N]`) lives in a `<X>` scratch, and the records defining it are still
-        PENDING here because declare() deliberately does not flush for an inline function's locals. They
-        must not stay in the captured body - the declaration that reads the scratch is emitted at the
-        CALLER's head, above the body - so each local takes the records it depends on and the rest of
-        metacode is left alone.
-
-        Ownership is POSITIONAL, from the `codeAt` mark each extent records before its expression is
-        parsed. Asking instead "which record wrote `<A>`" would be wrong: scratches are pool-recycled, so
-        two extents in one function can both be named `<A>`, and the last writer of an intermediate is
-        not necessarily the one this extent meant.
-    */
-    $$parser.captureInlineExtents = function (decls) {
-        var order = [], i, from;
-        iterate(decls, function (v) { order.push(v); });
-        var end = $$parser.metacode.length;      /* every extent is parsed before this runs */
-        for (i = order.length - 1; i >= 0; --i) {        /* backwards: each extent ends where the next begins */
-            from = order[i].codeAt;
-            if (from === undefined) continue;            /* a scalar, or an extent that emitted nothing */
-            if (from < end) {
-                order[i].code = $$parser.metacode.slice(from, end);
-                $$parser.metacode.splice(from, end - from);   /* the captured body must not re-run them */
-            }
-            end = from;
-        }
-    };
-
     /* Snapshot a body before flushMetaCode() clears it, operand-for-operand. The `;` source comments are
        KEPT, so an expansion can re-emit them. (There is no RETU to drop: it is emitted after this runs.) */
     $$parser.captureInlineBody = function (name, sourceCode, sourceOffset) {
@@ -1664,27 +1636,13 @@
             for (k = 0; k < info.locals.length; ++k) {
                 var lv = info.locals[k];
                 var lname = lv.name + tag;                      /* `$tmp` -> `$tmp_i3`, unique per expansion */
-                var lsize = lv.size;
-                if (lv.elemStruct !== undefined) {
-                    /* An array of structs is `count * .z.Struct`, and only the ASSEMBLER can multiply
-                       those - the struct may be an `extern struct` whose size the host owns. Render the
-                       fold into this caller's head, immediately above the declaration that reads it. */
-                    var lsc = $$parser.borrow('<');
-                    emitLine(_tab + '\t! MULi ' + lsc + ' #' + lv.count + ' #.z.' + lv.elemStruct);
-                    lsize = '*' + lsc;
-                    $$parser.returnBack(lsc);                   /* safe: the LOCA reading it is the very next line */
-                } else if (lv.code !== undefined) {
-                    /* A folded extent: replay the records that define its scratch, into THIS head, right
-                       above the declaration reading them. Rendering goes through flushMetaCode so the
-                       `!` lines come out in the one canonical shape - swap the list it renders. */
-                    var _saved = $$parser.metacode;
-                    $$parser.metacode = lv.code.slice(0);
-                    $$parser.flushMetaCode(_tab);
-                    $$parser.metacode = _saved;
-                }
+                /* `lv.size` is repeated verbatim, however the extent was arrived at: an array's is a
+                   `.x.` constant the callee's declaration named once, a struct's is `*.z.Struct`. Both
+                   are SYMBOLS the assembler resolves, so nothing has to be re-derived here - which is
+                   the point, since a fold lives in a scratch this head has no claim on. */
                 emitLine(_tab + lname + ':\t'
                         + replace(lv.kind, '?', $$parser.TYPE_SUFFIXES[lv.type] || '')
-                        + (lsize !== undefined ? ' ' + lsize : ''));
+                        + (lv.size !== undefined ? ' ' + lv.size : ''));
                 subst[lv.name] = lname;
             }
             emitLine(_tab + '\tENDS');
@@ -2045,17 +2003,46 @@
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
 
+    /* The symbol naming an array's allocation extent: `.x.name` for a global, `.x.func.local` for a
+       local. See docs/SymbolNamespace.md. */
+    $$parser.extentSymbol = function (owner, name) {
+        return '.x.' + (owner !== undefined ? owner + '.' : '') + name;
+    };
+
+    /* Publish an array's `*size` as a NAMED assemble-time constant instead of leaving it in a `<X>`
+       scratch. A scratch is a recycled register: it holds the extent only until the next borrow, so
+       the allocation line was the one and only place that could read it. A named constant is
+       permanent and referenceable, which is what lets an extent be quoted anywhere later. The value
+       is usually symbolic - a host `! DEFi` count, or `count * .z.Elem` that only resolves at
+       assembly - so naming it is the ONLY way to hold on to it; there is no number to keep. */
+    $$parser.defineExtent = function (symbol, value) {
+        $$parser.flushMetaCode('');                           /* the `! MULi` that computed value is still queued;
+                                                                 it has to precede the `! DEFi` that reads it
+                                                                 (the rule declare() follows before its own output) */
+        if (!$$parser.dry && typeof output === 'function') {
+            emitLine(symbol + ':' + (typeof TAB !== 'undefined' ? TAB : '\t') + '! DEFi #' + value);
+        }
+        $$parser.returnBack(value);                           /* the constant has taken the value over */
+    };
+
     /* '*size' operand for allocating an ARRAY. A struct-element array is `count * .z.Elem` - kept
        SYMBOLIC (a compile-time `! MULi` into a scratch) so the allocation tracks the element size,
-       exactly like the subscript stride. Scalar elements are one word each, so `*count`. */
-    $$parser.arrayAllocSize = function (elemDesc, count, words) {
+       exactly like the subscript stride. Scalar elements are one word each, so `*count`. Given a
+       `symbol`, the result is named rather than inlined. */
+    $$parser.arrayAllocSize = function (elemDesc, count, words, symbol) {
+        var value;
         if (elemDesc !== undefined && $$parser.descTail(elemDesc) === undefined
                 && $$parser.isStructAtom($$parser.descHead(elemDesc))) {
-            var s = $$parser.borrow('<');
-            $$parser.emit('<> *', 'i', s, '#' + count, '#.z.' + $$parser.descHead(elemDesc));
-            return '*' + s;
+            value = $$parser.borrow('<');
+            $$parser.emit('<> *', 'i', value, '#' + count, '#.z.' + $$parser.descHead(elemDesc));
+        } else {
+            value = words;
         }
-        return '*' + words;
+        if (symbol === undefined) {
+            return '*' + value;
+        }
+        $$parser.defineExtent(symbol, value);
+        return '*' + symbol;
     };
 
     /* The struct atom a pointer/array element descriptor points at, or undefined for anything whose
@@ -2088,8 +2075,8 @@
     /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
        is required, not tidiness: the declarator node is pooled and recycled by the parser, so anything
        holding a reference would later see whichever declarator came last. */
-    $$parser.declEntry = function (type, elem, struct, words, name, size, codeAt) {
-        return { type: type, elem: elem, struct: struct, words: words, name: name, size: size, codeAt: codeAt };
+    $$parser.declEntry = function (type, elem, struct, words, name, size) {
+        return { type: type, elem: elem, struct: struct, words: words, name: name, size: size };
     };
 
     $$parser.addStructField = function (name, field, sourceCode, sourceOffset) {
@@ -3813,13 +3800,12 @@ inp:ArgsDecl ')'_
                                                                      }
                 (
                     LOCALS _ loc:LocalsDecl                           {
-                                                                         if ($$parser.inlineMode) {
-                                                                             $$parser.captureInlineExtents($loc);
-                                                                         }
                                                                          iterate($loc, function (v) {
                                                                              /* Compute the allocation size ONCE: the declaration below needs it, and for an
                                                                                 `inline` function so does every expansion site, which re-declares the local
-                                                                                inside its own SCOP. Calling arrayAllocSize twice would borrow two scratches. */
+                                                                                inside its own SCOP. Calling arrayAllocSize twice would borrow two scratches.
+                                                                                An array's size is a NAMED `.x.` extent, so it is a symbol every expansion can
+                                                                                repeat verbatim - no re-rendering the pieces it was folded from. */
                                                                              var isStruct = (v.type === 'S');
                                                                              var kind = (isStruct ? 'LOCA' : 'LOC?');
                                                                              var type = (isStruct ? 'S' : v.type);
@@ -3827,23 +3813,20 @@ inp:ArgsDecl ')'_
                                                                              var size = (isStruct
                                                                                      ? $$parser.structAllocSize(v.struct)
                                                                                      : (v.type === 'A'
-                                                                                         ? $$parser.arrayAllocSize(v.elem, v.size, v.words)
+                                                                                         ? $$parser.arrayAllocSize(v.elem, v.size, v.words,
+                                                                                                 $$parser.extentSymbol($id, v.name))
                                                                                          : (v.words !== undefined ? '*' + v.words : undefined)));
                                                                              if ($$parser.inlineMode) {
-                                                                                 /* Each expansion re-declares this local at the CALLER's head, so it needs what
-                                                                                    the size is MADE OF, not just the operand folded here - which may name a
-                                                                                    `<X>` scratch whose `!` line belongs to THIS function's head. An array of
-                                                                                    structs is re-rendered from its two pieces; a folded expression has its
-                                                                                    defining records captured below. */
-                                                                                 var elemStruct = (v.type === 'A' ? $$parser.strideStruct(v.elem) : undefined);
-                                                                                 var ownSize = (elemStruct !== undefined ? undefined : size);
                                                                                  $$parser.inlineLocals.push({ name: '$' + v.name, kind: kind,
-                                                                                         type: type, size: ownSize, elem: elem,
-                                                                                         elemStruct: elemStruct, count: v.size,
-                                                                                         code: v.code });
+                                                                                         type: type, size: size, elem: elem });
                                                                              }
                                                                              $$parser.declare(kind, 'locals', '$' + v.name, type, false, size,
                                                                                      $$s, $$i, undefined, elem);
+                                                                         });
+                                                                         iterate($loc, function (v) {   /* the count scratches ArrayDecl held for this
+                                                                                                           clause (see there); a no-op for the ones a
+                                                                                                           declaration above already gave back */
+                                                                             $$parser.returnBack(v.size);
                                                                          });
                                                                      }
                 )?                                                    { /* The head/body separator is emitted at the REPLAY below, not here: an inline
@@ -4181,7 +4164,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 $a.name,
                                                                                 'A',
                                                                                 ($section === 'CNST'),
-                                                                                $$parser.arrayAllocSize($a.elem, $a.size, $a.words),
+                                                                                $$parser.arrayAllocSize($a.elem, $a.size, $a.words,
+                                                                                        $$parser.extentSymbol(undefined, $a.name)),
                                                                                 $$s, $$i,
                                                                                 $$parser.formatGlobalSignatureComment(
                                                                                     $section,
@@ -4292,19 +4276,20 @@ ArgsDecl    <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
-                 ( v:VarDecl                                          { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.codeAt); }
-                   ( ',' _ v:VarDecl                                  { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.codeAt); }
+                 ( v:VarDecl                                          { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
+                   ( ',' _ v:VarDecl                                  { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
                    )*
                  )?
 
 LocalsDecl  <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
+                                                                         $$parser.openDeclList = true;   /* see ArrayDecl: these extents are consumed later */
                                                                      }
-                 ( v:(VarDecl / ArrayDecl)                            { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.codeAt); }
-                   ( ',' _ v:(VarDecl / ArrayDecl)                    { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.codeAt); }
+                 ( v:(VarDecl / ArrayDecl)                            { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
+                   ( ',' _ v:(VarDecl / ArrayDecl)                    { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
                    )*
-                 )?
+                 )?                                                   { $$parser.openDeclList = false; }
 
 # ------------------------------------------------------------------
 #  Simple variable & array declarators                          
@@ -4349,17 +4334,18 @@ ArrayDecl   <-                                                        { $desc = 
                   )*
                 )?
                 ARRAY _ id:Identifier
-                ( '[' _                                               {
-                                                                         /* Where this extent's `!` records begin. An `inline` function replays them at
-                                                                            each expansion site, and ownership has to be POSITIONAL: compile-time
-                                                                            scratches are recycled, so asking "who wrote <A>" cannot answer it. */
-                                                                         $codeAt = $$parser.metacode.length;
-                                                                     }
-                  x:Expr ']' _                                        {
+                ( '[' _ x:Expr ']' _                                  {
                                                                          $size = $$parser.makeConstant($x, 'i', $$s, $$i);
                                                                          $extent = $$parser.dropHash($size);   /* element count - may be a symbolic const */
-                                                                         if ($$parser.openStruct === undefined) {
-                                                                             $$parser.returnBack($size);       /* a struct field's borrow outlives the decl - endStruct frees it */
+                                                                         /* A folded extent lives in a `<X>` scratch that something READS LATER, so the
+                                                                            borrow has to outlive this declarator wherever the declaration is not emitted
+                                                                            on the spot: a struct field is read by the layout block (endStruct frees it),
+                                                                            and a `locals` clause is read by the declaration pass that runs after the whole
+                                                                            list is parsed (FuncDecl frees it). Returning it here let the NEXT declarator
+                                                                            in the same list borrow the same scratch and overwrite the extent - two array
+                                                                            locals in one clause silently got whichever count was folded last. */
+                                                                         if ($$parser.openStruct === undefined && !$$parser.openDeclList) {
+                                                                             $$parser.returnBack($size);
                                                                          }
                                                                      }
                 )?                                                    {
@@ -4383,7 +4369,6 @@ ArrayDecl   <-                                                        { $desc = 
                                                                          $$.elem = $desc;
                                                                          $$.name = $id;
                                                                          $$.size = $extent;
-                                                                         $$.codeAt = $codeAt;                  /* start of this extent's records (see above) */
                                                                          $$.words = $extent;                   /* alloc size folds count*.z.Elem symbolically (arrayAllocSize) */
                                                                      }
 

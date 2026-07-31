@@ -82,9 +82,11 @@ round:	FUNC	; signature func round(float x) -> float @ 51:1
 		FLOf $y %0 
 		RETU   	; }
 
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 57:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 57:1
 	! MULi <A> #BALL_COUNT #BALL_PARAMS_COUNT
-balls:	GLOB *<A>	; signature array balls[] : unknown @ 58:1
+.x.balls:	! DEFi #<A>
+balls:	GLOB *.x.balls	; signature array balls[] : unknown @ 58:1
 
 ;-----------------------------------------------------------------------------
 tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 60:1
@@ -107,7 +109,8 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 	$midiVel:	LOCi
 	$octave:	LOCi
 	$note:	LOCi
-	$ballParams:	LOCA *BALL_PARAMS_COUNT
+.x.tick.ballParams:	! DEFi #BALL_PARAMS_COUNT
+	$ballParams:	LOCA *.x.tick.ballParams
 ;-----------------------------------------------------------------------------
 		DIVf $rsr16 #16.0 $sampleRate	; rsr16 = 16.0 / sampleRate
 		PEEK %1 &params:GRAVITY_PARAM 	; gravity = (float) cube((float) global params[GRAVITY_PARAM]) * MAX_GRAVITY

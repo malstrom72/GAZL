@@ -15,7 +15,8 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 7:1
 ; signature extern native printFloat() -> unknown @ 16:1
 ; signature extern native printLF() -> unknown @ 17:1
 FILTER_WORDS:	! DEFi #.z.Filter	; signature const FILTER_WORDS : int @ 19:1
-store:	GLOB *6	; signature array store[6] : unknown @ 21:1
+.x.store:	! DEFi #6
+store:	GLOB *.x.store	; signature array store[6] : unknown @ 21:1
 
 ;-----------------------------------------------------------------------------
 setup:	FUNC	; signature func setup(Filter-ptr f, int m, float c) -> void @ 23:1

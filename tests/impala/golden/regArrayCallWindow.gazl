@@ -19,8 +19,10 @@ inc:	FUNC	; signature func inc(int x) -> int @ 19:1
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 24:1
 		PARA *1
-	$a:	LOCA *2
-	$b:	LOCA *2
+.x.main.a:	! DEFi #2
+	$a:	LOCA *.x.main.a
+.x.main.b:	! DEFi #2
+	$b:	LOCA *.x.main.b
 ;-----------------------------------------------------------------------------
 		POKE &gi #1 	; global gi = 1
 		PEEK %0 &gi 	; a[global gi] = global gi

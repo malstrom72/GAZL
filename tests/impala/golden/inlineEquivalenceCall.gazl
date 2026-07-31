@@ -69,7 +69,8 @@ sum3:	FUNC	; signature func sum3(int a, int b, int c) -> int @ 51:1
 	$a:	INPi
 	$b:	INPi
 	$c:	INPi
-	$buf:	LOCA *3
+.x.sum3.buf:	! DEFi #3
+	$buf:	LOCA *.x.sum3.buf
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $buf:0 $a 	; buf[0] = a
@@ -172,7 +173,8 @@ sumTo:	FUNC	; signature func sumTo(int n) -> int @ 76:1
 main:	FUNC	; signature func main() -> void @ 80:1
 		PARA *1
 	$t:	LOCi
-	$cell:	LOCA *1
+.x.main.cell:	! DEFi #1
+	$cell:	LOCA *.x.main.cell
 ;-----------------------------------------------------------------------------
 		MOVi $t #10 	; t = 10
 		MOVi %2 $t 	; printInt(pure(t, 1))

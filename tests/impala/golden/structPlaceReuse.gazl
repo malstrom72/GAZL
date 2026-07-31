@@ -26,7 +26,8 @@ main:	FUNC	; signature func main() -> void @ 18:1
 		PARA *1
 	$v:	LOCA *.z.Voice
 	$p:	LOCp
-	$raw:	LOCA *8
+.x.main.raw:	! DEFi #8
+	$raw:	LOCA *.x.main.raw
 ;-----------------------------------------------------------------------------
 		MOVi $v:.o.Voice.note #5 	; v.note = 5
 		ADRL $p $raw:0 *0	; p = (Voice pointer) &raw[0]

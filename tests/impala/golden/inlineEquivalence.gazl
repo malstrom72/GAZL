@@ -13,6 +13,7 @@ shared:	DATi #0	; signature global shared : int @ 24:1
 	! ADDi <a> #<a> #1
 .z.P:	! DEFi #<a>
 ; signature struct P { x : int, y : int } @ 26:1
+.x.sum3.buf:	! DEFi #3
 
 ;-----------------------------------------------------------------------------
 helper:	FUNC	; signature func helper(int a) -> int @ 67:1
@@ -27,7 +28,8 @@ helper:	FUNC	; signature func helper(int a) -> int @ 67:1
 main:	FUNC	; signature func main() -> void @ 80:1
 		PARA *1
 	$t:	LOCi
-	$cell:	LOCA *1
+.x.main.cell:	! DEFi #1
+	$cell:	LOCA *.x.main.cell
 		SCOP
 	$t_i3:	LOCi
 		ENDS
@@ -38,15 +40,15 @@ main:	FUNC	; signature func main() -> void @ 80:1
 	$t_i5:	LOCi
 		ENDS
 		SCOP
-	$buf_i6:	LOCA *3
+	$buf_i6:	LOCA *.x.sum3.buf
 	$i_i6:	LOCi
 		ENDS
 		SCOP
-	$buf_i7:	LOCA *3
+	$buf_i7:	LOCA *.x.sum3.buf
 	$i_i7:	LOCi
 		ENDS
 		SCOP
-	$buf_i8:	LOCA *3
+	$buf_i8:	LOCA *.x.sum3.buf
 	$i_i8:	LOCi
 		ENDS
 		SCOP

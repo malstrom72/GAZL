@@ -2,11 +2,14 @@
 
 ; signatures version=1
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 1:1
-panelTextRows:	GLOB *8	; signature array panelTextRows[8] : unknown @ 3:1
+.x.panelTextRows:	! DEFi #8
+panelTextRows:	GLOB *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 3:1
 	DATA &.s__4d2 &.s__4d2 &.s__4d2 &.s__4d2 &.s__4d2 &.s__4d2
 	DATA &.s__4d2 &.s__4d2
-config:	GLOB *80	; signature array config[80] : unknown @ 8:1
-positions:	GLOB *2	; signature array positions[2] : unknown @ 9:1
+.x.config:	! DEFi #80
+config:	GLOB *.x.config	; signature array config[80] : unknown @ 8:1
+.x.positions:	! DEFi #2
+positions:	GLOB *.x.positions	; signature array positions[2] : unknown @ 9:1
 
 ;-----------------------------------------------------------------------------
 init:	FUNC	; signature func init() -> void @ 11:1

@@ -165,6 +165,8 @@ function locateInUnit(spans, source, index) {
 var TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // a named top-level definition line
 var ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
 var DATA_ROW_RE = /^\s*(?:DAT[ifps]?|DATA)\s/;        // an unlabeled initializer continuation row
+var EXTENT_DEF_RE = /^\s*\.x\.[\w.]+:\s+!/;           // the `.x.name: ! DEFi` naming an array's extent
+var META_DIRECTIVE_RE = /^\s*!\s*\w+/;                // an unlabeled compile-time directive
 
 function stripComment(line) {
 	var at = line.indexOf(";");
@@ -223,6 +225,23 @@ function deadStrip(gazl) {
 			var dataStart = i;
 			var prev = blocks.length > 0 ? blocks[blocks.length - 1] : undefined;
 			if (prev && prev.kind === "loose" && ANON_ALLOC_RE.test(lines[prev.start]) && prev.end === i) {
+				blocks.length = blocks.length - 1;
+				dataStart = prev.start;
+			}
+			// ...and so does the run of compile-time lines that COMPUTES this block's extent: the
+			// `.x.name: ! DEFi` naming it, and the unlabeled `! MULi`/`! ADDi` folding that feeds it.
+			// They belong to the definition twice over. Left loose they are kept unconditionally, so
+			// a dropped array leaves its extent behind - and, worse, the only reference to a const
+			// used purely as an extent (`buf[BUF_SIZE]`, `grid[H * W]`) lives on those lines, so the
+			// walk would never mark BUF_SIZE/H/W reachable and would strip the `! DEFi` out from
+			// under them. A labeled definition ends the run, so an adjacent const or struct layout
+			// is never swallowed.
+			while (blocks.length > 0) {
+				prev = blocks[blocks.length - 1];
+				if (prev.kind !== "loose" || prev.end !== dataStart
+						|| !(EXTENT_DEF_RE.test(lines[prev.start]) || META_DIRECTIVE_RE.test(lines[prev.start]))) {
+					break;
+				}
 				blocks.length = blocks.length - 1;
 				dataStart = prev.start;
 			}

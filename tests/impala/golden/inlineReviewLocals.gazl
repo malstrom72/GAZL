@@ -11,31 +11,33 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
 	! ADDi <a> #<a> #1
 .z.P:	! DEFi #<a>
 ; signature struct P { x : int, y : int } @ 25:1
+.x.sum3.buf:	! DEFi #3
+.x.pickOf.t:	! DEFi #4
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 57:1
 		PARA *1
 	$q:	LOCi
 		SCOP
-	$buf_i0:	LOCA *3
+	$buf_i0:	LOCA *.x.sum3.buf
 	$i_i0:	LOCi
 		ENDS
 		SCOP
-	$buf_i1:	LOCA *3
+	$buf_i1:	LOCA *.x.sum3.buf
 	$i_i1:	LOCi
 		ENDS
 		SCOP
-	$buf_i2:	LOCA *3
+	$buf_i2:	LOCA *.x.sum3.buf
 	$i_i2:	LOCi
 		ENDS
 		SCOP
-	$t_i3:	LOCA *4
+	$t_i3:	LOCA *.x.pickOf.t
 		ENDS
 		SCOP
-	$t_i4:	LOCA *4
+	$t_i4:	LOCA *.x.pickOf.t
 		ENDS
 		SCOP
-	$t_i5:	LOCA *4
+	$t_i5:	LOCA *.x.pickOf.t
 		ENDS
 		SCOP
 	$a_i6:	LOCA *.z.P

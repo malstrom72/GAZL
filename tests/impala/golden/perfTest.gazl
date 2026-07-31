@@ -266,7 +266,8 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 205:1
 		MOVf $y %0 
 		RETU   	; }
 
-gGlobalState:	GLOB *14	; signature array gGlobalState[14] : unknown @ 211:1
+.x.gGlobalState:	! DEFi #14
+gGlobalState:	GLOB *.x.gGlobalState	; signature array gGlobalState[14] : unknown @ 211:1
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 213:1

@@ -4,7 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 9:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 10:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 11:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:1
+.x.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 13:1
 	DATA &.s_BITSCL_4d2 &.s_SINSAM_4d3 &.s_ROTSRA_4d4
 	DATA &.s_DLYLEF_4d5 &.s_SHARPS_4d6 &.s_SHARPF_4d7
 	DATA &.s_SMOOTH_4d8 &.s_SMOOTH_4d9
@@ -30,11 +31,14 @@ panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:1
 ; signature extern const PARAM_COUNT : int @ 46:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 48:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 49:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 50:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 49:1
+.x.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 50:1
 	CNST *1
 clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 51:1
-signal:	GLOB *2	; signature array signal[2] : unknown @ 52:1
+.x.signal:	! DEFi #2
+signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 52:1
 LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 58:1
 LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 59:1
 LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 60:1
@@ -147,8 +151,10 @@ update:	FUNC	; signature func update() -> void @ 138:1
 ;-----------------------------------------------------------------------------
 process:	FUNC	; signature func process() -> void @ 142:1
 		PARA *1
-	$tapped:	LOCA *2
-	$mix:	LOCA *2
+.x.process.tapped:	! DEFi #2
+	$tapped:	LOCA *.x.process.tapped
+.x.process.mix:	! DEFi #2
+	$mix:	LOCA *.x.process.mix
 	$localClock:	LOCi
 	$leftTapBits:	LOCi
 	$rightTapBits:	LOCi

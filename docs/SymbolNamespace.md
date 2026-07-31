@@ -49,11 +49,31 @@ at every access site. **These are implemented and shipping** - see
 [`docs/StructLayoutConstants.md`](StructLayoutConstants.md). Unlike everything above they are STABLE and
 deliberately predictable, because hand-written or host-supplied GAZL must be able to name them.
 
+### Array extent constants: `.x.`
+
+`.x.<global>` and `.x.<function>.<local>`, emitted as `! DEFi` immediately above the array's own
+allocation line, which then reads `*.x.name` instead of a number or a scratch:
+
+    					! MULi <A> #H #W
+    .x.grid:			! DEFi #<A>
+    grid:				GLOB *.x.grid
+
+The value is the allocation size **in words** - the `*size` operand, not the element count (for a
+struct-element array those differ by `.z.Elem`). Every array gets one: global, `readonly`, `temporary`
+and non-inline local alike.
+
+The point is that an extent is usually NOT a number Impala knows. It can be a host-supplied
+`! DEFi` count, or `count * .z.Elem` that only resolves once the host's struct layout is in. Folding it
+into a `<X>` compile-time scratch made the allocation line the one and only place that could read it,
+because the next `borrow('<')` recycles the register. A named constant is permanent, so the extent can
+be quoted anywhere later - which is what lets a frame reservation, a bounds check or a second unit
+refer to it. Like `.o.` / `.z.` these are STABLE and predictable, and carry no random-id suffix.
+
 ### Fixed labels
 
 `.noAssertStrings` - guards the assert-message block so it vanishes when `DEBUG` is 0.
 
-### Inline expansion suffixes (GAZL 2 / `SCOP` branch)
+### Inline expansion suffixes
 
 An expansion appends `_i<N>` to every label and local it replays, so repeated expansions of one body do
 not collide: `.f0` becomes `.f0_i3`, and the callee's local `$tmp` becomes `$tmp_i3`. For a switch the
@@ -74,10 +94,10 @@ between struct `A_B` field `c` and struct `A` field `B_c`.
 
 ## Adding a new one
 
-1. **Take a free tag letter.** In use: `a e f l s t` (labels), `a s` (data), `o z` (layout). Free today:
-   `b c d g h i j k m n p q r u v w x y`.
-2. **Decide which shape it is.** Dot-followed (`.x.Thing.part`) for a stable, nameable constant that
-   host or hand-written GAZL may reference; letter+digits (`.xN`) for an internal, throwaway label.
+1. **Take a free tag letter.** In use: `a e f l s t` (labels), `a s` (data), `o z x` (constants). Free
+   today: `b c d g h i j k m n p q r u v w y`.
+2. **Decide which shape it is.** Dot-followed (`.k.Thing.part`) for a stable, nameable constant that
+   host or hand-written GAZL may reference; letter+digits (`.kN`) for an internal, throwaway label.
 3. **Stable names get NO random-id suffix**; internal content-derived ones get one.
 4. **Re-verify the inventory above** rather than trusting it - it is a snapshot. The tags are all minted
    through `newLabel` / `makeString` and the layout emitters, so:
