@@ -11,7 +11,8 @@ g:	DATi #0	; signature global g : int @ 33:1
 main:	FUNC	; signature func main() -> void @ 50:1
 		PARA *1
 	$w:	LOCi
-	$cell:	LOCA *1
+.x.main.cell:	! DEFi #1
+	$cell:	LOCA *.x.main.cell
 ;-----------------------------------------------------------------------------
 		MOVi $w #10 	; w = 10
 		MULi %1 $w #3	; r = a * 3

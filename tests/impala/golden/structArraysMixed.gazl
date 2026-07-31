@@ -18,7 +18,8 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 7:1
 .z.Bank:	! DEFi #<a>
 ; signature struct Bank { cells : Cell[3], n : int } @ 9:1
 	! MULi <A> #3 #.z.Cell
-top:	GLOB *<A>	; signature array top[3] : Cell @ 10:1
+.x.top:	! DEFi #<A>
+top:	GLOB *.x.top	; signature array top[3] : Cell @ 10:1
 ; signature extern native printInt() -> unknown @ 11:1
 ; signature extern native printLF() -> unknown @ 12:1
 

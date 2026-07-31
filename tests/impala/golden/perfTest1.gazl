@@ -21,7 +21,8 @@ myrand:	FUNC	; signature func myrand() -> int @ 7:1
 		POKE &seed $y 	; global seed = y
 		RETU   	; }
 
-a:	GLOB *20000	; signature array a[20000] : unknown @ 17:1
+.x.a:	! DEFi #20000
+a:	GLOB *.x.a	; signature array a[20000] : unknown @ 17:1
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 19:1

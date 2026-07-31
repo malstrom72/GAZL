@@ -15,9 +15,11 @@
  ; signature extern native printInt() -> unknown @ stripmain.impala:3:1
  ; signature extern native printLF() -> unknown @ stripmain.impala:4:1
  BUF_SIZE:			! DEFi #2	; signature const BUF_SIZE : int @ stripmain.impala:11:1
- KEPT:				CNST *5		; signature array KEPT[5] : int @ stripmain.impala:12:1
+ .x.KEPT:			! DEFi #5
+ KEPT:				CNST *.x.KEPT ; signature array KEPT[5] : int @ stripmain.impala:12:1
  					DATA #9 #9
- buf:				GLOB *BUF_SIZE ; signature array buf[BUF_SIZE] : int @ stripmain.impala:14:1
+ .x.buf:			! DEFi #BUF_SIZE
+ buf:				GLOB *.x.buf ; signature array buf[BUF_SIZE] : int @ stripmain.impala:14:1
 
  ;-----------------------------------------------------------------------------
  main:				FUNC		; signature export func main() -> void @ stripmain.impala:16:1

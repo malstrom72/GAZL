@@ -1953,17 +1953,46 @@
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
 
+    /* The symbol naming an array's allocation extent: `.x.name` for a global, `.x.func.local` for a
+       local. See docs/SymbolNamespace.md. */
+    $$parser.extentSymbol = function (owner, name) {
+        return '.x.' + (owner !== undefined ? owner + '.' : '') + name;
+    };
+
+    /* Publish an array's `*size` as a NAMED assemble-time constant instead of leaving it in a `<X>`
+       scratch. A scratch is a recycled register: it holds the extent only until the next borrow, so
+       the allocation line was the one and only place that could read it. A named constant is
+       permanent and referenceable, which is what lets an extent be quoted anywhere later. The value
+       is usually symbolic - a host `! DEFi` count, or `count * .z.Elem` that only resolves at
+       assembly - so naming it is the ONLY way to hold on to it; there is no number to keep. */
+    $$parser.defineExtent = function (symbol, value) {
+        $$parser.flushMetaCode('');                           /* the `! MULi` that computed value is still queued;
+                                                                 it has to precede the `! DEFi` that reads it
+                                                                 (the rule declare() follows before its own output) */
+        if (!$$parser.dry && typeof output === 'function') {
+            output(symbol + ':' + (typeof TAB !== 'undefined' ? TAB : '\t') + '! DEFi #' + value);
+        }
+        $$parser.returnBack(value);                           /* the constant has taken the value over */
+    };
+
     /* '*size' operand for allocating an ARRAY. A struct-element array is `count * .z.Elem` - kept
        SYMBOLIC (a compile-time `! MULi` into a scratch) so the allocation tracks the element size,
-       exactly like the subscript stride. Scalar elements are one word each, so `*count`. */
-    $$parser.arrayAllocSize = function (elemDesc, count, words) {
+       exactly like the subscript stride. Scalar elements are one word each, so `*count`. Given a
+       `symbol`, the result is named rather than inlined. */
+    $$parser.arrayAllocSize = function (elemDesc, count, words, symbol) {
+        var value;
         if (elemDesc !== undefined && $$parser.descTail(elemDesc) === undefined
                 && $$parser.isStructAtom($$parser.descHead(elemDesc))) {
-            var s = $$parser.borrow('<');
-            $$parser.emit('<> *', 'i', s, '#' + count, '#.z.' + $$parser.descHead(elemDesc));
-            return '*' + s;
+            value = $$parser.borrow('<');
+            $$parser.emit('<> *', 'i', value, '#' + count, '#.z.' + $$parser.descHead(elemDesc));
+        } else {
+            value = words;
         }
-        return '*' + words;
+        if (symbol === undefined) {
+            return '*' + value;
+        }
+        $$parser.defineExtent(symbol, value);
+        return '*' + symbol;
     };
 
     /* The struct atom a pointer/array element descriptor points at, or undefined for anything whose
@@ -3754,7 +3783,9 @@ inp:ArgsDecl ')'_
                                                                                      v.type,
                                                                                      false,
                                                                                      (v.type === 'A'
-                                                                                         ? $$parser.arrayAllocSize(v.elem, v.size, v.words)
+                                                                                         ? $$parser.arrayAllocSize(v.elem, v.size, v.words,
+                                                                                                 ($$parser.inlineMode ? undefined
+                                                                                                         : $$parser.extentSymbol($id, v.name)))
                                                                                          : (v.words !== undefined ? '*' + v.words : undefined)),
                                                                                      $$s, $$i,
                                                                                      undefined,
@@ -4086,7 +4117,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 $a.name,
                                                                                 'A',
                                                                                 ($section === 'CNST'),
-                                                                                $$parser.arrayAllocSize($a.elem, $a.size, $a.words),
+                                                                                $$parser.arrayAllocSize($a.elem, $a.size, $a.words,
+                                                                                        $$parser.extentSymbol(undefined, $a.name)),
                                                                                 $$s, $$i,
                                                                                 $$parser.formatGlobalSignatureComment(
                                                                                     $section,

@@ -64,9 +64,13 @@ site (`PEEK $x $v #.o.Voice.gain`), so brevity keeps generated GAZL compact and 
 are safe here despite the crowded label namespace because a layout tag is ALWAYS dot-followed (`.o.` /
 `.z.`) while the compiler's own labels are letter+digits with no dot (`.s0`, `.e24`, `.l3`,
 `.s_...`). So `.o.Voice` cannot be confused with any `.oN` / `.o_...` label even if that letter were
-later reused. Verified free: the compiler currently emits only `.f .s .e .l .a .t` label tags; `.o` and
-`.z` are unused. (`.z` = size; if you prefer the "words" mnemonic, `.w` is equally free - pick when
-implementing.)
+later reused.
+
+`.z` was chosen over the `.w` ("words") alternative and both `.o.*` and `.z.*` now SHIP - the paragraph
+here used to record them as unused and the choice as open, which is no longer true. The full inventory
+of generated symbols, which letters remain free, and the rules for adding one live in
+[`docs/SymbolNamespace.md`](SymbolNamespace.md); consult that rather than this section, which only
+explains the two layout tags.
 
 Compiler reserves the `.o.*` and `.z.*` prefixes; nothing in Impala emits a leading-dot symbol
 (globals/consts are bare names).

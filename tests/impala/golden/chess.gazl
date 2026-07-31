@@ -80,7 +80,8 @@ PAWN_ADVANCE_SCORE:	! DEFi <A>	; signature const PAWN_ADVANCE_SCORE : int @ 92:1
 CASTLING_SCORE:	! DEFi <A>	; signature const CASTLING_SCORE : int @ 93:1
 CASTLING_MASK:	! DEFi #0x80	; signature const CASTLING_MASK : int @ 94:1
 HISTORY_SIZE:	! DEFi #256	; signature const HISTORY_SIZE : int @ 95:1
-DIRS:	CNST *8	; signature array DIRS[8] : unknown @ 97:1
+.x.DIRS:	! DEFi #8
+DIRS:	CNST *.x.DIRS	; signature array DIRS[8] : unknown @ 97:1
 	! ADDi <A> #STRIDE #1
 	DATA #STRIDE
 	DATA <A>
@@ -96,7 +97,8 @@ DIRS:	CNST *8	; signature array DIRS[8] : unknown @ 97:1
 	! SUBi <A> #STRIDE #1
 	DATA #-1
 	DATA <A>
-KNIGHT_MOVES:	CNST *8	; signature array KNIGHT_MOVES[8] : unknown @ 98:1
+.x.KNIGHT_MOVES:	! DEFi #8
+KNIGHT_MOVES:	CNST *.x.KNIGHT_MOVES	; signature array KNIGHT_MOVES[8] : unknown @ 98:1
 	! MULi <A> #STRIDE #2
 	! ADDi <A> <A> #1
 	! ADDi <B> #2 #STRIDE
@@ -120,7 +122,8 @@ KNIGHT_MOVES:	CNST *8	; signature array KNIGHT_MOVES[8] : unknown @ 98:1
 	! SUBi <B> <B> #1
 	DATA <A>
 	DATA <B>
-PIECE_VALUES:	CNST *7	; signature array PIECE_VALUES[7] : unknown @ 99:1
+.x.PIECE_VALUES:	! DEFi #7
+PIECE_VALUES:	CNST *.x.PIECE_VALUES	; signature array PIECE_VALUES[7] : unknown @ 99:1
 	! MULi <B> #5 #PAWN_VALUE
 	DATA #0 #PAWN_VALUE
 	! MULi <A> #3 #PAWN_VALUE
@@ -130,12 +133,14 @@ PIECE_VALUES:	CNST *7	; signature array PIECE_VALUES[7] : unknown @ 99:1
 	DATA <B>
 	DATA #QUEEN_VALUE #MAX_SCORE
 	! ADDi <B> #8 #4
-RANK_VALUES:	CNST *<B>	; signature array RANK_VALUES[] : unknown @ 100:1
+.x.RANK_VALUES:	! DEFi #<B>
+RANK_VALUES:	CNST *.x.RANK_VALUES	; signature array RANK_VALUES[] : unknown @ 100:1
 	DATA #0 #0 #0 #30 #50 #60 #60 #50 #30 #0 #0 #0
 MAX_TARGET_SQUARES:	! DEFi #32	; signature const MAX_TARGET_SQUARES : int @ 102:1
 MAX_MOVES:	! DEFi #256	; signature const MAX_MOVES : int @ 103:1
 MAX_CAPTURES:	! DEFi #32	; signature const MAX_CAPTURES : int @ 104:1
-INIT_BOARD:	CNST *BOARD_SIZE	; signature array INIT_BOARD[BOARD_SIZE] : unknown @ 107:1
+.x.INIT_BOARD:	! DEFi #BOARD_SIZE
+INIT_BOARD:	CNST *.x.INIT_BOARD	; signature array INIT_BOARD[BOARD_SIZE] : unknown @ 107:1
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
@@ -224,13 +229,17 @@ INIT_BOARD:	CNST *BOARD_SIZE	; signature array INIT_BOARD[BOARD_SIZE] : unknown 
 	DATs PRNBQK  prnbqk
 	DATi #32 #0
 PIECE_CHARS:	! DEFp &.s_PRNBQK_4d2	; signature const PIECE_CHARS : ptr @ 122:1
-PIECE_NAMES:	CNST *8	; signature array PIECE_NAMES[8] : unknown @ 123:1
+.x.PIECE_NAMES:	! DEFi #8
+PIECE_NAMES:	CNST *.x.PIECE_NAMES	; signature array PIECE_NAMES[8] : unknown @ 123:1
 	DATA &.s_PRNBQK_4d2:16 &.s_pawn_4d2 &.s_rook_4d3
 	DATA &.s_knight_4d4 &.s_bishop_4d5 &.s_queen_4d6
 	DATA &.s_king_4d7
-board:	GLOB *BOARD_SIZE	; signature array board[BOARD_SIZE] : unknown @ 125:1
-nextPiece:	GLOB *BOARD_SIZE	; signature array nextPiece[BOARD_SIZE] : unknown @ 126:1
-prevPiece:	GLOB *BOARD_SIZE	; signature array prevPiece[BOARD_SIZE] : unknown @ 127:1
+.x.board:	! DEFi #BOARD_SIZE
+board:	GLOB *.x.board	; signature array board[BOARD_SIZE] : unknown @ 125:1
+.x.nextPiece:	! DEFi #BOARD_SIZE
+nextPiece:	GLOB *.x.nextPiece	; signature array nextPiece[BOARD_SIZE] : unknown @ 126:1
+.x.prevPiece:	! DEFi #BOARD_SIZE
+prevPiece:	GLOB *.x.prevPiece	; signature array prevPiece[BOARD_SIZE] : unknown @ 127:1
 	GLOB *1
 xCapture:	DATi #0	; signature global xCapture : int @ 128:1
 	GLOB *1
@@ -242,15 +251,20 @@ HASH_TABLE_SIZE:	! DEFi <B>	; signature const HASH_TABLE_SIZE : int @ 147:1
 	! XORi <B> #0 #-1
 HASH_MASK:	! DEFi <B>	; signature const HASH_MASK : int @ 148:1
 	! MULi <B> #BOARD_SIZE #64
-pieceKeys:	GLOB *<B>	; signature array pieceKeys[] : unknown @ 150:1
-xCaptureKeys:	GLOB *256	; signature array xCaptureKeys[256] : unknown @ 151:1
+.x.pieceKeys:	! DEFi #<B>
+pieceKeys:	GLOB *.x.pieceKeys	; signature array pieceKeys[] : unknown @ 150:1
+.x.xCaptureKeys:	! DEFi #256
+xCaptureKeys:	GLOB *.x.xCaptureKeys	; signature array xCaptureKeys[256] : unknown @ 151:1
 	! ADDi <B> #WHITE #1
-colorKeys:	GLOB *<B>	; signature array colorKeys[] : unknown @ 152:1
-hashTable:	GLOB *HASH_TABLE_SIZE	; signature array hashTable[HASH_TABLE_SIZE] : unknown @ 153:1
+.x.colorKeys:	! DEFi #<B>
+colorKeys:	GLOB *.x.colorKeys	; signature array colorKeys[] : unknown @ 152:1
+.x.hashTable:	! DEFi #HASH_TABLE_SIZE
+hashTable:	GLOB *.x.hashTable	; signature array hashTable[HASH_TABLE_SIZE] : unknown @ 153:1
 	GLOB *1
 evalCounter:	DATi #0	; signature global evalCounter : int @ 154:1
 	! MULi <B> #HISTORY_SIZE #4
-history:	GLOB *<B>	; signature array history[] : unknown @ 155:1
+.x.history:	! DEFi #<B>
+history:	GLOB *.x.history	; signature array history[] : unknown @ 155:1
 	GLOB *1
 historyCount:	DATi #0	; signature global historyCount : int @ 156:1
 	GLOB *1
@@ -440,8 +454,10 @@ checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 258:1
 	$i:	LOCi
 	$frm:	LOCi
 	$p:	LOCi
-	$counts:	LOCA *<B>
-	$countsAgain:	LOCA *<B>
+.x.checkInvariant.counts:	! DEFi #<B>
+	$counts:	LOCA *.x.checkInvariant.counts
+.x.checkInvariant.countsAgain:	! DEFi #<B>
+	$countsAgain:	LOCA *.x.checkInvariant.countsAgain
 ;-----------------------------------------------------------------------------
 		! EQUi #DEBUG #0 @.a0	; assert((int) isValidColor(global turnColor) != FALSE)
 		PEEK %1 &turnColor 
@@ -1428,7 +1444,8 @@ listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @
 canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 795:1
 	$b:	OUTi
 	$color:	INPi
-	$tos:	LOCA *MAX_TARGET_SQUARES
+.x.canCaptureKing.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.x.canCaptureKing.tos
 	$frm:	LOCi
 	$toCount:	LOCi
 	$i:	LOCi
@@ -1549,8 +1566,10 @@ searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int de
 	$firstMove:	INPi
 	$capturesCount:	LOCi
 	$frm:	LOCi
-	$moves:	LOCA *MAX_MOVES
-	$tos:	LOCA *MAX_TARGET_SQUARES
+.x.searchCaptures.moves:	! DEFi #MAX_MOVES
+	$moves:	LOCA *.x.searchCaptures.moves
+.x.searchCaptures.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.x.searchCaptures.tos
 	$myAlpha:	LOCi
 	$toCount:	LOCi
 	$i:	LOCi
@@ -1638,8 +1657,10 @@ searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int s
 	$depth:	INPi
 	$score:	INPi
 	$firstMove:	INPi
-	$moves:	LOCA *MAX_MOVES
-	$tos:	LOCA *MAX_TARGET_SQUARES
+.x.searchAll.moves:	! DEFi #MAX_MOVES
+	$moves:	LOCA *.x.searchAll.moves
+.x.searchAll.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.x.searchAll.tos
 	$movesCount:	LOCi
 	$capturesCount:	LOCi
 	$frm:	LOCi
@@ -1852,7 +1873,8 @@ search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, 
 executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1053:1
 	$status:	OUTi
 	$move:	INPi
-	$tos:	LOCA *MAX_TARGET_SQUARES
+.x.executeMove.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.x.executeMove.tos
 	$frm:	LOCi
 	$t:	LOCi
 	$oldPiece:	LOCi
@@ -2071,7 +2093,8 @@ toupper:	FUNC	; signature func toupper(int c) -> int @ 1162:1
 getUserMove:	FUNC	; signature func getUserMove() -> int @ 1171:1
 	$result:	OUTi
 	$level:	LOCi
-	$s:	LOCA *256
+.x.getUserMove.s:	! DEFi #256
+	$s:	LOCA *.x.getUserMove.s
 	$l:	LOCi
 	$fromCol:	LOCi
 	$fromRow:	LOCi
@@ -2178,7 +2201,8 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:1
 	$t:	INPi
 	$y:	LOCi
 	$lastI:	LOCi
-	$buffer:	LOCA *2
+.x.printBoard.buffer:	! DEFi #2
+	$buffer:	LOCA *.x.printBoard.buffer
 	$i:	LOCi
 	$c:	LOCi
 	$x:	LOCi
@@ -2354,7 +2378,8 @@ main:	FUNC	; signature func main() -> void @ 1292:1
 	$lastMove:	LOCi
 	$moveResult:	LOCi
 	$action:	LOCp
-	$buffer:	LOCA *256
+.x.main.buffer:	! DEFi #256
+	$buffer:	LOCA *.x.main.buffer
 	$lastCaptured:	LOCi
 	$lastXCapture:	LOCi
 	$p:	LOCp
