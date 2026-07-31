@@ -41,6 +41,14 @@ index (`POKE &g0 %0`). So partial coverage already exists at the assembler level
 
 ## The deferred assertion (verified)
 
+> **Superseded mechanism, 2026-07-31.** Everything below works, but it is the wrong tool. GAZL has a
+> purpose-built `! FAIL <free text>` directive (`src/GAZL.cpp:1027`) that aborts assembly with your own
+> message, and `src/UnitTest.gazl:30-40` already uses `! IFDF`/`! EQUi` + `! FAIL` as the canonical
+> idiom for exactly this. Use that instead of the undefined-label trick: it takes a real sentence
+> rather than encoding the message in a label name. See
+> [`docs/TwoStageConstants.md`](TwoStageConstants.md), "The deferred assertion". The section below is
+> kept because the branch-condition half (which comparison to emit, and when) still applies verbatim.
+
 GAZL has compile-time comparisons that branch (`! LSSi`, `! GEQi`, `! EQUi`, `! NEQi`, ... `_ccb`) and
 `! GOTO`. Branching to a label that does not exist is an assembly error. Together that is an
 assemble-time assertion:
