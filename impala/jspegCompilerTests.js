@@ -1001,14 +1001,15 @@ const inlineCases = [
 	["exporting an inline function",
 		"export inline function g(int a) returns int r { r = a; }\n"
 			+ "function main() locals int q { q = g(1); }\n", "cannot be exported"],
-	// Each expansion re-declares the callee's locals in its own SCOP at the CALLER's head, so an
-	// extent has to be a token that still means the same thing there. `H * N` folds to a `<X>`
-	// scratch, which is pool-recycled and whose `!` line belongs to the callee, so it is rejected.
-	// A literal, a named const and sizeof(Struct) all survive the move and are accepted.
-	["an inline function with a folded array size",
-		"const int H = 2\nconst int N = 2\ninline function f(int a) returns int r\n"
-			+ "locals int array t[H * N]\n{ t[0] = a; r = t[0]; }\n"
-			+ "function main() locals int q { q = f(1); }\n", "folded expression"],
+	// Each expansion re-declares the callee's locals in its own SCOP at the CALLER's head. A folded
+	// extent (`H * N`) lives in a `<X>` scratch, so the records defining it are replayed into that
+	// head too - ONE such extent is fine. Two are not: scratches are pool-recycled, so both can be
+	// named `<A>` and a backward walk cannot tell whose writer is whose. Guessing would silently
+	// mis-size a frame, so that case alone is refused.
+	["an inline function with two folded array sizes",
+		"const int H = 2\nconst int N = 2\nconst int K = 3\ninline function f(int a) returns int r\n"
+			+ "locals int array t[H * N], int array u[N * K]\n{ t[0] = a; u[0] = a; r = t[0] + u[0]; }\n"
+			+ "function main() locals int q { q = f(1); }\n", "only one local extent"],
 	["an inline function that was forward declared",
 		"extern function later\ninline function later(int a) returns int r { r = a; }\n"
 			+ "function main() locals int q { q = later(1); }\n", "was already declared"],

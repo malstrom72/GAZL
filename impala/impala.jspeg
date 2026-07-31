@@ -1519,6 +1519,53 @@
         return false;
     };
 
+    /*
+        Detach the `!` records that define an inline function's local extents.
+
+        A folded extent (`t[H * N]`) lives in a `<X>` scratch, and the records defining it are still
+        PENDING here because declare() deliberately does not flush for an inline function's locals. They
+        must not stay in the captured body - the declaration that reads the scratch is emitted at the
+        CALLER's head, above the body - so each local takes the records it depends on and the rest of
+        metacode is left alone.
+
+        Ambiguity to respect: scratches are pool-recycled, so two folded extents in one function can BOTH
+        be named `<A>` and a backward walk cannot tell whose writer is whose. That case (and only that
+        case) is still refused, because guessing would silently mis-size a frame.
+    */
+    $$parser.captureInlineExtents = function (sourceCode, sourceOffset) {
+        var locals = $$parser.inlineLocals, folded = [], i, k;
+        for (i = 0; i < locals.length; ++i) {
+            if (locals[i].size !== undefined && ('' + locals[i].size).indexOf('<') >= 0) folded.push(locals[i]);
+        }
+        if (folded.length === 0) return;
+        if (folded.length > 1) {
+            $$parser.fail('An inline function can fold only one local extent: ' + folded[0].name.substr(1)
+                        + ' and ' + folded[1].name.substr(1) + ' both need one',
+                    sourceCode, sourceOffset, 'E433',
+                    'compile-time scratches are recycled, so two folded extents cannot be told apart here - give one a named const');
+        }
+        var want = {}, taken = [], m = ('' + folded[0].size).match(/<[^>]*>/);
+        want[m[0]] = true;
+        for (i = $$parser.metacode.length - 1; i >= 0; --i) {          /* last writer of each wanted scratch */
+            var rec = $$parser.metacode[i];
+            if (!rec || rec.operator === undefined) continue;
+            var dst = '' + rec.operands[0];
+            if (want[dst] !== true) continue;
+            taken.unshift(rec);
+            want[dst] = false;
+            for (k = 1; k < 3; ++k) {
+                var mm = (rec.operands[k] == null ? null : ('' + rec.operands[k]).match(/<[^>]*>/));
+                if (mm && want[mm[0]] === undefined) want[mm[0]] = true;
+            }
+        }
+        folded[0].code = taken;
+        for (i = $$parser.metacode.length - 1; i >= 0; --i) {          /* the body must not re-run them */
+            for (k = 0; k < taken.length; ++k) {
+                if ($$parser.metacode[i] === taken[k]) { $$parser.metacode.splice(i, 1); break; }
+            }
+        }
+    };
+
     /* Snapshot a body before flushMetaCode() clears it, operand-for-operand. The `;` source comments are
        KEPT, so an expansion can re-emit them. (There is no RETU to drop: it is emitted after this runs.) */
     $$parser.captureInlineBody = function (name, sourceCode, sourceOffset) {
@@ -1644,6 +1691,14 @@
                     emitLine(_tab + '\t! MULi ' + lsc + ' #' + lv.count + ' #.z.' + lv.elemStruct);
                     lsize = '*' + lsc;
                     $$parser.returnBack(lsc);                   /* safe: the LOCA reading it is the very next line */
+                } else if (lv.code !== undefined) {
+                    /* A folded extent: replay the records that define its scratch, into THIS head, right
+                       above the declaration reading them. Rendering goes through flushMetaCode so the
+                       `!` lines come out in the one canonical shape - swap the list it renders. */
+                    var _saved = $$parser.metacode;
+                    $$parser.metacode = lv.code.slice(0);
+                    $$parser.flushMetaCode(_tab);
+                    $$parser.metacode = _saved;
                 }
                 emitLine(_tab + lname + ':\t'
                         + replace(lv.kind, '?', $$parser.TYPE_SUFFIXES[lv.type] || '')
@@ -3790,18 +3845,13 @@ inp:ArgsDecl ')'_
                                                                                          ? $$parser.arrayAllocSize(v.elem, v.size, v.words)
                                                                                          : (v.words !== undefined ? '*' + v.words : undefined)));
                                                                              if ($$parser.inlineMode) {
-                                                                                 /* Each expansion re-declares this local at the CALLER's head, so record what
-                                                                                    the size is MADE OF rather than the operand folded here: `size` may name a
-                                                                                    `<X>` scratch that is pool-recycled and whose `!` line belongs to this
-                                                                                    function. An array of structs is re-rendered per expansion (below); anything
-                                                                                    else must already be a self-contained token. */
+                                                                                 /* Each expansion re-declares this local at the CALLER's head, so it needs what
+                                                                                    the size is MADE OF, not just the operand folded here - which may name a
+                                                                                    `<X>` scratch whose `!` line belongs to THIS function's head. An array of
+                                                                                    structs is re-rendered from its two pieces; a folded expression has its
+                                                                                    defining records captured below. */
                                                                                  var elemStruct = (v.type === 'A' ? $$parser.strideStruct(v.elem) : undefined);
                                                                                  var ownSize = (elemStruct !== undefined ? undefined : size);
-                                                                                 if (ownSize !== undefined && ('' + ownSize).indexOf('<') >= 0) {
-                                                                                     $$parser.fail('An inline function cannot size the local ' + v.name
-                                                                                                 + ' from a folded expression', $$s, $$i, 'E433',
-                                                                                             'each expansion re-declares it, so write the extent as a literal, a named const or sizeof(Struct)');
-                                                                                 }
                                                                                  $$parser.inlineLocals.push({ name: '$' + v.name, kind: kind,
                                                                                          type: type, size: ownSize, elem: elem,
                                                                                          elemStruct: elemStruct, count: v.size });
@@ -3809,6 +3859,9 @@ inp:ArgsDecl ')'_
                                                                              $$parser.declare(kind, 'locals', '$' + v.name, type, false, size,
                                                                                      $$s, $$i, undefined, elem);
                                                                          });
+                                                                         if ($$parser.inlineMode) {
+                                                                             $$parser.captureInlineExtents($$s, $$i);
+                                                                         }
                                                                      }
                 )?                                                    { /* The head/body separator is emitted at the REPLAY below, not here: an inline
                                                                            expansion appends its SCOP block to the head while the body is being parsed,
