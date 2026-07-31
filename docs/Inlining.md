@@ -1,5 +1,11 @@
 # Function inlining in Impala (spec)
 
+> **PARKED for Impala 3.0 on this branch.** `inline` is rejected with `E439`; the implementation lives on
+> the `GAZL2` branch. An expansion places its locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 has to stay
+> usable on GAZL 1.0 engines, which reject `SCOP` outright. See
+> [`docs/ParkedFeatures.md`](ParkedFeatures.md). Everything below describes the design as built and is
+> kept as the spec to restore from - it is not what this branch's compiler does.
+
 Status: SPEC. Explicit `inline` keyword, no heuristics. Targets FUTURE firmware - see the coverage note at
 the end for what this deliberately does not reach.
 

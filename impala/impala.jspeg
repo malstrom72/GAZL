@@ -140,10 +140,6 @@
     /* 2  make sure the buckets exist */
     var $$parser.META_TO_GAZL   = {};
     var $$parser.SUPPORTED_OPS  = {};
-    var $$parser.inlineLocals   = [];                            /// scalar locals of the inline function being parsed
-    var $$parser.inlineMode     = false;                         /// true while parsing an `inline function` body - emit nothing
-    var $$parser.INLINE_PURE    = {};                          /// operators whose write destination the compiler can NAME
-    var $$parser.inlineCounter  = 0;                           /// per-expansion suffix, keeps inlined labels unique
     var $$parser.CASTS_TO_TYPES = {};
     var $$parser.ZEROES = {};
     var $$parser.TYPE_SUFFIXES  = {};
@@ -596,13 +592,6 @@
         }
         $$parser.checkExternAgreement(name, entry.externProto, entry.signature, true, sourceCode, sourceOffset);
 
-        /* An `inline function` has no out-of-line copy, so it publishes neither a FUNC label nor a
-           signature row - there is nothing for a caller or the validator to link against. */
-        if ($$parser.inlineMode) {
-            entry.kind = 'FUNC';                          /* still claims the name (duplicate detection) */
-            return;
-        }
-
         var comment = $$parser.formatFunctionSignatureComment(name, entry.signature);
 
         var entryType = (entry.type !== undefined ? entry.type : 'U');
@@ -807,11 +796,6 @@
         /* walk metacode bottom-to-top */
         for (var i = $$parser.metacode.length - 1; i >= 0; --i) {
             var inst = $$parser.metacode[i];
-
-            if (inst.settled) {                 /* already resolved when its inline body was captured */
-                target.false = target.true = currentGoto = null;
-                continue;
-            }
 
             switch (inst.operator) {
 
@@ -1406,306 +1390,6 @@
     $$parser.addFuncTypeReturn = function (name, type, elem, struct, words, sourceCode, sourceOffset) {
         $$parser.rejectByValueStruct(type, struct, name, true, sourceCode, sourceOffset);
         $$parser.functypes[name].returnList.push({ type: type, elem: elem, struct: struct, words: words });
-    };
-
-    /* --------------------------------------------------------- *
-     *  `inline function` expansion (see docs/Inlining.md)        *
-     * --------------------------------------------------------- */
-
-    /* Operators whose destination the compiler can NAME, so they cannot disturb a caller's local.
-       A POSITIVE list on purpose: an operator nobody classified defaults to opaque, so a write form
-       added later fails safe instead of silently making substitution unsound. */
-    map($$parser.INLINE_PURE,
-        '=',1, ':=',1, '=itof',1, '=ftoi',1, '=abs',1, '=floor',1,
-        '=[]',1, '=[]$',1, '=*',1, ':=*',1, '=&',1, '[]$=',1,
-        '|',1, '&',1, '^',1, '<<',1, '>>>',1, '>>',1,
-        '+',1, '-',1, '*',1, '/',1, '%',1, 'd',1,
-        '<=',1, '<',1, '>=',1, '>',1, '!=',1, '==',1,
-        '!<=',1, '!<',1, '!>=',1, '!>',1, '!!=',1, '!==',1,
-        '-->',1, '-->#',1, '...',1, '<--',1
-    );
-
-    /* Which operand positions accept an immediate (`#const`), plus a leading `d` when position 0 is the
-       DESTINATION. A positive list like INLINE_PURE: an operator missing here forces the argument to be
-       materialised, which is always correct. Verified one by one against the operand forms in
-       docs/InstructionSet.md. The COMPARISONS are the only entries with no `d`, because they branch
-       instead of producing a value - their operands 0 and 1 are both sources and the label is operand 2.
-       Stating the destination rather than inferring it from an absent `0` keeps the failure direction
-       safe: forget the marker on a new operator and it reads as "not foldable", never as "straight line". */
-    $$parser.INLINE_IMM_OK = {};
-    map($$parser.INLINE_IMM_OK,
-        '=',    'd1',  ':=',     'd1',                     /* MOVi   int(d) #int          */
-        '=abs', 'd1',  '=floor', 'd1', '=itof', 'd1', '=ftoi', 'd1',  /* ABSi/FLOf/ITOF/FTOI */
-        '+',   'd12',  '-',     'd12', '*',    'd12', '/',    'd12', '%', 'd12',
-        '|',   'd12',  '&',     'd12', '^',    'd12',
-        '<<',  'd12',  '>>',    'd12', '>>>',  'd12',
-        '<',    '01',  '<=',     '01', '>',     '01', '>=',   '01', '==', '01', '!=', '01',
-        '!<',   '01',  '!<=',    '01', '!>',    '01', '!>=',  '01', '!==','01', '!!=','01'
-    );
-
-    /* How many immediate sources an operator CALCULATES into position 0, or undefined if it calculates
-       nothing - which is exactly the operators with no `d`. One derivation serves both the constant fold
-       and the straight-line test, so the two can never disagree about what "produces a value" means. */
-    $$parser.inlineFoldWidth = function (op) {
-        var pos = $$parser.INLINE_IMM_OK[op];
-        return (pos === undefined || pos.charAt(0) !== 'd' ? undefined : pos.length - 1);
-    };
-
-    /* May this operand carry an immediate in EVERY place the body uses it? One bad use - a SWCH value,
-       an array base, a POKE address - spoils it, and materialising it there while substituting elsewhere
-       would need the MOV anyway. For a folded TEMPORARY, a destination position 0 is the write being
-       replaced, so it is not a use; the `d` marker says so per operator rather than per call site. */
-    function takesImmediate(body, name, isTemp) {
-        for (var i = 0; i < body.length; ++i) {
-            if (body[i].operator === ';') continue;                /* comment prose, not operands */
-            var okPos = $$parser.INLINE_IMM_OK[body[i].operator];
-            for (var k = (isTemp && ('' + okPos).charAt(0) === 'd' ? 1 : 0); k < 3; ++k) {
-                if (('' + body[i].operands[k]) !== '' + name) continue;
-                if (okPos === undefined || okPos.indexOf('' + k) < 0) return false;
-            }
-        }
-        return true;
-    }
-
-    /* An `inline function` has no out-of-line copy, so its address does not exist. A direct call never
-       emits `&name` at all (FuncCall expands the body instead), so ANY such operand reaching the output
-       is an address-take. Checked once where operands are rendered, so every consumer is covered. */
-    $$parser.rejectInlineAddress = function (operand) {
-        if (operand == null) return;
-        var name = '' + operand;
-        if (name.charAt(0) !== '&') return;
-        var fn = $$parser.symbols.functions[name = name.substr(1)];
-        if (fn !== undefined && fn.inline !== undefined) {
-            $$parser.fail('Cannot take the address of the inline function ' + name,
-                    undefined, undefined, 'E435',
-                    'an inline function has no out-of-line copy; drop `inline` to use it as a value');
-        }
-    };
-
-    /* Can this ONE record write a location it does not NAME? That is the whole soundness question, both
-       for a body (can it disturb a caller's local?) and for the marshalling scan below (can it disturb a
-       read we are about to defer past it?). One predicate, so the two cannot drift apart. */
-    $$parser.recordIsOpaque = function (m) {
-        var op = m.operator;
-        if (op === ';' || op.substr(0, 3) === '<> ') return false;  /* prose, or a fold writing only `<X>` */
-        if (op === '[]=' || op === '*=') {                          /* POKE: nameable only as `&global` */
-            return (('' + m.operands[0]).charAt(0) !== '&');
-        }
-        return (op === '()' || op === 'copy'                        /* a call, or a computed-dest COPY */
-                || !$$parser.INLINE_PURE[op]);                      /* unrecognised -> assume the worst */
-    };
-
-    $$parser.bodyIsOpaque = function (body) {
-        for (var i = 0; i < body.length; ++i) if ($$parser.recordIsOpaque(body[i])) return true;
-        return false;
-    };
-
-    /* Snapshot a body before flushMetaCode() clears it, operand-for-operand. The `;` source comments are
-       KEPT, so an expansion can re-emit them. (There is no RETU to drop: it is emitted after this runs.) */
-    $$parser.captureInlineBody = function (name, sourceCode, sourceOffset) {
-        var entry = $$parser.symbols.functions[name];
-        var sig = entry.signature;
-        var body = [], maxT = -1;
-        for (var i = 0; i < $$parser.metacode.length; ++i) {
-            var m = $$parser.metacode[i];
-            if (m.operator === undefined || m.operator === null) continue;      /* removed by processBranches */
-            if (m.operator === '()' && ('' + m.operands[0]) === '&' + name) {
-                $$parser.fail('An inline function cannot call itself', sourceCode, sourceOffset, 'E432',
-                        'inlining a recursive function would never terminate');
-            }
-            body.push({ operator: m.operator, type: m.type, inlineFold: m.inlineFold,
-                    operands: [ m.operands[0], m.operands[1], m.operands[2] ] });
-            for (var mo = 0; mo < 3; ++mo) {        /* the callee numbers its temporaries from 0; `%<X>`
-                                                       parses as NaN and so drops out of the compare */
-                var mv = m.operands[mo];
-                if (mv === undefined || ('' + mv).charAt(0) !== '%') continue;
-                var mn = parseInt(('' + mv).substr(1), 10);
-                if (mn > maxT) maxT = mn;
-            }
-        }
-        var params = [], litOK = [];
-        for (var p = 0; p < sig.params.length; ++p) {
-            params.push('$' + sig.params[p].name);
-            litOK.push(takesImmediate(body, params[p], false));
-        }
-        /* Constant folding inside the body (see expandInline) propagates a value from one instruction
-           to the next, which is only sound along a straight line: a label is a join point and a branch
-           can skip the write. Rather than model that, only fold bodies that are PURE ARITHMETIC - every
-           instruction a move or a calculation. That is exactly the shape worth folding anyway. */
-        var straightLine = true;
-        for (var si = 0; si < body.length && straightLine; ++si) {
-            straightLine = (body[si].operator === ';'
-                    || $$parser.inlineFoldWidth(body[si].operator) !== undefined);
-        }
-        entry.inline = { body: body, params: params, litOK: litOK, straightLine: straightLine,
-                locals: $$parser.inlineLocals, maxTransient: maxT,
-                ret: (sig.returnName !== undefined ? '$' + sig.returnName : undefined),
-                opaque: $$parser.bodyIsOpaque(body) };
-    };
-
-    /* Replay a captured body at a call site. The arguments are ALREADY marshalled into the call
-       window, so materialising is the default and substitution is a deletion: if the instruction that
-       filled a window slot is a plain move of a literal (or of a local, when the body is transparent),
-       drop it and use its source directly. Rules 2 and 4 of the spec then need no code at all - a
-       computed argument and a global argument both just keep their window slot. */
-    $$parser.expandInline = function (info, base, retSlots, argCount, mark) {
-        var subst = {}, i, j, k;
-        for (k = 0; k < argCount; ++k) {
-            var slot = '%' + (base + retSlots + k);
-            var src = slot;
-            for (j = $$parser.metacode.length - 1; j >= mark; --j) {   /* only THIS call's own marshalling */
-                var m = $$parser.metacode[j];
-                if (m.operator === undefined) continue;
-                if (m.operands[0] !== slot) {
-                    /* Deferring the read past this record means the body sees whatever it did. A CALL
-                       writes its own window (naming the base at operand 1, so the test above misses it),
-                       a POKE writes through a pointer, and a nested inline expansion emits either inline
-                       with no CALL record at all. All of them are exactly `recordIsOpaque`. */
-                    if ($$parser.recordIsOpaque(m)) break;
-                    continue;
-                }
-                if ((m.operator === '=' || m.operator === ':=') && m.operands[2] === undefined) {
-                    var o = '' + m.operands[1];
-                    var c = o.charAt(0);
-                    /* A SLOT may be substituted when the body cannot observe a write to the argument's
-                       storage (transparent), which is the aliasing argument in section 4 of the spec.
-                       A place operand (`$v:<A>`) is excluded: it carries a scratch whose value the
-                       expansion can redefine before the deferred read.
-                       A LITERAL may be substituted whenever every position that reads it accepts an
-                       immediate (litOK, decided at capture). Opacity does not apply to a literal: it has
-                       no storage to alias, and nothing in the body writes the argument window anyway. */
-                    if ((c === '$' && o.indexOf(':') < 0 && !info.opaque)
-                            || (c === '#' && info.litOK[k])) {
-                        src = o;
-                        m.operator = undefined;                /* flushMetaCode skips a cleared record */
-                    }
-                }
-                break;
-            }
-            subst[info.params[k]] = src;
-        }
-        if (info.ret !== undefined) subst[info.ret] = '%' + base;   /* the window's output slot */
-        var runs = [];                              /* every run borrowed below, released in reverse at the end */
-        function borrowRun(n) {                     /* an array local and the callee's own temporaries both
-                                                       need their slots ADJACENT */
-            var b = (n > 1 ? $$parser.borrowForCall()
-                           : parseInt($$parser.borrow('%').substr(1), 10));
-            for (var q = 1; q < n; ++q) $$parser.claimSlot(b + q);   /* slot 0 came with the borrow */
-            runs.push([ b, n ]);
-            return b;
-        }
-        for (k = 0; k < info.locals.length; ++k) {  /* a local lives in transients, one expansion at a time */
-            subst[info.locals[k].name] = '%' + borrowRun(info.locals[k].words);
-        }
-
-        var tag = '_i' + ($$parser.inlineCounter++);
-        var scratchMap = {};                    /* `<X>` folds carried in from an inner expansion */
-        function mapScratch(sc) {
-            if (!Object.prototype.hasOwnProperty.call(scratchMap, sc)) scratchMap[sc] = $$parser.borrow('<');
-            return scratchMap[sc];
-        }
-        var tCount = info.maxTransient + 1;      /* one run keeps every window inside the body intact */
-        var tBase = (tCount > 0 ? borrowRun(tCount) : -1);
-        var symOffsets = {};
-
-        var constMap = {}, foldScratch = [];     /* callee values that turned out to be compile-time */
-        function constFold(op) {                 /* read a value the fold above already resolved */
-            return (op !== undefined && Object.prototype.hasOwnProperty.call(constMap, '' + op)
-                    ? constMap['' + op] : op);
-        }
-        function isConstOperand(op) {            /* `#42` immediate, or `<A>` compile-time scratch */
-            var c = (op === undefined ? '' : ('' + op).charAt(0));
-            return (c === '#' || c === '<');
-        }
-        function mapOperand(op) {
-            if (op === undefined || op === null) return op;
-            var s = '' + op;
-            if (Object.prototype.hasOwnProperty.call(subst, s)) return subst[s];
-            if (s.charAt(0) === '%') {
-                if (s.charAt(1) === '<') return '%' + mapScratch(s.substr(1));   /* %<X>: rename only */
-                return '%' + (tBase + parseInt(s.substr(1), 10));   /* a slot number, shifted as a block */
-            }
-            if (s.length === 3 && s.charAt(0) === '<') return mapScratch(s);   /* a bare `<X>` */
-            if (s.charAt(0) === '@') {                          /* labels: per-expansion suffix */
-                var hh = s.indexOf('#');                        /* a switch case label is `<base>#<k>` */
-                return (hh < 0 ? s + tag : s.substr(0, hh) + tag + s.substr(hh));
-            }
-            /* A frame place must be resolved BEFORE the compound-scratch rule below: a nested struct
-               field arrives as `$v:<A>` (base plus a folded offset scratch), and renaming the scratch
-               without mapping the base would leave a local the caller never declared. */
-            var colon = s.indexOf(':');                         /* `$name:offset` frame places */
-            if (colon > 0 && Object.prototype.hasOwnProperty.call(subst, s.substr(0, colon))) {
-                var mapped = subst[s.substr(0, colon)];
-                var off = s.substr(colon + 1);
-                if (off.length === 3 && off.charAt(0) === '<') off = mapScratch(off);
-                if (mapped.charAt(0) !== '%') return mapped + ':' + off;
-                /* GAZL has no `%N:offset`. A numeric element offset folds straight into the slot
-                   number; a struct field's offset is a SYMBOL (`.o.S.f`) that only the assembler can
-                   resolve, so fold it there instead and index the transient symbolically - `%<X>` is
-                   legal, and the whole fold is assemble-time, costing nothing at run time. */
-                var n = parseInt(off, 10);
-                if (!isNaN(n) && ('' + n) === off) return '%' + (parseInt(mapped.substr(1), 10) + n);
-                if (!Object.prototype.hasOwnProperty.call(symOffsets, s)) {
-                    var sc = $$parser.borrow('<');   /* minted before the record that reads it, so push it now */
-                    $$parser.metacode.push({ operator: '<> +', type: 'i', settled: true, inlineFold: true,
-                            operands: [ sc, '#' + mapped.substr(1), '#' + off ] });
-                    symOffsets[s] = '%' + sc;
-                }
-                return symOffsets[s];
-            }
-            if (s.length > 3 && s.charAt(s.length - 1) === '>'  /* `*<A>`, `#<D>`, `&g:<D>` */
-                    && s.charAt(s.length - 3) === '<') {
-                return s.substr(0, s.length - 3) + mapScratch(s.substr(s.length - 3));
-            }
-            return s;
-        }
-        for (i = 0; i < info.body.length; ++i) {
-            var b = info.body[i];
-            if (b.operator === ';') {               /* comment text is prose, not an operand to rewrite */
-                $$parser.metacode.push({ operator: ';', type: b.type, settled: true,
-                        operands: [ b.operands[0], undefined, undefined ] });
-                continue;
-            }
-            /* an inherited `! ADDi <X> #slot #offset` carries a callee SLOT NUMBER in operand 1, not an
-               immediate, so that one shifts with the block instead of being mapped */
-            var d0 = mapOperand(b.operands[0]), fw = $$parser.inlineFoldWidth(b.operator);
-            var s1 = (b.inlineFold ? '#' + (tBase + parseInt(('' + b.operands[1]).substr(1), 10))
-                                   : constFold(mapOperand(b.operands[1])));
-            var s2 = constFold(mapOperand(b.operands[2]));
-
-            /* CONSTANT FOLDING. Sources that are all compile-time constants make the RESULT one too, so
-               keep it in a `<X>` scratch instead of a transient. GAZL would otherwise fold the maths at
-               assemble time and still emit a runtime MOVE to park the value (GAZL.cpp, "Const calc ->
-               MOVE"), which is a whole instruction spent on a number we already know. */
-            if (info.straightLine && !b.inlineFold && isConstOperand(s1) && fw !== undefined
-                    && (fw === 1 ? s2 === undefined : isConstOperand(s2))
-                    && ('' + d0).charAt(0) === '%' && ('' + d0) !== '%' + base
-                    && takesImmediate(info.body, b.operands[0], true)) {
-                if (b.operator === '=' || b.operator === ':=') {
-                    constMap['' + d0] = s1;            /* a move of a constant is pure propagation */
-                } else {
-                    var fsc = $$parser.borrow('<');
-                    foldScratch.push(fsc);
-                    $$parser.metacode.push({ operator: '<> ' + b.operator, type: b.type, settled: true,
-                            operands: [ fsc, s1, s2 ] });
-                    constMap['' + d0] = fsc;
-                }
-                continue;
-            }
-            delete constMap['' + d0];                  /* written with a run-time value again */
-            $$parser.metacode.push({ operator: b.operator, type: b.type, settled: true,
-                    inlineFold: b.inlineFold, operands: [ d0, s1, s2 ] });
-        }
-        for (k = 0; k < foldScratch.length; ++k) $$parser.returnBack(foldScratch[k]);
-        for (var sm in scratchMap) {
-            if (Object.prototype.hasOwnProperty.call(scratchMap, sm)) $$parser.returnBack(scratchMap[sm]);
-        }
-        for (var so in symOffsets) {
-            if (Object.prototype.hasOwnProperty.call(symOffsets, so)) $$parser.returnBack(symOffsets[so]);
-        }
-        for (k = runs.length - 1; k >= 0; --k) {
-            for (var rs = runs[k][1] - 1; rs >= 0; --rs) $$parser.returnBack('%' + (runs[k][0] + rs));
-        }
     };
 
     $$parser.endFuncType = function (name) {
@@ -2977,7 +2661,7 @@
 
     function $$parser.declare(kind, scope, name, type, readonly, value, sourceCode, sourceOffset, comment, elem) {
         /* emit data / flush pending code */
-        if (kind !== undefined && !($$parser.inlineMode && scope === 'locals')) {
+        if (kind !== undefined) {
             $$parser.flushMetaCode('');
 
             if (typeof output === 'function') {
@@ -3063,8 +2747,6 @@
                 /* empty / removed meta - skip */
                 continue;
             }
-
-            for (var ia = 0; ia < 3; ++ia) $$parser.rejectInlineAddress(rec.operands[ia]);
 
             /* -------------------------------------------------- */
             /* handle a stand-alone label (“<--”)                 */
@@ -3573,17 +3255,11 @@ FuncDecl    <-                                                        { $inl = f
                 ( INLINE _                                            { $inl = true; }
                 )?
                 FUNCTION _ id:Identifier '('_                         {
-                                                                         $$parser.inlineMode = $inl;
-                                                                         $$parser.inlineLocals = [];
-                                                                         if ($inl && $$parser.symbols.functions[$id] !== undefined) {
-                                                                             $$parser.fail('The inline function ' + $id + ' was already declared',
-                                                                                     $$s, $$i, 'E436',
-                                                                                     'an inline function emits no symbol, so it cannot be forward declared or redeclared');
-                                                                         }
-                                                                         if ($inl && $$parser.exportNext) {
-                                                                             $$parser.fail('An inline function cannot be exported',
-                                                                                     $$s, $$i, 'E434',
-                                                                                     'there is no out-of-line copy to link against; a caller needs the source, via `import`');
+                                                                         if ($inl) {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+                                                                             $$parser.fail('Inline functions are not supported in Impala 2.0',
+                                                                                     $$s, $$i, 'E439',
+                                                                                     'an expansion needs GAZL 2 `SCOP` / `ENDS` to place its locals; '
+                                                                                             + 'drop `inline` to compile it as an ordinary function');
                                                                          }
                                                                          assert($$parser.validateStock('%'));
                                                                          assert($$parser.validateStock('<'));
@@ -3593,10 +3269,8 @@ FuncDecl    <-                                                        { $inl = f
                                                                                  'compile-time scratch leak before ' + $id + ': '
                                                                                  + ($$parser.counters['<'] - $$parser.stock['<'].length) + ' unreturned');
 
-                                                                         if (!$$parser.inlineMode) {
-                                                                             output('');
-                                                                             output(';-----------------------------------------------------------------------------');
-                                                                         }
+                                                                         output('');
+                                                                         output(';-----------------------------------------------------------------------------');
 
                                                                          /* declare the function symbol */
                                                                          $$parser.declare(
@@ -3748,23 +3422,6 @@ inp:ArgsDecl ')'_
                                                                      }
                 (
                     LOCALS _ loc:LocalsDecl                           {
-                                                                         if ($$parser.inlineMode) {
-                                                                             /* A scalar local becomes a borrowed transient at each expansion site. An array or
-                                                                                struct needs FRAME space, and frame declarations are emitted at the function
-                                                                                head while an expansion site is mid-body. See docs/Inlining.md section 8. */
-                                                                             iterate($loc, function (v) {
-                                                                                 var words = $$parser.fieldWords(v);
-                                                                                 /* the run occupies a COUNTED set of transients, so the total must be a number
-                                                                                    here. Impala knows every non-extern struct's size; a folded or symbolic
-                                                                                    array extent does not resolve until assembly. */
-                                                                                 if (!(words > 0)) {
-                                                                                     $$parser.fail('An inline function needs a compile-time size for the local '
-                                                                                                 + v.name, $$s, $$i, 'E433',
-                                                                                             'its words occupy transients, so the count must be known while compiling');
-                                                                                 }
-                                                                                 $$parser.inlineLocals.push({ name: '$' + v.name, words: words });
-                                                                             });
-                                                                         }
                                                                          iterate($loc, function (v) {
                                                                              if (v.type === 'S') {         /* struct value local -> LOCA *sizeof, remember struct */
                                                                                  $$parser.declare(
@@ -3785,8 +3442,7 @@ inp:ArgsDecl ')'_
                                                                                      false,
                                                                                      (v.type === 'A'
                                                                                          ? $$parser.arrayAllocSize(v.elem, v.size, v.words,
-                                                                                                 ($$parser.inlineMode ? undefined
-                                                                                                         : $$parser.extentSymbol($id, v.name)))
+                                                                                                 $$parser.extentSymbol($id, v.name))
                                                                                          : (v.words !== undefined ? '*' + v.words : undefined)),
                                                                                      $$s, $$i,
                                                                                      undefined,
@@ -3800,23 +3456,17 @@ inp:ArgsDecl ')'_
                                                                              $$parser.returnBack(v.size);
                                                                          });
                                                                      }
-                )?                                                    { if (!$$parser.inlineMode) output(';-----------------------------------------------------------------------------'); }
+                )?                                                    { output(';-----------------------------------------------------------------------------'); }
                 Block                                                 {
                                                                          /* wrap-up body */
                                                                          $$parser.processBranches();
-                                                                         if ($$parser.inlineMode) {                       /* no out-of-line copy: keep the body, emit nothing */
-                                                                             $$parser.captureInlineBody($id, $$s, $$i);
-                                                                             $$parser.metacode.length = 0;
-                                                                         } else {
-                                                                             $$parser.emit('--^', undefined, undefined, undefined, undefined);
-                                                                             $$parser.flushMetaCode('\t');
-                                                                         }
+                                                                         $$parser.emit('--^', undefined, undefined, undefined, undefined);
+                                                                         $$parser.flushMetaCode('\t');
 
                                                                          prune($$parser.symbols.locals);
                                                                          $$parser.labelCounter = 0;
 
-                                                                         if (!$$parser.inlineMode) output('');
-                                                                         $$parser.inlineMode = false;
+                                                                         output('');
                                                                      }
 ExternDecl  <-  EXTERN _                                              { $$.scope = 'globals'; $$.structFwd = false;
                                                                         $at = $$i;   /* the declaration itself - end-of-rule positions have skipped past it */
@@ -4618,10 +4268,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            commentIndex = $$parser.metacode.length - 1;
                                                        }
 
-                                                       var inlineInfo = (entry ? entry.inline : undefined);
-                                                       if (inlineInfo !== undefined) {   /* replay the body instead of calling it */
-                                                           $$parser.expandInline(inlineInfo, $$.base, $$.retSlots, $$.words, $$.mark);
-                                                       } else {
+                                                       {
                                                            var func = $$parser.makeRValue(callee, '&^$%');
                                                            $$parser.emit('()', '?',
                                                                          func,

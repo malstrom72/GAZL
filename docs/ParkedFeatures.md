@@ -98,6 +98,43 @@ Rejected now with: `E426` by-value struct parameter, `E427` by-value struct retu
 values (function or funcptr type), `E429` destructuring assignment. Each diagnostic carries a fix-it hint.
 
 
+## Parked: `inline function`
+
+    branch:   GAZL2                          (the GAZL 2 line, which is where the rework lives)
+    removed:  see the commit naming this file
+    target:   Impala 3.0, requiring GAZL 2
+
+Contains the whole expansion machinery: body capture, per-expansion `_i<N>` label and local renaming,
+argument substitution with an opaque-write marshalling scan, constant folding through a straight-line
+body, transient block relocation, and the `SCOP` / `ENDS` frame scoping that places an expansion's
+locals.
+
+Parked because **an expansion needs GAZL 2 and Impala 2 must stay usable on GAZL 1.0 engines.** A 1.0
+assembler rejects `SCOP` with `Unknown mnemonic`. The transient-based lowering that did work on 1.0 was
+the wrong design and is not what is parked: it re-implemented allocation numerically, so an inline local
+whose extent is not a number Impala knows - an `extern struct` array, `t[H * N]` - either got a wrong
+frame or hit `E433`. See [`docs/TwoStageConstants.md`](TwoStageConstants.md) for why that class of
+assumption keeps failing.
+
+The park branch is not an ancestor: `GAZL2` forked from the last Impala 2 commit that still had the
+feature and carried it forward rather than freezing it. It is a working line, not an archive.
+
+Rejected now with `E439`, whose hint points at GAZL 2 and at dropping the keyword. The feature's own
+codes are retired with it and must not be reused: `E432` recursive expansion, `E433` non-literal local
+extent (which the `.x.` rework deleted outright), `E434` exported inline, `E436` redeclared inline.
+
+Retired with it: fixtures `inlineEquivalence`, `inlineEquivalenceCall`, `inlineFunctions`,
+`inlineReviewArgs`, `inlineReviewCompose`, `inlineReviewControl`, `inlineReviewLocals`,
+`inlineReviewTypes`; the `inlineCases` diagnostic table in `jspegCompilerTests.js`; and - the real loss
+- the fuzzer's INLINE DIFFERENTIAL, the only oracle there with a reference build to compare against
+(same program, keyword stripped, must print the same thing). Three silent miscompiles were caught by it.
+`tests/impala/sources/import/mathlib.impala` kept its cross-unit helper as an ordinary function.
+
+What did NOT go with it: `.x.` extent constants (`docs/SymbolNamespace.md`) and `SCOP` / `ENDS` are
+worth having on their own, and the call-window-in-a-hole guard in `borrowForCall` is an Impala 1.0 bug
+fix that stays.
+
+
 ## Impala 3.0 wishlist
 
 The first three belong together, because they are all changes to the same calling convention. Doing them in

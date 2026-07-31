@@ -988,81 +988,21 @@ console.log("impala.jspeg compiler accepts parenthesized bitwise mixes identical
 compileWithJsImpala(sameOpChainSource, { randomId: 42 });
 console.log("impala.jspeg compiler accepts same-operator bitwise chains without parentheses");
 
-// `inline function` has no out-of-line copy, so every use that needs one is an error rather than a
-// silent de-optimisation. The behavioural check lives in the inlineEquivalence fixture pair; these are
-// the cases that must not compile at all, plus the shapes that must.
+// `inline` is PARKED for Impala 3.0 (docs/ParkedFeatures.md): an expansion needs GAZL 2 `SCOP` / `ENDS`
+// to place its locals, and Impala 2 has to stay usable on GAZL 1.0 engines. The keyword stays reserved
+// so the door says why rather than reading as an unknown identifier.
 const inlineCases = [
-	["a recursive inline function",
-		"inline function f(int n) returns int r { if (n > 0) { r = f(n - 1); } else { r = 0; } }\n"
-			+ "function main() locals int q { q = f(3); }\n", "cannot call itself"],
-	["taking the address of an inline function",
-		"inline function f(int a) returns int r { r = a; }\nfunctype Cb(int a) returns int r\n"
-			+ "function main() locals Cb c, int q { c = f; q = c(1); }\n", "address of the inline function"],
-	["exporting an inline function",
-		"export inline function g(int a) returns int r { r = a; }\n"
-			+ "function main() locals int q { q = g(1); }\n", "cannot be exported"],
-	// Locals live in transients, one expansion at a time, so the WORD COUNT must be known while
-	// compiling - a folded or symbolic extent does not resolve until assembly.
-	["an inline function with a non-literal array size",
-		"const int H = 2\nconst int N = 2\ninline function f(int a) returns int r\n"
-			+ "locals int array t[H * N]\n{ t[0] = a; r = t[0]; }\n"
-			+ "function main() locals int q { q = f(1); }\n", "compile-time size"],
-	["an inline function that was forward declared",
-		"extern function later\ninline function later(int a) returns int r { r = a; }\n"
-			+ "function main() locals int q { q = later(1); }\n", "was already declared"],
-	["calling an inline function before its definition",
-		"function main() locals int q { q = f(1); }\ninline function f(int a) returns int r { r = a; }\n",
-			"Undeclared identifier"],
-	// and the shapes that must work
-	["an inline body containing a call",
-		"function helper(int a) returns int r { r = a * 2; }\n"
-			+ "inline function wrap(int a) returns int r { r = helper(a) + 1; }\n"
-			+ "function main() locals int q { q = wrap(5); }\n", null],
-	["an inline body containing a switch",
-		"inline function pick(int i) returns int r\n"
-			+ "{ switch (i == 0 to 3) { case 0: r = 10; default: r = 99; } }\n"
-			+ "function main() locals int q { q = pick(0); }\n", null],
-	["an inline body containing an assert",
-		"const int DEBUG = 1\ninline function chk(int a) returns int r { assert(a > 0); r = a; }\n"
-			+ "function main() locals int q { q = chk(5); }\n", null],
-	["an inline body containing a while loop",
-		"inline function count(int n) returns int r\nlocals int i\n"
-			+ "{ r = 0; i = 0; while (i < n) { r = r + i; i = i + 1; } }\n"
-			+ "function main() locals int q { q = count(4); }\n", null],
-	["an inline function with a pointer parameter",
-		"inline function dbl(int pointer p) returns int r { r = *p * 2; }\n"
-			+ "function main() locals int array c[1], int q { c[0] = 21; q = dbl(&c[0]); }\n", null],
-	["an inline function with float parameters",
-		"inline function scale(float v, float k) returns float r { r = v * k; }\n"
-			+ "function main() locals float f { f = scale(2.5, 4.0); }\n", null],
-
-	["an inline function declaring a struct local",
-		"struct P { int x; int y }\ninline function f(int v) returns int r\nlocals P a, P b\n"
-			+ "{ a.x = v; a.y = v; b.x = v; r = a.x + a.y + b.x; }\n"
-			+ "function main() locals int q { q = f(1) + f(2); }\n", null],
-	["an inline function declaring an array of structs",
-		"struct P { int x }\ninline function f(int v) returns int r\nlocals P array a[2]\n"
-			+ "{ a[[0]].x = v; a[[1]].x = v; r = a[[0]].x + a[[1]].x; }\n"
-			+ "function main() locals int q { q = f(1); }\n", null],
-	["an inline function declaring a scalar local",
-		"inline function f(int a) returns int r\nlocals int t\n{ t = a * 2; r = t + 1; }\n"
-			+ "function main() locals int q { q = f(1); }\n", null],
-	["an inline function declaring an array local",
-		"inline function f(int a) returns int r\nlocals int array t[3], int i\n"
-			+ "{ t[0] = a; t[1] = a; t[2] = a; r = 0; for (i = 0 to 3) r = r + t[i]; }\n"
-			+ "function main() locals int q { q = f(2); }\n", null],
-	["a plain inline call", "inline function f(int a) returns int r { r = a * 2; }\n"
+	["a plain inline function", "inline function f(int a) returns int r { r = a * 2; }\n"
+		+ "function main() locals int q { q = f(3); }\n", "not supported in Impala 2.0"],
+	["an exported inline function", "export inline function g(int a) returns int r { r = a; }\n",
+		"not supported in Impala 2.0"],
+	["the same function without `inline`", "function f(int a) returns int r { r = a * 2; }\n"
 		+ "function main() locals int q { q = f(3); }\n", null],
-	["nested inline expansion", "inline function f(int a) returns int r { r = a * 2; }\n"
-		+ "inline function g(int a) returns int r { r = f(a) + 1; }\n"
-		+ "function main() locals int q { q = g(2); }\n", null],
-	["a void inline function", "global int s;\ninline function f(int a) { global s = a; }\n"
-		+ "function main() { f(3); }\n", null],
 ];
 for (const [label, source, expected] of inlineCases) {
 	expectCompileOutcome("inline", label, source, expected);
 }
-console.log("impala.jspeg compiler enforces the inline-function rules");
+console.log("impala.jspeg compiler parks inline functions behind a diagnostic");
 
 // By-value structs are parked, and EVERY door that can introduce one must say so. `functype` was
 // unguarded, so a by-value struct param/return reached the parked window machinery - and against an
