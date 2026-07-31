@@ -563,8 +563,9 @@ to be declared BEFORE the first `SCOP`; a declaration placed after `ENDS` reuses
 
 Unbalanced `SCOP` / `ENDS` is an error, as is nesting deeper than 32.
 
-Guard uses of this with `! GEQi #GAZL_VERSION #2 @label` (never `! EQUi`) so the same source can still assemble on a
-GAZL 1 engine - a skipped conditional region is not parsed for mnemonics, so the scoped variant is ignored entirely.
+Code that wants to run on either engine can guard its use with `! GEQi #GAZL_VERSION #2 @label`, since a skipped
+conditional region is not parsed for mnemonics - the scoped variant is ignored entirely on a GAZL 1 engine. (Use
+`! EQUi` instead when you deliberately mean one exact version, as `src/UnitTest.gazl` does.)
 
 ## SETL
 - `var(d)          int             #const`

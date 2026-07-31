@@ -1,8 +1,8 @@
 const char* UNITTEST = 
 	"! IFDF #GAZL_VERSION @gotVersion\n"
 	"! FAIL GAZL_VERSION not defined!\n"
-	"gotVersion: ! GEQi #GAZL_VERSION #1 @versionOK\n"
-	"! FAIL This code needs GAZL version 1 or later.\n"
+	"gotVersion: ! EQUi #GAZL_VERSION #2 @versionOK\n"
+	"! FAIL This code is for version 2 of GAZL only.\n"
 	"versionOK: !\n"
 	"! IFDF #GAZL_WORD_SIZE @gotBits\n"
 	"! FAIL GAZL_WORD_SIZE not defined!\n"

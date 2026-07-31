@@ -29,8 +29,8 @@
 
             ! IFDF #GAZL_VERSION @gotVersion
             ! FAIL GAZL_VERSION not defined!
-gotVersion: ! GEQi #GAZL_VERSION #1 @versionOK
-            ! FAIL This code needs GAZL version 1 or later.
+gotVersion: ! EQUi #GAZL_VERSION #2 @versionOK
+            ! FAIL This code is for version 2 of GAZL only.
 versionOK:  !
 
             ! IFDF #GAZL_WORD_SIZE @gotBits
