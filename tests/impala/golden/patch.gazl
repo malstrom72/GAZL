@@ -166,20 +166,20 @@ help:	FUNC	; signature func help() -> void @ 95:1
 refreshPatchList:	FUNC	; signature func refreshPatchList() -> void @ 106:1
 		PARA *1
 	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
-	! ADDi <A> #8 #1
+	! ADDi <B> #8 #1
 	$p:	LOCp
 .x.refreshPatchList.dummy:	! DEFi #<A>
 	$dummy:	LOCA *.x.refreshPatchList.dummy
 	$index:	LOCi
 	$size:	LOCi
-.x.refreshPatchList.modDate:	! DEFi #<A>
+.x.refreshPatchList.modDate:	! DEFi #<B>
 	$modDate:	LOCA *.x.refreshPatchList.modDate
 ;-----------------------------------------------------------------------------
 		MOVi $index #-1 	; index = -1
 	.l0:	ADDi $index $index #1	; index = index + 1
 		GEQi $index #MAX_PATCHES @.f1	; if (index < MAX_PATCHES) p = &global patchNames[index * (MAX_PATCH_NAME_LENGTH + 1)]
-		! ADDi <A> #MAX_PATCH_NAME_LENGTH #1	; p = &global patchNames[index * (MAX_PATCH_NAME_LENGTH + 1)]
-		MULi %0 $index <A>
+		! ADDi <B> #MAX_PATCH_NAME_LENGTH #1	; p = &global patchNames[index * (MAX_PATCH_NAME_LENGTH + 1)]
+		MULi %0 $index <B>
 		ADDp $p &patchNames %0
 		GOTO @.e2  
 	.f1:	ADRL $p $dummy *0	; p = dummy
@@ -208,8 +208,8 @@ list:	FUNC	; signature func list() -> void @ 119:1
 		PEEK %0 &patchCount 
 		GEQi #0 %0 @.e0
 	.l1:	NOOP
-		! ADDi <A> #MAX_PATCH_NAME_LENGTH #1	; output(&global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)])
-		MULi %2 $i <A>
+		! ADDi <B> #MAX_PATCH_NAME_LENGTH #1	; output(&global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)])
+		MULi %2 $i <B>
 		ADDp %2 &patchNames %2
 		CALL ^output %1 *2	; expects output(unknown-ptr) -> unknown @ 125:62
 		MOVp %2 &.s_Availa_4d8:20 	; output(" ")
@@ -271,8 +271,8 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:1
 		PEEK %0 &patchCount 
 		GEQi #0 %0 @.e1
 	.l2:	NOOP
-		! ADDi <A> #MAX_PATCH_NAME_LENGTH #1	; p = &global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)]
-		MULi %1 $i <A>
+		! ADDi <B> #MAX_PATCH_NAME_LENGTH #1	; p = &global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)]
+		MULi %1 $i <B>
 		ADDp $p &patchNames %1
 		MOVp %2 $name 	; if ((int)stricmp(name, p) == 0) 
 		MOVp %3 $p 

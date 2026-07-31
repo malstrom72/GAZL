@@ -157,6 +157,7 @@
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
     var $$parser.structs = {};                                    /// name -> { fields:[{name,type,elem,offset,words}], words, complete }
     var $$parser.openStruct = undefined;                          /// struct whose field list is being parsed (its fields own their extent scratches)
+    var $$parser.openDeclList = false;                            /// true inside a `locals` clause (its declarators own their extent scratches, same reason)
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
@@ -3793,6 +3794,11 @@ inp:ArgsDecl ')'_
                                                                                  );
                                                                              }
                                                                          });
+                                                                         iterate($loc, function (v) {   /* the count scratches ArrayDecl held for this
+                                                                                                           clause (see there); a no-op for the ones a
+                                                                                                           declaration above already gave back */
+                                                                             $$parser.returnBack(v.size);
+                                                                         });
                                                                      }
                 )?                                                    { if (!$$parser.inlineMode) output(';-----------------------------------------------------------------------------'); }
                 Block                                                 {
@@ -4237,11 +4243,12 @@ ArgsDecl    <-                                                        {
 LocalsDecl  <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
+                                                                         $$parser.openDeclList = true;   /* see ArrayDecl: these extents are consumed later */
                                                                      }
                  ( v:(VarDecl / ArrayDecl)                            { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
                    ( ',' _ v:(VarDecl / ArrayDecl)                    { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
                    )*
-                 )?
+                 )?                                                   { $$parser.openDeclList = false; }
 
 # ------------------------------------------------------------------
 #  Simple variable & array declarators                          
@@ -4289,8 +4296,15 @@ ArrayDecl   <-                                                        { $desc = 
                 ( '[' _ x:Expr ']' _                                  {
                                                                          $size = $$parser.makeConstant($x, 'i', $$s, $$i);
                                                                          $extent = $$parser.dropHash($size);   /* element count - may be a symbolic const */
-                                                                         if ($$parser.openStruct === undefined) {
-                                                                             $$parser.returnBack($size);       /* a struct field's borrow outlives the decl - endStruct frees it */
+                                                                         /* A folded extent lives in a `<X>` scratch that something READS LATER, so the
+                                                                            borrow has to outlive this declarator wherever the declaration is not emitted
+                                                                            on the spot: a struct field is read by the layout block (endStruct frees it),
+                                                                            and a `locals` clause is read by the declaration pass that runs after the whole
+                                                                            list is parsed (FuncDecl frees it). Returning it here let the NEXT declarator
+                                                                            in the same list borrow the same scratch and overwrite the extent - two array
+                                                                            locals in one clause silently got whichever count was folded last. */
+                                                                         if ($$parser.openStruct === undefined && !$$parser.openDeclList) {
+                                                                             $$parser.returnBack($size);
                                                                          }
                                                                      }
                 )?                                                    {
