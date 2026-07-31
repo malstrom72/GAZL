@@ -5,6 +5,11 @@ machine. It is deliberately close to the underlying assembly: there is little
 optimization, types are minimal, and most constructs map almost one-to-one to GAZL
 instructions. Think of it as a high-level assembler.
 
+Because GAZL programs are distributed as assembly *text* and assembled on the end user's
+machine at load, Impala compiles into a two-stage build: values the host supplies at load
+are legal constants that Impala never sees a number for. This shapes the whole language
+and is specified in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
+
 This document is the language reference. For a feature-rich program with extensive
 inline commentary, see `impala/ImpalaDemo.impala`.
 
@@ -148,21 +153,34 @@ Initializers for globals must be compile-time constants.
 
 ### `const`
 
-`const` introduces a compile-time constant (a *define*). It occupies no memory and can
-be used for array sizes and other compile-time values. The value must be a compile-time
-constant expression.
+`const` introduces a named constant (a *define*). It occupies no memory and can be used
+for array sizes and other constant values. The value must be a constant expression.
 
 ```impala
 const int SOME_COUNT = 4
 ```
 
-Some constants are supplied by the VM or host at load time and are declared without a
-value:
+**"Constant" here does not mean "a number the Impala compiler knows."** A constant is
+anything that will have a value by the time the generated GAZL finishes assembling, and
+assembly happens on the end user's machine at load. So constants may be supplied by the
+VM or host at that point, and are then declared without a value:
 
 ```impala
 const int GAZL_WORD_SIZE
 const int DEBUG
 ```
+
+Such a constant is legal everywhere a literal is: as an array size, a `switch` range, a
+`sizeof` result, an operand. Impala emits a symbolic reference and the assembler resolves
+it. Even a constant Impala *does* know is passed through by name rather than folded, so
+`const int SOME_COUNT = 4` emits `SOME_COUNT: ! DEFi #4` and an array declared
+`[SOME_COUNT]` emits `CNST *SOME_COUNT`, not `CNST *4`. That keeps the value overridable
+at load.
+
+This two-stage model is the reason GAZL ships as text, and it shapes what the compiler is
+allowed to check and fold. It is specified in
+[`docs/TwoStageConstants.md`](TwoStageConstants.md); read that before relying on, or
+changing, any constant handling.
 
 ### `readonly`
 

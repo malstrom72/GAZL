@@ -16,6 +16,9 @@ the assembler; `tools/gazl-validate.sh` is a JS-side linter that passes every it
 
 ## The constraint: a constant is not always a number Impala knows
 
+> Summarized here because it governs every item below. The canonical, normative statement is
+> [`docs/TwoStageConstants.md`](TwoStageConstants.md) - read that first if any of this is new to you.
+
 This is the trap. In Impala 2.0 a constant can be resolved at ASSEMBLY time, not compile time:
 
 - `.z.Struct` / `.o.Struct.field` for an `extern struct` are supplied by the HOST at load.

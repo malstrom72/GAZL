@@ -93,6 +93,7 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 - [Overview](docs/Overview.md) - general architecture and goals
 - [Impala Language Reference](docs/Impala.md) - the language and toolchain
+- [Two-Stage Constants](docs/TwoStageConstants.md) - why GAZL ships as text, and why a constant is not always a number the compiler knows
 - [Instruction Set](docs/InstructionSet.md) - extracted opcode descriptions
 - [Memory Safety Model](docs/MemorySafetyModel.md) - stack frames, what is bounds-checked and when, what `*size` is for
 - [Usage Example](docs/UsageExample.md) - compile and run a simple program
