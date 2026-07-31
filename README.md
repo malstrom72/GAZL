@@ -96,6 +96,7 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 - [Two-Stage Constants](docs/TwoStageConstants.md) - why GAZL ships as text, and why a constant is not always a number the compiler knows
 - [Instruction Set](docs/InstructionSet.md) - extracted opcode descriptions
 - [Memory Safety Model](docs/MemorySafetyModel.md) - stack frames, what is bounds-checked and when, what `*size` is for
+- [Symbol Namespace](docs/SymbolNamespace.md) - every symbol the compiler mints for itself, and how to add one without colliding
 - [Usage Example](docs/UsageExample.md) - compile and run a simple program
 - [JSPEG Port](impala/JSPEG.md) - status and usage of the JavaScript PEG compiler
 
