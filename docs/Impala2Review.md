@@ -201,16 +201,18 @@ code-generating agent hits and the message points the wrong way. The symbol tabl
   to `sizeof`.
   **A symbolic extent can still be initialized**, and the first fix wrongly rejected that. `DATA` may
   define FEWER words than its region holds, with the remainder zeroed (`docs/InstructionSet.md:96-99`), so
-  the values given simply land at the front: `struct S { int a; int array v[N] }` with `{ 1, {7,8,9} }`
-  emits `DATA #1 #7 #8 #9` and assembles. What has no compile-time answer is the offset of a field placed
-  *after* the symbolic one. Verified against the assembler, three ways: there is no fill or repeat
+  the values given simply land at the front: `struct S { int a; int array v[N] }` with
+  `{ a: 1, v: {7,8,9} }` emits `DATA #1 #7 #8 #9` and assembles. What has no answer at Impala compile
+  time is the offset of a field placed *after* the symbolic one. Verified against the assembler, three ways: there is no fill or repeat
   directive in `docs/InstructionSet.md`; a FORWARD `! GOTO` assembles and can even skip a `DATA` line; a
   BACKWARD one does not assemble at all (`Compile time label not found`), so no assemble-time loop can
   emit a symbolic number of words. Hence `E454` — but only when a later field is given a NON-ZERO value.
-  Zero costs no words, so `{ 1, {7,8,9}, 0 }` is accepted and simply stops the row early, landing exactly
-  where the zero-fill would; omitted fields were always fine. Over-filling is left to the assembler, which
-  names it (`Not enough space in data section: s`), per `docs/CompileTimeHardening.md` rule 1 — Impala
-  does not know `N`, so it must not guess.
+  Zero costs no words, so `{ a: 1, v: {7,8,9}, z: 0 }` is accepted and simply stops the row early, landing
+  exactly where the zero-fill would; omitted fields were always fine. The hint leads with omitting those
+  fields or moving the symbolic array last, NOT with "give it a literal size" — per
+  `docs/TwoStageConstants.md`, steering a user toward pinning an extent numerically is the anti-pattern,
+  not the fix. Over-filling is left to the assembler, which names it (`Not enough space in data
+  section: s`), per rule 2 there — Impala does not know `N`, so it must not guess.
 - **Duplicate `case` labels** and **out-of-range `case` labels** are both accepted silently; a case *below*
   the low bound emits `.s0.-6` and the module will not load at all.
 - **`switch (x == lo to hi)`: `hi` is exclusive**, and `docs/Impala.md:328` says inclusive.

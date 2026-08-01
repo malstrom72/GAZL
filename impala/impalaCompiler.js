@@ -2179,11 +2179,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             for (var t = ops.tailFrom; t < ops.length; ++t) {
                 if (ops[t] !== Z.i && ops[t] !== Z.f && ops[t] !== Z.p && ops[t] !== Z.F) {
                     fail('Initializer value ' + ops[t] + ' falls after ' + ops.tailAfter
-                            + ', whose extent is not known until assembly',
+                            + ', whose extent is not resolved until GAZL assembly time',
                             sourceCode, sourceOffset, 'E454',
                             'a DATA row can stop short (the rest zero-fills) but cannot skip a symbolic '
-                                    + 'number of words - give ' + ops.tailAfter + ' a literal size, or '
-                                    + 'leave every field after it zero');
+                                    + 'number of words - omit the fields after ' + ops.tailAfter
+                                    + ' (they zero-fill), or move ' + ops.tailAfter + ' to the end of '
+                                    + 'the struct; a literal extent also works but gives up the '
+                                    + 'assembly-time size');
                 }
             }
             ops.length = ops.tailFrom;                        /* the region zero-fills the remainder */
