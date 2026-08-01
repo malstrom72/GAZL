@@ -1852,30 +1852,24 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             } else if (f.type === 'A') {
                 var arr = (item && item.braced) || [];
                 var structEl = isStructAtom(f.elem);
-                /* A symbolic extent blocks the row FROM THIS FIELD, not from after it. Impala cannot
-                   check the value count against the extent, so an over-filled array silently spills
-                   into whatever follows: `v[N]` with N=2 given three values, and a `z` after it, emits
-                   four words that FIT `1+N+1` exactly - so the assembler passes it and z gets v's third
-                   value. Only zeros are safe here, and those are what the region fills anyway. (The
-                   loop used to compare against the extent OPERAND, get NaN, run zero times, and emit a
-                   short row that shifted every later field.) */
+                /* A symbolic extent is fillable, but only up to the values actually given, and only if
+                   they FIT - an over-filled array spills into whatever follows: `v[N]` with N=2 given
+                   three values, and a `z` after it, emits four words that fit `1+N+1` exactly, so the
+                   assembler passes it and z gets v's third value. Impala cannot do that comparison, but
+                   it can hand it to the assembler, which by then knows the extent (assertFitsExtent).
+                   What stays blocked is everything AFTER the field: the words it did not fill are a
+                   symbolic count, and DATA cannot skip them. (The loop used to compare against the
+                   extent OPERAND, get NaN, run zero times, and emit a short row that shifted every
+                   later field.) */
                 var count = constInt('#' + f.size);
-                if (count !== undefined) {
-                    if (arr.length > count) {
-                        failSurplus(f.name, 'values', arr.length, count,
-                                arr[count] && arr[count].at, sourceCode, sourceOffset);
-                    }
-                } else {
-                    count = arr.length;
-                    blockInitFrom(out,
-                            'the extent of ' + f.name + ' is not resolved until GAZL assembly time, so '
-                                    + 'Impala cannot tell which word this would land in',
-                            'E454',
-                            'leave ' + f.name + ' (and every field after it) zero here - initializing a '
-                                    + 'symbolically-sized field needs GAZL 2 and is planned for Impala '
-                                    + '3.0; a literal extent also works, but gives up the assembly-time '
-                                    + 'size');
+                var symbolic = (count === undefined);
+                if (symbolic) {
+                    count = arr.length;                       /* fill what was given; the rest zero-fills */
+                } else if (arr.length > count) {
+                    failSurplus(f.name, 'values', arr.length, count,
+                            arr[count] && arr[count].at, sourceCode, sourceOffset);
                 }
+                var from = out.length;
                 for (var e = 0; e < count; ++e) {
                     var ev = (e < arr.length)
                             ? indexedEntry(arr[e], sourceCode, sourceOffset) : undefined;
@@ -1884,6 +1878,23 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                     } else {
                         pushInitScalar(out, ev, f.elem, f.name, sourceCode, sourceOffset);
                     }
+                }
+                if (symbolic) {
+                    /* WORDS given, not elements: a struct-element array contributes .z.Elem each, and
+                       the extent symbol is in words too. Nothing to assert once the row is already
+                       blocked - emitInitData drops these words rather than placing them. */
+                    if (out.blocked === undefined) {
+                        assertFitsExtent(out.length - from, structName, f.name,
+                                sourceCode, sourceOffset);
+                    }
+                    blockInitFrom(out,
+                            'the extent of ' + f.name + ' is not resolved until GAZL assembly time, so '
+                                    + 'Impala cannot tell which word this would land in',
+                            'E454',
+                            'leave every field after ' + f.name + ' zero here - ' + f.name + ' itself may '
+                                    + 'be initialized, and the assembler checks that the values fit; '
+                                    + 'placing a field BEHIND a symbolic extent needs GAZL 2 and is '
+                                    + 'planned for Impala 3.0');
                 }
             } else {
                 pushInitScalar(out, item, f.type, f.name, sourceCode, sourceOffset);
@@ -1932,6 +1943,26 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 + ' given, but it holds ' + holds,
                 sourceCode, (at !== undefined ? at : sourceOffset), 'E460',
                 'remove the extra ' + (given - holds) + ', or widen ' + name);
+    };
+
+    /* Hand a comparison Impala cannot make to the stage that can: `words <= .z.Struct.field`, deferred
+       to GAZL assembly time, where the extent finally has a value. Rule 4 of docs/TwoStageConstants.md,
+       and it costs nothing at run time - `! GRTi` is a compile-time directive, so no word is emitted
+       either way.
+
+       The single-line form is deliberate. A branch to an UNDEFINED label is not an error until it is
+       TAKEN, so the label doubles as the message and no `.ok` target (and no counter to keep those
+       unique across repeated fills) is needed: it fits -> no jump, nothing happens; it does not ->
+       `Compile time label not found: .ERROR.too_many_initializer_values_for.S.v`. Verified against
+       GAZLCmd on 2026-08-01, boundary included (words == extent passes). */
+    assertFitsExtent = function (words, structName, fieldName, sourceCode, sourceOffset) {
+        if (words <= 0) {
+            return;                                           /* nothing given - trivially fits */
+        }
+        declare('! GRT?', 'globals', undefined, 'i', true,
+                '#' + words + ' #' + fieldExtentSymbol(structName, fieldName)
+                        + ' @.ERROR.too_many_initializer_values_for.' + structName + '.' + fieldName,
+                sourceCode, sourceOffset);
     };
 
     blockInitFrom = function (out, why, code, hint) {

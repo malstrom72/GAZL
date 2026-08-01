@@ -211,8 +211,11 @@ code-generating agent hits and the message points the wrong way. The symbol tabl
   exactly where the zero-fill would; omitted fields were always fine. The hint leads with omitting those
   fields or moving the symbolic array last, NOT with "give it a literal size" — per
   `docs/TwoStageConstants.md`, steering a user toward pinning an extent numerically is the anti-pattern,
-  not the fix. Over-filling is left to the assembler, which names it (`Not enough space in data
-  section: s`), per rule 2 there — Impala does not know `N`, so it must not guess.
+  not the fix. Over-filling is left to the assembler, per rule 2 there — Impala does not know `N`, so it
+  must not guess. Note the assembler does NOT catch it on its own: over-running the whole section is
+  named (`Not enough space in data section: s`), but over-running one field INTO the next is a legal,
+  in-bounds write it has no notion of. So Impala emits the comparison for it (`! GRTi #3 #.z.S.v @.ERROR...`,
+  2026-08-01), which is the only thing standing between that shape and a silent spill.
 - **Duplicate `case` labels** and **out-of-range `case` labels** are both accepted silently; a case *below*
   the low bound emits `.s0.-6` and the module will not load at all.
 - **`switch (x == lo to hi)`: `hi` is exclusive**, and `docs/Impala.md:328` says inclusive.

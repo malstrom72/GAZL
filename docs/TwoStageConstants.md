@@ -302,10 +302,12 @@ Concrete shapes that violate the model. If you are about to write one of these, 
   shifts. Test the extent for numeric-ness first and take a deliberate branch. (FIXED 2026-07-31:
   `fieldWords` returns `undefined` rather than `NaN`, and the two checks that read
   `structWords(...) === undefined` as "incomplete" now ask `structDefined` - otherwise a symbolically
-  sized struct could not be nested by value or passed to `sizeof`. Initializing such a field at all is
-  refused, as `E454`: Impala cannot check the value count against the extent either, so an over-filled
-  array spilled into the next field while still FITTING the region, which the assembler cannot catch.
-  Zeros stay legal, being what the region fills with regardless.)
+  sized struct could not be nested by value or passed to `sizeof`. The field itself IS initializable -
+  its words start at a position Impala knows - and the count check Impala cannot make is emitted for the
+  assembler instead (`! GRTi #3 #.z.S.v @.ERROR...`, rule 4 below); that is what now stops an over-filled
+  array from spilling into the next field while still FITTING the region, which nothing could catch
+  before. `E454` covers only the fields BEHIND it, whose positions are genuinely unknown, and zeros stay
+  legal there, being what the region fills with regardless.)
 - **Emitting positional `DATA` for a type whose layout the host owns.** If field offsets come from
   `.o.*`, an initializer written in declaration order is a guess. There is no seek/`.org` directive to
   fix it up, so the only sound options are to reject the initializer or to require a host-independent

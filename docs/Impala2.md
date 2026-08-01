@@ -469,7 +469,7 @@ time, so an initializer is only emitted where Impala knows which word each value
 
 | Shape | Code | Why |
 |---|---|---|
-| a struct array field with a **symbolic** extent, and anything after it | `E454` | Impala cannot check the value count against the extent, so an over-filled array spills into the next field - and it FITS the region, so the assembler passes it |
+| a field placed **after** a struct array field whose extent is symbolic | `E454` | the array's unfilled words are a symbolic count, and `DATA` cannot skip them, so the next field's position is unknown |
 | any field of an **`extern struct`** | `E459` | the host owns field order, `.z.`, and possibly fields Impala never saw; a positional row guesses all three |
 
 In both cases **zero is still fine**, because zero is what the region fills with under any layout - so
@@ -477,6 +477,28 @@ In both cases **zero is still fine**, because zero is what the region fills with
 Impala 3.0 on GAZL 2; see [`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic
 offset"). For an extern struct the host owns the layout, so the host is also the right place for the
 initial contents.
+
+**A symbolically-sized array field is itself fillable**, which is the part that does NOT need GAZL 2.
+Its words start where Impala already knows, so only the ones it did not fill are unplaceable:
+
+    const int N = 5
+    struct S { int array v[N] }
+    global S s = { v: { 7, 8, 9 } }     // fine - emits three words, the rest zero-fills
+
+What Impala cannot do is check `3` against `N`, and neither can the assembler see anything wrong with
+the row: `v[N]` with `N` 2, given three values and a `z` behind it, emits four words that fit `1+N+1`
+EXACTLY - which is how `z` used to receive the array's third value in silence. So the comparison is
+handed to the one stage that knows the extent, as a compile-time directive that costs nothing at run
+time:
+
+    ! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v
+
+It fits, nothing happens. It does not, and the assembler stops with the label as the message. That is
+rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md), and `.z.S.v` is the field-extent constant
+described in [`StructLayoutConstants.md`](StructLayoutConstants.md). The cost is honest and worth
+stating: the error surfaces at GAZL assembly time, which in a shipped module means the end user's
+machine, with no caret. That is the correct place for it, because with a host-supplied `N` the answer
+genuinely differs per host.
 
 Uninitialized **global** struct storage is zero-filled - the globals and consts regions are cleared
 once at load (`src/GAZL.cpp:880`). **Locals are not.** A `call` only bumps the frame pointer, so an
@@ -1366,7 +1388,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E451 | a `;` after an `if` body leaves the following `else` with nothing to attach to |
 | E452 | a `global` prefix on a function or a const (a warning under `--legacy`) |
 | E453 | `export` on a valueless `const`; the two contradict (a valued `export const` is fine) |
-| E454 | a non-zero initializer at or after a struct array field whose extent is symbolic |
+| E454 | a non-zero initializer for a field placed after a struct array field whose extent is symbolic (the array itself may be filled) |
 | E455 | a struct initializer must name its fields, and must not mix named with positional (`--legacy` maps by position) |
 | E456 | a struct initializer names a field the struct does not have |
 | E457 | a struct initializer names the same field twice |

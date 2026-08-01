@@ -320,14 +320,21 @@ Two shapes have no sound lowering on GAZL 1, and both were silently wrong before
   field order, at `.z.`, and at whether the host has fields Impala never saw; an array of them also
   strided elements by Impala's guess at the size. Naming the fields (`{ x: 1, y: 2 }`, `E455`) fixed how
   the source READS but not where the words LAND.
-- **Struct array fields with a symbolic extent** (`E454`). Impala cannot compare the value count against
-  the extent, so an over-filled array spilled into the next field *and the assembler could not see it*:
-  `struct S { int a; int array v[N]; int z }` with `N` 2, given three values for `v`, emits four words -
-  which fits `1+N+1` exactly, so it assembles clean and `z` silently receives `v`'s third value.
+- **Fields placed BEHIND a struct array field with a symbolic extent** (`E454`). The words the array did
+  not fill are a symbolic count `DATA` can neither emit nor skip, so nothing after it has a known
+  position. (The array itself is no longer part of this - see below.)
 
 Both now reject any NON-ZERO word from the unplaceable point on. Zero stays legal because it is what the
 region fills under any layout, so `{ }`, an omitted field and an explicit `0` all still compile and emit
 nothing. One mechanism serves both (`blockInitFrom`); they differ only in the message.
+
+**The `E454` half shrank on 2026-08-01**, once field extents got a name. Filling the symbolic array
+*itself* is sound on GAZL 1: its words start where Impala knows, and the one thing Impala could not do -
+compare the value count against the extent - is now deferred to the assembler, which by then knows it.
+`struct S { int a; int array v[N]; int z }` with `N` 2 given three values emits four words that fit
+`1+N+1` exactly, so the assembler sees nothing wrong with the row and `z` used to receive the third
+value in silence; `! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v` is what now catches it.
+So `E454` no longer covers the array, only what is behind it.
 
 Verified 2026-08-01 that GAZL 1 has no way to express it:
 
@@ -349,31 +356,36 @@ decided**:
    it does not know, so out-of-order placement must be legal and a written-word set is what makes it safe.
    It would also catch overlapping host layouts, which `Impala2Review.md` C6 lists as undetected.
 
-**One part does NOT need GAZL 2**, and is worth doing independently: the value-count check behind `E454`.
-Impala cannot compare a literal count against a symbolic extent, but it can EMIT the comparison as a
-deferred assertion - `! LEQi #3 #<extent> @.ok` / `! GOTO @.ERROR_too_many_values_for_v`, with the label
-name as the message. That is rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md) and it costs nothing
-at run time. With it, a symbolic array could be filled again on GAZL 1 as long as the count provably fits;
-only fields AFTER it would still need `ORG`.
+**One part did NOT need GAZL 2 and is DONE as of 2026-08-01**: the value-count check behind `E454`.
+Impala cannot compare a literal count against a symbolic extent, but it EMITS the comparison instead, for
+the assembler to make once the extent has a value. Rule 4 of
+[`TwoStageConstants.md`](TwoStageConstants.md), and it costs nothing at run time. A symbolic array can be
+filled again on GAZL 1 whenever the count provably fits; only fields AFTER it still need `ORG`.
 
-**Its prerequisite is DONE as of 2026-08-01: a struct field extent now has a durable name.** It did not
-before - the `.x.` rework named array VARIABLE extents (`.x.plain: ! DEFi #<A>`, then `GLOB *.x.plain`)
-but a struct array field folded its extent into a bare scratch (`! ADDi <a> #<a> #<A>`) that `endStruct`
-handed straight back, so the next struct re-used `<A>` and there was nothing stable to compare against.
-The layout block now mints `.z.<Struct>.<field>` for every array field while the scratch is still live
-and advances by the SYMBOL, so the extent outlives the borrow. It went into `.z.` rather than `.x.`
-because `.x.<owner>.<name>` is keyed on functions and a struct may share a function's name - see
+It shipped as ONE line, not the two sketched here earlier:
+
+    ! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v
+
+A branch to an undefined label is not an error until it is TAKEN, so the label doubles as the message and
+no `.ok` target is needed - which also removes the counter that would have been required to keep such
+targets unique across repeated fills. Verified against GAZLCmd, boundary included: `words == extent`
+passes, `words > extent` stops with `Compile time label not found: .ERROR....`. `! GRTi` is the
+mnemonic; `! GTRi` does not exist.
+
+**Its prerequisite landed first: a struct field extent now has a durable name.** It did not before - the
+`.x.` rework named array VARIABLE extents (`.x.plain: ! DEFi #<A>`, then `GLOB *.x.plain`) but a struct
+array field folded its extent into a bare scratch (`! ADDi <a> #<a> #<A>`) that `endStruct` handed
+straight back, so the next struct re-used `<A>` and there was nothing stable to compare against. The
+layout block now mints `.z.<Struct>.<field>` for every array field while the scratch is still live and
+advances by the SYMBOL, so the extent outlives the borrow. It went into `.z.` rather than `.x.` because
+`.x.<owner>.<name>` is keyed on functions and a struct may share a function's name - see
 [`SymbolNamespace.md`](SymbolNamespace.md), and `tests/impala/sources/structFieldExtents.impala` for the
 pinned collision.
 
-So the assertion is now unblocked and is the next step here. Two things must be checked on a real GAZL 1
-assembler before writing it, neither of which the symbol settles: whether `! LEQi` accepts a symbolic
-right-hand operand, and whether a NEVER-EXECUTED forward `! GOTO` to an undefined label is quietly
-skipped or is a load-time error regardless (the whole scheme rests on the latter being false, and on the
-former the message is only as good as the label name). The same symbol is also what a `sizeof` of an
-array field would reference, and what would let gazl-validate check a host-supplied extent for an
-`extern struct` array field - an unstated wildcard today. Note extern structs mint no layout at all, so
-that last one needs the host to publish `.z.E.field` the way it already publishes `.o.E.field`.
+**Still open, and now cheap**, because they want the same symbol: `sizeof` of an array field, and
+gazl-validate checking a host-supplied extent for an `extern struct` array field (an unstated wildcard
+today). The second needs the host to publish `.z.E.field` the way it already publishes `.o.E.field`,
+since an extern struct mints no layout of its own.
 
 Note the two checks are complementary, not redundant. Define-each-word-once catches an over-run only when
 it lands on a word something else initialized; an array over-running into an *uninitialized* neighbour is

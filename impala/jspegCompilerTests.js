@@ -736,6 +736,27 @@ function assembleFixture(name, gazlPath) {
 	}
 }
 
+/* A source that must COMPILE clean and then be refused by the assembler. That is a real outcome for
+   anything Impala defers rather than decides (docs/TwoStageConstants.md), and nothing else here can see
+   it: the parity fixtures require assembly to SUCCEED, and a diagnostic table only ever runs the
+   compiler. Skipped without GAZLCmd, like every other assembler-backed check. */
+function assertLoadFails(label, source, expectedInMessage) {
+	if (!haveGazlCmd()) {
+		return;
+	}
+	const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "loadFail.gazl");
+	fs.mkdirSync(path.dirname(gazlPath), { recursive: true });
+	fs.writeFileSync(gazlPath, compileWithJsImpala(source, { randomId: 42 }), IMPALA_ENCODING);
+	const verdict = assembleOnly(gazlPath);
+	if (verdict === undefined || verdict === NEEDS_HOST
+			|| verdict.indexOf(expectedInMessage) < 0) {
+		console.error(`${label} should have been refused at assembly time with "${expectedInMessage}"`);
+		console.error(`  got: ${verdict === undefined ? "assembled clean" : verdict}`);
+		process.exit(1);
+	}
+	console.log(`${label} is refused at assembly time`);
+}
+
 function resolveValidatorFixture(name) {
 	return path.join(validatorFixturesDir, name);
 }
@@ -1299,16 +1320,20 @@ const SYM_STRUCT = "const int N = 3\nstruct S { int a; int array v[N]; int z }\n
 const SYM_TAIL = "const int N = 3\nstruct S { int a; int array v[N] }\n";
 const SYM_ZERO_SRC = SYM_STRUCT + "global S s = { a: 1, v: { 0, 0 }, z: 0 }\nfunction main() { }\n";
 const symbolicExtentCases = [
-	// Giving the array ANY non-zero value is the error, not merely a field after it. Impala cannot check
-	// the value count against a symbolic extent, so an over-filled array spills into whatever follows and
-	// the assembler cannot see it: `v[N]` with N=2 given three values, plus a `z`, emits four words that
-	// fit `1+N+1` EXACTLY - so it assembles clean and z silently receives v's third value.
-	["a symbolic array may not be given values",
-		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }", "Cannot initialize"],
-	["not even when it is the last field",
-		SYM_TAIL + "global S s = { a: 1, v: { 7 } }\nfunction main() { }", "Cannot initialize"],
-	["nor a field after it",
+	// The array ITSELF is fillable: its words start at a known position, so only the ones it did not fill
+	// are unplaceable. What Impala cannot do is check the count against a symbolic extent - an over-filled
+	// array spills into whatever follows and the assembler cannot see it either, because `v[N]` with N=2
+	// given three values, plus a `z`, emits four words that fit `1+N+1` EXACTLY. So the count check is
+	// DEFERRED to the assembler as `! GRTi` (assertFitsExtent), which by then knows the extent, and it is
+	// the field AFTER the array that stays blocked.
+	["a symbolic array may be given values",
+		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }", null],
+	["also when it is the last field",
+		SYM_TAIL + "global S s = { a: 1, v: { 7 } }\nfunction main() { }", null],
+	["but a field after it is blocked",
 		SYM_STRUCT + "global S s = { a: 1, z: 2 }\nfunction main() { }", "Cannot initialize"],
+	["blocked even when the array itself was filled",
+		SYM_STRUCT + "global S s = { a: 1, v: { 7 }, z: 2 }\nfunction main() { }", "Cannot initialize"],
 	["zeros are fine - they are what the region fills anyway", SYM_ZERO_SRC, null],
 	// Zero-ness is a VALUE, not a spelling. Comparing operands against the canonical `#0`/`#0.0`/`&NULL`
 	// strings rejected these, which is erroring on safe code. A SYMBOL stays rejected - Impala does not
@@ -1346,11 +1371,36 @@ const litInit = compileWithJsImpala(
 	{ randomId: 42 });
 assert(/DATA #1 #7 #8 #9 #2/.test(litInit),
 	`a literal-extent struct initializer must emit all five words\n${litInit}`);
-// A blocked initializer must emit NOTHING from the symbolic field on, not a truncated row.
+// A symbolic field emits exactly the words it was GIVEN and the row stops there - the ones it did not
+// fill are a symbolic count DATA cannot skip, and `z` lies past them.
 const symInit = compileWithJsImpala(SYM_ZERO_SRC, { randomId: 42 });
-assert(/DATA #1(\s|$)/.test(symInit) && !/#0/.test(symInit.split("DATA")[1] || ""),
-	`a blocked symbolic initializer must stop at the last placeable word\n${symInit}`);
+assert(/DATA #1 #0 #0(\s|$)/.test(symInit),
+	`a symbolic initializer must stop at the last placeable word\n${symInit}`);
 console.log("impala.jspeg compiler lays out symbolic struct extents and refuses to guess the rest");
+
+// The count check Impala cannot make is handed to the assembler, which by then knows the extent. Pin the
+// OPERANDS, not just that a line appeared: reversed operands, or elements counted where words are meant,
+// would still emit a plausible `! GRTi` and silently stop catching the spill it exists for.
+const symAssert = compileWithJsImpala(
+	SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }\n", { randomId: 42 });
+assert(/! GRTi #3 #\.z\.S\.v @\.ERROR\.too_many_initializer_values_for\.S\.v/.test(symAssert),
+	`a symbolic array fill must defer its count check to the assembler\n${symAssert}`);
+// WORDS, not elements: a struct-element array contributes .z.Elem each, and the extent symbol is in words.
+const symElemAssert = compileWithJsImpala(
+	"const int N = 3\nstruct P { int lo; int hi }\nstruct S { P array p[N] }\n"
+		+ "global S s = { p: { { lo: 1, hi: 2 }, { lo: 3, hi: 4 } } }\nfunction main() { }\n", { randomId: 42 });
+assert(/! GRTi #4 #\.z\.S\.p @/.test(symElemAssert),
+	`a struct-element fill must count WORDS against the extent, not elements\n${symElemAssert}`);
+// The compile-time half above only proves the LINE is there. This proves it BITES: the deferred check is
+// the sole thing standing between an over-filled symbolic array and the silent spill it replaced, and it
+// lives entirely at assembly time, so nothing else in this suite would notice it going quiet. The shape is
+// the original defect - `v[N]` with N=2 given three values plus a `z` emits four words that fit `1+N+1`
+// exactly, so the assembler accepts the DATA and only the assertion can tell.
+assertLoadFails("an over-filled symbolic array field",
+	"const int N = 2\nstruct S { int head; int array v[N]; int z }\n"
+		+ "global S s = { head: 1, v: { 1, 2, 3 } }\nfunction main() { }\n",
+	".ERROR.too_many_initializer_values_for.S.v");
+console.log("impala.jspeg compiler defers the symbolic value-count check to GAZL assembly time");
 
 // Surplus initializer values used to be read by nobody and vanish: the fill loops stop at the extent, so
 // nothing was emitted for them and the assembler had nothing wrong to see. (A surplus FIELD is already
