@@ -44,9 +44,10 @@ It also makes the layout inspectable and greppable, and it composes with imports
 
 Scheme: `.o.<Struct>.<field>` for a field offset and `.z.<Struct>` for a struct size.
 
-An ARRAY field's own extent in words is NOT part of this scheme - it is `.x.<Struct>.<field>`, under the
-one tag that names every array extent whatever owns it (see
-[`SymbolNamespace.md`](SymbolNamespace.md)). Array fields only: a scalar is 1 word and a by-value field
+`.z.` extends to `.z.<Struct>.<field>` for an ARRAY field's own extent in words. That is the same tag
+because it is the same quantity - `.z.<path>` is the words occupied by `<path>` - and it is what every
+OTHER array extent uses too (`.z.grid` for a global, `.z.main.buf` for a local); see
+[`SymbolNamespace.md`](SymbolNamespace.md). Array fields only: a scalar is 1 word and a by-value field
 is `.z.Inner`, so those need no name minted.
 
 Rationale (this is the whole subtlety):
@@ -141,9 +142,9 @@ nested-struct and array advances MUST be symbolic so they track the referenced d
 Field kinds and their advance line:
 - scalar (int/float/ptr): `! ADDi <a> #<a> #1` (the VM word-count of the scalar).
 - nested struct by value: `! ADDi <a> #<a> #.z.Inner`.
-- scalar array `int d[128]`: `.x.S.d: ! DEFi #128` (count * 1) then `! ADDi <a> #<a> #.x.S.d`.
-- struct array `Voice bank[8]`: `! MULi <t> #8 #.z.Voice`, `.x.S.bank: ! DEFi #<t>`, then
-  `! ADDi <a> #<a> #.x.S.bank`.
+- scalar array `int d[128]`: `.z.S.d: ! DEFi #128` (count * 1) then `! ADDi <a> #<a> #.z.S.d`.
+- struct array `Voice bank[8]`: `! MULi <t> #8 #.z.Voice`, `.z.S.bank: ! DEFi #<t>`, then
+  `! ADDi <a> #<a> #.z.S.bank`.
 
 Both array forms name the extent BEFORE advancing by it, so an extent that folded into a `<X>` scratch
 outlives the scratch. That is what the deferred value-count assertion behind `E454` needs a handle on

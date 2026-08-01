@@ -13,24 +13,24 @@ M:	! DEFi #3	; signature const M : int @ 21:1
 ; signature struct P { lo : int, hi : int } @ 23:1
 	! MOVi <a> #0	; layout of struct Scalars
 .o.Scalars.v:	! DEFi #<a>
-.x.Scalars.v:	! DEFi #N
-	! ADDi <a> #<a> #.x.Scalars.v
+.z.Scalars.v:	! DEFi #N
+	! ADDi <a> #<a> #.z.Scalars.v
 .z.Scalars:	! DEFi #<a>
 ; signature struct Scalars { v : int[N] } @ 25:1
 	! MOVi <a> #0	; layout of struct Elems
 .o.Elems.p:	! DEFi #<a>
 	! MULi <t> #M #.z.P
-.x.Elems.p:	! DEFi #<t>
-	! ADDi <a> #<a> #.x.Elems.p
+.z.Elems.p:	! DEFi #<t>
+	! ADDi <a> #<a> #.z.Elems.p
 .z.Elems:	! DEFi #<a>
 ; signature struct Elems { p : P[M] } @ 29:1
 ; signature extern native printInt() -> unknown @ 33:1
 ; signature extern native printLF() -> unknown @ 34:1
 s:	GLOB *.z.Scalars	; signature global s : Scalars @ 36:1
-	! GRTi #3 #.x.Scalars.v @.ERROR.too_many_initializer_values_for.Scalars.v
+	! GRTi #3 #.z.Scalars.v @.ERROR.too_many_initializer_values_for.Scalars.v
 	DATA #7 #8 #9
 e:	GLOB *.z.Elems	; signature global e : Elems @ 37:1
-	! GRTi #4 #.x.Elems.p @.ERROR.too_many_initializer_values_for.Elems.p
+	! GRTi #4 #.z.Elems.p @.ERROR.too_many_initializer_values_for.Elems.p
 	DATA #1 #2 #3 #4
 
 ;-----------------------------------------------------------------------------

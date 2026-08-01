@@ -3,8 +3,8 @@
 ; signatures version=1
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 7:1
 ; signature extern const DEBUG : int @ 8:1
-.x.PANEL_TEXT_ROWS:	! DEFi #8
-PANEL_TEXT_ROWS:	CNST *.x.PANEL_TEXT_ROWS	; signature array PANEL_TEXT_ROWS[8] : unknown @ 16:1
+.z.PANEL_TEXT_ROWS:	! DEFi #8
+PANEL_TEXT_ROWS:	CNST *.z.PANEL_TEXT_ROWS	; signature array PANEL_TEXT_ROWS[8] : unknown @ 16:1
 	DATA &.s_ABC888_4d2 &.s_ABC888_4d2 &.s_RM_4d3
 	DATA &.s_AMRATE_4d4 &.s_notuse_4d5 &.s_toollo_4d6
 	DATA &.s_7_4d7 &.s_ILOVEP_4d8
@@ -34,8 +34,8 @@ left:	DATi #0	; signature global left : int @ 50:1
 right:	DATi #0	; signature global right : int @ 51:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 52:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 53:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 53:1
 	GLOB *1
 instance:	DATi #0	; signature global instance : int @ 54:1
 LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 58:1
@@ -328,8 +328,8 @@ traceInt:	FUNC	; signature func traceInt(int i) -> void @ 260:1
 		PARA *1
 	$i:	INPi
 	! ADDi <A> #GAZL_WORD_SIZE #2
-.x.traceInt.buffer:	! DEFi #<A>
-	$buffer:	LOCA *.x.traceInt.buffer
+.z.traceInt.buffer:	! DEFi #<A>
+	$buffer:	LOCA *.z.traceInt.buffer
 ;-----------------------------------------------------------------------------
 		MOVi %2 $i 	; trace(intToString(i, 10, 1, buffer))
 		MOVi %3 #10 
@@ -344,8 +344,8 @@ traceInt:	FUNC	; signature func traceInt(int i) -> void @ 260:1
 traceFloat:	FUNC	; signature func traceFloat(float f) -> void @ 266:1
 		PARA *1
 	$f:	INPf
-.x.traceFloat.buffer:	! DEFi #32
-	$buffer:	LOCA *.x.traceFloat.buffer
+.z.traceFloat.buffer:	! DEFi #32
+	$buffer:	LOCA *.z.traceFloat.buffer
 ;-----------------------------------------------------------------------------
 		MOVf %2 $f 	; trace(floatToString(f, 6, buffer))
 		MOVi %3 #6 
@@ -373,10 +373,10 @@ rrx:	DATf #0.0	; signature global rrx : float @ 281:1
 rry:	DATf #0.0	; signature global rry : float @ 282:1
 	GLOB *1
 bufferIndex:	DATi #BUFFER_SIZE	; signature global bufferIndex : int @ 283:1
-.x.lbuffer:	! DEFi #4096
-lbuffer:	GLOB *.x.lbuffer	; signature array lbuffer[4096] : unknown @ 284:1
-.x.rbuffer:	! DEFi #4096
-rbuffer:	GLOB *.x.rbuffer	; signature array rbuffer[4096] : unknown @ 285:1
+.z.lbuffer:	! DEFi #4096
+lbuffer:	GLOB *.z.lbuffer	; signature array lbuffer[4096] : unknown @ 284:1
+.z.rbuffer:	! DEFi #4096
+rbuffer:	GLOB *.z.rbuffer	; signature array rbuffer[4096] : unknown @ 285:1
 
 ;-----------------------------------------------------------------------------
 init:	FUNC	; signature func init() -> void @ 292:1
@@ -446,8 +446,8 @@ reset:	FUNC	; signature func reset() -> void @ 301:1
 ;-----------------------------------------------------------------------------
 update:	FUNC	; signature func update() -> void @ 326:1
 		PARA *1
-.x.update.buf:	! DEFi #34
-	$buf:	LOCA *.x.update.buf
+.z.update.buf:	! DEFi #34
+	$buf:	LOCA *.z.update.buf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update_4df 	; trace("update")
 		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 329:17

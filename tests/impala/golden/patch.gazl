@@ -14,20 +14,20 @@ TRUE:	! DEFi #1	; signature const TRUE : int @ 17:1
 MAX_PATCHES:	! DEFi #64	; signature const MAX_PATCHES : int @ 19:1
 MAX_PATCH_NAME_LENGTH:	! DEFi #31	; signature const MAX_PATCH_NAME_LENGTH : int @ 20:1
 FILE_MEMORY_SIZE:	! DEFi #8000	; signature const FILE_MEMORY_SIZE : int @ 21:1
-.x.lastPatch:	! DEFi #256
-lastPatch:	GLOB *.x.lastPatch	; signature array lastPatch[256] : unknown @ 23:1
-.x.lastConfig:	! DEFi #256
-lastConfig:	GLOB *.x.lastConfig	; signature array lastConfig[256] : unknown @ 24:1
+.z.lastPatch:	! DEFi #256
+lastPatch:	GLOB *.z.lastPatch	; signature array lastPatch[256] : unknown @ 23:1
+.z.lastConfig:	! DEFi #256
+lastConfig:	GLOB *.z.lastConfig	; signature array lastConfig[256] : unknown @ 24:1
 	GLOB *1
 patchCount:	DATi #-1	; signature global patchCount : int @ 25:1
 	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
 	! MULi <A> #MAX_PATCHES <A>
-.x.patchNames:	! DEFi #<A>
-patchNames:	GLOB *.x.patchNames	; signature array patchNames[] : unknown @ 26:1
+.z.patchNames:	! DEFi #<A>
+patchNames:	GLOB *.z.patchNames	; signature array patchNames[] : unknown @ 26:1
 	GLOB *1
 displayedPatchingInfo:	DATi #FALSE	; signature global displayedPatchingInfo : int @ 27:1
-.x.fileMemory:	! DEFi #FILE_MEMORY_SIZE
-fileMemory:	GLOB *.x.fileMemory	; signature array fileMemory[FILE_MEMORY_SIZE] : unknown @ 29:1
+.z.fileMemory:	! DEFi #FILE_MEMORY_SIZE
+fileMemory:	GLOB *.z.fileMemory	; signature array fileMemory[FILE_MEMORY_SIZE] : unknown @ 29:1
 
 ;-----------------------------------------------------------------------------
 strcpy:	FUNC	; signature func strcpy(ptr d, ptr s) -> ptr @ 31:1
@@ -168,12 +168,12 @@ refreshPatchList:	FUNC	; signature func refreshPatchList() -> void @ 105:1
 	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
 	! ADDi <B> #8 #1
 	$p:	LOCp
-.x.refreshPatchList.dummy:	! DEFi #<A>
-	$dummy:	LOCA *.x.refreshPatchList.dummy
+.z.refreshPatchList.dummy:	! DEFi #<A>
+	$dummy:	LOCA *.z.refreshPatchList.dummy
 	$index:	LOCi
 	$size:	LOCi
-.x.refreshPatchList.modDate:	! DEFi #<B>
-	$modDate:	LOCA *.x.refreshPatchList.modDate
+.z.refreshPatchList.modDate:	! DEFi #<B>
+	$modDate:	LOCA *.z.refreshPatchList.modDate
 ;-----------------------------------------------------------------------------
 		MOVi $index #-1 	; index = -1
 	.l0:	ADDi $index $index #1	; index = index + 1
@@ -223,8 +223,8 @@ list:	FUNC	; signature func list() -> void @ 118:1
 ;-----------------------------------------------------------------------------
 restore:	FUNC	; signature func restore() -> void @ 131:1
 		PARA *1
-.x.restore.error:	! DEFi #256
-	$error:	LOCA *.x.restore.error
+.z.restore.error:	! DEFi #256
+	$error:	LOCA *.z.restore.error
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Restor_4d9 	; outputLine("Restoring factory firmware. Do not power off...")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 134:63
@@ -257,10 +257,10 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 148:1
 		PARA *1
 	$name:	INPp
 	$config:	INPp
-.x.patch.buffer1:	! DEFi #256
-	$buffer1:	LOCA *.x.patch.buffer1
-.x.patch.buffer2:	! DEFi #256
-	$buffer2:	LOCA *.x.patch.buffer2
+.z.patch.buffer1:	! DEFi #256
+	$buffer1:	LOCA *.z.patch.buffer1
+.z.patch.buffer2:	! DEFi #256
+	$buffer2:	LOCA *.z.patch.buffer2
 	$i:	LOCi
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
@@ -362,8 +362,8 @@ repatch:	FUNC	; signature func repatch() -> void @ 194:1
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 200:1
 		PARA *1
-.x.main.s:	! DEFi #256
-	$s:	LOCA *.x.main.s
+.z.main.s:	! DEFi #256
+	$s:	LOCA *.z.main.s
 	$p:	LOCp
 	$c:	LOCi
 ;-----------------------------------------------------------------------------

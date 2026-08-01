@@ -83,14 +83,14 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 71:1
 		RETU   	; }
 
 	! ADDi <A> #FILE_BUFFER_SIZE #1
-.x.fileBuffer:	! DEFi #<A>
-fileBuffer:	GLOB *.x.fileBuffer	; signature array fileBuffer[] : unknown @ 77:1
+.z.fileBuffer:	! DEFi #<A>
+fileBuffer:	GLOB *.z.fileBuffer	; signature array fileBuffer[] : unknown @ 77:1
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 79:1
 		PARA *1
-.x.main.s:	! DEFi #256
-	$s:	LOCA *.x.main.s
+.z.main.s:	! DEFi #256
+	$s:	LOCA *.z.main.s
 	$type:	LOCi
 	$offset:	LOCi
 	$readCount:	LOCi
@@ -102,8 +102,8 @@ main:	FUNC	; signature func main() -> void @ 79:1
 	$col:	LOCi
 	$c:	LOCi
 	$i:	LOCi
-.x.main.yn:	! DEFi #64
-	$yn:	LOCA *.x.main.yn
+.z.main.yn:	! DEFi #64
+	$yn:	LOCA *.z.main.yn
 ;-----------------------------------------------------------------------------
 		CALL &initFilesIfNecessary %0 *1	; expects initFilesIfNecessary() -> unknown @ 83:24
 		MOVp %1 &.s_GAZLdi_4d3 	; outputLine("GAZL disassembler v2.1.")

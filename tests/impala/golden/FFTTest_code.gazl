@@ -4,8 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
 	DATA &.s_Sillyr_4d2 &.s__4d3 &.s__4d3 &.s_LEFTDE_4d4
 	DATA &.s__4d3 &.s__4d3 &.s__4d3 &.s_RINGMO_4d5
 ; signature extern native abort() -> unknown @ 38:1
@@ -44,16 +44,16 @@ panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unkno
 ; signature extern const POSITION_FRACT_BITS : int @ 77:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 79:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
 	GLOB *1
 instance:	DATi #0	; signature global instance : int @ 82:1
-.x.signal:	! DEFi #2
-signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 86:1
-.x.EIGHT_BIT_EXP_TABLE:	! DEFi #256
-EIGHT_BIT_EXP_TABLE:	CNST *.x.EIGHT_BIT_EXP_TABLE	; signature array EIGHT_BIT_EXP_TABLE[256] : unknown @ 91:1
+.z.signal:	! DEFi #2
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 86:1
+.z.EIGHT_BIT_EXP_TABLE:	! DEFi #256
+EIGHT_BIT_EXP_TABLE:	CNST *.z.EIGHT_BIT_EXP_TABLE	; signature array EIGHT_BIT_EXP_TABLE[256] : unknown @ 91:1
 	DATA #0x0 #0x1 #0x2 #0x3 #0x4 #0x5 #0x6 #0x7 #0x8 #0x9
 	DATA #0xa #0xb #0xc #0xd #0xe #0xf #0x10 #0x11 #0x12 #0x13
 	DATA #0x14 #0x15 #0x16 #0x17 #0x18 #0x19 #0x1a #0x1b #0x1c
@@ -171,10 +171,10 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 	$n:	INPi
 	$ints:	INPp
 	! ADDi <A> #GAZL_WORD_SIZE #2
-.x.traceInts.buffer:	! DEFi #<A>
-	$buffer:	LOCA *.x.traceInts.buffer
-.x.traceInts.line:	! DEFi #1024
-	$line:	LOCA *.x.traceInts.line
+.z.traceInts.buffer:	! DEFi #<A>
+	$buffer:	LOCA *.z.traceInts.buffer
+.z.traceInts.line:	! DEFi #1024
+	$line:	LOCA *.z.traceInts.line
 	$i:	LOCi
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
@@ -209,8 +209,8 @@ traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 187:1
 		PARA *1
 	$text:	INPp
 	$i:	INPi
-.x.traceInt.ints:	! DEFi #1
-	$ints:	LOCA *.x.traceInt.ints
+.z.traceInt.ints:	! DEFi #1
+	$ints:	LOCA *.z.traceInt.ints
 ;-----------------------------------------------------------------------------
 		MOVi $ints:0 $i 	; ints[0] = i
 		MOVp %1 $text 	; traceInts(text, 1, ints)
@@ -332,8 +332,8 @@ complexFFT:	FUNC	; signature func complexFFT(int n, ptr data) -> void @ 253:1
 	$ny:	LOCf
 	$tr:	LOCf
 	$ti:	LOCf
-.x.complexFFT.tmp:	! DEFi #2
-	$tmp:	LOCA *.x.complexFFT.tmp
+.z.complexFFT.tmp:	! DEFi #2
+	$tmp:	LOCA *.z.complexFFT.tmp
 ;-----------------------------------------------------------------------------
 		! EQUi #DEBUG #0 @.a0	; assert(n >= 2 && (n & (n - 1)) == 0)
 		LSSi $n #2 @.f1
@@ -658,8 +658,8 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 452:1
 init:	FUNC	; signature func init() -> void @ 467:1
 		PARA *1
 	$i:	LOCi
-.x.init.buf:	! DEFi #256
-	$buf:	LOCA *.x.init.buf
+.z.init.buf:	! DEFi #256
+	$buf:	LOCA *.z.init.buf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4d9 	; trace("init")
 		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 470:15
@@ -688,10 +688,10 @@ reset:	FUNC	; signature func reset() -> void @ 478:1
 ;-----------------------------------------------------------------------------
 update:	FUNC	; signature func update() -> void @ 489:1
 		PARA *1
-.x.update.buf:	! DEFi #256
-	$buf:	LOCA *.x.update.buf
-.x.update.params:	! DEFi #PARAM_COUNT
-	$params:	LOCA *.x.update.params
+.z.update.buf:	! DEFi #256
+	$buf:	LOCA *.z.update.buf
+.z.update.params:	! DEFi #PARAM_COUNT
+	$params:	LOCA *.z.update.params
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
@@ -703,10 +703,10 @@ process:	FUNC	; signature func process() -> void @ 509:1
 	$maxI:	LOCi
 	$i:	LOCi
 	$out:	LOCi
-.x.process.fftInput:	! DEFi #512
-	$fftInput:	LOCA *.x.process.fftInput
-.x.process.fftOutput:	! DEFi #512
-	$fftOutput:	LOCA *.x.process.fftOutput
+.z.process.fftInput:	! DEFi #512
+	$fftInput:	LOCA *.z.process.fftInput
+.z.process.fftOutput:	! DEFi #512
+	$fftOutput:	LOCA *.z.process.fftOutput
 	$ph:	LOCf
 	$rate:	LOCf
 	$a:	LOCf

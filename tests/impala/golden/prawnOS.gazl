@@ -36,8 +36,8 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 9:1
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 22:1
 		PARA *1
-.x.main.inp:	! DEFi #256
-	$inp:	LOCA *.x.main.inp
+.z.main.inp:	! DEFi #256
+	$inp:	LOCA *.z.main.inp
 ;-----------------------------------------------------------------------------
 	mainLoop:	MOVp %1 &.s__4d2 	; mainLoop:
 		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 27:14

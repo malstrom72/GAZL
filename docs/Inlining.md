@@ -50,7 +50,7 @@ materialise everywhere else, rather than reach for a clever analysis.
   `impala compile` resolves the closure, so this needs no separate step.
 
 Rejected, each with its own diagnostic (section 7): recursion, taking the address, `export`, `extern`,
-and forward declaration. Array and struct locals are **allowed**, and since the `.x.` rework named every
+and forward declaration. Array and struct locals are **allowed**, and since the extent-naming rework named every
 extent, a NON-literal extent is allowed too - see section 8, which explains why `E433` no longer exists.
 (This paragraph used to say such a local was rejected, contradicting that section.)
 
@@ -292,7 +292,7 @@ already complete, and `B` cannot have inlined `A`.
 
 A callee's declared locals become REAL named locals of the caller, bracketed by `SCOP` / `ENDS`. The
 assembler owns their placement, exactly as it does for an ordinary local - which is the point: it
-resolves `*.z.Struct` and `*.x.f.name` before assigning offsets, so a host-owned size lands correctly,
+resolves `*.z.Struct` and `*.z.f.name` before assigning offsets, so a host-owned size lands correctly,
 where a compile-time slot count could only ever have been Impala's guess at it.
 
 Sibling expansions overlay, so a function's frame cost is its LARGEST expansion, not the sum. That is
@@ -312,12 +312,12 @@ CALL window's base must be a transient, so that block cannot be anything else.
 Nothing but a declaration line repeating the size operand verbatim:
 
     SCOP
-    $buf_i0:	LOCA *.x.sum3.buf
+    $buf_i0:	LOCA *.z.sum3.buf
     $i_i0:	LOCi
     ENDS
 
-Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.x.f.name` for
-an array (see `docs/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
+Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.z.f.name` for an array local
+(see `docs/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
 by folding (`t[H * N]`, or `count * .z.Ext` for an extern struct) lives in a recycled `<X>` scratch that
 belongs to wherever it was folded, so it can NOT be repeated at an expansion site - naming it once, at
 the callee's declaration, is what lets every site refer to it.

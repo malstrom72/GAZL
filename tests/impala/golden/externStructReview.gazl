@@ -27,8 +27,8 @@ setup:	FUNC	; signature func setup(Frame-ptr f) -> void @ 13:1
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 14:1
 		PARA *1
-.x.main.raw:	! DEFi #8
-	$raw:	LOCA *.x.main.raw
+.z.main.raw:	! DEFi #8
+	$raw:	LOCA *.z.main.raw
 	$f:	LOCp
 ;-----------------------------------------------------------------------------
 		ADRL $f $raw:0 *0	; f = (Frame pointer)&raw[0]

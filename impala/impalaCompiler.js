@@ -1521,9 +1521,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        has a single flat symbol space - so `global int S` beside `function S()` passed every check and
        then failed to assemble ("Symbol already defined: S"), and `struct S` + `functype S` was rejected
        in one order and accepted in the other. Types are not emitted under a bare name, but they are read
-       by position alone, and every symbol family the compiler mints is keyed on a user name - `.z.S` vs
-       `.x.S`, `.z.S.a` vs `.x.S.a` - so each new family otherwise needs its own collision analysis, two
-       of which were only found by accident. Claiming names once retires the class.
+       by position alone, and every symbol the compiler mints is keyed on a user name - so `.z.S` would
+       be both `struct S`'s size and a global array `S`'s extent, and each new family would otherwise
+       need its own collision analysis, two of which were only found by accident. Claiming names once
+       retires the class, and is what lets one `.z.` tag serve every size (see extentSymbol).
 
        Re-claiming the SAME kind is how a declaration meets its definition, and how an import closure
        sees one unit twice; the per-kind agreement checks (E401 / E410 / E437 / E438 / E440) own that
@@ -1706,14 +1707,16 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
 
-    /* The symbol naming an array's extent in words, for EVERY array: `.x.name` for a global,
-       `.x.func.local` for a local, `.x.Struct.field` for a struct array field. One tag for one concept
-       is only sound because a top-level name has one kind (claimTopName) - otherwise `.x.S.a` would mean
-       both `struct S`'s field and `function S`'s local. Struct array fields only: a scalar field is one
-       word and a by-value field is `.z.Inner`, so those are already nameable.
+    /* The symbol naming an array's extent in WORDS - the `*size` operand, not the element count (a
+       struct-element array is `count * .z.Elem`). Same tag as a struct's size because it is the same
+       quantity: `.z.<path>` is the words occupied by `<path>`, whether that is `.z.Voice` (a struct),
+       `.z.bank` (a global array), `.z.main.buf` (a local) or `.z.S.v` (a struct array field). One tag
+       is only sound because a top-level name has exactly one kind (claimTopName) - otherwise `.z.S`
+       would mean both `struct S` and a global array `S`. Struct array fields only: a scalar field is
+       one word and a by-value field is `.z.Inner`, so those are already nameable.
        See docs/SymbolNamespace.md. */
     extentSymbol = function (name, owner) {
-        return '.x.' + (owner !== undefined ? owner + '.' : '') + name;
+        return '.z.' + (owner !== undefined ? owner + '.' : '') + name;
     };
 
     /* '*size' operand for allocating an ARRAY, published as a NAMED assemble-time constant rather
@@ -1966,7 +1969,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 'remove the extra ' + (given - holds) + ', or widen ' + name);
     };
 
-    /* Hand a comparison Impala cannot make to the stage that can: `words <= .x.Struct.field`, deferred
+    /* Hand a comparison Impala cannot make to the stage that can: `words <= .z.Struct.field`, deferred
        to GAZL assembly time, where the extent finally has a value. Rule 4 of docs/TwoStageConstants.md,
        and it costs nothing at run time - `! GRTi` is a compile-time directive, so no word is emitted
        either way.

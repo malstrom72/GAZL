@@ -77,8 +77,8 @@ PAWN_ADVANCE_SCORE:	! DEFi <A>	; signature const PAWN_ADVANCE_SCORE : int @ 54:1
 CASTLING_SCORE:	! DEFi <A>	; signature const CASTLING_SCORE : int @ 55:1
 CASTLING_MASK:	! DEFi #0x80	; signature const CASTLING_MASK : int @ 56:1
 HISTORY_SIZE:	! DEFi #256	; signature const HISTORY_SIZE : int @ 57:1
-.x.DIRS:	! DEFi #8
-DIRS:	CNST *.x.DIRS	; signature array DIRS[8] : unknown @ 59:1
+.z.DIRS:	! DEFi #8
+DIRS:	CNST *.z.DIRS	; signature array DIRS[8] : unknown @ 59:1
 	! ADDi <A> #STRIDE #1
 	DATA #STRIDE
 	DATA <A>
@@ -94,8 +94,8 @@ DIRS:	CNST *.x.DIRS	; signature array DIRS[8] : unknown @ 59:1
 	! SUBi <A> #STRIDE #1
 	DATA #-1
 	DATA <A>
-.x.KNIGHT_MOVES:	! DEFi #8
-KNIGHT_MOVES:	CNST *.x.KNIGHT_MOVES	; signature array KNIGHT_MOVES[8] : unknown @ 60:1
+.z.KNIGHT_MOVES:	! DEFi #8
+KNIGHT_MOVES:	CNST *.z.KNIGHT_MOVES	; signature array KNIGHT_MOVES[8] : unknown @ 60:1
 	! MULi <A> #STRIDE #2
 	! ADDi <A> <A> #1
 	! ADDi <B> #2 #STRIDE
@@ -119,8 +119,8 @@ KNIGHT_MOVES:	CNST *.x.KNIGHT_MOVES	; signature array KNIGHT_MOVES[8] : unknown 
 	! SUBi <B> <B> #1
 	DATA <A>
 	DATA <B>
-.x.PIECE_VALUES:	! DEFi #7
-PIECE_VALUES:	CNST *.x.PIECE_VALUES	; signature array PIECE_VALUES[7] : unknown @ 61:1
+.z.PIECE_VALUES:	! DEFi #7
+PIECE_VALUES:	CNST *.z.PIECE_VALUES	; signature array PIECE_VALUES[7] : unknown @ 61:1
 	! MULi <B> #5 #PAWN_VALUE
 	DATA #0 #PAWN_VALUE
 	! MULi <A> #3 #PAWN_VALUE
@@ -130,14 +130,14 @@ PIECE_VALUES:	CNST *.x.PIECE_VALUES	; signature array PIECE_VALUES[7] : unknown 
 	DATA <B>
 	DATA #QUEEN_VALUE #MAX_SCORE
 	! ADDi <B> #8 #4
-.x.RANK_VALUES:	! DEFi #<B>
-RANK_VALUES:	CNST *.x.RANK_VALUES	; signature array RANK_VALUES[] : unknown @ 62:1
+.z.RANK_VALUES:	! DEFi #<B>
+RANK_VALUES:	CNST *.z.RANK_VALUES	; signature array RANK_VALUES[] : unknown @ 62:1
 	DATA #0 #0 #0 #30 #50 #60 #60 #50 #30 #0 #0 #0
 MAX_TARGET_SQUARES:	! DEFi #32	; signature const MAX_TARGET_SQUARES : int @ 64:1
 MAX_MOVES:	! DEFi #256	; signature const MAX_MOVES : int @ 65:1
 MAX_CAPTURES:	! DEFi #32	; signature const MAX_CAPTURES : int @ 66:1
-.x.INIT_BOARD:	! DEFi #BOARD_SIZE
-INIT_BOARD:	CNST *.x.INIT_BOARD	; signature array INIT_BOARD[BOARD_SIZE] : unknown @ 69:1
+.z.INIT_BOARD:	! DEFi #BOARD_SIZE
+INIT_BOARD:	CNST *.z.INIT_BOARD	; signature array INIT_BOARD[BOARD_SIZE] : unknown @ 69:1
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
@@ -226,17 +226,17 @@ INIT_BOARD:	CNST *.x.INIT_BOARD	; signature array INIT_BOARD[BOARD_SIZE] : unkno
 	DATs PRNBQK  prnbqk
 	DATi #32 #0
 PIECE_CHARS:	! DEFp &.s_PRNBQK_4d2	; signature const PIECE_CHARS : ptr @ 84:1
-.x.PIECE_NAMES:	! DEFi #8
-PIECE_NAMES:	CNST *.x.PIECE_NAMES	; signature array PIECE_NAMES[8] : unknown @ 85:1
+.z.PIECE_NAMES:	! DEFi #8
+PIECE_NAMES:	CNST *.z.PIECE_NAMES	; signature array PIECE_NAMES[8] : unknown @ 85:1
 	DATA &.s_PRNBQK_4d2:16 &.s_pawn_4d2 &.s_rook_4d3
 	DATA &.s_knight_4d4 &.s_bishop_4d5 &.s_queen_4d6
 	DATA &.s_king_4d7
-.x.board:	! DEFi #BOARD_SIZE
-board:	GLOB *.x.board	; signature array board[BOARD_SIZE] : unknown @ 87:1
-.x.nextPiece:	! DEFi #BOARD_SIZE
-nextPiece:	GLOB *.x.nextPiece	; signature array nextPiece[BOARD_SIZE] : unknown @ 88:1
-.x.prevPiece:	! DEFi #BOARD_SIZE
-prevPiece:	GLOB *.x.prevPiece	; signature array prevPiece[BOARD_SIZE] : unknown @ 89:1
+.z.board:	! DEFi #BOARD_SIZE
+board:	GLOB *.z.board	; signature array board[BOARD_SIZE] : unknown @ 87:1
+.z.nextPiece:	! DEFi #BOARD_SIZE
+nextPiece:	GLOB *.z.nextPiece	; signature array nextPiece[BOARD_SIZE] : unknown @ 88:1
+.z.prevPiece:	! DEFi #BOARD_SIZE
+prevPiece:	GLOB *.z.prevPiece	; signature array prevPiece[BOARD_SIZE] : unknown @ 89:1
 	GLOB *1
 xCapture:	DATi #0	; signature global xCapture : int @ 90:1
 	GLOB *1
@@ -248,20 +248,20 @@ HASH_TABLE_SIZE:	! DEFi <B>	; signature const HASH_TABLE_SIZE : int @ 109:1
 	! XORi <B> #0 #-1
 HASH_MASK:	! DEFi <B>	; signature const HASH_MASK : int @ 110:1
 	! MULi <B> #BOARD_SIZE #64
-.x.pieceKeys:	! DEFi #<B>
-pieceKeys:	GLOB *.x.pieceKeys	; signature array pieceKeys[] : unknown @ 112:1
-.x.xCaptureKeys:	! DEFi #256
-xCaptureKeys:	GLOB *.x.xCaptureKeys	; signature array xCaptureKeys[256] : unknown @ 113:1
+.z.pieceKeys:	! DEFi #<B>
+pieceKeys:	GLOB *.z.pieceKeys	; signature array pieceKeys[] : unknown @ 112:1
+.z.xCaptureKeys:	! DEFi #256
+xCaptureKeys:	GLOB *.z.xCaptureKeys	; signature array xCaptureKeys[256] : unknown @ 113:1
 	! ADDi <B> #WHITE #1
-.x.colorKeys:	! DEFi #<B>
-colorKeys:	GLOB *.x.colorKeys	; signature array colorKeys[] : unknown @ 114:1
-.x.hashTable:	! DEFi #HASH_TABLE_SIZE
-hashTable:	GLOB *.x.hashTable	; signature array hashTable[HASH_TABLE_SIZE] : unknown @ 115:1
+.z.colorKeys:	! DEFi #<B>
+colorKeys:	GLOB *.z.colorKeys	; signature array colorKeys[] : unknown @ 114:1
+.z.hashTable:	! DEFi #HASH_TABLE_SIZE
+hashTable:	GLOB *.z.hashTable	; signature array hashTable[HASH_TABLE_SIZE] : unknown @ 115:1
 	GLOB *1
 evalCounter:	DATi #0	; signature global evalCounter : int @ 116:1
 	! MULi <B> #HISTORY_SIZE #4
-.x.history:	! DEFi #<B>
-history:	GLOB *.x.history	; signature array history[] : unknown @ 117:1
+.z.history:	! DEFi #<B>
+history:	GLOB *.z.history	; signature array history[] : unknown @ 117:1
 	GLOB *1
 historyCount:	DATi #0	; signature global historyCount : int @ 118:1
 	GLOB *1
@@ -451,10 +451,10 @@ checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 220:1
 	$i:	LOCi
 	$frm:	LOCi
 	$p:	LOCi
-.x.checkInvariant.counts:	! DEFi #<B>
-	$counts:	LOCA *.x.checkInvariant.counts
-.x.checkInvariant.countsAgain:	! DEFi #<A>
-	$countsAgain:	LOCA *.x.checkInvariant.countsAgain
+.z.checkInvariant.counts:	! DEFi #<B>
+	$counts:	LOCA *.z.checkInvariant.counts
+.z.checkInvariant.countsAgain:	! DEFi #<A>
+	$countsAgain:	LOCA *.z.checkInvariant.countsAgain
 ;-----------------------------------------------------------------------------
 		! EQUi #DEBUG #0 @.a0	; assert((int) isValidColor(global turnColor) != FALSE)
 		PEEK %1 &turnColor 
@@ -1441,8 +1441,8 @@ listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @
 canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 757:1
 	$b:	OUTi
 	$color:	INPi
-.x.canCaptureKing.tos:	! DEFi #MAX_TARGET_SQUARES
-	$tos:	LOCA *.x.canCaptureKing.tos
+.z.canCaptureKing.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.z.canCaptureKing.tos
 	$frm:	LOCi
 	$toCount:	LOCi
 	$i:	LOCi
@@ -1563,10 +1563,10 @@ searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int de
 	$firstMove:	INPi
 	$capturesCount:	LOCi
 	$frm:	LOCi
-.x.searchCaptures.moves:	! DEFi #MAX_MOVES
-	$moves:	LOCA *.x.searchCaptures.moves
-.x.searchCaptures.tos:	! DEFi #MAX_TARGET_SQUARES
-	$tos:	LOCA *.x.searchCaptures.tos
+.z.searchCaptures.moves:	! DEFi #MAX_MOVES
+	$moves:	LOCA *.z.searchCaptures.moves
+.z.searchCaptures.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.z.searchCaptures.tos
 	$myAlpha:	LOCi
 	$toCount:	LOCi
 	$i:	LOCi
@@ -1654,10 +1654,10 @@ searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int s
 	$depth:	INPi
 	$score:	INPi
 	$firstMove:	INPi
-.x.searchAll.moves:	! DEFi #MAX_MOVES
-	$moves:	LOCA *.x.searchAll.moves
-.x.searchAll.tos:	! DEFi #MAX_TARGET_SQUARES
-	$tos:	LOCA *.x.searchAll.tos
+.z.searchAll.moves:	! DEFi #MAX_MOVES
+	$moves:	LOCA *.z.searchAll.moves
+.z.searchAll.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.z.searchAll.tos
 	$movesCount:	LOCi
 	$capturesCount:	LOCi
 	$frm:	LOCi
@@ -1870,8 +1870,8 @@ search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, 
 executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1015:1
 	$status:	OUTi
 	$move:	INPi
-.x.executeMove.tos:	! DEFi #MAX_TARGET_SQUARES
-	$tos:	LOCA *.x.executeMove.tos
+.z.executeMove.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.z.executeMove.tos
 	$frm:	LOCi
 	$t:	LOCi
 	$oldPiece:	LOCi
@@ -2092,8 +2092,8 @@ toupper:	FUNC	; signature func toupper(int c) -> int @ 1128:1
 getUserMove:	FUNC	; signature func getUserMove() -> int @ 1137:1
 	$result:	OUTi
 	$level:	LOCi
-.x.getUserMove.s:	! DEFi #256
-	$s:	LOCA *.x.getUserMove.s
+.z.getUserMove.s:	! DEFi #256
+	$s:	LOCA *.z.getUserMove.s
 	$l:	LOCi
 	$fromCol:	LOCi
 	$fromRow:	LOCi
@@ -2196,8 +2196,8 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1175:1
 	$t:	INPi
 	$y:	LOCi
 	$lastI:	LOCi
-.x.printBoard.buffer:	! DEFi #2
-	$buffer:	LOCA *.x.printBoard.buffer
+.z.printBoard.buffer:	! DEFi #2
+	$buffer:	LOCA *.z.printBoard.buffer
 	$i:	LOCi
 	$c:	LOCi
 	$x:	LOCi
@@ -2372,8 +2372,8 @@ main:	FUNC	; signature func main() -> void @ 1256:1
 	$lastMove:	LOCi
 	$moveResult:	LOCi
 	$action:	LOCp
-.x.main.buffer:	! DEFi #256
-	$buffer:	LOCA *.x.main.buffer
+.z.main.buffer:	! DEFi #256
+	$buffer:	LOCA *.z.main.buffer
 	$lastCaptured:	LOCi
 	$lastXCapture:	LOCi
 	$p:	LOCp

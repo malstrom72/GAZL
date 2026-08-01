@@ -13,9 +13,25 @@ readonly int array KEPT[5] = { 9, 9 }
 readonly int array DEAD[3] = { 1, 2, 3 }
 global int array buf[BUF_SIZE]
 
+/* Dead-stripping an array OF A STRUCT, which nothing covered before. A struct's layout block sits
+   directly above the arrays using it and ends in `.z.Voice: ! DEFi` - which since 2026-08-02 looks
+   like an array's own extent line, because `.z.` names both. `deadVoices` is unreferenced on purpose;
+   `liveVoice` is what proves the layout survived it, since `.z.Voice` is a dotted name that
+   `collectRefs` cannot see and so nothing else would notice it disappearing.
+
+   Honest limit: this does NOT prove the extent walk stops on the NAME rather than the tag. The
+   `; signature struct ...` row between the layout and the next fold halts the walk on its own, so a
+   tag-only match still passes here - verified by sabotage. The name check is defence against that row
+   moving, not something a fixture can witness today. */
+struct Voice { int note; float gain }
+global Voice array deadVoices[3]
+global Voice liveVoice
+
 export function main() locals int i {
 	printInt(used(41)); printLF();
 	for (i = 0 to 5) { printInt(global KEPT[i]); printLF(); }
 	global buf[0] = 7;
 	printInt(global buf[0]); printLF();
+	global liveVoice.note = 5;
+	printInt(global liveVoice.note); printLF();
 }

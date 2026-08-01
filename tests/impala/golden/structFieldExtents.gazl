@@ -16,18 +16,18 @@ N:	! DEFi #4	; signature const N : int @ 20:1
 	! DIVi <C> #N #2
 	! MOVi <a> #0	; layout of struct S
 .o.S.a:	! DEFi #<a>
-.x.S.a:	! DEFi #<A>
-	! ADDi <a> #<a> #.x.S.a
+.z.S.a:	! DEFi #<A>
+	! ADDi <a> #<a> #.z.S.a
 .o.S.b:	! DEFi #<a>
-.x.S.b:	! DEFi #<B>
-	! ADDi <a> #<a> #.x.S.b
+.z.S.b:	! DEFi #<B>
+	! ADDi <a> #<a> #.z.S.b
 .o.S.p:	! DEFi #<a>
 	! MULi <t> #<C> #.z.Pair
-.x.S.p:	! DEFi #<t>
-	! ADDi <a> #<a> #.x.S.p
+.z.S.p:	! DEFi #<t>
+	! ADDi <a> #<a> #.z.S.p
 .o.S.c:	! DEFi #<a>
-.x.S.c:	! DEFi #2
-	! ADDi <a> #<a> #.x.S.c
+.z.S.c:	! DEFi #2
+	! ADDi <a> #<a> #.z.S.c
 .o.S.n:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.S:	! DEFi #<a>

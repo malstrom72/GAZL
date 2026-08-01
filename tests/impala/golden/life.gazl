@@ -168,8 +168,8 @@ outputInt:	FUNC	; signature func outputInt(int i) -> void @ 108:1
 		PARA *1
 	$i:	INPi
 	! ADDi <A> #GAZL_WORD_SIZE #2
-.x.outputInt.buffer:	! DEFi #<A>
-	$buffer:	LOCA *.x.outputInt.buffer
+.z.outputInt.buffer:	! DEFi #<A>
+	$buffer:	LOCA *.z.outputInt.buffer
 ;-----------------------------------------------------------------------------
 		MOVi %2 $i 	; output(intToString(i, 10, 1, buffer))
 		MOVi %3 #10 
@@ -299,8 +299,8 @@ run:	FUNC	; signature func run(int dimX, int dimY, ptr cells, int generations) -
 	$c:	LOCi
 	$i:	LOCi
 	$size:	LOCi
-.x.run.cells2:	! DEFi #<A>
-	$cells2:	LOCA *.x.run.cells2
+.z.run.cells2:	! DEFi #<A>
+	$cells2:	LOCA *.z.run.cells2
 	$p1:	LOCp
 	$p2:	LOCp
 	$t:	LOCp
@@ -424,16 +424,16 @@ main:	FUNC	; signature func main() -> void @ 239:1
 	! MULi <A> #MAX_DIM_X #MAX_DIM_Y
 	$dimX:	LOCi
 	$dimY:	LOCi
-.x.main.s:	! DEFi #256
-	$s:	LOCA *.x.main.s
+.z.main.s:	! DEFi #256
+	$s:	LOCA *.z.main.s
 	$quit:	LOCi
 	$i:	LOCi
 	$j:	LOCi
 	$x:	LOCi
 	$y:	LOCi
 	$n:	LOCi
-.x.main.cells:	! DEFi #<A>
-	$cells:	LOCA *.x.main.cells
+.z.main.cells:	! DEFi #<A>
+	$cells:	LOCA *.z.main.cells
 	$c:	LOCi
 	$firstTime:	LOCi
 	$redraw:	LOCi

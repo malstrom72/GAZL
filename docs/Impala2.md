@@ -85,7 +85,7 @@ These are the constraints every 2.0 feature is measured against.
    per-table check and then fail to assemble with `Symbol already defined: S`, and `struct S` beside
    `functype S` was rejected in one declaration order and accepted in the other. It also keeps the
    compiler's own minted symbols unambiguous, since every family is keyed on a user name
-   (`.x.S`, `.x.S.a`, `.z.S`) - see [`SymbolNamespace.md`](SymbolNamespace.md).
+   (`.z.S`, `.z.S.a`, `.z.S`) - see [`SymbolNamespace.md`](SymbolNamespace.md).
 
    The rule covers TOP-LEVEL names only. A local may shadow a global, and a struct field may share a
    struct's name, because neither is emitted under a bare name (`$v`, `.o.S.f`). Re-declaring the SAME
@@ -504,10 +504,10 @@ EXACTLY - which is how `z` used to receive the array's third value in silence. S
 handed to the one stage that knows the extent, as a compile-time directive that costs nothing at run
 time:
 
-    ! GRTi #3 #.x.S.v @.ERROR.too_many_initializer_values_for.S.v
+    ! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v
 
 It fits, nothing happens. It does not, and the assembler stops with the label as the message. That is
-rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md), and `.x.S.v` is the field-extent constant
+rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md), and `.z.S.v` is the field-extent constant
 described in [`StructLayoutConstants.md`](StructLayoutConstants.md). The cost is honest and worth
 stating: the error surfaces at GAZL assembly time, which in a shipped module means the end user's
 machine, with no caret. That is the correct place for it, because with a host-supplied `N` the answer
@@ -1224,7 +1224,7 @@ What is rejected:
 | `&f`, or using it as a funcptr value | `E435` cannot take the address of an inline function |
 | `export inline function` | `E434` an inline function cannot be exported |
 | Forward-declared, redeclared, or also declared `extern` | `E436` the inline function was already declared |
-| ~~A local whose array extent is not a literal~~ | ~~`E433`~~ - deleted by the `.x.` rework; every extent is a named constant now |
+| ~~A local whose array extent is not a literal~~ | ~~`E433`~~ - deleted by the extent-naming rework; every extent is a named constant now |
 | A call placed **before** the definition | `E403` undeclared identifier - there is no forward form to add |
 
 Struct locals and array locals are fine; only a *non-literal* extent is not. The design spec is

@@ -1383,13 +1383,13 @@ console.log("impala.jspeg compiler lays out symbolic struct extents and refuses 
 // would still emit a plausible `! GRTi` and silently stop catching the spill it exists for.
 const symAssert = compileWithJsImpala(
 	SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }\n", { randomId: 42 });
-assert(/! GRTi #3 #\.x\.S\.v @\.ERROR\.too_many_initializer_values_for\.S\.v/.test(symAssert),
+assert(/! GRTi #3 #\.z\.S\.v @\.ERROR\.too_many_initializer_values_for\.S\.v/.test(symAssert),
 	`a symbolic array fill must defer its count check to the assembler\n${symAssert}`);
 // WORDS, not elements: a struct-element array contributes .z.Elem each, and the extent symbol is in words.
 const symElemAssert = compileWithJsImpala(
 	"const int N = 3\nstruct P { int lo; int hi }\nstruct S { P array p[N] }\n"
 		+ "global S s = { p: { { lo: 1, hi: 2 }, { lo: 3, hi: 4 } } }\nfunction main() { }\n", { randomId: 42 });
-assert(/! GRTi #4 #\.x\.S\.p @/.test(symElemAssert),
+assert(/! GRTi #4 #\.z\.S\.p @/.test(symElemAssert),
 	`a struct-element fill must count WORDS against the extent, not elements\n${symElemAssert}`);
 // The compile-time half above only proves the LINE is there. This proves it BITES: the deferred check is
 // the sole thing standing between an over-filled symbolic array and the silent spill it replaced, and it

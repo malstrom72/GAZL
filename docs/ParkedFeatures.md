@@ -138,7 +138,7 @@ feature and carried it forward rather than freezing it. It is a working line, no
 
 Rejected now with `E439`, whose hint points at GAZL 2 and at dropping the keyword. The feature's own
 codes are retired with it and must not be reused: `E432` recursive expansion, `E433` non-literal local
-extent (which the `.x.` rework deleted outright), `E434` exported inline, `E435` address of an inline
+extent (which the extent-naming rework deleted outright), `E434` exported inline, `E435` address of an inline
 function, `E436` redeclared inline.
 
 Retired with it: fixtures `inlineEquivalence`, `inlineEquivalenceCall`, `inlineFunctions`,
@@ -148,19 +148,19 @@ Retired with it: fixtures `inlineEquivalence`, `inlineEquivalenceCall`, `inlineF
 (same program, keyword stripped, must print the same thing). Three silent miscompiles were caught by it.
 `tests/impala/sources/import/mathlib.impala` kept its cross-unit helper as an ordinary function.
 
-What did NOT go with it: `.x.` extent constants (`docs/SymbolNamespace.md`) and `SCOP` / `ENDS` are
+What did NOT go with it: extent constants (`docs/SymbolNamespace.md`) and `SCOP` / `ENDS` are
 worth having on their own, and the call-window-in-a-hole guard in `borrowForCall` is an Impala 1.0 bug
 fix that stays.
 
 
 ## Does anything here get easier now that extents are named constants?
 
-Asked 2026-08-01, after `.x.<name>` array extents landed (`docs/SymbolNamespace.md`). Two different
+Asked 2026-08-01, after `.z.<name>` array extents landed (`docs/SymbolNamespace.md`). Two different
 questions, with two different answers. Recorded so neither is re-derived.
 
-### Does the EXISTING `.x.` symbol help? No.
+### Does the EXISTING `.z.` symbol help? No.
 
-`.x.` solves exactly one problem: a value that has neither a number Impala knows NOR a name - an array
+`.z.` solves exactly one problem: a value that has neither a number Impala knows NOR a name - an array
 extent used to be folded into a recycled `<X>` scratch, so it existed for one line and could not be
 quoted again. Neither parked feature has that problem.
 
@@ -175,7 +175,7 @@ the symbolic position algebra of [`docs/GAZLSymbolicWindows.md`](GAZLSymbolicWin
 machinery than today, and it trades `claimSlot`'s loud per-slot overlap assert for a discipline whose
 failures are silent. The parking rationale gets stronger, not weaker.
 
-**Multidim arrays.** `.x.` is keyed on the array OBJECT (`.x.a`, `.x.b`), so symbol identity as shape
+**Multidim arrays.** `.z.` is keyed on the array OBJECT (`.z.a`, `.z.b`), so symbol identity as shape
 identity would reject every pair of distinct arrays. Its value is the allocation size in WORDS, not a
 per-axis element count, and there is one per array, so a rank-2 shape has nothing to compare pairwise.
 It is not emitted for struct array fields or parameters - the positions the feature needs - and carries
@@ -215,7 +215,7 @@ reported to the host that caused it. Verified to work.
    mitigations: decide at compile time whatever Impala CAN decide (both sides literal) and defer only
    the rest; and where a shape genuinely depends on host constants, deferring is CORRECT, not a
    compromise - the answer differs per host.
-2. It needs a new per-axis symbol namespace (one per axis per array), not `.x.`, which is one-per-array
+2. It needs a new per-axis symbol namespace (one per axis per array), not `.z.`, which is one-per-array
    and in words. See `docs/SymbolNamespace.md` before minting a tag.
 3. `CONST_INT_P` is not forward-referencable, so both sides must be defined before the check - the same
    ordering discipline the layout blocks already follow.
@@ -225,7 +225,7 @@ reported to the host that caused it. Verified to work.
 6. It does nothing for by-value structs, whose blocker is the allocator, not identity.
 
 **The generalization worth remembering:** *if the compiler cannot decide it, name both sides and let the
-assembler decide it.* That is the same move `.x.` makes for extents and `.o.`/`.z.` make for layout, and
+assembler decide it.* That is the same move `.o.`/`.z.` make for layout and extents, and
 `! FAIL` is what turns it into a diagnostic rather than a silent assumption.
 
 
@@ -333,7 +333,7 @@ nothing. One mechanism serves both (`blockInitFrom`); they differ only in the me
 compare the value count against the extent - is now deferred to the assembler, which by then knows it.
 `struct S { int a; int array v[N]; int z }` with `N` 2 given three values emits four words that fit
 `1+N+1` exactly, so the assembler sees nothing wrong with the row and `z` used to receive the third
-value in silence; `! GRTi #3 #.x.S.v @.ERROR.too_many_initializer_values_for.S.v` is what now catches it.
+value in silence; `! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v` is what now catches it.
 So `E454` no longer covers the array, only what is behind it.
 
 Verified 2026-08-01 that GAZL 1 has no way to express it:
@@ -364,7 +364,7 @@ filled again on GAZL 1 whenever the count provably fits; only fields AFTER it st
 
 It shipped as ONE line, not the two sketched here earlier:
 
-    ! GRTi #3 #.x.S.v @.ERROR.too_many_initializer_values_for.S.v
+    ! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v
 
 A branch to an undefined label is not an error until it is TAKEN, so the label doubles as the message and
 no `.ok` target is needed - which also removes the counter that would have been required to keep such
@@ -373,18 +373,18 @@ passes, `words > extent` stops with `Compile time label not found: .ERROR....`. 
 mnemonic; `! GTRi` does not exist.
 
 **Its prerequisite landed first: a struct field extent now has a durable name.** It did not before - the
-`.x.` rework named array VARIABLE extents (`.x.plain: ! DEFi #<A>`, then `GLOB *.x.plain`) but a struct
+`.z.` rework named array VARIABLE extents (`.z.plain: ! DEFi #<A>`, then `GLOB *.z.plain`) but a struct
 array field folded its extent into a bare scratch (`! ADDi <a> #<a> #<A>`) that `endStruct` handed
 straight back, so the next struct re-used `<A>` and there was nothing stable to compare against. The
-layout block now mints `.x.<Struct>.<field>` for every array field while the scratch is still live and
-advances by the SYMBOL, so the extent outlives the borrow. It went into `.z.` rather than `.x.` because
-`.x.<owner>.<name>` is keyed on functions and a struct may share a function's name - see
+layout block now mints `.z.<Struct>.<field>` for every array field while the scratch is still live and
+advances by the SYMBOL, so the extent outlives the borrow. It went into `.z.` rather than `.z.` because
+`.z.<owner>.<name>` is keyed on functions and a struct may share a function's name - see
 [`SymbolNamespace.md`](SymbolNamespace.md), and `tests/impala/sources/structFieldExtents.impala` for the
 pinned collision.
 
 **Still open, and now cheap**, because they want the same symbol: `sizeof` of an array field, and
 gazl-validate checking a host-supplied extent for an `extern struct` array field (an unstated wildcard
-today). The second needs the host to publish `.x.E.field` the way it already publishes `.o.E.field`,
+today). The second needs the host to publish `.z.E.field` the way it already publishes `.o.E.field`,
 since an extern struct mints no layout of its own.
 
 Note the two checks are complementary, not redundant. Define-each-word-once catches an over-run only when

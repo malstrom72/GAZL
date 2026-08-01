@@ -4,8 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
 	DATA &.s_stdREV_4d2 &.s_fastCR_4d3 &.s_slowCH_4d4
 	DATA &.s_rndAK4_4d5 &.s_1616_4d6 &.s_3216_4d7 &.s_88_4d8
 	DATA &.s_168Gat_4d9
@@ -45,14 +45,14 @@ panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unkno
 ; signature extern const POSITION_FRACT_BITS : int @ 78:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 80:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 81:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 82:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 81:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 82:1
 	CNST *1
 clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 84:1
-.x.signal:	! DEFi #2
-signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 87:1
+.z.signal:	! DEFi #2
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 87:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -137,12 +137,12 @@ FX_PARAM_1_LSHIFT_10:	! DEFi #8	; signature const FX_PARAM_1_LSHIFT_10 : int @ 1
 FX_PARAM_MASK_10:	! DEFi #9	; signature const FX_PARAM_MASK_10 : int @ 148:1
 FX_PARAM_COUNT:	! DEFi #10	; signature const FX_PARAM_COUNT : int @ 149:1
 	! MULi <A> #FX_PARAM_COUNT #3
-.x.FX_PARAMS:	! DEFi #<A>
-FX_PARAMS:	GLOB *.x.FX_PARAMS	; signature array FX_PARAMS[] : unknown @ 153:1
-.x.stepFXs:	! DEFi #STEP_COUNT
-stepFXs:	GLOB *.x.stepFXs	; signature array stepFXs[STEP_COUNT] : unknown @ 154:1
-.x.stepFXParams:	! DEFi #STEP_COUNT
-stepFXParams:	GLOB *.x.stepFXParams	; signature array stepFXParams[STEP_COUNT] : unknown @ 155:1
+.z.FX_PARAMS:	! DEFi #<A>
+FX_PARAMS:	GLOB *.z.FX_PARAMS	; signature array FX_PARAMS[] : unknown @ 153:1
+.z.stepFXs:	! DEFi #STEP_COUNT
+stepFXs:	GLOB *.z.stepFXs	; signature array stepFXs[STEP_COUNT] : unknown @ 154:1
+.z.stepFXParams:	! DEFi #STEP_COUNT
+stepFXParams:	GLOB *.z.stepFXParams	; signature array stepFXParams[STEP_COUNT] : unknown @ 155:1
 	GLOB *1
 doReset:	DATi #TRUE	; signature global doReset : int @ 156:1
 	GLOB *1
@@ -177,8 +177,8 @@ update:	FUNC	; signature func update() -> void @ 184:1
 	$stepRate:	LOCi
 	$fxParams:	LOCi
 	$stepBits:	LOCi
-.x.update.fxs:	! DEFi #8
-	$fxs:	LOCA *.x.update.fxs
+.z.update.fxs:	! DEFi #8
+	$fxs:	LOCA *.z.update.fxs
 	$fxCountFloat:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update_4db 	; trace("update")
@@ -325,14 +325,14 @@ process:	FUNC	; signature func process() -> void @ 311:1
 	$stepBits:	LOCi
 	$trig:	LOCi
 	$step:	LOCi
-.x.process.inp:	! DEFi #2
-	$inp:	LOCA *.x.process.inp
-.x.process.outp:	! DEFi #2
-	$outp:	LOCA *.x.process.outp
-.x.process.samples:	! DEFi #4
-	$samples:	LOCA *.x.process.samples
-.x.process.fxParams:	! DEFi #FX_PARAM_COUNT
-	$fxParams:	LOCA *.x.process.fxParams
+.z.process.inp:	! DEFi #2
+	$inp:	LOCA *.z.process.inp
+.z.process.outp:	! DEFi #2
+	$outp:	LOCA *.z.process.outp
+.z.process.samples:	! DEFi #4
+	$samples:	LOCA *.z.process.samples
+.z.process.fxParams:	! DEFi #FX_PARAM_COUNT
+	$fxParams:	LOCA *.z.process.fxParams
 	$clock:	LOCi
 	$fx:	LOCi
 	$held:	LOCi

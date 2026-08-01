@@ -7,8 +7,8 @@ FILE_TYPE_EXE:	! DEFi #0	; signature const FILE_TYPE_EXE : int @ 10:1
 FILE_TYPE_SYS:	! DEFi #1	; signature const FILE_TYPE_SYS : int @ 11:1
 FILE_TYPE_TXT:	! DEFi #2	; signature const FILE_TYPE_TXT : int @ 12:1
 FILE_TYPE_BIN:	! DEFi #3	; signature const FILE_TYPE_BIN : int @ 13:1
-.x.FILE_TYPE_STRINGS:	! DEFi #FILE_TYPE_COUNT
-FILE_TYPE_STRINGS:	CNST *.x.FILE_TYPE_STRINGS	; signature array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] : unknown @ 14:1
+.z.FILE_TYPE_STRINGS:	! DEFi #FILE_TYPE_COUNT
+FILE_TYPE_STRINGS:	CNST *.z.FILE_TYPE_STRINGS	; signature array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] : unknown @ 14:1
 	DATA &.s_exe_4d2 &.s_sys_4d3 &.s_txt_4d4 &.s_bin_4d5
 FILE_FIELD_NAME:	! DEFi #0	; signature const FILE_FIELD_NAME : int @ 18:1
 FILE_FIELD_TYPE:	! DEFi #1	; signature const FILE_FIELD_TYPE : int @ 19:1
@@ -21,8 +21,8 @@ BUILT_IN_FILE_COUNT:	! DEFi #14	; signature const BUILT_IN_FILE_COUNT : int @ 26
 	GLOB *1
 fileCount:	DATi #BUILT_IN_FILE_COUNT	; signature global fileCount : int @ 27:1
 	! MULi <A> #MAX_FILE_COUNT #FILE_FIELD_COUNT
-.x.FILES:	! DEFi #<A>
-FILES:	GLOB *.x.FILES	; signature array FILES[] : unknown @ 29:1
+.z.FILES:	! DEFi #<A>
+FILES:	GLOB *.z.FILES	; signature array FILES[] : unknown @ 29:1
 	DATA &.s_about_4d6 #FILE_TYPE_TXT #2 &.s_111384_4d7
 	DATA &.s_advent_4d8 #FILE_TYPE_EXE #91 &.s_22178_4d9
 	DATA &.s_blupri_4da #FILE_TYPE_TXT #2 &.s_6579_4db
@@ -39,11 +39,11 @@ FILES:	GLOB *.x.FILES	; signature array FILES[] : unknown @ 29:1
 	DATA &.s_versio_4ef #FILE_TYPE_TXT #1 &.s_111384_4d7
 	! ADDi <A> #MAX_FILE_NAME_LENGTH #1
 	! MULi <A> #MAX_FILE_COUNT <A>
-.x.FILE_NAMES:	! DEFi #<A>
-FILE_NAMES:	GLOB *.x.FILE_NAMES	; signature array FILE_NAMES[] : unknown @ 45:1
+.z.FILE_NAMES:	! DEFi #<A>
+FILE_NAMES:	GLOB *.z.FILE_NAMES	; signature array FILE_NAMES[] : unknown @ 45:1
 	! MULi <A> #MAX_FILE_COUNT #9
-.x.FILE_DATES:	! DEFi #<A>
-FILE_DATES:	GLOB *.x.FILE_DATES	; signature array FILE_DATES[] : unknown @ 46:1
+.z.FILE_DATES:	! DEFi #<A>
+FILE_DATES:	GLOB *.z.FILE_DATES	; signature array FILE_DATES[] : unknown @ 46:1
 	GLOB *1
 filesAreInited:	DATi #0	; signature global filesAreInited : int @ 48:1
 
@@ -77,8 +77,8 @@ sortFiles:	FUNC	; signature func sortFiles() -> void @ 62:1
 	$minJ:	LOCi
 	$minS:	LOCp
 	$s:	LOCp
-.x.sortFiles.temp:	! DEFi #FILE_FIELD_COUNT
-	$temp:	LOCA *.x.sortFiles.temp
+.z.sortFiles.temp:	! DEFi #FILE_FIELD_COUNT
+	$temp:	LOCA *.z.sortFiles.temp
 	$p0:	LOCp
 	$p1:	LOCp
 ;-----------------------------------------------------------------------------

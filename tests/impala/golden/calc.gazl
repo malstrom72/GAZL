@@ -26,12 +26,12 @@ COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 29:1
 lastError:	DATp &NULL	; signature global lastError : ptr @ 31:1
 	! SUBi <A> #'z' #'a'
 	! ADDi <A> <A> #1
-.x.memoryUsed:	! DEFi #<A>
-memoryUsed:	GLOB *.x.memoryUsed	; signature array memoryUsed[] : unknown @ 33:1
+.z.memoryUsed:	! DEFi #<A>
+memoryUsed:	GLOB *.z.memoryUsed	; signature array memoryUsed[] : unknown @ 33:1
 	! SUBi <A> #'z' #'a'
 	! ADDi <A> <A> #1
-.x.memory:	! DEFi #<A>
-memory:	GLOB *.x.memory	; signature array memory[] : unknown @ 34:1
+.z.memory:	! DEFi #<A>
+memory:	GLOB *.z.memory	; signature array memory[] : unknown @ 34:1
 	GLOB *1
 lastResult:	DATf #0.0	; signature global lastResult : float @ 35:1
 
@@ -315,8 +315,8 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 238:1
 
 FUNCTION_COUNT:	! DEFi #10	; signature const FUNCTION_COUNT : int @ 244:1
 	! MULi <A> #FUNCTION_COUNT #2
-.x.FUNCTIONS:	! DEFi #<A>
-FUNCTIONS:	CNST *.x.FUNCTIONS	; signature array FUNCTIONS[] : unknown @ 245:1
+.z.FUNCTIONS:	! DEFi #<A>
+FUNCTIONS:	CNST *.z.FUNCTIONS	; signature array FUNCTIONS[] : unknown @ 245:1
 	DATA &.s_ceil_4d4 &ceilFunc &.s_exp_4d5 &exp &.s_floor_4d6
 	DATA &floorFunc &.s_log_4d7 &log &.s_log2_4d8 &log2
 	DATA &.s_log10_4d9 &log10 &.s_sqrt_4da &sqrt &.s_cos_4db
@@ -956,15 +956,15 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 620:1
 		PARA *1
-.x.main.s:	! DEFi #256
-	$s:	LOCA *.x.main.s
+.z.main.s:	! DEFi #256
+	$s:	LOCA *.z.main.s
 	$p:	LOCp
 	$q:	LOCp
 	$f:	LOCf
 	$c:	LOCi
 	$assignTo:	LOCi
-.x.main.buffer:	! DEFi #32
-	$buffer:	LOCA *.x.main.buffer
+.z.main.buffer:	! DEFi #32
+	$buffer:	LOCA *.z.main.buffer
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 	.l0:	MOVp %1 &.s_calc_4e5 	; output("calc> ")

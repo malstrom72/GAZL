@@ -73,7 +73,7 @@ if (canonicalizeNewlines(strippedGold) !== canonicalizeNewlines(stripped)) {
    continuation rows behind, where the PRECEDING block silently adopted them - so the golden would just
    record the corruption. Stripping must not change what the program prints, so run both. */
 if (haveGazlCmd()) {
-	const want = { args: ['main'], want: '42 9 9 0 0 0 7'.split(' ') };
+	const want = { args: ['main'], want: '42 9 9 0 0 0 7 5'.split(' ') };
 	for (const [label, gazl] of [['unstripped', unstripped], ['stripped', stripped]]) {
 		const gazlPath = path.join(repoRoot, 'output', `deadstrip-${label}.gazl`);
 		fs.writeFileSync(gazlPath, gazl, 'latin1');

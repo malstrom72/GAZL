@@ -165,13 +165,24 @@ function locateInUnit(spans, source, index) {
 var TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // a named top-level definition line
 var ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
 var DATA_ROW_RE = /^\s*(?:DAT[ifps]?|DATA)\s/;        // an unlabeled initializer continuation row
-// A compile-time line that computes or names a data definition's extent: the `.x.name: ! DEFi` itself,
-// or an unlabeled `!` fold feeding it. Anything LABELED with an ordinary identifier is a definition in
-// its own right (isDataDef sees it) and ends the run, which is what keeps a neighbouring const or
-// struct-layout block from being swallowed. That a bare `!` line is never something else immediately
-// above a data definition is a property of the emitter, not of this pattern - the assert guard
-// `! EQUi #DEBUG #0 @.noAssertStrings` is always followed by a DOT-labeled block, never an ASCII one.
-var EXTENT_LINE_RE = /^\s*(?:\.x\.[\w.]+:\s+)?!\s*\w+/;
+// A compile-time line that computes or names a data definition's extent: an unlabeled `!` fold, or the
+// `.z.<name>: ! DEFi` naming THIS definition's size. The name must match, because `.z.` also labels a
+// struct's own size (`.z.Voice`) and a struct layout block sits immediately above the arrays that use
+// it - matching the tag alone would swallow the layout into the first array and strip `.z.Voice` out
+// from under every other user. (Extents used to carry a distinct `.x.` tag, which made the tag alone
+// sufficient; `.z.` absorbed it on 2026-08-02, so the name is now what separates them.) Note the tag
+// alone does NOT reproduce that today, because the `; signature struct ...` row a layout emits sits
+// between it and the next array's fold and stops the walk anyway - so this is defence against an
+// emitter change, not a live bug, and no fixture can witness it while that row is there.
+// Anything LABELED with an ordinary identifier is a definition in its own right (isDataDef sees it) and
+// ends the run. That a bare `!` line is never something else immediately above a data definition is a
+// property of the emitter, not of this pattern - the assert guard `! EQUi #DEBUG #0 @.noAssertStrings`
+// is always followed by a DOT-labeled block, never an ASCII one.
+var CT_FOLD_RE = /^\s*!\s*\w+/;
+function isExtentLineFor(line, name) {
+	return CT_FOLD_RE.test(line)
+			|| new RegExp("^\\s*\\.z\\." + name + ":\\s+!\\s*\\w+").test(line);
+}
 
 function stripComment(line) {
 	var at = line.indexOf(";");
@@ -234,7 +245,7 @@ function deadStrip(gazl) {
 				dataStart = prev.start;
 			}
 			// ...and so does the run of compile-time lines that COMPUTES this block's extent: the
-			// `.x.name: ! DEFi` naming it, and the unlabeled `! MULi`/`! ADDi` folding that feeds it.
+			// `.z.name: ! DEFi` naming it, and the unlabeled `! MULi`/`! ADDi` folding that feeds it.
 			// They belong to the definition twice over. Left loose they are kept unconditionally, so
 			// a dropped array leaves its extent behind - and, worse, the only reference to a const
 			// used purely as an extent (`buf[BUF_SIZE]`, `grid[H * W]`) lives on those lines, so the
@@ -243,7 +254,8 @@ function deadStrip(gazl) {
 			// is never swallowed.
 			while (blocks.length > 0) {
 				prev = blocks[blocks.length - 1];
-				if (prev.kind !== "loose" || prev.end !== dataStart || !EXTENT_LINE_RE.test(lines[prev.start])) {
+				if (prev.kind !== "loose" || prev.end !== dataStart
+						|| !isExtentLineFor(lines[prev.start], dname)) {
 					break;
 				}
 				blocks.length = blocks.length - 1;
@@ -272,7 +284,7 @@ function deadStrip(gazl) {
 		if (blocks[i].kind === "loose") {
 			/* A loose line is KEPT unconditionally, so whatever it names has to survive too - otherwise
 			   the strip leaves a reference with nothing behind it. That is the general form of the bug
-			   the `.x.` absorption above fixes specifically: `! DEFi #BUF_SIZE` outliving BUF_SIZE. It
+			   the extent absorption above fixes specifically: `! DEFi #BUF_SIZE` outliving BUF_SIZE. It
 			   also covers every other compiler-minted dotted line, which `TOP_LABEL_RE` cannot match
 			   and which therefore all land here. Roots only ever ADD reachability, never remove it. */
 			collectRefs(stripComment(lines[blocks[i].start]), work);

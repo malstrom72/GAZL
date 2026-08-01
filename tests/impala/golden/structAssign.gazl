@@ -21,8 +21,8 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 ; signature extern native printInt() -> unknown @ 13:1
 ; signature extern native printFloat() -> unknown @ 14:1
 ; signature extern native printLF() -> unknown @ 15:1
-.x.store:	! DEFi #8
-store:	GLOB *.x.store	; signature array store[8] : unknown @ 17:1
+.z.store:	! DEFi #8
+store:	GLOB *.z.store	; signature array store[8] : unknown @ 17:1
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 19:1

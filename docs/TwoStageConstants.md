@@ -304,7 +304,7 @@ Concrete shapes that violate the model. If you are about to write one of these, 
   `structWords(...) === undefined` as "incomplete" now ask `structDefined` - otherwise a symbolically
   sized struct could not be nested by value or passed to `sizeof`. The field itself IS initializable -
   its words start at a position Impala knows - and the count check Impala cannot make is emitted for the
-  assembler instead (`! GRTi #3 #.x.S.v @.ERROR...`, rule 4 below); that is what now stops an over-filled
+  assembler instead (`! GRTi #3 #.z.S.v @.ERROR...`, rule 4 below); that is what now stops an over-filled
   array from spilling into the next field while still FITTING the region, which nothing could catch
   before. `E454` covers only the fields BEHIND it, whose positions are genuinely unknown, and zeros stay
   legal there, being what the region fills with regardless.)

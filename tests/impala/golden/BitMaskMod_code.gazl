@@ -4,8 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
 	DATA &.s__4d2 &.s__4d2 &.s__4d2 &.s__4d2 &.s_BMSKHI_4d3
 	DATA &.s_BMSKHI_4d3:53 &.s_BMSKHI_4d3:53 &.s_BMSKHI_4d3:53
 ; signature extern native abort() -> unknown @ 38:1
@@ -44,12 +44,12 @@ panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unkno
 ; signature extern const POSITION_FRACT_BITS : int @ 77:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 79:1
-.x.positions:	! DEFi #2
-positions:	GLOB *.x.positions	; signature array positions[2] : unknown @ 80:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 81:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 82:1
+.z.positions:	! DEFi #2
+positions:	GLOB *.z.positions	; signature array positions[2] : unknown @ 80:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 81:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 82:1
 	GLOB *1
 instance:	DATi #0	; signature global instance : int @ 83:1
 	CNST *1

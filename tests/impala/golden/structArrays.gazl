@@ -14,19 +14,19 @@ PAIRS:	! DEFi #2	; signature const PAIRS : int @ 11:1
 ; signature extern native printFloat() -> unknown @ 16:1
 ; signature extern native printLF() -> unknown @ 17:1
 	! MULi <A> #3 #.z.Voice
-.x.bank:	! DEFi #<A>
-bank:	GLOB *.x.bank	; signature array bank[3] : Voice @ 19:1
+.z.bank:	! DEFi #<A>
+bank:	GLOB *.z.bank	; signature array bank[3] : Voice @ 19:1
 	! MULi <A> #PAIRS #2
 	! MULi <B> #<A> #.z.Voice
-.x.pairs:	! DEFi #<B>
-pairs:	GLOB *.x.pairs	; signature array pairs[] : Voice @ 24:1
+.z.pairs:	! DEFi #<B>
+pairs:	GLOB *.z.pairs	; signature array pairs[] : Voice @ 24:1
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 26:1
 		PARA *1
 	! MULi <A> #2 #.z.Voice
-.x.main.vlocals:	! DEFi #<A>
-	$vlocals:	LOCA *.x.main.vlocals
+.z.main.vlocals:	! DEFi #<A>
+	$vlocals:	LOCA *.z.main.vlocals
 	$i:	LOCi
 	$vp:	LOCp
 ;-----------------------------------------------------------------------------

@@ -23,7 +23,7 @@ written. PLAN / BACKLOG = not done.
 
 | Doc | Kind | What it is |
 |---|---|---|
-| [SymbolNamespace](SymbolNamespace.md) | REFERENCE | Every symbol the compiler mints for itself (`.o. .z. .x. .s_ ...`) and how to add one without colliding |
+| [SymbolNamespace](SymbolNamespace.md) | REFERENCE | Every symbol the compiler mints for itself (`.o. .z. .s_ ...`) and how to add one without colliding |
 | [StructLayoutConstants](StructLayoutConstants.md) | SPEC | The `.o.` / `.z.` scheme and why layout is a named constant |
 | [ExternPrototypes](ExternPrototypes.md) | REFERENCE | Extern declarations and what is checkable about them |
 | [ImpalaTypeCheckingSpec](ImpalaTypeCheckingSpec.md) | SPEC | The type rules |
