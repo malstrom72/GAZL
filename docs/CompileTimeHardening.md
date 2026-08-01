@@ -167,13 +167,19 @@ it transliterates to, and would outlaw the one-past-the-end pointer that every w
 indexed write did not consult it. Purely a compile-time check on the symbol; no assembly-time subtlety -
 the readonly array lands in the const region, so the `POKE` is rejected there as a backstop.
 
-**A struct FIELD had the same hole, found and closed 2026-08-01.** `readonly S s; global s.a = 1;`
-emitted its `POKE` with no diagnostic, because `lookup` never propagated `readonly` onto a struct-value
-place and `emitPlaceValue` therefore built a writable `=*`. It now builds `:=*`, the same operator a
-readonly scalar global gets. Related, and fixed with it: a readonly scalar and a readonly struct field
-both reported the bare `Invalid lvalue` that a genuine mistake like `1 = q` gets - only the array-element
-case had a real message. All three now name what is readonly, while `1 = q` still does not (a literal
-carries the same `:=` operator, so the check requires a NAMED location as well).
+**Structs had the same hole in two places, found and closed 2026-08-01.** `readonly S s; global s.a = 1;`
+emitted its `POKE`, and `global s = global t;` emitted its whole-struct `COPY`, both with no diagnostic:
+`lookup` never propagated `readonly` onto a struct-value place, and the whole-struct path returns before
+the scalar check. Both now report.
+
+The mechanism is the `readonly` FLAG, not the operator spelling. `makeMeta` deliberately clears the flag
+(pooled slots must not inherit a previous symbol's writability), so every branch that mints a readonly
+meta re-publishes it afterwards - the idiom the codebase already used for arrays. An earlier attempt
+inferred readonly-ness from the operator (`:=`) plus an `&`/`$` operand instead; that looked equivalent
+and was not, because a function name, a whole global array, `nullfunc`, `null`, `&f` and a parameter all
+match that shape while none of them is readonly, and each was told to "declare it `global` instead of
+`readonly`". Scalars, array elements, struct fields and whole structs now share one message, and a
+genuine non-lvalue such as `1 = q` still reports `Invalid lvalue`.
 
 ### 3. Case label outside the switch range (task #33)
 

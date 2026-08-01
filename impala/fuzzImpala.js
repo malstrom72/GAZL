@@ -75,7 +75,6 @@ function runOnVm(res) {
 // catches a WRONG DATA row - a truncated one, a value landing in the next field, a dropped surplus -
 // none of which faults the VM or fails to load, and so none of which runOnVm can see.
 function checkExpected(res, expect) {
-	if (!expect.length) return null;
 	const got = (res.stdout || '').split('\n').map((l) => l.trim()).filter((l) => l !== '');
 	if (got.length < expect.length) {
 		return `printed ${got.length} values, expected at least ${expect.length}`;
@@ -97,9 +96,15 @@ function checkExpected(res, expect) {
 //
 // `checkExpected` below is now a second reference oracle, over static initializers rather than over
 // code. It was added because that path had NO fuzz coverage at all - the generator emitted only bare
-// declarations - while four silent wrong-data bugs were being found there by hand (a NaN-truncated
-// DATA row, a field's value landing in its neighbour, dropped surplus values, and a guessed extern
-// layout). It does not replace the inline differential; the two cover different halves.
+// declarations - while several silent wrong-data bugs were being found there by hand. It does not
+// replace the inline differential; the two cover different halves.
+//
+// Be precise about what it can and cannot reach. The checked struct is int-only, flat, with a LITERAL
+// extent, so it covers the fill loops, named-field mapping, zero-fill and the struct-array path. It
+// does NOT cover the two shapes behind E454/E459 - a SYMBOLIC extent and an `extern struct` - because
+// it never generates either, nor NESTED structs, which `genProgram` already builds for other purposes.
+// Widening it there is the obvious next step and would need no new machinery, only a recursive flatten
+// to compute `expect`.
 
 function mulberry32(a) {
 	return function () {
@@ -178,51 +183,43 @@ function genProgram() {
 	// exact. Partial lists are on purpose: the omitted tail must zero-fill.
 	const chkFields = 2 + ri(3);                          // struct with 2-4 int fields
 	const chkStruct = 'CK';
-	const chkVal = () => 1 + ri(900);
+	const chkVal = () => 1 + ri(900);                     // never 0, so 0 unambiguously means "omitted"
 	const expect = [];                                    // words, in the order main prints them
+	const chkPrint = [];
 	const chkDecl = ['struct ' + chkStruct + ' { '
 			+ Array.from({ length: chkFields }, (_, i) => 'int f' + i).join('; ') + ' }'];
-	const chkPrint = [];
+	// The expected word and the print that reads it are pushed TOGETHER, and only here: the oracle is
+	// only as good as those two lists staying in lockstep, and appending them from separate loops is
+	// how they would silently drift and start comparing the wrong words.
+	const chk = (expr, word) => {
+		expect.push(word);
+		chkPrint.push('\tprintInt(' + expr + '); printLF();');
+	};
+	// A field list as dense words - 0 means "not named in the source", which is exactly what the
+	// region zero-fills to, so the same array serves as both the source text and the expectation.
+	const fieldWords = () => Array.from({ length: chkFields }, () => (chance(0.6) ? chkVal() : 0));
+	const braced = (w) => '{ ' + w.map((v, i) => (v ? 'f' + i + ': ' + v : '')).filter(Boolean).join(', ') + ' }';
 
 	// (1) flat scalar array, partially initialized -> InitList + zero-fill
 	const aLen = 1 + ri(4);
-	const aGiven = ri(aLen + 1);
-	const aVals = Array.from({ length: aGiven }, chkVal);
+	const aVals = Array.from({ length: aLen }, () => (chance(0.7) ? chkVal() : 0));
+	const aGiven = aVals.filter(Boolean).length ? aLen - [...aVals].reverse().findIndex(Boolean) : 0;
 	chkDecl.push('readonly int array cA[' + aLen + ']'
-			+ (aGiven ? ' = { ' + aVals.join(', ') + ' }' : ''));
-	for (let i = 0; i < aLen; ++i) {
-		expect.push(i < aGiven ? aVals[i] : 0);
-		chkPrint.push('\tprintInt(global cA[' + i + ']); printLF();');
-	}
+			+ (aGiven ? ' = { ' + aVals.slice(0, aGiven).join(', ') + ' }' : ''));
+	aVals.forEach((v, i) => chk('global cA[' + i + ']', v));
 
 	// (2) struct value, a RANDOM SUBSET of fields named -> buildStructInit + fieldEntries + zero-fill
-	const sGiven = {};
-	for (let i = 0; i < chkFields; ++i) if (chance(0.6)) sGiven['f' + i] = chkVal();
-	const sKeys = Object.keys(sGiven);
+	const sVals = fieldWords();
 	chkDecl.push('global ' + chkStruct + ' cS'
-			+ (sKeys.length ? ' = { ' + sKeys.map((k) => k + ': ' + sGiven[k]).join(', ') + ' }' : ''));
-	for (let i = 0; i < chkFields; ++i) {
-		expect.push(sGiven['f' + i] || 0);
-		chkPrint.push('\tprintInt(global cS.f' + i + '); printLF();');
-	}
+			+ (sVals.some(Boolean) ? ' = ' + braced(sVals) : ''));
+	sVals.forEach((v, i) => chk('global cS.f' + i, v));
 
 	// (3) array OF structs, elements partially given -> the struct-array path, `[[ ]]` to index it
 	const kLen = 1 + ri(3);
-	const kGiven = ri(kLen + 1);
-	const kElems = Array.from({ length: kGiven }, () => {
-		const e = {};
-		for (let i = 0; i < chkFields; ++i) if (chance(0.6)) e['f' + i] = chkVal();
-		return e;
-	});
+	const kVals = Array.from({ length: kLen }, fieldWords);
 	chkDecl.push('global ' + chkStruct + ' array cK[' + kLen + ']'
-			+ (kGiven ? ' = { ' + kElems.map((e) => '{ '
-					+ Object.keys(e).map((k) => k + ': ' + e[k]).join(', ') + ' }').join(', ') + ' }' : ''));
-	for (let k = 0; k < kLen; ++k) {
-		for (let i = 0; i < chkFields; ++i) {
-			expect.push((k < kGiven && kElems[k]['f' + i]) || 0);
-			chkPrint.push('\tprintInt(global cK[[' + k + ']].f' + i + '); printLF();');
-		}
-	}
+			+ (kVals.some((w) => w.some(Boolean)) ? ' = { ' + kVals.map(braced).join(', ') + ' }' : ''));
+	kVals.forEach((w, k) => w.forEach((v, i) => chk('global cK[[' + k + ']].f' + i, v)));
 
 	// how a value is referenced: globals need the `global` keyword prefix
 	const ref = (e) => (e.isGlobal ? 'global ' + e.name : e.name);

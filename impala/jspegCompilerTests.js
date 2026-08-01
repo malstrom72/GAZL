@@ -1101,7 +1101,7 @@ const acceptedThenRejected = [
 	["the same label name in two functions", "function f() locals int i { i=0; lbl: ; }\nfunction g() locals int i { i=0; lbl: ; }", null],
 	["write to a readonly array element",
 		"readonly int array T[4] = { 1,2,3,4 }\nfunction f() { global T[0] = 9; }",
-		"Cannot assign to an element of a readonly array"],
+		"Cannot assign to a readonly value"],
 	["read a readonly array element",
 		"readonly int array T[4] = { 1,2,3,4 }\nfunction f() locals int x { x = global T[2]; }", null],
 	["write to a writable array element",
@@ -1109,7 +1109,7 @@ const acceptedThenRejected = [
 	// A string literal lives in a readonly section; the store used to compile and fail at GAZL load
 	// naming `.s_abc_...`. Marked readonly so the same E404 element-write check catches it here.
 	["write to a string literal element", `function f() { "abc"[0] = 1; }`,
-		"Cannot assign to an element of a readonly array"],
+		"Cannot assign to a readonly value"],
 	["read a string literal element", `function f() locals int c { c = "abc"[0]; }`, null],
 	// A pointer difference counts elements (DIFp, then a divide by the stride), so it only means anything
 	// when both sides walk the same element type. `ip - fp` used to slip through and divide by the wrong size.
@@ -1371,6 +1371,25 @@ const surplusCases = [
 for (const [label, source, expected] of surplusCases) {
 	expectCompileOutcome("surplus initializer", label, source, expected);
 }
+// The NAMED form reports a surplus as E456 (a name no field has). The POSITIONAL form has no name to
+// report, so it needs the count rule - and it is reachable ONLY under --legacy, which is why it was
+// missed at first: the strict dialect raises E455 and stops before ever mapping by index. So this one
+// cannot go in the table above; it has to compile in legacy mode to get past E455.
+{
+	let observed = null;
+	try {
+		compileWithJsImpala("struct S { int a; int b }\nglobal S s = { 1, 2, 3 }\nfunction main(){ }\n",
+			{ randomId: 42, legacy: true, onWarning: () => {} });
+	} catch (err) {
+		observed = err && err.message ? err.message : String(err);
+	}
+	assert(observed !== null && observed.includes("3 given, but it holds 2"),
+		`a legacy positional list must not silently drop a surplus value\n${observed}`);
+}
+// The caret belongs on the surplus entry, matching the E454/E459 rule.
+expectDiagnosticAt("E460 names the surplus entry, not the initializer",
+	"struct S { int array v[2]; int z }\nglobal S s = { v: { 7, 8, 9 }, z: 5 }\nfunction main(){ }\n",
+	"2:27: error[E460]");
 console.log("impala.jspeg compiler rejects initializer values that do not fit");
 
 // `readonly` reaches an assignment as a `:=` operator, which no lvalue branch accepts - so a readonly
@@ -1380,9 +1399,29 @@ console.log("impala.jspeg compiler rejects initializer values that do not fit");
 const readonlyWriteCases = [
 	["a readonly scalar", "readonly int r\nfunction main(){ global r = 1; }", "readonly value"],
 	["a readonly array element", "readonly int array t[2]\nfunction main(){ global t[0] = 1; }",
-		"element of a readonly array"],
+		"readonly value"],
 	["a readonly struct field", "struct S { int a }\nreadonly S s\nfunction main(){ global s.a = 1; }",
 		"readonly value"],
+	// The test is the readonly FLAG, never the operator/operand spelling. Keying on `:=` plus an
+	// `&`/`$` operand looked equivalent and was not: it also matched a function name, a whole global
+	// array, `nullfunc`, `null`, `&f` and a parameter - none of them readonly - and told each of them
+	// to "declare it `global` instead of `readonly`".
+	["a function name is not readonly",
+		"function foo(){}\nfunction bar(){}\nfunction main(){ foo = bar; }", "Invalid lvalue"],
+	["a whole global array is not readonly",
+		"global int array t[2]\nglobal int array u[2]\nfunction main(){ global t = global u; }",
+		"Invalid lvalue"],
+	["nullfunc is not readonly", "function f(){}\nfunction main(){ nullfunc = f; }", "Invalid lvalue"],
+	["a parameter is not readonly",
+		"function f(int a) returns int r { a = 1; r = a; }\nfunction main() locals int q { q = f(2); }",
+		"Invalid lvalue"],
+	// Whole-struct assignment returns before the scalar readonly check, so it emitted its COPY straight
+	// into the const region - the field-level hole was closed while this one stayed open.
+	["a whole readonly struct",
+		"struct S { int a }\nreadonly S s\nglobal S t\nfunction main(){ global s = global t; }",
+		"readonly value"],
+	["a whole WRITABLE struct is fine",
+		"struct S { int a }\nglobal S s\nglobal S t\nfunction main(){ global s = global t; }", null],
 	["reading a readonly struct field is fine",
 		"struct S { int a }\nreadonly S s\nfunction main() locals int q { q = global s.a; }", null],
 	["writing a NON-readonly struct field is fine",

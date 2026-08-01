@@ -1782,6 +1782,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                     sourceCode, items[0].at, 'E455',
                     'write `{ ' + fields[0].name + ': ... }` - a positional list changes meaning '
                             + 'whenever a field moves');
+            /* Reached only under --legacy, where the positional list is mapped by index and anything
+               past the last field is dropped. Named lists get E456 for a name no field has; the
+               positional form has no name to report, so it needs the count rule instead. */
+            if (items.length > fields.length) {
+                failSurplus(structName, 'values', items.length, fields.length,
+                        items[fields.length].at, sourceCode, sourceOffset);
+            }
             return undefined;                                 /* --legacy: map by position */
         }
         var known = {}, byName = {}, i;
@@ -1841,14 +1848,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                    loop used to compare against the extent OPERAND, get NaN, run zero times, and emit a
                    short row that shifted every later field.) */
                 var count = constInt('#' + f.size);
-                if (count !== undefined && arr.length > count) {
-                    /* The loop below stops at the extent, so a surplus value used to be read by nobody
-                       and vanish - no diagnostic here, and nothing wrong for the assembler to see. */
-                    fail('Too many initializer values for ' + f.name + ': ' + arr.length
-                            + ' given, but it holds ' + count, sourceCode, sourceOffset, 'E460',
-                            'remove the extra ' + (arr.length - count) + ', or widen ' + f.name);
-                }
-                if (count === undefined) {
+                if (count !== undefined) {
+                    if (arr.length > count) {
+                        failSurplus(f.name, 'values', arr.length, count,
+                                arr[count] && arr[count].at, sourceCode, sourceOffset);
+                    }
+                } else {
                     count = arr.length;
                     blockInitFrom(out,
                             'the extent of ' + f.name + ' is not resolved until GAZL assembly time, so '
@@ -1906,6 +1911,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        what the region fills them with anyway, so emitInitData requires that and then drops them. Two
        situations reach this and they share everything but the message: a symbolically-sized array field
        (E454), and a host-owned `extern struct` layout (E459). */
+    /* Surplus initializer entries are dropped by every fill loop (they stop at the extent), so they
+       vanish with nothing wrong for the assembler to see. Both loops - a struct's array FIELD and a
+       global array OF structs - need the identical rule, so it lives here once. `at` is the surplus
+       entry's own position, so the caret lands on it rather than on the initializer's `{`. */
+    failSurplus = function (name, what, given, holds, at, sourceCode, sourceOffset) {
+        fail('Too many initializer ' + what + ' for ' + name + ': ' + given
+                + ' given, but it holds ' + holds,
+                sourceCode, (at !== undefined ? at : sourceOffset), 'E460',
+                'remove the extra ' + (given - holds) + ', or widen ' + name);
+    };
+
     blockInitFrom = function (out, why, code, hint) {
         if (out.blocked === undefined) {                      /* the FIRST block bounds the row */
             out.blocked = { at: out.length, why: why, code: code, hint: hint };
@@ -1997,23 +2013,6 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     /* A place resolved to a terminal SCALAR location (a scalar field, or a scalar array element) becomes a
        value meta: local -> frame-relative MOV (GETL/SETL when a runtime index is present), global -> MOV*,
        pointer -> PEEK/POKE base <index-or-#offset>. `parts` are the compile-time offset parts to fold. */
-    /* A readonly datum reaches an assignment as a `:=` operator, which no lvalue branch accepts - so it
-       used to fall out as the same bare "Invalid lvalue" a genuine mistake like `1 = q` gets. A readonly
-       ARRAY element already had a real message; scalars and struct fields did not. */
-    failLvalue = function (meta, sourceCode, sourceOffset) {
-        var op = (meta ? meta.operator : undefined);
-        var base = (meta && meta.operands ? meta.operands[1] : undefined);
-        /* `:=` alone is not enough to say "readonly": a LITERAL carries it too (`1 = q` must stay a
-           plain invalid lvalue). A readonly datum also names a location - `&g`, `&g:.o.S.f`, `$local`. */
-        var located = (typeof base === 'string'
-                && (base.charAt(0) === '&' || base.charAt(0) === '$'));
-        if (typeof op === 'string' && op.charAt(0) === ':' && located) {
-            fail('Cannot assign to a readonly value', sourceCode, sourceOffset, 'E404',
-                    'declare it `global` instead of `readonly` if it has to be written');
-        }
-        fail('Invalid lvalue', sourceCode, sourceOffset, 'E404');
-    };
-
     emitPlaceValue = function (x, bk, base, parts, dynIndex, type, elemTail) {
         var offOp = foldOffset(parts);
         /* Writability is carried by the OPERATOR here, exactly as it is for a scalar global (`:=*` has no
@@ -2032,6 +2031,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         x.place = false;
         x.type  = type;
         x.elem  = elemTail;
+        x.readonly = ro;                                          /* survives the makeMeta above, which
+                                                                     clears it - assign() reads the FLAG */
     };
 
     /* structPtr[k] or arrayField[k] -> the element place. A constant index adds a symbolic stride to the
@@ -2487,6 +2488,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 fail('Struct type mismatch in assignment (' + leftx.struct + ' = '
                         + rightx.struct + ')', sourceCode, sourceOffset, 'E420');
             }
+            /* This path returns before the scalar `readonly` check below, so a whole-struct COPY into a
+               `readonly` global used to be emitted straight into the const region. */
+            if (leftx.readonly === true) {
+                fail('Cannot assign to a readonly value', sourceCode, sourceOffset, 'E404',
+                        'declare it `global` instead of `readonly` if it has to be written');
+            }
             var savedBK = leftx.baseKind, savedBase = leftx.base,
                 savedParts = leftx.offParts, savedStruct = leftx.struct, savedRoot = leftx.root;
             var dst = placeAddress(leftx);
@@ -2526,9 +2533,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         checkPtrAssign(leftx, rightx, sourceCode, sourceOffset);
 
         /* `readonly` was honoured for scalars and silently ignored for an indexed write, which left the
-           assembler to catch it as `Incompatible types` against the const region - if at all. */
+           assembler to catch it as `Incompatible types` against the const region - if at all. The FLAG
+           is the whole test: every readonly branch (scalar global, array element, struct field) sets it,
+           and nothing else does, so a literal or a function name falls through to `Invalid lvalue`. */
         if (leftx.readonly === true) {
-            fail('Cannot assign to an element of a readonly array',
+            fail('Cannot assign to a readonly value',
                     sourceCode, sourceOffset, 'E404',
                     'declare it `global` instead of `readonly` if it has to be written');
         }
@@ -2589,7 +2598,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             );
 
         } else {
-            failLvalue(leftx, sourceCode, sourceOffset);
+            fail('Invalid lvalue', sourceCode, sourceOffset, 'E404');
         }
 
         /* push the instruction just built */
@@ -2670,7 +2679,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             );
 
         } else {
-            failLvalue(expr, sourceCode, sourceOffset);
+            fail('Invalid lvalue', sourceCode, sourceOffset, 'E404');
         }
     };
 
@@ -3061,6 +3070,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                                   undefined,
                                   '&' + name,
                                   undefined);
+                x.readonly = (p.readonly === true);               /* makeMeta clears it; assign() reads
+                                                                     the FLAG, not the operator spelling */
             }
             setElem(x, p.elem);
             return;
@@ -3376,7 +3387,7 @@ function ExternDecl($){var $at,$id=createParserContext(),$sname,$f=createParserC
                                                                              $.scope, $.name, $.type, false,                     // not readonly
                                                                              '?', _s, _i, undefined, $.elem ); if ($.scope === 'functions') { var entry = symbols.functions[$.name]; var signature = entry && entry.signature; if (entry) { if (!signature) { signature = entry.signature = {}; } if (signature.sourceName === undefined) { signature.sourceName = sourceName; } if (signature.sourceCode === undefined) { signature.sourceCode = _s; signature.sourceOffset = declOffset; signature.sourceName = sourceName; } if (entry.kind !== 'FUNC') {  /* a definition here already resolved it - do not un-resolve it */ signature.returnResolved = false; } } var role = ($.type === 'N' ? 'extern native' : 'extern func'); var placeholderSignature = { params: [], returns: undefined, sourceName: sourceName, sourceCode: _s, sourceOffset: declOffset, }; var _proto = pendingProto; pendingProto = undefined; if (_proto !== undefined) {   /* a declared prototype: real params + at most one return */ var _pp = []; for (var _pi = 0; _pi < _proto.args.length; ++_pi) { var _p = _proto.args[_pi]; rejectByValueStruct(_p.type, _p.struct, _p.name, false, _s, _i); _pp.push({ type: _p.type, elem: _p.elem, name: _p.name, size: _p.size, struct: _p.struct, words: _p.words }); } var _pr = _proto.ret; if (_pr !== undefined) rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, _s, _i); placeholderSignature.params      = _pp; placeholderSignature.returns     = (_pr !== undefined ? _pr.type : 'V'); placeholderSignature.returnElem  = (_pr !== undefined ? _pr.elem : undefined); placeholderSignature.returnCount = (_pr !== undefined ? 1 : 0); placeholderSignature.returnWords = (_pr !== undefined ? 1 : 0); placeholderSignature.returnResolved = true; if (entry) { var _defined = (entry.kind === 'FUNC'); checkExternAgreement($.name, placeholderSignature, (_defined ? entry.signature : entry.externProto), _defined, _s, $at); entry.externProto = placeholderSignature; if (!_defined) {               /* a definition here outranks it; otherwise publish it so call sites check against it */ entry.signature.params         = _pp; entry.signature.returns        = placeholderSignature.returns; entry.signature.returnElem     = placeholderSignature.returnElem; entry.signature.returnCount    = placeholderSignature.returnCount; entry.signature.returnWords    = placeholderSignature.returnWords; entry.signature.returnResolved = true; } } } emitStandaloneSignatureComment( formatFunctionSignatureComment( $.name, placeholderSignature, role, sourceName, _s, declOffset ) ); } else if ($.scope === 'globals') { emitStandaloneSignatureComment( formatGlobalSignatureComment( 'GLOB', $.name, $.type, $.size, 'extern', sourceName, _s, declOffset, $.elem ) ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ConstDecl($){var $base=createParserContext(),$desc,$nf,$t,$telem,$cStart,$id=createParserContext(),$x=createParserContext();return (function(){var _b=_i;return CONST($)&&_($)&&TypeBase($base)&&(function(){ /* Same type grammar as every other declarator (TypeBase, not bare BASE_TYPE), so a const can name a struct pointer or a named functype - a const is an assembler-level address/scalar constant, and those two are just addresses. A struct VALUE is the one shape that has no scalar constant form. */ $desc = $base._; $nf = noForward; noForward = true; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ var chead = descHead($desc); var ctail = descTail($desc); if (ctail === undefined && isStructAtom(chead)) { fail('A const cannot be a struct value - use a struct pointer (' + 'const ' + chead + ' pointer)', _s, _i, 'E447'); } else if (ctail === undefined && isFuncTypeAtom(chead)) { $t = 'F'; $telem = chead;      /* named funcptr type constant */ } else { $t = chead; $telem = ctail; } $cStart = _i;   /* `Identifier` eats trailing space, so _i would name the NEXT declaration (E453) */ ; return true})()&&Identifier($id)&&(function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ declare( '! DEF?', 'defines', $id._, $t, true, makeConstant($x._, $t, _s, _i), _s, _i, formatConstSignatureComment( $id._, $t, sourceName, _s, declOffset, $telem ), $telem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* `export` says "this unit provides it"; a valueless const says "someone else does". The row below publishes it as an extern either way, so the keyword was silently dropped. */ if (exportNext) { fail('`export` contradicts a valueless `const` - ' + $id._ + ' is provided elsewhere, not by this unit', _s, $cStart, 'E453', 'give it a value to export it, or drop `export`'); } declare( undefined, 'defines', $id._, $t, true, undefined, _s, _i, undefined, $telem ); emitStandaloneSignatureComment(  /* valueless -> host/runtime defines it: publish it as an extern so it links-checks */ formatConstSignatureComment( $id._, $t, sourceName, _s, declOffset, $telem, true ) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ noForward = $nf; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function GlobalDecl($){var $section,$v=createParserContext(),$vStruct,$init,$initStart,$d=createParserContext(),$binit,$x=createParserContext(),$a=createParserContext(),$aStructEl,$aStruct,$aCount;return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ $vStruct = ($v.type === 'S'); if ($vStruct) {              /* struct value global -> one zeroed GLOB/CNST/TEMP *sizeof */ declare( $section, 'globals', $v.name, 'S', ($section === 'CNST'), structAllocSize($v.struct), _s, _i, formatGlobalSignatureComment( $section, $v.name, 'S', undefined, undefined, sourceName, _s, declOffset, $v.struct), $v.struct ); } else { declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; } ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){ $initStart = _i; ; return true})()&&(function(){var _b=_i;return Braced($d)&&(function(){ if (!$vStruct) fail('Brace initializers are only for struct values', _s, $initStart, 'E422'); $binit = []; buildStructInit($v.struct, $d._, $binit, _s, $initStart); emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ if ($vStruct) fail('A struct value needs a brace initializer', _s, _i, 'E421'); $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ if (!$vStruct) declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i, formatGlobalSignatureComment( $section, $v.name, $v.type, undefined, undefined, sourceName, _s, declOffset, $v.elem ), $v.elem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), arrayAllocSize($a.elem, $a.size, extentSymbol($a.name)), _s, _i, formatGlobalSignatureComment( $section, $a.name, 'A', $a.size, undefined, sourceName, _s, declOffset, $a.elem ), $a.elem ); returnBack($a.size);   /* declared: this consumer is done with it */ $aStructEl = ($a.elem !== undefined && descTail($a.elem) === undefined && isStructAtom(descHead($a.elem))); $aStruct = $a.elem; $aCount = parseInt('' + $a.size, 10); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){   /* the list is fully consumed before these checks run, so _i would land on the NEXT declaration - name the initializer itself */ $initStart = _i; ; return true})()&&(function(){var _b=_i;return InitList($d)&&(function(){   /* flat list -> scalar-element arrays only */ if ($aStructEl) fail('A struct-element array needs nested braces, one group per element', _s, $initStart, 'E422'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Braced($d)&&(function(){   /* nested braces -> struct-element arrays */ if (!$aStructEl) fail('Nested brace initializers are for struct-element arrays', _s, $initStart, 'E422'); if (isNaN($aCount)) fail('An initialized struct-element array needs a literal size', _s, $initStart, 'E414'); var _arr = $d._; if (_arr.length > $aCount) {   /* the loop stops at the extent, so surplus ELEMENTS used to vanish whole and silently */ fail('Too many initializer elements for ' + $a.name + ': ' + _arr.length + ' given, but it holds ' + $aCount, _s, $initStart, 'E460', 'remove the extra ' + (_arr.length - $aCount) + ', or widen ' + $a.name); } $binit = []; for (var _ae = 0; _ae < $aCount; ++_ae) { var _aev = (_ae < _arr.length) ? indexedEntry(_arr[_ae], _s, $initStart) : undefined; buildStructInit($aStruct, (_aev && _aev.braced) || [], $binit, _s, $initStart); } emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function GlobalDecl($){var $section,$v=createParserContext(),$vStruct,$init,$initStart,$d=createParserContext(),$binit,$x=createParserContext(),$a=createParserContext(),$aStructEl,$aStruct,$aCount;return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ $vStruct = ($v.type === 'S'); if ($vStruct) {              /* struct value global -> one zeroed GLOB/CNST/TEMP *sizeof */ declare( $section, 'globals', $v.name, 'S', ($section === 'CNST'), structAllocSize($v.struct), _s, _i, formatGlobalSignatureComment( $section, $v.name, 'S', undefined, undefined, sourceName, _s, declOffset, $v.struct), $v.struct ); } else { declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; } ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){ $initStart = _i; ; return true})()&&(function(){var _b=_i;return Braced($d)&&(function(){ if (!$vStruct) fail('Brace initializers are only for struct values', _s, $initStart, 'E422'); $binit = []; buildStructInit($v.struct, $d._, $binit, _s, $initStart); emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ if ($vStruct) fail('A struct value needs a brace initializer', _s, _i, 'E421'); $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ if (!$vStruct) declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i, formatGlobalSignatureComment( $section, $v.name, $v.type, undefined, undefined, sourceName, _s, declOffset, $v.elem ), $v.elem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), arrayAllocSize($a.elem, $a.size, extentSymbol($a.name)), _s, _i, formatGlobalSignatureComment( $section, $a.name, 'A', $a.size, undefined, sourceName, _s, declOffset, $a.elem ), $a.elem ); returnBack($a.size);   /* declared: this consumer is done with it */ $aStructEl = ($a.elem !== undefined && descTail($a.elem) === undefined && isStructAtom(descHead($a.elem))); $aStruct = $a.elem; $aCount = parseInt('' + $a.size, 10); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){   /* the list is fully consumed before these checks run, so _i would land on the NEXT declaration - name the initializer itself */ $initStart = _i; ; return true})()&&(function(){var _b=_i;return InitList($d)&&(function(){   /* flat list -> scalar-element arrays only */ if ($aStructEl) fail('A struct-element array needs nested braces, one group per element', _s, $initStart, 'E422'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Braced($d)&&(function(){   /* nested braces -> struct-element arrays */ if (!$aStructEl) fail('Nested brace initializers are for struct-element arrays', _s, $initStart, 'E422'); if (isNaN($aCount)) fail('An initialized struct-element array needs a literal size', _s, $initStart, 'E414'); var _arr = $d._; if (_arr.length > $aCount) { failSurplus($a.name, 'elements', _arr.length, $aCount, _arr[$aCount] && _arr[$aCount].at, _s, $initStart); } $binit = []; for (var _ae = 0; _ae < $aCount; ++_ae) { var _aev = (_ae < _arr.length) ? indexedEntry(_arr[_ae], _s, $initStart) : undefined; buildStructInit($aStruct, (_aev && _aev.braced) || [], $binit, _s, $initStart); } emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Braced($){var $i=createParserContext();return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return BracedEntry($i)&&(function(){ $._[$.n++] = $i._; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&BracedEntry($i)&&(function(){ $._[$.n++] = $i._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BracedEntry($){var $fname,$fat,$id=createParserContext(),$e=createParserContext();return (function(){var _b=_i;return (function(){ $fname = undefined; $fat = _i; ; return true})()&&((function(){var _b=_i;return Identifier($id)&&(_s[_i]===":")&&(++_i,true)&&_($)&&(function(){ $fname = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&BracedItem($e)&&(function(){ var _v = $e._;   /* bare `$e._` is the VALUE; `$e.field` would set a CONTEXT property, and `Braced` stores only the value */ _v.field = $fname; _v.at = $fat; $._ = _v; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BracedItem($){var $b=createParserContext(),$x=createParserContext();return (function(){var _b=_i;return Braced($b)&&(function(){ $._ = { braced: $b._ }; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ var m = metaSlot($x._); var op = makeRValue(m, '#<&'); if (span(op[0] || '', '#<&') !== 1) fail('Initializer must be a constant', _s, _i, 'E407'); $._ = { op: op, type: m.type }; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

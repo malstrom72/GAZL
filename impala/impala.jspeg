@@ -1769,6 +1769,13 @@
                     sourceCode, items[0].at, 'E455',
                     'write `{ ' + fields[0].name + ': ... }` - a positional list changes meaning '
                             + 'whenever a field moves');
+            /* Reached only under --legacy, where the positional list is mapped by index and anything
+               past the last field is dropped. Named lists get E456 for a name no field has; the
+               positional form has no name to report, so it needs the count rule instead. */
+            if (items.length > fields.length) {
+                $$parser.failSurplus(structName, 'values', items.length, fields.length,
+                        items[fields.length].at, sourceCode, sourceOffset);
+            }
             return undefined;                                 /* --legacy: map by position */
         }
         var known = {}, byName = {}, i;
@@ -1828,14 +1835,12 @@
                    loop used to compare against the extent OPERAND, get NaN, run zero times, and emit a
                    short row that shifted every later field.) */
                 var count = $$parser.constInt('#' + f.size);
-                if (count !== undefined && arr.length > count) {
-                    /* The loop below stops at the extent, so a surplus value used to be read by nobody
-                       and vanish - no diagnostic here, and nothing wrong for the assembler to see. */
-                    $$parser.fail('Too many initializer values for ' + f.name + ': ' + arr.length
-                            + ' given, but it holds ' + count, sourceCode, sourceOffset, 'E460',
-                            'remove the extra ' + (arr.length - count) + ', or widen ' + f.name);
-                }
-                if (count === undefined) {
+                if (count !== undefined) {
+                    if (arr.length > count) {
+                        $$parser.failSurplus(f.name, 'values', arr.length, count,
+                                arr[count] && arr[count].at, sourceCode, sourceOffset);
+                    }
+                } else {
                     count = arr.length;
                     $$parser.blockInitFrom(out,
                             'the extent of ' + f.name + ' is not resolved until GAZL assembly time, so '
@@ -1893,6 +1898,17 @@
        what the region fills them with anyway, so emitInitData requires that and then drops them. Two
        situations reach this and they share everything but the message: a symbolically-sized array field
        (E454), and a host-owned `extern struct` layout (E459). */
+    /* Surplus initializer entries are dropped by every fill loop (they stop at the extent), so they
+       vanish with nothing wrong for the assembler to see. Both loops - a struct's array FIELD and a
+       global array OF structs - need the identical rule, so it lives here once. `at` is the surplus
+       entry's own position, so the caret lands on it rather than on the initializer's `{`. */
+    $$parser.failSurplus = function (name, what, given, holds, at, sourceCode, sourceOffset) {
+        $$parser.fail('Too many initializer ' + what + ' for ' + name + ': ' + given
+                + ' given, but it holds ' + holds,
+                sourceCode, (at !== undefined ? at : sourceOffset), 'E460',
+                'remove the extra ' + (given - holds) + ', or widen ' + name);
+    };
+
     $$parser.blockInitFrom = function (out, why, code, hint) {
         if (out.blocked === undefined) {                      /* the FIRST block bounds the row */
             out.blocked = { at: out.length, why: why, code: code, hint: hint };
@@ -1984,23 +2000,6 @@
     /* A place resolved to a terminal SCALAR location (a scalar field, or a scalar array element) becomes a
        value meta: local -> frame-relative MOV (GETL/SETL when a runtime index is present), global -> MOV*,
        pointer -> PEEK/POKE base <index-or-#offset>. `parts` are the compile-time offset parts to fold. */
-    /* A readonly datum reaches an assignment as a `:=` operator, which no lvalue branch accepts - so it
-       used to fall out as the same bare "Invalid lvalue" a genuine mistake like `1 = q` gets. A readonly
-       ARRAY element already had a real message; scalars and struct fields did not. */
-    $$parser.failLvalue = function (meta, sourceCode, sourceOffset) {
-        var op = (meta ? meta.operator : undefined);
-        var base = (meta && meta.operands ? meta.operands[1] : undefined);
-        /* `:=` alone is not enough to say "readonly": a LITERAL carries it too (`1 = q` must stay a
-           plain invalid lvalue). A readonly datum also names a location - `&g`, `&g:.o.S.f`, `$local`. */
-        var located = (typeof base === 'string'
-                && (base.charAt(0) === '&' || base.charAt(0) === '$'));
-        if (typeof op === 'string' && op.charAt(0) === ':' && located) {
-            $$parser.fail('Cannot assign to a readonly value', sourceCode, sourceOffset, 'E404',
-                    'declare it `global` instead of `readonly` if it has to be written');
-        }
-        $$parser.fail('Invalid lvalue', sourceCode, sourceOffset, 'E404');
-    };
-
     $$parser.emitPlaceValue = function (x, bk, base, parts, dynIndex, type, elemTail) {
         var offOp = $$parser.foldOffset(parts);
         /* Writability is carried by the OPERATOR here, exactly as it is for a scalar global (`:=*` has no
@@ -2019,6 +2018,8 @@
         x.place = false;
         x.type  = type;
         x.elem  = elemTail;
+        x.readonly = ro;                                          /* survives the makeMeta above, which
+                                                                     clears it - assign() reads the FLAG */
     };
 
     /* structPtr[k] or arrayField[k] -> the element place. A constant index adds a symbolic stride to the
@@ -2474,6 +2475,12 @@
                 $$parser.fail('Struct type mismatch in assignment (' + leftx.struct + ' = '
                         + rightx.struct + ')', sourceCode, sourceOffset, 'E420');
             }
+            /* This path returns before the scalar `readonly` check below, so a whole-struct COPY into a
+               `readonly` global used to be emitted straight into the const region. */
+            if (leftx.readonly === true) {
+                $$parser.fail('Cannot assign to a readonly value', sourceCode, sourceOffset, 'E404',
+                        'declare it `global` instead of `readonly` if it has to be written');
+            }
             var savedBK = leftx.baseKind, savedBase = leftx.base,
                 savedParts = leftx.offParts, savedStruct = leftx.struct, savedRoot = leftx.root;
             var dst = $$parser.placeAddress(leftx);
@@ -2513,9 +2520,11 @@
         $$parser.checkPtrAssign(leftx, rightx, sourceCode, sourceOffset);
 
         /* `readonly` was honoured for scalars and silently ignored for an indexed write, which left the
-           assembler to catch it as `Incompatible types` against the const region - if at all. */
+           assembler to catch it as `Incompatible types` against the const region - if at all. The FLAG
+           is the whole test: every readonly branch (scalar global, array element, struct field) sets it,
+           and nothing else does, so a literal or a function name falls through to `Invalid lvalue`. */
         if (leftx.readonly === true) {
-            $$parser.fail('Cannot assign to an element of a readonly array',
+            $$parser.fail('Cannot assign to a readonly value',
                     sourceCode, sourceOffset, 'E404',
                     'declare it `global` instead of `readonly` if it has to be written');
         }
@@ -2576,7 +2585,7 @@
             );
 
         } else {
-            $$parser.failLvalue(leftx, sourceCode, sourceOffset);
+            $$parser.fail('Invalid lvalue', sourceCode, sourceOffset, 'E404');
         }
 
         /* push the instruction just built */
@@ -2657,7 +2666,7 @@
             );
 
         } else {
-            $$parser.failLvalue(expr, sourceCode, sourceOffset);
+            $$parser.fail('Invalid lvalue', sourceCode, sourceOffset, 'E404');
         }
     };
 
@@ -3048,6 +3057,8 @@
                                   undefined,
                                   '&' + name,
                                   undefined);
+                x.readonly = (p.readonly === true);               /* makeMeta clears it; assign() reads
+                                                                     the FLAG, not the operator spelling */
             }
             $$parser.setElem(x, p.elem);
             return;
@@ -4028,14 +4039,9 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 $$parser.fail('An initialized struct-element array needs a literal size',
                                                                                         $$s, $initStart, 'E414');
                                                                             var _arr = $d;
-                                                                            if (_arr.length > $aCount) {   /* the loop stops at the extent,
-                                                                                                              so surplus ELEMENTS used to
-                                                                                                              vanish whole and silently */
-                                                                                $$parser.fail('Too many initializer elements for ' + $a.name
-                                                                                        + ': ' + _arr.length + ' given, but it holds ' + $aCount,
-                                                                                        $$s, $initStart, 'E460',
-                                                                                        'remove the extra ' + (_arr.length - $aCount)
-                                                                                                + ', or widen ' + $a.name);
+                                                                            if (_arr.length > $aCount) {
+                                                                                $$parser.failSurplus($a.name, 'elements', _arr.length, $aCount,
+                                                                                        _arr[$aCount] && _arr[$aCount].at, $$s, $initStart);
                                                                             }
                                                                             $binit = [];
                                                                             for (var _ae = 0; _ae < $aCount; ++_ae) {
