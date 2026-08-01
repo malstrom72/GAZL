@@ -1299,19 +1299,23 @@ console.log("impala.jspeg compiler initializes struct values by field name");
 const SYM_STRUCT = "const int N = 3\nstruct S { int a; int array v[N]; int z }\n";
 const SYM_TAIL = "const int N = 3\nstruct S { int a; int array v[N] }\n";
 const symbolicExtentCases = [
-	["filling a trailing symbolic array is fine",
-		SYM_TAIL + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }", null],
-	["under-filling a trailing symbolic array is fine",
-		SYM_TAIL + "global S s = { a: 1, v: { 7 } }\nfunction main() { }", null],
-	["a field after a symbolic extent may be omitted",
-		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }", null],
-	["a field after a symbolic extent may be given zero (it emits nothing)",
-		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 }, z: 0 }\nfunction main() { }", null],
-	["a field after a symbolic extent may not be given a value",
-		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 }, z: 2 }\nfunction main() { }", "falls after v"],
+	// Giving the array ANY non-zero value is the error, not merely a field after it. Impala cannot check
+	// the value count against a symbolic extent, so an over-filled array spills into whatever follows and
+	// the assembler cannot see it: `v[N]` with N=2 given three values, plus a `z`, emits four words that
+	// fit `1+N+1` EXACTLY - so it assembles clean and z silently receives v's third value.
+	["a symbolic array may not be given values",
+		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }", "cannot be placed"],
+	["not even when it is the last field",
+		SYM_TAIL + "global S s = { a: 1, v: { 7 } }\nfunction main() { }", "cannot be placed"],
+	["nor a field after it",
+		SYM_STRUCT + "global S s = { a: 1, z: 2 }\nfunction main() { }", "cannot be placed"],
+	["zeros are fine - they are what the region fills anyway",
+		SYM_STRUCT + "global S s = { a: 1, v: { 0, 0 }, z: 0 }\nfunction main() { }", null],
+	["omitting the symbolic field and everything after it is fine",
+		SYM_STRUCT + "global S s = { a: 1 }\nfunction main() { }", null],
 	["the block reaches out through a nested struct",
 		"const int N = 3\nstruct Inner { int array v[N] }\nstruct Outer { Inner i; int z }\n"
-			+ "global Outer o = { i: { v: { 7, 8 } }, z: 2 }\nfunction main() { }", "falls after v"],
+			+ "global Outer o = { i: { v: { 7, 8 } }, z: 2 }\nfunction main() { }", "cannot be placed"],
 	["the same struct with no initializer is fine", SYM_STRUCT + "global S s\nfunction main() { }", null],
 	["sizeof of a symbolically sized struct is fine",
 		SYM_STRUCT + "function main() locals int q { q = sizeof(S); }", null],
@@ -1332,11 +1336,37 @@ const litInit = compileWithJsImpala(
 	{ randomId: 42 });
 assert(/DATA #1 #7 #8 #9 #2/.test(litInit),
 	`a literal-extent struct initializer must emit all five words\n${litInit}`);
+// A blocked initializer must emit NOTHING from the symbolic field on, not a truncated row.
 const symInit = compileWithJsImpala(
-	SYM_TAIL + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }\n", { randomId: 42 });
-assert(/DATA #1 #7 #8 #9(\s|$)/.test(symInit),
-	`a trailing symbolic array must still take the words it was given\n${symInit}`);
-console.log("impala.jspeg compiler lays out symbolic struct extents and rejects only what it cannot fill");
+	SYM_STRUCT + "global S s = { a: 1, v: { 0, 0 }, z: 0 }\nfunction main() { }\n", { randomId: 42 });
+assert(/DATA #1(\s|$)/.test(symInit) && !/#0/.test(symInit.split("DATA")[1] || ""),
+	`a blocked symbolic initializer must stop at the last placeable word\n${symInit}`);
+console.log("impala.jspeg compiler lays out symbolic struct extents and refuses to guess the rest");
+
+// The HOST owns an extern struct's field offsets AND its size, so a positional DATA row guesses at field
+// order, `.z.`, and whether there are fields Impala never saw. Reads already adapt (`POKE &g:.o.E.f`);
+// static data was the only early-bound part, and therefore the only part that could be wrong - silently.
+// Only an all-zero initializer is layout-independent, and that is what the region fills anyway.
+const EXT = "extern struct E { int a; int b }\n";
+const externInitCases = [
+	["a non-zero extern initializer is rejected", EXT + "global E e = { a: 1, b: 2 }\nfunction main(){ }",
+		"the host owns the layout"],
+	["an all-zero extern initializer is fine", EXT + "global E e = { a: 0, b: 0 }\nfunction main(){ }", null],
+	["empty braces are fine", EXT + "global E e = { }\nfunction main(){ }", null],
+	["no initializer at all is fine", EXT + "global E e\nfunction main(){ }", null],
+	["an array of extern structs is rejected too",
+		EXT + "global E array k[2] = { { a: 1 }, { a: 2 } }\nfunction main(){ }", "the host owns the layout"],
+	["readonly does not exempt it", EXT + "readonly E e = { a: 1 }\nfunction main(){ }",
+		"the host owns the layout"],
+	["a NORMAL struct is unaffected",
+		"struct N { int a; int b }\nglobal N n = { a: 1, b: 2 }\nfunction main(){ }", null],
+];
+for (const [label, source, expected] of externInitCases) {
+	expectCompileOutcome("extern initializer", label, source, expected);
+}
+const externZero = compileWithJsImpala(EXT + "global E e = { a: 0, b: 0 }\nfunction main(){ }\n", { randomId: 42 });
+assert(!/DATA/.test(externZero), `an all-zero extern initializer must emit no DATA row\n${externZero}`);
+console.log("impala.jspeg compiler refuses to guess a host-owned struct layout");
 
 // `global` names a storage table. A function and a const are in neither, so the prefix used to be accepted
 // and silently discarded there - a third, undiagnosed state next to "required" (globals) and E403 (locals).

@@ -1797,6 +1797,19 @@
 
     $$parser.buildStructInit = function (structName, items, out, sourceCode, sourceOffset) {
         var fields = $$parser.structs[structName].fields;
+        /* The HOST owns an extern struct's field offsets and its size, so a positional DATA row is a
+           guess at all three: field order, `.z.`, and whether there are fields Impala never saw. Reads
+           already adapt (`POKE &g:.o.E.f`); only static data is early-bound, which is exactly why it is
+           the only part that can be wrong. Emitting it anyway is the "half-deferred" shape
+           docs/TwoStageConstants.md calls worse than either consistent choice. */
+        if ($$parser.isExternStruct(structName)) {
+            $$parser.blockInitFrom(out,
+                    'cannot be placed: the host owns the layout of struct ' + structName
+                            + ', so Impala does not know which word it belongs in', 'E459',
+                    'a host-owned struct is initialized by the host - leave it zero-filled here; '
+                            + 'static initialization of a host-owned layout needs GAZL 2 and is planned '
+                            + 'for Impala 3.0 (docs/ParkedFeatures.md)');
+        }
         var byName = $$parser.fieldEntries(structName, fields, items, sourceCode, sourceOffset);
         for (var fi = 0; fi < fields.length; ++fi) {
             var f = fields[fi];
@@ -1812,10 +1825,23 @@
                    it cannot do is give a LATER field a countable offset, so this is the last field
                    that may carry data. The loop used to compare against the extent OPERAND, get NaN,
                    run zero times, and emit a short row that shifted every later field. */
+                /* A symbolic extent blocks the row FROM THIS FIELD, not from after it. Impala cannot
+                   check the value count against the extent, so an over-filled array silently spills
+                   into whatever follows: `v[N]` with N=2 given three values, and a `z` after it, emits
+                   four words that FIT `1+N+1` exactly - so the assembler passes it and z gets v's third
+                   value. Only zeros are safe here, and those are what the region fills anyway. */
                 var count = $$parser.constInt('#' + f.size);
                 var symbolic = (count === undefined);
                 if (symbolic) {
                     count = arr.length;
+                    $$parser.blockInitFrom(out,
+                            'cannot be placed: the extent of ' + f.name + ' is not resolved until GAZL '
+                                    + 'assembly time, so Impala cannot tell how many words it spans',
+                            'E454',
+                            'leave ' + f.name + ' (and every field after it) zero here - initializing a '
+                                    + 'symbolically-sized field needs GAZL 2 and is planned for Impala '
+                                    + '3.0; a literal extent also works, but gives up the assembly-time '
+                                    + 'size');
                 }
                 for (var e = 0; e < count; ++e) {
                     var ev = (e < arr.length)
@@ -1826,9 +1852,15 @@
                         $$parser.pushInitScalar(out, ev, f.elem, f.name, sourceCode, sourceOffset);
                     }
                 }
-                if (symbolic && out.tailFrom === undefined) {   /* the FIRST such field bounds the row */
-                    out.tailFrom = out.length;
-                    out.tailAfter = f.name;
+                if (symbolic) {
+                    $$parser.blockInitFrom(out,
+                            'falls after ' + f.name + ', whose extent is not resolved until GAZL '
+                                    + 'assembly time', 'E454',
+                            'a DATA row can stop short (the rest zero-fills) but cannot skip a symbolic '
+                                    + 'number of words - omit the fields after ' + f.name
+                                    + ' (they zero-fill), or move ' + f.name + ' to the end of the '
+                                    + 'struct; a literal extent also works but gives up the '
+                                    + 'assembly-time size');
                 }
             } else {
                 $$parser.pushInitScalar(out, item, f.type, f.name, sourceCode, sourceOffset);
@@ -1852,25 +1884,31 @@
         out.push(item.op);
     };
 
+    /* Mark every word from here on UNPLACEABLE: Impala cannot say which GAZL word it would land in.
+       `DATA` is positional and GAZL 1 cannot skip a symbolic number of words - there is no fill
+       directive, and a backward `! GOTO` does not assemble (`Compile time label not found`), so no
+       assemble-time loop can emit them either. Such words are only harmless when they are ZERO, which is
+       what the region fills them with anyway, so emitInitData requires that and then drops them. Two
+       situations reach this and they share everything but the message: a symbolically-sized array field
+       (E454), and a host-owned `extern struct` layout (E459). */
+    $$parser.blockInitFrom = function (out, why, code, hint) {
+        if (out.tailFrom !== undefined) {
+            return;                                           /* the FIRST block bounds the row */
+        }
+        out.tailFrom = out.length;
+        out.tailWhy = why;
+        out.tailCode = code;
+        out.tailHint = hint;
+    };
+
     /* emit a flat constant list as one or more DATA rows (mirrors InitList chunking) */
     $$parser.emitInitData = function (ops, sourceCode, sourceOffset) {
-        /* A DATA row may stop short of its region and the rest zero-fills, but GAZL has no way to SKIP a
-           symbolic number of words: there is no fill directive, and a backward `! GOTO` does not assemble
-           (`Compile time label not found`), so no assemble-time loop can emit them. Words past a symbolic
-           extent therefore have no countable offset - which is fine as long as they are all zero, because
-           then dropping them lands exactly where the zero-fill would. */
         if (ops.tailFrom !== undefined) {
             var Z = $$parser.ZEROES;
             for (var t = ops.tailFrom; t < ops.length; ++t) {
                 if (ops[t] !== Z.i && ops[t] !== Z.f && ops[t] !== Z.p && ops[t] !== Z.F) {
-                    $$parser.fail('Initializer value ' + ops[t] + ' falls after ' + ops.tailAfter
-                            + ', whose extent is not resolved until GAZL assembly time',
-                            sourceCode, sourceOffset, 'E454',
-                            'a DATA row can stop short (the rest zero-fills) but cannot skip a symbolic '
-                                    + 'number of words - omit the fields after ' + ops.tailAfter
-                                    + ' (they zero-fill), or move ' + ops.tailAfter + ' to the end of '
-                                    + 'the struct; a literal extent also works but gives up the '
-                                    + 'assembly-time size');
+                    $$parser.fail('Initializer value ' + ops[t] + ' ' + ops.tailWhy,
+                            sourceCode, sourceOffset, ops.tailCode, ops.tailHint);
                 }
             }
             ops.length = ops.tailFrom;                        /* the region zero-fills the remainder */
@@ -3963,9 +4001,9 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 var _aev = (_ae < _arr.length)
                                                                                         ? $$parser.indexedEntry(_arr[_ae], $$s, $initStart) : undefined;
                                                                                 $$parser.buildStructInit($aStruct,
-                                                                                        (_aev && _aev.braced) || [], $binit, $$s, $$i);
+                                                                                        (_aev && _aev.braced) || [], $binit, $$s, $initStart);
                                                                             }
-                                                                            $$parser.emitInitData($binit, $$s, $$i);
+                                                                            $$parser.emitInitData($binit, $$s, $initStart);
                                                                          }
                            ) )?
                  )

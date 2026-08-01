@@ -302,13 +302,16 @@ Concrete shapes that violate the model. If you are about to write one of these, 
   shifts. Test the extent for numeric-ness first and take a deliberate branch. (FIXED 2026-07-31:
   `fieldWords` returns `undefined` rather than `NaN`, and the two checks that read
   `structWords(...) === undefined` as "incomplete" now ask `structDefined` - otherwise a symbolically
-  sized struct could not be nested by value or passed to `sizeof`. The values GIVEN still land, because a
-  `DATA` row may stop short; only a later field is refused, as `E454`.)
+  sized struct could not be nested by value or passed to `sizeof`. Initializing such a field at all is
+  refused, as `E454`: Impala cannot check the value count against the extent either, so an over-filled
+  array spilled into the next field while still FITTING the region, which the assembler cannot catch.
+  Zeros stay legal, being what the region fills with regardless.)
 - **Emitting positional `DATA` for a type whose layout the host owns.** If field offsets come from
   `.o.*`, an initializer written in declaration order is a guess. There is no seek/`.org` directive to
   fix it up, so the only sound options are to reject the initializer or to require a host-independent
   form. Half-deferring (symbolic reads, positional writes) is worse than either consistent choice.
-  Confirmed 2026-08-01, and it is a live wrong-output defect today rather than a hypothetical. GAZL 1
+  Confirmed 2026-08-01, and it WAS a live wrong-output defect - now closed by refusing it (`E459`),
+  which is the "reject the initializer" branch above, narrowed so an all-zero one still compiles. GAZL 1
   cannot express the fix at all: no fill/repeat/origin directive, and a backward `! GOTO` does not
   assemble (`Compile time label not found`), so there is no way to emit *or* skip a symbolic number of
   words. The GAZL 2 requirements, and the alternatives that do not work, are in

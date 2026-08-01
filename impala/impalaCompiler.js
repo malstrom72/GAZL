@@ -1810,6 +1810,19 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     buildStructInit = function (structName, items, out, sourceCode, sourceOffset) {
         var fields = structs[structName].fields;
+        /* The HOST owns an extern struct's field offsets and its size, so a positional DATA row is a
+           guess at all three: field order, `.z.`, and whether there are fields Impala never saw. Reads
+           already adapt (`POKE &g:.o.E.f`); only static data is early-bound, which is exactly why it is
+           the only part that can be wrong. Emitting it anyway is the "half-deferred" shape
+           docs/TwoStageConstants.md calls worse than either consistent choice. */
+        if (isExternStruct(structName)) {
+            blockInitFrom(out,
+                    'cannot be placed: the host owns the layout of struct ' + structName
+                            + ', so Impala does not know which word it belongs in', 'E459',
+                    'a host-owned struct is initialized by the host - leave it zero-filled here; '
+                            + 'static initialization of a host-owned layout needs GAZL 2 and is planned '
+                            + 'for Impala 3.0 (docs/ParkedFeatures.md)');
+        }
         var byName = fieldEntries(structName, fields, items, sourceCode, sourceOffset);
         for (var fi = 0; fi < fields.length; ++fi) {
             var f = fields[fi];
@@ -1825,10 +1838,23 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                    it cannot do is give a LATER field a countable offset, so this is the last field
                    that may carry data. The loop used to compare against the extent OPERAND, get NaN,
                    run zero times, and emit a short row that shifted every later field. */
+                /* A symbolic extent blocks the row FROM THIS FIELD, not from after it. Impala cannot
+                   check the value count against the extent, so an over-filled array silently spills
+                   into whatever follows: `v[N]` with N=2 given three values, and a `z` after it, emits
+                   four words that FIT `1+N+1` exactly - so the assembler passes it and z gets v's third
+                   value. Only zeros are safe here, and those are what the region fills anyway. */
                 var count = constInt('#' + f.size);
                 var symbolic = (count === undefined);
                 if (symbolic) {
                     count = arr.length;
+                    blockInitFrom(out,
+                            'cannot be placed: the extent of ' + f.name + ' is not resolved until GAZL '
+                                    + 'assembly time, so Impala cannot tell how many words it spans',
+                            'E454',
+                            'leave ' + f.name + ' (and every field after it) zero here - initializing a '
+                                    + 'symbolically-sized field needs GAZL 2 and is planned for Impala '
+                                    + '3.0; a literal extent also works, but gives up the assembly-time '
+                                    + 'size');
                 }
                 for (var e = 0; e < count; ++e) {
                     var ev = (e < arr.length)
@@ -1839,9 +1865,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                         pushInitScalar(out, ev, f.elem, f.name, sourceCode, sourceOffset);
                     }
                 }
-                if (symbolic && out.tailFrom === undefined) {   /* the FIRST such field bounds the row */
-                    out.tailFrom = out.length;
-                    out.tailAfter = f.name;
+                if (symbolic) {
+                    blockInitFrom(out,
+                            'falls after ' + f.name + ', whose extent is not resolved until GAZL '
+                                    + 'assembly time', 'E454',
+                            'a DATA row can stop short (the rest zero-fills) but cannot skip a symbolic '
+                                    + 'number of words - omit the fields after ' + f.name
+                                    + ' (they zero-fill), or move ' + f.name + ' to the end of the '
+                                    + 'struct; a literal extent also works but gives up the '
+                                    + 'assembly-time size');
                 }
             } else {
                 pushInitScalar(out, item, f.type, f.name, sourceCode, sourceOffset);
@@ -1865,25 +1897,31 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         out.push(item.op);
     };
 
+    /* Mark every word from here on UNPLACEABLE: Impala cannot say which GAZL word it would land in.
+       `DATA` is positional and GAZL 1 cannot skip a symbolic number of words - there is no fill
+       directive, and a backward `! GOTO` does not assemble (`Compile time label not found`), so no
+       assemble-time loop can emit them either. Such words are only harmless when they are ZERO, which is
+       what the region fills them with anyway, so emitInitData requires that and then drops them. Two
+       situations reach this and they share everything but the message: a symbolically-sized array field
+       (E454), and a host-owned `extern struct` layout (E459). */
+    blockInitFrom = function (out, why, code, hint) {
+        if (out.tailFrom !== undefined) {
+            return;                                           /* the FIRST block bounds the row */
+        }
+        out.tailFrom = out.length;
+        out.tailWhy = why;
+        out.tailCode = code;
+        out.tailHint = hint;
+    };
+
     /* emit a flat constant list as one or more DATA rows (mirrors InitList chunking) */
     emitInitData = function (ops, sourceCode, sourceOffset) {
-        /* A DATA row may stop short of its region and the rest zero-fills, but GAZL has no way to SKIP a
-           symbolic number of words: there is no fill directive, and a backward `! GOTO` does not assemble
-           (`Compile time label not found`), so no assemble-time loop can emit them. Words past a symbolic
-           extent therefore have no countable offset - which is fine as long as they are all zero, because
-           then dropping them lands exactly where the zero-fill would. */
         if (ops.tailFrom !== undefined) {
             var Z = ZEROES;
             for (var t = ops.tailFrom; t < ops.length; ++t) {
                 if (ops[t] !== Z.i && ops[t] !== Z.f && ops[t] !== Z.p && ops[t] !== Z.F) {
-                    fail('Initializer value ' + ops[t] + ' falls after ' + ops.tailAfter
-                            + ', whose extent is not resolved until GAZL assembly time',
-                            sourceCode, sourceOffset, 'E454',
-                            'a DATA row can stop short (the rest zero-fills) but cannot skip a symbolic '
-                                    + 'number of words - omit the fields after ' + ops.tailAfter
-                                    + ' (they zero-fill), or move ' + ops.tailAfter + ' to the end of '
-                                    + 'the struct; a literal extent also works but gives up the '
-                                    + 'assembly-time size');
+                    fail('Initializer value ' + ops[t] + ' ' + ops.tailWhy,
+                            sourceCode, sourceOffset, ops.tailCode, ops.tailHint);
                 }
             }
             ops.length = ops.tailFrom;                        /* the region zero-fills the remainder */
@@ -3306,7 +3344,7 @@ function ExternDecl($){var $at,$id=createParserContext(),$sname,$f=createParserC
                                                                              $.scope, $.name, $.type, false,                     // not readonly
                                                                              '?', _s, _i, undefined, $.elem ); if ($.scope === 'functions') { var entry = symbols.functions[$.name]; var signature = entry && entry.signature; if (entry) { if (!signature) { signature = entry.signature = {}; } if (signature.sourceName === undefined) { signature.sourceName = sourceName; } if (signature.sourceCode === undefined) { signature.sourceCode = _s; signature.sourceOffset = declOffset; signature.sourceName = sourceName; } if (entry.kind !== 'FUNC') {  /* a definition here already resolved it - do not un-resolve it */ signature.returnResolved = false; } } var role = ($.type === 'N' ? 'extern native' : 'extern func'); var placeholderSignature = { params: [], returns: undefined, sourceName: sourceName, sourceCode: _s, sourceOffset: declOffset, }; var _proto = pendingProto; pendingProto = undefined; if (_proto !== undefined) {   /* a declared prototype: real params + at most one return */ var _pp = []; for (var _pi = 0; _pi < _proto.args.length; ++_pi) { var _p = _proto.args[_pi]; rejectByValueStruct(_p.type, _p.struct, _p.name, false, _s, _i); _pp.push({ type: _p.type, elem: _p.elem, name: _p.name, size: _p.size, struct: _p.struct, words: _p.words }); } var _pr = _proto.ret; if (_pr !== undefined) rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, _s, _i); placeholderSignature.params      = _pp; placeholderSignature.returns     = (_pr !== undefined ? _pr.type : 'V'); placeholderSignature.returnElem  = (_pr !== undefined ? _pr.elem : undefined); placeholderSignature.returnCount = (_pr !== undefined ? 1 : 0); placeholderSignature.returnWords = (_pr !== undefined ? 1 : 0); placeholderSignature.returnResolved = true; if (entry) { var _defined = (entry.kind === 'FUNC'); checkExternAgreement($.name, placeholderSignature, (_defined ? entry.signature : entry.externProto), _defined, _s, $at); entry.externProto = placeholderSignature; if (!_defined) {               /* a definition here outranks it; otherwise publish it so call sites check against it */ entry.signature.params         = _pp; entry.signature.returns        = placeholderSignature.returns; entry.signature.returnElem     = placeholderSignature.returnElem; entry.signature.returnCount    = placeholderSignature.returnCount; entry.signature.returnWords    = placeholderSignature.returnWords; entry.signature.returnResolved = true; } } } emitStandaloneSignatureComment( formatFunctionSignatureComment( $.name, placeholderSignature, role, sourceName, _s, declOffset ) ); } else if ($.scope === 'globals') { emitStandaloneSignatureComment( formatGlobalSignatureComment( 'GLOB', $.name, $.type, $.size, 'extern', sourceName, _s, declOffset, $.elem ) ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ConstDecl($){var $base=createParserContext(),$desc,$nf,$t,$telem,$cStart,$id=createParserContext(),$x=createParserContext();return (function(){var _b=_i;return CONST($)&&_($)&&TypeBase($base)&&(function(){ /* Same type grammar as every other declarator (TypeBase, not bare BASE_TYPE), so a const can name a struct pointer or a named functype - a const is an assembler-level address/scalar constant, and those two are just addresses. A struct VALUE is the one shape that has no scalar constant form. */ $desc = $base._; $nf = noForward; noForward = true; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ var chead = descHead($desc); var ctail = descTail($desc); if (ctail === undefined && isStructAtom(chead)) { fail('A const cannot be a struct value - use a struct pointer (' + 'const ' + chead + ' pointer)', _s, _i, 'E447'); } else if (ctail === undefined && isFuncTypeAtom(chead)) { $t = 'F'; $telem = chead;      /* named funcptr type constant */ } else { $t = chead; $telem = ctail; } $cStart = _i;   /* `Identifier` eats trailing space, so _i would name the NEXT declaration (E453) */ ; return true})()&&Identifier($id)&&(function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ declare( '! DEF?', 'defines', $id._, $t, true, makeConstant($x._, $t, _s, _i), _s, _i, formatConstSignatureComment( $id._, $t, sourceName, _s, declOffset, $telem ), $telem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* `export` says "this unit provides it"; a valueless const says "someone else does". The row below publishes it as an extern either way, so the keyword was silently dropped. */ if (exportNext) { fail('`export` contradicts a valueless `const` - ' + $id._ + ' is provided elsewhere, not by this unit', _s, $cStart, 'E453', 'give it a value to export it, or drop `export`'); } declare( undefined, 'defines', $id._, $t, true, undefined, _s, _i, undefined, $telem ); emitStandaloneSignatureComment(  /* valueless -> host/runtime defines it: publish it as an extern so it links-checks */ formatConstSignatureComment( $id._, $t, sourceName, _s, declOffset, $telem, true ) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ noForward = $nf; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function GlobalDecl($){var $section,$v=createParserContext(),$vStruct,$init,$initStart,$d=createParserContext(),$binit,$x=createParserContext(),$a=createParserContext(),$aStructEl,$aStruct,$aCount;return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ $vStruct = ($v.type === 'S'); if ($vStruct) {              /* struct value global -> one zeroed GLOB/CNST/TEMP *sizeof */ declare( $section, 'globals', $v.name, 'S', ($section === 'CNST'), structAllocSize($v.struct), _s, _i, formatGlobalSignatureComment( $section, $v.name, 'S', undefined, undefined, sourceName, _s, declOffset, $v.struct), $v.struct ); } else { declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; } ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){ $initStart = _i; ; return true})()&&(function(){var _b=_i;return Braced($d)&&(function(){ if (!$vStruct) fail('Brace initializers are only for struct values', _s, $initStart, 'E422'); $binit = []; buildStructInit($v.struct, $d._, $binit, _s, $initStart); emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ if ($vStruct) fail('A struct value needs a brace initializer', _s, _i, 'E421'); $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ if (!$vStruct) declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i, formatGlobalSignatureComment( $section, $v.name, $v.type, undefined, undefined, sourceName, _s, declOffset, $v.elem ), $v.elem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), arrayAllocSize($a.elem, $a.size, extentSymbol($a.name)), _s, _i, formatGlobalSignatureComment( $section, $a.name, 'A', $a.size, undefined, sourceName, _s, declOffset, $a.elem ), $a.elem ); returnBack($a.size);   /* declared: this consumer is done with it */ $aStructEl = ($a.elem !== undefined && descTail($a.elem) === undefined && isStructAtom(descHead($a.elem))); $aStruct = $a.elem; $aCount = parseInt('' + $a.size, 10); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){   /* the list is fully consumed before these checks run, so _i would land on the NEXT declaration - name the initializer itself */ $initStart = _i; ; return true})()&&(function(){var _b=_i;return InitList($d)&&(function(){   /* flat list -> scalar-element arrays only */ if ($aStructEl) fail('A struct-element array needs nested braces, one group per element', _s, $initStart, 'E422'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Braced($d)&&(function(){   /* nested braces -> struct-element arrays */ if (!$aStructEl) fail('Nested brace initializers are for struct-element arrays', _s, $initStart, 'E422'); if (isNaN($aCount)) fail('An initialized struct-element array needs a literal size', _s, $initStart, 'E414'); var _arr = $d._; $binit = []; for (var _ae = 0; _ae < $aCount; ++_ae) { var _aev = (_ae < _arr.length) ? indexedEntry(_arr[_ae], _s, $initStart) : undefined; buildStructInit($aStruct, (_aev && _aev.braced) || [], $binit, _s, _i); } emitInitData($binit, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function GlobalDecl($){var $section,$v=createParserContext(),$vStruct,$init,$initStart,$d=createParserContext(),$binit,$x=createParserContext(),$a=createParserContext(),$aStructEl,$aStruct,$aCount;return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ $vStruct = ($v.type === 'S'); if ($vStruct) {              /* struct value global -> one zeroed GLOB/CNST/TEMP *sizeof */ declare( $section, 'globals', $v.name, 'S', ($section === 'CNST'), structAllocSize($v.struct), _s, _i, formatGlobalSignatureComment( $section, $v.name, 'S', undefined, undefined, sourceName, _s, declOffset, $v.struct), $v.struct ); } else { declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; } ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){ $initStart = _i; ; return true})()&&(function(){var _b=_i;return Braced($d)&&(function(){ if (!$vStruct) fail('Brace initializers are only for struct values', _s, $initStart, 'E422'); $binit = []; buildStructInit($v.struct, $d._, $binit, _s, $initStart); emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ if ($vStruct) fail('A struct value needs a brace initializer', _s, _i, 'E421'); $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ if (!$vStruct) declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i, formatGlobalSignatureComment( $section, $v.name, $v.type, undefined, undefined, sourceName, _s, declOffset, $v.elem ), $v.elem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), arrayAllocSize($a.elem, $a.size, extentSymbol($a.name)), _s, _i, formatGlobalSignatureComment( $section, $a.name, 'A', $a.size, undefined, sourceName, _s, declOffset, $a.elem ), $a.elem ); returnBack($a.size);   /* declared: this consumer is done with it */ $aStructEl = ($a.elem !== undefined && descTail($a.elem) === undefined && isStructAtom(descHead($a.elem))); $aStruct = $a.elem; $aCount = parseInt('' + $a.size, 10); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){   /* the list is fully consumed before these checks run, so _i would land on the NEXT declaration - name the initializer itself */ $initStart = _i; ; return true})()&&(function(){var _b=_i;return InitList($d)&&(function(){   /* flat list -> scalar-element arrays only */ if ($aStructEl) fail('A struct-element array needs nested braces, one group per element', _s, $initStart, 'E422'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Braced($d)&&(function(){   /* nested braces -> struct-element arrays */ if (!$aStructEl) fail('Nested brace initializers are for struct-element arrays', _s, $initStart, 'E422'); if (isNaN($aCount)) fail('An initialized struct-element array needs a literal size', _s, $initStart, 'E414'); var _arr = $d._; $binit = []; for (var _ae = 0; _ae < $aCount; ++_ae) { var _aev = (_ae < _arr.length) ? indexedEntry(_arr[_ae], _s, $initStart) : undefined; buildStructInit($aStruct, (_aev && _aev.braced) || [], $binit, _s, $initStart); } emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Braced($){var $i=createParserContext();return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return BracedEntry($i)&&(function(){ $._[$.n++] = $i._; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&BracedEntry($i)&&(function(){ $._[$.n++] = $i._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BracedEntry($){var $fname,$fat,$id=createParserContext(),$e=createParserContext();return (function(){var _b=_i;return (function(){ $fname = undefined; $fat = _i; ; return true})()&&((function(){var _b=_i;return Identifier($id)&&(_s[_i]===":")&&(++_i,true)&&_($)&&(function(){ $fname = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&BracedItem($e)&&(function(){ var _v = $e._;   /* bare `$e._` is the VALUE; `$e.field` would set a CONTEXT property, and `Braced` stores only the value */ _v.field = $fname; _v.at = $fat; $._ = _v; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BracedItem($){var $b=createParserContext(),$x=createParserContext();return (function(){var _b=_i;return Braced($b)&&(function(){ $._ = { braced: $b._ }; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ var m = metaSlot($x._); var op = makeRValue(m, '#<&'); if (span(op[0] || '', '#<&') !== 1) fail('Initializer must be a constant', _s, _i, 'E407'); $._ = { op: op, type: m.type }; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

@@ -309,15 +309,25 @@ same change, or the rule would leave no way to spell what `foo(a)` spells now.
 
 ### Placing static data at a symbolic offset - REQUIRES GAZL 2
 
-**No park branch - never built.** Unlike the rest of this list this is not a missing feature but a live
-**wrong-output defect**, and it cannot be fixed on GAZL 1 at all.
+**No park branch - never built.** Unlike the rest of this list this is not a missing feature: it was a
+pair of live **wrong-output defects**, now closed by refusing the shapes rather than guessing at them.
+Restoring the capability needs GAZL 2.
 
-Brace-initializing an `extern struct` emits positional `DATA` in declaration order while every read goes
-through the host-supplied `.o.*`, so the values land wrong under any host layout that is not Impala's
-declaration order - silently, with no diagnostic. Naming the fields (`{ x: 1, y: 2 }`, `E455`) fixed how
-the source READS but not where the words LAND: `buildStructInit` still walks fields in declaration order.
-The same root cause produces `E454`, where a field after a symbolically-sized array field cannot be
-initialized because its offset is not countable at Impala compile time.
+Two shapes have no sound lowering on GAZL 1, and both were silently wrong before 2026-08-01:
+
+- **`extern struct` initializers** (`E459`). `buildStructInit` walked fields in declaration order and
+  emitted positional `DATA`, while every read goes through the host-supplied `.o.*`. That guesses at
+  field order, at `.z.`, and at whether the host has fields Impala never saw; an array of them also
+  strided elements by Impala's guess at the size. Naming the fields (`{ x: 1, y: 2 }`, `E455`) fixed how
+  the source READS but not where the words LAND.
+- **Struct array fields with a symbolic extent** (`E454`). Impala cannot compare the value count against
+  the extent, so an over-filled array spilled into the next field *and the assembler could not see it*:
+  `struct S { int a; int array v[N]; int z }` with `N` 2, given three values for `v`, emits four words -
+  which fits `1+N+1` exactly, so it assembles clean and `z` silently receives `v`'s third value.
+
+Both now reject any NON-ZERO word from the unplaceable point on. Zero stays legal because it is what the
+region fills under any layout, so `{ }`, an omitted field and an explicit `0` all still compile and emit
+nothing. One mechanism serves both (`blockInitFrom`); they differ only in the message.
 
 Verified 2026-08-01 that GAZL 1 has no way to express it:
 
@@ -339,11 +349,17 @@ decided**:
    it does not know, so out-of-order placement must be legal and a written-word set is what makes it safe.
    It would also catch overlapping host layouts, which `Impala2Review.md` C6 lists as undetected.
 
-Field-boundary over-run stays out of scope for the assembler: it has no notion of a struct's interior, so
-an array over-running into an *uninitialized* neighbour is a legal in-bounds write from where it stands.
-That check belongs to Impala - directly when the extent is literal, or as a deferred `! LEQi` / `! GOTO`
-assertion when it is symbolic (rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md)). Over-filling a
-whole section already self-reports as `Not enough space in data section`.
+**One part does NOT need GAZL 2**, and is worth doing independently: the value-count check behind `E454`.
+Impala cannot compare a literal count against a symbolic extent, but it can EMIT the comparison as a
+deferred assertion - `! LEQi #3 #.x.v @.ok` / `! GOTO @.ERROR_too_many_values_for_v`, with the label name
+as the message. That is rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md), it costs nothing at run
+time, and the `.x.` extent constants it needs already exist. With it, a symbolic array could be filled
+again on GAZL 1 as long as the count provably fits - only fields AFTER it would still need `ORG`.
+
+Note the two checks are complementary, not redundant. Define-each-word-once catches an over-run only when
+it lands on a word something else initialized; an array over-running into an *uninitialized* neighbour is
+a legal, in-bounds, non-overlapping write, and the assembler has no notion of a struct's interior to
+judge it by. Over-filling a whole section already self-reports as `Not enough space in data section`.
 
 Rejected alternatives: **assemble-time loops** (you would emit N zero words into a region that already
 zero-fills them, N can be host-supplied so module size becomes a function of a load-time define, and
@@ -351,7 +367,10 @@ assembly time stops being bounded) - the requirement is to SKIP, not to emit; an
 initializers as runtime stores in a startup function**, which breaks the static-data model, costs code and
 time, and cannot work for `readonly`/`CNST` at all.
 
-Retires `E454` outright, and shortens `DATA` rows for sparse initializers even with literal extents.
+Retires `E454` and `E459`, and shortens `DATA` rows for sparse initializers even with literal extents.
+`E459` is the one that unlocks something genuinely new: a host-owned struct could carry static contents
+for the first time, since every word would be placed at a `.o.*` the host defined rather than at a
+position Impala assumed.
 
 ### Tail calls
 

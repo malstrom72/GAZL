@@ -463,6 +463,21 @@ removing or reordering a struct field changed what every existing initializer me
 those initializers needing to change for it to happen. `--legacy` still maps positionally, so 1.x
 sources keep building.
 
+**Two shapes cannot be statically initialized in 2.0, and both are errors rather than guesses.** A
+`DATA` row is positional and GAZL 1 has no way to place a word at an offset it only learns at assembly
+time, so an initializer is only emitted where Impala knows which word each value lands in:
+
+| Shape | Code | Why |
+|---|---|---|
+| a struct array field with a **symbolic** extent, and anything after it | `E454` | Impala cannot check the value count against the extent, so an over-filled array spills into the next field - and it FITS the region, so the assembler passes it |
+| any field of an **`extern struct`** | `E459` | the host owns field order, `.z.`, and possibly fields Impala never saw; a positional row guesses all three |
+
+In both cases **zero is still fine**, because zero is what the region fills with under any layout - so
+`{ }`, an omitted field, and an explicit `0` all compile and simply emit nothing. Both are planned for
+Impala 3.0 on GAZL 2; see [`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic
+offset"). For an extern struct the host owns the layout, so the host is also the right place for the
+initial contents.
+
 Uninitialized **global** struct storage is zero-filled - the globals and consts regions are cleared
 once at load (`src/GAZL.cpp:880`). **Locals are not.** A `call` only bumps the frame pointer, so an
 uninitialized struct local holds whatever the previous frame left there. Initialize struct locals
@@ -1351,7 +1366,8 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E451 | a `;` after an `if` body leaves the following `else` with nothing to attach to |
 | E452 | a `global` prefix on a function or a const (a warning under `--legacy`) |
 | E453 | `export` on a valueless `const`; the two contradict (a valued `export const` is fine) |
-| E454 | a struct field initialized after one whose symbolic extent makes its offset uncountable |
+| E454 | a non-zero initializer at or after a struct array field whose extent is symbolic |
+| E459 | a non-zero initializer for an `extern struct` - the host owns the layout, so Impala cannot place it |
 | E455 | a struct initializer must name its fields, and must not mix named with positional (`--legacy` maps by position) |
 | E456 | a struct initializer names a field the struct does not have |
 | E457 | a struct initializer names the same field twice |

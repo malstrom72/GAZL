@@ -250,16 +250,20 @@ more** (verified 2026-07-31; only stale comment references survive near lines 19
 three restrictions have been lifted: an extern struct with a nested array field compiles, and a
 by-value extern local emits `LOCA *.z.E` / `COPY *.z.E`.
 
-Still genuinely outstanding: the gazl-validator cross-check of host layout vs declared interface. And
-one thing this expansion opened up that is NOT sound yet - brace-initializing an extern struct emits
-positional `DATA` in declaration order while every read goes through `.o.*`, so the values land wrong
-under any host layout that is not Impala's guess. See the audit note in
-[`docs/TwoStageConstants.md`](TwoStageConstants.md) ("Emitting positional `DATA` for a type whose
-layout the host owns"). **This is fixable only in GAZL 2** - verified 2026-08-01 that GAZL 1 has no fill
-or origin directive and no backward compile-time branch, so `DATA` cannot skip a symbolic number of
-words. Requirements, and the alternatives that do not work, are in
-[`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic offset"). Note that naming
-initializer fields (`E455`) did NOT fix this: it changed how the source reads, not where the words land.
+Still genuinely outstanding: the gazl-validator cross-check of host layout vs declared interface.
+
+One thing this expansion opened up was NOT sound and is now **closed by refusing it** (`E459`,
+2026-08-01). Brace-initializing an extern struct emitted positional `DATA` in declaration order while
+every read goes through `.o.*`, so the values landed wrong under any host layout that was not Impala's
+guess - guessing field order, `.z.`, and whether the host had fields Impala never saw. A non-zero
+initializer for an extern struct is now an error; zero is the only word Impala can place without knowing
+the layout, so `{ }`, an omitted field and an explicit `0` still compile and emit nothing. If the host
+owns the layout it owns the initial contents too. Note that naming initializer fields (`E455`) did NOT
+fix this: it changed how the source reads, not where the words land. Restoring the capability needs
+GAZL 2 - verified that GAZL 1 has no fill or origin directive and no backward compile-time branch, so
+`DATA` cannot skip a symbolic number of words. Requirements, and the alternatives that do not work, are
+in [`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic offset"); the audit note
+is in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
 (Superseded: this paragraph used to say Phase 2a was "still open". It landed - see the Phase 2a section
 above, which this sentence predates.)
 
