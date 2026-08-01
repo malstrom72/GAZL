@@ -1319,7 +1319,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E401 | identifier already declared |
 | E402 | type mismatch with previous declaration |
 | E403 | undeclared identifier |
-| E404 | invalid lvalue |
+| E404 | invalid lvalue, or a write to a `readonly` scalar, array element or struct field |
 | E405 | invalid argument count |
 | E406 | argument type mismatch |
 | E407 | constant expression expected |
@@ -1372,6 +1372,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E457 | a struct initializer names the same field twice |
 | E458 | a `field:` name in an array slot, where the index already does the naming |
 | E459 | a non-zero initializer for an `extern struct` - the host owns the layout, so Impala cannot place it |
+| E460 | more initializer values than the array holds (they used to be dropped silently) |
 
 E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct
 guards that were never needed once the features shipped (`docs/StructLayoutConstants.md` records the

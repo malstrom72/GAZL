@@ -1828,6 +1828,13 @@
                    loop used to compare against the extent OPERAND, get NaN, run zero times, and emit a
                    short row that shifted every later field.) */
                 var count = $$parser.constInt('#' + f.size);
+                if (count !== undefined && arr.length > count) {
+                    /* The loop below stops at the extent, so a surplus value used to be read by nobody
+                       and vanish - no diagnostic here, and nothing wrong for the assembler to see. */
+                    $$parser.fail('Too many initializer values for ' + f.name + ': ' + arr.length
+                            + ' given, but it holds ' + count, sourceCode, sourceOffset, 'E460',
+                            'remove the extra ' + (arr.length - count) + ', or widen ' + f.name);
+                }
                 if (count === undefined) {
                     count = arr.length;
                     $$parser.blockInitFrom(out,
@@ -1973,14 +1980,35 @@
     /* A place resolved to a terminal SCALAR location (a scalar field, or a scalar array element) becomes a
        value meta: local -> frame-relative MOV (GETL/SETL when a runtime index is present), global -> MOV*,
        pointer -> PEEK/POKE base <index-or-#offset>. `parts` are the compile-time offset parts to fold. */
+    /* A readonly datum reaches an assignment as a `:=` operator, which no lvalue branch accepts - so it
+       used to fall out as the same bare "Invalid lvalue" a genuine mistake like `1 = q` gets. A readonly
+       ARRAY element already had a real message; scalars and struct fields did not. */
+    $$parser.failLvalue = function (meta, sourceCode, sourceOffset) {
+        var op = (meta ? meta.operator : undefined);
+        var base = (meta && meta.operands ? meta.operands[1] : undefined);
+        /* `:=` alone is not enough to say "readonly": a LITERAL carries it too (`1 = q` must stay a
+           plain invalid lvalue). A readonly datum also names a location - `&g`, `&g:.o.S.f`, `$local`. */
+        var located = (typeof base === 'string'
+                && (base.charAt(0) === '&' || base.charAt(0) === '$'));
+        if (typeof op === 'string' && op.charAt(0) === ':' && located) {
+            $$parser.fail('Cannot assign to a readonly value', sourceCode, sourceOffset, 'E404',
+                    'declare it `global` instead of `readonly` if it has to be written');
+        }
+        $$parser.fail('Invalid lvalue', sourceCode, sourceOffset, 'E404');
+    };
+
     $$parser.emitPlaceValue = function (x, bk, base, parts, dynIndex, type, elemTail) {
         var offOp = $$parser.foldOffset(parts);
+        /* Writability is carried by the OPERATOR here, exactly as it is for a scalar global (`:=*` has no
+           assign() branch). A field of a `readonly` struct used to reach this as a plain `=*`, so the
+           POKE was emitted and only the CNST region caught it, at load. */
+        var ro = (x.readonly === true);
         if (bk === 'local' && dynIndex !== undefined) {           /* (dsp + base:off)[dynIndex] */
             $$parser.makeMeta(x, '=[]$', type, null, base + (offOp ? ':' + offOp : ''), dynIndex);
         } else if (bk === 'local') {
             $$parser.makeMeta(x, '=', type, undefined, base + ':' + offOp, undefined);
         } else if (bk === 'globalAddr') {                         /* &name:off in global memory */
-            $$parser.makeMeta(x, '=*', type, undefined, base + ':' + offOp, undefined);
+            $$parser.makeMeta(x, (ro ? ':=*' : '=*'), type, undefined, base + ':' + offOp, undefined);
         } else {                                                  /* pointer base: PEEK/POKE base <runtime index | #offset> */
             $$parser.makeMeta(x, '=[]', type, null, base, dynIndex !== undefined ? dynIndex : '#' + offOp);
         }
@@ -2544,7 +2572,7 @@
             );
 
         } else {
-            $$parser.fail("Invalid lvalue", sourceCode, sourceOffset, 'E404');
+            $$parser.failLvalue(leftx, sourceCode, sourceOffset);
         }
 
         /* push the instruction just built */
@@ -2625,7 +2653,7 @@
             );
 
         } else {
-            $$parser.fail("Invalid lvalue", sourceCode, sourceOffset, 'E404');
+            $$parser.failLvalue(expr, sourceCode, sourceOffset);
         }
     };
 
@@ -2998,6 +3026,8 @@
 
             if (p.type === 'S') {                                 /* struct value global -> a place in global memory */
                 $$parser.setPlace(x, 'globalAddr', '&' + name, [], p.elem, p.elem);
+                metaSlot(x).readonly = (p.readonly === true);      /* a field write must see it too - CNST
+                                                                     rejects the POKE only at load, if at all */
                 return;
             }
             if (p.type === 'A') {
@@ -3994,6 +4024,15 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 $$parser.fail('An initialized struct-element array needs a literal size',
                                                                                         $$s, $initStart, 'E414');
                                                                             var _arr = $d;
+                                                                            if (_arr.length > $aCount) {   /* the loop stops at the extent,
+                                                                                                              so surplus ELEMENTS used to
+                                                                                                              vanish whole and silently */
+                                                                                $$parser.fail('Too many initializer elements for ' + $a.name
+                                                                                        + ': ' + _arr.length + ' given, but it holds ' + $aCount,
+                                                                                        $$s, $initStart, 'E460',
+                                                                                        'remove the extra ' + (_arr.length - $aCount)
+                                                                                                + ', or widen ' + $a.name);
+                                                                            }
                                                                             $binit = [];
                                                                             for (var _ae = 0; _ae < $aCount; ++_ae) {
                                                                                 var _aev = (_ae < _arr.length)

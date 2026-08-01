@@ -1352,6 +1352,50 @@ assert(/DATA #1(\s|$)/.test(symInit) && !/#0/.test(symInit.split("DATA")[1] || "
 	`a blocked symbolic initializer must stop at the last placeable word\n${symInit}`);
 console.log("impala.jspeg compiler lays out symbolic struct extents and refuses to guess the rest");
 
+// Surplus initializer values used to be read by nobody and vanish: the fill loops stop at the extent, so
+// nothing was emitted for them and the assembler had nothing wrong to see. (A surplus FIELD is already
+// E456 - naming the fields closed that one for free.) A flat `int array a[2] = { 7, 8, 9 }` is a different
+// shape: it over-runs the section, and the ASSEMBLER reports it, so Impala does not duplicate that check.
+const surplusCases = [
+	["too many values for a struct array field",
+		"struct S { int array v[2]; int z }\nglobal S s = { v: { 7, 8, 9 }, z: 5 }\nfunction main(){ }",
+		"3 given, but it holds 2"],
+	["too many elements for an array of structs",
+		"struct S { int a }\nglobal S array k[1] = { { a: 1 }, { a: 2 } }\nfunction main(){ }",
+		"2 given, but it holds 1"],
+	["an exact fit is fine",
+		"struct S { int array v[2]; int z }\nglobal S s = { v: { 7, 8 }, z: 5 }\nfunction main(){ }", null],
+	["under-filling is fine (the rest zero-fills)",
+		"struct S { int array v[2]; int z }\nglobal S s = { v: { 7 }, z: 5 }\nfunction main(){ }", null],
+];
+for (const [label, source, expected] of surplusCases) {
+	expectCompileOutcome("surplus initializer", label, source, expected);
+}
+console.log("impala.jspeg compiler rejects initializer values that do not fit");
+
+// `readonly` reaches an assignment as a `:=` operator, which no lvalue branch accepts - so a readonly
+// SCALAR and a readonly STRUCT FIELD both fell out as the bare "Invalid lvalue" that a genuine mistake
+// like `1 = q` gets. Only the array-element case had a real message. A struct field additionally reached
+// the assignment as a writable `=*`, so its POKE was emitted and only the CNST region caught it, at load.
+const readonlyWriteCases = [
+	["a readonly scalar", "readonly int r\nfunction main(){ global r = 1; }", "readonly value"],
+	["a readonly array element", "readonly int array t[2]\nfunction main(){ global t[0] = 1; }",
+		"element of a readonly array"],
+	["a readonly struct field", "struct S { int a }\nreadonly S s\nfunction main(){ global s.a = 1; }",
+		"readonly value"],
+	["reading a readonly struct field is fine",
+		"struct S { int a }\nreadonly S s\nfunction main() locals int q { q = global s.a; }", null],
+	["writing a NON-readonly struct field is fine",
+		"struct S { int a }\nglobal S s\nfunction main(){ global s.a = 1; }", null],
+	// A literal carries `:=` too, so the readonly wording must not swallow a real syntax mistake.
+	["a genuine non-lvalue stays 'Invalid lvalue'", "function main() locals int q { 1 = q; }",
+		"Invalid lvalue"],
+];
+for (const [label, source, expected] of readonlyWriteCases) {
+	expectCompileOutcome("readonly write", label, source, expected);
+}
+console.log("impala.jspeg compiler names what is readonly instead of saying `Invalid lvalue`");
+
 // The HOST owns an extern struct's field offsets AND its size, so a positional DATA row guesses at field
 // order, `.z.`, and whether there are fields Impala never saw. Reads already adapt (`POKE &g:.o.E.f`);
 // static data was the only early-bound part, and therefore the only part that could be wrong - silently.

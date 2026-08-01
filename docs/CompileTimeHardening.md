@@ -164,8 +164,16 @@ it transliterates to, and would outlaw the one-past-the-end pointer that every w
     table[0] = 9;          // not caught by Impala; GAZL says `Incompatible types: table`
 
 `readonly` is tracked on the symbol (`declare(..., readonly, ...)`) and is honoured for scalars, but an
-indexed write does not consult it. Purely a compile-time check on the symbol; no assembly-time subtlety -
+indexed write did not consult it. Purely a compile-time check on the symbol; no assembly-time subtlety -
 the readonly array lands in the const region, so the `POKE` is rejected there as a backstop.
+
+**A struct FIELD had the same hole, found and closed 2026-08-01.** `readonly S s; global s.a = 1;`
+emitted its `POKE` with no diagnostic, because `lookup` never propagated `readonly` onto a struct-value
+place and `emitPlaceValue` therefore built a writable `=*`. It now builds `:=*`, the same operator a
+readonly scalar global gets. Related, and fixed with it: a readonly scalar and a readonly struct field
+both reported the bare `Invalid lvalue` that a genuine mistake like `1 = q` gets - only the array-element
+case had a real message. All three now name what is readonly, while `1 = q` still does not (a literal
+carries the same `:=` operator, so the check requires a NAMED location as well).
 
 ### 3. Case label outside the switch range (task #33)
 
