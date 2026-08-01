@@ -15,7 +15,12 @@
 // from its printed seed.
 //
 // Usage: node impala/fuzzImpala.js [iterations] [startSeed] [--vm]
-//   --vm also runs each compiled program on GAZLCmd and flags VM faults (miscompiles).
+//   --vm also runs each compiled program on GAZLCmd. It flags two different things: a VM fault (the
+//   module failed to load, or trapped), and a WRONG VALUE - `main` prints a set of checked global
+//   initializers before its random body, and the driver compares that prefix of stdout against the
+//   words the generator asked for. The second is a real REFERENCE oracle: it sees a DATA row that
+//   assembled and ran perfectly while holding the wrong numbers, which no crash oracle can.
+//   Without --vm the run is compile-only, so the value oracle does not apply.
 // The runner reloads the compiler module per call, so keep a single process to <=~20k
 // iterations (chunk larger sweeps across processes: for s in 0 20000 40000; do ... done).
 // First find (seed 10024): finishDestructure released its output window low-to-high (unlike every
@@ -65,11 +70,36 @@ function runOnVm(res) {
 	return 'load failure (exit ' + res.status + '): ' + (line || err.split('\n')[0] || '').trim();
 }
 
+// The value oracle: `main` prints the checked initializers before anything else, so the first
+// `expect.length` integers on stdout must be exactly the words the generator asked for. This is what
+// catches a WRONG DATA row - a truncated one, a value landing in the next field, a dropped surplus -
+// none of which faults the VM or fails to load, and so none of which runOnVm can see.
+function checkExpected(res, expect) {
+	if (!expect.length) return null;
+	const got = (res.stdout || '').split('\n').map((l) => l.trim()).filter((l) => l !== '');
+	if (got.length < expect.length) {
+		return `printed ${got.length} values, expected at least ${expect.length}`;
+	}
+	for (let i = 0; i < expect.length; ++i) {
+		if (parseInt(got[i], 10) !== expect[i]) {
+			return `initializer word ${i}: expected ${expect[i]}, got ${got[i]}`
+					+ ` (all: [${got.slice(0, expect.length).join(',')}] vs [${expect.join(',')}])`;
+		}
+	}
+	return null;
+}
+
 // PARKED WITH THE FEATURE: the inline differential (compile the same program with `inline` stripped
 // and require identical output) lived here. It was the only check in this fuzzer with a real
 // reference oracle, and the three inline miscompiles found by hand - call-window adjacency, switch
 // case labels, double processBranches - would each have failed it. Restore it from history alongside
 // `inline` itself; see docs/ParkedFeatures.md.
+//
+// `checkExpected` below is now a second reference oracle, over static initializers rather than over
+// code. It was added because that path had NO fuzz coverage at all - the generator emitted only bare
+// declarations - while four silent wrong-data bugs were being found there by hand (a NaN-truncated
+// DATA row, a field's value landing in its neighbour, dropped surplus values, and a guessed extern
+// layout). It does not replace the inline differential; the two cover different halves.
 
 function mulberry32(a) {
 	return function () {
@@ -138,6 +168,61 @@ function genProgram() {
 	}
 	const gScalars = globals.filter((g) => !g.isArray);
 	const gArrays = globals.filter((g) => g.isArray);
+
+	// ---- checked initializers: the only REFERENCE ORACLE in this fuzzer -------------------------
+	// Everything else here is a crash/trap oracle, which cannot see wrong DATA - and wrong DATA is
+	// exactly how the initializer path has failed (a NaN-truncated row, a field's value landing in its
+	// neighbour, surplus values dropped). These globals are deliberately NOT added to `globals`, so no
+	// generated statement can reference or mutate them; `main` prints them BEFORE its random body, and
+	// the driver compares that prefix against the words computed here. int-only, so the comparison is
+	// exact. Partial lists are on purpose: the omitted tail must zero-fill.
+	const chkFields = 2 + ri(3);                          // struct with 2-4 int fields
+	const chkStruct = 'CK';
+	const chkVal = () => 1 + ri(900);
+	const expect = [];                                    // words, in the order main prints them
+	const chkDecl = ['struct ' + chkStruct + ' { '
+			+ Array.from({ length: chkFields }, (_, i) => 'int f' + i).join('; ') + ' }'];
+	const chkPrint = [];
+
+	// (1) flat scalar array, partially initialized -> InitList + zero-fill
+	const aLen = 1 + ri(4);
+	const aGiven = ri(aLen + 1);
+	const aVals = Array.from({ length: aGiven }, chkVal);
+	chkDecl.push('readonly int array cA[' + aLen + ']'
+			+ (aGiven ? ' = { ' + aVals.join(', ') + ' }' : ''));
+	for (let i = 0; i < aLen; ++i) {
+		expect.push(i < aGiven ? aVals[i] : 0);
+		chkPrint.push('\tprintInt(global cA[' + i + ']); printLF();');
+	}
+
+	// (2) struct value, a RANDOM SUBSET of fields named -> buildStructInit + fieldEntries + zero-fill
+	const sGiven = {};
+	for (let i = 0; i < chkFields; ++i) if (chance(0.6)) sGiven['f' + i] = chkVal();
+	const sKeys = Object.keys(sGiven);
+	chkDecl.push('global ' + chkStruct + ' cS'
+			+ (sKeys.length ? ' = { ' + sKeys.map((k) => k + ': ' + sGiven[k]).join(', ') + ' }' : ''));
+	for (let i = 0; i < chkFields; ++i) {
+		expect.push(sGiven['f' + i] || 0);
+		chkPrint.push('\tprintInt(global cS.f' + i + '); printLF();');
+	}
+
+	// (3) array OF structs, elements partially given -> the struct-array path, `[[ ]]` to index it
+	const kLen = 1 + ri(3);
+	const kGiven = ri(kLen + 1);
+	const kElems = Array.from({ length: kGiven }, () => {
+		const e = {};
+		for (let i = 0; i < chkFields; ++i) if (chance(0.6)) e['f' + i] = chkVal();
+		return e;
+	});
+	chkDecl.push('global ' + chkStruct + ' array cK[' + kLen + ']'
+			+ (kGiven ? ' = { ' + kElems.map((e) => '{ '
+					+ Object.keys(e).map((k) => k + ': ' + e[k]).join(', ') + ' }').join(', ') + ' }' : ''));
+	for (let k = 0; k < kLen; ++k) {
+		for (let i = 0; i < chkFields; ++i) {
+			expect.push((k < kGiven && kElems[k]['f' + i]) || 0);
+			chkPrint.push('\tprintInt(global cK[[' + k + ']].f' + i + '); printLF();');
+		}
+	}
 
 	// how a value is referenced: globals need the `global` keyword prefix
 	const ref = (e) => (e.isGlobal ? 'global ' + e.name : e.name);
@@ -382,6 +467,9 @@ function genProgram() {
 		const localDecl = localDeclList.length ? '\nlocals ' + localDeclList.join(', ') : '';
 
 		const body = [];
+		// The checked initializers go out FIRST, before the random body can print anything, so the
+		// driver can compare a known-length prefix of stdout against the expected words.
+		if (isMain) body.push(...chkPrint);
 		// Locals are NOT zero-initialized (a callee sees the previous call's leftovers), so reading one
 		// before writing it has no defined value - and an expansion relocates that garbage, which the
 		// parked differential oracle would have reported as a miscompile. Seed every local first.
@@ -607,12 +695,13 @@ function genProgram() {
 		const ty = g.elem === 'i' ? 'int' : 'float';
 		out += g.isArray ? 'global ' + ty + ' array ' + g.name + '[' + g.size + ']\n' : 'global ' + ty + ' ' + g.name + '\n';
 	}
+	out += chkDecl.join('\n') + '\n';
 	out += HELPERS;
 	for (let i = 0; i < funcs.length; ++i) {
 		if (!funcs[i].fixed) out += renderFunc(funcs[i], false, funcs.slice(0, i));
 	}
 	out += renderFunc({ name: 'main', params: [], rets: [], retNames: [] }, true, funcs.slice());
-	return out;
+	return { src: out, expect: expect };
 }
 
 // ---- crash oracle ------------------------------------------------------------
@@ -629,7 +718,8 @@ function main() {
 	const printIdx = process.argv.indexOf('--print');
 	if (printIdx >= 0) {
 		rnd = mulberry32(parseInt(process.argv[printIdx + 1] || '1', 10));
-		process.stdout.write(genProgram() + '\n');
+		const shown = genProgram();
+		process.stdout.write(shown.src + '\n; expected checked words: ' + shown.expect.join(' ') + '\n');
 		return;
 	}
 	const args = process.argv.slice(2).filter((a) => a !== '--vm');
@@ -644,9 +734,11 @@ function main() {
 	for (let i = 0; i < iterations; ++i) {
 		const seed = startSeed + i;
 		rnd = mulberry32(seed);
-		let src;
+		let src, expect;
 		try {
-			src = genProgram();
+			const p = genProgram();
+			src = p.src;
+			expect = p.expect;
 		} catch (genErr) {
 			console.error(`[gen-error seed=${seed}] ${genErr.message}`);
 			continue;
@@ -656,7 +748,7 @@ function main() {
 			compiled++;
 			if (useVm) {
 				const res = runGazl(gazl);
-				const vmFault = runOnVm(res);
+				const vmFault = runOnVm(res) || checkExpected(res, expect);
 				vmRun++;
 				if (vmFault) {
 					bugs++;

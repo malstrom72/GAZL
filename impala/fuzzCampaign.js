@@ -2,13 +2,15 @@
 // the Impala compiler module reloads per compile, so a single process exhausts memory around ~20k
 // iterations (a Node crash, not a compiler bug) - chunking across processes sidesteps that and lets a
 // campaign run for days. Compile-only chunks run at high volume; every `vmEvery`-th chunk is a slower
-// `--vm` chunk (which spawns GAZLCmd per program) to catch load-time miscompiles. Seeds advance
+// `--vm` chunk (which spawns GAZLCmd per program) to catch load-time miscompiles AND wrong static data
+// - only the `--vm` chunks carry the checked-initializer value oracle, so do not set vmEvery so high
+// that a campaign never exercises it. Seeds advance
 // monotonically so no program is retested, and any CRASH/FAULT block is copied verbatim to the log.
 //
 // Usage: node fuzzCampaign.js [hours=48] [startSeed=1] [chunk=8000] [vmEvery=4] [logFile=fuzzCampaign.log]
 //   Any reported CRASH/FAULT reproduces standalone from its printed seed:
 //     node fuzzImpala.js 1 <seed>          (compile crash)
-//     node fuzzImpala.js --vm 1 <seed>     (vm load fault)
+//     node fuzzImpala.js --vm 1 <seed>     (vm load fault, or a wrong initializer word)
 
 const cp = require('child_process');
 const fs = require('fs');
