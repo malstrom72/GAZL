@@ -62,12 +62,25 @@ Only ARRAY fields get one. A scalar field is 1 word and a by-value field is `.z.
 already nameable and a second symbol for them would be churn. Extern structs mint nothing at all - the
 host owns their layout, extents included.
 
-**`.x.` cannot serve here**, which is the whole reason `.z.` grew a third part. `.x.<owner>.<name>` is
-keyed on FUNCTIONS, and a struct may share a function's name - `struct S { int array a[N] }` beside
-`function S() locals int array a[2]` is legal - so one tag would mint `.x.S.a` twice. `.z.` is
-struct-only, so a third part is unambiguous. `tests/impala/sources/structFieldExtents.impala` pins
-exactly that pair, and the witness is the assembler: spelling the field extent `.x.` makes it stop with
-`Symbol already defined: .x.S.a`.
+**Why an extent lives under `.z.` here but under `.x.` below**, since that looks arbitrary and is the
+first thing anyone asks. The line is NOT extent-vs-size. It is:
+
+| family | names the | keyed on |
+|---|---|---|
+| `.x.` | extent of something that occupies STORAGE | a global, or a function + its local |
+| `.o.` / `.z.` | layout of a TYPE | a struct, + optionally a field |
+
+A struct field is not a variable, it is part of a type's layout - the same thing `.o.S.v` describes - so
+its size belongs beside its offset. And the split is forced in BOTH directions, not a preference:
+
+- `.x.` cannot take fields. `.x.<owner>.<name>` is keyed on FUNCTIONS, and a struct may share a
+  function's name: `struct S { int array a[N] }` beside `function S() locals int array a[2]` is legal,
+  so one tag would mint `.x.S.a` twice.
+- `.z.` cannot take variables. `struct S { int a }` beside `global int array S[3]` is also legal, and
+  `.z.S` already means the struct's size, so the array's extent cannot have it.
+
+`tests/impala/sources/structFieldExtents.impala` pins the first pair, and the witness is the assembler:
+spelling the field extent `.x.` makes it stop with `Symbol already defined: .x.S.a`.
 
 ### Array extent constants: `.x.`
 
@@ -79,8 +92,9 @@ allocation line, which then reads `*.x.name` instead of a number or a scratch:
     grid:				GLOB *.x.grid
 
 The value is the allocation size **in words** - the `*size` operand, not the element count (for a
-struct-element array those differ by `.z.Elem`). Every array gets one: global, `readonly`, `temporary`
-and non-inline local alike.
+struct-element array those differ by `.z.Elem`). Every array VARIABLE gets one: global, `readonly`,
+`temporary` and non-inline local alike. An array FIELD of a struct does not - that is layout, so it is
+`.z.<Struct>.<field>` above.
 
 The point is that an extent is usually NOT a number Impala knows. It can be a host-supplied
 `! DEFi` count, or `count * .z.Elem` that only resolves once the host's struct layout is in. Folding it
