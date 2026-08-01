@@ -91,6 +91,9 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 ## Documentation
 
+**[docs/README.md](docs/README.md) indexes all 24 documents** with what each is for and how much to trust
+it. The most-linked few:
+
 - [Overview](docs/Overview.md) - general architecture and goals
 - [Impala Language Reference](docs/Impala.md) - the language and toolchain
 - [Two-Stage Constants](docs/TwoStageConstants.md) - why GAZL ships as text, and why a constant is not always a number the compiler knows
