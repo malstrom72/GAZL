@@ -1315,6 +1315,49 @@ console.log("impala.jspeg compiler reserves return/break/continue with dedicated
 expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break: ; }\n",
 	"'break' is a reserved word", "a reserved-word label");
 
+// A struct value is initialized BY FIELD NAME. The 1.x positional list silently changed meaning the moment
+// a field was inserted, removed or reordered - nothing in the source had to change for it to start filling
+// different fields - so it is E455 by default and only --legacy still maps by position. Array levels stay
+// positional in both forms (a struct's array field, and an array OF structs): there the index does the
+// naming, so a `field:` in one of those slots is E458.
+const NAMED = "struct P { int x; int y }\nstruct Q { int n; P mid; int array v[2] }\n";
+const namedInitCases = [
+	["named fields in declaration order",
+		NAMED + "global Q q = { n: 1, mid: { x: 2, y: 3 }, v: { 4, 5 } }\nfunction main(){ }", null],
+	["named fields OUT of order",
+		NAMED + "global Q q = { v: { 4, 5 }, n: 1, mid: { y: 3, x: 2 } }\nfunction main(){ }", null],
+	["omitted fields zero-fill", NAMED + "global Q q = { n: 1 }\nfunction main(){ }", null],
+	["an empty initializer is fine", NAMED + "global Q q = { }\nfunction main(){ }", null],
+	["positional is rejected", NAMED + "global P p = { 1, 2 }\nfunction main(){ }", "must name its fields"],
+	["mixing named and positional is rejected",
+		NAMED + "global P p = { x: 1, 2 }\nfunction main(){ }", "mixes named and positional"],
+	["an unknown field is rejected", NAMED + "global P p = { x: 1, q: 2 }\nfunction main(){ }", "has no field q"],
+	["a repeated field is rejected", NAMED + "global P p = { x: 1, x: 2 }\nfunction main(){ }", "initialized twice"],
+	["a name where an array INDEX belongs is rejected",
+		NAMED + "global Q q = { v: { x: 4, y: 5 } }\nfunction main(){ }", "an array element is positional"],
+	["a name on an array-of-structs SLOT is rejected",
+		NAMED + "global P array bank[2] = { first: { x: 1, y: 2 }, { x: 3, y: 4 } }\nfunction main(){ }",
+		"an array element is positional"],
+	["array-of-structs slots stay positional, their fields named",
+		NAMED + "global P array bank[2] = { { x: 1, y: 2 }, { x: 3, y: 4 } }\nfunction main(){ }", null],
+];
+for (const [label, source, expected] of namedInitCases) {
+	expectCompileOutcome("named initializer", label, source, expected);
+}
+
+// Entry order must not affect layout: words come out in FIELD order however they were written.
+const inOrder = compileWithJsImpala(
+	NAMED + "global Q q = { n: 1, mid: { x: 2, y: 3 }, v: { 4, 5 } }\nfunction main(){ }\n", { randomId: 42 });
+const outOfOrder = compileWithJsImpala(
+	NAMED + "global Q q = { v: { 4, 5 }, mid: { y: 3, x: 2 }, n: 1 }\nfunction main(){ }\n", { randomId: 42 });
+assert(/DATA #1 #2 #3 #4 #5/.test(inOrder), `a named initializer must emit in field order\n${inOrder}`);
+assert(inOrder === outOfOrder, "entry order must not change the emitted layout");
+
+// --legacy keeps the 1.x positional form compiling, so old sources still build.
+expectSingleLegacyWarning(NAMED + "global P p = { 1, 2 }\nfunction main(){ }\n",
+	"must name its fields", "a positional struct initializer");
+console.log("impala.jspeg compiler initializes struct values by field name");
+
 // A struct's real size is emitted as assemble-time arithmetic (`! ADDi <a> #<a> #N`), so a symbolic array
 // extent lays out fine and every consumer below must keep working. A brace initializer can still FILL one:
 // a DATA row may define fewer words than its region holds and the rest zero-fills, so the values given land
@@ -1325,18 +1368,18 @@ const SYM_STRUCT = "const int N = 3\nstruct S { int a; int array v[N]; int z }\n
 const SYM_TAIL = "const int N = 3\nstruct S { int a; int array v[N] }\n";
 const symbolicExtentCases = [
 	["filling a trailing symbolic array is fine",
-		SYM_TAIL + "global S s = { 1, { 7, 8, 9 } }\nfunction main() { }", null],
+		SYM_TAIL + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }", null],
 	["under-filling a trailing symbolic array is fine",
-		SYM_TAIL + "global S s = { 1, { 7 } }\nfunction main() { }", null],
+		SYM_TAIL + "global S s = { a: 1, v: { 7 } }\nfunction main() { }", null],
 	["a field after a symbolic extent may be omitted",
-		SYM_STRUCT + "global S s = { 1, { 7, 8, 9 } }\nfunction main() { }", null],
+		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }", null],
 	["a field after a symbolic extent may be given zero (it emits nothing)",
-		SYM_STRUCT + "global S s = { 1, { 7, 8, 9 }, 0 }\nfunction main() { }", null],
+		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 }, z: 0 }\nfunction main() { }", null],
 	["a field after a symbolic extent may not be given a value",
-		SYM_STRUCT + "global S s = { 1, { 7, 8, 9 }, 2 }\nfunction main() { }", "falls after v"],
+		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 }, z: 2 }\nfunction main() { }", "falls after v"],
 	["the block reaches out through a nested struct",
 		"const int N = 3\nstruct Inner { int array v[N] }\nstruct Outer { Inner i; int z }\n"
-			+ "global Outer o = { { { 7, 8 } }, 2 }\nfunction main() { }", "falls after v"],
+			+ "global Outer o = { i: { v: { 7, 8 } }, z: 2 }\nfunction main() { }", "falls after v"],
 	["the same struct with no initializer is fine", SYM_STRUCT + "global S s\nfunction main() { }", null],
 	["sizeof of a symbolically sized struct is fine",
 		SYM_STRUCT + "function main() locals int q { q = sizeof(S); }", null],
@@ -1353,12 +1396,12 @@ for (const [label, source, expected] of symbolicExtentCases) {
 
 // The corruption signature was a SHORT data row, so pin the exact words rather than just pass/fail.
 const litInit = compileWithJsImpala(
-	"struct S { int a; int array v[3]; int z }\nglobal S s = { 1, { 7, 8, 9 }, 2 }\nfunction main() { }\n",
+	"struct S { int a; int array v[3]; int z }\nglobal S s = { a: 1, v: { 7, 8, 9 }, z: 2 }\nfunction main() { }\n",
 	{ randomId: 42 });
 assert(/DATA #1 #7 #8 #9 #2/.test(litInit),
 	`a literal-extent struct initializer must emit all five words\n${litInit}`);
 const symInit = compileWithJsImpala(
-	SYM_TAIL + "global S s = { 1, { 7, 8, 9 } }\nfunction main() { }\n", { randomId: 42 });
+	SYM_TAIL + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }\n", { randomId: 42 });
 assert(/DATA #1 #7 #8 #9(\s|$)/.test(symInit),
 	`a trailing symbolic array must still take the words it was given\n${symInit}`);
 console.log("impala.jspeg compiler lays out symbolic struct extents and rejects only what it cannot fill");
@@ -1415,7 +1458,7 @@ const caretCases = [
 	["E453 names the const, not the next declaration",
 		"export const int C\nglobal int later = 3\nfunction main() { }\n", "1:18: error[E453]"],
 	["E454 names the initializer, not the next declaration",
-		"const int N = 3\nstruct S { int a; int array v[N]; int z }\nglobal S s = { 1, { 7, 8, 9 }, 2 }\n"
+		"const int N = 3\nstruct S { int a; int array v[N]; int z }\nglobal S s = { a: 1, v: { 7, 8, 9 }, z: 2 }\n"
 			+ "function main() { }\n", "3:14: error[E454]"],
 ];
 for (const [label, source, expected] of caretCases) {
@@ -1725,8 +1768,8 @@ const typedPointerCases = [
 		source: [
 			"struct Inner { float a; float b }",
 			"struct Outer { int n; Inner mid; float g }",
-			"global Outer g = { 1, { 0.5, 0.7 }, 2.0 }",
-			"readonly Outer preset = { 3, { 0.1, 0.2 }, 0.9 }",
+			"global Outer g = { n: 1, mid: { a: 0.5, b: 0.7 }, g: 2.0 }",
+			"readonly Outer preset = { n: 3, mid: { a: 0.1, b: 0.2 }, g: 0.9 }",
 			"function main() { }",
 		].join("\n"),
 		expectError: null,
@@ -1738,7 +1781,7 @@ const typedPointerCases = [
 	},
 	{
 		label: "struct initializer field type is checked",
-		source: ["struct S { int a; float b }", "global S g = { 1.0, 2.0 }"].join("\n"),
+		source: ["struct S { int a; float b }", "global S g = { a: 1.0, b: 2.0 }"].join("\n"),
 		expectError: "Initializer type mismatch",
 	},
 	{
@@ -1771,7 +1814,7 @@ const typedPointerCases = [
 	},
 	{
 		label: "an initialized struct-element array still needs a literal size",
-		source: ["struct V { int n }", "const int N = 2", "global V array bank[N] = { { 1 }, { 2 } }"].join("\n"),
+		source: ["struct V { int n }", "const int N = 2", "global V array bank[N] = { { n: 1 }, { n: 2 } }"].join("\n"),
 		expectError: "literal size",
 	},
 	{

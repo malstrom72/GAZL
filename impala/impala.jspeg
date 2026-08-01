@@ -2049,11 +2049,61 @@
     /* Walk a struct layout against a brace-tree of constants, producing the flat list of
        constant operands (field order); trailing/omitted slots zero-fill. Recurses for
        nested struct and array fields. `items` is an array of { op, type } | { braced:[...] }. */
+    /* One entry from a brace list, in a position where the INDEX does the naming. */
+    $$parser.indexedEntry = function (entry, sourceCode, sourceOffset) {
+        if (entry !== undefined && entry.field !== undefined) {
+            $$parser.fail('`' + entry.field + ':` names a field, but an array element is positional',
+                    sourceCode, entry.at, 'E458', 'drop the name - the position IS the index here');
+        }
+        return entry;
+    };
+
+    /* Map a struct's brace entries onto its fields BY NAME, or undefined when the list is the 1.x
+       positional form, which only --legacy still maps by position. Naming is the default because a
+       positional list silently changes meaning the moment a field is inserted, removed or reordered
+       - nothing in the source has to change for it to start initializing different fields. */
+    $$parser.fieldEntries = function (structName, fields, items, sourceCode, sourceOffset) {
+        if (items.length === 0) {
+            return undefined;                                 /* `{}` - every field zero-fills */
+        }
+        if (items[0].field === undefined) {
+            $$parser.strictError('Initializer for struct ' + structName + ' must name its fields',
+                    sourceCode, items[0].at, 'E455',
+                    'write `{ ' + fields[0].name + ': ... }` - a positional list changes meaning '
+                            + 'whenever a field moves');
+            return undefined;                                 /* --legacy: map by position */
+        }
+        var known = {}, byName = {}, i;
+        for (i = 0; i < fields.length; ++i) {
+            known['$' + fields[i].name] = true;               /* '$' prefix: a field may be named `constructor` */
+        }
+        for (i = 0; i < items.length; ++i) {
+            var e = items[i];
+            if (e.field === undefined) {
+                $$parser.fail('Initializer for struct ' + structName
+                        + ' mixes named and positional entries', sourceCode, e.at, 'E455',
+                        'name every field, or none of them');
+            }
+            if (known['$' + e.field] === undefined) {
+                $$parser.fail('struct ' + structName + ' has no field ' + e.field,
+                        sourceCode, e.at, 'E456');
+            }
+            if (byName['$' + e.field] !== undefined) {
+                $$parser.fail('Field ' + e.field + ' is initialized twice',
+                        sourceCode, e.at, 'E457');
+            }
+            byName['$' + e.field] = e;
+        }
+        return byName;
+    };
+
     $$parser.buildStructInit = function (structName, items, out, sourceCode, sourceOffset) {
         var fields = $$parser.structs[structName].fields;
+        var byName = $$parser.fieldEntries(structName, fields, items, sourceCode, sourceOffset);
         for (var fi = 0; fi < fields.length; ++fi) {
             var f = fields[fi];
-            var item = (items && fi < items.length) ? items[fi] : undefined;
+            var item = (byName !== undefined ? byName['$' + f.name]
+                    : (items && fi < items.length) ? items[fi] : undefined);
             if (f.type === 'S') {
                 $$parser.buildStructInit(f.struct, (item && item.braced) || [], out, sourceCode, sourceOffset);
             } else if (f.type === 'A') {
@@ -2070,7 +2120,8 @@
                     count = arr.length;
                 }
                 for (var e = 0; e < count; ++e) {
-                    var ev = (e < arr.length) ? arr[e] : undefined;
+                    var ev = (e < arr.length)
+                            ? $$parser.indexedEntry(arr[e], sourceCode, sourceOffset) : undefined;
                     if (structEl) {
                         $$parser.buildStructInit(f.elem, (ev && ev.braced) || [], out, sourceCode, sourceOffset);
                     } else {
@@ -4233,7 +4284,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                             var _arr = $d;
                                                                             $binit = [];
                                                                             for (var _ae = 0; _ae < $aCount; ++_ae) {
-                                                                                var _aev = (_ae < _arr.length) ? _arr[_ae] : undefined;
+                                                                                var _aev = (_ae < _arr.length)
+                                                                                        ? $$parser.indexedEntry(_arr[_ae], $$s, $initStart) : undefined;
                                                                                 $$parser.buildStructInit($aStruct,
                                                                                         (_aev && _aev.braced) || [], $binit, $$s, $$i);
                                                                             }
@@ -4247,10 +4299,24 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
 # ------------------------------------------------------------------
 # Nested brace tree of compile-time constants, for struct initializers.
 Braced      <-  '{' _                                                { $$ = []; $$.n = 0; }
-                ( i:BracedItem                                       { $$[$$.n++] = $i; }
-                  ( ',' _ i:BracedItem                               { $$[$$.n++] = $i; }
+                ( i:BracedEntry                                      { $$[$$.n++] = $i; }
+                  ( ',' _ i:BracedEntry                              { $$[$$.n++] = $i; }
                   )*
                 )? '}' _
+
+# `field: value` names a struct field; a bare value is an array element, where the position IS the
+# index. One rule for both - which form is legal is decided by the consumer that knows which it is
+# (fieldEntries for a struct, indexedEntry for an array slot). The action sits AFTER the ':' so a
+# bare `ident` expression does not leave $fname set when the group backtracks.
+BracedEntry <-                                                       { $fname = undefined; $fat = $$i; }
+                ( id:Identifier ':' _                                { $fname = $id; }
+                )?
+                e:BracedItem                                         { var _v = $e;   /* bare `$e` is the VALUE; `$e.field`
+                                                                                       would set a CONTEXT property, and
+                                                                                       `Braced` stores only the value */
+                                                                       _v.field = $fname;
+                                                                       _v.at = $fat;
+                                                                       $$ = _v; }
 
 BracedItem  <-  b:Braced                                             { $$ = { braced: $b }; }
                 / x:Expr                                             {
@@ -4262,12 +4328,14 @@ BracedItem  <-  b:Braced                                             { $$ = { br
                                                                     }
 
 InitList    <-  '{' _                                                 { $d = ' '; $type = undefined; }
-                ( x:Expr                                             {
+                # Decline a `field:` entry so the ordered choice falls through to `Braced`, which owns the
+                # named form. Without this, `Expr` evaluates the name first and dies as E403 instead.
+                ( !(Identifier ':') x:Expr                           {
                                                                             var xMeta = metaSlot($x);
                                                                             $type = xMeta.type;
                                                                             $d += $$parser.makeConstant(xMeta, $type, $$s, $$i);
                                                                         }
-                  ( ',' _ x:Expr                                     {
+                  ( ',' _ !(Identifier ':') x:Expr                   {
                                                                             var xMeta = metaSlot($x);
                                                                             var xType = xMeta.type;
                                                                             var constant = $$parser.makeConstant(xMeta, xType, $$s, $$i);

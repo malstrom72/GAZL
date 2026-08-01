@@ -430,22 +430,35 @@ outside float literals, so the member operator is collision-free too.
 
 *(decided)* Global and readonly struct variables (and struct arrays) take **nested-brace
 initializers**, one brace group per struct or array field, each value checked against the field's
-type. Values must be compile-time constants, as for 1.0 globals; trailing fields may be omitted
-and are zero-filled (the 1.0 array rule). Uninitialized **global** struct storage is zero-filled - the
-globals and consts regions are cleared once at load (`src/GAZL.cpp:880`). **Locals are not.** A `call`
-only bumps the frame pointer, so an uninitialized struct local holds whatever the previous frame left
-there. Initialize struct locals before reading them.
+type. Values must be compile-time constants, as for 1.0 globals.
+
+A struct value is initialized **by field name**, `field: value`. Any field may be omitted and is
+zero-filled, and the entries may appear in any order - the words are always emitted in layout order.
+Array levels stay **positional**, both for a struct's array field and for an array *of* structs,
+because there the index already does the naming; a `field:` in an array slot is `E458`.
 
 ```impala
-global Filter voice = { 0.5, 0.7, { 0.0, 0.0, 0.0, 0.0 }, 2, null }
+global Filter voice = { cutoff: 0.5, resonance: 0.7, state: { 0.0, 0.0, 0.0, 0.0 }, mode: 2 }
 readonly Voice array PRESETS[2] = {
-	{ { 0.1, 0.0, 0.0, 0.0 }, { 0.2, 0.0, 0.0, 0.0 }, 1.0 },
-	{ { 0.3, 0.0, 0.0, 0.0 }, { 0.4, 0.0, 0.0, 0.0 }, 0.5 }
+	{ low: { b0: 0.1 }, high: { b0: 0.2 }, gain: 1.0 },
+	{ low: { b0: 0.3 }, high: { b0: 0.4 }, gain: 0.5 }
 }
 ```
 
-The lowering is the flat `DATA` row the braces describe - the nesting exists for readability and
-per-field type checking, not for any runtime structure.
+Note `next` and the unset `Biquad` fields are simply left out rather than padded with `null`/`0.0`.
+
+The 1.0 **positional** form (`{ 0.5, 0.7, ... }`) is `E455`. It was silently order-dependent: inserting,
+removing or reordering a struct field changed what every existing initializer meant, with nothing in
+those initializers needing to change for it to happen. `--legacy` still maps positionally, so 1.x
+sources keep building.
+
+Uninitialized **global** struct storage is zero-filled - the globals and consts regions are cleared
+once at load (`src/GAZL.cpp:880`). **Locals are not.** A `call` only bumps the frame pointer, so an
+uninitialized struct local holds whatever the previous frame left there. Initialize struct locals
+before reading them.
+
+The lowering is the flat `DATA` row the braces describe - the nesting and the names exist for
+readability and per-field checking, not for any runtime structure.
 
 ### Field access: `.` and `->`
 
@@ -1313,6 +1326,10 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E452 | a `global` prefix on a function or a const (a warning under `--legacy`) |
 | E453 | `export` on a valueless `const`; the two contradict (a valued `export const` is fine) |
 | E454 | a struct field initialized after one whose symbolic extent makes its offset uncountable |
+| E455 | a struct initializer must name its fields, and must not mix named with positional (`--legacy` maps by position) |
+| E456 | a struct initializer names a field the struct does not have |
+| E457 | a struct initializer names the same field twice |
+| E458 | a `field:` name in an array slot, where the index already does the naming |
 
 E418, E424, E425 and E439 are **not allocated to anything that fires**. E418/E424/E425 were reserved for
 extern-struct guards that were never needed once the features shipped (`docs/StructLayoutConstants.md`
