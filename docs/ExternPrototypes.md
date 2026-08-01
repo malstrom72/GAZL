@@ -92,16 +92,24 @@ The original note follows, as the design record.
 
 ## The trigger
 
-There is no way today to call an extern that returns multiple values. Externs are declared name-only:
+There is no way today to call an extern that returns multiple values - but not for the reason this
+section used to give. Re-verified 2026-08-01:
 
-    extern native foo                              // OK
-    extern native foo(int n) returns int q, int r  // error[E001]: syntax error
+    extern native foo                              // OK - name-only, asserts nothing
+    extern native foo(int n) returns int q         // OK - a prototype, and it IS checked
+    extern native foo(int n) returns int q, int r  // error[E428]: multiple return values
 
-So the compiler never learns an extern's arity. `a, b = foo(x)` fails with E432 ("the right side is
-not a multi-value function call") because a name-only extern is assumed single-word (or void).
-Multi-return destructuring only works for Impala-defined functions, whose `returns int q, int r`
-signature tells the compiler how many output words to set up. There is also no argument type-checking
-for extern calls - an extern accepts anything.
+So a prototype is accepted (that is what the rest of this document is about); it is the SECOND return
+value that is refused, by the same `E428` an Impala-defined function gets. And on the call side,
+`a, b = foo(x)` fails with **`E429`** ("Destructuring assignment is not supported in Impala 2.0") for
+every callee, extern or not - multi-return and destructuring are both parked for 3.0.
+
+(Corrected: this paragraph claimed a prototype was `E001`, that destructuring worked for
+Impala-defined functions, and that the call failed with `E432` "the right side is not a multi-value
+function call". `E432` was retired with `inline function` and that message no longer exists.)
+
+A **name-only** extern still asserts nothing, so it gets no argument type-checking - that is the
+wildcard case the validator skips, and it is why a prototype is worth writing.
 
 The working pattern today is out-parameters (pointers the native writes through), which needs no
 special support:

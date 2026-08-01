@@ -50,9 +50,9 @@ materialise everywhere else, rather than reach for a clever analysis.
   `impala compile` resolves the closure, so this needs no separate step.
 
 Rejected, each with its own diagnostic (section 7): recursion, taking the address, `export`, `extern`,
-and forward declaration. Array and struct locals are **allowed** - only a local whose array extent is
-not a compile-time literal is rejected (E433), because locals become caller transients and must be
-sized. The fixtures pin both shapes as must-compile.
+and forward declaration. Array and struct locals are **allowed**, and since the `.x.` rework named every
+extent, a NON-literal extent is allowed too - see section 8, which explains why `E433` no longer exists.
+(This paragraph used to say such a local was rejected, contradicting that section.)
 
 
 ## 3. What gets captured

@@ -517,11 +517,11 @@ true and was reworded for that reason. Two exceptions:
 
 - **1.0's `p[i]`** PEEKs without a distinct marker, unlike `a[i]`'s local access - grandfathered by
   backward compatibility. New syntax is held to the stricter rule.
-- **An `inline` call site carries no marker at all** yet expands to an arbitrary number of
-  instructions, and argument substitution deletes marshalling moves a normal call would emit. Counting
-  markers in the expression cannot tell you what a call costs. Inlining is opt-in per callee and
-  visible at the declaration, so the cost is still *predictable* - it is just not countable from the
-  call site. See "Inline functions" below.
+- ~~**An `inline` call site carries no marker at all**~~ - moot in 2.0, since `inline` is parked
+  (`E439`). It is recorded because it is the exception that returns the moment the feature does: an
+  expansion emits an arbitrary number of instructions with no marker at the call site, and argument
+  substitution deletes marshalling moves a normal call would emit. That is why the rule below is worded
+  as *predictable* rather than *countable*. See "Inline functions" below.
 
 Structs are what makes a subscript able to cost more than one instruction, and that is exactly why
 they get their own bracket. `[i]` strides one word; `[[i]]` strides `sizeof(element)` and pays one
@@ -1129,7 +1129,15 @@ ever needs to exist in the legacy validator path.
 
 ---
 
-## Inline functions (implemented)
+## Inline functions (PARKED for 3.0 - not in Impala 2.0)
+
+> **Status: parked, not available.** `inline function` was implemented, reviewed, and then taken back
+> out; it now lives on the `GAZL2` branch. Writing `inline` is **`E439`**. An expansion has to place its
+> locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 must keep running on GAZL 1.0 engines, which reject
+> `SCOP` with `Unknown mnemonic`. See [`ParkedFeatures.md`](ParkedFeatures.md) and
+> [`Inlining.md`](Inlining.md). **The codes below (`E432`-`E436`) are retired with the feature and must
+> not be reused**, and its fixtures (`inlineEquivalence*`, `inlineFunctions`, `inlineReview*`) were
+> removed. What follows is the design record for the parked feature, not 2.0 behaviour.
 
 `inline` before `function` makes a function expand at each call site instead of being emitted once and
 called:
@@ -1166,13 +1174,14 @@ What is rejected:
 | `&f`, or using it as a funcptr value | `E435` cannot take the address of an inline function |
 | `export inline function` | `E434` an inline function cannot be exported |
 | Forward-declared, redeclared, or also declared `extern` | `E436` the inline function was already declared |
-| A local whose array extent is not a literal | `E433` needs a compile-time size for the local |
+| ~~A local whose array extent is not a literal~~ | ~~`E433`~~ - deleted by the `.x.` rework; every extent is a named constant now |
 | A call placed **before** the definition | `E403` undeclared identifier - there is no forward form to add |
 
 Struct locals and array locals are fine; only a *non-literal* extent is not. The design spec is
-[`docs/Inlining.md`](Inlining.md); the behavioural oracle is the fixture pair
-`tests/impala/sources/inlineEquivalence.impala` and `inlineEquivalenceCall.impala`, which must produce
-identical output inlined and not.
+[`docs/Inlining.md`](Inlining.md); the behavioural oracle was the fixture pair
+`tests/impala/sources/inlineEquivalence.impala` and `inlineEquivalenceCall.impala`, which had to produce
+identical output inlined and not. Both were removed when the feature was parked - restoring that oracle
+(and the fuzzer's inline differential, which went with it) is part of unparking.
 
 ---
 
@@ -1320,13 +1329,14 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E429 | destructuring assignment is not supported in Impala 2.0 |
 | E430 | an `extern struct` array field must not state a size |
 | E431 | array needs a size |
-| E432 | an inline function cannot call itself |
-| E433 | an inline function needs a compile-time size for a local |
-| E434 | an inline function cannot be exported |
-| E435 | cannot take the address of an inline function |
-| E436 | the inline function was already declared |
+| E432 | *retired with `inline function`* - do not reuse |
+| E433 | *retired with `inline function`* - do not reuse |
+| E434 | *retired with `inline function`* - do not reuse |
+| E435 | *retired with `inline function`* - do not reuse |
+| E436 | *retired with `inline function`* - do not reuse |
 | E437 | `extern` declaration of a function disagrees with its definition, or with another `extern` |
 | E438 | `extern struct` declarations disagree, or disagree with the definition |
+| E439 | `inline function` is parked for 3.0; it needs GAZL 2 `SCOP`/`ENDS` |
 | E440 | type name already used by a struct / `functype` redeclared with a different shape |
 | E441 | function or value does not match the funcptr type |
 | E442 | malformed argument list |
@@ -1347,9 +1357,13 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E457 | a struct initializer names the same field twice |
 | E458 | a `field:` name in an array slot, where the index already does the naming |
 
-E418, E424, E425 and E439 are **not allocated to anything that fires**. E418/E424/E425 were reserved for
-extern-struct guards that were never needed once the features shipped (`docs/StructLayoutConstants.md`
-records the correction); they stay burned rather than reused, per "stable error codes, never reused".
+E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct
+guards that were never needed once the features shipped (`docs/StructLayoutConstants.md` records the
+correction); they stay burned rather than reused, per "stable error codes, never reused".
+
+E432-E436 are a different case: they DID fire, and were retired when `inline function` was parked. They
+are burned too. (This paragraph used to list **E439** as unallocated - that is now wrong: E439 is the
+live diagnostic that rejects `inline`.)
 
 ---
 
