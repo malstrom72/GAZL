@@ -1833,19 +1833,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             } else if (f.type === 'A') {
                 var arr = (item && item.braced) || [];
                 var structEl = isStructAtom(f.elem);
-                /* A symbolic extent still takes the values it was GIVEN: a DATA row may define fewer
-                   words than its region holds and the rest zero-fills (docs/InstructionSet.md). What
-                   it cannot do is give a LATER field a countable offset, so this is the last field
-                   that may carry data. The loop used to compare against the extent OPERAND, get NaN,
-                   run zero times, and emit a short row that shifted every later field. */
                 /* A symbolic extent blocks the row FROM THIS FIELD, not from after it. Impala cannot
                    check the value count against the extent, so an over-filled array silently spills
                    into whatever follows: `v[N]` with N=2 given three values, and a `z` after it, emits
                    four words that FIT `1+N+1` exactly - so the assembler passes it and z gets v's third
-                   value. Only zeros are safe here, and those are what the region fills anyway. */
+                   value. Only zeros are safe here, and those are what the region fills anyway. (The
+                   loop used to compare against the extent OPERAND, get NaN, run zero times, and emit a
+                   short row that shifted every later field.) */
                 var count = constInt('#' + f.size);
-                var symbolic = (count === undefined);
-                if (symbolic) {
+                if (count === undefined) {
                     count = arr.length;
                     blockInitFrom(out,
                             'cannot be placed: the extent of ' + f.name + ' is not resolved until GAZL '
@@ -1864,16 +1860,6 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                     } else {
                         pushInitScalar(out, ev, f.elem, f.name, sourceCode, sourceOffset);
                     }
-                }
-                if (symbolic) {
-                    blockInitFrom(out,
-                            'falls after ' + f.name + ', whose extent is not resolved until GAZL '
-                                    + 'assembly time', 'E454',
-                            'a DATA row can stop short (the rest zero-fills) but cannot skip a symbolic '
-                                    + 'number of words - omit the fields after ' + f.name
-                                    + ' (they zero-fill), or move ' + f.name + ' to the end of the '
-                                    + 'struct; a literal extent also works but gives up the '
-                                    + 'assembly-time size');
                 }
             } else {
                 pushInitScalar(out, item, f.type, f.name, sourceCode, sourceOffset);
@@ -1905,26 +1891,38 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        situations reach this and they share everything but the message: a symbolically-sized array field
        (E454), and a host-owned `extern struct` layout (E459). */
     blockInitFrom = function (out, why, code, hint) {
-        if (out.tailFrom !== undefined) {
-            return;                                           /* the FIRST block bounds the row */
+        if (out.blocked === undefined) {                      /* the FIRST block bounds the row */
+            out.blocked = { at: out.length, why: why, code: code, hint: hint };
         }
-        out.tailFrom = out.length;
-        out.tailWhy = why;
-        out.tailCode = code;
-        out.tailHint = hint;
+    };
+
+    /* Zero is the one word that is safe to drop, because the region zero-fills to it under any layout -
+       so test the VALUE, not the spelling. `0x0`, `-0`, `0.0e0` and `&NULL` are all zero; comparing
+       against the canonical ZEROES strings rejected safe code that merely wrote one of them differently.
+       A symbol (`#N`) is NOT zero as far as Impala is concerned - it does not know the value, and per
+       docs/TwoStageConstants.md it must not guess one. */
+    isZeroWord = function (operand) {
+        if (typeof operand !== 'string') {
+            return false;
+        }
+        if (operand === '&NULL') {
+            return true;                                      /* null pointer / nullfunc */
+        }
+        var v = (operand.charAt(0) === '#' ? operand.substr(1) : '');
+        return v !== '' && Number(v) === 0;                   /* NaN for a symbol -> not zero */
     };
 
     /* emit a flat constant list as one or more DATA rows (mirrors InitList chunking) */
     emitInitData = function (ops, sourceCode, sourceOffset) {
-        if (ops.tailFrom !== undefined) {
-            var Z = ZEROES;
-            for (var t = ops.tailFrom; t < ops.length; ++t) {
-                if (ops[t] !== Z.i && ops[t] !== Z.f && ops[t] !== Z.p && ops[t] !== Z.F) {
-                    fail('Initializer value ' + ops[t] + ' ' + ops.tailWhy,
-                            sourceCode, sourceOffset, ops.tailCode, ops.tailHint);
+        var b = ops.blocked;
+        if (b !== undefined) {
+            for (var t = b.at; t < ops.length; ++t) {
+                if (!isZeroWord(ops[t])) {
+                    fail('Initializer value ' + ops[t] + ' ' + b.why,
+                            sourceCode, sourceOffset, b.code, b.hint);
                 }
             }
-            ops.length = ops.tailFrom;                        /* the region zero-fills the remainder */
+            ops.length = b.at;                                /* the region zero-fills the remainder */
         }
         var line = '';
         for (var i = 0; i < ops.length; ++i) {

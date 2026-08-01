@@ -260,10 +260,9 @@ initializer for an extern struct is now an error; zero is the only word Impala c
 the layout, so `{ }`, an omitted field and an explicit `0` still compile and emit nothing. If the host
 owns the layout it owns the initial contents too. Note that naming initializer fields (`E455`) did NOT
 fix this: it changed how the source reads, not where the words land. Restoring the capability needs
-GAZL 2 - verified that GAZL 1 has no fill or origin directive and no backward compile-time branch, so
-`DATA` cannot skip a symbolic number of words. Requirements, and the alternatives that do not work, are
-in [`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic offset"); the audit note
-is in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
+GAZL 2; the evidence for that, the requirements and the alternatives that do not work are all in
+[`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic offset"), which is the
+canonical home - the audit note is in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
 (Superseded: this paragraph used to say Phase 2a was "still open". It landed - see the Phase 2a section
 above, which this sentence predates.)
 

@@ -311,10 +311,9 @@ Concrete shapes that violate the model. If you are about to write one of these, 
   fix it up, so the only sound options are to reject the initializer or to require a host-independent
   form. Half-deferring (symbolic reads, positional writes) is worse than either consistent choice.
   Confirmed 2026-08-01, and it WAS a live wrong-output defect - now closed by refusing it (`E459`),
-  which is the "reject the initializer" branch above, narrowed so an all-zero one still compiles. GAZL 1
-  cannot express the fix at all: no fill/repeat/origin directive, and a backward `! GOTO` does not
-  assemble (`Compile time label not found`), so there is no way to emit *or* skip a symbolic number of
-  words. The GAZL 2 requirements, and the alternatives that do not work, are in
+  which is the "reject the initializer" branch above, narrowed so an all-zero one still compiles (zero
+  is the same word under any layout). GAZL 1 cannot express the fix at all; the evidence, the GAZL 2
+  requirements and the alternatives that do not work are in
   [`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic offset").
 
 

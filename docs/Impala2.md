@@ -1367,11 +1367,11 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E452 | a `global` prefix on a function or a const (a warning under `--legacy`) |
 | E453 | `export` on a valueless `const`; the two contradict (a valued `export const` is fine) |
 | E454 | a non-zero initializer at or after a struct array field whose extent is symbolic |
-| E459 | a non-zero initializer for an `extern struct` - the host owns the layout, so Impala cannot place it |
 | E455 | a struct initializer must name its fields, and must not mix named with positional (`--legacy` maps by position) |
 | E456 | a struct initializer names a field the struct does not have |
 | E457 | a struct initializer names the same field twice |
 | E458 | a `field:` name in an array slot, where the index already does the naming |
+| E459 | a non-zero initializer for an `extern struct` - the host owns the layout, so Impala cannot place it |
 
 E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct
 guards that were never needed once the features shipped (`docs/StructLayoutConstants.md` records the
