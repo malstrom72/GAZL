@@ -15,12 +15,12 @@
 // from its printed seed.
 //
 // Usage: node impala/fuzzImpala.js [iterations] [startSeed] [--vm]
-//   --vm also runs each compiled program on GAZLCmd. It flags two different things: a VM fault (the
-//   module failed to load, or trapped), and a WRONG VALUE - `main` prints a set of checked global
-//   initializers before its random body, and the driver compares that prefix of stdout against the
-//   words the generator asked for. The second is a real REFERENCE oracle: it sees a DATA row that
-//   assembled and ran perfectly while holding the wrong numbers, which no crash oracle can.
-//   Without --vm the run is compile-only, so the value oracle does not apply.
+//   --vm also runs each compiled program on GAZLCmd, supplying a randomly PERMUTED host layout for the
+//   checked `extern struct`. It flags two different things: a VM fault (the module failed to load, or
+//   trapped), and a WRONG VALUE - `main` prints a set of checked globals before its random body, and the
+//   driver compares that prefix of stdout against the words the generator computed. The second is a real
+//   REFERENCE oracle: it sees output that assembled and ran perfectly while holding the wrong numbers,
+//   which no crash oracle can. Without --vm the run is compile-only, so the value oracle does not apply.
 // The runner reloads the compiler module per call, so keep a single process to <=~20k
 // iterations (chunk larger sweeps across processes: for s in 0 20000 40000; do ... done).
 // First find (seed 10024): finishDestructure released its output window low-to-high (unlike every
@@ -51,11 +51,11 @@ const COMPILE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true 
 // rare. A HANG is therefore a genuine bug: all loops are bounded `for (v = 0 to N<=4)` with a
 // per-nesting-level counter that is read-only inside the body, so nothing can defeat termination
 // except a miscompile. Do not reclassify a timeout as benign - fix the cause.
-function runGazl(gazl) {                            // write, run, delete; the caller classifies the result
+function runGazl(gazl, defines) {                            // write, run, delete; the caller classifies the result
 	const tmp = path.join(os.tmpdir(), `fuzz-${process.pid}-${Math.floor(rnd() * 1e9)}.gazl`);
 	fs.writeFileSync(tmp, gazl, 'latin1');
 	try {
-		return cp.spawnSync(GAZLCMD, [tmp, 'main'], { encoding: 'latin1', timeout: 10000 });
+		return cp.spawnSync(GAZLCMD, [tmp, 'main'].concat(defines || []), { encoding: 'latin1', timeout: 10000 });
 	} finally {
 		try { fs.unlinkSync(tmp); } catch (_) {}
 	}
@@ -99,12 +99,16 @@ function checkExpected(res, expect) {
 // declarations - while several silent wrong-data bugs were being found there by hand. It does not
 // replace the inline differential; the two cover different halves.
 //
-// Be precise about what it can and cannot reach. The checked struct is int-only, flat, with a LITERAL
-// extent, so it covers the fill loops, named-field mapping, zero-fill and the struct-array path. It
-// does NOT cover the two shapes behind E454/E459 - a SYMBOLIC extent and an `extern struct` - because
-// it never generates either, nor NESTED structs, which `genProgram` already builds for other purposes.
-// Widening it there is the obvious next step and would need no new machinery, only a recursive flatten
-// to compute `expect`.
+// What it reaches, all int-only so the comparison is exact: the fill loops, named-field mapping,
+// zero-fill, nested structs and array fields (the recursion a value can cross into its neighbour
+// through), the struct-array path, a SYMBOLIC extent (`sv[SN]` - Impala never learns SN, so every
+// offset past it is assemble-time arithmetic and `tail` lands correctly only if that resolved), and an
+// `extern struct` handed a PERMUTED layout at load, which a baked positional offset could not survive.
+// The symbolic and extern cases are written at RUN TIME rather than statically, because E454/E459 only
+// let zero be placed statically there - so those two check the ACCESS path, not the DATA row.
+//
+// Still not reached: float and pointer fields (the oracle prints ints), and `readonly`/`temporary`
+// sections beyond the one `readonly` array.
 
 function mulberry32(a) {
 	return function () {
@@ -181,13 +185,10 @@ function genProgram() {
 	// generated statement can reference or mutate them; `main` prints them BEFORE its random body, and
 	// the driver compares that prefix against the words computed here. int-only, so the comparison is
 	// exact. Partial lists are on purpose: the omitted tail must zero-fill.
-	const chkFields = 2 + ri(3);                          // struct with 2-4 int fields
-	const chkStruct = 'CK';
 	const chkVal = () => 1 + ri(900);                     // never 0, so 0 unambiguously means "omitted"
 	const expect = [];                                    // words, in the order main prints them
 	const chkPrint = [];
-	const chkDecl = ['struct ' + chkStruct + ' { '
-			+ Array.from({ length: chkFields }, (_, i) => 'int f' + i).join('; ') + ' }'];
+	const chkDecl = [];
 	// The expected word and the print that reads it are pushed TOGETHER, and only here: the oracle is
 	// only as good as those two lists staying in lockstep, and appending them from separate loops is
 	// how they would silently drift and start comparing the wrong words.
@@ -195,31 +196,107 @@ function genProgram() {
 		expect.push(word);
 		chkPrint.push('\tprintInt(' + expr + '); printLF();');
 	};
-	// A field list as dense words - 0 means "not named in the source", which is exactly what the
-	// region zero-fills to, so the same array serves as both the source text and the expectation.
-	const fieldWords = () => Array.from({ length: chkFields }, () => (chance(0.6) ? chkVal() : 0));
-	const braced = (w) => '{ ' + w.map((v, i) => (v ? 'f' + i + ': ' + v : '')).filter(Boolean).join(', ') + ' }';
+	const trimZeros = (w) => { let n = w.length; while (n > 0 && !w[n - 1]) --n; return w.slice(0, n); };
+
+	// The checked struct is a list of MEMBERS - a scalar, a fixed-extent int array, or a nested struct.
+	// Describing them once and deriving declaration / initializer / word list / read-back path from the
+	// same description is what lets NESTING and ARRAY FIELDS be covered without a hand-written block per
+	// shape: `buildStructInit` recurses through both, and a value landing in the neighbouring field -
+	// the bug this oracle exists for - came out of exactly that recursion.
+	const innerName = 'CKI';
+	const innerFields = 1 + ri(3);
+	chkDecl.push('struct ' + innerName + ' { '
+			+ Array.from({ length: innerFields }, (_, i) => 'int g' + i).join('; ') + ' }');
+	const members = Array.from({ length: 2 + ri(3) }, (_, i) => {
+		const r = rnd();
+		if (r < 0.25) return { k: 's', name: 'm' + i };                    // nested struct
+		if (r < 0.55) return { k: 'a', name: 'm' + i, len: 1 + ri(3) };    // int array field
+		return { k: 'i', name: 'm' + i };                                  // plain scalar
+	});
+	const chkStruct = 'CK';
+	chkDecl.push('struct ' + chkStruct + ' { ' + members.map((m) => (m.k === 'i' ? 'int ' + m.name
+			: m.k === 'a' ? 'int array ' + m.name + '[' + m.len + ']'
+			: innerName + ' ' + m.name)).join('; ') + ' }');
+
+	const memWords = (m) => (m.k === 'i' ? (chance(0.6) ? chkVal() : 0)
+			: Array.from({ length: m.k === 'a' ? m.len : innerFields },
+					() => (chance(0.6) ? chkVal() : 0)));
+	const structWords = () => members.map(memWords);
+	// undefined -> omit the member entirely, so the whole field zero-fills
+	const memInit = (m, v) => {
+		if (m.k === 'i') return v ? m.name + ': ' + v : undefined;
+		const t = trimZeros(v);
+		if (!t.length) return undefined;
+		return m.name + ': { ' + (m.k === 'a' ? t.join(', ')
+				: t.map((x, i) => (x ? 'g' + i + ': ' + x : '')).filter(Boolean).join(', ')) + ' }';
+	};
+	const structInit = (vals) => '{ ' + members.map((m, i) => memInit(m, vals[i]))
+			.filter(Boolean).join(', ') + ' }';
+	const anyWord = (vals) => vals.some((v) => (typeof v === 'number' ? v : v.some(Boolean)));
+	const readStruct = (path, vals) => members.forEach((m, i) => {
+		const v = vals[i];
+		if (m.k === 'i') chk(path + '.' + m.name, v);
+		else if (m.k === 'a') v.forEach((x, j) => chk(path + '.' + m.name + '[' + j + ']', x));
+		else v.forEach((x, j) => chk(path + '.' + m.name + '.g' + j, x));
+	});
 
 	// (1) flat scalar array, partially initialized -> InitList + zero-fill
 	const aLen = 1 + ri(4);
 	const aVals = Array.from({ length: aLen }, () => (chance(0.7) ? chkVal() : 0));
-	const aGiven = aVals.filter(Boolean).length ? aLen - [...aVals].reverse().findIndex(Boolean) : 0;
+	const aGiven = trimZeros(aVals);
 	chkDecl.push('readonly int array cA[' + aLen + ']'
-			+ (aGiven ? ' = { ' + aVals.slice(0, aGiven).join(', ') + ' }' : ''));
+			+ (aGiven.length ? ' = { ' + aGiven.join(', ') + ' }' : ''));
 	aVals.forEach((v, i) => chk('global cA[' + i + ']', v));
 
-	// (2) struct value, a RANDOM SUBSET of fields named -> buildStructInit + fieldEntries + zero-fill
-	const sVals = fieldWords();
-	chkDecl.push('global ' + chkStruct + ' cS'
-			+ (sVals.some(Boolean) ? ' = ' + braced(sVals) : ''));
-	sVals.forEach((v, i) => chk('global cS.f' + i, v));
+	// (2) struct value, a random subset named -> buildStructInit + fieldEntries + the nesting recursion
+	const sVals = structWords();
+	chkDecl.push('global ' + chkStruct + ' cS' + (anyWord(sVals) ? ' = ' + structInit(sVals) : ''));
+	readStruct('global cS', sVals);
 
-	// (3) array OF structs, elements partially given -> the struct-array path, `[[ ]]` to index it
+	// (3) array OF structs -> the struct-array path, `[[ ]]` to index it
 	const kLen = 1 + ri(3);
-	const kVals = Array.from({ length: kLen }, fieldWords);
+	const kVals = Array.from({ length: kLen }, structWords);
 	chkDecl.push('global ' + chkStruct + ' array cK[' + kLen + ']'
-			+ (kVals.some((w) => w.some(Boolean)) ? ' = { ' + kVals.map(braced).join(', ') + ' }' : ''));
-	kVals.forEach((w, k) => w.forEach((v, i) => chk('global cK[[' + k + ']].f' + i, v)));
+			+ (kVals.some(anyWord) ? ' = { ' + kVals.map(structInit).join(', ') + ' }' : ''));
+	kVals.forEach((vals, k) => readStruct('global cK[[' + k + ']]', vals));
+
+	// (4) SYMBOLIC extent. `SN` is a const, so Impala never learns the number - every offset past `sv`
+	// is assemble-time arithmetic (`! ADDi <A> #.o.CS.sv #k`, `.o.CS.tail` = `.o.CS.sv + SN`). The
+	// generator DOES know it, which is the whole point: it can predict the layout the assembler must
+	// produce. `head` is initialized statically (a field BEFORE the block is still placeable, E454);
+	// `sv` and `tail` are written at RUN TIME and read back, so a wrong `.o.` would make `tail` collide
+	// with the last element of `sv` and the readback would disagree.
+	const symLen = 1 + ri(4);
+	chkDecl.push('const int SN = ' + symLen);
+	chkDecl.push('struct CS { int head; int array sv[SN]; int tail }');
+	const symHead = chance(0.6) ? chkVal() : 0;
+	chkDecl.push('global CS cY' + (symHead ? ' = { head: ' + symHead + ' }' : ''));
+	const symVals = Array.from({ length: symLen }, chkVal);
+	const symTail = chkVal();
+	symVals.forEach((v, i) => chkPrint.push('\tglobal cY.sv[' + i + '] = ' + v + ';'));
+	chkPrint.push('\tglobal cY.tail = ' + symTail + ';');
+	chk('global cY.head', symHead);
+	symVals.forEach((v, i) => chk('global cY.sv[' + i + ']', v));
+	chk('global cY.tail', symTail);
+
+	// (5) EXTERN struct: the host owns the layout, and it is handed a PERMUTED one at load. Every access
+	// goes through `.o.E.*`, so a correct compile reads back whatever it wrote no matter where the host
+	// put the fields; a baked positional offset would survive declaration order and fail here. Nothing is
+	// statically initialized (E459 - only zero is placeable without knowing the layout).
+	const extN = 2 + ri(3);
+	const extOff = Array.from({ length: extN }, (_, i) => i);
+	for (let i = extOff.length - 1; i > 0; --i) {         // shuffle: the host's order is NOT ours
+		const j = ri(i + 1);
+		const t = extOff[i]; extOff[i] = extOff[j]; extOff[j] = t;
+	}
+	const defines = [];
+	extOff.forEach((off, i) => { defines.push('.o.E.e' + i, String(off)); });
+	defines.push('.z.E', String(extN));
+	chkDecl.push('extern struct E { ' + Array.from({ length: extN }, (_, i) => 'int e' + i).join('; ') + ' }');
+	chkDecl.push('global E cE');
+	const extVals = Array.from({ length: extN }, chkVal);
+	extVals.forEach((v, i) => chkPrint.push('\tglobal cE.e' + i + ' = ' + v + ';'));
+	extVals.forEach((v, i) => chk('global cE.e' + i, v));
 
 	// how a value is referenced: globals need the `global` keyword prefix
 	const ref = (e) => (e.isGlobal ? 'global ' + e.name : e.name);
@@ -698,7 +775,7 @@ function genProgram() {
 		if (!funcs[i].fixed) out += renderFunc(funcs[i], false, funcs.slice(0, i));
 	}
 	out += renderFunc({ name: 'main', params: [], rets: [], retNames: [] }, true, funcs.slice());
-	return { src: out, expect: expect };
+	return { src: out, expect: expect, defines: defines };
 }
 
 // ---- crash oracle ------------------------------------------------------------
@@ -716,7 +793,8 @@ function main() {
 	if (printIdx >= 0) {
 		rnd = mulberry32(parseInt(process.argv[printIdx + 1] || '1', 10));
 		const shown = genProgram();
-		process.stdout.write(shown.src + '\n; expected checked words: ' + shown.expect.join(' ') + '\n');
+		process.stdout.write(shown.src + '\n; expected checked words: ' + shown.expect.join(' ')
+				+ '\n; host layout supplied at load: ' + shown.defines.join(' ') + '\n');
 		return;
 	}
 	const args = process.argv.slice(2).filter((a) => a !== '--vm');
@@ -731,11 +809,12 @@ function main() {
 	for (let i = 0; i < iterations; ++i) {
 		const seed = startSeed + i;
 		rnd = mulberry32(seed);
-		let src, expect;
+		let src, expect, defines;
 		try {
 			const p = genProgram();
 			src = p.src;
 			expect = p.expect;
+			defines = p.defines;
 		} catch (genErr) {
 			console.error(`[gen-error seed=${seed}] ${genErr.message}`);
 			continue;
@@ -744,7 +823,7 @@ function main() {
 			const gazl = compileWithJsImpala(src + '\n', COMPILE_OPTS);
 			compiled++;
 			if (useVm) {
-				const res = runGazl(gazl);
+				const res = runGazl(gazl, defines);
 				const vmFault = runOnVm(res) || checkExpected(res, expect);
 				vmRun++;
 				if (vmFault) {
