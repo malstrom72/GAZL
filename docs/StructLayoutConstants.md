@@ -255,7 +255,11 @@ one thing this expansion opened up that is NOT sound yet - brace-initializing an
 positional `DATA` in declaration order while every read goes through `.o.*`, so the values land wrong
 under any host layout that is not Impala's guess. See the audit note in
 [`docs/TwoStageConstants.md`](TwoStageConstants.md) ("Emitting positional `DATA` for a type whose
-layout the host owns").
+layout the host owns"). **This is fixable only in GAZL 2** - verified 2026-08-01 that GAZL 1 has no fill
+or origin directive and no backward compile-time branch, so `DATA` cannot skip a symbolic number of
+words. Requirements, and the alternatives that do not work, are in
+[`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic offset"). Note that naming
+initializer fields (`E455`) did NOT fix this: it changed how the source reads, not where the words land.
 (Superseded: this paragraph used to say Phase 2a was "still open". It landed - see the Phase 2a section
 above, which this sentence predates.)
 

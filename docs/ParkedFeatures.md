@@ -307,6 +307,52 @@ same change, or the rule would leave no way to spell what `foo(a)` spells now.
 
 `docs/ExternPrototypes.md` notes the interaction with extern prototypes that take arrays or pointers.
 
+### Placing static data at a symbolic offset - REQUIRES GAZL 2
+
+**No park branch - never built.** Unlike the rest of this list this is not a missing feature but a live
+**wrong-output defect**, and it cannot be fixed on GAZL 1 at all.
+
+Brace-initializing an `extern struct` emits positional `DATA` in declaration order while every read goes
+through the host-supplied `.o.*`, so the values land wrong under any host layout that is not Impala's
+declaration order - silently, with no diagnostic. Naming the fields (`{ x: 1, y: 2 }`, `E455`) fixed how
+the source READS but not where the words LAND: `buildStructInit` still walks fields in declaration order.
+The same root cause produces `E454`, where a field after a symbolically-sized array field cannot be
+initialized because its offset is not countable at Impala compile time.
+
+Verified 2026-08-01 that GAZL 1 has no way to express it:
+
+- no fill, repeat or origin directive exists (`docs/InstructionSet.md`);
+- a FORWARD `! GOTO` assembles, and can even skip a `DATA` line;
+- a BACKWARD one does not assemble at all (`Compile time label not found`), so there are no
+  assemble-time loops.
+
+`DATA` is therefore positional and append-only, and there is no way to emit *or* skip a symbolic number of
+words. What GAZL 2 needs is two CAPABILITIES - **the syntax below is illustrative only and is not
+decided**:
+
+1. **Place the next data word at an offset that resolves at GAZL assembly time** (say `ORG *offset`).
+   Impala already mints `.o.Struct.field` for every field, so it would emit each field at its own symbolic
+   offset and do no gap arithmetic.
+2. **Reject defining the same word twice.** Not a nicety: `DATA` is append-only today, so overwriting is
+   impossible by construction, and (1) would introduce that hazard. A monotonic cursor is the cheap form
+   but is NOT sufficient - host offsets need not follow declaration order, and Impala cannot sort by values
+   it does not know, so out-of-order placement must be legal and a written-word set is what makes it safe.
+   It would also catch overlapping host layouts, which `Impala2Review.md` C6 lists as undetected.
+
+Field-boundary over-run stays out of scope for the assembler: it has no notion of a struct's interior, so
+an array over-running into an *uninitialized* neighbour is a legal in-bounds write from where it stands.
+That check belongs to Impala - directly when the extent is literal, or as a deferred `! LEQi` / `! GOTO`
+assertion when it is symbolic (rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md)). Over-filling a
+whole section already self-reports as `Not enough space in data section`.
+
+Rejected alternatives: **assemble-time loops** (you would emit N zero words into a region that already
+zero-fills them, N can be host-supplied so module size becomes a function of a load-time define, and
+assembly time stops being bounded) - the requirement is to SKIP, not to emit; and **emitting the trailing
+initializers as runtime stores in a startup function**, which breaks the static-data model, costs code and
+time, and cannot work for `readonly`/`CNST` at all.
+
+Retires `E454` outright, and shortens `DATA` rows for sparse initializers even with literal extents.
+
 ### Tail calls
 
 **No park branch - never built.** Recursion works but is never eliminated, so a tail-recursive
