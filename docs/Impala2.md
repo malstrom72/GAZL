@@ -79,6 +79,19 @@ These are the constraints every 2.0 feature is measured against.
    Behavior never varies per file: no version markers, no pragmas, no dialect inference - one
    language, one set of rules, one escape flag at the invocation.
 
+5. **One flat namespace for top-level names.** A `global`, `function`, `const`, `struct` or `functype`
+   name may be used by exactly one of them (`E401`). GAZL has a single symbol space and Impala emits
+   into it, so this is not a style rule: `global int S` beside `function S()` used to clear every
+   per-table check and then fail to assemble with `Symbol already defined: S`, and `struct S` beside
+   `functype S` was rejected in one declaration order and accepted in the other. It also keeps the
+   compiler's own minted symbols unambiguous, since every family is keyed on a user name
+   (`.x.S`, `.x.S.a`, `.z.S`) - see [`SymbolNamespace.md`](SymbolNamespace.md).
+
+   The rule covers TOP-LEVEL names only. A local may shadow a global, and a struct field may share a
+   struct's name, because neither is emitted under a bare name (`$v`, `.o.S.f`). Re-declaring the SAME
+   kind stays legal - that is how `extern` meets a definition, and how an import closure sees one unit
+   twice - so only a clash between DIFFERENT kinds is an error.
+
 ## Roadmap
 
 The features are ordered by dependency, not ambition:
@@ -491,10 +504,10 @@ EXACTLY - which is how `z` used to receive the array's third value in silence. S
 handed to the one stage that knows the extent, as a compile-time directive that costs nothing at run
 time:
 
-    ! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v
+    ! GRTi #3 #.x.S.v @.ERROR.too_many_initializer_values_for.S.v
 
 It fits, nothing happens. It does not, and the assembler stops with the label as the message. That is
-rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md), and `.z.S.v` is the field-extent constant
+rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md), and `.x.S.v` is the field-extent constant
 described in [`StructLayoutConstants.md`](StructLayoutConstants.md). The cost is honest and worth
 stating: the error surfaces at GAZL assembly time, which in a shipped module means the end user's
 machine, with no caret. That is the correct place for it, because with a host-supplied `N` the answer
@@ -1338,7 +1351,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E307 | arithmetic on a struct pointer - move it with `&p[[i]]` |
 | E308 | difference between struct pointers - divide by `sizeof` yourself |
 | E309 | `for` variable is a struct pointer - `FORp` cannot stride |
-| E401 | identifier already declared |
+| E401 | a name is already used by another top-level declaration - one flat namespace covers globals, functions, consts, structs and functypes |
 | E402 | type mismatch with previous declaration |
 | E403 | undeclared identifier |
 | E404 | invalid lvalue, or a write to a `readonly` scalar, array element or struct field |
@@ -1374,7 +1387,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E437 | `extern` declaration of a function disagrees with its definition, or with another `extern` |
 | E438 | `extern struct` declarations disagree, or disagree with the definition |
 | E439 | `inline function` is parked for 3.0; it needs GAZL 2 `SCOP`/`ENDS` |
-| E440 | type name already used by a struct / `functype` redeclared with a different shape |
+| E440 | `functype` redeclared with a different shape (a name CLASH with a struct is E401) |
 | E441 | function or value does not match the funcptr type |
 | E442 | malformed argument list |
 | E443 | duplicate `case` value |

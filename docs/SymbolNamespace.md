@@ -49,52 +49,37 @@ at every access site. **These are implemented and shipping** - see
 [`docs/StructLayoutConstants.md`](StructLayoutConstants.md). Unlike everything above they are STABLE and
 deliberately predictable, because hand-written or host-supplied GAZL must be able to name them.
 
-`.z.` takes a THIRD part for an ARRAY FIELD's own extent in words: `.z.<Struct>.<field>`, so `.o.S.v` and
-`.z.S.v` are the offset and the size of the same field. The layout block mints it while the extent is
-still live and then advances by it, so the extent survives as a name instead of dying with the `<X>`
-scratch it folded into:
-
-    .o.S.a:				! DEFi #<a>
-    .z.S.a:				! DEFi #<A>
-    					! ADDi <a> #<a> #.z.S.a
-
-Only ARRAY fields get one. A scalar field is 1 word and a by-value field is `.z.Inner`, so those are
-already nameable and a second symbol for them would be churn. Extern structs mint nothing at all - the
-host owns their layout, extents included.
-
-**Why an extent lives under `.z.` here but under `.x.` below**, since that looks arbitrary and is the
-first thing anyone asks. The line is NOT extent-vs-size. It is:
-
-| family | names the | keyed on |
-|---|---|---|
-| `.x.` | extent of something that occupies STORAGE | a global, or a function + its local |
-| `.o.` / `.z.` | layout of a TYPE | a struct, + optionally a field |
-
-A struct field is not a variable, it is part of a type's layout - the same thing `.o.S.v` describes - so
-its size belongs beside its offset. And the split is forced in BOTH directions, not a preference:
-
-- `.x.` cannot take fields. `.x.<owner>.<name>` is keyed on FUNCTIONS, and a struct may share a
-  function's name: `struct S { int array a[N] }` beside `function S() locals int array a[2]` is legal,
-  so one tag would mint `.x.S.a` twice.
-- `.z.` cannot take variables. `struct S { int a }` beside `global int array S[3]` is also legal, and
-  `.z.S` already means the struct's size, so the array's extent cannot have it.
-
-`tests/impala/sources/structFieldExtents.impala` pins the first pair, and the witness is the assembler:
-spelling the field extent `.x.` makes it stop with `Symbol already defined: .x.S.a`.
+An array FIELD's extent is NOT here - it is `.x.<Struct>.<field>` with every other array extent, below.
 
 ### Array extent constants: `.x.`
 
-`.x.<global>` and `.x.<function>.<local>`, emitted as `! DEFi` immediately above the array's own
-allocation line, which then reads `*.x.name` instead of a number or a scratch:
+One tag for every array extent, keyed on whatever owns the array: `.x.<global>`,
+`.x.<function>.<local>`, `.x.<Struct>.<field>`. A variable's is emitted as `! DEFi` immediately above its
+own allocation line, which then reads `*.x.name` instead of a number or a scratch:
 
     					! MULi <A> #H #W
     .x.grid:			! DEFi #<A>
     grid:				GLOB *.x.grid
 
+A struct field's is emitted inside the layout block, while the extent is still live, and the accumulator
+then advances by the SYMBOL - so the extent outlives the `<X>` scratch it folded into:
+
+    .o.S.a:				! DEFi #<a>
+    .x.S.a:				! DEFi #<A>
+    					! ADDi <a> #<a> #.x.S.a
+
 The value is the allocation size **in words** - the `*size` operand, not the element count (for a
 struct-element array those differ by `.z.Elem`). Every array VARIABLE gets one: global, `readonly`,
-`temporary` and non-inline local alike. An array FIELD of a struct does not - that is layout, so it is
-`.z.<Struct>.<field>` above.
+`temporary` and non-inline local alike. So does every array FIELD; a scalar field is one word and a
+by-value field is `.z.Inner`, so only arrays need a name minted. Extern structs mint nothing at all -
+the host owns their layout, extents included.
+
+**One tag can serve all three only because a top-level name has exactly one kind.** `.x.S.a` would
+otherwise be ambiguous between `struct S`'s field `a` and `function S`'s local `a`, and `.x.S` between a
+global array `S` and nothing else while `.z.S` named a struct. Both shapes were legal until 2026-08-02,
+and the first was a real `Symbol already defined: .x.S.a` from the assembler; `claimTopName` now rejects
+every top-level name clash (`E401`), which is what collapses the two tags this file used to need. **If
+that rule is ever relaxed, this tag has to split again** - see the "Adding a new one" note below.
 
 The point is that an extent is usually NOT a number Impala knows. It can be a host-supplied
 `! DEFi` count, or `count * .z.Elem` that only resolves once the host's struct layout is in. Folding it
@@ -118,9 +103,12 @@ it does mean a new tag must stay unambiguous when `_i<N>` is appended.
 
 ## Why single letters are safe
 
-Before minting a tag, check whether an EXISTING stable family can take another part instead - `.z.` took
-the field extent that way. That is only sound when the family has one owner namespace: `.z.` is
-struct-only so `.z.S.v` can only be a field, while `.x.` spans functions and would have been ambiguous.
+Before minting a tag, check whether an EXISTING family can take another part instead - `.x.` absorbed
+struct array field extents that way rather than growing a second extent tag. Two things make that sound,
+and both must hold: the concept must genuinely be the same one (an extent is an extent, whoever owns
+it), and the OWNER names must be unambiguous. The second is not a property of the tag, it is
+`claimTopName`'s one-kind-per-top-level-name rule - so a change to that rule can retroactively break a
+symbol family. That is the direction this file's inventory is most likely to go stale in.
 
 
 A layout constant is ALWAYS dot-followed (`.o.` / `.z.`) while a label is letter-then-digits with no dot

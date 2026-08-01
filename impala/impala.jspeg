@@ -155,6 +155,7 @@
     var $$parser.structs = {};                                    /// name -> { fields:[{name,type,elem,offset,words}], words, complete }
     var $$parser.openStruct = undefined;                          /// struct whose field list is being parsed (its fields own their extent scratches)
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
+    var $$parser.topNames = {};                                   /// name -> kind ('global'/'function'/'const'/'struct'/'functype'), one flat namespace
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
     var $$parser.exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
@@ -1368,9 +1369,7 @@
        aside and let endFuncType compare; emitting nothing also means gazl-validate never sees a
        functype, so this is the only place the disagreement can be caught at all. */
     $$parser.beginFuncType = function (name, sourceCode, sourceOffset) {
-        if ($$parser.isStructAtom(name)) {
-            $$parser.fail('Type name already used by a struct: ' + name, sourceCode, sourceOffset, 'E440');
-        }
+        $$parser.claimTopName(name, 'functype', sourceCode, sourceOffset);
         var shadowed = ($$parser.isFuncTypeAtom(name) ? $$parser.functypes[name] : undefined);
         $$parser.functypes[name] = { shadowed: shadowed, params: [], returnList: [], returnCount: 0,
                 returns: 'V', returnElem: undefined, returnStruct: undefined, returnWords: 0,
@@ -1505,7 +1504,34 @@
         return 1;                                                 /* scalar i/f/p/F */
     };
 
+    /* ONE namespace for every top-level name. Impala used to key each kind off its own table, while GAZL
+       has a single flat symbol space - so `global int S` beside `function S()` passed every check and
+       then failed to assemble ("Symbol already defined: S"), and `struct S` + `functype S` was rejected
+       in one order and accepted in the other. Types are not emitted under a bare name, but they are read
+       by position alone, and every symbol family the compiler mints is keyed on a user name - `.z.S` vs
+       `.x.S`, `.z.S.a` vs `.x.S.a` - so each new family otherwise needs its own collision analysis, two
+       of which were only found by accident. Claiming names once retires the class.
+
+       Re-claiming the SAME kind is how a declaration meets its definition, and how an import closure
+       sees one unit twice; the per-kind agreement checks (E401 / E410 / E437 / E438 / E440) own that
+       case, so only a DIFFERENT kind is a clash here. */
+    var TOP_KINDS = { globals: 'global', functions: 'function', defines: 'const' };
+    $$parser.claimTopName = function (name, kind, sourceCode, sourceOffset) {
+        if (kind === undefined || name === undefined || name === null
+                || ('' + name).charAt(0) === '.') {
+            return;                                           /* compiler-minted: no Impala identifier starts with `.` */
+        }
+        var prev = $$parser.topNames[name];
+        if (prev !== undefined && prev !== kind) {
+            $$parser.fail('Name already used by a ' + prev + ': ' + name,
+                    sourceCode, sourceOffset, 'E401',
+                    'every top-level name must be unique - rename the ' + kind + ' or the ' + prev);
+        }
+        $$parser.topNames[name] = kind;
+    };
+
     $$parser.beginStruct = function (name, sourceCode, sourceOffset) {
+        $$parser.claimTopName(name, 'struct', sourceCode, sourceOffset);
         var prev = $$parser.structs[name];
         if (prev && prev.complete && !prev.extern) {
             $$parser.fail('Struct already defined: ' + name, sourceCode, sourceOffset, 'E410');
@@ -1592,12 +1618,12 @@
             if (f.type === 'S') {                                 /* nested by-value struct */
                 output(T + '! ADDi <a> #<a> #.z.' + f.struct);
             } else if (f.type === 'A') {                          /* array: name the extent, THEN advance by it */
+                var x = $$parser.extentSymbol(f.name, name);
                 if ($$parser.isStructAtom(f.elem)) {
                     output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
                 }
-                output($$parser.fieldExtentSymbol(name, f.name) + ':' + T + '! DEFi #'
-                        + ($$parser.isStructAtom(f.elem) ? '<t>' : f.size));
-                output(T + '! ADDi <a> #<a> #' + $$parser.fieldExtentSymbol(name, f.name));
+                output(x + ':' + T + '! DEFi #' + ($$parser.isStructAtom(f.elem) ? '<t>' : f.size));
+                output(T + '! ADDi <a> #<a> #' + x);
             } else {                                              /* scalar (int/float/ptr/funcptr) */
                 output(T + '! ADDi <a> #<a> #1');
             }
@@ -1632,6 +1658,7 @@
        collide with a definition the closure already has; ExternDecl simply puts that definition
        back. A bodied one IS a claim, parsed alongside the definition and compared by endStruct. */
     $$parser.beginExternStruct = function (name, sourceCode, sourceOffset) {
+        $$parser.claimTopName(name, 'struct', sourceCode, sourceOffset);
         var prev = $$parser.structs[name];
         if (!prev || prev.complete) {
             $$parser.structs[name] = { shadowed: (prev && prev.complete ? prev : undefined),
@@ -1666,20 +1693,14 @@
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
 
-    /* The symbol naming an array's allocation extent: `.x.name` for a global, `.x.func.local` for a
-       local. See docs/SymbolNamespace.md. */
+    /* The symbol naming an array's extent in words, for EVERY array: `.x.name` for a global,
+       `.x.func.local` for a local, `.x.Struct.field` for a struct array field. One tag for one concept
+       is only sound because a top-level name has one kind (claimTopName) - otherwise `.x.S.a` would mean
+       both `struct S`'s field and `function S`'s local. Struct array fields only: a scalar field is one
+       word and a by-value field is `.z.Inner`, so those are already nameable.
+       See docs/SymbolNamespace.md. */
     $$parser.extentSymbol = function (name, owner) {
         return '.x.' + (owner !== undefined ? owner + '.' : '') + name;
-    };
-
-    /* The extent of a struct ARRAY FIELD, in words. `.x.` cannot serve: it is `.x.<owner>.<name>` over
-       FUNCTIONS, and a struct may share a function's name (`struct Foo` beside `function Foo`), so a
-       field `v` and a local `v` would mint one symbol twice. `.z.` is struct-only and already means
-       "size in words", so a third part names a FIELD's size - `.o.S.v` and `.z.S.v` are the offset and
-       size of the same field. Minted only for array fields: a scalar is 1 and a by-value field is
-       `.z.Inner`, so those already have a name and need no second one. */
-    $$parser.fieldExtentSymbol = function (structName, fieldName) {
-        return '.z.' + structName + '.' + fieldName;
     };
 
     /* '*size' operand for allocating an ARRAY, published as a NAMED assemble-time constant rather
@@ -1932,7 +1953,7 @@
                 'remove the extra ' + (given - holds) + ', or widen ' + name);
     };
 
-    /* Hand a comparison Impala cannot make to the stage that can: `words <= .z.Struct.field`, deferred
+    /* Hand a comparison Impala cannot make to the stage that can: `words <= .x.Struct.field`, deferred
        to GAZL assembly time, where the extent finally has a value. Rule 4 of docs/TwoStageConstants.md,
        and it costs nothing at run time - `! GRTi` is a compile-time directive, so no word is emitted
        either way.
@@ -1947,7 +1968,7 @@
             return;                                           /* nothing given - trivially fits */
         }
         $$parser.declare('! GRT?', 'globals', undefined, 'i', true,
-                '#' + words + ' #' + $$parser.fieldExtentSymbol(structName, fieldName)
+                '#' + words + ' #' + $$parser.extentSymbol(fieldName, structName)
                         + ' @.ERROR.too_many_initializer_values_for.' + structName + '.' + fieldName,
                 sourceCode, sourceOffset);
     };
@@ -2912,6 +2933,7 @@
 
         /* register in symbol table */
         if (name !== undefined) {
+            $$parser.claimTopName(name, TOP_KINDS[scope], sourceCode, sourceOffset);
             var table = $$parser.symbols[scope];
             var prev  = table && table[name];
 
@@ -3360,6 +3382,7 @@
         $$parser.symbols.defines  = {};
         $$parser.structs          = {};
         $$parser.functypes        = {};
+        $$parser.topNames         = {};
         $$parser.exportNext       = false;
 
         /* reset deferred string tables */

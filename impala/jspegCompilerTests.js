@@ -1383,13 +1383,13 @@ console.log("impala.jspeg compiler lays out symbolic struct extents and refuses 
 // would still emit a plausible `! GRTi` and silently stop catching the spill it exists for.
 const symAssert = compileWithJsImpala(
 	SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }\n", { randomId: 42 });
-assert(/! GRTi #3 #\.z\.S\.v @\.ERROR\.too_many_initializer_values_for\.S\.v/.test(symAssert),
+assert(/! GRTi #3 #\.x\.S\.v @\.ERROR\.too_many_initializer_values_for\.S\.v/.test(symAssert),
 	`a symbolic array fill must defer its count check to the assembler\n${symAssert}`);
 // WORDS, not elements: a struct-element array contributes .z.Elem each, and the extent symbol is in words.
 const symElemAssert = compileWithJsImpala(
 	"const int N = 3\nstruct P { int lo; int hi }\nstruct S { P array p[N] }\n"
 		+ "global S s = { p: { { lo: 1, hi: 2 }, { lo: 3, hi: 4 } } }\nfunction main() { }\n", { randomId: 42 });
-assert(/! GRTi #4 #\.z\.S\.p @/.test(symElemAssert),
+assert(/! GRTi #4 #\.x\.S\.p @/.test(symElemAssert),
 	`a struct-element fill must count WORDS against the extent, not elements\n${symElemAssert}`);
 // The compile-time half above only proves the LINE is there. This proves it BITES: the deferred check is
 // the sole thing standing between an over-filled symbolic array and the silent spill it replaced, and it
@@ -1508,6 +1508,45 @@ for (const [label, source, expected] of externInitCases) {
 const externZero = compileWithJsImpala(EXT_ZERO_SRC, { randomId: 42 });
 assert(!/DATA/.test(externZero), `an all-zero extern initializer must emit no DATA row\n${externZero}`);
 console.log("impala.jspeg compiler refuses to guess a host-owned struct layout");
+
+// GAZL has ONE flat symbol space; Impala's tables did not. `global int S` beside `function S()` cleared
+// every per-table check and then would not assemble ("Symbol already defined: S"), and `struct S` +
+// `functype S` was caught in one ORDER only - the same clash, legal written the other way round. One claim
+// per top-level name replaces the piecemeal checks, so every pair rejects, symmetrically, naming whichever
+// kind got there first. Both orders are listed on purpose: the asymmetry is what made this a bug rather
+// than a policy.
+const nameClashCases = [
+	["struct then functype", "struct S { int a }\nfunctype S(int x) returns int", "already used by a struct"],
+	["functype then struct", "functype S(int x) returns int\nstruct S { int a }", "already used by a functype"],
+	["struct then function", "struct S { int a }\nfunction S() { }", "already used by a struct"],
+	["struct then global", "struct S { int a }\nglobal int array S[2]", "already used by a struct"],
+	["struct then const", "struct S { int a }\nconst int S = 3", "already used by a struct"],
+	["functype then function", "functype S(int x) returns int\nfunction S() { }", "already used by a functype"],
+	// The one that used to assemble-fail rather than compile-fail, in both directions.
+	["global then function", "global int S\nfunction S() { }", "already used by a global"],
+	["function then global", "function S() { }\nglobal int S", "already used by a function"],
+	["const then function", "const int S = 1\nfunction S() { }", "already used by a const"],
+	["readonly then struct", "readonly int array S[2] = { 1, 2 }\nstruct S { int a }", "already used by a global"],
+	// Re-claiming the SAME kind is a declaration meeting its definition, or an import closure seeing one
+	// unit twice. Those must stay legal or every `extern` pairing breaks.
+	["extern function, name-only, then defined",
+		"extern function f;\nfunction f(int a) returns int r { r = a; }", null],
+	["extern function, prototyped, then defined",
+		"extern function f(int a) returns int r;\nfunction f(int a) returns int r { r = a; }", null],
+	["extern struct then defined", "extern struct E { int a }\nstruct E { int a }", null],
+	["bodyless extern struct twice", "extern struct E\nextern struct E\nfunction main() { }", null],
+	["valueless const then defined", "const int K;\nconst int K = 3", null],
+	["one functype declared twice", "functype F(int x) returns int\nfunctype F(int x) returns int", null],
+	// Only TOP-LEVEL names share the space. A local is `$name` in GAZL and a field is `.o.S.f`, so neither
+	// can collide with anything here - rejecting those would be a new restriction nobody asked for.
+	["a local may shadow a global", "global int v\nfunction main() locals int v { v = 1; }", null],
+	["a field may share a struct's name",
+		"struct P { int a }\nstruct Q { int P }\nfunction main() locals Q q { q.P = 1; }", null],
+];
+for (const [label, source, expected] of nameClashCases) {
+	expectCompileOutcome("name clash", label, source, expected);
+}
+console.log("impala.jspeg compiler keeps one flat namespace for every top-level name");
 
 // `global` names a storage table. A function and a const are in neither, so the prefix used to be accepted
 // and silently discarded there - a third, undiagnosed state next to "required" (globals) and E403 (locals).

@@ -333,7 +333,7 @@ nothing. One mechanism serves both (`blockInitFrom`); they differ only in the me
 compare the value count against the extent - is now deferred to the assembler, which by then knows it.
 `struct S { int a; int array v[N]; int z }` with `N` 2 given three values emits four words that fit
 `1+N+1` exactly, so the assembler sees nothing wrong with the row and `z` used to receive the third
-value in silence; `! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v` is what now catches it.
+value in silence; `! GRTi #3 #.x.S.v @.ERROR.too_many_initializer_values_for.S.v` is what now catches it.
 So `E454` no longer covers the array, only what is behind it.
 
 Verified 2026-08-01 that GAZL 1 has no way to express it:
@@ -364,7 +364,7 @@ filled again on GAZL 1 whenever the count provably fits; only fields AFTER it st
 
 It shipped as ONE line, not the two sketched here earlier:
 
-    ! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v
+    ! GRTi #3 #.x.S.v @.ERROR.too_many_initializer_values_for.S.v
 
 A branch to an undefined label is not an error until it is TAKEN, so the label doubles as the message and
 no `.ok` target is needed - which also removes the counter that would have been required to keep such
@@ -376,7 +376,7 @@ mnemonic; `! GTRi` does not exist.
 `.x.` rework named array VARIABLE extents (`.x.plain: ! DEFi #<A>`, then `GLOB *.x.plain`) but a struct
 array field folded its extent into a bare scratch (`! ADDi <a> #<a> #<A>`) that `endStruct` handed
 straight back, so the next struct re-used `<A>` and there was nothing stable to compare against. The
-layout block now mints `.z.<Struct>.<field>` for every array field while the scratch is still live and
+layout block now mints `.x.<Struct>.<field>` for every array field while the scratch is still live and
 advances by the SYMBOL, so the extent outlives the borrow. It went into `.z.` rather than `.x.` because
 `.x.<owner>.<name>` is keyed on functions and a struct may share a function's name - see
 [`SymbolNamespace.md`](SymbolNamespace.md), and `tests/impala/sources/structFieldExtents.impala` for the
@@ -384,7 +384,7 @@ pinned collision.
 
 **Still open, and now cheap**, because they want the same symbol: `sizeof` of an array field, and
 gazl-validate checking a host-supplied extent for an `extern struct` array field (an unstated wildcard
-today). The second needs the host to publish `.z.E.field` the way it already publishes `.o.E.field`,
+today). The second needs the host to publish `.x.E.field` the way it already publishes `.o.E.field`,
 since an extern struct mints no layout of its own.
 
 Note the two checks are complementary, not redundant. Define-each-word-once catches an over-run only when

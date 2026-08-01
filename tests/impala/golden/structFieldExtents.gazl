@@ -1,69 +1,58 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 23:1
-H:	! DEFi #3	; signature const H : int @ 24:1
-N:	! DEFi #4	; signature const N : int @ 25:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 18:1
+H:	! DEFi #3	; signature const H : int @ 19:1
+N:	! DEFi #4	; signature const N : int @ 20:1
 	! MOVi <a> #0	; layout of struct Pair
 .o.Pair.lo:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Pair.hi:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Pair:	! DEFi #<a>
-; signature struct Pair { lo : int, hi : int } @ 27:1
+; signature struct Pair { lo : int, hi : int } @ 22:1
 	! MULi <A> #H #N
 	! ADDi <B> #H #1
 	! DIVi <C> #N #2
 	! MOVi <a> #0	; layout of struct S
 .o.S.a:	! DEFi #<a>
-.z.S.a:	! DEFi #<A>
-	! ADDi <a> #<a> #.z.S.a
+.x.S.a:	! DEFi #<A>
+	! ADDi <a> #<a> #.x.S.a
 .o.S.b:	! DEFi #<a>
-.z.S.b:	! DEFi #<B>
-	! ADDi <a> #<a> #.z.S.b
+.x.S.b:	! DEFi #<B>
+	! ADDi <a> #<a> #.x.S.b
 .o.S.p:	! DEFi #<a>
 	! MULi <t> #<C> #.z.Pair
-.z.S.p:	! DEFi #<t>
-	! ADDi <a> #<a> #.z.S.p
+.x.S.p:	! DEFi #<t>
+	! ADDi <a> #<a> #.x.S.p
 .o.S.c:	! DEFi #<a>
-.z.S.c:	! DEFi #2
-	! ADDi <a> #<a> #.z.S.c
+.x.S.c:	! DEFi #2
+	! ADDi <a> #<a> #.x.S.c
 .o.S.n:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.S:	! DEFi #<a>
-; signature struct S { a : int[], b : int[], p : Pair[], c : int[2], n : int } @ 29:1
-; signature extern native printInt() -> unknown @ 37:1
-; signature extern native printLF() -> unknown @ 38:1
+; signature struct S { a : int[], b : int[], p : Pair[], c : int[2], n : int } @ 24:1
+; signature extern native printInt() -> unknown @ 32:1
+; signature extern native printLF() -> unknown @ 33:1
 
 ;-----------------------------------------------------------------------------
-S:	FUNC	; signature func S() -> int @ 42:1
-	$r:	OUTi
-.x.S.a:	! DEFi #2
-	$a:	LOCA *.x.S.a
-;-----------------------------------------------------------------------------
-		MOVi $a:1 #2 	; a[1] = 2
-		MOVi $r $a:1 	; r = a[1]
-		RETU   	; }
-
-
-;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 49:1
+main:	FUNC	; signature func main() -> void @ 35:1
 		PARA *1
 	$s:	LOCA *.z.S
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MULi %1 #H #N	; printInt(H * N)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 52:17
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 52:28
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:28
 		ADDi %1 #H #1	; printInt(H + 1)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:17
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 53:28
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 39:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 39:28
 		DIVi %1 #N #2	; printInt(N / 2)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 54:17
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 54:28
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:28
 		MOVi %1 #.z.S 	; printInt(sizeof(S))
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 55:21
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 55:32
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:32
 		MOVi $s:.o.S.n #77 	; s.n = 77
 		! ADDi <C> #.o.S.a #11	; s.a[11] = 11
 		MOVi $s:<C> #11 
@@ -74,23 +63,20 @@ main:	FUNC	; signature func main() -> void @ 49:1
 		! ADDi <B> #<B> #.o.Pair.hi
 		MOVi $s:<B> #5 
 		MOVi %1 $s:.o.S.n 	; printInt(s.n)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 61:15
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 61:26
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:15
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:26
 		! ADDi <B> #.o.S.a #11	; printInt(s.a[11])
 		MOVi %1 $s:<B> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 62:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 62:30
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 48:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 48:30
 		! ADDi <B> #.o.S.b #3	; printInt(s.b[3])
 		MOVi %1 $s:<B> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 63:18
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 63:29
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 49:29
 		! MULi <B> #1 #.z.Pair	; printInt(s.p[[1]].hi)
 		! ADDi <C> #.o.S.p #<B>
 		! ADDi <C> #<C> #.o.Pair.hi
 		MOVi %1 $s:<C> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 64:23
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 64:34
-		CALL &S %1 *1	; expects S() -> int @ 65:14
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 65:15
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 65:26
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 50:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 50:34
 		RETU   	; }

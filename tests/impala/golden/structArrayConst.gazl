@@ -14,8 +14,8 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 	! ADDi <a> #<a> #1
 .o.Voice.filters:	! DEFi #<a>
 	! MULi <t> #3 #.z.Biquad
-.z.Voice.filters:	! DEFi #<t>
-	! ADDi <a> #<a> #.z.Voice.filters
+.x.Voice.filters:	! DEFi #<t>
+	! ADDi <a> #<a> #.x.Voice.filters
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Voice:	! DEFi #<a>

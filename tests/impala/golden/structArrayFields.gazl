@@ -4,8 +4,8 @@
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 	! MOVi <a> #0	; layout of struct Filter
 .o.Filter.state:	! DEFi #<a>
-.z.Filter.state:	! DEFi #4
-	! ADDi <a> #<a> #.z.Filter.state
+.x.Filter.state:	! DEFi #4
+	! ADDi <a> #<a> #.x.Filter.state
 .o.Filter.taps:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Filter:	! DEFi #<a>
