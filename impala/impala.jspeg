@@ -4,6 +4,25 @@
 
 {
     /**
+     * emitLine(line) - every GAZL line leaves through here.
+     *
+     * A function's frame declarations are emitted as its head is parsed, but an inline expansion
+     * happens mid-body and needs to ADD declarations to that head (GAZL requires them before the
+     * first real instruction). So while a function body is being parsed, head lines are buffered in
+     * `$$parser.headSink` and replayed once the body - and therefore every expansion in it - is
+     * known. Outside a function the sink is null and lines go straight out, unchanged.
+     */
+    function emitLine(line) {
+        if ($$parser.headSink !== null) {
+            $$parser.headSink.push(line);
+            return;
+        }
+        if (typeof output === 'function') {
+            output(line);
+        }
+    }
+
+    /**
      * map(target, k1, v1, k2, v2, ...)
      *   assigns target[k1]=v1, etc.
      */
@@ -133,6 +152,9 @@
     var $$parser.dry            = false;
     var $$parser.legacyMode     = (typeof _hostOptions !== 'undefined' && _hostOptions != null
             && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings
+    var $$parser.units          = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
+            && _hostOptions.units) || undefined);               /// import-closure spans {name,start,end}[], for origins
+    var $$parser.declOffset     = 0;                            /// offset of the declaration being parsed - see `root`
 
     /* 2  make sure the buckets exist */
     var $$parser.META_TO_GAZL   = {};
@@ -141,6 +163,7 @@
     var $$parser.inlineMode     = false;                         /// true while parsing an `inline function` body - emit nothing
     var $$parser.INLINE_PURE    = {};                          /// operators whose write destination the compiler can NAME
     var $$parser.inlineCounter  = 0;                           /// per-expansion suffix, keeps inlined labels unique
+    var $$parser.headSink       = null;                        /// while a function body is parsed, its head lines buffer here (see emitLine)
     var $$parser.CASTS_TO_TYPES = {};
     var $$parser.ZEROES = {};
     var $$parser.TYPE_SUFFIXES  = {};
@@ -306,6 +329,76 @@
         return parts.join(', ');
     }
 
+    /* Types only, no names: what a signature CLAIM actually asserts, and the only part two claims
+       about one name have to agree on. Element chains stay in - gazl-validate treats a bare `ptr` as
+       element-UNKNOWN and lets it match any chain, so flattening `V-ptr` to `ptr` would silently
+       disarm the cross-unit check. That is the only type record a name-only `extern function f` has. */
+    function renderParamTypes(params) {
+        var parts = [], count = (params ? params.length : 0);
+        for (var idx = 0; idx < count; ++idx) {
+            var param = params[idx] || {};
+            parts.push(param.type === 'S' ? (param.struct || 'unknown')
+                    : signatureCategoryForDesc(fullDescFor(param.type, param.elem)));
+        }
+        return parts.join(', ');
+    }
+
+    /* The comparable shape of anything callable - a function signature, an extern prototype or a
+       `functype`, which all carry the same params/returns fields. */
+    function signatureShape(name, sig) {
+        return name + '(' + renderParamTypes(sig.params) + ') -> ' + renderReturnType(sig);
+    }
+
+    /* Two claims about one name that do not agree - `got` arrived second. A DEFINITION outranks a
+       declaration, so it is named as authoritative where the closure has one; with none in sight the
+       claims are only judgeable against each other, and blaming a definition would cite no file. */
+    function failDisagreement(what, got, had, code, priorIsDefinition, noun, plural, sourceCode, sourceOffset) {
+        if (priorIsDefinition) {
+            $$parser.fail('extern declaration of ' + what + ' does not match its definition: declared "'
+                    + got + '" but definition provides "' + had + '"', sourceCode, sourceOffset, code,
+                    'the definition is authoritative - correct the declaration, or drop it and let the definition speak');
+        }
+        $$parser.fail('extern declarations of ' + what + ' disagree: "' + got + '" vs "' + had + '"',
+                sourceCode, sourceOffset, code,
+                'one ' + noun + ' cannot have two ' + plural
+                        + ' - make the declarations identical, or keep only one');
+    }
+
+    function renderReturnType(signature) {
+        if (signature.returnCount > 1) {                           /* multiple return values -> (t1, t2, ...) */
+            var parts = [];
+            for (var idx = 0; idx < signature.returnList.length; ++idx) {
+                var r = signature.returnList[idx];
+                parts.push(r.elem !== undefined ? signatureCategoryForDesc(fullDescFor(r.type, r.elem))
+                        : signatureParamCategory(r.type));
+            }
+            return '(' + parts.join(', ') + ')';
+        }
+        if (signature.returns === 'S') {                           /* by-value struct return -> the struct name */
+            return (signature.returnStruct || 'unknown');
+        }
+        return (signature.returnElem !== undefined
+                ? signatureCategoryForDesc(fullDescFor(signature.returns, signature.returnElem))
+                : signatureReturnCategory(signature.returns, signature.returns !== undefined));
+    }
+
+    /* Compiling an import closure means ONE concatenated source, so a raw offset gives a line that
+       indexes the concatenation and a name that is always the root unit - the wrong file, on the
+       wrong line, for everything past the first. The spans recorded by the closure walk map the
+       offset back to the unit that owns it. A lone unit is left exactly as it was: no name, no
+       shift, so a source that imports nothing keeps emitting the bytes it always did. */
+    function originUnit(offset) {                                 /* no local alias: `var units = $$parser.units` rewrites to `var units = units` */
+        if (!$$parser.units || $$parser.units.length <= 1) {
+            return undefined;
+        }
+        for (var i = 0; i < $$parser.units.length; ++i) {
+            if (offset >= $$parser.units[i].start && offset <= $$parser.units[i].end) {
+                return $$parser.units[i];
+            }
+        }
+        return undefined;
+    }
+
     function computeOrigin(sourceName, sourceCode, sourceOffset) {
         if (!sourceCode || sourceOffset == null) {
             return undefined;
@@ -319,9 +412,10 @@
             offset = sourceCode.length;
         }
 
+        var unit = originUnit(offset);
         var line = 1;
         var column = 1;
-        for (var idx = 0; idx < offset; ++idx) {
+        for (var idx = (unit ? unit.start : 0); idx < offset; ++idx) {
             var ch = sourceCode.charAt(idx);
             if (ch === '\r') {
                 if (idx + 1 < sourceCode.length && sourceCode.charAt(idx + 1) === '\n') {
@@ -340,8 +434,9 @@
         }
 
         var origin = line + ':' + column;
-        if (sourceName) {
-            origin = sourceName + ':' + origin;
+        var name = (unit ? unit.name : sourceName);
+        if (name) {
+            origin = name + ':' + origin;
         }
         return origin;
     }
@@ -365,24 +460,7 @@
         }
 
         var paramsText = renderParamList(signature.params);
-        var hasReturn = (signature && signature.returns !== undefined);
-        var returnType;
-        if (signature.returnCount > 1) {                          /* multiple return values -> (t1, t2, ...) */
-            var parts = [];
-            for (var _rri = 0; _rri < signature.returnList.length; ++_rri) {
-                var r = signature.returnList[_rri];
-                parts.push(r.elem !== undefined
-                        ? signatureCategoryForDesc(fullDescFor(r.type, r.elem))
-                        : signatureParamCategory(r.type));
-            }
-            returnType = '(' + parts.join(', ') + ')';
-        } else if (signature.returns === 'S') {                   /* by-value struct return -> the struct name */
-            returnType = (signature.returnStruct || 'unknown');
-        } else {
-            returnType = (signature.returnElem !== undefined
-                    ? signatureCategoryForDesc(fullDescFor(signature.returns, signature.returnElem))
-                    : signatureReturnCategory(signature.returns, hasReturn));
-        }
+        var returnType = renderReturnType(signature);
         var kind = (role ? role : 'func');
         if ($$parser.exportNext) kind = 'export ' + kind;         /* Step 5: host-visible marker */
 
@@ -400,20 +478,8 @@
         var paramsText;
         var hasSignature = !!(signature && signature.params);
 
-        /* Element chains matter here: gazl-validate treats a bare `ptr` as element-UNKNOWN and lets it
-           match any chain, so flattening `V-ptr` to `ptr` would silently disarm the cross-unit check.
-           That is the only type record a name-only `extern function f` has. */
-        if (hasSignature) {
-            var extracted = [];
-            for (var i = 0; i < signature.params.length; ++i) {
-                var _p = signature.params[i];
-                extracted.push(_p.type === 'S' ? (_p.struct || 'unknown')
-                                               : signatureCategoryForDesc(fullDescFor(_p.type, _p.elem)));
-            }
-            paramsText = extracted.join(', ');
-        } else {
-            paramsText = renderTypeList(actualTypes, actualElems);
-        }
+        paramsText = (hasSignature ? renderParamTypes(signature.params)
+                                   : renderTypeList(actualTypes, actualElems));
 
         var returnCode = callResultType;
         var known = false;
@@ -547,6 +613,7 @@
                     sourceCode, sourceOffset, 'E401',
                     'each function needs a unique name across the whole import closure');
         }
+        $$parser.checkExternAgreement(name, entry.externProto, entry.signature, true, sourceCode, sourceOffset);
 
         /* An `inline function` has no out-of-line copy, so it publishes neither a FUNC label nor a
            signature row - there is nothing for a caller or the validator to link against. */
@@ -568,6 +635,24 @@
                          entry.sourceCode,
                          entry.sourceOffset,
                          comment);
+    };
+
+    /* One name may have at most one DEFINITION but any number of `extern` declarations, so long as
+       every claim agrees: with the definition if the closure has one, and otherwise with each other.
+       This does NOT police linkage - a prototype for a name nothing defines is a promise only
+       gazl-validate can settle, and a name-only extern records no prototype and so asserts nothing.
+       It fires exactly when the compiler is holding two claims itself, which an import closure makes
+       routine since the builder compiles the whole closure as one unit. Names are not compared, only
+       types, matching functionSignaturesCompatible() in tools/gazl-validate.nuxjs.js. */
+    $$parser.checkExternAgreement = function (name, claim, prior, priorIsDefinition, sourceCode, sourceOffset) {
+        if (!claim || !prior) {
+            return;
+        }
+        var got = signatureShape(name, claim), had = signatureShape(name, prior);
+        if (got !== had) {
+            failDisagreement(name, got, had, 'E437', priorIsDefinition, 'function', 'shapes',
+                    sourceCode, sourceOffset);
+        }
     };
 
     function signatureRoleForSection(section) {
@@ -644,7 +729,7 @@
         }
 
         if (typeof output === 'function') {
-            output('; ' + comment);
+            emitLine('; ' + comment);
         }
     }
 
@@ -824,8 +909,11 @@
 
         /* POST-CONDITION. This pass OWNS every `@.` label - it mints them, aliases them and
            deletes them - so a reference left pointing at a name it also deleted is a bug HERE,
-           and saying so beats the assembler's "Symbol not found" three layers downstream. A
-           user label (`@name`) is not ours to promise. */
+           and saying so beats the assembler's "Symbol not found" three layers downstream.
+           A user label (`@name`) is not ours to promise, but it IS decidable: a label is always
+           local to the function body, and by the time this runs the body is fully parsed, so the
+           map below is the complete set. An undefined one is a user error, not an internal bug,
+           so it gets a diagnostic at the `goto` rather than an assert. */
         var defined = {};
         for (i = 0; i < $$parser.metacode.length; ++i) {
             if ($$parser.metacode[i].operator === '<--') defined[$$parser.metacode[i].operands[0]] = true;
@@ -835,8 +923,15 @@
             if (op == null || op === ';' || op === '<--') continue;
             for (var k = 0; k < 3; ++k) {
                 var ref = rec.operands[k];
-                assert(typeof ref !== 'string' || ref.substr(0, 2) !== '@.' || defined[ref],
-                        "branch to deleted label " + ref + " from " + op);
+                if (typeof ref !== 'string' || ref.charAt(0) !== '@' || defined[ref]) continue;
+                if (ref.charAt(1) === '.') {
+                    assert(false, "branch to deleted label " + ref + " from " + op);
+                } else if (rec.gotoOffset !== undefined) {
+                    $$parser.fail('goto to undefined label ' + ref.substr(1),
+                            rec.gotoSource, rec.gotoOffset, 'E445',
+                            'a label is local to its function - define it as `' + ref.substr(1)
+                                    + ': ;` in this body, or remove the goto');
+                }
             }
         }
     };
@@ -1080,6 +1175,7 @@
         rec.dynIndex  = undefined;
         rec.winBase   = undefined;
         rec.winWords  = undefined;
+        rec.readonly  = false;        /* pooled slots: never inherit a previous symbol's writability */
         return rec;
     };
 
@@ -1200,6 +1296,41 @@
         }
     };
 
+    /* The integer behind a folded operand, or undefined when it is symbolic (`<A>`, a host `! DEFi`, an
+       `extern struct` size). EVERY compile-time check gates on this: Impala may only reject a value it
+       genuinely knows, and not knowing is not the same as being fine - so a symbolic operand is passed
+       over in silence rather than guessed at. See docs/CompileTimeHardening.md. */
+    $$parser.constInt = function (operand) {
+        return (typeof operand === 'string' && /^#-?[0-9]+$/.test(operand))
+                ? parseInt(operand.substr(1), 10) : undefined;
+    };
+
+    /* `SWCH` resolves table entries 0..size-1 only, so a case outside that window is unreachable - and a
+       NEGATIVE offset folds to `.sN.-6`, which the assembler rejects as an invalid identifier, failing a
+       build the compiler accepted without a word. A repeated value mints the same `.sN#K` label twice and
+       trips `Symbol already defined` on a name the user never wrote. Both are decidable here whenever the
+       range and the value are numeric, which is the common shape. */
+    $$parser.checkCaseValue = function (ctx, value, source, offset) {
+        if (ctx === undefined || ctx.fromNum === undefined || value === undefined) {
+            return;
+        }
+        /* Subtract here rather than reading the emitted offset: `subConstInt` defers to an assemble-time
+           `! SUBi <A>` whenever `from` is non-zero, so the offset operand is symbolic in exactly the
+           `switch (i == 5 to 9)` shape that produces the unloadable `.sN.-6`. */
+        var off = value - ctx.fromNum;
+        if (ctx.caseSeen[off] === true) {
+            $$parser.fail('Duplicate case value ' + value, source, offset, 'E443',
+                    'each case value may appear once in a switch');
+        }
+        ctx.caseSeen[off] = true;
+        if (ctx.sizeNum !== undefined && (off < 0 || off >= ctx.sizeNum)) {
+            $$parser.fail('Case value ' + value + ' is outside the switch range '
+                    + ctx.fromNum + ' to ' + (ctx.fromNum + ctx.sizeNum), source, offset, 'E444',
+                    'the upper bound is exclusive, so the last reachable case is '
+                            + (ctx.fromNum + ctx.sizeNum - 1));
+        }
+    };
+
     $$parser.mixedBitwise = function (first, op, source, offset) {
         $$parser.strictError("Mixed bitwise operators ('" + first + "' and '" + op
                 + "') require parentheses", source, offset, 'E101',
@@ -1251,14 +1382,19 @@
      *  Named function-pointer types  (Impala 2 Step 3)          *
      * --------------------------------------------------------- */
 
+    /* A functype emits NOTHING - no symbol, no layout, not even a `; signature` row - so unlike a
+       struct definition (which owns its `.o.`/`.z.` constants) or a function (which owns a FUNC
+       label) there is no artifact for a second declaration to collide with. Re-declaring one is
+       therefore free PROVIDED the two agree, which is what lets a unit declare the functypes it uses
+       and still be imported alongside another unit that declares the same ones. Set the earlier one
+       aside and let endFuncType compare; emitting nothing also means gazl-validate never sees a
+       functype, so this is the only place the disagreement can be caught at all. */
     $$parser.beginFuncType = function (name, sourceCode, sourceOffset) {
-        if ($$parser.isFuncTypeAtom(name)) {
-            $$parser.fail('Function type already defined: ' + name, sourceCode, sourceOffset, 'E440');
-        }
         if ($$parser.isStructAtom(name)) {
             $$parser.fail('Type name already used by a struct: ' + name, sourceCode, sourceOffset, 'E440');
         }
-        $$parser.functypes[name] = { params: [], returnList: [], returnCount: 0,
+        var shadowed = ($$parser.isFuncTypeAtom(name) ? $$parser.functypes[name] : undefined);
+        $$parser.functypes[name] = { shadowed: shadowed, params: [], returnList: [], returnCount: 0,
                 returns: 'V', returnElem: undefined, returnStruct: undefined, returnWords: 0,
                 complete: false, sourceCode: sourceCode, sourceOffset: sourceOffset,
                 sourceName: $$parser.sourceName };
@@ -1477,11 +1613,40 @@
             runs.push([ b, n ]);
             return b;
         }
-        for (k = 0; k < info.locals.length; ++k) {  /* a local lives in transients, one expansion at a time */
-            subst[info.locals[k].name] = '%' + borrowRun(info.locals[k].words);
+        var tag = '_i' + ($$parser.inlineCounter++);
+
+        /*
+            The callee's declared locals become REAL frame locals of the caller, bracketed by
+            SCOP / ENDS (GAZL 2). The assembler then owns their placement, exactly as it does for
+            an ordinary local - which is the whole point: it resolves `*.z.Struct` before assigning
+            offsets, so a host-owned size lands correctly, whereas a compile-time slot count could
+            only ever be Impala's guess at it.
+
+            Sibling expansions overlay, so the frame cost is the LARGEST expansion in a function,
+            not the sum. That is sound because an expansion's locals are dead once its body ends:
+            the result leaves through the call window, never through a local.
+
+            The transient block below is a different matter and stays transient - it carries the
+            body's own `%k` slots, including CALL windows, whose base must be a transient.
+        */
+        if (info.locals.length > 0) {
+            var _tab = (typeof TAB !== 'undefined' ? TAB : '\t');    /* same shape declare() renders */
+            emitLine(_tab + '\tSCOP');
+            for (k = 0; k < info.locals.length; ++k) {
+                var lv = info.locals[k];
+                var lname = lv.name + tag;                      /* `$tmp` -> `$tmp_i3`, unique per expansion */
+                /* `lv.size` is repeated verbatim, however the extent was arrived at: an array's is a
+                   `.x.` constant the callee's declaration named once, a struct's is `*.z.Struct`. Both
+                   are SYMBOLS the assembler resolves, so nothing has to be re-derived here - which is
+                   the point, since a fold lives in a scratch this head has no claim on. */
+                emitLine(_tab + lname + ':\t'
+                        + replace(lv.kind, '?', $$parser.TYPE_SUFFIXES[lv.type] || '')
+                        + (lv.size !== undefined ? ' ' + lv.size : ''));
+                subst[lv.name] = lname;
+            }
+            emitLine(_tab + '\tENDS');
         }
 
-        var tag = '_i' + ($$parser.inlineCounter++);
         var scratchMap = {};                    /* `<X>` folds carried in from an inner expansion */
         function mapScratch(sc) {
             if (!Object.prototype.hasOwnProperty.call(scratchMap, sc)) scratchMap[sc] = $$parser.borrow('<');
@@ -1608,6 +1773,15 @@
             ft.returns = 'V';
             ft.returnWords = 0;
         }
+        var held = ft.shadowed;
+        if (held) {
+            var got = signatureShape(name, ft), had = signatureShape(name, held);
+            if (got !== had) {                                    /* never a definition: a functype has only declarations */
+                $$parser.fail('functype ' + name + ' is already declared with a different shape: "'
+                        + got + '" vs "' + had + '"', ft.sourceCode, ft.sourceOffset, 'E440',
+                        'one functype cannot have two shapes - make the declarations identical, or keep only one');
+            }
+        }
     };
 
     /* Does a concrete function signature satisfy a named funcptr type? Compares arity, each
@@ -1672,22 +1846,56 @@
 
     $$parser.beginStruct = function (name, sourceCode, sourceOffset) {
         var prev = $$parser.structs[name];
-        if (prev && prev.complete) {
+        if (prev && prev.complete && !prev.extern) {
             $$parser.fail('Struct already defined: ' + name, sourceCode, sourceOffset, 'E410');
         }
-        $$parser.structs[name] = { fields: [], words: 0, complete: false,
+        /* A completed `extern struct` is a CLAIM about a layout, not a second definition of it, so
+           set it aside and let endStruct compare the two rather than rejecting the definition it
+           describes. The definition wins either way. */
+        $$parser.structs[name] = { shadowed: (prev && prev.complete ? prev : undefined),
+                fields: [], words: 0, complete: false,
                 sourceCode: sourceCode, sourceOffset: sourceOffset };
         $$parser.openStruct = name;
     };
 
+    /* An `extern struct` declaration and a `struct` definition of one name are two claims about one
+       layout, and must agree - the E437 rule, for types. Whichever arrived second was parsed into a
+       fresh entry so the first stayed intact; the DEFINITION is authoritative in either order.
+       Returns true when the entry just parsed was the DECLARATION, i.e. it owns no layout to emit. */
+    $$parser.checkStructAgreement = function (name) {
+        var parsed = $$parser.structs[name], held = parsed.shadowed;
+        if (!held) {
+            return false;
+        }
+        var parsedRow = $$parser.structSignatureRow(name, false);
+        $$parser.structs[name] = held;
+        var heldRow = $$parser.structSignatureRow(name, false);
+        if (parsedRow !== heldRow) {
+            /* fail() bakes its message, and bake() EVALS anything between braces (that is how
+               `{$type1}` interpolation works), so a struct row's `{ a : int }` must not go in raw. */
+            function shown(row) { return replace(replace(replace(row, 'signature ', ''), '{', '('), '}', ')'); }
+            failDisagreement('struct ' + name, shown(parsed.extern ? parsedRow : heldRow),
+                    shown(parsed.extern ? heldRow : parsedRow), 'E438',
+                    !(parsed.extern && held.extern),              /* both extern -> no definition to arbitrate */
+                    'struct', 'layouts', parsed.sourceCode, parsed.sourceOffset);
+        }
+        if (!parsed.extern) {
+            $$parser.structs[name] = parsed;                      /* a definition outranks the declaration it fulfils */
+        }
+        return !!parsed.extern;
+    };
+
     /* A field extent that needs folding lives in a `<X>` scratch that the layout block reads LATER, so
-       unlike every other ArrayDecl site the borrow must survive the declaration - otherwise a second
-       such field folds into the same scratch and silently overwrites the first one's extent. The struct
-       owns those borrows; they are released here, once the layout has consumed them. */
+       the borrow must survive the declarator - otherwise a second such field folds into the same scratch
+       and silently overwrites the first one's extent. ArrayDecl hands every extent to its consumer (see
+       there); this is the struct's release, once the layout has read them. */
     $$parser.endStruct = function (name) {
         var s = $$parser.structs[name];
         s.complete = true;
-        $$parser.emitStructLayout(name);
+        var redeclared = $$parser.checkStructAgreement(name);
+        if (!redeclared) {
+            $$parser.emitStructLayout(name);
+        }
         var held = {};
         for (var i = 0; i < s.fields.length; ++i) {
             var size = '' + s.fields[i].size;
@@ -1697,6 +1905,7 @@
             $$parser.returnBack(s.fields[i].size);
         }
         $$parser.openStruct = undefined;
+        return redeclared;
     };
 
     /* Emit a struct's layout as GAZL compile-time constants: a rolling `<a>` accumulator that
@@ -1715,22 +1924,22 @@
                                                                          queued through emit(); drain it BEFORE the block so
                                                                          the definition precedes the ! ADDi that reads it
                                                                          (same rule declare() follows before its own output) */
-        output(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
+        emitLine(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
         for (var i = 0; i < s.fields.length; ++i) {
             var f = s.fields[i];
-            output('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
+            emitLine('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
             if (f.type === 'S') {                                 /* nested by-value struct */
-                output(T + '! ADDi <a> #<a> #.z.' + f.struct);
+                emitLine(T + '! ADDi <a> #<a> #.z.' + f.struct);
             } else if (f.type === 'A' && $$parser.isStructAtom(f.elem)) {   /* struct-element array */
-                output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
-                output(T + '! ADDi <a> #<a> #<t>');
+                emitLine(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
+                emitLine(T + '! ADDi <a> #<a> #<t>');
             } else if (f.type === 'A') {                          /* scalar-element array */
-                output(T + '! ADDi <a> #<a> #' + f.size);
+                emitLine(T + '! ADDi <a> #<a> #' + f.size);
             } else {                                              /* scalar (int/float/ptr/funcptr) */
-                output(T + '! ADDi <a> #<a> #1');
+                emitLine(T + '! ADDi <a> #<a> #1');
             }
         }
-        output('.z.' + name + ':' + T + '! DEFi #<a>');
+        emitLine('.z.' + name + ':' + T + '! DEFi #<a>');
     };
 
     /* Fold a place's compile-time offset PARTS (field-offset symbols + constant strides) into one
@@ -1754,16 +1963,28 @@
     /* `extern struct Name { fields }`: host-owned layout. Impala knows the interface (field
        names + types) and emits symbolic `.o.Name.field` / `.z.Name` references, but does NOT
        emit the layout - the host supplies those constants at load. See docs/StructLayoutConstants.md. */
+    /* Never rejects: the body has not been parsed yet, so it is not yet known whether this
+       declaration asserts anything at all. A BODYLESS `extern struct N` is the struct analogue of a
+       name-only `extern function f` - an opaque handle making no layout claim - so it must not
+       collide with a definition the closure already has; ExternDecl simply puts that definition
+       back. A bodied one IS a claim, parsed alongside the definition and compared by endStruct. */
     $$parser.beginExternStruct = function (name, sourceCode, sourceOffset) {
         var prev = $$parser.structs[name];
-        if (prev && prev.complete) {
-            $$parser.fail('Struct already defined: ' + name, sourceCode, sourceOffset, 'E410');
-        }
-        if (!prev) {
-            $$parser.structs[name] = { fields: [], words: 0, complete: false,
+        if (!prev || prev.complete) {
+            $$parser.structs[name] = { shadowed: (prev && prev.complete ? prev : undefined),
+                    fields: [], words: 0, complete: false,
                     sourceCode: sourceCode, sourceOffset: sourceOffset };
         }
         $$parser.structs[name].extern = true;
+    };
+
+    /* A BODYLESS `extern struct N` never reaches endStruct, so nothing compares it - and with no body
+       it claims no layout, so there is nothing to compare. Give back whatever it was parsed beside. */
+    $$parser.cancelStructRedeclaration = function (name) {
+        var s = $$parser.structs[name];
+        if (s && s.shadowed) {
+            $$parser.structs[name] = s.shadowed;
+        }
     };
 
     $$parser.isExternStruct = function (name) {
@@ -1781,17 +2002,58 @@
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
 
-    /* '*size' operand for allocating an ARRAY. A struct-element array is `count * .z.Elem` - kept
-       SYMBOLIC (a compile-time `! MULi` into a scratch) so the allocation tracks the element size,
-       exactly like the subscript stride. Scalar elements are one word each, so `*count`. */
-    $$parser.arrayAllocSize = function (elemDesc, count, words) {
+    /* The symbol naming an array's allocation extent: `.x.name` for a global, `.x.func.local` for a
+       local. See docs/SymbolNamespace.md. */
+    $$parser.extentSymbol = function (name, owner) {
+        return '.x.' + (owner !== undefined ? owner + '.' : '') + name;
+    };
+
+    /* '*size' operand for allocating an ARRAY, published as a NAMED assemble-time constant rather
+       than left in a `<X>` scratch. A scratch is a recycled register: it holds the extent only until
+       the next borrow, so the allocation line was the one and only place that could read it. A named
+       constant is permanent and referenceable, which is what lets an extent be quoted anywhere later.
+       The value is usually symbolic - a host `! DEFi` count, or `count * .z.Elem` that only resolves
+       at assembly - so naming it is the ONLY way to hold on to it; there is no number to keep. A
+       struct-element array is that `count * .z.Elem`, folded by a compile-time `! MULi` so the
+       allocation tracks the element size exactly like the subscript stride does; scalar elements are
+       one word each, so the count IS the size. declare() flushes the fold ahead of the `! DEFi` that
+       reads it, and hands the scratch back. */
+    $$parser.arrayAllocSize = function (elemDesc, count, symbol) {
+        var value = count;
         if (elemDesc !== undefined && $$parser.descTail(elemDesc) === undefined
                 && $$parser.isStructAtom($$parser.descHead(elemDesc))) {
-            var s = $$parser.borrow('<');
-            $$parser.emit('<> *', 'i', s, '#' + count, '#.z.' + $$parser.descHead(elemDesc));
-            return '*' + s;
+            value = $$parser.borrow('<');
+            $$parser.emit('<> *', 'i', value, '#' + count, '#.z.' + $$parser.descHead(elemDesc));
         }
-        return '*' + words;
+        $$parser.declare('! DEF?', 'defines', symbol, 'i', true, '#' + value);
+        return '*' + symbol;
+    };
+
+    /* The struct atom a pointer/array element descriptor points at, or undefined for anything whose
+       stride is one word. `int pointer` and untyped `pointer` both land in the undefined case, which is
+       why scaling changes nothing for them. */
+    $$parser.strideStruct = function (elemDesc) {
+        if (elemDesc === undefined || $$parser.descTail(elemDesc) !== undefined) {
+            return undefined;
+        }
+        var head = $$parser.descHead(elemDesc);
+        return $$parser.isStructAtom(head) ? head : undefined;
+    };
+
+    /* Does a subscript on this slot stride by a struct size rather than by one word? That is exactly the
+       question `[i]` vs `[[i]]` asks, so both the Subscript rule and the pointer-arithmetic diagnostics
+       ask it here. Note a SCALAR array field inside a struct (`s.v[k]`) reaches subscriptStruct too but
+       strides one word, so the predicate is the element type, never which code path handles it. */
+    $$parser.subscriptScales = function (slot) {
+        var elem;
+        if (slot.place && slot.arrayOf) {
+            elem = slot.arrayOf;
+        } else if (slot.type === 'p') {
+            elem = slot.elem;
+        } else {
+            return false;
+        }
+        return $$parser.strideStruct(elem) !== undefined;
     };
 
     /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
@@ -2135,24 +2397,45 @@
                         'use a cast: (' + $$parser.elemVerbose(leftx.elem) + ' pointer)');
             }
         }
-        if (leftx.type === 'F' && $$parser.isFuncTypeAtom(leftx.elem)) {   /* named funcptr type target: check the signature */
-            var rop = rightx.operands && rightx.operands[1];
-            if (rop === '&NULL' && rightx.operands[2] === undefined) {
-                return;                                           /* nullfunc is assignable to any funcptr type */
+        if (leftx.type === 'F' && $$parser.isFuncTypeAtom(leftx.elem)) {   /* named funcptr type target */
+            $$parser.checkFuncPtrTarget(leftx.elem, bareOperand(rightx), rightx.type, rightx.elem,
+                    '', sourceCode, sourceOffset);
+        }
+    };
+
+    /* The lone operand of a one-operand meta - a direct `&f` / `^f` reference or `&NULL` - and
+       undefined for anything compound, which is neither. */
+    function bareOperand(x) {
+        return (x.operands && x.operands[2] === undefined ? x.operands[1] : undefined);
+    }
+
+    /* A named funcptr target, at an assignment or at an argument (`at` names which): `nullfunc` suits
+       any type, a direct function reference is checked against it, and anything else must ALREADY
+       carry that exact type. An untyped funcptr is not silently promoted, for the same reason a bare
+       `pointer` is not assignable to an `int pointer` (E201) - it guarantees nothing about the shape
+       of what gets called. The cast that says "I checked" needs no `pointer`, a functype being one. */
+    $$parser.checkFuncPtrTarget = function (expected, operand, actualType, actualElem, at,
+                                            sourceCode, sourceOffset) {
+        if (operand === '&NULL') {
+            return;
+        }
+        /* Gated on the LOOKUP, not on the sigil: reading a global spells itself `&name` too, so
+           `&`/`^` alone cannot tell a function reference from one, and testing the sigil sent every
+           global funcptr into this branch to find no function and silently fall out - past the
+           element check below, which is the one that applies to it. */
+        var fe = (operand && (operand.charAt(0) === '&' || operand.charAt(0) === '^')
+                ? $$parser.symbols.functions[operand.substr(1)] : undefined);
+        if (fe && fe.signature) {                                 /* a direct function reference */
+            if (!$$parser.funcTypeMatches(expected, fe.signature)) {
+                $$parser.fail('Function ' + operand.substr(1) + " does not match funcptr type '"
+                        + expected + "'" + at, sourceCode, sourceOffset, 'E441',
+                        'check the parameter and return types against ' + expected);
             }
-            if (rop && (rop[0] === '&' || rop[0] === '^')) {      /* a direct function reference */
-                var fe = $$parser.symbols.functions[rop.substr(1)];
-                if (fe && fe.signature && !$$parser.funcTypeMatches(leftx.elem, fe.signature)) {
-                    $$parser.fail('Function ' + rop.substr(1) + " does not match funcptr type '"
-                            + leftx.elem + "'", sourceCode, sourceOffset, 'E441',
-                            'check the parameter and return types against ' + leftx.elem);
-                }
-            } else if (rightx.type === 'F' && rightx.elem !== undefined
-                    && $$parser.isFuncTypeAtom(rightx.elem) && rightx.elem !== leftx.elem) {
-                $$parser.fail("Funcptr type mismatch (expected '" + leftx.elem + "', got '"
-                        + rightx.elem + "')", sourceCode, sourceOffset, 'E441',
-                        'cast explicitly if this is intentional');
-            }
+        } else if (actualType === 'F' && actualElem !== expected) {
+            $$parser.fail('Funcptr type mismatch' + at + " (expected '" + expected + "', got "
+                    + (actualElem !== undefined && $$parser.isFuncTypeAtom(actualElem)
+                            ? "'" + actualElem + "'" : 'an untyped funcptr') + ')',
+                    sourceCode, sourceOffset, 'E441', 'use a cast: (' + expected + ')');
         }
     };
 
@@ -2166,6 +2449,7 @@
         rightx = metaSlot(rightx);
 
         var lelem = leftx.elem;                                   /* element type of the base (Impala 2) */
+        var lro   = leftx.readonly;                               /* a readonly array's element is readonly too */
 
         /* a binary result is never a verbatim call result; drop callInfo so
            assign() cannot mistake it for one (see unaryOp for rationale). */
@@ -2228,16 +2512,32 @@
         } else {
 
             /* pointer-difference special-case “d” */
-            if (operator === '-' && rightx.type === 'p') {
+            var diff = (operator === '-' && rightx.type === 'p');
+            if (diff) {
                 operator = 'd';
             }
 
-            $$parser.makeMeta(
-                leftx, operator, tp, null,
-                $$parser.makeRValue(leftx),
-                $$parser.makeRValue(rightx)
-            );
+            /* Arithmetic on a struct pointer is REJECTED, because `+` and `-` carry no marker for the
+               multiply they would need, and the scaled subscript already spells it: `&p[[i]]`. Scaling
+               them instead was tried and reverted - it leaked into comparison (no unit there at all) and
+               `for` could not honour it, `FORp` having no room for a stride. See docs/Impala2Review.md,
+               "the scaled subscript is spelled `[[ ]]`". Comparisons fall through untouched: they are
+               unit-free and are what the `while` walk is built on. */
+            var stride = (leftx.type === 'p' ? $$parser.strideStruct(lelem) : undefined);
+            if (stride !== undefined && (operator === '+' || operator === '-')) {
+                $$parser.fail('Arithmetic on a ' + stride + ' pointer', sourceCode, sourceOffset,
+                        'E307', 'a struct pointer moves by scaled subscript only - write `&p[[i]]`');
+            }
+            if (stride !== undefined && diff) {
+                $$parser.fail('Difference between ' + stride + ' pointers', sourceCode, sourceOffset,
+                        'E308', 'the element count is `((pointer)q - (pointer)p) / sizeof('
+                                + stride + ')`');
+            }
+            $$parser.makeMeta(leftx, operator, tp, null,
+                              $$parser.makeRValue(leftx), $$parser.makeRValue(rightx));
         }
+
+        leftx.readonly = lro;                                     /* survives the makeMeta calls above */
 
         /* element-type propagation (Impala 2) */
         if (operator === '=[]' && lelem !== undefined) {
@@ -2373,13 +2673,23 @@
 
         if (leftx.type !== '?' && rightx.type !== '?' && leftx.type !== rightx.type) {
             $$parser.typeError(
-                'Incompatible types for assignment ({$type1} = {$type2})',
+                /* Reads as a statement about the assignment, not as an equation: `(pointer = funcptr)`
+                   left people working out which side was which. Source first, destination second. */
+                'Incompatible types for assignment: cannot assign {$type2} to {$type1}',
                 sourceCode, sourceOffset,
                 leftx.type, rightx.type
             , 'E303');
         }
 
         $$parser.checkPtrAssign(leftx, rightx, sourceCode, sourceOffset);
+
+        /* `readonly` was honoured for scalars and silently ignored for an indexed write, which left the
+           assembler to catch it as `Incompatible types` against the const region - if at all. */
+        if (leftx.readonly === true) {
+            $$parser.fail('Cannot assign to an element of a readonly array',
+                    sourceCode, sourceOffset, 'E404',
+                    'declare it `global` instead of `readonly` if it has to be written');
+        }
 
         /* fast path: constant expression on RHS */
         var op1 = rightx.operands[1];
@@ -2712,7 +3022,7 @@
                 if (value !== undefined) line += ' ' + value;
                 if (comment)             line += '\t; ' + comment;
 
-                output( line );
+                emitLine( line );
             }
         }
 
@@ -2754,6 +3064,7 @@
                 readonly: !!readonly,
                 kind: kind,
                 signature: prev && prev.signature,
+                externProto: prev && prev.externProto,   /* survives the definition's signature reset */
                 sourceCode: sourceCode,
                 sourceOffset: sourceOffset,
                 sourceName: ($$parser.sourceName !== undefined ? $$parser.sourceName
@@ -2795,7 +3106,7 @@
                 assert(rec.operands[0][0] === '@',
                        "label must start with '@'");
                 if (nextLabel !== TABstr) {
-                    output(prefix + nextLabel + 'NOOP');
+                    emitLine(prefix + nextLabel + 'NOOP');
                 }
                 nextLabel = rec.operands[0].substr(1) + ':' + TABstr;
                 continue;
@@ -2816,7 +3127,7 @@
             if (op.substr(0, 3) === '<> ') {
 
                 if (nextLabel !== TABstr) {
-                    output(prefix + nextLabel + 'NOOP');
+                    emitLine(prefix + nextLabel + 'NOOP');
                 }
                 nextLabel = TABstr;
 
@@ -2824,7 +3135,7 @@
                 gop      = replace(gop, '?',
                                    $$parser.TYPE_SUFFIXES[ rec.type ]);
 
-                output(prefix + '\t! ' + gop + ' ' +
+                emitLine(prefix + '\t! ' + gop + ' ' +
                        formatOperand(rec.operands[0]) + ' '   +
                        formatOperand(rec.operands[1]) + ' '   +
                        formatOperand(rec.operands[2]) + nextComment);
@@ -2840,7 +3151,7 @@
             gInstr     = replace(gInstr, '?',
                                  $$parser.TYPE_SUFFIXES[ rec.type ]);
 
-            output(prefix + nextLabel + gInstr + ' ' +
+            emitLine(prefix + nextLabel + gInstr + ' ' +
                    formatOperand(rec.operands[0]) + ' ' +
                    formatOperand(rec.operands[1]) + ' ' +
                    formatOperand(rec.operands[2]) + nextComment);
@@ -2897,6 +3208,10 @@
             if (p.type === 'A') {
                 $$parser.makeMeta(x, ':=', 'p', undefined,
                                   '&' + name, undefined);
+                /* A scalar `readonly` is rejected by its `:=*` operator having no assign() branch, but an
+                   ARRAY decays to the same `:=` address meta whether or not it is writable - so carry the
+                   flag and let assign() consult it once the subscript has been folded in. */
+                x.readonly = (p.readonly === true);
             } else {
                 $$parser.makeMeta(x,
                                   (p.readonly ? ':=*' : '=*'),
@@ -2932,8 +3247,18 @@
         }
 
         /* not found --------------------------------------------*/
+        /* Before giving up, look in the OTHER namespace. `global` is a mandatory prefix at every use
+           site, so reading a global without it - or a local/const with it - is the first error most
+           newcomers and code generators hit, and a bare "Undeclared identifier" points away from the
+           one-word fix. The symbol tables already hold the answer; say it. */
+        var hint;
+        if (!isGlobal && sym.globals[name]) {
+            hint = name + ' is a global - write `global ' + name + '`';
+        } else if (isGlobal && sym.locals['$' + name]) {
+            hint = name + ' is a local - drop the `global` keyword';
+        }
         $$parser.fail('Undeclared identifier: ' + name,
-                      sourceCode, sourceOffset, 'E403');
+                      sourceCode, sourceOffset, 'E403', hint);
     };
 
     /* -----------------------------------------------------------
@@ -3166,9 +3491,9 @@
 
         /* banner */
         var LF = '\n';
-        output('; Compiled with Impala version ' +
+        emitLine('; Compiled with Impala version ' +
                $$parser.IMPALA_VERSION + LF);
-        output('; signatures version=1');
+        emitLine('; signatures version=1');
     };
 
     $$parser.end = function () {
@@ -3181,13 +3506,13 @@
         /* dump assert strings only if present */
         if ($$parser.strings.a.length > 0) {
 
-            output('\t! EQUi #DEBUG #0 @.noAssertStrings');
+            emitLine('\t! EQUi #DEBUG #0 @.noAssertStrings');
 
             iterate($$parser.strings.a, function (rec) {
                 $$parser.dumpString(rec.name, rec.data);
             });
 
-            output('.noAssertStrings:\t!');
+            emitLine('.noAssertStrings:\t!');
         }
     };
 }
@@ -3196,9 +3521,14 @@
 #    Grammar    #
 #################
 
+# A `; signature` row is emitted once the whole declaration has parsed, and by then the parse
+# position has run past its trailing whitespace and comments onto the NEXT declaration - so an
+# origin taken there names the wrong line. Each declaration records where it STARTED instead;
+# every emit site reports `$$parser.declOffset`, error sites keep using the precise `$$i`.
 root        <-  _                                                     { $$parser.start(); }
-                (ImportDecl / ExportDecl / FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
-                / GlobalDecl / ';'_)* !.                              { $$parser.end(); }
+                ( { $$parser.declOffset = $$i; }
+                  (ImportDecl / ExportDecl / FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
+                  / GlobalDecl / ';'_) )* !.                          { $$parser.end(); }
 
 # `import "path"` names a unit for the builder's link closure. The compiler itself treats it
 # as a no-op - `impala build` resolves the closure, concatenates the sources, and compiles the
@@ -3227,7 +3557,7 @@ StructDecl  <-  STRUCT _ id:Identifier                               { $sname = 
                                                                          /* Publish the real layout with TYPES so gazl-validate can check an `extern struct`
                                                                             declaration of the same name against it - the .o./.z. constants alone carry no types. */
                                                                          emitStandaloneSignatureComment(
-                                                                             $$parser.structSignatureRow($sname, false, $$parser.sourceName, $$s, $$i));
+                                                                             $$parser.structSignatureRow($sname, false, $$parser.sourceName, $$s, $$parser.declOffset));
                                                                      }
 
 # ------------------------------------------------------------------
@@ -3297,9 +3627,12 @@ FuncDecl    <-                                                        { $inl = f
                                                                                  + ($$parser.counters['<'] - $$parser.stock['<'].length) + ' unreturned');
 
                                                                          if (!$$parser.inlineMode) {
-                                                                             output('');
-                                                                             output(';-----------------------------------------------------------------------------');
+                                                                             emitLine('');
+                                                                             emitLine(';-----------------------------------------------------------------------------');
                                                                          }
+                                                                         /* Buffer this function's head until the body is parsed - see emitLine. Nothing is
+                                                                            added to it yet, so the replay below is byte-identical to emitting directly. */
+                                                                         $$parser.headSink = [];
 
                                                                          /* declare the function symbol */
                                                                          $$parser.declare(
@@ -3321,7 +3654,7 @@ FuncDecl    <-                                                        { $inl = f
                                                                              entry.signature.returnElem = undefined;
                                                                              entry.signature.returnName = undefined;
                                                                              entry.signature.sourceCode = $$s;
-                                                                             entry.signature.sourceOffset = $$i;
+                                                                             entry.signature.sourceOffset = $$parser.declOffset;
                                                                              entry.signature.sourceName = $$parser.sourceName;
                                                                              entry.signature.returnResolved = false;
                                                                              entry.pendingReturnPlaceholder = undefined;
@@ -3451,55 +3784,51 @@ inp:ArgsDecl ')'_
                                                                      }
                 (
                     LOCALS _ loc:LocalsDecl                           {
-                                                                         if ($$parser.inlineMode) {
-                                                                             /* A scalar local becomes a borrowed transient at each expansion site. An array or
-                                                                                struct needs FRAME space, and frame declarations are emitted at the function
-                                                                                head while an expansion site is mid-body. See docs/Inlining.md section 8. */
-                                                                             iterate($loc, function (v) {
-                                                                                 var words = $$parser.fieldWords(v);
-                                                                                 /* the run occupies a COUNTED set of transients, so the total must be a number
-                                                                                    here. Impala knows every non-extern struct's size; a folded or symbolic
-                                                                                    array extent does not resolve until assembly. */
-                                                                                 if (!(words > 0)) {
-                                                                                     $$parser.fail('An inline function needs a compile-time size for the local '
-                                                                                                 + v.name, $$s, $$i, 'E433',
-                                                                                             'its words occupy transients, so the count must be known while compiling');
-                                                                                 }
-                                                                                 $$parser.inlineLocals.push({ name: '$' + v.name, words: words });
-                                                                             });
-                                                                         }
                                                                          iterate($loc, function (v) {
-                                                                             if (v.type === 'S') {         /* struct value local -> LOCA *sizeof, remember struct */
-                                                                                 $$parser.declare(
-                                                                                     'LOCA', 'locals',
-                                                                                     '$' + v.name,
-                                                                                     'S',
-                                                                                     false,
-                                                                                     $$parser.structAllocSize(v.struct),
-                                                                                     $$s, $$i,
-                                                                                     undefined,
-                                                                                     v.struct
-                                                                                 );
-                                                                             } else {
-                                                                                 $$parser.declare(
-                                                                                     'LOC?', 'locals',
-                                                                                     '$' + v.name,
-                                                                                     v.type,
-                                                                                     false,
-                                                                                     (v.type === 'A'
-                                                                                         ? $$parser.arrayAllocSize(v.elem, v.size, v.words)
-                                                                                         : (v.words !== undefined ? '*' + v.words : undefined)),
-                                                                                     $$s, $$i,
-                                                                                     undefined,
-                                                                                     v.elem
-                                                                                 );
+                                                                             /* Compute the allocation size ONCE: the declaration below needs it, and for an
+                                                                                `inline` function so does every expansion site, which re-declares the local
+                                                                                inside its own SCOP. Calling arrayAllocSize twice would borrow two scratches.
+                                                                                An array's size is a NAMED `.x.` extent, so it is a symbol every expansion can
+                                                                                repeat verbatim - no re-rendering the pieces it was folded from. */
+                                                                             var isStruct = (v.type === 'S');
+                                                                             var kind = (isStruct ? 'LOCA' : 'LOC?');
+                                                                             var type = (isStruct ? 'S' : v.type);
+                                                                             var elem = (isStruct ? v.struct : v.elem);
+                                                                             var size = (isStruct
+                                                                                     ? $$parser.structAllocSize(v.struct)
+                                                                                     : (v.type === 'A'
+                                                                                         ? $$parser.arrayAllocSize(v.elem, v.size,
+                                                                                                 $$parser.extentSymbol(v.name, $id))
+                                                                                         : (v.words !== undefined ? '*' + v.words : undefined)));
+                                                                             if ($$parser.inlineMode) {
+                                                                                 $$parser.inlineLocals.push({ name: '$' + v.name, kind: kind,
+                                                                                         type: type, size: size, elem: elem });
                                                                              }
+                                                                             $$parser.declare(kind, 'locals', '$' + v.name, type, false, size,
+                                                                                     $$s, $$i, undefined, elem);
+                                                                         });
+                                                                         iterate($loc, function (v) {   /* the count scratches ArrayDecl held for this
+                                                                                                           clause (see there); a no-op for the ones a
+                                                                                                           declaration above already gave back */
+                                                                             $$parser.returnBack(v.size);
                                                                          });
                                                                      }
-                )?                                                    { if (!$$parser.inlineMode) output(';-----------------------------------------------------------------------------'); }
+                )?                                                    { /* The head/body separator is emitted at the REPLAY below, not here: an inline
+                                                                           expansion appends its SCOP block to the head while the body is being parsed,
+                                                                           so anything written here would end up above those declarations. */ }
                 Block                                                 {
                                                                          /* wrap-up body */
                                                                          $$parser.processBranches();
+                                                                         /* The body (and every inline expansion in it) is now known, so the head is
+                                                                            final: replay it, then let flushMetaCode write the body straight out. */
+                                                                         var _head = $$parser.headSink;
+                                                                         $$parser.headSink = null;
+                                                                         if (_head !== null) {
+                                                                             for (var _h = 0; _h < _head.length; ++_h) emitLine(_head[_h]);
+                                                                         }
+                                                                         if (!$$parser.inlineMode) {
+                                                                             emitLine(';-----------------------------------------------------------------------------');
+                                                                         }
                                                                          if ($$parser.inlineMode) {                       /* no out-of-line copy: keep the body, emit nothing */
                                                                              $$parser.captureInlineBody($id, $$s, $$i);
                                                                              $$parser.metacode.length = 0;
@@ -3511,10 +3840,11 @@ inp:ArgsDecl ')'_
                                                                          prune($$parser.symbols.locals);
                                                                          $$parser.labelCounter = 0;
 
-                                                                         if (!$$parser.inlineMode) output('');
+                                                                         if (!$$parser.inlineMode) emitLine('');
                                                                          $$parser.inlineMode = false;
                                                                      }
 ExternDecl  <-  EXTERN _                                              { $$.scope = 'globals'; $$.structFwd = false;
+                                                                        $at = $$i;   /* the declaration itself - end-of-rule positions have skipped past it */
                                                                         $$parser.pendingProto = undefined; }
                 (
                     STRUCT _ id:Identifier                            {
@@ -3533,13 +3863,16 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                      }
                         ( ';' _ )?
                       )*
-                      '}' _                                           {   $$parser.endStruct($sname);
-                                                                          /* Declare the host-owned interface so gazl-validate can check the layout
+                      '}' _                                           {   /* Declare the host-owned interface so gazl-validate can check the layout
                                                                              the host supplies (.o.Name.field / .z.Name) against what Impala assumed,
-                                                                             the way extern globals and function signatures are already checked. */
-                                                                          emitStandaloneSignatureComment(
-                                                                              $$parser.structSignatureRow(
-                                                                                  $sname, true, $$parser.sourceName, $$s, $$i));
+                                                                             the way extern globals and function signatures are already checked. A
+                                                                             re-declaration of a struct DEFINED here describes no host layout, so it
+                                                                             publishes no row - the definition already published the real one. */
+                                                                          if (!$$parser.endStruct($sname)) {
+                                                                              emitStandaloneSignatureComment(
+                                                                                  $$parser.structSignatureRow(
+                                                                                      $sname, true, $$parser.sourceName, $$s, $$parser.declOffset));
+                                                                          }
                                                                       }
                     )?
                 /   (   FUNCTION                                      { $$.type  = 'U';  $$.scope = 'functions'; }
@@ -3579,7 +3912,10 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                      }
                 /   VarDecl
                 )                                                     {
-                                                                        if ($$.structFwd) return true;
+                                                                        if ($$.structFwd) {
+                                                                            $$parser.cancelStructRedeclaration($sname);
+                                                                            return true;
+                                                                        }
                                                                          $$parser.declare(
                                                                              undefined,                 // no section for extern
                                                                              $$.scope,
@@ -3604,10 +3940,12 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              }
                                                                              if (signature.sourceCode === undefined) {
                                                                                  signature.sourceCode = $$s;
-                                                                                 signature.sourceOffset = $$i;
+                                                                                 signature.sourceOffset = $$parser.declOffset;
                                                                                  signature.sourceName = $$parser.sourceName;
                                                                              }
-                                                                             signature.returnResolved = false;
+                                                                             if (entry.kind !== 'FUNC') {  /* a definition here already resolved it - do not un-resolve it */
+                                                                                 signature.returnResolved = false;
+                                                                             }
                                                                         }
 
                                                                         var role = ($$.type === 'N' ? 'extern native' : 'extern func');
@@ -3616,7 +3954,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                             returns: undefined,
                                                                             sourceName: $$parser.sourceName,
                                                                             sourceCode: $$s,
-                                                                            sourceOffset: $$i,
+                                                                            sourceOffset: $$parser.declOffset,
                                                                         };
                                                                                                                                                 var _proto = $$parser.pendingProto;
                                                                         $$parser.pendingProto = undefined;
@@ -3636,13 +3974,20 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                             placeholderSignature.returnCount = (_pr !== undefined ? 1 : 0);
                                                                             placeholderSignature.returnWords = (_pr !== undefined ? 1 : 0);
                                                                             placeholderSignature.returnResolved = true;
-                                                                            if (entry) {                   /* publish it so call sites check against it */
-                                                                                entry.signature.params         = _pp;
-                                                                                entry.signature.returns        = placeholderSignature.returns;
-                                                                                entry.signature.returnElem     = placeholderSignature.returnElem;
-                                                                                entry.signature.returnCount    = placeholderSignature.returnCount;
-                                                                                entry.signature.returnWords    = placeholderSignature.returnWords;
-                                                                                entry.signature.returnResolved = true;
+                                                                            if (entry) {
+                                                                                var _defined = (entry.kind === 'FUNC');
+                                                                                $$parser.checkExternAgreement($$.name, placeholderSignature,
+                                                                                        (_defined ? entry.signature : entry.externProto), _defined, $$s, $at);
+                                                                                entry.externProto = placeholderSignature;
+                                                                                if (!_defined) {               /* a definition here outranks it; otherwise publish
+                                                                                                                  it so call sites check against it */
+                                                                                    entry.signature.params         = _pp;
+                                                                                    entry.signature.returns        = placeholderSignature.returns;
+                                                                                    entry.signature.returnElem     = placeholderSignature.returnElem;
+                                                                                    entry.signature.returnCount    = placeholderSignature.returnCount;
+                                                                                    entry.signature.returnWords    = placeholderSignature.returnWords;
+                                                                                    entry.signature.returnResolved = true;
+                                                                                }
                                                                             }
                                                                         }
                                                                         emitStandaloneSignatureComment(
@@ -3652,7 +3997,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                                 role,
                                                                                 $$parser.sourceName,
                                                                                 $$s,
-                                                                                $$i
+                                                                                $$parser.declOffset
                                                                             )
                                                                         );
                                                                          } else if ($$.scope === 'globals') {
@@ -3665,7 +4010,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                                     'extern',
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i,
+                                                                                    $$parser.declOffset,
                                                                                     $$.elem
                                                                                 )
                                                                             );
@@ -3695,7 +4040,7 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                                     $t,
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i,
+                                                                                    $$parser.declOffset,
                                                                                     $telem
                                                                                 ),
                                                                                 $telem
@@ -3716,7 +4061,7 @@ ConstDecl   <-  CONST _ type:BASE_TYPE _                              {
                                                                                      $t,
                                                                                      $$parser.sourceName,
                                                                                      $$s,
-                                                                                     $$i,
+                                                                                     $$parser.declOffset,
                                                                                      $telem,
                                                                                      true
                                                                                  )
@@ -3741,7 +4086,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                      $$s, $$i,
                                                                                      $$parser.formatGlobalSignatureComment(
                                                                                          $section, $v.name, 'S', undefined, undefined,
-                                                                                         $$parser.sourceName, $$s, $$i, $v.struct),
+                                                                                         $$parser.sourceName, $$s, $$parser.declOffset, $v.struct),
                                                                                      $v.struct
                                                                                  );
                                                                              } else {
@@ -3789,7 +4134,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     undefined,
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i,
+                                                                                    $$parser.declOffset,
                                                                                     $v.elem
                                                                                 ),
                                                                                 $v.elem
@@ -3803,7 +4148,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 $a.name,
                                                                                 'A',
                                                                                 ($section === 'CNST'),
-                                                                                $$parser.arrayAllocSize($a.elem, $a.size, $a.words),
+                                                                                $$parser.arrayAllocSize($a.elem, $a.size,
+                                                                                        $$parser.extentSymbol($a.name)),
                                                                                 $$s, $$i,
                                                                                 $$parser.formatGlobalSignatureComment(
                                                                                     $section,
@@ -3813,11 +4159,12 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     undefined,
                                                                                     $$parser.sourceName,
                                                                                     $$s,
-                                                                                    $$i,
+                                                                                    $$parser.declOffset,
                                                                                     $a.elem
                                                                                 ),
                                                                                 $a.elem
                                                                             );
+                                                                            $$parser.returnBack($a.size);   /* declared: this consumer is done with it */
                                                                             $aStructEl = ($a.elem !== undefined
                                                                                     && $$parser.descTail($a.elem) === undefined
                                                                                     && $$parser.isStructAtom($$parser.descHead($a.elem)));
@@ -3974,9 +4321,13 @@ ArrayDecl   <-                                                        { $desc = 
                 ( '[' _ x:Expr ']' _                                  {
                                                                          $size = $$parser.makeConstant($x, 'i', $$s, $$i);
                                                                          $extent = $$parser.dropHash($size);   /* element count - may be a symbolic const */
-                                                                         if ($$parser.openStruct === undefined) {
-                                                                             $$parser.returnBack($size);       /* a struct field's borrow outlives the decl - endStruct frees it */
-                                                                         }
+                                                                         /* THE CONSUMER OWNS THE BORROW. A folded extent lives in a `<X>` scratch, and
+                                                                            a scratch is recycled on the next borrow - so whoever still has to READ this
+                                                                            one decides when it goes back: endStruct after the layout block, FuncDecl
+                                                                            after the locals pass, GlobalDecl right after its declaration. Freeing it
+                                                                            here instead let the NEXT declarator in the same list borrow the same
+                                                                            scratch and overwrite the extent, which is how two array locals in one
+                                                                            clause silently got whichever count was folded last. */
                                                                      }
                 )?                                                    {
                                                                          /* An `extern struct` field states NO extent, matching the
@@ -3999,7 +4350,8 @@ ArrayDecl   <-                                                        { $desc = 
                                                                          $$.elem = $desc;
                                                                          $$.name = $id;
                                                                          $$.size = $extent;
-                                                                         $$.words = $extent;                   /* alloc size folds count*.z.Elem symbolically (arrayAllocSize) */
+                                                                         $$.words = $extent;                   /* an array's words ARE its count; a struct element
+                                                                                                                    scales symbolically, in arrayAllocSize */
                                                                      }
 
 # ------------------------------------------------------------------
@@ -4064,20 +4416,32 @@ MulDiv      <-  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
 
 PrePost     <-  (op:PREFIX_OP _
                 / '('_ op:BASE_TYPE _               { $cdesc = $$parser.CASTS_TO_TYPES[$op]; }
-                  ( POINTER _                       { $cdesc = 'p:' + $cdesc; $cmods = true; }
+                  ( POINTER _                       { $cdesc = 'p:' + $cdesc; $ccast = 'pointer'; }
                   )* ')'_
-                / '('_ sid:Identifier               { $pdepth = 0; }   # struct-pointer cast: (Name pointer ...)
+                / '('_ sid:Identifier               { $pdepth = 0; }   # named-type cast: (Name pointer ...) / (Fn)
                   ( POINTER _                       { $pdepth = $pdepth + 1; }
-                  )+ ')'_                           {
-                                                      if (!$$parser.isStructAtom($sid))
-                                                          $$parser.fail('Unknown type ' + $sid, $$s, $$i, 'E413');
-                                                      $cdesc = $sid;
-                                                      for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc;
-                                                      $cmods = true;
+                  )* ')'_                           {
+                                                      /* With no `pointer` this is only a cast when the name is a
+                                                         FUNCTYPE, which is already a pointer and so needs no
+                                                         modifier - a struct has no by-value cast, and anything else
+                                                         is a plain parenthesized expression. Backing out (rather
+                                                         than failing) lets Value parse `(x) + 1`; the test above is
+                                                         a pure lookup, so there is no side effect to undo. */
+                                                      if ($pdepth === 0) {
+                                                          if (!$$parser.isFuncTypeAtom($sid)) return false;
+                                                          $cdesc = 'F:' + $sid;
+                                                          $ccast = 'funcptr';
+                                                      } else {
+                                                          if (!$$parser.isStructAtom($sid) && !$$parser.isFuncTypeAtom($sid))
+                                                              $$parser.fail('Unknown type ' + $sid, $$s, $$i, 'E413');
+                                                          $cdesc = $sid;
+                                                          for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc;
+                                                          $ccast = 'pointer';
+                                                      }
                                                     }
                 ) PrePost                           { if (!$$parser.dry) {
-                                                       if ($cmods) {
-                                                           $$parser.unaryOp('pointer', $$, $$s, $$i);
+                                                       if ($ccast) {          /* a named/pointer cast; a bare BASE_TYPE cast has no $ccast */
+                                                           $$parser.unaryOp($ccast, $$, $$s, $$i);
                                                            $$parser.setElem($$, $$parser.descTail($cdesc));
                                                        } else {
                                                            $$parser.unaryOp($op, $$, $$s, $$i);
@@ -4085,8 +4449,24 @@ PrePost     <-  (op:PREFIX_OP _
                                                      } }
                 / Value (FuncCall / Subscript / FieldAccess)*
 
-Subscript   <-  '['_ s:Expr ']'_                   { if (!$$parser.dry) {
+# Two subscripts, never interchangeable: `[i]` strides one word and costs one instruction, `[[i]]`
+# strides sizeof(element) and costs one more. Each is an error where the other is correct, so the
+# spelling states the cost at the use site - the same job `->` does for a load. `[[` is tried first;
+# there is no ambiguity with a nested `a[b[i]]` because no Expr can begin with `[`.
+Subscript   <-  '[['_ s:Expr ']]'_                 { if (!$$parser.dry) {
+                                                       var sbs = metaSlot($$);
+                                                       if (!$$parser.subscriptScales(sbs))
+                                                           $$parser.fail('Scaled subscript on a one-word element',
+                                                                   $$s, $$i, 'E205',
+                                                                   '`[[ ]]` scales by the element size - this element is one word, so write `[ ]`');
+                                                       $$parser.subscriptStruct($$, $s);
+                                                     } }
+                / '['_ s:Expr ']'_                 { if (!$$parser.dry) {
                                                        var sb = metaSlot($$);
+                                                       if ($$parser.subscriptScales(sb))
+                                                           $$parser.fail('Plain subscript on a struct element',
+                                                                   $$s, $$i, 'E204',
+                                                                   'this element is a struct, so the index scales - write `[[ ]]`');
                                                        if ((sb.place && sb.arrayOf) || (sb.type === 'p' && $$parser.isStructAtom(sb.elem)))
                                                            $$parser.subscriptStruct($$, $s);
                                                        else
@@ -4121,7 +4501,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            $$parser.claimSlot($$.base + _os);
                                                        $$.types = [];
                                                        $$.elems = [];
-                                                       $$.nulls = [];
+                                                       $$.opnds = [];
                                                     } }
                 (Argument (','_ Argument)*)?
                 (   ')'_
@@ -4214,7 +4594,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                }
                                                                var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */
                                                                if (expected === 'p' && expectedElem !== undefined
-                                                                       && !$$.nulls[argIdx]
+                                                                       && $$.opnds[argIdx] !== '&NULL'
                                                                        && $$.elems[argIdx] !== expectedElem) {
                                                                    $$parser.fail('Pointer element type mismatch for argument '
                                                                            + (argIdx + 1) + ' when calling ' + label
@@ -4222,6 +4602,15 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                            + ' elements, got ' + $$parser.elemVerbose($$.elems[argIdx])
                                                                            + ' elements)', $$s, $$i, 'E202',
                                                                            'use a cast: (' + $$parser.elemVerbose(expectedElem) + ' pointer)');
+                                                               }
+                                                               /* Same rule for a named funcptr param as for assignment, so the same check:
+                                                                  `expected` is already 'F' here, which is what the assign path derives from
+                                                                  the r-value's own type. */
+                                                               if (expected === 'F' && $$parser.isFuncTypeAtom(expectedElem)) {
+                                                                   $$parser.checkFuncPtrTarget(expectedElem, $$.opnds[argIdx], 'F',
+                                                                           $$.elems[argIdx],
+                                                                           ' for argument ' + (argIdx + 1) + ' when calling ' + label,
+                                                                           $$s, $$i);
                                                                }
                                                            }
 
@@ -4242,7 +4631,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            callResultType,
                                                            $$parser.sourceName,
                                                            $$s,
-                                                           $$i,
+                                                           $$i,                 /* the CALL SITE, not the enclosing declaration */
                                                            $$.elems
                                                        );
                                                        var commentIndex = -1;
@@ -4321,9 +4710,7 @@ Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        }
                                                        if ($$.elems) {                       /* element chain + null-ness, captured */
                                                            $$.elems.push(meta.elem);         /* before makeArgValue mutates the meta */
-                                                           $$.nulls.push(meta.type === 'p'
-                                                               && meta.operands[1] === '&NULL'
-                                                               && meta.operands[2] === undefined);
+                                                           $$.opnds.push(bareOperand(meta));  /* `&NULL` marks a null/nullfunc literal */
                                                        }
                                                        var winSlot = $$.base + $$.retSlots + $$.words;
                                                        if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */
@@ -4422,6 +4809,11 @@ Block       <-  '{'_ Statement* '}'_
 
 Goto        <-  GOTO _ label:Identifier ';'_        {
                                                         $$parser.emit('-->', undefined, '@' + $label._, undefined, undefined);
+                                                        /* carry the source position so processBranches can name the
+                                                           `.impala` line if this label is never defined (E445) */
+                                                        var g = $$parser.metacode[$$parser.metacode.length - 1];
+                                                        g.gotoSource = $$s;
+                                                        g.gotoOffset = $$i;
                                                     }
 
 
@@ -4474,6 +4866,15 @@ For         <-  FOR _ '('_ var:Variable             {
                                                                 'For variable must be a local modifiable int or pointer variable',
                                                                 $$s, $$i
                                                             , 'E305');
+                                                        }
+                                                        /* `FORp` steps exactly one WORD and is already a 3-operand form, so a
+                                                           struct pointer has nowhere to put its stride. Scaling only the bound
+                                                           silently ran sizeof(S) times too many (F2 in docs/Impala2Review.md). */
+                                                        if ($$parser.strideStruct(varMeta.elem) !== undefined) {
+                                                            $$parser.fail(
+                                                                'For variable must not be a struct pointer',
+                                                                $$s, $$i, 'E309',
+                                                                'FORp cannot stride by a struct - use `while (p < end) { ...; p = &p[[1]]; }`');
                                                         }
                                                         $gotInit = false;            /* flag to detect an explicit start value */
                                                     }
@@ -4610,6 +5011,13 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                                          switchMeta.from
                                                                      );
 
+                                                        /* snapshot the range as plain numbers now: the operands
+                                                           are handed back to the scratch pool below, and a case
+                                                           is only checkable while both ends are known. */
+                                                        switchMeta.fromNum = $$parser.constInt(switchMeta.from);
+                                                        switchMeta.sizeNum = $$parser.constInt($size);
+                                                        switchMeta.caseSeen = {};
+
                                                         switchMeta.switchLabel = $$parser.newLabel('s');
                                                         $switchExit              = $$parser.newLabel('e');
 
@@ -4689,10 +5097,11 @@ CaseExpr    <-  Expr                                {
                                                         var baseFrom = (ctx ? ctx.from : caseMeta.from);
                                                         var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel);
 
-                                                        $n = $$parser.subConstInt(
-                                                                $$parser.makeConstant(caseMeta, 'i', $$s, $$i),
-                                                                baseFrom
-                                                            );
+                                                        var caseConst = $$parser.makeConstant(caseMeta, 'i', $$s, $$i);
+                                                        $$parser.checkCaseValue(ctx, $$parser.constInt(caseConst),
+                                                                $$s, $$i);
+
+                                                        $n = $$parser.subConstInt(caseConst, baseFrom);
 
                                                         /* create label for this case                                     */
                                                         $$parser.emit(

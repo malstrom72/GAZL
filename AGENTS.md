@@ -4,6 +4,32 @@ All code style and design principles (RAII / design-by-contract, naming, class l
 [docs/CodingStyle.md](docs/CodingStyle.md), the canonical cross-project style doc. This file covers this repository's
 operations (layout, build/test, scripts) and the commit conventions.
 
+## Read this before touching Impala or GAZL
+
+Two invariants govern almost every design decision in this repository. Getting either wrong produces
+changes that look reasonable and are wrong at the level of the whole system.
+
+**1. Impala is a transliterator, not a compiler.** The ~1:1 mapping between Impala constructs and GAZL
+instructions is sacred. No hidden optimization passes, no runtime machinery the programmer cannot
+predict from the source, and never stricter than the machine it targets. Optimization belongs in the
+assembler, where more is known. See the design principles in [`docs/Impala2.md`](docs/Impala2.md).
+
+**2. The build has TWO stages, and a constant is not always a number Impala knows.** GAZL programs are
+distributed as assembly TEXT, and that text is assembled on the END USER's machine immediately before
+running. The host injects named constant values at that moment (`Symbols::defineConstant`, `! DEFi`,
+`<A>`-`<Z>`, `! IFDF`), so one shipped `.gazl` file compiles to different code under different
+conditions. Impala therefore emits references to constants whose values it never saw, and that is
+correct and intended, not a gap to close. Do not make Impala demand a numeric value where a symbol
+would do; do not fold a named constant away; do not treat "not known at Impala compile time" as an
+error. The full rules, with verified examples, are in
+[`docs/TwoStageConstants.md`](docs/TwoStageConstants.md) - **read it before changing any constant
+handling, folding, bounds check or diagnostic.**
+
+Say "Impala compile time" or "GAZL assembly time" explicitly. Bare "compile time" is ambiguous here
+and is the usual root of the mistake.
+
+## Building and testing
+
 To run the test suite use the helper script with up to three minutes allowed for execution:
 
 ```bash

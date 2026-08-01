@@ -1,29 +1,29 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 2:1
-MAX_GRAVITY:	! DEFf #40.0	; signature const MAX_GRAVITY : float @ 3:1
-MIN_SPEED:	! DEFf #0.01	; signature const MIN_SPEED : float @ 4:1
-MAX_SPEED:	! DEFf #20.0	; signature const MAX_SPEED : float @ 5:1
-GRAVITY_PARAM:	! DEFi #0	; signature const GRAVITY_PARAM : int @ 6:1
-BUMPER_FORCE_PARAM:	! DEFi #1	; signature const BUMPER_FORCE_PARAM : int @ 7:1
-PARAM_COUNT:	! DEFi #2	; signature const PARAM_COUNT : int @ 8:1
-BALL_COUNT:	! DEFi #3	; signature const BALL_COUNT : int @ 9:1
-BALL_ACTIVE_PARAM:	! DEFi #0	; signature const BALL_ACTIVE_PARAM : int @ 10:1
-BALL_X_PARAM:	! DEFi #1	; signature const BALL_X_PARAM : int @ 11:1
-BALL_Y_PARAM:	! DEFi #2	; signature const BALL_Y_PARAM : int @ 12:1
-BALL_DX_PARAM:	! DEFi #3	; signature const BALL_DX_PARAM : int @ 13:1
-BALL_DY_PARAM:	! DEFi #4	; signature const BALL_DY_PARAM : int @ 14:1
-BALL_PARAMS_COUNT:	! DEFi #5	; signature const BALL_PARAMS_COUNT : int @ 16:1
-PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 18:1
-; signature extern native printLF() -> unknown @ 18:22
-; signature extern native abort() -> unknown @ 19:20
-; signature extern native atan2() -> unknown @ 21:20
-; signature extern native log() -> unknown @ 22:18
-; signature extern native sqrt() -> unknown @ 23:19
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 1:1
+MAX_GRAVITY:	! DEFf #40.0	; signature const MAX_GRAVITY : float @ 2:1
+MIN_SPEED:	! DEFf #0.01	; signature const MIN_SPEED : float @ 3:1
+MAX_SPEED:	! DEFf #20.0	; signature const MAX_SPEED : float @ 4:1
+GRAVITY_PARAM:	! DEFi #0	; signature const GRAVITY_PARAM : int @ 5:1
+BUMPER_FORCE_PARAM:	! DEFi #1	; signature const BUMPER_FORCE_PARAM : int @ 6:1
+PARAM_COUNT:	! DEFi #2	; signature const PARAM_COUNT : int @ 7:1
+BALL_COUNT:	! DEFi #3	; signature const BALL_COUNT : int @ 8:1
+BALL_ACTIVE_PARAM:	! DEFi #0	; signature const BALL_ACTIVE_PARAM : int @ 9:1
+BALL_X_PARAM:	! DEFi #1	; signature const BALL_X_PARAM : int @ 10:1
+BALL_Y_PARAM:	! DEFi #2	; signature const BALL_Y_PARAM : int @ 11:1
+BALL_DX_PARAM:	! DEFi #3	; signature const BALL_DX_PARAM : int @ 12:1
+BALL_DY_PARAM:	! DEFi #4	; signature const BALL_DY_PARAM : int @ 13:1
+BALL_PARAMS_COUNT:	! DEFi #5	; signature const BALL_PARAMS_COUNT : int @ 14:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 16:1
+; signature extern native printLF() -> unknown @ 18:1
+; signature extern native abort() -> unknown @ 19:1
+; signature extern native atan2() -> unknown @ 21:1
+; signature extern native log() -> unknown @ 22:1
+; signature extern native sqrt() -> unknown @ 23:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC	; signature func error(ptr s) -> void @ 25:16
+error:	FUNC	; signature func error(ptr s) -> void @ 25:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
@@ -34,7 +34,7 @@ error:	FUNC	; signature func error(ptr s) -> void @ 25:16
 
 
 ;-----------------------------------------------------------------------------
-cube:	FUNC	; signature func cube(float x) -> float @ 31:15
+cube:	FUNC	; signature func cube(float x) -> float @ 31:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
@@ -44,7 +44,7 @@ cube:	FUNC	; signature func cube(float x) -> float @ 31:15
 
 
 ;-----------------------------------------------------------------------------
-clamp:	FUNC	; signature func clamp(float x, float min, float max) -> float @ 37:16
+clamp:	FUNC	; signature func clamp(float x, float min, float max) -> float @ 37:1
 	$y:	OUTf
 	$x:	INPf
 	$min:	INPf
@@ -61,7 +61,7 @@ clamp:	FUNC	; signature func clamp(float x, float min, float max) -> float @ 37:
 
 
 ;-----------------------------------------------------------------------------
-floorMod:	FUNC	; signature func floorMod(float a, float n) -> float @ 45:19
+floorMod:	FUNC	; signature func floorMod(float a, float n) -> float @ 45:1
 	$r:	OUTf
 	$a:	INPf
 	$n:	INPf
@@ -74,7 +74,7 @@ floorMod:	FUNC	; signature func floorMod(float a, float n) -> float @ 45:19
 
 
 ;-----------------------------------------------------------------------------
-round:	FUNC	; signature func round(float x) -> float @ 51:16
+round:	FUNC	; signature func round(float x) -> float @ 51:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
@@ -82,12 +82,14 @@ round:	FUNC	; signature func round(float x) -> float @ 51:16
 		FLOf $y %0 
 		RETU   	; }
 
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 58:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 57:1
 	! MULi <A> #BALL_COUNT #BALL_PARAMS_COUNT
-balls:	GLOB *<A>	; signature array balls[] : unknown @ 60:1
+.x.balls:	! DEFi #<A>
+balls:	GLOB *.x.balls	; signature array balls[] : unknown @ 58:1
 
 ;-----------------------------------------------------------------------------
-tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 60:15
+tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 60:1
 		PARA *1
 	$sampleFrames:	INPi
 	$sampleRate:	INPf
@@ -107,7 +109,8 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 	$midiVel:	LOCi
 	$octave:	LOCi
 	$note:	LOCi
-	$ballParams:	LOCA *BALL_PARAMS_COUNT
+.x.tick.ballParams:	! DEFi #BALL_PARAMS_COUNT
+	$ballParams:	LOCA *.x.tick.ballParams
 ;-----------------------------------------------------------------------------
 		DIVf $rsr16 #16.0 $sampleRate	; rsr16 = 16.0 / sampleRate
 		PEEK %1 &params:GRAVITY_PARAM 	; gravity = (float) cube((float) global params[GRAVITY_PARAM]) * MAX_GRAVITY
@@ -220,7 +223,7 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 136:15
+init:	FUNC	; signature func init() -> void @ 136:1
 		PARA *1
 	$i:	LOCi
 	$o:	LOCi
@@ -248,7 +251,7 @@ init:	FUNC	; signature func init() -> void @ 136:15
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 151:15
+main:	FUNC	; signature func main() -> void @ 151:1
 		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------

@@ -1,13 +1,14 @@
  ; Compiled with Impala version 1.0
 
  ; signatures version=1
- ; signature extern native printInt() -> unknown @ 3:23
- N:					! DEFi #90000 ; signature const N : int @ 5:20
- REPS:				! DEFi #300	; signature const REPS : int @ 6:21
- flags:				GLOB *N		; signature array flags[N] : unknown @ 8:22
+ ; signature extern native printInt() -> unknown @ 3:1
+ N:					! DEFi #90000 ; signature const N : int @ 5:1
+ REPS:				! DEFi #300	; signature const REPS : int @ 6:1
+ .x.flags:			! DEFi #N
+ flags:				GLOB *.x.flags ; signature array flags[N] : unknown @ 8:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ 10:15
+ main:				FUNC		; signature func main() -> void @ 10:1
  								PARA *1
  					$rep:		LOCi
  					$i:			LOCi

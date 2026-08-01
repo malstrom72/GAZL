@@ -1,12 +1,12 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
-; signature extern native printInt() -> unknown @ 21:1
-; signature extern native printLF() -> unknown @ 23:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 18:1
+; signature extern native printInt() -> unknown @ 20:1
+; signature extern native printLF() -> unknown @ 21:1
 
 ;-----------------------------------------------------------------------------
-helper:	FUNC	; signature func helper(int a) -> int @ 23:17
+helper:	FUNC	; signature func helper(int a) -> int @ 23:1
 	$r:	OUTi
 	$a:	INPi
 ;-----------------------------------------------------------------------------
@@ -15,7 +15,7 @@ helper:	FUNC	; signature func helper(int a) -> int @ 23:17
 
 
 ;-----------------------------------------------------------------------------
-takesTwo:	FUNC	; signature func takesTwo(int a, int b) -> int @ 31:19
+takesTwo:	FUNC	; signature func takesTwo(int a, int b) -> int @ 31:1
 	$r:	OUTi
 	$a:	INPi
 	$b:	INPi
@@ -25,7 +25,7 @@ takesTwo:	FUNC	; signature func takesTwo(int a, int b) -> int @ 31:19
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 33:15
+main:	FUNC	; signature func main() -> void @ 33:1
 		PARA *1
 	$w:	LOCi
 ;-----------------------------------------------------------------------------

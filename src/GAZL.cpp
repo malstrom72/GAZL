@@ -86,6 +86,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , EXPECTED_CONSTANT							*/	, "Expected constant"
 	/* , NOT_ENOUGH_FUNCTION_SPACE					*/	, "Not enough space for function table"
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
+	/* , UNBALANCED_LOCAL_SCOPE						*/	, "Unbalanced SCOP / ENDS"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -250,7 +251,7 @@ enum Opcode {
 	, NLSF_VVB, NLSF_VCB, NLSF_CVB, NEQF_VVB, NEQF_VCB
 	, GOTO_B__, SWCH_VCC
 
-	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____
+	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____
 	
 	, MOVE_CC_
 	, ABSI_CC_
@@ -371,6 +372,7 @@ static const Operator OPERATORS[] = {
 	, { " DIVi_vcv", DIVI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " DIVi_vvc", DIVI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, CHECK_DIV_BY_0, 0				}
 	, { " DIVi_vvv", DIVI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
+	, { " ENDS____", ENDS____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " EQUf_ccb", EQUF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
 	, { " EQUf_cvb", EQUF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " EQUf_vcb", EQUF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
@@ -504,6 +506,7 @@ static const Operator OPERATORS[] = {
 	, { " POKE_vvc", POKE_VVC,	{ VAR_PTR_R		, VAR_INT_R		, KONST			}		, 0				, 0				}
 	, { " POKE_vvv", POKE_VVV,	{ VAR_PTR_R		, VAR_INT_R		, ANY_VAR_R		}		, 0				, 0				}
 	, { " RETU____", RETU_C__,	{ 0				, 0				, 0				}		, 0				, 0				}
+	, { " SCOP____", SCOP____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " SETL_vvc", SETL_VVC,	{ ANY_VAR_FREE_W, VAR_INT_R		, KONST			}		, 0				, 0				}
 	, { " SETL_vvv", SETL_VVV,	{ ANY_VAR_FREE_W, VAR_INT_R		, ANY_VAR_R		}		, 0				, 0				}
 	, { " SHLi_vcc", SHLI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT_P	}		, YIELDS_CONST	, CONST_INT		}
@@ -759,7 +762,8 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		, UInt maxMemorySize, Value* memoryBase, Symbols& globals)
 		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
-		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
+		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), maxLocalsSize(0), localScopeDepth(0)
+		, paramsSize(0), globalsPointer(memoryBase)
 		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
@@ -893,10 +897,11 @@ void Assembler::finalizeFunction() {
 			throw Exception(LABEL_ON_FUNCTION);
 		}
 	}
-	functionStart->p0.i = localsSize;
+	if (localScopeDepth != 0) throw Exception(UNBALANCED_LOCAL_SCOPE);
+	functionStart->p0.i = maxLocalsSize;
 	functionStart->p1.i = paramsSize;
 	functionStart = 0;
-	localsSize = paramsSize = 0;
+	localsSize = maxLocalsSize = paramsSize = 0;
 	locals.resolveForwardRefs();
 	locals.clear();
 }
@@ -1179,9 +1184,32 @@ const Char* Assembler::feed(const Char* line) {
 							v.i = localsSize;
 							declare(locals, labelBegin, labelEnd, op->declareTypes, v, size);
 							localsSize += size;
+							if (localsSize > maxLocalsSize) maxLocalsSize = localsSize;
 							break;
-							
+
+			/*
+				SCOP / ENDS bracket a group of declarations whose lifetime does not overlap the next group's.
+				`ENDS` rewinds the bump so a SIBLING group reuses the same offsets, while a NESTED group stacks
+				on top -- which is exactly what an inline expansion needs, including inlines within inlines. The
+				frame is `maxLocalsSize` (the peak over nesting chains), not the sum, and the assembler computes
+				it from RESOLVED sizes, so `LOCA *.z.Struct` overlays correctly even when only the host knows
+				the size. Purely a declaration-time construct: no instruction is emitted and the VM is unchanged.
+			*/
+			case SCOP____:	if (ip != (functionStart + 1)) throw Exception(MUST_DEFINE_LOCALS_FIRST);					// SCOP
+							if (localScopeDepth >= MAX_LOCAL_SCOPE_DEPTH) throw Exception(UNBALANCED_LOCAL_SCOPE);
+							localScopeStack[localScopeDepth++] = localsSize;
+							break;
+
+			case ENDS____:	if (ip != (functionStart + 1)) throw Exception(MUST_DEFINE_LOCALS_FIRST);					// ENDS
+							if (localScopeDepth == 0) throw Exception(UNBALANCED_LOCAL_SCOPE);
+							localsSize = localScopeStack[--localScopeDepth];
+							break;
+
 			default:		if (functionStart == 0) throw Exception(MISSING_FUNCTION_DECLARATION);						// The rest
+							if (ip == functionStart + 1) {																// leaving the declaration region
+								if (localScopeDepth != 0) throw Exception(UNBALANCED_LOCAL_SCOPE);
+								localsSize = maxLocalsSize;	// every local operand and RETU below resolves against the FINAL frame
+							}
 							v.p = (Int)(ip - codeBase);
 							declare(locals, labelBegin, labelEnd, BRANCH, v);
 							if (op->opcode == NOOP____) break;															// NOOP

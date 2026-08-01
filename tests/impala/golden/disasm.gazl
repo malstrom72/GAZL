@@ -1,39 +1,39 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern const DEBUG : int @ 8:1
-FILE_BUFFER_SIZE:	! DEFi #8192	; signature const FILE_BUFFER_SIZE : int @ 9:1
-TERMINAL_COLUMNS:	! DEFi #80	; signature const TERMINAL_COLUMNS : int @ 10:1
-TERMINAL_ROWS:	! DEFi #25	; signature const TERMINAL_ROWS : int @ 11:1
-TERMINAL_TAB_SIZE:	! DEFi #4	; signature const TERMINAL_TAB_SIZE : int @ 13:1
-; signature extern native output() -> unknown @ 14:1
-; signature extern native input() -> unknown @ 15:1
-; signature extern native inputEOF() -> unknown @ 16:1
-; signature extern native launch() -> unknown @ 17:1
-; signature extern native loadText() -> unknown @ 18:1
-; signature extern native sleep() -> unknown @ 22:1
-; signature extern const FILE_TYPE_COUNT : int @ 23:1
-; signature extern const FILE_TYPE_EXE : int @ 24:1
-; signature extern const FILE_TYPE_SYS : int @ 25:1
-; signature extern const FILE_TYPE_TXT : int @ 26:1
-; signature extern const FILE_TYPE_BIN : int @ 28:1
-; signature extern array FILE_TYPE_STRINGS[] : unknown @ 30:1
-; signature extern const FILE_FIELD_NAME : int @ 31:1
-; signature extern const FILE_FIELD_TYPE : int @ 32:1
-; signature extern const FILE_FIELD_SIZE : int @ 33:1
-; signature extern const FILE_FIELD_DATE : int @ 34:1
-; signature extern const FILE_FIELD_COUNT : int @ 36:1
-; signature extern global fileCount : int @ 37:1
-; signature extern array FILES[] : unknown @ 39:1
-; signature extern func strcmp() -> unknown @ 40:1
-; signature extern func findFile() -> unknown @ 41:1
-; signature extern func lower() -> unknown @ 42:1
-; signature extern func initFilesIfNecessary() -> unknown @ 46:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 47:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 49:1
+; signature extern const DEBUG : int @ 7:1
+FILE_BUFFER_SIZE:	! DEFi #8192	; signature const FILE_BUFFER_SIZE : int @ 8:1
+TERMINAL_COLUMNS:	! DEFi #80	; signature const TERMINAL_COLUMNS : int @ 9:1
+TERMINAL_ROWS:	! DEFi #25	; signature const TERMINAL_ROWS : int @ 10:1
+TERMINAL_TAB_SIZE:	! DEFi #4	; signature const TERMINAL_TAB_SIZE : int @ 11:1
+; signature extern native output() -> unknown @ 13:1
+; signature extern native input() -> unknown @ 14:1
+; signature extern native inputEOF() -> unknown @ 15:1
+; signature extern native launch() -> unknown @ 16:1
+; signature extern native loadText() -> unknown @ 17:1
+; signature extern native sleep() -> unknown @ 18:1
+; signature extern const FILE_TYPE_COUNT : int @ 22:1
+; signature extern const FILE_TYPE_EXE : int @ 23:1
+; signature extern const FILE_TYPE_SYS : int @ 24:1
+; signature extern const FILE_TYPE_TXT : int @ 25:1
+; signature extern const FILE_TYPE_BIN : int @ 26:1
+; signature extern array FILE_TYPE_STRINGS[] : unknown @ 28:1
+; signature extern const FILE_FIELD_NAME : int @ 30:1
+; signature extern const FILE_FIELD_TYPE : int @ 31:1
+; signature extern const FILE_FIELD_SIZE : int @ 32:1
+; signature extern const FILE_FIELD_DATE : int @ 33:1
+; signature extern const FILE_FIELD_COUNT : int @ 34:1
+; signature extern global fileCount : int @ 36:1
+; signature extern array FILES[] : unknown @ 37:1
+; signature extern func strcmp() -> unknown @ 39:1
+; signature extern func findFile() -> unknown @ 40:1
+; signature extern func lower() -> unknown @ 41:1
+; signature extern func initFilesIfNecessary() -> unknown @ 42:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 46:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 47:1
 
 ;-----------------------------------------------------------------------------
-strlen:	FUNC	; signature func strlen(ptr s) -> int @ 49:17
+strlen:	FUNC	; signature func strlen(ptr s) -> int @ 49:1
 	$l:	OUTi
 	$s:	INPp
 	$a:	LOCp
@@ -48,7 +48,7 @@ strlen:	FUNC	; signature func strlen(ptr s) -> int @ 49:17
 
 
 ;-----------------------------------------------------------------------------
-strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr @ 58:17
+strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr @ 58:1
 	$r:	OUTp
 	$d:	INPp
 	$s:	INPp
@@ -72,7 +72,7 @@ strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr @ 58:17
 
 
 ;-----------------------------------------------------------------------------
-outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 71:21
+outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 71:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
@@ -83,12 +83,14 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 71:21
 		RETU   	; }
 
 	! ADDi <A> #FILE_BUFFER_SIZE #1
-fileBuffer:	GLOB *<A>	; signature array fileBuffer[] : unknown @ 79:1
+.x.fileBuffer:	! DEFi #<A>
+fileBuffer:	GLOB *.x.fileBuffer	; signature array fileBuffer[] : unknown @ 77:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 79:15
+main:	FUNC	; signature func main() -> void @ 79:1
 		PARA *1
-	$s:	LOCA *256
+.x.main.s:	! DEFi #256
+	$s:	LOCA *.x.main.s
 	$type:	LOCi
 	$offset:	LOCi
 	$readCount:	LOCi
@@ -100,7 +102,8 @@ main:	FUNC	; signature func main() -> void @ 79:15
 	$col:	LOCi
 	$c:	LOCi
 	$i:	LOCi
-	$yn:	LOCA *64
+.x.main.yn:	! DEFi #64
+	$yn:	LOCA *.x.main.yn
 ;-----------------------------------------------------------------------------
 		CALL &initFilesIfNecessary %0 *1	; expects initFilesIfNecessary() -> unknown @ 83:24
 		MOVp %1 &.s_GAZLdi_4d3 	; outputLine("GAZL disassembler v2.1.")

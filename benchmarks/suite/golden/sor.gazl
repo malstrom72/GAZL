@@ -1,14 +1,15 @@
  ; Compiled with Impala version 1.0
 
  ; signatures version=1
- ; signature extern native printInt() -> unknown @ 5:23
- M:					! DEFi #100	; signature const M : int @ 7:18
- SIZE:				! DEFi #10000 ; signature const SIZE : int @ 8:23
- NITER:				! DEFi #2000 ; signature const NITER : int @ 9:23
- g:					GLOB *SIZE	; signature array g[SIZE] : unknown @ 11:21
+ ; signature extern native printInt() -> unknown @ 5:1
+ M:					! DEFi #100	; signature const M : int @ 7:1
+ SIZE:				! DEFi #10000 ; signature const SIZE : int @ 8:1
+ NITER:				! DEFi #2000 ; signature const NITER : int @ 9:1
+ .x.g:				! DEFi #SIZE
+ g:					GLOB *.x.g	; signature array g[SIZE] : unknown @ 11:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ 13:15
+ main:				FUNC		; signature func main() -> void @ 13:1
  								PARA *1
  					$p:			LOCi
  					$i:			LOCi

@@ -1,0 +1,91 @@
+; Compiled with Impala version 1.0
+
+; signatures version=1
+; signature extern native printInt() -> unknown @ 9:1
+; signature extern native printLF() -> unknown @ 10:1
+	! MOVi <a> #0	; layout of struct S
+.o.S.a:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.S.b:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.S.c:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.S:	! DEFi #<a>
+; signature struct S { a : int, b : int, c : int } @ 12:1
+	! MULi <A> #4 #.z.S
+.x.bank:	! DEFi #<A>
+bank:	GLOB *.x.bank	; signature array bank[4] : unknown @ 14:1
+	DATA #10 #0 #0 #20 #0 #0 #30 #0 #0 #40 #0 #0
+.x.words:	! DEFi #6
+words:	GLOB *.x.words	; signature array words[6] : int @ 15:1
+	DATA #1 #2 #3 #4 #4 #4
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature export func main() -> void @ 17:1
+		PARA *1
+	$p:	LOCp
+	$q:	LOCp
+	$end:	LOCp
+	$w:	LOCp
+	$v:	LOCp
+	$n:	LOCi
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $p &bank 	; p = &global bank[[0]]
+		! MULi <A> #1 #.z.S	; q = &p[[1]]
+		ADDp %0 $p #<A>
+		MOVp $q %0 
+		PEEK %1 $q #.o.S.a	; printInt(q->a)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 22:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 22:27
+		! MULi <A> #1 #.z.S	; printInt(p[[1]].a)
+		! ADDi <B> #<A> #.o.S.a
+		PEEK %1 $p #<B>
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 23:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 23:31
+		MOVi $i #2 	; i = 2
+		MULi %1 $i #.z.S	; q = &p[[i]]
+		ADDp %0 $p %1
+		MOVp $q %0 
+		PEEK %1 $q #.o.S.a	; printInt(q->a)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 27:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 27:27
+		MULi %2 $i #.z.S	; printInt(p[[i]].a)
+		ADDp %1 $p %2
+		PEEK %1 %1 #.o.S.a
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 28:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:31
+		! MULi <B> #3 #.z.S	; q = &global bank[[3]]
+		ADDp %0 &bank #<B>
+		MOVp $q %0 
+		DIFp %0 $q $p	; n = ((pointer) q - (pointer) p) / sizeof(S)
+		DIVi $n %0 #.z.S
+		MOVi %1 $n 	; printInt(n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 32:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:24
+		DIFp %0 $q &bank	; n = ((pointer) q - (pointer) &global bank[[0]]) / sizeof(S)
+		DIVi $n %0 #.z.S
+		MOVi %1 $n 	; printInt(n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 34:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:24
+		MOVp $w &words:0 	; w = &global words[0]
+		ADDp $v $w #3	; v = w + 3
+		PEEK %1 $v 	; printInt(*v)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 39:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 39:25
+		PEEK %1 $w #3	; printInt(w[3])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:27
+		MOVp $p &bank 	; p = &global bank[[0]]
+		! MULi <B> #4 #.z.S	; end = &global bank[[4]]
+		ADDp %0 &bank #<B>
+		MOVp $end %0 
+	.l0:	GEQp $p $end @.e1	; while (p < end) 
+		PEEK %1 $p #.o.S.a	; printInt(p->a)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:28
+		! MULi <B> #1 #.z.S	; p = &p[[1]]
+		ADDp %0 $p #<B>
+		MOVp $p %0 
+		GOTO @.l0  	; }
+	.e1:	RETU   	; }

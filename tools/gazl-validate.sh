@@ -8,4 +8,4 @@ if [ ! -x "output/NuXJS" ]; then
 	exit 1
 fi
 
-"output/NuXJS" "tools/gazl-validate.js" "$@"
+"output/NuXJS" "tools/gazl-validate.nuxjs.js" "$@"

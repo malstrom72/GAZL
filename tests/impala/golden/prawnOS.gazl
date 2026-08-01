@@ -1,16 +1,16 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native print() -> unknown @ 1:20
-; signature extern native printInt() -> unknown @ 2:23
-; signature extern native printLF() -> unknown @ 3:22
-; signature extern native abort() -> unknown @ 4:20
-; signature extern native input() -> unknown @ 5:20
-; signature extern native inputEOF() -> unknown @ 6:23
-; signature extern native launch() -> unknown @ 7:21
+; signature extern native print() -> unknown @ 1:1
+; signature extern native printInt() -> unknown @ 2:1
+; signature extern native printLF() -> unknown @ 3:1
+; signature extern native abort() -> unknown @ 4:1
+; signature extern native input() -> unknown @ 5:1
+; signature extern native inputEOF() -> unknown @ 6:1
+; signature extern native launch() -> unknown @ 7:1
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 9:17
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 9:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -34,9 +34,10 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 9:17
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 22:15
+main:	FUNC	; signature func main() -> void @ 22:1
 		PARA *1
-	$inp:	LOCA *256
+.x.main.inp:	! DEFi #256
+	$inp:	LOCA *.x.main.inp
 ;-----------------------------------------------------------------------------
 	mainLoop:	MOVp %1 &.s__4d2 	; mainLoop:
 		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 27:14

@@ -1,14 +1,14 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native printInt() -> unknown @ 1:23
-; signature extern native printLF() -> unknown @ 2:22
-; signature extern native print() -> unknown @ 3:20
+; signature extern native printInt() -> unknown @ 1:1
+; signature extern native printLF() -> unknown @ 2:1
+; signature extern native print() -> unknown @ 3:1
 	GLOB *1
-seed:	DATi #2463534242	; signature global seed : int @ 5:29
+seed:	DATi #2463534242	; signature global seed : int @ 5:1
 
 ;-----------------------------------------------------------------------------
-myrand:	FUNC	; signature func myrand() -> int @ 7:17
+myrand:	FUNC	; signature func myrand() -> int @ 7:1
 	$y:	OUTi
 ;-----------------------------------------------------------------------------
 		PEEK $y &seed 	; y = global seed
@@ -21,10 +21,11 @@ myrand:	FUNC	; signature func myrand() -> int @ 7:17
 		POKE &seed $y 	; global seed = y
 		RETU   	; }
 
-a:	GLOB *20000	; signature array a[20000] : unknown @ 17:22
+.x.a:	! DEFi #20000
+a:	GLOB *.x.a	; signature array a[20000] : unknown @ 17:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 19:15
+main:	FUNC	; signature func main() -> void @ 19:1
 		PARA *1
 	$i:	LOCi
 	$j:	LOCi

@@ -1,32 +1,36 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native output() -> unknown @ 8:1
-; signature extern native input() -> unknown @ 9:1
-; signature extern native inputEOF() -> unknown @ 10:1
-; signature extern native sleep() -> unknown @ 11:1
-; signature extern native findFirmwarePatch() -> unknown @ 12:1
-; signature extern native patchFirmware() -> unknown @ 13:1
-; signature extern native readGUIVariable() -> unknown @ 14:1
-; signature extern native writeGUIVariable() -> unknown @ 16:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 17:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-MAX_PATCHES:	! DEFi #64	; signature const MAX_PATCHES : int @ 20:1
-MAX_PATCH_NAME_LENGTH:	! DEFi #31	; signature const MAX_PATCH_NAME_LENGTH : int @ 21:1
-FILE_MEMORY_SIZE:	! DEFi #8000	; signature const FILE_MEMORY_SIZE : int @ 23:1
-lastPatch:	GLOB *256	; signature array lastPatch[256] : unknown @ 24:1
-lastConfig:	GLOB *256	; signature array lastConfig[256] : unknown @ 25:1
+; signature extern native output() -> unknown @ 7:1
+; signature extern native input() -> unknown @ 8:1
+; signature extern native inputEOF() -> unknown @ 9:1
+; signature extern native sleep() -> unknown @ 10:1
+; signature extern native findFirmwarePatch() -> unknown @ 11:1
+; signature extern native patchFirmware() -> unknown @ 12:1
+; signature extern native readGUIVariable() -> unknown @ 13:1
+; signature extern native writeGUIVariable() -> unknown @ 14:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 16:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 17:1
+MAX_PATCHES:	! DEFi #64	; signature const MAX_PATCHES : int @ 19:1
+MAX_PATCH_NAME_LENGTH:	! DEFi #31	; signature const MAX_PATCH_NAME_LENGTH : int @ 20:1
+FILE_MEMORY_SIZE:	! DEFi #8000	; signature const FILE_MEMORY_SIZE : int @ 21:1
+.x.lastPatch:	! DEFi #256
+lastPatch:	GLOB *.x.lastPatch	; signature array lastPatch[256] : unknown @ 23:1
+.x.lastConfig:	! DEFi #256
+lastConfig:	GLOB *.x.lastConfig	; signature array lastConfig[256] : unknown @ 24:1
 	GLOB *1
-patchCount:	DATi #-1	; signature global patchCount : int @ 26:1
+patchCount:	DATi #-1	; signature global patchCount : int @ 25:1
 	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
 	! MULi <A> #MAX_PATCHES <A>
-patchNames:	GLOB *<A>	; signature array patchNames[] : unknown @ 27:1
+.x.patchNames:	! DEFi #<A>
+patchNames:	GLOB *.x.patchNames	; signature array patchNames[] : unknown @ 26:1
 	GLOB *1
-displayedPatchingInfo:	DATi #FALSE	; signature global displayedPatchingInfo : int @ 29:1
-fileMemory:	GLOB *FILE_MEMORY_SIZE	; signature array fileMemory[FILE_MEMORY_SIZE] : unknown @ 31:1
+displayedPatchingInfo:	DATi #FALSE	; signature global displayedPatchingInfo : int @ 27:1
+.x.fileMemory:	! DEFi #FILE_MEMORY_SIZE
+fileMemory:	GLOB *.x.fileMemory	; signature array fileMemory[FILE_MEMORY_SIZE] : unknown @ 29:1
 
 ;-----------------------------------------------------------------------------
-strcpy:	FUNC	; signature func strcpy(ptr d, ptr s) -> ptr @ 31:17
+strcpy:	FUNC	; signature func strcpy(ptr d, ptr s) -> ptr @ 31:1
 	$r:	OUTp
 	$d:	INPp
 	$s:	INPp
@@ -46,7 +50,7 @@ strcpy:	FUNC	; signature func strcpy(ptr d, ptr s) -> ptr @ 31:17
 
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 43:17
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 43:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -68,7 +72,7 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 43:17
 
 
 ;-----------------------------------------------------------------------------
-stricmp:	FUNC	; signature func stricmp(ptr s0, ptr s1) -> int @ 55:18
+stricmp:	FUNC	; signature func stricmp(ptr s0, ptr s1) -> int @ 55:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -100,7 +104,7 @@ stricmp:	FUNC	; signature func stricmp(ptr s0, ptr s1) -> int @ 55:18
 
 
 ;-----------------------------------------------------------------------------
-upper:	FUNC	; signature func upper(ptr s) -> void @ 74:16
+upper:	FUNC	; signature func upper(ptr s) -> void @ 74:1
 		PARA *1
 	$s:	INPp
 	$p:	LOCp
@@ -120,7 +124,7 @@ upper:	FUNC	; signature func upper(ptr s) -> void @ 74:16
 
 
 ;-----------------------------------------------------------------------------
-outputLF:	FUNC	; signature func outputLF() -> void @ 84:19
+outputLF:	FUNC	; signature func outputLF() -> void @ 84:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s__4d2 	; output("\n")
@@ -129,7 +133,7 @@ outputLF:	FUNC	; signature func outputLF() -> void @ 84:19
 
 
 ;-----------------------------------------------------------------------------
-outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 89:21
+outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 89:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
@@ -140,7 +144,7 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 89:21
 
 
 ;-----------------------------------------------------------------------------
-help:	FUNC	; signature func help() -> void @ 95:15
+help:	FUNC	; signature func help() -> void @ 95:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		CALL &outputLF %0 *1	; expects outputLF() -> void @ 97:12
@@ -159,21 +163,23 @@ help:	FUNC	; signature func help() -> void @ 95:15
 
 
 ;-----------------------------------------------------------------------------
-refreshPatchList:	FUNC	; signature func refreshPatchList() -> void @ 106:27
+refreshPatchList:	FUNC	; signature func refreshPatchList() -> void @ 106:1
 		PARA *1
 	! ADDi <A> #MAX_PATCH_NAME_LENGTH #1
-	! ADDi <A> #8 #1
+	! ADDi <B> #8 #1
 	$p:	LOCp
-	$dummy:	LOCA *<A>
+.x.refreshPatchList.dummy:	! DEFi #<A>
+	$dummy:	LOCA *.x.refreshPatchList.dummy
 	$index:	LOCi
 	$size:	LOCi
-	$modDate:	LOCA *<A>
+.x.refreshPatchList.modDate:	! DEFi #<B>
+	$modDate:	LOCA *.x.refreshPatchList.modDate
 ;-----------------------------------------------------------------------------
 		MOVi $index #-1 	; index = -1
 	.l0:	ADDi $index $index #1	; index = index + 1
 		GEQi $index #MAX_PATCHES @.f1	; if (index < MAX_PATCHES) p = &global patchNames[index * (MAX_PATCH_NAME_LENGTH + 1)]
-		! ADDi <A> #MAX_PATCH_NAME_LENGTH #1	; p = &global patchNames[index * (MAX_PATCH_NAME_LENGTH + 1)]
-		MULi %0 $index <A>
+		! ADDi <B> #MAX_PATCH_NAME_LENGTH #1	; p = &global patchNames[index * (MAX_PATCH_NAME_LENGTH + 1)]
+		MULi %0 $index <B>
 		ADDp $p &patchNames %0
 		GOTO @.e2  
 	.f1:	ADRL $p $dummy *0	; p = dummy
@@ -191,7 +197,7 @@ refreshPatchList:	FUNC	; signature func refreshPatchList() -> void @ 106:27
 
 
 ;-----------------------------------------------------------------------------
-list:	FUNC	; signature func list() -> void @ 119:15
+list:	FUNC	; signature func list() -> void @ 119:1
 		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
@@ -202,8 +208,8 @@ list:	FUNC	; signature func list() -> void @ 119:15
 		PEEK %0 &patchCount 
 		GEQi #0 %0 @.e0
 	.l1:	NOOP
-		! ADDi <A> #MAX_PATCH_NAME_LENGTH #1	; output(&global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)])
-		MULi %2 $i <A>
+		! ADDi <B> #MAX_PATCH_NAME_LENGTH #1	; output(&global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)])
+		MULi %2 $i <B>
 		ADDp %2 &patchNames %2
 		CALL ^output %1 *2	; expects output(unknown-ptr) -> unknown @ 125:62
 		MOVp %2 &.s_Availa_4d8:20 	; output(" ")
@@ -215,9 +221,10 @@ list:	FUNC	; signature func list() -> void @ 119:15
 
 
 ;-----------------------------------------------------------------------------
-restore:	FUNC	; signature func restore() -> void @ 132:18
+restore:	FUNC	; signature func restore() -> void @ 132:1
 		PARA *1
-	$error:	LOCA *256
+.x.restore.error:	! DEFi #256
+	$error:	LOCA *.x.restore.error
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_Restor_4d9 	; outputLine("Restoring factory firmware. Do not power off...")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 135:63
@@ -246,12 +253,14 @@ restore:	FUNC	; signature func restore() -> void @ 132:18
 
 
 ;-----------------------------------------------------------------------------
-patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
+patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:1
 		PARA *1
 	$name:	INPp
 	$config:	INPp
-	$buffer1:	LOCA *256
-	$buffer2:	LOCA *256
+.x.patch.buffer1:	! DEFi #256
+	$buffer1:	LOCA *.x.patch.buffer1
+.x.patch.buffer2:	! DEFi #256
+	$buffer2:	LOCA *.x.patch.buffer2
 	$i:	LOCi
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
@@ -262,8 +271,8 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
 		PEEK %0 &patchCount 
 		GEQi #0 %0 @.e1
 	.l2:	NOOP
-		! ADDi <A> #MAX_PATCH_NAME_LENGTH #1	; p = &global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)]
-		MULi %1 $i <A>
+		! ADDi <B> #MAX_PATCH_NAME_LENGTH #1	; p = &global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)]
+		MULi %1 $i <B>
 		ADDp $p &patchNames %1
 		MOVp %2 $name 	; if ((int)stricmp(name, p) == 0) 
 		MOVp %3 $p 
@@ -337,7 +346,7 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ 149:16
 
 
 ;-----------------------------------------------------------------------------
-repatch:	FUNC	; signature func repatch() -> void @ 195:18
+repatch:	FUNC	; signature func repatch() -> void @ 195:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		PEEK %0 &lastPatch:0 	; if ((int)global lastPatch[0] == 0) help()
@@ -351,9 +360,10 @@ repatch:	FUNC	; signature func repatch() -> void @ 195:18
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 201:15
+main:	FUNC	; signature func main() -> void @ 201:1
 		PARA *1
-	$s:	LOCA *256
+.x.main.s:	! DEFi #256
+	$s:	LOCA *.x.main.s
 	$p:	LOCp
 	$c:	LOCi
 ;-----------------------------------------------------------------------------

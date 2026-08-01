@@ -18,26 +18,13 @@ CALL buildGAZLCmd.cmd release
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
-REM Verify the checked-in Impala compiler is regenerated from the current grammar, so the
-REM playground (impala\playground.html loads impala\impalaCompiler.js directly) never goes stale.
-node impala\updateJSPEG.js --check
+REM Every node-only gate, shared with build.sh so the two cannot run different subsets.
+CALL tools\test-js.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 
 REM Build Impala
 CALL tools\BuildImpala.cmd
 IF ERRORLEVEL 1 EXIT /B 1
-
-REM Run the Impala test suite from the source directory
-PUSHD impala
-node jspegCompilerTests.js
-IF ERRORLEVEL 1 EXIT /B 1
-node runJspegTests.js
-IF ERRORLEVEL 1 EXIT /B 1
-node importBuildTests.js
-IF ERRORLEVEL 1 EXIT /B 1
-node fuzzImpala.js 3000 1
-IF ERRORLEVEL 1 EXIT /B 1
-POPD
 
 REM Validate generated .gazl metadata for the JSPEG fixtures.
 FOR %%F IN (impala\testdata\*.expected.gazl) DO (
@@ -54,4 +41,8 @@ output\NuXJS.exe output\impala.nuxjs.js ^
 	impala\ImpalaDemo.impala output\ImpalaDemo.gazl 0x4d2 impala\ImpalaDemo.impala
 IF ERRORLEVEL 1 EXIT /B 1
 output\GAZLCmd.exe output\ImpalaDemo.gazl main
+IF ERRORLEVEL 1 EXIT /B 1
+
+REM ImpalaDemo imports nothing, so it cannot tell whether the closure walk survived staging.
+CALL tools\run-nuxjs-impala-smoke.cmd
 IF ERRORLEVEL 1 EXIT /B 1

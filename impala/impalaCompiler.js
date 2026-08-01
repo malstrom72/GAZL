@@ -1,3 +1,4 @@
+/* GENERATED from impala/impala.jspeg by `node impala/updateJSPEG.js` -- do not edit by hand. */
 var $$parser = {};
 var impalaCompilerImpl = (function(_s, _options) {
 var _hostOptions = _options || {};
@@ -15,6 +16,25 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 	? _hostOptions.sourceName
 	: undefined;
 {
+    /**
+     * emitLine(line) - every GAZL line leaves through here.
+     *
+     * A function's frame declarations are emitted as its head is parsed, but an inline expansion
+     * happens mid-body and needs to ADD declarations to that head (GAZL requires them before the
+     * first real instruction). So while a function body is being parsed, head lines are buffered in
+     * `headSink` and replayed once the body - and therefore every expansion in it - is
+     * known. Outside a function the sink is null and lines go straight out, unchanged.
+     */
+    function emitLine(line) {
+        if (headSink !== null) {
+            headSink.push(line);
+            return;
+        }
+        if (typeof output === 'function') {
+            output(line);
+        }
+    }
+
     /**
      * map(target, k1, v1, k2, v2, ...)
      *   assigns target[k1]=v1, etc.
@@ -145,6 +165,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     var dry            = false;
     var legacyMode     = (typeof _hostOptions !== 'undefined' && _hostOptions != null
             && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings
+    var units          = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
+            && _hostOptions.units) || undefined);               /// import-closure spans {name,start,end}[], for origins
+    var declOffset     = 0;                            /// offset of the declaration being parsed - see `root`
 
     /* 2  make sure the buckets exist */
     var META_TO_GAZL   = {};
@@ -153,6 +176,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     var inlineMode     = false;                         /// true while parsing an `inline function` body - emit nothing
     var INLINE_PURE    = {};                          /// operators whose write destination the compiler can NAME
     var inlineCounter  = 0;                           /// per-expansion suffix, keeps inlined labels unique
+    var headSink       = null;                        /// while a function body is parsed, its head lines buffer here (see emitLine)
     var CASTS_TO_TYPES = {};
     var ZEROES = {};
     var TYPE_SUFFIXES  = {};
@@ -318,6 +342,76 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return parts.join(', ');
     }
 
+    /* Types only, no names: what a signature CLAIM actually asserts, and the only part two claims
+       about one name have to agree on. Element chains stay in - gazl-validate treats a bare `ptr` as
+       element-UNKNOWN and lets it match any chain, so flattening `V-ptr` to `ptr` would silently
+       disarm the cross-unit check. That is the only type record a name-only `extern function f` has. */
+    function renderParamTypes(params) {
+        var parts = [], count = (params ? params.length : 0);
+        for (var idx = 0; idx < count; ++idx) {
+            var param = params[idx] || {};
+            parts.push(param.type === 'S' ? (param.struct || 'unknown')
+                    : signatureCategoryForDesc(fullDescFor(param.type, param.elem)));
+        }
+        return parts.join(', ');
+    }
+
+    /* The comparable shape of anything callable - a function signature, an extern prototype or a
+       `functype`, which all carry the same params/returns fields. */
+    function signatureShape(name, sig) {
+        return name + '(' + renderParamTypes(sig.params) + ') -> ' + renderReturnType(sig);
+    }
+
+    /* Two claims about one name that do not agree - `got` arrived second. A DEFINITION outranks a
+       declaration, so it is named as authoritative where the closure has one; with none in sight the
+       claims are only judgeable against each other, and blaming a definition would cite no file. */
+    function failDisagreement(what, got, had, code, priorIsDefinition, noun, plural, sourceCode, sourceOffset) {
+        if (priorIsDefinition) {
+            fail('extern declaration of ' + what + ' does not match its definition: declared "'
+                    + got + '" but definition provides "' + had + '"', sourceCode, sourceOffset, code,
+                    'the definition is authoritative - correct the declaration, or drop it and let the definition speak');
+        }
+        fail('extern declarations of ' + what + ' disagree: "' + got + '" vs "' + had + '"',
+                sourceCode, sourceOffset, code,
+                'one ' + noun + ' cannot have two ' + plural
+                        + ' - make the declarations identical, or keep only one');
+    }
+
+    function renderReturnType(signature) {
+        if (signature.returnCount > 1) {                           /* multiple return values -> (t1, t2, ...) */
+            var parts = [];
+            for (var idx = 0; idx < signature.returnList.length; ++idx) {
+                var r = signature.returnList[idx];
+                parts.push(r.elem !== undefined ? signatureCategoryForDesc(fullDescFor(r.type, r.elem))
+                        : signatureParamCategory(r.type));
+            }
+            return '(' + parts.join(', ') + ')';
+        }
+        if (signature.returns === 'S') {                           /* by-value struct return -> the struct name */
+            return (signature.returnStruct || 'unknown');
+        }
+        return (signature.returnElem !== undefined
+                ? signatureCategoryForDesc(fullDescFor(signature.returns, signature.returnElem))
+                : signatureReturnCategory(signature.returns, signature.returns !== undefined));
+    }
+
+    /* Compiling an import closure means ONE concatenated source, so a raw offset gives a line that
+       indexes the concatenation and a name that is always the root unit - the wrong file, on the
+       wrong line, for everything past the first. The spans recorded by the closure walk map the
+       offset back to the unit that owns it. A lone unit is left exactly as it was: no name, no
+       shift, so a source that imports nothing keeps emitting the bytes it always did. */
+    function originUnit(offset) {                                 /* no local alias: `var units = units` rewrites to `var units = units` */
+        if (!units || units.length <= 1) {
+            return undefined;
+        }
+        for (var i = 0; i < units.length; ++i) {
+            if (offset >= units[i].start && offset <= units[i].end) {
+                return units[i];
+            }
+        }
+        return undefined;
+    }
+
     function computeOrigin(sourceName, sourceCode, sourceOffset) {
         if (!sourceCode || sourceOffset == null) {
             return undefined;
@@ -331,9 +425,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             offset = sourceCode.length;
         }
 
+        var unit = originUnit(offset);
         var line = 1;
         var column = 1;
-        for (var idx = 0; idx < offset; ++idx) {
+        for (var idx = (unit ? unit.start : 0); idx < offset; ++idx) {
             var ch = sourceCode.charAt(idx);
             if (ch === '\r') {
                 if (idx + 1 < sourceCode.length && sourceCode.charAt(idx + 1) === '\n') {
@@ -352,8 +447,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
 
         var origin = line + ':' + column;
-        if (sourceName) {
-            origin = sourceName + ':' + origin;
+        var name = (unit ? unit.name : sourceName);
+        if (name) {
+            origin = name + ':' + origin;
         }
         return origin;
     }
@@ -377,24 +473,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
 
         var paramsText = renderParamList(signature.params);
-        var hasReturn = (signature && signature.returns !== undefined);
-        var returnType;
-        if (signature.returnCount > 1) {                          /* multiple return values -> (t1, t2, ...) */
-            var parts = [];
-            for (var _rri = 0; _rri < signature.returnList.length; ++_rri) {
-                var r = signature.returnList[_rri];
-                parts.push(r.elem !== undefined
-                        ? signatureCategoryForDesc(fullDescFor(r.type, r.elem))
-                        : signatureParamCategory(r.type));
-            }
-            returnType = '(' + parts.join(', ') + ')';
-        } else if (signature.returns === 'S') {                   /* by-value struct return -> the struct name */
-            returnType = (signature.returnStruct || 'unknown');
-        } else {
-            returnType = (signature.returnElem !== undefined
-                    ? signatureCategoryForDesc(fullDescFor(signature.returns, signature.returnElem))
-                    : signatureReturnCategory(signature.returns, hasReturn));
-        }
+        var returnType = renderReturnType(signature);
         var kind = (role ? role : 'func');
         if (exportNext) kind = 'export ' + kind;         /* Step 5: host-visible marker */
 
@@ -412,20 +491,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var paramsText;
         var hasSignature = !!(signature && signature.params);
 
-        /* Element chains matter here: gazl-validate treats a bare `ptr` as element-UNKNOWN and lets it
-           match any chain, so flattening `V-ptr` to `ptr` would silently disarm the cross-unit check.
-           That is the only type record a name-only `extern function f` has. */
-        if (hasSignature) {
-            var extracted = [];
-            for (var i = 0; i < signature.params.length; ++i) {
-                var _p = signature.params[i];
-                extracted.push(_p.type === 'S' ? (_p.struct || 'unknown')
-                                               : signatureCategoryForDesc(fullDescFor(_p.type, _p.elem)));
-            }
-            paramsText = extracted.join(', ');
-        } else {
-            paramsText = renderTypeList(actualTypes, actualElems);
-        }
+        paramsText = (hasSignature ? renderParamTypes(signature.params)
+                                   : renderTypeList(actualTypes, actualElems));
 
         var returnCode = callResultType;
         var known = false;
@@ -559,6 +626,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                     sourceCode, sourceOffset, 'E401',
                     'each function needs a unique name across the whole import closure');
         }
+        checkExternAgreement(name, entry.externProto, entry.signature, true, sourceCode, sourceOffset);
 
         /* An `inline function` has no out-of-line copy, so it publishes neither a FUNC label nor a
            signature row - there is nothing for a caller or the validator to link against. */
@@ -580,6 +648,24 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                          entry.sourceCode,
                          entry.sourceOffset,
                          comment);
+    };
+
+    /* One name may have at most one DEFINITION but any number of `extern` declarations, so long as
+       every claim agrees: with the definition if the closure has one, and otherwise with each other.
+       This does NOT police linkage - a prototype for a name nothing defines is a promise only
+       gazl-validate can settle, and a name-only extern records no prototype and so asserts nothing.
+       It fires exactly when the compiler is holding two claims itself, which an import closure makes
+       routine since the builder compiles the whole closure as one unit. Names are not compared, only
+       types, matching functionSignaturesCompatible() in tools/gazl-validate.nuxjs.js. */
+    checkExternAgreement = function (name, claim, prior, priorIsDefinition, sourceCode, sourceOffset) {
+        if (!claim || !prior) {
+            return;
+        }
+        var got = signatureShape(name, claim), had = signatureShape(name, prior);
+        if (got !== had) {
+            failDisagreement(name, got, had, 'E437', priorIsDefinition, 'function', 'shapes',
+                    sourceCode, sourceOffset);
+        }
     };
 
     function signatureRoleForSection(section) {
@@ -656,7 +742,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
 
         if (typeof output === 'function') {
-            output('; ' + comment);
+            emitLine('; ' + comment);
         }
     }
 
@@ -836,8 +922,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         /* POST-CONDITION. This pass OWNS every `@.` label - it mints them, aliases them and
            deletes them - so a reference left pointing at a name it also deleted is a bug HERE,
-           and saying so beats the assembler's "Symbol not found" three layers downstream. A
-           user label (`@name`) is not ours to promise. */
+           and saying so beats the assembler's "Symbol not found" three layers downstream.
+           A user label (`@name`) is not ours to promise, but it IS decidable: a label is always
+           local to the function body, and by the time this runs the body is fully parsed, so the
+           map below is the complete set. An undefined one is a user error, not an internal bug,
+           so it gets a diagnostic at the `goto` rather than an assert. */
         var defined = {};
         for (i = 0; i < metacode.length; ++i) {
             if (metacode[i].operator === '<--') defined[metacode[i].operands[0]] = true;
@@ -847,8 +936,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (op == null || op === ';' || op === '<--') continue;
             for (var k = 0; k < 3; ++k) {
                 var ref = rec.operands[k];
-                assert(typeof ref !== 'string' || ref.substr(0, 2) !== '@.' || defined[ref],
-                        "branch to deleted label " + ref + " from " + op);
+                if (typeof ref !== 'string' || ref.charAt(0) !== '@' || defined[ref]) continue;
+                if (ref.charAt(1) === '.') {
+                    assert(false, "branch to deleted label " + ref + " from " + op);
+                } else if (rec.gotoOffset !== undefined) {
+                    fail('goto to undefined label ' + ref.substr(1),
+                            rec.gotoSource, rec.gotoOffset, 'E445',
+                            'a label is local to its function - define it as `' + ref.substr(1)
+                                    + ': ;` in this body, or remove the goto');
+                }
             }
         }
     };
@@ -1092,6 +1188,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         rec.dynIndex  = undefined;
         rec.winBase   = undefined;
         rec.winWords  = undefined;
+        rec.readonly  = false;        /* pooled slots: never inherit a previous symbol's writability */
         return rec;
     };
 
@@ -1212,6 +1309,41 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
     };
 
+    /* The integer behind a folded operand, or undefined when it is symbolic (`<A>`, a host `! DEFi`, an
+       `extern struct` size). EVERY compile-time check gates on this: Impala may only reject a value it
+       genuinely knows, and not knowing is not the same as being fine - so a symbolic operand is passed
+       over in silence rather than guessed at. See docs/CompileTimeHardening.md. */
+    constInt = function (operand) {
+        return (typeof operand === 'string' && /^#-?[0-9]+$/.test(operand))
+                ? parseInt(operand.substr(1), 10) : undefined;
+    };
+
+    /* `SWCH` resolves table entries 0..size-1 only, so a case outside that window is unreachable - and a
+       NEGATIVE offset folds to `.sN.-6`, which the assembler rejects as an invalid identifier, failing a
+       build the compiler accepted without a word. A repeated value mints the same `.sN#K` label twice and
+       trips `Symbol already defined` on a name the user never wrote. Both are decidable here whenever the
+       range and the value are numeric, which is the common shape. */
+    checkCaseValue = function (ctx, value, source, offset) {
+        if (ctx === undefined || ctx.fromNum === undefined || value === undefined) {
+            return;
+        }
+        /* Subtract here rather than reading the emitted offset: `subConstInt` defers to an assemble-time
+           `! SUBi <A>` whenever `from` is non-zero, so the offset operand is symbolic in exactly the
+           `switch (i == 5 to 9)` shape that produces the unloadable `.sN.-6`. */
+        var off = value - ctx.fromNum;
+        if (ctx.caseSeen[off] === true) {
+            fail('Duplicate case value ' + value, source, offset, 'E443',
+                    'each case value may appear once in a switch');
+        }
+        ctx.caseSeen[off] = true;
+        if (ctx.sizeNum !== undefined && (off < 0 || off >= ctx.sizeNum)) {
+            fail('Case value ' + value + ' is outside the switch range '
+                    + ctx.fromNum + ' to ' + (ctx.fromNum + ctx.sizeNum), source, offset, 'E444',
+                    'the upper bound is exclusive, so the last reachable case is '
+                            + (ctx.fromNum + ctx.sizeNum - 1));
+        }
+    };
+
     mixedBitwise = function (first, op, source, offset) {
         strictError("Mixed bitwise operators ('" + first + "' and '" + op
                 + "') require parentheses", source, offset, 'E101',
@@ -1263,14 +1395,19 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
      *  Named function-pointer types  (Impala 2 Step 3)          *
      * --------------------------------------------------------- */
 
+    /* A functype emits NOTHING - no symbol, no layout, not even a `; signature` row - so unlike a
+       struct definition (which owns its `.o.`/`.z.` constants) or a function (which owns a FUNC
+       label) there is no artifact for a second declaration to collide with. Re-declaring one is
+       therefore free PROVIDED the two agree, which is what lets a unit declare the functypes it uses
+       and still be imported alongside another unit that declares the same ones. Set the earlier one
+       aside and let endFuncType compare; emitting nothing also means gazl-validate never sees a
+       functype, so this is the only place the disagreement can be caught at all. */
     beginFuncType = function (name, sourceCode, sourceOffset) {
-        if (isFuncTypeAtom(name)) {
-            fail('Function type already defined: ' + name, sourceCode, sourceOffset, 'E440');
-        }
         if (isStructAtom(name)) {
             fail('Type name already used by a struct: ' + name, sourceCode, sourceOffset, 'E440');
         }
-        functypes[name] = { params: [], returnList: [], returnCount: 0,
+        var shadowed = (isFuncTypeAtom(name) ? functypes[name] : undefined);
+        functypes[name] = { shadowed: shadowed, params: [], returnList: [], returnCount: 0,
                 returns: 'V', returnElem: undefined, returnStruct: undefined, returnWords: 0,
                 complete: false, sourceCode: sourceCode, sourceOffset: sourceOffset,
                 sourceName: sourceName };
@@ -1489,11 +1626,40 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             runs.push([ b, n ]);
             return b;
         }
-        for (k = 0; k < info.locals.length; ++k) {  /* a local lives in transients, one expansion at a time */
-            subst[info.locals[k].name] = '%' + borrowRun(info.locals[k].words);
+        var tag = '_i' + (inlineCounter++);
+
+        /*
+            The callee's declared locals become REAL frame locals of the caller, bracketed by
+            SCOP / ENDS (GAZL 2). The assembler then owns their placement, exactly as it does for
+            an ordinary local - which is the whole point: it resolves `*.z.Struct` before assigning
+            offsets, so a host-owned size lands correctly, whereas a compile-time slot count could
+            only ever be Impala's guess at it.
+
+            Sibling expansions overlay, so the frame cost is the LARGEST expansion in a function,
+            not the sum. That is sound because an expansion's locals are dead once its body ends:
+            the result leaves through the call window, never through a local.
+
+            The transient block below is a different matter and stays transient - it carries the
+            body's own `%k` slots, including CALL windows, whose base must be a transient.
+        */
+        if (info.locals.length > 0) {
+            var _tab = (typeof TAB !== 'undefined' ? TAB : '\t');    /* same shape declare() renders */
+            emitLine(_tab + '\tSCOP');
+            for (k = 0; k < info.locals.length; ++k) {
+                var lv = info.locals[k];
+                var lname = lv.name + tag;                      /* `$tmp` -> `$tmp_i3`, unique per expansion */
+                /* `lv.size` is repeated verbatim, however the extent was arrived at: an array's is a
+                   `.x.` constant the callee's declaration named once, a struct's is `*.z.Struct`. Both
+                   are SYMBOLS the assembler resolves, so nothing has to be re-derived here - which is
+                   the point, since a fold lives in a scratch this head has no claim on. */
+                emitLine(_tab + lname + ':\t'
+                        + replace(lv.kind, '?', TYPE_SUFFIXES[lv.type] || '')
+                        + (lv.size !== undefined ? ' ' + lv.size : ''));
+                subst[lv.name] = lname;
+            }
+            emitLine(_tab + '\tENDS');
         }
 
-        var tag = '_i' + (inlineCounter++);
         var scratchMap = {};                    /* `<X>` folds carried in from an inner expansion */
         function mapScratch(sc) {
             if (!Object.prototype.hasOwnProperty.call(scratchMap, sc)) scratchMap[sc] = borrow('<');
@@ -1620,6 +1786,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             ft.returns = 'V';
             ft.returnWords = 0;
         }
+        var held = ft.shadowed;
+        if (held) {
+            var got = signatureShape(name, ft), had = signatureShape(name, held);
+            if (got !== had) {                                    /* never a definition: a functype has only declarations */
+                fail('functype ' + name + ' is already declared with a different shape: "'
+                        + got + '" vs "' + had + '"', ft.sourceCode, ft.sourceOffset, 'E440',
+                        'one functype cannot have two shapes - make the declarations identical, or keep only one');
+            }
+        }
     };
 
     /* Does a concrete function signature satisfy a named funcptr type? Compares arity, each
@@ -1684,22 +1859,56 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     beginStruct = function (name, sourceCode, sourceOffset) {
         var prev = structs[name];
-        if (prev && prev.complete) {
+        if (prev && prev.complete && !prev.extern) {
             fail('Struct already defined: ' + name, sourceCode, sourceOffset, 'E410');
         }
-        structs[name] = { fields: [], words: 0, complete: false,
+        /* A completed `extern struct` is a CLAIM about a layout, not a second definition of it, so
+           set it aside and let endStruct compare the two rather than rejecting the definition it
+           describes. The definition wins either way. */
+        structs[name] = { shadowed: (prev && prev.complete ? prev : undefined),
+                fields: [], words: 0, complete: false,
                 sourceCode: sourceCode, sourceOffset: sourceOffset };
         openStruct = name;
     };
 
+    /* An `extern struct` declaration and a `struct` definition of one name are two claims about one
+       layout, and must agree - the E437 rule, for types. Whichever arrived second was parsed into a
+       fresh entry so the first stayed intact; the DEFINITION is authoritative in either order.
+       Returns true when the entry just parsed was the DECLARATION, i.e. it owns no layout to emit. */
+    checkStructAgreement = function (name) {
+        var parsed = structs[name], held = parsed.shadowed;
+        if (!held) {
+            return false;
+        }
+        var parsedRow = structSignatureRow(name, false);
+        structs[name] = held;
+        var heldRow = structSignatureRow(name, false);
+        if (parsedRow !== heldRow) {
+            /* fail() bakes its message, and bake() EVALS anything between braces (that is how
+               `{$type1}` interpolation works), so a struct row's `{ a : int }` must not go in raw. */
+            function shown(row) { return replace(replace(replace(row, 'signature ', ''), '{', '('), '}', ')'); }
+            failDisagreement('struct ' + name, shown(parsed.extern ? parsedRow : heldRow),
+                    shown(parsed.extern ? heldRow : parsedRow), 'E438',
+                    !(parsed.extern && held.extern),              /* both extern -> no definition to arbitrate */
+                    'struct', 'layouts', parsed.sourceCode, parsed.sourceOffset);
+        }
+        if (!parsed.extern) {
+            structs[name] = parsed;                      /* a definition outranks the declaration it fulfils */
+        }
+        return !!parsed.extern;
+    };
+
     /* A field extent that needs folding lives in a `<X>` scratch that the layout block reads LATER, so
-       unlike every other ArrayDecl site the borrow must survive the declaration - otherwise a second
-       such field folds into the same scratch and silently overwrites the first one's extent. The struct
-       owns those borrows; they are released here, once the layout has consumed them. */
+       the borrow must survive the declarator - otherwise a second such field folds into the same scratch
+       and silently overwrites the first one's extent. ArrayDecl hands every extent to its consumer (see
+       there); this is the struct's release, once the layout has read them. */
     endStruct = function (name) {
         var s = structs[name];
         s.complete = true;
-        emitStructLayout(name);
+        var redeclared = checkStructAgreement(name);
+        if (!redeclared) {
+            emitStructLayout(name);
+        }
         var held = {};
         for (var i = 0; i < s.fields.length; ++i) {
             var size = '' + s.fields[i].size;
@@ -1709,6 +1918,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             returnBack(s.fields[i].size);
         }
         openStruct = undefined;
+        return redeclared;
     };
 
     /* Emit a struct's layout as GAZL compile-time constants: a rolling `<a>` accumulator that
@@ -1727,22 +1937,22 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                                                                          queued through emit(); drain it BEFORE the block so
                                                                          the definition precedes the ! ADDi that reads it
                                                                          (same rule declare() follows before its own output) */
-        output(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
+        emitLine(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
         for (var i = 0; i < s.fields.length; ++i) {
             var f = s.fields[i];
-            output('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
+            emitLine('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
             if (f.type === 'S') {                                 /* nested by-value struct */
-                output(T + '! ADDi <a> #<a> #.z.' + f.struct);
+                emitLine(T + '! ADDi <a> #<a> #.z.' + f.struct);
             } else if (f.type === 'A' && isStructAtom(f.elem)) {   /* struct-element array */
-                output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
-                output(T + '! ADDi <a> #<a> #<t>');
+                emitLine(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
+                emitLine(T + '! ADDi <a> #<a> #<t>');
             } else if (f.type === 'A') {                          /* scalar-element array */
-                output(T + '! ADDi <a> #<a> #' + f.size);
+                emitLine(T + '! ADDi <a> #<a> #' + f.size);
             } else {                                              /* scalar (int/float/ptr/funcptr) */
-                output(T + '! ADDi <a> #<a> #1');
+                emitLine(T + '! ADDi <a> #<a> #1');
             }
         }
-        output('.z.' + name + ':' + T + '! DEFi #<a>');
+        emitLine('.z.' + name + ':' + T + '! DEFi #<a>');
     };
 
     /* Fold a place's compile-time offset PARTS (field-offset symbols + constant strides) into one
@@ -1766,16 +1976,28 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     /* `extern struct Name { fields }`: host-owned layout. Impala knows the interface (field
        names + types) and emits symbolic `.o.Name.field` / `.z.Name` references, but does NOT
        emit the layout - the host supplies those constants at load. See docs/StructLayoutConstants.md. */
+    /* Never rejects: the body has not been parsed yet, so it is not yet known whether this
+       declaration asserts anything at all. A BODYLESS `extern struct N` is the struct analogue of a
+       name-only `extern function f` - an opaque handle making no layout claim - so it must not
+       collide with a definition the closure already has; ExternDecl simply puts that definition
+       back. A bodied one IS a claim, parsed alongside the definition and compared by endStruct. */
     beginExternStruct = function (name, sourceCode, sourceOffset) {
         var prev = structs[name];
-        if (prev && prev.complete) {
-            fail('Struct already defined: ' + name, sourceCode, sourceOffset, 'E410');
-        }
-        if (!prev) {
-            structs[name] = { fields: [], words: 0, complete: false,
+        if (!prev || prev.complete) {
+            structs[name] = { shadowed: (prev && prev.complete ? prev : undefined),
+                    fields: [], words: 0, complete: false,
                     sourceCode: sourceCode, sourceOffset: sourceOffset };
         }
         structs[name].extern = true;
+    };
+
+    /* A BODYLESS `extern struct N` never reaches endStruct, so nothing compares it - and with no body
+       it claims no layout, so there is nothing to compare. Give back whatever it was parsed beside. */
+    cancelStructRedeclaration = function (name) {
+        var s = structs[name];
+        if (s && s.shadowed) {
+            structs[name] = s.shadowed;
+        }
     };
 
     isExternStruct = function (name) {
@@ -1793,17 +2015,58 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
 
-    /* '*size' operand for allocating an ARRAY. A struct-element array is `count * .z.Elem` - kept
-       SYMBOLIC (a compile-time `! MULi` into a scratch) so the allocation tracks the element size,
-       exactly like the subscript stride. Scalar elements are one word each, so `*count`. */
-    arrayAllocSize = function (elemDesc, count, words) {
+    /* The symbol naming an array's allocation extent: `.x.name` for a global, `.x.func.local` for a
+       local. See docs/SymbolNamespace.md. */
+    extentSymbol = function (name, owner) {
+        return '.x.' + (owner !== undefined ? owner + '.' : '') + name;
+    };
+
+    /* '*size' operand for allocating an ARRAY, published as a NAMED assemble-time constant rather
+       than left in a `<X>` scratch. A scratch is a recycled register: it holds the extent only until
+       the next borrow, so the allocation line was the one and only place that could read it. A named
+       constant is permanent and referenceable, which is what lets an extent be quoted anywhere later.
+       The value is usually symbolic - a host `! DEFi` count, or `count * .z.Elem` that only resolves
+       at assembly - so naming it is the ONLY way to hold on to it; there is no number to keep. A
+       struct-element array is that `count * .z.Elem`, folded by a compile-time `! MULi` so the
+       allocation tracks the element size exactly like the subscript stride does; scalar elements are
+       one word each, so the count IS the size. declare() flushes the fold ahead of the `! DEFi` that
+       reads it, and hands the scratch back. */
+    arrayAllocSize = function (elemDesc, count, symbol) {
+        var value = count;
         if (elemDesc !== undefined && descTail(elemDesc) === undefined
                 && isStructAtom(descHead(elemDesc))) {
-            var s = borrow('<');
-            emit('<> *', 'i', s, '#' + count, '#.z.' + descHead(elemDesc));
-            return '*' + s;
+            value = borrow('<');
+            emit('<> *', 'i', value, '#' + count, '#.z.' + descHead(elemDesc));
         }
-        return '*' + words;
+        declare('! DEF?', 'defines', symbol, 'i', true, '#' + value);
+        return '*' + symbol;
+    };
+
+    /* The struct atom a pointer/array element descriptor points at, or undefined for anything whose
+       stride is one word. `int pointer` and untyped `pointer` both land in the undefined case, which is
+       why scaling changes nothing for them. */
+    strideStruct = function (elemDesc) {
+        if (elemDesc === undefined || descTail(elemDesc) !== undefined) {
+            return undefined;
+        }
+        var head = descHead(elemDesc);
+        return isStructAtom(head) ? head : undefined;
+    };
+
+    /* Does a subscript on this slot stride by a struct size rather than by one word? That is exactly the
+       question `[i]` vs `[[i]]` asks, so both the Subscript rule and the pointer-arithmetic diagnostics
+       ask it here. Note a SCALAR array field inside a struct (`s.v[k]`) reaches subscriptStruct too but
+       strides one word, so the predicate is the element type, never which code path handles it. */
+    subscriptScales = function (slot) {
+        var elem;
+        if (slot.place && slot.arrayOf) {
+            elem = slot.arrayOf;
+        } else if (slot.type === 'p') {
+            elem = slot.elem;
+        } else {
+            return false;
+        }
+        return strideStruct(elem) !== undefined;
     };
 
     /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
@@ -2147,24 +2410,45 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                         'use a cast: (' + elemVerbose(leftx.elem) + ' pointer)');
             }
         }
-        if (leftx.type === 'F' && isFuncTypeAtom(leftx.elem)) {   /* named funcptr type target: check the signature */
-            var rop = rightx.operands && rightx.operands[1];
-            if (rop === '&NULL' && rightx.operands[2] === undefined) {
-                return;                                           /* nullfunc is assignable to any funcptr type */
+        if (leftx.type === 'F' && isFuncTypeAtom(leftx.elem)) {   /* named funcptr type target */
+            checkFuncPtrTarget(leftx.elem, bareOperand(rightx), rightx.type, rightx.elem,
+                    '', sourceCode, sourceOffset);
+        }
+    };
+
+    /* The lone operand of a one-operand meta - a direct `&f` / `^f` reference or `&NULL` - and
+       undefined for anything compound, which is neither. */
+    function bareOperand(x) {
+        return (x.operands && x.operands[2] === undefined ? x.operands[1] : undefined);
+    }
+
+    /* A named funcptr target, at an assignment or at an argument (`at` names which): `nullfunc` suits
+       any type, a direct function reference is checked against it, and anything else must ALREADY
+       carry that exact type. An untyped funcptr is not silently promoted, for the same reason a bare
+       `pointer` is not assignable to an `int pointer` (E201) - it guarantees nothing about the shape
+       of what gets called. The cast that says "I checked" needs no `pointer`, a functype being one. */
+    checkFuncPtrTarget = function (expected, operand, actualType, actualElem, at,
+                                            sourceCode, sourceOffset) {
+        if (operand === '&NULL') {
+            return;
+        }
+        /* Gated on the LOOKUP, not on the sigil: reading a global spells itself `&name` too, so
+           `&`/`^` alone cannot tell a function reference from one, and testing the sigil sent every
+           global funcptr into this branch to find no function and silently fall out - past the
+           element check below, which is the one that applies to it. */
+        var fe = (operand && (operand.charAt(0) === '&' || operand.charAt(0) === '^')
+                ? symbols.functions[operand.substr(1)] : undefined);
+        if (fe && fe.signature) {                                 /* a direct function reference */
+            if (!funcTypeMatches(expected, fe.signature)) {
+                fail('Function ' + operand.substr(1) + " does not match funcptr type '"
+                        + expected + "'" + at, sourceCode, sourceOffset, 'E441',
+                        'check the parameter and return types against ' + expected);
             }
-            if (rop && (rop[0] === '&' || rop[0] === '^')) {      /* a direct function reference */
-                var fe = symbols.functions[rop.substr(1)];
-                if (fe && fe.signature && !funcTypeMatches(leftx.elem, fe.signature)) {
-                    fail('Function ' + rop.substr(1) + " does not match funcptr type '"
-                            + leftx.elem + "'", sourceCode, sourceOffset, 'E441',
-                            'check the parameter and return types against ' + leftx.elem);
-                }
-            } else if (rightx.type === 'F' && rightx.elem !== undefined
-                    && isFuncTypeAtom(rightx.elem) && rightx.elem !== leftx.elem) {
-                fail("Funcptr type mismatch (expected '" + leftx.elem + "', got '"
-                        + rightx.elem + "')", sourceCode, sourceOffset, 'E441',
-                        'cast explicitly if this is intentional');
-            }
+        } else if (actualType === 'F' && actualElem !== expected) {
+            fail('Funcptr type mismatch' + at + " (expected '" + expected + "', got "
+                    + (actualElem !== undefined && isFuncTypeAtom(actualElem)
+                            ? "'" + actualElem + "'" : 'an untyped funcptr') + ')',
+                    sourceCode, sourceOffset, 'E441', 'use a cast: (' + expected + ')');
         }
     };
 
@@ -2178,6 +2462,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         rightx = metaSlot(rightx);
 
         var lelem = leftx.elem;                                   /* element type of the base (Impala 2) */
+        var lro   = leftx.readonly;                               /* a readonly array's element is readonly too */
 
         /* a binary result is never a verbatim call result; drop callInfo so
            assign() cannot mistake it for one (see unaryOp for rationale). */
@@ -2240,16 +2525,32 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         } else {
 
             /* pointer-difference special-case “d” */
-            if (operator === '-' && rightx.type === 'p') {
+            var diff = (operator === '-' && rightx.type === 'p');
+            if (diff) {
                 operator = 'd';
             }
 
-            makeMeta(
-                leftx, operator, tp, null,
-                makeRValue(leftx),
-                makeRValue(rightx)
-            );
+            /* Arithmetic on a struct pointer is REJECTED, because `+` and `-` carry no marker for the
+               multiply they would need, and the scaled subscript already spells it: `&p[[i]]`. Scaling
+               them instead was tried and reverted - it leaked into comparison (no unit there at all) and
+               `for` could not honour it, `FORp` having no room for a stride. See docs/Impala2Review.md,
+               "the scaled subscript is spelled `[[ ]]`". Comparisons fall through untouched: they are
+               unit-free and are what the `while` walk is built on. */
+            var stride = (leftx.type === 'p' ? strideStruct(lelem) : undefined);
+            if (stride !== undefined && (operator === '+' || operator === '-')) {
+                fail('Arithmetic on a ' + stride + ' pointer', sourceCode, sourceOffset,
+                        'E307', 'a struct pointer moves by scaled subscript only - write `&p[[i]]`');
+            }
+            if (stride !== undefined && diff) {
+                fail('Difference between ' + stride + ' pointers', sourceCode, sourceOffset,
+                        'E308', 'the element count is `((pointer)q - (pointer)p) / sizeof('
+                                + stride + ')`');
+            }
+            makeMeta(leftx, operator, tp, null,
+                              makeRValue(leftx), makeRValue(rightx));
         }
+
+        leftx.readonly = lro;                                     /* survives the makeMeta calls above */
 
         /* element-type propagation (Impala 2) */
         if (operator === '=[]' && lelem !== undefined) {
@@ -2385,13 +2686,23 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         if (leftx.type !== '?' && rightx.type !== '?' && leftx.type !== rightx.type) {
             typeError(
-                'Incompatible types for assignment ({$type1} = {$type2})',
+                /* Reads as a statement about the assignment, not as an equation: `(pointer = funcptr)`
+                   left people working out which side was which. Source first, destination second. */
+                'Incompatible types for assignment: cannot assign {$type2} to {$type1}',
                 sourceCode, sourceOffset,
                 leftx.type, rightx.type
             , 'E303');
         }
 
         checkPtrAssign(leftx, rightx, sourceCode, sourceOffset);
+
+        /* `readonly` was honoured for scalars and silently ignored for an indexed write, which left the
+           assembler to catch it as `Incompatible types` against the const region - if at all. */
+        if (leftx.readonly === true) {
+            fail('Cannot assign to an element of a readonly array',
+                    sourceCode, sourceOffset, 'E404',
+                    'declare it `global` instead of `readonly` if it has to be written');
+        }
 
         /* fast path: constant expression on RHS */
         var op1 = rightx.operands[1];
@@ -2724,7 +3035,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 if (value !== undefined) line += ' ' + value;
                 if (comment)             line += '\t; ' + comment;
 
-                output( line );
+                emitLine( line );
             }
         }
 
@@ -2766,6 +3077,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 readonly: !!readonly,
                 kind: kind,
                 signature: prev && prev.signature,
+                externProto: prev && prev.externProto,   /* survives the definition's signature reset */
                 sourceCode: sourceCode,
                 sourceOffset: sourceOffset,
                 sourceName: (sourceName !== undefined ? sourceName
@@ -2807,7 +3119,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 assert(rec.operands[0][0] === '@',
                        "label must start with '@'");
                 if (nextLabel !== TABstr) {
-                    output(prefix + nextLabel + 'NOOP');
+                    emitLine(prefix + nextLabel + 'NOOP');
                 }
                 nextLabel = rec.operands[0].substr(1) + ':' + TABstr;
                 continue;
@@ -2828,7 +3140,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (op.substr(0, 3) === '<> ') {
 
                 if (nextLabel !== TABstr) {
-                    output(prefix + nextLabel + 'NOOP');
+                    emitLine(prefix + nextLabel + 'NOOP');
                 }
                 nextLabel = TABstr;
 
@@ -2836,7 +3148,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 gop      = replace(gop, '?',
                                    TYPE_SUFFIXES[ rec.type ]);
 
-                output(prefix + '\t! ' + gop + ' ' +
+                emitLine(prefix + '\t! ' + gop + ' ' +
                        formatOperand(rec.operands[0]) + ' '   +
                        formatOperand(rec.operands[1]) + ' '   +
                        formatOperand(rec.operands[2]) + nextComment);
@@ -2852,7 +3164,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             gInstr     = replace(gInstr, '?',
                                  TYPE_SUFFIXES[ rec.type ]);
 
-            output(prefix + nextLabel + gInstr + ' ' +
+            emitLine(prefix + nextLabel + gInstr + ' ' +
                    formatOperand(rec.operands[0]) + ' ' +
                    formatOperand(rec.operands[1]) + ' ' +
                    formatOperand(rec.operands[2]) + nextComment);
@@ -2909,6 +3221,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (p.type === 'A') {
                 makeMeta(x, ':=', 'p', undefined,
                                   '&' + name, undefined);
+                /* A scalar `readonly` is rejected by its `:=*` operator having no assign() branch, but an
+                   ARRAY decays to the same `:=` address meta whether or not it is writable - so carry the
+                   flag and let assign() consult it once the subscript has been folded in. */
+                x.readonly = (p.readonly === true);
             } else {
                 makeMeta(x,
                                   (p.readonly ? ':=*' : '=*'),
@@ -2944,8 +3260,18 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
 
         /* not found --------------------------------------------*/
+        /* Before giving up, look in the OTHER namespace. `global` is a mandatory prefix at every use
+           site, so reading a global without it - or a local/const with it - is the first error most
+           newcomers and code generators hit, and a bare "Undeclared identifier" points away from the
+           one-word fix. The symbol tables already hold the answer; say it. */
+        var hint;
+        if (!isGlobal && sym.globals[name]) {
+            hint = name + ' is a global - write `global ' + name + '`';
+        } else if (isGlobal && sym.locals['$' + name]) {
+            hint = name + ' is a local - drop the `global` keyword';
+        }
         fail('Undeclared identifier: ' + name,
-                      sourceCode, sourceOffset, 'E403');
+                      sourceCode, sourceOffset, 'E403', hint);
     };
 
     /* -----------------------------------------------------------
@@ -3178,9 +3504,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         /* banner */
         var LF = '\n';
-        output('; Compiled with Impala version ' +
+        emitLine('; Compiled with Impala version ' +
                IMPALA_VERSION + LF);
-        output('; signatures version=1');
+        emitLine('; signatures version=1');
     };
 
     end = function () {
@@ -3193,27 +3519,27 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         /* dump assert strings only if present */
         if (strings.a.length > 0) {
 
-            output('\t! EQUi #DEBUG #0 @.noAssertStrings');
+            emitLine('\t! EQUi #DEBUG #0 @.noAssertStrings');
 
             iterate(strings.a, function (rec) {
                 dumpString(rec.name, rec.data);
             });
 
-            output('.noAssertStrings:\t!');
+            emitLine('.noAssertStrings:\t!');
         }
     };
-};function root($){return (function(){var _b=_i;return _($)&&(function(){ start(); ; return true})()&&((function(){while((function(){var _b=_i;return ImportDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExportDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FuncDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||StructDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FuncTypeDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExternDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ConstDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GlobalDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _l=_i,_x=(!!_s[_i])&&(++_i,true);_i=_l;return !_x})()&&(function(){ end(); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+};function root($){return (function(){var _b=_i;return _($)&&(function(){ start(); ; return true})()&&((function(){while((function(){var _b=_i;return (function(){ declOffset = _i; ; return true})()&&(function(){var _b=_i;return ImportDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExportDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FuncDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||StructDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FuncTypeDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExternDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ConstDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GlobalDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _l=_i,_x=(!!_s[_i])&&(++_i,true);_i=_l;return !_x})()&&(function(){ end(); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ImportDecl($){var $path=createParserContext();return (function(){var _b=_i;return IMPORT($)&&_($)&&StringLiteral($path)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ExportDecl($){return (function(){var _b=_i;return EXPORT($)&&_($)&&(function(){ exportNext = true; ; return true})()&&(function(){var _b=_i;return FuncDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GlobalDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ConstDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ exportNext = false; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function StructDecl($){var $id=createParserContext(),$sname,$f=createParserContext();return (function(){var _b=_i;return STRUCT($)&&_($)&&Identifier($id)&&(function(){ $sname = $id._; beginStruct($id._, _s, _i); ; return true})()&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return ArrayDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ addStructField($sname, { name: $f.name, type: $f.type, elem: $f.elem, struct: $f.struct, size: $f.size }, _s, _i); ; return true})()&&((function(){var _b=_i;return (_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){   endStruct($sname); /* Publish the real layout with TYPES so gazl-validate can check an `extern struct` declaration of the same name against it - the .o./.z. constants alone carry no types. */ emitStandaloneSignatureComment( structSignatureRow($sname, false, sourceName, _s, _i)); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function StructDecl($){var $id=createParserContext(),$sname,$f=createParserContext();return (function(){var _b=_i;return STRUCT($)&&_($)&&Identifier($id)&&(function(){ $sname = $id._; beginStruct($id._, _s, _i); ; return true})()&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return ArrayDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ addStructField($sname, { name: $f.name, type: $f.type, elem: $f.elem, struct: $f.struct, size: $f.size }, _s, _i); ; return true})()&&((function(){var _b=_i;return (_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){   endStruct($sname); /* Publish the real layout with TYPES so gazl-validate can check an `extern struct` declaration of the same name against it - the .o./.z. constants alone carry no types. */ emitStandaloneSignatureComment( structSignatureRow($sname, false, sourceName, _s, declOffset)); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FuncTypeDecl($){var $id=createParserContext(),$ftname,$p=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return FUNCTYPE($)&&_($)&&Identifier($id)&&(function(){ $ftname = $id._; beginFuncType($id._, _s, _i); ; return true})()&&(_s[_i]==="(")&&(++_i,true)&&_($)&&((function(){var _b=_i;return TypeDeclr($p)&&(function(){ addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, _s, _i); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&TypeDeclr($p)&&(function(){ addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&((function(){var _b=_i;return RETURNS($)&&_($)&&TypeDeclr($r)&&(function(){ addFuncTypeReturn($ftname, $r.type, $r.elem, $r.struct, $r.words, _s, _i); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&TypeDeclr($r)&&(function(){   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */ fail('Multiple return values are not supported in Impala 2.0', _s, _i, 'E428', 'declare a single return type for this funcptr type'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ endFuncType($ftname); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function TypeDeclr($){var $base=createParserContext(),$desc,$id=createParserContext();return (function(){var _b=_i;return TypeBase($base)&&(function(){ $desc = $base._; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&((function(){var _b=_i;return Identifier($id)&&(function(){ $.name = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ var head = descHead($desc); var tail = descTail($desc); if (tail === undefined && isStructAtom(head)) { $.type = 'S'; $.struct = head; $.elem = undefined; $.words = structWords(head); } else if (tail === undefined && isFuncTypeAtom(head)) { $.type = 'F'; $.elem = head; $.struct = undefined; $.words = 1; } else { $.type = head; $.elem = tail; $.struct = undefined; $.words = undefined; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function FuncDecl($){var $inl,$id=createParserContext(),$inp=createParserContext(),$out=createParserContext(),$v=createParserContext(),$s,$i,$,$loc=createParserContext();return (function(){var _b=_i;return (function(){ $inl = false; ; return true})()&&((function(){var _b=_i;return INLINE($)&&_($)&&(function(){ $inl = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&FUNCTION($)&&_($)&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ inlineMode = $inl; inlineLocals = []; if ($inl && symbols.functions[$id._] !== undefined) { fail('The inline function ' + $id._ + ' was already declared', _s, _i, 'E436', 'an inline function emits no symbol, so it cannot be forward declared or redeclared'); } if ($inl && exportNext) { fail('An inline function cannot be exported', _s, _i, 'E434', 'there is no out-of-line copy to link against; a caller needs the source, via `import`'); } assert(validateStock('%')); assert(validateStock('<')); /* every compile-time scratch borrowed by the previous function/globals must be back in the pool at this clean boundary - catches offset-scratch leaks at the source */ assert(stock['<'].length === counters['<'], 'compile-time scratch leak before ' + $id._ + ': ' + (counters['<'] - stock['<'].length) + ' unreturned'); if (!inlineMode) { output(''); output(';-----------------------------------------------------------------------------'); } /* declare the function symbol */ declare( undefined, 'functions', $id._, 'U', true, undefined, _s, _i ); var entry = symbols.functions[$id._]; if (entry) { if (!entry.signature) { entry.signature = {}; } entry.signature.params = []; entry.signature.returns = '?'; entry.signature.returnElem = undefined; entry.signature.returnName = undefined; entry.signature.sourceCode = _s; entry.signature.sourceOffset = _i; entry.signature.sourceName = sourceName; entry.signature.returnResolved = false; entry.pendingReturnPlaceholder = undefined; entry.pendingReturnDeclaration = undefined; } ; return true})()&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ var entry = symbols.functions[$id._]; if (entry) { entry.pendingReturns = undefined; addReturn(entry, $out.name, $out.type, $out.elem, $out.size, _s, _i, $out.struct, $out.words); } ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&VarDecl($v)&&(function(){   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */ fail('Multiple return values are not supported in Impala 2.0', _s, _i, 'E428', 'return one value, or pass extra results back through pointer out-parameters'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ var entry = symbols.functions[$id._]; if (entry && entry.signature) { var rl = entry.pendingReturns; entry.signature.returnList = rl; entry.signature.returnCount = rl.length; entry.signature.returns = rl[0].type; entry.signature.returnElem = rl[0].elem; entry.signature.returnName = rl[0].rawName; entry.signature.returnStruct = rl[0].struct; var _rw = 0;                    /* total output-window words (struct returns span >1) */ for (var _wi = 0; _wi < rl.length; ++_wi) _rw += (rl[_wi].type === 'S' ? rl[_wi].words : 1); entry.signature.returnWords = _rw; resolveFunctionReturnType($id._, rl[0].type, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* implicit 1-word return: even void functions expose a single-word PARA so legacy call sites keep a deterministic return slot and the JSPEG output matches the historical PPEG layout. */ var entry = symbols.functions[$id._]; if (entry) { entry.pendingReturns = undefined; entry.pendingReturnPlaceholder = { sourceCode: _s, sourceOffset: _i }; } if (entry && entry.signature) { entry.signature.returns = 'V'; entry.signature.returnElem = undefined; entry.signature.returnName = undefined; entry.signature.returnCount = 0; entry.signature.returnList = []; resolveFunctionReturnType($id._, 'V', _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ /* declare input parameters */ var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.params = []; for (var idx = 0; idx < $inp.n; ++idx) { var param = $inp._[idx]; entry.signature.params.push({ type: param.type, elem: param.elem, name: param.name, size: param.size, struct: param.struct, words: param.words }); } } emitFunctionSignature($id._, _s, _i); if (entry) { if (entry.pendingReturns && entry.pendingReturns.length > 0) { for (var _ri = 0; _ri < entry.pendingReturns.length; ++_ri) { var ret = entry.pendingReturns[_ri]; rejectByValueStruct(ret.type, ret.struct, ret.rawName, true, ret.sourceCode, ret.sourceOffset); { declare( 'OUT?', 'locals', ret.name, ret.type, false, ret.size, ret.sourceCode, ret.sourceOffset, undefined, ret.elem ); } } entry.pendingReturns = undefined; } else if (entry.pendingReturnPlaceholder) { var placeholder = entry.pendingReturnPlaceholder; declare( 'PARA', 'locals', undefined, '?', false, '*1', placeholder.sourceCode, placeholder.sourceOffset ); entry.pendingReturnPlaceholder = undefined; } } iterate($inp._, function (p) { rejectByValueStruct(p.type, p.struct, p.name, false, $s, $i); { declare( 'INP?', 'locals', '$' + p.name, p.type, true, (p.size !== undefined ? '*' + p.size : undefined), _s, _i, undefined, p.elem ); } }); ; return true})()&&((function(){var _b=_i;return LOCALS($)&&_($)&&LocalsDecl($loc)&&(function(){ if (inlineMode) { /* A scalar local becomes a borrowed transient at each expansion site. An array or struct needs FRAME space, and frame declarations are emitted at the function head while an expansion site is mid-body. See docs/Inlining.md section 8. */ iterate($loc._, function (v) { var words = fieldWords(v); /* the run occupies a COUNTED set of transients, so the total must be a number here. Impala knows every non-extern struct's size; a folded or symbolic array extent does not resolve until assembly. */ if (!(words > 0)) { fail('An inline function needs a compile-time size for the local ' + v.name, _s, _i, 'E433', 'its words occupy transients, so the count must be known while compiling'); } inlineLocals.push({ name: '$' + v.name, words: words }); }); } iterate($loc._, function (v) { if (v.type === 'S') {         /* struct value local -> LOCA *sizeof, remember struct */ declare( 'LOCA', 'locals', '$' + v.name, 'S', false, structAllocSize(v.struct), _s, _i, undefined, v.struct ); } else { declare( 'LOC?', 'locals', '$' + v.name, v.type, false, (v.type === 'A' ? arrayAllocSize(v.elem, v.size, v.words) : (v.words !== undefined ? '*' + v.words : undefined)), _s, _i, undefined, v.elem ); } }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ if (!inlineMode) output(';-----------------------------------------------------------------------------'); ; return true})()&&Block($)&&(function(){ /* wrap-up body */ processBranches(); if (inlineMode) {                       /* no out-of-line copy: keep the body, emit nothing */ captureInlineBody($id._, _s, _i); metacode.length = 0; } else { emit('--^', undefined, undefined, undefined, undefined); flushMetaCode('\t'); } prune(symbols.locals); labelCounter = 0; if (!inlineMode) output(''); inlineMode = false; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function ExternDecl($){var $id=createParserContext(),$sname,$f=createParserContext(),$inp=createParserContext(),$out=createParserContext(),$desc,$type=createParserContext(),$s,$i;return (function(){var _b=_i;return EXTERN($)&&_($)&&(function(){ $.scope = 'globals'; $.structFwd = false; pendingProto = undefined; ; return true})()&&(function(){var _b=_i;return STRUCT($)&&_($)&&Identifier($id)&&(function(){ $.structFwd = true; $sname = $id._; beginExternStruct($id._, _s, _i); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ /* a bodyless `extern struct G` never reaches endStruct, so only the braced form opens */ openStruct = $sname; ; return true})()&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return ArrayDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ addStructField($sname, { name: $f.name, type: $f.type, elem: $f.elem, struct: $f.struct, size: $f.size }, _s, _i); ; return true})()&&((function(){var _b=_i;return (_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){   endStruct($sname); /* Declare the host-owned interface so gazl-validate can check the layout the host supplies (.o.Name.field / .z.Name) against what Impala assumed, the way extern globals and function signatures are already checked. */ emitStandaloneSignatureComment( structSignatureRow( $sname, true, sourceName, _s, _i)); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){var _b=_i;return FUNCTION($)&&(function(){ $.type  = 'U';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NATIVE($)&&(function(){ $.type  = 'N';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&Identifier($id)&&(function(){ $.name  = $id._; ; return true})()&&((function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){   /* Optional PROTOTYPE. Name-only stays valid and asserts nothing (a wildcard the validator skips); a prototype is a checkable assertion, so calls get argument type-checking and the emitted signature row carries real types. */ var _pa = []; for (var _pk = 0; _pk < $inp.n; ++_pk) { var _pv = $inp._[_pk]; _pa.push({ type: _pv.type, elem: _pv.elem, name: _pv.name, size: _pv.size, struct: _pv.struct, words: _pv.words }); } pendingProto = { args: _pa, ret: undefined }; ; return true})()&&((function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ if (pendingProto) pendingProto.ret = { type: $out.type, elem: $out.elem, struct: $out.struct, name: $out.name }; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&VarDecl($)&&(function(){   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */ fail('Multiple return values are not supported in Impala 2.0', _s, _i, 'E428', 'declare a single return value for this extern'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ $desc = undefined; ; return true})()&&((function(){var _b=_i;return BASE_TYPE($type)&&_($)&&(function(){ $desc = CASTS_TO_TYPES[$type._]; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&ARRAY($)&&_($)&&Identifier($id)&&(function(){ $.type = 'A'; $.name = $id._; $.elem = $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ if ($.structFwd) return true; declare( undefined,                 // no section for extern
+function FuncDecl($){var $inl,$id=createParserContext(),$inp=createParserContext(),$out=createParserContext(),$v=createParserContext(),$s,$i,$,$loc=createParserContext();return (function(){var _b=_i;return (function(){ $inl = false; ; return true})()&&((function(){var _b=_i;return INLINE($)&&_($)&&(function(){ $inl = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&FUNCTION($)&&_($)&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ inlineMode = $inl; inlineLocals = []; if ($inl && symbols.functions[$id._] !== undefined) { fail('The inline function ' + $id._ + ' was already declared', _s, _i, 'E436', 'an inline function emits no symbol, so it cannot be forward declared or redeclared'); } if ($inl && exportNext) { fail('An inline function cannot be exported', _s, _i, 'E434', 'there is no out-of-line copy to link against; a caller needs the source, via `import`'); } assert(validateStock('%')); assert(validateStock('<')); /* every compile-time scratch borrowed by the previous function/globals must be back in the pool at this clean boundary - catches offset-scratch leaks at the source */ assert(stock['<'].length === counters['<'], 'compile-time scratch leak before ' + $id._ + ': ' + (counters['<'] - stock['<'].length) + ' unreturned'); if (!inlineMode) { emitLine(''); emitLine(';-----------------------------------------------------------------------------'); } /* Buffer this function's head until the body is parsed - see emitLine. Nothing is added to it yet, so the replay below is byte-identical to emitting directly. */ headSink = []; /* declare the function symbol */ declare( undefined, 'functions', $id._, 'U', true, undefined, _s, _i ); var entry = symbols.functions[$id._]; if (entry) { if (!entry.signature) { entry.signature = {}; } entry.signature.params = []; entry.signature.returns = '?'; entry.signature.returnElem = undefined; entry.signature.returnName = undefined; entry.signature.sourceCode = _s; entry.signature.sourceOffset = declOffset; entry.signature.sourceName = sourceName; entry.signature.returnResolved = false; entry.pendingReturnPlaceholder = undefined; entry.pendingReturnDeclaration = undefined; } ; return true})()&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ var entry = symbols.functions[$id._]; if (entry) { entry.pendingReturns = undefined; addReturn(entry, $out.name, $out.type, $out.elem, $out.size, _s, _i, $out.struct, $out.words); } ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&VarDecl($v)&&(function(){   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */ fail('Multiple return values are not supported in Impala 2.0', _s, _i, 'E428', 'return one value, or pass extra results back through pointer out-parameters'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ var entry = symbols.functions[$id._]; if (entry && entry.signature) { var rl = entry.pendingReturns; entry.signature.returnList = rl; entry.signature.returnCount = rl.length; entry.signature.returns = rl[0].type; entry.signature.returnElem = rl[0].elem; entry.signature.returnName = rl[0].rawName; entry.signature.returnStruct = rl[0].struct; var _rw = 0;                    /* total output-window words (struct returns span >1) */ for (var _wi = 0; _wi < rl.length; ++_wi) _rw += (rl[_wi].type === 'S' ? rl[_wi].words : 1); entry.signature.returnWords = _rw; resolveFunctionReturnType($id._, rl[0].type, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* implicit 1-word return: even void functions expose a single-word PARA so legacy call sites keep a deterministic return slot and the JSPEG output matches the historical PPEG layout. */ var entry = symbols.functions[$id._]; if (entry) { entry.pendingReturns = undefined; entry.pendingReturnPlaceholder = { sourceCode: _s, sourceOffset: _i }; } if (entry && entry.signature) { entry.signature.returns = 'V'; entry.signature.returnElem = undefined; entry.signature.returnName = undefined; entry.signature.returnCount = 0; entry.signature.returnList = []; resolveFunctionReturnType($id._, 'V', _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ /* declare input parameters */ var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.params = []; for (var idx = 0; idx < $inp.n; ++idx) { var param = $inp._[idx]; entry.signature.params.push({ type: param.type, elem: param.elem, name: param.name, size: param.size, struct: param.struct, words: param.words }); } } emitFunctionSignature($id._, _s, _i); if (entry) { if (entry.pendingReturns && entry.pendingReturns.length > 0) { for (var _ri = 0; _ri < entry.pendingReturns.length; ++_ri) { var ret = entry.pendingReturns[_ri]; rejectByValueStruct(ret.type, ret.struct, ret.rawName, true, ret.sourceCode, ret.sourceOffset); { declare( 'OUT?', 'locals', ret.name, ret.type, false, ret.size, ret.sourceCode, ret.sourceOffset, undefined, ret.elem ); } } entry.pendingReturns = undefined; } else if (entry.pendingReturnPlaceholder) { var placeholder = entry.pendingReturnPlaceholder; declare( 'PARA', 'locals', undefined, '?', false, '*1', placeholder.sourceCode, placeholder.sourceOffset ); entry.pendingReturnPlaceholder = undefined; } } iterate($inp._, function (p) { rejectByValueStruct(p.type, p.struct, p.name, false, $s, $i); { declare( 'INP?', 'locals', '$' + p.name, p.type, true, (p.size !== undefined ? '*' + p.size : undefined), _s, _i, undefined, p.elem ); } }); ; return true})()&&((function(){var _b=_i;return LOCALS($)&&_($)&&LocalsDecl($loc)&&(function(){ iterate($loc._, function (v) { /* Compute the allocation size ONCE: the declaration below needs it, and for an `inline` function so does every expansion site, which re-declares the local inside its own SCOP. Calling arrayAllocSize twice would borrow two scratches. An array's size is a NAMED `.x.` extent, so it is a symbol every expansion can repeat verbatim - no re-rendering the pieces it was folded from. */ var isStruct = (v.type === 'S'); var kind = (isStruct ? 'LOCA' : 'LOC?'); var type = (isStruct ? 'S' : v.type); var elem = (isStruct ? v.struct : v.elem); var size = (isStruct ? structAllocSize(v.struct) : (v.type === 'A' ? arrayAllocSize(v.elem, v.size, extentSymbol(v.name, $id._)) : (v.words !== undefined ? '*' + v.words : undefined))); if (inlineMode) { inlineLocals.push({ name: '$' + v.name, kind: kind, type: type, size: size, elem: elem }); } declare(kind, 'locals', '$' + v.name, type, false, size, _s, _i, undefined, elem); }); iterate($loc._, function (v) {   /* the count scratches ArrayDecl held for this clause (see there); a no-op for the ones a declaration above already gave back */ returnBack(v.size); }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ /* The head/body separator is emitted at the REPLAY below, not here: an inline expansion appends its SCOP block to the head while the body is being parsed, so anything written here would end up above those declarations. */ ; return true})()&&Block($)&&(function(){ /* wrap-up body */ processBranches(); /* The body (and every inline expansion in it) is now known, so the head is final: replay it, then let flushMetaCode write the body straight out. */ var _head = headSink; headSink = null; if (_head !== null) { for (var _h = 0; _h < _head.length; ++_h) emitLine(_head[_h]); } if (!inlineMode) { emitLine(';-----------------------------------------------------------------------------'); } if (inlineMode) {                       /* no out-of-line copy: keep the body, emit nothing */ captureInlineBody($id._, _s, _i); metacode.length = 0; } else { emit('--^', undefined, undefined, undefined, undefined); flushMetaCode('\t'); } prune(symbols.locals); labelCounter = 0; if (!inlineMode) emitLine(''); inlineMode = false; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function ExternDecl($){var $at,$id=createParserContext(),$sname,$f=createParserContext(),$inp=createParserContext(),$out=createParserContext(),$desc,$type=createParserContext(),$s,$i;return (function(){var _b=_i;return EXTERN($)&&_($)&&(function(){ $.scope = 'globals'; $.structFwd = false; $at = _i;   /* the declaration itself - end-of-rule positions have skipped past it */ pendingProto = undefined; ; return true})()&&(function(){var _b=_i;return STRUCT($)&&_($)&&Identifier($id)&&(function(){ $.structFwd = true; $sname = $id._; beginExternStruct($id._, _s, _i); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ /* a bodyless `extern struct G` never reaches endStruct, so only the braced form opens */ openStruct = $sname; ; return true})()&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return ArrayDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ addStructField($sname, { name: $f.name, type: $f.type, elem: $f.elem, struct: $f.struct, size: $f.size }, _s, _i); ; return true})()&&((function(){var _b=_i;return (_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){   /* Declare the host-owned interface so gazl-validate can check the layout the host supplies (.o.Name.field / .z.Name) against what Impala assumed, the way extern globals and function signatures are already checked. A re-declaration of a struct DEFINED here describes no host layout, so it publishes no row - the definition already published the real one. */ if (!endStruct($sname)) { emitStandaloneSignatureComment( structSignatureRow( $sname, true, sourceName, _s, declOffset)); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){var _b=_i;return FUNCTION($)&&(function(){ $.type  = 'U';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NATIVE($)&&(function(){ $.type  = 'N';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&Identifier($id)&&(function(){ $.name  = $id._; ; return true})()&&((function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){   /* Optional PROTOTYPE. Name-only stays valid and asserts nothing (a wildcard the validator skips); a prototype is a checkable assertion, so calls get argument type-checking and the emitted signature row carries real types. */ var _pa = []; for (var _pk = 0; _pk < $inp.n; ++_pk) { var _pv = $inp._[_pk]; _pa.push({ type: _pv.type, elem: _pv.elem, name: _pv.name, size: _pv.size, struct: _pv.struct, words: _pv.words }); } pendingProto = { args: _pa, ret: undefined }; ; return true})()&&((function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ if (pendingProto) pendingProto.ret = { type: $out.type, elem: $out.elem, struct: $out.struct, name: $out.name }; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&VarDecl($)&&(function(){   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */ fail('Multiple return values are not supported in Impala 2.0', _s, _i, 'E428', 'declare a single return value for this extern'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ $desc = undefined; ; return true})()&&((function(){var _b=_i;return BASE_TYPE($type)&&_($)&&(function(){ $desc = CASTS_TO_TYPES[$type._]; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&ARRAY($)&&_($)&&Identifier($id)&&(function(){ $.type = 'A'; $.name = $id._; $.elem = $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ if ($.structFwd) { cancelStructRedeclaration($sname); return true; } declare( undefined,                 // no section for extern
                                                                              $.scope, $.name, $.type, false,                     // not readonly
-                                                                             '?', _s, _i, undefined, $.elem ); if ($.scope === 'functions') { var entry = symbols.functions[$.name]; var signature = entry && entry.signature; if (entry) { if (!signature) { signature = entry.signature = {}; } if (signature.sourceName === undefined) { signature.sourceName = sourceName; } if (signature.sourceCode === undefined) { signature.sourceCode = _s; signature.sourceOffset = _i; signature.sourceName = sourceName; } signature.returnResolved = false; } var role = ($.type === 'N' ? 'extern native' : 'extern func'); var placeholderSignature = { params: [], returns: undefined, sourceName: sourceName, sourceCode: _s, sourceOffset: _i, }; var _proto = pendingProto; pendingProto = undefined; if (_proto !== undefined) {   /* a declared prototype: real params + at most one return */ var _pp = []; for (var _pi = 0; _pi < _proto.args.length; ++_pi) { var _p = _proto.args[_pi]; rejectByValueStruct(_p.type, _p.struct, _p.name, false, $s, $i); _pp.push({ type: _p.type, elem: _p.elem, name: _p.name, size: _p.size, struct: _p.struct, words: _p.words }); } var _pr = _proto.ret; if (_pr !== undefined) rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, $s, $i); placeholderSignature.params      = _pp; placeholderSignature.returns     = (_pr !== undefined ? _pr.type : 'V'); placeholderSignature.returnElem  = (_pr !== undefined ? _pr.elem : undefined); placeholderSignature.returnCount = (_pr !== undefined ? 1 : 0); placeholderSignature.returnWords = (_pr !== undefined ? 1 : 0); placeholderSignature.returnResolved = true; if (entry) {                   /* publish it so call sites check against it */ entry.signature.params         = _pp; entry.signature.returns        = placeholderSignature.returns; entry.signature.returnElem     = placeholderSignature.returnElem; entry.signature.returnCount    = placeholderSignature.returnCount; entry.signature.returnWords    = placeholderSignature.returnWords; entry.signature.returnResolved = true; } } emitStandaloneSignatureComment( formatFunctionSignatureComment( $.name, placeholderSignature, role, sourceName, _s, _i ) ); } else if ($.scope === 'globals') { emitStandaloneSignatureComment( formatGlobalSignatureComment( 'GLOB', $.name, $.type, $.size, 'extern', sourceName, _s, _i, $.elem ) ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function ConstDecl($){var $type=createParserContext(),$desc,$nf,$t,$telem,$id=createParserContext(),$x=createParserContext();return (function(){var _b=_i;return CONST($)&&_($)&&BASE_TYPE($type)&&_($)&&(function(){ $desc = CASTS_TO_TYPES[$type._]; $nf = noForward; noForward = true; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ $t     = descHead($desc); $telem = descTail($desc); ; return true})()&&Identifier($id)&&(function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ declare( '! DEF?', 'defines', $id._, $t, true, makeConstant($x._, $t, _s, _i), _s, _i, formatConstSignatureComment( $id._, $t, sourceName, _s, _i, $telem ), $telem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ declare( undefined, 'defines', $id._, $t, true, undefined, _s, _i, undefined, $telem ); emitStandaloneSignatureComment(  /* valueless -> host/runtime defines it: publish it as an extern so it links-checks */ formatConstSignatureComment( $id._, $t, sourceName, _s, _i, $telem, true ) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ noForward = $nf; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function GlobalDecl($){var $section,$v=createParserContext(),$vStruct,$init,$d=createParserContext(),$binit,$x=createParserContext(),$a=createParserContext(),$aStructEl,$aStruct,$aCount;return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ $vStruct = ($v.type === 'S'); if ($vStruct) {              /* struct value global -> one zeroed GLOB/CNST/TEMP *sizeof */ declare( $section, 'globals', $v.name, 'S', ($section === 'CNST'), structAllocSize($v.struct), _s, _i, formatGlobalSignatureComment( $section, $v.name, 'S', undefined, undefined, sourceName, _s, _i, $v.struct), $v.struct ); } else { declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; } ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){var _b=_i;return Braced($d)&&(function(){ if (!$vStruct) fail('Brace initializers are only for struct values', _s, _i, 'E422'); $binit = []; buildStructInit($v.struct, $d._, $binit, _s, _i); emitInitData($binit, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ if ($vStruct) fail('A struct value needs a brace initializer', _s, _i, 'E421'); $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ if (!$vStruct) declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i, formatGlobalSignatureComment( $section, $v.name, $v.type, undefined, undefined, sourceName, _s, _i, $v.elem ), $v.elem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), arrayAllocSize($a.elem, $a.size, $a.words), _s, _i, formatGlobalSignatureComment( $section, $a.name, 'A', $a.size, undefined, sourceName, _s, _i, $a.elem ), $a.elem ); $aStructEl = ($a.elem !== undefined && descTail($a.elem) === undefined && isStructAtom(descHead($a.elem))); $aStruct = $a.elem; $aCount = parseInt('' + $a.size, 10); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){var _b=_i;return InitList($d)&&(function(){   /* flat list -> scalar-element arrays only */ if ($aStructEl) fail('A struct-element array needs nested braces, one group per element', _s, _i, 'E422'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Braced($d)&&(function(){   /* nested braces -> struct-element arrays */ if (!$aStructEl) fail('Nested brace initializers are for struct-element arrays', _s, _i, 'E422'); if (isNaN($aCount)) fail('An initialized struct-element array needs a literal size', _s, _i, 'E414'); var _arr = $d._; $binit = []; for (var _ae = 0; _ae < $aCount; ++_ae) { var _aev = (_ae < _arr.length) ? _arr[_ae] : undefined; buildStructInit($aStruct, (_aev && _aev.braced) || [], $binit, _s, _i); } emitInitData($binit, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+                                                                             '?', _s, _i, undefined, $.elem ); if ($.scope === 'functions') { var entry = symbols.functions[$.name]; var signature = entry && entry.signature; if (entry) { if (!signature) { signature = entry.signature = {}; } if (signature.sourceName === undefined) { signature.sourceName = sourceName; } if (signature.sourceCode === undefined) { signature.sourceCode = _s; signature.sourceOffset = declOffset; signature.sourceName = sourceName; } if (entry.kind !== 'FUNC') {  /* a definition here already resolved it - do not un-resolve it */ signature.returnResolved = false; } } var role = ($.type === 'N' ? 'extern native' : 'extern func'); var placeholderSignature = { params: [], returns: undefined, sourceName: sourceName, sourceCode: _s, sourceOffset: declOffset, }; var _proto = pendingProto; pendingProto = undefined; if (_proto !== undefined) {   /* a declared prototype: real params + at most one return */ var _pp = []; for (var _pi = 0; _pi < _proto.args.length; ++_pi) { var _p = _proto.args[_pi]; rejectByValueStruct(_p.type, _p.struct, _p.name, false, $s, $i); _pp.push({ type: _p.type, elem: _p.elem, name: _p.name, size: _p.size, struct: _p.struct, words: _p.words }); } var _pr = _proto.ret; if (_pr !== undefined) rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, $s, $i); placeholderSignature.params      = _pp; placeholderSignature.returns     = (_pr !== undefined ? _pr.type : 'V'); placeholderSignature.returnElem  = (_pr !== undefined ? _pr.elem : undefined); placeholderSignature.returnCount = (_pr !== undefined ? 1 : 0); placeholderSignature.returnWords = (_pr !== undefined ? 1 : 0); placeholderSignature.returnResolved = true; if (entry) { var _defined = (entry.kind === 'FUNC'); checkExternAgreement($.name, placeholderSignature, (_defined ? entry.signature : entry.externProto), _defined, _s, $at); entry.externProto = placeholderSignature; if (!_defined) {               /* a definition here outranks it; otherwise publish it so call sites check against it */ entry.signature.params         = _pp; entry.signature.returns        = placeholderSignature.returns; entry.signature.returnElem     = placeholderSignature.returnElem; entry.signature.returnCount    = placeholderSignature.returnCount; entry.signature.returnWords    = placeholderSignature.returnWords; entry.signature.returnResolved = true; } } } emitStandaloneSignatureComment( formatFunctionSignatureComment( $.name, placeholderSignature, role, sourceName, _s, declOffset ) ); } else if ($.scope === 'globals') { emitStandaloneSignatureComment( formatGlobalSignatureComment( 'GLOB', $.name, $.type, $.size, 'extern', sourceName, _s, declOffset, $.elem ) ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function ConstDecl($){var $type=createParserContext(),$desc,$nf,$t,$telem,$id=createParserContext(),$x=createParserContext();return (function(){var _b=_i;return CONST($)&&_($)&&BASE_TYPE($type)&&_($)&&(function(){ $desc = CASTS_TO_TYPES[$type._]; $nf = noForward; noForward = true; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ $t     = descHead($desc); $telem = descTail($desc); ; return true})()&&Identifier($id)&&(function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ declare( '! DEF?', 'defines', $id._, $t, true, makeConstant($x._, $t, _s, _i), _s, _i, formatConstSignatureComment( $id._, $t, sourceName, _s, declOffset, $telem ), $telem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ declare( undefined, 'defines', $id._, $t, true, undefined, _s, _i, undefined, $telem ); emitStandaloneSignatureComment(  /* valueless -> host/runtime defines it: publish it as an extern so it links-checks */ formatConstSignatureComment( $id._, $t, sourceName, _s, declOffset, $telem, true ) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ noForward = $nf; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function GlobalDecl($){var $section,$v=createParserContext(),$vStruct,$init,$d=createParserContext(),$binit,$x=createParserContext(),$a=createParserContext(),$aStructEl,$aStruct,$aCount;return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ $vStruct = ($v.type === 'S'); if ($vStruct) {              /* struct value global -> one zeroed GLOB/CNST/TEMP *sizeof */ declare( $section, 'globals', $v.name, 'S', ($section === 'CNST'), structAllocSize($v.struct), _s, _i, formatGlobalSignatureComment( $section, $v.name, 'S', undefined, undefined, sourceName, _s, declOffset, $v.struct), $v.struct ); } else { declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, _i ); $init = ZEROES[$v.type]; } ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){var _b=_i;return Braced($d)&&(function(){ if (!$vStruct) fail('Brace initializers are only for struct values', _s, _i, 'E422'); $binit = []; buildStructInit($v.struct, $d._, $binit, _s, _i); emitInitData($binit, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ if ($vStruct) fail('A struct value needs a brace initializer', _s, _i, 'E421'); $init = makeConstant($x._, $v.type, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ if (!$vStruct) declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, _i, formatGlobalSignatureComment( $section, $v.name, $v.type, undefined, undefined, sourceName, _s, declOffset, $v.elem ), $v.elem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), arrayAllocSize($a.elem, $a.size, extentSymbol($a.name)), _s, _i, formatGlobalSignatureComment( $section, $a.name, 'A', $a.size, undefined, sourceName, _s, declOffset, $a.elem ), $a.elem ); returnBack($a.size);   /* declared: this consumer is done with it */ $aStructEl = ($a.elem !== undefined && descTail($a.elem) === undefined && isStructAtom(descHead($a.elem))); $aStruct = $a.elem; $aCount = parseInt('' + $a.size, 10); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){var _b=_i;return InitList($d)&&(function(){   /* flat list -> scalar-element arrays only */ if ($aStructEl) fail('A struct-element array needs nested braces, one group per element', _s, _i, 'E422'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Braced($d)&&(function(){   /* nested braces -> struct-element arrays */ if (!$aStructEl) fail('Nested brace initializers are for struct-element arrays', _s, _i, 'E422'); if (isNaN($aCount)) fail('An initialized struct-element array needs a literal size', _s, _i, 'E414'); var _arr = $d._; $binit = []; for (var _ae = 0; _ae < $aCount; ++_ae) { var _aev = (_ae < _arr.length) ? _arr[_ae] : undefined; buildStructInit($aStruct, (_aev && _aev.braced) || [], $binit, _s, _i); } emitInitData($binit, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Braced($){var $i=createParserContext();return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return BracedItem($i)&&(function(){ $._[$.n++] = $i._; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&BracedItem($i)&&(function(){ $._[$.n++] = $i._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BracedItem($){var $b=createParserContext(),$x=createParserContext();return (function(){var _b=_i;return Braced($b)&&(function(){ $._ = { braced: $b._ }; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ var m = metaSlot($x._); var op = makeRValue(m, '#<&'); if (span(op[0] || '', '#<&') !== 1) fail('Initializer must be a constant', _s, _i, 'E407'); $._ = { op: op, type: m.type }; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function InitList($){var $d,$type,$x=createParserContext();return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ $d = ' '; $type = undefined; ; return true})()&&((function(){var _b=_i;return Expr($x)&&(function(){ var xMeta = metaSlot($x._); $type = xMeta.type; $d += makeConstant(xMeta, $type, _s, _i); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Expr($x)&&(function(){ var xMeta = metaSlot($x._); var xType = xMeta.type; var constant = makeConstant(xMeta, xType, _s, _i); /* decide if we need to flush DATA */ if (  constant[0] === '<' || $d[1] === '<' || ($d + ' ' + constant).length >= 55) { declare( 'DATA', 'globals', undefined, xType, true, $d.substr(1), _s, _i ); $d = ''; } $d += ' ' + constant; $type = xType; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ if ($d.substr(1) !== '') { declare( 'DATA', 'globals', undefined, $type, true, $d.substr(1), _s, _i ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
@@ -3221,33 +3547,33 @@ function ArgsDecl($){var $v=createParserContext();return (function(){var _b=_i;r
 function LocalsDecl($){var $v=createParserContext();return (function(){var _b=_i;return (function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return (function(){var _b=_i;return VarDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ $._[$.n++] = declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&(function(){var _b=_i;return VarDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ $._[$.n++] = declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function TypeBase($){var $t=createParserContext(),$id=createParserContext();return (function(){var _b=_i;return BASE_TYPE($t)&&_($)&&(function(){ $._ = CASTS_TO_TYPES[$t._]; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Identifier($id)&&(function(){ if (!isStructAtom($id._) && !isFuncTypeAtom($id._)) fail('Unknown type ' + $id._, _s, _i, 'E413'); $._ = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function VarDecl($){var $base=createParserContext(),$desc,$id=createParserContext();return (function(){var _b=_i;return TypeBase($base)&&(function(){ $desc = $base._; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&Identifier($id)&&(function(){ var head = descHead($desc); var tail = descTail($desc); if (tail === undefined && isStructAtom(head)) { $.type = 'S'; $.struct = head; $.elem = undefined; $.words = structWords(head); } else if (tail === undefined && isFuncTypeAtom(head)) { $.type = 'F';           /* named funcptr type -> a funcptr carrying its type tag */ $.elem = head; $.struct = undefined; $.words = undefined;    /* scalar funcptr: a single word, no size operand */ } else { $.type = head; $.elem = tail; $.struct = undefined; $.words = undefined; } $.name = $id._; $.size = undefined; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function ArrayDecl($){var $desc,$extent,$base=createParserContext(),$id=createParserContext(),$x=createParserContext(),$size;return (function(){var _b=_i;return (function(){ $desc = undefined; $extent = undefined; ; return true})()&&((function(){var _b=_i;return TypeBase($base)&&(function(){ $desc = $base._; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&ARRAY($)&&_($)&&Identifier($id)&&((function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($x)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ $size = makeConstant($x._, 'i', _s, _i); $extent = dropHash($size);   /* element count - may be a symbolic const */ if (openStruct === undefined) { returnBack($size);       /* a struct field's borrow outlives the decl - endStruct frees it */ } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ /* An `extern struct` field states NO extent, matching the `extern array` rule: the host owns that layout, so a number here would be an unverifiable claim Impala never reads (offsets are host-supplied `.o.` symbols, 1-D stride is 1). */ var externField = (openStruct !== undefined && isExternStruct(openStruct)); if (externField && $extent !== undefined) { fail('An extern struct array field must not state a size', _s, _i, 'E430', 'the host owns this layout - write `array ' + $id._ + '` without a size'); } if (!externField && $extent === undefined) { fail('Array ' + $id._ + ' needs a size', _s, _i, 'E431', 'only a sizeless `extern array` or `extern struct` field may omit it'); } $.type = 'A'; $.elem = $desc; $.name = $id._; $.size = $extent; $.words = $extent;                   /* alloc size folds count*.z.Elem symbolically (arrayAllocSize) */ ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function ArrayDecl($){var $desc,$extent,$base=createParserContext(),$id=createParserContext(),$x=createParserContext(),$size;return (function(){var _b=_i;return (function(){ $desc = undefined; $extent = undefined; ; return true})()&&((function(){var _b=_i;return TypeBase($base)&&(function(){ $desc = $base._; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&ARRAY($)&&_($)&&Identifier($id)&&((function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($x)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ $size = makeConstant($x._, 'i', _s, _i); $extent = dropHash($size);   /* element count - may be a symbolic const */ /* THE CONSUMER OWNS THE BORROW. A folded extent lives in a `<X>` scratch, and a scratch is recycled on the next borrow - so whoever still has to READ this one decides when it goes back: endStruct after the layout block, FuncDecl after the locals pass, GlobalDecl right after its declaration. Freeing it here instead let the NEXT declarator in the same list borrow the same scratch and overwrite the extent, which is how two array locals in one clause silently got whichever count was folded last. */ ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ /* An `extern struct` field states NO extent, matching the `extern array` rule: the host owns that layout, so a number here would be an unverifiable claim Impala never reads (offsets are host-supplied `.o.` symbols, 1-D stride is 1). */ var externField = (openStruct !== undefined && isExternStruct(openStruct)); if (externField && $extent !== undefined) { fail('An extern struct array field must not state a size', _s, _i, 'E430', 'the host owns this layout - write `array ' + $id._ + '` without a size'); } if (!externField && $extent === undefined) { fail('Array ' + $id._ + ' needs a size', _s, _i, 'E431', 'only a sizeless `extern array` or `extern struct` field may omit it'); } $.type = 'A'; $.elem = $desc; $.name = $id._; $.size = $extent; $.words = $extent;                   /* an array's words ARE its count; a struct element scales symbolically, in arrayAllocSize */ ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Statement($){var $label=createParserContext();return (function(){var _b=_i;return (function(){ var snippet = _s.substr(_i); var cut     = find(snippet, "{;\r\n"); var txt     = (cut >= 0 ? snippet.substr(0, cut) : snippet); emitMeta({ operator:';', type:undefined, operands:[ txt, undefined, undefined ] }); ; return true})()&&((function(){while((function(){var _b=_i;return Identifier($label)&&(_s[_i]===":")&&(++_i,true)&&_($)&&(function(){ emitMeta({ operator:'<--', type:undefined, operands:[ '@' + $label._, undefined, undefined ] }); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _b=_i;return (_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Assert($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Block($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Copy($)||(_im=(_i>_im?_i:_im),_i=_b,false)||DoWhile($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Loop($)||(_im=(_i>_im?_i:_im),_i=_b,false)||For($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Goto($)||(_im=(_i>_im?_i:_im),_i=_b,false)||If($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Switch($)||(_im=(_i>_im?_i:_im),_i=_b,false)||While($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Destructure($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($)&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ if (metaSlot($._).winBase !== undefined) {     /* discarded struct-return value: free its window + base */ returnBack(metaSlot($._).base); freeStructWindow($._); } releaseMeta($._); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Expr($){var $r=createParserContext();return (function(){var _b=_i;return Bitwise($)&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($r)&&(function(){ if (!dry) assign($._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Bitwise($){var $first,$op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return (function(){ $first = undefined; ; return true})()&&AddSub($)&&((function(){while((function(){var _b=_i;return BITWISE_OP($op)&&_($)&&AddSub($r)&&(function(){ if (!dry) { if ($first === undefined) $first = $op._; else if ($first !== $op._) mixedBitwise($first, $op._, _s, _i); binaryOp($op._, $._, $r._, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ if (!dry) stampBitwise($._, $first !== undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function AddSub($){var $op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return MulDiv($)&&((function(){while((function(){var _b=_i;return ADDSUB_OP($op)&&_($)&&MulDiv($r)&&(function(){ if (!dry) binaryOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function MulDiv($){var $op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return PrePost($)&&((function(){while((function(){var _b=_i;return MULDIV_OP($op)&&_($)&&PrePost($r)&&(function(){ if (!dry) mulDivOp($op._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function PrePost($){var $op=createParserContext(),$cdesc,$cmods,$sid=createParserContext(),$pdepth;return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(function(){ $cdesc = CASTS_TO_TYPES[$op._]; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $cdesc = 'p:' + $cdesc; $cmods = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&Identifier($sid)&&(function(){ $pdepth = 0; ; return true})()&&((function(){for(var _n=0;(function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $pdepth = $pdepth + 1; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})();++_n);return _n>0})())&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!isStructAtom($sid._)) fail('Unknown type ' + $sid._, _s, _i, 'E413'); $cdesc = $sid._; for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc; $cmods = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) { if ($cmods) { unaryOp('pointer', $._, _s, _i); setElem($._, descTail($cdesc)); } else { unaryOp($op._, $._, _s, _i); } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FieldAccess($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Subscript($){var $s=createParserContext();return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var sb = metaSlot($._); if ((sb.place && sb.arrayOf) || (sb.type === 'p' && isStructAtom(sb.elem))) subscriptStruct($._, $s._); else binaryOp('=[]', $._, $s._, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function PrePost($){var $op=createParserContext(),$cdesc,$ccast,$sid=createParserContext(),$pdepth;return (function(){var _b=_i;return (function(){var _b=_i;return PREFIX_OP($op)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&BASE_TYPE($op)&&_($)&&(function(){ $cdesc = CASTS_TO_TYPES[$op._]; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $cdesc = 'p:' + $cdesc; $ccast = 'pointer'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="(")&&(++_i,true)&&_($)&&Identifier($sid)&&(function(){ $pdepth = 0; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $pdepth = $pdepth + 1; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ /* With no `pointer` this is only a cast when the name is a FUNCTYPE, which is already a pointer and so needs no modifier - a struct has no by-value cast, and anything else is a plain parenthesized expression. Backing out (rather than failing) lets Value parse `(x) + 1`; the test above is a pure lookup, so there is no side effect to undo. */ if ($pdepth === 0) { if (!isFuncTypeAtom($sid._)) return false; $cdesc = 'F:' + $sid._; $ccast = 'funcptr'; } else { if (!isStructAtom($sid._) && !isFuncTypeAtom($sid._)) fail('Unknown type ' + $sid._, _s, _i, 'E413'); $cdesc = $sid._; for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc; $ccast = 'pointer'; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&PrePost($)&&(function(){ if (!dry) { if ($ccast) {          /* a named/pointer cast; a bare BASE_TYPE cast has no $ccast */ unaryOp($ccast, $._, _s, _i); setElem($._, descTail($cdesc)); } else { unaryOp($op._, $._, _s, _i); } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Value($)&&((function(){while((function(){var _b=_i;return FuncCall($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Subscript($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FieldAccess($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Subscript($){var $s=createParserContext();return (function(){var _b=_i;return (_s.substr(_i,2)==="[[")&&(_i+=2,true)&&_($)&&Expr($s)&&(_s.substr(_i,2)==="]]")&&(_i+=2,true)&&_($)&&(function(){ if (!dry) { var sbs = metaSlot($._); if (!subscriptScales(sbs)) fail('Scaled subscript on a one-word element', _s, _i, 'E205', '`[[ ]]` scales by the element size - this element is one word, so write `[ ]`'); subscriptStruct($._, $s._); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="[")&&(++_i,true)&&_($)&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var sb = metaSlot($._); if (subscriptScales(sb)) fail('Plain subscript on a struct element', _s, _i, 'E204', 'this element is a struct, so the index scales - write `[[ ]]`'); if ((sb.place && sb.arrayOf) || (sb.type === 'p' && isStructAtom(sb.elem))) subscriptStruct($._, $s._); else binaryOp('=[]', $._, $s._, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FieldAccess($){var $f=createParserContext();return (function(){var _b=_i;return (_s.substr(_i,2)==="->")&&(_i+=2,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, true, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===".")&&(++_i,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, false, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; /* how many leading output slots the callee expects (>1 = multi-return) */ var _c = metaSlot($._); var _rs = 1; if (_c.operator === ':=' && _c.operands[1] && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) { var _e = symbols.functions[_c.operands[1].substr(1)]; if (_e && _e.signature && _e.signature.returnWords !== undefined && _e.signature.returnWords > 1) _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */ } else if (_c.type === 'F' && isFuncTypeAtom(_c.elem)) { var _ft = functypes[_c.elem];   /* indirect call through a named funcptr type */ if (_ft.returnWords > 1) _rs = _ft.returnWords; } $.retSlots = _rs; $.words = 0;                            /* input words placed so far (struct args span >1) */ $.base  = borrowForCall(); $.mark  = metacode.length;     /* first meta of THIS call's arguments */ for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */ claimSlot($.base + _os); $.types = []; $.elems = []; $.nulls = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){var _b=_i;return (_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){   /* a '(' after a value is always a call, so no valid parse ever backtracks out of one - and the prologue above already borrowed the call window, which a backtrack would leak into whatever diagnostic comes next. Reject here, where the syntax broke. */ if (!dry) fail('Malformed argument list', _s, _i, 'E442', 'expected , or ) here - and note that a comparison or a && / || group is not a value in Impala'); ; return true})()&&(function(){var _l=_i,_x=_($);_i=_l;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type , undefined, 'E408'); } if (callee.operator === ':=' && callee.operands[1] && (callee.operands[1][0] === '&' || callee.operands[1][0] === '^')) { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; /* an Impala-defined function, or an extern with a DECLARED prototype (name-only externs carry no `params` and stay unchecked - they assert nothing) */ if (entry && entry.signature && (entry.kind === 'FUNC' || entry.signature.params)) { signature = entry.signature; } } else if (callee.type === 'F' && isFuncTypeAtom(callee.elem)) { signature = functypes[callee.elem];   /* indirect call: check against the funcptr type */ } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i , 'E405'); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { /* Name the struct when the actual is a struct VALUE, and point at `&`: passing `v` where `V pointer` is wanted is the common slip now that by-value struct params are parked for Impala 3.0. */ var _actualText = ((actual === 'S' && $.elems && $.elems[argIdx]) ? 'struct ' + $.elems[argIdx] : '{$type1}'); typeError( 'Argument type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (' + _actualText + ' vs expected {$type2})', _s, _i, actual, expected , 'E406', ((actual === 'S' && expected === 'p') ? 'pass its address with & (by-value struct params are parked for Impala 3.0)' : undefined)); } if (expected === 'S' && params[argIdx].struct !== undefined && $.elems[argIdx] !== params[argIdx].struct) { fail('Struct type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + params[argIdx].struct + ', got ' + ($.elems[argIdx] || 'a non-struct value') + ')', _s, _i, 'E421'); } var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */ if (expected === 'p' && expectedElem !== undefined && !$.nulls[argIdx] && $.elems[argIdx] !== expectedElem) { fail('Pointer element type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + elemVerbose(expectedElem) + ' elements, got ' + elemVerbose($.elems[argIdx]) + ' elements)', _s, _i, 'E202', 'use a cast: (' + elemVerbose(expectedElem) + ' pointer)'); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i, $.elems ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var inlineInfo = (entry ? entry.inline : undefined); if (inlineInfo !== undefined) {   /* replay the body instead of calling it */ expandInline(inlineInfo, $.base, $.retSlots, $.words, $.mark); } else { var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.words + $.retSlots)); returnBack(func); } while ($.words-- > 0) {              /* free the argument words (past the output slots) */ returnBack('%' + ($.base + $.retSlots + $.words)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); /* Keep the RETURN's element type: `returns V pointer` must yield a V-pointer, not a bare one, or `*f()` cannot be recognised as a struct and typed-pointer assignment checks go blind. A funcptr type carries returnElem too, so indirect calls work. */ setElem(callee, signature ? signature.returnElem : undefined); if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */ var _wp = borrow('%'); emit('=&', 'p', _wp, '%' + $.base, '*' + $.retSlots);   /* numeric: fixed output window (see copyStructArg) */ setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct); callee.winBase  = $.base;       /* output window slots to free once the value is consumed */ callee.winWords = $.retSlots; } else if ($.retSlots > 1) {        /* multi-return: expose window for destructuring */ callee.multiBase = $.base; callee.multiCount = $.retSlots; callee.multiReturnList = signature.returnList; } if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), actualElems: ($.elems ? $.elems.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Argument($){var $a=createParserContext(),$type;return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if (meta.type === 'V') { typeError( 'Invalid type ({$type1})', _s, _i, meta.type ); } if ($.types) { $.types.push(meta.type); } if ($.elems) {                       /* element chain + null-ness, captured */ $.elems.push(meta.elem);         /* before makeArgValue mutates the meta */ $.nulls.push(meta.type === 'p' && meta.operands[1] === '&NULL' && meta.operands[2] === undefined); } var winSlot = $.base + $.retSlots + $.words; if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */ var w = structWords(meta.struct); copyStructArg($a._, winSlot, w); $.words += w; } else { makeArgValue($a._, winSlot); $.words += 1; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; /* how many leading output slots the callee expects (>1 = multi-return) */ var _c = metaSlot($._); var _rs = 1; if (_c.operator === ':=' && _c.operands[1] && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) { var _e = symbols.functions[_c.operands[1].substr(1)]; if (_e && _e.signature && _e.signature.returnWords !== undefined && _e.signature.returnWords > 1) _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */ } else if (_c.type === 'F' && isFuncTypeAtom(_c.elem)) { var _ft = functypes[_c.elem];   /* indirect call through a named funcptr type */ if (_ft.returnWords > 1) _rs = _ft.returnWords; } $.retSlots = _rs; $.words = 0;                            /* input words placed so far (struct args span >1) */ $.base  = borrowForCall(); $.mark  = metacode.length;     /* first meta of THIS call's arguments */ for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */ claimSlot($.base + _os); $.types = []; $.elems = []; $.opnds = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){var _b=_i;return (_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){   /* a '(' after a value is always a call, so no valid parse ever backtracks out of one - and the prologue above already borrowed the call window, which a backtrack would leak into whatever diagnostic comes next. Reject here, where the syntax broke. */ if (!dry) fail('Malformed argument list', _s, _i, 'E442', 'expected , or ) here - and note that a comparison or a && / || group is not a value in Impala'); ; return true})()&&(function(){var _l=_i,_x=_($);_i=_l;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type , undefined, 'E408'); } if (callee.operator === ':=' && callee.operands[1] && (callee.operands[1][0] === '&' || callee.operands[1][0] === '^')) { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; /* an Impala-defined function, or an extern with a DECLARED prototype (name-only externs carry no `params` and stay unchecked - they assert nothing) */ if (entry && entry.signature && (entry.kind === 'FUNC' || entry.signature.params)) { signature = entry.signature; } } else if (callee.type === 'F' && isFuncTypeAtom(callee.elem)) { signature = functypes[callee.elem];   /* indirect call: check against the funcptr type */ } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i , 'E405'); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { /* Name the struct when the actual is a struct VALUE, and point at `&`: passing `v` where `V pointer` is wanted is the common slip now that by-value struct params are parked for Impala 3.0. */ var _actualText = ((actual === 'S' && $.elems && $.elems[argIdx]) ? 'struct ' + $.elems[argIdx] : '{$type1}'); typeError( 'Argument type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (' + _actualText + ' vs expected {$type2})', _s, _i, actual, expected , 'E406', ((actual === 'S' && expected === 'p') ? 'pass its address with & (by-value struct params are parked for Impala 3.0)' : undefined)); } if (expected === 'S' && params[argIdx].struct !== undefined && $.elems[argIdx] !== params[argIdx].struct) { fail('Struct type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + params[argIdx].struct + ', got ' + ($.elems[argIdx] || 'a non-struct value') + ')', _s, _i, 'E421'); } var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */ if (expected === 'p' && expectedElem !== undefined && $.opnds[argIdx] !== '&NULL' && $.elems[argIdx] !== expectedElem) { fail('Pointer element type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + elemVerbose(expectedElem) + ' elements, got ' + elemVerbose($.elems[argIdx]) + ' elements)', _s, _i, 'E202', 'use a cast: (' + elemVerbose(expectedElem) + ' pointer)'); } /* Same rule for a named funcptr param as for assignment, so the same check: `expected` is already 'F' here, which is what the assign path derives from the r-value's own type. */ if (expected === 'F' && isFuncTypeAtom(expectedElem)) { checkFuncPtrTarget(expectedElem, $.opnds[argIdx], 'F', $.elems[argIdx], ' for argument ' + (argIdx + 1) + ' when calling ' + label, _s, _i); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i,                 /* the CALL SITE, not the enclosing declaration */ $.elems ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var inlineInfo = (entry ? entry.inline : undefined); if (inlineInfo !== undefined) {   /* replay the body instead of calling it */ expandInline(inlineInfo, $.base, $.retSlots, $.words, $.mark); } else { var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.words + $.retSlots)); returnBack(func); } while ($.words-- > 0) {              /* free the argument words (past the output slots) */ returnBack('%' + ($.base + $.retSlots + $.words)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); /* Keep the RETURN's element type: `returns V pointer` must yield a V-pointer, not a bare one, or `*f()` cannot be recognised as a struct and typed-pointer assignment checks go blind. A funcptr type carries returnElem too, so indirect calls work. */ setElem(callee, signature ? signature.returnElem : undefined); if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */ var _wp = borrow('%'); emit('=&', 'p', _wp, '%' + $.base, '*' + $.retSlots);   /* numeric: fixed output window (see copyStructArg) */ setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct); callee.winBase  = $.base;       /* output window slots to free once the value is consumed */ callee.winWords = $.retSlots; } else if ($.retSlots > 1) {        /* multi-return: expose window for destructuring */ callee.multiBase = $.base; callee.multiCount = $.retSlots; callee.multiReturnList = signature.returnList; } if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), actualElems: ($.elems ? $.elems.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Argument($){var $a=createParserContext(),$type;return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if (meta.type === 'V') { typeError( 'Invalid type ({$type1})', _s, _i, meta.type ); } if ($.types) { $.types.push(meta.type); } if ($.elems) {                       /* element chain + null-ness, captured */ $.elems.push(meta.elem);         /* before makeArgValue mutates the meta */ $.opnds.push(bareOperand(meta));  /* `&NULL` marks a null/nullfunc literal */ } var winSlot = $.base + $.retSlots + $.words; if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */ var w = structWords(meta.struct); copyStructArg($a._, winSlot, w); $.words += w; } else { makeArgValue($a._, winSlot); $.words += 1; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Group($){return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) stampBitwise($._, false); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BoolGroup($){var $label;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ $label = undefined; ; return true})()&&And($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="||")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('t'); } emit('?->', true, $label, undefined, undefined); ; return true})()&&And($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if ($label !== undefined) { emit('<-?', true, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function And($){var $label;return (function(){var _b=_i;return (function(){ $label = undefined; ; return true})()&&Comp($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="&&")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('f'); } emit('?->', false, $label, undefined, undefined); ; return true})()&&Comp($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ if ($label !== undefined) { emit('<-?', false, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Comp($){var $op=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return (_s[_i]==="!")&&(++_i,true)&&_($)&&Comp($)&&(function(){ emit('!', undefined, undefined, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ dry = true; ; return true})()&&(function(){var _l=_i,_x=Group($);_i=_l;return !_x})()&&(function(){ dry = false; ; return true})()&&BoolGroup($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ dry = false; ; return true})()&&Expr($)&&COMP_OP($op)&&_($)&&Expr($r)&&(function(){ checkCompMix($._, $r._, _s, _i); binaryOp($op._, $._, $r._, _s, _i); emitMeta($._); releaseMeta($._); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Assert($){var $okLabel,$start,$exprText,$str=createParserContext(),$;return (function(){var _b=_i;return ASSERT($)&&_($)&&(function(){ $okLabel = newLabel('a'); emit('<> ==', 'i', '#DEBUG', '#0', $okLabel); $start    = _i; $exprText = ''; ; return true})()&&BoolGroup($str)&&(function(){ $exprText = _s.substring($start, _i); $exprText = $exprText.replace(/[ \t\r\n]+$/, ''); ; return true})()&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ emit('?->', true, $okLabel, undefined, undefined); var r = borrowForCall(); /* store the assert-string constant */ makeString('a', $str._, $exprText, _s, _i); /* argument goes into %<r+1> */ makeArgValue($str._, r + 1); /* call the failure handler */ emit('()', '?', '^assertFail', '%' + r, '*1'); /* tidy temporaries */ returnBack('%' + (r + 1)); returnBack('%' +  r); /* continue after OK-label */ emit('<-?', true, $okLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Block($){return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while(Statement($));})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Goto($){var $label=createParserContext();return (function(){var _b=_i;return GOTO($)&&_($)&&Identifier($label)&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ emit('-->', undefined, '@' + $label._, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Goto($){var $label=createParserContext();return (function(){var _b=_i;return GOTO($)&&_($)&&Identifier($label)&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ emit('-->', undefined, '@' + $label._, undefined, undefined); /* carry the source position so processBranches can name the `.impala` line if this label is never defined (E445) */ var g = metacode[metacode.length - 1]; g.gotoSource = _s; g.gotoOffset = _i; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function If($){var $dontLabel,$doneLabel;return (function(){var _b=_i;return IF($)&&_($)&&BoolGroup($)&&(function(){ $dontLabel = newLabel('f'); emit('?->', false, $dontLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){var _b=_i;return ELSE($)&&_($)&&(function(){ $doneLabel = newLabel('e'); emit('-->', undefined, $doneLabel, undefined, undefined); emit('<-?',  false, $dontLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('<--', undefined, $doneLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ emit('<-?', false, $dontLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function DoWhile($){var $loopLabel;return (function(){var _b=_i;return DO($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<-?', false, $loopLabel, undefined, undefined); ; return true})()&&Statement($)&&WHILE($)&&_($)&&BoolGroup($)&&(function(){ emit('?->', true, $loopLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Loop($){var $loopLabel;return (function(){var _b=_i;return LOOP($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function For($){var $var=createParserContext(),$gotInit,$init=createParserContext(),$toExpr=createParserContext(),$type,$to,$noLoopLabel,$loopLabel,$body=createParserContext();return (function(){var _b=_i;return FOR($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Variable($var)&&(function(){ /* loop-variable must be local, modifiable int / pointer */ var varMeta = metaSlot($var._); if (varMeta.operator !== '=' || span(varMeta.type, "ip") === 0) { fail( 'For variable must be a local modifiable int or pointer variable', _s, _i , 'E305'); } $gotInit = false;            /* flag to detect an explicit start value */ ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($init)&&(function(){ assign($init._, $var._, $init._, _s, _i); $gotInit = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&TO($)&&_($)&&Expr($toExpr)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ var varMeta  = metaSlot($var._); var toMeta   = metaSlot($toExpr._); if (toMeta.type !== varMeta.type) { typeError( 'Incompatible types ({$type1} and {$type2})', _s, _i, varMeta.type, toMeta.type , 'E301'); } /* constant upper bound */ $to = makeRValue(toMeta); /* initial comparison  (var < to)                         */ emit( '<', toMeta.type, undefined, $gotInit ? metaSlot($init._).operands[1]     /* start value from “var = expr” */ : varMeta.operands[1],            /* or the original variable */ $to ); if ($gotInit) { releaseMeta($init._); } /* branch-out   and  loop label */ $noLoopLabel = newLabel('e'); emit('?->', false, $noLoopLabel, undefined, undefined); $loopLabel   = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($body)&&(function(){ var varMeta = metaSlot($var._); /* increment + jump back */ emit( '...', varMeta.type, varMeta.operands[1],        /* address of loop variable */ $to, $loopLabel ); emit('<-?', false, $noLoopLabel, undefined, undefined); returnBack($to); releaseMeta(varMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function For($){var $var=createParserContext(),$gotInit,$init=createParserContext(),$toExpr=createParserContext(),$type,$to,$noLoopLabel,$loopLabel,$body=createParserContext();return (function(){var _b=_i;return FOR($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Variable($var)&&(function(){ /* loop-variable must be local, modifiable int / pointer */ var varMeta = metaSlot($var._); if (varMeta.operator !== '=' || span(varMeta.type, "ip") === 0) { fail( 'For variable must be a local modifiable int or pointer variable', _s, _i , 'E305'); } /* `FORp` steps exactly one WORD and is already a 3-operand form, so a struct pointer has nowhere to put its stride. Scaling only the bound silently ran sizeof(S) times too many (F2 in docs/Impala2Review.md). */ if (strideStruct(varMeta.elem) !== undefined) { fail( 'For variable must not be a struct pointer', _s, _i, 'E309', 'FORp cannot stride by a struct - use `while (p < end) { ...; p = &p[[1]]; }`'); } $gotInit = false;            /* flag to detect an explicit start value */ ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($init)&&(function(){ assign($init._, $var._, $init._, _s, _i); $gotInit = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&TO($)&&_($)&&Expr($toExpr)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ var varMeta  = metaSlot($var._); var toMeta   = metaSlot($toExpr._); if (toMeta.type !== varMeta.type) { typeError( 'Incompatible types ({$type1} and {$type2})', _s, _i, varMeta.type, toMeta.type , 'E301'); } /* constant upper bound */ $to = makeRValue(toMeta); /* initial comparison  (var < to)                         */ emit( '<', toMeta.type, undefined, $gotInit ? metaSlot($init._).operands[1]     /* start value from “var = expr” */ : varMeta.operands[1],            /* or the original variable */ $to ); if ($gotInit) { releaseMeta($init._); } /* branch-out   and  loop label */ $noLoopLabel = newLabel('e'); emit('?->', false, $noLoopLabel, undefined, undefined); $loopLabel   = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&Statement($body)&&(function(){ var varMeta = metaSlot($var._); /* increment + jump back */ emit( '...', varMeta.type, varMeta.operands[1],        /* address of loop variable */ $to, $loopLabel ); emit('<-?', false, $noLoopLabel, undefined, undefined); returnBack($to); releaseMeta(varMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Copy($){var $l=createParserContext(),$f=createParserContext(),$t=createParserContext(),$length,$type,$;return (function(){var _b=_i;return COPY($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($l)&&FROM($)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ var fromMeta = metaSlot($f._); var toMeta   = metaSlot($t._); $length = makeConstant($l._, 'i', _s, _i); var lengthHash = dropHash($length); if (fromMeta.type + toMeta.type !== 'pp') { returnBack($length); typeError( 'Invalid types ({$type1} and {$type2})', _s, _i, fromMeta.type, toMeta.type , 'E301'); } var copyMeta = metaSlot($l._); makeMeta( copyMeta, 'copy', '?', makeRValue(toMeta, '&$%'), makeRValue(fromMeta, '&$%'), '*' + lengthHash ); emitMeta(copyMeta); returnBack($length); releaseMeta(copyMeta); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Destructure($){return (function(){var _b=_i;return DestTarget($)&&((function(){for(var _n=0;(function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&DestTarget($)||(_im=(_i>_im?_i:_im),_i=_b,false)})();++_n);return _n>0})())&&(_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md. Kept only to recognise the shape and reject it well; the targets themselves are never needed. */ fail('Destructuring assignment is not supported in Impala 2.0', _s, _i, 'E429', 'assign one value per statement'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function DestTarget($){var $tgtGlobal,$id=createParserContext(),$tgtName;return (function(){var _b=_i;return (function(){ $tgtGlobal = false; ; return true})()&&((function(){var _b=_i;return GLOBAL($)&&_($)&&(function(){ $tgtGlobal = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Identifier($id)&&(function(){ $tgtName = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Switch($){var $f=createParserContext(),$t=createParserContext(),$size,$switcher,$,$switchExit,$progress,$stmt=createParserContext();return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($._); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i, 'E306'); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups -> fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case ...” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined', undefined, undefined, 'E409'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = switchStack.pop() || metaSlot($._); /* no explicit “default” -> hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) - switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot($._); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); $n = subConstInt( makeConstant(caseMeta, 'i', _s, _i), baseFrom ); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Switch($){var $f=createParserContext(),$t=createParserContext(),$size,$switcher,$,$switchExit,$progress,$stmt=createParserContext();return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($._); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i, 'E306'); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); /* snapshot the range as plain numbers now: the operands are handed back to the scratch pool below, and a case is only checkable while both ends are known. */ switchMeta.fromNum = constInt(switchMeta.from); switchMeta.sizeNum = constInt($size); switchMeta.caseSeen = {}; switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups -> fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case ...” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined', undefined, undefined, 'E409'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = switchStack.pop() || metaSlot($._); /* no explicit “default” -> hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) - switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot($._); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); var caseConst = makeConstant(caseMeta, 'i', _s, _i); checkCaseValue(ctx, constInt(caseConst), _s, _i); $n = subConstInt(caseConst, baseFrom); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function While($){var $loopLabel,$exitLabel;return (function(){var _b=_i;return WHILE($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&BoolGroup($)&&(function(){ $exitLabel = newLabel('e'); emit('?->', false, $exitLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); emit('<-?', false, $exitLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Value($){var $base=createParserContext(),$f=createParserContext(),$i=createParserContext(),$s=createParserContext();return (function(){var _b=_i;return Group($)||(_im=(_i>_im?_i:_im),_i=_b,false)||SIZEOF($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&TypeBase($base)&&(function(){ if (!dry) { var head = descHead($base._); if (isStructAtom(head)) {   /* struct size -> symbolic .z.Name */ if (!isExternStruct(head) && structWords(head) === undefined) fail('sizeof of incomplete struct ' + head, _s, _i, 'E419'); makeMeta($._, ':=', 'i', undefined, '#.z.' + head, undefined); setElem($._, undefined); } else { makeMeta($._, ':=', 'i', undefined, '#1', undefined); setElem($._, undefined); } } ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FloatLiteral($f)&&(function(){ if (!dry) { makeMeta($._, ':=', 'f', undefined, '#' + $f._, undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||IntegerLiteral($i)&&(function(){ if (!dry) { makeMeta($._, ':=', 'i', undefined, '#' + $i._, undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||StringLiteral($s)&&(function(){ if (!dry) { makeString('s', $._, evaluate($s._), _s, _i); setElem($._, 'i');      /* string data is int words (Impala 2) */ } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'p', undefined, '&NULL', undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'F', undefined, '&NULL', undefined); setElem($._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Variable($){var $global,$id=createParserContext();return (function(){var _b=_i;return (function(){ $global = false; ; return true})()&&((function(){var _b=_i;return GLOBAL($)&&_($)&&(function(){ $global = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Identifier($id)&&(function(){ if (!dry) { lookup($._, $id._, $global, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

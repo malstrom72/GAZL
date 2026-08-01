@@ -1,40 +1,44 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 10:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 13:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:33
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 9:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 10:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 11:1
+.x.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 13:1
 	DATA &.s_BITSCL_4d2 &.s_SINSAM_4d3 &.s_ROTSRA_4d4
 	DATA &.s_DLYLEF_4d5 &.s_SHARPS_4d6 &.s_SHARPF_4d7
 	DATA &.s_SMOOTH_4d8 &.s_SMOOTH_4d9
-; signature extern native abort() -> unknown @ 25:1
-; signature extern native trace() -> unknown @ 26:1
-; signature extern native yield() -> unknown @ 27:1
-; signature extern native write() -> unknown @ 28:1
-; signature extern native read() -> unknown @ 30:1
-; signature extern const DEBUG : int @ 32:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 33:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 34:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 35:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 36:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 38:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 39:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 40:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 41:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 42:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 43:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 44:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 45:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 46:1
-; signature extern const PARAM_COUNT : int @ 48:1
+; signature extern native abort() -> unknown @ 24:1
+; signature extern native trace() -> unknown @ 25:1
+; signature extern native yield() -> unknown @ 26:1
+; signature extern native write() -> unknown @ 27:1
+; signature extern native read() -> unknown @ 28:1
+; signature extern const DEBUG : int @ 30:1
+; signature extern const SWITCHES_SYNC_MASK : int @ 32:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ 33:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ 34:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 35:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ 36:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 38:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ 39:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ 40:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 41:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 42:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ 43:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 44:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 45:1
+; signature extern const PARAM_COUNT : int @ 46:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 49:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 50:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 51:1
+clock:	DATi #0	; signature global clock : int @ 48:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 49:1
+.x.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 50:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 52:1
-signal:	GLOB *2	; signature array signal[2] : unknown @ 53:1
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 51:1
+.x.signal:	! DEFi #2
+signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 52:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -47,8 +51,9 @@ signal:	GLOB *2	; signature array signal[2] : unknown @ 53:1
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int @ 58:1
-EIGHT_BIT_EXP_TABLE:	CNST *256	; signature array EIGHT_BIT_EXP_TABLE[256] : unknown @ 58:41
+updateMask:	DATi <A>	; signature readonly updateMask : int @ 53:1
+.x.EIGHT_BIT_EXP_TABLE:	! DEFi #256
+EIGHT_BIT_EXP_TABLE:	CNST *.x.EIGHT_BIT_EXP_TABLE	; signature array EIGHT_BIT_EXP_TABLE[256] : unknown @ 58:1
 	DATA #0x0 #0x1 #0x2 #0x3 #0x4 #0x5 #0x6 #0x7 #0x8 #0x9
 	DATA #0xa #0xb #0xc #0xd #0xe #0xf #0x10 #0x11 #0x12 #0x13
 	DATA #0x14 #0x15 #0x16 #0x17 #0x18 #0x19 #0x1a #0x1b #0x1c
@@ -83,18 +88,18 @@ EIGHT_BIT_EXP_TABLE:	CNST *256	; signature array EIGHT_BIT_EXP_TABLE[256] : unkn
 	DATA #0x7c00 #0x8000 #0x8800 #0x9000 #0x9800 #0xa000
 	DATA #0xa800 #0xb000 #0xb800 #0xc000 #0xc800 #0xd000
 	DATA #0xd800 #0xe000 #0xe800 #0xf000 #0xffff
-LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 80:1
-LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 81:1
-LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 82:1
-E:	! DEFf #2.71828182845904523536	; signature const E : float @ 83:1
-HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 84:1
-PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 85:1
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 79:1
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 80:1
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 81:1
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ 82:1
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 83:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 84:1
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 86:1
-COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 88:1
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 85:1
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 86:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC	; signature func error(ptr s) -> void @ 88:16
+error:	FUNC	; signature func error(ptr s) -> void @ 88:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
@@ -105,7 +110,7 @@ error:	FUNC	; signature func error(ptr s) -> void @ 88:16
 
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC	; signature func trunc(float x) -> float @ 94:16
+trunc:	FUNC	; signature func trunc(float x) -> float @ 94:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
@@ -119,7 +124,7 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 94:16
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 101:15
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 101:1
 	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
@@ -136,7 +141,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 101:15
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC	; signature func cos(float x) -> float @ 119:14
+cos:	FUNC	; signature func cos(float x) -> float @ 119:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -168,7 +173,7 @@ cos:	FUNC	; signature func cos(float x) -> float @ 119:14
 
 
 ;-----------------------------------------------------------------------------
-sin:	FUNC	; signature func sin(float x) -> float @ 135:14
+sin:	FUNC	; signature func sin(float x) -> float @ 135:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
@@ -177,64 +182,71 @@ sin:	FUNC	; signature func sin(float x) -> float @ 135:14
 		MOVf $y %0 
 		RETU   	; }
 
-CURVE_SIZE_BITS:	! DEFi #4	; signature const CURVE_SIZE_BITS : int @ 144:1
+CURVE_SIZE_BITS:	! DEFi #4	; signature const CURVE_SIZE_BITS : int @ 143:1
 	! SHLi <A> #1 #CURVE_SIZE_BITS
-CURVE_SIZE:	! DEFi <A>	; signature const CURVE_SIZE : int @ 145:1
+CURVE_SIZE:	! DEFi <A>	; signature const CURVE_SIZE : int @ 144:1
 	! ADDi <A> #CURVE_SIZE #1
-CURVE_SIZE_PLUS_1:	! DEFi <A>	; signature const CURVE_SIZE_PLUS_1 : int @ 146:1
+CURVE_SIZE_PLUS_1:	! DEFi <A>	; signature const CURVE_SIZE_PLUS_1 : int @ 145:1
 	! SUBi <A> #12 #CURVE_SIZE_BITS
-CURVE_SHIFT:	! DEFi <A>	; signature const CURVE_SHIFT : int @ 147:1
+CURVE_SHIFT:	! DEFi <A>	; signature const CURVE_SHIFT : int @ 146:1
 	! XORi <A> #0 #-1
 	! SHLi <A> <A> #CURVE_SHIFT
 	! XORi <A> <A> #-1
-CURVE_FRACTION_MASK:	! DEFi <A>	; signature const CURVE_FRACTION_MASK : int @ 148:1
+CURVE_FRACTION_MASK:	! DEFi <A>	; signature const CURVE_FRACTION_MASK : int @ 147:1
 	! SHLi <A> #1 #CURVE_SHIFT
-CURVE_STEP_SIZE:	! DEFi <A>	; signature const CURVE_STEP_SIZE : int @ 149:1
+CURVE_STEP_SIZE:	! DEFi <A>	; signature const CURVE_STEP_SIZE : int @ 148:1
 	! iTOf <A> #CURVE_STEP_SIZE #1.0
 	! DIVf <A> #1.0 <A>
-STEP_TO_FLOAT_SCALE:	! DEFf <A>	; signature const STEP_TO_FLOAT_SCALE : float @ 149:64
-NO_SHAPER:	! DEFi #0	; signature const NO_SHAPER : int @ 152:1
-LINEAR_SHAPER:	! DEFi #1	; signature const LINEAR_SHAPER : int @ 153:1
-QUADRATIC_SHAPER:	! DEFi #2	; signature const QUADRATIC_SHAPER : int @ 154:1
-SHAPER_COUNT:	! DEFi #3	; signature const SHAPER_COUNT : int @ 155:1
-BIT_CRUSH:	! DEFi #1	; signature const BIT_CRUSH : int @ 156:1
-SINE_SHAPE:	! DEFi #2	; signature const SINE_SHAPE : int @ 157:1
-SPIN:	! DEFi #3	; signature const SPIN : int @ 158:1
-STEREO_DELAY:	! DEFi #4	; signature const STEREO_DELAY : int @ 160:1
-OPERATOR_SHAPERS:	CNST *5	; signature array OPERATOR_SHAPERS[5] : unknown @ 160:36
+STEP_TO_FLOAT_SCALE:	! DEFf <A>	; signature const STEP_TO_FLOAT_SCALE : float @ 149:1
+NO_SHAPER:	! DEFi #0	; signature const NO_SHAPER : int @ 151:1
+LINEAR_SHAPER:	! DEFi #1	; signature const LINEAR_SHAPER : int @ 152:1
+QUADRATIC_SHAPER:	! DEFi #2	; signature const QUADRATIC_SHAPER : int @ 153:1
+SHAPER_COUNT:	! DEFi #3	; signature const SHAPER_COUNT : int @ 154:1
+BIT_CRUSH:	! DEFi #1	; signature const BIT_CRUSH : int @ 155:1
+SINE_SHAPE:	! DEFi #2	; signature const SINE_SHAPE : int @ 156:1
+SPIN:	! DEFi #3	; signature const SPIN : int @ 157:1
+STEREO_DELAY:	! DEFi #4	; signature const STEREO_DELAY : int @ 158:1
+.x.OPERATOR_SHAPERS:	! DEFi #5
+OPERATOR_SHAPERS:	CNST *.x.OPERATOR_SHAPERS	; signature array OPERATOR_SHAPERS[5] : unknown @ 160:1
 	DATA #NO_SHAPER #LINEAR_SHAPER #LINEAR_SHAPER
 	DATA #QUADRATIC_SHAPER #QUADRATIC_SHAPER
-sinTable:	GLOB *0x1000	; signature array sinTable[0x1000] : unknown @ 165:1
-linCurveA:	GLOB *CURVE_SIZE	; signature array linCurveA[CURVE_SIZE] : unknown @ 166:1
-linCurveB:	GLOB *CURVE_SIZE	; signature array linCurveB[CURVE_SIZE] : unknown @ 167:1
-quadCurveA:	GLOB *CURVE_SIZE_PLUS_1	; signature array quadCurveA[CURVE_SIZE_PLUS_1] : unknown @ 168:1
-quadCurveB:	GLOB *CURVE_SIZE_PLUS_1	; signature array quadCurveB[CURVE_SIZE_PLUS_1] : unknown @ 169:1
-quadCurveC:	GLOB *CURVE_SIZE_PLUS_1	; signature array quadCurveC[CURVE_SIZE_PLUS_1] : unknown @ 170:1
+.x.sinTable:	! DEFi #0x1000
+sinTable:	GLOB *.x.sinTable	; signature array sinTable[0x1000] : unknown @ 164:1
+.x.linCurveA:	! DEFi #CURVE_SIZE
+linCurveA:	GLOB *.x.linCurveA	; signature array linCurveA[CURVE_SIZE] : unknown @ 165:1
+.x.linCurveB:	! DEFi #CURVE_SIZE
+linCurveB:	GLOB *.x.linCurveB	; signature array linCurveB[CURVE_SIZE] : unknown @ 166:1
+.x.quadCurveA:	! DEFi #CURVE_SIZE_PLUS_1
+quadCurveA:	GLOB *.x.quadCurveA	; signature array quadCurveA[CURVE_SIZE_PLUS_1] : unknown @ 167:1
+.x.quadCurveB:	! DEFi #CURVE_SIZE_PLUS_1
+quadCurveB:	GLOB *.x.quadCurveB	; signature array quadCurveB[CURVE_SIZE_PLUS_1] : unknown @ 168:1
+.x.quadCurveC:	! DEFi #CURVE_SIZE_PLUS_1
+quadCurveC:	GLOB *.x.quadCurveC	; signature array quadCurveC[CURVE_SIZE_PLUS_1] : unknown @ 169:1
 	GLOB *1
-op1:	DATi #-1	; signature global op1 : int @ 171:1
+op1:	DATi #-1	; signature global op1 : int @ 170:1
 	GLOB *1
-shaper:	DATi #0	; signature global shaper : int @ 172:1
+shaper:	DATi #0	; signature global shaper : int @ 171:1
 	GLOB *1
-op1Stuff:	DATi #0	; signature global op1Stuff : int @ 173:1
+op1Stuff:	DATi #0	; signature global op1Stuff : int @ 172:1
 	GLOB *1
-spinXOrR:	DATi #0	; signature global spinXOrR : int @ 174:1
+spinXOrR:	DATi #0	; signature global spinXOrR : int @ 173:1
 	GLOB *1
-biasL:	DATi #0	; signature global biasL : int @ 175:1
+biasL:	DATi #0	; signature global biasL : int @ 174:1
 	GLOB *1
-biasR:	DATi #0	; signature global biasR : int @ 176:1
+biasR:	DATi #0	; signature global biasR : int @ 175:1
 	GLOB *1
-delayL:	DATi #0	; signature global delayL : int @ 177:1
+delayL:	DATi #0	; signature global delayL : int @ 176:1
 	GLOB *1
-delayR:	DATi #0	; signature global delayR : int @ 178:1
+delayR:	DATi #0	; signature global delayR : int @ 177:1
 	GLOB *1
-lastOp1Param:	DATi #-1	; signature global lastOp1Param : int @ 179:1
+lastOp1Param:	DATi #-1	; signature global lastOp1Param : int @ 178:1
 	GLOB *1
-lastOp2:	DATi #-1	; signature global lastOp2 : int @ 180:1
+lastOp2:	DATi #-1	; signature global lastOp2 : int @ 179:1
 	GLOB *1
-lastShaperBits:	DATi #-1	; signature global lastShaperBits : int @ 187:1
+lastShaperBits:	DATi #-1	; signature global lastShaperBits : int @ 180:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 187:15
+init:	FUNC	; signature func init() -> void @ 187:1
 		PARA *1
 	$i:	LOCi
 	$s:	LOCi
@@ -263,11 +275,13 @@ init:	FUNC	; signature func init() -> void @ 187:15
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 202:17
+update:	FUNC	; signature func update() -> void @ 202:1
 		PARA *1
 	! ADDi <A> #CURVE_SIZE_PLUS_1 #3
-	$params:	LOCA *PARAM_COUNT
-	$quadPoints:	LOCA *<A>
+.x.update.params:	! DEFi #PARAM_COUNT
+	$params:	LOCA *.x.update.params
+.x.update.quadPoints:	! DEFi #<A>
+	$quadPoints:	LOCA *.x.update.quadPoints
 	$v:	LOCi
 	$mask:	LOCi
 	$d:	LOCi
@@ -433,9 +447,10 @@ update:	FUNC	; signature func update() -> void @ 202:17
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 296:18
+process:	FUNC	; signature func process() -> void @ 296:1
 		PARA *1
-	$localSignal:	LOCA *2
+.x.process.localSignal:	! DEFi #2
+	$localSignal:	LOCA *.x.process.localSignal
 	$left:	LOCi
 	$right:	LOCi
 	$localClock:	LOCi

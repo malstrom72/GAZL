@@ -72,7 +72,7 @@ typedef unsigned int Pointer;																							// Pointer must be unsigned 
 typedef float Float;
 typedef Int Status;																										// Run-time status code
 
-const int VERSION = 1;
+const int VERSION = 2;						// 2 adds SCOP / ENDS local scopes. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
 const Pointer IP_OFFSET = 0x56789ABC;																					// All instruction / function pointers in GAZL are offsetted by this amount (thus the address of the first instruction is not zero). This makes it easier to detect invalid function calls (such as performing a function call on a null-pointer).
@@ -126,7 +126,8 @@ enum AssemblerError {
 	, EXPECTED_CONSTANT = 31
 	, NOT_ENOUGH_FUNCTION_SPACE = 32
 	, LABEL_ON_FUNCTION = 33
-	, ASSEMBLER_ERROR_COUNT = 34
+	, UNBALANCED_LOCAL_SCOPE = 34
+	, ASSEMBLER_ERROR_COUNT = 35
 };
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
@@ -272,7 +273,11 @@ class Assembler {
 	protected:	Instruction* ip;
 	protected:	Instruction* functionStart;
 	protected:	UInt functionCount;					// Running ordinal; assigned to each `FUNC` in declaration order.
-	protected:	UInt localsSize;
+	protected:	UInt localsSize;					// Running bump within the innermost SCOP; the final frame size is `maxLocalsSize`.
+	protected:	UInt maxLocalsSize;					// Frame high-water mark. SCOP / ENDS let sibling scopes OVERLAY, so the frame is the max over nesting chains, not the sum.
+	protected:	UInt localScopeDepth;
+	protected:	enum { MAX_LOCAL_SCOPE_DEPTH = 32 };
+	protected:	UInt localScopeStack[MAX_LOCAL_SCOPE_DEPTH];
 	protected:	UInt paramsSize;
 	protected:	Value* globalsPointer;
 	protected:	Value* constantsPointer;

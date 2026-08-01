@@ -490,20 +490,24 @@ function genProgram() {
 	// Case bodies are braced blocks: a single Statement can't hold e.g. `copy(...);` (Copy leaves the `;`).
 	function genSwitch(scope, f, ctrlDepth) {
 		const parts = [];
-		const used = new Set();   // case labels must be distinct across the whole switch (else a duplicate GAZL label)
+		// Pick the range FIRST and draw case values from inside it: `SWCH` resolves offsets 0..size-1, so
+		// anything else is E444 and the program never reaches codegen. Drawing from a wider pool than the
+		// range rejected a third of every run. Values stay distinct because a repeat is E443.
+		const size = 1 + ri(8);
+		const used = new Set();
 		for (let c = 1 + ri(3); c > 0; --c) {
 			const labels = [];
 			for (let j = 1 + ri(2); j > 0; --j) {
-				let v = ri(12);
-				while (used.has(v)) v = (v + 1) % 12;
-				if (used.size >= 12) break;   // exhausted the label space
+				if (used.size >= size) break;   // exhausted the reachable label space (guard BEFORE the probe)
+				let v = ri(size);
+				while (used.has(v)) v = (v + 1) % size;
 				used.add(v);
 				labels.push(String(v));
 			}
 			if (labels.length) parts.push('\tcase ' + labels.join(', ') + ': ' + genBlock(scope, f, ctrlDepth));
 		}
 		if (chance(0.6)) parts.push('\tdefault: ' + genBlock(scope, f, ctrlDepth));
-		return '\tswitch (' + genExpr('i', 2, scope) + ' == 0 to ' + (1 + ri(8)) + ') {\n' + parts.join('\n') + '\n\t}';
+		return '\tswitch (' + genExpr('i', 2, scope) + ' == 0 to ' + size + ') {\n' + parts.join('\n') + '\n\t}';
 	}
 
 	function genStmt(scope, f, ctrlDepth) {

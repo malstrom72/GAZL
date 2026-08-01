@@ -1,49 +1,49 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native sin() -> unknown @ 1:18
-; signature extern native cos() -> unknown @ 2:18
-; signature extern native tan() -> unknown @ 3:18
-; signature extern native asin() -> unknown @ 4:19
-; signature extern native acos() -> unknown @ 5:19
-; signature extern native atan() -> unknown @ 6:19
-; signature extern native exp() -> unknown @ 7:18
-; signature extern native log() -> unknown @ 8:18
-; signature extern native pow() -> unknown @ 9:18
-; signature extern native sqrt() -> unknown @ 10:19
-; signature extern native fillArray() -> unknown @ 11:24
-; signature extern native multiplyArray() -> unknown @ 12:28
-; signature extern native multiplyArrays() -> unknown @ 13:29
-; signature extern native addArray() -> unknown @ 14:23
-; signature extern native addArrays() -> unknown @ 15:24
-; signature extern native updateParameters() -> unknown @ 16:31
-; signature extern native getFrame() -> unknown @ 17:23
-; signature extern native putFrame() -> unknown @ 18:23
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 20:42
-; signature extern const OPERATOR_1_NOP : int @ 22:25
-; signature extern const OPERATOR_1_AND : int @ 23:25
-; signature extern const OPERATOR_1_MUL : int @ 24:25
-; signature extern const OPERATOR_1_OSC : int @ 25:25
-; signature extern const OPERATOR_1_RND : int @ 26:25
-; signature extern const OPERATOR_2_NOP : int @ 27:25
-; signature extern const OPERATOR_2_OR : int @ 28:24
-; signature extern const OPERATOR_2_XOR : int @ 29:25
-; signature extern const OPERATOR_2_MSK : int @ 30:25
-; signature extern const OPERATOR_2_SUB : int @ 31:25
-; signature extern const CLOCK_FREQUENCY_PARAM_INDEX : int @ 33:38
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 34:33
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 35:37
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 36:36
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 37:33
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 38:37
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 39:36
-; signature extern const PARAM_COUNT : int @ 40:22
-PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 42:40
-FALSE:	! DEFi #0	; signature const FALSE : int @ 44:20
-TRUE:	! DEFi #1	; signature const TRUE : int @ 45:19
+; signature extern native sin() -> unknown @ 1:1
+; signature extern native cos() -> unknown @ 2:1
+; signature extern native tan() -> unknown @ 3:1
+; signature extern native asin() -> unknown @ 4:1
+; signature extern native acos() -> unknown @ 5:1
+; signature extern native atan() -> unknown @ 6:1
+; signature extern native exp() -> unknown @ 7:1
+; signature extern native log() -> unknown @ 8:1
+; signature extern native pow() -> unknown @ 9:1
+; signature extern native sqrt() -> unknown @ 10:1
+; signature extern native fillArray() -> unknown @ 11:1
+; signature extern native multiplyArray() -> unknown @ 12:1
+; signature extern native multiplyArrays() -> unknown @ 13:1
+; signature extern native addArray() -> unknown @ 14:1
+; signature extern native addArrays() -> unknown @ 15:1
+; signature extern native updateParameters() -> unknown @ 16:1
+; signature extern native getFrame() -> unknown @ 17:1
+; signature extern native putFrame() -> unknown @ 18:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 20:1
+; signature extern const OPERATOR_1_NOP : int @ 22:1
+; signature extern const OPERATOR_1_AND : int @ 23:1
+; signature extern const OPERATOR_1_MUL : int @ 24:1
+; signature extern const OPERATOR_1_OSC : int @ 25:1
+; signature extern const OPERATOR_1_RND : int @ 26:1
+; signature extern const OPERATOR_2_NOP : int @ 27:1
+; signature extern const OPERATOR_2_OR : int @ 28:1
+; signature extern const OPERATOR_2_XOR : int @ 29:1
+; signature extern const OPERATOR_2_MSK : int @ 30:1
+; signature extern const OPERATOR_2_SUB : int @ 31:1
+; signature extern const CLOCK_FREQUENCY_PARAM_INDEX : int @ 33:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ 34:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 35:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 36:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ 37:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 38:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 39:1
+; signature extern const PARAM_COUNT : int @ 40:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 42:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 44:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 45:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 47:15
+main:	FUNC	; signature func main() -> void @ 47:1
 		PARA *1
 	$r:	LOCf
 	$k:	LOCf
@@ -74,7 +74,8 @@ main:	FUNC	; signature func main() -> void @ 47:15
 	$d3zR:	LOCf
 	$left:	LOCf
 	$right:	LOCf
-	$params:	LOCA *PARAM_COUNT
+.x.main.params:	! DEFi #PARAM_COUNT
+	$params:	LOCA *.x.main.params
 ;-----------------------------------------------------------------------------
 		MOVf $d3zL #0.0 	; dxzL = d0zL = d1zL = d2zL = d3zL = 0.0
 		MOVf $d2zL #0.0 

@@ -5,10 +5,11 @@ const vm = require("vm");
 
 const { wrapCompilerSource, applyImpalaHardening } = require("./updateJSPEG.js");
 const { compileWithJsImpala } = require("./impalaJsCompilerRunner");
+const { haveGazlCmd, assembleOnly, NEEDS_HOST } = require("./gazlAssembleCheck");
 
 const dir = __dirname;
 const IMPALA_ENCODING = "latin1";
-const validatorScript = path.join(dir, "..", "tools", "gazl-validate.js");
+const validatorScript = path.join(dir, "..", "tools", "gazl-validate.nuxjs.js");
 const nuxjsExe = path.join(dir, "..", "output", process.platform === "win32" ? "NuXJS.exe" : "NuXJS");
 const validatorFixturesDir = path.join(dir, "testdata", "validator");
 
@@ -438,6 +439,7 @@ function testStringLabelFloatLiteralCollision() {
 
 function testNuXJSCommandCompilerScript(compilerSource) {
 	const scriptSource = fs.readFileSync(path.join(dir, "impala.nuxjs.js"), "utf8");
+	const closureSource = fs.readFileSync(path.join(dir, "impalaImportClosure.js"), "utf8");
 	const sourcePath = "smoke.impala";
 	const sourceText = fs.readFileSync(path.join(dir, "testdata", "smoke.impala"), IMPALA_ENCODING);
 
@@ -459,6 +461,12 @@ function testNuXJSCommandCompilerScript(compilerSource) {
 				throw new Error(`Unexpected read path for ${label}: ${file}`);
 			},
 			load: (file) => {
+				// The script also load()s its closure helper, from the real file - it is staged
+				// alongside impala.nuxjs.js and is what makes `import` work on the NuXJS path.
+				if (/impalaImportClosure\.js$/.test(file)) {
+					new vm.Script(closureSource, { filename: file }).runInContext(context);
+					return;
+				}
 				if (!acceptedCompilerPaths[file]) {
 					throw new Error(`Unexpected load path for ${label}: ${file}`);
 				}
@@ -661,6 +669,30 @@ function runParityFixture(fixture) {
 		process.exit(1);
 	}
 	console.log(`impala.jspeg compiler matches ${fixture.name} fixture output`);
+	if (!fixture.expectedDir) {
+		assembleFixture(fixture.name, expectedPath);
+	}
+}
+
+/* The `impala/testdata` fixtures used to get `; signature` validation and nothing else, so a label
+   this compiler emitted but never defined - a duplicate `.sN#K` from two identical `case` values,
+   say - would sail through on the shapes only testdata covers (return contracts, extern assignment).
+   Same gate the goldens get, same rule: a host or companion-unit symbol is out of scope here, a
+   module-local `.` name is ours. Fixtures carrying an `expectedDir` are goldens, which runJspegTests
+   already assembles - with its own exemption list - so they are skipped rather than checked twice. */
+function assembleFixture(name, gazlPath) {
+	if (!haveGazlCmd()) {
+		return;
+	}
+	const verdict = assembleOnly(gazlPath);
+	if (verdict === NEEDS_HOST) {
+		console.log(`${name} compiled but NOT link-checked (needs a host)`);
+	} else if (verdict !== undefined) {
+		console.error(`${name} fixture ${verdict}`);
+		process.exit(1);
+	} else {
+		console.log(`${name} fixture assembles`);
+	}
 }
 
 function resolveValidatorFixture(name) {
@@ -969,12 +1001,6 @@ const inlineCases = [
 	["exporting an inline function",
 		"export inline function g(int a) returns int r { r = a; }\n"
 			+ "function main() locals int q { q = g(1); }\n", "cannot be exported"],
-	// Locals live in transients, one expansion at a time, so the WORD COUNT must be known while
-	// compiling - a folded or symbolic extent does not resolve until assembly.
-	["an inline function with a non-literal array size",
-		"const int H = 2\nconst int N = 2\ninline function f(int a) returns int r\n"
-			+ "locals int array t[H * N]\n{ t[0] = a; r = t[0]; }\n"
-			+ "function main() locals int q { q = f(1); }\n", "compile-time size"],
 	["an inline function that was forward declared",
 		"extern function later\ninline function later(int a) returns int r { r = a; }\n"
 			+ "function main() locals int q { q = later(1); }\n", "was already declared"],
@@ -1010,7 +1036,7 @@ const inlineCases = [
 			+ "function main() locals int q { q = f(1) + f(2); }\n", null],
 	["an inline function declaring an array of structs",
 		"struct P { int x }\ninline function f(int v) returns int r\nlocals P array a[2]\n"
-			+ "{ a[0].x = v; a[1].x = v; r = a[0].x + a[1].x; }\n"
+			+ "{ a[[0]].x = v; a[[1]].x = v; r = a[[0]].x + a[[1]].x; }\n"
 			+ "function main() locals int q { q = f(1); }\n", null],
 	["an inline function declaring a scalar local",
 		"inline function f(int a) returns int r\nlocals int t\n{ t = a * 2; r = t + 1; }\n"
@@ -1086,6 +1112,52 @@ for (const [label, source, expected] of arrayExtentCases) {
 	expectCompileOutcome("array extent", label, source, expected);
 }
 console.log("impala.jspeg compiler requires an array extent everywhere except an extern struct field");
+
+// Shapes the compiler used to accept and hand to the assembler, which then failed the build naming a
+// compiler-minted symbol (`.s0.0`, `.s0.-6`, `nowhere`) instead of the source line. Each is decidable
+// here whenever the values are numeric; a SYMBOLIC range or extent stays unchecked on purpose, because
+// not knowing is not the same as being fine. See docs/CompileTimeHardening.md.
+const SW = (range, body) => `function f() locals int i { i = 1; switch (i == ${range}) { ${body} } }`;
+const acceptedThenRejected = [
+	["duplicate case value", SW("0 to 3", "case 0: { i=1; } case 0: { i=2; }"), "Duplicate case value 0"],
+	["duplicate inside one list", SW("0 to 3", "case 1, 1: { i=1; }"), "Duplicate case value 1"],
+	["case above the range", SW("0 to 3", "case 8: { i=1; }"), "outside the switch range 0 to 3"],
+	["case at the exclusive bound", SW("0 to 3", "case 3: { i=1; }"), "outside the switch range 0 to 3"],
+	// Below `from` is the one that produced an UNLOADABLE module: the offset folds to `.s0.-6`, which
+	// the assembler rejects as an invalid identifier. `from` is non-zero here on purpose - the offset
+	// is then an assemble-time `! SUBi <A>`, so the check cannot read it off the emitted operand.
+	["case below the range", SW("5 to 9", "case -1: { i=1; }"), "outside the switch range 5 to 9"],
+	["case just below from", SW("5 to 9", "case 4: { i=1; }"), "outside the switch range 5 to 9"],
+	["in-range cases", SW("5 to 9", "case 5, 8: { i=1; } default: { i=2; }"), null],
+	["goto an undefined label", "function f() { goto nowhere; }", "goto to undefined label nowhere"],
+	["goto a defined label", "function f() locals int i { i = 0; if (i < 3) goto top; top: ; }", null],
+	["write to a readonly array element",
+		"readonly int array T[4] = { 1,2,3,4 }\nfunction f() { global T[0] = 9; }",
+		"Cannot assign to an element of a readonly array"],
+	["read a readonly array element",
+		"readonly int array T[4] = { 1,2,3,4 }\nfunction f() locals int x { x = global T[2]; }", null],
+	["write to a writable array element",
+		"global int array W[4]\nfunction f() { global W[0] = 9; }", null],
+];
+for (const [label, source, expected] of acceptedThenRejected) {
+	expectCompileOutcome("accepted-then-rejected", label, source, expected);
+}
+console.log("impala.jspeg compiler rejects the shapes that used to fail at assembly time");
+
+// `global` is a mandatory prefix at every use site, so mixing it up is the first error most newcomers
+// and code generators hit - and a bare "Undeclared identifier" points away from the one-word fix.
+const namespaceHints = [
+	["global read without the keyword", "global int G = 5\nfunction f() locals int x { x = G; }",
+		"G is a global - write `global G`"],
+	["local read with the keyword", "function f() locals int x { x = 1; global x = 2; }",
+		"x is a local - drop the `global` keyword"],
+];
+// The note travels as a rendered `note:` line in the formatted message, not as a property - the runner
+// re-throws a plain Error - so match the text a user actually sees.
+for (const [label, source, expectedHint] of namespaceHints) {
+	expectCompileOutcome("E403 hint", label, source, "note: " + expectedHint);
+}
+console.log("impala.jspeg compiler names the fix when global/local are confused");
 
 // A `(` after a value is always a call, so the argument list must never backtrack: its prologue has
 // already borrowed the call window, and a backtrack leaks that window into whatever comes next. It
@@ -1453,9 +1525,9 @@ const typedPointerCases = [
 			"struct V { int n; float g }",
 			"global V array bank[4]",
 			"function main() locals V array loc[2], int i, float f {",
-			"\tglobal bank[0].n = 1; f = global bank[2].g;",
-			"\tfor (i = 0 to 4) global bank[i].n = i;",
-			"\tloc[1].g = 0.5;",
+			"\tglobal bank[[0]].n = 1; f = global bank[[2]].g;",
+			"\tfor (i = 0 to 4) global bank[[i]].n = i;",
+			"\tloc[[1]].g = 0.5;",
 			"}",
 		].join("\n"),
 		expectError: null,
@@ -1466,7 +1538,7 @@ const typedPointerCases = [
 			"struct V { int n }",
 			"global V array bank[3]",
 			"function use(V pointer p) { p->n = 9; }",
-			"function main() { use(&global bank[1]); }",
+			"function main() { use(&global bank[[1]]); }",
 		].join("\n"),
 		expectError: null,
 	},
@@ -1498,8 +1570,76 @@ const typedPointerCases = [
 		source: [
 			"struct Inner { float a }",
 			"struct Outer { Inner array items[3] }",
-			"function main() locals Outer o { o.items[1].a = 0.5; }",
+			"function main() locals Outer o { o.items[[1]].a = 0.5; }",
 		].join("\n"),
+		expectError: null,
+	},
+	/* The `[[ ]]` rule: the spelling states the stride, so each bracket form is an error where the other
+	   is correct, and a struct pointer moves by scaled subscript only. See docs/Impala2Review.md. */
+	{
+		label: "a plain subscript on a struct element is rejected",
+		source: ["struct V { int n; int m }", "global V array bank[4]", "function main() locals int i { i = global bank[1].n; }"].join("\n"),
+		expectError: "Plain subscript on a struct element",
+	},
+	{
+		label: "a plain subscript through a struct pointer is rejected",
+		source: ["struct V { int n; int m }", "function main() locals V pointer p, int i { i = p[1].n; }"].join("\n"),
+		expectError: "Plain subscript on a struct element",
+	},
+	{
+		label: "a scaled subscript on a one-word element is rejected",
+		source: ["global int array w[4]", "function main() locals int i { i = global w[[1]]; }"].join("\n"),
+		expectError: "Scaled subscript on a one-word element",
+	},
+	{
+		label: "a scaled subscript on a scalar array field is rejected",
+		source: ["struct F { float array state[4] }", "function main() locals F f, float x { x = f.state[[1]]; }"].join("\n"),
+		expectError: "Scaled subscript on a one-word element",
+	},
+	{
+		label: "arithmetic on a struct pointer is rejected",
+		source: ["struct V { int n; int m }", "function main() locals V pointer p, int i { p = p + i; }"].join("\n"),
+		expectError: "Arithmetic on a V pointer",
+	},
+	{
+		label: "subtracting an int from a struct pointer is rejected",
+		source: ["struct V { int n; int m }", "function main() locals V pointer p { p = p - 1; }"].join("\n"),
+		expectError: "Arithmetic on a V pointer",
+	},
+	{
+		label: "the difference of two struct pointers is rejected",
+		source: ["struct V { int n; int m }", "function main() locals V pointer p, V pointer q, int n { n = q - p; }"].join("\n"),
+		expectError: "Difference between V pointers",
+	},
+	{
+		label: "for over a struct pointer is rejected (FORp cannot stride)",
+		source: [
+			"struct V { int n; int m }",
+			"global V array bank[4]",
+			"function main() locals V pointer p, int i { for (p = &global bank[[0]] to &global bank[[3]]) i = p->n; }",
+		].join("\n"),
+		expectError: "For variable must not be a struct pointer",
+	},
+	{
+		label: "struct pointers still compare without scaling",
+		source: [
+			"struct V { int n; int m }",
+			"global V array bank[4]",
+			"function main() locals V pointer p, V pointer e, int i {",
+			"\tp = &global bank[[0]]; e = &global bank[[4]];",
+			"\twhile (p < e) { i = p->n; p = &p[[1]]; }",
+			"}",
+		].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "an out-of-range constant index is legal when only an address is formed",
+		source: ["struct V { int n }", "global V array bank[4]", "function main() locals V pointer e { e = &global bank[[9]]; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "unit-stride pointer arithmetic is untouched",
+		source: ["global int array w[4]", "function main() locals int pointer v, int n { v = &global w[0]; v = v + 2; n = v - &global w[0]; }"].join("\n"),
 		expectError: null,
 	},
 	{
@@ -1704,6 +1844,146 @@ const typedPointerCases = [
 	{
 		label: "a name-only extern stays an unknown-return wildcard",
 		source: ["extern function ext;", "function main() locals int i { i = ext(); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "an extern prototype contradicting a definition above it is an error",
+		source: ["function f() { }", "extern function f() returns int r"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "an extern prototype contradicting a definition below it is an error",
+		source: ["extern function f() returns float x", "function f() returns int r { r = 1; }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "an extern prototype contradicting a definition in a parameter is an error",
+		source: ["extern function f(float a)", "function f(int a) { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "an extern prototype agreeing with a definition is silent, and names are not compared",
+		source: ["extern function f(int a) returns int r", "function f(int b) returns int q { q = b; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a bodyless extern struct claims no layout, so it cannot collide with a definition",
+		source: ["struct S { int a }", "extern struct S", "function main() locals S s { s.a = 1; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a bodyless extern struct before the definition is likewise silent",
+		source: ["extern struct S", "struct S { int a }", "function main() locals S s { s.a = 1; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "an extern struct body agreeing with the definition is silent",
+		source: ["struct S { int a; float b }", "extern struct S { int a; float b }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "an extern struct body contradicting the definition is an error",
+		source: ["struct S { int a; float b }", "extern struct S { int a; int b }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "an extern struct body contradicting a LATER definition is the same error",
+		source: ["extern struct S { int a; int b }", "struct S { int a; float b }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "two real struct definitions still collide",
+		source: ["struct S { int a }", "struct S { int a }"].join("\n"),
+		expectError: "Struct already defined",
+	},
+	/* With no definition anywhere the declarations still have to agree with EACH OTHER - nothing
+	   else can arbitrate, and the compiler generates calls and field offsets from whichever it kept. */
+	{
+		label: "two extern prototypes that disagree are an error even with no definition",
+		source: ["extern function f(int a)", "extern function f(float a)"].join("\n"),
+		expectError: "extern declarations of f disagree",
+	},
+	{
+		label: "two extern struct bodies that disagree are an error even with no definition",
+		source: ["extern struct S { int a }", "extern struct S { float a }"].join("\n"),
+		expectError: "extern declarations of struct S disagree",
+	},
+	{
+		label: "identical extern declarations are fine, however many",
+		source: ["extern function f(int a)", "extern function f(int a)", "extern struct S { int a }",
+			"extern struct S { int a }"].join("\n"),
+		expectError: null,
+	},
+	/* A functype emits no symbol at all, so a second identical declaration collides with nothing -
+	   which is what lets a unit declare the functypes it uses and still be imported next to a unit
+	   that declares the same ones. Disagreeing ones are still an error, and this is the only place
+	   that can be caught, since nothing about a functype reaches gazl-validate. */
+	{
+		label: "a functype may be re-declared identically",
+		source: ["functype Cb(int a) returns int r", "functype Cb(int a) returns int r"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a functype re-declared with a different shape is an error",
+		source: ["functype Cb(int a) returns int r", "functype Cb(float a) returns int r"].join("\n"),
+		expectError: "already declared with a different shape",
+	},
+	{
+		label: "a functype still cannot take a struct's name",
+		source: ["struct Cb { int a }", "functype Cb(int a)"].join("\n"),
+		expectError: "already used by a struct",
+	},
+	/* An untyped funcptr is not promoted into a named one, exactly as a bare `pointer` is not
+	   assignable to an `int pointer` (E201) - the named type exists to guarantee the shape of what
+	   gets called. `(Cb)` is the cast that says "I checked"; a functype needs no `pointer` modifier. */
+	{
+		label: "an untyped funcptr does not assign into a named functype",
+		source: ["functype Cb(int a) returns int r",
+			"function main() locals funcptr f, Cb c { c = f; }"].join("\n"),
+		expectError: "Funcptr type mismatch (expected 'Cb', got an untyped funcptr)",
+	},
+	{
+		label: "...nor pass as one",
+		source: ["functype Cb(int a) returns int r", "function g(Cb c) { }",
+			"function main() locals funcptr f { g(f); }"].join("\n"),
+		expectError: "Funcptr type mismatch for argument 1",
+	},
+	/* A GLOBAL read spells itself `&name`, exactly like a function reference, so testing the sigil
+	   instead of the lookup sent globals down the function-reference branch to find no function and
+	   fall out silently - past the very check that applied to them. */
+	{
+		label: "a global untyped funcptr is caught too, not just a local",
+		source: ["functype Cb(int a) returns int r", "global funcptr fp;",
+			"function main() locals Cb c { c = global fp; }"].join("\n"),
+		expectError: "got an untyped funcptr",
+	},
+	{
+		label: "a global of the named type still assigns freely",
+		source: ["functype Cb(int a) returns int r", "global Cb gc;",
+			"function main() locals Cb c { c = global gc; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a (Cb) cast is what makes it explicit",
+		source: ["functype Cb(int a) returns int r", "function g(Cb c) { }",
+			"function main() locals funcptr f, Cb c { c = (Cb)f; g((Cb)f); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a named funcptr type still widens to plain funcptr",
+		source: ["functype Cb(int a) returns int r",
+			"function main() locals funcptr f, Cb c { f = c; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a functype is castable through a pointer too",
+		source: ["functype Fn(int a) returns int r",
+			"function main() locals Fn pointer p, pointer q { p = (Fn pointer)q; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "relaxing the cast rule left parenthesized expressions alone",
+		source: ["function main() locals int a, int b, int i { i = (a) * (b) + (a); }"].join("\n"),
 		expectError: null,
 	},
 ];

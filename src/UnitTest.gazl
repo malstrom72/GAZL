@@ -29,8 +29,8 @@
 
             ! IFDF #GAZL_VERSION @gotVersion
             ! FAIL GAZL_VERSION not defined!
-gotVersion: ! EQUi #GAZL_VERSION #1 @versionOK
-            ! FAIL This code is for version 1 of GAZL only.
+gotVersion: ! EQUi #GAZL_VERSION #2 @versionOK
+            ! FAIL This code is for version 2 of GAZL only.
 versionOK:  !
 
             ! IFDF #GAZL_WORD_SIZE @gotBits
@@ -102,10 +102,36 @@ test:                   FUNC
     p3:                 LOCp
     lArray:             LOCA *777
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; SCOP / ENDS: sA and sB are SIBLINGS, so they share offsets; sInner NESTS inside
+; sA's scope, so it must not collide with sA. Everything above stays untouched.
+                        SCOP
+    sA:                 LOCi
+                        SCOP
+    sInner:             LOCi
+                        ENDS
+                        ENDS
+                        SCOP
+    sB:                 LOCi
+    sB2:                LOCi
+                        ENDS
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 ;
 ; Test that global / const data is initialized correctly.
 ;
+;
+; Test SCOP / ENDS frame overlay (GAZL 2).
+;
+ MOVi       i0              #111
+ MOVi       sA              #222
+ MOVi       sInner          #333
+ NEQi       sA              #222            @fail            ; a NESTED scope must not disturb its parent
+ MOVi       sB              #444
+ NEQi       sA              #444            @fail            ; a SIBLING scope reuses the same offset
+ MOVi       sB2             #555
+ NEQi       sInner          #555            @fail            ; sB2 overlays sInner likewise
+ NEQi       i0              #111            @fail            ; anything declared before the first SCOP is untouched
+
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int
  PEEK       p0              &consts.pointer
@@ -487,6 +513,14 @@ checkZeroLoop: NOOP
  DIVi      i2              i1              #761
  DIVi      i3              i1              i2
  NEQi      i3              #761            @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;ENDS
+;
+; Closes the innermost SCOP (GAZL 2 and later). See SCOP.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
 ;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ;
@@ -1505,6 +1539,26 @@ pokeloop: NOOP
 ;
 ; Returns from function call.
 ;
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;SCOP
+;
+; Opens a local scope (GAZL 2 and later). Like LOC / PARA declarations, SCOP and its matching ENDS must appear after a
+; FUNC declaration but before any real instruction.
+;
+; Declarations inside a scope are released by ENDS, so the NEXT sibling scope reuses the same frame offsets while a
+; NESTED scope stacks on top. A function's frame is therefore the DEEPEST nesting chain, not the sum of every
+; declaration. Use it for groups whose lifetimes do not overlap - an expanded inline body being the motivating case,
+; including inlines within inlines.
+;
+; Sizes are resolved before offsets are assigned, so `LOCA *SOME_CONSTANT` overlays correctly even when only the host
+; knows the value. Anything that must outlive a scope has to be declared BEFORE the first SCOP; a declaration placed
+; after ENDS reuses the released space.
+;
+; Unbalanced SCOP / ENDS is an error, as is nesting deeper than 32.
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 

@@ -1,10 +1,10 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native printInt() -> unknown @ 1:23
+; signature extern native printInt() -> unknown @ 1:1
 
 ;-----------------------------------------------------------------------------
-fib:	FUNC	; signature func fib(int y) -> int @ 3:14
+fib:	FUNC	; signature func fib(int y) -> int @ 3:1
 	$x:	OUTi
 	$y:	INPi
 ;-----------------------------------------------------------------------------
@@ -20,7 +20,7 @@ fib:	FUNC	; signature func fib(int y) -> int @ 3:14
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 13:15
+main:	FUNC	; signature func main() -> void @ 13:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVi %2 #35 	; printInt(fib(35))

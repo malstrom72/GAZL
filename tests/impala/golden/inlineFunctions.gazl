@@ -1,14 +1,14 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 25:1
-; signature extern native printInt() -> unknown @ 26:1
-; signature extern native printLF() -> unknown @ 28:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 23:1
+; signature extern native printInt() -> unknown @ 25:1
+; signature extern native printLF() -> unknown @ 26:1
 	GLOB *1
-g:	DATi #0	; signature global g : int @ 28:13
+g:	DATi #0	; signature global g : int @ 28:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 40:15
+main:	FUNC	; signature func main() -> void @ 40:1
 		PARA *1
 	$i:	LOCi
 	$acc:	LOCi

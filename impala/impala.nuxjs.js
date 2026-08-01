@@ -1,27 +1,34 @@
 /* Command-line Impala compiler for the NuXJS REPL.
 
    Usage:
-     NuXJS impala/impala.nuxjs.js [--legacy] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
+     NuXJS impala/impala.nuxjs.js [--legacy] [--dead-strip] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
 
    NuXJS exposes global `arguments` as [script.js, arguments...]. With no output
    path, or output path `-`, this script emits compiled GAZL to stdout.
    `--legacy` downgrades Impala 2 strict-expression errors to warnings (printed
    as `;`-prefixed comment lines so stdout remains a valid GAZL stream).
+
+   The source's import closure is resolved and compiled as one program, by the same
+   impalaImportClosure.js the Node front end uses. A source that imports nothing is a
+   closure of one and compiles to exactly what it always did.
 */
 
 var impalaNuxRawArgs = arguments;
 var impalaNuxLegacy = false;
+var impalaNuxDeadStrip = false;
 var impalaNuxArgs = [];
 for (var impalaNuxArgIndex = 0; impalaNuxArgIndex < impalaNuxRawArgs.length; ++impalaNuxArgIndex) {
 	if ("" + impalaNuxRawArgs[impalaNuxArgIndex] === "--legacy") {
 		impalaNuxLegacy = true;
+	} else if ("" + impalaNuxRawArgs[impalaNuxArgIndex] === "--dead-strip") {
+		impalaNuxDeadStrip = true;
 	} else {
 		impalaNuxArgs[impalaNuxArgs.length] = impalaNuxRawArgs[impalaNuxArgIndex];
 	}
 }
 
 function usage() {
-	print("Usage: NuXJS impala/impala.nuxjs.js [--legacy] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
+	print("Usage: NuXJS impala/impala.nuxjs.js [--legacy] [--dead-strip] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
 }
 
 function fail(message) {
@@ -54,21 +61,23 @@ function repeatSpaces(count) {
 }
 
 function emitCompiledOutput(lines, outputPath) {
-	var text = "";
+	var retabulated = [];
 	var i;
-	var line;
 
 	for (i = 0; i < lines.length; ++i) {
-		line = retabulate(lines[i]);
-		if (outputPath && outputPath !== "-") {
-			text += line + "\n";
-		} else {
-			print(line);
-		}
+		retabulated[i] = retabulate(lines[i]);
+	}
+	// Strip after retabulation, exactly as the Node front end does, so both produce the same bytes.
+	if (impalaNuxDeadStrip) {
+		retabulated = deadStrip(retabulated.join("\n")).split("\n");
 	}
 
 	if (outputPath && outputPath !== "-") {
-		write(outputPath, text);
+		write(outputPath, retabulated.length > 0 ? retabulated.join("\n") + "\n" : "");
+		return;
+	}
+	for (i = 0; i < retabulated.length; ++i) {
+		print(retabulated[i]);
 	}
 }
 
@@ -128,8 +137,11 @@ var impalaNuxSourceName = impalaNuxArgs.length >= 5 ? "" + impalaNuxArgs[4] : im
 var impalaNuxCompilerPath = impalaNuxArgs.length >= 6 ? "" + impalaNuxArgs[5] : dirname(impalaNuxScriptPath) + "impalaCompiler.js";
 
 loadCompilerPath(impalaNuxCompilerPath);
+load(dirname(impalaNuxScriptPath) + "impalaImportClosure.js");
 
-var impalaNuxSource = read(impalaNuxSourcePath);
+var impalaNuxClosure = concatenateClosure(impalaNuxSourcePath, { read: function (path) { return read(path); } });
+var impalaNuxSource = impalaNuxClosure.combined;
+var impalaNuxSpans = impalaNuxClosure.spans;
 var impalaNuxLines = [];
 function impalaNuxLineColumn(source, offset) {
 	var line = 1;
@@ -147,8 +159,14 @@ function impalaNuxLineColumn(source, offset) {
 	return line + ":" + column;
 }
 
+/* Past the first unit a raw offset names the root file on a line that only indexes the
+   concatenation, so with a real closure the span decides the file and line instead. */
 function impalaNuxDiagnostic(source, offset, severity, code, message) {
-	var position = impalaNuxSourceName + ":" + impalaNuxLineColumn(source, isFinite(offset) ? offset : 0);
+	var at = isFinite(offset) ? offset : 0;
+	var where = impalaNuxSpans.length > 1 ? locateInUnit(impalaNuxSpans, source, at) : undefined;
+	var position = where
+			? where.name + ":" + where.line
+			: impalaNuxSourceName + ":" + impalaNuxLineColumn(source, at);
 	return position + ": " + severity + (code ? "[" + code + "]" : "") + ": " + message;
 }
 
@@ -157,6 +175,7 @@ var impalaNuxCompilerOptions = {
 		impalaNuxLines[impalaNuxLines.length] = line;
 	},
 	sourceName: impalaNuxSourceName,
+	units: impalaNuxSpans,
 	warn: function (message, offset, code, hint) {
 		print("; " + impalaNuxDiagnostic(impalaNuxSource, offset, "warning", code, message));
 		if (hint) {

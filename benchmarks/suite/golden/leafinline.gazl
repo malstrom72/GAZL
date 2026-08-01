@@ -1,11 +1,11 @@
  ; Compiled with Impala version 1.0
 
  ; signatures version=1
- ; signature extern native printInt() -> unknown @ 10:23
- N:					! DEFi #20000000 ; signature const N : int @ 12:23
+ ; signature extern native printInt() -> unknown @ 10:1
+ N:					! DEFi #20000000 ; signature const N : int @ 12:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ 20:15
+ main:				FUNC		; signature func main() -> void @ 20:1
  								PARA *1
  					$i:			LOCi
  					$acc:		LOCi

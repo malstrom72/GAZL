@@ -1,0 +1,35 @@
+/*
+	A MUTUAL import cycle - even.impala <-> odd.impala, the shape cycles exist for. Gathering the
+	cycle works (realpath visited-set, each file parsed once), but the builder concatenates
+	dependency-first and the compiler is single-pass, so only ONE direction of a cycle resolves on
+	its own: whichever unit the concatenation puts last. The other direction needs a hand-written
+	`extern` - see odd.impala.
+
+	This unit is the root that WORKS: `impala build even.impala` puts odd.impala first, so the call
+	to isOdd below is already defined. Building odd.impala as the root instead fails with
+	`E403 Undeclared identifier: isOdd`, from this very line, with no source change at all. Both
+	halves are pinned in impala/importBuildTests.js.
+
+	This asymmetry is the 2.0 rule: collect mode, which removes it, is deferred to Impala 3.0
+	(docs/ParkedFeatures.md; see also docs/Impala2.md "Cycles"). If it lands, odd.impala's `extern`
+	becomes redundant rather than required, and the failing-root assertion in importBuildTests.js
+	flips to a passing build.
+
+	Expected when run (GAZLCmd out.gazl main): 1 0
+*/
+
+import "odd.impala"
+
+extern native printInt
+extern native printLF
+
+function isEven(int n) returns int r
+{
+	if (n == 0) { r = 1; } else { r = isOdd(n - 1); }
+}
+
+function main()
+{
+	printInt(isEven(4)); printLF();		// 1
+	printInt(isEven(7)); printLF();		// 0
+}

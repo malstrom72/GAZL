@@ -75,9 +75,43 @@ IF ERRORLEVEL 1 (
   DEL "%ERROR_LOG%" >NUL 2>NUL
   EXIT /b 1
 )
-FINDSTR /R /C:"\.s_GRBLEN.*-" "%OUTPUT%" >NUL
+REM Anchored to the label token itself - a bare `.*` runs to the end of the line and matches any
+REM dash anywhere on it, which made this fire on every clean build.
+FINDSTR /R /C:"\.s_GRBLEN[^ :]*-" "%OUTPUT%" >NUL
 IF NOT ERRORLEVEL 1 (
-  ECHO NuXJS smoke test emitted a string label containing '-' (invalid GAZL identifier character).
+  ECHO NuXJS smoke test emitted a string label containing '-' ^(invalid GAZL identifier character^).
+  DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
+  EXIT /b 1
+)
+
+REM The import closure must be walked on the NuXJS path too, not just under Node - impala.nuxjs.js
+REM load()s impalaImportClosure.js, so a missing staged copy shows up right here.
+CALL "%NUXJS_EXE%" "%CD%\impala\impala.nuxjs.js" "%CD%\tests\impala\sources\import\main.impala" "%OUTPUT%" 1234 main.impala "%CD%\impala\impalaCompiler.js"
+SET "STATUS=%ERRORLEVEL%"
+IF NOT "%STATUS%"=="0" (
+  DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
+  EXIT /b %STATUS%
+)
+REM makeVec and addVec are defined only in mathlib.impala, so their presence proves the imported
+REM unit was walked, concatenated and compiled - not just the root.
+FINDSTR /C:"makeVec:" "%OUTPUT%" >NUL
+IF ERRORLEVEL 1 (
+  ECHO NuXJS smoke test did not link the import closure - missing makeVec.
+  DEL "%OUTPUT%" >NUL 2>NUL
+  DEL "%LABEL_SOURCE%" >NUL 2>NUL
+  DEL "%INVALID_SOURCE%" >NUL 2>NUL
+  DEL "%ERROR_LOG%" >NUL 2>NUL
+  EXIT /b 1
+)
+FINDSTR /C:"addVec:" "%OUTPUT%" >NUL
+IF ERRORLEVEL 1 (
+  ECHO NuXJS smoke test did not link the import closure - missing addVec.
   DEL "%OUTPUT%" >NUL 2>NUL
   DEL "%LABEL_SOURCE%" >NUL 2>NUL
   DEL "%INVALID_SOURCE%" >NUL 2>NUL
@@ -86,7 +120,7 @@ IF NOT ERRORLEVEL 1 (
 )
 
 (
-  ECHO function main^()
+  ECHO function main^(^)
   ECHO locals int x
   ECHO {
   ECHO 	x^(^);

@@ -1,24 +1,24 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern const DEBUG : int @ 9:1
-; signature extern native output() -> unknown @ 9:21
-; signature extern native abort() -> unknown @ 10:20
-; signature extern native input() -> unknown @ 11:20
-; signature extern native inputEOF() -> unknown @ 12:23
-; signature extern native launch() -> unknown @ 13:21
-FALSE:	! DEFi #0	; signature const FALSE : int @ 15:20
-TRUE:	! DEFi #1	; signature const TRUE : int @ 16:19
-MAX_DIM_X:	! DEFi #76	; signature const MAX_DIM_X : int @ 18:25
-MAX_DIM_Y:	! DEFi #23	; signature const MAX_DIM_Y : int @ 19:25
-MAX_GENERATIONS:	! DEFi #1000	; signature const MAX_GENERATIONS : int @ 20:33
+; signature extern const DEBUG : int @ 7:1
+; signature extern native output() -> unknown @ 9:1
+; signature extern native abort() -> unknown @ 10:1
+; signature extern native input() -> unknown @ 11:1
+; signature extern native inputEOF() -> unknown @ 12:1
+; signature extern native launch() -> unknown @ 13:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 15:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 16:1
+MAX_DIM_X:	! DEFi #76	; signature const MAX_DIM_X : int @ 18:1
+MAX_DIM_Y:	! DEFi #23	; signature const MAX_DIM_Y : int @ 19:1
+MAX_GENERATIONS:	! DEFi #1000	; signature const MAX_GENERATIONS : int @ 20:1
 	GLOB *1
-xorShiftRandomSeedX:	DATi #123456789	; signature global xorShiftRandomSeedX : int @ 22:43
+xorShiftRandomSeedX:	DATi #123456789	; signature global xorShiftRandomSeedX : int @ 22:1
 	GLOB *1
-xorShiftRandomSeedY:	DATi #362436069	; signature global xorShiftRandomSeedY : int @ 23:43
+xorShiftRandomSeedY:	DATi #362436069	; signature global xorShiftRandomSeedY : int @ 23:1
 
 ;-----------------------------------------------------------------------------
-xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ 24:25
+xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ 24:1
 	$y:	OUTi
 	$x:	LOCi
 	$t:	LOCi
@@ -39,7 +39,7 @@ xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ 24:25
 
 
 ;-----------------------------------------------------------------------------
-eatWhite:	FUNC	; signature func eatWhite(ptr p) -> ptr @ 38:19
+eatWhite:	FUNC	; signature func eatWhite(ptr p) -> ptr @ 38:1
 	$q:	OUTp
 	$p:	INPp
 ;-----------------------------------------------------------------------------
@@ -52,7 +52,7 @@ eatWhite:	FUNC	; signature func eatWhite(ptr p) -> ptr @ 38:19
 
 
 ;-----------------------------------------------------------------------------
-outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 45:21
+outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 45:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
@@ -64,7 +64,7 @@ outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ 45:21
 
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 51:17
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 51:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -86,7 +86,7 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 51:17
 
 
 ;-----------------------------------------------------------------------------
-strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 65:18
+strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 65:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -114,10 +114,10 @@ strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 65:18
 	done:	NOOP
 	.f0:	RETU   	; }
 
-; signature extern const GAZL_WORD_SIZE : int @ 90:1
+; signature extern const GAZL_WORD_SIZE : int @ 89:1
 
 ;-----------------------------------------------------------------------------
-intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 90:22
+intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 90:1
 	$p:	OUTp
 	$i:	INPi
 	$radix:	INPi
@@ -164,11 +164,12 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 
 
 ;-----------------------------------------------------------------------------
-outputInt:	FUNC	; signature func outputInt(int i) -> void @ 108:20
+outputInt:	FUNC	; signature func outputInt(int i) -> void @ 108:1
 		PARA *1
 	$i:	INPi
 	! ADDi <A> #GAZL_WORD_SIZE #2
-	$buffer:	LOCA *<A>
+.x.outputInt.buffer:	! DEFi #<A>
+	$buffer:	LOCA *.x.outputInt.buffer
 ;-----------------------------------------------------------------------------
 		MOVi %2 $i 	; output(intToString(i, 10, 1, buffer))
 		MOVi %3 #10 
@@ -180,7 +181,7 @@ outputInt:	FUNC	; signature func outputInt(int i) -> void @ 108:20
 
 
 ;-----------------------------------------------------------------------------
-parseInt:	FUNC	; signature func parseInt(ptr s, int defaultValue) -> int @ 114:19
+parseInt:	FUNC	; signature func parseInt(ptr s, int defaultValue) -> int @ 114:1
 	$i:	OUTi
 	$s:	INPp
 	$defaultValue:	INPi
@@ -222,7 +223,7 @@ parseInt:	FUNC	; signature func parseInt(ptr s, int defaultValue) -> int @ 114:1
 
 
 ;-----------------------------------------------------------------------------
-parseXY:	FUNC	; signature func parseXY(ptr s, ptr x, ptr y) -> void @ 141:18
+parseXY:	FUNC	; signature func parseXY(ptr s, ptr x, ptr y) -> void @ 141:1
 		PARA *1
 	$s:	INPp
 	$x:	INPp
@@ -255,7 +256,7 @@ parseXY:	FUNC	; signature func parseXY(ptr s, ptr x, ptr y) -> void @ 141:18
 
 
 ;-----------------------------------------------------------------------------
-help:	FUNC	; signature func help() -> void @ 158:15
+help:	FUNC	; signature func help() -> void @ 158:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_fedcba_4d3:31 	; outputLine("")
@@ -280,7 +281,7 @@ help:	FUNC	; signature func help() -> void @ 158:15
 
 
 ;-----------------------------------------------------------------------------
-run:	FUNC	; signature func run(int dimX, int dimY, ptr cells, int generations) -> void @ 171:14
+run:	FUNC	; signature func run(int dimX, int dimY, ptr cells, int generations) -> void @ 171:1
 		PARA *1
 	$dimX:	INPi
 	$dimY:	INPi
@@ -298,7 +299,8 @@ run:	FUNC	; signature func run(int dimX, int dimY, ptr cells, int generations) -
 	$c:	LOCi
 	$i:	LOCi
 	$size:	LOCi
-	$cells2:	LOCA *<A>
+.x.run.cells2:	! DEFi #<A>
+	$cells2:	LOCA *.x.run.cells2
 	$p1:	LOCp
 	$p2:	LOCp
 	$t:	LOCp
@@ -371,7 +373,7 @@ run:	FUNC	; signature func run(int dimX, int dimY, ptr cells, int generations) -
 
 
 ;-----------------------------------------------------------------------------
-outputCellsAlive:	FUNC	; signature func outputCellsAlive(int dimX, int dimY, ptr cells) -> int @ 222:27
+outputCellsAlive:	FUNC	; signature func outputCellsAlive(int dimX, int dimY, ptr cells) -> int @ 222:1
 	$n:	OUTi
 	$dimX:	INPi
 	$dimY:	INPi
@@ -396,7 +398,7 @@ outputCellsAlive:	FUNC	; signature func outputCellsAlive(int dimX, int dimY, ptr
 
 
 ;-----------------------------------------------------------------------------
-randomize:	FUNC	; signature func randomize(int dimX, int dimY, ptr cells, int percentage) -> void @ 231:20
+randomize:	FUNC	; signature func randomize(int dimX, int dimY, ptr cells, int percentage) -> void @ 231:1
 		PARA *1
 	$dimX:	INPi
 	$dimY:	INPi
@@ -417,19 +419,21 @@ randomize:	FUNC	; signature func randomize(int dimX, int dimY, ptr cells, int pe
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 239:15
+main:	FUNC	; signature func main() -> void @ 239:1
 		PARA *1
 	! MULi <A> #MAX_DIM_X #MAX_DIM_Y
 	$dimX:	LOCi
 	$dimY:	LOCi
-	$s:	LOCA *256
+.x.main.s:	! DEFi #256
+	$s:	LOCA *.x.main.s
 	$quit:	LOCi
 	$i:	LOCi
 	$j:	LOCi
 	$x:	LOCi
 	$y:	LOCi
 	$n:	LOCi
-	$cells:	LOCA *<A>
+.x.main.cells:	! DEFi #<A>
+	$cells:	LOCA *.x.main.cells
 	$c:	LOCi
 	$firstTime:	LOCi
 	$redraw:	LOCi

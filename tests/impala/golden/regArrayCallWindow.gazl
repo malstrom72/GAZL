@@ -1,14 +1,14 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 14:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 12:1
 	GLOB *1
-gi:	DATi #0	; signature global gi : int @ 16:1
-; signature extern native printInt() -> unknown @ 17:1
-; signature extern native printLF() -> unknown @ 19:1
+gi:	DATi #0	; signature global gi : int @ 14:1
+; signature extern native printInt() -> unknown @ 16:1
+; signature extern native printLF() -> unknown @ 17:1
 
 ;-----------------------------------------------------------------------------
-inc:	FUNC	; signature func inc(int x) -> int @ 19:14
+inc:	FUNC	; signature func inc(int x) -> int @ 19:1
 	$r:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
@@ -17,10 +17,12 @@ inc:	FUNC	; signature func inc(int x) -> int @ 19:14
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 24:15
+main:	FUNC	; signature func main() -> void @ 24:1
 		PARA *1
-	$a:	LOCA *2
-	$b:	LOCA *2
+.x.main.a:	! DEFi #2
+	$a:	LOCA *.x.main.a
+.x.main.b:	! DEFi #2
+	$b:	LOCA *.x.main.b
 ;-----------------------------------------------------------------------------
 		POKE &gi #1 	; global gi = 1
 		PEEK %0 &gi 	; a[global gi] = global gi

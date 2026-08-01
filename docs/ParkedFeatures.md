@@ -101,8 +101,8 @@ values (function or funcptr type), `E429` destructuring assignment. Each diagnos
 ## Impala 3.0 wishlist
 
 The first three belong together, because they are all changes to the same calling convention. Doing them in
-one pass is much cheaper than three separate ABI migrations. Multidimensional arrays are independent of the
-ABI work and can land on their own.
+one pass is much cheaper than three separate ABI migrations. Multidimensional arrays and collect mode are
+independent of the ABI work and of each other, and can land on their own.
 
 ### Restore by-value structs, multi-return and destructuring
 
@@ -141,3 +141,22 @@ change. Two things must be settled FIRST, and neither is part of the feature its
 identity (a constant evaluator is load-bearing here), and the expression-extent ordering trap in struct
 array fields. The 2026-07-26 re-evaluation above also stands: the "matrix as a struct field" shortcut does
 not reach `extern struct`, because a sizeless host-owned array field has no stride to index by.
+
+### Full import-cycle resolution (collect mode)
+
+**No park branch - this one was never built.** Unlike everything above, collect mode is a design that was
+written and deferred, not code that was removed, so there is nothing to check out. The architecture is
+`impala/Impala2Slices.md` Step 5 (still the plan of record) and `docs/Impala2.md` "Deferred to 3.0: collect
+mode"; both are complete enough to implement from.
+
+Deferred 2026-07-29 rather than held up 2.0. Impala 2.0's answer to a backwards cross-cycle reference is a
+forward `extern`, which covers the function and global cases, is checked against the real definition since
+E437, and is what 1.0 users already write. Only a cross-cycle *struct type* has no workaround short of
+breaking the cycle. Adding collect mode later **removes** the need for those externs without invalidating
+them - an existing `extern` stays correct and keeps compiling - so this is a pure relaxation, not a
+breaking change, and nothing written against 2.0 has to be revisited.
+
+Its precondition is worth doing regardless: finishing the thinning of fat inline actions into `$$parser`
+methods (`impala/RefactorPlan.md` is the adjacent cleanup on the same surface) also shrinks the migration
+that "JSPEG 2" would face (`docs/JSPEGFuture.md` Problem 2). Do not treat collect mode as gated on JSPEG 2
+or on the body-level AST rework - it is gated on neither.

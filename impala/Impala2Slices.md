@@ -142,6 +142,24 @@ the two fix-it notes from the spec.
 
 ## Step 5: import-as-linking + `--dead-strip`
 
+> **PARTLY IMPLEMENTED (status added 2026-07-28).** `import`, `export`, `--dead-strip`, the closure
+> walk and per-unit dedup all shipped. **Collect mode did not.** The builder took a shortcut the plan
+> below does not describe: it concatenates the closure into one source and compiles it *once*, in
+> emit mode, rather than gather -> resolve -> codegen. That gets correct cross-unit codegen for free
+> and moots the per-unit seed requirement, but it leaves the compiler single-pass over the
+> concatenation - so the cycle claims further down are **not** true today. A backwards reference
+> across a cycle fails (`E403` for a function, `E413` for a struct type), and which direction fails
+> depends only on which unit is named as root. Fixture: `tests/impala/sources/importcycle/`, pinned
+> in `impala/importBuildTests.js`. Current behaviour and the route out are written up in
+> `docs/Impala2.md` under "Cycles" and "Deferred to 3.0: collect mode"; the architecture in this
+> section is still the plan of record for that work.
+>
+> **Collect mode DEFERRED to Impala 3.0 (2026-07-29)** - see `docs/ParkedFeatures.md`. Half-resolved
+> cycles are the shipped 2.0 rule, not a pending fix: a backwards cross-cycle reference takes a
+> forward `extern`, which covers functions and globals (a cross-cycle struct type does not, and has
+> no workaround short of breaking the cycle). Landing the pre-pass later makes those externs
+> unnecessary without making them wrong, so the deferral raises no compatibility question.
+
 **Division of labor: the compiler gains a collect-only mode; the builder owns the closure.**
 
 **Architecture (revised 2026-07-20 per the thin-action/handler discussion): `$$parser` already IS
@@ -159,12 +177,12 @@ moves:
 
 - *Declaration-level two-phase* (gather decls across the closure, then resolve names): cheap,
   bounded, unlocks cycles. Delivered by collect-mode + deferred resolution.
-- *Body-level two-phase* (AST of expressions, resolve/emit later): the JSPEG 2 rework; cycles do
-  **not** need it; still deferred.
+- *Body-level two-phase* (AST of expressions, resolve/emit later): an `impala.jspeg` action rewrite
+  (`docs/JSPEGFuture.md` Problem 1), not a JSPEG change; cycles do **not** need it; still deferred.
 
 - Grammar gains only: `import "path"` and the `export` declaration modifier (`export` emitted as a
   role prefix in the `; signature` rows; validator's `classifyRole` extended to accept it).
-- The **builder** (`impala build` in `impala.node.js`): (1) **gather** - walk the import closure
+- The **builder** (the closure walk behind `impala compile`): (1) **gather** - walk the import closure
   (visited-set by canonical path), parse every unit in collect mode, merge declarations into one
   closure-wide interface with names still symbolic; (2) **resolve** - resolve all type/name
   references against the merged interface (by-value containment cycles caught here as infinite
@@ -182,6 +200,9 @@ moves:
   forward-reference a type. (Bonus: cross-unit forward function references also resolve without
   `extern`, byte-safe - existing externs become redundant, not wrong. Whether to also make the
   standalone single-unit path gather-first is a separate, byte-safe option, not required here.)
+  **Unbuilt - this paragraph describes the target, not today.** Without collect mode the body
+  compiler *is* asked to forward-reference, and refuses; the `extern` is required rather than
+  redundant. See the status note at the top of this section.
 - **`--dead-strip` is a text-level `.gazl` transform in the builder, not compiler logic.** The
   output is line-structured: labeled `FUNC` blocks, labeled `GLOB`/`CNST`/`TEMP` data blocks,
   `! DEF` rows. Build a reference graph from operands (`&name`, `^name`, `#name`), roots from
@@ -197,6 +218,14 @@ moves:
 4. **2.5** - by-value params/returns on the window convention.
 5. **Step 3** - `functype` (independent, low risk).
 6. **Step 5** - builder + import + `export` + `--dead-strip`, with the cycle amendment.
+7. **Collect mode** - ~~the one piece of Step 5 still outstanding~~ **DEFERRED to Impala 3.0**
+   (2026-07-29, `docs/ParkedFeatures.md`); half-resolved cycles are the 2.0 rule and `extern` is the
+   answer. Kept here as the plan of record. Precondition: finish thinning the fat inline actions into
+   `$$parser` (see the architecture note above, and `impala/RefactorPlan.md` for the adjacent
+   return-style cleanup on the same surface) - worth doing on its own, since it also shrinks what a
+   later "JSPEG 2" would have to migrate. Not gated on the body-level AST rework - the split is in
+   "declaration-level vs body-level two-phase" above. Done when
+   `tests/impala/sources/importcycle/odd.impala` builds as a root with its `extern` deleted.
 
 Each lands as a separate commit behind the full gate (regenerate → jspegCompilerTests →
 runJspegTests golden → full build → VM-run fixtures).

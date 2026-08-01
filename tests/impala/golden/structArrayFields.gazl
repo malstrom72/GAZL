@@ -1,20 +1,20 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 	! MOVi <a> #0	; layout of struct Filter
 .o.Filter.state:	! DEFi #<a>
 	! ADDi <a> #<a> #4
 .o.Filter.taps:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Filter:	! DEFi #<a>
-; signature struct Filter { state : float[4], taps : int } @ 15:1
-; signature extern native printFloat() -> unknown @ 16:1
-; signature extern native printLF() -> unknown @ 18:1
-gf:	GLOB *.z.Filter	; signature global gf : Filter @ 20:1
+; signature struct Filter { state : float[4], taps : int } @ 10:1
+; signature extern native printFloat() -> unknown @ 15:1
+; signature extern native printLF() -> unknown @ 16:1
+gf:	GLOB *.z.Filter	; signature global gf : Filter @ 18:1
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process(Filter-ptr f, int i, float x) -> void @ 20:18
+process:	FUNC	; signature func process(Filter-ptr f, int i, float x) -> void @ 20:1
 		PARA *1
 	$f:	INPp
 	$i:	INPi
@@ -26,7 +26,7 @@ process:	FUNC	; signature func process(Filter-ptr f, int i, float x) -> void @ 2
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 25:15
+main:	FUNC	; signature func main() -> void @ 25:1
 		PARA *1
 	$lf:	LOCA *.z.Filter
 	$i:	LOCi

@@ -1,10 +1,10 @@
  ; Compiled with Impala version 1.0
 
  ; signatures version=1
- ; signature extern func tezt() -> unknown @ 5:21
+ ; signature extern func tezt() -> unknown @ 5:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ 7:15
+ main:				FUNC		; signature func main() -> void @ 7:1
  								PARA *1
  					$p:			LOCp
  					$i:			LOCi

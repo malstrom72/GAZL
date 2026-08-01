@@ -58,6 +58,22 @@ if grep -q '\.s_GRBLEN[^[:space:]:]*-' "$output_file"; then
 	exit 1
 fi
 
+# The import closure must be walked on the NuXJS path too, not just under Node - impala.nuxjs.js
+# load()s impalaImportClosure.js, so a missing staged copy shows up right here.
+"$nuxjs" \
+	"$(pwd)/impala/impala.nuxjs.js" \
+	"$(pwd)/tests/impala/sources/import/main.impala" \
+	"$output_file" \
+	1234 \
+	main.impala \
+	"$(pwd)/impala/impalaCompiler.js"
+for symbol in makeVec: addVec: main:; do
+	if ! grep -q "$symbol" "$output_file"; then
+		echo "NuXJS smoke test did not link the import closure (missing $symbol)." >&2
+		exit 1
+	fi
+done
+
 printf 'function main()\nlocals int x\n{\n\tx();\n}\n' > "$invalid_source"
 if "$nuxjs" "$(pwd)/impala/impala.nuxjs.js" "$invalid_source" - >"$error_log" 2>&1; then
 	echo "NuXJS smoke test expected invalid Impala source to fail." >&2

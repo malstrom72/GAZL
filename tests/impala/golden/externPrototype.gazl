@@ -1,13 +1,13 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 22:1
-; signature extern native printInt(int n) -> void @ 23:1
-; signature extern native printFloat(float x) -> void @ 24:1
-; signature extern native printLF() -> unknown @ 26:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
+; signature extern native printInt(int n) -> void @ 22:1
+; signature extern native printFloat(float x) -> void @ 23:1
+; signature extern native printLF() -> unknown @ 24:1
 
 ;-----------------------------------------------------------------------------
-divmod:	FUNC	; signature func divmod(int a, int b, int-ptr rem) -> int @ 26:17
+divmod:	FUNC	; signature func divmod(int a, int b, int-ptr rem) -> int @ 26:1
 	$q:	OUTi
 	$a:	INPi
 	$b:	INPi
@@ -22,7 +22,7 @@ divmod:	FUNC	; signature func divmod(int a, int b, int-ptr rem) -> int @ 26:17
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 32:15
+main:	FUNC	; signature func main() -> void @ 32:1
 		PARA *1
 	$q:	LOCi
 	$r:	LOCi

@@ -47,14 +47,22 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 2. Run the demo from the `output/` directory:
    ```
    ./output/NuXJS output/impala.nuxjs.js \
-   	impala/ImpalaDemo.impala 0x4d2 impala/ImpalaDemo.impala > output/demo.gazl
+   	impala/ImpalaDemo.impala output/demo.gazl 0x4d2 impala/ImpalaDemo.impala
    ./output/GAZLCmd output/demo.gazl main
    ```
-3. See the [Using from C++](docs/Overview.md#using-from-c) notes in `docs/Overview.md` for integrating the VM in your own projects.
+   The output path is the *second* argument. Passing the random id there instead writes the
+   GAZL to a file named `0x4d2` and leaves `demo.gazl` empty, which `GAZLCmd` then reports as
+   `Code size: 0 ... Could not locate function: main`.
+3. To compile and run one of your own sources without staging anything, use the Node front end:
+   ```
+   node impala/impala.node.js run myprogram.impala
+   ```
+4. See the [Using from C++](docs/Overview.md#using-from-c) notes in `docs/Overview.md` for integrating the VM in your own projects.
 
 ## Helper Scripts
 
 - `build.sh` / `build.cmd` - build all tools and run the full test + demo sequence
+- `tools/test-js.sh` / `.cmd` - every gate that needs only node (~15s, no C++ toolchain); run this before committing a compiler-only change
 - `tools/buildGAZLCmd.sh` / `.cmd` - build just `GAZLCmd` (VM executable)
 - `tools/BuildNuXJS.sh` / `.cmd` - build the NuXJS command-line JavaScript runtime
 - `tools/BuildImpala.sh` / `.cmd` - build NuXJS and stage the JSPEG Impala compiler into `output/`
@@ -85,8 +93,10 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 - [Overview](docs/Overview.md) - general architecture and goals
 - [Impala Language Reference](docs/Impala.md) - the language and toolchain
+- [Two-Stage Constants](docs/TwoStageConstants.md) - why GAZL ships as text, and why a constant is not always a number the compiler knows
 - [Instruction Set](docs/InstructionSet.md) - extracted opcode descriptions
 - [Memory Safety Model](docs/MemorySafetyModel.md) - stack frames, what is bounds-checked and when, what `*size` is for
+- [Symbol Namespace](docs/SymbolNamespace.md) - every symbol the compiler mints for itself, and how to add one without colliding
 - [Usage Example](docs/UsageExample.md) - compile and run a simple program
 - [JSPEG Port](impala/JSPEG.md) - status and usage of the JavaScript PEG compiler
 

@@ -1,14 +1,14 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 	! MOVi <a> #0	; layout of struct Biquad
 .o.Biquad.b0:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Biquad.z1:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Biquad:	! DEFi #<a>
-; signature struct Biquad { b0 : float, z1 : float } @ 11:1
+; signature struct Biquad { b0 : float, z1 : float } @ 10:1
 	! MOVi <a> #0	; layout of struct Voice
 .o.Voice.note:	! DEFi #<a>
 	! ADDi <a> #<a> #1
@@ -17,14 +17,15 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Voice:	! DEFi #<a>
-; signature struct Voice { note : int, lo : Biquad, gain : float } @ 13:1
-; signature extern native printInt() -> unknown @ 14:1
-; signature extern native printFloat() -> unknown @ 15:1
-; signature extern native printLF() -> unknown @ 17:1
-store:	GLOB *8	; signature array store[8] : unknown @ 19:1
+; signature struct Voice { note : int, lo : Biquad, gain : float } @ 11:1
+; signature extern native printInt() -> unknown @ 13:1
+; signature extern native printFloat() -> unknown @ 14:1
+; signature extern native printLF() -> unknown @ 15:1
+.x.store:	! DEFi #8
+store:	GLOB *.x.store	; signature array store[8] : unknown @ 17:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 19:15
+main:	FUNC	; signature func main() -> void @ 19:1
 		PARA *1
 	$a:	LOCA *.z.Voice
 	$b:	LOCA *.z.Voice

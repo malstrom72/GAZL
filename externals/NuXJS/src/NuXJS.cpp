@@ -510,16 +510,17 @@ static Char* doubleToString(Char buffer[32], const double value) {
 		}
 		assert(next >= normalized); // Correct behavior is to never reach higher than digit 9.
 
-		// Do we hit goal with digit or digit + 1? If so, is next digit >= 5 (magnitude / 2) then increment it.
+		// Decide between digit and digit + 1 under final rounding; bump the digit if the lower one doesn't reconstruct
+		// to the exact value, or if we are strictly past the half-step. (Ported from Numbstrict's realToString. The
+		// previous version overwrote `reconstructed` and so missed the "lower digit doesn't round-trip but the higher
+		// one does" case, emitting a last digit one too low for some values, e.g. String(7.120236347223045e-307).)
 		reconstructed = scaleAndRound(accumulator, factor);
-		if (reconstructed != absValue) {
-			reconstructed = scaleAndRound(accumulator + magnitude, factor);
-		}
-		if (reconstructed == absValue && accumulator + magnitude / 2 < normalized) {
+		const double r1 = scaleAndRound(accumulator + magnitude, factor);
+		if ((reconstructed != absValue && r1 == absValue) || (reconstructed == absValue
+				&& accumulator + magnitude / 2 < normalized && absValue != std::numeric_limits<double>::max())) {
+			reconstructed = r1;
 			++digit;
 			assert(digit < 10); // If this happens we have failed to calculate the correct exponent above.
-		} else {
-			assert(accumulator > 0.0); // If this happens we have failed to calculate the correct exponent above.
 		}
 
 		*p++ = '0' + digit;
@@ -779,7 +780,7 @@ bool Value::toArrayIndex(UInt32& index) const {
 	switch (type) {
 		case NUMBER_TYPE: {
 			const double n = var.number;
-			if (n < 0.0 || n >= 4294967295.0) {
+			if (!(n >= 0.0 && n < 4294967295.0)) {	// NaN fails this test and is correctly rejected (avoids UB float->UInt32 cast)
 				return false;
 			}
 			index = static_cast<UInt32>(n);
@@ -1782,9 +1783,11 @@ bool JSArray::setOwnPropertyInternal(Runtime& rt, const Value& key, const Value&
 	}
 	if (key.equalsString(LENGTH_STRING)) {
 		const double rawLength = v.toDouble();
+		if (!(rawLength >= 0.0 && rawLength <= 4294967295.0)) {	// NaN-safe range check *before* the cast (avoids UB float->UInt32 cast)
+			ScriptException::throwError(rt.getHeap(), RANGE_ERROR, "Invalid array length");
+		}
 		const UInt32 coercedLength = static_cast<UInt32>(rawLength);
-		if (isNaN(rawLength) || rawLength < 0.0 || rawLength > 4294967295.0
-				|| rawLength != static_cast<double>(coercedLength)) {
+		if (rawLength != static_cast<double>(coercedLength)) {
 			ScriptException::throwError(rt.getHeap(), RANGE_ERROR, "Invalid array length");
 		}
 		result = updateLength(coercedLength);
@@ -2605,7 +2608,11 @@ void Processor::newOperation(const Int32 argc) {
 			}
 		}
 		Object* newObject = new(heap) JSObject(heap.managed(), prototype != 0 ? prototype : rt.getObjectPrototype());
-		++sp;	// if we have 0 args we make room for the new object
+		++sp;	// make room for the new object
+		// The slot just exposed by `++sp` is now inside the gc-marked stack range, so it must hold a valid Value
+		// before `construct()` runs (a re-entrant native constructor could trigger a gc). Storing `newObject` both
+		// initialises the slot and keeps `newObject` reachable across the call.
+		*sp = newObject;
 		sp[-argc] = f->construct(rt, *this, argc, sp - argc, newObject);
 		sp[-argc - 1] = newObject;
 		pop(argc);
@@ -2672,14 +2679,22 @@ void Processor::innerRun() {
 			}
 			
 			case SET_PROPERTY_OP: {
-				sp[-2].getObject()->setProperty(rt, sp[-1], sp[0]);
+				Object* o = convertToObject(sp[-2], false);
+				if (o == 0) {
+					return;
+				}
+				o->setProperty(rt, sp[-1], sp[0]);
 				sp[-2] = sp[0];
 				pop(2);
 				break;
 			}
 			
 			case SET_PROPERTY_POP_OP: {
-				sp[-2].getObject()->setProperty(rt, sp[-1], sp[0]);
+				Object* o = convertToObject(sp[-2], false);
+				if (o == 0) {
+					return;
+				}
+				o->setProperty(rt, sp[-1], sp[0]);
 				pop(3);
 				break;
 			}
@@ -3377,6 +3392,10 @@ Char* Compiler::unescape(Char* buffer, const Char* e) {
 			UInt32 l = 0;
 			d = std::copy(b, p, d);
 			++p;
+			// 7.8.4: only `0` with [lookahead not DecimalDigit] escapes a digit, the rest is Annex B octal
+			if (*p >= '0' && *p <= '9' && (*p != '0' || (p + 1 != e && p[1] >= '0' && p[1] <= '9'))) {
+				error(SYNTAX_ERROR, "Invalid escape sequence");
+			}
 			const Char* f = std::find(ESCAPE_CHARS, ESCAPE_CHARS + ESCAPE_CODE_COUNT, *p);
 			if (f != ESCAPE_CHARS + ESCAPE_CODE_COUNT) {
 				l = ESCAPE_CODES[f - ESCAPE_CHARS];
@@ -3879,11 +3898,12 @@ bool Compiler::postOperate(ExpressionResult& xr, Precedence precedence) {
 		case PROPERTY_BRACKETS: {
 			assert(!op.primitiveInput);
 			makeRValue(xr, false);
-			emit(Processor::CHECK_OBJECT_COERCIBLE_OP);
 			const bool didAcceptInOperator = acceptInOperator;
 			acceptInOperator = true;
-			makeRValue(operand(op), true, Processor::OBJ_TO_STRING_OP); // left doesn't need to be primitive, but right does (and preferred string!)
+			const ExpressionResult keyXR = makeRValue(operand(op), false);
 			acceptInOperator = didAcceptInOperator;
+			emit(Processor::CHECK_RESOLVE_PROPERTY_OP);
+			makeRValue(keyXR, true, Processor::OBJ_TO_STRING_OP); // left doesn't need to be primitive, but right does (and preferred string!)
 			xr = ExpressionResult(ExpressionResult::PROPERTY);
 			break;
 		}
@@ -3907,19 +3927,27 @@ void Compiler::functionDefinition(const String* functionName, const String* self
 	emitWithConstant(Processor::GEN_FUNC_OP, func);
 }
 
+/*
+	Caps total live compile-time recursion depth. Expressions and statements share this one counter (it is threaded
+	into nested function compilers), so deeply nested source cannot overflow the C++ stack during compilation. It must
+	stay well below the real stack ceiling - nested function definitions, the largest frames, overflow at a few thousand
+	levels - while leaving ample room for real code and for JSON.parse(), which eval()s validated input that is already
+	bounded far below this by MAX_JSON_DEPTH in stdlib.js.
+*/
+const Int32 MAX_NESTED_COMPILE_DEPTH = 256;
 const Int32 CATCH_PARAMETER = 0x7FFFFFFF;
-const Int32 MAX_NESTED_EXPRESSION_DEPTH = 64;
+
+Compiler::NestGuard::NestGuard(Compiler& compiler) : compiler(compiler) {
+	if (compiler.nestCounter >= MAX_NESTED_COMPILE_DEPTH) {
+		compiler.error(RANGE_ERROR, "Internal compiler limitations reached. Reduce code complexity.");
+	}
+	++compiler.nestCounter;
+}
+Compiler::NestGuard::~NestGuard() { --compiler.nestCounter; }
 
 bool Compiler::optionalExpression(ExpressionResult& xr, Precedence precedence) {
-	if (nestCounter >= MAX_NESTED_EXPRESSION_DEPTH) {
-		error(RANGE_ERROR, "Internal compiler limitations reached. Reduce code complexity.");
-	}
-	struct NestCounter {
-		NestCounter(Compiler& c) : c(c) { ++c.nestCounter; };
-		~NestCounter() { --c.nestCounter; };
-		Compiler& c;
-	} nestCounter(*this);
-	
+	NestGuard nestGuard(*this);
+
 	if (!preOperate(xr, precedence)) {
 		if (eof()) {
 			return false;
@@ -4617,7 +4645,9 @@ void Compiler::switchStatement(SemanticScope* currentScope) {
 */
 void Compiler::statement(SemanticScope* currentScope, SemanticScope* scopeLabelsEnd) {
 	assert(currentSection == &mainSection); // statements must produce into main-section because of breaks etc...
-	
+
+	NestGuard nestGuard(*this);
+
 	white();
 	
 	if (token("{", false)) {

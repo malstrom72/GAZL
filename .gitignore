@@ -1,6 +1,11 @@
 .DS_Store
 /output
 /projects/build
+# Scratch worktrees. Nothing here is a home for anything - the four JIT design docs that lived in
+# /temp until 2026-08-01 are on branch `jit-compiler` under docs/Jit*.md now. If you write something
+# in here you want to keep, move it into docs/ (see docs/README.md) before it gets swept.
+/spike
+/temp
 tests/impala/erroneous/
 externals/NuXJS/output/
 externals/NuXJS/**/*.dSYM/

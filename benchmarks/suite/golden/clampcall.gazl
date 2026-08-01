@@ -1,12 +1,12 @@
  ; Compiled with Impala version 1.0
 
  ; signatures version=1
- ; signature extern native printInt() -> unknown @ 11:23
- W:					! DEFi #4096 ; signature const W : int @ 13:19
- PASSES:			! DEFi #2000 ; signature const PASSES : int @ 14:24
+ ; signature extern native printInt() -> unknown @ 12:1
+ W:					! DEFi #4096 ; signature const W : int @ 14:1
+ PASSES:			! DEFi #2000 ; signature const PASSES : int @ 15:1
 
  ;-----------------------------------------------------------------------------
- clamp:				FUNC		; signature func clamp(int v, int lo, int hi) -> int @ 16:16
+ clamp:				FUNC		; signature func clamp(int v, int lo, int hi) -> int @ 17:1
  					$r:			OUTi
  					$v:			INPi
  					$lo:		INPi
@@ -19,10 +19,11 @@
  								MOVi $r $hi 					; r = hi
  					.f1:		RETU   							; }
 
- data:				GLOB *4096	; signature array data[4096] : unknown @ 24:24
+ .x.data:			! DEFi #4096
+ data:				GLOB *.x.data ; signature array data[4096] : unknown @ 25:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ 26:15
+ main:				FUNC		; signature func main() -> void @ 27:1
  								PARA *1
  					$i:			LOCi
  					$j:			LOCi
@@ -43,12 +44,12 @@
  								ADDi %1 %1 $acc
  								MOVi %2 #-1000 
  								MOVi %3 #1000 
- 								CALL &clamp %0 *4				; expects clamp(int, int, int) -> int @ 33:54
+ 								CALL &clamp %0 *4				; expects clamp(int, int, int) -> int @ 34:54
  								MOVi $t %0 
  								ADDi $acc $acc $t				; acc = acc + t
  								FORi $i #W @.l5					; }
  					.e4:		FORi $j #PASSES @.l3			; }
  					.e2:		MOVi %1 $acc 					; printInt(acc)
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 37:15
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 38:15
  								RETU   							; }
 

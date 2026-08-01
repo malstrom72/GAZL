@@ -6,6 +6,14 @@ type; the emitted row carries real types (`extern native printInt(int n) -> void
 unchanged and still assert nothing (`() -> unknown`, a wildcard the validator skips), so prototypes are
 ALLOWED, never demanded. Fixture: `tests/impala/sources/externPrototype.impala`.
 
+A prototype and a definition of the same name are two claims about one function, so where the compiler
+holds BOTH it now checks them against each other (**E437**) instead of letting whichever parsed last
+overwrite the other - which used to compile clean and emit contradictory `; signature` rows for
+gazl-validate to catch. This is not a linkage rule: a prototype for a name the closure never defines is
+still a promise only gazl-validate can settle, and a name-only extern still asserts nothing. It matters
+most under `import`, where the builder compiles the whole closure as one unit, so a stale hand-written
+prototype and the real definition routinely land in the same compilation.
+
 Not done: the two nudge WARNINGS (name-only-but-verifiable, prototyped-but-unverifiable), and making the
 native manifest authoritative and complete (step 2 of the sequencing below) - so a prototype for an opaque
 host native is still a trusted claim rather than a checked one.
@@ -18,6 +26,53 @@ extern calls - is what got implemented.
 Related: an `extern struct` now emits `; signature extern struct Name { field : type, ... }` and
 gazl-validate checks it against the layout constants a host supplies (`.o.Name.field` / `.z.Name`), so a
 drifted or conflicting host layout is a build failure.
+
+## One rule for every kind of extern
+
+> **At most one DEFINITION of a name; any number of `extern` declarations, provided every claim agrees
+> - with the definition where the closure has one, and otherwise with each other. A declaration that
+> asserts nothing never collides with anything.** Order never matters.
+
+That is the whole model, and it now holds uniformly:
+
+| Kind | Opaque form (asserts nothing) | Claim form | Mismatch | Two definitions |
+|---|---|---|---|---|
+| function | `extern function f;` | `extern function f(int a) returns int r` | **E437** | E401 |
+| struct | `extern struct S` (bodyless) | `extern struct S { int a }` | **E438** | E410 |
+| global | *(none - a type is always stated)* | `extern int g` | E402 | E401 |
+| array | `extern array a` (untyped) | `extern int array a` | E203 | E401 |
+| functype | the built-in `funcptr` type | the `functype` declaration itself | **E440** | *(re-declaring is legal if it matches)* |
+
+Notes on the corners:
+
+- The mismatch checks fire **declaration-against-declaration too**, not only against a definition -
+  with nothing to arbitrate, two disagreeing claims are both suspect, and the compiler generates calls
+  and field offsets from whichever it happened to keep. Message says so: *"extern declarations of f
+  disagree"* rather than blaming a definition that does not exist.
+- Where a definition IS present it is authoritative: it wins, it keeps ownership of the emitted struct
+  layout, and a re-declaration publishes no second `; signature` row.
+- An `extern array` states no extent by design (`E430`), so extents are never compared - the same
+  wildcard model as a name-only prototype. An untyped `array` element type is likewise opaque.
+- Globals have no opaque form because `extern g` cannot be written without a type; that is a gap only
+  in the sense that there is nothing to be opaque *about*.
+- `functype` has no extern form, and needs none. A functype **emits nothing** - no symbol, no layout,
+  not even a `; signature` row - so there is no artifact for a second declaration to collide with, and
+  the declaration simply repeats as long as the shapes match. That is the difference from a `struct`,
+  whose definition owns real `.o.`/`.z.` constants and so must be unique with any second mention
+  spelled `extern`. Emitting nothing also means gazl-validate never sees a functype, so the compiler
+  is the *only* place a disagreement can be caught.
+- Nothing *forces* a functype on you: the untyped `funcptr` is its opaque form and is accepted
+  everywhere a named one is - parameter, struct field, `extern struct` field, `extern` prototype. But
+  it is opaque in the same direction a bare `pointer` is: a named type widens to `funcptr` freely,
+  and going the other way needs an explicit `(Cb)` cast (**E441**, for assignments and arguments
+  alike), because the named type exists to guarantee the shape of what gets called and an untyped
+  source guarantees nothing. A functype takes no `pointer` modifier in a cast, being a pointer
+  already; `(Cb pointer)` casts to a pointer *to* one. Consequence to keep in mind for `.gazl` blob
+  imports: a blob can never carry a functype, so a source importing one and wanting the typed form has
+  to declare it locally - which is exactly what a repeatable declaration allows.
+
+This matters under `import` for the reason E437 and E438 both exist: the builder compiles the whole
+closure as one unit, so a hand-copied `extern` and the real definition land in the same compilation.
 
 The original note follows, as the design record.
 

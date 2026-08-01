@@ -1,11 +1,11 @@
  ; Compiled with Impala version 1.0
 
  ; signatures version=1
- ; signature extern native printInt() -> unknown @ 12:23
- N:					! DEFi #20000000 ; signature const N : int @ 14:23
+ ; signature extern native printInt() -> unknown @ 13:1
+ N:					! DEFi #20000000 ; signature const N : int @ 15:1
 
  ;-----------------------------------------------------------------------------
- mix:				FUNC		; signature func mix(int a, int b) -> int @ 16:14
+ mix:				FUNC		; signature func mix(int a, int b) -> int @ 17:1
  					$r:			OUTi
  					$a:			INPi
  					$b:			INPi
@@ -16,7 +16,7 @@
 
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ 22:15
+ main:				FUNC		; signature func main() -> void @ 23:1
  								PARA *1
  					$i:			LOCi
  					$acc:		LOCi
@@ -26,10 +26,10 @@
  								GEQi #0 #N @.e0
  					.l1:		MOVi %1 $acc 					; acc = mix(acc, i)
  								MOVi %2 $i 
- 								CALL &mix %0 *3					; expects mix(int, int) -> int @ 26:36
+ 								CALL &mix %0 *3					; expects mix(int, int) -> int @ 27:36
  								MOVi $acc %0 
  								FORi $i #N @.l1
  					.e0:		MOVi %1 $acc 					; printInt(acc)
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 27:15
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 28:15
  								RETU   							; }
 

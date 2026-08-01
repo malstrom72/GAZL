@@ -7,8 +7,17 @@ Impala 2.0 turned a lot of silent runtime garbage into diagnostics (typed pointe
 expressions, extern/struct link checking). What follows is the remaining list, and how to implement it
 without breaking the thing that makes GAZL interesting.
 
+Read the list as a DIAGNOSTIC-QUALITY backlog, not a soundness one. Verified 2026-07-29 against
+`output/GAZLCmd.exe`: the assembler already rejects items 1, 2 and 5, and item 3 below `from`. What is
+wrong is WHERE the error points - at a symbol and a line in generated GAZL, not at the `.impala` line
+that caused it. Only item 3 above the range, and item 4, reach a running program. Check claims against
+the assembler; `tools/gazl-validate.sh` is a JS-side linter that passes every item here.
+
 
 ## The constraint: a constant is not always a number Impala knows
+
+> Summarized here because it governs every item below. The canonical, normative statement is
+> [`docs/TwoStageConstants.md`](TwoStageConstants.md) - read that first if any of this is new to you.
 
 This is the trap. In Impala 2.0 a constant can be resolved at ASSEMBLY time, not compile time:
 
@@ -31,6 +40,14 @@ index (`POKE &g0 %0`). So partial coverage already exists at the assembler level
 
 
 ## The deferred assertion (verified)
+
+> **Superseded mechanism, 2026-07-31.** Everything below works, but it is the wrong tool. GAZL has a
+> purpose-built `! FAIL <free text>` directive (`src/GAZL.cpp:1027`) that aborts assembly with your own
+> message, and `src/UnitTest.gazl:30-40` already uses `! IFDF`/`! EQUi` + `! FAIL` as the canonical
+> idiom for exactly this. Use that instead of the undefined-label trick: it takes a real sentence
+> rather than encoding the message in a label name. See
+> [`docs/TwoStageConstants.md`](TwoStageConstants.md), "The deferred assertion". The section below is
+> kept because the branch-condition half (which comparison to emit, and when) still applies verbatim.
 
 GAZL has compile-time comparisons that branch (`! LSSi`, `! GEQi`, `! EQUi`, `! NEQi`, ... `_ccb`) and
 `! GOTO`. Branching to a label that does not exist is an assembly error. Together that is an
@@ -78,13 +95,23 @@ global with a constant offset GAZL does catch it, so behaviour is inconsistent b
 - Symbolic extent (`extern struct` array field, host-defined size) -> deferred assertion, or silence.
 - Runtime index -> out of scope; that is a bounds-check-at-runtime question, deliberately not Impala's model.
 
+**Scope: dereference only, never address formation.** The example above is a store, and the check applies
+to that shape - `a[7]`, `a[7] = 1`, `p[9].a` as a value. It must NOT reject `&a[7]`, `&a[N]` or `&p[[i]]`.
+An out-of-range address is a value like any other, and GAZL itself accepts it: `MOVp $e &a:9` on a 4-word
+`a` assembles and runs, because the `Offset out of bounds` check fires on constant-offset *access*
+operands only. Containment is guaranteed by every dereference being bounds-checked at run time (see
+`docs/MemorySafetyModel.md`), so rejecting address arithmetic would make Impala stricter than the machine
+it transliterates to, and would outlaw the one-past-the-end pointer that every walk loop needs. See F3 in
+`docs/Impala2Review.md`.
+
 ### 2. Writes to a readonly array element (task #21)
 
     readonly int array table[4] = { 1, 2, 3, 4 }
-    table[0] = 9;          // not caught today
+    table[0] = 9;          // not caught by Impala; GAZL says `Incompatible types: table`
 
 `readonly` is tracked on the symbol (`declare(..., readonly, ...)`) and is honoured for scalars, but an
-indexed write does not consult it. Purely a compile-time check on the symbol; no assembly-time subtlety.
+indexed write does not consult it. Purely a compile-time check on the symbol; no assembly-time subtlety -
+the readonly array lands in the const region, so the `POKE` is rejected there as a backstop.
 
 ### 3. Case label outside the switch range (task #33)
 
@@ -121,6 +148,16 @@ in the same function body, and the compiler holds the complete set by the time t
 compiler-minted `@.` labels and deliberately leaves user labels alone precisely because an undefined one
 is a user error that deserves a real diagnostic, not an internal assertion. A plain compile-time error
 naming the label is all this needs.
+
+### 5. Duplicate `case` labels (fuzzer-found)
+
+    switch (i == 0 to 3) { case 0: { i = 1; } case 0: { i = 2; } }
+
+Both arms are emitted, each under its own `.s0#0:`, and the assembler rejects the second with
+`Symbol already defined: .s0.0`. So the build does fail - but on a compiler-minted label the user never
+wrote, which is the worst possible way to report "you listed case 0 twice". Fully decidable at compile
+time whenever the case values are numeric, exactly like item 3, and it wants the same pass: collect the
+arm values for a switch, then reject a repeat naming the value and both source positions.
 
 
 ## Not in this list

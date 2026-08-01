@@ -4,6 +4,10 @@
 // Usage:
 //   node impala/impala.node.js compile [<input.impala>] [<output.gazl>|-] [<random id>]
 //   node impala/impala.node.js run [<input.impala>]
+//
+// `compile` always resolves the import closure of its input - a file that imports nothing is just a
+// closure of one, and compiles to exactly what it always did. Reading from stdin resolves imports
+// against the current directory, there being no source file to be relative to.
 
 const fs = require('fs');
 const os = require('os');
@@ -11,8 +15,10 @@ const path = require('path');
 const cp = require('child_process');
 
 const { compileWithJsImpala } = require('./impalaJsCompilerRunner');
+const { concatenateClosure, resolveImportClosure, scanImports, deadStrip } = require('./impalaImportClosure');
 
 const IMPALA_ENCODING = 'latin1';
+const STDIN_PATH = '<stdin>';   // a root name with no directory, so imports resolve from the cwd
 
 function readFileLatin1(filePath) {
 	return fs.readFileSync(filePath, IMPALA_ENCODING);
@@ -40,177 +46,38 @@ function readStdinLatin1Sync() {
 
 function usageAndExit() {
 	console.error('Usage:');
-	console.error('  node impala/impala.node.js compile [--legacy] [<input.impala>] [<output.gazl>|-] [<random id>]');
-	console.error('  node impala/impala.node.js build [--legacy] [--dead-strip] <root.impala> [<output.gazl>|-] [<random id>]');
+	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [<input.impala>] [<output.gazl>|-] [<random id>]');
 	console.error('  node impala/impala.node.js run [--legacy] [<input.impala>]');
 	console.error('  --legacy downgrades Impala 2 strict-expression errors to warnings');
+	console.error('  --dead-strip drops everything unreachable from an `export`');
 	process.exit(1);
 }
 
 // --- Step 5: import-as-linking -------------------------------------------------
-// `import "path"` names a unit for the link closure (path relative to the importing file).
-// The builder walks the closure (visited-set by real path, cycles harmless), concatenates the
-// unit sources in dependency-first order, and compiles the whole program in one pass - so
-// cross-unit calls (including struct/multi-value returns) codegen correctly with no header drift.
-function scanImports(source) {
-	const re = /^[ \t]*import[ \t]+"([^"\r\n]*)"/gm;
-	const paths = [];
-	let m;
-	while ((m = re.exec(source)) !== null) {
-		paths.push(m[1]);
-	}
-	return paths;
+// `import "path"` names a unit for the link closure (path relative to the importing file). The
+// closure walk, concatenation and `--dead-strip` all live in ./impalaImportClosure so the NuXJS
+// front end runs the same code; this supplies the two host primitives it asks for. `realpathSync`
+// as `canonical` is what folds symlinks and Windows case into one file identity.
+function makeIo(stdinSource) {
+	return {
+		read(filePath) {
+			return (stdinSource !== undefined && filePath === STDIN_PATH) ? stdinSource : readFileLatin1(filePath);
+		},
+		canonical(filePath) {
+			try { return fs.realpathSync(filePath); } catch (_) { return path.resolve(filePath); }
+		},
+	};
 }
 
-function resolveImportClosure(rootPath) {
-	const visited = new Set();
-	const order = [];
-
-	function canonical(p) {
-		try { return fs.realpathSync(p); } catch (_) { return path.resolve(p); }
-	}
-
-	function visit(absPath, importChain) {
-		const key = canonical(absPath);
-		if (visited.has(key)) return;             // dedup diamonds; break import cycles
-		visited.add(key);
-
-		let source;
-		try {
-			source = readFileLatin1(absPath);
-		} catch (err) {
-			const via = importChain.length ? ` (imported from ${importChain[importChain.length - 1]})` : '';
-			console.error(`Error reading ${absPath}${via}: ${err && err.message ? err.message : String(err)}`);
-			process.exit(1);
-		}
-
-		const dir = path.dirname(absPath);
-		for (const rel of scanImports(source)) {
-			visit(path.resolve(dir, rel), importChain.concat(absPath));
-		}
-		order.push({ path: absPath, source });    // post-order -> dependencies precede dependents
-	}
-
-	visit(path.resolve(rootPath), []);
-	return order;
-}
-
-// Resolve + concatenate the import closure of `rootPath` into one compilation-ready source.
-function concatenateClosure(rootPath) {
-	const units = resolveImportClosure(rootPath);
-	const rootDir = path.dirname(path.resolve(rootPath));
-	const combined = units
-		.map((u) => `// ==== unit: ${path.relative(rootDir, u.path).split(path.sep).join('/')} ====\n${u.source}`)
-		.join('\n');
-	return { units, combined };
-}
-
-// --- Step 5: --dead-strip -----------------------------------------------------
-// Link-time dead-code elimination on the finished .gazl. Roots are `export`ed symbols (read
-// from the `; signature ... export ...` rows); any FUNC or labeled data/DEF block that is
-// neither exported nor reachable from an export is dropped. Conservative: anything it cannot
-// classify with confidence is kept, and it only runs when explicitly requested.
-const TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // a named top-level definition line
-const ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
-
-function stripComment(line) {
-	const at = line.indexOf(';');
-	return at >= 0 ? line.slice(0, at) : line;
-}
-
-function isFuncDef(line) {
-	const m = TOP_LABEL_RE.exec(line);
-	return m && /^FUNC\b/.test(m[2]) ? m[1] : null;
-}
-
-function isDataDef(line) {
-	const m = TOP_LABEL_RE.exec(line);
-	if (!m) return null;
-	return /^(?:DAT[ifps]?|DATA|GLOB|CNST|TEMP|!\s*DEF[ifp]?)\b/.test(m[2]) ? m[1] : null;
-}
-
-// A function body ends only at the next named definition or a standalone `; signature` row
-// (extern decls). Internal `;----` separators, `; expects` comments and blank lines stay in
-// the body - the code section of every function is preceded by its own `;----` separator.
-function isBoundary(line) {
-	return !!(isFuncDef(line) || isDataDef(line) || /^\s*;\s*signature\b/.test(line));
-}
-
-function collectRefs(text) {
-	const refs = [];
-	const re = /[&^#]([A-Za-z_]\w*)/g;   // &func/&global, ^native, #const - names only (numbers skip)
-	let m;
-	while ((m = re.exec(text)) !== null) refs.push(m[1]);
-	return refs;
-}
-
-function deadStrip(gazl) {
-	const lines = gazl.split('\n');
-	const blocks = [];   // { kind:'func'|'data'|'loose', name, start, end, refs:[], exported }
-	let i = 0;
-	while (i < lines.length) {
-		const line = lines[i];
-		const fname = isFuncDef(line);
-		if (fname) {
-			const start = i++;
-			while (i < lines.length && !isBoundary(lines[i])) i++;   // body: indented decls/instructions/blanks
-			blocks.push({ kind: 'func', name: fname, start, end: i });
-			continue;
-		}
-		const dname = isDataDef(line);
-		if (dname) {
-			// pull a preceding anonymous allocation line into this block so it strips together
-			let start = i;
-			const prev = blocks[blocks.length - 1];
-			if (prev && prev.kind === 'loose' && ANON_ALLOC_RE.test(lines[prev.start]) && prev.end === i) {
-				blocks.pop();
-				start = prev.start;
-			}
-			blocks.push({ kind: 'data', name: dname, start, end: i + 1 });
-			i++;
-			continue;
-		}
-		blocks.push({ kind: 'loose', start: i, end: i + 1 });
-		i++;
-	}
-
-	const byName = {};
-	const roots = [];
-	for (const b of blocks) {
-		if (b.kind === 'loose') continue;
-		byName[b.name] = b;
-		const defLine = lines[b.start];
-		b.refs = [];
-		for (let k = b.start; k < b.end; ++k) b.refs.push(...collectRefs(stripComment(lines[k])));
-		if (/;\s*signature\s+export\b/.test(defLine)) roots.push(b.name);
-	}
-
-	const reachable = new Set();
-	const work = roots.slice();
-	while (work.length) {
-		const name = work.pop();
-		if (reachable.has(name) || !byName[name]) continue;
-		reachable.add(name);
-		for (const r of byName[name].refs) if (byName[r]) work.push(r);
-	}
-
-	const kept = [];
-	for (const b of blocks) {
-		if (b.kind === 'loose' || reachable.has(b.name)) {
-			for (let k = b.start; k < b.end; ++k) kept.push(lines[k]);
-		}
-	}
-	return kept.join('\n');
-}
-
-// Build a linked .gazl program from a root unit. Exposed for tests.
-function buildProgram(rootPath, options = {}) {
-	const { combined, units } = concatenateClosure(rootPath);
+// Compile a root unit and its import closure into one linked .gazl program. Exposed for tests.
+function compileProgram(rootPath, options = {}) {
+	const { combined, units, spans } = concatenateClosure(rootPath, makeIo(options.stdinSource));
 	let output = compileWithJsImpala(combined, {
 		randomId: options.randomId,
 		retabulate: true,
 		trailingNewline: true,
 		sourceName: rootPath,
+		units: spans,
 		legacy: options.legacy,
 	});
 	if (options.deadStrip) {
@@ -219,24 +86,35 @@ function buildProgram(rootPath, options = {}) {
 	return { output, unitCount: units.length };
 }
 
-function buildCommand(args, legacy, deadStrip) {
+function compileCommand(args, legacy, wantDeadStrip) {
+	let stdinSource;
+	let rootPath;
 	if (args.length === 0) {
-		console.error('build requires a root .impala file');
-		process.exit(1);
+		stdinSource = readStdinLatin1Sync();
+		if (!stdinSource) {
+			console.error('No input provided on stdin');
+			process.exit(1);
+		}
+		rootPath = STDIN_PATH;
+	} else {
+		rootPath = args[0];
 	}
-	const rootPath = args[0];
 	const outputPath = args[1] || '-';
 	const randomId = parseRandomId(args[2]);
 
 	let output;
 	let unitCount;
 	try {
-		const built = buildProgram(rootPath, { randomId, legacy, deadStrip });
+		const built = compileProgram(rootPath, { randomId, legacy, deadStrip: wantDeadStrip, stdinSource });
 		output = built.output;
 		unitCount = built.unitCount;
 	} catch (err) {
 		const message = (err && err.message) ? err.message : String(err);
-		console.error(message.includes(': error[') || message.includes(': error:') ? message : `Error building ${rootPath}: ${message}`);
+		console.error(message.includes(': error[') || message.includes(': error:') ? message : `Error compiling ${rootPath}: ${message}`);
+		// Overwrite any stale output so a failed compile cannot leave a previously-good .gazl behind.
+		if (outputPath && outputPath !== '-') {
+			try { writeFileLatin1(outputPath, 'Error: ' + message); } catch (_) {}
+		}
 		process.exit(1);
 	}
 
@@ -246,7 +124,7 @@ function buildCommand(args, legacy, deadStrip) {
 	}
 	try {
 		writeFileLatin1(outputPath, output);
-		console.error(`Successfully built ${rootPath} (${unitCount} unit${unitCount === 1 ? '' : 's'})`);
+		console.error(`Successfully compiled ${rootPath}${unitCount > 1 ? ` (${unitCount} units)` : ''}`);
 	} catch (err) {
 		console.error(`Error writing ${outputPath}: ${err && err.message ? err.message : String(err)}`);
 		process.exit(1);
@@ -260,83 +138,23 @@ function parseRandomId(arg) {
 	return Number.isFinite(n) ? Math.trunc(n) : undefined;
 }
 
-function compileCommand(args, legacy) {
-	let source;
-	let inputPath;
-	let outputPath;
-	let randomId;
-
-	if (args.length === 0) {
-		// stdin -> stdout
-		source = readStdinLatin1Sync();
-		if (!source) {
-			console.error('No input provided on stdin');
-			process.exit(1);
-		}
-		outputPath = '-';
-	} else {
-		inputPath = args[0];
-		try {
-			source = readFileLatin1(inputPath);
-		} catch (err) {
-			console.error(`Error reading ${inputPath}: ${err && err.message ? err.message : String(err)}`);
-			process.exit(1);
-		}
-		outputPath = args[1] || '-';
-		randomId = parseRandomId(args[2]);
-	}
-
-	let output;
-	try {
-		output = compileWithJsImpala(source, { randomId, retabulate: true, trailingNewline: true, sourceName: inputPath || '<stdin>', legacy });
-	} catch (err) {
-		const message = (err && err.message) ? err.message : String(err);
-		if (message.includes(': error[') || message.includes(': error:')) console.error(message);
-		else if (inputPath) console.error(`Error compiling ${inputPath}: ${message}`);
-		else console.error(`Error: ${message}`);
-		if (outputPath && outputPath !== '-') {
-			try { writeFileLatin1(outputPath, 'Error: ' + message); } catch (_) {}
-		}
-		process.exit(1);
-	}
-
-	if (!outputPath || outputPath === '-') {
-		process.stdout.write(output);
-		return;
-	}
-
-	try {
-		writeFileLatin1(outputPath, output);
-		if (inputPath) console.error(`Successfully compiled ${inputPath}`);
-		else console.error('Successful');
-	} catch (err) {
-		console.error(`Error writing ${outputPath}: ${err && err.message ? err.message : String(err)}`);
-		process.exit(1);
-	}
-}
-
 function runCommand(args, legacy) {
-	let source;
-	let inputPath;
+	let stdinSource;
+	let rootPath;
 	if (args.length === 0) {
-		source = readStdinLatin1Sync();
-		if (!source) {
+		stdinSource = readStdinLatin1Sync();
+		if (!stdinSource) {
 			console.error('No input provided on stdin');
 			process.exit(1);
 		}
+		rootPath = STDIN_PATH;
 	} else {
-		inputPath = args[0];
-		try {
-			source = readFileLatin1(inputPath);
-		} catch (err) {
-			console.error(`Error reading ${inputPath}: ${err && err.message ? err.message : String(err)}`);
-			process.exit(1);
-		}
+		rootPath = args[0];
 	}
 
 	let gazl;
 	try {
-		gazl = compileWithJsImpala(source, { retabulate: true, trailingNewline: true, sourceName: inputPath || '<stdin>', legacy });
+		gazl = compileProgram(rootPath, { legacy, stdinSource }).output;
 	} catch (err) {
 		console.error((err && err.message) ? err.message : String(err));
 		process.exit(1);
@@ -366,14 +184,12 @@ function runCommand(args, legacy) {
 function main() {
 	const argv = process.argv.slice(2);
 	const legacy = argv.includes('--legacy');
-	const deadStrip = argv.includes('--dead-strip');
+	const wantDeadStrip = argv.includes('--dead-strip');
 	const [cmd, ...rest] = argv.filter((arg) => arg !== '--legacy' && arg !== '--dead-strip');
 	if (!cmd) return usageAndExit();
 	switch (cmd) {
 		case 'compile':
-			return compileCommand(rest, legacy);
-		case 'build':
-			return buildCommand(rest, legacy, deadStrip);
+			return compileCommand(rest, legacy, wantDeadStrip);
 		case 'run':
 			return runCommand(rest, legacy);
 		default:
@@ -381,7 +197,14 @@ function main() {
 	}
 }
 
-module.exports = { buildProgram, concatenateClosure, resolveImportClosure, scanImports, deadStrip };
+// Re-exported for tests, with the Node io already bound so callers need not know about it.
+module.exports = {
+	compileProgram,
+	concatenateClosure: (rootPath) => concatenateClosure(rootPath, makeIo()),
+	resolveImportClosure: (rootPath) => resolveImportClosure(rootPath, makeIo()),
+	scanImports,
+	deadStrip,
+};
 
 if (require.main === module) {
 	main();

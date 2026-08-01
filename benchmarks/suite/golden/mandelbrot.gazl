@@ -1,13 +1,13 @@
  ; Compiled with Impala version 1.0
 
  ; signatures version=1
- ; signature extern native printInt() -> unknown @ 4:23
- W:					! DEFi #800	; signature const W : int @ 6:18
- H:					! DEFi #600	; signature const H : int @ 7:18
- MAXITER:			! DEFi #256	; signature const MAXITER : int @ 8:24
+ ; signature extern native printInt() -> unknown @ 4:1
+ W:					! DEFi #800	; signature const W : int @ 6:1
+ H:					! DEFi #600	; signature const H : int @ 7:1
+ MAXITER:			! DEFi #256	; signature const MAXITER : int @ 8:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ 10:15
+ main:				FUNC		; signature func main() -> void @ 10:1
  								PARA *1
  					$px:		LOCi
  					$py:		LOCi

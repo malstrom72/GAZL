@@ -1,20 +1,20 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 	! MOVi <a> #0	; layout of struct Filter
 .o.Filter.mode:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Filter.cutoff:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Filter:	! DEFi #<a>
-; signature struct Filter { mode : int, cutoff : float } @ 12:1
-; signature extern native printInt() -> unknown @ 13:1
-; signature extern native printFloat() -> unknown @ 14:1
-; signature extern native printLF() -> unknown @ 16:1
+; signature struct Filter { mode : int, cutoff : float } @ 10:1
+; signature extern native printInt() -> unknown @ 12:1
+; signature extern native printFloat() -> unknown @ 13:1
+; signature extern native printLF() -> unknown @ 14:1
 
 ;-----------------------------------------------------------------------------
-configure:	FUNC	; signature func configure(Filter-ptr f, int m, float c) -> void @ 16:20
+configure:	FUNC	; signature func configure(Filter-ptr f, int m, float c) -> void @ 16:1
 		PARA *1
 	$f:	INPp
 	$m:	INPi
@@ -26,7 +26,7 @@ configure:	FUNC	; signature func configure(Filter-ptr f, int m, float c) -> void
 
 
 ;-----------------------------------------------------------------------------
-bump:	FUNC	; signature func bump(int-ptr n) -> void @ 22:15
+bump:	FUNC	; signature func bump(int-ptr n) -> void @ 22:1
 		PARA *1
 	$n:	INPp
 ;-----------------------------------------------------------------------------
@@ -35,7 +35,7 @@ bump:	FUNC	; signature func bump(int-ptr n) -> void @ 22:15
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 27:15
+main:	FUNC	; signature func main() -> void @ 27:1
 		PARA *1
 	$v:	LOCA *.z.Filter
 	$p:	LOCp

@@ -41,9 +41,14 @@ dry, once wet).
   the side-effect problem ceases to exist rather than being managed. This also unlocks: multi-error
   diagnostics, free lookahead for new syntax (destructuring `x, y = f()` vs expression statement),
   and Impala 2.0's `import` interface mode (parse, take declarations, emit nothing) as a trivial
-  variant instead of a special mode.
+  variant instead of a special mode. *That last one is a convenience, **not** a dependency: import
+  cycles need only declaration-level two-phase, which `impala/Impala2Slices.md:155-163` scopes as a
+  mode on `$$parser` and explicitly separates from this rework. Do not wait for it to fix cycles.*
   *Impact on `impala.jspeg`: rule structure unchanged; every action rewritten from emit-now to
-  build-node. This is the "JSPEG 2" moment and should be done once, deliberately - not piecemeal.*
+  build-node. Note this is **not** a change to JSPEG - nothing in the code generator stops a grammar
+  from building nodes in its actions today, so it is a rewrite of `impala.jspeg` and sits with the
+  grammar author alone. It pairs well with JSPEG 2 (Problem 2), which makes a node simply the value
+  a rule returns, but neither waits for the other.*
 
 ## Problem 2: The `._` holder duality
 
@@ -65,15 +70,16 @@ currently has ~50 `$$.` holder-escape sites.
 - **Near term - finish `RefactorPlan.md`.** Return-style helpers (`$$ = binaryRet(...)`) shrink
   the number of places that touch holder semantics at all. Behavior-preserving, fixture-gated,
   already planned milestone by milestone.
-- **Long term - value-returning rules.** Change the codegen so a rule is a function returning its
-  value; tags become plain local variables; `$$` becomes an ordinary variable; the rewriter's
+- **Long term - value-returning rules. This is "JSPEG 2"** - the one breaking change to JSPEG
+  itself, and it is about `$$`, nothing else. Change the codegen so a rule is a function returning
+  its value; tags become plain local variables; `$$` becomes an ordinary variable; the rewriter's
   heuristics and the `._` convention are deleted outright. Object-valued `$$` still supports field
   mutation (`$$.count = 0` works on a plain object), so the container-style rules (`FuncCall`)
   migrate by initializing `$$ = {...}` instead of relying on a pre-existing holder.
   *Impact on `impala.jspeg`: mechanical migration of the ~50 `$$.` sites plus an audit of tag
   rebinding; retire the dollar-report and most of the `$$` documentation. Pairs naturally with the
   AST move in Problem 1 - in two-phase style, `$$` is just the node under construction and the
-  holder question evaporates. Do both in the same breaking step.*
+  holder question evaporates - so doing both in one breaking step is convenient, not required.*
 
 ## Problem 3: Performance
 
@@ -122,6 +128,27 @@ agents writing new 2.0 syntax will hit parse errors constantly.
 X, Y, or Z` (offset→line:col mapping is runner-side and trivial). Token rules get display names.
 Modest codegen change, no grammar changes, and it can land before any Impala 2.0 work.
 
+## Adjacent gap: the PikaScript emulation layer
+
+`impala.jspeg`'s prelude still runs on a shim of hand-ported PikaScript builtins - `bake`, `evaluate`,
+`replace`, `char`, `ordinal`, `args`, and the `resetQueue`/`pushBack`/`queueSize` wrappers over plain
+Arrays. They were the cheapest possible port from the PikaScript original, not a design, and they are
+dead weight now that the host is JavaScript: `replace(s, a, b)` is `s.split(a).join(b)` spelled longer,
+the queue wrappers are `[]`, `evaluate` is `JSON.parse`.
+
+**`bake` is the one that bites.** Every `$$parser.fail` message is passed through it, and it **`eval`s
+whatever sits between braces** - that is how `{$type1}` interpolation in `typeError` works. So any
+diagnostic whose text happens to contain braces is executed as JavaScript. A struct row
+(`struct S { a : int }`) in an error message throws `Unexpected token ':'` from deep inside `JSON.parse`,
+with nothing in the stack naming the real cause; `E438` has to render its rows with parentheses to dodge
+it. It is also an eval of compiler-controlled text on the error path, which is a poor place for one.
+
+**What it would take:** replace `bake` with an explicit substitution - `format(template, values)` over a
+`{name}` placeholder, no `eval` - and migrate the ~10 `typeError` call sites that rely on `{$type1}` /
+`{$type2}`. Then delete the rest of the shim in favour of the JS builtins. Mechanical, fixture-gated,
+and independent of everything else in this document; the messages are covered by
+`impala/jspegCompilerTests.js`, so drift shows up immediately.
+
 ## Sequencing
 
 **Nothing here gates Impala 2.0 Step 1.** Step 1 (typed declarations) and the strict-expression
@@ -131,9 +158,10 @@ fixtures.
 
 | When | Work | `impala.jspeg` impact | Ordering constraint |
 |---|---|---|---|
-| Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers | none / mechanical helper migration | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); neither blocks Step 1 |
+| Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers; retire the PikaScript emulation layer (`bake` first) | none / mechanical helper migration | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); none blocks Step 1 |
 | Before Steps 4/5, *if adopted* | Automatic `dry` for predicates in JSPEG; de-IIFE + char-class codegen | delete the dry toggles and ~16 guards; otherwise none | destructuring lookahead and import interface mode are the two features that lean on the side-effect weakness - the only real ordering edge in this document |
-| After 2.0 stabilizes, if ever ("JSPEG 2") | Two-phase AST + value-returning rules, in one deliberate breaking step | rules unchanged; all actions rewritten as node constructors; holders, `dry`, and the `$$` special-casing retired | none - optional end-state |
+| After 2.0 stabilizes, if ever ("JSPEG 2") | Value-returning rules - the `$$`/holder change, and the only breaking change to JSPEG itself | mechanical migration of the ~50 `$$.` sites; holders and the `._` convention retired | none - optional end-state |
+| Independent of JSPEG entirely | Two-phase AST in `impala.jspeg` (actions build nodes, a walk emits) | rules unchanged; every action rewritten as a node constructor | not a JSPEG change at all - possible today; convenient to do alongside JSPEG 2, not gated on it |
 
 The closing point from the Impala 2.0 review bears repeating: JSPEG's parity discipline is its best
 feature, because it makes every one of these changes - up to and including a full replacement of

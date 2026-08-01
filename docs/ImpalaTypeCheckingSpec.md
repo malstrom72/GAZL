@@ -104,7 +104,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
     convention recorded by the metadata.
 * When mismatches are found, emit actionable diagnostics that cite both the importer and exporter source locations. The validator should parse the optional `@ <origin>` suffix on each comment and, when absent, fall back to the legacy `$$s`/`$$i` offsets that are already threaded through declarations for this purpose.【F:impala/impala.jspeg†L1466-L1546】
 * Provide `--warn-only` and `--force` flags so teams can adopt strictness gradually.
-* `tools/gazl-validate.sh` / `tools\gazl-validate.cmd` accept `.gazl` files, downgrade errors to warnings when `--warn-only` is supplied, and promote missing-definition warnings to hard failures when `--force` is used.【F:tools/gazl-validate.js†L1-L71】【F:tools/gazl-validate.js†L636-L668】
+* `tools/gazl-validate.sh` / `tools\gazl-validate.cmd` accept `.gazl` files, downgrade errors to warnings when `--warn-only` is supplied, and promote missing-definition warnings to hard failures when `--force` is used.【F:tools/gazl-validate.nuxjs.js†L1-L71】【F:tools/gazl-validate.nuxjs.js†L636-L668】
 
 ### 3. Surface Metadata to Developers
 
@@ -135,7 +135,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
   - [x] Lock down the comment grammar (for example, `FUNC foo    ; signature func foo(int a, ptr b) -> int` and `CALL foo    ; expects foo(int, ptr) -> int`) and document it alongside the Impala assembly reference so downstream tooling knows how to parse it.
   - [x] Ensure comments never break layout-sensitive sections by routing them through the same helpers that already insert `;`-prefixed notes when `-g` is enabled today.
 - [x] **Validator tool**
-  - [x] Create `tools/gazl-validate.{js,sh,cmd}` for NuXJS that parses the signature comments, performs the matching described above, and exits non-zero on fatal mismatches unless `--warn-only` is passed.【F:tools/gazl-validate.js†L1-L338】【F:tools/gazl-validate.js†L486-L679】
+  - [x] Create `tools/gazl-validate.{js,sh,cmd}` for NuXJS that parses the signature comments, performs the matching described above, and exits non-zero on fatal mismatches unless `--warn-only` is passed.【F:tools/gazl-validate.nuxjs.js†L1-L338】【F:tools/gazl-validate.nuxjs.js†L486-L679】
   - [x] Run `tools/gazl-validate.sh` from the default build on explicit JSPEG fixture file sets, while keeping arbitrary linked-unit validation as a direct command.
   - [x] Parse optional `@ <origin>` markers so mismatch diagnostics can cite both the importer and exporter spans when metadata is available.
 - [x] **Documentation & onboarding**

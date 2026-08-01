@@ -1,86 +1,87 @@
 ; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native output() -> unknown @ 36:1
-; signature extern native input() -> unknown @ 37:1
-; signature extern native clock() -> unknown @ 39:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 40:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 41:1
-; signature extern const DEBUG : int @ 43:1
+; signature extern native output() -> unknown @ 35:1
+; signature extern native input() -> unknown @ 36:1
+; signature extern native clock() -> unknown @ 37:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ 39:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ 40:1
+; signature extern const DEBUG : int @ 41:1
 	! ADDi <A> #8 #2
-STRIDE:	! DEFi <A>	; signature const STRIDE : int @ 44:1
+STRIDE:	! DEFi <A>	; signature const STRIDE : int @ 43:1
 	! ADDi <A> #8 #4
 	! MULi <A> <A> #STRIDE
-BOARD_SIZE:	! DEFi <A>	; signature const BOARD_SIZE : int @ 45:1
+BOARD_SIZE:	! DEFi <A>	; signature const BOARD_SIZE : int @ 44:1
 	! MULi <A> #STRIDE #2
-RANK_1:	! DEFi <A>	; signature const RANK_1 : int @ 46:1
+RANK_1:	! DEFi <A>	; signature const RANK_1 : int @ 45:1
 	! MULi <A> #STRIDE #3
-RANK_2:	! DEFi <A>	; signature const RANK_2 : int @ 47:1
+RANK_2:	! DEFi <A>	; signature const RANK_2 : int @ 46:1
 	! MULi <A> #STRIDE #4
-RANK_3:	! DEFi <A>	; signature const RANK_3 : int @ 48:1
+RANK_3:	! DEFi <A>	; signature const RANK_3 : int @ 47:1
 	! MULi <A> #STRIDE #5
-RANK_4:	! DEFi <A>	; signature const RANK_4 : int @ 49:1
+RANK_4:	! DEFi <A>	; signature const RANK_4 : int @ 48:1
 	! MULi <A> #STRIDE #6
-RANK_5:	! DEFi <A>	; signature const RANK_5 : int @ 50:1
+RANK_5:	! DEFi <A>	; signature const RANK_5 : int @ 49:1
 	! MULi <A> #STRIDE #7
-RANK_6:	! DEFi <A>	; signature const RANK_6 : int @ 51:1
+RANK_6:	! DEFi <A>	; signature const RANK_6 : int @ 50:1
 	! MULi <A> #STRIDE #8
-RANK_7:	! DEFi <A>	; signature const RANK_7 : int @ 52:1
+RANK_7:	! DEFi <A>	; signature const RANK_7 : int @ 51:1
 	! MULi <A> #STRIDE #9
-RANK_8:	! DEFi <A>	; signature const RANK_8 : int @ 54:1
-OFFBOARD:	! DEFi #-1	; signature const OFFBOARD : int @ 55:1
-EMPTY:	! DEFi #0	; signature const EMPTY : int @ 56:1
-PAWN:	! DEFi #1	; signature const PAWN : int @ 57:1
-ROOK:	! DEFi #2	; signature const ROOK : int @ 58:1
-KNIGHT:	! DEFi #3	; signature const KNIGHT : int @ 59:1
-BISHOP:	! DEFi #4	; signature const BISHOP : int @ 60:1
-QUEEN:	! DEFi #5	; signature const QUEEN : int @ 61:1
-KING:	! DEFi #6	; signature const KING : int @ 62:1
-BLACK:	! DEFi #8	; signature const BLACK : int @ 63:1
-WHITE:	! DEFi #16	; signature const WHITE : int @ 64:1
-PIECE_MASK:	! DEFi #7	; signature const PIECE_MASK : int @ 65:1
+RANK_8:	! DEFi <A>	; signature const RANK_8 : int @ 52:1
+OFFBOARD:	! DEFi #-1	; signature const OFFBOARD : int @ 54:1
+EMPTY:	! DEFi #0	; signature const EMPTY : int @ 55:1
+PAWN:	! DEFi #1	; signature const PAWN : int @ 56:1
+ROOK:	! DEFi #2	; signature const ROOK : int @ 57:1
+KNIGHT:	! DEFi #3	; signature const KNIGHT : int @ 58:1
+BISHOP:	! DEFi #4	; signature const BISHOP : int @ 59:1
+QUEEN:	! DEFi #5	; signature const QUEEN : int @ 60:1
+KING:	! DEFi #6	; signature const KING : int @ 61:1
+BLACK:	! DEFi #8	; signature const BLACK : int @ 62:1
+WHITE:	! DEFi #16	; signature const WHITE : int @ 63:1
+PIECE_MASK:	! DEFi #7	; signature const PIECE_MASK : int @ 64:1
 	! IORi <A> #BLACK #WHITE
-COLOR_MASK:	! DEFi <A>	; signature const COLOR_MASK : int @ 66:1
+COLOR_MASK:	! DEFi <A>	; signature const COLOR_MASK : int @ 65:1
 	! XORi <A> #BLACK #WHITE
-COLOR_SWITCH_XOR:	! DEFi <A>	; signature const COLOR_SWITCH_XOR : int @ 67:1
-MOVED_MASK:	! DEFi #32	; signature const MOVED_MASK : int @ 68:1
+COLOR_SWITCH_XOR:	! DEFi <A>	; signature const COLOR_SWITCH_XOR : int @ 66:1
+MOVED_MASK:	! DEFi #32	; signature const MOVED_MASK : int @ 67:1
 	! IORi <A> #PIECE_MASK #MOVED_MASK
-PIECE_AND_MOVED_MASK:	! DEFi <A>	; signature const PIECE_AND_MOVED_MASK : int @ 69:1
-MAX_PIECE_AND_MOVED_VALUE:	! DEFi #64	; signature const MAX_PIECE_AND_MOVED_VALUE : int @ 71:1
-MIN_DEPTH:	! DEFi #4	; signature const MIN_DEPTH : int @ 72:1
-MAX_DEPTH:	! DEFi #16	; signature const MAX_DEPTH : int @ 73:1
-QUIESCENCE_DEPTH:	! DEFi #8	; signature const QUIESCENCE_DEPTH : int @ 74:1
-TO_SHIFT:	! DEFi #8	; signature const TO_SHIFT : int @ 75:1
-SCORE_SHIFT:	! DEFi #16	; signature const SCORE_SHIFT : int @ 76:1
-MOVE_MASK:	! DEFi #0x0000FFFF	; signature const MOVE_MASK : int @ 77:1
-FROM_MASK:	! DEFi #0x000000FF	; signature const FROM_MASK : int @ 78:1
-TO_MASK:	! DEFi #0x0000FF00	; signature const TO_MASK : int @ 79:1
+PIECE_AND_MOVED_MASK:	! DEFi <A>	; signature const PIECE_AND_MOVED_MASK : int @ 68:1
+MAX_PIECE_AND_MOVED_VALUE:	! DEFi #64	; signature const MAX_PIECE_AND_MOVED_VALUE : int @ 69:1
+MIN_DEPTH:	! DEFi #4	; signature const MIN_DEPTH : int @ 71:1
+MAX_DEPTH:	! DEFi #16	; signature const MAX_DEPTH : int @ 72:1
+QUIESCENCE_DEPTH:	! DEFi #8	; signature const QUIESCENCE_DEPTH : int @ 73:1
+TO_SHIFT:	! DEFi #8	; signature const TO_SHIFT : int @ 74:1
+SCORE_SHIFT:	! DEFi #16	; signature const SCORE_SHIFT : int @ 75:1
+MOVE_MASK:	! DEFi #0x0000FFFF	; signature const MOVE_MASK : int @ 76:1
+FROM_MASK:	! DEFi #0x000000FF	; signature const FROM_MASK : int @ 77:1
+TO_MASK:	! DEFi #0x0000FF00	; signature const TO_MASK : int @ 78:1
 	! XORi <A> #MOVE_MASK #-1
-SCORE_MASK:	! DEFi <A>	; signature const SCORE_MASK : int @ 80:1
-CHECKMATE:	! DEFi #0xFFFF	; signature const CHECKMATE : int @ 81:1
-STALEMATE:	! DEFi #0xFFFE	; signature const STALEMATE : int @ 82:1
-IN_CHECK:	! DEFi #0xFFFD	; signature const IN_CHECK : int @ 83:1
-VALID_MOVE:	! DEFi #0xFFFC	; signature const VALID_MOVE : int @ 84:1
-INVALID_MOVE:	! DEFi #-1	; signature const INVALID_MOVE : int @ 85:1
-MAX_SCORE:	! DEFi #10000	; signature const MAX_SCORE : int @ 86:1
+SCORE_MASK:	! DEFi <A>	; signature const SCORE_MASK : int @ 79:1
+CHECKMATE:	! DEFi #0xFFFF	; signature const CHECKMATE : int @ 80:1
+STALEMATE:	! DEFi #0xFFFE	; signature const STALEMATE : int @ 81:1
+IN_CHECK:	! DEFi #0xFFFD	; signature const IN_CHECK : int @ 82:1
+VALID_MOVE:	! DEFi #0xFFFC	; signature const VALID_MOVE : int @ 83:1
+INVALID_MOVE:	! DEFi #-1	; signature const INVALID_MOVE : int @ 84:1
+MAX_SCORE:	! DEFi #10000	; signature const MAX_SCORE : int @ 85:1
 	! SUBi <A> #0 #MAX_SCORE
-MIN_SCORE:	! DEFi <A>	; signature const MIN_SCORE : int @ 87:1
-PAWN_VALUE:	! DEFi #100	; signature const PAWN_VALUE : int @ 88:1
+MIN_SCORE:	! DEFi <A>	; signature const MIN_SCORE : int @ 86:1
+PAWN_VALUE:	! DEFi #100	; signature const PAWN_VALUE : int @ 87:1
 	! MULi <A> #9 #PAWN_VALUE
-QUEEN_VALUE:	! DEFi <A>	; signature const QUEEN_VALUE : int @ 89:1
+QUEEN_VALUE:	! DEFi <A>	; signature const QUEEN_VALUE : int @ 88:1
 	! SUBi <A> #QUEEN_VALUE #PAWN_VALUE
-PROMOTION_SCORE:	! DEFi <A>	; signature const PROMOTION_SCORE : int @ 90:1
+PROMOTION_SCORE:	! DEFi <A>	; signature const PROMOTION_SCORE : int @ 89:1
 	! SUBi <A> #MAX_SCORE #MAX_DEPTH
-CAPTURE_KING_MIN_SCORE:	! DEFi <A>	; signature const CAPTURE_KING_MIN_SCORE : int @ 91:1
+CAPTURE_KING_MIN_SCORE:	! DEFi <A>	; signature const CAPTURE_KING_MIN_SCORE : int @ 90:1
 	! DIVi <A> #PAWN_VALUE #10
-RANDOM_AMOUNT:	! DEFi <A>	; signature const RANDOM_AMOUNT : int @ 92:1
+RANDOM_AMOUNT:	! DEFi <A>	; signature const RANDOM_AMOUNT : int @ 91:1
 	! DIVi <A> #PAWN_VALUE #10
-PAWN_ADVANCE_SCORE:	! DEFi <A>	; signature const PAWN_ADVANCE_SCORE : int @ 93:1
+PAWN_ADVANCE_SCORE:	! DEFi <A>	; signature const PAWN_ADVANCE_SCORE : int @ 92:1
 	! DIVi <A> #PAWN_VALUE #2
-CASTLING_SCORE:	! DEFi <A>	; signature const CASTLING_SCORE : int @ 94:1
-CASTLING_MASK:	! DEFi #0x80	; signature const CASTLING_MASK : int @ 95:1
-HISTORY_SIZE:	! DEFi #256	; signature const HISTORY_SIZE : int @ 97:1
-DIRS:	CNST *8	; signature array DIRS[8] : unknown @ 97:24
+CASTLING_SCORE:	! DEFi <A>	; signature const CASTLING_SCORE : int @ 93:1
+CASTLING_MASK:	! DEFi #0x80	; signature const CASTLING_MASK : int @ 94:1
+HISTORY_SIZE:	! DEFi #256	; signature const HISTORY_SIZE : int @ 95:1
+.x.DIRS:	! DEFi #8
+DIRS:	CNST *.x.DIRS	; signature array DIRS[8] : unknown @ 97:1
 	! ADDi <A> #STRIDE #1
 	DATA #STRIDE
 	DATA <A>
@@ -96,7 +97,8 @@ DIRS:	CNST *8	; signature array DIRS[8] : unknown @ 97:24
 	! SUBi <A> #STRIDE #1
 	DATA #-1
 	DATA <A>
-KNIGHT_MOVES:	CNST *8	; signature array KNIGHT_MOVES[8] : unknown @ 98:32
+.x.KNIGHT_MOVES:	! DEFi #8
+KNIGHT_MOVES:	CNST *.x.KNIGHT_MOVES	; signature array KNIGHT_MOVES[8] : unknown @ 98:1
 	! MULi <A> #STRIDE #2
 	! ADDi <A> <A> #1
 	! ADDi <B> #2 #STRIDE
@@ -120,7 +122,8 @@ KNIGHT_MOVES:	CNST *8	; signature array KNIGHT_MOVES[8] : unknown @ 98:32
 	! SUBi <B> <B> #1
 	DATA <A>
 	DATA <B>
-PIECE_VALUES:	CNST *7	; signature array PIECE_VALUES[7] : unknown @ 99:32
+.x.PIECE_VALUES:	! DEFi #7
+PIECE_VALUES:	CNST *.x.PIECE_VALUES	; signature array PIECE_VALUES[7] : unknown @ 99:1
 	! MULi <B> #5 #PAWN_VALUE
 	DATA #0 #PAWN_VALUE
 	! MULi <A> #3 #PAWN_VALUE
@@ -130,12 +133,14 @@ PIECE_VALUES:	CNST *7	; signature array PIECE_VALUES[7] : unknown @ 99:32
 	DATA <B>
 	DATA #QUEEN_VALUE #MAX_SCORE
 	! ADDi <B> #8 #4
-RANK_VALUES:	CNST *<B>	; signature array RANK_VALUES[] : unknown @ 100:34
+.x.RANK_VALUES:	! DEFi #<B>
+RANK_VALUES:	CNST *.x.RANK_VALUES	; signature array RANK_VALUES[] : unknown @ 100:1
 	DATA #0 #0 #0 #30 #50 #60 #60 #50 #30 #0 #0 #0
-MAX_TARGET_SQUARES:	! DEFi #32	; signature const MAX_TARGET_SQUARES : int @ 103:1
-MAX_MOVES:	! DEFi #256	; signature const MAX_MOVES : int @ 104:1
-MAX_CAPTURES:	! DEFi #32	; signature const MAX_CAPTURES : int @ 107:1
-INIT_BOARD:	CNST *BOARD_SIZE	; signature array INIT_BOARD[BOARD_SIZE] : unknown @ 107:39
+MAX_TARGET_SQUARES:	! DEFi #32	; signature const MAX_TARGET_SQUARES : int @ 102:1
+MAX_MOVES:	! DEFi #256	; signature const MAX_MOVES : int @ 103:1
+MAX_CAPTURES:	! DEFi #32	; signature const MAX_CAPTURES : int @ 104:1
+.x.INIT_BOARD:	! DEFi #BOARD_SIZE
+INIT_BOARD:	CNST *.x.INIT_BOARD	; signature array INIT_BOARD[BOARD_SIZE] : unknown @ 107:1
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
 	DATA #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
@@ -223,45 +228,54 @@ INIT_BOARD:	CNST *BOARD_SIZE	; signature array INIT_BOARD[BOARD_SIZE] : unknown 
 	DATi #32
 	DATs PRNBQK  prnbqk
 	DATi #32 #0
-PIECE_CHARS:	! DEFp &.s_PRNBQK_4d2	; signature const PIECE_CHARS : ptr @ 122:47
-PIECE_NAMES:	CNST *8	; signature array PIECE_NAMES[8] : unknown @ 123:31
+PIECE_CHARS:	! DEFp &.s_PRNBQK_4d2	; signature const PIECE_CHARS : ptr @ 122:1
+.x.PIECE_NAMES:	! DEFi #8
+PIECE_NAMES:	CNST *.x.PIECE_NAMES	; signature array PIECE_NAMES[8] : unknown @ 123:1
 	DATA &.s_PRNBQK_4d2:16 &.s_pawn_4d2 &.s_rook_4d3
 	DATA &.s_knight_4d4 &.s_bishop_4d5 &.s_queen_4d6
 	DATA &.s_king_4d7
-board:	GLOB *BOARD_SIZE	; signature array board[BOARD_SIZE] : unknown @ 125:31
-nextPiece:	GLOB *BOARD_SIZE	; signature array nextPiece[BOARD_SIZE] : unknown @ 126:35
-prevPiece:	GLOB *BOARD_SIZE	; signature array prevPiece[BOARD_SIZE] : unknown @ 127:35
+.x.board:	! DEFi #BOARD_SIZE
+board:	GLOB *.x.board	; signature array board[BOARD_SIZE] : unknown @ 125:1
+.x.nextPiece:	! DEFi #BOARD_SIZE
+nextPiece:	GLOB *.x.nextPiece	; signature array nextPiece[BOARD_SIZE] : unknown @ 126:1
+.x.prevPiece:	! DEFi #BOARD_SIZE
+prevPiece:	GLOB *.x.prevPiece	; signature array prevPiece[BOARD_SIZE] : unknown @ 127:1
 	GLOB *1
-xCapture:	DATi #0	; signature global xCapture : int @ 128:20
+xCapture:	DATi #0	; signature global xCapture : int @ 128:1
 	GLOB *1
-turnColor:	DATi #0	; signature global turnColor : int @ 129:21
+turnColor:	DATi #0	; signature global turnColor : int @ 129:1
 	GLOB *1
-boardHash:	DATi #0	; signature global boardHash : int @ 130:21
+boardHash:	DATi #0	; signature global boardHash : int @ 130:1
 	! MULi <B> #64 #1024
-HASH_TABLE_SIZE:	! DEFi <B>	; signature const HASH_TABLE_SIZE : int @ 148:1
+HASH_TABLE_SIZE:	! DEFi <B>	; signature const HASH_TABLE_SIZE : int @ 147:1
 	! XORi <B> #0 #-1
-HASH_MASK:	! DEFi <B>	; signature const HASH_MASK : int @ 150:1
+HASH_MASK:	! DEFi <B>	; signature const HASH_MASK : int @ 148:1
 	! MULi <B> #BOARD_SIZE #64
-pieceKeys:	GLOB *<B>	; signature array pieceKeys[] : unknown @ 150:40
-xCaptureKeys:	GLOB *256	; signature array xCaptureKeys[256] : unknown @ 151:31
+.x.pieceKeys:	! DEFi #<B>
+pieceKeys:	GLOB *.x.pieceKeys	; signature array pieceKeys[] : unknown @ 150:1
+.x.xCaptureKeys:	! DEFi #256
+xCaptureKeys:	GLOB *.x.xCaptureKeys	; signature array xCaptureKeys[256] : unknown @ 151:1
 	! ADDi <B> #WHITE #1
-colorKeys:	GLOB *<B>	; signature array colorKeys[] : unknown @ 152:34
-hashTable:	GLOB *HASH_TABLE_SIZE	; signature array hashTable[HASH_TABLE_SIZE] : unknown @ 153:40
+.x.colorKeys:	! DEFi #<B>
+colorKeys:	GLOB *.x.colorKeys	; signature array colorKeys[] : unknown @ 152:1
+.x.hashTable:	! DEFi #HASH_TABLE_SIZE
+hashTable:	GLOB *.x.hashTable	; signature array hashTable[HASH_TABLE_SIZE] : unknown @ 153:1
 	GLOB *1
-evalCounter:	DATi #0	; signature global evalCounter : int @ 154:27
+evalCounter:	DATi #0	; signature global evalCounter : int @ 154:1
 	! MULi <B> #HISTORY_SIZE #4
-history:	GLOB *<B>	; signature array history[] : unknown @ 155:39
+.x.history:	! DEFi #<B>
+history:	GLOB *.x.history	; signature array history[] : unknown @ 155:1
 	GLOB *1
-historyCount:	DATi #0	; signature global historyCount : int @ 156:28
+historyCount:	DATi #0	; signature global historyCount : int @ 156:1
 	GLOB *1
-minEvals:	DATi #10000	; signature global minEvals : int @ 157:28
+minEvals:	DATi #10000	; signature global minEvals : int @ 157:1
 	GLOB *1
-randPX:	DATi #123456789	; signature global randPX : int @ 159:30
+randPX:	DATi #123456789	; signature global randPX : int @ 159:1
 	GLOB *1
-randPY:	DATi #362436069	; signature global randPY : int @ 160:30
+randPY:	DATi #362436069	; signature global randPY : int @ 160:1
 
 ;-----------------------------------------------------------------------------
-nextRandom:	FUNC	; signature func nextRandom() -> int @ 162:21
+nextRandom:	FUNC	; signature func nextRandom() -> int @ 162:1
 	$y:	OUTi
 	$x:	LOCi
 	$t:	LOCi
@@ -282,7 +296,7 @@ nextRandom:	FUNC	; signature func nextRandom() -> int @ 162:21
 
 
 ;-----------------------------------------------------------------------------
-initGlobals:	FUNC	; signature func initGlobals() -> void @ 177:22
+initGlobals:	FUNC	; signature func initGlobals() -> void @ 177:1
 		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
@@ -305,7 +319,7 @@ initGlobals:	FUNC	; signature func initGlobals() -> void @ 177:22
 
 
 ;-----------------------------------------------------------------------------
-isOnBoard:	FUNC	; signature func isOnBoard(int square) -> int @ 195:20
+isOnBoard:	FUNC	; signature func isOnBoard(int square) -> int @ 195:1
 	$b:	OUTi
 	$square:	INPi
 ;-----------------------------------------------------------------------------
@@ -319,7 +333,7 @@ isOnBoard:	FUNC	; signature func isOnBoard(int square) -> int @ 195:20
 
 
 ;-----------------------------------------------------------------------------
-isValidColor:	FUNC	; signature func isValidColor(int color) -> int @ 204:23
+isValidColor:	FUNC	; signature func isValidColor(int color) -> int @ 204:1
 	$b:	OUTi
 	$color:	INPi
 ;-----------------------------------------------------------------------------
@@ -331,7 +345,7 @@ isValidColor:	FUNC	; signature func isValidColor(int color) -> int @ 204:23
 
 
 ;-----------------------------------------------------------------------------
-isValidMove:	FUNC	; signature func isValidMove(int move) -> int @ 213:22
+isValidMove:	FUNC	; signature func isValidMove(int move) -> int @ 213:1
 	$b:	OUTi
 	$move:	INPi
 ;-----------------------------------------------------------------------------
@@ -350,7 +364,7 @@ isValidMove:	FUNC	; signature func isValidMove(int move) -> int @ 213:22
 
 
 ;-----------------------------------------------------------------------------
-isValidPiece:	FUNC	; signature func isValidPiece(int piece) -> int @ 222:23
+isValidPiece:	FUNC	; signature func isValidPiece(int piece) -> int @ 222:1
 	$b:	OUTi
 	$piece:	INPi
 ;-----------------------------------------------------------------------------
@@ -369,7 +383,7 @@ isValidPiece:	FUNC	; signature func isValidPiece(int piece) -> int @ 222:23
 
 
 ;-----------------------------------------------------------------------------
-moveFrom:	FUNC	; signature func moveFrom(int move) -> int @ 232:19
+moveFrom:	FUNC	; signature func moveFrom(int move) -> int @ 232:1
 	$f:	OUTi
 	$move:	INPi
 ;-----------------------------------------------------------------------------
@@ -384,7 +398,7 @@ moveFrom:	FUNC	; signature func moveFrom(int move) -> int @ 232:19
 
 
 ;-----------------------------------------------------------------------------
-moveTo:	FUNC	; signature func moveTo(int move) -> int @ 239:17
+moveTo:	FUNC	; signature func moveTo(int move) -> int @ 239:1
 	$t:	OUTi
 	$move:	INPi
 ;-----------------------------------------------------------------------------
@@ -399,7 +413,7 @@ moveTo:	FUNC	; signature func moveTo(int move) -> int @ 239:17
 
 
 ;-----------------------------------------------------------------------------
-makeMove:	FUNC	; signature func makeMove(int fromCol, int fromRow, int toCol, int toRow) -> int @ 246:19
+makeMove:	FUNC	; signature func makeMove(int fromCol, int fromRow, int toCol, int toRow) -> int @ 246:1
 	$m:	OUTi
 	$fromCol:	INPi
 	$fromRow:	INPi
@@ -420,7 +434,7 @@ makeMove:	FUNC	; signature func makeMove(int fromCol, int fromRow, int toCol, in
 
 
 ;-----------------------------------------------------------------------------
-switchColor:	FUNC	; signature func switchColor(int color) -> int @ 252:22
+switchColor:	FUNC	; signature func switchColor(int color) -> int @ 252:1
 	$c:	OUTi
 	$color:	INPi
 ;-----------------------------------------------------------------------------
@@ -429,19 +443,21 @@ switchColor:	FUNC	; signature func switchColor(int color) -> int @ 252:22
 
 
 ;-----------------------------------------------------------------------------
-checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 258:25
+checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 258:1
 	$b:	OUTi
 	! IORi <B> #BLACK #WHITE
 	! ADDi <B> <B> #1
-	! IORi <B> #BLACK #WHITE
-	! ADDi <B> <B> #1
+	! IORi <A> #BLACK #WHITE
+	! ADDi <A> <A> #1
 	$color:	LOCi
 	$h:	LOCi
 	$i:	LOCi
 	$frm:	LOCi
 	$p:	LOCi
-	$counts:	LOCA *<B>
-	$countsAgain:	LOCA *<B>
+.x.checkInvariant.counts:	! DEFi #<B>
+	$counts:	LOCA *.x.checkInvariant.counts
+.x.checkInvariant.countsAgain:	! DEFi #<A>
+	$countsAgain:	LOCA *.x.checkInvariant.countsAgain
 ;-----------------------------------------------------------------------------
 		! EQUi #DEBUG #0 @.a0	; assert((int) isValidColor(global turnColor) != FALSE)
 		PEEK %1 &turnColor 
@@ -461,8 +477,8 @@ checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 258:25
 	.a2:	NOOP
 		! EQUi #DEBUG #0 @.a4	; assert((int) isOnBoard(global xCapture & ~128) != FALSE)
 		PEEK %1 &xCapture 
-		! XORi <B> #128 #-1
-		ANDi %1 %1 <B>
+		! XORi <A> #128 #-1
+		ANDi %1 %1 <A>
 		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ 267:50
 		NEQi %0 #FALSE @.a4
 		MOVp %1 &.a_intisO_4d5 
@@ -472,32 +488,32 @@ checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 258:25
 		EQUi %0 #0 @.f5
 		! EQUi #DEBUG #0 @.a6	; assert(((int) global board[global xCapture & ~CASTLING_MASK] & PIECE_AND_MOVED_MASK) == (ROOK | MOVED_MASK))
 		PEEK %0 &xCapture 
-		! XORi <B> #CASTLING_MASK #-1
-		ANDi %0 %0 <B>
+		! XORi <A> #CASTLING_MASK #-1
+		ANDi %0 %0 <A>
 		PEEK %0 &board %0
 		ANDi %0 %0 #PIECE_AND_MOVED_MASK
-		! IORi <B> #ROOK #MOVED_MASK
-		EQUi %0 <B> @.a6
+		! IORi <A> #ROOK #MOVED_MASK
+		EQUi %0 <A> @.a6
 		MOVp %1 &.a_intglo_4d6 
 		CALL ^assertFail %0 *1
 	.a6:	NOOP
 		! EQUi #DEBUG #0 @.a7	; assert(((int) global board[(global xCapture & ~CASTLING_MASK) - 1] & PIECE_AND_MOVED_MASK) == (KING | MOVED_MASK)
 		PEEK %0 &xCapture 
-		! XORi <B> #CASTLING_MASK #-1
-		ANDi %0 %0 <B>
+		! XORi <A> #CASTLING_MASK #-1
+		ANDi %0 %0 <A>
 		SUBi %0 %0 #1
 		PEEK %0 &board %0
 		ANDi %0 %0 #PIECE_AND_MOVED_MASK
-		! IORi <B> #KING #MOVED_MASK
-		EQUi %0 <B> @.e9
+		! IORi <A> #KING #MOVED_MASK
+		EQUi %0 <A> @.e9
 		PEEK %0 &xCapture 
-		! XORi <B> #CASTLING_MASK #-1
-		ANDi %0 %0 <B>
+		! XORi <A> #CASTLING_MASK #-1
+		ANDi %0 %0 <A>
 		ADDi %0 %0 #1
 		PEEK %0 &board %0
 		ANDi %0 %0 #PIECE_AND_MOVED_MASK
-		! IORi <B> #KING #MOVED_MASK
-		EQUi %0 <B> @.e9
+		! IORi <A> #KING #MOVED_MASK
+		EQUi %0 <A> @.e9
 		MOVp %1 &.a_intglo_4d7 
 		CALL ^assertFail %0 *1
 	.a7:	GOTO @.e9  	; } else 
@@ -517,16 +533,16 @@ checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 258:25
 		! EQUi #DEBUG #0 @.a14	; assert((int) global board[global xCapture + STRIDE] == (WHITE | PAWN | MOVED_MASK)
 		PEEK %0 &xCapture 
 		ADDi %0 %0 #STRIDE
-		! IORi <B> #WHITE #PAWN
+		! IORi <A> #WHITE #PAWN
 		PEEK %0 &board %0
-		! IORi <B> <B> #MOVED_MASK
-		EQUi %0 <B> @.a14
+		! IORi <A> <A> #MOVED_MASK
+		EQUi %0 <A> @.a14
 		PEEK %0 &xCapture 
 		SUBi %0 %0 #STRIDE
-		! IORi <B> #BLACK #PAWN
+		! IORi <A> #BLACK #PAWN
 		PEEK %0 &board %0
-		! IORi <B> <B> #MOVED_MASK
-		EQUi %0 <B> @.a14
+		! IORi <A> <A> #MOVED_MASK
+		EQUi %0 <A> @.a14
 		MOVp %1 &.a_intglo_4d9 
 		CALL ^assertFail %0 *1
 	.a14:	NOOP
@@ -614,7 +630,7 @@ checkInvariant:	FUNC	; signature func checkInvariant() -> int @ 258:25
 
 
 ;-----------------------------------------------------------------------------
-putPiece:	FUNC	; signature func putPiece(int square, int piece) -> void @ 314:19
+putPiece:	FUNC	; signature func putPiece(int square, int piece) -> void @ 314:1
 		PARA *1
 	$square:	INPi
 	$piece:	INPi
@@ -658,7 +674,7 @@ putPiece:	FUNC	; signature func putPiece(int square, int piece) -> void @ 314:19
 
 
 ;-----------------------------------------------------------------------------
-liftPiece:	FUNC	; signature func liftPiece(int square) -> void @ 331:20
+liftPiece:	FUNC	; signature func liftPiece(int square) -> void @ 331:1
 		PARA *1
 	$square:	INPi
 	$piece:	LOCi
@@ -692,7 +708,7 @@ liftPiece:	FUNC	; signature func liftPiece(int square) -> void @ 331:20
 
 
 ;-----------------------------------------------------------------------------
-movePiece:	FUNC	; signature func movePiece(int frm, int t, int newPiece) -> void @ 346:20
+movePiece:	FUNC	; signature func movePiece(int frm, int t, int newPiece) -> void @ 346:1
 		PARA *1
 	$frm:	INPi
 	$t:	INPi
@@ -762,7 +778,7 @@ movePiece:	FUNC	; signature func movePiece(int frm, int t, int newPiece) -> void
 
 
 ;-----------------------------------------------------------------------------
-restart:	FUNC	; signature func restart() -> void @ 368:18
+restart:	FUNC	; signature func restart() -> void @ 368:1
 		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
@@ -801,7 +817,7 @@ restart:	FUNC	; signature func restart() -> void @ 368:18
 
 
 ;-----------------------------------------------------------------------------
-squareCapturesCastlingKing:	FUNC	; signature func squareCapturesCastlingKing(int square) -> int @ 391:37
+squareCapturesCastlingKing:	FUNC	; signature func squareCapturesCastlingKing(int square) -> int @ 391:1
 	$b:	OUTi
 	$square:	INPi
 ;-----------------------------------------------------------------------------
@@ -819,7 +835,7 @@ squareCapturesCastlingKing:	FUNC	; signature func squareCapturesCastlingKing(int
 
 
 ;-----------------------------------------------------------------------------
-squareCapturesKing:	FUNC	; signature func squareCapturesKing(int square) -> int @ 407:29
+squareCapturesKing:	FUNC	; signature func squareCapturesKing(int square) -> int @ 407:1
 	$b:	OUTi
 	$square:	INPi
 ;-----------------------------------------------------------------------------
@@ -841,7 +857,7 @@ squareCapturesKing:	FUNC	; signature func squareCapturesKing(int square) -> int 
 
 
 ;-----------------------------------------------------------------------------
-doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> int @ 432:17
+doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> int @ 432:1
 	$score:	OUTi
 	$frm:	INPi
 	$t:	INPi
@@ -895,36 +911,36 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		SUBi $score %0 #4
 		POKE &xCapture #0 	; global xCapture = 0
 		SWCH $oldPiece *MAX_PIECE_AND_MOVED_VALUE @.s7	; switch (oldPiece == 0 to MAX_PIECE_AND_MOVED_VALUE) 
-		! IORi <B> #KING #WHITE	; case KING | WHITE
-	.s7#<B>:	NOOP
-		! ADDi <B> #RANK_1 #7	; switch (t == RANK_1 + 3 to RANK_1 + 7 + 1) 
-		! ADDi <A> #RANK_1 #3
-		! ADDi <B> <B> #1
-		! SUBi <B> <B> <A>
-		SUBi %0 $t <A>
-		SWCH %0 *<B> @.s9
-		! ADDi <B> #RANK_1 #3	; case RANK_1 + 3
-		! SUBi <B> <B> <A>
-	.s9#<B>:	ADDi %1 #RANK_1 #1	; movePiece(RANK_1 + 1, RANK_1 + 4, ROOK | WHITE | MOVED_MASK)
+		! IORi <A> #KING #WHITE	; case KING | WHITE
+	.s7#<A>:	NOOP
+		! ADDi <A> #RANK_1 #7	; switch (t == RANK_1 + 3 to RANK_1 + 7 + 1) 
+		! ADDi <B> #RANK_1 #3
+		! ADDi <A> <A> #1
+		! SUBi <A> <A> <B>
+		SUBi %0 $t <B>
+		SWCH %0 *<A> @.s9
+		! ADDi <A> #RANK_1 #3	; case RANK_1 + 3
+		! SUBi <A> <A> <B>
+	.s9#<A>:	ADDi %1 #RANK_1 #1	; movePiece(RANK_1 + 1, RANK_1 + 4, ROOK | WHITE | MOVED_MASK)
 		ADDi %2 #RANK_1 #4
-		! IORi <B> #ROOK #WHITE
-		IORi %3 <B> #MOVED_MASK
+		! IORi <A> #ROOK #WHITE
+		IORi %3 <A> #MOVED_MASK
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 455:66
-		! ADDi <B> #RANK_1 #4	; global xCapture = (RANK_1 + 4) | CASTLING_MASK
-		! IORi <B> <B> #CASTLING_MASK
-		POKE &xCapture <B> 
+		! ADDi <A> #RANK_1 #4	; global xCapture = (RANK_1 + 4) | CASTLING_MASK
+		! IORi <A> <A> #CASTLING_MASK
+		POKE &xCapture <A> 
 		ADDi $score $score #CASTLING_SCORE	; score = score + CASTLING_SCORE
 		GOTO @.e8  	; }
-		! ADDi <B> #RANK_1 #7	; case RANK_1 + 7
-		! SUBi <B> <B> <A>
-	.s9#<B>:	ADDi %1 #RANK_1 #8	; movePiece(RANK_1 + 8, RANK_1 + 6, ROOK | WHITE | MOVED_MASK)
+		! ADDi <A> #RANK_1 #7	; case RANK_1 + 7
+		! SUBi <A> <A> <B>
+	.s9#<A>:	ADDi %1 #RANK_1 #8	; movePiece(RANK_1 + 8, RANK_1 + 6, ROOK | WHITE | MOVED_MASK)
 		ADDi %2 #RANK_1 #6
-		! IORi <B> #ROOK #WHITE
-		IORi %3 <B> #MOVED_MASK
+		! IORi <A> #ROOK #WHITE
+		IORi %3 <A> #MOVED_MASK
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 464:66
-		! ADDi <B> #RANK_1 #6	; global xCapture = (RANK_1 + 6) | CASTLING_MASK
-		! IORi <B> <B> #CASTLING_MASK
-		POKE &xCapture <B> 
+		! ADDi <A> #RANK_1 #6	; global xCapture = (RANK_1 + 6) | CASTLING_MASK
+		! IORi <A> <A> #CASTLING_MASK
+		POKE &xCapture <A> 
 		ADDi $score $score #CASTLING_SCORE	; score = score + CASTLING_SCORE
 		GOTO @.e8  	; }
 	.s9:	DIVi %0 $t #STRIDE	; score = score + (int) global RANK_VALUES[t / STRIDE] - (int) global RANK_VALUES[frm / STRIDE]
@@ -934,36 +950,36 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		PEEK %1 &RANK_VALUES %1
 		SUBi $score %0 %1
 	.e10:	GOTO @.e8  	; }
-		! IORi <A> #KING #BLACK	; case KING | BLACK
-	.s7#<A>:	NOOP
-		! ADDi <A> #RANK_8 #7	; switch (t == RANK_8 + 3 to RANK_8 + 7 + 1) 
-		! ADDi <B> #RANK_8 #3
-		! ADDi <A> <A> #1
-		! SUBi <A> <A> <B>
-		SUBi %0 $t <B>
-		SWCH %0 *<A> @.s11
-		! ADDi <A> #RANK_8 #3	; case RANK_8 + 3
-		! SUBi <A> <A> <B>
-	.s11#<A>:	ADDi %1 #RANK_8 #1	; movePiece(RANK_8 + 1, RANK_8 + 4, ROOK | BLACK | MOVED_MASK)
+		! IORi <B> #KING #BLACK	; case KING | BLACK
+	.s7#<B>:	NOOP
+		! ADDi <B> #RANK_8 #7	; switch (t == RANK_8 + 3 to RANK_8 + 7 + 1) 
+		! ADDi <A> #RANK_8 #3
+		! ADDi <B> <B> #1
+		! SUBi <B> <B> <A>
+		SUBi %0 $t <A>
+		SWCH %0 *<B> @.s11
+		! ADDi <B> #RANK_8 #3	; case RANK_8 + 3
+		! SUBi <B> <B> <A>
+	.s11#<B>:	ADDi %1 #RANK_8 #1	; movePiece(RANK_8 + 1, RANK_8 + 4, ROOK | BLACK | MOVED_MASK)
 		ADDi %2 #RANK_8 #4
-		! IORi <A> #ROOK #BLACK
-		IORi %3 <A> #MOVED_MASK
+		! IORi <B> #ROOK #BLACK
+		IORi %3 <B> #MOVED_MASK
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 482:66
-		! ADDi <A> #RANK_8 #4	; global xCapture = (RANK_8 + 4) | CASTLING_MASK
-		! IORi <A> <A> #CASTLING_MASK
-		POKE &xCapture <A> 
+		! ADDi <B> #RANK_8 #4	; global xCapture = (RANK_8 + 4) | CASTLING_MASK
+		! IORi <B> <B> #CASTLING_MASK
+		POKE &xCapture <B> 
 		ADDi $score $score #CASTLING_SCORE	; score = score + CASTLING_SCORE
 		GOTO @.e8  	; }
-		! ADDi <A> #RANK_8 #7	; case RANK_8 + 7
-		! SUBi <A> <A> <B>
-	.s11#<A>:	ADDi %1 #RANK_8 #8	; movePiece(RANK_8 + 8, RANK_8 + 6, ROOK | BLACK | MOVED_MASK)
+		! ADDi <B> #RANK_8 #7	; case RANK_8 + 7
+		! SUBi <B> <B> <A>
+	.s11#<B>:	ADDi %1 #RANK_8 #8	; movePiece(RANK_8 + 8, RANK_8 + 6, ROOK | BLACK | MOVED_MASK)
 		ADDi %2 #RANK_8 #6
-		! IORi <A> #ROOK #BLACK
-		IORi %3 <A> #MOVED_MASK
+		! IORi <B> #ROOK #BLACK
+		IORi %3 <B> #MOVED_MASK
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 491:66
-		! ADDi <A> #RANK_8 #6	; global xCapture = (RANK_8 + 6) | CASTLING_MASK
-		! IORi <A> <A> #CASTLING_MASK
-		POKE &xCapture <A> 
+		! ADDi <B> #RANK_8 #6	; global xCapture = (RANK_8 + 6) | CASTLING_MASK
+		! IORi <B> <B> #CASTLING_MASK
+		POKE &xCapture <B> 
 		ADDi $score $score #CASTLING_SCORE	; score = score + CASTLING_SCORE
 		GOTO @.e8  	; }
 	.s11:	DIVi %0 $t #STRIDE	; score = score + (int) global RANK_VALUES[t / STRIDE] - (int) global RANK_VALUES[frm / STRIDE]
@@ -973,15 +989,15 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		PEEK %1 &RANK_VALUES %1
 		SUBi $score %0 %1
 	.e12:	GOTO @.e8  	; }
-		! IORi <B> #PAWN #WHITE	; case PAWN | WHITE | MOVED_MASK
-		! IORi <B> <B> #MOVED_MASK
-	.s7#<B>:	NEQi $t $oldXCapture @.f13	; if (t == oldXCapture) 
+		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+	.s7#<A>:	NEQi $t $oldXCapture @.f13	; if (t == oldXCapture) 
 		! EQUi #DEBUG #0 @.a14	; assert((int) global board[t - STRIDE] == (PAWN | BLACK | MOVED_MASK))
 		SUBi %0 $t #STRIDE
-		! IORi <B> #PAWN #BLACK
+		! IORi <A> #PAWN #BLACK
 		PEEK %0 &board %0
-		! IORi <B> <B> #MOVED_MASK
-		EQUi %0 <B> @.a14
+		! IORi <A> <A> #MOVED_MASK
+		EQUi %0 <A> @.a14
 		MOVp %1 &.a_intglo_4ed 
 		CALL ^assertFail %0 *1
 	.a14:	SUBi %1 $t #STRIDE	; liftPiece(t - STRIDE)
@@ -990,23 +1006,23 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		ADDi $score %0 #PAWN_VALUE
 		GOTO @.e8  	; } else if (t >= RANK_8) 
 	.f13:	LSSi $t #RANK_8 @.f16	; if (t >= RANK_8) 
-		! IORi <B> #QUEEN #WHITE	; newPiece = QUEEN | WHITE | MOVED_MASK
-		! IORi <B> <B> #MOVED_MASK
-		MOVi $newPiece <B> 
+		! IORi <A> #QUEEN #WHITE	; newPiece = QUEEN | WHITE | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+		MOVi $newPiece <A> 
 		ADDi $score $score #PROMOTION_SCORE	; score = score + PROMOTION_SCORE
 		GOTO @.e8  	; } else 
 	.f16:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
 	.e17:	NOOP
 	.e15:	GOTO @.e8  	; }
-		! IORi <B> #PAWN #BLACK	; case PAWN | BLACK | MOVED_MASK
-		! IORi <B> <B> #MOVED_MASK
-	.s7#<B>:	NEQi $t $oldXCapture @.f18	; if (t == oldXCapture) 
+		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+	.s7#<A>:	NEQi $t $oldXCapture @.f18	; if (t == oldXCapture) 
 		! EQUi #DEBUG #0 @.a19	; assert((int) global board[t + STRIDE] == (PAWN | WHITE | MOVED_MASK))
 		ADDi %0 $t #STRIDE
-		! IORi <B> #PAWN #WHITE
+		! IORi <A> #PAWN #WHITE
 		PEEK %0 &board %0
-		! IORi <B> <B> #MOVED_MASK
-		EQUi %0 <B> @.a19
+		! IORi <A> <A> #MOVED_MASK
+		EQUi %0 <A> @.a19
 		MOVp %1 &.a_intglo_4ee 
 		CALL ^assertFail %0 *1
 	.a19:	ADDi %1 $t #STRIDE	; liftPiece(t + STRIDE)
@@ -1015,23 +1031,23 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		ADDi $score %0 #PAWN_VALUE
 		GOTO @.e8  	; } else if (t < RANK_2) 
 	.f18:	GEQi $t #RANK_2 @.f21	; if (t < RANK_2) 
-		! IORi <B> #QUEEN #BLACK	; newPiece = QUEEN | BLACK | MOVED_MASK
-		! IORi <B> <B> #MOVED_MASK
-		MOVi $newPiece <B> 
+		! IORi <A> #QUEEN #BLACK	; newPiece = QUEEN | BLACK | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+		MOVi $newPiece <A> 
 		ADDi $score $score #PROMOTION_SCORE	; score = score + PROMOTION_SCORE
 		GOTO @.e8  	; } else 
 	.f21:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
 	.e22:	NOOP
 	.e20:	GOTO @.e8  	; }
-		! IORi <B> #PAWN #WHITE	; case PAWN | WHITE
-	.s7#<B>:	LSSi $t #RANK_4 @.f23	; if (t >= RANK_4) 
+		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE
+	.s7#<A>:	LSSi $t #RANK_4 @.f23	; if (t >= RANK_4) 
 		SUBi %0 $t #STRIDE	; global xCapture = t - STRIDE
 		POKE &xCapture %0 
 		ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
 	.f23:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
 		GOTO @.e8  	; }
-		! IORi <B> #PAWN #BLACK	; case PAWN | BLACK
-	.s7#<B>:	GEQi $t #RANK_6 @.f24	; if (t < RANK_6) 
+		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK
+	.s7#<A>:	GEQi $t #RANK_6 @.f24	; if (t < RANK_6) 
 		ADDi %0 $t #STRIDE	; global xCapture = t + STRIDE
 		POKE &xCapture %0 
 		ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
@@ -1050,19 +1066,19 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		MOVi %2 $t 
 		IORi %3 $newPiece #MOVED_MASK
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 573:42
-		! IORi <B> #PIECE_MASK #COLOR_MASK	; switch ((captured & (PIECE_MASK | COLOR_MASK)) == 0 to MAX_PIECE_AND_MOVED_VALUE) 
-		ANDi %0 $captured <B>
+		! IORi <A> #PIECE_MASK #COLOR_MASK	; switch ((captured & (PIECE_MASK | COLOR_MASK)) == 0 to MAX_PIECE_AND_MOVED_VALUE) 
+		ANDi %0 $captured <A>
 		SWCH %0 *MAX_PIECE_AND_MOVED_VALUE @.s26
 	.s26#EMPTY:	GOTO @.e27  	; 
-		! IORi <B> #PAWN #WHITE	; case PAWN | WHITE
-	.s26#<B>:	DIVi %0 $t #STRIDE	; score = score + PAWN_VALUE + (t / STRIDE - 3) * PAWN_ADVANCE_SCORE
+		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE
+	.s26#<A>:	DIVi %0 $t #STRIDE	; score = score + PAWN_VALUE + (t / STRIDE - 3) * PAWN_ADVANCE_SCORE
 		SUBi %0 %0 #3
 		ADDi %1 $score #PAWN_VALUE
 		MULi %0 %0 #PAWN_ADVANCE_SCORE
 		ADDi $score %1 %0
 		GOTO @.e27  	; }
-		! IORi <B> #PAWN #BLACK	; case PAWN | BLACK
-	.s26#<B>:	DIVi %1 $t #STRIDE	; score = score + PAWN_VALUE + (8 - t / STRIDE) * PAWN_ADVANCE_SCORE
+		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK
+	.s26#<A>:	DIVi %1 $t #STRIDE	; score = score + PAWN_VALUE + (8 - t / STRIDE) * PAWN_ADVANCE_SCORE
 		SUBi %1 #8 %1
 		ADDi %0 $score #PAWN_VALUE
 		MULi %1 %1 #PAWN_ADVANCE_SCORE
@@ -1086,7 +1102,7 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 
 
 ;-----------------------------------------------------------------------------
-undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> void @ 603:19
+undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> void @ 603:1
 		PARA *1
 	$frm:	INPi
 	$t:	INPi
@@ -1144,66 +1160,66 @@ undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captu
 		MOVi %2 $captured 
 		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ 617:24
 	.f7:	SWCH $oldPiece *MAX_PIECE_AND_MOVED_VALUE @.s8	; switch (oldPiece == 0 to MAX_PIECE_AND_MOVED_VALUE) 
-		! IORi <B> #KING #WHITE	; case KING | WHITE
-	.s8#<B>:	NOOP
-		! ADDi <B> #RANK_1 #7	; switch (t == RANK_1 + 3 to RANK_1 + 7 + 1) 
-		! ADDi <A> #RANK_1 #3
-		! ADDi <B> <B> #1
-		! SUBi <B> <B> <A>
-		SUBi %0 $t <A>
-		SWCH %0 *<B> @.s10
-		! ADDi <B> #RANK_1 #3	; case RANK_1 + 3
-		! SUBi <B> <B> <A>
-	.s10#<B>:	ADDi %1 #RANK_1 #4	; movePiece(RANK_1 + 4, RANK_1 + 1, ROOK | WHITE)
+		! IORi <A> #KING #WHITE	; case KING | WHITE
+	.s8#<A>:	NOOP
+		! ADDi <A> #RANK_1 #7	; switch (t == RANK_1 + 3 to RANK_1 + 7 + 1) 
+		! ADDi <B> #RANK_1 #3
+		! ADDi <A> <A> #1
+		! SUBi <A> <A> <B>
+		SUBi %0 $t <B>
+		SWCH %0 *<A> @.s10
+		! ADDi <A> #RANK_1 #3	; case RANK_1 + 3
+		! SUBi <A> <A> <B>
+	.s10#<A>:	ADDi %1 #RANK_1 #4	; movePiece(RANK_1 + 4, RANK_1 + 1, ROOK | WHITE)
 		ADDi %2 #RANK_1 #1
 		IORi %3 #ROOK #WHITE
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 627:53
 		GOTO @.e9  	; }
-		! ADDi <B> #RANK_1 #7	; case RANK_1 + 7
-		! SUBi <B> <B> <A>
-	.s10#<B>:	ADDi %1 #RANK_1 #6	; movePiece(RANK_1 + 6, RANK_1 + 8, ROOK | WHITE)
+		! ADDi <A> #RANK_1 #7	; case RANK_1 + 7
+		! SUBi <A> <A> <B>
+	.s10#<A>:	ADDi %1 #RANK_1 #6	; movePiece(RANK_1 + 6, RANK_1 + 8, ROOK | WHITE)
 		ADDi %2 #RANK_1 #8
 		IORi %3 #ROOK #WHITE
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 634:53
 	.s10:	NOOP
 	.e11:	GOTO @.e9  	; }
-		! IORi <A> #KING #BLACK	; case KING | BLACK
-	.s8#<A>:	NOOP
-		! ADDi <A> #RANK_8 #7	; switch (t == RANK_8 + 3 to RANK_8 + 7 + 1) 
-		! ADDi <B> #RANK_8 #3
-		! ADDi <A> <A> #1
-		! SUBi <A> <A> <B>
-		SUBi %0 $t <B>
-		SWCH %0 *<A> @.s12
-		! ADDi <A> #RANK_8 #3	; case RANK_8 + 3
-		! SUBi <A> <A> <B>
-	.s12#<A>:	ADDi %1 #RANK_8 #4	; movePiece(RANK_8 + 4, RANK_8 + 1, ROOK | BLACK)
+		! IORi <B> #KING #BLACK	; case KING | BLACK
+	.s8#<B>:	NOOP
+		! ADDi <B> #RANK_8 #7	; switch (t == RANK_8 + 3 to RANK_8 + 7 + 1) 
+		! ADDi <A> #RANK_8 #3
+		! ADDi <B> <B> #1
+		! SUBi <B> <B> <A>
+		SUBi %0 $t <A>
+		SWCH %0 *<B> @.s12
+		! ADDi <B> #RANK_8 #3	; case RANK_8 + 3
+		! SUBi <B> <B> <A>
+	.s12#<B>:	ADDi %1 #RANK_8 #4	; movePiece(RANK_8 + 4, RANK_8 + 1, ROOK | BLACK)
 		ADDi %2 #RANK_8 #1
 		IORi %3 #ROOK #BLACK
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 645:53
 		GOTO @.e9  	; }
-		! ADDi <A> #RANK_8 #7	; case RANK_8 + 7
-		! SUBi <A> <A> <B>
-	.s12#<A>:	ADDi %1 #RANK_8 #6	; movePiece(RANK_8 + 6, RANK_8 + 8, ROOK | BLACK)
+		! ADDi <B> #RANK_8 #7	; case RANK_8 + 7
+		! SUBi <B> <B> <A>
+	.s12#<B>:	ADDi %1 #RANK_8 #6	; movePiece(RANK_8 + 6, RANK_8 + 8, ROOK | BLACK)
 		ADDi %2 #RANK_8 #8
 		IORi %3 #ROOK #BLACK
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 652:53
 	.s12:	NOOP
 	.e13:	GOTO @.e9  	; }
-		! IORi <B> #PAWN #WHITE	; case PAWN | WHITE | MOVED_MASK
-		! IORi <B> <B> #MOVED_MASK
-	.s8#<B>:	NEQi $t $oldXCapture @.e9	; if (t == oldXCapture) 
+		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+	.s8#<A>:	NEQi $t $oldXCapture @.e9	; if (t == oldXCapture) 
 		SUBi %1 $t #STRIDE	; putPiece(t - STRIDE, PAWN | BLACK | MOVED_MASK)
-		! IORi <B> #PAWN #BLACK
-		IORi %2 <B> #MOVED_MASK
+		! IORi <A> #PAWN #BLACK
+		IORi %2 <A> #MOVED_MASK
 		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ 662:52
 		GOTO @.e9  	; }
-		! IORi <B> #PAWN #BLACK	; case PAWN | BLACK | MOVED_MASK
-		! IORi <B> <B> #MOVED_MASK
-	.s8#<B>:	NEQi $t $oldXCapture @.f15	; if (t == oldXCapture) 
+		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+	.s8#<A>:	NEQi $t $oldXCapture @.f15	; if (t == oldXCapture) 
 		ADDi %1 $t #STRIDE	; putPiece(t + STRIDE, PAWN | WHITE | MOVED_MASK)
-		! IORi <B> #PAWN #WHITE
-		IORi %2 <B> #MOVED_MASK
+		! IORi <A> #PAWN #WHITE
+		IORi %2 <A> #MOVED_MASK
 		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ 671:52
 	.f15:	NOOP
 	.s8:	NOOP
@@ -1219,7 +1235,7 @@ undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captu
 
 
 ;-----------------------------------------------------------------------------
-traceRBQ:	FUNC	; signature func traceRBQ(int color, int frm, int toCount, ptr tos, int start, int step) -> int @ 681:19
+traceRBQ:	FUNC	; signature func traceRBQ(int color, int frm, int toCount, ptr tos, int start, int step) -> int @ 681:1
 	$newToCount:	OUTi
 	$color:	INPi
 	$frm:	INPi
@@ -1263,7 +1279,7 @@ traceRBQ:	FUNC	; signature func traceRBQ(int color, int frm, int toCount, ptr to
 
 
 ;-----------------------------------------------------------------------------
-listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @ 708:20
+listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @ 708:1
 	$toCount:	OUTi
 	$color:	INPi
 	$frm:	INPi
@@ -1286,8 +1302,8 @@ listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @
 		SWCH %0 *MAX_PIECE_AND_MOVED_VALUE @.s1
 	.s1#PAWN:	MOVi $s #STRIDE 	; s = STRIDE
 		NEQi $color #BLACK @.f3	; if (color == BLACK) s = -STRIDE
-		! SUBi <B> #0 #STRIDE	; s = -STRIDE
-		MOVi $s <B> 
+		! SUBi <A> #0 #STRIDE	; s = -STRIDE
+		MOVi $s <A> 
 	.f3:	ADDi $t $frm $s	; t = frm + s
 		PEEK %0 &board $t	; if ((int) global board[t] == EMPTY) 
 		NEQi %0 #EMPTY @.f4
@@ -1425,10 +1441,11 @@ listMoves:	FUNC	; signature func listMoves(int color, int frm, ptr tos) -> int @
 
 
 ;-----------------------------------------------------------------------------
-canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 795:25
+canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 795:1
 	$b:	OUTi
 	$color:	INPi
-	$tos:	LOCA *MAX_TARGET_SQUARES
+.x.canCaptureKing.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.x.canCaptureKing.tos
 	$frm:	LOCi
 	$toCount:	LOCi
 	$i:	LOCi
@@ -1460,10 +1477,10 @@ canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 795:25
 	.e2:	NOOP
 	returnNow:	RETU   	; }
 
-; signature extern func search() -> unknown @ 815:23
+; signature extern func search() -> unknown @ 815:1
 
 ;-----------------------------------------------------------------------------
-findBestMove:	FUNC	; signature func findBestMove(int lowestScore, int alpha, int beta, int depth, int score, int movesCount, ptr moves) -> int @ 817:23
+findBestMove:	FUNC	; signature func findBestMove(int lowestScore, int alpha, int beta, int depth, int score, int movesCount, ptr moves) -> int @ 817:1
 	$bestMove:	OUTi
 	$lowestScore:	INPi
 	$alpha:	INPi
@@ -1540,7 +1557,7 @@ findBestMove:	FUNC	; signature func findBestMove(int lowestScore, int alpha, int
 
 
 ;-----------------------------------------------------------------------------
-searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int depth, int score, int firstMove) -> int @ 857:25
+searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int depth, int score, int firstMove) -> int @ 857:1
 	$bestMove:	OUTi
 	$alpha:	INPi
 	$beta:	INPi
@@ -1549,8 +1566,10 @@ searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int de
 	$firstMove:	INPi
 	$capturesCount:	LOCi
 	$frm:	LOCi
-	$moves:	LOCA *MAX_MOVES
-	$tos:	LOCA *MAX_TARGET_SQUARES
+.x.searchCaptures.moves:	! DEFi #MAX_MOVES
+	$moves:	LOCA *.x.searchCaptures.moves
+.x.searchCaptures.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.x.searchCaptures.tos
 	$myAlpha:	LOCi
 	$toCount:	LOCi
 	$i:	LOCi
@@ -1631,15 +1650,17 @@ searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int de
 
 
 ;-----------------------------------------------------------------------------
-searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int score, int firstMove) -> int @ 905:20
+searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int score, int firstMove) -> int @ 905:1
 	$bestMove:	OUTi
 	$alpha:	INPi
 	$beta:	INPi
 	$depth:	INPi
 	$score:	INPi
 	$firstMove:	INPi
-	$moves:	LOCA *MAX_MOVES
-	$tos:	LOCA *MAX_TARGET_SQUARES
+.x.searchAll.moves:	! DEFi #MAX_MOVES
+	$moves:	LOCA *.x.searchAll.moves
+.x.searchAll.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.x.searchAll.tos
 	$movesCount:	LOCi
 	$capturesCount:	LOCi
 	$frm:	LOCi
@@ -1661,9 +1682,9 @@ searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int s
 		MOVp %1 &.a_firstM_4f3 
 		CALL ^assertFail %0 *1
 	.a1:	LSSi $alpha $beta @.f3	; if (alpha >= beta) 
-		! SUBi <B> #MIN_SCORE #1	; bestMove = (MIN_SCORE - 1) << SCORE_SHIFT
-		! SHLi <B> <B> #SCORE_SHIFT
-		MOVi $bestMove <B> 
+		! SUBi <A> #MIN_SCORE #1	; bestMove = (MIN_SCORE - 1) << SCORE_SHIFT
+		! SHLi <A> <A> #SCORE_SHIFT
+		MOVi $bestMove <A> 
 		GOTO @.e4  	; } else 
 	.f3:	MOVi $movesCount #0 	; movesCount = 0
 		MOVi $capturesCount #0 	; capturesCount = 0
@@ -1739,7 +1760,7 @@ searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int s
 
 
 ;-----------------------------------------------------------------------------
-search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, int capturesOnly) -> int @ 972:17
+search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, int capturesOnly) -> int @ 972:1
 	$result:	OUTi
 	$alpha:	INPi
 	$beta:	INPi
@@ -1777,14 +1798,14 @@ search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, 
 		PEEK %2 &colorKeys %2
 		ADDi %1 %1 %2
 		ANDi $h %1 #HASH_MASK
-		! SUBi <B> #HASH_TABLE_SIZE #1	; hashIndex = (h & (HASH_TABLE_SIZE - 1))
-		ANDi $hashIndex $h <B>
-		! XORi <B> #MOVE_MASK #-1	; h = (h & ~MOVE_MASK)
-		ANDi $h $h <B>
+		! SUBi <A> #HASH_TABLE_SIZE #1	; hashIndex = (h & (HASH_TABLE_SIZE - 1))
+		ANDi $hashIndex $h <A>
+		! XORi <A> #MOVE_MASK #-1	; h = (h & ~MOVE_MASK)
+		ANDi $h $h <A>
 		PEEK $entry &hashTable $hashIndex	; entry = (int) global hashTable[hashIndex]
 		MOVi $firstMove #0 	; firstMove = 0
-		! XORi <B> #MOVE_MASK #-1	; if ((entry & ~MOVE_MASK) == h) 
-		ANDi %1 $entry <B>
+		! XORi <A> #MOVE_MASK #-1	; if ((entry & ~MOVE_MASK) == h) 
+		ANDi %1 $entry <A>
 		NEQi %1 $h @.f3
 		ANDi $firstMove $entry #MOVE_MASK	; firstMove = entry & MOVE_MASK
 	.f3:	EQUi $capturesOnly #FALSE @.f4	; if (capturesOnly != FALSE) 
@@ -1849,10 +1870,11 @@ search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, 
 
 
 ;-----------------------------------------------------------------------------
-executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1053:22
+executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1053:1
 	$status:	OUTi
 	$move:	INPi
-	$tos:	LOCA *MAX_TARGET_SQUARES
+.x.executeMove.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.x.executeMove.tos
 	$frm:	LOCi
 	$t:	LOCi
 	$oldPiece:	LOCi
@@ -1910,24 +1932,24 @@ executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1053:22
 		MOVi %4 #0 
 		MOVi %5 #FALSE 
 		CALL &search %0 *6	; expects search(int, int, int, int, int) -> int @ 1072:62
-		! ADDi <B> #CHECKMATE #1
-		! SUBi <B> <B> #IN_CHECK
+		! ADDi <A> #CHECKMATE #1
+		! SUBi <A> <A> #IN_CHECK
 		ANDi %0 %0 #MOVE_MASK
 		SUBi %0 %0 #IN_CHECK
-		SWCH %0 *<B> @.s9
+		SWCH %0 *<A> @.s9
 	.s9:	MOVi $status #VALID_MOVE 	; status = VALID_MOVE
 		GOTO @returnNow  	; goto returnNow
 		GOTO @.e10  	; }
-		! SUBi <B> #CHECKMATE #IN_CHECK	; case CHECKMATE
-	.s9#<B>:	MOVi $status #CHECKMATE 	; status = CHECKMATE
+		! SUBi <A> #CHECKMATE #IN_CHECK	; case CHECKMATE
+	.s9#<A>:	MOVi $status #CHECKMATE 	; status = CHECKMATE
 		GOTO @returnNow  	; goto returnNow
 		GOTO @.e10  	; }
-		! SUBi <B> #STALEMATE #IN_CHECK	; case STALEMATE
-	.s9#<B>:	MOVi $status #STALEMATE 	; status = STALEMATE
+		! SUBi <A> #STALEMATE #IN_CHECK	; case STALEMATE
+	.s9#<A>:	MOVi $status #STALEMATE 	; status = STALEMATE
 		GOTO @returnNow  	; goto returnNow
 		GOTO @.e10  	; }
-		! SUBi <B> #IN_CHECK #IN_CHECK	; case IN_CHECK
-	.s9#<B>:	MOVi %1 $frm 	; undoMove(frm, t, oldPiece, captured, oldXCapture)
+		! SUBi <A> #IN_CHECK #IN_CHECK	; case IN_CHECK
+	.s9#<A>:	MOVi %1 $frm 	; undoMove(frm, t, oldPiece, captured, oldXCapture)
 		MOVi %2 $t 
 		MOVi %3 $oldPiece 
 		MOVi %4 $captured 
@@ -1944,7 +1966,7 @@ executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1053:22
 
 
 ;-----------------------------------------------------------------------------
-getComputerMove:	FUNC	; signature func getComputerMove() -> int @ 1094:26
+getComputerMove:	FUNC	; signature func getComputerMove() -> int @ 1094:1
 	$move:	OUTi
 	$d:	LOCi
 	$m:	LOCi
@@ -1992,18 +2014,18 @@ getComputerMove:	FUNC	; signature func getComputerMove() -> int @ 1094:26
 	.a6:	ANDi $move $m #MOVE_MASK	; move = (m & MOVE_MASK)
 		RETU   	; }
 
-REDISPLAY_BOARD:	! DEFi #-1	; signature const REDISPLAY_BOARD : int @ 1121:1
-LET_COMPUTER_PLAY:	! DEFi #-2	; signature const LET_COMPUTER_PLAY : int @ 1122:1
-TAKE_BACK:	! DEFi #-3	; signature const TAKE_BACK : int @ 1123:1
-NEW_GAME:	! DEFi #-4	; signature const NEW_GAME : int @ 1124:1
-QUIT:	! DEFi #-5	; signature const QUIT : int @ 1125:1
-SYNTAX_ERROR:	! DEFi #-6	; signature const SYNTAX_ERROR : int @ 1126:1
-MATE:	! DEFi #-7	; signature const MATE : int @ 1127:1
-SET_MAXIMUM_LEVEL:	! DEFi #-97	; signature const SET_MAXIMUM_LEVEL : int @ 1128:1
-SET_MINIMUM_LEVEL:	! DEFi #-101	; signature const SET_MINIMUM_LEVEL : int @ 1130:1
+REDISPLAY_BOARD:	! DEFi #-1	; signature const REDISPLAY_BOARD : int @ 1120:1
+LET_COMPUTER_PLAY:	! DEFi #-2	; signature const LET_COMPUTER_PLAY : int @ 1121:1
+TAKE_BACK:	! DEFi #-3	; signature const TAKE_BACK : int @ 1122:1
+NEW_GAME:	! DEFi #-4	; signature const NEW_GAME : int @ 1123:1
+QUIT:	! DEFi #-5	; signature const QUIT : int @ 1124:1
+SYNTAX_ERROR:	! DEFi #-6	; signature const SYNTAX_ERROR : int @ 1125:1
+MATE:	! DEFi #-7	; signature const MATE : int @ 1126:1
+SET_MAXIMUM_LEVEL:	! DEFi #-97	; signature const SET_MAXIMUM_LEVEL : int @ 1127:1
+SET_MINIMUM_LEVEL:	! DEFi #-101	; signature const SET_MINIMUM_LEVEL : int @ 1128:1
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 1130:17
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 1130:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -2025,7 +2047,7 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 1130:17
 
 
 ;-----------------------------------------------------------------------------
-strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 1142:18
+strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 1142:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -2055,23 +2077,24 @@ strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 1142:18
 
 
 ;-----------------------------------------------------------------------------
-toupper:	FUNC	; signature func toupper(int c) -> int @ 1162:18
+toupper:	FUNC	; signature func toupper(int c) -> int @ 1162:1
 	$u:	OUTi
 	$c:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $u $c 	; u = c
 		LSSi $u #'a' @.f1	; if (u >= 'a' && u <= 'z') 
 		GRTi $u #'z' @.f1
-		! SUBi <B> #'a' #'A'	; u = u - ('a' - 'A')
-		SUBi $u $u <B>
+		! SUBi <A> #'a' #'A'	; u = u - ('a' - 'A')
+		SUBi $u $u <A>
 	.f1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-getUserMove:	FUNC	; signature func getUserMove() -> int @ 1171:22
+getUserMove:	FUNC	; signature func getUserMove() -> int @ 1171:1
 	$result:	OUTi
 	$level:	LOCi
-	$s:	LOCA *256
+.x.getUserMove.s:	! DEFi #256
+	$s:	LOCA *.x.getUserMove.s
 	$l:	LOCi
 	$fromCol:	LOCi
 	$fromRow:	LOCi
@@ -2172,13 +2195,14 @@ getUserMove:	FUNC	; signature func getUserMove() -> int @ 1171:22
 
 
 ;-----------------------------------------------------------------------------
-printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:21
+printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:1
 		PARA *1
 	$frm:	INPi
 	$t:	INPi
 	$y:	LOCi
 	$lastI:	LOCi
-	$buffer:	LOCA *2
+.x.printBoard.buffer:	! DEFi #2
+	$buffer:	LOCA *.x.printBoard.buffer
 	$i:	LOCi
 	$c:	LOCi
 	$x:	LOCi
@@ -2217,8 +2241,8 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:21
 		ADRL %1 $buffer *0	; output(buffer)
 		CALL ^output %0 *2	; expects output(ptr) -> unknown @ 1231:18
 		PEEK %0 &board $i	; c = (int) global PIECE_CHARS[(int) global board[i] & (PIECE_MASK | BLACK)]
-		! IORi <B> #PIECE_MASK #BLACK
-		ANDi %0 %0 <B>
+		! IORi <A> #PIECE_MASK #BLACK
+		ANDi %0 %0 <A>
 		PEEK $c #PIECE_CHARS %0
 		NEQi $c #' ' @.f11	; if (c == ' ' && ((x ^ y) & 1) == 1) c = '.'
 		XORi %0 $x $y
@@ -2254,7 +2278,7 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:21
 
 
 ;-----------------------------------------------------------------------------
-registerMove:	FUNC	; signature func registerMove(int move, int piece, int captured, int xCapture) -> void @ 1252:23
+registerMove:	FUNC	; signature func registerMove(int move, int piece, int captured, int xCapture) -> void @ 1252:1
 		PARA *1
 	$move:	INPi
 	$piece:	INPi
@@ -2293,7 +2317,7 @@ registerMove:	FUNC	; signature func registerMove(int move, int piece, int captur
 
 
 ;-----------------------------------------------------------------------------
-takeBackMove:	FUNC	; signature func takeBackMove() -> int @ 1269:23
+takeBackMove:	FUNC	; signature func takeBackMove() -> int @ 1269:1
 	$move:	OUTi
 	$i:	LOCi
 	$frm:	LOCi
@@ -2329,7 +2353,7 @@ takeBackMove:	FUNC	; signature func takeBackMove() -> int @ 1269:23
 
 
 ;-----------------------------------------------------------------------------
-setLevel:	FUNC	; signature func setLevel(int level) -> void @ 1285:19
+setLevel:	FUNC	; signature func setLevel(int level) -> void @ 1285:1
 		PARA *1
 	$level:	INPi
 	$i:	LOCi
@@ -2345,7 +2369,7 @@ setLevel:	FUNC	; signature func setLevel(int level) -> void @ 1285:19
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 1292:15
+main:	FUNC	; signature func main() -> void @ 1292:1
 		PARA *1
 	$lastFrom:	LOCi
 	$lastTo:	LOCi
@@ -2354,7 +2378,8 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 	$lastMove:	LOCi
 	$moveResult:	LOCi
 	$action:	LOCp
-	$buffer:	LOCA *256
+.x.main.buffer:	! DEFi #256
+	$buffer:	LOCA *.x.main.buffer
 	$lastCaptured:	LOCi
 	$lastXCapture:	LOCi
 	$p:	LOCp
@@ -2400,20 +2425,20 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 		NEQi $isComputersTurn #FALSE @.f5	; if (isComputersTurn == FALSE) 
 		CALL &getUserMove %0 *1	; expects getUserMove() -> int @ 1324:35
 		MOVi $lastMove %0 
-		! ADDi <B> #REDISPLAY_BOARD #1	; switch (lastMove == NEW_GAME to REDISPLAY_BOARD + 1) 
-		! SUBi <B> <B> #NEW_GAME
+		! ADDi <A> #REDISPLAY_BOARD #1	; switch (lastMove == NEW_GAME to REDISPLAY_BOARD + 1) 
+		! SUBi <A> <A> #NEW_GAME
 		SUBi %0 $lastMove #NEW_GAME
-		SWCH %0 *<B> @.s6
-		! SUBi <B> #REDISPLAY_BOARD #NEW_GAME	; case REDISPLAY_BOARD
-	.s6#<B>:	MOVi %1 $lastFrom 	; printBoard(lastFrom, lastTo)
+		SWCH %0 *<A> @.s6
+		! SUBi <A> #REDISPLAY_BOARD #NEW_GAME	; case REDISPLAY_BOARD
+	.s6#<A>:	MOVi %1 $lastFrom 	; printBoard(lastFrom, lastTo)
 		MOVi %2 $lastTo 
 		CALL &printBoard %0 *3	; expects printBoard(int, int) -> void @ 1327:35
 		GOTO @.e7  	; }
-		! SUBi <B> #LET_COMPUTER_PLAY #NEW_GAME	; case LET_COMPUTER_PLAY
-	.s6#<B>:	MOVi $isComputersTurn #TRUE 	; isComputersTurn = TRUE
+		! SUBi <A> #LET_COMPUTER_PLAY #NEW_GAME	; case LET_COMPUTER_PLAY
+	.s6#<A>:	MOVi $isComputersTurn #TRUE 	; isComputersTurn = TRUE
 		GOTO @.e7  	; }
-		! SUBi <B> #TAKE_BACK #NEW_GAME	; case TAKE_BACK
-	.s6#<B>:	CALL &takeBackMove %0 *1	; expects takeBackMove() -> int @ 1335:38
+		! SUBi <A> #TAKE_BACK #NEW_GAME	; case TAKE_BACK
+	.s6#<A>:	CALL &takeBackMove %0 *1	; expects takeBackMove() -> int @ 1335:38
 		MOVi $lastMove %0 
 		LEQi $lastMove #0 @.f8	; if (lastMove > 0) 
 		MOVi %1 $lastMove 	; lastFrom = (int) moveFrom(lastMove)
@@ -2429,8 +2454,8 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 1342:41
 		MOVi $lastMove #-1 	; lastMove = -1
 	.e9:	GOTO @.e7  	; }
-		! SUBi <B> #NEW_GAME #NEW_GAME	; case NEW_GAME
-	.s6#<B>:	CALL &restart %0 *1	; expects restart() -> void @ 1348:16
+		! SUBi <A> #NEW_GAME #NEW_GAME	; case NEW_GAME
+	.s6#<A>:	CALL &restart %0 *1	; expects restart() -> void @ 1348:16
 		MOVi $lastMove #0 	; lastMove = 0
 		MOVi $lastFrom #0 	; lastFrom = 0
 		MOVi $lastTo #0 	; lastTo = 0
@@ -2473,16 +2498,16 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 		MOVi %1 $lastMove 	; moveResult = (int) executeMove(lastMove)
 		CALL &executeMove %0 *2	; expects executeMove(int) -> int @ 1385:45
 		MOVi $moveResult %0 
-		! ADDi <B> #CHECKMATE #1	; switch (moveResult == VALID_MOVE to CHECKMATE + 1) 
-		! SUBi <B> <B> #VALID_MOVE
+		! ADDi <A> #CHECKMATE #1	; switch (moveResult == VALID_MOVE to CHECKMATE + 1) 
+		! SUBi <A> <A> #VALID_MOVE
 		SUBi %0 $moveResult #VALID_MOVE
-		SWCH %0 *<B> @.s16
-		! SUBi <B> #VALID_MOVE #VALID_MOVE	; case VALID_MOVE, CHECKMATE, STALEMATE
-	.s16#<B>:	NOOP
-		! SUBi <B> #CHECKMATE #VALID_MOVE
-	.s16#<B>:	NOOP
-		! SUBi <B> #STALEMATE #VALID_MOVE
-	.s16#<B>:	MOVi %1 $lastMove 	; registerMove(lastMove, lastPiece, lastCaptured, lastXCapture)
+		SWCH %0 *<A> @.s16
+		! SUBi <A> #VALID_MOVE #VALID_MOVE	; case VALID_MOVE, CHECKMATE, STALEMATE
+	.s16#<A>:	NOOP
+		! SUBi <A> #CHECKMATE #VALID_MOVE
+	.s16#<A>:	NOOP
+		! SUBi <A> #STALEMATE #VALID_MOVE
+	.s16#<A>:	MOVi %1 $lastMove 	; registerMove(lastMove, lastPiece, lastCaptured, lastXCapture)
 		MOVi %2 $lastPiece 
 		MOVi %3 $lastCaptured 
 		MOVi %4 $lastXCapture 
@@ -2492,8 +2517,8 @@ main:	FUNC	; signature func main() -> void @ 1292:15
 		GOTO @.e17  	; } else 
 	.f18:	MOVi $isComputersTurn #FALSE 	; isComputersTurn = FALSE
 	.e19:	GOTO @.e17  	; }
-		! SUBi <B> #IN_CHECK #VALID_MOVE	; case IN_CHECK
-	.s16#<B>:	MOVp %1 &.s_Kingin_4ee 	; output("King in check.\n")
+		! SUBi <A> #IN_CHECK #VALID_MOVE	; case IN_CHECK
+	.s16#<A>:	MOVp %1 &.s_Kingin_4ee 	; output("King in check.\n")
 		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 1397:33
 		MOVi $lastMove #-1 	; lastMove = -1
 		GOTO @.e17  	; }

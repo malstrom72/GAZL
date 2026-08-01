@@ -1,18 +1,23 @@
+/* Switch PARSING stress test: value lists, odd whitespace, `default` in the middle, char literals,
+   constant-expression cases, named constants, negative bounds and nesting. Every case value is inside
+   its switch range - `SWCH` only resolves entries 0..size-1, and a value below `from` folds to a
+   negative label like `.s0.-6` that the assembler rejects outright, so out-of-range cases are E444
+   and this file used to be exempt from the assemble gate because of them. */
 function x() locals int i, int j, int k {
 	switch(i == 0 to 10) {
 	case 0,1,2,3: j = i;
 	case 5: x();
 	default: i = j;
-	  case   11 , 33   :  k = j;
+	  case   6 , 8   :  k = j;
 	}
 }
 
-const int CONSTANT = 2949;
+const int CONSTANT = 29;
 function y() locals int i, array a[5] {
 	switch ((int) a[i] == 0 to 'a') { }
 	switch (i == 23+5 to 234 * 2) { }
-	switch (i == 4+1 to 9) { case 23+57, -1, CONSTANT: i=i+1234; case'y': ; case 4*CONSTANT: { i = i * 100; } }
-	switch (i == 10 to 100) { case 100: x(); default: ; case 200: i = i + 1; case 'zzz': i = (int) a[i]; }
+	switch (i == 4+1 to 130) { case 23+57, 5, CONSTANT: i=i+1234; case'y': ; case 4*CONSTANT: { i = i * 100; } }
+	switch (i == 10 to 100) { case 99: x(); default: ; case 20: i = i + 1; case 'a': i = (int) a[i]; }
 }
 
 extern native printInt;
@@ -39,7 +44,7 @@ locals int i, int a, int b, int c, int d
 
 	for (i = -5 to 20) {
 		switch (i == (MINUS_FIVE + 5) to 10+1) {
-			case -2: printInt(-2);
+			case 2: printInt(-2);
 			case 11-1: printInt(10);
 			case 'a'-'a': printInt(0);
 			default: {

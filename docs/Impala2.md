@@ -4,7 +4,7 @@
 > typed function pointers, import) plus the strict-expression rules and coded diagnostics are
 > implemented in the JSPEG compiler: VM-verified against fixtures in `tests/impala/sources/`, held to a
 > byte-identical golden gate, and fuzzed (`impala/fuzzImpala.js`). `--legacy` gates the strictness rules;
-> `impala build` drives import-as-linking with `export` and `--dead-strip`.
+> `impala compile` drives import-as-linking with `export` and `--dead-strip`.
 >
 > **Step 4 (multiple return values), destructuring, and passing/returning STRUCTS BY VALUE were
 > implemented and then deliberately parked for Impala 3.0** - the work is preserved on the
@@ -13,8 +13,13 @@
 > `sizeof`, whole-struct assignment and single named returns are all unaffected. See
 > [`docs/ParkedFeatures.md`](ParkedFeatures.md) for what is parked, where, and why.
 >
-> The per-step sections below are the design records; a few polish items remain (`.gazl` blob imports,
-> typed `extern function`, richer parse errors).
+> The per-step sections below are the design records. **Import cycles resolve in one direction only**: a
+> backwards cross-cycle reference needs a forward `extern`, because the declaration pre-pass ("collect
+> mode") was designed and then DEFERRED TO IMPALA 3.0 (2026-07-29) rather than held up 2.0 - `extern`
+> covers the function and global cases and adding the pre-pass later only removes the need for it, so
+> this is a relaxation waiting to happen, not a compatibility question. See [Cycles](#cycles) for the
+> rule and [Deferred to 3.0: collect mode](#deferred-to-30-collect-mode-the-declaration-pre-pass) for the
+> design. Smaller items left: `.gazl` blob imports, richer parse errors.
 
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),
@@ -31,6 +36,17 @@ These are the constraints every 2.0 feature is measured against.
    sacred. 2.0 adds no hidden optimization passes and no runtime machinery the programmer can't
    predict from the source. If a feature can't be expressed as a thin sugar over the GAZL a
    programmer would write by hand, it doesn't belong in 2.0.
+
+   **Corollary: the build has two stages, and the second one is not ours.** Impala compiles to GAZL
+   TEXT; that text is assembled on the END USER's machine at load, and the host can inject named
+   constant values at that moment. A hand-writing GAZL programmer freely references symbols the host
+   will define later, so a transliterator must pass them through. Therefore **a constant is not always
+   a number Impala knows**, and one `.gazl` artifact is *expected* to compile to different code under
+   different host conditions. This is the constraint most often violated by well-intentioned
+   hardening: 2.0 never demands a numeric value where a symbol would do, never folds a named constant
+   away, and never treats "unknown at Impala compile time" as an error. Checks that cannot be decided
+   at compile time get DEFERRED to assembly time, not abandoned and not guessed at. Specified in
+   [`docs/TwoStageConstants.md`](TwoStageConstants.md), which is normative for every feature below.
 
 2. **Types are a zero-cost compile-time overlay.** This is the spine of the whole release. Every
    type in 2.0 **erases to exactly the GAZL that 1.0 would emit.** Types exist so the *compiler*
@@ -80,11 +96,12 @@ The features are ordered by dependency, not ambition:
    per function since 1.0, and Impala never exposed it. Implemented, then PARKED for Impala 3.0
    (see [`docs/ParkedFeatures.md`](ParkedFeatures.md)); design record in
    [Step 4: Multiple return values](#step-4-multiple-return-values-parked).
-5. **Import** - sharing typed interfaces between units without textual copying. Implemented; design in
-   [Step 5: Import](#step-5-import-implemented).
+5. **Import** - sharing typed interfaces between units without textual copying. Implemented; full cycle
+   resolution deferred to 3.0. Design in [Step 5: Import](#step-5-import-implemented-except-cycles), rule
+   and design in [Deferred to 3.0: collect mode](#deferred-to-30-collect-mode-the-declaration-pre-pass).
 
 Cross-cutting decisions - strict expressions, the rejection of
-[compound assignment](#compound-assignment--rejected), and the [diagnostic format](#diagnostics) -
+[compound assignment](#compound-assignment---rejected), and the [diagnostic format](#diagnostics) -
 have their own sections below.
 Other long-standing gaps (richer `for`) are out of scope for this document and tracked separately.
 
@@ -154,7 +171,8 @@ function findSmallest(int n, int pointer vector) returns int j locals int i { /*
   `pointer int`, `pointer float`, and `pointer pointer` all have **stride 1 word**. Typed pointers
   therefore change pointer arithmetic **not at all** - `p + 3` is still three words. (Stride only
   stops being 1 when elements become multi-word, i.e. structs - which is precisely why structs come
-  later.)
+  later. A struct pointer does not do arithmetic at all: it moves by scaled subscript, `&p[[3]]`.
+  See the cost model below.)
 - **The compiler selects the typed instruction from the element type.** Reading `a[i]` where `a` is
   `int array` yields an `int` and emits the int-typed peek; where `a` is `float array` it yields a
   `float` and emits the float-typed peek. No cast required, and the result type flows into
@@ -465,7 +483,7 @@ it is a cost annotation with exact GAZL meaning):
 Combined with the existing markers, every memory access in an expression is visible in the source:
 
 > **Instruction count = marker count.** Each `global`, `*`, `->`, and `[]`-on-a-pointer costs one
-> load. Dots are free.
+> load. Each `[[ ]]` costs one load plus one `MULi`. Dots are free.
 
 ```impala
 f.cutoff                    // 0 loads - direct operand
@@ -477,6 +495,28 @@ head->next->next->value     // 3 loads - each hop visible
 
 (The one grandfathered exception: 1.0's `p[i]` PEEKs without a distinct marker vs `a[i]`'s local
 access - nailed by backward compatibility. New syntax is held to the stricter rule.)
+
+Structs are what makes a subscript able to cost more than one instruction, and that is exactly why
+they get their own bracket. `[i]` strides one word; `[[i]]` strides `sizeof(element)` and pays one
+`MULi` for it. Each is an error where the other is correct, so there is one legal spelling per access
+and the stride is never something you have to look up:
+
+```impala
+words[i]                    // 1 instruction  - stride 1
+voices[[i]]                 // 2 instructions - stride sizeof(Voice)
+&voices[[i]]                // the only way to move a Voice pointer
+```
+
+The residual multiply is the **floor**, not overhead: the address of element `i` of a 3-word struct
+genuinely is `base + i*3`, and no language or ISA can form it without a multiply. A constant index
+folds at assembly time (`! MULi`), so it costs nothing at run time - but **today that fold only fires
+for a bare decimal literal** (`impala.jspeg:2158` tests `/^#[0-9]+$/`). `bank[[2]]` folds to
+`! MULi <A> #2 #.z.S`; `bank[[K]]` for `const int K = 2`, `bank[[HOST_I]]`, `bank[[K + 1]]` and
+`p[[-1]]` all fall through to a RUNTIME `MULi` + `ADDp`, even though `! MULi` accepts every one of
+those operands (the compiler itself emits `! MULi <A> #HOST_N #.z.S` when sizing an array). Measured:
+identical programs differing only in `2` vs `K` assemble to code size 3 vs 5. See `docs/Impala2Review.md`,
+"the scaled subscript is spelled `[[ ]]`", for why arithmetic on a struct pointer is rejected rather
+than scaled.
 
 ### Verified lowering
 
@@ -494,8 +534,8 @@ MOVf $x  $f:1              ; x = f.resonance
 ; B) local struct array, dynamic index - GETL with the field offset folded into the
 ;    BASE OPERAND (precedent: UnitTest.gazl:794 "GETL i0 lArray:4 i1"). No ADDi.
 $voices: LOCA *64
-MULi %0 $i #8              ; i * sizeof(Filter) - the stride multiply
-GETL $x $voices:6 %0      ; x = voices[i].mode   (constant :6 rides the operand)
+MULi %0 $i #8              ; i * sizeof(Filter) - the stride multiply, marked by [[ ]]
+GETL $x $voices:6 %0      ; x = voices[[i]].mode   (constant :6 rides the operand)
 
 ; C) through a pointer - one real load, constant offset immediate
 PEEK $x $fp #6            ; x = fp->mode
@@ -555,7 +595,7 @@ working *for* us.
 - **By-value return** (`returns Filter out`): N `OUT` words - a struct return *is* a multiple return
   whose slots carry names and offsets. The callee writes `out.cutoff` as free direct `OUT`-slot
   access; the caller consumes it into a struct place, statement-level (`v = makeFilter(...)`), the
-  same restriction as `a = b`. **This makes [Step 4 (multiple return values)](#step-4-multiple-return-values-implemented)
+  same restriction as `a = b`. **This makes [Step 4 (multiple return values)](#step-4-multiple-return-values-parked)
   a prerequisite of struct returns** - same multi-`OUT` window layout, one implementation. By-value
   *parameters* need only `PARA` sections and can land without Step 4; by-value *returns* need it.
 - **Whole-struct assignment `a = b` is allowed, statement-level only.** It lowers to exactly one
@@ -759,15 +799,17 @@ scalars now, or as a named struct once Step 2 lands.
 
 ---
 
-## Step 5: Import (implemented)
+## Step 5: Import (implemented, except cycles)
 
-*(Implemented: `import "path"` + `impala build root.impala` walks the closure and compiles the
+*(Implemented: `import "path"` + `impala compile root.impala` walks the closure and compiles the
 concatenated units in one pass - cross-unit structs, struct/multi-value returns, and functypes all
 resolve with no header drift (visited-set dedups diamonds and breaks cycles). `export` marks
 host-visible symbols in the `; signature` metadata, and `--dead-strip` drops any FUNC/data block not
 reachable from an export. VM-verified in `tests/impala/sources/import/` and `tests/impala/sources/deadstrip/`.
 The one deviation from the design below: the builder concatenates and compiles the sources rather than
-emitting each unit separately, so `.gazl` (precompiled-blob) imports are not yet supported.)*
+emitting each unit separately. Two consequences - `.gazl` (precompiled-blob) imports are not yet
+supported, and import cycles only half-resolve; see [Cycles](#cycles) and
+[Deferred to 3.0: collect mode](#deferred-to-30-collect-mode-the-declaration-pre-pass).)*
 
 ### The problem
 
@@ -804,7 +846,7 @@ list is redundancy with failure modes: a forgotten unit, a stale artifact, a wro
 the build is driven from a root unit:
 
 ```
-impala build main.impala → main.gazl        (the complete, linked program)
+impala compile main.impala → main.gazl      (the complete, linked program)
 ```
 
 The toolchain walks the import closure (visited-set, cycles legal), compiles each unit exactly
@@ -848,29 +890,111 @@ from the definitions it describes. Moves the copy, doesn't kill it.
 
 ### Cycles
 
-Import cycles are **legal**. Mutual dependency between units is a supported pattern today
-(concatenation is order-independent), and mutually-dependent units are exactly the ones with the
-most shared interface surface - erroring on cycles would push them back to hand-written externs,
-the boilerplate this feature exists to kill.
+Import cycles are **legal to write, and resolve in one direction** - the backwards reference needs a
+forward `extern`. Read the rule box below before relying on this section. Cycles are not rejected
+because mutual dependency is a supported pattern (concatenation is order-independent) and
+mutually-dependent units are exactly the ones with the most shared interface surface - erroring on
+them would push those units back to hand-written externs wholesale, the boilerplate this feature
+exists to kill. Requiring one `extern` at the cycle edge keeps the rest of that saving.
 
-Cycles are harmless because the closure walk separates gathering from emission: the compiler keeps
-a **visited set keyed by canonical path**, seeded with the root unit. Each file in the import
-closure is parsed exactly once and emitted exactly once; an `import` naming an already-visited
-file is skipped. The self-import-via-cycle case (B importing the root) needs no special rule - the
-seeding handles it. Diamonds dedupe the same way. Name resolution runs after the whole closure is
-gathered, so mutually-referencing types resolve regardless of parse order.
+The closure *walk* delivers on this: the builder keeps a **visited set keyed by canonical path**,
+seeded with the root unit. Each file in the import closure is parsed exactly once and emitted
+exactly once; an `import` naming an already-visited file is skipped. The self-import-via-cycle case
+(B importing the root) needs no special rule - the seeding handles it. Diamonds dedupe the same way.
+
+> #### The 2.0 rule: cycles GATHER but do not fully RESOLVE
+>
+> Settled 2026-07-29: this is Impala 2.0 behaviour, not a temporary state. The pre-pass that would
+> lift it is deferred to 3.0 (below), because `extern` covers the cases that matter and lifting it
+> later breaks nothing.
+>
+> The design assumed name resolution runs after the whole closure is gathered. **It does not.**
+> The shipped builder concatenates the closure dependency-first and hands it to the
+> single-pass compiler in one piece (the deviation noted at the top of this step), so a unit can
+> only reference names that appear *earlier* in the concatenation. In a cycle no order satisfies
+> both directions, so one of them fails:
+>
+> - a cross-unit function call backwards across the cycle -> `E403 Undeclared identifier`
+> - a cross-unit struct type backwards across the cycle -> `E413 Unknown type`
+>
+> The asymmetry is the tell: the **same two files** build or fail depending only on which one you
+> name as the root, because that decides the concatenation order. Fixture:
+> `tests/impala/sources/importcycle/` (mutually recursive `isEven`/`isOdd`), both halves pinned in
+> `impala/importBuildTests.js`.
+>
+> The diagnostic names the unit the text actually came from (multi-unit builds used to report the
+> root unit and a line number that only indexed the concatenation) and adds a note pointing at the
+> definition it cannot see yet, with the remedy that applies - a forward `extern` for a function or
+> global, and for a type, that there isn't one short of breaking the cycle.
+>
+> **The 2.0 answer is a hand-written forward `extern`** in whichever unit is emitted first. It is
+> the one place this feature does not remove boilerplate, but it is boilerplate 1.0 users already
+> write, and since E437 it is checked against the real definition rather than silently trusted
+> (`docs/ExternPrototypes.md`). A cross-cycle *struct type* is the one case with no workaround
+> short of breaking the cycle.
+>
+> **Where this is heading: collect mode, in 3.0.** See "Deferred to 3.0: collect mode" below. An
+> `extern` written today stays valid and keeps compiling once it lands - the pre-pass makes it
+> unnecessary, never wrong.
 
 What *does* error is definitional cycles in content - which are errors within a single file too;
 imports merely let them span files:
 
 | Cycle kind | Verdict |
 |---|---|
-| Import cycle (A↔B, any depth) | **legal** - visited-set memoization, each file parsed once |
+| Import cycle (A↔B, any depth) | gathering: **legal** - visited-set memoization, each file parsed once. Resolution: **one direction in 2.0** - the other needs a forward `extern`; lifted in 3.0 by collect mode |
 | Same file reached via two paths | legal - canonical-path dedup |
 | Same symbol from two different files | error - flat namespace, duplicate declaration |
 | Const *value* cycle across the closure | error, diagnostic cites the dependency chain |
 | **By-value** struct containment cycle (`struct A { B b }` / `struct B { A a }`) | error (infinite size) - the mutual generalization of the self-reference rule |
 | By-pointer struct cycle | legal, exactly like self-reference |
+
+### Deferred to 3.0: collect mode (the declaration pre-pass)
+
+This is the one piece of Step 5 that was designed and not built, and it is what would let a cycle
+resolve in both directions. **Deferred to Impala 3.0 on 2026-07-29** (`docs/ParkedFeatures.md`):
+`extern` covers the function and global cases, and landing the pre-pass later only *removes* the
+need for those externs, so waiting costs nothing a 2.0 program has to unlearn. The design stands as
+written - the full plan is `impala/Impala2Slices.md:143-190`; the essentials:
+
+**It is NOT gated on the JSPEG rework.** `Impala2Slices.md:155-163` splits two-phase compilation in
+two, and only the cheap half is needed here:
+
+- *Declaration-level two-phase* - gather declarations across the closure, then resolve names.
+  Bounded, and it is all cycles need.
+- *Body-level two-phase* - the AST rework of `docs/JSPEGFuture.md` Problem 1. Cycles do **not**
+  need it; still deferred. `JSPEGFuture.md:39-46` mentions interface mode as something that rework
+  would unlock "as a trivial variant", which is easy to misread as a dependency. It is not one.
+
+**Shape.** `$$parser` already *is* the semantic-handler object the grammar dispatches to, so this
+is a mode on it rather than a second implementation of anything
+(`Impala2Slices.md:147-154`):
+
+- **emit mode** - today's codegen.
+- **collect mode** - declarations register in the symbol/struct/type tables **with type references
+  recorded by NAME, not eagerly resolved**; bodies are parsed but emit nothing.
+
+**What actually remains**, given what shipped:
+
+1. *Precondition, partly done* - finish thinning the remaining fat inline actions into `$$parser`
+   methods, so the mode switch covers all the semantics. Roughly a quarter of the rule region
+   dispatches to `$$parser.` today; the rest is still inline JS. `impala/RefactorPlan.md` is the
+   adjacent (return-style helper) cleanup on the same surface.
+2. *Suppress emission in collect mode* - the small half. Emission is already funnelled through a
+   handful of chokepoints (`output`, `declare`, `makeMeta`, `emit`).
+3. *Defer type resolution* - the expensive half. `declare`/`lookup` resolve types on the spot
+   today, which is exactly why a backwards struct reference dies with `E413`.
+
+**The shipped shortcut made this cheaper, not harder.** The original plan needed per-unit collect
+parsing, a merge into closure-wide tables, and per-unit random seeds (mandatory, per
+`Impala2Slices.md:174-179`, because two units sharing a seed collide on identical string
+constants). None of that applies now: the builder hands the compiler *one* concatenated source
+compiled *once*, so "gather" is a pre-scan of that single source and the seed-collision problem
+cannot arise.
+
+**Done when** `tests/impala/sources/importcycle/odd.impala` builds as a root, its
+`extern function isEven` can be deleted, and the negative assertion in `impala/importBuildTests.js`
+is rewritten as a positive one.
 
 ### Dead-code elimination and `export`
 
@@ -883,7 +1007,7 @@ The hazard is "reachable from *what*?": Impala has no in-language `main`, and ho
 points *by name* (`findFunction("process")`), so naive reachability would strip every firmware
 entry point. The resolution is a **compile-time flag, off by default** - mirroring `--legacy`:
 
-- **Default `impala build` trims nothing.** Every unit in the closure is emitted whole, exactly
+- **By default `impala compile` trims nothing.** Every unit in the closure is emitted whole, exactly
   like manual concatenation but tool-performed. An unmodified 1.0 firmware builds to a working
   program with no annotations. **100% backward compatible** - no positional "root is special" rule,
   no behavior that depends on which file is the build root.
@@ -1052,12 +1176,17 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E201 | pointer element type mismatch in assignment |
 | E202 | pointer element type mismatch in call argument |
 | E203 | element type mismatch with previous declaration |
+| E204 | plain `[]` on a struct element - write `[[ ]]` |
+| E205 | scaled `[[ ]]` on a one-word element - write `[]` |
 | E301 | invalid operand types for operator |
 | E302 | invalid operand type for unary operator |
 | E303 | incompatible types for assignment |
 | E304 | return type disagreement (mismatch / conflicting expectations / previous uses) |
 | E305 | `for` variable must be a local modifiable int or pointer |
 | E306 | `switch` expression must be int |
+| E307 | arithmetic on a struct pointer - move it with `&p[[i]]` |
+| E308 | difference between struct pointers - divide by `sizeof` yourself |
+| E309 | `for` variable is a struct pointer - `FORp` cannot stride |
 | E401 | identifier already declared |
 | E402 | type mismatch with previous declaration |
 | E403 | undeclared identifier |
