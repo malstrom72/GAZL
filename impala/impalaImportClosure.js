@@ -179,9 +179,14 @@ var DATA_ROW_RE = /^\s*(?:DAT[ifps]?|DATA)\s/;        // an unlabeled initialize
 // property of the emitter, not of this pattern - the assert guard `! EQUi #DEBUG #0 @.noAssertStrings`
 // is always followed by a DOT-labeled block, never an ASCII one.
 var CT_FOLD_RE = /^\s*!\s*\w+/;
+var EXTENT_LABEL_RE = /^\s*\.z\.([\w.]+):\s+!\s*\w+/;
+// Any compile-time line, with or without a compiler-minted dot label, INCLUDING a bare `!` no-op
+// carrying nothing but a label (`.g0:  !`). Only used inside a data block's own initializer run,
+// where the DATA row that must follow is what keeps it from over-reaching.
+var CT_LINE_RE = /^\s*(?:\.[\w.]+:)?\s*!/;
 function isExtentLineFor(line, name) {
-	return CT_FOLD_RE.test(line)
-			|| new RegExp("^\\s*\\.z\\." + name + ":\\s+!\\s*\\w+").test(line);
+	var m = EXTENT_LABEL_RE.exec(line);
+	return CT_FOLD_RE.test(line) || (m !== null && m[1] === name);
 }
 
 function stripComment(line) {
@@ -264,9 +269,26 @@ function deadStrip(gazl) {
 			// ...and trailing unlabeled `DATA` rows are this block's initializer, not free-standing
 			// lines. Left loose they were kept unconditionally, so stripping the header handed the
 			// values to whichever block came before - silently, whenever they fit its zero-fill slack.
+			// A run of compile-time lines counts as part of the initializer when the rows CONTINUE
+			// after it: that is the `! LEQi`/`! FAIL`/skip-label guard assertFitsExtent emits between
+			// the header and the rows it guards, which otherwise cut the block in two and left the
+			// rows orphaned (a hard throw below). Requiring a DATA row to follow is what stops this
+			// from swallowing the NEXT definition's extent fold, which looks identical from here but
+			// is never followed by rows belonging to THIS block.
 			i++;
-			while (i < lines.length && DATA_ROW_RE.test(lines[i])) {
-				i++;
+			while (i < lines.length) {
+				if (DATA_ROW_RE.test(lines[i])) {
+					i++;
+					continue;
+				}
+				var j = i;
+				while (j < lines.length && CT_LINE_RE.test(lines[j])) {
+					j++;
+				}
+				if (j === i || j >= lines.length || !DATA_ROW_RE.test(lines[j])) {
+					break;
+				}
+				i = j;
 			}
 			blocks[blocks.length] = { kind: "data", name: dname, start: dataStart, end: i };
 			continue;

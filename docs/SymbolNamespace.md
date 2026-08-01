@@ -26,6 +26,12 @@ Minted by `newLabel(tag)` as `.<tag><n>`, with `labelCounter` reset per function
 | `.l` | loop head | `.l3` |
 | `.s` | `switch` table base | `.s0` |
 | `.t` | temporary branch target | `.t0` |
+| `.g` | deferred-assertion skip target | `.g0` |
+
+`.g` is the one that does NOT use `labelCounter`. It is minted at global-declaration time by
+`assertFitsExtent`, and `labelCounter` resets per function - two globals either side of a function would
+both be handed `.g0` and the module would not assemble. It carries its own `guardCounter`, reset once per
+compilation.
 
 A `switch` arm appends `#<k>` to the table base (`.s0#0`), because `SWCH` finds its arms by appending
 `#k` to its own target. That `#` is part of the label, not a separator the compiler is free to move.
@@ -128,8 +134,8 @@ between struct `A_B` field `c` and struct `A` field `B_c`.
 
 ## Adding a new one
 
-1. **Take a free tag letter.** In use: `a e f l s t` (labels), `a s` (data), `o z` (constants). Free
-   today: `b c d g h i j k m n p q r u v w x y`. (`x` was the array-extent tag until 2026-08-02, when
+1. **Take a free tag letter.** In use: `a e f g l s t` (labels), `a s` (data), `o z` (constants). Free
+   today: `b c d h i j k m n p q r u v w x y`. (`x` was the array-extent tag until 2026-08-02, when
    `.z.` absorbed it - do not resurrect it for a second size-like idea without re-reading the note above.)
 2. **Decide which shape it is.** Dot-followed (`.k.Thing.part`) for a stable, nameable constant that
    host or hand-written GAZL may reference; letter+digits (`.kN`) for an internal, throwaway label.

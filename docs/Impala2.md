@@ -504,9 +504,15 @@ EXACTLY - which is how `z` used to receive the array's third value in silence. S
 handed to the one stage that knows the extent, as a compile-time directive that costs nothing at run
 time:
 
-    ! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v
+    s:      GLOB *.z.S
+            ! LEQi #3 #.z.S.v @.g0
+            ! FAIL too many initializer values for S.v: 3 given, room for .z.S.v
+    .g0:    !
+            DATA #1 #7 #8 #9
 
-It fits, nothing happens. It does not, and the assembler stops with the label as the message. That is
+It fits, nothing happens. It does not, and the assembler stops with that `! FAIL` text. The guard sits
+ABOVE the rows deliberately: GAZL checks only the whole allocation, so below them a field spill that
+still fits the struct total would go unreported. That is
 rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md), and `.z.S.v` is the field-extent constant
 described in [`StructLayoutConstants.md`](StructLayoutConstants.md). The cost is honest and worth
 stating: the error surfaces at GAZL assembly time, which in a shipped module means the end user's

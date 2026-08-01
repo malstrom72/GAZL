@@ -27,10 +27,14 @@ M:	! DEFi #3	; signature const M : int @ 21:1
 ; signature extern native printInt() -> unknown @ 33:1
 ; signature extern native printLF() -> unknown @ 34:1
 s:	GLOB *.z.Scalars	; signature global s : Scalars @ 36:1
-	! GRTi #3 #.z.Scalars.v @.ERROR.too_many_initializer_values_for.Scalars.v
+	! LEQi #3 #.z.Scalars.v @.g0
+	! FAIL too many initializer values for Scalars.v: 3 given, room for .z.Scalars.v
+.g0:	!
 	DATA #7 #8 #9
 e:	GLOB *.z.Elems	; signature global e : Elems @ 37:1
-	! GRTi #4 #.z.Elems.p @.ERROR.too_many_initializer_values_for.Elems.p
+	! LEQi #4 #.z.Elems.p @.g1
+	! FAIL too many initializer values for Elems.p: 4 given, room for .z.Elems.p
+.g1:	!
 	DATA #1 #2 #3 #4
 
 ;-----------------------------------------------------------------------------

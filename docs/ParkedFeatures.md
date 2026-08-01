@@ -333,7 +333,7 @@ nothing. One mechanism serves both (`blockInitFrom`); they differ only in the me
 compare the value count against the extent - is now deferred to the assembler, which by then knows it.
 `struct S { int a; int array v[N]; int z }` with `N` 2 given three values emits four words that fit
 `1+N+1` exactly, so the assembler sees nothing wrong with the row and `z` used to receive the third
-value in silence; `! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v` is what now catches it.
+value in silence; a `! LEQi` / `! FAIL` guard above the row is what now catches it.
 So `E454` no longer covers the array, only what is behind it.
 
 Verified 2026-08-01 that GAZL 1 has no way to express it:
@@ -362,25 +362,37 @@ the assembler to make once the extent has a value. Rule 4 of
 [`TwoStageConstants.md`](TwoStageConstants.md), and it costs nothing at run time. A symbolic array can be
 filled again on GAZL 1 whenever the count provably fits; only fields AFTER it still need `ORG`.
 
-It shipped as ONE line, not the two sketched here earlier:
+It shipped as the canonical `! FAIL` idiom, emitted ABOVE the rows it guards:
 
-    ! GRTi #3 #.z.S.v @.ERROR.too_many_initializer_values_for.S.v
+    s:      GLOB *.z.S
+            ! LEQi #3 #.z.S.v @.g0
+            ! FAIL too many initializer values for S.v: 3 given, room for .z.S.v
+    .g0:    !
+            DATA #1 #7 #8 #9
 
-A branch to an undefined label is not an error until it is TAKEN, so the label doubles as the message and
-no `.ok` target is needed - which also removes the counter that would have been required to keep such
-targets unique across repeated fills. Verified against GAZLCmd, boundary included: `words == extent`
-passes, `words > extent` stops with `Compile time label not found: .ERROR....`. `! GRTi` is the
-mnemonic; `! GTRi` does not exist.
+It briefly shipped (2026-08-01) as one line branching to a deliberately UNDEFINED label, so the label
+name doubled as the message. That is the trick [`TwoStageConstants.md`](TwoStageConstants.md) and
+[`CompileTimeHardening.md`](CompileTimeHardening.md) both explicitly ban, and it was corrected on
+2026-08-02: an identifier cannot carry spaces, so it could not state the two counts that make the message
+actionable, and it read like an internal error. The `.g<N>` skip label needs a counter that does NOT
+reset per function, which is the only cost the one-line form was avoiding.
+
+**Position is load-bearing.** GAZL checks the WHOLE allocation, not the field, so the guard must sit
+above the `DATA` rows: below them a total overflow reports the coarser `Not enough space in data section`
+first, and a field spill that still fits the total reports nothing at all. Verified against GAZLCmd
+2026-08-02, boundary included: `words == extent` passes, and both over-fill shapes stop with the
+`! FAIL` text.
 
 **Its prerequisite landed first: a struct field extent now has a durable name.** It did not before - the
 `.z.` rework named array VARIABLE extents (`.z.plain: ! DEFi #<A>`, then `GLOB *.z.plain`) but a struct
 array field folded its extent into a bare scratch (`! ADDi <a> #<a> #<A>`) that `endStruct` handed
 straight back, so the next struct re-used `<A>` and there was nothing stable to compare against. The
 layout block now mints `.z.<Struct>.<field>` for every array field while the scratch is still live and
-advances by the SYMBOL, so the extent outlives the borrow. It went into `.z.` rather than `.z.` because
-`.z.<owner>.<name>` is keyed on functions and a struct may share a function's name - see
-[`SymbolNamespace.md`](SymbolNamespace.md), and `tests/impala/sources/structFieldExtents.impala` for the
-pinned collision.
+advances by the SYMBOL, so the extent outlives the borrow. It briefly carried its own `.x.` tag, because
+`.z.<owner>.<name>` was also a local array's extent and a struct could then share a function's name. That
+clash is gone: `claimTopName` now rejects every top-level name collision (`E401`), so one owner name has
+exactly one kind and a single `.z.` covers both - see [`SymbolNamespace.md`](SymbolNamespace.md), and
+`tests/impala/sources/structFieldExtents.impala` for the pinned layout.
 
 **Still open, and now cheap**, because they want the same symbol: `sizeof` of an array field, and
 gazl-validate checking a host-supplied extent for an `extern struct` array field (an unstated wildcard

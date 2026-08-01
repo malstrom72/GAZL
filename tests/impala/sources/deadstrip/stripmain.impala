@@ -3,7 +3,9 @@ import "striplib.impala"
 extern native printInt
 extern native printLF
 
-/* KEPT is initialized SHORT of its extent, so its trailing words are zero-fill and DEAD's initializer
+/*	Expected (GAZLCmd stripmain.gazl main): 42 9 9 0 0 0 7 5 4 3
+
+   KEPT is initialized SHORT of its extent, so its trailing words are zero-fill and DEAD's initializer
    fits exactly in that slack - which is how a stripped DEAD used to be adopted by KEPT with no error
    anywhere. BUF_SIZE is referenced only as an array extent (`GLOB *BUF_SIZE`), the one reference shape
    the reachability scan used to miss. Neither is provable by a byte-compare against a golden, so
@@ -27,6 +29,14 @@ struct Voice { int note; float gain }
 global Voice array deadVoices[3]
 global Voice liveVoice
 
+/* A symbolically-sized array field that is actually FILLED. assertFitsExtent puts a
+   `! LEQi`/`! FAIL`/skip-label guard between this global's header and its DATA rows, which split the
+   data block in two and left the rows orphaned - `deadStrip` threw outright on any module of this
+   shape, i.e. exactly what the feature exists to enable. Nothing crossed the two halves before: the
+   struct case above was added for the layout walk, not for a filled initializer. */
+struct Tail { int lead; int array vals[BUF_SIZE] }
+global Tail tail = { lead: 4, vals: { 6, 3 } }
+
 export function main() locals int i {
 	printInt(used(41)); printLF();
 	for (i = 0 to 5) { printInt(global KEPT[i]); printLF(); }
@@ -34,4 +44,6 @@ export function main() locals int i {
 	printInt(global buf[0]); printLF();
 	global liveVoice.note = 5;
 	printInt(global liveVoice.note); printLF();
+	printInt(global tail.lead); printLF();
+	printInt(global tail.vals[1]); printLF();
 }

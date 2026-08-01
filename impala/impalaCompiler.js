@@ -169,6 +169,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     var openStruct = undefined;                          /// struct whose field list is being parsed (its fields own their extent scratches)
     var functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var topNames = {};                                   /// name -> kind ('global'/'function'/'const'/'struct'/'functype'), one flat namespace
+    var guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
     var switchStack = [];
     var noForward = false;
     var exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
@@ -1633,10 +1634,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 output(T + '! ADDi <a> #<a> #.z.' + f.struct);
             } else if (f.type === 'A') {                          /* array: name the extent, THEN advance by it */
                 var x = extentSymbol(f.name, name);
-                if (isStructAtom(f.elem)) {
+                var words = f.size;
+                if (isStructAtom(f.elem)) {              /* count * element size, folded now */
                     output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
+                    words = '<t>';
                 }
-                output(x + ':' + T + '! DEFi #' + (isStructAtom(f.elem) ? '<t>' : f.size));
+                output(x + ':' + T + '! DEFi #' + words);
                 output(T + '! ADDi <a> #<a> #' + x);
             } else {                                              /* scalar (int/float/ptr/funcptr) */
                 output(T + '! ADDi <a> #<a> #1');
@@ -1903,14 +1906,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                         pushInitScalar(out, ev, f.elem, f.name, sourceCode, sourceOffset);
                     }
                 }
-                if (symbolic) {
+                if (symbolic && out.blocked === undefined) {
                     /* WORDS given, not elements: a struct-element array contributes .z.Elem each, and
                        the extent symbol is in words too. Nothing to assert once the row is already
-                       blocked - emitInitData drops these words rather than placing them. */
-                    if (out.blocked === undefined) {
-                        assertFitsExtent(out.length - from, structName, f.name,
-                                sourceCode, sourceOffset);
-                    }
+                       blocked - emitInitData drops these words rather than placing them, and
+                       blockInitFrom keeps the FIRST block, so both calls are no-ops past that point. */
+                    assertFitsExtent(out.length - from, structName, f.name,
+                            sourceCode, sourceOffset);
                     blockInitFrom(out,
                             'the extent of ' + f.name + ' is not resolved until GAZL assembly time, so '
                                     + 'Impala cannot tell which word this would land in',
@@ -1971,22 +1973,32 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     /* Hand a comparison Impala cannot make to the stage that can: `words <= .z.Struct.field`, deferred
        to GAZL assembly time, where the extent finally has a value. Rule 4 of docs/TwoStageConstants.md,
-       and it costs nothing at run time - `! GRTi` is a compile-time directive, so no word is emitted
-       either way.
+       and it costs nothing at run time - every line is an `!` directive, so no word is emitted either
+       way.
 
-       The single-line form is deliberate. A branch to an UNDEFINED label is not an error until it is
-       TAKEN, so the label doubles as the message and no `.ok` target (and no counter to keep those
-       unique across repeated fills) is needed: it fits -> no jump, nothing happens; it does not ->
-       `Compile time label not found: .ERROR.too_many_initializer_values_for.S.v`. Verified against
-       GAZLCmd on 2026-08-01, boundary included (words == extent passes). */
+       `! LEQi` + `! FAIL` + a skip label is the CANONICAL idiom - docs/TwoStageConstants.md prescribes
+       it and src/UnitTest.gazl:30-40 guards GAZL_VERSION exactly this way. An earlier version of this
+       branched to a deliberately UNDEFINED label so the label name doubled as the message; that is the
+       trick TwoStageConstants.md and CompileTimeHardening.md both explicitly ban, because an identifier
+       cannot carry spaces - so it could not name the two counts that make the message actionable.
+
+       It must sit ABOVE the rows it guards. GAZL checks only the WHOLE allocation (`Not enough space in
+       data section: s`), so an over-filled FIELD that still fits the struct total spills into the next
+       field and assembles silently; and where the total DOES overflow, whichever check comes first in
+       the file wins, so emitting below the rows would trade this message for the coarser one. Verified
+       against GAZLCmd on 2026-08-02: words == extent passes, both over-fill shapes fail here. */
     assertFitsExtent = function (words, structName, fieldName, sourceCode, sourceOffset) {
         if (words <= 0) {
             return;                                           /* nothing given - trivially fits */
         }
-        declare('! GRT?', 'globals', undefined, 'i', true,
-                '#' + words + ' #' + extentSymbol(fieldName, structName)
-                        + ' @.ERROR.too_many_initializer_values_for.' + structName + '.' + fieldName,
-                sourceCode, sourceOffset);
+        var extent = extentSymbol(fieldName, structName);
+        var skip = '.g' + (guardCounter++);           /* own counter: labelCounter resets per function */
+        declare('! LEQ?', 'globals', undefined, 'i', true,
+                '#' + words + ' #' + extent + ' @' + skip, sourceCode, sourceOffset);
+        declare('! FAIL too many initializer values for ' + structName + '.' + fieldName + ': '
+                        + words + ' given, room for ' + extent,
+                'globals', undefined, undefined, true, undefined, sourceCode, sourceOffset);
+        declare('!', 'globals', skip, undefined, true, undefined, sourceCode, sourceOffset);
     };
 
     blockInitFrom = function (out, why, code, hint) {
@@ -3399,6 +3411,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         structs          = {};
         functypes        = {};
         topNames         = {};
+        guardCounter     = 0;
         exportNext       = false;
 
         /* reset deferred string tables */

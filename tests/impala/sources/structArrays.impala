@@ -19,7 +19,7 @@ extern native printLF
 global Voice array bank[3]
 
 /* Both halves of the extent symbolic at once: a FOLDED count times a struct's `.z.` size. Neither
-   number exists until assembly, so `.x.pairs` is the only thing that can hold the product - and the
+   number exists until assembly, so `.z.pairs` is the only thing that can hold the product - and the
    count's scratch has to survive the fold that reads it (docs/SymbolNamespace.md). */
 global Voice array pairs[PAIRS * 2]
 
