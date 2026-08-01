@@ -37,6 +37,17 @@ These are the constraints every 2.0 feature is measured against.
    predict from the source. If a feature can't be expressed as a thin sugar over the GAZL a
    programmer would write by hand, it doesn't belong in 2.0.
 
+   **Corollary: the build has two stages, and the second one is not ours.** Impala compiles to GAZL
+   TEXT; that text is assembled on the END USER's machine at load, and the host can inject named
+   constant values at that moment. A hand-writing GAZL programmer freely references symbols the host
+   will define later, so a transliterator must pass them through. Therefore **a constant is not always
+   a number Impala knows**, and one `.gazl` artifact is *expected* to compile to different code under
+   different host conditions. This is the constraint most often violated by well-intentioned
+   hardening: 2.0 never demands a numeric value where a symbol would do, never folds a named constant
+   away, and never treats "unknown at Impala compile time" as an error. Checks that cannot be decided
+   at compile time get DEFERRED to assembly time, not abandoned and not guessed at. Specified in
+   [`docs/TwoStageConstants.md`](TwoStageConstants.md), which is normative for every feature below.
+
 2. **Types are a zero-cost compile-time overlay.** This is the spine of the whole release. Every
    type in 2.0 **erases to exactly the GAZL that 1.0 would emit.** Types exist so the *compiler*
    stops throwing away information it already computes at parse time - not to change what runs.

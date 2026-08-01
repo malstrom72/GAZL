@@ -2,6 +2,9 @@
 
 Status: DESIGN NOTE, not implemented. Idea + naming decision + open questions.
 
+Background: this note applies the two-stage constant model to struct layout. The model itself is
+specified in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
+
 ## The idea (GAZL as a macro-assembler)
 
 Emit each struct's field offsets and its size as NAMED GAZL constants, and reference those symbols at
