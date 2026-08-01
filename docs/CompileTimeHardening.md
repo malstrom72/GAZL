@@ -91,7 +91,9 @@ flag, or only when the operand is symbolic (compile-time-known cases being rejec
 Today this compiles. Correction to an earlier claim here: the assembler catches BOTH storage classes, not
 just globals - `Symbols::resolve` rejects `offset >= symbol.size` (`src/GAZL.cpp:619`) and a local's size
 comes from its `LOCA *size`, so `MOVi $buf:9 #1` under `LOCA *4` fails with `Offset out of bounds: $buf`.
-Verified 2026-08-01 for both. So this is not a missing check; it is a check that fires at the WRONG TIME -
+Verified 2026-08-01 for both - and `docs/Impala2Review.md` C6 had already flagged this section as
+"backwards on which case is uncovered", so this correction was overdue rather than new. So this is not a
+missing check; it is a check that fires at the WRONG TIME -
 at assembly, on the end user's machine, when Impala had the number all along. `ADDp` is deliberately
 `UNCHECKED_ADDRESS` (`src/GAZL.cpp:285`), so dynamic indices correctly fall through to the runtime
 `PEEK`/`POKE` region check instead.
@@ -176,11 +178,18 @@ two-line fix.
 
 A systematic sweep for the pattern this note is about - Impala either baking a number it cannot justify,
 refusing a construct for lack of one, or silently skipping a check when the value turns symbolic. Each
-entry below was REPRODUCED, not inferred. Ranked by severity.
+entry below was REPRODUCED, not inferred.
+
+**Read the attributions.** Roughly half of this was already on record and is repeated here only because
+the sweep reproduced it at a specific site; the genuinely new findings are S1's reachability and the
+validator group S7-S11. Where an item says ALREADY RECORDED, that other place is authoritative - do not
+let the two copies drift.
 
 ### Confirmed miscompiles (a wrong number reaches the artifact)
 
-**S1. A by-value struct argument to an UNPROTOTYPED callee bakes a host-owned size.**
+**S1. A by-value struct argument to an UNPROTOTYPED callee bakes a host-owned size.** *(The `*NaN`
+mechanism is ALREADY RECORDED as an anti-pattern in `docs/TwoStageConstants.md` - `field.size * per`.
+NEW here: the reachability, i.e. that `rejectByValueStruct` guards declarators only.)*
 `rejectByValueStruct` guards declarators only, so `extern native sink` / bodiless `extern function sink`
 have nothing to reject and the parked by-value path runs at the call site. One artifact then makes two
 contradictory statements about one quantity:
@@ -198,6 +207,8 @@ Fix: call `rejectByValueStruct` from the ARGUMENT site, not just declarators. Do
 - see `docs/GAZLSymbolicWindows.md`, the numeric window ABI is correct.
 
 **S2. `buildStructInit` iterates a symbolic field extent, silently dropping initializer words.**
+*(ALREADY RECORDED, `docs/TwoStageConstants.md`: "the loop runs zero times ... initializer words are
+silently dropped and every later field shifts". Reproduced here at the site.)*
 `for (var e = 0; e < f.size; ++e)` where `f.size` is the extent string. This is verbatim the anti-pattern
 `docs/TwoStageConstants.md` names. With `struct S { int array v[N]; int tag }` and `global S s = {{1,2},7}`
 the emitted data is `DATA #7` - the `1, 2` vanish and the `7` lands at `.o.S.v`, not `.o.S.tag`. The same
@@ -205,25 +216,29 @@ source with `v[2]` emits the correct `DATA #1 #2 #7`. No diagnostic.
 Fix: extend E414's "needs a literal size" to every field width preceding the last initialized field.
 Positional `DATA` has no seek directive, so rejecting is the only sound answer.
 
-**S3. `parseFloat` on an emitted operand string mis-folds a pointer offset.**
+**S3. `parseFloat` on an emitted operand string mis-folds a pointer offset.** *(ALREADY RECORDED,
+`docs/TwoStageConstants.md`, which names `parseFloat("0x10")` being `0` exactly. Reproduced here.)*
 The `p - const` fold tests `operands[2][0] === '#'`, which establishes CONSTANT, not DECIMAL, then runs
 `parseFloat` on it. `*(p - 0x2)` emits `PEEK $x $p #0` instead of `#-2` - completely silent. `*(p - K)`
 for any named const emits `#NaN`. The non-folded path is already correct, and GAZL can negate at assembly
 (`! SUBi <A> #0 #K`).
 
-**S4. `parseInt('0x2', 10) === 0` slips past E414 and drops a whole initializer.**
+**S4. `parseInt('0x2', 10) === 0` slips past E414 and drops a whole initializer.** *(Same anti-pattern
+as S3, ALREADY RECORDED. NEW: that it defeats E414's `isNaN` guard specifically.)*
 `readonly S array t[0x2] = { {1}, {2} }` emits the allocation but no `DATA` row at all, because the guard
 tests `isNaN` and `0` is not NaN. Stage-1 only (a host constant yields NaN and is correctly rejected).
 
 ### Confirmed silent acceptances that become gibberish at assembly
 
-**S5. A symbolic switch range disables E444.** `checkCaseValue` returns early when `constInt` cannot read
+**S5. A symbolic switch range disables E444.** *(Item 3 above predicted this; `Impala2Review.md` C6
+recorded the pre-E444 version. NEW: reproduced as the residual AFTER E444 shipped.)* `checkCaseValue` returns early when `constInt` cannot read
 the range, so `switch (x == LO to HI)` with host-supplied bounds is unchecked. With `LO=5`, a `case 0`
 folds to a negative offset and the module fails to load with `Invalid identifier: .s0.-5` - a
 compiler-minted label the user never wrote. This is the deferred-assertion case: emit
 `! GEQi #<off> #0 @ok / ! FAIL <source>: case 0 is below the switch range`.
 
 **S6. The same gate disables E443 (duplicate case) - and that one needs no assembler help at all.**
+*(Item 5 above; `Impala2Review.md` C6. NEW: that it is the residual after E443, and needs no assertion.)*
 `caseSeen` is indexed by `value - fromNum`, so it inherits a dependency on the range base that duplicate
 detection does not have. Two `case 0:` arms under a symbolic range compile clean and then fail assembly
 with `Symbol already defined: .s0.0`; under a literal range the same source is a clean E443. Index by the
@@ -251,7 +266,8 @@ to demonstrate.
 `filter` - while ARRAY rows do not lower-case the extent, so the same disagreement errors through one
 path and passes through another.
 
-**S12.** The extern-struct layout check is name-presence-only and inspects only the FIRST declaration: a
+**S12.** *(ALREADY RECORDED, `Impala2Review.md` C6: "extern struct host layout is essentially
+unchecked".)* The check is name-presence-only and inspects only the FIRST declaration: a
 layout that transposes two fields validates clean. Offsets are host-supplied constants, so ordering,
 overlap and the `.z.` bound are all decidable with `! EQUi` / `! LSSi` chains.
 
