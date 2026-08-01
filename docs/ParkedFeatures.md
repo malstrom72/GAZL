@@ -150,12 +150,14 @@ fix that stays.
 
 ## Does anything here get easier now that extents are named constants?
 
-Asked 2026-08-01, after `.x.<name>` array extents landed (`docs/SymbolNamespace.md`). **Answer: no, for
-either by-value structs or multidim arrays.** Recorded so it is not re-derived.
+Asked 2026-08-01, after `.x.<name>` array extents landed (`docs/SymbolNamespace.md`). Two different
+questions, with two different answers. Recorded so neither is re-derived.
+
+### Does the EXISTING `.x.` symbol help? No.
 
 `.x.` solves exactly one problem: a value that has neither a number Impala knows NOR a name - an array
 extent used to be folded into a recycled `<X>` scratch, so it existed for one line and could not be
-quoted again. Both parked features need something else.
+quoted again. Neither parked feature has that problem.
 
 **By-value structs.** Their size was never nameless: `.z.Name` has been a permanent assemble-time symbol
 since struct layouts shipped, and `structAllocSize` already returns `*.z.Name`. The blocker is that
@@ -168,18 +170,59 @@ the symbolic position algebra of [`docs/GAZLSymbolicWindows.md`](GAZLSymbolicWin
 machinery than today, and it trades `claimSlot`'s loud per-slot overlap assert for a discipline whose
 failures are silent. The parking rationale gets stronger, not weaker.
 
-**Multidim arrays.** `.x.` is the wrong symbol for the wrong quantity in the wrong places. It is keyed on
-the array OBJECT (`.x.a`, `.x.b`), so symbol identity as shape identity would reject every pair of
-distinct arrays - 100% false negatives. Its value is the allocation size in WORDS, not a per-axis element
-count, and there is one per array, so a rank-2 shape has nothing to compare pairwise. It is not emitted
-for struct array fields (they still fold to `<X>`; see `emitStructLayout`) or for parameters, which are
-the positions the feature needs. And it carries no signature row, so `gazl-validate` cannot see it. The
-useful nominal identity - "both extents are the named const `N`" - was always available from `N`'s own
-GAZL symbol and needed nothing new.
+**Multidim arrays.** `.x.` is keyed on the array OBJECT (`.x.a`, `.x.b`), so symbol identity as shape
+identity would reject every pair of distinct arrays. Its value is the allocation size in WORDS, not a
+per-axis element count, and there is one per array, so a rank-2 shape has nothing to compare pairwise.
+It is not emitted for struct array fields or parameters - the positions the feature needs - and carries
+no signature row, so `gazl-validate` cannot see it.
 
-What `.x.` does contribute is a PRECEDENT: an extent can be a stable, host-quotable, assembly-resolved
-constant in the same class as `.o.`/`.z.`. If a host-supplied inner stride or a link-time shape assertion
-is ever wanted, that is the shape it would take.
+### Does the CONCEPT - always mint a constant, here one per DIMENSION - help? Yes, for multidim.
+
+This is the sharper question and it has a real answer. The thread's stated limit was:
+
+> There is no way to have BOTH "write any calculation directly" AND "sound, complete type equivalence"
+> **when the values are unknown**.
+
+The operative clause is the last one. Name every dimension and the comparison can be DEFERRED to
+assembly, where the values are not unknown - so it stops being a syntactic question (the
+polynomial-identity problem) and becomes an integer compare: sound, complete, any expression allowed.
+The mechanism already exists and is already used this way in `src/UnitTest.gazl:30-40`:
+
+    ! EQUi #.d.a.0 #.d.b.0 @.dim0ok
+    ! FAIL f(b): axis 0 is b[N] but f expects [4]
+    .dim0ok:
+
+[`docs/deferredShapeCheck.gazl`](deferredShapeCheck.gazl) is a runnable demo. `[4][3]` checked against
+`[N][W-1]` PASSES when the host supplies `N=4, W=4`, and names the offending axis when it does not.
+Neither Impala (it does not know `N`) nor `gazl-validate` (`arraySignaturesCompatible` is a raw
+`a.size !== b.size` string compare, so `[4]` vs `[N]` is a false conflict and a folded extent publishes
+as `[]` and is skipped) can decide that today. Zero runtime cost - every line is a `!` directive.
+
+**This also makes E430 re-examinable.** That rule forbids an `extern struct` array field from stating an
+extent because "a number here would be an unverifiable claim Impala never reads"
+(`impala/impala.jspeg`). It is unverifiable only because nothing asks. If the host publishes a per-axis
+extent the way it already publishes `.o.` and `.z.`, the claim becomes checkable, and the drift is
+reported to the host that caused it. Verified to work.
+
+**Honest costs.**
+
+1. The error moves from compile time to ASSEMBLY time, which in GAZL means the end user's machine. Two
+   mitigations: decide at compile time whatever Impala CAN decide (both sides literal) and defer only
+   the rest; and where a shape genuinely depends on host constants, deferring is CORRECT, not a
+   compromise - the answer differs per host.
+2. It needs a new per-axis symbol namespace (one per axis per array), not `.x.`, which is one-per-array
+   and in words. See `docs/SymbolNamespace.md` before minting a tag.
+3. `CONST_INT_P` is not forward-referencable, so both sides must be defined before the check - the same
+   ordering discipline the layout blocks already follow.
+4. The diagnostic is free text with no caret, though it can carry an Impala source location.
+5. It only pays off WITH arrays-as-values, since Impala has no array parameters today. The one piece
+   worth doing independently is fixing `arraySignaturesCompatible`'s form-dependence.
+6. It does nothing for by-value structs, whose blocker is the allocator, not identity.
+
+**The generalization worth remembering:** *if the compiler cannot decide it, name both sides and let the
+assembler decide it.* That is the same move `.x.` makes for extents and `.o.`/`.z.` make for layout, and
+`! FAIL` is what turns it into a diagnostic rather than a silent assumption.
+
 
 ## Impala 3.0 wishlist
 
@@ -220,8 +263,10 @@ CORRECT, not a stopgap - see that document before "fixing" any by-value size to 
 ### Multidimensional arrays
 
 Restore from `Impala2-multidim-arrays`. Independent of the ABI work above - it needs no calling-convention
-change. One thing must be settled FIRST and it is not part of the feature: array-dimension type identity
-(a constant evaluator is load-bearing here). The other former prerequisite, the expression-extent ordering
+change. One thing must be settled FIRST and it is not part of the feature: array-dimension type identity.
+The "constant evaluator is load-bearing" reading of that is superseded - see the deferred-shape-check note
+above, which decides identity at ASSEMBLY time with `! EQUi` + `! FAIL` and needs no evaluator, because
+the values are known by then. The other former prerequisite, the expression-extent ordering
 trap in struct array fields, was fixed in `260b57c`. The 2026-07-26 re-evaluation above still stands on
 cost/benefit: multidim SYNTAX cannot state an inner extent for a host-owned struct, and hand-striding
 through a host-supplied `const int W;` already covers that case without the feature.
