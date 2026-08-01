@@ -52,6 +52,12 @@ The interpreter rows are the control. They reproduce the section-1 table on a di
 5.18 ns/call), and they were taken from the same binaries, in the same session, as the JIT rows directly
 above them - so the JIT rows carry the same confidence.
 
+These numbers predate the GAZL 2 rework that places an expansion's locals with `SCOP` / `ENDS`, so they
+were taken on the earlier transient-based lowering. They carry over unchanged: neither kernel's helper has
+a local beyond its return value, so neither emits `SCOP`, and the instructions they lower to are unchanged
+across the rework apart from the named array extent `c978142` introduced. A helper that DOES declare locals
+is not covered by this measurement.
+
 Two things worth keeping in mind:
 
 - **The JIT's lead over the interpreter SHRINKS when the leaf loop is inlined** (5.32x to 3.97x) and is
