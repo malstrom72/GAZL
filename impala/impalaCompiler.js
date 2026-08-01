@@ -1817,8 +1817,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            docs/TwoStageConstants.md calls worse than either consistent choice. */
         if (isExternStruct(structName)) {
             blockInitFrom(out,
-                    'cannot be placed: the host owns the layout of struct ' + structName
-                            + ', so Impala does not know which word it belongs in', 'E459',
+                    'the host owns the layout of struct ' + structName
+                            + ', so Impala does not know which word it would land in', 'E459',
                     'a host-owned struct is initialized by the host - leave it zero-filled here; '
                             + 'static initialization of a host-owned layout needs GAZL 2 and is planned '
                             + 'for Impala 3.0 (docs/ParkedFeatures.md)');
@@ -1851,8 +1851,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 if (count === undefined) {
                     count = arr.length;
                     blockInitFrom(out,
-                            'cannot be placed: the extent of ' + f.name + ' is not resolved until GAZL '
-                                    + 'assembly time, so Impala cannot tell how many words it spans',
+                            'the extent of ' + f.name + ' is not resolved until GAZL assembly time, so '
+                                    + 'Impala cannot tell which word this would land in',
                             'E454',
                             'leave ' + f.name + ' (and every field after it) zero here - initializing a '
                                     + 'symbolically-sized field needs GAZL 2 and is planned for Impala '
@@ -1886,6 +1886,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         if (item.type !== type) {
             typeError('Initializer type mismatch for field ' + fieldName + ' ({$type1} vs {$type2})',
                     sourceCode, sourceOffset, item.type, type, 'E422');
+        }
+        /* This is the ONLY place a word enters the row, so it is where "no word past here is placeable"
+           belongs: here the entry still knows its own field name and source position, whereas by
+           emitInitData it is a bare operand string in a flat array. Zero is exempt - the region fills
+           with it under any layout, so those words are simply dropped. */
+        var b = out.blocked;
+        if (b !== undefined && !isZeroWord(item.op)) {
+            fail('Cannot initialize ' + fieldName + ': ' + b.why,
+                    sourceCode, (item.at !== undefined ? item.at : sourceOffset), b.code, b.hint);
         }
         out.push(item.op);
     };
@@ -1921,15 +1930,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     /* emit a flat constant list as one or more DATA rows (mirrors InitList chunking) */
     emitInitData = function (ops, sourceCode, sourceOffset) {
-        var b = ops.blocked;
-        if (b !== undefined) {
-            for (var t = b.at; t < ops.length; ++t) {
-                if (!isZeroWord(ops[t])) {
-                    fail('Initializer value ' + ops[t] + ' ' + b.why,
-                            sourceCode, sourceOffset, b.code, b.hint);
-                }
-            }
-            ops.length = b.at;                                /* the region zero-fills the remainder */
+        if (ops.blocked !== undefined) {
+            ops.length = ops.blocked.at;                      /* the region zero-fills the remainder;
+                                                                 pushInitScalar already refused any
+                                                                 non-zero word past this point */
         }
         var line = '';
         for (var i = 0; i < ops.length; ++i) {

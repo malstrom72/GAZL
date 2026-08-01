@@ -1304,11 +1304,11 @@ const symbolicExtentCases = [
 	// the assembler cannot see it: `v[N]` with N=2 given three values, plus a `z`, emits four words that
 	// fit `1+N+1` EXACTLY - so it assembles clean and z silently receives v's third value.
 	["a symbolic array may not be given values",
-		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }", "cannot be placed"],
+		SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }", "Cannot initialize"],
 	["not even when it is the last field",
-		SYM_TAIL + "global S s = { a: 1, v: { 7 } }\nfunction main() { }", "cannot be placed"],
+		SYM_TAIL + "global S s = { a: 1, v: { 7 } }\nfunction main() { }", "Cannot initialize"],
 	["nor a field after it",
-		SYM_STRUCT + "global S s = { a: 1, z: 2 }\nfunction main() { }", "cannot be placed"],
+		SYM_STRUCT + "global S s = { a: 1, z: 2 }\nfunction main() { }", "Cannot initialize"],
 	["zeros are fine - they are what the region fills anyway", SYM_ZERO_SRC, null],
 	// Zero-ness is a VALUE, not a spelling. Comparing operands against the canonical `#0`/`#0.0`/`&NULL`
 	// strings rejected these, which is erroring on safe code. A SYMBOL stays rejected - Impala does not
@@ -1320,12 +1320,12 @@ const symbolicExtentCases = [
 			+ "global F f = { a: 1, z: 0.0e0 }\nfunction main() { }", null],
 	["a const that happens to be zero is NOT assumed zero",
 		"const int Z = 0\n" + SYM_STRUCT + "global S s = { a: 1, z: Z }\nfunction main() { }",
-		"cannot be placed"],
+		"Cannot initialize"],
 	["omitting the symbolic field and everything after it is fine",
 		SYM_STRUCT + "global S s = { a: 1 }\nfunction main() { }", null],
 	["the block reaches out through a nested struct",
 		"const int N = 3\nstruct Inner { int array v[N] }\nstruct Outer { Inner i; int z }\n"
-			+ "global Outer o = { i: { v: { 7, 8 } }, z: 2 }\nfunction main() { }", "cannot be placed"],
+			+ "global Outer o = { i: { v: { 7, 8 } }, z: 2 }\nfunction main() { }", "Cannot initialize"],
 	["the same struct with no initializer is fine", SYM_STRUCT + "global S s\nfunction main() { }", null],
 	["sizeof of a symbolically sized struct is fine",
 		SYM_STRUCT + "function main() locals int q { q = sizeof(S); }", null],
@@ -1471,9 +1471,15 @@ const caretCases = [
 		"function f() locals int x {\n\tif (x == 1) { x = 2; };\n\telse { x = 3; }\n}\n", "2:27: error[E451]"],
 	["E453 names the const, not the next declaration",
 		"export const int C\nglobal int later = 3\nfunction main() { }\n", "1:18: error[E453]"],
-	["E454 names the initializer, not the next declaration",
-		"const int N = 3\nstruct S { int a; int array v[N]; int z }\nglobal S s = { a: 1, v: { 7, 8, 9 }, z: 2 }\n"
-			+ "function main() { }\n", "3:14: error[E454]"],
+	// E454/E459 point at the OFFENDING ENTRY, not at the `{` and not at the next declaration. The entry
+	// position comes from `BracedEntry`'s `.at`, which is only reachable while the item is still an
+	// object - hence the check living in pushInitScalar rather than in emitInitData.
+	["E454 names the entry that cannot be placed",
+		"const int N = 3\nstruct S { int a; int array v[N]; int z }\nglobal S s = { a: 1, z: 2 }\n"
+			+ "function main() { }\n", "3:22: error[E454]"],
+	["E459 names the entry, not the struct",
+		"extern struct E { int a; int b }\nstruct O { int p; E e; int q }\nglobal O o = { p: 1, q: 7 }\n"
+			+ "function main() { }\n", "3:22: error[E459]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);
