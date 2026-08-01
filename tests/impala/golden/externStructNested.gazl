@@ -16,7 +16,8 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 18:1
 		PARA *1
-	$raw:	LOCA *8
+.x.main.raw:	! DEFi #8
+	$raw:	LOCA *.x.main.raw
 	$f:	LOCp
 ;-----------------------------------------------------------------------------
 		ADRL $f $raw:0 *0	; f = (Frame pointer) &raw[0]

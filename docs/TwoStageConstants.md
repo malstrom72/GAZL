@@ -86,7 +86,24 @@ SOME_CONSTS:    CNST *SOME_COUNT        ; signature array SOME_CONSTS[SOME_COUNT
 ```
 
 Note the array size is emitted as `*SOME_COUNT`, **not** `*4`, even though Impala knows it is 4. The
-symbol survives into the artifact, so the size remains inspectable and overridable at stage 2.
+symbol survives into the artifact, so the size stays inspectable, greppable, and editable as a single
+line of the shipped text, and the arithmetic around it stays visible.
+
+**But be precise about what a valued `const` is NOT.** It emits `! DEFi #4`, so it is already defined
+by the time the host sees the file and the host CANNOT override it:
+
+    $ ./output/GAZLCmd program.gazl main SOME_COUNT 9
+    Symbol already defined: SOME_COUNT
+
+The two flavours of `const` are therefore genuinely different, and it matters:
+
+| Form | Emits | Host can define it? | What you get |
+|---|---|---|---|
+| `const int N = 4` | `N: ! DEFi #4` | **No** - `Symbol already defined` | a name, not a knob |
+| `const int N` | nothing (signature row only) | **Yes**, and must | a real specialization point |
+
+So a valued `const` gives you readability and assembler-side folding; only a VALUELESS `const` is
+host-overridable. When you want the host to decide, do not give the constant a default value.
 
 **A `const` with no value emits no definition at all.** The host must supply it:
 
@@ -192,7 +209,14 @@ Every check, fold, diagnostic and optimization in the Impala compiler must obey 
    emit either `*SOME_COUNT` or `*4`, emit the symbol; when it can emit `! SHLi <B> #1 #anInt` or the
    folded result, emit the directive. This is what the compiler already does (see the evidence above).
    Folding is the assembler's job (`docs/GAZLAssemblerOptimizations.md`), and a folded literal has
-   thrown away a specialization point that cannot be recovered from the text.
+   thrown away the name, the visible arithmetic, and the single-line edit point in the shipped text.
+
+   **Corollary, and it has bitten this compiler: a check must never decide "do I know this value?" by
+   inspecting the operand text it just emitted.** Because of this rule the emitted form of a value
+   Impala knows perfectly well is usually `<A>`, `#KNOWN`, `#'a'` or `#0x08`, none of which look like
+   a literal. A check that regex-matches for `#<digits>` therefore silently disables itself on the
+   values it was written to catch. Decide from the parsed constant EXPRESSION, and treat it as unknown
+   only when a host-supplied symbol genuinely enters it.
 
 6. **Never be stricter than the machine you transliterate to.** If GAZL accepts a construct, Impala
    rejecting it needs a much stronger justification than "it looks wrong". See the `&a[7]` case in
@@ -201,23 +225,37 @@ Every check, fold, diagnostic and optimization in the Impala compiler must obey 
 
 ## The deferred assertion
 
-When Impala wants to check something it cannot evaluate, it can emit the check as GAZL directives.
-Branching to a label that does not exist is an assembly error, so a compile-time comparison plus
-`! GOTO` is an assemble-time assertion at zero runtime cost:
+When Impala wants to check something it cannot evaluate, it emits the check as GAZL directives and lets
+the assembler decide. GAZL has a purpose-built directive for this: **`! FAIL <message>`** aborts
+assembly with your text (`src/GAZL.cpp:1027`). Pair it with a compile-time comparison:
 
 ```
 SIZE:       ! DEFi #4
 main:       FUNC
             PARA *1
-            ! LSSi #2 #SIZE @.inRange       ; index < size -> skip the failure
-            ! GOTO @.INDEX_OUT_OF_BOUNDS    ; undefined label = assembly-time error
-.inRange:   MOVi %1 #111
+            ! LSSi #9 #SIZE @inRange        ; index < size -> skip the failure
+            ! FAIL index 9 is out of bounds for Frame (size is SIZE)
+inRange:    !
 ```
 
-The diagnostic text the user sees IS the label name, so name it to read as an error
-(`.ERROR_index_9_out_of_bounds_for_Frame`). This works even when the extent is a host-supplied symbol
-Impala never knew. Mechanics, caveats and the open questions about when to emit these are in
-`docs/CompileTimeHardening.md`.
+which produces:
+
+    FAIL directive encountered: index 9 is out of bounds for Frame (size is SIZE)
+    Line 5:     ! FAIL index 9 is out of bounds for Frame (size is SIZE)
+
+This is the canonical idiom, not a trick: `src/UnitTest.gazl:30-40` guards `GAZL_VERSION` and
+`GAZL_WORD_SIZE` exactly this way, combining `! IFDF` (is it defined at all?) with `! EQUi` and
+`! FAIL`. Note `inRange:  !` - a bare `!` is a no-op that exists to carry a label, since a label needs
+an instruction on its line.
+
+It works even when the operand is a host-supplied symbol Impala never knew, and costs nothing at run
+time because every line is an `!` directive.
+
+> **Do not use the undefined-label trick.** An earlier version of this section (and of
+> `docs/CompileTimeHardening.md`) described branching to a deliberately undefined label so that
+> `Compile time label not found: .INDEX_OUT_OF_BOUNDS` becomes the diagnostic. That works, but it
+> abuses the label name as the error text, so the message cannot contain spaces or punctuation and
+> reads like an internal error. `! FAIL` takes free text. Prefer it.
 
 
 ## Why this follows from "stay a transliterator"
@@ -253,6 +291,19 @@ Concrete shapes that violate the model. If you are about to write one of these, 
   the assembler, where the value actually exists.
 - **Treating "the host has not defined it" as an Impala error.** It is an assembly error, reported at
   stage 2, and that is the correct place for it.
+- **Running `parseInt` / `parseFloat` / arithmetic on an OPERAND STRING.** An operand is `#4` today and
+  `#HOST_N`, `<A>`, `#0x10` or `#'a'` tomorrow. `parseFloat("HOST_N")` is `NaN` and `#NaN` is a legal
+  GAZL identifier; `parseFloat("0x10")` is `0`, so a plain hand-written hex offset silently becomes
+  zero. If you must have a number, get it from the parsed constant expression and handle "I don't have
+  one" explicitly. Guarding on `operand[0] === '#'` does not establish that the rest is a decimal.
+- **Comparing or iterating a declared extent as if it were a number** (`for (e = 0; e < field.size; ++e)`,
+  `field.size * per`). When the extent is symbolic, `field.size` is the string `'N'`: the loop runs zero
+  times and the multiply is `NaN`, so initializer words are silently dropped and every later field
+  shifts. Test the extent for numeric-ness first and take a deliberate branch.
+- **Emitting positional `DATA` for a type whose layout the host owns.** If field offsets come from
+  `.o.*`, an initializer written in declaration order is a guess. There is no seek/`.org` directive to
+  fix it up, so the only sound options are to reject the initializer or to require a host-independent
+  form. Half-deferring (symbolic reads, positional writes) is worse than either consistent choice.
 
 
 ## See also

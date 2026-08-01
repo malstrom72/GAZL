@@ -23,7 +23,8 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 9:1
 ; signature extern native printInt() -> unknown @ 23:1
 ; signature extern native printFloat() -> unknown @ 24:1
 ; signature extern native printLF() -> unknown @ 25:1
-store:	GLOB *8	; signature array store[8] : unknown @ 27:1
+.x.store:	! DEFi #8
+store:	GLOB *.x.store	; signature array store[8] : unknown @ 27:1
 
 ;-----------------------------------------------------------------------------
 tweak:	FUNC	; signature func tweak(Voice-ptr v, float x) -> void @ 29:1

@@ -53,14 +53,26 @@ comparison, no `[<A>]` descriptors, no constant evaluator, no `:` open-axis mark
 to `a[y*W + x]` folded into the existing single `dynIndex` place. It was still rejected, for reasons
 that are NOT the type-identity trap:
 
-1. Expression extents in struct array fields were BROKEN (see the ordering trap in
-   [[docs/StructLayoutConstants.md]]) - a prerequisite fix, not part of the feature.
-2. An `extern struct` array field states no extent (E430). An inner extent IS the stride, so a sizeless
-   field cannot be indexed at rank >= 2. "Extern array fields are sizeless" and "a matrix can be a
-   struct field" are mutually exclusive for host-owned structs.
-3. Therefore the whole selling point - "put a matrix in a struct and pass it that way" - cannot reach
-   host-owned structs. The feature costs grammar, place-model, validator and fuzzer work while
-   delivering materially less than proposed.
+1. ~~Expression extents in struct array fields were BROKEN~~ - **already fixed when this was written.**
+   `260b57c` (2026-07-26 14:32) emits a field's folded extent before the layout block that reads it,
+   with fixture `structFieldExtents`; this re-evaluation was committed 23 minutes later and recorded
+   the discovery rather than the state. No longer a prerequisite.
+2. An `extern struct` array field states no extent (E430), and an inner extent IS the stride, so the
+   multidim SPELLING cannot state one for a host-owned struct. This was written as "extern array fields
+   are sizeless" and "a matrix can be a struct field" being mutually exclusive, which overstates it: a
+   host-owned matrix is indexable TODAY through a valueless `const int W;`, which the host supplies at
+   assembly like any other extent. Verified:
+
+        const int W;
+        extern struct Grid { int array cells; int tag }
+        function get(Grid pointer g, int x, int y) returns int v { v = g->cells[y * W + x]; }
+        -> MULi %0 $y #W / ADDi %0 %0 $x / ADDp %1 $g #.o.Grid.cells / PEEK $v %1 %0
+
+   So the constraint is on the syntax's reach, not on the capability.
+3. The conclusion stands, but as cost/benefit rather than impossibility. What multidim adds over
+   `y*W + x` is subscript sugar plus shape typing. The sugar is available today for both struct kinds
+   (see 2), and the shape typing is exactly the unsolved type-identity problem above. The feature costs
+   grammar, place-model, validator and fuzzer work while delivering materially less than proposed.
 
 Same call as by-value: the reach does not justify the surface. Do not treat multi-dim arrays as
 "nearly done" because the milder design looked clean on paper.
@@ -103,6 +115,120 @@ Rejected now with: `E426` by-value struct parameter, `E427` by-value struct retu
 values (function or funcptr type), `E429` destructuring assignment. Each diagnostic carries a fix-it hint.
 
 
+## Parked: `inline function`
+
+    branch:   GAZL2                          (the GAZL 2 line, which is where the rework lives)
+    removed:  see the commit naming this file
+    target:   Impala 3.0, requiring GAZL 2
+
+Contains the whole expansion machinery: body capture, per-expansion `_i<N>` label and local renaming,
+argument substitution with an opaque-write marshalling scan, constant folding through a straight-line
+body, transient block relocation, and the `SCOP` / `ENDS` frame scoping that places an expansion's
+locals.
+
+Parked because **an expansion needs GAZL 2 and Impala 2 must stay usable on GAZL 1.0 engines.** A 1.0
+assembler rejects `SCOP` with `Unknown mnemonic`. The transient-based lowering that did work on 1.0 was
+the wrong design and is not what is parked: it re-implemented allocation numerically, so an inline local
+whose extent is not a number Impala knows - an `extern struct` array, `t[H * N]` - either got a wrong
+frame or hit `E433`. See [`docs/TwoStageConstants.md`](TwoStageConstants.md) for why that class of
+assumption keeps failing.
+
+The park branch is not an ancestor: `GAZL2` forked from the last Impala 2 commit that still had the
+feature and carried it forward rather than freezing it. It is a working line, not an archive.
+
+Rejected now with `E439`, whose hint points at GAZL 2 and at dropping the keyword. The feature's own
+codes are retired with it and must not be reused: `E432` recursive expansion, `E433` non-literal local
+extent (which the `.x.` rework deleted outright), `E434` exported inline, `E435` address of an inline
+function, `E436` redeclared inline.
+
+Retired with it: fixtures `inlineEquivalence`, `inlineEquivalenceCall`, `inlineFunctions`,
+`inlineReviewArgs`, `inlineReviewCompose`, `inlineReviewControl`, `inlineReviewLocals`,
+`inlineReviewTypes`; the `inlineCases` diagnostic table in `jspegCompilerTests.js`; and - the real loss
+- the fuzzer's INLINE DIFFERENTIAL, the only oracle there with a reference build to compare against
+(same program, keyword stripped, must print the same thing). Three silent miscompiles were caught by it.
+`tests/impala/sources/import/mathlib.impala` kept its cross-unit helper as an ordinary function.
+
+What did NOT go with it: `.x.` extent constants (`docs/SymbolNamespace.md`) and `SCOP` / `ENDS` are
+worth having on their own, and the call-window-in-a-hole guard in `borrowForCall` is an Impala 1.0 bug
+fix that stays.
+
+
+## Does anything here get easier now that extents are named constants?
+
+Asked 2026-08-01, after `.x.<name>` array extents landed (`docs/SymbolNamespace.md`). Two different
+questions, with two different answers. Recorded so neither is re-derived.
+
+### Does the EXISTING `.x.` symbol help? No.
+
+`.x.` solves exactly one problem: a value that has neither a number Impala knows NOR a name - an array
+extent used to be folded into a recycled `<X>` scratch, so it existed for one line and could not be
+quoted again. Neither parked feature has that problem.
+
+**By-value structs.** Their size was never nameless: `.z.Name` has been a permanent assemble-time symbol
+since struct layouts shipped, and `structAllocSize` already returns `*.z.Name`. The blocker is that
+Impala's TRANSIENT allocator keys slots by integer index - `claimSlot` looks up `'%'+n`, `borrowForCall`
+compares `maxFree` against `counters-1`, `copyStructArg` iterates `words` slots - and you cannot iterate
+`.z.V` slots. The `SCOP`/`ENDS` remedy that fixed inline locals does NOT transfer: it places NAMED FRAME
+LOCALS, and there is no assembler-side allocator for transients to delegate to at all (`%N` is an index
+the emitter computes; the assembler only takes a `max`). So the fix is REWRITING Impala's allocator into
+the symbolic position algebra of [`docs/GAZLSymbolicWindows.md`](GAZLSymbolicWindows.md) - strictly more
+machinery than today, and it trades `claimSlot`'s loud per-slot overlap assert for a discipline whose
+failures are silent. The parking rationale gets stronger, not weaker.
+
+**Multidim arrays.** `.x.` is keyed on the array OBJECT (`.x.a`, `.x.b`), so symbol identity as shape
+identity would reject every pair of distinct arrays. Its value is the allocation size in WORDS, not a
+per-axis element count, and there is one per array, so a rank-2 shape has nothing to compare pairwise.
+It is not emitted for struct array fields or parameters - the positions the feature needs - and carries
+no signature row, so `gazl-validate` cannot see it.
+
+### Does the CONCEPT - always mint a constant, here one per DIMENSION - help? Yes, for multidim.
+
+This is the sharper question and it has a real answer. The thread's stated limit was:
+
+> There is no way to have BOTH "write any calculation directly" AND "sound, complete type equivalence"
+> **when the values are unknown**.
+
+The operative clause is the last one. Name every dimension and the comparison can be DEFERRED to
+assembly, where the values are not unknown - so it stops being a syntactic question (the
+polynomial-identity problem) and becomes an integer compare: sound, complete, any expression allowed.
+The mechanism already exists and is already used this way in `src/UnitTest.gazl:30-40`:
+
+    ! EQUi #.d.a.0 #.d.b.0 @.dim0ok
+    ! FAIL f(b): axis 0 is b[N] but f expects [4]
+    .dim0ok:
+
+[`docs/deferredShapeCheck.gazl`](deferredShapeCheck.gazl) is a runnable demo. `[4][3]` checked against
+`[N][W-1]` PASSES when the host supplies `N=4, W=4`, and names the offending axis when it does not.
+Neither Impala (it does not know `N`) nor `gazl-validate` (`arraySignaturesCompatible` is a raw
+`a.size !== b.size` string compare, so `[4]` vs `[N]` is a false conflict and a folded extent publishes
+as `[]` and is skipped) can decide that today. Zero runtime cost - every line is a `!` directive.
+
+**This also makes E430 re-examinable.** That rule forbids an `extern struct` array field from stating an
+extent because "a number here would be an unverifiable claim Impala never reads"
+(`impala/impala.jspeg`). It is unverifiable only because nothing asks. If the host publishes a per-axis
+extent the way it already publishes `.o.` and `.z.`, the claim becomes checkable, and the drift is
+reported to the host that caused it. Verified to work.
+
+**Honest costs.**
+
+1. The error moves from compile time to ASSEMBLY time, which in GAZL means the end user's machine. Two
+   mitigations: decide at compile time whatever Impala CAN decide (both sides literal) and defer only
+   the rest; and where a shape genuinely depends on host constants, deferring is CORRECT, not a
+   compromise - the answer differs per host.
+2. It needs a new per-axis symbol namespace (one per axis per array), not `.x.`, which is one-per-array
+   and in words. See `docs/SymbolNamespace.md` before minting a tag.
+3. `CONST_INT_P` is not forward-referencable, so both sides must be defined before the check - the same
+   ordering discipline the layout blocks already follow.
+4. The diagnostic is free text with no caret, though it can carry an Impala source location.
+5. It only pays off WITH arrays-as-values, since Impala has no array parameters today. The one piece
+   worth doing independently is fixing `arraySignaturesCompatible`'s form-dependence.
+6. It does nothing for by-value structs, whose blocker is the allocator, not identity.
+
+**The generalization worth remembering:** *if the compiler cannot decide it, name both sides and let the
+assembler decide it.* That is the same move `.x.` makes for extents and `.o.`/`.z.` make for layout, and
+`! FAIL` is what turns it into a diagnostic rather than a silent assumption.
+
+
 ## Impala 3.0 wishlist
 
 The first three belong together, because they are all changes to the same calling convention. Doing them in
@@ -143,10 +269,13 @@ CORRECT, not a stopgap - see that document before "fixing" any by-value size to 
 ### Multidimensional arrays
 
 Restore from `Impala2-multidim-arrays`. Independent of the ABI work above - it needs no calling-convention
-change. Two things must be settled FIRST, and neither is part of the feature itself: array-dimension type
-identity (a constant evaluator is load-bearing here), and the expression-extent ordering trap in struct
-array fields. The 2026-07-26 re-evaluation above also stands: the "matrix as a struct field" shortcut does
-not reach `extern struct`, because a sizeless host-owned array field has no stride to index by.
+change. One thing must be settled FIRST and it is not part of the feature: array-dimension type identity.
+The "constant evaluator is load-bearing" reading of that is superseded - see the deferred-shape-check note
+above, which decides identity at ASSEMBLY time with `! EQUi` + `! FAIL` and needs no evaluator, because
+the values are known by then. The other former prerequisite, the expression-extent ordering
+trap in struct array fields, was fixed in `260b57c`. The 2026-07-26 re-evaluation above still stands on
+cost/benefit: multidim SYNTAX cannot state an inner extent for a host-owned struct, and hand-striding
+through a host-supplied `const int W;` already covers that case without the feature.
 
 ### Block implicit array->pointer decay
 

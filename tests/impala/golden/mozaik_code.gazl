@@ -4,7 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 9:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 10:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 11:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:1
+.x.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 13:1
 	DATA &.s__4d2 &.s__4d2 &.s_CRUSH_4d3 &.s_BLOCKR_4d4
 	DATA &.s__4d2 &.s__4d2 &.s__4d5 &.s_BLOCKS_4d6
 ; signature extern native abort() -> unknown @ 24:1
@@ -29,11 +30,14 @@ panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 13:1
 ; signature extern const PARAM_COUNT : int @ 46:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 48:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 49:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 50:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 49:1
+.x.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 50:1
 	CNST *1
 clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 51:1
-signal:	GLOB *2	; signature array signal[2] : unknown @ 52:1
+.x.signal:	! DEFi #2
+signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 52:1
 	CNST *1
 	! SHLi <A> #1 #SWITCHES_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -190,10 +194,14 @@ HP_K:	! DEFf #0.0056828256022101	; signature const HP_K : float @ 202:1
 wantsReset:	DATi #FALSE	; signature global wantsReset : int @ 206:1
 	GLOB *1
 breakLoop:	DATi #FALSE	; signature global breakLoop : int @ 207:1
-readRates:	GLOB *256	; signature array readRates[256] : unknown @ 208:1
-blockLens:	GLOB *256	; signature array blockLens[256] : unknown @ 209:1
-minCycles:	GLOB *256	; signature array minCycles[256] : unknown @ 210:1
-thresDKs:	GLOB *256	; signature array thresDKs[256] : unknown @ 211:1
+.x.readRates:	! DEFi #256
+readRates:	GLOB *.x.readRates	; signature array readRates[256] : unknown @ 208:1
+.x.blockLens:	! DEFi #256
+blockLens:	GLOB *.x.blockLens	; signature array blockLens[256] : unknown @ 209:1
+.x.minCycles:	! DEFi #256
+minCycles:	GLOB *.x.minCycles	; signature array minCycles[256] : unknown @ 210:1
+.x.thresDKs:	! DEFi #256
+thresDKs:	GLOB *.x.thresDKs	; signature array thresDKs[256] : unknown @ 211:1
 
 ;-----------------------------------------------------------------------------
 init:	FUNC	; signature func init() -> void @ 218:1
@@ -254,7 +262,8 @@ process:	FUNC	; signature func process() -> void @ 244:1
 	$inR:	LOCf
 	$yL:	LOCf
 	$yR:	LOCf
-	$y2:	LOCA *2
+.x.process.y2:	! DEFi #2
+	$y2:	LOCA *.x.process.y2
 	$clock:	LOCi
 	$wcLenL:	LOCi
 	$wcLenR:	LOCi

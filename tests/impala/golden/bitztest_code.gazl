@@ -4,7 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
+.x.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
 	DATA &.s_Sillyr_4d2 &.s__4d3 &.s__4d3 &.s_LEFTDE_4d4
 	DATA &.s__4d3 &.s__4d3 &.s__4d3 &.s_RINGMO_4d5
 ; signature extern native abort() -> unknown @ 38:1
@@ -43,19 +44,23 @@ panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
 ; signature extern const POSITION_FRACT_BITS : int @ 77:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 79:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 80:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 81:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
+.x.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
 	GLOB *1
 instance:	DATi #0	; signature global instance : int @ 82:1
 	CNST *1
 clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 83:1
-signal:	GLOB *2	; signature array signal[2] : unknown @ 85:1
+.x.signal:	! DEFi #2
+signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 85:1
 
 ;-----------------------------------------------------------------------------
 init:	FUNC	; signature func init() -> void @ 99:1
 		PARA *1
 	$i:	LOCi
-	$buf:	LOCA *256
+.x.init.buf:	! DEFi #256
+	$buf:	LOCA *.x.init.buf
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
@@ -70,8 +75,10 @@ reset:	FUNC	; signature func reset() -> void @ 108:1
 ;-----------------------------------------------------------------------------
 update:	FUNC	; signature func update() -> void @ 116:1
 		PARA *1
-	$buf:	LOCA *256
-	$params:	LOCA *PARAM_COUNT
+.x.update.buf:	! DEFi #256
+	$buf:	LOCA *.x.update.buf
+.x.update.params:	! DEFi #PARAM_COUNT
+	$params:	LOCA *.x.update.params
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 

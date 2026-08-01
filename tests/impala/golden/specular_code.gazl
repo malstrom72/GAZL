@@ -4,7 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
+.x.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
 	DATA &.s__4d2 &.s__4d2 &.s_THRESH_4d3 &.s_00FFlo_4d4
 	DATA &.s__4d2 &.s__4d2 &.s_DECAYP_4d5 &.s_00FFx1_4d6
 ; signature extern native abort() -> unknown @ 38:1
@@ -43,13 +44,16 @@ panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
 ; signature extern const POSITION_FRACT_BITS : int @ 77:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 79:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 80:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 81:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
+.x.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
 	GLOB *1
 instance:	DATi #0	; signature global instance : int @ 82:1
 	CNST *1
 clockFreqLimit:	DATi #44100	; signature readonly clockFreqLimit : int @ 83:1
-signal:	GLOB *2	; signature array signal[2] : unknown @ 86:1
+.x.signal:	! DEFi #2
+signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 86:1
 
 ;-----------------------------------------------------------------------------
 error:	FUNC	; signature func error(ptr s) -> void @ 99:1
@@ -225,22 +229,30 @@ PARTIALS_PARAM:	! DEFi #OPERAND_2_LOW_PARAM_INDEX	; signature const PARTIALS_PAR
 updateMask:	DATi <A>	; signature readonly updateMask : int @ 213:1
 	GLOB *1
 doReset:	DATi #TRUE	; signature global doReset : int @ 218:1
-window:	GLOB *FFT_SIZE_2	; signature array window[FFT_SIZE_2] : unknown @ 219:1
-cRotateRe:	GLOB *256	; signature array cRotateRe[256] : unknown @ 220:1
-cRotateIm:	GLOB *256	; signature array cRotateIm[256] : unknown @ 221:1
-partialGains:	GLOB *8	; signature array partialGains[8] : unknown @ 222:1
+.x.window:	! DEFi #FFT_SIZE_2
+window:	GLOB *.x.window	; signature array window[FFT_SIZE_2] : unknown @ 219:1
+.x.cRotateRe:	! DEFi #256
+cRotateRe:	GLOB *.x.cRotateRe	; signature array cRotateRe[256] : unknown @ 220:1
+.x.cRotateIm:	! DEFi #256
+cRotateIm:	GLOB *.x.cRotateIm	; signature array cRotateIm[256] : unknown @ 221:1
+.x.partialGains:	! DEFi #8
+partialGains:	GLOB *.x.partialGains	; signature array partialGains[8] : unknown @ 222:1
 	! SUBi <A> #FFT_POWER #1
-fftWPRe:	GLOB *<A>	; signature array fftWPRe[] : unknown @ 223:1
+.x.fftWPRe:	! DEFi #<A>
+fftWPRe:	GLOB *.x.fftWPRe	; signature array fftWPRe[] : unknown @ 223:1
 	! SUBi <A> #FFT_POWER #1
-fftWPIm:	GLOB *<A>	; signature array fftWPIm[] : unknown @ 224:1
+.x.fftWPIm:	! DEFi #<A>
+fftWPIm:	GLOB *.x.fftWPIm	; signature array fftWPIm[] : unknown @ 224:1
 	GLOB *1
 threshold:	DATf #0.0	; signature global threshold : float @ 225:1
 	GLOB *1
 decayConstant:	DATf #0.0	; signature global decayConstant : float @ 226:1
 	GLOB *1
 outputGain:	DATf #0.0	; signature global outputGain : float @ 227:1
-randomArray:	GLOB *FFT_SIZE_2	; signature array randomArray[FFT_SIZE_2] : unknown @ 228:1
-untangleParams:	GLOB *2	; signature array untangleParams[2] : unknown @ 229:1
+.x.randomArray:	! DEFi #FFT_SIZE_2
+randomArray:	GLOB *.x.randomArray	; signature array randomArray[FFT_SIZE_2] : unknown @ 228:1
+.x.untangleParams:	! DEFi #2
+untangleParams:	GLOB *.x.untangleParams	; signature array untangleParams[2] : unknown @ 229:1
 
 ;-----------------------------------------------------------------------------
 fftReIndex:	FUNC	; signature func fftReIndex(int n, ptr data) -> void @ 233:1
@@ -815,8 +827,10 @@ update:	FUNC	; signature func update() -> void @ 508:1
 process:	FUNC	; signature func process() -> void @ 538:1
 		PARA *1
 	! MULi <A> #FFT_SIZE #2
-	$fftBuffer:	LOCA *FFT_SIZE
-	$inputBuffer:	LOCA *FFT_SIZE
+.x.process.fftBuffer:	! DEFi #FFT_SIZE
+	$fftBuffer:	LOCA *.x.process.fftBuffer
+.x.process.inputBuffer:	! DEFi #FFT_SIZE
+	$inputBuffer:	LOCA *.x.process.inputBuffer
 	$clock:	LOCi
 	$i:	LOCi
 	$i2:	LOCi
@@ -827,8 +841,10 @@ process:	FUNC	; signature func process() -> void @ 538:1
 	$re:	LOCf
 	$im:	LOCf
 	$power:	LOCf
-	$feedbackRe:	LOCA *FFT_SIZE_2
-	$feedbackIm:	LOCA *FFT_SIZE_2
+.x.process.feedbackRe:	! DEFi #FFT_SIZE_2
+	$feedbackRe:	LOCA *.x.process.feedbackRe
+.x.process.feedbackIm:	! DEFi #FFT_SIZE_2
+	$feedbackIm:	LOCA *.x.process.feedbackIm
 	$k:	LOCf
 	$partial:	LOCi
 	$partialBase1:	LOCi
@@ -845,7 +861,8 @@ process:	FUNC	; signature func process() -> void @ 538:1
 	$y:	LOCi
 	$t:	LOCi
 	$prng:	LOCi
-	$mixBuffer:	LOCA *<A>
+.x.process.mixBuffer:	! DEFi #<A>
+	$mixBuffer:	LOCA *.x.process.mixBuffer
 	$mixBufferOffset:	LOCi
 	$myInstance:	LOCi
 ;-----------------------------------------------------------------------------

@@ -1,6 +1,20 @@
 # Struct layout as GAZL constants (design note)
 
-Status: DESIGN NOTE, not implemented. Idea + naming decision + open questions.
+Status: **IMPLEMENTED** (verified 2026-07-31 against the shipped compiler). This file began as a design
+note and the historical sections below are kept as the design record, but the scheme itself now ships:
+normal structs, extern structs, `sizeof`, field access AND allocation sizes are all symbolic. See
+[IMPLEMENTED (Phase 2a)](#implemented-phase-2a---normal-structs) and
+[IMPLEMENTED (extern struct v1)](#implemented-extern-struct-v1) for the details, and treat any
+"not implemented" / "still open" phrasing elsewhere in this file as historical.
+
+Observed today from `struct Local { int a  float b }` with a `Local` local:
+
+    ! MOVi <a> #0 ; layout of struct Local
+    .o.Local.a:  ! DEFi #<a>
+    .o.Local.b:  ! DEFi #<a>
+    .z.Local:    ! DEFi #<a>
+    $v:          LOCA *.z.Local
+                 MOVi $v:.o.Local.a #1
 
 Background: this note applies the two-stage constant model to struct layout. The model itself is
 specified in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
@@ -50,9 +64,13 @@ site (`PEEK $x $v #.o.Voice.gain`), so brevity keeps generated GAZL compact and 
 are safe here despite the crowded label namespace because a layout tag is ALWAYS dot-followed (`.o.` /
 `.z.`) while the compiler's own labels are letter+digits with no dot (`.s0`, `.e24`, `.l3`,
 `.s_...`). So `.o.Voice` cannot be confused with any `.oN` / `.o_...` label even if that letter were
-later reused. Verified free: the compiler currently emits only `.f .s .e .l .a .t` label tags; `.o` and
-`.z` are unused. (`.z` = size; if you prefer the "words" mnemonic, `.w` is equally free - pick when
-implementing.)
+later reused.
+
+`.z` was chosen over the `.w` ("words") alternative and both `.o.*` and `.z.*` now SHIP - the paragraph
+here used to record them as unused and the choice as open, which is no longer true. The full inventory
+of generated symbols, which letters remain free, and the rules for adding one live in
+[`docs/SymbolNamespace.md`](SymbolNamespace.md); consult that rather than this section, which only
+explains the two layout tags.
 
 Compiler reserves the `.o.*` and `.z.*` prefixes; nothing in Impala emits a leading-dot symbol
 (globals/consts are bare names).
@@ -197,11 +215,15 @@ field's extent borrow until `endStruct`, so two expression extents cannot fold i
 Every non-extern struct now emits its layout as GAZL compile-time constants: a rolling `<a>`
 accumulator (`! MOVi <a> #0`; `.o.Struct.field: ! DEFi #<a>`; `! ADDi <a> #<a> #<size>`; `.z.Struct:
 ! DEFi #<a>`), emitted at struct-definition time in dependency order (inner-before-outer, guaranteed by
-E412). Field access references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested and array
-field offsets are ACCUMULATED AT ASSEMBLE TIME into a `<X>` scratch (`! ADDi <A> #.o.D.outer
-#.o.C.mid`, ...), so an access at any depth resolves to a single operand offset. Allocation/copy SIZES
-(LOCA/PARA/GLOB/COPY/ADRL-hint) stay numeric; they equal the accumulator's value (same computation), so
-the program is consistent.
+E412). Field access references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested struct and
+array fields MATERIALIZE the sub-object address into a pointer place at offset 0 (via `ADDp`/`ADRL`), so
+every access uses a SINGLE symbol - no runtime offset accumulation and no compile-time folding through
+the lazy-meta model.
+
+(Superseded detail: this section used to say allocation/copy SIZES stayed numeric. They no longer do.
+Verified 2026-07-31: a struct local emits `LOCA *.z.Local`, an array of structs emits
+`! MULi <A> #4 #.z.Voice` / `LOCA *<A>`, and whole-struct copy emits `COPY *.z.Name`. Allocation is
+symbolic too, which is what makes host-owned layout actually work rather than only half-work.)
 
 Verified: the playground demo (`Voice`/`Biquad`, nested access, whole-struct copy) renders the DEFi
 accumulator and runs; the dedicated fixture tests/impala/sources/structLayout.impala prints `4 2 0.75
@@ -221,26 +243,21 @@ NO layout - the host supplies those constants at load. Verified end to end on GA
 Impala GAZL ran correctly against two different host layouts (fields at different offsets) with no
 recompile. Normal structs are unchanged (byte-identical goldens); only the extern path is symbolic.
 
-v1 scope and guards. **Corrected 2026-07-29** - this list described planned guards that were never
-needed, because the features they were guarding against all shipped:
+Superseded scope note: this section used to list guards **E418** (fields must be scalar/pointer),
+**E425** (no by-value extern instances) and **E424** (no nested extern field access), and to defer
+by-value/nested/array extern fields to "v1.1". **None of those three codes exist in `impala.jspeg` any
+more** (verified 2026-07-31; only stale comment references survive near lines 1951 and 2245), and all
+three restrictions have been lifted: an extern struct with a nested array field compiles, and a
+by-value extern local emits `LOCA *.z.E` / `COPY *.z.E`.
 
-- ~~Fields must be scalar or pointer (E418)~~ - **wrong.** Array fields and by-value nested struct
-  fields both work (`tests/impala/sources/externStructArrayField.impala`, `externStructNested.impala`).
-- ~~Declaring an extern struct BY VALUE is rejected (E425)~~ - **wrong.** By-value extern instances work
-  (`externStructByValue.impala`). Access is via pointer, a cast to `Name pointer`, or by value; read and
-  write.
-- ~~Nested field access at a non-zero offset is rejected (E424)~~ - **wrong.** `f->origin.y` compiles and
-  runs.
-
-**E418, E424 and E425 have no fail site and never did** - grep `impala/impala.jspeg` and they appear only
-in comments. The one real restriction is generic rather than extern-specific: passing or returning ANY
-struct by value is `E426`/`E427` (see [`ParkedFeatures.md`](ParkedFeatures.md)). The dead codes stay
-burned, not reused.
-
-Still deferred: the gazl-validator cross-check of host layout vs declared interface (see
-[`ExternPrototypes.md`](ExternPrototypes.md) for what it does and does not catch today).
-Separately, Phase 2a (converting NORMAL structs to the same `.o.*`/`.z.*` scheme, for the conditional-
-field benefit) is still open - it is the larger ~15-site change with full golden regeneration.
+Still genuinely outstanding: the gazl-validator cross-check of host layout vs declared interface. And
+one thing this expansion opened up that is NOT sound yet - brace-initializing an extern struct emits
+positional `DATA` in declaration order while every read goes through `.o.*`, so the values land wrong
+under any host layout that is not Impala's guess. See the audit note in
+[`docs/TwoStageConstants.md`](TwoStageConstants.md) ("Emitting positional `DATA` for a type whose
+layout the host owns").
+(Superseded: this paragraph used to say Phase 2a was "still open". It landed - see the Phase 2a section
+above, which this sentence predates.)
 
 ## Host-owned struct layout (late-bound ABI) - a motivating future use case
 

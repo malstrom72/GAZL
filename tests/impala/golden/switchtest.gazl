@@ -29,7 +29,8 @@ CONSTANT:	! DEFi #29	; signature const CONSTANT : int @ 15:1
 y:	FUNC	; signature func y() -> void @ 16:1
 		PARA *1
 	$i:	LOCi
-	$a:	LOCA *5
+.x.y.a:	! DEFi #5
+	$a:	LOCA *.x.y.a
 ;-----------------------------------------------------------------------------
 		GETL %0 $a $i	; switch ((int) a[i] == 0 to 'a') 
 		SWCH %0 *'a' @.s0
@@ -74,7 +75,8 @@ y:	FUNC	; signature func y() -> void @ 16:1
 ; signature extern native printInt() -> unknown @ 23:1
 ; signature extern native printLF() -> unknown @ 24:1
 MINUS_FIVE:	! DEFi #-5	; signature const MINUS_FIVE : int @ 25:1
-gx:	GLOB *10	; signature array gx[10] : unknown @ 26:1
+.x.gx:	! DEFi #10
+gx:	GLOB *.x.gx	; signature array gx[10] : unknown @ 26:1
 
 ;-----------------------------------------------------------------------------
 test:	FUNC	; signature func test(int a, int b) -> int @ 28:1

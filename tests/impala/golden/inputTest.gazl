@@ -9,7 +9,8 @@
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 6:1
 		PARA *1
-	$buffer:	LOCA *1024
+.x.main.buffer:	! DEFi #1024
+	$buffer:	LOCA *.x.main.buffer
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_HEJ_4d2 	; print("HEJ")
 		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 9:14

@@ -30,8 +30,6 @@ const path = require('path');
 const cp = require('child_process');
 
 const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32' ? 'GAZLCmd.exe' : 'GAZLCmd');
-// Both halves of the inline differential must compile under IDENTICAL settings or the oracle compares
-// two different programs.
 const COMPILE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true };
 
 // Run a compiled program on the VM. Returns null when there is no compiler fault, or a message when
@@ -67,36 +65,11 @@ function runOnVm(res) {
 	return 'load failure (exit ' + res.status + '): ' + (line || err.split('\n')[0] || '').trim();
 }
 
-// What a program PRINTED, for the inline differential below. null when it did not load cleanly or
-// trapped - in that case there is nothing to compare.
-function outputOf(res) {
-	return (res.error || res.status !== 0 ? null : (res.stdout || ''));
-}
-
-// THE INLINE ORACLE. `inline` is a lowering, not a semantic change, so the same program with the
-// keyword stripped must print exactly the same thing. This is the only check here with a real
-// reference - the plain --vm oracle can just see that a module loads. It is what the three inline
-// miscompiles found by hand (call-window adjacency, switch case labels, double processBranches)
-// would each have failed, and all three were silent.
-function inlineDifferential(src, res) {
-	if (src.indexOf('inline function') < 0) return null;
-	const plain = src.split('inline function').join('function');
-	let plainGazl;
-	try {
-		plainGazl = compileWithJsImpala(plain + '\n', COMPILE_OPTS);
-	} catch (e) {
-		return 'inline differential: the same program without `inline` failed to compile: '
-				+ ((e && e.message) || e);
-	}
-	const a = outputOf(res);                        // the inlined build already ran; do not run it twice
-	const b = outputOf(runGazl(plainGazl));
-	if (a === null || b === null) return null;      // trapped or did not load: nothing to compare
-	if (a !== b) {
-		return 'inline differential: inlined printed ' + JSON.stringify(a.slice(0, 200))
-				+ ' but the out-of-line build printed ' + JSON.stringify(b.slice(0, 200));
-	}
-	return null;
-}
+// PARKED WITH THE FEATURE: the inline differential (compile the same program with `inline` stripped
+// and require identical output) lived here. It was the only check in this fuzzer with a real
+// reference oracle, and the three inline miscompiles found by hand - call-window adjacency, switch
+// case labels, double processBranches - would each have failed it. Restore it from history alongside
+// `inline` itself; see docs/ParkedFeatures.md.
 
 function mulberry32(a) {
 	return function () {
@@ -197,19 +170,18 @@ function genProgram() {
 		return ints.length ? '(' + ref(ints[ri(ints.length)]) + ' & ' + mask + ')' : String(ri(n));
 	}
 
-	// Two guaranteed inline helpers with FIXED bodies, declared first so every later function and main
-	// can call them: `fnW` writes through its pointer parameter, `fnA` is transparent and reads both of
-	// its. Together they are exactly what the aliasing shape in genCall needs, and the bodies are fixed
-	// because a random one would usually make `fnA` opaque - and then nothing is ever substituted.
-	// Guaranteed for the same reason a struct local and a local array are: assembled from the random
-	// population the shape needs about seven flips to line up and simply never appeared.
-	// (Bare `p`/`a`/`b`/`r` cannot collide with generated names, which all carry a digit suffix.)
-	const HELPERS = 'inline function fnW(int pointer p) returns int r { p[0] = 7; r = 0; }\n'
-			+ 'inline function fnA(int a, int b) returns int r { r = a + b; }\n';
+	// Two guaranteed helpers with FIXED bodies, declared first so every later function and main can
+	// call them: `fnW` writes through its pointer parameter, `fnA` is transparent and reads both of
+	// its. Together they are exactly what the aliasing shape in genCall needs. Guaranteed for the same
+	// reason a struct local and a local array are: assembled from the random population the shape needs
+	// about seven flips to line up and simply never appeared. (Bare `p`/`a`/`b`/`r` cannot collide with
+	// generated names, which all carry a digit suffix.) Both were `inline` until that was parked.
+	const HELPERS = 'function fnW(int pointer p) returns int r { p[0] = 7; r = 0; }\n'
+			+ 'function fnA(int a, int b) returns int r { r = a + b; }\n';
 	funcs.push({ name: 'fnW', params: [{ name: 'p', t: 'p:i' }], rets: ['i'], retNames: ['r'],
-			inline: true, fixed: true, aliasWriter: true });
+			fixed: true, aliasWriter: true });
 	funcs.push({ name: 'fnA', params: [{ name: 'a', t: 'i' }, { name: 'b', t: 'i' }], rets: ['i'],
-			retNames: ['r'], inline: true, fixed: true });
+			retNames: ['r'], fixed: true });
 
 	// helper functions (2-5)
 	const nFuncs = 2 + ri(4);
@@ -220,15 +192,13 @@ function genProgram() {
 		// scalar return.
 		for (let k = ri(4); k > 0; --k) params.push({ name: id('p'), t: someType(false, true) });
 		const rets = rnd() < 0.35 ? [] : [pick(scalarTypes)];
-		funcs.push({ name: 'fn' + i, params, rets, retNames: rets.map(() => id('r')),
-				inline: chance(0.35) });   // no symbol is emitted, so never a funcptr target
+		funcs.push({ name: 'fn' + i, params, rets, retNames: rets.map(() => id('r')) });
 	}
 
 	// functypes (0-2), each derived from a real function's signature so it has a valid target
 	const nFts = ri(3);
-	const outOfLine = funcs.filter((f) => !f.inline);   // an inline function has no address to point at
-	for (let i = 0; i < nFts && outOfLine.length; ++i) {
-		const src = pick(outOfLine);
+	for (let i = 0; i < nFts; ++i) {                   // `inline` is parked; every function has an address
+		const src = pick(funcs);
 		functypes.push({ name: 'FT' + i, params: src.params.map((p) => p.t), rets: src.rets.slice(), target: src.name });
 	}
 	const funcMatches = (fn, ft) => fn.params.length === ft.params.length
@@ -255,9 +225,9 @@ function genProgram() {
 			// Everywhere else - a call argument, and so a parameter - only element 0 is dereferenced.
 			// No string literal here, though one is typed `int pointer`: it is the one pointer the
 			// generator can produce that is NOT writable, and now that a callee may write through its
-			// pointer parameter, passing one is undefined behaviour - it traps, and a trapped run has
-			// no output for the inline differential to compare, so it silently costs coverage instead
-			// of finding anything. Constant-string codegen is byte-diff gated by 36 fixtures already.
+			// pointer parameter, passing one is undefined behaviour - it traps, and a trapped run tells
+			// the oracles nothing, so it silently costs coverage instead of finding anything.
+			// Constant-string codegen is byte-diff gated by 36 fixtures already.
 			const e = ptrElem(want);
 			need = need || 1;
 			// The address of a scalar local: the only pointer that can ALIAS something the program also
@@ -326,19 +296,20 @@ function genProgram() {
 		return lit();
 	}
 
-	// THE ALIASING SHAPE, built on purpose rather than left to chance: an INLINE call whose earlier
-	// argument is a bare local and whose later argument writes that same local through a pointer.
-	// The inliner may substitute the bare local, which DEFERS its read past the write, so the two
-	// builds only agree if the marshalling scan stops at the write (docs/Inlining.md 5).
-	// Assembled at random this needs about seven flips to line up - measured, only 1.3% of arguments
-	// are even a bare local - and it turned up in roughly one program in two hundred, which is why a
-	// real miscompile of exactly this shape survived a 1000-program sweep.
+	// THE ALIASING SHAPE, built on purpose rather than left to chance: a call whose earlier argument is
+	// a bare local and whose later argument writes that same local through a pointer. It is kept while
+	// `inline` is parked because it is what the differential oracle was built around: an expansion may
+	// substitute the bare local, which DEFERS its read past the write, so the two builds only agree if
+	// the marshalling scan stops at the write (docs/Inlining.md 5). Assembled at random this needs
+	// about seven flips to line up - measured, only 1.3% of arguments are even a bare local - and it
+	// turned up in roughly one program in two hundred, which is why a real miscompile of exactly this
+	// shape survived a 1000-program sweep.
 	function genCall(f, depth, scope) {
 		const args = f.params.map((p) => genExpr(p.t, depth - 1, scope));
 		const ints = f.params.map((p, k) => (p.t === 'i' ? k : -1)).filter((k) => k >= 0);
 		const xs = scope.locals.filter((l) => l.t === 'i' && !l.ro && !l.loopVar);
 		const w = scope.callable.filter((fn) => fn.aliasWriter);
-		if (f.inline && ints.length >= 2 && xs.length && w.length && chance(0.5)) {
+		if (ints.length >= 2 && xs.length && w.length && chance(0.5)) {
 			const x = pick(xs).name;
 			args[ints[0]] = x;
 			args[ints[1]] = w[0].name + '(&' + x + ')';
@@ -369,7 +340,7 @@ function genProgram() {
 		const fptrLocals = [];
 		for (const cb of cbLocals) {
 			const ft = functypes.find((x) => x.name === cb.t);
-			const match = callable.filter((fn) => funcMatches(fn, ft) && !fn.inline);
+			const match = callable.filter((fn) => funcMatches(fn, ft));
 			if (match.length && chance(0.6)) {
 				const pf = { name: id('pf'), t: 'pF:' + cb.t, target: cb, func: pick(match).name };
 				fptrLocals.push(pf);
@@ -403,7 +374,7 @@ function genProgram() {
 			callable: callable,
 		};
 
-		let header = (!isMain && f.inline ? 'inline ' : '') + 'function ' + f.name + '(' + f.params.map((p) => decl(p.t) + p.name).join(', ') + ')';
+		let header = 'function ' + f.name + '(' + f.params.map((p) => decl(p.t) + p.name).join(', ') + ')';
 		if (f.rets.length) header += ' returns ' + f.rets.map((t, i) => decl(t) + f.retNames[i]).join(', ');
 
 		const localDeclList = locals.map((l) => decl(l.t) + l.name)
@@ -411,10 +382,9 @@ function genProgram() {
 		const localDecl = localDeclList.length ? '\nlocals ' + localDeclList.join(', ') : '';
 
 		const body = [];
-		// Locals are NOT zero-initialized (an out-of-line callee sees the previous call's leftovers),
-		// so reading one before writing it has no defined value. Inlining relocates a local from the
-		// frame into a transient, which relocates that garbage - a legitimate difference that would
-		// make the inline differential report false miscompiles. Seed every local first.
+		// Locals are NOT zero-initialized (a callee sees the previous call's leftovers), so reading one
+		// before writing it has no defined value - and an expansion relocates that garbage, which the
+		// parked differential oracle would have reported as a miscompile. Seed every local first.
 		for (const l of locals) {
 			if (isStruct(l.t)) {
 				const s = structs.find((x) => x.name === l.t);
@@ -440,7 +410,7 @@ function genProgram() {
 		const nStmt = 1 + ri(isMain ? 8 : 4);
 		for (let i = 0; i < nStmt; ++i) body.push(genStmt(scope, f, 0));
 		// main ends by PRINTING every int-valued thing it can reach. Without this the program has no
-		// observable output, and the inline differential below compares "" against "" forever.
+		// observable output for a differential oracle to compare.
 		if (isMain) {
 			for (const l of locals) if (l.t === 'i') body.push('\tprintInt(' + l.name + '); printLF();');
 			for (const a of arrLocals) {
@@ -561,7 +531,7 @@ function genProgram() {
 			if (cbLocals.length) {
 				const cb = pick(cbLocals);
 				const ft = functypes.find((x) => x.name === cb.t);
-				const match = scope.callable.filter((fn) => funcMatches(fn, ft) && !fn.inline);
+				const match = scope.callable.filter((fn) => funcMatches(fn, ft));
 				if (match.length) {
 					const assign = '\t' + cb.name + ' = ' + pick(match).name + ';';
 					// then an indirect call through the funcptr
@@ -686,7 +656,7 @@ function main() {
 			compiled++;
 			if (useVm) {
 				const res = runGazl(gazl);
-				const vmFault = runOnVm(res) || inlineDifferential(src, res);
+				const vmFault = runOnVm(res);
 				vmRun++;
 				if (vmFault) {
 					bugs++;

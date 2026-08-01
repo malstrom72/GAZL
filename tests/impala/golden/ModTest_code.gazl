@@ -4,7 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
+.x.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
 	DATA &.s_XORHIG_4d2 &.s_XORHIG_4d2:53 &.s_XORHIG_4d2:53
 	DATA &.s_XORHIG_4d2:53 &.s_XORHIG_4d2:53 &.s_SUB16B_4d3
 	DATA &.s_SUB16B_4d3:53 &.s_SUB16B_4d3:53
@@ -44,9 +45,12 @@ panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
 ; signature extern const POSITION_FRACT_BITS : int @ 77:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 79:1
-positions:	GLOB *2	; signature array positions[2] : unknown @ 80:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 81:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 82:1
+.x.positions:	! DEFi #2
+positions:	GLOB *.x.positions	; signature array positions[2] : unknown @ 80:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 81:1
+.x.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 82:1
 	GLOB *1
 instance:	DATi #0	; signature global instance : int @ 83:1
 	GLOB *1

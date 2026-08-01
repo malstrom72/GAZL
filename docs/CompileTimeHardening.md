@@ -82,6 +82,14 @@ not because it is planned. Every symbolic case here turned out to be either alre
 assembler (item 1) or legitimately configuration-dependent and therefore not an error at all (item 3).
 Before reaching for it, re-read rule 3 above.
 
+> **Superseded mechanism, 2026-07-31.** Everything below works, but it is the wrong tool. GAZL has a
+> purpose-built `! FAIL <free text>` directive (`src/GAZL.cpp:1027`) that aborts assembly with your own
+> message, and `src/UnitTest.gazl:30-40` already uses `! IFDF`/`! EQUi` + `! FAIL` as the canonical
+> idiom for exactly this. Use that instead of the undefined-label trick: it takes a real sentence
+> rather than encoding the message in a label name. See
+> [`docs/TwoStageConstants.md`](TwoStageConstants.md), "The deferred assertion". The section below is
+> kept because the branch-condition half (which comparison to emit, and when) still applies verbatim.
+
 GAZL has compile-time comparisons that branch (`! LSSi`, `! GEQi`, `! EQUi`, `! NEQi`, ... `_ccb`) and
 `! GOTO`. Branching to a label that does not exist is an assembly error. Together that is an
 assemble-time assertion:
@@ -121,17 +129,15 @@ flag, or only when the operand is symbolic (compile-time-known cases being rejec
     int array a[4]
     a[7] = 1;              // accepted today
 
-Today Impala compiles this; the **assembler rejects it**, for locals and globals alike:
-
-    Offset out of bounds: $a
-    Line 11:  MOVi $a:7 #1   ; a[7] = 1
-
-(An earlier version of this note claimed locals escaped the check while globals were caught. That was
-wrong - both fail identically, and the doc's own preamble already said so.)
-
-So the entire remaining value of this item is WHERE the error points. And even that is modest, because the
-GAZL line carries the original source text as a trailing comment, so the offending expression is already
-in front of you; what is missing is `foo.impala:11:2` and a caret.
+Today this compiles. Correction to an earlier claim here: the assembler catches BOTH storage classes, not
+just globals - `Symbols::resolve` rejects `offset >= symbol.size` (`src/GAZL.cpp:619`) and a local's size
+comes from its `LOCA *size`, so `MOVi $buf:9 #1` under `LOCA *4` fails with `Offset out of bounds: $buf`.
+Verified 2026-08-01 for both - and `docs/Impala2Review.md` C6 had already flagged this section as
+"backwards on which case is uncovered", so this correction was overdue rather than new. So this is not a
+missing check; it is a check that fires at the WRONG TIME -
+at assembly, on the end user's machine, when Impala had the number all along. `ADDp` is deliberately
+`UNCHECKED_ADDRESS` (`src/GAZL.cpp:285`), so dynamic indices correctly fall through to the runtime
+`PEEK`/`POKE` region check instead.
 
 - Numeric index and numeric extent -> plain compile-time error, with the extent in the message.
 - **Symbolic extent -> do nothing.** Not a deferred assertion: the assembler resolves the symbol before it
@@ -172,9 +178,12 @@ dead code with no warning, and the stray `.sN#8` labels make the GAZL confusing 
 
 A case BELOW `from` is worse than dead code. Its offset goes negative, the emitted `.sN#<X>` folds to
 `.sN.-6`, and `Symbols::link` rejects that as `Invalid identifier` - so the whole module fails to
-assemble, from a program the compiler accepted without a word. `tests/impala/golden/switchtest.gazl` is
-in exactly that state today (`case 23+57, -1, CONSTANT` against a `4+1 to 9` switch), which is why
-`runJspegTests.js` has to exempt it from the assemble check.
+assemble, from a program the compiler accepted without a word. `switchtest.gazl` used to be in exactly
+that state, which is why `runJspegTests.js` had an exemption list - **both are now fixed**: E444 makes an
+out-of-range case a compile error and `KNOWN_UNLOADABLE` is empty. Verified 2026-08-01.
+
+**DONE for a numeric range; the symbolic half is still open** - see S5 in the scan below, which reproduces
+`Invalid identifier: .s0.-5` from `switch (x == LO to HI)` with host-supplied bounds.
 
 CLOSED by `E444`, on the terms below:
 
@@ -207,6 +216,121 @@ wrote, which is the worst possible way to report "you listed case 0 twice". Full
 time whenever the case values are numeric, exactly like item 3, and it wants the same pass: collect the
 arm values for a switch, then reject a repeat naming the value and both source positions.
 
+**DONE as E443 for a numeric range.** But it inherited item 3's gate, so a SYMBOLIC range still disables
+it - and unlike item 3, duplicate detection never needed the range base at all. See S6 below; it is a
+two-line fix.
+
+
+## Scan: where else does Impala guess, refuse, or skip? (2026-08-01)
+
+A systematic sweep for the pattern this note is about - Impala either baking a number it cannot justify,
+refusing a construct for lack of one, or silently skipping a check when the value turns symbolic. Each
+entry below was REPRODUCED, not inferred.
+
+**Read the attributions.** Roughly half of this was already on record and is repeated here only because
+the sweep reproduced it at a specific site; the genuinely new findings are S1's reachability and the
+validator group S7-S11. Where an item says ALREADY RECORDED, that other place is authoritative - do not
+let the two copies drift.
+
+### Confirmed miscompiles (a wrong number reaches the artifact)
+
+**S1. A by-value struct argument to an UNPROTOTYPED callee bakes a host-owned size.** *(The `*NaN`
+mechanism is ALREADY RECORDED as an anti-pattern in `docs/TwoStageConstants.md` - `field.size * per`.
+NEW here: the reachability, i.e. that `rejectByValueStruct` guards declarators only.)*
+`rejectByValueStruct` guards declarators only, so `extern native sink` / bodiless `extern function sink`
+have nothing to reject and the parked by-value path runs at the call site. One artifact then makes two
+contradictory statements about one quantity:
+
+    b:      GLOB *.z.AB          ; size is host-owned here...
+            ADRL %3 %1 *2        ; ...and baked to 2 here
+            COPY %3 &b *2
+            CALL ^sink %0 *3
+
+A host defining `.z.AB` as 3 gets a silently truncated `COPY`. Worse sub-case: `fieldWords` does
+`field.size * per` on the extent STRING, so an extern-struct array field (E430 forces it sizeless) or
+`array v[N]` with a host `const int N;` yields `*NaN` - a legal GAZL identifier, so an undefined-symbol
+error at best, and `claimSlot`'s `k < NaN` loop never runs so the `ADRL` self-aliases.
+Fix: call `rejectByValueStruct` from the ARGUMENT site, not just declarators. Do NOT emit `*.z.Name` here
+- see `docs/GAZLSymbolicWindows.md`, the numeric window ABI is correct.
+
+**S2. `buildStructInit` iterates a symbolic field extent, silently dropping initializer words.**
+*(ALREADY RECORDED, `docs/TwoStageConstants.md`: "the loop runs zero times ... initializer words are
+silently dropped and every later field shifts". Reproduced here at the site.)*
+`for (var e = 0; e < f.size; ++e)` where `f.size` is the extent string. This is verbatim the anti-pattern
+`docs/TwoStageConstants.md` names. With `struct S { int array v[N]; int tag }` and `global S s = {{1,2},7}`
+the emitted data is `DATA #7` - the `1, 2` vanish and the `7` lands at `.o.S.v`, not `.o.S.tag`. The same
+source with `v[2]` emits the correct `DATA #1 #2 #7`. No diagnostic.
+Fix: extend E414's "needs a literal size" to every field width preceding the last initialized field.
+Positional `DATA` has no seek directive, so rejecting is the only sound answer.
+
+**S3. `parseFloat` on an emitted operand string mis-folds a pointer offset.** *(ALREADY RECORDED,
+`docs/TwoStageConstants.md`, which names `parseFloat("0x10")` being `0` exactly. Reproduced here.)*
+The `p - const` fold tests `operands[2][0] === '#'`, which establishes CONSTANT, not DECIMAL, then runs
+`parseFloat` on it. `*(p - 0x2)` emits `PEEK $x $p #0` instead of `#-2` - completely silent. `*(p - K)`
+for any named const emits `#NaN`. The non-folded path is already correct, and GAZL can negate at assembly
+(`! SUBi <A> #0 #K`).
+
+**S4. `parseInt('0x2', 10) === 0` slips past E414 and drops a whole initializer.** *(Same anti-pattern
+as S3, ALREADY RECORDED. NEW: that it defeats E414's `isNaN` guard specifically.)*
+`readonly S array t[0x2] = { {1}, {2} }` emits the allocation but no `DATA` row at all, because the guard
+tests `isNaN` and `0` is not NaN. Stage-1 only (a host constant yields NaN and is correctly rejected).
+
+### Confirmed silent acceptances that become gibberish at assembly
+
+**S5. A symbolic switch range disables E444.** *(Item 3 above predicted this; `Impala2Review.md` C6
+recorded the pre-E444 version. NEW: reproduced as the residual AFTER E444 shipped.)* `checkCaseValue` returns early when `constInt` cannot read
+the range, so `switch (x == LO to HI)` with host-supplied bounds is unchecked. With `LO=5`, a `case 0`
+folds to a negative offset and the module fails to load with `Invalid identifier: .s0.-5` - a
+compiler-minted label the user never wrote. This is the deferred-assertion case: emit
+`! GEQi #<off> #0 @ok / ! FAIL <source>: case 0 is below the switch range`.
+
+**S6. The same gate disables E443 (duplicate case) - and that one needs no assembler help at all.**
+*(Item 5 above; `Impala2Review.md` C6. NEW: that it is the residual after E443, and needs no assertion.)*
+`caseSeen` is indexed by `value - fromNum`, so it inherits a dependency on the range base that duplicate
+detection does not have. Two `case 0:` arms under a symbolic range compile clean and then fail assembly
+with `Symbol already defined: .s0.0`; under a literal range the same source is a clean E443. Index by the
+raw value and the check works for every switch. Two-line fix, no `! FAIL` needed.
+
+### Link-checking holes (see also `tools/gazl-validate.nuxjs.js`)
+
+**S7.** `fieldListsMatch`'s array-vs-scalar guard is an `&&` whose first clause is false in exactly the
+case it was written for, because `fieldParts` returns `size: undefined` for both `int[]` and `int`. Since
+E430 forces `int[]` on every extern struct array field, a unit declaring an array field as a SCALAR
+validates clean.
+
+**S8.** The cross-unit extent check is dead code: the grammar gives `extern array` nowhere to state an
+extent and E430 forbids one on an extern struct field, so `a.size && b.size` can never both hold on
+compiler output. Its only regression test uses a row the compiler cannot emit.
+
+**S9.** Two conflicting struct DEFINITIONS in different units are never compared - `validateExternStructs`
+iterates only the extern map. Every other symbol kind has a definition-vs-definition path.
+
+**S10.** `arraySignaturesCompatible` compares extents as raw strings, so `[4]` vs `[N]` with host `N=4` is
+a false conflict and `[4]` vs `[]` is a false pass. This is the case `docs/deferredShapeCheck.gazl` exists
+to demonstrate.
+
+**S11.** Struct field types are lower-cased wholesale, so `int[N]` matches `int[n]` and `Filter` matches
+`filter` - while ARRAY rows do not lower-case the extent, so the same disagreement errors through one
+path and passes through another.
+
+**S12.** *(ALREADY RECORDED, `Impala2Review.md` C6: "extern struct host layout is essentially
+unchecked".)* The check is name-presence-only and inspects only the FIRST declaration: a
+layout that transposes two fields validates clean. Offsets are host-supplied constants, so ordering,
+overlap and the `.z.` bound are all decidable with `! EQUi` / `! LSSi` chains.
+
+### The shape of the answer
+
+These split three ways, and the split is the useful part:
+
+1. **Never needed the number** (S6, S7, S9, S11) - the check was accidentally made to depend on a value it
+   does not need. Ordinary bug fixes, cheapest and highest value.
+2. **Had the number and threw it away** (S3, S4, and item 1 above) - `parseInt`/`parseFloat` on an emitted
+   OPERAND STRING, which rule 5 guarantees will not look like a number. Fix by reading the value before it
+   becomes text.
+3. **Genuinely cannot have the number** (S1, S2, S5, S8, S10, S12) - either refuse honestly (S1, S2) or
+   name both sides and let the assembler decide (S5, S8, S10, S12).
+
+Only category 3 wants `! FAIL`. Reaching for it first would be a mistake - most of this list is category 1.
 
 ## Not in this list
 

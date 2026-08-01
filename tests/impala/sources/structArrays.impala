@@ -3,10 +3,12 @@
 	Allocation is count*sizeof; a struct-array element indexes to a place with sizeof stride
 	(constant index folds into the offset; dynamic index emits one MULi). Works in global and
 	local memory, supports address-of an element and whole-struct element copy.
-	Expected when run (GAZLCmd structArrays.gazl main): 10 20 30 0.9 20 30.
+	Expected when run (GAZLCmd structArrays.gazl main): 10 20 30 0.9 20 30 7.
 */
 
 const int DEBUG = 1
+
+const int PAIRS = 2
 
 struct Voice { int note; float gain }
 
@@ -15,6 +17,11 @@ extern native printFloat
 extern native printLF
 
 global Voice array bank[3]
+
+/* Both halves of the extent symbolic at once: a FOLDED count times a struct's `.z.` size. Neither
+   number exists until assembly, so `.x.pairs` is the only thing that can hold the product - and the
+   count's scratch has to survive the fold that reads it (docs/SymbolNamespace.md). */
+global Voice array pairs[PAIRS * 2]
 
 function main()
 locals Voice array vlocals[2], int i, Voice pointer vp
@@ -35,4 +42,7 @@ locals Voice array vlocals[2], int i, Voice pointer vp
 
 	global bank[[0]] = global bank[[2]];				// whole-struct element copy
 	printInt(global bank[[0]].note); printLF();
+
+	global pairs[[3]].note = 7;					/* the last element of a folded struct-element extent */
+	printInt(global pairs[[3]].note); printLF();
 }

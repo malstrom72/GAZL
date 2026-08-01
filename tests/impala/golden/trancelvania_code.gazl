@@ -4,7 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
+.x.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
 	DATA &.s_116ste_4d2 &.s_132ste_4d3 &.s_Level6_4d4
 	DATA &.s_Leftst_4d5 &.s_Gate_4d6 &.s_LPF_4d7 &.s_BPF_4d8
 	DATA &.s_HPFAtt_4d9
@@ -44,13 +45,16 @@ panelTextRows:	CNST *8	; signature array panelTextRows[8] : unknown @ 27:1
 ; signature extern const POSITION_FRACT_BITS : int @ 77:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 79:1
-params:	GLOB *PARAM_COUNT	; signature array params[PARAM_COUNT] : unknown @ 80:1
-displayLEDs:	GLOB *4	; signature array displayLEDs[4] : unknown @ 81:1
+.x.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
+.x.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
 	GLOB *1
 instance:	DATi #0	; signature global instance : int @ 82:1
 	CNST *1
 clockFreqLimit:	DATi #176400	; signature readonly clockFreqLimit : int @ 83:1
-signal:	GLOB *2	; signature array signal[2] : unknown @ 86:1
+.x.signal:	! DEFi #2
+signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 86:1
 E:	! DEFf #2.71828182845904523536	; signature const E : float @ 97:1
 HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 98:1
 PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 99:1
@@ -178,8 +182,10 @@ LOG0_001:	! DEFf #-6.9077552789821	; signature const LOG0_001 : float @ 209:1
 	GLOB *1
 doReset:	DATi #TRUE	; signature global doReset : int @ 213:1
 	! MULi <A> #FILTER_PARAM_TABLE_SIZE #2
-filterParamTable:	GLOB *<A>	; signature array filterParamTable[] : unknown @ 214:1
-rateTable:	GLOB *256	; signature array rateTable[256] : unknown @ 215:1
+.x.filterParamTable:	! DEFi #<A>
+filterParamTable:	GLOB *.x.filterParamTable	; signature array filterParamTable[] : unknown @ 214:1
+.x.rateTable:	! DEFi #256
+rateTable:	GLOB *.x.rateTable	; signature array rateTable[256] : unknown @ 215:1
 
 ;-----------------------------------------------------------------------------
 init:	FUNC	; signature func init() -> void @ 224:1
@@ -276,7 +282,8 @@ process:	FUNC	; signature func process() -> void @ 267:1
 	$idxL:	LOCi
 	$idxR:	LOCi
 	$outputChoice:	LOCi
-	$inputSignal:	LOCA *2
+.x.process.inputSignal:	! DEFi #2
+	$inputSignal:	LOCA *.x.process.inputSignal
 	$nyquist:	LOCf
 	$gainL:	LOCf
 	$gainR:	LOCf

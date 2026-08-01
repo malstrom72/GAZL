@@ -536,7 +536,12 @@ voices[[i]]                 // 2 instructions - stride sizeof(Voice)
 
 The residual multiply is the **floor**, not overhead: the address of element `i` of a 3-word struct
 genuinely is `base + i*3`, and no language or ISA can form it without a multiply. A constant index
-folds at assembly time (`! MULi`), so it costs nothing at run time. See `docs/Impala2Review.md`,
+folds at assembly time (`! MULi`), so it costs nothing at run time - but **today that fold only fires
+for a bare decimal literal** (`impala.jspeg:2158` tests `/^#[0-9]+$/`). `bank[[2]]` folds to
+`! MULi <A> #2 #.z.S`; `bank[[K]]` for `const int K = 2`, `bank[[HOST_I]]`, `bank[[K + 1]]` and
+`p[[-1]]` all fall through to a RUNTIME `MULi` + `ADDp`, even though `! MULi` accepts every one of
+those operands (the compiler itself emits `! MULi <A> #HOST_N #.z.S` when sizing an array). Measured:
+identical programs differing only in `2` vs `K` assemble to code size 3 vs 5. See `docs/Impala2Review.md`,
 "the scaled subscript is spelled `[[ ]]`", for why arithmetic on a struct pointer is rejected rather
 than scaled.
 

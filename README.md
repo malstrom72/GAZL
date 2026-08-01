@@ -113,12 +113,16 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 ## Documentation
 
+**[docs/README.md](docs/README.md) indexes all 24 documents** with what each is for and how much to trust
+it. The most-linked few:
+
 - [Overview](docs/Overview.md) - general architecture and goals
 - [Impala Language Reference](docs/Impala.md) - the language and toolchain
 - [The `impala/` directory](impala/README.md) - what each compiler file is, and the common commands
 - [Two-Stage Constants](docs/TwoStageConstants.md) - why GAZL ships as text, and why a constant is not always a number the compiler knows
 - [Instruction Set](docs/InstructionSet.md) - extracted opcode descriptions
 - [Memory Safety Model](docs/MemorySafetyModel.md) - stack frames, what is bounds-checked and when, what `*size` is for
+- [Symbol Namespace](docs/SymbolNamespace.md) - every symbol the compiler mints for itself, and how to add one without colliding
 - [Usage Example](docs/UsageExample.md) - compile and run a simple program
 - [JSPEG Port](impala/JSPEG.md) - status and usage of the JavaScript PEG compiler
 
