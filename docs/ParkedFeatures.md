@@ -356,15 +356,24 @@ name as the message. That is rule 4 of [`TwoStageConstants.md`](TwoStageConstant
 at run time. With it, a symbolic array could be filled again on GAZL 1 as long as the count provably fits;
 only fields AFTER it would still need `ORG`.
 
-**It has a prerequisite, verified 2026-08-01: a struct FIELD extent has no durable name.** The `.x.` rework
-named array VARIABLE extents (`.x.plain: ! DEFi #<A>`, then `GLOB *.x.plain`), but a struct array field
-still folds its extent into a bare scratch - `! ADDi <a> #<a> #<A>` - and `endStruct` returns that borrow,
-so the NEXT struct re-uses `<A>` for its own extent. There is nothing stable for the assertion to compare
-against. Minting `.x.Struct.field` alongside the existing `.o.`/`.z.` layout constants (one `! DEFi` per
-array field, inside the layout block while the scratch is still live) is the missing piece, and it pays
-for itself elsewhere: it is also what a `sizeof` of an array field would reference, and what would let
-gazl-validate check a host-supplied extent for an `extern struct` array field, which is an unstated
-wildcard today. See [`SymbolNamespace.md`](SymbolNamespace.md) before adding it.
+**Its prerequisite is DONE as of 2026-08-01: a struct field extent now has a durable name.** It did not
+before - the `.x.` rework named array VARIABLE extents (`.x.plain: ! DEFi #<A>`, then `GLOB *.x.plain`)
+but a struct array field folded its extent into a bare scratch (`! ADDi <a> #<a> #<A>`) that `endStruct`
+handed straight back, so the next struct re-used `<A>` and there was nothing stable to compare against.
+The layout block now mints `.z.<Struct>.<field>` for every array field while the scratch is still live
+and advances by the SYMBOL, so the extent outlives the borrow. It went into `.z.` rather than `.x.`
+because `.x.<owner>.<name>` is keyed on functions and a struct may share a function's name - see
+[`SymbolNamespace.md`](SymbolNamespace.md), and `tests/impala/sources/structFieldExtents.impala` for the
+pinned collision.
+
+So the assertion is now unblocked and is the next step here. Two things must be checked on a real GAZL 1
+assembler before writing it, neither of which the symbol settles: whether `! LEQi` accepts a symbolic
+right-hand operand, and whether a NEVER-EXECUTED forward `! GOTO` to an undefined label is quietly
+skipped or is a load-time error regardless (the whole scheme rests on the latter being false, and on the
+former the message is only as good as the label name). The same symbol is also what a `sizeof` of an
+array field would reference, and what would let gazl-validate check a host-supplied extent for an
+`extern struct` array field - an unstated wildcard today. Note extern structs mint no layout at all, so
+that last one needs the host to publish `.z.E.field` the way it already publishes `.o.E.field`.
 
 Note the two checks are complementary, not redundant. Define-each-word-once catches an over-run only when
 it lands on a word something else initialized; an array over-running into an *uninitialized* neighbour is

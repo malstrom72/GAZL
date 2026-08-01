@@ -1591,11 +1591,13 @@
             output('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
             if (f.type === 'S') {                                 /* nested by-value struct */
                 output(T + '! ADDi <a> #<a> #.z.' + f.struct);
-            } else if (f.type === 'A' && $$parser.isStructAtom(f.elem)) {   /* struct-element array */
-                output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
-                output(T + '! ADDi <a> #<a> #<t>');
-            } else if (f.type === 'A') {                          /* scalar-element array */
-                output(T + '! ADDi <a> #<a> #' + f.size);
+            } else if (f.type === 'A') {                          /* array: name the extent, THEN advance by it */
+                if ($$parser.isStructAtom(f.elem)) {
+                    output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
+                }
+                output($$parser.fieldExtentSymbol(name, f.name) + ':' + T + '! DEFi #'
+                        + ($$parser.isStructAtom(f.elem) ? '<t>' : f.size));
+                output(T + '! ADDi <a> #<a> #' + $$parser.fieldExtentSymbol(name, f.name));
             } else {                                              /* scalar (int/float/ptr/funcptr) */
                 output(T + '! ADDi <a> #<a> #1');
             }
@@ -1668,6 +1670,16 @@
        local. See docs/SymbolNamespace.md. */
     $$parser.extentSymbol = function (name, owner) {
         return '.x.' + (owner !== undefined ? owner + '.' : '') + name;
+    };
+
+    /* The extent of a struct ARRAY FIELD, in words. `.x.` cannot serve: it is `.x.<owner>.<name>` over
+       FUNCTIONS, and a struct may share a function's name (`struct Foo` beside `function Foo`), so a
+       field `v` and a local `v` would mint one symbol twice. `.z.` is struct-only and already means
+       "size in words", so a third part names a FIELD's size - `.o.S.v` and `.z.S.v` are the offset and
+       size of the same field. Minted only for array fields: a scalar is 1 and a by-value field is
+       `.z.Inner`, so those already have a name and need no second one. */
+    $$parser.fieldExtentSymbol = function (structName, fieldName) {
+        return '.z.' + structName + '.' + fieldName;
     };
 
     /* '*size' operand for allocating an ARRAY, published as a NAMED assemble-time constant rather

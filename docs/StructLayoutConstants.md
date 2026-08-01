@@ -42,7 +42,11 @@ It also makes the layout inspectable and greppable, and it composes with imports
 
 ## Naming (DECIDED): reserved leading tag, `.`-separated, hex-free
 
-Scheme: `.o.<Struct>.<field>` for a field offset, `.z.<Struct>` for a struct size.
+Scheme: `.o.<Struct>.<field>` for a field offset, `.z.<Struct>` for a struct size, and
+`.z.<Struct>.<field>` for an ARRAY field's own extent in words - offset and size of one field, spelled
+alike. Array fields only: a scalar is 1 word and a by-value field is `.z.Inner`, so those need no second
+name. See [`SymbolNamespace.md`](SymbolNamespace.md) for why the extent joined `.z.` rather than the
+`.x.` array-extent tag (`.x.` spans functions, and a struct may share a function's name).
 
 Rationale (this is the whole subtlety):
 - The leading tag is MANDATORY and the struct name can NEVER be the first segment. Struct names are
@@ -136,8 +140,13 @@ nested-struct and array advances MUST be symbolic so they track the referenced d
 Field kinds and their advance line:
 - scalar (int/float/ptr): `! ADDi <a> #<a> #1` (the VM word-count of the scalar).
 - nested struct by value: `! ADDi <a> #<a> #.z.Inner`.
-- scalar array `int d[128]`: `! ADDi <a> #<a> #128` (count * 1).
-- struct array `Voice bank[8]`: `! MULi <t> #8 #.z.Voice` then `! ADDi <a> #<a> #<t>`.
+- scalar array `int d[128]`: `.z.S.d: ! DEFi #128` (count * 1) then `! ADDi <a> #<a> #.z.S.d`.
+- struct array `Voice bank[8]`: `! MULi <t> #8 #.z.Voice`, `.z.S.bank: ! DEFi #<t>`, then
+  `! ADDi <a> #<a> #.z.S.bank`.
+
+Both array forms name the extent BEFORE advancing by it, so an extent that folded into a `<X>` scratch
+outlives the scratch. That is what the deferred value-count assertion behind `E454` needs a handle on
+(see [`ParkedFeatures.md`](ParkedFeatures.md)).
 
 ### The payoff: conditional fields adapt for free
 

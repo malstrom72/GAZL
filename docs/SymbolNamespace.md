@@ -49,6 +49,26 @@ at every access site. **These are implemented and shipping** - see
 [`docs/StructLayoutConstants.md`](StructLayoutConstants.md). Unlike everything above they are STABLE and
 deliberately predictable, because hand-written or host-supplied GAZL must be able to name them.
 
+`.z.` takes a THIRD part for an ARRAY FIELD's own extent in words: `.z.<Struct>.<field>`, so `.o.S.v` and
+`.z.S.v` are the offset and the size of the same field. The layout block mints it while the extent is
+still live and then advances by it, so the extent survives as a name instead of dying with the `<X>`
+scratch it folded into:
+
+    .o.S.a:				! DEFi #<a>
+    .z.S.a:				! DEFi #<A>
+    					! ADDi <a> #<a> #.z.S.a
+
+Only ARRAY fields get one. A scalar field is 1 word and a by-value field is `.z.Inner`, so those are
+already nameable and a second symbol for them would be churn. Extern structs mint nothing at all - the
+host owns their layout, extents included.
+
+**`.x.` cannot serve here**, which is the whole reason `.z.` grew a third part. `.x.<owner>.<name>` is
+keyed on FUNCTIONS, and a struct may share a function's name - `struct S { int array a[N] }` beside
+`function S() locals int array a[2]` is legal - so one tag would mint `.x.S.a` twice. `.z.` is
+struct-only, so a third part is unambiguous. `tests/impala/sources/structFieldExtents.impala` pins
+exactly that pair, and the witness is the assembler: spelling the field extent `.x.` makes it stop with
+`Symbol already defined: .x.S.a`.
+
 ### Array extent constants: `.x.`
 
 `.x.<global>` and `.x.<function>.<local>`, emitted as `! DEFi` immediately above the array's own
@@ -83,6 +103,11 @@ Note this is a SUFFIX namespace on names that already exist, so it does not cons
 it does mean a new tag must stay unambiguous when `_i<N>` is appended.
 
 ## Why single letters are safe
+
+Before minting a tag, check whether an EXISTING stable family can take another part instead - `.z.` took
+the field extent that way. That is only sound when the family has one owner namespace: `.z.` is
+struct-only so `.z.S.v` can only be a field, while `.x.` spans functions and would have been ambiguous.
+
 
 A layout constant is ALWAYS dot-followed (`.o.` / `.z.`) while a label is letter-then-digits with no dot
 (`.s0`, `.e24`). So `.o.Voice` cannot be confused with a hypothetical `.oN` label even if `o` were later

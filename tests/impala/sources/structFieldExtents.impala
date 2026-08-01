@@ -12,7 +12,12 @@
 	Covers the scalar-element branch, the struct-element branch (extent * .z.Elem), and a plain
 	literal extent alongside them.
 
-	Expected (GAZLCmd structFieldExtents.gazl main): 12 4 2 23 77 11 33 5
+	Also pins WHY a field extent is named `.z.S.a` and not `.x.S.a`: `.x.` is `.x.<owner>.<name>` over
+	FUNCTIONS, and `function S` below shares a name with `struct S` while owning a local array `a` -
+	so under one tag the field and the local would mint the same symbol twice. The assembler is the
+	witness: this fixture assembles, and a duplicate definition would stop it.
+
+	Expected (GAZLCmd structFieldExtents.gazl main): 12 4 2 23 77 11 33 5 2
 */
 
 const int DEBUG = 1
@@ -32,6 +37,15 @@ struct S {
 extern native printInt
 extern native printLF
 
+/* Same name as `struct S`, same array member name as its field `a`: `.x.S.a` (this local) must not be
+   the symbol `.z.S.a` (the field). */
+function S() returns int r
+locals int array a[2]
+{
+	a[1] = 2;
+	r = a[1];
+}
+
 function main()
 locals S s, int i
 {
@@ -48,4 +62,5 @@ locals S s, int i
 	printInt(s.a[11]); printLF();			// 11
 	printInt(s.b[3]); printLF();			// 33
 	printInt(s.p[[1]].hi); printLF();			// 5
+	printInt(S()); printLF();				// 2   - the same-named function's own array
 }
