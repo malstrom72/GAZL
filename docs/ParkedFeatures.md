@@ -48,14 +48,26 @@ comparison, no `[<A>]` descriptors, no constant evaluator, no `:` open-axis mark
 to `a[y*W + x]` folded into the existing single `dynIndex` place. It was still rejected, for reasons
 that are NOT the type-identity trap:
 
-1. Expression extents in struct array fields were BROKEN (see the ordering trap in
-   [[docs/StructLayoutConstants.md]]) - a prerequisite fix, not part of the feature.
-2. An `extern struct` array field states no extent (E430). An inner extent IS the stride, so a sizeless
-   field cannot be indexed at rank >= 2. "Extern array fields are sizeless" and "a matrix can be a
-   struct field" are mutually exclusive for host-owned structs.
-3. Therefore the whole selling point - "put a matrix in a struct and pass it that way" - cannot reach
-   host-owned structs. The feature costs grammar, place-model, validator and fuzzer work while
-   delivering materially less than proposed.
+1. ~~Expression extents in struct array fields were BROKEN~~ - **already fixed when this was written.**
+   `260b57c` (2026-07-26 14:32) emits a field's folded extent before the layout block that reads it,
+   with fixture `structFieldExtents`; this re-evaluation was committed 23 minutes later and recorded
+   the discovery rather than the state. No longer a prerequisite.
+2. An `extern struct` array field states no extent (E430), and an inner extent IS the stride, so the
+   multidim SPELLING cannot state one for a host-owned struct. This was written as "extern array fields
+   are sizeless" and "a matrix can be a struct field" being mutually exclusive, which overstates it: a
+   host-owned matrix is indexable TODAY through a valueless `const int W;`, which the host supplies at
+   assembly like any other extent. Verified:
+
+        const int W;
+        extern struct Grid { int array cells; int tag }
+        function get(Grid pointer g, int x, int y) returns int v { v = g->cells[y * W + x]; }
+        -> MULi %0 $y #W / ADDi %0 %0 $x / ADDp %1 $g #.o.Grid.cells / PEEK $v %1 %0
+
+   So the constraint is on the syntax's reach, not on the capability.
+3. The conclusion stands, but as cost/benefit rather than impossibility. What multidim adds over
+   `y*W + x` is subscript sugar plus shape typing. The sugar is available today for both struct kinds
+   (see 2), and the shape typing is exactly the unsolved type-identity problem above. The feature costs
+   grammar, place-model, validator and fuzzer work while delivering materially less than proposed.
 
 Same call as by-value: the reach does not justify the surface. Do not treat multi-dim arrays as
 "nearly done" because the milder design looked clean on paper.
@@ -136,6 +148,39 @@ worth having on their own, and the call-window-in-a-hole guard in `borrowForCall
 fix that stays.
 
 
+## Does anything here get easier now that extents are named constants?
+
+Asked 2026-08-01, after `.x.<name>` array extents landed (`docs/SymbolNamespace.md`). **Answer: no, for
+either by-value structs or multidim arrays.** Recorded so it is not re-derived.
+
+`.x.` solves exactly one problem: a value that has neither a number Impala knows NOR a name - an array
+extent used to be folded into a recycled `<X>` scratch, so it existed for one line and could not be
+quoted again. Both parked features need something else.
+
+**By-value structs.** Their size was never nameless: `.z.Name` has been a permanent assemble-time symbol
+since struct layouts shipped, and `structAllocSize` already returns `*.z.Name`. The blocker is that
+Impala's TRANSIENT allocator keys slots by integer index - `claimSlot` looks up `'%'+n`, `borrowForCall`
+compares `maxFree` against `counters-1`, `copyStructArg` iterates `words` slots - and you cannot iterate
+`.z.V` slots. The `SCOP`/`ENDS` remedy that fixed inline locals does NOT transfer: it places NAMED FRAME
+LOCALS, and there is no assembler-side allocator for transients to delegate to at all (`%N` is an index
+the emitter computes; the assembler only takes a `max`). So the fix is REWRITING Impala's allocator into
+the symbolic position algebra of [`docs/GAZLSymbolicWindows.md`](GAZLSymbolicWindows.md) - strictly more
+machinery than today, and it trades `claimSlot`'s loud per-slot overlap assert for a discipline whose
+failures are silent. The parking rationale gets stronger, not weaker.
+
+**Multidim arrays.** `.x.` is the wrong symbol for the wrong quantity in the wrong places. It is keyed on
+the array OBJECT (`.x.a`, `.x.b`), so symbol identity as shape identity would reject every pair of
+distinct arrays - 100% false negatives. Its value is the allocation size in WORDS, not a per-axis element
+count, and there is one per array, so a rank-2 shape has nothing to compare pairwise. It is not emitted
+for struct array fields (they still fold to `<X>`; see `emitStructLayout`) or for parameters, which are
+the positions the feature needs. And it carries no signature row, so `gazl-validate` cannot see it. The
+useful nominal identity - "both extents are the named const `N`" - was always available from `N`'s own
+GAZL symbol and needed nothing new.
+
+What `.x.` does contribute is a PRECEDENT: an extent can be a stable, host-quotable, assembly-resolved
+constant in the same class as `.o.`/`.z.`. If a host-supplied inner stride or a link-time shape assertion
+is ever wanted, that is the shape it would take.
+
 ## Impala 3.0 wishlist
 
 The first three belong together, because they are all changes to the same calling convention. Doing them in
@@ -175,10 +220,11 @@ CORRECT, not a stopgap - see that document before "fixing" any by-value size to 
 ### Multidimensional arrays
 
 Restore from `Impala2-multidim-arrays`. Independent of the ABI work above - it needs no calling-convention
-change. Two things must be settled FIRST, and neither is part of the feature itself: array-dimension type
-identity (a constant evaluator is load-bearing here), and the expression-extent ordering trap in struct
-array fields. The 2026-07-26 re-evaluation above also stands: the "matrix as a struct field" shortcut does
-not reach `extern struct`, because a sizeless host-owned array field has no stride to index by.
+change. One thing must be settled FIRST and it is not part of the feature: array-dimension type identity
+(a constant evaluator is load-bearing here). The other former prerequisite, the expression-extent ordering
+trap in struct array fields, was fixed in `260b57c`. The 2026-07-26 re-evaluation above still stands on
+cost/benefit: multidim SYNTAX cannot state an inner extent for a host-owned struct, and hand-striding
+through a host-supplied `const int W;` already covers that case without the feature.
 
 ### Full import-cycle resolution (collect mode)
 

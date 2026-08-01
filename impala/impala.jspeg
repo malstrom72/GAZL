@@ -1631,8 +1631,9 @@
        size is host-owned, so use the symbolic `.z.Name` (resolved at load); a normal struct uses its
        compiler-known word count. Frame/global allocation accepts a symbolic size, so by-value extern
        locals/globals work. (Passing/returning a struct BY VALUE is different - it reserves a
-       compile-time-known number of transient VM slots, which a host-owned size cannot provide, so
-       those sites stay blocked; see E425.) */
+       compile-time-known number of transient VM slots, which a host-owned size cannot provide. By-value
+       params/returns are parked wholesale today (E426/E427), so the extern-specific E425 that used to
+       state this no longer fires; docs/GAZLSymbolicWindows.md is where the reasoning lives.) */
     $$parser.structAllocSize = function (structName) {
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
@@ -1939,8 +1940,9 @@
         }
         /* Size hints here stay NUMERIC on purpose (not *.z.Struct): the window is a fixed `words`-slot
            block baked by the register allocator, and these must match it exactly - a symbolic size that
-           later resolved differently would overrun the window. By-value locks the size; extern structs,
-           whose size is host-owned, are blocked from by-value (E425). */
+           later resolved differently would overrun the window. By-value locks the size; an extern struct,
+           whose size is host-owned, could not supply one - which is why by-value and extern were mutually
+           exclusive before by-value was parked entirely. See docs/GAZLSymbolicWindows.md. */
         var dst = $$parser.borrow('%');
         $$parser.emit('=&', 'p', dst, '%' + winSlot, '*' + words);   /* ADRL address of the window region */
         var src = $$parser.placeAddress(argMeta);                    /* address of the source struct */
