@@ -157,6 +157,7 @@
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.topNames = {};                                   /// name -> kind ('global'/'function'/'const'/'struct'/'functype'), one flat namespace
     var $$parser.guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
+    var $$parser.initElemType = undefined;                        /// declared element type an `InitList` must match ('i'/'f'/'p'); undefined = untyped array, accept what comes
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
     var $$parser.exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
@@ -4120,6 +4121,19 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                               checks run, so $$i would land on the NEXT
                                                                               declaration - name the initializer itself */
                                                                             $initStart = $$i;
+                                                                            /* Hand InitList the DECLARED element type. Without it every entry was
+                                                                               checked against its own type, which no value can fail, so
+                                                                               `int array A[2] = { 1, "s" }` stored a pointer in an int slot and
+                                                                               `float array F[2] = { 1, 2 }` stored the INTEGER bit pattern and read
+                                                                               back 1.4013e-45. The scalar paths have always been this strict
+                                                                               (`global float f = 1` is E407); only the array path was not.
+                                                                               Restricted to the scalar heads on purpose: a struct-element array
+                                                                               must keep reporting the friendlier E422 below, and a funcptr element
+                                                                               head is a TYPE NAME that makeConstant would not recognise. */
+                                                                            var _eh = ($a.elem !== undefined
+                                                                                    ? $$parser.descHead($a.elem) : undefined);
+                                                                            $$parser.initElemType = (!$aStructEl
+                                                                                    && (_eh === 'i' || _eh === 'f' || _eh === 'p')) ? _eh : undefined;
                                                                          }
                            ( d:InitList                                {   /* flat list -> scalar-element arrays only */
                                                                             if ($aStructEl)
@@ -4186,15 +4200,20 @@ BracedItem  <-  b:Braced                                             { $$ = { br
 InitList    <-  '{' _                                                 { $d = ' '; $type = undefined; }
                 # Decline a `field:` entry so the ordered choice falls through to `Braced`, which owns the
                 # named form. Without this, `Expr` evaluates the name first and dies as E403 instead.
-                ( !(Identifier ':') x:Expr                           {
+                ( !(Identifier ':')                                  { $entryAt = $$i; }   # `Expr` eats the trailing
+                                                                                          # space, so $$i would name the NEXT entry
+                  x:Expr                                             {
                                                                             var xMeta = metaSlot($x);
-                                                                            $type = xMeta.type;
-                                                                            $d += $$parser.makeConstant(xMeta, $type, $$s, $$i);
+                                                                            $type = ($$parser.initElemType !== undefined
+                                                                                    ? $$parser.initElemType : xMeta.type);
+                                                                            $d += $$parser.makeConstant(xMeta, $type, $$s, $entryAt);
                                                                         }
-                  ( ',' _ !(Identifier ':') x:Expr                   {
+                  ( ',' _ !(Identifier ':')                          { $entryAt = $$i; }
+                    x:Expr                                           {
                                                                             var xMeta = metaSlot($x);
-                                                                            var xType = xMeta.type;
-                                                                            var constant = $$parser.makeConstant(xMeta, xType, $$s, $$i);
+                                                                            var xType = ($$parser.initElemType !== undefined
+                                                                                    ? $$parser.initElemType : xMeta.type);
+                                                                            var constant = $$parser.makeConstant(xMeta, xType, $$s, $entryAt);
 
                                                                             /* decide if we need to flush DATA */
                                                                             if (  constant[0] === '<'

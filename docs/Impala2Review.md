@@ -168,6 +168,14 @@ code-generating agent hits and the message points the wrong way. The symbol tabl
 
 ### C6. Other silent-wrong shapes **[V]**
 
+- ~~**A flat array initializer ignored the declared element type.**~~ FIXED 2026-08-02. `InitList`
+  checked each entry against its OWN type — a comparison no value can fail — so nothing enforced the
+  array's element type. `int array A[2] = { 1, "s" }` stored a POINTER in an int slot, and
+  `float array F[2] = { 1, 2 }` stored the INTEGER bit pattern, so `F[0]` read back as `1.4013e-45`
+  (verified by running it). The assembler cannot catch either: `DATA` is untyped words. The scalar
+  paths were always this strict — `global float f = 1` is E407 — so this was the array path missing a
+  check the rest of the language had, not a new rule. Untyped `array A[2]` (Impala 1) states no element
+  type and is still unchecked, deliberately.
 - **A declared return value never assigned returns stale frame garbage.** No definite-assignment analysis;
   decidable single-pass for the trivial case.
 - **`copy` bypasses the pointer type system entirely.** `copy(8 from &intSrc[0] to &floatDst[0])` and a

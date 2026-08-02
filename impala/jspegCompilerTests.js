@@ -1459,6 +1459,36 @@ expectDiagnosticAt("E460 names the surplus entry, not the initializer",
 	"2:27: error[E460]");
 console.log("impala.jspeg compiler rejects initializer values that do not fit");
 
+// A flat array initializer checked each entry against ITS OWN type, which no value can fail, so the
+// declared element type went unenforced. The scalar paths were always strict (`global float f = 1` is
+// E407); only the array path was not. Two shapes it silently mis-compiled, neither of which the
+// assembler can see - a word is a word: `{ 1, "s" }` on an int array stored a POINTER in an int slot,
+// and `{ 1, 2 }` on a float array stored the INTEGER bit pattern, so F[0] read back as 1.4013e-45.
+const arrayElemTypeCases = [
+	["ints in an int array", "readonly int array A[2] = { 1, 2 }", null],
+	["a named const in an int array", "const int N = 7\nreadonly int array A[2] = { N, 2 }", null],
+	["a string in an int array", "readonly int array A[2] = { 1, \"nope\" }", "Expected constant int"],
+	["a float literal in an int array", "readonly int array A[2] = { 1, 2.5 }", "Expected constant int"],
+	["floats in a float array", "readonly float array A[2] = { 1.0, 2.5 }", null],
+	["int literals in a float array", "readonly float array A[2] = { 1, 2 }", "Expected constant float"],
+	["strings in a pointer array", "readonly int pointer array A[2] = { \"a\", \"b\" }", null],
+	["ints in a pointer array", "readonly int pointer array A[2] = { 1, 2 }", "Expected constant pointer"],
+	// An UNTYPED array states no element type, so there is nothing to check it against - Impala 1 wrote
+	// these and they must keep compiling. Not knowing is not the same as being fine.
+	["an untyped array takes anything", "readonly array A[2] = { 1, \"x\" }", null],
+	// A struct-element array must keep its own friendlier message rather than falling out as a type
+	// mismatch against the struct name, which is why the element check skips a struct head.
+	["a struct-element array still asks for nested braces", "struct S { int a }\nglobal S array B[1] = { 1 }",
+		"needs nested braces"],
+];
+for (const [label, source, expected] of arrayElemTypeCases) {
+	expectCompileOutcome("array element type", label, `${source}\nfunction main() { }\n`, expected);
+}
+// ...and the caret names the offending ENTRY, not the `{` and not the next declaration.
+expectDiagnosticAt("E407 names the array entry whose type is wrong",
+	"readonly int array A[2] = { 1, \"nope\" }\nfunction main() { }\n", "1:32: error[E407]");
+console.log("impala.jspeg compiler checks array initializer entries against the declared element type");
+
 // `readonly` reaches an assignment as a `:=` operator, which no lvalue branch accepts - so a readonly
 // SCALAR and a readonly STRUCT FIELD both fell out as the bare "Invalid lvalue" that a genuine mistake
 // like `1 = q` gets. Only the array-element case had a real message. A struct field additionally reached
