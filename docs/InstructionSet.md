@@ -90,6 +90,13 @@ order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defin
 ordering (`LSSp`, `GEQp` etc.) and arithmetic (`ADDp`, `SUBp`, `DIFp`) applied to a function pointer yield an
 unspecified (but memory-safe) result.
 
+> **GAZL 1 does not enforce that contract, and GAZL 2 should.** All of those assemble today, because `p`
+> covers both data pointers and function pointers. `ADDp` is the one that bites: `&one + 1` is a valid
+> ordinal, so it does not trap - it silently calls a different function. "Memory-safe" is accurate and
+> still understates it. The fix is a distinct `t` (target) type with no arithmetic or ordering forms at
+> all, making the undefined operations unrepresentable rather than merely undefined. See
+> [`docs/GAZL2FunctionPointers.md`](GAZL2FunctionPointers.md).
+
 ## CNST
 - `*size`
 

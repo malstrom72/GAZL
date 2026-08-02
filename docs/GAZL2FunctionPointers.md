@@ -9,6 +9,20 @@ checking can close, because Impala has nowhere to encode the distinction.
 GAZL has three storage types - `i`, `f`, `p` - and **`p` is doing double duty**: it is both "data
 pointer" and "function pointer", which are not the same thing and are not interchangeable.
 
+## This is not a new rule - the ISA already states it
+
+`docs/InstructionSet.md`, under `CALL`, has said so all along:
+
+> A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function
+> declaration order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defined operations
+> on a function pointer; ordering (`LSSp`, `GEQp` etc.) and arithmetic (`ADDp`, `SUBp`, `DIFp`) applied to
+> a function pointer yield an unspecified (but memory-safe) result.
+
+The defined operation set is therefore already **equality and calling** - exactly the set proposed below.
+This document is not asking for a new rule; it is asking the assembler to ENFORCE the one already written
+down, which a shared `p` type makes impossible. Note too that "unspecified (but memory-safe)" is accurate
+but undersells `ADDp`: the result is not garbage, it is a *different function*, called silently.
+
 ## They are already different things at run time
 
 This is not a type-system nicety layered over one representation. The two live in different numeric
