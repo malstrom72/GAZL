@@ -1763,6 +1763,41 @@ console.log("impala.jspeg compiler keeps one-past-the-end ADDRESSES legal");
 	console.log("impala.jspeg compiler emits DEBUG-gated range checks only under --range-checks");
 }
 
+// EVERY array shape, because a flag that covers one of them is worse than no flag - it reads as
+// protection. A plain array decays to a pointer at lookup and so takes a different subscript path from
+// a struct field; a local's extent lives under `.z.<func>.<name>`, a global's under `.z.<name>`. The
+// last two entries are the boundary: a CONSTANT index is left to GAZL ("Offset out of bounds", a better
+// diagnostic than a trap), and a bare pointer has no extent to check at all.
+{
+	const decls = "const int DEBUG = 1\nstruct E { int a }\nstruct S { int array v[3] }\nglobal S s\n"
+		+ "global int array g[4]\nglobal E array ge[3]\n";
+	const shapes = [
+		["global scalar array", "global g[i] = 1;", "#.z.g "],
+		["local scalar array", "a[i] = 1;", "#.z.main.a "],
+		["struct array field", "global s.v[i] = 1;", "#.z.S.v "],
+		["global array of structs", "global ge[[i]].a = 1;", "#.z.ge "],
+		["local array of structs", "le[[i]].a = 1;", "#.z.main.le "],
+	];
+	for (const [label, stmt, bound] of shapes) {
+		const on = compileWithJsImpala(decls
+			+ "export function main() locals int i, int array a[5], E array le[2] { i = 1; " + stmt + " }\n",
+			{ randomId: 42, rangeChecks: true });
+		assert(on.includes("SUBi") && on.includes(bound),
+			`range checks: ${label} is not bounded by ${bound.trim()}\n` + on);
+	}
+	const noCheck = [
+		["a constant index (GAZL rejects it outright)", "global g[2] = 1;"],
+		["a bare pointer (no extent exists)", "p = &a[0]; p[i] = 1;"],
+	];
+	for (const [label, stmt] of noCheck) {
+		const on = compileWithJsImpala(decls
+			+ "export function main() locals int i, int array a[5], int pointer p { i = 1; " + stmt + " }\n",
+			{ randomId: 42, rangeChecks: true });
+		assert(!/index out of range/.test(on), `range checks: fired on ${label}\n` + on);
+	}
+	console.log("impala.jspeg compiler range-checks every array shape, and only those");
+}
+
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
 const caretNonCases = [
 	["if/else with a semicolon-terminated then-branch",

@@ -1184,6 +1184,15 @@
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
+    /* What a subscript needs to know about the array it indexes: `n` decides the two STATIC tiers and is
+       a number only when the source wrote one, `sym` is the `.z.` extent in words and is what the
+       RUNTIME check compares against, so it works for a symbolic extent too. A declared array records
+       `extentSym` at its declaration - the one point where a local's owning function is in scope. */
+    $$parser.arrayExtent = function (sym, name) {
+        return (sym === undefined || sym.extentSym === undefined) ? undefined
+                : { n: sym.size, sym: sym.extentSym, what: name };
+    };
+
     /* `--range-checks`: the DEBUG-gated RUNTIME bounds test for a subscript whose index is not a
        compile-time number, which is the only tier the two static ones cannot reach.
 
@@ -2493,10 +2502,18 @@
         /* special treatment for indexed “=[]” form */
         if (operator === '=[]') {
             var op1 = leftx.operands[1];     /* base pointer/address */
+            /* A plain array reaches here rather than subscriptStruct, because it decayed to a pointer at
+               lookup - so the extent rides on the meta instead of on a place. Same rule as there: only a
+               DYNAMIC index gets the runtime test. A constant one is already an assemble-time offset and
+               GAZL rejects it outright ("Offset out of bounds"), which is a better diagnostic than a trap.
+               The two branches below are exactly the two shapes that name a declared array, `&global` and
+               `$local`; anything else is a bare pointer with no extent to check. */
+            var xt = leftx.extent;
 
             if (leftx.operator === ':=' && op1[0] === '&') {
 
                 var op2 = $$parser.makeRValue(rightx);
+                if (op2[0] !== '#') $$parser.emitRangeCheck(op2, xt, sourceCode, sourceOffset);
 
                 if (op2[0] === '#') {
                     $$parser.makeMeta(
@@ -2514,6 +2531,7 @@
                 assert(op1[0] === '$', "=& expects local '$'");
 
                 var op2b = $$parser.makeRValue(rightx);
+                if (op2b[0] !== '#') $$parser.emitRangeCheck(op2b, xt, sourceCode, sourceOffset);
 
                 if (op2b[0] === '#') {
                     $$parser.makeMeta(leftx, '=', tp, null,
@@ -3226,12 +3244,14 @@
                 return;
             }
             if (p.type === 'A' && $$parser.isStructAtom(p.elem)) {   /* struct-element array -> a foldable local array place (base:offset, no ADRL) */
-                $$parser.setPlace(x, 'local', '$' + name, [], undefined, p.elem, p.elem);
+                $$parser.setPlace(x, 'local', '$' + name, [], undefined, p.elem, p.elem,
+                        undefined, $$parser.arrayExtent(p, name));
                 return;
             }
             if (p.type === 'A') {
                 $$parser.makeMeta(x, '=&', 'p', undefined,
                                   '$' + name, '*0');
+                metaSlot(x).extent = $$parser.arrayExtent(p, name);   /* survives until the next makeMeta */
             } else {
                 $$parser.makeMeta(x,
                                   (p.readonly ? ':=' : '='),
@@ -3256,6 +3276,7 @@
             if (p.type === 'A') {
                 $$parser.makeMeta(x, ':=', 'p', undefined,
                                   '&' + name, undefined);
+                metaSlot(x).extent = $$parser.arrayExtent(p, name);   /* survives until the next makeMeta */
                 /* A scalar `readonly` is rejected by its `:=*` operator having no assign() branch, but an
                    ARRAY decays to the same `:=` address meta whether or not it is writable - so carry the
                    flag and let assign() consult it once the subscript has been folded in. */
@@ -3861,6 +3882,12 @@ inp:ArgsDecl ')'_
                                                                                      v.elem
                                                                                  );
                                                                              }
+                                                                             if (v.type === 'A') {   /* the ONLY place the owning function's
+                                                                                                        name is in scope, so the extent symbol is
+                                                                                                        recorded here for --range-checks to quote */
+                                                                                 $$parser.symbols.locals['$' + v.name].extentSym =
+                                                                                         $$parser.extentSymbol(v.name, $id);
+                                                                             }
                                                                          });
                                                                          iterate($loc, function (v) {   /* the count scratches ArrayDecl held for this
                                                                                                            clause (see there); a no-op for the ones a
@@ -4229,6 +4256,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 ),
                                                                                 $a.elem
                                                                             );
+                                                                            $$parser.symbols.globals[$a.name].extentSym =
+                                                                                    $$parser.extentSymbol($a.name);   /* for --range-checks */
                                                                             $$parser.returnBack($a.size);   /* declared: this consumer is done with it */
                                                                             $aStructEl = ($a.elem !== undefined
                                                                                     && $$parser.descTail($a.elem) === undefined
