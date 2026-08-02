@@ -1625,6 +1625,20 @@ const caretCases = [
 	["E459 names the entry, not the struct",
 		"extern struct E { int a; int b }\nstruct O { int p; E e; int q }\nglobal O o = { p: 1, q: 7 }\n"
 			+ "function main() { }\n", "3:22: error[E459]"],
+	// The SCALAR initializer paths kept `$$i` while the brace path beside them moved to a saved start,
+	// so `Expr` (and `']' _`) ate the trailing space and the caret landed on the NEXT declaration. When
+	// the bad declaration was last in the file it landed past EOF and no source line printed at all -
+	// which is why the last case here deliberately has nothing after it.
+	["E407 names the global's initializer, not the next declaration",
+		"global int x = \"nope\"\nfunction main() { }\n", "1:16: error[E407]"],
+	["E407 names the const's initializer, not the next declaration",
+		"const int X = \"nope\"\nfunction main() { }\n", "1:15: error[E407]"],
+	["E407 names the array extent, not the next declaration",
+		"global int array A[\"nope\"]\nfunction main() { }\n", "1:20: error[E407]"],
+	["E421 names the initializer, not the next declaration",
+		"struct S { int a }\nglobal S s = 5\nfunction main() { }\n", "2:14: error[E421]"],
+	["a trailing bad initializer still renders a caret, not a position past EOF",
+		"function main() { }\nglobal int x = \"nope\"\n", "2:16: error[E407]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);

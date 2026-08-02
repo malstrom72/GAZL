@@ -256,10 +256,14 @@ and conditions need a `COMP_OP`.
   `function inline g()`, `export struct S` are all `E001`.
 - **`assert` defers its own prerequisites to the assembler** — with no `const int DEBUG` and no `assertFail`
   in the link set the Impala compile succeeds and the failure surfaces at load.
-- **Initializer errors are anchored on the *next* declaration** **[V]** — `$$i` has already skipped
+- ~~**Initializer errors are anchored on the *next* declaration** **[V]** — `$$i` has already skipped
   whitespace. When the bad declaration is last in the file the caret lands past EOF and no source line
-  prints at all. The grammar already has the fix for the metadata path (`$$parser.declOffset`, described
-  verbatim at `:3349-3352`); it was not applied to the error path.
+  prints at all.~~ FIXED 2026-08-02. Four scalar paths kept `$$i` while the brace path beside them had
+  already moved to a saved start offset: the global initializer (E407/E421), the const initializer
+  (E407) and the array extent (E407). Each now saves `$$i` straight after the `'='` or `'['`, before
+  `Expr` (or `']' _`) eats the trailing space — the same one-line pattern `$initStart` and `$cStart`
+  already used. Carets are column-accurate, not merely on the right line, and pinned in `caretCases`
+  including a deliberately last-in-file case for the past-EOF shape.
 - **`docs/Impala.md:261` says forward references work.** They do not — but the E403 note is excellent, and
   even finds the later definition.
 - **`docs/Impala.md:316-324`'s documented `goto`-out-of-loop idiom does not compile** — a trailing label
