@@ -17,7 +17,7 @@
  BUF_SIZE:			! DEFi #2	; signature const BUF_SIZE : int @ stripmain.impala:13:1
  .z.KEPT:			! DEFi #5
  KEPT:				CNST *.z.KEPT ; signature array KEPT[5] : int @ stripmain.impala:14:1
- 					DATA #9 #9
+ 					DATi #9 #9
  .z.buf:			! DEFi #BUF_SIZE
  buf:				GLOB *.z.buf ; signature array buf[BUF_SIZE] : int @ stripmain.impala:16:1
  					! MOVi <a> #0 ; layout of struct Voice

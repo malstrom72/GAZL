@@ -337,14 +337,20 @@ checkZeroLoop: NOOP
 
 ;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ;
-;DATf      #float
-;DATi      #int
-;DATp      &address
+;DATf      #float #float ...
+;DATi      #int #int ...
+;DATp      &address &address ...
 ;DATA      #const #const #const #const ...
 ;DATs      any string here
 ;
 ; DAT instructions are used to initialize globals and constant arrays. See consts declarations in top of this file for
 ; examples. Tests on global / const initializers can be found first in the unit-test function.
+;
+; All four of DATf/DATi/DATp/DATA take any number of operands - see `DATi #CR #LF #0` at the top of this file. What
+; sets DATA apart is that its operands may be of MIXED types (`consts.mixed`); the typed forms enforce their type on
+; every operand on the line, which is what makes them the safer choice whenever the values share one type.
+; DATs is the exception: it takes no operands at all - the rest of the line is the literal, one word per character,
+; with no terminating zero (`consts.string` follows it with a DATi).
 ;
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\

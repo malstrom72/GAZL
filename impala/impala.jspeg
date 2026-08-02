@@ -1999,6 +1999,20 @@
         $$parser.declare('!', 'globals', skip, undefined, true, undefined, sourceCode, sourceOffset);
     };
 
+    /* The mnemonic for one flat-array initializer row. `DATi`/`DATf`/`DATp` apply their type to EVERY
+       operand on the line (`src/GAZL.cpp:996-1019` - one loop shared by all four, `accepts` picked from
+       the 4th mnemonic character), so the assembler re-checks what Impala already checked. That second
+       line of defence is the point: while these rows were `DATA` - which takes `KONST`, anything at all -
+       Impala was the ONLY check, which is how a tautological one went unnoticed. It also covers what
+       Impala cannot fold: `DATi #N` verifies that `N` really is `! DEFi` and not `! DEFf`.
+
+       `DATA` stays for an UNTYPED array, which states no element type to check against. Struct
+       initializers keep it too, and must: one row spans fields of different types (`DATA #1 #2.5 &s`),
+       which is exactly the mixed case `DATA` exists for - see `consts.mixed` in src/UnitTest.gazl. */
+    $$parser.initElemRow = function () {
+        return ($$parser.initElemType !== undefined ? 'DAT?' : 'DATA');
+    };
+
     $$parser.blockInitFrom = function (out, why, code, hint) {
         if (out.blocked === undefined) {                      /* the FIRST block bounds the row */
             out.blocked = { at: out.length, why: why, code: code, hint: hint };
@@ -4221,7 +4235,7 @@ InitList    <-  '{' _                                                 { $d = ' '
                                                                               || ($d + ' ' + constant).length >= 55) {
 
                                                                                 $$parser.declare(
-                                                                                    'DATA', 'globals',
+                                                                                    $$parser.initElemRow(), 'globals',
                                                                                     undefined, xType,
                                                                                     true, $d.substr(1),
                                                                                     $$s, $$i
@@ -4235,7 +4249,7 @@ InitList    <-  '{' _                                                 { $d = ' '
               '}' _                                                  {
                                                                         if ($d.substr(1) !== '') {
                                                                             $$parser.declare(
-                                                                                'DATA', 'globals',
+                                                                                $$parser.initElemRow(), 'globals',
                                                                                 undefined, $type,
                                                                                 true, $d.substr(1),
                                                                                 $$s, $$i

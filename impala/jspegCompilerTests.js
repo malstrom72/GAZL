@@ -1489,6 +1489,31 @@ expectDiagnosticAt("E407 names the array entry whose type is wrong",
 	"readonly int array A[2] = { 1, \"nope\" }\nfunction main() { }\n", "1:32: error[E407]");
 console.log("impala.jspeg compiler checks array initializer entries against the declared element type");
 
+// ...and the ROW carries the type, so the assembler re-checks every operand independently of Impala.
+// `DATi`/`DATf`/`DATp` apply their type to all operands on the line (src/GAZL.cpp:996-1019 - one loop
+// for all four mnemonics), where `DATA` takes KONST and checks nothing. That matters most for what
+// Impala cannot fold: `DATi #N` verifies N is `! DEFi`, not `! DEFf`. Verified against GAZLCmd by
+// READBACK, not by acceptance - a short row just zero-fills its section and assembles clean either way.
+const initRowCases = [
+	["int rows are DATi", "readonly int array A[2] = { 1, 2 }", /\bDATi #1 #2\b/],
+	["float rows are DATf", "readonly float array A[2] = { 1.0, 2.5 }", /\bDATf #1\.0 #2\.5\b/],
+	["pointer rows are DATp", "readonly int pointer array A[2] = { \"a\", \"b\" }", /\bDATp &\S+ &\S+/],
+	// The whole point: a symbolic const gets its type checked at assembly time, which Impala cannot do.
+	["a symbolic const still rides a typed row", "const int N = 7\nreadonly int array A[2] = { N, 2 }",
+		/\bDATi #N #2\b/],
+	// An untyped array has no element type to check against, so its row must stay the permissive form.
+	["an untyped array keeps DATA", "readonly array A[2] = { 1, \"x\" }", /\bDATA #1 &/],
+	// A struct row spans fields of DIFFERENT types, which is the mixed case DATA exists for - typing it
+	// is not merely unnecessary, it is impossible (see `consts.mixed` in src/UnitTest.gazl).
+	["a struct initializer keeps DATA", "struct S { int a; float b }\nglobal S s = { a: 1, b: 2.5 }",
+		/\bDATA #1 #2\.5\b/],
+];
+for (const [label, source, wanted] of initRowCases) {
+	const out = compileWithJsImpala(`${source}\nfunction main() { }\n`, { randomId: 42 });
+	assert(wanted.test(out), `${label}: expected ${wanted} in the emitted rows\n${out}`);
+}
+console.log("impala.jspeg compiler types its array initializer rows so the assembler rechecks them");
+
 // `readonly` reaches an assignment as a `:=` operator, which no lvalue branch accepts - so a readonly
 // SCALAR and a readonly STRUCT FIELD both fell out as the bare "Invalid lvalue" that a genuine mistake
 // like `1 = q` gets. Only the array-element case had a real message. A struct field additionally reached

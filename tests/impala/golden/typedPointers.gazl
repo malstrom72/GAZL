@@ -4,10 +4,10 @@
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 9:1
 .z.values:	! DEFi #5
 values:	GLOB *.z.values	; signature array values[5] : int @ 11:1
-	DATA #10 #20 #30 #40 #50
+	DATi #10 #20 #30 #40 #50
 .z.gains:	! DEFi #2
 gains:	GLOB *.z.gains	; signature array gains[2] : float @ 12:1
-	DATA #1.5 #2.5
+	DATf #1.5 #2.5
 	GLOB *1
 cursor:	DATp &NULL	; signature global cursor : int-ptr @ 13:1
 ; signature extern native printInt() -> unknown @ 15:1

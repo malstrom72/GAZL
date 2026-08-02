@@ -18,7 +18,7 @@ bank:	GLOB *.z.bank	; signature array bank[4] : S @ 14:1
 	DATA #10 #0 #0 #20 #0 #0 #30 #0 #0 #40 #0 #0
 .z.words:	! DEFi #6
 words:	GLOB *.z.words	; signature array words[6] : int @ 15:1
-	DATA #1 #2 #3 #4 #4 #4
+	DATi #1 #2 #3 #4 #4 #4
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature export func main() -> void @ 17:1
