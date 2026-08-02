@@ -229,6 +229,20 @@ assembler decide it.* That is the same move `.o.`/`.z.` make for layout and exte
 `! FAIL` is what turns it into a diagnostic rather than a silent assumption.
 
 
+## GAZL 2 wishlist
+
+### A distinct function-pointer type (suffix `t`)
+
+`p` is currently both "data pointer" and "function pointer", which are different things - a data pointer is
+a memory address, a function pointer is a declaration-order ordinal into `functionTable`, and the two live
+`0x44444444` apart on purpose. Most misuse traps, but `ADDp` on a function pointer does NOT: `&one + 1` is
+a valid ordinal, so it silently calls a different function. A separate type makes that unrepresentable
+rather than merely detectable, because there would be no `ADDt`/`SUBt`/`LSSt` at all.
+
+Researched and written up in [`docs/GAZL2FunctionPointers.md`](GAZL2FunctionPointers.md), including the
+runtime demonstration, the ~14 table entries it needs, and the suffix letters ruled out (`F` collides with
+`DATf` on case alone; `a` and `e` collide with `LOCA`/`DATA` and `MOVE`).
+
 ## Impala 3.0 wishlist
 
 The first three belong together, because they are all changes to the same calling convention. Doing them in
