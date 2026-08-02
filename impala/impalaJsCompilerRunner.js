@@ -252,6 +252,9 @@ function compileWithJsImpala(source, options = {}) {
 	if (legacy) {
 		compilerOptions.legacy = true;
 	}
+	if (options.rangeChecks) {
+		compilerOptions.rangeChecks = true;   // --range-checks: DEBUG-gated runtime bounds tests, off by default
+	}
 	compilerOptions.warn = (message, offset, code, hint) => {
 		const formatted = formatDiagnostic(source, options, offset ?? 0, "warning", code, message, hint);
 		if (typeof onWarning === "function") {

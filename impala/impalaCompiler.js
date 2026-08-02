@@ -146,6 +146,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     var dry            = false;
     var legacyMode     = (typeof _hostOptions !== 'undefined' && _hostOptions != null
             && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings
+    var rangeChecks    = (typeof _hostOptions !== 'undefined' && _hostOptions != null
+            && !!_hostOptions.rangeChecks);                     /// `--range-checks` emits DEBUG-gated runtime bounds tests
     var units          = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
             && _hostOptions.units) || undefined);               /// import-closure spans {name,start,end}[], for origins
     var declOffset     = 0;                            /// offset of the declaration being parsed - see `root`
@@ -1195,6 +1197,44 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
+    /* `--range-checks`: the DEBUG-gated RUNTIME bounds test for a subscript whose index is not a
+       compile-time number, which is the only tier the two static ones cannot reach.
+
+       Branchless on purpose. `(extent - 1 - i) | i` has its sign bit set exactly when `i < 0` or
+       `i >= extent`, so ONE conditional branch reaches the failure call and the emitted shape is
+       `assert`'s - guard, comparison, `?->`, call, join - which is the only shape processBranches
+       understands. The bound is the `.z.` SYMBOL, not a number, so this works unchanged for an extent
+       the assembler resolves (`v[SN]`); and for a struct element the operand handed in is the SCALED
+       word offset, which is what `.z.` counts.
+
+       OFF BY DEFAULT, and that is not the same switch as `#DEBUG`. `DEBUG` decides whether the
+       assembler EMITS the instructions; this decides whether they are in the .gazl TEXT at all - and
+       the text is the shipped artifact, embedded into C++ via tools/gazlCompactor. Measured, an assert
+       costs ~95 bytes of compacted source that `DEBUG 0` does not remove. */
+    emitRangeCheck = function (idxOp, extent, sourceCode, sourceOffset) {
+        if (!rangeChecks || extent === undefined || extent.sym === undefined
+                || idxOp === undefined) {
+            return;
+        }
+        var ok = newLabel('r');
+        var t  = borrow('%');
+        emit('<> ==', 'i', '#DEBUG', '#0', ok);      /* assemble-time: DEBUG 0 drops the rest */
+        emit('-', 'i', t, '#' + extent.sym, idxOp);
+        emit('-', 'i', t, t, '#1');
+        emit('|', 'i', t, t, idxOp);
+        emit('>=', 'i', undefined, t, '#0');
+        emit('?->', true, ok, undefined, undefined);
+        returnBack(t);
+        var r = borrowForCall();
+        var msg = {};
+        makeString('a', msg, 'index out of range: ' + extent.what, sourceCode, sourceOffset);
+        makeArgValue(msg, r + 1);
+        emit('()', '?', '^assertFail', '%' + r, '*1');
+        returnBack('%' + (r + 1));
+        returnBack('%' + r);
+        emit('<-?', true, ok, undefined, undefined);
+    };
+
     /* One past the end survived the subscript as a flag because only `&` makes it legal. Anything that
        READS or WRITES the element is a real overrun, and lands here. */
     checkOnePast = function (expr) {
@@ -2189,8 +2229,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            the folding branch below does not, so `v[-1]` - which takes the dynamic path and writes
            BACKWARDS into the preceding field - is caught too. */
         var onePast;
-        if (extent !== undefined && /^[0-9]+$/.test('' + extent) && /^#-?[0-9]+$/.test(idxRV)) {
-            var ck = parseInt(idxRV.substr(1), 10), cn = parseInt(extent, 10);
+        if (extent !== undefined && /^[0-9]+$/.test('' + extent.n) && /^#-?[0-9]+$/.test(idxRV)) {
+            var ck = parseInt(idxRV.substr(1), 10), cn = parseInt(extent.n, 10);
             /* ONE PAST THE END is an address, not an element: `&s.v[2]` on `v[2]` is the standard end
                pointer and GAZL accepts it. So it cannot be rejected here - by the time the subscript is
                parsed nobody knows yet whether an `&` follows. Flag it instead and let reference() clear
@@ -2228,9 +2268,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (elemStruct) {
                 var frameIdx = borrow('%');
                 emit('*', 'i', frameIdx, idxRV, '#.z.' + elem);
+                emitRangeCheck(frameIdx, extent, sourceCode, sourceOffset);   /* scaled: `.z.` counts words */
                 returnBack(idxRV);
                 setPlace(x, 'local', x.base, x.offParts, elem, x.root, undefined, frameIdx);
             } else {
+                emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
                 emitPlaceValue(x, 'local', x.base, x.offParts, idxRV, eType, eTail);
             }
             return;
@@ -2240,12 +2282,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         if (elemStruct) {
             var elemPtr = borrow('%'), scaled = borrow('%');
             emit('*', 'i', scaled, idxRV, '#.z.' + elem);
+            emitRangeCheck(scaled, extent, sourceCode, sourceOffset);
             emit('+', 'p', elemPtr, arrPtr, scaled);
             returnBack(scaled);
             returnBack(idxRV);
             returnBack(arrPtr);
             setPlace(x, 'pointer', elemPtr, [], elem, elem);
         } else {                                                  /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
+            emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
             emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
         }
     };
@@ -2365,7 +2409,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
         if (field.type === 'A') {                                 /* array field -> a fold-able array place for the next [k]
                                                                      (struct OR scalar element; subscriptStruct terminates it) */
-            setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex, field.size);
+            setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex,
+                    { n: field.size, sym: extentSymbol(fieldName, structName),
+                      what: structName + '.' + fieldName });
             return;
         }
 

@@ -1745,6 +1745,24 @@ for (const [label, source] of endPointerCases) {
 }
 console.log("impala.jspeg compiler keeps one-past-the-end ADDRESSES legal");
 
+// `--range-checks` is the third tier: a DYNAMIC index into a struct array field, which neither static
+// tier nor GAZL can decide. Both halves are asserted, because a flag that silently does nothing and a
+// flag that silently does it always look identical from one side. The OFF case is the load-bearing one:
+// the guard lines stay in the .gazl text whatever `DEBUG` says, and that text is the shipped artifact.
+{
+	const src = "const int DEBUG = 1\nstruct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+		+ "export function main() locals int i { i = 5; global s.v[i] = 99; }\n";
+	const off = compileWithJsImpala(src, { randomId: 42 });
+	const on = compileWithJsImpala(src, { randomId: 42, rangeChecks: true });
+	assert(!/index out of range/.test(off) && !/@\.r\d/.test(off),
+		"range checks: emitted with the flag OFF\n" + off);
+	assert(/! EQUi #DEBUG #0 @\.r\d/.test(on), "range checks: no DEBUG gate on the guard\n" + on);
+	assert(/SUBi .* #\.z\.S\.v /.test(on), "range checks: bound is not the .z. extent symbol\n" + on);
+	assert(/index out of range: S\.v/.test(on), "range checks: no message naming the field\n" + on);
+	assert(/CALL \^assertFail/.test(on), "range checks: does not reuse the assertFail native\n" + on);
+	console.log("impala.jspeg compiler emits DEBUG-gated range checks only under --range-checks");
+}
+
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
 const caretNonCases = [
 	["if/else with a semicolon-terminated then-branch",

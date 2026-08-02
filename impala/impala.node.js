@@ -46,10 +46,12 @@ function readStdinLatin1Sync() {
 
 function usageAndExit() {
 	console.error('Usage:');
-	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [<input.impala>] [<output.gazl>|-] [<random id>]');
+	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [--range-checks] [<input.impala>] [<output.gazl>|-] [<random id>]');
 	console.error('  node impala/impala.node.js run [--legacy] [<input.impala>]');
 	console.error('  --legacy downgrades Impala 2 strict-expression errors to warnings');
 	console.error('  --dead-strip drops everything unreachable from an `export`');
+	console.error('  --range-checks emits DEBUG-gated runtime bounds tests (off by default: they stay in the');
+	console.error('                 .gazl TEXT even when DEBUG is 0, and that text is what ships)');
 	process.exit(1);
 }
 
@@ -79,6 +81,7 @@ function compileProgram(rootPath, options = {}) {
 		sourceName: rootPath,
 		units: spans,
 		legacy: options.legacy,
+		rangeChecks: options.rangeChecks,
 	});
 	if (options.deadStrip) {
 		output = deadStrip(output);
@@ -86,7 +89,7 @@ function compileProgram(rootPath, options = {}) {
 	return { output, unitCount: units.length };
 }
 
-function compileCommand(args, legacy, wantDeadStrip) {
+function compileCommand(args, legacy, wantDeadStrip, rangeChecks) {
 	let stdinSource;
 	let rootPath;
 	if (args.length === 0) {
@@ -105,7 +108,7 @@ function compileCommand(args, legacy, wantDeadStrip) {
 	let output;
 	let unitCount;
 	try {
-		const built = compileProgram(rootPath, { randomId, legacy, deadStrip: wantDeadStrip, stdinSource });
+		const built = compileProgram(rootPath, { randomId, legacy, deadStrip: wantDeadStrip, rangeChecks, stdinSource });
 		output = built.output;
 		unitCount = built.unitCount;
 	} catch (err) {
@@ -185,11 +188,13 @@ function main() {
 	const argv = process.argv.slice(2);
 	const legacy = argv.includes('--legacy');
 	const wantDeadStrip = argv.includes('--dead-strip');
-	const [cmd, ...rest] = argv.filter((arg) => arg !== '--legacy' && arg !== '--dead-strip');
+	const rangeChecks = argv.includes('--range-checks');
+	const [cmd, ...rest] = argv.filter((arg) => arg !== '--legacy' && arg !== '--dead-strip'
+			&& arg !== '--range-checks');
 	if (!cmd) return usageAndExit();
 	switch (cmd) {
 		case 'compile':
-			return compileCommand(rest, legacy, wantDeadStrip);
+			return compileCommand(rest, legacy, wantDeadStrip, rangeChecks);
 		case 'run':
 			return runCommand(rest, legacy);
 		default:
