@@ -122,6 +122,11 @@ Integer constant data items. Every operand on the line must be an int (see `DATf
 
 Pointer constant data items. Every operand on the line must be an address (see `DATf`).
 
+Note `p` covers BOTH data pointers and function pointers, which are different things - a data pointer is a
+memory address, a function pointer is a declaration-order ordinal. So `DATp &func &data` assembles, and
+`ADDp` on a function pointer assembles without trapping. GAZL 2 is expected to split this into a `t`
+(target) type; see [`docs/GAZL2FunctionPointers.md`](GAZL2FunctionPointers.md).
+
 ## DATs
 - `string`
 

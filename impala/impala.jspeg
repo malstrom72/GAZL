@@ -194,6 +194,10 @@
 
     map($$parser.CASTS_TO_TYPES, 'float','f','funcptr','F','int','i','pointer','p');
     map($$parser.ZEROES,         'f','#0.0','i','#0','p','&NULL','F','&NULL');
+    /* GAZL 2: `'F','p'` is where Impala THROWS AWAY the funcptr/data-pointer distinction it already has -
+       GAZL 1 offers only `p` for both, so a funcptr array and a pointer array emit identical `DATp` rows.
+       When GAZL 2 lands the `t` (target) type this becomes `'F','t'` and Impala needs nothing else; the
+       type is already tracked. See docs/GAZL2FunctionPointers.md. */
     map($$parser.TYPE_SUFFIXES,  'void','', 'i','i','f','f','p','p','F','p','U','',
                                  'N','',   'A','A','?','E', 'V','');
     map($$parser.VERBOSE_TYPES,  'i','int','f','float','p','pointer','F','funcptr',

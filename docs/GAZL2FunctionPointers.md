@@ -117,6 +117,24 @@ The natural letter is `f`, and float has it. Everything else is a compromise, so
 The lowercase suffix space is only `f i p`, plus `s` (`DATs`) and `u` (`SHRu`). `t` is free and collides
 with no word-form on any stem that would take it (`MOV LOC DAT EQU NEQ INP OUT`).
 
+## Where this is anchored, so GAZL 2 cannot miss it
+
+A design note on its own gets missed. Every site that has to change carries a `GAZL 2:` comment pointing
+back here, so the work is discovered by editing the code rather than by remembering this file:
+
+| site | what it says |
+|---|---|
+| `src/GAZL.cpp`, `ANY_FREE` | SPLIT THIS - the union of `FUNC` and `FREE_ADDRESS` is the root cause |
+| `src/GAZL.cpp`, `CALL_v__` / `CALL_vvs` | indirect call takes generic `VAR_PTR_R`; retype to `t` |
+| `src/GAZL.cpp`, `DATp_c__` | one row can mix function and data addresses; needs a `DATt` sibling |
+| `impala/impala.jspeg`, `TYPE_SUFFIXES` | `'F','p'` is where Impala discards the distinction; becomes `'F','t'` |
+| `docs/InstructionSet.md`, `DATp` | records that `p` covers both, and why that is a problem |
+
+**The Impala side is one map entry.** Impala already tracks funcptr as its own type `'F'` and collapses it
+only at emission, so `'F','p'` -> `'F','t'` is the whole change there. Nothing else in the compiler needs
+to learn a new concept - which is worth knowing before estimating the work, because the assembler side
+looks like the expensive half and is.
+
 ## Open questions
 
 - **Struct fields and `copy`.** A struct holding a call target is a mixed-type region; `DATA` rows stay
