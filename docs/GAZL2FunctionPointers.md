@@ -142,6 +142,7 @@ back here, so the work is discovered by editing the code rather than by remember
 | `src/GAZL.cpp`, `CALL_v__` / `CALL_vvs` | indirect call takes generic `VAR_PTR_R`; retype to `t` |
 | `src/GAZL.cpp`, `DATp_c__` | one row can mix function and data addresses; needs a `DATt` sibling |
 | `impala/impala.jspeg`, `TYPE_SUFFIXES` | `'F','p'` is where Impala discards the distinction; becomes `'F','t'` |
+| `docs/InstructionSet.md`, `CALL` | the contract paragraph, plus a note that GAZL 1 cannot enforce it |
 | `docs/InstructionSet.md`, `DATp` | records that `p` covers both, and why that is a problem |
 
 **The Impala side is one map entry.** Impala already tracks funcptr as its own type `'F'` and collapses it
