@@ -1157,6 +1157,7 @@
         rec.root      = undefined;
         rec.arrayOf   = undefined;
         rec.extent    = undefined;
+        rec.onePast   = undefined;
         rec.struct    = undefined;
         rec.dynIndex  = undefined;
         rec.winBase   = undefined;
@@ -1181,10 +1182,22 @@
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
+    /* One past the end survived the subscript as a flag because only `&` makes it legal. Anything that
+       READS or WRITES the element is a real overrun, and lands here. */
+    $$parser.checkOnePast = function (expr) {
+        var op = expr.onePast;
+        if (op === undefined) return;
+        expr.onePast = undefined;
+        $$parser.fail('Index ' + op.n + ' is outside the extent ' + op.n + ' of this array',
+                op.src, op.off, 'E461',
+                'one past the end is an address only - write `&` to take it, or index 0 to ' + (op.n - 1));
+    };
+
     $$parser.makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
+        $$parser.checkOnePast(expr);                              /* reading it - reference() would have cleared the flag */
 
         if (expr.place && expr.arrayOf) {                         /* array place used without a subscript -> decay to a pointer */
             var delem = expr.arrayOf;
@@ -2113,6 +2126,7 @@
         slot.root     = root || structName || arrayOf;
         slot.elem     = arrayOf || structName;
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
+        slot.onePast  = undefined;                                /* pooled slot: never inherit another subscript's end-pointer flag */
     };
 
     /* A place resolved to a terminal SCALAR location (a scalar field, or a scalar array element) becomes a
@@ -2161,13 +2175,20 @@
            or a runtime index is not knowable at Impala compile time. The index test accepts a MINUS sign
            the folding branch below does not, so `v[-1]` - which takes the dynamic path and writes
            BACKWARDS into the preceding field - is caught too. */
+        var onePast;
         if (extent !== undefined && /^[0-9]+$/.test('' + extent) && /^#-?[0-9]+$/.test(idxRV)) {
             var ck = parseInt(idxRV.substr(1), 10), cn = parseInt(extent, 10);
-            if (ck < 0 || ck >= cn) {
+            /* ONE PAST THE END is an address, not an element: `&s.v[2]` on `v[2]` is the standard end
+               pointer and GAZL accepts it. So it cannot be rejected here - by the time the subscript is
+               parsed nobody knows yet whether an `&` follows. Flag it instead and let reference() clear
+               the flag; makeRValue and assign fail on anything that still carries one, which is exactly
+               the set of uses that DEREFERENCE the element. Two past is wild in every context. */
+            if (ck < 0 || ck > cn) {
                 $$parser.fail('Index ' + ck + ' is outside the extent ' + cn + ' of this array',
                         sourceCode, sourceOffset, 'E461',
                         'valid indices are 0 to ' + (cn - 1));
             }
+            if (ck === cn) onePast = { n: cn, src: sourceCode, off: sourceOffset };
         }
 
         if (/^#[0-9]+$/.test(idxRV)) {                           /* constant index -> fold into the compile-time offset parts */
@@ -2184,6 +2205,7 @@
             }
             if (elemStruct) $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
             else            $$parser.emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
+            metaSlot(x).onePast = onePast;                       /* set AFTER the terminal call - both clear the slot */
             return;
         }
 
@@ -2309,6 +2331,8 @@
             $$parser.fail("Field access requires a struct" + (arrow ? ' pointer' : ''),
                     sourceCode, sourceOffset, 'E415');
         }
+
+        $$parser.checkOnePast(x);                                 /* `e[[2]].a` reaches INTO the element past the end */
 
         var field = $$parser.findField(structName, fieldName);
         if (!field) {
@@ -2598,6 +2622,8 @@
         x      = metaSlot(x);
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
+        $$parser.checkOnePast(leftx);                             /* writing it: a target is never an address */
+        $$parser.checkOnePast(rightx);                            /* `x = s.v[2]` reuses the operand without makeRValue */
 
         /* whole-struct assignment: one COPY *sizeof, statement value is the dest place */
         if (leftx.type === 'S' || rightx.type === 'S') {
@@ -2773,6 +2799,9 @@
     $$parser.reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
+        expr.onePast = undefined;                    /* taking the ADDRESS of one past the end is the whole
+                                                        point of allowing it - see subscriptStruct. Cleared
+                                                        before the `=[]$` branch below calls makeRValue. */
 
         if (expr.operator === '=') {                 // variable
             assert(expr.operands[2] === undefined,
@@ -4749,6 +4778,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
 Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        ++$$.count;
                                                        var meta = metaSlot($a);
+                                                       $$parser.checkOnePast(meta);   /* a bare arg is placed without makeRValue */
                                                        if (meta.type === 'V') {
                                                            $$parser.typeError(
                                                                'Invalid type ({$type1})',

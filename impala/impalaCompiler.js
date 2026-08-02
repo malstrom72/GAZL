@@ -1170,6 +1170,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         rec.root      = undefined;
         rec.arrayOf   = undefined;
         rec.extent    = undefined;
+        rec.onePast   = undefined;
         rec.struct    = undefined;
         rec.dynIndex  = undefined;
         rec.winBase   = undefined;
@@ -1194,10 +1195,22 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
+    /* One past the end survived the subscript as a flag because only `&` makes it legal. Anything that
+       READS or WRITES the element is a real overrun, and lands here. */
+    checkOnePast = function (expr) {
+        var op = expr.onePast;
+        if (op === undefined) return;
+        expr.onePast = undefined;
+        fail('Index ' + op.n + ' is outside the extent ' + op.n + ' of this array',
+                op.src, op.off, 'E461',
+                'one past the end is an address only - write `&` to take it, or index 0 to ' + (op.n - 1));
+    };
+
     makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
+        checkOnePast(expr);                              /* reading it - reference() would have cleared the flag */
 
         if (expr.place && expr.arrayOf) {                         /* array place used without a subscript -> decay to a pointer */
             var delem = expr.arrayOf;
@@ -2126,6 +2139,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         slot.root     = root || structName || arrayOf;
         slot.elem     = arrayOf || structName;
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
+        slot.onePast  = undefined;                                /* pooled slot: never inherit another subscript's end-pointer flag */
     };
 
     /* A place resolved to a terminal SCALAR location (a scalar field, or a scalar array element) becomes a
@@ -2174,13 +2188,20 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            or a runtime index is not knowable at Impala compile time. The index test accepts a MINUS sign
            the folding branch below does not, so `v[-1]` - which takes the dynamic path and writes
            BACKWARDS into the preceding field - is caught too. */
+        var onePast;
         if (extent !== undefined && /^[0-9]+$/.test('' + extent) && /^#-?[0-9]+$/.test(idxRV)) {
             var ck = parseInt(idxRV.substr(1), 10), cn = parseInt(extent, 10);
-            if (ck < 0 || ck >= cn) {
+            /* ONE PAST THE END is an address, not an element: `&s.v[2]` on `v[2]` is the standard end
+               pointer and GAZL accepts it. So it cannot be rejected here - by the time the subscript is
+               parsed nobody knows yet whether an `&` follows. Flag it instead and let reference() clear
+               the flag; makeRValue and assign fail on anything that still carries one, which is exactly
+               the set of uses that DEREFERENCE the element. Two past is wild in every context. */
+            if (ck < 0 || ck > cn) {
                 fail('Index ' + ck + ' is outside the extent ' + cn + ' of this array',
                         sourceCode, sourceOffset, 'E461',
                         'valid indices are 0 to ' + (cn - 1));
             }
+            if (ck === cn) onePast = { n: cn, src: sourceCode, off: sourceOffset };
         }
 
         if (/^#[0-9]+$/.test(idxRV)) {                           /* constant index -> fold into the compile-time offset parts */
@@ -2197,6 +2218,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             }
             if (elemStruct) setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
             else            emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
+            metaSlot(x).onePast = onePast;                       /* set AFTER the terminal call - both clear the slot */
             return;
         }
 
@@ -2322,6 +2344,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             fail("Field access requires a struct" + (arrow ? ' pointer' : ''),
                     sourceCode, sourceOffset, 'E415');
         }
+
+        checkOnePast(x);                                 /* `e[[2]].a` reaches INTO the element past the end */
 
         var field = findField(structName, fieldName);
         if (!field) {
@@ -2611,6 +2635,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         x      = metaSlot(x);
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
+        checkOnePast(leftx);                             /* writing it: a target is never an address */
+        checkOnePast(rightx);                            /* `x = s.v[2]` reuses the operand without makeRValue */
 
         /* whole-struct assignment: one COPY *sizeof, statement value is the dest place */
         if (leftx.type === 'S' || rightx.type === 'S') {
@@ -2786,6 +2812,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
+        expr.onePast = undefined;                    /* taking the ADDRESS of one past the end is the whole
+                                                        point of allowing it - see subscriptStruct. Cleared
+                                                        before the `=[]$` branch below calls makeRValue. */
 
         if (expr.operator === '=') {                 // variable
             assert(expr.operands[2] === undefined,
@@ -3543,7 +3572,7 @@ function PrePost($){var $op=createParserContext(),$cdesc,$ccast,$sid=createParse
 function Subscript($){var $idxAt,$s=createParserContext();return (function(){var _b=_i;return (_s.substr(_i,2)==="[[")&&(_i+=2,true)&&_($)&&(function(){ $idxAt = _i; ; return true})()&&Expr($s)&&(_s.substr(_i,2)==="]]")&&(_i+=2,true)&&_($)&&(function(){ if (!dry) { var sbs = metaSlot($._); if (!subscriptScales(sbs)) fail('Scaled subscript on a one-word element', _s, _i, 'E205', '`[[ ]]` scales by the element size - this element is one word, so write `[ ]`'); subscriptStruct($._, $s._, _s, $idxAt); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="[")&&(++_i,true)&&_($)&&(function(){ $idxAt = _i; ; return true})()&&Expr($s)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ if (!dry) { var sb = metaSlot($._); if (subscriptScales(sb)) fail('Plain subscript on a struct element', _s, _i, 'E204', 'this element is a struct, so the index scales - write `[[ ]]`'); if ((sb.place && sb.arrayOf) || (sb.type === 'p' && isStructAtom(sb.elem))) subscriptStruct($._, $s._, _s, $idxAt); else binaryOp('=[]', $._, $s._, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FieldAccess($){var $f=createParserContext();return (function(){var _b=_i;return (_s.substr(_i,2)==="->")&&(_i+=2,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, true, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===".")&&(++_i,true)&&_($)&&Identifier($f)&&(function(){ if (!dry) fieldAccess($._, $f._, false, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FuncCall($){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ if (!dry) { $.count = 0; /* how many leading output slots the callee expects (>1 = multi-return) */ var _c = metaSlot($._); var _rs = 1; if (_c.operator === ':=' && _c.operands[1] && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) { var _e = symbols.functions[_c.operands[1].substr(1)]; if (_e && _e.signature && _e.signature.returnWords !== undefined && _e.signature.returnWords > 1) _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */ } else if (_c.type === 'F' && isFuncTypeAtom(_c.elem)) { var _ft = functypes[_c.elem];   /* indirect call through a named funcptr type */ if (_ft.returnWords > 1) _rs = _ft.returnWords; } $.retSlots = _rs; $.words = 0;                            /* input words placed so far (struct args span >1) */ $.base  = borrowForCall(); for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */ claimSlot($.base + _os); $.types = []; $.elems = []; $.opnds = []; } ; return true})()&&((function(){var _b=_i;return Argument($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Argument($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){var _b=_i;return (_s[_i]===")")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){   /* a '(' after a value is always a call, so no valid parse ever backtracks out of one - and the prologue above already borrowed the call window, which a backtrack would leak into whatever diagnostic comes next. Reject here, where the syntax broke. */ if (!dry) fail('Malformed argument list', _s, _i, 'E442', 'expected , or ) here - and note that a comparison or a && / || group is not a value in Impala'); ; return true})()&&(function(){var _l=_i,_x=_($);_i=_l;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ if (!dry) { var callee = metaSlot($._); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'FN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type , undefined, 'E408'); } if (callee.operator === ':=' && callee.operands[1] && (callee.operands[1][0] === '&' || callee.operands[1][0] === '^')) { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; /* an Impala-defined function, or an extern with a DECLARED prototype (name-only externs carry no `params` and stay unchecked - they assert nothing) */ if (entry && entry.signature && (entry.kind === 'FUNC' || entry.signature.params)) { signature = entry.signature; } } else if (callee.type === 'F' && isFuncTypeAtom(callee.elem)) { signature = functypes[callee.elem];   /* indirect call: check against the funcptr type */ } if (signature) { var params = signature.params || []; var actualCount = ($.types ? $.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i , 'E405'); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = $.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { /* Name the struct when the actual is a struct VALUE, and point at `&`: passing `v` where `V pointer` is wanted is the common slip now that by-value struct params are parked for Impala 3.0. */ var _actualText = ((actual === 'S' && $.elems && $.elems[argIdx]) ? 'struct ' + $.elems[argIdx] : '{$type1}'); typeError( 'Argument type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (' + _actualText + ' vs expected {$type2})', _s, _i, actual, expected , 'E406', ((actual === 'S' && expected === 'p') ? 'pass its address with & (by-value struct params are parked for Impala 3.0)' : undefined)); } if (expected === 'S' && params[argIdx].struct !== undefined && $.elems[argIdx] !== params[argIdx].struct) { fail('Struct type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + params[argIdx].struct + ', got ' + ($.elems[argIdx] || 'a non-struct value') + ')', _s, _i, 'E421'); } var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */ if (expected === 'p' && expectedElem !== undefined && $.opnds[argIdx] !== '&NULL' && $.elems[argIdx] !== expectedElem) { fail('Pointer element type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + elemVerbose(expectedElem) + ' elements, got ' + elemVerbose($.elems[argIdx]) + ' elements)', _s, _i, 'E202', 'use a cast: (' + elemVerbose(expectedElem) + ' pointer)'); } /* Same rule for a named funcptr param as for assignment, so the same check: `expected` is already 'F' here, which is what the assign path derives from the r-value's own type. */ if (expected === 'F' && isFuncTypeAtom(expectedElem)) { checkFuncPtrTarget(expectedElem, $.opnds[argIdx], 'F', $.elems[argIdx], ' for argument ' + (argIdx + 1) + ' when calling ' + label, _s, _i); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } var callComment = formatCallExpectationComment( calleeName, signature, $.types, callResultType, sourceName, _s, _i,                 /* the CALL SITE, not the enclosing declaration */ $.elems ); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + $.base, '*' + ($.words + $.retSlots)); returnBack(func); while ($.words-- > 0) {              /* free the argument words (past the output slots) */ returnBack('%' + ($.base + $.retSlots + $.words)); } makeMeta(callee, ':=', callResultType, undefined, '%' + $.base, undefined); /* Keep the RETURN's element type: `returns V pointer` must yield a V-pointer, not a bare one, or `*f()` cannot be recognised as a struct and typed-pointer assignment checks go blind. A funcptr type carries returnElem too, so indirect calls work. */ setElem(callee, signature ? signature.returnElem : undefined); if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */ var _wp = borrow('%'); emit('=&', 'p', _wp, '%' + $.base, '*' + $.retSlots);   /* numeric: fixed output window (see copyStructArg) */ setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct); callee.winBase  = $.base;       /* output window slots to free once the value is consumed */ callee.winWords = $.retSlots; } else if ($.retSlots > 1) {        /* multi-return: expose window for destructuring */ callee.multiBase = $.base; callee.multiCount = $.retSlots; callee.multiReturnList = signature.returnList; } if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: { name: calleeName, signature: signature, actualTypes: ($.types ? $.types.slice() : undefined), actualElems: ($.elems ? $.elems.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i } }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Argument($){var $a=createParserContext(),$type;return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); if (meta.type === 'V') { typeError( 'Invalid type ({$type1})', _s, _i, meta.type, undefined, 'E406', 'a function with no `returns` clause produces no value' ); } if ($.types) { $.types.push(meta.type); } if ($.elems) {                       /* element chain + null-ness, captured */ $.elems.push(meta.elem);         /* before makeArgValue mutates the meta */ $.opnds.push(bareOperand(meta));  /* `&NULL` marks a null/nullfunc literal */ } var winSlot = $.base + $.retSlots + $.words; if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */ var w = structWords(meta.struct); copyStructArg($a._, winSlot, w); $.words += w; } else { makeArgValue($a._, winSlot); $.words += 1; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Argument($){var $a=createParserContext(),$type;return (function(){var _b=_i;return Expr($a)&&(function(){ if (!dry) { ++$.count; var meta = metaSlot($a._); checkOnePast(meta);   /* a bare arg is placed without makeRValue */ if (meta.type === 'V') { typeError( 'Invalid type ({$type1})', _s, _i, meta.type, undefined, 'E406', 'a function with no `returns` clause produces no value' ); } if ($.types) { $.types.push(meta.type); } if ($.elems) {                       /* element chain + null-ness, captured */ $.elems.push(meta.elem);         /* before makeArgValue mutates the meta */ $.opnds.push(bareOperand(meta));  /* `&NULL` marks a null/nullfunc literal */ } var winSlot = $.base + $.retSlots + $.words; if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */ var w = structWords(meta.struct); copyStructArg($a._, winSlot, w); $.words += w; } else { makeArgValue($a._, winSlot); $.words += 1; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Group($){return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if (!dry) stampBitwise($._, false); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BoolGroup($){var $label;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ $label = undefined; ; return true})()&&And($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="||")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('t'); } emit('?->', true, $label, undefined, undefined); ; return true})()&&And($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){ if ($label !== undefined) { emit('<-?', true, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function And($){var $label;return (function(){var _b=_i;return (function(){ $label = undefined; ; return true})()&&Comp($)&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="&&")&&(_i+=2,true)&&_($)&&(function(){ if ($label === undefined) { $label = newLabel('f'); } emit('?->', false, $label, undefined, undefined); ; return true})()&&Comp($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ if ($label !== undefined) { emit('<-?', false, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
