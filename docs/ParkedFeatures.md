@@ -98,6 +98,20 @@ Rejected now with: `E426` by-value struct parameter, `E427` by-value struct retu
 values (function or funcptr type), `E429` destructuring assignment. Each diagnostic carries a fix-it hint.
 
 
+## GAZL 2 wishlist
+
+### A distinct function-pointer type (suffix `t`)
+
+`docs/InstructionSet.md` already states the contract: a function pointer is an opaque ordinal, and only
+equality and calling are defined on it. GAZL 1 cannot ENFORCE that, because `p` covers both data pointers
+and function pointers - so `ADDp` on a function pointer assembles, and does not trap, and silently calls a
+different function (`&one + 1` is a valid ordinal). A `t` type with no arithmetic or ordering forms makes
+those operations unrepresentable instead of undefined.
+
+Written up in [`docs/GAZL2FunctionPointers.md`](GAZL2FunctionPointers.md), with the runtime demonstration,
+the ~14 table entries needed, and the suffix letters ruled out. The sites that must change carry
+`GAZL 2:` comments pointing back at it.
+
 ## Impala 3.0 wishlist
 
 The first three belong together, because they are all changes to the same calling convention. Doing them in

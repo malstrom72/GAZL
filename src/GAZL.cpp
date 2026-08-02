@@ -291,6 +291,13 @@ const int FREE_ADDRESS		= ADDRESS | UNCHECKED_ADDRESS;
 const int FWD_FREE			= FREE_ADDRESS | FORWARD;
 const int FWD_FREE_W		= ADDRESS_W | UNCHECKED_ADDRESS | FORWARD;
 const int FWD_FREE_R		= ADDRESS_R | UNCHECKED_ADDRESS | FORWARD;
+// GAZL 2: SPLIT THIS. Unioning FUNC with FREE_ADDRESS makes a function pointer and a data pointer
+// interchangeable everywhere except a DIRECT call, so `p` means both "data pointer" and "any pointer".
+// docs/InstructionSet.md (CALL) already states that ONLY equality and calling are defined on a function
+// pointer - this union is precisely why the assembler cannot enforce its own documented contract. ADDp on
+// a function pointer assembles and does NOT trap: `&one + 1` is a valid ordinal, so it silently calls a
+// different function. Fix is a fourth storage type, suffix `t` (target), which simply has no
+// ADDt/SUBt/DIFt/LSSt forms. See docs/GAZL2FunctionPointers.md.
 const int ANY_FREE			= NULL_PTR | FREE_ADDRESS | FUNC;
 const int ANY_FWD_FREE		= ANY_FREE | FORWARD;
 const int ANY_VAR_FREE_W	= ANY_VAR_W | UNCHECKED_ADDRESS;
@@ -339,6 +346,8 @@ static const Operator OPERATORS[] = {
 	, { " CALL_cvs", CALL_CVC,	{ FUNC | FORWARD, TRANSIENT		, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	, { " CALL_n__", CALL_NVC,	{ NATIVE|FORWARD, 0			, 0				}		, 0				, 0				}
 	, { " CALL_nvs", CALL_NVC,	{ NATIVE|FORWARD, TRANSIENT	, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
+	// GAZL 2: these take the generic VAR_PTR_R, so an INDIRECT call cannot demand a function pointer - only
+	// CALL_c__ above (FUNC | FORWARD) discriminates. Retype to `t`. See docs/GAZL2FunctionPointers.md.
 	, { " CALL_v__", CALL_VVC,	{ VAR_PTR_R		, 0				, 0				}		, 0				, 0				}
 	, { " CALL_vvs", CALL_VVC,	{ VAR_PTR_R		, TRANSIENT		, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	, { " CNST_s__", CNST____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ADDRESS_R		}
@@ -349,6 +358,8 @@ static const Operator OPERATORS[] = {
 	, { " DATA_c__", DATA____,	{ KONST			, 0				, 0				}		, 0				, 0				}
 	, { " DATf_c__", DATA____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, 0				}
 	, { " DATi_c__", DATA____,	{ CONST_INT		, 0				, 0				}		, 0				, 0				}
+	// GAZL 2: ANY_FWD_FREE lets one DATp row mix function and data addresses indistinguishably
+	// (`DATp &func &data` assembles). Needs a sibling DATt. See docs/GAZL2FunctionPointers.md.
 	, { " DATp_c__", DATA____,	{ ANY_FWD_FREE	, 0				, 0				}		, 0				, 0				}
 	, { " DATs____", DATA____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " DIFp_vcc", SUBI_CCC,	{ VAR_INT_W		, FREE_ADDRESS		, FREE_ADDRESS		}		, YIELDS_CONST	, CONST_INT		}
