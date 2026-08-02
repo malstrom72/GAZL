@@ -1301,21 +1301,31 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     /* `SWCH` resolves table entries 0..size-1 only, so a case outside that window is unreachable - and a
        NEGATIVE offset folds to `.sN.-6`, which the assembler rejects as an invalid identifier, failing a
        build the compiler accepted without a word. A repeated value mints the same `.sN#K` label twice and
-       trips `Symbol already defined` on a name the user never wrote. Both are decidable here whenever the
-       range and the value are numeric, which is the common shape. */
+       trips `Symbol already defined` on a name the user never wrote. They need DIFFERENT things: the
+       window check wants a numeric range, the duplicate check wants only the values, so a symbolic
+       range narrows this to the duplicate half rather than switching both off. */
     checkCaseValue = function (ctx, value, source, offset) {
-        if (ctx === undefined || ctx.fromNum === undefined || value === undefined) {
+        if (ctx === undefined || value === undefined) {
             return;
+        }
+        /* Key the duplicate check on the RAW value. It used to read `caseSeen[value - fromNum]`, which
+           borrowed the range base it has no need of and put it behind the same early return as the
+           window check - so a SYMBOLIC range (`switch (i == LO to HI)`, `LO` a named const, which
+           `constInt` deliberately never folds) silently disabled it. The two arms then minted `.sN#K`
+           twice and the build died at assembly on `Symbol already defined: .s0.0`, naming a
+           compiler-minted label the user never wrote. A repeat is a repeat whatever the base is. */
+        if (ctx.caseSeen[value] === true) {
+            fail('Duplicate case value ' + value, source, offset, 'E443',
+                    'each case value may appear once in a switch');
+        }
+        ctx.caseSeen[value] = true;
+        if (ctx.fromNum === undefined) {
+            return;              /* symbolic range: the window is genuinely unknowable here - see S5 */
         }
         /* Subtract here rather than reading the emitted offset: `subConstInt` defers to an assemble-time
            `! SUBi <A>` whenever `from` is non-zero, so the offset operand is symbolic in exactly the
            `switch (i == 5 to 9)` shape that produces the unloadable `.sN.-6`. */
         var off = value - ctx.fromNum;
-        if (ctx.caseSeen[off] === true) {
-            fail('Duplicate case value ' + value, source, offset, 'E443',
-                    'each case value may appear once in a switch');
-        }
-        ctx.caseSeen[off] = true;
         if (ctx.sizeNum !== undefined && (off < 0 || off >= ctx.sizeNum)) {
             fail('Case value ' + value + ' is outside the switch range '
                     + ctx.fromNum + ' to ' + (ctx.fromNum + ctx.sizeNum), source, offset, 'E444',

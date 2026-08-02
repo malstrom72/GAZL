@@ -216,8 +216,10 @@ code-generating agent hits and the message points the wrong way. The symbol tabl
   named (`Not enough space in data section: s`), but over-running one field INTO the next is a legal,
   in-bounds write it has no notion of. So Impala emits the comparison for it (`! LEQi` + `! FAIL` above
   the rows, 2026-08-02), which is the only thing standing between that shape and a silent spill.
-- **Duplicate `case` labels** and **out-of-range `case` labels** are both accepted silently; a case *below*
-  the low bound emits `.s0.-6` and the module will not load at all.
+- ~~**Duplicate `case` labels** and **out-of-range `case` labels** are both accepted silently; a case
+  *below* the low bound emits `.s0.-6` and the module will not load at all.~~ FIXED: `E443` (duplicate,
+  every range as of 2026-08-02) and `E444` (outside a numeric range). A symbolic range leaves the window
+  check off deliberately - see S5/S6 in `CompileTimeHardening.md`.
 - **`switch (x == lo to hi)`: `hi` is exclusive**, and `docs/Impala.md:328` says inclusive.
 
 ### C7. C reflexes that are rejected with a bare `E001: syntax error`

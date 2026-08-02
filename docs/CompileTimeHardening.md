@@ -230,9 +230,9 @@ wrote, which is the worst possible way to report "you listed case 0 twice". Full
 time whenever the case values are numeric, exactly like item 3, and it wants the same pass: collect the
 arm values for a switch, then reject a repeat naming the value and both source positions.
 
-**DONE as E443 for a numeric range.** But it inherited item 3's gate, so a SYMBOLIC range still disables
-it - and unlike item 3, duplicate detection never needed the range base at all. See S6 below; it is a
-two-line fix.
+**DONE as E443, for EVERY range.** It first shipped inheriting item 3's gate, so a symbolic range
+disabled it until 2026-08-02 - and unlike item 3, duplicate detection never needed the range base at all.
+See S6 below.
 
 
 ## Scan: where else does Impala guess, refuse, or skip? (2026-08-01)
@@ -298,12 +298,18 @@ folds to a negative offset and the module fails to load with `Invalid identifier
 compiler-minted label the user never wrote. This is the deferred-assertion case: emit
 `! GEQi #<off> #0 @ok / ! FAIL <source>: case 0 is below the switch range`.
 
-**S6. The same gate disables E443 (duplicate case) - and that one needs no assembler help at all.**
-*(Item 5 above; `Impala2Review.md` C6. NEW: that it is the residual after E443, and needs no assertion.)*
-`caseSeen` is indexed by `value - fromNum`, so it inherits a dependency on the range base that duplicate
-detection does not have. Two `case 0:` arms under a symbolic range compile clean and then fail assembly
-with `Symbol already defined: .s0.0`; under a literal range the same source is a clean E443. Index by the
-raw value and the check works for every switch. Two-line fix, no `! FAIL` needed.
+**S6. The same gate disabled E443 (duplicate case) - FIXED 2026-08-02.** *(Item 5 above;
+`Impala2Review.md` C6.)* `caseSeen` was indexed by `value - fromNum`, inheriting a dependency on the
+range base that duplicate detection does not have, and sitting behind the same early return as the window
+check. Two `case 0:` arms under a symbolic range compiled clean and then failed assembly with
+`Symbol already defined: .s0.0`, naming a compiler-minted label the user never wrote; under a literal
+range the same source was a clean E443. `checkCaseValue` now keys the duplicate check on the raw value
+and returns only afterwards when `fromNum` is unknown, so the two checks no longer share a gate.
+
+Note this did NOT need a deferred assertion, unlike S5 beside it: the case values are all in hand at
+Impala compile time whatever the range does. The window check stays off under a symbolic range on
+purpose - a configuration may legitimately narrow it, and erroring on a now-surplus arm would make that
+configuration unbuildable. Both halves are pinned in `jspegCompilerTests.js`, non-zero base included.
 
 ### Link-checking holes (see also `tools/gazl-validate.nuxjs.js`)
 

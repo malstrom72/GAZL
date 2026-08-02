@@ -1099,6 +1099,7 @@ console.log("impala.jspeg compiler requires an array extent everywhere except an
 // here whenever the values are numeric; a SYMBOLIC range or extent stays unchecked on purpose, because
 // not knowing is not the same as being fine. See docs/CompileTimeHardening.md.
 const SW = (range, body) => `function f() locals int i { i = 1; switch (i == ${range}) { ${body} } }`;
+const SYM_RANGE = "const int LO = 5\nconst int HI = 9\n";   // named consts: constInt never folds these
 const acceptedThenRejected = [
 	["duplicate case value", SW("0 to 3", "case 0: { i=1; } case 0: { i=2; }"), "Duplicate case value 0"],
 	["duplicate inside one list", SW("0 to 3", "case 1, 1: { i=1; }"), "Duplicate case value 1"],
@@ -1110,6 +1111,25 @@ const acceptedThenRejected = [
 	["case below the range", SW("5 to 9", "case -1: { i=1; }"), "outside the switch range 5 to 9"],
 	["case just below from", SW("5 to 9", "case 4: { i=1; }"), "outside the switch range 5 to 9"],
 	["in-range cases", SW("5 to 9", "case 5, 8: { i=1; } default: { i=2; }"), null],
+	// A SYMBOLIC range disables the window check - `constInt` never folds a named const, by design - but
+	// it must NOT disable the duplicate check, which never needed the range base. It did until
+	// 2026-08-02, sharing one early return: both arms minted `.s0#K` and the build died at assembly on
+	// `Symbol already defined: .s0.0`. Non-zero base included, since that is where the offset the old
+	// code keyed on stops being the value.
+	[
+		"duplicate case under a symbolic range",
+		SYM_RANGE + SW("LO to HI", "case 0: { i=1; } case 0: { i=2; }"), "Duplicate case value 0"],
+	[
+		"duplicate case under a symbolic range with a non-zero base",
+		SYM_RANGE + SW("LO to HI", "case 6: { i=1; } case 6: { i=2; }"), "Duplicate case value 6"],
+	[
+		"distinct cases under a symbolic range still compile",
+		SYM_RANGE + SW("LO to HI", "case 0: { i=1; } case 1: { i=2; }"), null],
+	// ...and the window check stays OFF there: a configuration may legitimately narrow the range, so
+	// erroring on a now-surplus arm would make that configuration unbuildable (docs/TwoStageConstants.md).
+	[
+		"a case outside a symbolic range is left to the configuration",
+		SYM_RANGE + SW("LO to HI", "case 99: { i=1; }"), null],
 	["goto an undefined label", "function f() { goto nowhere; }", "goto to undefined label nowhere"],
 	["goto a defined label", "function f() locals int i { i = 0; if (i < 3) goto top; top: ; }", null],
 	// A label written twice mints two identical GAZL labels; the assembler rejected "Symbol already
