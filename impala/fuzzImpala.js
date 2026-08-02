@@ -10,6 +10,11 @@
 //   - a clean coded diagnostic (`error[Exxx]`) is an ACCEPTABLE outcome (invalid program),
 //   - a raw JS exception or an internal `Assertion failed` (e.g. the transient-register
 //     `validateStock` checks) is a COMPILER BUG.
+// Every compiled program is also DEAD-STRIPPED, because `deadStrip` reads the emitted GAZL back with
+// its own idea of where a block starts and ends, and a throw from it is that reading going wrong on
+// output the compiler accepted. It threw on every symbolically-sized initializer - the shape section
+// (4) below now generates - while 3000 fuzz programs stayed green, purely because nothing here called
+// it. `main` is exported so the strip has a root to walk from.
 //
 // Deterministic: every program is produced from a seeded PRNG, so any failure reproduces
 // from its printed seed.
@@ -20,7 +25,9 @@
 //   trapped), and a WRONG VALUE - `main` prints a set of checked globals before its random body, and the
 //   driver compares that prefix of stdout against the words the generator computed. The second is a real
 //   REFERENCE oracle: it sees output that assembled and ran perfectly while holding the wrong numbers,
-//   which no crash oracle can. Without --vm the run is compile-only, so the value oracle does not apply.
+//   which no crash oracle can. --vm additionally runs the DEAD-STRIPPED module and requires byte-identical
+//   stdout - a third reference oracle, over what the strip removed rather than over what the compiler
+//   emitted. Without --vm the run is compile-only, so none of the three apply.
 // The runner reloads the compiler module per call, so keep a single process to <=~20k
 // iterations (chunk larger sweeps across processes: for s in 0 20000 40000; do ... done).
 // First find (seed 10024): finishDestructure released its output window low-to-high (unlike every
@@ -29,6 +36,7 @@
 // pool-reaches-the-top invariant, so a future release-order regression fails loudly here.
 
 const { compileWithJsImpala } = require('./impalaJsCompilerRunner.js');
+const { deadStrip } = require('./impalaImportClosure.js');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -70,6 +78,27 @@ function runOnVm(res) {
 	return 'load failure (exit ' + res.status + '): ' + (line || err.split('\n')[0] || '').trim();
 }
 
+// Dead-stripping must be OUTPUT-PRESERVING: it removes only definitions that nothing reachable from an
+// export names, so the stripped module has to load and print exactly what the full one printed. A
+// difference means the strip took something live - which the fixture in tests/impala/sources/deadstrip
+// catches only for the shapes someone thought to write down, and this catches for any shape.
+function checkStripped(res, ref) {
+	const load = runOnVm(res);
+	if (load) return 'stripped: ' + load;
+	return res.stdout === ref.stdout ? null
+			: 'dead-strip changed output: ' + JSON.stringify((res.stdout || '').slice(0, 120))
+					+ ' vs ' + JSON.stringify((ref.stdout || '').slice(0, 120));
+}
+
+// The INVERTED oracle for a deliberate over-fill (see section (4)): Impala cannot count the words of a
+// symbolic extent, so the only thing between the surplus and the next field is assertFitsExtent's
+// deferred `! FAIL` guard. The compile must SUCCEED and the assembly must FAIL. A silent pass means the
+// guard stopped being emitted, which every other check here would read as a healthy program.
+function checkMustFail(res) {
+	return /FAIL directive/.test((res.stderr || '') + (res.stdout || '')) ? null
+			: 'over-filled symbolic initializer assembled without tripping the ! FAIL guard';
+}
+
 // The value oracle: `main` prints the checked initializers before anything else, so the first
 // `expect.length` integers on stdout must be exactly the words the generator asked for. This is what
 // catches a WRONG DATA row - a truncated one, a value landing in the next field, a dropped surplus -
@@ -104,8 +133,10 @@ function checkExpected(res, expect) {
 // through), the struct-array path, a SYMBOLIC extent (`sv[SN]` - Impala never learns SN, so every
 // offset past it is assemble-time arithmetic and `tail` lands correctly only if that resolved), and an
 // `extern struct` handed a PERMUTED layout at load, which a baked positional offset could not survive.
-// The symbolic and extern cases are written at RUN TIME rather than statically, because E454/E459 only
-// let zero be placed statically there - so those two check the ACCESS path, not the DATA row.
+// The symbolic array is filled statically half the time and at run time the other half - the two check
+// different halves (the DATA row landing inside a block whose size is not a number yet, versus the
+// address arithmetic that reads it back). The extern struct stays run-time-only: E459 still allows
+// nothing but zero there, since the host, not the assembler, owns that layout.
 //
 // Still not reached: float and pointer fields (the oracle prints ints), and `readonly`/`temporary`
 // sections beyond the one `readonly` array.
@@ -263,17 +294,32 @@ function genProgram() {
 	// (4) SYMBOLIC extent. `SN` is a const, so Impala never learns the number - every offset past `sv`
 	// is assemble-time arithmetic (`! ADDi <A> #.o.CS.sv #k`, `.o.CS.tail` = `.o.CS.sv + SN`). The
 	// generator DOES know it, which is the whole point: it can predict the layout the assembler must
-	// produce. `head` is initialized statically (a field BEFORE the block is still placeable, E454);
-	// `sv` and `tail` are written at RUN TIME and read back, so a wrong `.o.` would make `tail` collide
-	// with the last element of `sv` and the readback would disagree.
+	// produce. `head` is initialized statically (a field BEFORE the block is still placeable, E454).
+	// `sv` is filled STATICALLY or at run time; `tail` is always run-time, because a field AFTER a
+	// symbolic block cannot be placed at all (E454) - and it is the one that catches a wrong `.o.`, since
+	// a bad offset makes it collide with the last element of `sv` and the readback disagrees.
 	const symLen = 1 + ri(4);
 	chkDecl.push('const int SN = ' + symLen);
 	chkDecl.push('struct CS { int head; int array sv[SN]; int tail }');
 	const symHead = chance(0.6) ? chkVal() : 0;
-	chkDecl.push('global CS cY' + (symHead ? ' = { head: ' + symHead + ' }' : ''));
-	const symVals = Array.from({ length: symLen }, chkVal);
+	const symVals = Array.from({ length: symLen }, () => (chance(0.7) ? chkVal() : 0));
+	const symGiven = trimZeros(symVals);
+	const symStatic = symGiven.length > 0 && chance(0.5);
+	// A static fill BEYOND the extent (rare). Impala cannot count these words either, so the surplus is
+	// stopped only by assertFitsExtent's deferred `! FAIL` guard at GAZL assembly time. checkMustFail
+	// flips the oracle for such a program: it must not assemble, and it never runs, so nothing else applies.
+	const symOver = symStatic && chance(0.12);
+	if (symOver) { const n = symLen + 1 + ri(2); while (symGiven.length < n) { symGiven.push(chkVal()); } }
+	const symInit = [symHead ? 'head: ' + symHead : '',
+			symStatic ? 'sv: { ' + symGiven.join(', ') + ' }' : ''].filter(Boolean).join(', ');
+	chkDecl.push('global CS cY' + (symInit ? ' = { ' + symInit + ' }' : ''));
+	// A DEAD twin of cY, referenced by nothing. Without one unreachable definition the strip differential
+	// compares a module to itself: `main` reads every other checked global, so there is nothing to remove.
+	// This is also the shape that made deadStrip throw - now as the block being REMOVED, which has to take
+	// its `! LEQi`/`! FAIL` guard and its DATA rows with it or the leftovers fail the module outright.
+	chkDecl.push('global CS cD' + (symInit ? ' = { ' + symInit + ' }' : ''));
 	const symTail = chkVal();
-	symVals.forEach((v, i) => chkPrint.push('\tglobal cY.sv[' + i + '] = ' + v + ';'));
+	if (!symStatic) symGiven.forEach((v, i) => chkPrint.push('\tglobal cY.sv[' + i + '] = ' + v + ';'));
 	chkPrint.push('\tglobal cY.tail = ' + symTail + ';');
 	chk('global cY.head', symHead);
 	symVals.forEach((v, i) => chk('global cY.sv[' + i + ']', v));
@@ -533,7 +579,10 @@ function genProgram() {
 			callable: callable,
 		};
 
-		let header = 'function ' + f.name + '(' + f.params.map((p) => decl(p.t) + p.name).join(', ') + ')';
+		// `main` is exported: that is what the VM enters, and what gives `deadStrip` a reachability root
+		// (with no export the strip is entitled to delete the entire program, and did).
+		let header = (isMain ? 'export function ' : 'function ') + f.name
+				+ '(' + f.params.map((p) => decl(p.t) + p.name).join(', ') + ')';
 		if (f.rets.length) header += ' returns ' + f.rets.map((t, i) => decl(t) + f.retNames[i]).join(', ');
 
 		const localDeclList = locals.map((l) => decl(l.t) + l.name)
@@ -775,7 +824,7 @@ function genProgram() {
 		if (!funcs[i].fixed) out += renderFunc(funcs[i], false, funcs.slice(0, i));
 	}
 	out += renderFunc({ name: 'main', params: [], rets: [], retNames: [] }, true, funcs.slice());
-	return { src: out, expect: expect, defines: defines };
+	return { src: out, expect: expect, defines: defines, mustFail: symOver };
 }
 
 // ---- crash oracle ------------------------------------------------------------
@@ -794,7 +843,9 @@ function main() {
 		rnd = mulberry32(parseInt(process.argv[printIdx + 1] || '1', 10));
 		const shown = genProgram();
 		process.stdout.write(shown.src + '\n; expected checked words: ' + shown.expect.join(' ')
-				+ '\n; host layout supplied at load: ' + shown.defines.join(' ') + '\n');
+				+ '\n; host layout supplied at load: ' + shown.defines.join(' ')
+				+ (shown.mustFail ? '\n; THIS ONE MUST NOT ASSEMBLE: cY.sv is over-filled on purpose' : '')
+				+ '\n');
 		return;
 	}
 	const args = process.argv.slice(2).filter((a) => a !== '--vm');
@@ -809,12 +860,13 @@ function main() {
 	for (let i = 0; i < iterations; ++i) {
 		const seed = startSeed + i;
 		rnd = mulberry32(seed);
-		let src, expect, defines;
+		let src, expect, defines, mustFail;
 		try {
 			const p = genProgram();
 			src = p.src;
 			expect = p.expect;
 			defines = p.defines;
+			mustFail = p.mustFail;
 		} catch (genErr) {
 			console.error(`[gen-error seed=${seed}] ${genErr.message}`);
 			continue;
@@ -822,9 +874,17 @@ function main() {
 		try {
 			const gazl = compileWithJsImpala(src + '\n', COMPILE_OPTS);
 			compiled++;
+			// A throw here is a compiler bug and lands in the catch below with every other one: `classify`
+			// keeps only what is not a coded diagnostic, and `deadStrip` has no diagnostics to emit.
+			// `cD` is the one definition nothing references, so it is also the one the strip must drop -
+			// checked here rather than under --vm so the default gate covers it.
+			const stripped = deadStrip(gazl);
+			if (/^\s*cD:/m.test(stripped)) throw new Error('dead-strip kept the unreferenced global cD');
 			if (useVm) {
 				const res = runGazl(gazl, defines);
-				const vmFault = runOnVm(res) || checkExpected(res, expect);
+				const vmFault = mustFail ? checkMustFail(res)
+						: (runOnVm(res) || checkExpected(res, expect)
+								|| checkStripped(runGazl(stripped, defines), res));
 				vmRun++;
 				if (vmFault) {
 					bugs++;
