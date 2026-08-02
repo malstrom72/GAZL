@@ -1694,6 +1694,17 @@ const caretCases = [
 		"struct S { int a }\nglobal S s = 5\nfunction main() { }\n", "2:14: error[E421]"],
 	["a trailing bad initializer still renders a caret, not a position past EOF",
 		"function main() { }\nglobal int x = \"nope\"\n", "2:16: error[E407]"],
+	// E461: an array FIELD overrun stays inside the struct's allocation, so GAZL cannot see it -
+	// `s.v[5]` on `int array v[2]` silently landed in `pad`. The negative case matters separately: it
+	// takes the DYNAMIC path (the folding branch's regex has no minus sign), and writes backwards into
+	// the field before it. One past the end is rejected too - no fixture in the corpus forms an
+	// end pointer that way, so nothing pays for the stricter rule.
+	["E461 names the offending index on a struct array field",
+		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() { global s.v[5] = 1; }\n", "3:30: error[E461]"],
+	["E461 catches a negative index, which takes the dynamic path",
+		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() { global s.pad[-1] = 1; }\n", "3:32: error[E461]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);

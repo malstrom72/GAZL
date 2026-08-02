@@ -1156,6 +1156,7 @@
         rec.offParts  = undefined;
         rec.root      = undefined;
         rec.arrayOf   = undefined;
+        rec.extent    = undefined;
         rec.struct    = undefined;
         rec.dynIndex  = undefined;
         rec.winBase   = undefined;
@@ -2089,7 +2090,7 @@
 
     /* A place names a struct (or struct array) at base + a sum of compile-time offset parts. Only a
        terminal scalar field emits code, so struct values never enter the word temporaries. */
-    $$parser.setPlace = function (rec, baseKind, base, offParts, structName, root, arrayOf, dynIndex) {
+    $$parser.setPlace = function (rec, baseKind, base, offParts, structName, root, arrayOf, dynIndex, extent) {
         var slot = metaSlot(rec);
         slot.operator = '@place';
         slot.operands = [ undefined, undefined, undefined ];
@@ -2098,6 +2099,15 @@
         slot.base     = base;
         slot.offParts = offParts || [];
         slot.arrayOf  = arrayOf;                                  /* set -> an array of `arrayOf`; a later [k] indexes it */
+        slot.extent   = extent;                                   /* declared element COUNT, set by an array FIELD and
+                                                                     nowhere else - that is the only overrun GAZL cannot
+                                                                     see, since it stays inside the struct's allocation.
+                                                                     A plain array (local or global) has decayed to a
+                                                                     pointer before it is subscripted, and an array of
+                                                                     structs is caught as "Offset out of bounds", so
+                                                                     neither is worth re-checking here. Every other
+                                                                     setPlace passes nothing, so a pooled slot cannot
+                                                                     inherit a stale extent. */
         slot.struct   = arrayOf ? undefined : structName;
         slot.type     = arrayOf ? 'p' : 'S';
         slot.root     = root || structName || arrayOf;
@@ -2132,8 +2142,9 @@
 
     /* structPtr[k] or arrayField[k] -> the element place. A constant index adds a symbolic stride to the
        offset parts (folds into the following .field, no runtime cost); a dynamic index materializes. */
-    $$parser.subscriptStruct = function (x, idx) {
+    $$parser.subscriptStruct = function (x, idx, sourceCode, sourceOffset) {
         x = metaSlot(x);
+        var extent = x.extent;
         if (!x.arrayOf) {                                         /* a raw struct pointer: wrap it as an array place */
             var p = $$parser.makeRValue(x);
             $$parser.setPlace(x, (p[0] === '&' ? 'globalAddr' : 'pointer'), p, [], undefined, x.elem, x.elem);
@@ -2143,6 +2154,21 @@
                                                                     scalar element -> stride 1 word, this [k] IS the terminal value */
         var eType = $$parser.descHead(elem), eTail = $$parser.descTail(elem);
         var idxRV = $$parser.makeRValue(metaSlot(idx));
+
+        /* A struct array FIELD is the one overrun nothing else sees: GAZL bounds-checks the whole
+           allocation, which `s.v[5]` on `int array v[2]` never leaves - it just lands in the next field.
+           Decidable only when both the index and the extent are numbers here; a symbolic extent (`v[SN]`)
+           or a runtime index is not knowable at Impala compile time. The index test accepts a MINUS sign
+           the folding branch below does not, so `v[-1]` - which takes the dynamic path and writes
+           BACKWARDS into the preceding field - is caught too. */
+        if (extent !== undefined && /^[0-9]+$/.test('' + extent) && /^#-?[0-9]+$/.test(idxRV)) {
+            var ck = parseInt(idxRV.substr(1), 10), cn = parseInt(extent, 10);
+            if (ck < 0 || ck >= cn) {
+                $$parser.fail('Index ' + ck + ' is outside the extent ' + cn + ' of this array',
+                        sourceCode, sourceOffset, 'E461',
+                        'valid indices are 0 to ' + (cn - 1));
+            }
+        }
 
         if (/^#[0-9]+$/.test(idxRV)) {                           /* constant index -> fold into the compile-time offset parts */
             var k = parseInt(idxRV.substr(1), 10);
@@ -2302,7 +2328,7 @@
         }
         if (field.type === 'A') {                                 /* array field -> a fold-able array place for the next [k]
                                                                      (struct OR scalar element; subscriptStruct terminates it) */
-            $$parser.setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex);
+            $$parser.setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex, field.size);
             return;
         }
 
@@ -4479,22 +4505,26 @@ PrePost     <-  (op:PREFIX_OP _
 # strides sizeof(element) and costs one more. Each is an error where the other is correct, so the
 # spelling states the cost at the use site - the same job `->` does for a load. `[[` is tried first;
 # there is no ambiguity with a nested `a[b[i]]` because no Expr can begin with `[`.
-Subscript   <-  '[['_ s:Expr ']]'_                 { if (!$$parser.dry) {
+# `$idxAt` is captured after the bracket: the closing `]] _` / `] _` eats the trailing space, so the
+# action's own `$$i` names whatever follows the subscript (an `=`, or the next declaration).
+Subscript   <-  '[['_                              { $idxAt = $$i; }
+                s:Expr ']]'_                       { if (!$$parser.dry) {
                                                        var sbs = metaSlot($$);
                                                        if (!$$parser.subscriptScales(sbs))
                                                            $$parser.fail('Scaled subscript on a one-word element',
                                                                    $$s, $$i, 'E205',
                                                                    '`[[ ]]` scales by the element size - this element is one word, so write `[ ]`');
-                                                       $$parser.subscriptStruct($$, $s);
+                                                       $$parser.subscriptStruct($$, $s, $$s, $idxAt);
                                                      } }
-                / '['_ s:Expr ']'_                 { if (!$$parser.dry) {
+                / '['_                             { $idxAt = $$i; }
+                  s:Expr ']'_                      { if (!$$parser.dry) {
                                                        var sb = metaSlot($$);
                                                        if ($$parser.subscriptScales(sb))
                                                            $$parser.fail('Plain subscript on a struct element',
                                                                    $$s, $$i, 'E204',
                                                                    'this element is a struct, so the index scales - write `[[ ]]`');
                                                        if ((sb.place && sb.arrayOf) || (sb.type === 'p' && $$parser.isStructAtom(sb.elem)))
-                                                           $$parser.subscriptStruct($$, $s);
+                                                           $$parser.subscriptStruct($$, $s, $$s, $idxAt);
                                                        else
                                                            $$parser.binaryOp('=[]', $$, $s, $$s, $$i);
                                                      } }
