@@ -50,6 +50,8 @@ const cp = require('child_process');
 const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32' ? 'GAZLCmd.exe' : 'GAZLCmd');
 const COMPILE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true };
 const RANGE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true, rangeChecks: true };
+const MUTANTS_PER_SEED = 3;
+const LEGACY_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true, legacy: true };
 
 // Run a compiled program on the VM. Returns null when there is no compiler fault, or a message when
 // the loader/assembler REJECTS the emitted GAZL - that means the compiler produced structurally
@@ -948,6 +950,32 @@ function genProgram() {
 // ---- crash oracle ------------------------------------------------------------
 const CLEAN = /error\[E\d+\]/;                 // a coded diagnostic - acceptable
 const BENIGN = /compiler stopped at \d+/;      // partial parse - acceptable
+
+/* The generator emits ~100% VALID programs on purpose, so every diagnostic path in the compiler was
+   exercised only by the hand-written table in jspegCompilerTests. Mutating a valid program is the cheap
+   way to reach the rest: the contract for ANY input, valid or not, is that the compiler either accepts
+   it or refuses it with a CODED diagnostic - never a raw JS exception, and never an internal assertion.
+   `classify` already draws exactly that line, so a mutant needs no oracle of its own.
+   Compile-only by design: a mutant that still compiles has different semantics from its parent, so
+   there is nothing to compare its output against. */
+const MUTATORS = [
+	['drop a line', (L, r) => { L.splice(r(L.length), 1); }],
+	['duplicate a line', (L, r) => { const i = r(L.length); L.splice(i, 0, L[i]); }],
+	['drop a token', (L, r) => { const i = r(L.length); L[i] = L[i].replace(/\S+/, ''); }],
+	['drop a brace', (L, r) => { const i = r(L.length); L[i] = L[i].replace(/[{}]/, ''); }],
+	['drop a semicolon', (L, r) => { const i = r(L.length); L[i] = L[i].replace(/;/, ''); }],
+	['drop a paren', (L, r) => { const i = r(L.length); L[i] = L[i].replace(/[()]/, ''); }],
+	['swap two lines', (L, r) => { const a = r(L.length), b = r(L.length); const t = L[a]; L[a] = L[b]; L[b] = t; }],
+	['retype a local', (L, r) => { const i = r(L.length); L[i] = L[i].replace(/\bint\b/, 'float'); }],
+	['renumber', (L, r) => { const i = r(L.length); L[i] = L[i].replace(/\b\d+\b/, (m) => String(+m + 1)); }],
+	['rename an identifier', (L, r) => { const i = r(L.length); L[i] = L[i].replace(/\b[a-z]+\d+\b/, 'zz9'); }],
+];
+function mutate(src, r) {
+	const lines = src.split('\n');
+	const pick = MUTATORS[r(MUTATORS.length)];
+	pick[1](lines, r);
+	return { name: pick[0], src: lines.join('\n') };
+}
 function classify(err) {
 	const msg = (err && err.message) ? err.message : String(err);
 	if (CLEAN.test(msg) || BENIGN.test(msg)) return null;
@@ -974,6 +1002,7 @@ function main() {
 	let compiled = 0;
 	let rejected = 0;
 	let vmRun = 0;
+	let mutants = 0;
 	const codeTally = {};
 	for (let i = 0; i < iterations; ++i) {
 		const seed = startSeed + i;
@@ -988,6 +1017,17 @@ function main() {
 		try {
 			const gazl = compileWithJsImpala(p.src + '\n', COMPILE_OPTS);
 			compiled++;
+			// `--legacy` only ever DOWNGRADES a strict refusal to a warning, so for a program the strict
+			// compiler already accepted it must be byte-for-byte the same module. Anything else means a
+			// legacy branch is changing CODEGEN rather than just tolerance.
+			const legacyGazl = compileWithJsImpala(p.src + '\n', LEGACY_OPTS);
+			if (legacyGazl !== gazl) {
+				const a = gazl.split('\n'), b = legacyGazl.split('\n');
+				let d = 0;
+				while (d < a.length && d < b.length && a[d] === b[d]) ++d;
+				throw new Error('--legacy changed codegen at line ' + (d + 1) + ': strict '
+						+ JSON.stringify(a[d] || '<end>') + ' vs legacy ' + JSON.stringify(b[d] || '<end>'));
+			}
 			// A throw here is a compiler bug and lands in the catch below with every other one: `classify`
 			// keeps only what is not a coded diagnostic, and `deadStrip` has no diagnostics to emit.
 			// `cD` is the one definition nothing references, so it is also the one the strip must drop -
@@ -1024,9 +1064,29 @@ function main() {
 				codeTally[k] = (codeTally[k] || 0) + 1;
 			}
 		}
+		for (let m = 0; m < MUTANTS_PER_SEED; ++m) {
+			const mut = mutate(p.src + '\n', ri);
+			mutants++;
+			try {
+				compileWithJsImpala(mut.src, COMPILE_OPTS);
+			} catch (err) {
+				const crash = classify(err);
+				if (!crash) {
+					const code = ((err && err.message) || '').match(/error\[(E\d+)\]/);
+					codeTally[code ? code[1] : 'other'] = (codeTally[code ? code[1] : 'other'] || 0) + 1;
+					continue;
+				}
+				bugs++;
+				console.error(`\n=== MUTANT CRASH seed=${seed} (${mut.name}): ${crash} ===`);
+				console.error(mut.src);
+				console.error(`=== end seed=${seed} ===\n`);
+				if (bugs >= 5) { console.error('stopping after 5 crashes'); break; }
+			}
+		}
+		if (bugs >= 5) break;
 	}
 	const top = Object.entries(codeTally).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k}:${v}`).join(' ');
-	console.error(`fuzz: ${iterations} programs, ${compiled} compiled${useVm ? ` (${vmRun} run on VM)` : ''}, ${rejected} cleanly rejected, ${bugs} ${useVm ? 'FAULTS' : 'CRASHES'} (seeds ${startSeed}..${startSeed + iterations - 1})`);
+	console.error(`fuzz: ${iterations} programs, ${compiled} compiled${useVm ? ` (${vmRun} run on VM)` : ''}, ${rejected} cleanly rejected, ${mutants} mutants, ${bugs} ${useVm ? 'FAULTS' : 'CRASHES'} (seeds ${startSeed}..${startSeed + iterations - 1})`);
 	if (top) console.error(`rejection codes: ${top}`);
 	process.exit(bugs > 0 ? 1 : 0);
 }

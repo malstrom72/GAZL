@@ -1296,6 +1296,20 @@ const reservedWordCases = [
 		"'break' is a reserved word, not a variable name"],
 	["a name merely CONTAINING a reserved word is fine",
 		"function f() locals int returned, int breaking { returned = 1; breaking = 2; }", null],
+	// A duplicate declaration must name what the USER wrote. An ARRAY mints `.z.<name>` as an argument to
+	// the very `declare` that would report the clash, so JS evaluated it first and the derived symbol
+	// collided first: `Identifier already declared: .z.g0`, thrown with no code, position or caret,
+	// against a name that appears nowhere in the source. A scalar was always fine, which is what made it
+	// invisible. Found by mutation fuzzing (duplicate a line), not by anything hand-written.
+	["a duplicate global array", "global int array g0[2]\nglobal int array g0[2]\nfunction f() { }",
+		"error[E401]: Identifier already declared: g0"],
+	["a duplicate global scalar", "global int g1\nglobal int g1\nfunction f() { }",
+		"error[E401]: Identifier already declared: g1"],
+	// ...and a LOCAL is tabled as `$b`, so the message used to hand back the compiler's spelling.
+	["a duplicate local array", "function f() locals int array b[2], int array b[2] { }",
+		"error[E401]: Identifier already declared: b"],
+	["a duplicate local scalar", "function f() locals int b, int b { }",
+		"error[E401]: Identifier already declared: b"],
 ];
 for (const [label, source, expected] of reservedWordCases) {
 	expectCompileOutcome("reserved words", label, source, expected);

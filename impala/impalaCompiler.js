@@ -2130,7 +2130,16 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             value = borrow('<');
             emit('<> *', 'i', value, '#' + count, '#.z.' + descHead(elemDesc));
         }
-        declare('! DEF?', 'defines', symbol, 'i', true, '#' + value);
+        /* A DERIVED name must never be the one that reports a user's mistake. This runs as an ARGUMENT to
+           the `declare` that registers the array itself, so JS evaluates it FIRST - and on a duplicate
+           `global array g[2]` the `.z.g` collision fired before the `g` collision could, aborting with
+           `Identifier already declared: .z.g` and no code, position or caret, naming a symbol the user
+           never wrote. Skipping the redeclare lets the owner's own diagnostic (E401) arrive instead.
+           Safe because `.z.g` derives from `g` alone: a collision here MEANS the owner collides too, and
+           the stale definition dies with the compile a moment later. */
+        if (symbols.defines === undefined || symbols.defines[symbol] === undefined) {
+            declare('! DEF?', 'defines', symbol, 'i', true, '#' + value);
+        }
         return '*' + symbol;
     };
 
@@ -3426,7 +3435,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
             if (prev) {
                 if (kind !== undefined && prev.kind !== undefined) {
-                    fail('Identifier already declared: ' + name,
+                    /* a local is TABLED as `$b`; the user wrote `b`, so report what they wrote */
+                    fail('Identifier already declared: '
+                                          + (name.charAt(0) === '$' ? name.substr(1) : name),
                                   sourceCode, sourceOffset, 'E401');
                 }
                 if (type !== prev.type) {
