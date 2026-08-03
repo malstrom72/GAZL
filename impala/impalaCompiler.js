@@ -1233,19 +1233,21 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        was found by hand after shipping rather than by a test. A new operand form now lands in a case that
        has to be named.
 
-       A FOLDED scratch is 'runtime' on purpose, not by omission. `<A>` is recycled: the next folded
-       subscript in the same function rebinds it (`! ADDi <A> #K #1` ... `! ADDi <A> #M #1`), so an
-       assertion deferred to the end of the function would read whichever value landed last. It can only
-       be checked where it is still live, which is what the runtime tier does. */
+       A FOLDED scratch gets its OWN kind rather than being lumped in with either neighbour, because the
+       two questions callers ask part company here. It is an assemble-time value, so it folds into an
+       offset like any other constant. But `<A>` is recycled - the next folded subscript in the same
+       function rebinds it (`! ADDi <A> #K #1` ... `! ADDi <A> #M #1`) - so it can never KEY a bounds
+       assertion, which dedups by index text and would then answer for whichever value landed last. */
     indexKind = function (op) {
-        if (op.charAt(0) !== '#') return 'runtime';               /* $local, %transient, bare <A> */
+        if (/^#?<[A-Za-z]>$/.test(op)) return 'scratch';          /* an assemble-time fold under a recycled name */
+        if (op.charAt(0) !== '#') return 'runtime';               /* $local, %transient */
         if (/^#-?[0-9]+$/.test(op)) return 'now';                 /* a literal - Impala decides it */
-        return /^#[A-Za-z_]/.test(op) ? 'assembly' : 'runtime';   /* #NAME is the assembler's; #<A> is not */
+        return /^#[A-Za-z_]/.test(op) ? 'assembly' : 'runtime';   /* #NAME is the assembler's */
     };
 
     checkConstIndex = function (extent, idxRV, sourceCode, sourceOffset) {
         var kind = indexKind(idxRV);
-        if (extent === undefined || kind === 'runtime') {
+        if (extent === undefined || kind === 'runtime' || kind === 'scratch') {
             return undefined;                                     /* tier 3's, if it is enabled at all */
         }
         if (kind === 'assembly') {
@@ -1395,22 +1397,21 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             emit('<> *', 'i', w, lhs, '#' + op.ext.stride);
             lhs = '#' + w;
         }
-        if (typeof op.k === 'number') {
+        if (typeof op.k !== 'number') {
+            /* A NAMED const may be negative, so it needs BOTH bounds (a literal was already settled by
+               E461). Both are plain comparisons: the low one falls through into the FAIL, which the
+               second label rides - assemble-time branches resolve against a folded line, so that label
+               costs nothing. This used to be `(extent - 1 - k) | k >= 0`, three extra ALU ops bought
+               purely to avoid a second label back when flushMetaCode spent every one on a NOOP. */
+            var low = newLabel('g');
+            emit('<> <', 'i', lhs, '#0', low);
             emit('<> <', 'i', lhs, '#' + op.ext.sym, ok);
+            if (w !== undefined) { returnBack(w); }
+            emit('<-?', true, low, undefined, undefined);
         } else {
-            /* A SYMBOLIC index needs BOTH bounds, and here the branchless form is the CHEAP one - the
-               exact opposite of the runtime tier, because every instruction below folds at assembly and
-               costs nothing to execute. Two comparisons would need a second label, and a label landing on
-               an assemble-time line is spent as a runtime NOOP (flushMetaCode); `(extent - 1 - k) | k`
-               has its sign bit set exactly when `k` is out of range at either end, so one comparison and
-               one label do the whole job and the label rides the guarded instruction. */
-            if (w === undefined) { w = borrow('<'); }
-            emit('<> -', 'i', w, '#' + op.ext.sym, lhs);
-            emit('<> -', 'i', w, '#' + w, '#1');
-            emit('<> |', 'i', w, '#' + w, lhs);
-            emit('<> >=', 'i', '#' + w, '#0', ok);
+            emit('<> <', 'i', lhs, '#' + op.ext.sym, ok);
+            if (w !== undefined) { returnBack(w); }
         }
-        if (w !== undefined) { returnBack(w); }
         emit('<> FAIL', undefined,
                 'index ' + op.k + ' outside ' + op.ext.what + ' (resolved only at assembly)',
                 undefined, undefined);
@@ -2419,16 +2420,23 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         var oobIndex = checkConstIndex(extent, idxRV, sourceCode, sourceOffset);
 
-        if (/^#[0-9]+$/.test(idxRV)) {                           /* constant index -> fold into the compile-time offset parts */
-            var k = parseInt(idxRV.substr(1), 10);
-            returnBack(idxRV);
-            if (k !== 0) {
+        var idxKind = indexKind(idxRV);
+        if (idxKind !== 'runtime') {                             /* an assemble-time index -> fold into the compile-time offset parts */
+            /* This test used to be `/^#[0-9]+$/`, so a named const, a NEGATIVE literal and a folded `<A>`
+               all fell to the branch below and emitted GETL/SETL with an immediate index - an encoding
+               that does not exist, so a module the compiler accepted would not assemble. */
+            var k = (idxKind === 'scratch') ? replace(idxRV, '#', '') : idxRV.substr(1);
+            if (idxKind !== 'scratch') {
+                returnBack(idxRV);                      /* a scratch passes to offParts, whose fold frees it */
+            }
+            if (k !== '0') {
                 if (elemStruct) {
                     var s = borrow('<');
                     emit('<> *', 'i', s, '#' + k, '#.z.' + elem);
+                    if (idxKind === 'scratch') { returnBack(k); }
                     x.offParts.push(s);
                 } else {
-                    x.offParts.push('' + k);                     /* scalar stride is 1 word -> the offset is just k */
+                    x.offParts.push(k);                          /* scalar stride is 1 word -> the offset is just k */
                 }
             }
             if (elemStruct) setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
@@ -2437,7 +2445,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         } else if (x.baseKind === 'local' && x.dynIndex === undefined) {
             /* a frame place with a single runtime index: keep it frame-relative so it emits one
                GETL/SETL (dsp + constOff)[idx], not ADRL + ADDp + PEEK/POKE (struct index is scaled;
-               scalar is 1). A NEGATIVE constant lands here too - the folding test has no minus sign. */
+               scalar is 1). Only a genuinely RUNTIME index reaches here - every assemble-time one, named
+               or negative, folded above, because GETL/SETL have no immediate-index form. */
             if (elemStruct) {
                 var frameIdx = borrow('%');
                 emit('*', 'i', frameIdx, idxRV, '#.z.' + elem);
@@ -3335,7 +3344,26 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var TABstr = (typeof TAB !== 'undefined') ? TAB : '\t';
 
         var nextLabel   = TABstr;   // pending label prefix
+        var nextName    = '';       // ...and its raw `@name`, to decide whether it may ride a `!` line
         var nextComment = '';       // pending trailing comment
+
+        /* A label may RIDE an assemble-time line instead of being spent on a NOOP. The assembler resolves
+           `! LSSi .. @L` against a folded line, but a runtime `GOTO @L` reports "Symbol not found (in
+           expected scope)" once that line folds away. So ride only a label some `!` branch names and no
+           runtime one does - an UNREFERENCED label keeps its NOOP, because a switch case label (`.sN#k`)
+           is reached by SWCH dispatch that spells the name out of a base and never operands it here. */
+        var rides = {};
+        for (var p = 0; p < metacode.length; ++p) {
+            var pr = metacode[p], po = pr.operator;
+            if (po == null || po === '<--' || po === ';') continue;
+            var meta = (po.substr(0, 3) === '<> ');
+            for (var q = 0; q < pr.operands.length; ++q) {
+                var pq = pr.operands[q];
+                if (typeof pq === 'string' && pq.charAt(0) === '@' && rides[pq] !== false) {
+                    rides[pq] = meta;
+                }
+            }
+        }
         function formatOperand(op) {
             return (op == null ? '' : op);
         }
@@ -3360,6 +3388,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                     output(prefix + nextLabel + 'NOOP');
                 }
                 nextLabel = rec.operands[0].substr(1) + ':' + TABstr;
+                nextName  = rec.operands[0];
                 continue;
             }
 
@@ -3377,20 +3406,21 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             /* -------------------------------------------------- */
             if (op.substr(0, 3) === '<> ') {
 
-                if (nextLabel !== TABstr) {
+                if (nextLabel !== TABstr && rides[nextName] !== true) {
                     output(prefix + nextLabel + 'NOOP');
+                    nextLabel = TABstr;
                 }
-                nextLabel = TABstr;
 
                 var gop = META_TO_GAZL[ op.substr(3) ];
                 gop      = replace(gop, '?',
                                    TYPE_SUFFIXES[ rec.type ]);
 
-                output(prefix + '	! ' + gop + ' ' +
+                output(prefix + nextLabel + '! ' + gop + ' ' +
                        formatOperand(rec.operands[0]) + ' '   +
                        formatOperand(rec.operands[1]) + ' '   +
                        formatOperand(rec.operands[2]) + nextComment);
 
+                nextLabel   = TABstr;
                 nextComment = '';
                 continue;
             }

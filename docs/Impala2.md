@@ -1384,10 +1384,33 @@ neither problem. The only thing deferral bought was collapsing several indices i
 largest, and that never fired on the corpus: every duplicate was the same index accessed twice, which a
 per-function seen-set removes just as well. A guard four lines from its access reads as no guard at all.
 
-For a SYMBOLIC index the test is branchless - `(extent - 1 - k) | k` - which is the opposite of tier 3's
-trade and right for the same reason it was wrong there: every line folds at assembly and costs nothing to
-execute, while a second label would land on an assemble-time line and be spent as a runtime `NOOP`.
-`deadStrip` removes a dead function's guards with it.
+A SYMBOLIC index needs BOTH bounds, since a named const may be negative, and gets two plain comparisons.
+The low one falls through into the `FAIL`, which the second label RIDES:
+
+```gazl
+! ADDi <A> #.o.Test.b #KONST   ; the index folds into the offset, like any other constant
+! LSSi #KONST #0 @.g1          ; below the start -> fall through to the FAIL
+! LSSi #KONST #.z.Test.b @.g0  ; inside the extent -> ok
+.g1:  ! FAIL index KONST outside Test.b
+.g0:  MOVi $j $xxx:<A>
+```
+
+A label may ride an assemble-time line only when nothing branches to it at RUN time: the assembler
+resolves `! LSSi .. @L` against a line that folds away, but a runtime `GOTO @L` then reports `Symbol not
+found (in expected scope)`. `flushMetaCode` decides per label - an unreferenced one keeps its `NOOP`,
+because a switch case label is reached by `SWCH` spelling the name out of a table base and never appears
+as an operand. This briefly was `(extent - 1 - k) | k >= 0` instead, three extra ALU ops bought purely to
+avoid a second label, on the belief that one landing on a `!` line always cost a runtime `NOOP`. It does
+not: a `NOOP` is removed during assembly and costs no cycles, so the price was a line of shipped text, and
+the label did not need one anyway. `deadStrip` removes a dead function's guards with it.
+
+**The index itself must fold into the compile-time offset**, which is a separate question from whether it
+can be checked. `GETL`/`SETL` take a *variable* index, so an immediate has no encoding there - and Impala
+folded only literals, so `b[KONST]`, `b[H - 1]` and `b[-1]` all emitted `GETL $j $xxx:.o.Test.b #KONST`
+and friends: accepted by the compiler, refused outright by the assembler. `indexKind` names four operand
+shapes so the two questions can disagree. A folded `<X>` scratch is the case that forces them apart: it is
+an assemble-time value and folds like any other, but the name is RECYCLED, so it can never key a guard
+(which dedups by index text and would answer for whichever value landed last).
 
 **Tier 3 - dynamic index: `--range-checks`, off by default.** The only tier that can see `a[i]`. It emits
 a `DEBUG`-gated test per subscript, bounded by the array's `.z.` extent symbol - so it works unchanged for

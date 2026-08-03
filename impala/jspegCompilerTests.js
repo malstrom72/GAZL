@@ -1886,13 +1886,24 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		+ "global Test xxx\n";
 	const symIdx = compileWithJsImpala(konst
 		+ "export function main() locals int j { j = global xxx.b[KONST]; }\n", { randomId: 42 });
-	// Both bounds in ONE comparison, and BRANCHLESS - the opposite of the runtime tier's trade, because
-	// every line here folds at assembly and costs nothing to execute, while a second label would land on
-	// an assemble-time line and be spent as a runtime NOOP.
-	assert(/! SUBi <\w> #\.z\.Test\.b #KONST/.test(symIdx) && /! IORi <\w> #<\w> #KONST/.test(symIdx)
-			&& /! GEQi #<\w> #0 @/.test(symIdx)
+	// Two plain comparisons, and the low one falls through into the FAIL that the second label RIDES.
+	// This was briefly `(extent - 1 - k) | k >= 0`, three extra ALU ops bought only to avoid that second
+	// label, back when flushMetaCode spent every label landing on a `!` line as a runtime NOOP.
+	assert(/! LSSi #KONST #0 @\.\w+/.test(symIdx) && /! LSSi #KONST #\.z\.Test\.b @\.\w+/.test(symIdx)
+			&& /\.\w+:\s+! FAIL index KONST/.test(symIdx)
+			&& !/NOOP/.test(symIdx)
 			&& (symIdx.match(/! FAIL index/g) || []).length === 1,
-		"symbolic index: not one branchless assertion covering both ends\n" + symIdx);
+		"symbolic index: not two comparisons with the FAIL carrying the label\n" + symIdx);
+	// The index itself must FOLD into the compile-time offset. GETL/SETL take a variable index, so a
+	// named const (and a folded `<X>` expression, and a negative literal) emitted an immediate operand
+	// that has no encoding: the compiler accepted a module the assembler then refused outright.
+	assert(/! ADDi <\w> #\.o\.Test\.b #KONST/.test(symIdx) && !/GETL|SETL/.test(symIdx),
+		"symbolic index: did not fold into the offset\n" + symIdx);
+	const exprIdx = compileWithJsImpala(konst
+		+ "export function main() locals int j { j = global xxx.b[KONST - 8]; }\n", { randomId: 42 });
+	assert(/! SUBi <\w> #KONST #8/.test(exprIdx) && !/GETL|SETL/.test(exprIdx)
+			&& !/! FAIL index/.test(exprIdx),
+		"expression index: a folded scratch must fold on, and can never key an assertion\n" + exprIdx);
 	const symAddr = compileWithJsImpala(konst
 		+ "export function main() locals int pointer p { p = &global xxx.b[KONST]; }\n", { randomId: 42 });
 	assert(!/! FAIL index/.test(symAddr),
