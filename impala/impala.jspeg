@@ -159,7 +159,7 @@
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.topNames = {};                                   /// name -> kind ('global'/'function'/'const'/'struct'/'functype'), one flat namespace
     var $$parser.guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
-    var $$parser.pendingGuards = [];                              /// deferred index assertions found mid-expression, emitted at the end of the function (flushIndexGuards)
+    var $$parser.pendingGuards = {};                              /// deferred index assertions found mid-expression, keyed by extent symbol, emitted at the end of the function (flushIndexGuards)
     var $$parser.initElemType = undefined;                        /// declared element type an `InitList` must match ('i'/'f'/'p'); undefined = untyped array, accept what comes
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
@@ -1226,12 +1226,13 @@
                text of the canonical `const int N; array a[N]` idiom to say what the assembler says for
                free - 15 of 87 goldens grew when this was not scoped. `stride` carries a struct-element
                field's element size, because `.z.` counts WORDS and the index counts elements. */
-            return extent.inField
-                    ? { k: ck, sym: extent.sym, what: extent.what, stride: extent.stride,
-                        src: sourceCode, off: sourceOffset }
-                    : undefined;
+            if (!extent.inField) {
+                return undefined;
+            }
+        } else if (ck < cn) {
+            return undefined;                                     /* in range, and decided right here */
         }
-        return (ck >= cn) ? { k: ck, n: cn, src: sourceCode, off: sourceOffset } : undefined;
+        return { k: ck, n: cn, ext: extent, src: sourceCode, off: sourceOffset };
     };
 
     /* `--range-checks`: the DEBUG-gated RUNTIME bounds test for a subscript whose index is not a
@@ -1312,7 +1313,28 @@
                     'valid indices are 0 to ' + (op.n - 1)
                             + ' - taking its ADDRESS is legal, reading or writing it is not');
         }
-        $$parser.pendingGuards.push(op);                          /* NOT emitted here - see flushIndexGuards */
+        /* NOT emitted here - see flushIndexGuards. Keyed by extent symbol and keeping the LARGEST index,
+           because the stride is positive: a guard for `k` implies every smaller one, so one per array is
+           the whole check. Measured over the corpus that is 39 guards down to 23, and 12 of the 39 were
+           byte-identical duplicates of a subscript written twice. */
+        var seen = $$parser.pendingGuards[op.ext.sym];
+        if (seen === undefined || op.k > seen.k) {
+            $$parser.pendingGuards[op.ext.sym] = op;
+        }
+    };
+
+    /* ONE deferred assertion, in the canonical `! <CMP>` / `! FAIL <text>` / skip-label form
+       (docs/TwoStageConstants.md rule 4): the assembler decides what Impala could not, aborts with a real
+       sentence, and the whole thing costs no runtime instruction. Every caller goes through here so the
+       shape has one home - it had two before, drifting apart by a `declare` argument at a time. `.g<N>`
+       uses guardCounter, NOT labelCounter, which resets per function. */
+    $$parser.assembleAssert = function (cmp, operands, message, sourceCode, sourceOffset) {
+        var skip = '.g' + ($$parser.guardCounter++);
+        $$parser.declare('! ' + cmp, 'globals', undefined, 'i', true,
+                operands + ' @' + skip, sourceCode, sourceOffset);
+        $$parser.declare('! FAIL ' + message, 'globals', undefined, undefined, true, undefined,
+                sourceCode, sourceOffset);
+        $$parser.declare('!', 'globals', skip, undefined, true, undefined, sourceCode, sourceOffset);
     };
 
     /* The deferred guards a function body accumulated, emitted once its own code is out. They cannot go
@@ -1322,26 +1344,26 @@
        literal) is module-scoped - so the end of the enclosing function is simply the first clean
        boundary. `.g<N>` has its own counter because labelCounter resets per function. */
     $$parser.flushIndexGuards = function () {
-        for (var i = 0; i < $$parser.pendingGuards.length; ++i) {
-            var op = $$parser.pendingGuards[i];
-            var skip = '.g' + ($$parser.guardCounter++);
+        for (var sym in $$parser.pendingGuards) {
+            var op = $$parser.pendingGuards[sym];
             var lhs = '#' + op.k;
-            if (op.stride !== undefined) {                        /* struct elements: `.z.` counts WORDS, the
-                                                                     index counts ELEMENTS - scale it first */
-                var w = $$parser.borrow('<');
-                $$parser.declare('! MUL?', 'globals', undefined, 'i', true,
-                        w + ' #' + op.k + ' #' + op.stride, op.src, op.off);
-                lhs = '#' + w;
-                $$parser.returnBack(w);
+            if (op.ext.stride !== undefined) {
+                /* Struct elements: `.z.` counts WORDS, the index counts ELEMENTS, so scale first. `<g>`
+                   is a FIXED compile-time scratch, deliberately not a pool borrow: this runs AFTER the
+                   function's scratch window has closed, and borrowing here tripped the pool's own leak
+                   assert for every function but the last. One name serves every guard because the
+                   `! MULi` is consumed by the `! LSSi` on the very next line. The whole instruction goes
+                   in the MNEMONIC, like the `! FAIL` below: declare() hands its VALUE to returnBack,
+                   which would see a leading `<` and push this line into the scratch stock. */
+                $$parser.declare('! MULi <g> #' + op.k + ' #' + op.ext.stride,
+                        'globals', undefined, undefined, true, undefined, op.src, op.off);
+                lhs = '#<g>';
             }
-            $$parser.declare('! LSS?', 'globals', undefined, 'i', true,
-                    lhs + ' #' + op.sym + ' @' + skip, op.src, op.off);
-            $$parser.declare('! FAIL index ' + op.k + ' is outside ' + op.what + ', whose extent '
-                            + op.sym + ' is not known until GAZL assembly time',
-                    'globals', undefined, undefined, true, undefined, op.src, op.off);
-            $$parser.declare('!', 'globals', skip, undefined, true, undefined, op.src, op.off);
+            $$parser.assembleAssert('LSS?', lhs + ' #' + sym,
+                    'index ' + op.k + ' outside ' + op.ext.what + ' (extent ' + sym
+                            + ' unknown until assembly)', op.src, op.off);
         }
-        $$parser.pendingGuards.length = 0;
+        $$parser.pendingGuards = {};
     };
 
     $$parser.makeRValue = function (expr, classes) {
@@ -2159,13 +2181,9 @@
             return;                                           /* nothing given - trivially fits */
         }
         var extent = $$parser.extentSymbol(fieldName, structName);
-        var skip = '.g' + ($$parser.guardCounter++);           /* own counter: labelCounter resets per function */
-        $$parser.declare('! LEQ?', 'globals', undefined, 'i', true,
-                '#' + words + ' #' + extent + ' @' + skip, sourceCode, sourceOffset);
-        $$parser.declare('! FAIL too many initializer values for ' + structName + '.' + fieldName + ': '
-                        + words + ' given, room for ' + extent,
-                'globals', undefined, undefined, true, undefined, sourceCode, sourceOffset);
-        $$parser.declare('!', 'globals', skip, undefined, true, undefined, sourceCode, sourceOffset);
+        $$parser.assembleAssert('LEQ?', '#' + words + ' #' + extent,
+                'too many initializer values for ' + structName + '.' + fieldName + ': '
+                        + words + ' given, room for ' + extent, sourceCode, sourceOffset);
     };
 
     /* The mnemonic for one flat-array initializer row. `DATi`/`DATf`/`DATp` apply their type to EVERY
@@ -3972,8 +3990,7 @@ inp:ArgsDecl ')'_
                                                                                                         here - see arrayExtent's shape */
                                                                                  $$parser.symbols.locals['$' + v.name].extent =
                                                                                          { n: v.size, what: v.name,
-                                                                                           sym: $$parser.extentSymbol(v.name, $id),
-                                                                                           scalar: !$$parser.isStructAtom(v.elem) };
+                                                                                           sym: $$parser.extentSymbol(v.name, $id) };
                                                                              }
                                                                          });
                                                                          iterate($loc, function (v) {   /* the count scratches ArrayDecl held for this
@@ -4347,8 +4364,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                             );
                                                                             $$parser.symbols.globals[$a.name].extent =
                                                                                     { n: $a.size, what: $a.name,
-                                                                                      sym: $$parser.extentSymbol($a.name),
-                                                                                      scalar: !$$parser.isStructAtom($a.elem) };
+                                                                                      sym: $$parser.extentSymbol($a.name) };
                                                                             $$parser.returnBack($a.size);   /* declared: this consumer is done with it */
                                                                             $aStructEl = ($a.elem !== undefined
                                                                                     && $$parser.descTail($a.elem) === undefined

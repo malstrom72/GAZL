@@ -1834,7 +1834,7 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	const sym = "const int SN = 2\nstruct T { int array v[SN]; int array pad[8] }\nglobal T t\n";
 	const deferred = compileWithJsImpala(sym
 		+ "export function main() { global t.v[5] = 99; }\n", { randomId: 42 });
-	assert(/! LSSi #5 #\.z\.T\.v @\.g\d/.test(deferred) && /! FAIL index 5 is outside T\.v/.test(deferred),
+	assert(/! LSSi #5 #\.z\.T\.v @\.g\d/.test(deferred) && /! FAIL index 5 outside T\.v/.test(deferred),
 		"tier 2: no deferred guard for a constant index into a symbolic extent\n" + deferred);
 	const addr = compileWithJsImpala(sym
 		+ "export function main() locals int pointer p { p = &global t.v[9]; }\n", { randomId: 42 });
@@ -1851,6 +1851,23 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		+ "export function main() { global o.e[[3]].a = 1; }\n", { randomId: 42 });
 	assert(/! MULi <\w> #3 #\.z\.E/.test(scaled) && /! LSSi #<\w> #\.z\.O\.e/.test(scaled),
 		"tier 2: a struct-element index is not scaled by the element size\n" + scaled);
+	// The scaling scratch must NOT come from the runtime pool: guards flush after the function's scratch
+	// window has closed, so a borrow there tripped `compile-time scratch leak before <fn>` in every
+	// function but the last - and a `<`-leading value handed to declare() gets pushed into the stock by
+	// returnBack. Both only show up when the guarded access is NOT in the final function.
+	const notLast = compileWithJsImpala("const int SN = 3\nstruct E { int a; int b }\n"
+		+ "struct O { E array e[SN]; int t }\nglobal O o\n"
+		+ "function f() { global o.e[[3]].a = 1; }\nexport function main() { f(); }\n", { randomId: 42 });
+	assert(/! FAIL index 3 outside O\.e/.test(notLast),
+		"tier 2: no guard for a function that is not the last one\n" + notLast);
+	// One guard per array, keyed on the extent symbol and keeping the LARGEST index - the stride is
+	// positive, so it implies every smaller one. Without this the same subscript written twice shipped
+	// two byte-identical guards (39 across the corpus, 23 after).
+	const dup = compileWithJsImpala("const int SN = 2\nstruct T { int array v[SN]; int t }\nglobal T t\n"
+		+ "export function main() { global t.v[3] = 1; global t.v[3] = 2; global t.v[5] = 3; }\n",
+		{ randomId: 42 });
+	assert((dup.match(/! FAIL index/g) || []).length === 1 && /! FAIL index 5 /.test(dup),
+		"tier 2: guards are not deduplicated to the largest index per array\n" + dup);
 	console.log("impala.jspeg compiler defers a symbolic-extent field index to GAZL assembly time");
 }
 
