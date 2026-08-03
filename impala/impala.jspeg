@@ -1206,23 +1206,38 @@
        rejected - `.o.S.pad + (-1)` is a perfectly good positive offset naming the field before it, so
        `&s.pad[-1]` assembles, runs, and aliases a neighbour. One source-level mistake had three different
        outcomes across the shapes; this is the one place that can give it one. */
+    /* WHAT can decide this index, and WHEN. Every tier boundary reads this ONE table, because the three
+       spellings of "constant" - `#123`, `#KONST` and a folded `<A>` - used to be sorted by three separate
+       regexes in two functions whose union was never the whole operand universe, and each gap that left
+       was found by hand after shipping rather than by a test. A new operand form now lands in a case that
+       has to be named.
+
+       A FOLDED scratch is 'runtime' on purpose, not by omission. `<A>` is recycled: the next folded
+       subscript in the same function rebinds it (`! ADDi <A> #K #1` ... `! ADDi <A> #M #1`), so an
+       assertion deferred to the end of the function would read whichever value landed last. It can only
+       be checked where it is still live, which is what the runtime tier does. */
+    $$parser.indexKind = function (op) {
+        if (op.charAt(0) !== '#') return 'runtime';               /* $local, %transient, bare <A> */
+        if (/^#-?[0-9]+$/.test(op)) return 'now';                 /* a literal - Impala decides it */
+        return /^#[A-Za-z_]/.test(op) ? 'assembly' : 'runtime';   /* #NAME is the assembler's; #<A> is not */
+    };
+
     $$parser.checkConstIndex = function (extent, idxRV, sourceCode, sourceOffset) {
+        var kind = $$parser.indexKind(idxRV);
+        if (extent === undefined || kind === 'runtime') {
+            return undefined;                                     /* tier 3's, if it is enabled at all */
+        }
+        if (kind === 'assembly') {
+            /* A SYMBOLIC constant index - `a[KONST]`: the ASSEMBLER can evaluate the operand and Impala
+               cannot. Decidable, just not now, so defer it exactly as a symbolic EXTENT is deferred
+               below. Same scoping too: a plain array is caught natively (`&g:KONST` -> "Offset out of
+               bounds: g"), a struct field is not. BOTH ends have to be asked, because neither is
+               knowable here. */
+            return extent.inField
+                    ? { k: idxRV.substr(1), ext: extent, src: sourceCode, off: sourceOffset }
+                    : undefined;
+        }
         var ck = $$parser.constInt(idxRV);
-        if (extent === undefined) {
-            return undefined;
-        }
-        if (ck === undefined) {
-            /* A SYMBOLIC constant index - `a[KONST]`, where the ASSEMBLER can evaluate the operand and
-               Impala cannot. This used to fall between every tier: constInt declines it here, and
-               emitRangeCheck skips anything `#`-prefixed on the grounds that a constant is this
-               function's business. It is decidable, just not now - so defer it, exactly as a symbolic
-               EXTENT is deferred below. Same scoping too: a plain array is caught natively
-               (`&g:KONST` -> "Offset out of bounds: g"), a struct field is not. Both ends have to be
-               asked, because neither is knowable here. */
-            return (extent.inField && /^#[A-Za-z_]/.test(idxRV))
-                    ? { k: idxRV.substr(1), sym: true, ext: extent, src: sourceCode, off: sourceOffset }
-                    : undefined;                                  /* else a runtime index - tier 3's job */
-        }
         if (ck < 0) {                                             /* decidable WITHOUT the extent */
             $$parser.fail('Index ' + ck + ' is before the start of this array',
                     sourceCode, sourceOffset, 'E461',
@@ -1258,18 +1273,21 @@
 
        An earlier version was branchless - `(extent - 1 - i) | i` has its sign bit set exactly when `i` is
        out of range, which is one conditional branch instead of two. That is the wrong trade: it spends
-       three ALU instructions to save one branch, six runtime instructions against four, and it computes
-       `extent - 1` at RUN time from a constant the assembler already knows. Two compares also read as
-       what they are.
+       three ALU instructions to save one branch - six runtime instructions against four, and FOUR against
+       TWO on the path that matters, since an in-range access never reaches the failure call - and it
+       computes `extent - 1` at RUN time from a constant the assembler already knows. GAZL fuses the
+       compare and the branch, so each bound really is one instruction. Two compares also read as what
+       they are.
 
        OFF BY DEFAULT, and that is not the same switch as `#DEBUG`. `DEBUG` decides whether the
        assembler EMITS the instructions; this decides whether they are in the .gazl TEXT at all - and
        the text is the shipped artifact, embedded into C++ via tools/gazlCompactor. Measured, an assert
        costs ~95 bytes of compacted source that `DEBUG 0` does not remove. */
     $$parser.emitRangeCheck = function (idxOp, extent, sourceCode, sourceOffset) {
-        if (!$$parser.rangeChecks || extent === undefined || idxOp.charAt(0) === '#') {
-            return;                                               /* a CONSTANT index is checkConstIndex's,
-                                                                     decided without emitting anything */
+        if (!$$parser.rangeChecks || extent === undefined
+                || $$parser.indexKind(idxOp) !== 'runtime') {
+            return;                                               /* a constant, in any of its spellings,
+                                                                     belongs to an earlier tier */
         }
         var ok  = $$parser.beginDebugGuard('r');
         var bad = $$parser.newLabel('r');
@@ -1332,16 +1350,12 @@
                     'valid indices are 0 to ' + (op.n - 1)
                             + ' - taking its ADDRESS is legal, reading or writing it is not');
         }
-        /* NOT emitted here - see flushIndexGuards. Keyed by extent symbol and keeping the LARGEST index,
-           because the stride is positive: a guard for `k` implies every smaller one, so one per array is
-           the whole check. Measured over the corpus that is 39 guards down to 23, and 12 of the 39 were
-           byte-identical duplicates of a subscript written twice. */
-        var key = op.ext.sym + (op.sym ? '|' + op.k : '');        /* symbolic indices cannot be ordered,
-                                                                     so each distinct one keeps its own
-                                                                     entry; numeric ones collapse to the
-                                                                     largest, which implies the rest */
+        /* NOT emitted here - see flushIndexGuards. NUMERIC indices for one array collapse to the largest,
+           which implies every smaller one because the stride is positive; a SYMBOLIC index cannot be
+           ordered, so its own text goes in the key and each distinct one is kept. */
+        var key = op.ext.sym + (typeof op.k === 'number' ? '' : '|' + op.k);
         var seen = $$parser.pendingGuards[key];
-        if (seen === undefined || (!op.sym && op.k > seen.k)) {
+        if (seen === undefined || op.k > seen.k) {
             $$parser.pendingGuards[key] = op;
         }
     };
@@ -1351,13 +1365,19 @@
        sentence, and the whole thing costs no runtime instruction. Every caller goes through here so the
        shape has one home - it had two before, drifting apart by a `declare` argument at a time. `.g<N>`
        uses guardCounter, NOT labelCounter, which resets per function. */
-    $$parser.assembleAssert = function (cmp, operands, message, sourceCode, sourceOffset) {
-        var skip = '.g' + ($$parser.guardCounter++);
-        $$parser.declare('! ' + cmp, 'globals', undefined, 'i', true,
-                operands + ' @' + skip, sourceCode, sourceOffset);
-        $$parser.declare('! FAIL ' + message, 'globals', undefined, undefined, true, undefined,
-                sourceCode, sourceOffset);
-        $$parser.declare('!', 'globals', skip, undefined, true, undefined, sourceCode, sourceOffset);
+    $$parser.assembleAssert = function (tests, message, sourceCode, sourceOffset) {
+        var ok = '.g' + ($$parser.guardCounter++);
+        var bad = (tests.length > 1) ? '.g' + ($$parser.guardCounter++) : ok;
+        for (var i = 0; i < tests.length; ++i) {
+            /* The LAST test jumps past the failure when it holds; every earlier one jumps TO it, so a
+               caller with two bounds supplies the first already inverted. Two tests share one `! FAIL`
+               and one message - the same two-tests-one-failure shape the runtime tier uses. */
+            $$parser.declare('! ' + tests[i][0], 'globals', undefined, 'i', true,
+                    tests[i][1] + ' @' + (i + 1 < tests.length ? bad : ok), sourceCode, sourceOffset);
+        }
+        $$parser.declare('! FAIL ' + message, 'globals', (bad === ok ? undefined : bad),
+                undefined, true, undefined, sourceCode, sourceOffset);
+        $$parser.declare('!', 'globals', ok, undefined, true, undefined, sourceCode, sourceOffset);
     };
 
     /* The deferred guards a function body accumulated, emitted once its own code is out. They cannot go
@@ -1369,14 +1389,14 @@
     $$parser.flushIndexGuards = function () {
         for (var key in $$parser.pendingGuards) {
             var op = $$parser.pendingGuards[key];
-            var sym = op.ext.sym;
             var lhs = '#' + op.k;
-            if (op.sym) {                                         /* a SYMBOLIC index: the lower bound is
-                                                                     not knowable at Impala compile time
-                                                                     either, so ask for it too */
-                $$parser.assembleAssert('GEQ?', lhs + ' #0',
-                        'index ' + op.k + ' is negative, so it cannot index ' + op.ext.what,
-                        op.src, op.off);
+            var tests = [];
+            if (typeof op.k !== 'number') {                       /* a SYMBOLIC index: the lower bound is
+                                                                     not knowable here either, so ask for
+                                                                     it in the same assertion. Inverted,
+                                                                     and BEFORE any scaling - a positive
+                                                                     stride preserves the sign. */
+                tests.push(['LSS?', lhs + ' #0']);
             }
             if (op.ext.stride !== undefined) {
                 /* Struct elements: `.z.` counts WORDS, the index counts ELEMENTS, so scale first. `<g>`
@@ -1390,7 +1410,8 @@
                         'globals', undefined, undefined, true, undefined, op.src, op.off);
                 lhs = '#<g>';
             }
-            $$parser.assembleAssert('LSS?', lhs + ' #' + sym,
+            tests.push(['LSS?', lhs + ' #' + op.ext.sym]);
+            $$parser.assembleAssert(tests,
                     'index ' + op.k + ' outside ' + op.ext.what + ' (resolved only at assembly)',
                     op.src, op.off);
         }
@@ -2212,7 +2233,7 @@
             return;                                           /* nothing given - trivially fits */
         }
         var extent = $$parser.extentSymbol(fieldName, structName);
-        $$parser.assembleAssert('LEQ?', '#' + words + ' #' + extent,
+        $$parser.assembleAssert([['LEQ?', '#' + words + ' #' + extent]],
                 'too many initializer values for ' + structName + '.' + fieldName + ': '
                         + words + ' given, room for ' + extent, sourceCode, sourceOffset);
     };

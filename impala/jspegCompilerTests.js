@@ -1824,7 +1824,7 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		} else {
 			// The bound is quoted STRAIGHT into the compare as an assemble-time immediate - no
 			// instruction computes it, which is the whole reason the check is two compares and no ALU.
-			assert(on.includes("LSSi ") && on.includes(bound + "@") && /LSSi \S+ #0 @/.test(on),
+			assert(on.includes(bound + "@") && /LSSi \S+ #0 @/.test(on),
 				`range checks: ${label} is not two compares bounded by ${bound.trim()}\n` + on);
 		}
 	}
@@ -1884,8 +1884,11 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		+ "global Test xxx\n";
 	const symIdx = compileWithJsImpala(konst
 		+ "export function main() locals int j { j = global xxx.b[KONST]; }\n", { randomId: 42 });
-	assert(/! LSSi #KONST #\.z\.Test\.b @/.test(symIdx) && /! GEQi #KONST #0 @/.test(symIdx),
-		"symbolic index: not deferred at both ends\n" + symIdx);
+	// Both bounds, ONE failure and one message - the same two-tests-one-failure shape the runtime tier
+	// uses. The lower test is inverted (it jumps TO the failure) and comes before any stride scaling.
+	assert(/! LSSi #KONST #0 @/.test(symIdx) && /! LSSi #KONST #\.z\.Test\.b @/.test(symIdx)
+			&& (symIdx.match(/! FAIL index/g) || []).length === 1,
+		"symbolic index: not one assertion covering both ends\n" + symIdx);
 	const symAddr = compileWithJsImpala(konst
 		+ "export function main() locals int pointer p { p = &global xxx.b[KONST]; }\n", { randomId: 42 });
 	assert(!/! FAIL index/.test(symAddr),

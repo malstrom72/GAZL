@@ -199,8 +199,10 @@
 	var timer = null;
 	function schedule() { clearTimeout(timer); timer = setTimeout(compile, 120); }
 	srcEl.addEventListener("input", function () { persist(); schedule(); });
-	[seedEl, retabEl, legacyEl, rangesEl].forEach(function (el) {
-		el.addEventListener("input", compile);
+	// A checkbox fires BOTH `input` and `change` on one click, so binding it to both compiled twice per
+	// tick. The seed is a text field and needs `input` to feel live; the toggles only need `change`.
+	seedEl.addEventListener("input", compile);
+	flagEls.forEach(function (el) {
 		el.addEventListener("change", function () { persistFlags(); compile(); });
 	});
 
