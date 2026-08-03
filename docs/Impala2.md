@@ -1387,19 +1387,24 @@ a symbolic extent - and calls the host's `assertFail` on failure, exactly as `as
 
 ```gazl
 ! EQUi #DEBUG #0 @.r0        ; assemble-time: DEBUG 0 drops everything below
-  SUBi %1 #.z.S.v $i
-  SUBi %1 %1 #1
-  IORi %1 %1 $i              ; (extent - 1 - i) | i  has its sign bit set iff i is out of range
-  GEQi %1 #0 @.r0
+  LSSi $i #0 @.r1            ; below the start -> fail
+  LSSi $i #.z.S.v @.r0       ; inside the extent -> ok
+.r1:
   MOVp %2 &.a_indexo_4d2
   CALL ^assertFail %1 *1
 .r0:
 ```
 
-Branchless on purpose: both ends of the range cost one conditional branch, and the sequence then matches
-the only shape `processBranches` understands. Covered shapes are every array whose extent Impala knows -
-global and local scalar arrays, struct array fields, and arrays of structs. A bare pointer (`p[i]`) has no
-extent and is not checked.
+**Two compares and no arithmetic**, because the index is the only value not known until run time: the
+bound is a SYMBOL, so it is an assemble-time immediate that costs no instruction to produce. Four runtime
+instructions, two of them on the cold path - so an in-range access pays exactly two compares.
+
+(An earlier version was branchless - `(extent - 1 - i) | i` has its sign bit set exactly when `i` is out
+of range, which is one conditional branch instead of two. That is the wrong trade: three ALU instructions
+to save one branch, and it computed `extent - 1` at RUN time from a constant the assembler already knew.)
+
+Covered shapes are every array whose extent Impala knows - global and local scalar arrays, struct array
+fields, and arrays of structs. A bare pointer (`p[i]`) has no extent and is not checked.
 
 **Why two switches.** `DEBUG` decides whether the assembler EMITS the instructions; `--range-checks`
 decides whether they are in the `.gazl` TEXT at all. They are not redundant: the text is the shipped

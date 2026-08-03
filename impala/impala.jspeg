@@ -1238,12 +1238,17 @@
     /* `--range-checks`: the DEBUG-gated RUNTIME bounds test for a subscript whose index is not a
        compile-time number, which is the only tier the two static ones cannot reach.
 
-       Branchless on purpose. `(extent - 1 - i) | i` has its sign bit set exactly when `i < 0` or
-       `i >= extent`, so ONE conditional branch reaches the failure call and the emitted shape is
-       `assert`'s - guard, comparison, `?->`, call, join - which is the only shape processBranches
-       understands. The bound is the `.z.` SYMBOL, not a number, so this works unchanged for an extent
-       the assembler resolves (`v[SN]`); and for a struct element the operand handed in is the SCALED
-       word offset, which is what `.z.` counts.
+       TWO COMPARES AND NOTHING ELSE. The index is the only value not known until run time: the bound is
+       the `.z.` SYMBOL, so it is an assemble-time immediate and needs no instruction to produce - which
+       also makes this work unchanged for an extent the assembler resolves (`v[SN]`). For a struct element
+       the operand handed in is the SCALED word offset, which is what `.z.` counts, and that multiply was
+       already emitted for the access itself.
+
+       An earlier version was branchless - `(extent - 1 - i) | i` has its sign bit set exactly when `i` is
+       out of range, which is one conditional branch instead of two. That is the wrong trade: it spends
+       three ALU instructions to save one branch, six runtime instructions against four, and it computes
+       `extent - 1` at RUN time from a constant the assembler already knows. Two compares also read as
+       what they are.
 
        OFF BY DEFAULT, and that is not the same switch as `#DEBUG`. `DEBUG` decides whether the
        assembler EMITS the instructions; this decides whether they are in the .gazl TEXT at all - and
@@ -1254,15 +1259,13 @@
             return;                                               /* a CONSTANT index is checkConstIndex's,
                                                                      decided without emitting anything */
         }
-        var ok = $$parser.beginDebugGuard('r');
-        var t  = $$parser.borrow('%');
-        $$parser.emit('-', 'i', t, '#' + extent.sym, idxOp);
-        $$parser.emit('-', 'i', t, t, '#1');
-        $$parser.emit('|', 'i', t, t, idxOp);
-        $$parser.emit('>=', 'i', undefined, t, '#0');
-        $$parser.returnBack(t);
+        var ok  = $$parser.beginDebugGuard('r');
+        var bad = $$parser.newLabel('r');
+        $$parser.emit('<', 'i', undefined, idxOp, '#0');           /* below the start -> fail */
+        $$parser.emit('?->', true, bad, undefined, undefined);
+        $$parser.emit('<', 'i', undefined, idxOp, '#' + extent.sym);   /* inside the extent -> ok */
         $$parser.endDebugGuard(ok, {}, 'index out of range: ' + extent.what,
-                sourceCode, sourceOffset);
+                sourceCode, sourceOffset, bad);
     };
 
     /* The two halves of a DEBUG-gated runtime check, shared by `assert` and by --range-checks so the
@@ -1278,8 +1281,12 @@
         return ok;
     };
 
-    $$parser.endDebugGuard = function (ok, msg, text, sourceCode, sourceOffset) {
+    $$parser.endDebugGuard = function (ok, msg, text, sourceCode, sourceOffset, failLabel) {
         $$parser.emit('?->', true, ok, undefined, undefined);
+        if (failLabel !== undefined) {                            /* a second test that jumps straight to
+                                                                     the failure lands here */
+            $$parser.emit('<-?', true, failLabel, undefined, undefined);
+        }
         var r = $$parser.borrowForCall();
         $$parser.makeString('a', msg, text, sourceCode, sourceOffset);
         $$parser.makeArgValue(msg, r + 1);

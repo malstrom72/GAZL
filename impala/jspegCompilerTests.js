@@ -1786,7 +1786,12 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	assert(!/index out of range/.test(off) && !/@\.r\d/.test(off),
 		"range checks: emitted with the flag OFF\n" + off);
 	assert(/! EQUi #DEBUG #0 @\.r\d/.test(on), "range checks: no DEBUG gate on the guard\n" + on);
-	assert(/SUBi .* #\.z\.S\.v /.test(on), "range checks: bound is not the .z. extent symbol\n" + on);
+	// Two compares and no arithmetic: the extent is an assemble-time symbol, so it is quoted straight
+	// into the compare rather than computed. An ALU op appearing here means the check regressed to
+	// deriving something the assembler already knows.
+	assert(/LSSi \S+ #0 @/.test(on) && /LSSi \S+ #\.z\.S\.v @/.test(on),
+		"range checks: not two compares against the .z. extent symbol\n" + on);
+	assert(!/SUBi|IORi/.test(on), "range checks: computing a bound the assembler already knows\n" + on);
 	assert(/index out of range: S\.v/.test(on), "range checks: no message naming the field\n" + on);
 	assert(/CALL \^assertFail/.test(on), "range checks: does not reuse the assertFail native\n" + on);
 	console.log("impala.jspeg compiler emits DEBUG-gated range checks only under --range-checks");
@@ -1817,8 +1822,10 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		if (bound === null) {
 			assert(!/index out of range/.test(on), `range checks: fired on ${label}\n` + on);
 		} else {
-			assert(on.includes("SUBi") && on.includes(bound),
-				`range checks: ${label} is not bounded by ${bound.trim()}\n` + on);
+			// The bound is quoted STRAIGHT into the compare as an assemble-time immediate - no
+			// instruction computes it, which is the whole reason the check is two compares and no ALU.
+			assert(on.includes("LSSi ") && on.includes(bound + "@") && /LSSi \S+ #0 @/.test(on),
+				`range checks: ${label} is not two compares bounded by ${bound.trim()}\n` + on);
 		}
 	}
 	console.log("impala.jspeg compiler range-checks every array shape, and only those");
