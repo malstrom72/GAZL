@@ -361,14 +361,24 @@ Verified 2026-08-01 that GAZL 1 has no way to express it:
 words. What GAZL 2 needs is two CAPABILITIES - **the syntax below is illustrative only and is not
 decided**:
 
-1. **Place the next data word at an offset that resolves at GAZL assembly time** (say `ORG *offset`).
-   Impala already mints `.o.Struct.field` for every field, so it would emit each field at its own symbolic
-   offset and do no gap arithmetic.
-2. **Reject defining the same word twice.** Not a nicety: `DATA` is append-only today, so overwriting is
-   impossible by construction, and (1) would introduce that hazard. A monotonic cursor is the cheap form
-   but is NOT sufficient - host offsets need not follow declaration order, and Impala cannot sort by values
-   it does not know, so out-of-order placement must be legal and a written-word set is what makes it safe.
-   It would also catch overlapping host layouts, which `Impala2Review.md` C6 lists as undetected.
+**Take a REGION, not a cursor.** The two capabilities below started out as "place the next word at a
+symbolic offset (say `ORG *offset`)" plus "reject writing a word twice", and that pair does NOT close the
+problem: a cursor can place a field, but the words it skipped over are still undefined, and a symbolic gap
+cannot be enumerated to fill them. `ORG` alone RELOCATES the defect rather than fixing it. One primitive -
+a region of `*size` words at `*offset`, ZERO unless written - subsumes both and adds what neither had:
+
+1. **Fill falls out.** Untouched words in the region are defined without anyone counting them. This is the
+   only part that makes a symbolic gap expressible at all, and it is why the cursor form is not enough.
+2. **Overlap becomes an interval test.** A monotonic cursor is not sufficient - host offsets need not
+   follow declaration order, so out-of-order placement has to stay legal, which otherwise forces a
+   written-WORD set to stay safe. A region declaration IS that bookkeeping. It also catches an overlapping
+   host layout, which `Impala2Review.md` C6 lists as undetected.
+3. **Total accounting.** A struct is a region of `.z.Name` words, so every placement is checked against the
+   real size instead of each field independently landing somewhere.
+
+Cost: the assembler must hold interval state across the data section, where `DATA` is append-only today -
+the same cost the written-word set would have charged. The wishlist entry on the `GAZL2` branch carries
+this form; this section is the compiler-side half of the same item.
 
 **One part did NOT need GAZL 2 and is DONE as of 2026-08-01**: the value-count check behind `E454`.
 Impala cannot compare a literal count against a symbolic extent, but it EMITS the comparison instead, for
