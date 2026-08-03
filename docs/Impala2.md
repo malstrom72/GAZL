@@ -1359,8 +1359,22 @@ stays inside the struct's allocation, so `Symbols::resolve` sees a legal offset.
 caught natively - `const int SN = 4; global int array a[SN]; global a[7] = 1;` gives
 `Offset out of bounds: a` - and re-checking it here would put three assemble-time lines into the shipped
 text of the commonest idiom in the corpus to say what the assembler says for free. Measured: **15 of 87
-goldens grew when this was not scoped, versus 1 when it was.** A struct-ELEMENT array field is skipped
-too, because `.z.` counts words and the guard would need the index scaled by the element size.
+goldens grew when this was not scoped, versus 1 when it was.**
+
+A struct-ELEMENT array field is covered too, with the index scaled first, because `.z.` counts WORDS
+while the index counts elements:
+
+```gazl
+! MULi <B> #3 #.z.E          ; 3 elements -> words
+! LSSi #<B> #.z.O.e @.g0
+! FAIL index 3 is outside O.e, whose extent .z.O.e is not known until GAZL assembly time
+.g0:	!
+```
+
+`o.e[[3]]` on `E array e[SN]` is the case that earns it: it lands in the field AFTER `e`, still inside
+the struct's allocation, so the assembler sees a legal offset and nothing else looks. (Index far enough
+past the end to leave the allocation - `o.e[[7]]` - is caught by the assembler first, as `Offset out of
+bounds`; the guard is for the near miss.)
 
 The guards are queued and emitted at the end of the enclosing function, not where they are found:
 `declare` flushes pending metacode first, and a subscript is discovered halfway through building an

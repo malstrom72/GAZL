@@ -86,9 +86,17 @@ main:	FUNC	; signature func main() -> void @ 35:1
 	! LSSi #3 #.z.S.b @.g1
 	! FAIL index 3 is outside S.b, whose extent .z.S.b is not known until GAZL assembly time
 .g1:	!
-	! LSSi #11 #.z.S.a @.g2
-	! FAIL index 11 is outside S.a, whose extent .z.S.a is not known until GAZL assembly time
+	! MULi <C> #1 #.z.Pair
+	! LSSi #<C> #.z.S.p @.g2
+	! FAIL index 1 is outside S.p, whose extent .z.S.p is not known until GAZL assembly time
 .g2:	!
-	! LSSi #3 #.z.S.b @.g3
-	! FAIL index 3 is outside S.b, whose extent .z.S.b is not known until GAZL assembly time
+	! LSSi #11 #.z.S.a @.g3
+	! FAIL index 11 is outside S.a, whose extent .z.S.a is not known until GAZL assembly time
 .g3:	!
+	! LSSi #3 #.z.S.b @.g4
+	! FAIL index 3 is outside S.b, whose extent .z.S.b is not known until GAZL assembly time
+.g4:	!
+	! MULi <C> #1 #.z.Pair
+	! LSSi #<C> #.z.S.p @.g5
+	! FAIL index 1 is outside S.p, whose extent .z.S.p is not known until GAZL assembly time
+.g5:	!

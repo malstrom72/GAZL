@@ -1237,10 +1237,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                with a symbolic extent is already caught natively (`a[7]` on `a[SN]` -> "Offset out of
                bounds: a"), and re-checking it here would put three assemble-time lines into the shipped
                text of the canonical `const int N; array a[N]` idiom to say what the assembler says for
-               free - 15 of 87 goldens grew when this was not scoped. A struct-ELEMENT array is skipped
-               too: `.z.` counts words, so the guard would need the index scaled by the element size. */
-            return (extent.inField && extent.scalar)
-                    ? { k: ck, sym: extent.sym, what: extent.what, src: sourceCode, off: sourceOffset }
+               free - 15 of 87 goldens grew when this was not scoped. `stride` carries a struct-element
+               field's element size, because `.z.` counts WORDS and the index counts elements. */
+            return extent.inField
+                    ? { k: ck, sym: extent.sym, what: extent.what, stride: extent.stride,
+                        src: sourceCode, off: sourceOffset }
                     : undefined;
         }
         return (ck >= cn) ? { k: ck, n: cn, src: sourceCode, off: sourceOffset } : undefined;
@@ -1337,8 +1338,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         for (var i = 0; i < pendingGuards.length; ++i) {
             var op = pendingGuards[i];
             var skip = '.g' + (guardCounter++);
+            var lhs = '#' + op.k;
+            if (op.stride !== undefined) {                        /* struct elements: `.z.` counts WORDS, the
+                                                                     index counts ELEMENTS - scale it first */
+                var w = borrow('<');
+                declare('! MUL?', 'globals', undefined, 'i', true,
+                        w + ' #' + op.k + ' #' + op.stride, op.src, op.off);
+                lhs = '#' + w;
+                returnBack(w);
+            }
             declare('! LSS?', 'globals', undefined, 'i', true,
-                    '#' + op.k + ' #' + op.sym + ' @' + skip, op.src, op.off);
+                    lhs + ' #' + op.sym + ' @' + skip, op.src, op.off);
             declare('! FAIL index ' + op.k + ' is outside ' + op.what + ', whose extent '
                             + op.sym + ' is not known until GAZL assembly time',
                     'globals', undefined, undefined, true, undefined, op.src, op.off);
@@ -2487,8 +2497,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex);
             x.extent = field.extent || (field.extent =             /* built once per FIELD, not per access */
                     { n: field.size, what: structName + '.' + fieldName,
-                      sym: extentSymbol(fieldName, structName),
-                      scalar: !isStructAtom(field.elem), inField: true });
+                      sym: extentSymbol(fieldName, structName), inField: true,
+                      stride: isStructAtom(field.elem) ? '.z.' + field.elem : undefined });
             return;
         }
 

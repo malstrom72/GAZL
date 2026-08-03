@@ -1843,6 +1843,14 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		+ "export function main() { global a[7] = 1; }\n", { randomId: 42 });
 	assert(!/! FAIL index/.test(plain),
 		"tier 2: duplicated the assembler's own check on a plain array\n" + plain);
+	// A struct-ELEMENT array field: `.z.` counts WORDS and the index counts ELEMENTS, so the guard has to
+	// scale before comparing. `o.e[[3]]` on `e[SN]` is the case that matters - it lands in the NEXT FIELD,
+	// still inside the allocation, so the assembler sees a legal offset and only this guard catches it.
+	const scaled = compileWithJsImpala("const int SN = 3\nstruct E { int a; int b }\n"
+		+ "struct O { E array e[SN]; int t }\nglobal O o\n"
+		+ "export function main() { global o.e[[3]].a = 1; }\n", { randomId: 42 });
+	assert(/! MULi <\w> #3 #\.z\.E/.test(scaled) && /! LSSi #<\w> #\.z\.O\.e/.test(scaled),
+		"tier 2: a struct-element index is not scaled by the element size\n" + scaled);
 	console.log("impala.jspeg compiler defers a symbolic-extent field index to GAZL assembly time");
 }
 
