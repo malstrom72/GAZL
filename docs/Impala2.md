@@ -1412,6 +1412,26 @@ shapes so the two questions can disagree. A folded `<X>` scratch is the case tha
 an assemble-time value and folds like any other, but the name is RECYCLED, so it can never key a guard
 (which dedups by index text and would answer for whichever value landed last).
 
+So the guard takes its OWN copy - one assemble-time `! MOVi`, no runtime cost - at the subscript, while
+the value is still live. It has to: the pushed value is folded into the offset and freed inside the
+subscript, long before the USE decides whether this is a dereference at all. Whichever side consumes the
+finding returns the copy - `checkIndexUse` after emitting, `reference` when it discards it because an
+address is never bounds-checked. The copy is never deduplicated and never scaled: it was taken from the
+value already pushed into the offset, which is in `.z.` units, and its name identifies nothing.
+
+```gazl
+! SUBi <A> #H #1               ; s.b[H - 1]
+! MOVi <B> #<A>                ; the guard's own copy
+! ADDi <C> #.o.S.b #<A>
+! LSSi #<B> #0 @.g10
+! LSSi #<B> #.z.S.b @.g9
+.g10: ! FAIL a computed index outside S.b
+.g9:  MOVi %1 $s:<C>
+```
+
+The one waste is that `! MOVi` on an address-formation site, where the copy is taken and then thrown
+away. Avoiding it would mean deferring the copy to the use, which is the whole problem.
+
 **Tier 3 - dynamic index: `--range-checks`, off by default.** The only tier that can see `a[i]`. It emits
 a `DEBUG`-gated test per subscript, bounded by the array's `.z.` extent symbol - so it works unchanged for
 a symbolic extent - and calls the host's `assertFail` on failure, exactly as `assert` does:

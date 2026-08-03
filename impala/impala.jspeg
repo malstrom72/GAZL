@@ -1370,15 +1370,18 @@
 
            Emitting in place also costs one line less: the skip label rides on the guarded instruction
            instead of needing a bare `!` of its own. */
+        /* An OWNED copy is never deduplicated and never scaled: it was taken from the folded value the
+           subscript pushed into the offset, which is already in `.z.` units, and its name is a recycled
+           scratch that says nothing about which index it holds. */
         var key = op.ext.sym + '|' + op.k;
-        if ($$parser.emittedGuards[key]) {
+        if (!op.own && $$parser.emittedGuards[key]) {
             return;                                               /* the same assertion, already asked */
         }
         $$parser.emittedGuards[key] = true;
         var ok  = $$parser.newLabel('g');
         var lhs = '#' + op.k;
         var w;
-        if (op.ext.stride !== undefined) {                        /* `.z.` counts WORDS, the index counts
+        if (op.ext.stride !== undefined && !op.own) {             /* `.z.` counts WORDS, the index counts
                                                                      ELEMENTS - scale before comparing */
             w = $$parser.borrow('<');
             $$parser.emit('<> *', 'i', w, lhs, '#' + op.ext.stride);
@@ -1400,9 +1403,13 @@
             if (w !== undefined) { $$parser.returnBack(w); }
         }
         $$parser.emit('<> FAIL', undefined,
-                'index ' + op.k + ' outside ' + op.ext.what + ' (resolved only at assembly)',
+                (op.own ? 'a computed index' : 'index ' + op.k)
+                        + ' outside ' + op.ext.what + ' (resolved only at assembly)',
                 undefined, undefined);
         $$parser.emit('<-?', true, ok, undefined, undefined);
+        if (op.own) {
+            $$parser.returnBack(op.k);                            /* held since the subscript, for exactly this */
+        }
     };
 
     /* ONE deferred assertion, in the canonical `! <CMP>` / `! FAIL <text>` / skip-label form
@@ -2425,6 +2432,15 @@
                 } else {
                     x.offParts.push(k);                          /* scalar stride is 1 word -> the offset is just k */
                 }
+                /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
+                   value is still live - the pushed one is freed by foldOffset long before the use decides
+                   whether this is a dereference at all. One assemble-time MOVi, no runtime cost, and the
+                   copy is returned by whichever side consumes the finding. */
+                if (idxKind === 'scratch' && extent !== undefined && extent.inField) {
+                    var g = $$parser.borrow('<');
+                    $$parser.emit('<> =', 'i', g, '#' + (elemStruct ? s : k), undefined);
+                    oobIndex = { k: g, own: true, ext: extent, src: sourceCode, off: sourceOffset };
+                }
             }
             if (elemStruct) $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
             else            $$parser.emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
@@ -3042,6 +3058,9 @@
     $$parser.reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
+        if (expr.oobIndex !== undefined && expr.oobIndex.own) {
+            $$parser.returnBack(expr.oobIndex.k);    /* the guard's copy dies with the finding, not later */
+        }
         expr.oobIndex = undefined;                   /* address formation is never bounds-checked, at any
                                                         index - see checkConstIndex. Cleared before the
                                                         `=[]$` branch below calls makeRValue. */

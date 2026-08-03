@@ -98,25 +98,41 @@ main:	FUNC	; signature func main() -> void @ 39:1
 	.g4:	! FAIL index N outside S.a (resolved only at assembly)  
 	.g3:	MOVi $s:<C> #44 
 		! SUBi <C> #H #1	; s.b[H - 1] = 22
-		! ADDi <B> #.o.S.b #<C>
-		MOVi $s:<B> #22 
-		! SUBi <B> #N #3	; s.p[[N - 3]].lo = 6
-		! MULi <C> #<B> #.z.Pair
-		! ADDi <B> #.o.S.p #<C>
-		! ADDi <B> #<B> #.o.Pair.lo
-		MOVi $s:<B> #6 
-		! ADDi <B> #.o.S.a #N	; printInt(s.a[N])
-		MOVi %1 $s:<B> 
+		! MOVi <B> #<C> 
+		! ADDi <A> #.o.S.b #<C>
+		! LSSi #<B> #0 @.g6
+		! LSSi #<B> #.z.S.b @.g5
+	.g6:	! FAIL a computed index outside S.b (resolved only at assembly)  
+	.g5:	MOVi $s:<A> #22 
+		! SUBi <A> #N #3	; s.p[[N - 3]].lo = 6
+		! MULi <B> #<A> #.z.Pair
+		! MOVi <A> #<B> 
+		! LSSi #<A> #0 @.g8
+		! LSSi #<A> #.z.S.p @.g7
+	.g8:	! FAIL a computed index outside S.p (resolved only at assembly)  
+	.g7:	! ADDi <A> #.o.S.p #<B>
+		! ADDi <A> #<A> #.o.Pair.lo
+		MOVi $s:<A> #6 
+		! ADDi <A> #.o.S.a #N	; printInt(s.a[N])
+		MOVi %1 $s:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 59:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 59:29
-		! SUBi <B> #H #1	; printInt(s.b[H - 1])
-		! ADDi <C> #.o.S.b #<B>
-		MOVi %1 $s:<C> 
+		! SUBi <A> #H #1	; printInt(s.b[H - 1])
+		! MOVi <B> #<A> 
+		! ADDi <C> #.o.S.b #<A>
+		! LSSi #<B> #0 @.g10
+		! LSSi #<B> #.z.S.b @.g9
+	.g10:	! FAIL a computed index outside S.b (resolved only at assembly)  
+	.g9:	MOVi %1 $s:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 60:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 60:33
 		! SUBi <C> #N #3	; printInt(s.p[[N - 3]].lo)
 		! MULi <B> #<C> #.z.Pair
-		! ADDi <C> #.o.S.p #<B>
+		! MOVi <C> #<B> 
+		! LSSi #<C> #0 @.g12
+		! LSSi #<C> #.z.S.p @.g11
+	.g12:	! FAIL a computed index outside S.p (resolved only at assembly)  
+	.g11:	! ADDi <C> #.o.S.p #<B>
 		! ADDi <C> #<C> #.o.Pair.lo
 		MOVi %1 $s:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 61:27

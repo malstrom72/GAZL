@@ -1899,11 +1899,21 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	// that has no encoding: the compiler accepted a module the assembler then refused outright.
 	assert(/! ADDi <\w> #\.o\.Test\.b #KONST/.test(symIdx) && !/GETL|SETL/.test(symIdx),
 		"symbolic index: did not fold into the offset\n" + symIdx);
+	// A folded `<X>` cannot key a deferred assertion - the name is recycled - so the guard takes its OWN
+	// copy while the value is still live, and compares that. Without the copy there is nothing left to
+	// check by the time the USE decides whether this is a dereference at all: the pushed value is folded
+	// into the offset and freed inside the subscript.
 	const exprIdx = compileWithJsImpala(konst
 		+ "export function main() locals int j { j = global xxx.b[KONST - 8]; }\n", { randomId: 42 });
 	assert(/! SUBi <\w> #KONST #8/.test(exprIdx) && !/GETL|SETL/.test(exprIdx)
-			&& !/! FAIL index/.test(exprIdx),
-		"expression index: a folded scratch must fold on, and can never key an assertion\n" + exprIdx);
+			&& /! MOVi <\w> #<\w>/.test(exprIdx)
+			&& /! LSSi #<\w> #\.z\.Test\.b @/.test(exprIdx)
+			&& /! FAIL a computed index outside Test\.b/.test(exprIdx),
+		"expression index: no assertion on a folded scratch\n" + exprIdx);
+	const exprAddr = compileWithJsImpala(konst
+		+ "export function main() locals int pointer p { p = &global xxx.b[KONST - 8]; }\n", { randomId: 42 });
+	assert(!/! FAIL/.test(exprAddr),
+		"expression index: guarded an ADDRESS, which is always legal\n" + exprAddr);
 	const symAddr = compileWithJsImpala(konst
 		+ "export function main() locals int pointer p { p = &global xxx.b[KONST]; }\n", { randomId: 42 });
 	assert(!/! FAIL index/.test(symAddr),

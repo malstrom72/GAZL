@@ -1383,15 +1383,18 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
            Emitting in place also costs one line less: the skip label rides on the guarded instruction
            instead of needing a bare `!` of its own. */
+        /* An OWNED copy is never deduplicated and never scaled: it was taken from the folded value the
+           subscript pushed into the offset, which is already in `.z.` units, and its name is a recycled
+           scratch that says nothing about which index it holds. */
         var key = op.ext.sym + '|' + op.k;
-        if (emittedGuards[key]) {
+        if (!op.own && emittedGuards[key]) {
             return;                                               /* the same assertion, already asked */
         }
         emittedGuards[key] = true;
         var ok  = newLabel('g');
         var lhs = '#' + op.k;
         var w;
-        if (op.ext.stride !== undefined) {                        /* `.z.` counts WORDS, the index counts
+        if (op.ext.stride !== undefined && !op.own) {             /* `.z.` counts WORDS, the index counts
                                                                      ELEMENTS - scale before comparing */
             w = borrow('<');
             emit('<> *', 'i', w, lhs, '#' + op.ext.stride);
@@ -1413,9 +1416,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (w !== undefined) { returnBack(w); }
         }
         emit('<> FAIL', undefined,
-                'index ' + op.k + ' outside ' + op.ext.what + ' (resolved only at assembly)',
+                (op.own ? 'a computed index' : 'index ' + op.k)
+                        + ' outside ' + op.ext.what + ' (resolved only at assembly)',
                 undefined, undefined);
         emit('<-?', true, ok, undefined, undefined);
+        if (op.own) {
+            returnBack(op.k);                            /* held since the subscript, for exactly this */
+        }
     };
 
     /* ONE deferred assertion, in the canonical `! <CMP>` / `! FAIL <text>` / skip-label form
@@ -2438,6 +2445,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 } else {
                     x.offParts.push(k);                          /* scalar stride is 1 word -> the offset is just k */
                 }
+                /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
+                   value is still live - the pushed one is freed by foldOffset long before the use decides
+                   whether this is a dereference at all. One assemble-time MOVi, no runtime cost, and the
+                   copy is returned by whichever side consumes the finding. */
+                if (idxKind === 'scratch' && extent !== undefined && extent.inField) {
+                    var g = borrow('<');
+                    emit('<> =', 'i', g, '#' + (elemStruct ? s : k), undefined);
+                    oobIndex = { k: g, own: true, ext: extent, src: sourceCode, off: sourceOffset };
+                }
             }
             if (elemStruct) setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
             else            emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
@@ -3055,6 +3071,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
+        if (expr.oobIndex !== undefined && expr.oobIndex.own) {
+            returnBack(expr.oobIndex.k);    /* the guard's copy dies with the finding, not later */
+        }
         expr.oobIndex = undefined;                   /* address formation is never bounds-checked, at any
                                                         index - see checkConstIndex. Cleared before the
                                                         `=[]$` branch below calls makeRValue. */
