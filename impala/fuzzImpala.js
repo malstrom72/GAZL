@@ -16,6 +16,11 @@
 // (4) below now generates - while 3000 fuzz programs stayed green, purely because nothing here called
 // it. `main` is exported so the strip has a root to walk from.
 //
+// Control flow covers `if`/`else`/`switch`/`for`/`do`-while/`loop`/`goto`. The last three were added
+// after a landed fix for two dangling-label shapes in the short-circuit pass was found to have exactly
+// one hand-written fixture and no fuzz coverage at all - the generator emitted none of the three. Both
+// shapes are now built on purpose (see genDoWhile); reverting that fix makes this fuzzer fail at seed 14.
+//
 // Deterministic: every program is produced from a seeded PRNG, so any failure reproduces
 // from its printed seed.
 //
@@ -56,9 +61,10 @@ const COMPILE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true 
 // not the compiler's, and without a reference oracle we cannot call it a miscompile, so we ignore it.
 // The generator avoids `/` and `%` (no div-by-zero), keeps every array/pointer index strictly IN
 // BOUNDS (see genIdx), and always points a pointer local at a real array, so runtime traps should be
-// rare. A HANG is therefore a genuine bug: all loops are bounded `for (v = 0 to N<=4)` with a
-// per-nesting-level counter that is read-only inside the body, so nothing can defeat termination
-// except a miscompile. Do not reclassify a timeout as benign - fix the cause.
+// rare. A HANG is therefore a genuine bug: EVERY loop shape is bounded by a per-nesting-level counter
+// the body cannot reach (`for (v = 0 to N<=4)`, a `do`-while counting to a literal, and `loop` with a
+// counted `goto` exit), so nothing can defeat termination except a miscompile. Do not reclassify a
+// timeout as benign - fix the cause.
 function runGazl(gazl, defines) {                            // write, run, delete; the caller classifies the result
 	const tmp = path.join(os.tmpdir(), `fuzz-${process.pid}-${Math.floor(rnd() * 1e9)}.gazl`);
 	fs.writeFileSync(tmp, gazl, 'latin1');
@@ -691,22 +697,81 @@ function genProgram() {
 		return '\tswitch (' + genExpr('i', 2, scope) + ' == 0 to ' + size + ') {\n' + parts.join('\n') + '\n\t}';
 	}
 
+	// The body scope for any loop: every loop counter is read-only inside it, so the body cannot defeat
+	// termination no matter what the generator puts there.
+	const loopBody = (scope) => ({ ...scope,
+			locals: scope.locals.map((l) => (l.loopVar ? { ...l, ro: true } : l)) });
+
+	// `do`-while. The counter is incremented LAST, not first, because the bug this family exists to cover
+	// needs two `do`s at the SAME address - only `{ }`, a `loop` header, a bare label or a trailing
+	// `assert` may sit between them, and an increment at the top would separate them. Both dangling-label
+	// shapes are built ON PURPOSE, for the reason the aliasing shape is: adjacency, and a `goto` as the
+	// first statement of a body, do not come up by chance in a few thousand programs.
+	function genDoWhile(scope, f, ctrlDepth) {
+		const lv = scope.loopVars[ctrlDepth];
+		if (!lv) return undefined;
+		const inits = ['\t' + lv.name + ' = 0;'];
+		const parts = [];
+		let after = '';
+		const r = rnd();
+		if (r < 0.25) {                                   // SHAPE 2: body STARTS with an unconditional goto
+			const lbl = id('L');
+			parts.push('\t\tgoto ' + lbl + ';');
+			after = '\n\t' + lbl + ': ;';
+		} else if (r < 0.55 && scope.loopVars[ctrlDepth + 1]) {   // SHAPE 1: two `do`s at one address
+			const iv = scope.loopVars[ctrlDepth + 1];
+			inits.push('\t' + iv.name + ' = 0;');         // HOISTED - an init between the two `do`s would
+			                                              // break the very adjacency the shape needs. It
+			                                              // only resets once, which still terminates: the
+			                                              // inner runs its count on the first pass and
+			                                              // once per pass after.
+			parts.push('\t\tdo { ' + iv.name + ' = ' + iv.name + ' + 1; } while ('
+					+ iv.name + ' < ' + (1 + ri(3)) + ');');
+		}
+		parts.push(genStmt(loopBody(scope), f, ctrlDepth + 1));
+		parts.push('\t\t' + lv.name + ' = ' + lv.name + ' + 1;');
+		return inits.join('\n') + '\n\tdo {\n' + parts.join('\n') + '\n\t} while ('
+				+ lv.name + ' < ' + (1 + ri(4)) + ');' + after;
+	}
+
+	// `loop` is an UNCONDITIONAL back-edge, so its counted `goto` is the only way out and the counter must
+	// be stepped before the test. Nothing in the body can reach the counter (loopBody), so the exit is
+	// reached in a fixed number of passes whatever the body does.
+	function genLoop(scope, f, ctrlDepth) {
+		const lv = scope.loopVars[ctrlDepth];
+		if (!lv) return undefined;
+		const lbl = id('L');
+		return '\t' + lv.name + ' = 0;\n\tloop {\n'
+				+ '\t\t' + lv.name + ' = ' + lv.name + ' + 1;\n'
+				+ '\t\tif (' + lv.name + ' > ' + (1 + ri(3)) + ') { goto ' + lbl + '; }\n'
+				+ genStmt(loopBody(scope), f, ctrlDepth + 1) + '\n\t}\n\t' + lbl + ': ;';
+	}
+
 	function genStmt(scope, f, ctrlDepth) {
 		const roll = rnd();
-		// control flow (if / else / bounded for), depth-limited to keep programs small
-		if (roll < 0.18 && ctrlDepth < 2) {
+		// control flow (if / else / switch / for / do-while / loop / goto), depth-limited to keep
+		// programs small. Every loop here is bounded: a HANG cannot be told apart from the miscompile
+		// these oracles exist to catch, so termination is structural, never left to the body.
+		if (roll < 0.22 && ctrlDepth < 2) {
 			const cd = ctrlDepth + 1;
 			const k = rnd();
-			if (k < 0.45) return '\tif (' + genCond(scope) + ') ' + genBlock(scope, f, cd);
-			if (k < 0.75) return '\tif (' + genCond(scope) + ') ' + genBlock(scope, f, cd) + ' else ' + genBlock(scope, f, cd);
-			if (k < 0.88) return genSwitch(scope, f, cd);
+			if (k < 0.34) return '\tif (' + genCond(scope) + ') ' + genBlock(scope, f, cd);
+			if (k < 0.56) return '\tif (' + genCond(scope) + ') ' + genBlock(scope, f, cd) + ' else ' + genBlock(scope, f, cd);
+			if (k < 0.66) return genSwitch(scope, f, cd);
+			if (k < 0.86) {
+				const shape = (k < 0.74) ? genDoWhile(scope, f, ctrlDepth) : genLoop(scope, f, ctrlDepth);
+				if (shape) return shape;
+			}
+			if (k < 0.93) {
+				// a FORWARD `goto` over the next statement - the only unconditional jump that cannot loop
+				const lbl = id('L');
+				return '\tif (' + genCond(scope) + ') { goto ' + lbl + '; }\n'
+						+ genStmt(scope, f, cd) + '\n\t' + lbl + ': ;';
+			}
 			// bounded `for (fv = 0 to N)` - a loop var unique to this nesting level (so a nested loop
 			// can't reset an enclosing counter), read-only inside the body so it always terminates
 			const lv = scope.loopVars[ctrlDepth];
-			if (lv) {
-				const bodyScope = { ...scope, locals: scope.locals.map((l) => (l.loopVar ? { ...l, ro: true } : l)) };
-				return '\tfor (' + lv.name + ' = 0 to ' + (1 + ri(4)) + ') ' + genBlock(bodyScope, f, cd);
-			}
+			if (lv) return '\tfor (' + lv.name + ' = 0 to ' + (1 + ri(4)) + ') ' + genBlock(loopBody(scope), f, cd);
 		}
 		// pointer-dereference write through any pointer in scope. `ro` marks a local that cannot be
 		// REASSIGNED, which says nothing about writing through it - and a pointer PARAMETER is exactly
