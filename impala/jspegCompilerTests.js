@@ -1720,6 +1720,16 @@ const caretCases = [
 		"global int array g[4]\nfunction main() { global g[9] = 1; }\n", "2:28: error[E461]"],
 	["E461 covers a plain LOCAL array",
 		"function main() locals int array a[5] { a[9] = 1; }\n", "1:43: error[E461]"],
+	// A NEGATIVE index fails even when only an address is formed - the one exception to "addresses are
+	// never checked", because it is not an address GAZL will take: `&g:-1` and `$a:-1` are both rejected
+	// at assembly, and on a struct field `.o.S.pad + (-1)` folds to a valid offset naming the PREVIOUS
+	// field, so it assembles, runs, and aliases. Three outcomes for one mistake before this.
+	["E461 rejects a negative index used only as an address, on a plain array",
+		"global int array g[4]\nfunction main() locals int pointer p { p = &global g[-1]; }\n",
+		"2:54: error[E461]"],
+	["E461 rejects a negative index used only as an address, on a struct field",
+		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() locals int pointer p { p = &global s.pad[-1]; }\n", "3:58: error[E461]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);

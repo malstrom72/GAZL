@@ -1191,20 +1191,32 @@
        index test accepts a MINUS sign the folding branches do not, so `v[-1]` - which otherwise takes the
        dynamic path and writes BACKWARDS into whatever precedes the array - is caught here too.
 
-       NOTHING IS REPORTED HERE, because whether this is an error depends on what happens next, and the
-       rule is `docs/Impala2Review.md`'s: a DEREFERENCE with an out-of-range constant index is a
+       PAST THE END IS NOT REPORTED HERE, because whether it is an error depends on what happens next,
+       and the rule is `docs/Impala2Review.md`'s: a DEREFERENCE with an out-of-range constant index is a
        guaranteed trap, so it is a compile error, while ADDRESS FORMATION (`&a[7]`, `&p[[i]]`) is always
        legal and never checked - an out-of-range address is a value like any other, and GAZL's own check
        fires on access operands, not on address-taking. So the finding is returned as a flag; reference()
        clears it and checkIndexUse reports on every use that actually reads or writes the element. That
-       is also why Impala needs no one-past-the-end carve-out where C does. */
+       is also why Impala needs no one-past-the-end carve-out where C does; verified to `&g[1000000]`.
+
+       BEFORE THE START is different, and fails outright - address or not. It is not "an address like any
+       other": GAZL cannot even represent it on the direct form (`MOVp $p &g:-1` and `ADRL $p $a:-1` are
+       both rejected at assembly, "Negative value not accepted"), and on the FOLDED form it is worse than
+       rejected - `.o.S.pad + (-1)` is a perfectly good positive offset naming the field before it, so
+       `&s.pad[-1]` assembles, runs, and aliases a neighbour. One source-level mistake had three different
+       outcomes across the shapes; this is the one place that can give it one. */
     $$parser.checkConstIndex = function (extent, idxRV, sourceCode, sourceOffset) {
         if (extent === undefined || !/^[0-9]+$/.test('' + extent.n)
                 || !/^#-?[0-9]+$/.test(idxRV)) {
             return undefined;
         }
         var ck = parseInt(idxRV.substr(1), 10), cn = parseInt(extent.n, 10);
-        return (ck < 0 || ck >= cn) ? { k: ck, n: cn, src: sourceCode, off: sourceOffset } : undefined;
+        if (ck < 0) {
+            $$parser.fail('Index ' + ck + ' is before the start of this array',
+                    sourceCode, sourceOffset, 'E461',
+                    'valid indices are 0 to ' + (cn - 1) + '; a negative index is not a legal address either');
+        }
+        return (ck >= cn) ? { k: ck, n: cn, src: sourceCode, off: sourceOffset } : undefined;
     };
 
     /* What a subscript needs to know about the array it indexes: `n` decides the two STATIC tiers and is
