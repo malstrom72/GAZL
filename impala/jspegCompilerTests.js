@@ -1730,6 +1730,16 @@ const caretCases = [
 	["E461 rejects a negative index used only as an address, on a struct field",
 		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
 			+ "function main() locals int pointer p { p = &global s.pad[-1]; }\n", "3:58: error[E461]"],
+	// `declare()` REBUILDS the symbol record rather than updating it, so an array's extent has to be on
+	// its carry-over list or the second declaration drops it - and `extern array g` beside the definition
+	// is the ordinary import-closure shape, not a corner case. Both orders, because only one of them
+	// re-runs the declaration site that records the extent.
+	["E461 survives a re-declaration that follows the definition",
+		"global int array g[4]\nextern array g\nfunction main() { global g[9] = 1; }\n",
+		"3:28: error[E461]"],
+	["E461 survives a re-declaration that precedes it",
+		"extern array g\nglobal int array g[4]\nfunction main() { global g[9] = 1; }\n",
+		"3:28: error[E461]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);
@@ -1789,30 +1799,27 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 // diagnostic than a trap), and a bare pointer has no extent to check at all.
 {
 	const decls = "const int DEBUG = 1\nstruct E { int a }\nstruct S { int array v[3] }\nglobal S s\n"
-		+ "global int array g[4]\nglobal E array ge[3]\n";
+		+ "global int array g[4]\nglobal E array ge[3]\nglobal int array g2[4]\nextern array g2\n";
 	const shapes = [
 		["global scalar array", "global g[i] = 1;", "#.z.g "],
 		["local scalar array", "a[i] = 1;", "#.z.main.a "],
 		["struct array field", "global s.v[i] = 1;", "#.z.S.v "],
 		["global array of structs", "global ge[[i]].a = 1;", "#.z.ge "],
 		["local array of structs", "le[[i]].a = 1;", "#.z.main.le "],
+		["a re-declared array keeps its extent", "global g2[i] = 1;", "#.z.g2 "],
+		["a constant index (GAZL rejects it outright)", "global g[2] = 1;", null],
+		["a bare pointer (no extent exists)", "p = &a[0]; p[i] = 1;", null],
 	];
 	for (const [label, stmt, bound] of shapes) {
 		const on = compileWithJsImpala(decls
-			+ "export function main() locals int i, int array a[5], E array le[2] { i = 1; " + stmt + " }\n",
-			{ randomId: 42, rangeChecks: true });
-		assert(on.includes("SUBi") && on.includes(bound),
-			`range checks: ${label} is not bounded by ${bound.trim()}\n` + on);
-	}
-	const noCheck = [
-		["a constant index (GAZL rejects it outright)", "global g[2] = 1;"],
-		["a bare pointer (no extent exists)", "p = &a[0]; p[i] = 1;"],
-	];
-	for (const [label, stmt] of noCheck) {
-		const on = compileWithJsImpala(decls
-			+ "export function main() locals int i, int array a[5], int pointer p { i = 1; " + stmt + " }\n",
-			{ randomId: 42, rangeChecks: true });
-		assert(!/index out of range/.test(on), `range checks: fired on ${label}\n` + on);
+			+ "export function main() locals int i, int array a[5], E array le[2], int pointer p { i = 1; "
+			+ stmt + " }\n", { randomId: 42, rangeChecks: true });
+		if (bound === null) {
+			assert(!/index out of range/.test(on), `range checks: fired on ${label}\n` + on);
+		} else {
+			assert(on.includes("SUBi") && on.includes(bound),
+				`range checks: ${label} is not bounded by ${bound.trim()}\n` + on);
+		}
 	}
 	console.log("impala.jspeg compiler range-checks every array shape, and only those");
 }

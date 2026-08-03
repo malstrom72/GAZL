@@ -860,19 +860,15 @@ function main() {
 	for (let i = 0; i < iterations; ++i) {
 		const seed = startSeed + i;
 		rnd = mulberry32(seed);
-		let src, expect, defines, mustFail;
+		let p;
 		try {
-			const p = genProgram();
-			src = p.src;
-			expect = p.expect;
-			defines = p.defines;
-			mustFail = p.mustFail;
+			p = genProgram();
 		} catch (genErr) {
 			console.error(`[gen-error seed=${seed}] ${genErr.message}`);
 			continue;
 		}
 		try {
-			const gazl = compileWithJsImpala(src + '\n', COMPILE_OPTS);
+			const gazl = compileWithJsImpala(p.src + '\n', COMPILE_OPTS);
 			compiled++;
 			// A throw here is a compiler bug and lands in the catch below with every other one: `classify`
 			// keeps only what is not a coded diagnostic, and `deadStrip` has no diagnostics to emit.
@@ -881,15 +877,15 @@ function main() {
 			const stripped = deadStrip(gazl);
 			if (/^\s*cD:/m.test(stripped)) throw new Error('dead-strip kept the unreferenced global cD');
 			if (useVm) {
-				const res = runGazl(gazl, defines);
-				const vmFault = mustFail ? checkMustFail(res)
-						: (runOnVm(res) || checkExpected(res, expect)
-								|| checkStripped(runGazl(stripped, defines), res));
+				const res = runGazl(gazl, p.defines);
+				const vmFault = p.mustFail ? checkMustFail(res)
+						: (runOnVm(res) || checkExpected(res, p.expect)
+								|| checkStripped(runGazl(stripped, p.defines), res));
 				vmRun++;
 				if (vmFault) {
 					bugs++;
 					console.error(`\n=== VM FAULT seed=${seed}: ${vmFault} ===`);
-					console.error(src);
+					console.error(p.src);
 					console.error(`=== end seed=${seed} ===\n`);
 					if (bugs >= 5) { console.error('stopping after 5 faults'); break; }
 				}
@@ -899,7 +895,7 @@ function main() {
 			if (crash) {
 				bugs++;
 				console.error(`\n=== CRASH seed=${seed}: ${crash} ===`);
-				console.error(src);
+				console.error(p.src);
 				console.error(`=== end seed=${seed} ===\n`);
 				if (bugs >= 5) { console.error('stopping after 5 crashes'); break; }
 			} else {

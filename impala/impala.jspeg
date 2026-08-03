@@ -1159,7 +1159,7 @@
         rec.root      = undefined;
         rec.arrayOf   = undefined;
         rec.extent    = undefined;
-        rec.oobIndex   = undefined;
+        rec.oobIndex  = undefined;
         rec.struct    = undefined;
         rec.dynIndex  = undefined;
         rec.winBase   = undefined;
@@ -1206,26 +1206,17 @@
        `&s.pad[-1]` assembles, runs, and aliases a neighbour. One source-level mistake had three different
        outcomes across the shapes; this is the one place that can give it one. */
     $$parser.checkConstIndex = function (extent, idxRV, sourceCode, sourceOffset) {
-        if (extent === undefined || !/^[0-9]+$/.test('' + extent.n)
-                || !/^#-?[0-9]+$/.test(idxRV)) {
-            return undefined;
+        var ck = $$parser.constInt(idxRV);
+        var cn = (extent === undefined) ? undefined : $$parser.constInt('#' + extent.n);
+        if (ck === undefined || cn === undefined) {
+            return undefined;                                     /* symbolic either side - not knowable here */
         }
-        var ck = parseInt(idxRV.substr(1), 10), cn = parseInt(extent.n, 10);
         if (ck < 0) {
             $$parser.fail('Index ' + ck + ' is before the start of this array',
                     sourceCode, sourceOffset, 'E461',
                     'valid indices are 0 to ' + (cn - 1) + '; a negative index is not a legal address either');
         }
         return (ck >= cn) ? { k: ck, n: cn, src: sourceCode, off: sourceOffset } : undefined;
-    };
-
-    /* What a subscript needs to know about the array it indexes: `n` decides the two STATIC tiers and is
-       a number only when the source wrote one, `sym` is the `.z.` extent in words and is what the
-       RUNTIME check compares against, so it works for a symbolic extent too. A declared array records
-       `extentSym` at its declaration - the one point where a local's owning function is in scope. */
-    $$parser.arrayExtent = function (sym, name) {
-        return (sym === undefined || sym.extentSym === undefined) ? undefined
-                : { n: sym.extentNum, sym: sym.extentSym, what: name };
     };
 
     /* `--range-checks`: the DEBUG-gated RUNTIME bounds test for a subscript whose index is not a
@@ -1243,27 +1234,51 @@
        the text is the shipped artifact, embedded into C++ via tools/gazlCompactor. Measured, an assert
        costs ~95 bytes of compacted source that `DEBUG 0` does not remove. */
     $$parser.emitRangeCheck = function (idxOp, extent, sourceCode, sourceOffset) {
-        if (!$$parser.rangeChecks || extent === undefined || extent.sym === undefined
-                || idxOp === undefined) {
-            return;
+        if (!$$parser.rangeChecks || extent === undefined || idxOp.charAt(0) === '#') {
+            return;                                               /* a CONSTANT index is checkConstIndex's,
+                                                                     decided without emitting anything */
         }
-        var ok = $$parser.newLabel('r');
+        var ok = $$parser.beginDebugGuard('r');
         var t  = $$parser.borrow('%');
-        $$parser.emit('<> ==', 'i', '#DEBUG', '#0', ok);      /* assemble-time: DEBUG 0 drops the rest */
         $$parser.emit('-', 'i', t, '#' + extent.sym, idxOp);
         $$parser.emit('-', 'i', t, t, '#1');
         $$parser.emit('|', 'i', t, t, idxOp);
         $$parser.emit('>=', 'i', undefined, t, '#0');
-        $$parser.emit('?->', true, ok, undefined, undefined);
         $$parser.returnBack(t);
+        $$parser.endDebugGuard(ok, {}, 'index out of range: ' + extent.what,
+                sourceCode, sourceOffset);
+    };
+
+    /* The two halves of a DEBUG-gated runtime check, shared by `assert` and by --range-checks so the
+       protocol has one home: an assemble-time skip when `DEBUG` is 0, then (caller emits its comparison)
+       a conditional jump past the failure call, the `^assertFail` call with its message constant, and the
+       join. processBranches understands only this shape - the comparison must sit immediately before the
+       `?->` - so a change to the assert-string protocol, assertFail's arity or the branch pair belongs
+       here rather than in two places that must be kept bit-identical. `msg` is the meta slot the message
+       constant is built into; `assert` passes its own so the string is its parsed expression text. */
+    $$parser.beginDebugGuard = function (tag) {
+        var ok = $$parser.newLabel(tag);
+        $$parser.emit('<> ==', 'i', '#DEBUG', '#0', ok);
+        return ok;
+    };
+
+    $$parser.endDebugGuard = function (ok, msg, text, sourceCode, sourceOffset) {
+        $$parser.emit('?->', true, ok, undefined, undefined);
         var r = $$parser.borrowForCall();
-        var msg = {};
-        $$parser.makeString('a', msg, 'index out of range: ' + extent.what, sourceCode, sourceOffset);
+        $$parser.makeString('a', msg, text, sourceCode, sourceOffset);
         $$parser.makeArgValue(msg, r + 1);
         $$parser.emit('()', '?', '^assertFail', '%' + r, '*1');
         $$parser.returnBack('%' + (r + 1));
         $$parser.returnBack('%' + r);
         $$parser.emit('<-?', true, ok, undefined, undefined);
+    };
+
+    /* Both tiers of a subscript's bounds checking, in the order they must run: the constant one decides
+       without emitting, the runtime one emits only when the constant one declined. Callers get the
+       out-of-range finding back to hang on the meta they build. */
+    $$parser.checkSubscript = function (extent, idxOp, sourceCode, sourceOffset) {
+        $$parser.emitRangeCheck(idxOp, extent, sourceCode, sourceOffset);
+        return $$parser.checkConstIndex(extent, idxOp, sourceCode, sourceOffset);
     };
 
     /* An out-of-range constant index survived the subscript as a flag because only its USE decides
@@ -2188,7 +2203,7 @@
 
     /* A place names a struct (or struct array) at base + a sum of compile-time offset parts. Only a
        terminal scalar field emits code, so struct values never enter the word temporaries. */
-    $$parser.setPlace = function (rec, baseKind, base, offParts, structName, root, arrayOf, dynIndex, extent) {
+    $$parser.setPlace = function (rec, baseKind, base, offParts, structName, root, arrayOf, dynIndex) {
         var slot = metaSlot(rec);
         slot.operator = '@place';
         slot.operands = [ undefined, undefined, undefined ];
@@ -2197,21 +2212,15 @@
         slot.base     = base;
         slot.offParts = offParts || [];
         slot.arrayOf  = arrayOf;                                  /* set -> an array of `arrayOf`; a later [k] indexes it */
-        slot.extent   = extent;                                   /* declared element COUNT, set by an array FIELD and
-                                                                     nowhere else - that is the only overrun GAZL cannot
-                                                                     see, since it stays inside the struct's allocation.
-                                                                     A plain array (local or global) has decayed to a
-                                                                     pointer before it is subscripted, and an array of
-                                                                     structs is caught as "Offset out of bounds", so
-                                                                     neither is worth re-checking here. Every other
-                                                                     setPlace passes nothing, so a pooled slot cannot
-                                                                     inherit a stale extent. */
         slot.struct   = arrayOf ? undefined : structName;
         slot.type     = arrayOf ? 'p' : 'S';
         slot.root     = root || structName || arrayOf;
         slot.elem     = arrayOf || structName;
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
-        slot.oobIndex  = undefined;                                /* pooled slot: never inherit another subscript's finding */
+        slot.extent   = undefined;                                /* pooled slot: never inherit another array's extent or
+                                                                     another subscript's finding. The two callers that DO
+                                                                     have an extent assign it after the call. */
+        slot.oobIndex = undefined;
     };
 
     /* A place resolved to a terminal SCALAR location (a scalar field, or a scalar array element) becomes a
@@ -2270,13 +2279,11 @@
             }
             if (elemStruct) $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
             else            $$parser.emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
-            metaSlot(x).oobIndex = oobIndex;                       /* set AFTER the terminal call - both clear the slot */
-            return;
-        }
 
-        if (x.baseKind === 'local' && x.dynIndex === undefined) { /* a frame place with a single runtime index: keep it
-                                                                     frame-relative so it emits one GETL/SETL (dsp + constOff)[idx],
-                                                                     not ADRL + ADDp + PEEK/POKE (struct index is scaled; scalar is 1) */
+        } else if (x.baseKind === 'local' && x.dynIndex === undefined) {
+            /* a frame place with a single runtime index: keep it frame-relative so it emits one
+               GETL/SETL (dsp + constOff)[idx], not ADRL + ADDp + PEEK/POKE (struct index is scaled;
+               scalar is 1). A NEGATIVE constant lands here too - the folding test has no minus sign. */
             if (elemStruct) {
                 var frameIdx = $$parser.borrow('%');
                 $$parser.emit('*', 'i', frameIdx, idxRV, '#.z.' + elem);
@@ -2287,26 +2294,25 @@
                 $$parser.emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
                 $$parser.emitPlaceValue(x, 'local', x.base, x.offParts, idxRV, eType, eTail);
             }
-            metaSlot(x).oobIndex = oobIndex;                     /* a NEGATIVE constant reaches this path:
-                                                                    the folding test above has no minus sign */
-            return;
-        }
 
-        var arrPtr = $$parser.placeAddress(x);                    /* pointer base or a second runtime index: materialize */
-        if (elemStruct) {
-            var elemPtr = $$parser.borrow('%'), scaled = $$parser.borrow('%');
-            $$parser.emit('*', 'i', scaled, idxRV, '#.z.' + elem);
-            $$parser.emitRangeCheck(scaled, extent, sourceCode, sourceOffset);
-            $$parser.emit('+', 'p', elemPtr, arrPtr, scaled);
-            $$parser.returnBack(scaled);
-            $$parser.returnBack(idxRV);
-            $$parser.returnBack(arrPtr);
-            $$parser.setPlace(x, 'pointer', elemPtr, [], elem, elem);
-        } else {                                                  /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
-            $$parser.emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
-            $$parser.emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
+        } else {
+            var arrPtr = $$parser.placeAddress(x);                /* pointer base or a second runtime index: materialize */
+            if (elemStruct) {
+                var elemPtr = $$parser.borrow('%'), scaled = $$parser.borrow('%');
+                $$parser.emit('*', 'i', scaled, idxRV, '#.z.' + elem);
+                $$parser.emitRangeCheck(scaled, extent, sourceCode, sourceOffset);
+                $$parser.emit('+', 'p', elemPtr, arrPtr, scaled);
+                $$parser.returnBack(scaled);
+                $$parser.returnBack(idxRV);
+                $$parser.returnBack(arrPtr);
+                $$parser.setPlace(x, 'pointer', elemPtr, [], elem, elem);
+            } else {                                              /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
+                $$parser.emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
+                $$parser.emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
+            }
         }
-        metaSlot(x).oobIndex = oobIndex;
+        x.oobIndex = oobIndex;                                    /* AFTER the terminal call on every path -
+                                                                     setPlace and emitPlaceValue both clear it */
     };
 
     /* a place's address: fold its offset parts into the base - ADRL for a local, ADDp for a pointer. */
@@ -2424,9 +2430,10 @@
         }
         if (field.type === 'A') {                                 /* array field -> a fold-able array place for the next [k]
                                                                      (struct OR scalar element; subscriptStruct terminates it) */
-            $$parser.setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex,
-                    { n: field.size, sym: $$parser.extentSymbol(fieldName, structName),
-                      what: structName + '.' + fieldName });
+            $$parser.setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex);
+            x.extent = field.extent || (field.extent =             /* built once per FIELD, not per access */
+                    { n: field.size, what: structName + '.' + fieldName,
+                      sym: $$parser.extentSymbol(fieldName, structName) });
             return;
         }
 
@@ -2533,8 +2540,7 @@
             if (leftx.operator === ':=' && op1[0] === '&') {
 
                 var op2 = $$parser.makeRValue(rightx);
-                xOob = $$parser.checkConstIndex(xt, op2, sourceCode, sourceOffset);
-                if (op2[0] !== '#') $$parser.emitRangeCheck(op2, xt, sourceCode, sourceOffset);
+                xOob = $$parser.checkSubscript(xt, op2, sourceCode, sourceOffset);
 
                 if (op2[0] === '#') {
                     $$parser.makeMeta(
@@ -2552,8 +2558,7 @@
                 assert(op1[0] === '$', "=& expects local '$'");
 
                 var op2b = $$parser.makeRValue(rightx);
-                xOob = $$parser.checkConstIndex(xt, op2b, sourceCode, sourceOffset);
-                if (op2b[0] !== '#') $$parser.emitRangeCheck(op2b, xt, sourceCode, sourceOffset);
+                xOob = $$parser.checkSubscript(xt, op2b, sourceCode, sourceOffset);
 
                 if (op2b[0] === '#') {
                     $$parser.makeMeta(leftx, '=', tp, null,
@@ -3154,6 +3159,10 @@
                 kind: kind,
                 signature: prev && prev.signature,
                 externProto: prev && prev.externProto,   /* survives the definition's signature reset */
+                extent: prev && prev.extent,             /* ditto: this REBUILDS the record, so an array's
+                                                            extent must be carried or a later `extern array g`
+                                                            - the ordinary import-closure shape - drops it and
+                                                            silently disarms E461 and --range-checks */
                 sourceCode: sourceCode,
                 sourceOffset: sourceOffset,
                 sourceName: ($$parser.sourceName !== undefined ? $$parser.sourceName
@@ -3267,14 +3276,14 @@
                 return;
             }
             if (p.type === 'A' && $$parser.isStructAtom(p.elem)) {   /* struct-element array -> a foldable local array place (base:offset, no ADRL) */
-                $$parser.setPlace(x, 'local', '$' + name, [], undefined, p.elem, p.elem,
-                        undefined, $$parser.arrayExtent(p, name));
+                $$parser.setPlace(x, 'local', '$' + name, [], undefined, p.elem, p.elem);
+                x.extent = p.extent;                                  /* after setPlace, which clears it */
                 return;
             }
             if (p.type === 'A') {
                 $$parser.makeMeta(x, '=&', 'p', undefined,
                                   '$' + name, '*0');
-                metaSlot(x).extent = $$parser.arrayExtent(p, name);   /* survives until the next makeMeta */
+                x.extent = p.extent;                                  /* after makeMeta, which clears it */
             } else {
                 $$parser.makeMeta(x,
                                   (p.readonly ? ':=' : '='),
@@ -3299,7 +3308,7 @@
             if (p.type === 'A') {
                 $$parser.makeMeta(x, ':=', 'p', undefined,
                                   '&' + name, undefined);
-                metaSlot(x).extent = $$parser.arrayExtent(p, name);   /* survives until the next makeMeta */
+                x.extent = p.extent;                                  /* after makeMeta, which clears it */
                 /* A scalar `readonly` is rejected by its `:=*` operator having no assign() branch, but an
                    ARRAY decays to the same `:=` address meta whether or not it is writable - so carry the
                    flag and let assign() consult it once the subscript has been folded in. */
@@ -3906,12 +3915,12 @@ inp:ArgsDecl ')'_
                                                                                  );
                                                                              }
                                                                              if (v.type === 'A') {   /* the ONLY place the owning function's
-                                                                                                        name is in scope, so the extent is recorded
-                                                                                                        here: the symbol for --range-checks, the
-                                                                                                        count for the constant-index check */
-                                                                                 $$parser.symbols.locals['$' + v.name].extentSym =
-                                                                                         $$parser.extentSymbol(v.name, $id);
-                                                                                 $$parser.symbols.locals['$' + v.name].extentNum = v.size;
+                                                                                                        name is in scope, so what a later subscript
+                                                                                                        needs to bounds-check this array is recorded
+                                                                                                        here - see arrayExtent's shape */
+                                                                                 $$parser.symbols.locals['$' + v.name].extent =
+                                                                                         { n: v.size, what: v.name,
+                                                                                           sym: $$parser.extentSymbol(v.name, $id) };
                                                                              }
                                                                          });
                                                                          iterate($loc, function (v) {   /* the count scratches ArrayDecl held for this
@@ -4281,9 +4290,9 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 ),
                                                                                 $a.elem
                                                                             );
-                                                                            $$parser.symbols.globals[$a.name].extentSym =
-                                                                                    $$parser.extentSymbol($a.name);
-                                                                            $$parser.symbols.globals[$a.name].extentNum = $a.size;
+                                                                            $$parser.symbols.globals[$a.name].extent =
+                                                                                    { n: $a.size, what: $a.name,
+                                                                                      sym: $$parser.extentSymbol($a.name) };
                                                                             $$parser.returnBack($a.size);   /* declared: this consumer is done with it */
                                                                             $aStructEl = ($a.elem !== undefined
                                                                                     && $$parser.descTail($a.elem) === undefined
@@ -4965,36 +4974,16 @@ Comp        <-  '!'_                                {
 
 
 Assert      <-  ASSERT _                            {
-                                                        $okLabel = $$parser.newLabel('a');
-                                                        $$parser.emit('<> ==', 'i', '#DEBUG', '#0', $okLabel);
+                                                        $okLabel  = $$parser.beginDebugGuard('a');
                                                         $start    = $$i;
                                                         $exprText = '';
                                                     }
-                str:BoolGroup                       {
+                str:BoolGroup                       {   /* the assert's own source text becomes its message */
                                                         $exprText = $$s.substring($start, $$i);
                                                         $exprText = $exprText.replace(/[ \t\r\n]+$/, '');
                                                     }
                 ';'_                                {
-                                                        $$parser.emit('?->', true, $okLabel, undefined, undefined);
-
-                                                        var r = $$parser.borrowForCall();
-
-                                                        /* store the assert-string constant */
-                                                        $$parser.makeString('a', $str, $exprText, $$s, $$i);
-
-                                                        /* argument goes into %<r+1> */
-                                                        $$parser.makeArgValue($str, r + 1);
-
-                                                        /* call the failure handler */
-                                                        $$parser.emit('()', '?', '^assertFail',
-                                                                      '%' + r, '*1');
-
-                                                        /* tidy temporaries */
-                                                        $$parser.returnBack('%' + (r + 1));
-                                                        $$parser.returnBack('%' +  r);
-
-                                                        /* continue after OK-label */
-                                                        $$parser.emit('<-?', true, $okLabel, undefined, undefined);
+                                                        $$parser.endDebugGuard($okLabel, $str, $exprText, $$s, $$i);
                                                     }
 
 

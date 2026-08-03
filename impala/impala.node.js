@@ -47,7 +47,7 @@ function readStdinLatin1Sync() {
 function usageAndExit() {
 	console.error('Usage:');
 	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [--range-checks] [<input.impala>] [<output.gazl>|-] [<random id>]');
-	console.error('  node impala/impala.node.js run [--legacy] [<input.impala>]');
+	console.error('  node impala/impala.node.js run [--legacy] [--range-checks] [<input.impala>]');
 	console.error('  --legacy downgrades Impala 2 strict-expression errors to warnings');
 	console.error('  --dead-strip drops everything unreachable from an `export`');
 	console.error('  --range-checks emits DEBUG-gated runtime bounds tests (off by default: they stay in the');
@@ -89,7 +89,7 @@ function compileProgram(rootPath, options = {}) {
 	return { output, unitCount: units.length };
 }
 
-function compileCommand(args, legacy, wantDeadStrip, rangeChecks) {
+function compileCommand(args, opts) {
 	let stdinSource;
 	let rootPath;
 	if (args.length === 0) {
@@ -108,7 +108,7 @@ function compileCommand(args, legacy, wantDeadStrip, rangeChecks) {
 	let output;
 	let unitCount;
 	try {
-		const built = compileProgram(rootPath, { randomId, legacy, deadStrip: wantDeadStrip, rangeChecks, stdinSource });
+		const built = compileProgram(rootPath, Object.assign({ randomId, stdinSource }, opts));
 		output = built.output;
 		unitCount = built.unitCount;
 	} catch (err) {
@@ -141,7 +141,7 @@ function parseRandomId(arg) {
 	return Number.isFinite(n) ? Math.trunc(n) : undefined;
 }
 
-function runCommand(args, legacy) {
+function runCommand(args, opts) {
 	let stdinSource;
 	let rootPath;
 	if (args.length === 0) {
@@ -157,7 +157,7 @@ function runCommand(args, legacy) {
 
 	let gazl;
 	try {
-		gazl = compileProgram(rootPath, { legacy, stdinSource }).output;
+		gazl = compileProgram(rootPath, Object.assign({ stdinSource }, opts)).output;
 	} catch (err) {
 		console.error((err && err.message) ? err.message : String(err));
 		process.exit(1);
@@ -186,17 +186,26 @@ function runCommand(args, legacy) {
 
 function main() {
 	const argv = process.argv.slice(2);
-	const legacy = argv.includes('--legacy');
-	const wantDeadStrip = argv.includes('--dead-strip');
-	const rangeChecks = argv.includes('--range-checks');
-	const [cmd, ...rest] = argv.filter((arg) => arg !== '--legacy' && arg !== '--dead-strip'
-			&& arg !== '--range-checks');
+	// One list, so adding a flag touches one place instead of three. An UNKNOWN `--flag` is rejected
+	// rather than taken for a filename: `--range-cheks` used to be silently dropped and compile anyway.
+	const FLAGS = { '--legacy': 'legacy', '--dead-strip': 'deadStrip', '--range-checks': 'rangeChecks' };
+	const opts = {};
+	const rest = [];
+	for (const arg of argv) {
+		if (arg.slice(0, 2) === '--') {
+			if (!FLAGS[arg]) { console.error(`Unknown option: ${arg}`); return usageAndExit(); }
+			opts[FLAGS[arg]] = true;
+		} else {
+			rest.push(arg);
+		}
+	}
+	const cmd = rest.shift();
 	if (!cmd) return usageAndExit();
 	switch (cmd) {
 		case 'compile':
-			return compileCommand(rest, legacy, wantDeadStrip, rangeChecks);
+			return compileCommand(rest, opts);
 		case 'run':
-			return runCommand(rest, legacy);
+			return runCommand(rest, opts);
 		default:
 			return usageAndExit();
 	}
