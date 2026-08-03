@@ -1556,7 +1556,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E446 | a label is defined twice in one function |
 | E447 | a `const` cannot be a struct value (use a struct pointer) |
 | E448 | `return` does not take a value; assign to the named return variable, then `return;` |
-| E449 | `return`/`break`/`continue` is a reserved word and cannot name a label (a warning under `--legacy`) |
+| E449 | `return`/`break`/`continue` is a reserved word and cannot name a label, variable, array, function, struct or const (a warning under `--legacy`) |
 | E450 | `break`/`continue` is not supported; exit or repeat a loop with `goto` to a label |
 | E451 | a `;` after an `if` body leaves the following `else` with nothing to attach to |
 | E452 | a `global` prefix on a function or a const (a warning under `--legacy`) |

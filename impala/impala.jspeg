@@ -1605,6 +1605,24 @@
      *  Strict-expression helpers (Impala 2)                     *
      * --------------------------------------------------------- */
 
+    /* `return`, `break` and `continue` are reserved, and none of them is in the KEYWORD alternation:
+       `return` is a statement rule of its own, and the other two have no lowering at all. So nothing
+       stopped any of them being used as a NAME, and the complaint then landed at the USE naming the
+       wrong thing - `locals int return` was accepted, and `return = 5;` reported E448 "return does not
+       take a value", while `break`/`continue` reached E403 "Undeclared identifier". One rule, called
+       from every door that takes a name. Still a --legacy warning: in 1.x these WERE ordinary
+       identifiers, so old code that used one has to keep building. */
+    $$parser.RESERVED_NAMES = { 'return': true, 'break': true, 'continue': true };
+    $$parser.checkReservedName = function (name, what, sourceCode, sourceOffset) {
+        if ($$parser.RESERVED_NAMES[name] !== true) {
+            return;
+        }
+        $$parser.strictError("'" + name + "' is a reserved word, not a"
+                        + ('aeiou'.indexOf(what.charAt(0)) < 0 ? ' ' : 'n ') + what + " name",
+                sourceCode, sourceOffset, 'E449',
+                'rename the ' + what + '; --legacy still accepts a reserved word here');
+    };
+
     $$parser.strictError = function (message, source, offset, code, hint) {   /// error by default; warning under `--legacy`
         if (!$$parser.legacyMode) {
             $$parser.fail(message, source, offset, code, hint);
@@ -1871,6 +1889,7 @@
                 || ('' + name).charAt(0) === '.') {
             return;                                           /* compiler-minted: no Impala identifier starts with `.` */
         }
+        $$parser.checkReservedName(name, kind, sourceCode, sourceOffset);
         var prev = $$parser.topNames[name];
         if (prev !== undefined && prev !== kind) {
             $$parser.fail('Name already used by a ' + prev + ': ' + name,
@@ -4727,7 +4746,9 @@ TypeBase    <-  t:BASE_TYPE _                                         { $$ = $$p
 VarDecl     <-  base:TypeBase                                        { $desc = $base; }
                 ( POINTER _                                           { $desc = 'p:' + $desc; }
                 )*
+                { $nameStart = $$i; }
                 id:Identifier                                         {
+                                                                         $$parser.checkReservedName($id, 'variable', $$s, $nameStart);
                                                                          var head = $$parser.descHead($desc);
                                                                          var tail = $$parser.descTail($desc);
                                                                          if (tail === undefined && $$parser.isStructAtom(head)) {
@@ -4755,7 +4776,7 @@ ArrayDecl   <-                                                        { $desc = 
                   ( POINTER _                                         { $desc = 'p:' + $desc; }
                   )*
                 )?
-                ARRAY _ id:Identifier
+                ARRAY _ { $nameStart = $$i; } id:Identifier           { $$parser.checkReservedName($id, 'array', $$s, $nameStart); }
                 ( '[' _                                               { $extentStart = $$i; }   # `']' _` eats the trailing
                                                                                                # space, so $$i would name the NEXT declaration
                   x:Expr ']' _                                        {
@@ -4828,14 +4849,8 @@ Statement   <-                                                        {
                                                                             var lbl = $$parser.metacode[$$parser.metacode.length - 1];
                                                                             lbl.labelSource = $$s;
                                                                             lbl.labelOffset = $$i;
-                                                                            /* `return`/`break`/`continue` are reserved words; naming a
-                                                                               label with one is an error by default, a warning under
-                                                                               --legacy (the 1.x `goto break;` early-exit idiom). */
-                                                                            if ($label._ === 'return' || $label._ === 'break' || $label._ === 'continue') {
-                                                                                $$parser.strictError("'" + $label._ + "' is a reserved word, not a label name",
-                                                                                    $$s, $lblStart, 'E449',
-                                                                                    'rename the label; --legacy still accepts a reserved word here');
-                                                                            }
+                                                                            /* the 1.x `goto break;` early-exit idiom is the --legacy case */
+                                                                            $$parser.checkReservedName($label._, 'label', $$s, $lblStart);
                                                                         }
                 )*
                 (   ';' _

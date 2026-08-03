@@ -1276,6 +1276,26 @@ const reservedWordCases = [
 		"'return' is a reserved word"],
 	["break as a label is reserved", "function f() locals int x { x = 1; goto break; break: ; }",
 		"'break' is a reserved word"],
+	// ...and reserved at every door that takes a NAME, not just at a label. These used to be accepted,
+	// and the complaint then landed at the USE naming the wrong thing: `locals int return` compiled and
+	// `return = 5;` reported E448 "return does not take a value", while break/continue reached E403
+	// "Undeclared identifier" for a name the user had just declared.
+	["return as a local is reserved", "function f() locals int return { return = 5; }",
+		"'return' is a reserved word, not a variable name"],
+	["break as a local is reserved", "function f() locals int break { break = 5; }",
+		"'break' is a reserved word, not a variable name"],
+	["continue as a local is reserved", "function f() locals int continue { continue = 5; }",
+		"'continue' is a reserved word, not a variable name"],
+	["return as a global is reserved", "global int return\nfunction f() { }",
+		"'return' is a reserved word, not a variable name"],
+	["break as an array is reserved", "function f() locals int array break[2] { break[0] = 1; }",
+		"'break' is a reserved word, not an array name"],
+	["continue as a function is reserved", "function continue() { }",
+		"'continue' is a reserved word, not a function name"],
+	["break as a struct field is reserved", "struct S { int break }\nfunction f() { }",
+		"'break' is a reserved word, not a variable name"],
+	["a name merely CONTAINING a reserved word is fine",
+		"function f() locals int returned, int breaking { returned = 1; breaking = 2; }", null],
 ];
 for (const [label, source, expected] of reservedWordCases) {
 	expectCompileOutcome("reserved words", label, source, expected);
@@ -1286,6 +1306,10 @@ console.log("impala.jspeg compiler reserves return/break/continue with dedicated
 // idiom, downgrading the E449 to a single warning so old code still compiles.
 expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break: ; }\n",
 	"'break' is a reserved word", "a reserved-word label");
+// Same for a DECLARED name: in 1.x these were ordinary identifiers, so code that used one has to keep
+// building under --legacy rather than becoming unbuildable on upgrade.
+expectSingleLegacyWarning("function f() locals int break { break = 5; }\n",
+	"'break' is a reserved word", "a reserved-word local");
 
 // A struct value is initialized BY FIELD NAME. The 1.x positional list silently changed meaning the moment
 // a field was inserted, removed or reordered - nothing in the source had to change for it to start filling
