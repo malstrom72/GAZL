@@ -384,7 +384,7 @@ this form; this section is the compiler-side half of the same item.
 Impala cannot compare a literal count against a symbolic extent, but it EMITS the comparison instead, for
 the assembler to make once the extent has a value. Rule 4 of
 [`TwoStageConstants.md`](TwoStageConstants.md), and it costs nothing at run time. A symbolic array can be
-filled again on GAZL 1 whenever the count provably fits; only fields AFTER it still need `ORG`.
+filled again on GAZL 1 whenever the count provably fits; only fields AFTER it still need the region.
 
 It shipped as the canonical `! FAIL` idiom, emitted ABOVE the rows it guards:
 
