@@ -193,10 +193,10 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.a0:	ABSf $y $f 	; y = abs(f)
 		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
 		MOVp $p &.s_0_4db 	; p = "0"
-		GOTO @.f36  
+		RETU   
 	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
 		MOVp $p &.s_HUGE_4dc 	; p = "HUGE"
-		GOTO @.f36  
+		RETU   
 	.f4:	MOVi $e #0 	; e = 0
 		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
 		ADDp $ep %0 $precision
@@ -434,7 +434,7 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 336:1
 		SUBf %0 #0.0 $x	; y = -floor(-x)
 		FLOf %0 %0 
 		SUBf $y #0.0 %0
-		GOTO @.e1  
+		RETU   
 	.f0:	FLOf $y $x 	; y = floor(x)
 	.e1:	RETU   	; }
 
@@ -448,7 +448,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 343:1
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4dd 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 346:41
-		GOTO @.e1  
+		RETU   
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
 		CALL &trunc %0 *2	; expects trunc(float) -> float @ 347:35
 		MULf %0 %0 $y
@@ -776,7 +776,7 @@ log:	FUNC	; signature func log(float x) -> float @ 548:1
 		LSSf $x #1.0e38 @.f1
 	.t0:	MOVp %1 &.s_Domain_4de 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 556:52
-		GOTO @.e2  
+		RETU   
 	.f1:	MOVf $b #0.0 	; b = 0.0
 		MOVf $m $x 	; m = x
 	.l3:	GEQf $m #0.5 @.e4	; while (m < 0.5) 
@@ -1204,7 +1204,7 @@ update:	FUNC	; signature func update() -> void @ 745:1
 		DIVf %8 $stepLength $maxDelay1
 		MOVi %9 #8 
 		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 780:224
-		GOTO @done  	; goto done
+		RETU   	; goto done
 	.s5:	MOVf $maxGain2 #0.00001 	; maxGain2 = 0.00001
 		MOVf $maxDelay2 #0.00001 	; maxDelay2 = 0.00001
 		MOVi %1 $localParams:OPERAND_2_HIGH_PARAM_INDEX 	; calcGainsAndDelays((int) localParams[OPERAND_2_HIGH_PARAM_INDEX], (int) localParams[OPERAND_2_LOW_PARAM_INDEX], 1.0, 1.0, &gains[8], &delays[8], &maxGain2, &maxDelay2, &endGain, &endDelay)
@@ -1308,7 +1308,7 @@ process:	FUNC	; signature func process() -> void @ 928:1
 		POKE &signal:1 %0 
 		CALL ^yield %0 *1	; expects yield() -> unknown @ 959:10
 		GOTO @.l1  	; }
-		GOTO @.e5  	; } else 
+		RETU   	; } else 
 	.f0:	MOVi $ledBits #0 	; ledBits = 0
 		MOVp $bp &buffer 	; bp = global buffer
 		MOVi $bi #0 	; for (bi = 0 to BATCH_SIZE) 

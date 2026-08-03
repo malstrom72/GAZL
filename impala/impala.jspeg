@@ -950,6 +950,37 @@
             }
         }
 
+        /* BRANCH THREADING and RETURN DUPLICATION (docs/GAZLAssemblerOptimizations.md items 4 and 5).
+           The walk above resolves an alias AT VISIT TIME, so it is not transitive: a chain it meets in
+           the wrong order survives. Here everything has settled, so following one is just a lookup.
+              `GOTO @a` where `a:` leads to the function's RETU BECOMES that RETU - `RETU` takes no
+           operands and does the same frame work wherever it stands, so this costs nothing but saves a
+           dispatch on every execution. It is the common case, not a corner one: Impala has no `return`
+           statement, so an early exit is a `goto` to the end label, which is where RETU sits.
+              Branch THREADING (item 4) is deliberately NOT here. Adopting a target's target reproduces
+           the prototype's `Priyome`: `Symbol not found (in expected scope): .f5` - a label graph is not
+           a safe thing to rewrite from inside the compiler that is still minting it, and the assembler
+           does the same job over RESOLVED addresses where the question cannot arise. Left to it. */
+        var leadsTo = {};
+        for (i = 0; i < $$parser.metacode.length; ++i) {
+            if ($$parser.metacode[i].operator !== '<--') continue;
+            for (var n = i + 1; n <= $$parser.metacode.length; ++n) {
+                var nx = (n < $$parser.metacode.length ? $$parser.metacode[n] : { operator: '--^' });
+                if (nx.operator == null || nx.operator === ';' || nx.operator === '<--') continue;
+                leadsTo[$$parser.metacode[i].operands[0]] = nx;
+                break;
+            }
+        }
+        for (i = 0; i < $$parser.metacode.length; ++i) {
+            rec = $$parser.metacode[i];
+            if (rec.operator == null || rec.operator === ';' || rec.operator === '<--') continue;
+            if (rec.operator === '-->' && leadsTo[rec.operands[0]] !== undefined
+                    && leadsTo[rec.operands[0]].operator === '--^') {
+                rec.operator = '--^';                             /* the GOTO IS the return */
+                rec.operands[0] = undefined;
+            }
+        }
+
         for (i = 0; i < $$parser.metacode.length; ++i) {
             var op = (rec = $$parser.metacode[i]).operator;
             if (op == null || op === ';' || op === '<--') continue;
@@ -4163,8 +4194,11 @@ inp:ArgsDecl ')'_
                 )?                                                    { output(';-----------------------------------------------------------------------------'); }
                 Block                                                 {
                                                                          /* wrap-up body */
-                                                                         $$parser.processBranches();
+                                                                         /* The closing RETU goes in BEFORE the pass, so the pass can
+                                                                            see it: `goto out;` where `out:` is the end-of-body label is
+                                                                            Impala's only early-exit idiom, and it lands exactly here. */
                                                                          $$parser.emit('--^', undefined, undefined, undefined, undefined);
+                                                                         $$parser.processBranches();
                                                                          $$parser.flushMetaCode('\t');
                                                                          $$parser.emittedGuards = {};   /* per function: labels are too */
 

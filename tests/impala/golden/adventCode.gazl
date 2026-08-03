@@ -2148,7 +2148,7 @@ fill:	FUNC	; signature func fill(int OBJ) -> int @ 1303:1
 		POKE &SPK #108 	; global SPK=108
 	.f16:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.e17  	; } else 
+		RETU   	; } else 
 	.f0:	POKE &SPK #29 	; global SPK=29
 		MOVi %1 $lLOC 	; if((int)LIQLOC(lLOC) == 0)global SPK=144
 		CALL &LIQLOC %0 *2	; expects LIQLOC(int) -> int @ 1335:24

@@ -679,7 +679,7 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ 333:1
 		ADDi $mem56 $mem56 #1	; mem56 = mem56 + 1
 		POKE $input $mem56 #155	; input[mem56] = 155
 		MOVi $r #1 	; r = 1
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f6:	EQUi $currentChar #'.' @.f7	; if (currentChar != '.') goto break0
 		GOTO @break0  	; goto break0
 	.f7:	ADDi $X $X #1	; X = X + 1
@@ -703,13 +703,13 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ 333:1
 		LEQi $mem56 #120 @.f11	; if (mem56 > 120) 
 		POKE $input $mem56 #155	; input[mem56] = 155
 		MOVi $r #1 	; r = 1
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f11:	POKE $input $mem56 #' '	; input[mem56] = ' '
 		GOTO @pos36554  	; goto pos36554
 	.f10:	ANDi %0 $mem57 #128	; if((mem57 & 128) == 0) 
 		NEQi %0 #0 @.f12
 		MOVi $r #0 	; r = 0
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f12:	NOOP
 		! EQUi #DEBUG #0 @.a13	; assert(65 <= currentChar && currentChar < 65 + 26)
 		GRTi #65 $currentChar @.f14
@@ -837,7 +837,7 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ 333:1
 	.e45:	ADDi $X $X #1	; X = X + 1
 		GOTO @.e29  	; }
 	.s28:	MOVi $r #0 	; r = 0
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.e29:	MOVi $mem59 $X 	; mem59 = X
 		GOTO @.l23  	; }
 	break4:	MOVi $mem58 $mem60 	; break4:
@@ -976,7 +976,7 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ 333:1
 		GOTO @nextRule  	; goto nextRule
 	.e83:	GOTO @.e54  	; }
 	.s53:	MOVi $r #0 	; r = 0
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.e54:	MOVi $mem58 $X 	; mem58 = X
 		GOTO @continue1  	; }
 	_return:	RETU   	; }
@@ -1505,7 +1505,7 @@ Parser1:	FUNC	; signature func Parser1() -> int @ 1352:1
 		NEQi $sign1 #155 @.f3	; if (sign1 == 155) 
 		POKE &phonemeIndex $position #255	; (int)global phonemeIndex[position] = 255
 		MOVi $r #1 	; r = 1
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f3:	ADDi $X $X #1	; X = X + 1
 		PEEK $sign2 &input $X	; sign2 = (int)global input[X]
 		MOVi $Y #0 	; for (Y = 0 to 81) 
@@ -1538,7 +1538,7 @@ Parser1:	FUNC	; signature func Parser1() -> int @ 1352:1
 		GOTO @.l13  
 	.e15:	NEQi $Y #0 @.f16	; if (Y == 0) 
 		MOVi $r #0 	; r = 0
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f16:	SUBi %0 $position #1	; (int)global stress[position-1] = Y
 		POKE &stress %0 $Y
 		GOTO @continue0  	; } //while
@@ -1589,7 +1589,7 @@ Parser2:	FUNC	; signature func Parser2() -> void @ 1427:1
 		NEQi $A #0 @.f1	; if (A == 0) goto continue0
 		GOTO @continue0  	; goto continue0
 	.f1:	NEQi $A #255 @.f2	; if (A == 255) goto _return
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f2:	MOVi $Y $A 	; Y = A
 		PEEK %0 &flags $A	; if (((int)global flags[A] & 16) != 0) 
 		ANDi %0 %0 #16
@@ -1853,7 +1853,7 @@ Code48619:	FUNC	; signature func Code48619() -> void @ 1606:1
 	.l12:	MOVi $X $mem66 	; X = mem66
 		PEEK $index &phonemeIndex $X	; index = (int)global phonemeIndex[X]
 		NEQi $index #255 @.f13	; if (index == 255) goto _return
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f13:	PEEK %0 &flags $index	; A = (int)global flags[index] & 128
 		ANDi $A %0 #128
 		EQUi $A #0 @.f14	; if (A != 0) 
@@ -2055,7 +2055,7 @@ InitPlayback:	FUNC	; signature func InitPlayback() -> int @ 1760:1
 		CALL &Parser1 %0 *1	; expects Parser1() -> int @ 1768:21
 		NEQi %0 #0 @.f0
 		MOVi $r #0 	; r = 0
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f0:	CALL &Parser2 %0 *1	; expects Parser2() -> void @ 1772:11
 		CALL &Code41883 %0 *1	; expects Code41883() -> void @ 1773:13
 		CALL &SetPhonemeLength %0 *1	; expects SetPhonemeLength() -> void @ 1774:20
@@ -2250,7 +2250,7 @@ Special1:	FUNC	; signature func Special1(int mem48, int X) -> int @ 1891:1
 	.l5:	ADDi %0 $i #1	; i = (i + 1) & 255
 		ANDi $i %0 #255
 		NEQi $i $X @.f6	; if (i == X) goto _return
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f6:	PEEK %0 &pitches $i	; } while ((int)global pitches[i] == 255)
 		EQUi %0 #255 @.l5
 		GOTO @.e3  	; }
@@ -2307,7 +2307,7 @@ GenerateNoise:	FUNC	; signature func GenerateNoise(int Y0, int mem39, ptr mem44,
 	.e1:	POKE $mem44 #1 	; (int)*mem44 = 1
 		POKE $mem66 $Y 	; (int)*mem66 = Y
 		MOVi $Y $mem49 	; Y = mem49
-		GOTO @.e7  	; } else 
+		RETU   	; } else 
 	.f0:	XORi $Y $A #255	; for (Y = A ^ 255 to 256) 
 		GEQi $Y #256 @.e8
 	.l9:	MULi %0 $mem47 #256	; A = (int)global randomtable[mem47*256+Y]
@@ -2364,7 +2364,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ 1964:1
 ;-----------------------------------------------------------------------------
 		PEEK %0 &phonemeIndexOutput:0 	; if ((int)global phonemeIndexOutput[0] == 255) goto _return
 		NEQi %0 #255 @.f0
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f0:	MOVi $A #0 	; A = 0
 		MOVi $X #0 	; X = 0
 		MOVi $phase1 #0 	; phase1 = 0
@@ -2569,7 +2569,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ 1964:1
 		PEEK $speedcounter &speed 	; speedcounter = global speed
 		SUBi $mem48 $mem48 #2	; mem48 = mem48 - 2
 		NEQi $mem48 #0 @.f43	; if (mem48 == 0) goto _return
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 		GOTO @.f43  	; } else 
 	.f40:	PEEK %0 &sinus $phase1	; mem56 = (int)global multtable[(int)global sinus[phase1] | (int)global amplitude1[Y]]
 		PEEK %1 &amplitude1 $Y
@@ -2604,7 +2604,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ 1964:1
 		ADDi $Y $Y #1	; Y = Y + 1
 		SUBi $mem48 $mem48 #1	; mem48 = mem48 - 1
 		NEQi $mem48 #0 @.f43	; if (mem48 == 0) goto _return
-		GOTO @_return  	; goto _return
+		RETU   	; goto _return
 	.f43:	SUBi $mem44 $mem44 #1	; mem44 = mem44 - 1
 		NEQi $mem44 #0 @.f45	; if (mem44 == 0) goto break4
 		GOTO @.l37  	; goto break4
@@ -2655,7 +2655,7 @@ Play:	FUNC	; signature func Play() -> void @ 2163:1
 		NEQi $A #255 @.f2	; if (A == 255) 
 		POKE &phonemeIndexOutput $Y #255	; (int)global phonemeIndexOutput[Y] = 255
 		CALL &ProduceOutput %0 *1	; expects ProduceOutput() -> void @ 2178:19
-		GOTO @break0  	; goto break0
+		RETU   	; goto break0
 		GOTO @.f6  	; } else if (A == 254) 
 	.f2:	NEQi $A #254 @.f4	; if (A == 254) 
 		POKE &phonemeIndexOutput $Y #255	; (int)global phonemeIndexOutput[Y] = 255

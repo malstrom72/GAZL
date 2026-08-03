@@ -181,7 +181,7 @@ update:	FUNC	; signature func update() -> void @ 114:1
 	.f22:	SHLi $g $g #1	; g = g << 1
 	.e23:	POKE &gains $i $g	; global gains[i] = g
 		FORi $i #16 @.l21	; }
-		GOTO @.e24  	; }
+		RETU   	; }
 	.s18#REVERSE:	NOOP
 	.s18#STUTTER:	NOOP
 	.s18#TAPE_STOP:	MOVi $i #0 	; for (i = 0 to 16) global sfxs[i] = (bottomBits & (0x8000 >> i))

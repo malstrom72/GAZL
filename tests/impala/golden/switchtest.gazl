@@ -14,11 +14,11 @@ x:	FUNC	; signature func x() -> void @ 6:1
 	.s0#1:	NOOP
 	.s0#2:	NOOP
 	.s0#3:	MOVi $j $i 	; j = i
-		GOTO @.e1  
+		RETU   
 	.s0#5:	CALL &x %0 *1	; expects x() -> void @ 9:13
-		GOTO @.e1  
+		RETU   
 	.s0:	MOVi $i $j 	; i = j
-		GOTO @.e1  
+		RETU   
 	.s0#6:	NOOP
 	.s0#8:	MOVi $k $j 	; k = j
 	.e1:	RETU   	; }
@@ -61,10 +61,10 @@ y:	FUNC	; signature func y() -> void @ 16:1
 	.s4:	SUBi %0 $i #10	; switch (i == 10 to 100) 
 		SWCH %0 *90 @.s6
 	.s6#89:	CALL &x %0 *1	; expects x() -> void @ 20:40
-		GOTO @.e7  
-	.s6:	GOTO @.e7  	; 
+		RETU   
+	.s6:	RETU   	; 
 	.s6#10:	ADDi $i $i #1	; i = i + 1
-		GOTO @.e7  
+		RETU   
 		! SUBi <A> #'a' #10	; case 'a'
 	.s6#<A>:	GETL $i $a $i	; i = (int) a[i]
 	.e7:	RETU   	; }

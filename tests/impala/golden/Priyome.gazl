@@ -1457,7 +1457,7 @@ canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ 757:1
 		CALL &squareCapturesKing %0 *2	; expects squareCapturesKing(int) -> int @ 767:41
 		EQUi %0 #FALSE @.f5
 		MOVi $b #TRUE 	; b = TRUE
-		GOTO @returnNow  	; goto returnNow
+		RETU   	; goto returnNow
 	.f5:	FORi $i $toCount @.l4	; }
 	.e3:	PEEK $frm &nextPiece $frm	; frm = (int) global nextPiece[frm]
 		GOTO @.l1  	; }
@@ -1579,7 +1579,7 @@ searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int de
 		MOVi $myAlpha $score 	; myAlpha = score
 	.f3:	LSSi $myAlpha $beta @.f4	; if (myAlpha >= beta) 
 		SHLi $bestMove $score #SCORE_SHIFT	; bestMove = (score << SCORE_SHIFT)
-		GOTO @returnNow  	; } else 
+		RETU   	; } else 
 	.f4:	MOVi $capturesCount #0 	; capturesCount = 0
 		PEEK %0 &turnColor 	; frm = (int) global nextPiece[global turnColor]
 		PEEK $frm &nextPiece %0
@@ -1601,7 +1601,7 @@ searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int de
 		ADDi %0 #CAPTURE_KING_MIN_SCORE $depth	; bestMove = ((CAPTURE_KING_MIN_SCORE + depth) << SCORE_SHIFT) | move
 		SHLi %0 %0 #SCORE_SHIFT
 		IORi $bestMove %0 $move
-		GOTO @returnNow  	; goto returnNow
+		RETU   	; goto returnNow
 	.f10:	PEEK %0 &board $t	; if ((int) global board[t] > EMPTY || global xCapture == t) 
 		GRTi %0 #EMPTY @.t11
 		PEEK %0 &xCapture 
@@ -1669,7 +1669,7 @@ searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int s
 		! SUBi <A> #MIN_SCORE #1	; bestMove = (MIN_SCORE - 1) << SCORE_SHIFT
 		! SHLi <A> <A> #SCORE_SHIFT
 		MOVi $bestMove <A> 
-		GOTO @returnNow  	; } else 
+		RETU   	; } else 
 	.f3:	MOVi $movesCount #0 	; movesCount = 0
 		MOVi $capturesCount #0 	; capturesCount = 0
 		PEEK %0 &turnColor 	; frm = (int) global nextPiece[global turnColor]
@@ -1692,7 +1692,7 @@ searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int s
 		ADDi %0 #CAPTURE_KING_MIN_SCORE $depth	; bestMove = ((CAPTURE_KING_MIN_SCORE + depth) << SCORE_SHIFT) | move
 		SHLi %0 %0 #SCORE_SHIFT
 		IORi $bestMove %0 $move
-		GOTO @returnNow  	; goto returnNow
+		RETU   	; goto returnNow
 	.f9:	NOOP
 		! EQUi #DEBUG #0 @.a10	; assert(movesCount < MAX_MOVES)
 		LSSi $movesCount #MAX_MOVES @.a10
@@ -1917,15 +1917,15 @@ executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1015:1
 		SUBi %0 %0 #IN_CHECK
 		SWCH %0 *<A> @.s9
 	.s9:	MOVi $status #VALID_MOVE 	; status = VALID_MOVE
-		GOTO @returnNow  	; goto returnNow
+		RETU   	; goto returnNow
 		GOTO @.e10  	; }
 		! SUBi <A> #CHECKMATE #IN_CHECK	; case CHECKMATE
 	.s9#<A>:	MOVi $status #CHECKMATE 	; status = CHECKMATE
-		GOTO @returnNow  	; goto returnNow
+		RETU   	; goto returnNow
 		GOTO @.e10  	; }
 		! SUBi <A> #STALEMATE #IN_CHECK	; case STALEMATE
 	.s9#<A>:	MOVi $status #STALEMATE 	; status = STALEMATE
-		GOTO @returnNow  	; goto returnNow
+		RETU   	; goto returnNow
 		GOTO @.e10  	; }
 		! SUBi <A> #IN_CHECK #IN_CHECK	; case IN_CHECK
 	.s9#<A>:	MOVi %1 $frm 	; undoMove(frm, t, oldPiece, captured, oldXCapture)
@@ -1935,7 +1935,7 @@ executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1015:1
 		MOVi %5 $oldXCapture 
 		CALL &undoMove %0 *6	; expects undoMove(int, int, int, int, int) -> void @ 1039:56
 		MOVi $status #IN_CHECK 	; status = IN_CHECK
-		GOTO @returnNow  	; goto returnNow
+		RETU   	; goto returnNow
 	.e10:	FORi $i $toCount @.l7	; }
 	.e6:	PEEK $frm &nextPiece $frm	; frm = (int) global nextPiece[frm]
 		GOTO @.l1  	; }
@@ -2048,7 +2048,7 @@ strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 1108:1
 		SUBi $d $c %0
 		NEQi $d #0 @done
 		NEQi $c #0 @.f4
-		GOTO @done  	; goto done
+		RETU   	; goto done
 	.f4:	ADDp $a $a #1	; a = a + 1
 		ADDp $b $b #1	; b = b + 1
 		FORi $i $n @.l2	; }
@@ -2315,7 +2315,7 @@ takeBackMove:	FUNC	; signature func takeBackMove() -> int @ 1233:1
 		ADDi %5 $i #3
 		PEEK %5 &history %5
 		CALL &undoMove %0 *6	; expects undoMove(int, int, int, int, int) -> void @ 1243:106
-		GOTO @.e1  	; } else 
+		RETU   	; } else 
 	.f0:	MOVi $move #0 	; move = 0
 	.e1:	RETU   	; }
 

@@ -193,10 +193,10 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.a0:	ABSf $y $f 	; y = abs(f)
 		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
 		MOVp $p &.s_0_4d6 	; p = "0"
-		GOTO @.f36  
+		RETU   
 	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
 		MOVp $p &.s_HUGE_4d7 	; p = "HUGE"
-		GOTO @.f36  
+		RETU   
 	.f4:	MOVi $e #0 	; e = 0
 		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
 		ADDp $ep %0 $precision
@@ -430,7 +430,7 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 338:1
 		SUBf %0 #0.0 $x	; y = -floor(-x)
 		FLOf %0 %0 
 		SUBf $y #0.0 %0
-		GOTO @.e1  
+		RETU   
 	.f0:	FLOf $y $x 	; y = floor(x)
 	.e1:	RETU   	; }
 
@@ -444,7 +444,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 345:1
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4d8 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 348:41
-		GOTO @.e1  
+		RETU   
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
 		CALL &trunc %0 *2	; expects trunc(float) -> float @ 349:35
 		MULf %0 %0 $y
@@ -532,7 +532,7 @@ tan:	FUNC	; signature func tan(float x) -> float @ 430:1
 		NEQf $c #0.0 @.f0	; if (c == 0.0) error("Domain error")
 		MOVp %1 &.s_Domain_4d9 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 436:37
-		GOTO @.e1  
+		RETU   
 	.f0:	MOVf %1 $x 	; y = (float) sin(x) / c
 		CALL &sin %0 *2	; expects sin(float) -> float @ 437:26
 		DIVf $y %0 $c

@@ -196,7 +196,7 @@ findFile:	FUNC	; signature func findFile(ptr s0) -> int @ 112:1
 		PEEK %3 &FILES %3
 		CALL &strcmp %1 *3	; expects strcmp(ptr, ptr) -> int @ 117:80
 		NEQi %1 #0 @.f2
-		GOTO @found  	; goto found
+		RETU   	; goto found
 	.f2:	FORi $file %0 @.l1
 	.e0:	MOVi $file #-1 	; file = -1
 	found:	RETU   	; }

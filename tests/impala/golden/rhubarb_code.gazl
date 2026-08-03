@@ -242,7 +242,7 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 200:1
 		SUBf %0 #0.0 $x	; y = -floor(-x)
 		FLOf %0 %0 
 		SUBf $y #0.0 %0
-		GOTO @.e1  
+		RETU   
 	.f0:	FLOf $y $x 	; y = floor(x)
 	.e1:	RETU   	; }
 
@@ -256,7 +256,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 207:1
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4d7 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 210:41
-		GOTO @.e1  
+		RETU   
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
 		CALL &trunc %0 *2	; expects trunc(float) -> float @ 211:35
 		MULf %0 %0 $y

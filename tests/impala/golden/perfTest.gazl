@@ -68,7 +68,7 @@ log:	FUNC	; signature func log(float x) -> float @ 85:1
 		LSSf $x #1.0e38 @.f1
 	.t0:	MOVp %1 &.s_Domain_4d3 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 93:52
-		GOTO @.e2  
+		RETU   
 	.f1:	MOVf $b #0.0 	; b = 0.0
 		MOVf $m $x 	; m = x
 	.l3:	GEQf $m #0.5 @.e4	; while (m < 0.5) 
@@ -124,7 +124,7 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 125:1
 		SUBf %0 #0.0 $x	; y = -floor(-x)
 		FLOf %0 %0 
 		SUBf $y #0.0 %0
-		GOTO @.e1  
+		RETU   
 	.f0:	FLOf $y $x 	; y = floor(x)
 	.e1:	RETU   	; }
 
@@ -138,7 +138,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 132:1
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4d4 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 135:41
-		GOTO @.e1  
+		RETU   
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
 		CALL &trunc %0 *2	; expects trunc(float) -> float @ 136:35
 		MULf %0 %0 $y
@@ -202,7 +202,7 @@ tan:	FUNC	; signature func tan(float x) -> float @ 177:1
 		NEQf $c #0.0 @.f0	; if (c == 0.0) error("Domain error")
 		MOVp %1 &.s_Domain_4d3 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 183:37
-		GOTO @.e1  
+		RETU   
 	.f0:	MOVf %1 $x 	; y = (float)sin(x) / c
 		CALL &sin %0 *2	; expects sin(float) -> float @ 184:25
 		DIVf $y %0 $c

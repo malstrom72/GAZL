@@ -106,7 +106,7 @@ log:	FUNC	; signature func log(float x) -> float @ 112:1
 		LSSf $x #1.0e38 @.f1
 	.t0:	MOVp %1 &.s_Domain_4d2 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 120:52
-		GOTO @.e2  
+		RETU   
 	.f1:	MOVf $b #0.0 	; b = 0.0
 		MOVf $m $x 	; m = x
 	.l3:	GEQf $m #0.5 @.e4	; while (m < 0.5) 
@@ -162,7 +162,7 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 152:1
 		SUBf %0 #0.0 $x	; y = -floor(-x)
 		FLOf %0 %0 
 		SUBf $y #0.0 %0
-		GOTO @.e1  
+		RETU   
 	.f0:	FLOf $y $x 	; y = floor(x)
 	.e1:	RETU   	; }
 
@@ -176,7 +176,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 159:1
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4d3 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 162:41
-		GOTO @.e1  
+		RETU   
 	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
 		CALL &trunc %0 *2	; expects trunc(float) -> float @ 163:36
 		MULf %0 %0 $y
@@ -240,7 +240,7 @@ tan:	FUNC	; signature func tan(float x) -> float @ 204:1
 		NEQf $c #0.0 @.f0	; if (c == 0.0) error("Domain error")
 		MOVp %1 &.s_Domain_4d2 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 210:37
-		GOTO @.e1  
+		RETU   
 	.f0:	MOVf %1 $x 	; y = (float) sin(x) / c
 		CALL &sin %0 *2	; expects sin(float) -> float @ 211:26
 		DIVf $y %0 $c
@@ -511,10 +511,10 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.a0:	ABSf $y $f 	; y = abs(f)
 		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
 		MOVp $p &.s_log10_4d9:4 	; p = "0"
-		GOTO @.f36  
+		RETU   
 	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
 		MOVp $p &.s_HUGE_4df 	; p = "HUGE"
-		GOTO @.f36  
+		RETU   
 	.f4:	MOVi $e #0 	; e = 0
 		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
 		ADDp $ep %0 $precision
@@ -792,7 +792,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		iTOf %0 %0 #1.0
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-		GOTO @.f41  	; }
+		RETU   	; }
 		! SUBi <A> #'&' #'%'	; case '&'
 	.s23#<A>:	GEQi $precedence #BITWISE_PRECEDENCE @.f41	; if (precedence < BITWISE_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
@@ -807,7 +807,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		iTOf %0 %0 #1.0
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-		GOTO @.f41  	; }
+		RETU   	; }
 		! SUBi <A> #'^' #'%'	; case '^'
 	.s23#<A>:	GEQi $precedence #BITWISE_PRECEDENCE @.f41	; if (precedence < BITWISE_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
@@ -822,7 +822,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		iTOf %0 %0 #1.0
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-		GOTO @.f41  	; }
+		RETU   	; }
 		! SUBi <A> #'<' #'%'	; case '<'
 	.s23#<A>:	PEEK %0 $p #1	; if ((int) p[1] == '<' && precedence < BITWISE_PRECEDENCE) 
 		NEQi %0 #'<' @.f41
@@ -839,7 +839,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		iTOf %0 %0 #1.0
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-		GOTO @.f41  	; }
+		RETU   	; }
 		! SUBi <A> #'>' #'%'	; case '>'
 	.s23#<A>:	PEEK %0 $p #1	; if ((int) p[1] == '>' && precedence < BITWISE_PRECEDENCE) 
 		NEQi %0 #'>' @.f41
@@ -856,7 +856,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		iTOf %0 %0 #1.0
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-		GOTO @.f41  	; }
+		RETU   	; }
 		! SUBi <A> #'+' #'%'	; case '+'
 	.s23#<A>:	GEQi $precedence #ADD_SUB_PRECEDENCE @.f41	; if (precedence < ADD_SUB_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE)
@@ -868,7 +868,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		ADDf %0 %0 $f
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-		GOTO @.f41  	; }
+		RETU   	; }
 		! SUBi <A> #'-' #'%'	; case '-'
 	.s23#<A>:	GEQi $precedence #ADD_SUB_PRECEDENCE @.f41	; if (precedence < ADD_SUB_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE)
@@ -880,7 +880,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		SUBf %0 %0 $f
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-		GOTO @.f41  	; }
+		RETU   	; }
 		! SUBi <A> #'*' #'%'	; case '*'
 	.s23#<A>:	PEEK %0 $p #1	; if ((int) p[1] == '*') 
 		NEQi %0 #'*' @.f34
@@ -895,7 +895,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		CALL &pow %0 *3	; expects pow(float, float) -> float @ 590:30
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-		GOTO @.f41  	; } else 
+		RETU   	; } else 
 	.f34:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f41	; if (precedence < MUL_DIV_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
 		ADRL %2 $f *0
@@ -906,7 +906,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		MULf %0 %0 $f
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-	.e36:	GOTO @.f41  	; }
+	.e36:	RETU   	; }
 		! SUBi <A> #'/' #'%'	; case '/'
 	.s23#<A>:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f41	; if (precedence < MUL_DIV_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
@@ -922,7 +922,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		DIVf %0 %0 $f
 		POKE $v %0 
 	.e40:	GOTO @wasFunction  	; goto repeat
-		GOTO @.f41  	; }
+		RETU   	; }
 		! SUBi <A> #'%' #'%'	; case '%'
 	.s23#<A>:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f41	; if (precedence < MUL_DIV_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
@@ -966,7 +966,7 @@ main:	FUNC	; signature func main() -> void @ 620:1
 		MOVp %2 &.s_quit_4e6 
 		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 635:48
 		NEQi %0 #0 @.f2
-		GOTO @quit  	; goto quit
+		RETU   	; goto quit
 	.f2:	MOVi $assignTo #-1 	; assignTo = -1
 		PEEK %1 $p 	; c = (int) lower(*p)
 		CALL &lower %0 *2	; expects lower(int) -> int @ 638:22

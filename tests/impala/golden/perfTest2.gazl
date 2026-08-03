@@ -14,7 +14,7 @@ fib:	FUNC	; signature func fib(int y) -> int @ 3:1
 		SUBi %2 $y #2
 		CALL &fib %1 *2	; expects fib(int) -> int @ 7:42
 		ADDi $x %0 %1
-		GOTO @.e1  	; } else 
+		RETU   	; } else 
 	.f0:	MOVi $x $y 	; x = y
 	.e1:	RETU   	; }
 

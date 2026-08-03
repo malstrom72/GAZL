@@ -92,7 +92,7 @@ operate2:	FUNC	; signature func operate2() -> int @ 134:1
 		PEEK %0 &params:OPERATOR_2_PARAM_INDEX 	; switch ((int) global params[OPERATOR_2_PARAM_INDEX] == 0 to OPERATOR_2_COUNT) 
 		SWCH %0 *OPERATOR_2_COUNT @.s0
 	.s0:	MOVi $r #0 	; r = 0
-		GOTO @.e1  
+		RETU   
 	.s0#OPERATOR_2_OR:	PEEK $x &mask 	; x = global mask
 		PEEK %0 &clock 	; y = ((int) global clock << POSITION_FRACT_BITS) & ~x
 		SHLi %0 %0 #POSITION_FRACT_BITS

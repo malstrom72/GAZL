@@ -100,7 +100,7 @@ log:	FUNC	; signature func log(float x) -> float @ 147:1
 		LSSf $x #1.0e38 @.f1
 	.t0:	MOVp %1 &.s_Domain_4d7 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 155:52
-		GOTO @.e2  
+		RETU   
 	.f1:	MOVf $b #0.0 	; b = 0.0
 		MOVf $m $x 	; m = x
 	.l3:	GEQf $m #0.5 @.e4	; while (m < 0.5) 

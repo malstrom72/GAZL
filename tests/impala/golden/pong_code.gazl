@@ -367,7 +367,7 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		DIVf %8 $stepLength2 $maxDelay1
 		MOVi %9 #8 
 		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 243:224
-		GOTO @done  	; goto done
+		RETU   	; goto done
 	.s1:	MOVf $maxGain2 #0.00001 	; maxGain2 = 0.00001
 		MOVf $maxDelay2 #0.00001 	; maxDelay2 = 0.00001
 		MOVi %1 $localParams:OPERAND_2_LOW_PARAM_INDEX 	; calcGainsAndDelays((int) localParams[OPERAND_2_LOW_PARAM_INDEX], (int) localParams[OPERAND_2_HIGH_PARAM_INDEX], 1.0, 1.0, &gains[8], &delays[8], &maxGain2, &maxDelay2, &endGain, &endDelay)

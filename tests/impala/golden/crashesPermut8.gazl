@@ -231,10 +231,10 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.a0:	ABSf $y $f 	; y = abs(f)
 		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
 		MOVp $p &.s_0_4db 	; p = "0"
-		GOTO @.f36  
+		RETU   
 	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
 		MOVp $p &.s_HUGE_4dc 	; p = "HUGE"
-		GOTO @.f36  
+		RETU   
 	.f4:	MOVi $e #0 	; e = 0
 		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
 		ADDp $ep %0 $precision
