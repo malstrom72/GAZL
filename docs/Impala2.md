@@ -1429,8 +1429,9 @@ value already pushed into the offset, which is in `.z.` units, and its name iden
 .g9:  MOVi %1 $s:<C>
 ```
 
-The one waste is that `! MOVi` on an address-formation site, where the copy is taken and then thrown
-away. Avoiding it would mean deferring the copy to the use, which is the whole problem.
+On an address-formation site the copy is taken and then not needed, so `reference` RETRACTS it - it nulls
+the `! MOVi` record as well as returning the scratch, and `flushMetaCode` skips a null operator. Deferring
+the copy to the use is impossible (that is the whole problem), but un-emitting it afterwards is two lines.
 
 **Tier 3 - dynamic index: `--range-checks`, off by default.** The only tier that can see `a[i]`. It emits
 a `DEBUG`-gated test per subscript, bounded by the array's `.z.` extent symbol - so it works unchanged for

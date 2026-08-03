@@ -1910,10 +1910,13 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 			&& /! LSSi #<\w> #\.z\.Test\.b @/.test(exprIdx)
 			&& /! FAIL a computed index outside Test\.b/.test(exprIdx),
 		"expression index: no assertion on a folded scratch\n" + exprIdx);
+	// ...and an ADDRESS retracts the copy it never needed. The `! MOVi` is emitted at the subscript, before
+	// anything knows whether this is a dereference, so `reference` nulls the record rather than ship a line
+	// nothing reads - `flushMetaCode` already skips a null operator.
 	const exprAddr = compileWithJsImpala(konst
 		+ "export function main() locals int pointer p { p = &global xxx.b[KONST - 8]; }\n", { randomId: 42 });
-	assert(!/! FAIL/.test(exprAddr),
-		"expression index: guarded an ADDRESS, which is always legal\n" + exprAddr);
+	assert(!/! FAIL/.test(exprAddr) && !/! MOVi <\w> #<\w>/.test(exprAddr),
+		"expression index: an ADDRESS kept the guard or its copy\n" + exprAddr);
 	const symAddr = compileWithJsImpala(konst
 		+ "export function main() locals int pointer p { p = &global xxx.b[KONST]; }\n", { randomId: 42 });
 	assert(!/! FAIL index/.test(symAddr),

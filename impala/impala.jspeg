@@ -1197,8 +1197,8 @@
        paths - a struct field keeps its extent on a place, a plain array decayed to a pointer and carries
        it on the meta, and there is no reason for `g[9]` and `s.v[9]` to report differently. Undecidable
        when either side is symbolic (`v[SN]`, a runtime index); those fall through to --range-checks. The
-       index test accepts a MINUS sign the folding branches do not, so `v[-1]` - which otherwise takes the
-       dynamic path and writes BACKWARDS into whatever precedes the array - is caught here too.
+       A NEGATIVE index is caught here too: `v[-1]` folds to a legal-looking positive offset inside the
+       struct and writes BACKWARDS into whatever field precedes the array.
 
        PAST THE END IS NOT REPORTED HERE, because whether it is an error depends on what happens next,
        and the rule is `docs/Impala2Review.md`'s: a DEREFERENCE with an out-of-range constant index is a
@@ -1372,12 +1372,14 @@
            instead of needing a bare `!` of its own. */
         /* An OWNED copy is never deduplicated and never scaled: it was taken from the folded value the
            subscript pushed into the offset, which is already in `.z.` units, and its name is a recycled
-           scratch that says nothing about which index it holds. */
-        var key = op.ext.sym + '|' + op.k;
-        if (!op.own && $$parser.emittedGuards[key]) {
-            return;                                               /* the same assertion, already asked */
+           scratch that says nothing about which index it holds - so it cannot key anything either. */
+        var key = op.own ? undefined : op.ext.sym + '|' + op.k;
+        if (key !== undefined) {
+            if ($$parser.emittedGuards[key]) {
+                return;                                           /* the same assertion, already asked */
+            }
+            $$parser.emittedGuards[key] = true;
         }
-        $$parser.emittedGuards[key] = true;
         var ok  = $$parser.newLabel('g');
         var lhs = '#' + op.k;
         var w;
@@ -1387,26 +1389,29 @@
             $$parser.emit('<> *', 'i', w, lhs, '#' + op.ext.stride);
             lhs = '#' + w;
         }
+        var low;
         if (typeof op.k !== 'number') {
-            /* A NAMED const may be negative, so it needs BOTH bounds (a literal was already settled by
-               E461). Both are plain comparisons: the low one falls through into the FAIL, which the
-               second label rides - assemble-time branches resolve against a folded line, so that label
-               costs nothing. This used to be `(extent - 1 - k) | k >= 0`, three extra ALU ops bought
-               purely to avoid a second label back when flushMetaCode spent every one on a NOOP. */
-            var low = $$parser.newLabel('g');
+            /* Anything but a literal may be negative, so it needs BOTH bounds (a literal was settled by
+               E461). Both are plain comparisons: the low one falls through into the FAIL, whose label
+               RIDES it - assemble-time branches resolve against a line that folds away. This used to be
+               `(extent - 1 - k) | k >= 0`, three extra ALU ops bought purely to avoid a second label
+               back when flushMetaCode spent every one on a NOOP. */
+            low = $$parser.newLabel('g');
             $$parser.emit('<> <', 'i', lhs, '#0', low);
-            $$parser.emit('<> <', 'i', lhs, '#' + op.ext.sym, ok);
-            if (w !== undefined) { $$parser.returnBack(w); }
+        }
+        $$parser.emit('<> <', 'i', lhs, '#' + op.ext.sym, ok);
+        if (w !== undefined) { $$parser.returnBack(w); }
+        if (low !== undefined) {
             $$parser.emit('<-?', true, low, undefined, undefined);
-        } else {
-            $$parser.emit('<> <', 'i', lhs, '#' + op.ext.sym, ok);
-            if (w !== undefined) { $$parser.returnBack(w); }
+            $$parser.metacode[$$parser.metacode.length - 1].mayRide = true;   /* only the `! FAIL` below */
         }
         $$parser.emit('<> FAIL', undefined,
                 (op.own ? 'a computed index' : 'index ' + op.k)
                         + ' outside ' + op.ext.what + ' (resolved only at assembly)',
                 undefined, undefined);
         $$parser.emit('<-?', true, ok, undefined, undefined);
+        $$parser.metacode[$$parser.metacode.length - 1].mayRide = true;   /* the guarded instruction, or the
+                                                                             next guard's first comparison */
         if (op.own) {
             $$parser.returnBack(op.k);                            /* held since the subscript, for exactly this */
         }
@@ -2419,28 +2424,29 @@
             /* This test used to be `/^#[0-9]+$/`, so a named const, a NEGATIVE literal and a folded `<A>`
                all fell to the branch below and emitted GETL/SETL with an immediate index - an encoding
                that does not exist, so a module the compiler accepted would not assemble. */
-            var k = (idxKind === 'scratch') ? replace(idxRV, '#', '') : idxRV.substr(1);
-            if (idxKind !== 'scratch') {
+            var scratch = (idxKind === 'scratch');
+            var k = $$parser.dropHash(idxRV);
+            if (!scratch) {
                 $$parser.returnBack(idxRV);                      /* a scratch passes to offParts, whose fold frees it */
             }
             if (k !== '0') {
+                var part = k;                                    /* scalar stride is 1 word -> the offset is just k */
                 if (elemStruct) {
-                    var s = $$parser.borrow('<');
-                    $$parser.emit('<> *', 'i', s, '#' + k, '#.z.' + elem);
-                    if (idxKind === 'scratch') { $$parser.returnBack(k); }
-                    x.offParts.push(s);
-                } else {
-                    x.offParts.push(k);                          /* scalar stride is 1 word -> the offset is just k */
+                    part = $$parser.borrow('<');
+                    $$parser.emit('<> *', 'i', part, '#' + k, '#.z.' + elem);
+                    if (scratch) { $$parser.returnBack(k); }
                 }
                 /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
                    value is still live - the pushed one is freed by foldOffset long before the use decides
                    whether this is a dereference at all. One assemble-time MOVi, no runtime cost, and the
                    copy is returned by whichever side consumes the finding. */
-                if (idxKind === 'scratch' && extent !== undefined && extent.inField) {
+                if (scratch && extent !== undefined && extent.inField) {
                     var g = $$parser.borrow('<');
-                    $$parser.emit('<> =', 'i', g, '#' + (elemStruct ? s : k), undefined);
-                    oobIndex = { k: g, own: true, ext: extent, src: sourceCode, off: sourceOffset };
+                    $$parser.emit('<> =', 'i', g, '#' + part, undefined);
+                    oobIndex = { k: g, own: true, ext: extent, copyAt: $$parser.metacode.length - 1,
+                            src: sourceCode, off: sourceOffset };
                 }
+                x.offParts.push(part);
             }
             if (elemStruct) $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
             else            $$parser.emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
@@ -3059,7 +3065,10 @@
 
         expr = metaSlot(expr);
         if (expr.oobIndex !== undefined && expr.oobIndex.own) {
-            $$parser.returnBack(expr.oobIndex.k);    /* the guard's copy dies with the finding, not later */
+            $$parser.returnBack(expr.oobIndex.k);    /* the guard's copy dies with the finding - and so does
+                                                        the `! MOVi` that made it, or an address would ship
+                                                        a line nothing reads (flushMetaCode skips a null) */
+            $$parser.metacode[expr.oobIndex.copyAt].operator = null;
         }
         expr.oobIndex = undefined;                   /* address formation is never bounds-checked, at any
                                                         index - see checkConstIndex. Cleared before the
@@ -3350,26 +3359,8 @@
         var TABstr = (typeof TAB !== 'undefined') ? TAB : '\t';
 
         var nextLabel   = TABstr;   // pending label prefix
-        var nextName    = '';       // ...and its raw `@name`, to decide whether it may ride a `!` line
+        var nextRide    = false;    // ...and whether it may ride a `!` line instead of costing a NOOP
         var nextComment = '';       // pending trailing comment
-
-        /* A label may RIDE an assemble-time line instead of being spent on a NOOP. The assembler resolves
-           `! LSSi .. @L` against a folded line, but a runtime `GOTO @L` reports "Symbol not found (in
-           expected scope)" once that line folds away. So ride only a label some `!` branch names and no
-           runtime one does - an UNREFERENCED label keeps its NOOP, because a switch case label (`.sN#k`)
-           is reached by SWCH dispatch that spells the name out of a base and never operands it here. */
-        var rides = {};
-        for (var p = 0; p < $$parser.metacode.length; ++p) {
-            var pr = $$parser.metacode[p], po = pr.operator;
-            if (po == null || po === '<--' || po === ';') continue;
-            var meta = (po.substr(0, 3) === '<> ');
-            for (var q = 0; q < pr.operands.length; ++q) {
-                var pq = pr.operands[q];
-                if (typeof pq === 'string' && pq.charAt(0) === '@' && rides[pq] !== false) {
-                    rides[pq] = meta;
-                }
-            }
-        }
         function formatOperand(op) {
             return (op == null ? '' : op);
         }
@@ -3394,7 +3385,7 @@
                     output(prefix + nextLabel + 'NOOP');
                 }
                 nextLabel = rec.operands[0].substr(1) + ':' + TABstr;
-                nextName  = rec.operands[0];
+                nextRide  = (rec.mayRide === true);
                 continue;
             }
 
@@ -3412,7 +3403,12 @@
             /* -------------------------------------------------- */
             if (op.substr(0, 3) === '<> ') {
 
-                if (nextLabel !== TABstr && rides[nextName] !== true) {
+                /* A label RIDES this `!` line only if its minter said so. The assembler resolves
+                   `! LSSi .. @L` against a line that folds away, but a runtime `GOTO @L` then reports
+                   "Symbol not found (in expected scope)" - and a label nobody operands at all (a switch
+                   case, which SWCH spells out of a table base) would vanish entirely. Only the minter
+                   knows which it is, so it flags the record rather than have this pass guess. */
+                if (nextLabel !== TABstr && !nextRide) {
                     output(prefix + nextLabel + 'NOOP');
                     nextLabel = TABstr;
                 }
