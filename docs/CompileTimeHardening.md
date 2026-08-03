@@ -43,10 +43,13 @@ may legitimately narrow the range, and the surplus arms are then dead code in th
 compile-time-false branch is dead (see [`FutureOptimizations.md`](FutureOptimizations.md)). Rejecting it
 would make a valid configuration unbuildable. Unreachable is not wrong.
 
-**`&a[k]` out of bounds is not on this list, by design.** `p = &a[7]` compiles, assembles and runs, and
+**`&a[k]` PAST THE END is not on this list, by design.** `p = &a[7]` compiles, assembles and runs, and
 should: forming a pointer is not a memory access, and one-past-the-end is a standard idiom -
 `e = &a[4]` on a 4-element array is how you write a loop bound, and it works today. A bounds check on
 address-of would reject the idiom while catching nothing real. Only the dereference matters.
+(A NEGATIVE `k` is the exception and IS rejected, address or not - see `docs/Impala2.md` "Array bounds".
+`&g:-1` and `$a:-1` are rejected by the assembler, and on a struct field the offset folds to a positive
+one naming the previous field, so it would assemble and alias silently.)
 
 
 ## The constraint: a constant is not always a number Impala knows
@@ -78,12 +81,14 @@ Existing precedent: GAZL already rejects a CONSTANT out-of-range offset into a g
 index (`POKE &g0 %0`). So partial coverage already exists at the assembler level.
 
 
-## The deferred assertion (verified, but currently unused)
+## The deferred assertion
 
-**No item in this document needs this.** It is recorded because the capability is real and was verified,
-not because it is planned. Every symbolic case here turned out to be either already covered by the
-assembler (item 1) or legitimately configuration-dependent and therefore not an error at all (item 3).
-Before reaching for it, re-read rule 3 above.
+**One item needs this, and only one: a constant index into a struct array FIELD whose extent is symbolic**
+(item 1, shipped 2026-08-03). That case is genuinely wrong in every configuration AND invisible to the
+assembler, because the overrun stays inside the struct's allocation. Everything else here turned out to be
+either already covered by the assembler (a plain array, symbolic extent or not) or legitimately
+configuration-dependent and therefore not an error at all (item 3). Before reaching for it, re-read rule 3
+above - the bar is "wrong in every configuration", and almost nothing clears it.
 
 > **Superseded mechanism, 2026-07-31.** Everything below works, but it is the wrong tool. GAZL has a
 > purpose-built `! FAIL <free text>` directive (`src/GAZL.cpp:1027`) that aborts assembly with your own
@@ -143,10 +148,16 @@ at assembly, on the end user's machine, when Impala had the number all along. `A
 `PEEK`/`POKE` region check instead.
 
 - Numeric index and numeric extent -> plain compile-time error, with the extent in the message.
-- **Symbolic extent -> do nothing.** Not a deferred assertion: the assembler resolves the symbol before it
-  checks the offset, so it catches this case natively. Verified with `const int N = 4; int array a[N];
-  a[7] = 1;` -> `Offset out of bounds: $a`. Emitting `! LSSi`/`! GOTO` scaffolding to re-check what the
-  assembler checks for free would be strictly worse than silence.
+- **Symbolic extent on a PLAIN array -> do nothing.** Not a deferred assertion: the assembler resolves the
+  symbol before it checks the offset, so it catches this case natively. Verified with `const int N = 4;
+  int array a[N]; a[7] = 1;` -> `Offset out of bounds: $a`. Emitting `! LSSi`/`! GOTO` scaffolding to
+  re-check what the assembler checks for free would be strictly worse than silence - measured when E461
+  shipped, doing so grew 15 of 87 goldens, versus 1 when scoped.
+- **Symbolic extent on a struct array FIELD -> deferred assertion after all.** The paragraph above is
+  right about plain arrays and wrong about this one: a field overrun stays INSIDE the struct's allocation,
+  so `Symbols::resolve` sees a legal offset and nothing catches it at any stage. This is the one shape
+  that earns the `! LSSi`/`! FAIL` scaffolding, and it gets it (`docs/Impala2.md`, "Array bounds",
+  tier 2).
 
 **Priority: low.** This is caret placement on an error that already names the source expression, and it is
 the whole of what is left. Do not let its position at the top of this list imply otherwise.

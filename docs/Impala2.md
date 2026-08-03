@@ -1340,23 +1340,32 @@ and silently aliases a neighbour. One mistake with three outcomes; `E461` gives 
 Only a LITERAL index is decidable here - `g[2 + 7]` is not folded before the subscript sees it, and falls
 through to tier 3.
 
-**Tier 2 - constant index, symbolic extent (`v[SN]`): OPEN, and it is a real hole, not an optimisation.**
-For a plain array the assembler already covers it: it resolves the symbol before checking the offset, so
-`const int SN = 4; global int array a[SN]; global a[7] = 1;` is rejected with `Offset out of bounds: a`.
-For a struct array FIELD it is covered by nothing - the overrun stays inside the struct's allocation, so
-the assembler sees a legal offset, and tier 1 declined because the extent is not a number:
+**Tier 2 - constant index, symbolic extent (`v[SN]`): a DEFERRED assertion, at GAZL assembly time.** The
+question is real but not answerable at Impala compile time, so it is asked of the assembler in the
+canonical `! LSSi` / `! FAIL` / skip-label form (`docs/TwoStageConstants.md` rule 4, the same shape
+`assertFitsExtent` uses for an over-filled initializer):
 
-```impala
-const int SN = 2
-struct T { int array v[SN]; int array pad[8] }
-global T t
-export function main() { global t.v[5] = 99; }     // compiles, assembles, runs, lands in `pad`
+```gazl
+! LSSi #5 #.z.T.v @.g0
+! FAIL index 5 is outside T.v, whose extent .z.T.v is not known until GAZL assembly time
+.g0:	!
 ```
 
-`--range-checks` does not catch it either - it deliberately skips constant indices, on the grounds that
-tier 1 has them, which is true only when the extent is numeric. The fix is the deferred-assertion idiom
-(`! LSSi` / `! FAIL` / skip label, per `docs/TwoStageConstants.md`), which `assertFitsExtent` already uses
-for over-filled initializers and which is verified to work inside a function body at zero runtime cost.
+Zero runtime instructions - it executes nothing. It is emitted at the DEREFERENCE, so `&t.v[9]` stays
+legal here exactly as in tier 1.
+
+**Scoped to a struct array FIELD, deliberately.** That is the only place nothing else looks: the overrun
+stays inside the struct's allocation, so `Symbols::resolve` sees a legal offset. A plain array is already
+caught natively - `const int SN = 4; global int array a[SN]; global a[7] = 1;` gives
+`Offset out of bounds: a` - and re-checking it here would put three assemble-time lines into the shipped
+text of the commonest idiom in the corpus to say what the assembler says for free. Measured: **15 of 87
+goldens grew when this was not scoped, versus 1 when it was.** A struct-ELEMENT array field is skipped
+too, because `.z.` counts words and the guard would need the index scaled by the element size.
+
+The guards are queued and emitted at the end of the enclosing function, not where they are found:
+`declare` flushes pending metacode first, and a subscript is discovered halfway through building an
+expression, so emitting there renders a half-built meta and throws. Position is free - the guard executes
+nothing and every name it uses is module-scoped. `deadStrip` removes a dead function's guards with it.
 
 **Tier 3 - dynamic index: `--range-checks`, off by default.** The only tier that can see `a[i]`. It emits
 a `DEBUG`-gated test per subscript, bounded by the array's `.z.` extent symbol - so it works unchanged for

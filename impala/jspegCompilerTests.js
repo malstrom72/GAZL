@@ -1824,6 +1824,28 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler range-checks every array shape, and only those");
 }
 
+// TIER 2 - a constant index whose extent is a SYMBOL. Undecidable at Impala compile time, so it becomes a
+// deferred `! LSSi` / `! FAIL` assertion the assembler resolves, at zero runtime cost. Scoped to a struct
+// array FIELD on purpose: that is the only place nothing else looks, because the overrun stays inside the
+// struct's allocation. A plain `a[7]` on `a[SN]` is already caught natively ("Offset out of bounds: a"),
+// and re-checking it would put three lines into the shipped text of the commonest idiom in the corpus -
+// measured, 15 of 87 goldens grew when this was not scoped, versus 1 when it was.
+{
+	const sym = "const int SN = 2\nstruct T { int array v[SN]; int array pad[8] }\nglobal T t\n";
+	const deferred = compileWithJsImpala(sym
+		+ "export function main() { global t.v[5] = 99; }\n", { randomId: 42 });
+	assert(/! LSSi #5 #\.z\.T\.v @\.g\d/.test(deferred) && /! FAIL index 5 is outside T\.v/.test(deferred),
+		"tier 2: no deferred guard for a constant index into a symbolic extent\n" + deferred);
+	const addr = compileWithJsImpala(sym
+		+ "export function main() locals int pointer p { p = &global t.v[9]; }\n", { randomId: 42 });
+	assert(!/! FAIL index/.test(addr), "tier 2: guarded an ADDRESS, which is always legal\n" + addr);
+	const plain = compileWithJsImpala("const int SN = 4\nglobal int array a[SN]\n"
+		+ "export function main() { global a[7] = 1; }\n", { randomId: 42 });
+	assert(!/! FAIL index/.test(plain),
+		"tier 2: duplicated the assembler's own check on a plain array\n" + plain);
+	console.log("impala.jspeg compiler defers a symbolic-extent field index to GAZL assembly time");
+}
+
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
 const caretNonCases = [
 	["if/else with a semicolon-terminated then-branch",

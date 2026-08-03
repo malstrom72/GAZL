@@ -73,4 +73,7 @@
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ stripmain.impala:48:31
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ stripmain.impala:48:42
  								RETU   							; }
+ 					! LSSi #1 #.z.Tail.vals @.g1
+ 					! FAIL index 1 is outside Tail.vals, whose extent .z.Tail.vals is not known until GAZL assembly time
+ .g1:				!
 

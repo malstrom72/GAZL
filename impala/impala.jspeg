@@ -159,6 +159,7 @@
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.topNames = {};                                   /// name -> kind ('global'/'function'/'const'/'struct'/'functype'), one flat namespace
     var $$parser.guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
+    var $$parser.pendingGuards = [];                              /// deferred index assertions found mid-expression, emitted at the end of the function (flushIndexGuards)
     var $$parser.initElemType = undefined;                        /// declared element type an `InitList` must match ('i'/'f'/'p'); undefined = untyped array, accept what comes
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
@@ -1207,14 +1208,27 @@
        outcomes across the shapes; this is the one place that can give it one. */
     $$parser.checkConstIndex = function (extent, idxRV, sourceCode, sourceOffset) {
         var ck = $$parser.constInt(idxRV);
-        var cn = (extent === undefined) ? undefined : $$parser.constInt('#' + extent.n);
-        if (ck === undefined || cn === undefined) {
-            return undefined;                                     /* symbolic either side - not knowable here */
+        if (ck === undefined || extent === undefined) {
+            return undefined;                                     /* a runtime index - --range-checks' job */
         }
-        if (ck < 0) {
+        if (ck < 0) {                                             /* decidable WITHOUT the extent */
             $$parser.fail('Index ' + ck + ' is before the start of this array',
                     sourceCode, sourceOffset, 'E461',
-                    'valid indices are 0 to ' + (cn - 1) + '; a negative index is not a legal address either');
+                    'a negative index is not a legal address either');
+        }
+        var cn = $$parser.constInt('#' + extent.n);
+        if (cn === undefined) {
+            /* TIER 2 - the extent is a symbol only the assembler can resolve. Deferred for a struct array
+               FIELD, and ONLY there, because that is the only place nothing else looks: the overrun stays
+               inside the struct's allocation, so `Symbols::resolve` sees a legal offset. A plain array
+               with a symbolic extent is already caught natively (`a[7]` on `a[SN]` -> "Offset out of
+               bounds: a"), and re-checking it here would put three assemble-time lines into the shipped
+               text of the canonical `const int N; array a[N]` idiom to say what the assembler says for
+               free - 15 of 87 goldens grew when this was not scoped. A struct-ELEMENT array is skipped
+               too: `.z.` counts words, so the guard would need the index scaled by the element size. */
+            return (extent.inField && extent.scalar)
+                    ? { k: ck, sym: extent.sym, what: extent.what, src: sourceCode, off: sourceOffset }
+                    : undefined;
         }
         return (ck >= cn) ? { k: ck, n: cn, src: sourceCode, off: sourceOffset } : undefined;
     };
@@ -1281,16 +1295,43 @@
         return $$parser.checkConstIndex(extent, idxOp, sourceCode, sourceOffset);
     };
 
-    /* An out-of-range constant index survived the subscript as a flag because only its USE decides
-       whether it is an error. Anything that reads or writes the element lands here; `&` cleared it. */
+    /* A constant index that tier 1 could not clear survived the subscript as a flag, because only its USE
+       decides whether it is an error. Anything that reads or writes the element lands here; `&` cleared
+       it. A numeric extent is decided now; a symbolic one becomes a DEFERRED assertion, asked of the
+       assembler in the canonical `! LSSi` / `! FAIL` / skip-label form (docs/TwoStageConstants.md rule 4,
+       the same shape assertFitsExtent uses for an over-filled initializer). It costs no runtime
+       instruction and is emitted only at a real dereference, so `&s.v[9]` stays legal here too. */
     $$parser.checkIndexUse = function (expr) {
         var op = expr.oobIndex;
         if (op === undefined) return;
         expr.oobIndex = undefined;
-        $$parser.fail('Index ' + op.k + ' is outside the extent ' + op.n + ' of this array',
-                op.src, op.off, 'E461',
-                'valid indices are 0 to ' + (op.n - 1)
-                        + ' - taking its ADDRESS is legal, reading or writing it is not');
+        if (op.n !== undefined) {
+            $$parser.fail('Index ' + op.k + ' is outside the extent ' + op.n + ' of this array',
+                    op.src, op.off, 'E461',
+                    'valid indices are 0 to ' + (op.n - 1)
+                            + ' - taking its ADDRESS is legal, reading or writing it is not');
+        }
+        $$parser.pendingGuards.push(op);                          /* NOT emitted here - see flushIndexGuards */
+    };
+
+    /* The deferred guards a function body accumulated, emitted once its own code is out. They cannot go
+       out where they are FOUND: `declare` flushes pending metacode first, and a subscript is discovered
+       halfway through building an expression, so flushing there renders a half-built meta and throws.
+       Position is free anyway - the guard executes nothing, and every name it uses (`.z.<path>`, a
+       literal) is module-scoped - so the end of the enclosing function is simply the first clean
+       boundary. `.g<N>` has its own counter because labelCounter resets per function. */
+    $$parser.flushIndexGuards = function () {
+        for (var i = 0; i < $$parser.pendingGuards.length; ++i) {
+            var op = $$parser.pendingGuards[i];
+            var skip = '.g' + ($$parser.guardCounter++);
+            $$parser.declare('! LSS?', 'globals', undefined, 'i', true,
+                    '#' + op.k + ' #' + op.sym + ' @' + skip, op.src, op.off);
+            $$parser.declare('! FAIL index ' + op.k + ' is outside ' + op.what + ', whose extent '
+                            + op.sym + ' is not known until GAZL assembly time',
+                    'globals', undefined, undefined, true, undefined, op.src, op.off);
+            $$parser.declare('!', 'globals', skip, undefined, true, undefined, op.src, op.off);
+        }
+        $$parser.pendingGuards.length = 0;
     };
 
     $$parser.makeRValue = function (expr, classes) {
@@ -2433,7 +2474,8 @@
             $$parser.setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex);
             x.extent = field.extent || (field.extent =             /* built once per FIELD, not per access */
                     { n: field.size, what: structName + '.' + fieldName,
-                      sym: $$parser.extentSymbol(fieldName, structName) });
+                      sym: $$parser.extentSymbol(fieldName, structName),
+                      scalar: !$$parser.isStructAtom(field.elem), inField: true });
             return;
         }
 
@@ -3920,7 +3962,8 @@ inp:ArgsDecl ')'_
                                                                                                         here - see arrayExtent's shape */
                                                                                  $$parser.symbols.locals['$' + v.name].extent =
                                                                                          { n: v.size, what: v.name,
-                                                                                           sym: $$parser.extentSymbol(v.name, $id) };
+                                                                                           sym: $$parser.extentSymbol(v.name, $id),
+                                                                                           scalar: !$$parser.isStructAtom(v.elem) };
                                                                              }
                                                                          });
                                                                          iterate($loc, function (v) {   /* the count scratches ArrayDecl held for this
@@ -3935,6 +3978,8 @@ inp:ArgsDecl ')'_
                                                                          $$parser.processBranches();
                                                                          $$parser.emit('--^', undefined, undefined, undefined, undefined);
                                                                          $$parser.flushMetaCode('\t');
+                                                                         $$parser.flushIndexGuards();   /* metacode is empty here - the
+                                                                                                          first point declare() is safe */
 
                                                                          prune($$parser.symbols.locals);
                                                                          $$parser.labelCounter = 0;
@@ -4292,7 +4337,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                             );
                                                                             $$parser.symbols.globals[$a.name].extent =
                                                                                     { n: $a.size, what: $a.name,
-                                                                                      sym: $$parser.extentSymbol($a.name) };
+                                                                                      sym: $$parser.extentSymbol($a.name),
+                                                                                      scalar: !$$parser.isStructAtom($a.elem) };
                                                                             $$parser.returnBack($a.size);   /* declared: this consumer is done with it */
                                                                             $aStructEl = ($a.elem !== undefined
                                                                                     && $$parser.descTail($a.elem) === undefined
