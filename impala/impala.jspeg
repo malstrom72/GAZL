@@ -4021,7 +4021,7 @@ FuncDecl    <-                                                        { $inl = f
                 ( INLINE                                              { $inl = true; $inlAt = $$i; }
                   _
                 )?
-                FUNCTION _ id:Identifier '('_                         {
+                FUNCTION _ { $fnAt = $$i; } id:Identifier '('_        {
                                                                          if ($inl) {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
                                                                              $$parser.fail('Inline functions are not supported in Impala 2.0',
                                                                                      $$s, $inlAt, 'E439',
@@ -4047,7 +4047,7 @@ FuncDecl    <-                                                        { $inl = f
                                                                              'U',
                                                                              true,
                                                                              undefined,
-                                                                             $$s, $$i
+                                                                             $$s, $fnAt   /* the NAME, not the `(` this action already ate */
                                                                          );
                                                                          var entry = $$parser.symbols.functions[$id];
                                                                          if (entry) {

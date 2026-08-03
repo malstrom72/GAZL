@@ -1780,6 +1780,12 @@ const caretCases = [
 	["E461 survives a re-declaration that precedes it",
 		"extern array g\nglobal int array g[4]\nfunction main() { global g[9] = 1; }\n",
 		"3:28: error[E461]"],
+	// The function door recorded its position AFTER `'('_` had been consumed, so every diagnostic that
+	// names a function pointed at the parenthesis (or the space past it) instead of the name.
+	["a function-name clash points at the name",
+		"global int dup\nfunction dup() { }\n", "2:10: error[E401]"],
+	["a reserved function name points at the name",
+		"function continue() { }\n", "1:10: error[E449]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);
