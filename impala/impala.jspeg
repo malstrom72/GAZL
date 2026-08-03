@@ -1159,7 +1159,7 @@
         rec.root      = undefined;
         rec.arrayOf   = undefined;
         rec.extent    = undefined;
-        rec.onePast   = undefined;
+        rec.oobIndex   = undefined;
         rec.struct    = undefined;
         rec.dynIndex  = undefined;
         rec.winBase   = undefined;
@@ -1184,13 +1184,36 @@
      * Convert an expression into an r-value, allocating a transient
      * when needed.  `classes` defaults to '#<&^$%'.
      */
+    /* A CONSTANT index against a KNOWN extent. One rule for every array, called from both subscript
+       paths - a struct field keeps its extent on a place, a plain array decayed to a pointer and carries
+       it on the meta, and there is no reason for `g[9]` and `s.v[9]` to report differently. Undecidable
+       when either side is symbolic (`v[SN]`, a runtime index); those fall through to --range-checks. The
+       index test accepts a MINUS sign the folding branches do not, so `v[-1]` - which otherwise takes the
+       dynamic path and writes BACKWARDS into whatever precedes the array - is caught here too.
+
+       NOTHING IS REPORTED HERE, because whether this is an error depends on what happens next, and the
+       rule is `docs/Impala2Review.md`'s: a DEREFERENCE with an out-of-range constant index is a
+       guaranteed trap, so it is a compile error, while ADDRESS FORMATION (`&a[7]`, `&p[[i]]`) is always
+       legal and never checked - an out-of-range address is a value like any other, and GAZL's own check
+       fires on access operands, not on address-taking. So the finding is returned as a flag; reference()
+       clears it and checkIndexUse reports on every use that actually reads or writes the element. That
+       is also why Impala needs no one-past-the-end carve-out where C does. */
+    $$parser.checkConstIndex = function (extent, idxRV, sourceCode, sourceOffset) {
+        if (extent === undefined || !/^[0-9]+$/.test('' + extent.n)
+                || !/^#-?[0-9]+$/.test(idxRV)) {
+            return undefined;
+        }
+        var ck = parseInt(idxRV.substr(1), 10), cn = parseInt(extent.n, 10);
+        return (ck < 0 || ck >= cn) ? { k: ck, n: cn, src: sourceCode, off: sourceOffset } : undefined;
+    };
+
     /* What a subscript needs to know about the array it indexes: `n` decides the two STATIC tiers and is
        a number only when the source wrote one, `sym` is the `.z.` extent in words and is what the
        RUNTIME check compares against, so it works for a symbolic extent too. A declared array records
        `extentSym` at its declaration - the one point where a local's owning function is in scope. */
     $$parser.arrayExtent = function (sym, name) {
         return (sym === undefined || sym.extentSym === undefined) ? undefined
-                : { n: sym.size, sym: sym.extentSym, what: name };
+                : { n: sym.extentNum, sym: sym.extentSym, what: name };
     };
 
     /* `--range-checks`: the DEBUG-gated RUNTIME bounds test for a subscript whose index is not a
@@ -1231,22 +1254,23 @@
         $$parser.emit('<-?', true, ok, undefined, undefined);
     };
 
-    /* One past the end survived the subscript as a flag because only `&` makes it legal. Anything that
-       READS or WRITES the element is a real overrun, and lands here. */
-    $$parser.checkOnePast = function (expr) {
-        var op = expr.onePast;
+    /* An out-of-range constant index survived the subscript as a flag because only its USE decides
+       whether it is an error. Anything that reads or writes the element lands here; `&` cleared it. */
+    $$parser.checkIndexUse = function (expr) {
+        var op = expr.oobIndex;
         if (op === undefined) return;
-        expr.onePast = undefined;
-        $$parser.fail('Index ' + op.n + ' is outside the extent ' + op.n + ' of this array',
+        expr.oobIndex = undefined;
+        $$parser.fail('Index ' + op.k + ' is outside the extent ' + op.n + ' of this array',
                 op.src, op.off, 'E461',
-                'one past the end is an address only - write `&` to take it, or index 0 to ' + (op.n - 1));
+                'valid indices are 0 to ' + (op.n - 1)
+                        + ' - taking its ADDRESS is legal, reading or writing it is not');
     };
 
     $$parser.makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
-        $$parser.checkOnePast(expr);                              /* reading it - reference() would have cleared the flag */
+        $$parser.checkIndexUse(expr);                              /* reading it - reference() would have cleared the flag */
 
         if (expr.place && expr.arrayOf) {                         /* array place used without a subscript -> decay to a pointer */
             var delem = expr.arrayOf;
@@ -2175,7 +2199,7 @@
         slot.root     = root || structName || arrayOf;
         slot.elem     = arrayOf || structName;
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
-        slot.onePast  = undefined;                                /* pooled slot: never inherit another subscript's end-pointer flag */
+        slot.oobIndex  = undefined;                                /* pooled slot: never inherit another subscript's finding */
     };
 
     /* A place resolved to a terminal SCALAR location (a scalar field, or a scalar array element) becomes a
@@ -2218,27 +2242,7 @@
         var eType = $$parser.descHead(elem), eTail = $$parser.descTail(elem);
         var idxRV = $$parser.makeRValue(metaSlot(idx));
 
-        /* A struct array FIELD is the one overrun nothing else sees: GAZL bounds-checks the whole
-           allocation, which `s.v[5]` on `int array v[2]` never leaves - it just lands in the next field.
-           Decidable only when both the index and the extent are numbers here; a symbolic extent (`v[SN]`)
-           or a runtime index is not knowable at Impala compile time. The index test accepts a MINUS sign
-           the folding branch below does not, so `v[-1]` - which takes the dynamic path and writes
-           BACKWARDS into the preceding field - is caught too. */
-        var onePast;
-        if (extent !== undefined && /^[0-9]+$/.test('' + extent.n) && /^#-?[0-9]+$/.test(idxRV)) {
-            var ck = parseInt(idxRV.substr(1), 10), cn = parseInt(extent.n, 10);
-            /* ONE PAST THE END is an address, not an element: `&s.v[2]` on `v[2]` is the standard end
-               pointer and GAZL accepts it. So it cannot be rejected here - by the time the subscript is
-               parsed nobody knows yet whether an `&` follows. Flag it instead and let reference() clear
-               the flag; makeRValue and assign fail on anything that still carries one, which is exactly
-               the set of uses that DEREFERENCE the element. Two past is wild in every context. */
-            if (ck < 0 || ck > cn) {
-                $$parser.fail('Index ' + ck + ' is outside the extent ' + cn + ' of this array',
-                        sourceCode, sourceOffset, 'E461',
-                        'valid indices are 0 to ' + (cn - 1));
-            }
-            if (ck === cn) onePast = { n: cn, src: sourceCode, off: sourceOffset };
-        }
+        var oobIndex = $$parser.checkConstIndex(extent, idxRV, sourceCode, sourceOffset);
 
         if (/^#[0-9]+$/.test(idxRV)) {                           /* constant index -> fold into the compile-time offset parts */
             var k = parseInt(idxRV.substr(1), 10);
@@ -2254,7 +2258,7 @@
             }
             if (elemStruct) $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
             else            $$parser.emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
-            metaSlot(x).onePast = onePast;                       /* set AFTER the terminal call - both clear the slot */
+            metaSlot(x).oobIndex = oobIndex;                       /* set AFTER the terminal call - both clear the slot */
             return;
         }
 
@@ -2271,6 +2275,8 @@
                 $$parser.emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
                 $$parser.emitPlaceValue(x, 'local', x.base, x.offParts, idxRV, eType, eTail);
             }
+            metaSlot(x).oobIndex = oobIndex;                     /* a NEGATIVE constant reaches this path:
+                                                                    the folding test above has no minus sign */
             return;
         }
 
@@ -2288,6 +2294,7 @@
             $$parser.emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
             $$parser.emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
         }
+        metaSlot(x).oobIndex = oobIndex;
     };
 
     /* a place's address: fold its offset parts into the base - ADRL for a local, ADDp for a pointer. */
@@ -2385,7 +2392,7 @@
                     sourceCode, sourceOffset, 'E415');
         }
 
-        $$parser.checkOnePast(x);                                 /* `e[[2]].a` reaches INTO the element past the end */
+        $$parser.checkIndexUse(x);                                 /* `e[[9]].a` reaches INTO an element that is not there */
 
         var field = $$parser.findField(structName, fieldName);
         if (!field) {
@@ -2509,10 +2516,12 @@
                The two branches below are exactly the two shapes that name a declared array, `&global` and
                `$local`; anything else is a bare pointer with no extent to check. */
             var xt = leftx.extent;
+            var xOob;
 
             if (leftx.operator === ':=' && op1[0] === '&') {
 
                 var op2 = $$parser.makeRValue(rightx);
+                xOob = $$parser.checkConstIndex(xt, op2, sourceCode, sourceOffset);
                 if (op2[0] !== '#') $$parser.emitRangeCheck(op2, xt, sourceCode, sourceOffset);
 
                 if (op2[0] === '#') {
@@ -2531,6 +2540,7 @@
                 assert(op1[0] === '$', "=& expects local '$'");
 
                 var op2b = $$parser.makeRValue(rightx);
+                xOob = $$parser.checkConstIndex(xt, op2b, sourceCode, sourceOffset);
                 if (op2b[0] !== '#') $$parser.emitRangeCheck(op2b, xt, sourceCode, sourceOffset);
 
                 if (op2b[0] === '#') {
@@ -2549,6 +2559,7 @@
                                   $$parser.makeRValue(leftx),
                                   $$parser.makeRValue(rightx));
             }
+            leftx.oobIndex = xOob;                    /* after the makeMeta above, which clears it */
 
         } else {
 
@@ -2686,8 +2697,8 @@
         x      = metaSlot(x);
         leftx  = metaSlot(leftx);
         rightx = metaSlot(rightx);
-        $$parser.checkOnePast(leftx);                             /* writing it: a target is never an address */
-        $$parser.checkOnePast(rightx);                            /* `x = s.v[2]` reuses the operand without makeRValue */
+        $$parser.checkIndexUse(leftx);                             /* writing it: a target is never an address */
+        $$parser.checkIndexUse(rightx);                            /* `x = s.v[2]` reuses the operand without makeRValue */
 
         /* whole-struct assignment: one COPY *sizeof, statement value is the dest place */
         if (leftx.type === 'S' || rightx.type === 'S') {
@@ -2863,9 +2874,9 @@
     $$parser.reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
-        expr.onePast = undefined;                    /* taking the ADDRESS of one past the end is the whole
-                                                        point of allowing it - see subscriptStruct. Cleared
-                                                        before the `=[]$` branch below calls makeRValue. */
+        expr.oobIndex = undefined;                   /* address formation is never bounds-checked, at any
+                                                        index - see checkConstIndex. Cleared before the
+                                                        `=[]$` branch below calls makeRValue. */
 
         if (expr.operator === '=') {                 // variable
             assert(expr.operands[2] === undefined,
@@ -3883,10 +3894,12 @@ inp:ArgsDecl ')'_
                                                                                  );
                                                                              }
                                                                              if (v.type === 'A') {   /* the ONLY place the owning function's
-                                                                                                        name is in scope, so the extent symbol is
-                                                                                                        recorded here for --range-checks to quote */
+                                                                                                        name is in scope, so the extent is recorded
+                                                                                                        here: the symbol for --range-checks, the
+                                                                                                        count for the constant-index check */
                                                                                  $$parser.symbols.locals['$' + v.name].extentSym =
                                                                                          $$parser.extentSymbol(v.name, $id);
+                                                                                 $$parser.symbols.locals['$' + v.name].extentNum = v.size;
                                                                              }
                                                                          });
                                                                          iterate($loc, function (v) {   /* the count scratches ArrayDecl held for this
@@ -4257,7 +4270,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 $a.elem
                                                                             );
                                                                             $$parser.symbols.globals[$a.name].extentSym =
-                                                                                    $$parser.extentSymbol($a.name);   /* for --range-checks */
+                                                                                    $$parser.extentSymbol($a.name);
+                                                                            $$parser.symbols.globals[$a.name].extentNum = $a.size;
                                                                             $$parser.returnBack($a.size);   /* declared: this consumer is done with it */
                                                                             $aStructEl = ($a.elem !== undefined
                                                                                     && $$parser.descTail($a.elem) === undefined
@@ -4853,7 +4867,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
 Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        ++$$.count;
                                                        var meta = metaSlot($a);
-                                                       $$parser.checkOnePast(meta);   /* a bare arg is placed without makeRValue */
+                                                       $$parser.checkIndexUse(meta);   /* a bare arg is placed without makeRValue */
                                                        if (meta.type === 'V') {
                                                            $$parser.typeError(
                                                                'Invalid type ({$type1})',

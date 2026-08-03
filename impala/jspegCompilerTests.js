@@ -1695,38 +1695,43 @@ const caretCases = [
 	["a trailing bad initializer still renders a caret, not a position past EOF",
 		"function main() { }\nglobal int x = \"nope\"\n", "2:16: error[E407]"],
 	// E461: an array FIELD overrun stays inside the struct's allocation, so GAZL cannot see it -
-	// `s.v[5]` on `int array v[2]` silently landed in `pad`. The negative case matters separately: it
-	// takes the DYNAMIC path (the folding branch's regex has no minus sign), and writes backwards into
-	// the field before it. ONE past the end is not an overrun: `&s.v[2]` is the standard end pointer and
-	// GAZL accepts it, so the subscript only FLAGS it and every use that dereferences the element - a
-	// read, a write, a bare argument, a `.field` into it - reports; `&` clears the flag. The read and
-	// the argument are listed because neither goes through makeRValue: they reuse the operand directly,
-	// so a check placed only there passes them silently.
+	// `s.v[5]` on `int array v[2]` silently landed in `pad`. A PLAIN array is checked by the same rule,
+	// on a different path (it decayed to a pointer at lookup), because `g[9]` and `s.v[9]` are the same
+	// mistake and reporting one at Impala compile time and the other as a GAZL symbol would be arbitrary.
+	// The negative case matters separately: it takes the DYNAMIC path (the folding branch's regex has no
+	// minus sign) and writes BACKWARDS. The read and the bare argument are listed because neither goes
+	// through makeRValue - they reuse the operand directly, so a check placed only there passes them.
 	["E461 names the offending index on a struct array field",
 		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
 			+ "function main() { global s.v[5] = 1; }\n", "3:30: error[E461]"],
 	["E461 catches a negative index, which takes the dynamic path",
 		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
 			+ "function main() { global s.pad[-1] = 1; }\n", "3:32: error[E461]"],
-	["E461 reports a READ one past the end, which never reaches makeRValue",
+	["E461 reports a READ, which never reaches makeRValue",
 		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
 			+ "function main() locals int x { x = global s.v[2]; }\n", "3:47: error[E461]"],
-	["E461 reports a bare ARGUMENT one past the end",
+	["E461 reports a bare ARGUMENT",
 		"extern native printInt\nstruct S { int array v[2]; int array pad[8] }\nglobal S s\n"
 			+ "function main() { printInt(global s.v[2]); }\n", "4:39: error[E461]"],
-	["E461 reports a `.field` reached through the element one past the end",
+	["E461 reports a `.field` reached through an element that is not there",
 		"struct E { int a }\nstruct O { E array e[2]; int t }\nglobal O o\n"
 			+ "function main() { global o.e[[2]].a = 1; }\n", "4:31: error[E461]"],
+	["E461 covers a plain GLOBAL array, not just a struct field",
+		"global int array g[4]\nfunction main() { global g[9] = 1; }\n", "2:31: error[E461]"],
+	["E461 covers a plain LOCAL array",
+		"function main() locals int array a[5] { a[9] = 1; }\n", "1:46: error[E461]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);
 }
 console.log("impala.jspeg compiler points its carets at the offending token");
 
-// The END POINTER is the reason E461 cannot simply reject `index == extent` at the subscript: it is a
-// legal address, GAZL assembles `&a:N`, and rejecting it would outlaw the standard one-past sentinel.
-// These are the shapes that must keep compiling; without them a stricter rule looks green forever.
-const endPointerCases = [
+// ADDRESS FORMATION IS NEVER BOUNDS-CHECKED, at any index - the rule from docs/Impala2Review.md, and the
+// reason E461 cannot fire at the subscript itself: whether an out-of-range constant is an error depends
+// on what is done with it, and at the subscript the `&` has not been seen yet. It is also why Impala
+// needs no one-past-the-end carve-out where C does; the end pointer is just an address like the rest.
+// Without these cases a stricter rule looks green forever.
+const addressCases = [
 	["&field[extent] is a legal end pointer",
 		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
 			+ "function main() locals int pointer p { p = &global s.v[2]; }"],
@@ -1736,14 +1741,18 @@ const endPointerCases = [
 	["&structField[[extent]] is a legal end pointer too",
 		"struct E { int a }\nstruct O { E array e[2]; int t }\nglobal O o\n"
 			+ "function main() locals E pointer p { p = &global o.e[[2]]; }"],
+	["an address WELL past the end is legal too - the rule has no distance limit",
+		"global int array g[4]\nfunction main() locals int pointer p { p = &global g[9]; }"],
+	["...and the same on a plain local array",
+		"function main() locals int array a[5], int pointer p { p = &a[40]; }"],
 	["in-range reads and writes are untouched",
 		"extern native printInt\nstruct S { int array v[2]; int array pad[8] }\nglobal S s\n"
 			+ "function main() locals int x { global s.v[1] = 3; x = global s.v[1]; printInt(x); }"],
 ];
-for (const [label, source] of endPointerCases) {
-	expectCompileOutcome("end pointer", label, source, null);
+for (const [label, source] of addressCases) {
+	expectCompileOutcome("address formation", label, source, null);
 }
-console.log("impala.jspeg compiler keeps one-past-the-end ADDRESSES legal");
+console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 
 // `--range-checks` is the third tier: a DYNAMIC index into a struct array field, which neither static
 // tier nor GAZL can decide. Both halves are asserted, because a flag that silently does nothing and a
