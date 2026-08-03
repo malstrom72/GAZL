@@ -91,9 +91,16 @@ function runOnVm(res) {
 function checkStripped(res, ref) {
 	const load = runOnVm(res);
 	if (load) return 'stripped: ' + load;
-	return res.stdout === ref.stdout ? null
-			: 'dead-strip changed output: ' + JSON.stringify((res.stdout || '').slice(0, 120))
-					+ ' vs ' + JSON.stringify((ref.stdout || '').slice(0, 120));
+	if (res.stdout === ref.stdout) return null;
+	// Report the FIRST DIFFERING LINE, not the first 120 characters of each. Truncating the head made two
+	// outputs that diverge further down print IDENTICALLY, so the report read like a false positive and a
+	// real fault sat unlooked-at.
+	const a = (ref.stdout || '').split(/\r?\n/), b = (res.stdout || '').split(/\r?\n/);
+	let i = 0;
+	while (i < a.length && i < b.length && a[i] === b[i]) ++i;
+	return 'dead-strip changed output at line ' + (i + 1) + ' of ' + a.length + ': full '
+			+ JSON.stringify(a[i] === undefined ? '<end>' : a[i]) + ' vs stripped '
+			+ JSON.stringify(b[i] === undefined ? '<end>' : b[i]);
 }
 
 // The INVERTED oracle for a deliberate over-fill (see section (4)): Impala cannot count the words of a
@@ -604,8 +611,18 @@ function genProgram() {
 		// parked differential oracle would have reported as a miscompile. Seed every local first.
 		for (const l of locals) {
 			if (isStruct(l.t)) {
-				const s = structs.find((x) => x.name === l.t);
-				for (const fld of s.fields) if (!isStruct(fld.type)) body.push('\t' + l.name + '.' + fld.name + ' = ' + (fld.type === 'f' ? '0.0' : '0') + ';');
+				// EVERY scalar leaf, nested ones included. This used to skip a struct-typed field instead
+				// of descending into it, so `S2 { S0 f5; int f6 }` seeded only `f6` and a read of
+				// `l.f5.f0` returned stack garbage. That is not merely untidy: it made the program's
+				// output depend on the module LAYOUT, which is exactly what --dead-strip changes, so the
+				// strip oracle reported a "changed output" fault against a compiler that was correct
+				// (seed 20986). `structs.length` bounds the descent - a field's struct type is always an
+				// EARLIER declaration, so nesting cannot exceed the number of structs.
+				for (const e of scalarTypes) {
+					for (const pth of structScalarPaths(l.name, l.t, e, structs.length)) {
+						body.push('\t' + pth + ' = ' + (e === 'f' ? '0.0' : '0') + ';');
+					}
+				}
 			} else if (l.t === 'i' || l.t === 'f') {
 				body.push('\t' + l.name + ' = ' + (l.t === 'f' ? '0.0' : '0') + ';');
 			}
@@ -647,8 +664,11 @@ function genProgram() {
 		for (let i = 0; i < f.rets.length; ++i) {
 			const t = f.rets[i];
 			if (isStruct(t)) {
-				const s = structs.find((x) => x.name === t);
-				for (const fld of s.fields) if (!isStruct(fld.type)) body.push('\t' + f.retNames[i] + '.' + fld.name + ' = ' + genExpr(fld.type, 2, scope) + ';');
+				for (const e of scalarTypes) {                // nested leaves too - a returned struct is READ
+					for (const pth of structScalarPaths(f.retNames[i], t, e, structs.length)) {
+						body.push('\t' + pth + ' = ' + genExpr(e, 2, scope) + ';');
+					}
+				}
 			} else {
 				body.push('\t' + f.retNames[i] + ' = ' + genExpr(t, 2, scope) + ';');
 			}
