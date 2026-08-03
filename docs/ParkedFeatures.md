@@ -100,6 +100,82 @@ values (function or funcptr type), `E429` destructuring assignment. Each diagnos
 
 ## GAZL 2 wishlist
 
+**The criterion: does it fit `struct Instruction`?** (`src/GAZL.h:87`)
+
+```cpp
+struct Instruction { Int opcode; Value p0; Value p1; Value p2; };
+```
+
+Opcode plus exactly THREE operand slots, one fixed record for every instruction in every program. A
+candidate needing a fourth operand does not cost "one more field" - it widens every instruction ever
+assembled, to serve whichever one form asked. So sort candidates by which side of that line they fall on:
+
+- a NEW OPCODE reusing the three slots is cheap (an enum entry and a table row);
+- an ASSEMBLE-TIME directive or `!` meta-instruction is cheaper still - it never reaches the VM;
+- a fourth operand is a redesign, and needs a reason that outweighs the size of every other instruction.
+
+The items below are ordered by that rule, cheapest first. One rejected candidate is kept at the end
+because the reasoning is the useful part.
+
+### A region directive for static data at a symbolic offset
+
+`DATA` is positional and append-only, and GAZL 1 has no fill, repeat or origin directive - verified
+against `docs/InstructionSet.md`, plus: a FORWARD `! GOTO` assembles and can even skip a `DATA` line, but
+a BACKWARD one does not assemble at all (`Compile time label not found`), so there are no assemble-time
+loops either. There is therefore no way to emit *or* skip a symbolic number of words.
+
+That blocks initializing anything whose layout is only known at assembly - a host-owned (`extern`) struct,
+or a field sitting behind a struct array field with a symbolic extent. The words such a field does not
+fill are a symbolic count, so nothing after it has a known position.
+
+**Take a REGION, not a cursor.** An `ORG *offset` that merely moves a write cursor RELOCATES the problem
+instead of solving it: it can place a field, but the words it skipped over are still undefined, and a
+symbolic gap cannot be enumerated to fill them. Declaring a region of `*size` words at `*offset`, ZERO
+unless written, gets three things a cursor does not:
+
+1. **Fill falls out.** Untouched words in the region are defined without anyone counting them. This is the
+   only part that makes a symbolic gap expressible at all, and it is the whole reason the cursor form is
+   not enough.
+2. **Overlap is an interval test.** A monotonic cursor is not sufficient - host offsets need not follow
+   declaration order, so out-of-order placement has to stay legal, which otherwise forces a written-WORD
+   set to stay safe. A region declaration IS that bookkeeping, and it also catches an overlapping host
+   layout, which nothing detects today.
+3. **Total accounting.** The whole struct is a region of `.z.Name` words, so every placement is checked
+   against the real size rather than each field independently landing somewhere.
+
+Cost: the assembler must hold interval state across the data section, where `DATA` is append-only today.
+That is the same cost the written-word set would have charged.
+
+> The compiler-side analysis (which shapes are refused today, and why naming the fields fixed how the
+> source READS but not where the words LAND) lives on the `Impala2` branch, which is ahead of this one -
+> it arrives at the next merge.
+
+### `! FAILIF` - one meta-instruction for a deferred assertion
+
+Every assertion the compiler defers to assembly is the same three lines - compare, fail, skip label:
+
+```gazl
+! LSSi #K #.z.Test.b @.g0
+! FAIL index K outside Test.b
+.g0:
+```
+
+Collapsing that to `! FAILIF <cmp> a b "text"` is not just a third of the shipped text. The LABEL is what
+costs: it forces the emitter to decide whether a label may sit on a line that folds away (an assemble-time
+branch resolves against it, a runtime `GOTO` reports `Symbol not found` once the line is gone), and
+whether one that may not needs a `NOOP` to land on. A form with no label retires that whole question.
+Nothing reaches the VM, so this is the cheapest item here.
+
+### Unsigned comparisons (`LSSu` and friends)
+
+There are none: every comparison is `f`/`i`/`p` only, and `SHRu` is the single `u` in the instruction set,
+so the suffix convention exists but was never applied to comparisons. `(unsigned)k < extent` tests BOTH
+ends of a range in one comparison, halving every bounds check - the compiler currently emits two, one per
+end, because it has no other way to say it. New opcodes reusing the three slots, so it fits the record.
+
+Note the VM already relies on exactly this trick internally: `GETL_VVV` (`src/GAZL.cpp`) compares the
+index unsigned so a negative one wraps huge and traps rather than stepping backwards.
+
 ### A distinct function-pointer type (suffix `t`)
 
 `docs/InstructionSet.md` already states the contract: a function pointer is an opaque ordinal, and only
@@ -111,6 +187,30 @@ those operations unrepresentable instead of undefined.
 Written up in [`docs/GAZL2FunctionPointers.md`](GAZL2FunctionPointers.md), with the runtime demonstration,
 the ~14 table entries needed, and the suffix letters ruled out. The sites that must change carry
 `GAZL 2:` comments pointing back at it.
+
+### REJECTED: bounding `GETL`/`SETL` by the object instead of the stack
+
+Kept because the premise is genuinely tempting and the refutation is the useful part.
+
+`docs/MemorySafetyModel.md` notes that a dynamic index is bounded by `dataStackEnd`, NOT by the object it
+indexes - which is why a struct array field overrun stays inside the frame and nothing traps. The compiler
+therefore emits its own comparisons to approximate a check the VM is already performing. Worse, the VM's
+bound is not even a constant:
+
+```cpp
+case GETL_VVV: if ((ui = V2.i) < (UInt)(dataStackEnd - dsp - C1.i)) { V0 = (dsp + C1.i)[ui]; ... }
+```
+
+That subtraction runs on EVERY access. Handing the instruction the object's extent - which the assembler
+knows, as a `.z.` symbol - would be strictly cheaper at run time AND correct, so it reads like a free win.
+
+**It is not, because the extent has nowhere to live.** `GETL` already uses all three slots: `V0` dest,
+`C1` constant base offset, `V2` index. An extent is a fourth, and by the criterion at the top of this
+section that widens every instruction in every program to bounds-check dynamic indices. Packing base and
+extent into `p1` as two halves is the only form that fits, and it caps both to half a `Value`.
+
+If this is ever revisited, the question to answer FIRST is where the extent lives - not whether the check
+is worth having. The check is obviously worth having; the encoding is the entire problem.
 
 ## Impala 3.0 wishlist
 
