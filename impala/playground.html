@@ -43,6 +43,7 @@
 		<label>seed <input id="seed" type="text" value="0x4d2" spellcheck="false" /></label>
 		<label><input id="retab" type="checkbox" checked /> align</label>
 		<label><input id="legacy" type="checkbox" /> --legacy</label>
+		<label><input id="ranges" type="checkbox" /> --range-checks</label>
 	</div>
 	<div id="status">&nbsp;</div>
 </header>
@@ -107,7 +108,8 @@
 		statusEl = document.getElementById("status"),
 		seedEl = document.getElementById("seed"),
 		retabEl = document.getElementById("retab"),
-		legacyEl = document.getElementById("legacy");
+		legacyEl = document.getElementById("legacy"),
+		rangesEl = document.getElementById("ranges");
 
 	function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
 
@@ -123,6 +125,7 @@
 			randomId: seed,
 			sourceName: "input.impala",
 			legacy: legacyEl.checked,
+			rangeChecks: rangesEl.checked,   // the emitted guards are `DEBUG`-gated, so they need `const int DEBUG`
 			warn: function (message, offset, code, hint) {
 				var c = caretLine(source, offset);
 				var pos = "input.impala:" + c.lc.line + ":" + c.lc.col;
@@ -187,7 +190,7 @@
 	var timer = null;
 	function schedule() { clearTimeout(timer); timer = setTimeout(compile, 120); }
 	srcEl.addEventListener("input", function () { persist(); schedule(); });
-	[seedEl, retabEl, legacyEl].forEach(function (el) { el.addEventListener("input", compile); el.addEventListener("change", compile); });
+	[seedEl, retabEl, legacyEl, rangesEl].forEach(function (el) { el.addEventListener("input", compile); el.addEventListener("change", compile); });
 
 	var DEMO = [
 		"// Impala 2 — edit me; GAZL updates live.",
