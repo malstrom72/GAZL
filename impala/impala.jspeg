@@ -4644,7 +4644,7 @@ Subscript   <-  '[['_                              { $idxAt = $$i; }
                                                        if ((sb.place && sb.arrayOf) || (sb.type === 'p' && $$parser.isStructAtom(sb.elem)))
                                                            $$parser.subscriptStruct($$, $s, $$s, $idxAt);
                                                        else
-                                                           $$parser.binaryOp('=[]', $$, $s, $$s, $$i);
+                                                           $$parser.binaryOp('=[]', $$, $s, $$s, $idxAt);
                                                      } }
 
 FieldAccess <-  '->'_ f:Identifier                 { if (!$$parser.dry)

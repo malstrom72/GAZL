@@ -1717,9 +1717,9 @@ const caretCases = [
 		"struct E { int a }\nstruct O { E array e[2]; int t }\nglobal O o\n"
 			+ "function main() { global o.e[[2]].a = 1; }\n", "4:31: error[E461]"],
 	["E461 covers a plain GLOBAL array, not just a struct field",
-		"global int array g[4]\nfunction main() { global g[9] = 1; }\n", "2:31: error[E461]"],
+		"global int array g[4]\nfunction main() { global g[9] = 1; }\n", "2:28: error[E461]"],
 	["E461 covers a plain LOCAL array",
-		"function main() locals int array a[5] { a[9] = 1; }\n", "1:46: error[E461]"],
+		"function main() locals int array a[5] { a[9] = 1; }\n", "1:43: error[E461]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);
