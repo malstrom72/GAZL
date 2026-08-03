@@ -191,6 +191,29 @@ shipped text. What remains is not recoverable this way and should not be chased:
 The other half of the old measurement - 99 `COMP ->A; GOTO B; A:` sites that should be `!COMP ->B` - is
 untouched, and is what items 4 and 5 recover from below.
 
+### The `.f5` failure, isolated (2026-08-03) - and it is a warning for item 4
+
+Both attempts at threading inside Impala died on `Priyome` with `Symbol not found (in expected scope):
+.f5`, and neither found the cause. It is not what the earlier notes guessed. Minimising it gives one
+changed line in `checkInvariant`:
+
+    good:  ! EQUi #DEBUG #0 @.a7
+    bad:   ! EQUi #DEBUG #0 @.a14      (because `.a7:` holds `GOTO @.a14`)
+
+**An assemble-time branch is not control flow.** `! EQUi #DEBUG #0 @L` tells the assembler to stop
+emitting until it reaches `L`; the target does not mean "continue here", it delimits a REGION OF TEXT
+that will not exist. Threading it to a later label silently WIDENS the skipped region, taking the label
+definitions inside it - so a symbol goes missing while sitting in plain sight in the listing, and the
+complaint surfaces against the NEXT function, where the scope closes with the reference still open.
+
+Excluding those records fixes it completely (Priyome assembles, corpus 0/87 goldens). It is still not
+shipped, because it then changes exactly ONE line across the whole corpus and that line is in a synthetic
+fixture: Impala's backward walk already collapses every chain running in the direction it scans.
+
+**For an assembler implementation this hazard cannot arise** - by `finalize` the `!` directives have
+already been consumed and every remaining target is an instruction index. That is a second, better reason
+to do item 4 here rather than in the compiler.
+
 ## 6. Not candidates
 
 - **Anything requiring the assembler to know Impala's type model.** It sees words.

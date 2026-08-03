@@ -957,10 +957,20 @@
            operands and does the same frame work wherever it stands, so this costs nothing but saves a
            dispatch on every execution. It is the common case, not a corner one: Impala has no `return`
            statement, so an early exit is a `goto` to the end label, which is where RETU sits.
-              Branch THREADING (item 4) is deliberately NOT here. Adopting a target's target reproduces
-           the prototype's `Priyome`: `Symbol not found (in expected scope): .f5` - a label graph is not
-           a safe thing to rewrite from inside the compiler that is still minting it, and the assembler
-           does the same job over RESOLVED addresses where the question cannot arise. Left to it. */
+              Branch THREADING (item 4) is not here, and the reason recorded until 2026-08-03 was WRONG.
+           It was not "a label graph is unsafe to rewrite from inside the compiler". The cause, isolated
+           by minimising `Priyome`: `! EQUi #DEBUG #0 @L` is NOT control flow. It tells the ASSEMBLER to
+           stop emitting until it reaches `L`, so the target does not mean "continue here" - it delimits
+           a REGION OF TEXT that will not exist. Thread it to a later label and the skipped region grows,
+           swallowing the label DEFINITIONS inside it. Hence a symbol reported missing while plainly
+           present in the listing, blamed on the NEXT function, where the scope closes with the forward
+           reference still open. Two attempts failed to isolate that.
+              Skipping records whose operator starts with `<> ` fixes it completely (verified: Priyome
+           assembles, 0/87). It is still not here, for a duller reason - it then changes ONE line in the
+           whole corpus, and that line is in a synthetic fixture. The backward walk above already
+           collapses every chain that runs in the direction it scans, which is all of them in practice.
+              Note this is also why the coincident-label merge above IS safe: it re-points a reference to
+           a label at the SAME address, so no skip region moves. */
         var leadsTo = {};
         for (i = 0; i < $$parser.metacode.length; ++i) {
             if ($$parser.metacode[i].operator !== '<--') continue;
