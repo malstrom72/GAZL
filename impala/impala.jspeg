@@ -906,6 +906,50 @@
             }
             defined[name] = true;
         }
+
+        /* COINCIDENT LABELS. A run of `<--` with nothing emitted between them all name the same
+           address, but only one LINE can carry a name - so each of the others was spent on a `NOOP`
+           whose entire job was to exist (adventCode had seven in a row). Collapse the run onto one
+           survivor and rewrite the references to it. Safe HERE and not during the walk above: every
+           alias and deletion is settled by now, so nothing re-points afterwards - which is what sank
+           the prototype that tried to do this while walking. A user label survives in preference to a
+           minted one, so a name someone can `goto` never disappears from the listing.
+           NOT merged: a name holding `#` is a switch table entry (`.sN#k`), where the case value IS
+           part of the name and two entries are different addresses that merely render alike here. */
+        var alias = {}, run = [];
+        for (i = 0; i <= $$parser.metacode.length; ++i) {
+            rec = (i < $$parser.metacode.length ? $$parser.metacode[i] : { operator: null });
+            if (rec.operator === ';' || (rec.operator == null && i < $$parser.metacode.length)) continue;
+            if (rec.operator === '<--' && rec.operands[0].indexOf('#') < 0) {
+                run.push(rec);
+                continue;
+            }
+            for (var r = 1; r < run.length; ++r) {                /* a lone label has nothing to merge */
+                var keep = run[0];
+                for (var u = 0; u < run.length; ++u) {            /* prefer a name the user wrote */
+                    if (run[u].operands[0].charAt(1) !== '.') { keep = run[u]; break; }
+                }
+                for (u = 0; u < run.length; ++u) {
+                    if (run[u] === keep) continue;
+                    alias[run[u].operands[0]] = keep.operands[0];
+                    delete defined[run[u].operands[0]];           /* the reference check below now covers this */
+                    keep.mayRide = (keep.mayRide === true && run[u].mayRide === true);
+                    run[u].operator = null;
+                }
+                break;
+            }
+            run.length = 0;
+        }
+        if (alias !== undefined) {
+            for (i = 0; i < $$parser.metacode.length; ++i) {
+                rec = $$parser.metacode[i];
+                if (rec.operator == null || rec.operator === ';') continue;
+                for (var a = 0; a < 3; ++a) {
+                    if (alias[rec.operands[a]] !== undefined) rec.operands[a] = alias[rec.operands[a]];
+                }
+            }
+        }
+
         for (i = 0; i < $$parser.metacode.length; ++i) {
             var op = (rec = $$parser.metacode[i]).operator;
             if (op == null || op === ';' || op === '<--') continue;

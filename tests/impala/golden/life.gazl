@@ -97,11 +97,11 @@ strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 65:1
 	$c:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $d #0 	; d = 0
-		LEQi $n #0 @.f0	; if (n > 0) 
+		LEQi $n #0 @done	; if (n > 0) 
 		MOVp $a $s0 	; a = s0
 		MOVp $b $s1 	; b = s1
 		MOVi $i #1 	; for (i = 1 to n) 
-		GEQi #1 $n @.f0
+		GEQi #1 $n @done
 	.l2:	PEEK $c $a 	; if ((d = (c = (int)*a) - (int)*b) != 0 || c == 0) goto done
 		PEEK %0 $b 
 		SUBi $d $c %0
@@ -111,8 +111,7 @@ strncmp:	FUNC	; signature func strncmp(ptr s0, ptr s1, int n) -> int @ 65:1
 	.f4:	ADDp $a $a #1	; a = a + 1
 		ADDp $b $b #1	; b = b + 1
 		FORi $i $n @.l2	; }
-	done:	NOOP
-	.f0:	RETU   	; }
+	done:	RETU   	; }
 
 ; signature extern const GAZL_WORD_SIZE : int @ 89:1
 
@@ -197,20 +196,18 @@ parseInt:	FUNC	; signature func parseInt(ptr s, int defaultValue) -> int @ 114:1
 		PEEK $c $p 	; if ((c = (int)*p) == '+') p = p + 1
 		NEQi $c #'+' @.f0
 		ADDp $p $p #1	; p = p + 1
-		GOTO @.e1  
+		GOTO @.f2  
 	.f0:	NEQi $c #'-' @.f2	; if (c == '-') 
 		MOVi $sign #-1 	; sign = -1
 		ADDp $p $p #1	; p = p + 1
-	.f2:	NOOP
-	.e1:	NOOP
-	.l3:	PEEK $c $p 	; while ((c = (int)*p) >= '0' && c <= '9') 
+	.f2:	PEEK $c $p 	; while ((c = (int)*p) >= '0' && c <= '9') 
 		LSSi $c #'0' @.e5
 		GRTi $c #'9' @.e5
 		MULi %0 $i #10	; i = i * 10 + (c - '0')
 		SUBi %1 $c #'0'
 		ADDi $i %0 %1
 		ADDp $p $p #1	; p = p + 1
-		GOTO @.l3  	; }
+		GOTO @.f2  	; }
 	.e5:	MOVp %1 $p 	; p = (pointer)eatWhite(p)
 		CALL &eatWhite %0 *2	; expects eatWhite(ptr) -> ptr @ 135:26
 		MOVp $p %0 
@@ -451,7 +448,7 @@ main:	FUNC	; signature func main() -> void @ 239:1
 		GRTi $dimY #0 @.f1
 	.t0:	MOVp %1 &.s_Invali_4de 	; outputLine("Invalid dimensions. Bye!")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 257:68
-		GOTO @.e2  
+		GOTO @.e5  
 	.f1:	GRTi $dimX #MAX_DIM_X @.t3	; if (dimX > MAX_DIM_X || dimY > MAX_DIM_Y) 
 		LEQi $dimY #MAX_DIM_Y @.f4
 	.t3:	MOVp %1 &.s_Toolar_4df 	; output("Too large. Max dimensions are ")
@@ -540,10 +537,10 @@ main:	FUNC	; signature func main() -> void @ 239:1
 		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 306:32
 		NEQi %0 #0 @.f24
 		MOVi $quit #TRUE 	; quit = TRUE
-		GOTO @.e25  	; } else if ((int)s[0] == 0) 
+		GOTO @.e48  	; } else if ((int)s[0] == 0) 
 	.f24:	NEQi $s:0 #0 @.f26	; if ((int)s[0] == 0) 
 		MOVi $redraw #TRUE 	; redraw = TRUE
-		GOTO @.e27  	; } else if ((int)strcmp(s, "clear") == 0) 
+		GOTO @.e48  	; } else if ((int)strcmp(s, "clear") == 0) 
 	.f26:	ADRL %1 $s *0	; if ((int)strcmp(s, "clear") == 0) 
 		MOVp %2 &.s_clear_4e4 
 		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 310:40
@@ -555,7 +552,7 @@ main:	FUNC	; signature func main() -> void @ 239:1
 		FORi $i %0 @.l30
 	.e29:	MOVp %1 &.s_Cleare_4e5 	; outputLine("Cleared all cells.")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 312:38
-		GOTO @.e31  	; } else if ((int)strncmp(s, "rand ", 5) == 0) 
+		GOTO @.e48  	; } else if ((int)strncmp(s, "rand ", 5) == 0) 
 	.f28:	ADRL %1 $s *0	; if ((int)strncmp(s, "rand ", 5) == 0) 
 		MOVp %2 &.s_rand_4e6 
 		MOVi %3 #5 
@@ -568,7 +565,7 @@ main:	FUNC	; signature func main() -> void @ 239:1
 		LSSi $i #0 @.t33	; if (i < 0 || i > 100) help()
 		LEQi $i #100 @.f34
 	.t33:	CALL &help %0 *1	; expects help() -> void @ 315:34
-		GOTO @.e36  
+		GOTO @.e48  
 	.f34:	MOVi %1 $dimX 	; randomize(dimX, dimY, cells, i)
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0
@@ -584,7 +581,7 @@ main:	FUNC	; signature func main() -> void @ 239:1
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0
 		CALL &outputCellsAlive %0 *4	; expects outputCellsAlive(int, int, ptr) -> int @ 321:42
-	.e35:	GOTO @.e36  	; } else 
+	.e35:	GOTO @.e48  	; } else 
 	.f32:	ADRL %1 $s *0	; i = (int)parseInt(s, -10000)
 		MOVi %2 #-10000 
 		CALL &parseInt %0 *3	; expects parseInt(ptr, int) -> int @ 324:34
@@ -606,14 +603,14 @@ main:	FUNC	; signature func main() -> void @ 239:1
 		MOVi %2 $dimY 
 		ADRL %3 $cells *0
 		CALL &outputCellsAlive %0 *4	; expects outputCellsAlive(int, int, ptr) -> int @ 331:43
-		GOTO @.e40  	; } else 
+		GOTO @.e48  	; } else 
 	.f38:	MOVp %1 &.s_Maxgen_4eb 	; output("Max generations is ")
 		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ 333:37
 		MOVi %1 #MAX_GENERATIONS 	; outputInt(MAX_GENERATIONS)
 		CALL &outputInt %0 *2	; expects outputInt(int) -> void @ 334:34
 		MOVp %1 &.s_Cleare_4e5:17 	; outputLine(".")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 335:23
-	.e39:	GOTO @.e40  	; } else 
+	.e39:	GOTO @.e48  	; } else 
 	.f37:	ADRL %1 $s *0	; parseXY(s, &x, &y)
 		ADRL %2 $x *0
 		ADRL %3 $y *0
@@ -652,12 +649,7 @@ main:	FUNC	; signature func main() -> void @ 239:1
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 353:43
 	.e47:	GOTO @.e48  	; } else 
 	.f42:	CALL &help %0 *1	; expects help() -> void @ 356:14
-	.e48:	NOOP
-	.e40:	NOOP
-	.e36:	NOOP
-	.e31:	NOOP
-	.e27:	NOOP
-	.e25:	NEQi $redraw #FALSE @.f49	; } while (redraw == FALSE && quit == FALSE)
+	.e48:	NEQi $redraw #FALSE @.f49	; } while (redraw == FALSE && quit == FALSE)
 		EQUi $quit #FALSE @.l23
 	.f49:	EQUi $quit #FALSE @.l8	; } while (quit == FALSE)
 		MOVp %1 &.s_Invali_4ef:20 	; outputLine("")
@@ -666,8 +658,7 @@ main:	FUNC	; signature func main() -> void @ 239:1
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 364:25
 		MOVp %1 &.s_Byebye_4f0:8 	; outputLine("")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 365:17
-	.e5:	NOOP
-	.e2:	RETU   	; }
+	.e5:	RETU   	; }
 
 .s__4d2:	CNST *2
 	DATi #10 #0

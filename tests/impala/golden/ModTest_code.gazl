@@ -75,8 +75,7 @@ update:	FUNC	; signature func update() -> void @ 113:1
 		EQUi %0 #0 @.f2
 		IORi $x $x #0xF	; x = x | 0xF
 	.f2:	POKE &xorMask $x 	; global xorMask = x
-	.s0:	NOOP
-	.e1:	PEEK %0 &params:OPERATOR_2_PARAM_INDEX 	; switch ((int) global params[OPERATOR_2_PARAM_INDEX] == 0 to OPERATOR_2_COUNT) 
+	.s0:	PEEK %0 &params:OPERATOR_2_PARAM_INDEX 	; switch ((int) global params[OPERATOR_2_PARAM_INDEX] == 0 to OPERATOR_2_COUNT) 
 		SWCH %0 *OPERATOR_2_COUNT @.s3
 	.s3#OPERATOR_2_XOR:	PEEK %0 &params:OPERAND_2_HIGH_PARAM_INDEX 	; x = ((int) global params[OPERAND_2_HIGH_PARAM_INDEX] << 8) | (int) global params[OPERAND_2_LOW_PARAM_INDEX]
 		SHLi %0 %0 #8
@@ -90,8 +89,7 @@ update:	FUNC	; signature func update() -> void @ 113:1
 		SHRi %0 $y #8	; global displayLEDs[2] = y >> 8
 		POKE &displayLEDs:2 %0 
 		POKE &displayLEDs:3 $y 	; global displayLEDs[3] = y
-	.s3:	NOOP
-	.e4:	RETU   	; }
+	.s3:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------

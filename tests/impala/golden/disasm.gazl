@@ -113,7 +113,7 @@ main:	FUNC	; signature func main() -> void @ 79:1
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
 		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 86:15
-		EQUi $s:0 #0 @.f0	; if ((int)s[0] != 0) 
+		EQUi $s:0 #0 @stopIt	; if ((int)s[0] != 0) 
 		ADRL %1 $s *0	; lower(s)
 		CALL &lower %0 *2	; expects lower(ptr) -> unknown @ 88:11
 		ADRL %1 $s *0	; if ((file = (int)findFile(s)) < 0) outputLine("File not found")
@@ -122,7 +122,7 @@ main:	FUNC	; signature func main() -> void @ 79:1
 		GEQi %0 #0 @.f1
 		MOVp %1 &.s_Fileno_4d5 	; outputLine("File not found")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 89:66
-		GOTO @.e2  
+		GOTO @stopIt  
 	.f1:	MULi %0 $file #FILE_FIELD_COUNT	; if ((type = (int)global FILES[file * FILE_FIELD_COUNT + FILE_FIELD_TYPE]) != FILE_TYPE_EXE
 		ADDi %0 %0 #FILE_FIELD_TYPE
 		PEEK $type &FILES %0
@@ -131,14 +131,14 @@ main:	FUNC	; signature func main() -> void @ 79:1
 		EQUi $type #FILE_TYPE_BIN @.f4
 		MOVp %1 &.s_Fileis_4d6 	; outputLine("File is not GAZL format")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 93:42
-		GOTO @.e5  	; } else if ((int)strcmp(s, "permut8") == 0) 
+		GOTO @stopIt  	; } else if ((int)strcmp(s, "permut8") == 0) 
 	.f4:	ADRL %1 $s *0	; if ((int)strcmp(s, "permut8") == 0) 
 		MOVp %2 &.s_permut_4d7 
 		CALL &strcmp %0 *3	; expects strcmp(ptr, int-ptr) -> unknown @ 94:41
 		NEQi %0 #0 @.f6
 		MOVp %1 &.s_Protec_4d8 	; outputLine("Protected file")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 95:33
-		GOTO @.e7  	; } else 
+		GOTO @stopIt  	; } else 
 	.f6:	MOVp $p &.s_zl_4d9 	; p = ".zl"
 		NEQi $type #FILE_TYPE_BIN @.f8	; if (type == FILE_TYPE_BIN) p = ".gazl"
 		MOVp $p &.s_gazl_4da 	; p = ".gazl"
@@ -198,10 +198,6 @@ main:	FUNC	; signature func main() -> void @ 79:1
 	.e11:	GRTi $readCount #0 @.l9	; } while (readCount > 0)
 		MOVp %1 &.s_Morey_4dc:10 	; outputLine("")
 		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ 137:19
-	.e7:	NOOP
-	.e5:	NOOP
-	.e2:	NOOP
-	.f0:	NOOP
 	stopIt:	RETU   	; }
 
 .s__4d2:	CNST *2

@@ -167,12 +167,29 @@ labels, it is the only layer hand-written GAZL passes through, and there is no l
 Impala leaves behind is currently paid forever. Both transforms also satisfy this document's own
 admission criterion: neither changes the number of memory accesses nor the order of side effects.
 
-**Related work on the Impala side.** A prototyped `processBranches` restructure (record aliases during
-the walk, then a forward pass resolving every label operand to a fixpoint and dropping the unreferenced
-ones) cut corpus NOOPs 523 -> 379 but made `Priyome.impala` fail to assemble (`Symbol not found: .f5`,
-cause not isolated) and was rejected. The same review measured what is left in `tests/impala/golden`
-(~4600 instructions): ~250 NOOPs from coincident labels plus 99 `COMP ->A; GOTO B; A:` sites that should
-be `!COMP ->B`, together 7-8%. Items 4 and 5 recover part of that from below, without the restructure.
+**Related work on the Impala side. The NOOP half is DONE; the `GOTO` chains are still yours.**
+
+A prototyped `processBranches` restructure (record aliases during the walk, then a forward pass resolving
+every label operand to a fixpoint and dropping the unreferenced ones) cut corpus NOOPs 523 -> 379 but made
+`Priyome.impala` fail to assemble (`Symbol not found: .f5`, cause not isolated) and was rejected.
+
+What shipped instead is smaller and sits at the END of `processBranches`, after every alias and deletion
+that pass makes has settled - so nothing re-points afterwards, which is what sank the prototype. A run of
+`<--` records with nothing emitted between them all names ONE address, and only one LINE can carry a name,
+so each of the others was spent on a `NOOP` that existed for no other reason (`adventCode` had seven in a
+row). The run collapses onto one survivor - a user label in preference to a minted one, so a `goto` target
+never leaves the listing - and every reference is rewritten to it.
+
+Measured across `tests/impala/golden` (89 files, 36102 code lines): **NOOPs 516 -> 255**, 261 lines of
+shipped text. What remains is not recoverable this way and should not be chased:
+
+| remaining NOOP | count | why it stays |
+|----------------|-------|--------------|
+| label lands on a `!` line | 203 | a RUNTIME branch target - the line folds away and would take the label |
+| switch table entry (`.sN#k`) | 52 | the case VALUE is part of the name; two entries are two addresses |
+
+The other half of the old measurement - 99 `COMP ->A; GOTO B; A:` sites that should be `!COMP ->B` - is
+untouched, and is what items 4 and 5 recover from below.
 
 ## 6. Not candidates
 

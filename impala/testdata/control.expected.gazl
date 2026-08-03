@@ -27,12 +27,11 @@
  								ADDi $sum $sum $index			; sum = sum + index
  								ADDi $index $index #1			; index = index + 1
  								GOTO @.l1  						; }
- 					.e2:		NOOP
- 					.l3:		LSSi $index #5 @.f4				; if (index >= 5) goto done
+ 					.e2:		LSSi $index #5 @.f4				; if (index >= 5) goto done
  								GOTO @done  					; goto done
  					.f4:		ADDi $sum $sum #1				; sum = sum + 1
  								ADDi $index $index #1			; index = index + 1
- 								GOTO @.l3  						; }
+ 								GOTO @.e2  						; }
  					done:		MOVi $index #0 					; done:
  								GEQi #0 #3 @.e5
  					.l6:		ADDi $sum $sum $index			; sum = sum + index

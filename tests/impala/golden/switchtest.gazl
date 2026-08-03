@@ -35,14 +35,12 @@ y:	FUNC	; signature func y() -> void @ 16:1
 		GETL %0 $a $i	; switch ((int) a[i] == 0 to 'a') 
 		SWCH %0 *'a' @.s0
 	.s0:	NOOP
-	.e1:	NOOP
 		! ADDi <A> #23 #5	; switch (i == 23+5 to 234 * 2) 
 		! MULi <B> #234 #2
 		! SUBi <B> <B> <A>
 		SUBi %0 $i <A>
 		SWCH %0 *<B> @.s2
 	.s2:	NOOP
-	.e3:	NOOP
 		! ADDi <A> #4 #1	; switch (i == 4+1 to 130) 
 		! SUBi <B> #130 <A>
 		SUBi %0 $i <A>
@@ -54,14 +52,13 @@ y:	FUNC	; signature func y() -> void @ 16:1
 	.s4#<B>:	NOOP
 		! SUBi <B> #CONSTANT <A>
 	.s4#<B>:	ADDi $i $i #1234	; i=i+1234
-		GOTO @.e5  
+		GOTO @.s4  
 		! SUBi <B> #'y' <A>	; case 'y'
-	.s4#<B>:	GOTO @.e5  	; 
+	.s4#<B>:	GOTO @.s4  	; 
 		! MULi <B> #4 #CONSTANT	; case 4*CONSTANT
 		! SUBi <B> <B> <A>
 	.s4#<B>:	MULi $i $i #100	; i = i * 100
-	.s4:	NOOP
-	.e5:	SUBi %0 $i #10	; switch (i == 10 to 100) 
+	.s4:	SUBi %0 $i #10	; switch (i == 10 to 100) 
 		SWCH %0 *90 @.s6
 	.s6#89:	CALL &x %0 *1	; expects x() -> void @ 20:40
 		GOTO @.e7  

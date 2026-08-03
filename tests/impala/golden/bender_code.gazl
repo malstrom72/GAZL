@@ -265,11 +265,10 @@ init:	FUNC	; signature func init() -> void @ 187:1
 		fTOi $s %0 #1.0
 		GEQi $s #-0x7FF @.f2	; if (s < -0x7FF) s = -0x7FF
 		MOVi $s #-0x7FF 	; s = -0x7FF
-		GOTO @.e3  
+		GOTO @.f4  
 	.f2:	LEQi $s #0x7FF @.f4	; if (s > 0x7FF) s = 0x7FF
 		MOVi $s #0x7FF 	; s = 0x7FF
-	.f4:	NOOP
-	.e3:	POKE &sinTable $i $s	; global sinTable[i] = s
+	.f4:	POKE &sinTable $i $s	; global sinTable[i] = s
 		FORi $i #0x1000 @.l1	; }
 	.e0:	RETU   	; }
 
@@ -304,7 +303,7 @@ update:	FUNC	; signature func update() -> void @ 202:1
 		PEEK %0 &op1 	; if (global op1 != op1 || global lastOp1Param != op1Param) 
 		NEQi %0 $op1 @.t0
 		PEEK %0 &lastOp1Param 
-		EQUi %0 $op1Param @.f1
+		EQUi %0 $op1Param @.s2
 	.t0:	POKE &op1 $op1 	; global op1 = op1
 		POKE &lastOp1Param $op1Param 	; global lastOp1Param = op1Param
 		ANDi $stereoBit $op1Param #0x80	; stereoBit = (op1Param & 0x80)
@@ -328,11 +327,11 @@ update:	FUNC	; signature func update() -> void @ 202:1
 		EQUi $stereoBit #0 @.f5	; if (stereoBit != 0) 
 		POKE &biasL $t 	; global biasL = t
 		POKE &biasR #0 	; global biasR = 0
-		GOTO @.e3  	; } else 
+		GOTO @.s2  	; } else 
 	.f5:	SHRi $t $t #1	; t = t >> 1
 		POKE &biasL $t 	; global biasL = t
 		POKE &biasR $t 	; global biasR = t
-	.e6:	GOTO @.e3  	; }
+	.e6:	GOTO @.s2  	; }
 	.s2#SINE_SHAPE:	ANDi %0 $op1Param #0x7F	; t = (op1Param & 0x7F) + 1
 		ADDi $t %0 #1
 		POKE &op1Stuff $t 	; global op1Stuff = t
@@ -348,23 +347,21 @@ update:	FUNC	; signature func update() -> void @ 202:1
 		SHLi %0 <A> %0
 		XORi %0 %0 #-1
 		POKE &displayLEDs:0 %0 
-		GOTO @.e3  	; }
+		GOTO @.s2  	; }
 	.s2#SPIN:	ANDi %0 $op1Param #0x7F	; global op1Stuff = (op1Param & 0x7F)
 		POKE &op1Stuff %0 
 		POKE &spinXOrR #0 	; global spinXOrR = 0
 		EQUi $stereoBit #0 @.f7	; if (stereoBit != 0) 
 		POKE &spinXOrR #0xFFF 	; global spinXOrR = 0xFFF
 	.f7:	POKE &displayLEDs:0 #0 	; global displayLEDs[0] = 0
-		GOTO @.e3  	; }
+		GOTO @.s2  	; }
 	.s2#STEREO_DELAY:	PEEK %0 &EIGHT_BIT_EXP_TABLE $op1Param	; global delayL = (int) global EIGHT_BIT_EXP_TABLE[op1Param]
 		POKE &delayL %0 
 		! SUBi <A> #8 #3	; global displayLEDs[0] = 0x1 << (op1Param >> (8 - 3))
 		SHRi %0 $op1Param <A>
 		SHLi %0 #0x1 %0
 		POKE &displayLEDs:0 %0 
-	.s2:	NOOP
-	.e3:	NOOP
-	.f1:	PEEK %0 &EIGHT_BIT_EXP_TABLE $params:OPERAND_1_LOW_PARAM_INDEX	; global delayR = (int) global EIGHT_BIT_EXP_TABLE[(int) params[OPERAND_1_LOW_PARAM_INDEX]]
+	.s2:	PEEK %0 &EIGHT_BIT_EXP_TABLE $params:OPERAND_1_LOW_PARAM_INDEX	; global delayR = (int) global EIGHT_BIT_EXP_TABLE[(int) params[OPERAND_1_LOW_PARAM_INDEX]]
 		POKE &delayR %0 
 		! SUBi <A> #8 #3	; global displayLEDs[1] = 0x1 << ((int) params[OPERAND_1_LOW_PARAM_INDEX] >> (8 - 3))
 		SHRi %0 $params:OPERAND_1_LOW_PARAM_INDEX <A>
@@ -392,12 +389,11 @@ update:	FUNC	; signature func update() -> void @ 202:1
 		ANDi %0 $shaperBits $mask	; if ((shaperBits & mask) == 0) d = CURVE_STEP_SIZE
 		NEQi %0 #0 @.f12
 		MOVi $d #CURVE_STEP_SIZE 	; d = CURVE_STEP_SIZE
-		GOTO @.e13  
+		GOTO @.f14  
 	.f12:	NEQi $shelf #0 @.f14	; if (shelf == 0) d = -CURVE_STEP_SIZE
 		! SUBi <A> #0 #CURVE_STEP_SIZE	; d = -CURVE_STEP_SIZE
 		MOVi $d <A> 
-	.f14:	NOOP
-	.e13:	POKE &linCurveB $i $d	; global linCurveB[i] = d
+	.f14:	POKE &linCurveB $i $d	; global linCurveB[i] = d
 		ADDi $v $v $d	; v = v + d
 		FORi $i #CURVE_SIZE @.l11	; }
 	.e10:	NOOP
@@ -555,7 +551,7 @@ process:	FUNC	; signature func process() -> void @ 296:1
 		SUBi $left %0 $localBiasL
 		IORi %0 $right $localOp1Stuff	; right = (right | localOp1Stuff) - localBiasR
 		SUBi $right %0 $localBiasR
-		GOTO @.e8  	; }
+		GOTO @.s7  	; }
 	.s7#SINE_SHAPE:	MULi %0 $left $localOp1Stuff	; left = (int) global sinTable[(((left * localOp1Stuff) >> 2) - localBiasL) & 0xFFF]
 		SHRi %0 %0 #2
 		SUBi %0 %0 $localBiasL
@@ -566,7 +562,7 @@ process:	FUNC	; signature func process() -> void @ 296:1
 		ADDi %0 %0 $localBiasL
 		ANDi %0 %0 #0xFFF
 		PEEK $right &sinTable %0
-		GOTO @.e8  	; }
+		GOTO @.s7  	; }
 	.s7#SPIN:	SHRu $tmp $spinner #6	; tmp = (spinner >>> 6)
 		ADDi $il $left $tmp	; il = (left + tmp)
 		XORi %0 $tmp $localSpinXOrR	; ir = (right + (tmp ^ localSpinXOrR))
@@ -584,14 +580,13 @@ process:	FUNC	; signature func process() -> void @ 296:1
 		ANDi %0 %0 #0xFFF
 		SUBi $right %0 #0x800
 		ADDi $spinner $spinner $localOp1Stuff	; spinner = spinner + localOp1Stuff
-		GOTO @.e8  	; }
+		GOTO @.s7  	; }
 	.s7#STEREO_DELAY:	SUBi %1 $localClock $localDelayL	; read(localClock - localDelayL, 1, localSignal)
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
 		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 373:52
 		MOVi $left $localSignal:0 	; left = (int) localSignal[0]
-	.s7:	NOOP
-	.e8:	LEQi $left $peak @.f9	; if (left > peak) peak = left
+	.s7:	LEQi $left $peak @.f9	; if (left > peak) peak = left
 		MOVi $peak $left 	; peak = left
 	.f9:	GEQi $left $dip @.f10	; if (left < dip) dip = left
 		MOVi $dip $left 	; dip = left
@@ -616,7 +611,7 @@ process:	FUNC	; signature func process() -> void @ 296:1
 		PEEK %0 &linCurveA $ir
 		SHRi %1 %1 #CURVE_SHIFT
 		ADDi $right %0 %1
-		GOTO @.e14  	; }
+		GOTO @.s13  	; }
 	.s13#QUADRATIC_SHAPER:	NOOP
 		! SUBi <B> #CURVE_SHIFT #1	; xl = left + 0x800 + (1 << (CURVE_SHIFT - 1))
 		ADDi %0 $left #0x800
@@ -648,8 +643,7 @@ process:	FUNC	; signature func process() -> void @ 296:1
 		MULf %1 %1 $pr
 		ADDf %0 %0 %1
 		fTOi $right %0 #1.0
-	.s13:	NOOP
-	.e14:	POKE &signal:0 $left 	; global signal[0] = left
+	.s13:	POKE &signal:0 $left 	; global signal[0] = left
 		POKE &signal:1 $right 	; global signal[1] = right
 		CALL ^yield %0 *1	; expects yield() -> unknown @ 407:11
 		ADDi %0 $localClock $clockDir	; localClock = (localClock + clockDir) & 0xFFFF

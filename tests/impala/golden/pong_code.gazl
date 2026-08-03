@@ -329,12 +329,12 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		MOVf $offset #0.0 	; offset = 0.0
 		SWCH $localParams:OPERATOR_2_PARAM_INDEX *5 @.s1	; switch ((int) localParams[OPERATOR_2_PARAM_INDEX] == 0 to 5) 
 	.s1#0:	GOTO @noSecond  	; goto noSecond
-		GOTO @.e2  
-	.s1#1:	GOTO @.e2  	; 
+		GOTO @.s1  
+	.s1#1:	GOTO @.s1  	; 
 	.s1#2:	MULf $stepLength2 $stepLength2 #0.5	; stepLength2 = stepLength2 * 0.5
-		GOTO @.e2  
+		GOTO @.s1  
 	.s1#3:	MULf $offset $stepLength2 #0.5	; offset = stepLength2 * 0.5
-		GOTO @.e2  
+		GOTO @.s1  
 	.s1#4:	MOVi %1 $localParams:OPERAND_2_LOW_PARAM_INDEX 	; calcGainsAndDelays((int) localParams[OPERAND_2_LOW_PARAM_INDEX], (int) localParams[OPERAND_2_HIGH_PARAM_INDEX], endGain, endDelay, &gains[8], &delays[8], &maxGain1, &maxDelay1, &endGain, &endDelay)
 		MOVi %2 $localParams:OPERAND_2_HIGH_PARAM_INDEX 
 		MOVf %3 $endGain 
@@ -368,8 +368,7 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		MOVi %9 #8 
 		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 243:224
 		GOTO @done  	; goto done
-	.s1:	NOOP
-	.e2:	MOVf $maxGain2 #0.00001 	; maxGain2 = 0.00001
+	.s1:	MOVf $maxGain2 #0.00001 	; maxGain2 = 0.00001
 		MOVf $maxDelay2 #0.00001 	; maxDelay2 = 0.00001
 		MOVi %1 $localParams:OPERAND_2_LOW_PARAM_INDEX 	; calcGainsAndDelays((int) localParams[OPERAND_2_LOW_PARAM_INDEX], (int) localParams[OPERAND_2_HIGH_PARAM_INDEX], 1.0, 1.0, &gains[8], &delays[8], &maxGain2, &maxDelay2, &endGain, &endDelay)
 		MOVi %2 $localParams:OPERAND_2_HIGH_PARAM_INDEX 
@@ -392,7 +391,7 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		DIVf %8 $stepLength2 $maxDelay2
 		MOVi %9 #8 
 		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 250:222
-	noSecond:	LEQi $localParams:OPERATOR_1_PARAM_INDEX #0 @.f3	; if ((int) localParams[OPERATOR_1_PARAM_INDEX] > 0) 
+	noSecond:	LEQi $localParams:OPERATOR_1_PARAM_INDEX #0 @done	; if ((int) localParams[OPERATOR_1_PARAM_INDEX] > 0) 
 		MOVi %1 $localParams:OPERATOR_1_PARAM_INDEX 	; addTaps((int) localParams[OPERATOR_1_PARAM_INDEX], (int) localParams[OPERAND_1_LOW_PARAM_INDEX], (int) localParams[OPERAND_1_HIGH_PARAM_INDEX], 0.0, gains, delays, 256.0 / maxGain1, stepLength1 / maxDelay1, 0)
 		MOVi %2 $localParams:OPERAND_1_LOW_PARAM_INDEX 
 		MOVi %3 $localParams:OPERAND_1_HIGH_PARAM_INDEX 
@@ -403,7 +402,6 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		DIVf %8 $stepLength1 $maxDelay1
 		MOVi %9 #0 
 		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 253:212
-	.f3:	NOOP
 	done:	RETU   	; }
 
 .z.temp:	! DEFi #2

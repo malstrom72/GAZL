@@ -1919,6 +1919,30 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		+ "export function main() locals int pointer p { p = &global xxx.b[KONST - 8]; }\n", { randomId: 42 });
 	assert(!/! FAIL/.test(exprAddr) && !/! MOVi <\w> #<\w>/.test(exprAddr),
 		"expression index: an ADDRESS kept the guard or its copy\n" + exprAddr);
+
+	// COINCIDENT LABELS collapse. Nested `if`s end at the same address, and only one line can carry a
+	// name, so every label but one used to be spent on a `NOOP` that existed for no other reason
+	// (adventCode had seven in a row). processBranches folds the run onto one survivor and rewrites the
+	// references, which is only safe after every alias and deletion it makes has settled.
+	const coincident = compileWithJsImpala(
+		"function main() locals int x, int y { if (x == 1) { if (y == 2) { x = 3; } } x = 4; }\n",
+		{ randomId: 42 });
+	assert(!/NOOP/.test(coincident) && (coincident.match(/@\.f\d/g) || []).length === 2
+			&& new Set(coincident.match(/@\.f\d/g)).size === 1,
+		"coincident labels: not collapsed onto one survivor\n" + coincident);
+	// A user label survives in preference to a minted one, so a `goto` target never leaves the listing.
+	const userLabel = compileWithJsImpala(
+		"function main() locals int x { if (x == 1) { x = 2; } top: ; x = 3; goto top; }\n", { randomId: 42 });
+	assert(!/NOOP/.test(userLabel) && /GOTO @top/.test(userLabel) && /^\s*top:/m.test(userLabel)
+			&& /NEQi \$x #1 @top/.test(userLabel),
+		"coincident labels: the user's name did not survive\n" + userLabel);
+	// ...but a switch table entry must NOT merge: the case VALUE is part of the name, so `.s0#3` and
+	// `.s0#7` are different addresses that merely render alike before the assembler resolves them.
+	const caseLabels = compileWithJsImpala(
+		"function main() locals int x, int y { switch (x == 0 to 8) { case 3, 7: { y = 1; } } }\n",
+		{ randomId: 42 });
+	assert(/\.s0#3:/.test(caseLabels) && /\.s0#7:/.test(caseLabels),
+		"switch: a case label was merged away\n" + caseLabels);
 	const symAddr = compileWithJsImpala(konst
 		+ "export function main() locals int pointer p { p = &global xxx.b[KONST]; }\n", { randomId: 42 });
 	assert(!/! FAIL index/.test(symAddr),
