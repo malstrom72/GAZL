@@ -42,6 +42,7 @@
 
 const { compileWithJsImpala } = require('./impalaJsCompilerRunner.js');
 const { deadStrip } = require('./impalaImportClosure.js');
+const { compileProgram } = require('./impala.node.js');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -108,6 +109,40 @@ function checkStripped(res, ref) {
 	const load = runOnVm(res);
 	if (load) return 'stripped: ' + load;
 	return firstDiff('dead-strip', ref, res, 'stripped');
+}
+
+// `import` is LINKING BY CONCATENATION: the closure inlines each unit dependency-first, so cutting a
+// program in two at a top-level boundary and importing the first half has to behave exactly as the whole
+// file did. Cutting at a `function` keeps every declaration ahead of its uses, which the single-pass
+// compiler needs either way. Byte-comparing the two builds is NOT the oracle - the closure inserts
+// `// ==== unit:` headers and every line below the cut moves - so the VM decides. Nothing fuzzed imports
+// before this: the one multi-unit fixture is hand-written and static.
+function checkImportSplit(p, ref) {
+	const lines = (p.src + '\n').split('\n');
+	const cuts = [];
+	for (let i = 1; i < lines.length; ++i) {
+		if (/^function /.test(lines[i])) cuts.push(i);
+	}
+	if (cuts.length === 0) return null;
+	const at = cuts[ri(cuts.length)];
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fuzzimp-'));
+	try {
+		fs.writeFileSync(path.join(dir, 'lib.impala'), lines.slice(0, at).join('\n') + '\n', 'latin1');
+		fs.writeFileSync(path.join(dir, 'main.impala'),
+				'import "lib.impala"\n' + lines.slice(at).join('\n'), 'latin1');
+		let out;
+		try {
+			out = compileProgram(path.join(dir, 'main.impala'), { randomId: 0x4d2 }).output;
+		} catch (err) {
+			return 'import split: compile threw: ' + ((err && err.message) || err);
+		}
+		const res = runGazl(out, p.defines);
+		const load = runOnVm(res);
+		if (load) return 'import split: ' + load;
+		return firstDiff('import split', ref, res, 'linked');
+	} finally {
+		try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+	}
 }
 
 // `--range-checks` must be OUTPUT-NEUTRAL. Every index this generator emits is in bounds, so no guard may
@@ -1039,7 +1074,8 @@ function main() {
 				const vmFault = p.mustFail ? checkMustFail(res)
 						: (runOnVm(res) || checkExpected(res, p.expect)
 								|| checkStripped(runGazl(stripped, p.defines), res)
-								|| checkRangeChecked(p.src + '\n', res, p.defines));
+								|| checkRangeChecked(p.src + '\n', res, p.defines)
+								|| checkImportSplit(p, res));
 				vmRun++;
 				if (vmFault) {
 					bugs++;
