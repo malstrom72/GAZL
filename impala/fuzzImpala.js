@@ -49,6 +49,7 @@ const cp = require('child_process');
 
 const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32' ? 'GAZLCmd.exe' : 'GAZLCmd');
 const COMPILE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true };
+const RANGE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true, rangeChecks: true };
 
 // Run a compiled program on the VM. Returns null when there is no compiler fault, or a message when
 // the loader/assembler REJECTS the emitted GAZL - that means the compiler produced structurally
@@ -88,19 +89,40 @@ function runOnVm(res) {
 // export names, so the stripped module has to load and print exactly what the full one printed. A
 // difference means the strip took something live - which the fixture in tests/impala/sources/deadstrip
 // catches only for the shapes someone thought to write down, and this catches for any shape.
-function checkStripped(res, ref) {
-	const load = runOnVm(res);
-	if (load) return 'stripped: ' + load;
+// Report the FIRST DIFFERING LINE, not the first 120 characters of each. Truncating the head made two
+// outputs that diverge further down print IDENTICALLY, so the report read like a false positive and a
+// real fault sat unlooked-at.
+function firstDiff(what, ref, res, otherName) {
 	if (res.stdout === ref.stdout) return null;
-	// Report the FIRST DIFFERING LINE, not the first 120 characters of each. Truncating the head made two
-	// outputs that diverge further down print IDENTICALLY, so the report read like a false positive and a
-	// real fault sat unlooked-at.
 	const a = (ref.stdout || '').split(/\r?\n/), b = (res.stdout || '').split(/\r?\n/);
 	let i = 0;
 	while (i < a.length && i < b.length && a[i] === b[i]) ++i;
-	return 'dead-strip changed output at line ' + (i + 1) + ' of ' + a.length + ': full '
-			+ JSON.stringify(a[i] === undefined ? '<end>' : a[i]) + ' vs stripped '
+	return what + ' changed output at line ' + (i + 1) + ' of ' + a.length + ': plain '
+			+ JSON.stringify(a[i] === undefined ? '<end>' : a[i]) + ' vs ' + otherName + ' '
 			+ JSON.stringify(b[i] === undefined ? '<end>' : b[i]);
+}
+
+function checkStripped(res, ref) {
+	const load = runOnVm(res);
+	if (load) return 'stripped: ' + load;
+	return firstDiff('dead-strip', ref, res, 'stripped');
+}
+
+// `--range-checks` must be OUTPUT-NEUTRAL. Every index this generator emits is in bounds, so no guard may
+// ever fire: if the guarded build prints something else, or fails to load, the GUARD is wrong rather than
+// the program. Nothing else exercises tier 3 at all - the flag is off by default, so the golden corpus
+// never sees it, and the emitted test is `DEBUG`-gated on top of that.
+function checkRangeChecked(src, ref, defines) {
+	let gazl;
+	try {
+		gazl = compileWithJsImpala(src, RANGE_OPTS);
+	} catch (err) {
+		return 'range-checks: compile threw: ' + ((err && err.message) || err);
+	}
+	const res = runGazl(gazl, defines);
+	const load = runOnVm(res);
+	if (load) return 'range-checks: ' + load;
+	return firstDiff('range-checks', ref, res, 'checked');
 }
 
 // The INVERTED oracle for a deliberate over-fill (see section (4)): Impala cannot count the words of a
@@ -380,8 +402,18 @@ function genProgram() {
 	// behaviour, so indices now stay inside. A dynamic index is masked by the largest (2^k - 1)
 	// that keeps it below `size`.
 	const idxMask = (size) => { let m = 1; while (m * 2 <= size) m *= 2; return m - 1; };
+	// An index is one of THREE shapes, because the compiler treats them as three different questions and
+	// only the literal one used to be generated (see indexKind in impala.jspeg):
+	//   a LITERAL      - Impala decides the bound itself, here and now (E461)
+	//   a NAMED CONST  - only the assembler can evaluate it, so the bound becomes a deferred `! FAIL`
+	//   an EXPRESSION  - folds to a recycled `<X>` scratch, which needs a copy to be checkable at all
+	// The last two spent a long time emitting `GETL $j $x:.o.S.f #KZ` - an encoding that does not exist,
+	// so the compiler accepted modules the assembler refused outright. Nothing generated the shape, so
+	// nothing caught it. `KZ` is 0 and `KO` is 1, so both stay in bounds for any array this fuzzer makes.
 	function genIdx(scope, size) {
 		const n = (size !== undefined && size > 0) ? size : 1;
+		if (chance(0.2)) return 'KZ';                             // named const -> the deferred-assertion tier
+		if (chance(0.15)) return n > 1 ? '(KO + 0)' : '(KZ + 0)';  // expression -> a folded `<X>` scratch
 		const mask = idxMask(n);
 		if (mask === 0 || chance(0.6)) return String(ri(n));
 		const ints = scope.locals.filter((l) => l.t === 'i').concat(scope.gscalars.filter((g) => g.elem === 'i'));
@@ -890,7 +922,8 @@ function genProgram() {
 	}
 
 	// assemble
-	let out = 'const int DEBUG = 1\nextern native printInt\nextern native printLF\n';
+	let out = 'const int DEBUG = 1\nconst int KZ = 0\nconst int KO = 1\n'
+			+ 'extern native printInt\nextern native printLF\n';
 	for (const s of structs) {
 		out += 'struct ' + s.name + ' { ' + s.fields.map((f) => decl(f.type) + f.name).join('; ') + ' }\n';
 	}
@@ -965,7 +998,8 @@ function main() {
 				const res = runGazl(gazl, p.defines);
 				const vmFault = p.mustFail ? checkMustFail(res)
 						: (runOnVm(res) || checkExpected(res, p.expect)
-								|| checkStripped(runGazl(stripped, p.defines), res));
+								|| checkStripped(runGazl(stripped, p.defines), res)
+								|| checkRangeChecked(p.src + '\n', res, p.defines));
 				vmRun++;
 				if (vmFault) {
 					bugs++;

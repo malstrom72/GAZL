@@ -215,10 +215,18 @@ function isBoundary(line) {
 }
 
 function collectRefs(text, into) {
-	// &func/&global, ^native, #const, *size - names only (numbers skip). `*` is load-bearing: a const
-	// used ONLY as an array extent (`GLOB *BUF_SIZE`) has no other reference shape, and dropping its
-	// `! DEFi` row is how `global int array buf[N]` - the canonical firmware idiom - stopped assembling.
-	var re = /[&^#*]([A-Za-z_]\w*)/g;
+	// &func/&global, ^native, #const, *size, :offset - names only (numbers skip). `*` is load-bearing: a
+	// const used ONLY as an array extent (`GLOB *BUF_SIZE`) has no other reference shape, and dropping
+	// its `! DEFi` row is how `global int array buf[N]` - the canonical firmware idiom - stopped
+	// assembling. `:` is load-bearing one step further in: an index that only the assembler can resolve
+	// rides the BASE operand (`ADRL %1 $arr:KZ *0`, `MOVi $j $x:.o.S.f`), and that is the sole place the
+	// name appears.
+	// The leading `[.]` matters just as much. Every compiler-minted symbol starts with one - `.z.E`,
+	// `.o.S.f`, an assert's `.a_...` message block - so `[A-Za-z_]` made a reference to ANY of them
+	// invisible, and the definition strippable out from under it.
+	// Over-matching is SAFE here and under-matching is not: an extra name keeps a block that could have
+	// gone, a missing one deletes a definition something still needs.
+	var re = /[&^#*:]([.A-Za-z_][\w.]*)/g;
 	var m;
 	while ((m = re.exec(text)) !== null) {
 		into[into.length] = m[1];

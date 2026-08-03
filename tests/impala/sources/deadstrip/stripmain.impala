@@ -3,13 +3,20 @@ import "striplib.impala"
 extern native printInt
 extern native printLF
 
-/*	Expected (GAZLCmd stripmain.gazl main): 42 9 9 0 0 0 7 5 4 3
+/*	Expected (GAZLCmd stripmain.gazl main): 42 9 9 0 0 0 7 5 4 3 9
 
    KEPT is initialized SHORT of its extent, so its trailing words are zero-fill and DEAD's initializer
    fits exactly in that slack - which is how a stripped DEAD used to be adopted by KEPT with no error
    anywhere. BUF_SIZE is referenced only as an array extent (`GLOB *BUF_SIZE`), the one reference shape
    the reachability scan used to miss. Neither is provable by a byte-compare against a golden, so
    importBuildTests RUNS this program and checks what it prints. */
+/* A const referenced ONLY as an INDEX. `global KEPT[IDX]` lowers to `PEEK ... &KEPT:IDX`, so the name
+   occurs exactly once, in the offset half of a base operand - a shape the reachability scan could not
+   see, so it stripped the `! DEFi` out from under the single line needing it. Every DOTTED compiler
+   symbol (`.z.`, `.o.`, an assert's `.a_...` block) was invisible for the same reason: the scan wanted
+   a letter immediately after the sigil. Found once the fuzzer began emitting named-const indices -
+   nothing in the corpus used one. */
+const int IDX = 1
 const int BUF_SIZE = 2
 readonly int array KEPT[5] = { 9, 9 }
 readonly int array DEAD[3] = { 1, 2, 3 }
@@ -46,4 +53,5 @@ export function main() locals int i {
 	printInt(global liveVoice.note); printLF();
 	printInt(global tail.lead); printLF();
 	printInt(global tail.vals[1]); printLF();
+	printInt(global KEPT[IDX]); printLF();
 }
