@@ -1875,6 +1875,25 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		{ randomId: 42 });
 	assert((dup.match(/! FAIL index/g) || []).length === 1 && /! FAIL index 5 /.test(dup),
 		"tier 2: guards are not deduplicated to the largest index per array\n" + dup);
+	// A SYMBOLIC constant index (`b[KONST]`) used to fall between every tier: `constInt` declines it here
+	// because Impala cannot evaluate it, and the runtime check skips anything `#`-prefixed on the grounds
+	// that a constant belongs to the static tier. It is decidable, just not by Impala - so BOTH ends go to
+	// the assembler, since neither is knowable at compile time. A plain array needs none of this: the
+	// assembler resolves `&g:KONST` against the symbol size itself.
+	const konst = "const int KONST = 9\nstruct Test { int a; int array b[4]; int array pad[9] }\n"
+		+ "global Test xxx\n";
+	const symIdx = compileWithJsImpala(konst
+		+ "export function main() locals int j { j = global xxx.b[KONST]; }\n", { randomId: 42 });
+	assert(/! LSSi #KONST #\.z\.Test\.b @/.test(symIdx) && /! GEQi #KONST #0 @/.test(symIdx),
+		"symbolic index: not deferred at both ends\n" + symIdx);
+	const symAddr = compileWithJsImpala(konst
+		+ "export function main() locals int pointer p { p = &global xxx.b[KONST]; }\n", { randomId: 42 });
+	assert(!/! FAIL index/.test(symAddr),
+		"symbolic index: guarded an ADDRESS, which is always legal\n" + symAddr);
+	const symPlain = compileWithJsImpala("const int KONST = 9\nglobal int array g[4]\n"
+		+ "export function main() locals int j { j = global g[KONST]; }\n", { randomId: 42 });
+	assert(!/! FAIL index/.test(symPlain),
+		"symbolic index: duplicated the assembler's own check on a plain array\n" + symPlain);
 	console.log("impala.jspeg compiler defers a symbolic-extent field index to GAZL assembly time");
 }
 

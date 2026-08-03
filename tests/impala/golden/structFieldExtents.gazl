@@ -81,12 +81,12 @@ main:	FUNC	; signature func main() -> void @ 35:1
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 50:34
 		RETU   	; }
 	! LSSi #11 #.z.S.a @.g0
-	! FAIL index 11 outside S.a (extent .z.S.a unknown until assembly)
+	! FAIL index 11 outside S.a (resolved only at assembly)
 .g0:	!
 	! LSSi #3 #.z.S.b @.g1
-	! FAIL index 3 outside S.b (extent .z.S.b unknown until assembly)
+	! FAIL index 3 outside S.b (resolved only at assembly)
 .g1:	!
 	! MULi <g> #1 #.z.Pair
 	! LSSi #<g> #.z.S.p @.g2
-	! FAIL index 1 outside S.p (extent .z.S.p unknown until assembly)
+	! FAIL index 1 outside S.p (resolved only at assembly)
 .g2:	!

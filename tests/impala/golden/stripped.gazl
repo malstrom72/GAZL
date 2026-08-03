@@ -74,6 +74,6 @@
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ stripmain.impala:48:42
  								RETU   							; }
  					! LSSi #1 #.z.Tail.vals @.g1
- 					! FAIL index 1 outside Tail.vals (extent .z.Tail.vals unknown until assembly)
+ 					! FAIL index 1 outside Tail.vals (resolved only at assembly)
  .g1:				!
 

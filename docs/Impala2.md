@@ -1338,7 +1338,8 @@ struct field `.o.S.pad + (-1)` folds to a valid offset naming the PREVIOUS field
 and silently aliases a neighbour. One mistake with three outcomes; `E461` gives it one.
 
 Only a LITERAL index is decidable here - `g[2 + 7]` is not folded before the subscript sees it, and falls
-through to tier 3.
+through to tier 3. A SYMBOLIC constant index (`b[KONST]`) is not decidable here either, but it is not a
+runtime value: it goes to tier 2, at both ends, since neither bound is knowable at Impala compile time.
 
 **Tier 2 - constant index, symbolic extent (`v[SN]`): a DEFERRED assertion, at GAZL assembly time.** The
 question is real but not answerable at Impala compile time, so it is asked of the assembler in the

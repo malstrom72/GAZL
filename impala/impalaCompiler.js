@@ -1221,8 +1221,20 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        outcomes across the shapes; this is the one place that can give it one. */
     checkConstIndex = function (extent, idxRV, sourceCode, sourceOffset) {
         var ck = constInt(idxRV);
-        if (ck === undefined || extent === undefined) {
-            return undefined;                                     /* a runtime index - --range-checks' job */
+        if (extent === undefined) {
+            return undefined;
+        }
+        if (ck === undefined) {
+            /* A SYMBOLIC constant index - `a[KONST]`, where the ASSEMBLER can evaluate the operand and
+               Impala cannot. This used to fall between every tier: constInt declines it here, and
+               emitRangeCheck skips anything `#`-prefixed on the grounds that a constant is this
+               function's business. It is decidable, just not now - so defer it, exactly as a symbolic
+               EXTENT is deferred below. Same scoping too: a plain array is caught natively
+               (`&g:KONST` -> "Offset out of bounds: g"), a struct field is not. Both ends have to be
+               asked, because neither is knowable here. */
+            return (extent.inField && /^#[A-Za-z_]/.test(idxRV))
+                    ? { k: idxRV.substr(1), sym: true, ext: extent, src: sourceCode, off: sourceOffset }
+                    : undefined;                                  /* else a runtime index - tier 3's job */
         }
         if (ck < 0) {                                             /* decidable WITHOUT the extent */
             fail('Index ' + ck + ' is before the start of this array',
@@ -1337,9 +1349,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            because the stride is positive: a guard for `k` implies every smaller one, so one per array is
            the whole check. Measured over the corpus that is 39 guards down to 23, and 12 of the 39 were
            byte-identical duplicates of a subscript written twice. */
-        var seen = pendingGuards[op.ext.sym];
-        if (seen === undefined || op.k > seen.k) {
-            pendingGuards[op.ext.sym] = op;
+        var key = op.ext.sym + (op.sym ? '|' + op.k : '');        /* symbolic indices cannot be ordered,
+                                                                     so each distinct one keeps its own
+                                                                     entry; numeric ones collapse to the
+                                                                     largest, which implies the rest */
+        var seen = pendingGuards[key];
+        if (seen === undefined || (!op.sym && op.k > seen.k)) {
+            pendingGuards[key] = op;
         }
     };
 
@@ -1364,9 +1380,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        literal) is module-scoped - so the end of the enclosing function is simply the first clean
        boundary. `.g<N>` has its own counter because labelCounter resets per function. */
     flushIndexGuards = function () {
-        for (var sym in pendingGuards) {
-            var op = pendingGuards[sym];
+        for (var key in pendingGuards) {
+            var op = pendingGuards[key];
+            var sym = op.ext.sym;
             var lhs = '#' + op.k;
+            if (op.sym) {                                         /* a SYMBOLIC index: the lower bound is
+                                                                     not knowable at Impala compile time
+                                                                     either, so ask for it too */
+                assembleAssert('GEQ?', lhs + ' #0',
+                        'index ' + op.k + ' is negative, so it cannot index ' + op.ext.what,
+                        op.src, op.off);
+            }
             if (op.ext.stride !== undefined) {
                 /* Struct elements: `.z.` counts WORDS, the index counts ELEMENTS, so scale first. `<g>`
                    is a FIXED compile-time scratch, deliberately not a pool borrow: this runs AFTER the
@@ -1380,8 +1404,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 lhs = '#<g>';
             }
             assembleAssert('LSS?', lhs + ' #' + sym,
-                    'index ' + op.k + ' outside ' + op.ext.what + ' (extent ' + sym
-                            + ' unknown until assembly)', op.src, op.off);
+                    'index ' + op.k + ' outside ' + op.ext.what + ' (resolved only at assembly)',
+                    op.src, op.off);
         }
         pendingGuards = {};
     };
