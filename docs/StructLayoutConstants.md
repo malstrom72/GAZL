@@ -139,6 +139,17 @@ fields, snapshotting the running offset into each `.o.*` and advancing by each f
 `<A>` across sections the same way). Scalar advances can be literals (`#1`) or symbolic (`#.z.int`);
 nested-struct and array advances MUST be symbolic so they track the referenced definition.
 
+**Why the accumulator is lowercase.** Compile-time scratches come from two places, and the case is what
+tells them apart. `borrow('<')` mints the POOL names, always uppercase `<A>`..`<Z>`, recycled as
+expressions finish with them. `<a>` (this accumulator) and `<t>` (its element-size temp) are hand-picked,
+live across the whole layout block, and sit outside that accounting - so they must not be names the
+allocator can hand out. A layout routinely has both live at once:
+
+    ! MULi <A> #23 #5                          ; a POOL scratch folding an extent
+    ! MOVi <a> #0                              ; the accumulator, untouched by it
+
+A new fixed scratch must therefore be lowercase, and must not collide with `<a>` or `<t>`.
+
 Field kinds and their advance line:
 - scalar (int/float/ptr): `! ADDi <a> #<a> #1` (the VM word-count of the scalar).
 - nested struct by value: `! ADDi <a> #<a> #.z.Inner`.

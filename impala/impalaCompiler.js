@@ -967,6 +967,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return '%' + (counters['%']++);
         }
         if (cls === '<') {
+            /* THE POOL OWNS UPPERCASE `<A>`..`<Z>`, and that is the whole reason the hand-picked
+               compile-time scratches are lowercase (`<a>` the struct-layout accumulator, `<t>` its
+               element-size temp). Those two live across a whole layout block, outside the pool's
+               borrow/return accounting, so a name the allocator can hand out would be clobbered by the
+               next fold - and a struct layout routinely has a pooled scratch live at the same time
+               (`! MULi <A> #23 #5` computing an extent while `<a>` accumulates the offset). The case
+               is the only thing keeping the two namespaces apart; a new fixed scratch must be
+               lowercase, and a new lowercase name must not already be taken. */
             var idx = counters['<']++;
             assert(idx < 26, "compile-time scratch pool exhausted (expression too complex)");
             return '<' + String.fromCharCode('A'.charCodeAt(0) + idx) + '>';
