@@ -55,10 +55,18 @@ main:	FUNC	; signature func main() -> void @ 35:1
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:32
 		MOVi $s:.o.S.n #77 	; s.n = 77
 		! ADDi <C> #.o.S.a #11	; s.a[11] = 11
-		MOVi $s:<C> #11 
+		! LSSi #11 #.z.S.a @.g0
+		! FAIL index 11 outside S.a (resolved only at assembly)  
+	.g0:	MOVi $s:<C> #11 
 		! ADDi <C> #.o.S.b #3	; s.b[3] = 33
-		MOVi $s:<C> #33 
+		! LSSi #3 #.z.S.b @.g1
+		! FAIL index 3 outside S.b (resolved only at assembly)  
+	.g1:	MOVi $s:<C> #33 
 		! MULi <C> #1 #.z.Pair	; s.p[[1]].hi = 5
+		! MULi <B> #1 #.z.Pair
+		! LSSi #<B> #.z.S.p @.g2
+		! FAIL index 1 outside S.p (resolved only at assembly)  
+	.g2:	NOOP
 		! ADDi <B> #.o.S.p #<C>
 		! ADDi <B> #<B> #.o.Pair.hi
 		MOVi $s:<B> #5 
@@ -80,13 +88,3 @@ main:	FUNC	; signature func main() -> void @ 35:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 50:23
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 50:34
 		RETU   	; }
-	! LSSi #11 #.z.S.a @.g0
-	! FAIL index 11 outside S.a (resolved only at assembly)
-.g0:	!
-	! LSSi #3 #.z.S.b @.g1
-	! FAIL index 3 outside S.b (resolved only at assembly)
-.g1:	!
-	! MULi <g> #1 #.z.Pair
-	! LSSi #<g> #.z.S.p @.g2
-	! FAIL index 1 outside S.p (resolved only at assembly)
-.g2:	!

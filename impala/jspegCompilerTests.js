@@ -1867,14 +1867,16 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		+ "function f() { global o.e[[3]].a = 1; }\nexport function main() { f(); }\n", { randomId: 42 });
 	assert(/! FAIL index 3 outside O\.e/.test(notLast),
 		"tier 2: no guard for a function that is not the last one\n" + notLast);
-	// One guard per array, keyed on the extent symbol and keeping the LARGEST index - the stride is
-	// positive, so it implies every smaller one. Without this the same subscript written twice shipped
-	// two byte-identical guards (39 across the corpus, 23 after).
+	// The SAME assertion is asked once per function. `t.v[3]` written and then read is one question, not
+	// two - which is the whole of the deduplication that ever fired on the corpus. Two DIFFERENT indices
+	// stay two questions: the guard sits next to the access it belongs to now, so collapsing them onto
+	// the larger would put an assertion beside code it does not describe.
 	const dup = compileWithJsImpala("const int SN = 2\nstruct T { int array v[SN]; int t }\nglobal T t\n"
-		+ "export function main() { global t.v[3] = 1; global t.v[3] = 2; global t.v[5] = 3; }\n",
+		+ "export function main() locals int j { global t.v[3] = 1; j = global t.v[3]; global t.v[5] = 3; }\n",
 		{ randomId: 42 });
-	assert((dup.match(/! FAIL index/g) || []).length === 1 && /! FAIL index 5 /.test(dup),
-		"tier 2: guards are not deduplicated to the largest index per array\n" + dup);
+	assert((dup.match(/! FAIL index/g) || []).length === 2
+			&& /! FAIL index 3 /.test(dup) && /! FAIL index 5 /.test(dup),
+		"tier 2: the same assertion is not asked exactly once\n" + dup);
 	// A SYMBOLIC constant index (`b[KONST]`) used to fall between every tier: `constInt` declines it here
 	// because Impala cannot evaluate it, and the runtime check skips anything `#`-prefixed on the grounds
 	// that a constant belongs to the static tier. It is decidable, just not by Impala - so BOTH ends go to
@@ -1884,11 +1886,13 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		+ "global Test xxx\n";
 	const symIdx = compileWithJsImpala(konst
 		+ "export function main() locals int j { j = global xxx.b[KONST]; }\n", { randomId: 42 });
-	// Both bounds, ONE failure and one message - the same two-tests-one-failure shape the runtime tier
-	// uses. The lower test is inverted (it jumps TO the failure) and comes before any stride scaling.
-	assert(/! LSSi #KONST #0 @/.test(symIdx) && /! LSSi #KONST #\.z\.Test\.b @/.test(symIdx)
+	// Both bounds in ONE comparison, and BRANCHLESS - the opposite of the runtime tier's trade, because
+	// every line here folds at assembly and costs nothing to execute, while a second label would land on
+	// an assemble-time line and be spent as a runtime NOOP.
+	assert(/! SUBi <\w> #\.z\.Test\.b #KONST/.test(symIdx) && /! IORi <\w> #<\w> #KONST/.test(symIdx)
+			&& /! GEQi #<\w> #0 @/.test(symIdx)
 			&& (symIdx.match(/! FAIL index/g) || []).length === 1,
-		"symbolic index: not one assertion covering both ends\n" + symIdx);
+		"symbolic index: not one branchless assertion covering both ends\n" + symIdx);
 	const symAddr = compileWithJsImpala(konst
 		+ "export function main() locals int pointer p { p = &global xxx.b[KONST]; }\n", { randomId: 42 });
 	assert(!/! FAIL index/.test(symAddr),

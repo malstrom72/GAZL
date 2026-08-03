@@ -69,11 +69,10 @@
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ stripmain.impala:47:28
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ stripmain.impala:47:39
  								! ADDi <A> #.o.Tail.vals #1		; printInt(global tail.vals[1])
- 								PEEK %1 &tail:<A> 
+ 								! LSSi #1 #.z.Tail.vals @.g2
+ 								! FAIL index 1 outside Tail.vals (resolved only at assembly)  
+ 					.g2:		PEEK %1 &tail:<A> 
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ stripmain.impala:48:31
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ stripmain.impala:48:42
  								RETU   							; }
- 					! LSSi #1 #.z.Tail.vals @.g1
- 					! FAIL index 1 outside Tail.vals (resolved only at assembly)
- .g1:				!
 

@@ -1377,10 +1377,17 @@ the struct's allocation, so the assembler sees a legal offset and nothing else l
 past the end to leave the allocation - `o.e[[7]]` - is caught by the assembler first, as `Offset out of
 bounds`; the guard is for the near miss.)
 
-The guards are queued and emitted at the end of the enclosing function, not where they are found:
-`declare` flushes pending metacode first, and a subscript is discovered halfway through building an
-expression, so emitting there renders a half-built meta and throws. Position is free - the guard executes
-nothing and every name it uses is module-scoped. `deadStrip` removes a dead function's guards with it.
+The guard sits IMMEDIATELY BEFORE the access it guards, and its skip label rides the guarded instruction.
+It briefly did not - it was queued and flushed at the end of the function, because `declare` writes to the
+output stream and flushes pending metacode first, which a mid-expression call cannot survive. `emit` has
+neither problem. The only thing deferral bought was collapsing several indices into one array down to the
+largest, and that never fired on the corpus: every duplicate was the same index accessed twice, which a
+per-function seen-set removes just as well. A guard four lines from its access reads as no guard at all.
+
+For a SYMBOLIC index the test is branchless - `(extent - 1 - k) | k` - which is the opposite of tier 3's
+trade and right for the same reason it was wrong there: every line folds at assembly and costs nothing to
+execute, while a second label would land on an assemble-time line and be spent as a runtime `NOOP`.
+`deadStrip` removes a dead function's guards with it.
 
 **Tier 3 - dynamic index: `--range-checks`, off by default.** The only tier that can see `a[i]`. It emits
 a `DEBUG`-gated test per subscript, bounded by the array's `.z.` extent symbol - so it works unchanged for

@@ -159,7 +159,7 @@
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.topNames = {};                                   /// name -> kind ('global'/'function'/'const'/'struct'/'functype'), one flat namespace
     var $$parser.guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
-    var $$parser.pendingGuards = {};                              /// deferred index assertions found mid-expression, keyed by extent symbol, emitted at the end of the function (flushIndexGuards)
+    var $$parser.emittedGuards = {};                              /// (array, index) pairs already asserted in this function - the same assertion twice says nothing new
     var $$parser.initElemType = undefined;                        /// declared element type an `InitList` must match ('i'/'f'/'p'); undefined = untyped array, accept what comes
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
@@ -171,7 +171,7 @@
         '=itof','iTOf', '=ftoi','fTOi', '=abs','ABS?', '=floor','FLOf',
         '=[]','PEEK',  '[]=','POKE',   '=[]$','GETL',  '[]$=','SETL',
         '=*','PEEK', ':=*','PEEK', '*=','POKE', '=&','ADRL', 'copy','COPY',
-        '-->','GOTO', '-->#','SWCH',  '...','FOR?',  '()','CALL', '--^','RETU',
+        '-->','GOTO', '-->#','SWCH',  '...','FOR?',  '()','CALL', '--^','RETU', 'FAIL','FAIL',
         '|','IOR?', '&','AND?', '^','XOR?', '<<','SHL?', '>>>','SHRu', '>>','SHR?',
         '+','ADD?', '-','SUB?', '*','MUL?', '/','DIV?', '%','MOD?', 'd','DIFp',
         '<=','LEQ?', '<','LSS?', '>=','GEQ?', '>','GRT?', '!=','NEQ?', '==','EQU?',
@@ -1350,14 +1350,50 @@
                     'valid indices are 0 to ' + (op.n - 1)
                             + ' - taking its ADDRESS is legal, reading or writing it is not');
         }
-        /* NOT emitted here - see flushIndexGuards. NUMERIC indices for one array collapse to the largest,
-           which implies every smaller one because the stride is positive; a SYMBOLIC index cannot be
-           ordered, so its own text goes in the key and each distinct one is kept. */
-        var key = op.ext.sym + (typeof op.k === 'number' ? '' : '|' + op.k);
-        var seen = $$parser.pendingGuards[key];
-        if (seen === undefined || op.k > seen.k) {
-            $$parser.pendingGuards[key] = op;
+        /* Emitted RIGHT HERE, immediately before the access it guards. It used to be queued and flushed at
+           the end of the function, because `declare` writes straight to the output stream and flushes
+           pending metacode first, which a mid-expression call cannot survive. `emit` has neither problem:
+           it appends to metacode in order, exactly as the subscript's own `! ADDi` does. The only thing
+           deferral ever bought was collapsing several indices into one array down to the largest, and
+           that never fired once in the corpus - every duplicate was the SAME index accessed twice (read
+           and written), which a per-function seen-set removes just as well.
+
+           Emitting in place also costs one line less: the skip label rides on the guarded instruction
+           instead of needing a bare `!` of its own. */
+        var key = op.ext.sym + '|' + op.k;
+        if ($$parser.emittedGuards[key]) {
+            return;                                               /* the same assertion, already asked */
         }
+        $$parser.emittedGuards[key] = true;
+        var ok  = $$parser.newLabel('g');
+        var lhs = '#' + op.k;
+        var w;
+        if (op.ext.stride !== undefined) {                        /* `.z.` counts WORDS, the index counts
+                                                                     ELEMENTS - scale before comparing */
+            w = $$parser.borrow('<');
+            $$parser.emit('<> *', 'i', w, lhs, '#' + op.ext.stride);
+            lhs = '#' + w;
+        }
+        if (typeof op.k === 'number') {
+            $$parser.emit('<> <', 'i', lhs, '#' + op.ext.sym, ok);
+        } else {
+            /* A SYMBOLIC index needs BOTH bounds, and here the branchless form is the CHEAP one - the
+               exact opposite of the runtime tier, because every instruction below folds at assembly and
+               costs nothing to execute. Two comparisons would need a second label, and a label landing on
+               an assemble-time line is spent as a runtime NOOP (flushMetaCode); `(extent - 1 - k) | k`
+               has its sign bit set exactly when `k` is out of range at either end, so one comparison and
+               one label do the whole job and the label rides the guarded instruction. */
+            if (w === undefined) { w = $$parser.borrow('<'); }
+            $$parser.emit('<> -', 'i', w, '#' + op.ext.sym, lhs);
+            $$parser.emit('<> -', 'i', w, '#' + w, '#1');
+            $$parser.emit('<> |', 'i', w, '#' + w, lhs);
+            $$parser.emit('<> >=', 'i', '#' + w, '#0', ok);
+        }
+        if (w !== undefined) { $$parser.returnBack(w); }
+        $$parser.emit('<> FAIL', undefined,
+                'index ' + op.k + ' outside ' + op.ext.what + ' (resolved only at assembly)',
+                undefined, undefined);
+        $$parser.emit('<-?', true, ok, undefined, undefined);
     };
 
     /* ONE deferred assertion, in the canonical `! <CMP>` / `! FAIL <text>` / skip-label form
@@ -1378,44 +1414,6 @@
         $$parser.declare('! FAIL ' + message, 'globals', (bad === ok ? undefined : bad),
                 undefined, true, undefined, sourceCode, sourceOffset);
         $$parser.declare('!', 'globals', ok, undefined, true, undefined, sourceCode, sourceOffset);
-    };
-
-    /* The deferred guards a function body accumulated, emitted once its own code is out. They cannot go
-       out where they are FOUND: `declare` flushes pending metacode first, and a subscript is discovered
-       halfway through building an expression, so flushing there renders a half-built meta and throws.
-       Position is free anyway - the guard executes nothing, and every name it uses (`.z.<path>`, a
-       literal) is module-scoped - so the end of the enclosing function is simply the first clean
-       boundary. `.g<N>` has its own counter because labelCounter resets per function. */
-    $$parser.flushIndexGuards = function () {
-        for (var key in $$parser.pendingGuards) {
-            var op = $$parser.pendingGuards[key];
-            var lhs = '#' + op.k;
-            var tests = [];
-            if (typeof op.k !== 'number') {                       /* a SYMBOLIC index: the lower bound is
-                                                                     not knowable here either, so ask for
-                                                                     it in the same assertion. Inverted,
-                                                                     and BEFORE any scaling - a positive
-                                                                     stride preserves the sign. */
-                tests.push(['LSS?', lhs + ' #0']);
-            }
-            if (op.ext.stride !== undefined) {
-                /* Struct elements: `.z.` counts WORDS, the index counts ELEMENTS, so scale first. `<g>`
-                   is a FIXED compile-time scratch, deliberately not a pool borrow: this runs AFTER the
-                   function's scratch window has closed, and borrowing here tripped the pool's own leak
-                   assert for every function but the last. One name serves every guard because the
-                   `! MULi` is consumed by the `! LSSi` on the very next line. The whole instruction goes
-                   in the MNEMONIC, like the `! FAIL` below: declare() hands its VALUE to returnBack,
-                   which would see a leading `<` and push this line into the scratch stock. */
-                $$parser.declare('! MULi <g> #' + op.k + ' #' + op.ext.stride,
-                        'globals', undefined, undefined, true, undefined, op.src, op.off);
-                lhs = '#<g>';
-            }
-            tests.push(['LSS?', lhs + ' #' + op.ext.sym]);
-            $$parser.assembleAssert(tests,
-                    'index ' + op.k + ' outside ' + op.ext.what + ' (resolved only at assembly)',
-                    op.src, op.off);
-        }
-        $$parser.pendingGuards = {};
     };
 
     $$parser.makeRValue = function (expr, classes) {
@@ -3353,7 +3351,7 @@
                 gop      = replace(gop, '?',
                                    $$parser.TYPE_SUFFIXES[ rec.type ]);
 
-                output(prefix + '\t! ' + gop + ' ' +
+                output(prefix + '	! ' + gop + ' ' +
                        formatOperand(rec.operands[0]) + ' '   +
                        formatOperand(rec.operands[1]) + ' '   +
                        formatOperand(rec.operands[2]) + nextComment);
@@ -4057,8 +4055,7 @@ inp:ArgsDecl ')'_
                                                                          $$parser.processBranches();
                                                                          $$parser.emit('--^', undefined, undefined, undefined, undefined);
                                                                          $$parser.flushMetaCode('\t');
-                                                                         $$parser.flushIndexGuards();   /* metacode is empty here - the
-                                                                                                          first point declare() is safe */
+                                                                         $$parser.emittedGuards = {};   /* per function: labels are too */
 
                                                                          prune($$parser.symbols.locals);
                                                                          $$parser.labelCounter = 0;
