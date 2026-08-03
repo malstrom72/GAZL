@@ -1879,6 +1879,20 @@
                     words = '<t>';
                 }
                 output(x + ':' + T + '! DEFi #' + words);
+                if ($$parser.constInt('#' + f.size) === undefined) {
+                    /* A SYMBOLIC extent could still be negative - `const int K = -1`, or a host-supplied
+                       `! DEFi`. Impala cannot see the number (ArrayDecl rejects the ones it can), and
+                       nothing downstream would: this count is only ever ADDED to the offset accumulator,
+                       so a negative one runs the layout BACKWARDS and lands the next field on top of an
+                       earlier one, silently. Ask the assembler, in the same deferred form the index
+                       checks use. Zero runtime cost, and only for a field whose extent is not a number. */
+                    var neg = '.g' + ($$parser.guardCounter++);
+                    output(T + '! GEQi #' + x + ' #0 @' + neg);
+                    output(T + '! FAIL extent of ' + name + '.' + f.name
+                            + ' is negative, which would run the struct layout backwards');
+                    output(neg + ':' + T + '! ADDi <a> #<a> #' + x);
+                    continue;
+                }
                 output(T + '! ADDi <a> #<a> #' + x);
             } else {                                              /* scalar (int/float/ptr/funcptr) */
                 output(T + '! ADDi <a> #<a> #1');
@@ -4615,6 +4629,19 @@ ArrayDecl   <-                                                        { $desc = 
                                                                                                # space, so $$i would name the NEXT declaration
                   x:Expr ']' _                                        {
                                                                          $size = $$parser.makeConstant($x, 'i', $$s, $extentStart);
+                                                                         /* A NEGATIVE extent runs the layout BACKWARDS. On a plain array the assembler
+                                                                            catches it, because the count reaches it as a `GLOB *size` / `LOCA *size`
+                                                                            operand it type-checks ("Incompatible types: .z.g"). A struct FIELD's count
+                                                                            is only ever ADDED into the offset accumulator, which subtracts without
+                                                                            complaint - `struct T { int a; int array b[-1]; int c }` compiles,
+                                                                            assembles, runs, and puts `a` and `c` in the SAME WORD. Rejected here, at
+                                                                            the declaration, because that is where the extent is still a number and
+                                                                            where the invariant belongs. Zero is left alone: it wastes a field but
+                                                                            aliases nothing, and every constant index into it is already out of range. */
+                                                                         if ($$parser.constInt($size) < 0)
+                                                                             $$parser.fail('Array extent is negative: ' + $$parser.dropHash($size),
+                                                                                     $$s, $extentStart, 'E462',
+                                                                                     'an array holds zero or more elements');
                                                                          $extent = $$parser.dropHash($size);   /* element count - may be a symbolic const */
                                                                          /* THE CONSUMER OWNS THE BORROW. A folded extent lives in a `<X>` scratch, and
                                                                             a scratch is recycled on the next borrow - so whoever still has to READ this

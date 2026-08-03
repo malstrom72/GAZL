@@ -17,14 +17,20 @@ N:	! DEFi #4	; signature const N : int @ 20:1
 	! MOVi <a> #0	; layout of struct S
 .o.S.a:	! DEFi #<a>
 .z.S.a:	! DEFi #<A>
-	! ADDi <a> #<a> #.z.S.a
+	! GEQi #.z.S.a #0 @.g0
+	! FAIL extent of S.a is negative, which would run the struct layout backwards
+.g0:	! ADDi <a> #<a> #.z.S.a
 .o.S.b:	! DEFi #<a>
 .z.S.b:	! DEFi #<B>
-	! ADDi <a> #<a> #.z.S.b
+	! GEQi #.z.S.b #0 @.g1
+	! FAIL extent of S.b is negative, which would run the struct layout backwards
+.g1:	! ADDi <a> #<a> #.z.S.b
 .o.S.p:	! DEFi #<a>
 	! MULi <t> #<C> #.z.Pair
 .z.S.p:	! DEFi #<t>
-	! ADDi <a> #<a> #.z.S.p
+	! GEQi #.z.S.p #0 @.g2
+	! FAIL extent of S.p is negative, which would run the struct layout backwards
+.g2:	! ADDi <a> #<a> #.z.S.p
 .o.S.c:	! DEFi #<a>
 .z.S.c:	! DEFi #2
 	! ADDi <a> #<a> #.z.S.c

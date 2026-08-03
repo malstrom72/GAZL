@@ -14,27 +14,31 @@ M:	! DEFi #3	; signature const M : int @ 21:1
 	! MOVi <a> #0	; layout of struct Scalars
 .o.Scalars.v:	! DEFi #<a>
 .z.Scalars.v:	! DEFi #N
-	! ADDi <a> #<a> #.z.Scalars.v
+	! GEQi #.z.Scalars.v #0 @.g0
+	! FAIL extent of Scalars.v is negative, which would run the struct layout backwards
+.g0:	! ADDi <a> #<a> #.z.Scalars.v
 .z.Scalars:	! DEFi #<a>
 ; signature struct Scalars { v : int[N] } @ 25:1
 	! MOVi <a> #0	; layout of struct Elems
 .o.Elems.p:	! DEFi #<a>
 	! MULi <t> #M #.z.P
 .z.Elems.p:	! DEFi #<t>
-	! ADDi <a> #<a> #.z.Elems.p
+	! GEQi #.z.Elems.p #0 @.g1
+	! FAIL extent of Elems.p is negative, which would run the struct layout backwards
+.g1:	! ADDi <a> #<a> #.z.Elems.p
 .z.Elems:	! DEFi #<a>
 ; signature struct Elems { p : P[M] } @ 29:1
 ; signature extern native printInt() -> unknown @ 33:1
 ; signature extern native printLF() -> unknown @ 34:1
 s:	GLOB *.z.Scalars	; signature global s : Scalars @ 36:1
-	! LEQi #3 #.z.Scalars.v @.g0
+	! LEQi #3 #.z.Scalars.v @.g2
 	! FAIL too many initializer values for Scalars.v: 3 given, room for .z.Scalars.v
-.g0:	!
+.g2:	!
 	DATA #7 #8 #9
 e:	GLOB *.z.Elems	; signature global e : Elems @ 37:1
-	! LEQi #4 #.z.Elems.p @.g1
+	! LEQi #4 #.z.Elems.p @.g3
 	! FAIL too many initializer values for Elems.p: 4 given, room for .z.Elems.p
-.g1:	!
+.g3:	!
 	DATA #1 #2 #3 #4
 
 ;-----------------------------------------------------------------------------

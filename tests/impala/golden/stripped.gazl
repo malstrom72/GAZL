@@ -33,13 +33,15 @@
  					! ADDi <a> #<a> #1
  .o.Tail.vals:		! DEFi #<a>
  .z.Tail.vals:		! DEFi #BUF_SIZE
- 					! ADDi <a> #<a> #.z.Tail.vals
+ 					! GEQi #.z.Tail.vals #0 @.g0
+ 					! FAIL extent of Tail.vals is negative, which would run the struct layout backwards
+ .g0:				! ADDi <a> #<a> #.z.Tail.vals
  .z.Tail:			! DEFi #<a>
  ; signature struct Tail { lead : int, vals : int[BUF_SIZE] } @ stripmain.impala:37:1
  tail:				GLOB *.z.Tail ; signature global tail : Tail @ stripmain.impala:38:1
- 					! LEQi #2 #.z.Tail.vals @.g0
+ 					! LEQi #2 #.z.Tail.vals @.g1
  					! FAIL too many initializer values for Tail.vals: 2 given, room for .z.Tail.vals
- .g0:				!
+ .g1:				!
  					DATA #4 #6 #3
 
  ;-----------------------------------------------------------------------------

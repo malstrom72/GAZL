@@ -1901,6 +1901,27 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		+ "export function main() locals int j { j = global g[KONST]; }\n", { randomId: 42 });
 	assert(!/! FAIL index/.test(symPlain),
 		"symbolic index: duplicated the assembler's own check on a plain array\n" + symPlain);
+	// A NEGATIVE EXTENT runs the layout backwards, and a struct field's extent is only ever ADDED to the
+	// offset accumulator - so `struct T { int a; int array b[-1]; int c }` used to compile, assemble, run,
+	// and put `a` and `c` in the SAME WORD. A plain array is caught by the assembler ("Incompatible
+	// types"), a field by nothing. Rejected at the declaration when Impala can see the number, deferred
+	// when it cannot (`const int K = -1`, or a host `! DEFi`).
+	for (const [label, src] of [
+		["a struct field", "struct T { int a; int array b[-1]; int c }\nfunction main() { }\n"],
+		["a global array", "global int array g[-1]\nfunction main() { }\n"],
+		["a local array", "function main() locals int array a[-1] { }\n"],
+	]) {
+		expectCompileOutcome("negative extent", label, src, "E462");
+	}
+	const negSym = compileWithJsImpala("const int K = -1\nstruct T { int a; int array b[K]; int c }\n"
+		+ "global T t\nexport function main() { global t.c = 1; }\n", { randomId: 42 });
+	assert(/! GEQi #\.z\.T\.b #0 @/.test(negSym) && /! FAIL extent of T\.b is negative/.test(negSym),
+		"negative extent: a symbolic one is not deferred to the assembler\n" + negSym);
+	const posSym = compileWithJsImpala("const int K = 3\nstruct T { int a; int array b[K]; int c }\n"
+		+ "global T t\nexport function main() { global t.c = 1; }\n", { randomId: 42 });
+	assert(/! GEQi #\.z\.T\.b #0 @/.test(posSym),
+		"negative extent: the guard is not emitted for every symbolic extent\n" + posSym);
+	console.log("impala.jspeg compiler refuses an array extent that would run a layout backwards");
 	console.log("impala.jspeg compiler defers a symbolic-extent field index to GAZL assembly time");
 }
 
