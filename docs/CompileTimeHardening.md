@@ -12,11 +12,14 @@ these; what was wrong is WHERE the error points - at a symbol and a line in gene
 `.impala` line that caused it. Check claims against the assembler, not against `tools/gazl-validate.sh`,
 which is a JS-side metadata linter that passes every item here.
 
-**Status 2026-07-29: items 2-5 are CLOSED**, by one diagnostics pass. Item 1 is the only one left.
+**Status 2026-08-03: every item on this list is CLOSED.** Items 2-5 went in one diagnostics pass on
+2026-07-29; item 1 shipped on 2026-08-03 as `E461`, scoped to dereference (plus any negative index) and
+backed by a `--range-checks` runtime tier for the dynamic indices no constant check can see. The rule as
+shipped is in `docs/Impala2.md` under "Array bounds"; this section records how it was reasoned about.
 
 | Item | Status | Code |
 |---|---|---|
-| 1. Constant array index out of bounds | **OPEN** | - |
+| 1. Constant array index out of bounds | closed | `E461` |
 | 2. Write to a readonly array element | closed | `E404` |
 | 3. Case label outside the switch range | closed | `E444` |
 | 4. `goto` to an undefined label | closed | `E445` |

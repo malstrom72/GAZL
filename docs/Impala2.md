@@ -1313,6 +1313,80 @@ readers would assume it's the same, which is its own trap.)
 
 ---
 
+## Array bounds
+
+Three tiers, because an index is knowable at three different times and Impala should complain at the
+earliest one that can actually decide.
+
+**Tier 1 - constant index, numeric extent: `E461`, at Impala compile time.** Free, and it fires in every
+build. The rule is about the USE, not the index:
+
+| | address (`&a[k]`) | dereference (`a[k]`) |
+|---|---|---|
+| `k` in range | legal | legal |
+| `k` past the end, any distance | **legal** | `E461` |
+| `k` negative | `E461` | `E461` |
+
+Address formation past the end is deliberately unrestricted - an out-of-range address is a value like any
+other, GAZL's own check fires on access operands rather than on address-taking, and `&a[4]` on `a[4]` is
+the ordinary end pointer. Verified as far as `&g[1000000]`. **This is why Impala needs no one-past-the-end
+carve-out where C does**: the end pointer is not a special case, it is just an address.
+
+A NEGATIVE index is the exception, and it is not a distance rule - it is that a negative offset is not an
+address GAZL will take. `MOVp $p &g:-1` and `ADRL $p $a:-1` are both rejected at assembly, while on a
+struct field `.o.S.pad + (-1)` folds to a valid offset naming the PREVIOUS field, so it assembles, runs
+and silently aliases a neighbour. One mistake with three outcomes; `E461` gives it one.
+
+Only a LITERAL index is decidable here - `g[2 + 7]` is not folded before the subscript sees it, and falls
+through to tier 3.
+
+**Tier 2 - constant index, symbolic extent (`v[SN]`): OPEN, and it is a real hole, not an optimisation.**
+For a plain array the assembler already covers it: it resolves the symbol before checking the offset, so
+`const int SN = 4; global int array a[SN]; global a[7] = 1;` is rejected with `Offset out of bounds: a`.
+For a struct array FIELD it is covered by nothing - the overrun stays inside the struct's allocation, so
+the assembler sees a legal offset, and tier 1 declined because the extent is not a number:
+
+```impala
+const int SN = 2
+struct T { int array v[SN]; int array pad[8] }
+global T t
+export function main() { global t.v[5] = 99; }     // compiles, assembles, runs, lands in `pad`
+```
+
+`--range-checks` does not catch it either - it deliberately skips constant indices, on the grounds that
+tier 1 has them, which is true only when the extent is numeric. The fix is the deferred-assertion idiom
+(`! LSSi` / `! FAIL` / skip label, per `docs/TwoStageConstants.md`), which `assertFitsExtent` already uses
+for over-filled initializers and which is verified to work inside a function body at zero runtime cost.
+
+**Tier 3 - dynamic index: `--range-checks`, off by default.** The only tier that can see `a[i]`. It emits
+a `DEBUG`-gated test per subscript, bounded by the array's `.z.` extent symbol - so it works unchanged for
+a symbolic extent - and calls the host's `assertFail` on failure, exactly as `assert` does:
+
+```gazl
+! EQUi #DEBUG #0 @.r0        ; assemble-time: DEBUG 0 drops everything below
+  SUBi %1 #.z.S.v $i
+  SUBi %1 %1 #1
+  IORi %1 %1 $i              ; (extent - 1 - i) | i  has its sign bit set iff i is out of range
+  GEQi %1 #0 @.r0
+  MOVp %2 &.a_indexo_4d2
+  CALL ^assertFail %1 *1
+.r0:
+```
+
+Branchless on purpose: both ends of the range cost one conditional branch, and the sequence then matches
+the only shape `processBranches` understands. Covered shapes are every array whose extent Impala knows -
+global and local scalar arrays, struct array fields, and arrays of structs. A bare pointer (`p[i]`) has no
+extent and is not checked.
+
+**Why two switches.** `DEBUG` decides whether the assembler EMITS the instructions; `--range-checks`
+decides whether they are in the `.gazl` TEXT at all. They are not redundant: the text is the shipped
+artifact - `tools/gazlCompactor` strips it and `textToCpp` embeds it in a C++ string literal - and
+`DEBUG 0` removes nothing from it. Measured, 20 asserts took a compacted module from 372 to 2282 bytes,
+~95 bytes per check that `DEBUG 0` does not reclaim. Hence off by default: a shipping build carries zero
+bytes, a dev build carries them and can still toggle them at assembly without recompiling Impala.
+
+---
+
 ## Diagnostics
 
 The error format is part of the language's contract with its audience - AI agents iterate against
@@ -1414,6 +1488,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E458 | a `field:` name in an array slot, where the index already does the naming |
 | E459 | a non-zero initializer for an `extern struct` - the host owns the layout, so Impala cannot place it |
 | E460 | more initializer values than the array holds (they used to be dropped silently) |
+| E461 | a constant array index out of bounds: any DEREFERENCE past the end, or ANY use of a negative one (see [Array bounds](#array-bounds)) |
 
 E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct
 guards that were never needed once the features shipped (`docs/StructLayoutConstants.md` records the

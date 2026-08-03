@@ -30,7 +30,7 @@ build if they drift from their grammar.
 
 | File | |
 |---|---|
-| `impala.node.js` | Node CLI. `compile` / `run` subcommands, `--legacy`, `--dead-strip`. What you use during development. |
+| `impala.node.js` | Node CLI. `compile` / `run` subcommands, `--legacy`, `--dead-strip`, `--range-checks`. What you use during development. |
 | `impala.nuxjs.js` | The same compiler driven from the NuXJS ES5 runtime, positional args only. This is the production driver; `build.sh` stages it into `output/`. |
 | `playground.html` | Standalone browser playground, no server and no build. Open it from this directory. |
 | `updateJSPEG.js` | Regenerates the two `*Compiler.js` files, or `--check`-verifies them. |

@@ -549,12 +549,22 @@ Correct scope, which neither write-up states:
 
 - **Dereference with a known out-of-range constant index** (`a[7]`, `a[7] = 1`, `p[9].a` as a value) -
   compile error. It is a guaranteed trap, so catching it early loses nothing.
-- **Address formation** (`&a[7]`, `&a[N]`, `&p[[i]]`) - always legal, never checked.
+- **Address formation PAST THE END** (`&a[7]`, `&a[N]`, `&p[[i]]`) - always legal, never checked.
 
 `CompileTimeHardening.md`'s motivating example is `a[7] = 1`, a store, so the check as *motivated* is
 already correctly scoped; only the wording generalises past it. Note this leaves Impala **simpler** than
 C, not looser: C needs an explicit carve-out making one-past-the-end valid and two-past undefined, while
 Impala needs no carve-out at all.
+
+> **AMENDED 2026-08-03, when this shipped as `E461`.** A NEGATIVE constant index is rejected in every
+> context, address included - the one exception to the second bullet, and the paragraph above overstates
+> "no carve-out at all". It is not a distance rule: a negative offset is not an address the target machine
+> will take either. `MOVp $p &g:-1` and `ADRL $p $a:-1` are both rejected at assembly ("Negative value not
+> accepted"), and on a struct field `.o.S.pad + (-1)` folds to a perfectly good POSITIVE offset naming the
+> previous field, so `&s.pad[-1]` assembles, runs and silently aliases a neighbour - the very bug the check
+> exists for. So the reasoning above still holds ("do not invent a restriction the target does not have");
+> it is just that for a negative index the target does have one. See `docs/Impala2.md` "Array bounds" for
+> the shipped rule, including the `--range-checks` runtime tier for indices no constant check can see.
 
 
 # Decision: the scaled subscript is spelled `[[ ]]` (2026-07-30)
