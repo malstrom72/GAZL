@@ -81,6 +81,7 @@ const impalaExpected = applyImpalaHardening(
 		prelude: "var $$parser = {};",
 		exposeSourceNameOption: true,
 	}),
+	impalaGrammar,
 ).trim();
 if (canonicalizeTrimmed(impalaExpected) !== canonicalizeTrimmed(impalaExisting)) {
 	console.error("Generated compiler differs from impalaCompiler.js");
@@ -106,6 +107,7 @@ const impalaSelfExpected = applyImpalaHardening(
 		prelude: "var $$parser = {};",
 		exposeSourceNameOption: true,
 	}),
+	impalaGrammar,
 ).trim();
 if (canonicalizeTrimmed(impalaSelfExpected) !== canonicalizeTrimmed(impalaExisting)) {
 	console.error("Self-hosted impalaCompiler.js differs from recorded output after hardening");
