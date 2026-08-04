@@ -1575,6 +1575,19 @@
     $$parser.makeArgValue = function (expr, number) {
         expr = metaSlot(expr);
 
+        /* An ARGUMENT is a reading context like any other, and a place is not an instruction: `g(f.state)`
+           handed the writer a raw `@place` record, whose operator is in no opcode table, and the compiler
+           died on `Cannot read properties of undefined` with no code, position or caret. Only this door
+           was missing - `p = f.state` and `&f.state[0]` both decay - because the arg path skips
+           makeRValue on purpose (it emits straight into the call window instead of a temp). Ask it about
+           the place and nothing else: it returns the moment it has decayed one, and it owns what every
+           other reader means by a place, so a new place shape cannot be right for readers and fatal here.
+           checkIndexUse is idempotent (it clears oobIndex on entry), so Argument having already run it is
+           not a double guard. */
+        if (expr.place) {
+            $$parser.makeRValue(expr);
+        }
+
         var op   = expr.operator;
         var tgt  = '%' + number;
         var op1  = expr.operands[1];

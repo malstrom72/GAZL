@@ -2066,6 +2066,30 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler decides every integer literal spelling, and defers only chars");
 }
 
+// A struct ARRAY FIELD decays to a pointer in every reading context - docs/Impala2.md says so - but the
+// argument path skips makeRValue by design (it emits into the call window instead of a temp), so the one
+// door that never decayed handed the writer a raw `@place` record. Its operator is in no opcode table,
+// and the compiler died on `Cannot read properties of undefined (reading 'split')`: no code, no position,
+// no caret. All four base kinds, because the place carries the base and each reaches the window
+// differently - and the emitted operand is asserted, since decaying through a temp would compile just as
+// green while costing an instruction per argument.
+{
+	const decls = "extern native printInt\nstruct F { int array state[4]; int tag }\nstruct Outer { F inner }\n"
+		+ "global F gf\nfunction sum(int pointer p) returns int r { r = p[0]; }\n";
+	for (const [label, body, expected] of [
+		["a LOCAL struct's array field", "locals F f { printInt(sum(f.state)); }", /ADRL %\d \$f:\.o\.F\.state \*0/],
+		["a GLOBAL struct's", "{ printInt(sum(global gf.state)); }", /ADDp %\d &gf #\.o\.F\.state/],
+		["a NESTED field's", "locals Outer o { printInt(sum(o.inner.state)); }", /ADRL %\d \$o:<[A-Za-z]> \*0/],
+		["one reached through a pointer", "locals F pointer fp { printInt(sum(fp->state)); }", /ADDp %\d \$fp #\.o\.F\.state/],
+	]) {
+		const out = compileWithJsImpala(decls + "export function main() " + body + "\n", { randomId: 42 });
+		assert(!/@place/.test(out), "struct array field argument: a raw place reached the output\n" + out);
+		assert(expected.test(out),
+			"struct array field argument (" + label + "): not decayed straight into the call window\n" + out);
+	}
+	console.log("impala.jspeg compiler decays a struct array field passed as an argument");
+}
+
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
 const caretNonCases = [
 	["if/else with a semicolon-terminated then-branch",
