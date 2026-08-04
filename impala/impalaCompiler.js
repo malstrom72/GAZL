@@ -174,8 +174,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     var guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
     var emittedGuards = {};                              /// (array, index) pairs already asserted in this function - the same assertion twice says nothing new
     var initTarget = undefined;                          /// element DESCRIPTOR an `InitList`'s entries answer to; undefined = untyped array, accept what comes
-    var reservedAt = undefined;
-    var pendingAxisOob = undefined;                      /// a per-axis bounds finding, handed from foldAxes to subscriptStruct                          /// offset of the last name reported as reserved - two doors check one name, one reports it
+    var reservedAt = undefined;                          /// offset of the last name reported as reserved - two doors check one name, one reports it
+    var axisOob = [];                                    /// per-axis bounds findings, handed from foldAxes to subscriptStruct
     var switchStack = [];
     var noForward = false;
     var exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
@@ -1436,7 +1436,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        out-of-range finding back to hang on the meta they build. */
     checkSubscript = function (extent, idxOp, sourceCode, sourceOffset) {
         emitRangeCheck(idxOp, extent, sourceCode, sourceOffset);
-        return checkConstIndex(extent, idxOp, sourceCode, sourceOffset);
+        var oob = checkConstIndex(extent, idxOp, sourceCode, sourceOffset);
+        return (oob === undefined ? undefined : [ oob ]);         /* `oobIndex` is a LIST - see checkIndexUse */
     };
 
     /* A constant index that tier 1 could not clear survived the subscript as a flag, because only its USE
@@ -1445,10 +1446,21 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        assembler in the canonical `! LSSi` / `! FAIL` / skip-label form (docs/TwoStageConstants.md rule 4,
        the same shape assertFitsExtent uses for an over-filled initializer). It costs no runtime
        instruction and is emitted only at a real dereference, so `&s.v[9]` stays legal here too. */
+    /* A SHAPED subscript leaves one finding PER AXIS, each naming a different bound, so a subscript carries
+       a LIST. Arbitrating down to one silently dropped every axis but the first: `cells[i, j]` on a shape
+       with two host-supplied axes then guarded `i` and let `j` run off its row. Axis findings are pushed
+       first, so an E461 that can name the axis is the one that fires - the flat check has nothing to say
+       about `cells[0, 5]`, a legal word offset and an illegal coordinate. */
     checkIndexUse = function (expr) {
-        var op = expr.oobIndex;
-        if (op === undefined) return;
+        var list = expr.oobIndex;
+        if (list === undefined) return;
         expr.oobIndex = undefined;
+        for (var i = 0; i < list.length; ++i) {
+            indexGuard(list[i]);
+        }
+    };
+
+    indexGuard = function (op) {
         if (op.n !== undefined) {
             fail('Index ' + op.k + ' is outside the extent ' + op.n + ' of this array',
                     op.src, op.off, 'E461',
@@ -2011,13 +2023,19 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         if (!redeclared) {
             emitStructLayout(name);
         }
+        /* EVERY borrowed operand the layout block just read, not only the total: a shape holds one scratch
+           per non-literal AXIS as well, and those stay live until the `.d.` DEFi lines above quote them. */
         var held = {};
         for (var i = 0; i < s.fields.length; ++i) {
-            var size = '' + s.fields[i].size;
-            if (size.charAt(0) !== '<') continue;
-            assert(!held[size], 'struct ' + name + ' reuses extent scratch ' + size);
-            held[size] = true;
-            returnBack(s.fields[i].size);
+            var f = s.fields[i];
+            var parts = (f.dims === undefined ? [ f.size ] : [ f.size ].concat(f.dims));
+            for (var j = 0; j < parts.length; ++j) {
+                var op = '' + parts[j];
+                if (op.charAt(0) !== '<') continue;
+                assert(!held[op], 'struct ' + name + ' reuses extent scratch ' + op);
+                held[op] = true;
+                returnBack(op);
+            }
         }
         openStruct = undefined;
         return redeclared;
@@ -2196,9 +2214,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         for (var i = 1; i < dims.length; ++i) {
             var next = borrow('<');
             emit('<> *', 'i', next, '#' + acc, '#' + dims[i]);
-            if (('' + acc).charAt(0) === '<') {
+            if (i > 1 && ('' + acc).charAt(0) === '<') {
                 returnBack(acc);                     /* an intermediate product, not an axis */
-            }
+            }                                                 /* i === 1: acc IS axis 0, and `.d.<S>.<f>.0`
+                                                                 has yet to quote it - endStruct frees it */
             acc = next;
         }
         return acc;
@@ -2682,11 +2701,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
         var oob = checkConstIndex({ n: ext.dimN[axis], what: ext.what + ' axis ' + axis,
                 sym: ext.dims[axis], inField: true }, idxRV, sourceCode, sourceOffset);
-        /* An AXIS violation outranks the flat one the subscript will find: `cells[0, 5]` is a legal word
-           offset and an illegal coordinate, so the flat check has nothing to say about it. Held on the
-           parser because `subscriptStruct` runs after the fold and assigns `oobIndex` last. */
-        if (oob !== undefined && pendingAxisOob === undefined) {
-            pendingAxisOob = oob;
+        /* Held on the parser because `foldAxes` runs before `subscriptStruct`, which assigns `oobIndex`
+           last. Every axis keeps its own finding - see checkIndexUse for why they are not arbitrated. */
+        if (oob !== undefined) {
+            axisOob.push(oob);
         }
         /* Tier 3 for this axis. `emitRangeCheck` self-selects - it returns at once unless `--range-checks`
            is on AND this index is a runtime value - so the constant axes of a mixed subscript cost nothing.
@@ -2799,11 +2817,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
             }
         }
-        if (pendingAxisOob !== undefined) {               /* a per-axis finding wins - see checkAxis */
-            oobIndex = pendingAxisOob;
-            pendingAxisOob = undefined;
-        }
-        x.oobIndex = oobIndex;                                    /* AFTER the terminal call on every path -
+        var found = axisOob;                             /* the axes this subscript just folded */
+        axisOob = [];
+        if (oobIndex !== undefined) found.push(oobIndex);
+        x.oobIndex = (found.length === 0 ? undefined : found);    /* AFTER the terminal call on every path -
                                                                      setPlace and emitPlaceValue both clear it */
     };
 
@@ -3410,11 +3427,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
-        if (expr.oobIndex !== undefined && expr.oobIndex.own) {
-            returnBack(expr.oobIndex.k);    /* the guard's copy dies with the finding - and so does
+        for (var oi = 0; expr.oobIndex !== undefined && oi < expr.oobIndex.length; ++oi) {
+            var oob = expr.oobIndex[oi];
+            if (!oob.own) continue;
+            returnBack(oob.k);              /* the guard's copy dies with the finding - and so does
                                                         the `! MOVi` that made it, or an address would ship
                                                         a line nothing reads (flushMetaCode skips a null) */
-            metacode[expr.oobIndex.copyAt].operator = null;
+            metacode[oob.copyAt].operator = null;
         }
         expr.oobIndex = undefined;                   /* address formation is never bounds-checked, at any
                                                         index - see checkConstIndex. Cleared before the
@@ -4183,7 +4202,7 @@ function InitList($){var $d,$type,$entryAt,$x=createParserContext();return (func
 function ArgsDecl($){var $v=createParserContext();return (function(){var _b=_i;return (function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return VarDecl($v)&&(function(){ $._[$.n++] = declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&VarDecl($v)&&(function(){ $._[$.n++] = declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function LocalsDecl($){var $v=createParserContext();return (function(){var _b=_i;return (function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return (function(){var _b=_i;return VarDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ $._[$.n++] = declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&(function(){var _b=_i;return VarDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ $._[$.n++] = declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function TypeBase($){var $t=createParserContext(),$id=createParserContext();return (function(){var _b=_i;return BASE_TYPE($t)&&_($)&&(function(){ $._ = CASTS_TO_TYPES[$t._]; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Identifier($id)&&(function(){ if (!isStructAtom($id._) && !isFuncTypeAtom($id._)) fail('Unknown type ' + $id._, _s, _i, 'E413'); $._ = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function VarDecl($){var $base=createParserContext(),$desc,$nameStart,$id=createParserContext();return (function(){var _b=_i;return TypeBase($base)&&(function(){ $desc = $base._; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ $nameStart = _i; ; return true})()&&Identifier($id)&&(function(){ checkReservedName($id._, 'variable', _s, $nameStart); var vd = descTypeElem($desc); if (vd.elem === undefined && isStructAtom(vd.type)) { $.type = 'S'; $.struct = vd.type; $.elem = undefined; $.words = structWords(vd.type); } else { $.type = vd.type;       /* 'F' + the name for a named funcptr type */ $.elem = vd.elem; $.struct = undefined; $.words = undefined;    /* scalar: a single word, no size operand */ } $.name = $id._; $.at   = $nameStart;   /* the NAME - `Identifier` ate the trailing space, so an end-of-rule _i would name the NEXT declaration */ $.size = undefined; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function VarDecl($){var $base=createParserContext(),$desc,$nameStart,$id=createParserContext();return (function(){var _b=_i;return TypeBase($base)&&(function(){ $desc = $base._; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ $nameStart = _i; ; return true})()&&Identifier($id)&&(function(){ checkReservedName($id._, 'variable', _s, $nameStart); var vd = descTypeElem($desc); if (vd.elem === undefined && isStructAtom(vd.type)) { $.type = 'S'; $.struct = vd.type; $.elem = undefined; $.words = structWords(vd.type); } else { $.type = vd.type;       /* 'F' + the name for a named funcptr type */ $.elem = vd.elem; $.struct = undefined; $.words = undefined;    /* scalar: a single word, no size operand */ } $.name = $id._; $.at   = $nameStart;   /* the NAME - `Identifier` ate the trailing space, so an end-of-rule _i would name the NEXT declaration */ $.size = undefined; $.dims = undefined;    /* a recycled slot: a scalar after a SHAPED array would inherit its axes */ ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ArrayDecl($){var $desc,$extent,$dims,$base=createParserContext(),$nameStart,$id=createParserContext(),$extentStart,$x=createParserContext(),$y=createParserContext(),$size;return (function(){var _b=_i;return (function(){ $desc = undefined; $extent = undefined; $dims = undefined; ; return true})()&&((function(){var _b=_i;return TypeBase($base)&&(function(){ $desc = $base._; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = 'p:' + $desc; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&ARRAY($)&&_($)&&(function(){ $nameStart = _i; ; return true})()&&Identifier($id)&&(function(){ checkReservedName($id._, 'array', _s, $nameStart); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_($)&&(function(){ $extentStart = _i; $dims = []; ; return true})()&&Expr($x)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&Expr($y)&&(function(){   /* an EXTRA axis. Held as its own constant; the axes stay separate so each can be checked against its own index, and only the PRODUCT becomes the allocation size. */ $dims.push(arrayAxis($y._, _s, $extentStart)); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="]")&&(++_i,true)&&_($)&&(function(){ $size = makeConstant($x._, 'i', _s, $extentStart); /* A NEGATIVE extent runs the layout BACKWARDS. On a plain array the assembler catches it, because the count reaches it as a `GLOB *size` / `LOCA *size` operand it type-checks ("Incompatible types: .z.g"). A struct FIELD's count is only ever ADDED into the offset accumulator, which subtracts without complaint - `struct T { int a; int array b[-1]; int c }` compiles, assembles, runs, and puts `a` and `c` in the SAME WORD. Rejected here, at the declaration, because that is where the extent is still a number and where the invariant belongs. Zero is left alone: it wastes a field but aliases nothing, and every constant index into it is already out of range. */ if (constInt($size) < 0) fail('Array extent is negative: ' + dropHash($size), _s, $extentStart, 'E462', 'an array holds zero or more elements'); $extent = dropHash($size);   /* element count - may be a symbolic const */ if ($dims.length > 0) {              /* a SHAPE: allocate the product, keep the axes */ $dims.unshift($extent);          /* written order, outermost first */ $extent = axesProduct($dims); $dims.reverse();                 /* stride order: axis 0 is innermost */ } /* THE CONSUMER OWNS THE BORROW. A folded extent lives in a `<X>` scratch, and a scratch is recycled on the next borrow - so whoever still has to READ this one decides when it goes back: endStruct after the layout block, FuncDecl after the locals pass, GlobalDecl right after its declaration. Freeing it here instead let the NEXT declarator in the same list borrow the same scratch and overwrite the extent, which is how two array locals in one clause silently got whichever count was folded last. */ ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ /* An `extern struct` field states NO extent, matching the `extern array` rule: the host owns that layout, so a number here would be an unverifiable claim Impala never reads (offsets are host-supplied `.o.` symbols, 1-D stride is 1). */ var externField = (openStruct !== undefined && isExternStruct(openStruct)); if (externField && $extent !== undefined) { fail('An extern struct array field must not state a size', _s, _i, 'E430', 'the host owns this layout - write `array ' + $id._ + '` without a size'); } if (!externField && $extent === undefined) { fail('Array ' + $id._ + ' needs a size', _s, _i, 'E431', 'only a sizeless `extern array` or `extern struct` field may omit it'); } $.type = 'A'; $.elem = $desc; $.name = $id._; $.at   = $nameStart;                 /* see VarDecl */ $.size = $extent; $.words = $extent;                   /* an array's words ARE its count; a struct element scales symbolically, in arrayAllocSize */ $.dims = (($dims !== undefined && $dims.length > 1) ? $dims : undefined); /* only a SHAPE carries axes; a 1-D array has none, which is what keeps its every path unchanged */ ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Statement($){var $lblStart,$label=createParserContext();return (function(){var _b=_i;return (function(){ var snippet = _s.substr(_i); var cut     = find(snippet, "{;\r\n"); var txt     = (cut >= 0 ? snippet.substr(0, cut) : snippet); emitMeta({ operator:';', type:undefined, operands:[ txt, undefined, undefined ] }); ; return true})()&&((function(){while((function(){var _b=_i;return (function(){ $lblStart = _i; ; return true})()&&Identifier($label)&&(_s[_i]===":")&&(++_i,true)&&_($)&&(function(){ emitMeta({ operator:'<--', type:undefined, operands:[ '@' + $label._, undefined, undefined ] }); /* carry the source position so processBranches can name the `.impala` line if this label is a duplicate */ var lbl = metacode[metacode.length - 1]; lbl.labelSource = _s; lbl.labelOffset = _i; /* the 1.x `goto break;` early-exit idiom is the --legacy case */ checkReservedName($label._, 'label', _s, $lblStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _b=_i;return (_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Assert($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Block($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Copy($)||(_im=(_i>_im?_i:_im),_i=_b,false)||DoWhile($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Loop($)||(_im=(_i>_im?_i:_im),_i=_b,false)||For($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Goto($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Return($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Break($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Continue($)||(_im=(_i>_im?_i:_im),_i=_b,false)||If($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Switch($)||(_im=(_i>_im?_i:_im),_i=_b,false)||While($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Destructure($)||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($)&&(_s[_i]===";")&&(++_i,true)&&_($)&&(function(){ if (metaSlot($._).winBase !== undefined) {     /* discarded struct-return value: free its window + base */ returnBack(metaSlot($._).base); freeStructWindow($._); } releaseMeta($._); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Expr($){var $r=createParserContext();return (function(){var _b=_i;return Bitwise($)&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&Expr($r)&&(function(){ if (!dry) assign($._, $._, $r._, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

@@ -161,8 +161,8 @@
     var $$parser.guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
     var $$parser.emittedGuards = {};                              /// (array, index) pairs already asserted in this function - the same assertion twice says nothing new
     var $$parser.initTarget = undefined;                          /// element DESCRIPTOR an `InitList`'s entries answer to; undefined = untyped array, accept what comes
-    var $$parser.reservedAt = undefined;
-    var $$parser.pendingAxisOob = undefined;                      /// a per-axis bounds finding, handed from foldAxes to subscriptStruct                          /// offset of the last name reported as reserved - two doors check one name, one reports it
+    var $$parser.reservedAt = undefined;                          /// offset of the last name reported as reserved - two doors check one name, one reports it
+    var $$parser.axisOob = [];                                    /// per-axis bounds findings, handed from foldAxes to subscriptStruct
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
     var $$parser.exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
@@ -1423,7 +1423,8 @@
        out-of-range finding back to hang on the meta they build. */
     $$parser.checkSubscript = function (extent, idxOp, sourceCode, sourceOffset) {
         $$parser.emitRangeCheck(idxOp, extent, sourceCode, sourceOffset);
-        return $$parser.checkConstIndex(extent, idxOp, sourceCode, sourceOffset);
+        var oob = $$parser.checkConstIndex(extent, idxOp, sourceCode, sourceOffset);
+        return (oob === undefined ? undefined : [ oob ]);         /* `oobIndex` is a LIST - see checkIndexUse */
     };
 
     /* A constant index that tier 1 could not clear survived the subscript as a flag, because only its USE
@@ -1432,10 +1433,21 @@
        assembler in the canonical `! LSSi` / `! FAIL` / skip-label form (docs/TwoStageConstants.md rule 4,
        the same shape assertFitsExtent uses for an over-filled initializer). It costs no runtime
        instruction and is emitted only at a real dereference, so `&s.v[9]` stays legal here too. */
+    /* A SHAPED subscript leaves one finding PER AXIS, each naming a different bound, so a subscript carries
+       a LIST. Arbitrating down to one silently dropped every axis but the first: `cells[i, j]` on a shape
+       with two host-supplied axes then guarded `i` and let `j` run off its row. Axis findings are pushed
+       first, so an E461 that can name the axis is the one that fires - the flat check has nothing to say
+       about `cells[0, 5]`, a legal word offset and an illegal coordinate. */
     $$parser.checkIndexUse = function (expr) {
-        var op = expr.oobIndex;
-        if (op === undefined) return;
+        var list = expr.oobIndex;
+        if (list === undefined) return;
         expr.oobIndex = undefined;
+        for (var i = 0; i < list.length; ++i) {
+            $$parser.indexGuard(list[i]);
+        }
+    };
+
+    $$parser.indexGuard = function (op) {
         if (op.n !== undefined) {
             $$parser.fail('Index ' + op.k + ' is outside the extent ' + op.n + ' of this array',
                     op.src, op.off, 'E461',
@@ -1998,13 +2010,19 @@
         if (!redeclared) {
             $$parser.emitStructLayout(name);
         }
+        /* EVERY borrowed operand the layout block just read, not only the total: a shape holds one scratch
+           per non-literal AXIS as well, and those stay live until the `.d.` DEFi lines above quote them. */
         var held = {};
         for (var i = 0; i < s.fields.length; ++i) {
-            var size = '' + s.fields[i].size;
-            if (size.charAt(0) !== '<') continue;
-            assert(!held[size], 'struct ' + name + ' reuses extent scratch ' + size);
-            held[size] = true;
-            $$parser.returnBack(s.fields[i].size);
+            var f = s.fields[i];
+            var parts = (f.dims === undefined ? [ f.size ] : [ f.size ].concat(f.dims));
+            for (var j = 0; j < parts.length; ++j) {
+                var op = '' + parts[j];
+                if (op.charAt(0) !== '<') continue;
+                assert(!held[op], 'struct ' + name + ' reuses extent scratch ' + op);
+                held[op] = true;
+                $$parser.returnBack(op);
+            }
         }
         $$parser.openStruct = undefined;
         return redeclared;
@@ -2183,9 +2201,10 @@
         for (var i = 1; i < dims.length; ++i) {
             var next = $$parser.borrow('<');
             $$parser.emit('<> *', 'i', next, '#' + acc, '#' + dims[i]);
-            if (('' + acc).charAt(0) === '<') {
+            if (i > 1 && ('' + acc).charAt(0) === '<') {
                 $$parser.returnBack(acc);                     /* an intermediate product, not an axis */
-            }
+            }                                                 /* i === 1: acc IS axis 0, and `.d.<S>.<f>.0`
+                                                                 has yet to quote it - endStruct frees it */
             acc = next;
         }
         return acc;
@@ -2669,11 +2688,10 @@
         }
         var oob = $$parser.checkConstIndex({ n: ext.dimN[axis], what: ext.what + ' axis ' + axis,
                 sym: ext.dims[axis], inField: true }, idxRV, sourceCode, sourceOffset);
-        /* An AXIS violation outranks the flat one the subscript will find: `cells[0, 5]` is a legal word
-           offset and an illegal coordinate, so the flat check has nothing to say about it. Held on the
-           parser because `subscriptStruct` runs after the fold and assigns `oobIndex` last. */
-        if (oob !== undefined && $$parser.pendingAxisOob === undefined) {
-            $$parser.pendingAxisOob = oob;
+        /* Held on the parser because `foldAxes` runs before `subscriptStruct`, which assigns `oobIndex`
+           last. Every axis keeps its own finding - see checkIndexUse for why they are not arbitrated. */
+        if (oob !== undefined) {
+            $$parser.axisOob.push(oob);
         }
         /* Tier 3 for this axis. `emitRangeCheck` self-selects - it returns at once unless `--range-checks`
            is on AND this index is a runtime value - so the constant axes of a mixed subscript cost nothing.
@@ -2786,11 +2804,10 @@
                 $$parser.emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
             }
         }
-        if ($$parser.pendingAxisOob !== undefined) {               /* a per-axis finding wins - see checkAxis */
-            oobIndex = $$parser.pendingAxisOob;
-            $$parser.pendingAxisOob = undefined;
-        }
-        x.oobIndex = oobIndex;                                    /* AFTER the terminal call on every path -
+        var found = $$parser.axisOob;                             /* the axes this subscript just folded */
+        $$parser.axisOob = [];
+        if (oobIndex !== undefined) found.push(oobIndex);
+        x.oobIndex = (found.length === 0 ? undefined : found);    /* AFTER the terminal call on every path -
                                                                      setPlace and emitPlaceValue both clear it */
     };
 
@@ -3397,11 +3414,13 @@
     $$parser.reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
-        if (expr.oobIndex !== undefined && expr.oobIndex.own) {
-            $$parser.returnBack(expr.oobIndex.k);    /* the guard's copy dies with the finding - and so does
+        for (var oi = 0; expr.oobIndex !== undefined && oi < expr.oobIndex.length; ++oi) {
+            var oob = expr.oobIndex[oi];
+            if (!oob.own) continue;
+            $$parser.returnBack(oob.k);              /* the guard's copy dies with the finding - and so does
                                                         the `! MOVi` that made it, or an address would ship
                                                         a line nothing reads (flushMetaCode skips a null) */
-            $$parser.metacode[expr.oobIndex.copyAt].operator = null;
+            $$parser.metacode[oob.copyAt].operator = null;
         }
         expr.oobIndex = undefined;                   /* address formation is never bounds-checked, at any
                                                         index - see checkConstIndex. Cleared before the
@@ -4998,6 +5017,8 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                                                     space, so an end-of-rule $$i would name
                                                                                                     the NEXT declaration */
                                                                          $$.size = undefined;
+                                                                         $$.dims = undefined;    /* a recycled slot: a scalar after a
+                                                                                                    SHAPED array would inherit its axes */
                                                                      }
 
 ArrayDecl   <-                                                        { $desc = undefined; $extent = undefined; $dims = undefined; }

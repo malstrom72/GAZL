@@ -16,10 +16,22 @@
 	a 1-D `cells[11]`. Covers: a 2-D and a 3-D field, constant and runtime indices, read and write,
 	access through a pointer parameter, and a shape sharing a struct with an ordinary 1-D field.
 
-	Expected (GAZLCmd multidimFields.gazl main): 23 138 3 210 13
+	`struct Shaped` covers the SYMBOLIC axes, where Impala cannot decide the bound and every tier that
+	could is the assembler's. All three of these shipped broken and are regressions:
+
+	  - an axis that folds to a `<X>` scratch was never handed back, so the pool leaked one borrow per
+	    shaped field and tripped the boundary assert before `main`;
+	  - `axesProduct` returned axis 0's scratch as though it were an intermediate product, while
+	    `.d.<S>.<f>.0` had yet to quote it;
+	  - a SCALAR field declared after a shaped one inherited its axes, because VarDecl clears every other
+	    field of the recycled meta slot and `dims` was not on the list.
+
+	Expected (GAZLCmd multidimFields.gazl main): 23 138 3 210 13 99 13 13
 */
 
 const int DEBUG = 0
+const int H = 3
+const int W = 2
 
 extern native printInt
 extern native printLF
@@ -32,7 +44,16 @@ struct Grid
 	int tag
 }
 
+/* Axes Impala cannot evaluate: a named const and a folded expression. Both reach the assembler as
+   `.d.Shaped.m.<k>`, so the bounds tier for them is a deferred `! LSSi` / `! FAIL` rather than E461. */
+struct Shaped
+{
+	int array m[H, W * 2];
+	int mark					/* a SCALAR right after a shape - must not inherit its axes */
+}
+
 global Grid g
+global Shaped sh
 
 /* A shape reached through a POINTER parameter: the axes come from the struct type, so the callee
    strides and bounds-checks with nothing passed but the pointer. */
@@ -73,5 +94,14 @@ locals int y, int x, int z, int v
 	x = 3;
 	v = global g.cells[y, x];                       /* runtime indices on both axes */
 	printInt(v);
+	printLF();
+
+	global sh.mark = 13;
+	global sh.m[2, 3] = 99;                         /* both axes symbolic: checked at assembly, not here */
+	printInt(global sh.m[2, 3]);
+	printLF();
+	printInt(global sh.mark);                       /* 13 - the shape beside it did not move it */
+	printLF();
+	printInt(sizeof(Shaped));                       /* 3 * 4 + 1 */
 	printLF();
 }

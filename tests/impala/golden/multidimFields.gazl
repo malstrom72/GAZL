@@ -1,9 +1,11 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #0	; signature const DEBUG : int @ 22:1
-; signature extern native printInt() -> unknown @ 24:1
-; signature extern native printLF() -> unknown @ 25:1
+DEBUG:	! DEFi #0	; signature const DEBUG : int @ 32:1
+H:	! DEFi #3	; signature const H : int @ 33:1
+W:	! DEFi #2	; signature const W : int @ 34:1
+; signature extern native printInt() -> unknown @ 36:1
+; signature extern native printLF() -> unknown @ 37:1
 	! MULi <A> #3 #4
 	! MULi <B> #2 #3
 	! MULi <C> #<B> #4
@@ -29,11 +31,26 @@ DEBUG:	! DEFi #0	; signature const DEBUG : int @ 22:1
 .o.Grid.tag:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Grid:	! DEFi #<a>
-; signature struct Grid { cells : int[], cube : int[], flat : int[5], tag : int } @ 27:1
-g:	GLOB *.z.Grid	; signature global g : Grid @ 35:1
+; signature struct Grid { cells : int[], cube : int[], flat : int[5], tag : int } @ 39:1
+	! MULi <C> #W #2
+	! MULi <A> #H #<C>
+	! MOVi <a> #0	; layout of struct Shaped
+.o.Shaped.m:	! DEFi #<a>
+.z.Shaped.m:	! DEFi #<A>
+.d.Shaped.m.0:	! DEFi #<C>
+.d.Shaped.m.1:	! DEFi #H
+	! GEQi #.z.Shaped.m #0 @.g2
+	! FAIL extent of Shaped.m is negative, which would run the struct layout backwards
+.g2:	! ADDi <a> #<a> #.z.Shaped.m
+.o.Shaped.mark:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Shaped:	! DEFi #<a>
+; signature struct Shaped { m : int[], mark : int } @ 49:1
+g:	GLOB *.z.Grid	; signature global g : Grid @ 55:1
+sh:	GLOB *.z.Shaped	; signature global sh : Shaped @ 56:1
 
 ;-----------------------------------------------------------------------------
-sum:	FUNC	; signature func sum(Grid-ptr p, int rows) -> int @ 39:1
+sum:	FUNC	; signature func sum(Grid-ptr p, int rows) -> int @ 60:1
 	$total:	OUTi
 	$p:	INPp
 	$rows:	INPi
@@ -56,7 +73,7 @@ sum:	FUNC	; signature func sum(Grid-ptr p, int rows) -> int @ 39:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature export func main() -> void @ 50:1
+main:	FUNC	; signature export func main() -> void @ 71:1
 		PARA *1
 	$y:	LOCi
 	$x:	LOCi
@@ -84,13 +101,13 @@ main:	FUNC	; signature export func main() -> void @ 50:1
 		! LSSi #<A> #.z.Grid.cells @.g4
 	.g5:	! FAIL a computed index outside Grid.cells (resolved only at assembly)  
 	.g4:	PEEK %1 &g:<B> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 58:32
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 59:11
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 79:32
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 80:11
 		MOVp %2 &g 	; printInt(sum(&global g, 3))
 		MOVi %3 #3 
-		CALL &sum %1 *3	; expects sum(Grid-ptr, int) -> int @ 61:28
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 61:29
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 62:11
+		CALL &sum %1 *3	; expects sum(Grid-ptr, int) -> int @ 82:28
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 82:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 83:11
 		! MULi <B> #1 #.d.Grid.cube.1	; global g.cube[1, 2, 3] = 3
 		! ADDi <B> <B> #2
 		! MULi <A> #<B> #.d.Grid.cube.0
@@ -111,14 +128,14 @@ main:	FUNC	; signature export func main() -> void @ 50:1
 		! LSSi #<C> #.z.Grid.cube @.g8
 	.g9:	! FAIL a computed index outside Grid.cube (resolved only at assembly)  
 	.g8:	PEEK %1 &g:<A> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 65:34
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 66:11
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 86:34
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 87:11
 		! ADDi <A> #.o.Grid.flat #4	; global g.flat[4] = 210
 		POKE &g:<A> #210 
 		! ADDi <A> #.o.Grid.flat #4	; printInt(global g.flat[4])
 		PEEK %1 &g:<A> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 69:28
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 70:11
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 90:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 91:11
 		MOVi $y #1 	; y = 1
 		MOVi $x #3 	; x = 3
 		MULi %0 $y #.d.Grid.cells.0	; v = global g.cells[y, x]
@@ -126,6 +143,35 @@ main:	FUNC	; signature export func main() -> void @ 50:1
 		ADDp %1 &g #.o.Grid.cells
 		PEEK $v %1 %0
 		MOVi %1 $v 	; printInt(v)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 75:13
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 76:11
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 96:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 97:11
+		POKE &sh:.o.Shaped.mark #13 	; global sh.mark = 13
+		! MULi <A> #2 #.d.Shaped.m.0	; global sh.m[2, 3] = 99
+		! ADDi <A> <A> #3
+		! MOVi <C> #<A> 
+		! ADDi <B> #.o.Shaped.m #<A>
+		! LSSi #2 #.d.Shaped.m.1 @.g10
+		! FAIL index 2 outside Shaped.m axis 1 (resolved only at assembly)  
+	.g10:	! LSSi #3 #.d.Shaped.m.0 @.g11
+		! FAIL index 3 outside Shaped.m axis 0 (resolved only at assembly)  
+	.g11:	! LSSi #<C> #0 @.g13
+		! LSSi #<C> #.z.Shaped.m @.g12
+	.g13:	! FAIL a computed index outside Shaped.m (resolved only at assembly)  
+	.g12:	POKE &sh:<B> #99 
+		! MULi <B> #2 #.d.Shaped.m.0	; printInt(global sh.m[2, 3])
+		! ADDi <B> <B> #3
+		! MOVi <C> #<B> 
+		! ADDi <A> #.o.Shaped.m #<B>
+		! LSSi #<C> #0 @.g15
+		! LSSi #<C> #.z.Shaped.m @.g14
+	.g15:	! FAIL a computed index outside Shaped.m (resolved only at assembly)  
+	.g14:	PEEK %1 &sh:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 101:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 102:11
+		PEEK %1 &sh:.o.Shaped.mark 	; printInt(global sh.mark)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 103:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 104:11
+		MOVi %1 #.z.Shaped 	; printInt(sizeof(Shaped))
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 105:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 106:11
 		RETU   	; }
