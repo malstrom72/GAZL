@@ -216,9 +216,12 @@ only ever the message that pointed the wrong way.
   2026-08-04.** (`docs/ExternPrototypes.md` used to claim gazl-validate catches drift; it now says plainly
   that the scanner records field names only and spells out what that does and does not catch.
   `docs/StructLayoutConstants.md` correctly calls the rest deferred.)
-- **Constant OOB through a pointer** (`p[[9]].a`) is caught nowhere. **[V] still open 2026-08-04.** The
-  ARRAY half of this bullet is closed: a constant index past a known extent is now `E461` at Impala compile
-  time, not an assembler complaint about generated GAZL.
+- ~~**Constant OOB through a pointer** (`p[[9]].a`) is caught nowhere.~~ NOT A DEFECT — filed here in
+  error. A pointer has no extent, so there is nothing to check against, and a language at this level hands
+  that to the programmer exactly as C does. Pointer indexing is unchecked at every tier, permanently and by
+  design; it is not a gap and not future work. The ARRAY half of this bullet was real and is closed: a
+  constant index past a known extent is `E461` at Impala compile time. See `docs/MemorySafetyModel.md`
+  for the tiers and what each one covers.
 - **`for`'s upper bound is live or frozen depending on the shape of the bound expression** — a plain local
   emits `FORi $i $n` (re-read each iteration); anything else is snapshotted into a scratch.
   **[V] 2026-07-29.**
