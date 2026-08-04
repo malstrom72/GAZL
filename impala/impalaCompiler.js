@@ -2688,6 +2688,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         if (oob !== undefined && pendingAxisOob === undefined) {
             pendingAxisOob = oob;
         }
+        /* Tier 3 for this axis. `emitRangeCheck` self-selects - it returns at once unless `--range-checks`
+           is on AND this index is a runtime value - so the constant axes of a mixed subscript cost nothing.
+           The bound is the axis SYMBOL, an assemble-time immediate, so this is two compares and no setup,
+           exactly as the 1-D tier is. */
+        emitRangeCheck(idxRV, { n: ext.dimN[axis], what: ext.what + ' axis ' + axis,
+                sym: ext.dims[axis], inField: true }, sourceCode, sourceOffset);
     };
 
     foldAxes = function (slot, first, extra, sourceCode, sourceOffset) {
