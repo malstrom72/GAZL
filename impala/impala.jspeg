@@ -702,7 +702,7 @@
     };
 
     $$parser.formatGlobalSignatureComment = function (section, name, type, size, flavor,
-                                                      sourceName, sourceCode, sourceOffset, elem) {
+                                                      sourceName, sourceCode, sourceOffset, elem, dims) {
         if (!name) {
             return undefined;
         }
@@ -710,7 +710,7 @@
         var prefix = ($$parser.exportNext ? 'export ' : '') + (flavor ? flavor + ' ' : '');
 
         if (type === 'A') {
-            var extent = extentText(size);
+            var extent = extentText(size, dims);                  /* a SHAPE states every axis: `g[3x4]` */
             var elemCategory = signatureCategoryForDesc(elem);    /* typed arrays advertise their element chain; */
                                                                   /* untyped arrays keep the `unknown` wildcard */
             return appendOrigin('signature ' + prefix + 'array ' + name + extent + ' : ' + elemCategory,
@@ -1395,6 +1395,15 @@
             return;                                               /* a constant, in any of its spellings,
                                                                      belongs to an earlier tier */
         }
+        if (extent.dims !== undefined) {
+            return;                                               /* a SHAPE: every axis was just checked
+                                                                     against its own extent, and `.z.` is
+                                                                     their product - so `i < .z.` cannot
+                                                                     fail where all the axes passed. Sound
+                                                                     only because checkRank makes stating
+                                                                     every axis mandatory. checkAxis's own
+                                                                     per-axis record carries no `dims`. */
+        }
         var ok  = $$parser.beginDebugGuard('r');
         var bad = $$parser.newLabel('r');
         $$parser.emit('<', 'i', undefined, idxOp, '#0');           /* below the start -> fail */
@@ -2024,20 +2033,7 @@
         if (!redeclared) {
             $$parser.emitStructLayout(name);
         }
-        /* EVERY borrowed operand the layout block just read, not only the total: a shape holds one scratch
-           per non-literal AXIS as well, and those stay live until the `.d.` DEFi lines above quote them. */
-        var held = {};
-        for (var i = 0; i < s.fields.length; ++i) {
-            var f = s.fields[i];
-            var parts = (f.dims === undefined ? [ f.size ] : [ f.size ].concat(f.dims));
-            for (var j = 0; j < parts.length; ++j) {
-                var op = '' + parts[j];
-                if (op.charAt(0) !== '<') continue;
-                assert(!held[op], 'struct ' + name + ' reuses extent scratch ' + op);
-                held[op] = true;
-                $$parser.returnBack(op);
-            }
-        }
+        $$parser.returnExtent('struct ' + name, s.fields);
         $$parser.openStruct = undefined;
         return redeclared;
     };
@@ -2185,6 +2181,45 @@
         return '.d.' + (owner !== undefined ? owner + '.' : '') + name + '.' + axis;
     };
 
+    /* The record every bounds tier reads, built the same way for a global array, a local array and a
+       struct ARRAY FIELD - only the owner path the symbols hang off differs, and a field adds two keys
+       of its own at the call site. A SHAPE carries its axes as SYMBOLS, innermost first: a subscript
+       strides by one and a bounds check tests against one, and both need a NAME rather than a value
+       because the assembler - or the host - may be the one who knows it. Undefined for a 1-D array,
+       which has no shape, which is what keeps its every path unchanged. */
+    $$parser.arrayExtent = function (name, owner, what, size, dims) {
+        return { n: size, what: what, sym: $$parser.extentSymbol(name, owner),
+                 dims: (dims === undefined ? undefined : dims.map(function (d, k) {
+                     return $$parser.axisSymbol(name, owner, k);
+                 })),
+                 dimN: dims };                                    /* the axis COUNTS as written, for checking */
+    };
+
+    /* Hand back every operand a declaration borrowed: the extent, and one per non-literal AXIS. THE
+       CONSUMER OWNS THE BORROW (see ArrayDecl), so the release is here, at the three consumers that
+       have finished reading them - endStruct after the layout block, FuncDecl after the locals pass,
+       GlobalDecl right after its declaration. Returning only the total leaked one scratch per shaped
+       array and tripped the pool's boundary assert before `main`.
+
+       The whole BATCH goes back at once - every field of the struct, every declarator of the locals
+       clause - because that is the scope the assert has to cover: two extents in one batch that folded
+       into the SAME scratch means the borrow protocol broke upstream, and `returnBack` dedups silently,
+       so nothing else would ever say so. */
+    $$parser.returnExtent = function (what, entries) {
+        var held = {};
+        for (var i = 0; i < entries.length; ++i) {
+            var e = entries[i];
+            var parts = (e.dims === undefined ? [ e.size ] : [ e.size ].concat(e.dims));
+            for (var j = 0; j < parts.length; ++j) {
+                var op = '' + parts[j];
+                if (op.charAt(0) !== '<') continue;
+                assert(!held[op], what + ' reuses extent scratch ' + op);
+                held[op] = true;
+                $$parser.returnBack(op);
+            }
+        }
+    };
+
     /* '*size' operand for allocating an ARRAY, published as a NAMED assemble-time constant rather
        than left in a `<X>` scratch. A scratch is a recycled register: it holds the extent only until
        the next borrow, so the allocation line was the one and only place that could read it. A named
@@ -2224,7 +2259,8 @@
         return acc;
     };
 
-    $$parser.arrayAllocSize = function (elemDesc, count, symbol) {
+    $$parser.arrayAllocSize = function (elemDesc, count, name, owner, dims) {
+        var symbol = $$parser.extentSymbol(name, owner);
         var value = count;
         if (elemDesc !== undefined && $$parser.descTail(elemDesc) === undefined
                 && $$parser.isStructAtom($$parser.descHead(elemDesc))) {
@@ -2240,6 +2276,14 @@
            the stale definition dies with the compile a moment later. */
         if ($$parser.symbols.defines === undefined || $$parser.symbols.defines[symbol] === undefined) {
             $$parser.declare('! DEF?', 'defines', symbol, 'i', true, '#' + value);
+            /* A SHAPE publishes one constant per axis besides the total, exactly as a shaped struct FIELD
+               does in its layout block: `.z.` counts WORDS, so it can neither stride nor bound a single
+               coordinate. Inside the same duplicate guard - every one of these derives from the array's
+               own name, so a collision here means the owner collides and E401 is about to say so. */
+            for (var k = 0; dims !== undefined && k < dims.length; ++k) {
+                $$parser.declare('! DEF?', 'defines', $$parser.axisSymbol(name, owner, k), 'i', true,
+                        '#' + dims[k]);
+            }
         }
         return '*' + symbol;
     };
@@ -2274,8 +2318,12 @@
     /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
        is required, not tidiness: the declarator node is pooled and recycled by the parser, so anything
        holding a reference would later see whichever declarator came last. */
-    $$parser.declEntry = function (type, elem, struct, words, name, size, at) {
-        return { type: type, elem: elem, struct: struct, words: words, name: name, size: size, at: at };
+    /* Positional, not `declEntry($v)`: bare `$v` in an action is the rule's RETURN VALUE (`$v._`), while
+       `$v.name` is the context field the declarator actually wrote - so passing the node whole silently
+       hands over an empty object and every local is declared as `$undefined`. */
+    $$parser.declEntry = function (type, elem, struct, words, name, size, dims, at) {
+        return { type: type, elem: elem, struct: struct, words: words, name: name, size: size,
+                 dims: dims, at: at };
     };
 
     $$parser.addStructField = function (name, field, sourceCode, sourceOffset) {
@@ -2715,14 +2763,39 @@
                 sym: ext.dims[axis], inField: true }, sourceCode, sourceOffset);
     };
 
-    $$parser.foldAxes = function (slot, first, extra, sourceCode, sourceOffset) {
+    /* Drain the per-axis findings `foldAxes` left on the parser and append this subscript's own flat one.
+       BOTH lowerings call it, because both can now be handed a shape: a struct field reaches
+       `subscriptStruct`, a standalone `global`/local array reaches `binaryOp('=[]')`. An undrained
+       accumulator would hand one subscript's axes to the next subscript in the same function. `concat`
+       takes the flat finding in either spelling - one record from subscriptStruct, a list from
+       checkSubscript. */
+    $$parser.takeAxisOob = function (own) {
+        var found = $$parser.axisOob;
+        $$parser.axisOob = [];
+        if (own !== undefined) found = found.concat(own);
+        return (found.length === 0 ? undefined : found);
+    };
+
+    /* A subscript states EVERY axis of the array it indexes - asked of every subscript, including the
+       ones with no comma in them. Asking only when a comma was written left the flat spelling as an open
+       door back into exactly what a shape exists to reject: `cells[11]` on a `[3, 4]` is a legal WORD
+       offset and an illegal coordinate, and it compiled silently. An array with no `dims` is rank 1, so
+       an ordinary array - and a bare pointer, which has no extent at all - still takes one index and is
+       unaffected. Returns the axes, which foldAxes then knows are the right count. */
+    $$parser.checkRank = function (slot, count, sourceCode, sourceOffset) {
         var dims = slot.extent && slot.extent.dims;
-        if (dims === undefined || dims.length !== extra.length + 1) {
-            $$parser.fail('This array has ' + (dims === undefined ? 'one axis' : dims.length + ' axes')
-                    + ', but the subscript names ' + (extra.length + 1),
+        var rank = (dims === undefined ? 1 : dims.length);
+        if (rank !== count) {
+            $$parser.fail('This array has ' + (rank === 1 ? 'one axis' : rank + ' axes')
+                    + ', but the subscript names ' + count,
                     sourceCode, sourceOffset, 'E206',
                     'a subscript states every axis of the array it indexes');
         }
+        return dims;
+    };
+
+    $$parser.foldAxes = function (slot, first, extra, extraAt, sourceCode, sourceOffset) {
+        var dims = slot.extent.dims;                              /* checkRank already agreed on the count */
         var acc = $$parser.makeRValue(metaSlot(first));
         /* EVERY axis is checked against ITS OWN extent, which is the entire safety argument for shapes:
            the flat product cannot catch `cells[0, W]`, an index that stays inside the allocation while
@@ -2732,7 +2805,7 @@
         var rank = dims.length;
         $$parser.checkAxis(slot, rank - 1, acc, sourceCode, sourceOffset);
         for (var a = 0; a < extra.length; ++a) {
-            $$parser.checkAxis(slot, rank - 2 - a, extra[a], sourceCode, sourceOffset);
+            $$parser.checkAxis(slot, rank - 2 - a, extra[a], sourceCode, extraAt[a]);
             /* stride of the axis we are LEAVING = the extent of the next axis inwards */
             acc = $$parser.mulAddAxis(acc, dims[rank - 2 - a], extra[a]);
         }
@@ -2774,8 +2847,11 @@
                 /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
                    value is still live - the pushed one is freed by foldOffset long before the use decides
                    whether this is a dereference at all. One assemble-time MOVi, no runtime cost, and the
-                   copy is returned by whichever side consumes the finding. */
-                if (scratch && extent !== undefined && extent.inField) {
+                   copy is returned by whichever side consumes the finding.
+                   Skipped for a SHAPE, whose per-axis deferred guards already say strictly more: `.z.` is
+                   the product of the axes, so no index that cleared every axis can fail against it. Three
+                   lines of shipped GAZL text, not runtime cost - but they restated a settled question. */
+                if (scratch && extent !== undefined && extent.inField && extent.dims === undefined) {
                     var g = $$parser.borrow('<');
                     $$parser.emit('<> =', 'i', g, '#' + part, undefined);
                     oobIndex = { k: g, own: true, ext: extent, copyAt: $$parser.metacode.length - 1,
@@ -2818,10 +2894,7 @@
                 $$parser.emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
             }
         }
-        var found = $$parser.axisOob;                             /* the axes this subscript just folded */
-        $$parser.axisOob = [];
-        if (oobIndex !== undefined) found.push(oobIndex);
-        x.oobIndex = (found.length === 0 ? undefined : found);    /* AFTER the terminal call on every path -
+        x.oobIndex = $$parser.takeAxisOob(oobIndex);              /* AFTER the terminal call on every path -
                                                                      setPlace and emitPlaceValue both clear it */
     };
 
@@ -2941,18 +3014,14 @@
         if (field.type === 'A') {                                 /* array field -> a fold-able array place for the next [k]
                                                                      (struct OR scalar element; subscriptStruct terminates it) */
             $$parser.setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex);
-            x.extent = field.extent || (field.extent =             /* built once per FIELD, not per access */
-                    { n: field.size, what: structName + '.' + fieldName,
-                      sym: $$parser.extentSymbol(fieldName, structName), inField: true,
-                      /* A SHAPE carries its axes as SYMBOLS, innermost first: a subscript strides by one
-                         and a bounds check tests against one, and both need a name rather than a value
-                         because the host may own it. Undefined for a 1-D field, which has no shape. */
-                      dims: (field.dims === undefined ? undefined
-                              : field.dims.map(function (d, k) {
-                                  return $$parser.axisSymbol(fieldName, structName, k);
-                              })),
-                      dimN: field.dims,                           /* the axis COUNTS as written, for checking */
-                      stride: $$parser.isStructAtom(field.elem) ? '.z.' + field.elem : undefined });
+            if (field.extent === undefined) {                      /* built once per FIELD, not per access */
+                field.extent = $$parser.arrayExtent(fieldName, structName,
+                        structName + '.' + fieldName, field.size, field.dims);
+                field.extent.inField = true;                      /* an overrun stays inside the struct's own
+                                                                     allocation, so nothing else looks */
+                field.extent.stride = ($$parser.isStructAtom(field.elem) ? '.z.' + field.elem : undefined);
+            }
+            x.extent = field.extent;
             return;
         }
 
@@ -3117,7 +3186,7 @@
                                   $$parser.makeRValue(leftx),
                                   $$parser.makeRValue(rightx));
             }
-            leftx.oobIndex = xOob;                    /* after the makeMeta above, which clears it */
+            leftx.oobIndex = $$parser.takeAxisOob(xOob);   /* after the makeMeta above, which clears it */
 
         } else {
 
@@ -4461,7 +4530,7 @@ inp:ArgsDecl ')'_
                                                                                      false,
                                                                                      (v.type === 'A'
                                                                                          ? $$parser.arrayAllocSize(v.elem, v.size,
-                                                                                                 $$parser.extentSymbol(v.name, $id))
+                                                                                                 v.name, $id, v.dims)
                                                                                          : (v.words !== undefined ? '*' + v.words : undefined)),
                                                                                      $$s, v.at,
                                                                                      undefined,
@@ -4473,15 +4542,13 @@ inp:ArgsDecl ')'_
                                                                                                         needs to bounds-check this array is recorded
                                                                                                         here - see arrayExtent's shape */
                                                                                  $$parser.symbols.locals['$' + v.name].extent =
-                                                                                         { n: v.size, what: v.name,
-                                                                                           sym: $$parser.extentSymbol(v.name, $id) };
+                                                                                         $$parser.arrayExtent(v.name, $id, v.name,
+                                                                                                 v.size, v.dims);
                                                                              }
                                                                          });
-                                                                         iterate($loc, function (v) {   /* the count scratches ArrayDecl held for this
-                                                                                                           clause (see there); a no-op for the ones a
-                                                                                                           declaration above already gave back */
-                                                                             $$parser.returnBack(v.size);
-                                                                         });
+                                                                         $$parser.returnExtent('locals of ' + $id, $loc);
+                                                                                                       /* the count and axis scratches ArrayDecl
+                                                                                                          held for this clause (see there) */
                                                                      }
                 )?                                                    { output(';-----------------------------------------------------------------------------'); }
                 Block                                                 {
@@ -4832,7 +4899,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 'A',
                                                                                 ($section === 'CNST'),
                                                                                 $$parser.arrayAllocSize($a.elem, $a.size,
-                                                                                        $$parser.extentSymbol($a.name)),
+                                                                                        $a.name, undefined, $a.dims),
                                                                                 $$s, $a.at,
                                                                                 $$parser.formatGlobalSignatureComment(
                                                                                     $section,
@@ -4843,14 +4910,18 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     $$parser.sourceName,
                                                                                     $$s,
                                                                                     $$parser.declOffset,
-                                                                                    $a.elem
+                                                                                    $a.elem,
+                                                                                    $a.dims
                                                                                 ),
                                                                                 $a.elem
                                                                             );
                                                                             $$parser.symbols.globals[$a.name].extent =
-                                                                                    { n: $a.size, what: $a.name,
-                                                                                      sym: $$parser.extentSymbol($a.name) };
-                                                                            $$parser.returnBack($a.size);   /* declared: this consumer is done with it */
+                                                                                    $$parser.arrayExtent($a.name, undefined, $a.name,
+                                                                                            $a.size, $a.dims);
+                                                                            $$parser.returnExtent('global ' + $a.name,   /* declared: this
+                                                                                    consumer is done. Fields spelled out because bare `$a` is
+                                                                                    the rule's return value, not its context - see declEntry */
+                                                                                    [ { size: $a.size, dims: $a.dims } ]);
                                                                             $aStructEl = ($a.elem !== undefined
                                                                                     && $$parser.descTail($a.elem) === undefined
                                                                                     && $$parser.isStructAtom($$parser.descHead($a.elem)));
@@ -4983,8 +5054,8 @@ ArgsDecl    <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
-                 ( v:VarDecl                                          { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); }
-                   ( ',' _ v:VarDecl                                  { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); }
+                 ( v:VarDecl                                          { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.dims, $v.at); }
+                   ( ',' _ v:VarDecl                                  { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.dims, $v.at); }
                    )*
                  )?
 
@@ -4992,8 +5063,8 @@ LocalsDecl  <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
-                 ( v:(VarDecl / ArrayDecl)                            { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); }
-                   ( ',' _ v:(VarDecl / ArrayDecl)                    { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); }
+                 ( v:(VarDecl / ArrayDecl)                            { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.dims, $v.at); }
+                   ( ',' _ v:(VarDecl / ArrayDecl)                    { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.dims, $v.at); }
                    )*
                  )?
 
@@ -5229,16 +5300,22 @@ PrePost     <-  (op:PREFIX_OP _
 # `a[y * .d....0 + x]` and reduces to the single linear index every path below already takes. Each index is
 # r-valued as it is parsed, while its meta is still fresh - the discipline call arguments use. One index
 # takes exactly the path it took before this rule learned to count, so a 1-D subscript is byte-identical.
-Subscript   <-  '['_                               { $idxAt = $$i; $subExtra = []; }
+Subscript   <-  '['_                               { $idxAt = $$i; $subExtra = []; $subAt = []; }
                 s:Expr
-                ( ','_ x:Expr                      { if (!$$parser.dry) $subExtra.push($$parser.makeRValue(metaSlot($x))); }
+                ( ','_ { $axisAt = $$i; }
+                  x:Expr                           { if (!$$parser.dry) {
+                                                       $subExtra.push($$parser.makeRValue(metaSlot($x)));
+                                                       $subAt.push($axisAt);   /* each axis carries its OWN position, or every
+                                                                                  per-axis diagnostic points at the first index */
+                                                     } }
                 )*
                 ']'_                               { if (!$$parser.dry) {
                                                        var sb = metaSlot($$);
+                                                       $$parser.checkRank(sb, $subExtra.length + 1, $$s, $idxAt);
                                                        /* ONE index takes the path it took before this rule learned to count -
                                                           `$s` is handed on untouched, so a 1-D subscript is byte-identical. */
                                                        var sIdx = ($subExtra.length === 0 ? $s
-                                                               : $$parser.foldAxes(sb, $s, $subExtra, $$s, $idxAt));
+                                                               : $$parser.foldAxes(sb, $s, $subExtra, $subAt, $$s, $idxAt));
                                                        if ((sb.place && sb.arrayOf) || (sb.type === 'p' && $$parser.isStructAtom(sb.elem)))
                                                            $$parser.subscriptStruct($$, sIdx, $$s, $idxAt);
                                                        else

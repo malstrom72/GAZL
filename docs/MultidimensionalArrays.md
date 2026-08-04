@@ -47,7 +47,8 @@ valueless `const int W;`, or any expression - the constant is what makes it refe
 Where an axis is already a single referenceable operand (a literal, or a named const) there is nothing to
 mint and the extent is referenced directly.
 
-`.d` is unused in [`SymbolNamespace.md`](SymbolNamespace.md) and must be registered there before minting.
+`.d` is registered in [`SymbolNamespace.md`](SymbolNamespace.md), in all three of its path shapes
+(`.d.<Struct>.<field>.<k>`, `.d.<global>.<k>`, `.d.<function>.<local>.<k>` - the same three `.z.` has).
 It inherits `.z.`'s soundness condition, which is enforced and now has tests: a top-level name has exactly
 one kind, so `.d.S.*` can never mean two things. Verified - `struct S` + `global int array S[4]`,
 `struct main` + `function main`, `functype F` + `global F`, `const K` + `global array K` are all `E401`.
@@ -97,9 +98,28 @@ not. Multi-dim as a struct field is not a compromise shape - it is the shape wit
 `! FAIL`, per-axis `--range-checks`. Self-contained: it lowers through `subscriptStruct`, which already has
 the `offParts`/`dynIndex` machinery a Horner fold needs, and it needs no type-system change whatsoever.
 
-**Slice 2 - standalone arrays.** `global int array grid[H, W]` and locals. Object-keyed `.d.`, so checking
-covers the owning scope only. Note these lower through `binaryOp('=[]')`, a *different* path that never
-builds a place - the Horner reduction has to be shared between the two rather than written twice.
+**Slice 2 - standalone arrays.** IMPLEMENTED. `global int array grid[H, W]` and locals, with the same
+three tiers and the same `x`-joined metadata; `.d.` is object-keyed here (`.d.grid.0`, `.d.main.b.0`), so
+checking covers the owning scope only. These lower through `binaryOp('=[]')`, a *different* path that
+never builds a place, and the Horner reduction is shared rather than written twice: `foldAxes` produces
+the one linear index both paths already took, and the only thing each path adds is draining the per-axis
+findings. Verified end to end - the deferred `! FAIL` on `sym[2, 5]` fires under `GAZLCmd`, the in-range
+control runs, and `tests/impala/sources/multidimArrays.impala` covers a global shape, a local shape,
+symbolic axes and a 1-D array beside them.
+
+The slice turned up a hole that was in slice 1 too, and it is the more important half of the work: **the
+rank check only ran when a comma was written**, so `cells[11]` on a `[3, 4]` compiled silently as a flat
+word offset. That is row-crossing walking back in through the spelling with no comma in it - decision 1
+below rejects `cells[0, W]` and said nothing about `cells[11]`, which is the same address. A subscript now
+states every axis on both paths and for one index as much as for several (`E206`); an array with no axes
+is rank 1, so ordinary arrays and bare pointers are untouched.
+
+Making that mandatory is also what retired two *duplicate* checks a shape was carrying. The per-axis
+checks strictly imply the flat one - `.z.` is the product of the axes, so no index that cleared every axis
+can fail against `.z.` - so a shaped subscript no longer emits the flat `--range-checks` compare pair, nor
+the flat deferred `! LSSi` / `! FAIL` triple and the `! MOVi` guard copy that fed it. Four lines of shipped
+GAZL per shaped access, restating a settled question. This was sound only once every axis had to be
+stated; before the rank fix, `cells[11]` cleared no axis at all.
 
 **Slice 3 - shape identity across standalone arrays.** The deferred `! EQUi` compare. Needs a position
 where two shapes meet, which needs shape-carrying pointer types or a named shape - the largest step, and
@@ -115,6 +135,10 @@ nested-brace initializers, C-style `a[y][x]` chains.
 with no aliasing optimisation. Bounds checking rejects it instead: the check is **per axis**, not against
 the flat total. Checking only the total would let `x >= W` through, which is exactly the row-overflow bug
 the feature exists to catch - a shape that cannot catch it buys syntax and nothing else.
+
+Rejecting `cells[0, W]` is only half of it, and the half that was easy to see. `cells[W]` is the SAME
+ADDRESS written without a comma, and it compiled silently until the rank check was made unconditional (see
+slice 2 above). A per-axis rule that any subscript can opt out of by dropping a comma is not a rule.
 
 **2. An `extern struct` matrix field states its RANK; the host supplies every axis. `E430` stays.**
 

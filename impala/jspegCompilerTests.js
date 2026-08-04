@@ -1769,6 +1769,28 @@ const caretCases = [
 		"global int array g[4]\nfunction main() { global g[9] = 1; }\n", "2:28: error[E461]"],
 	["E461 covers a plain LOCAL array",
 		"function main() locals int array a[5] { a[9] = 1; }\n", "1:43: error[E461]"],
+	// A SHAPE is checked PER AXIS, on the standalone path as much as on the struct-field one: the flat
+	// product cannot catch `[0, 5]` on a `[3, 4]`, a legal word offset and an illegal coordinate, which
+	// is the whole reason a shape exists. The outer axis is listed too - a shape must not be checked
+	// only where the stride is 1.
+	["E461 checks the INNER axis of a standalone shape",
+		"global int array g[3, 4]\nfunction main() { global g[0, 5] = 1; }\n", "2:31: error[E461]"],
+	["E461 checks the OUTER axis of a standalone shape",
+		"global int array g[3, 4]\nfunction main() { global g[3, 0] = 1; }\n", "2:28: error[E461]"],
+	["E461 checks the axes of a LOCAL shape",
+		"function main() locals int array b[2, 3] { b[2, 0] = 1; }\n", "1:46: error[E461]"],
+	// A subscript states EVERY axis, and that is asked of a ONE-index subscript as well - which is the
+	// spelling row-crossing came back in through. `cells[11]` on a `[3, 4]` was a legal word offset and
+	// a meaningless coordinate, and it compiled silently on both paths.
+	["E206 rejects a flat subscript on a shaped standalone array",
+		"global int array g[3, 4]\nfunction main() { global g[11] = 1; }\n", "2:28: error[E206]"],
+	["E206 rejects a flat subscript on a shaped struct field",
+		"struct S { int array v[3, 4]; int t }\nglobal S s\n"
+			+ "function main() { global s.v[11] = 1; }\n", "3:30: error[E206]"],
+	["E206 rejects too many axes on a 1-D array",
+		"global int array g[12]\nfunction main() { global g[1, 2] = 1; }\n", "2:28: error[E206]"],
+	["E206 rejects a comma subscript on a bare pointer, which has no shape at all",
+		"function main() locals int pointer p { p[1, 2] = 1; }\n", "1:42: error[E206]"],
 	// A NEGATIVE index fails even when only an address is formed - the one exception to "addresses are
 	// never checked", because it is not an address GAZL will take: `&g:-1` and `$a:-1` are both rejected
 	// at assembly, and on a struct field `.o.S.pad + (-1)` folds to a valid offset naming the PREVIOUS
