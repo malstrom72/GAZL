@@ -2115,7 +2115,22 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	]) {
 		expectCompileOutcome("funcptr initializer", label, decls + decl + "function main() { }\n", null);
 	}
-	console.log("impala.jspeg compiler checks a funcptr type at every initializer, not just at assignment");
+	// The POINTER-ELEMENT half of the same check, which the same doors were missing: an initializer runs
+	// checkPtrAssign now, not a wrapper around half of it, so a third check added there cannot be right
+	// for assignments and absent at declarations.
+	expectCompileOutcome("initializer element type", "a pointer element mismatch at a global",
+		"global float array f[4]\nglobal int pointer p = &global f[0]\nfunction main() { }\n", "E201");
+	expectCompileOutcome("initializer element type", "...and the matching one still passes",
+		"global int array g[4]\nglobal int pointer p = &global g[0]\nfunction main() { }\n", null);
+	// Ordering matters as much as the check: an `int pointer` initialized with `1` is not an ELEMENT
+	// mismatch, it is not a pointer at all, and "got untyped elements" would be a worse answer than the
+	// true one. The assignment path never has to say this because E303 stops a non-pointer earlier; at a
+	// declaration the coarse question belongs to makeConstant, which answers E407.
+	expectCompileOutcome("initializer element type", "a non-pointer value stays E407, not E201",
+		"global int pointer p = 1\nfunction main() { }\n", "E407");
+	expectCompileOutcome("initializer element type", "...and in an array, too",
+		"readonly int pointer array A[2] = { 1, 2 }\nfunction main() { }\n", "E407");
+	console.log("impala.jspeg compiler runs the full assignment check at every initializer");
 }
 
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.

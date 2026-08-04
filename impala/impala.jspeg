@@ -161,7 +161,8 @@
     var $$parser.guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
     var $$parser.emittedGuards = {};                              /// (array, index) pairs already asserted in this function - the same assertion twice says nothing new
     var $$parser.initElemType = undefined;                        /// declared element type an `InitList` must match ('i'/'f'/'p'); undefined = untyped array, accept what comes
-    var $$parser.initElemFunc = undefined;                        /// declared funcptr TYPE an `InitList`'s entries must match; the head makeConstant cannot take
+    var $$parser.initTargetType = undefined;                      /// declared element TYPE an `InitList`'s entries answer to, whole ('p'/'F'/...)
+    var $$parser.initTargetElem = undefined;                      /// ...and its element chain - the pair initElemType drops, because makeConstant cannot take it
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
     var $$parser.exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
@@ -2806,17 +2807,26 @@
         }
     };
 
-    /* An INITIALIZER states exactly what an assignment states, so it answers to the same check - but it
-       reached the data rows through makeConstant, which knows a type and not a funcptr TYPE, and so
-       `global TickFn onTick = wrong` stored a function of any shape under a name that promises one
-       shape. Silent: no diagnostic, and the signature row published `: TickFn` regardless. Four doors
-       share this because a fix at one of them is the shape of bug that comes back at the next. */
-    $$parser.checkInitFuncPtr = function (elem, x, sourceCode, sourceOffset) {
-        if (elem === undefined || !$$parser.isFuncTypeAtom(elem)) {
+    /* An INITIALIZER states exactly what an assignment states, so it answers to the SAME function - it
+       just reached the data rows through makeConstant, which knows a type and neither a funcptr type nor
+       a pointer element. Both halves were silent at every declaration door: `global TickFn onTick = wrong`
+       stored a function of any shape under a name promising one shape, and `global int pointer p =
+       &global f[0]` off a `float array` published `: int-ptr` over float storage - while the in-function
+       twin of each is E441 / E201. checkPtrAssign, not a wrapper around half of it, so a third check
+       added there cannot be right for assignments and missing at declarations. */
+    $$parser.checkInitTarget = function (type, elem, x, sourceCode, sourceOffset) {
+        if (type === undefined) {
             return;
         }
         var m = metaSlot(x);
-        $$parser.checkFuncPtrTarget(elem, bareOperand(m), m.type, m.elem, '', sourceCode, sourceOffset);
+        /* Ask about the ELEMENT only once the value is a pointer at all. `int pointer p = 1` is not an
+           element mismatch - "got untyped elements" would be a worse answer than the true one - and the
+           assignment path never has to say so, because E303 stops a non-pointer before checkPtrAssign
+           runs. Here the coarse question belongs to makeConstant, which answers it with E407. */
+        if (type === 'p' && m.type !== 'p') {
+            return;
+        }
+        $$parser.checkPtrAssign({ type: type, elem: elem }, m, sourceCode, sourceOffset);
     };
 
     /* --------------------------------------------------------- *
@@ -4488,7 +4498,7 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                  (   '=' _                                            { $cInitStart = $$i; }   # `Expr` eats trailing space,
                                                                                                # so $$i would name the NEXT declaration
                      x:Expr                                           {
-                                                                            $$parser.checkInitFuncPtr($telem, $x, $$s, $cInitStart);
+                                                                            $$parser.checkInitTarget($t, $telem, $x, $$s, $cInitStart);
                                                                             $$parser.declare(
                                                                                 '! DEF?', 'defines',
                                                                                 $id, $t, true,
@@ -4584,7 +4594,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                                                  ate the trailing space too */
                                                                                  $$parser.fail('A struct value needs a brace initializer',
                                                                                          $$s, $initStart, 'E421');
-                                                                             $$parser.checkInitFuncPtr($v.elem, $x, $$s, $initStart);
+                                                                             $$parser.checkInitTarget($v.type, $v.elem, $x, $$s, $initStart);
                                                                              $init = $$parser.makeConstant($x, $v.type, $$s, $initStart);
                                                                          }
                            ) )?
@@ -4664,8 +4674,11 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     ? $$parser.descHead($a.elem) : undefined);
                                                                             $$parser.initElemType = (!$aStructEl
                                                                                     && (_eh === 'i' || _eh === 'f' || _eh === 'p')) ? _eh : undefined;
-                                                                            $$parser.initElemFunc = ($$parser.descTail($a.elem) === undefined
-                                                                                    ? _eh : undefined);
+                                                                            var _et = ($a.elem !== undefined
+                                                                                    ? $$parser.descTail($a.elem) : undefined);
+                                                                            var _ef = (_et === undefined && $$parser.isFuncTypeAtom(_eh));
+                                                                            $$parser.initTargetType = ($aStructEl ? undefined : (_ef ? 'F' : _eh));
+                                                                            $$parser.initTargetElem = ($aStructEl ? undefined : (_ef ? _eh : _et));
                                                                          }
                            ( d:InitList                                {   /* flat list -> scalar-element arrays only */
                                                                             if ($aStructEl)
@@ -4736,7 +4749,7 @@ InitList    <-  '{' _                                                 { $d = ' '
                                                                                           # space, so $$i would name the NEXT entry
                   x:Expr                                             {
                                                                             var xMeta = metaSlot($x);
-                                                                            $$parser.checkInitFuncPtr($$parser.initElemFunc, xMeta, $$s, $entryAt);
+                                                                            $$parser.checkInitTarget($$parser.initTargetType, $$parser.initTargetElem, xMeta, $$s, $entryAt);
                                                                             $type = ($$parser.initElemType !== undefined
                                                                                     ? $$parser.initElemType : xMeta.type);
                                                                             $d += $$parser.makeConstant(xMeta, $type, $$s, $entryAt);
@@ -4744,7 +4757,7 @@ InitList    <-  '{' _                                                 { $d = ' '
                   ( ',' _ !(Identifier ':')                          { $entryAt = $$i; }
                     x:Expr                                           {
                                                                             var xMeta = metaSlot($x);
-                                                                            $$parser.checkInitFuncPtr($$parser.initElemFunc, xMeta, $$s, $entryAt);
+                                                                            $$parser.checkInitTarget($$parser.initTargetType, $$parser.initTargetElem, xMeta, $$s, $entryAt);
                                                                             var xType = ($$parser.initElemType !== undefined
                                                                                     ? $$parser.initElemType : xMeta.type);
                                                                             var constant = $$parser.makeConstant(xMeta, xType, $$s, $entryAt);
