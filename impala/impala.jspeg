@@ -2039,6 +2039,13 @@
                     words = '<t>';
                 }
                 output(x + ':' + T + '! DEFi #' + words);
+                /* A SHAPE also names each axis, so a subscript can stride by one and a bounds check can
+                   test against one. `.z.` is the product and says nothing about how it is divided; these
+                   are keyed on the STRUCT, so every value of it shares them - which is what lets an extent
+                   survive a call boundary. Axis 0 is innermost, stride 1. */
+                for (var d = 0; f.dims !== undefined && d < f.dims.length; ++d) {
+                    output($$parser.axisSymbol(f.name, name, d) + ':' + T + '! DEFi #' + f.dims[d]);
+                }
                 if ($$parser.constInt('#' + f.size) === undefined) {
                     /* A SYMBOLIC extent could still be negative - `const int K = -1`, or a host-supplied
                        `! DEFi`. Impala cannot see the number (ArrayDecl rejects the ones it can), and
@@ -2135,6 +2142,16 @@
         return '.z.' + (owner !== undefined ? owner + '.' : '') + name;
     };
 
+    /* The symbol naming ONE AXIS of a shaped array, numbered by stride with axis 0 innermost. `.z.` is the
+       total in words and cannot serve: there is one of it per array, so a rank-2 shape has nothing to
+       stride by and nothing to compare pairwise. Same path scheme, so the same soundness argument applies -
+       a top-level name has exactly one kind (claimTopName), and the axis suffix is a NUMBER where a field
+       name would be an identifier, so `.d.S.v.0` can never collide with a field called `0`.
+       See docs/SymbolNamespace.md and docs/MultidimensionalArrays.md. */
+    $$parser.axisSymbol = function (name, owner, axis) {
+        return '.d.' + (owner !== undefined ? owner + '.' : '') + name + '.' + axis;
+    };
+
     /* '*size' operand for allocating an ARRAY, published as a NAMED assemble-time constant rather
        than left in a `<X>` scratch. A scratch is a recycled register: it holds the extent only until
        the next borrow, so the allocation line was the one and only place that could read it. A named
@@ -2145,6 +2162,34 @@
        allocation tracks the element size exactly like the subscript stride does; scalar elements are
        one word each, so the count IS the size. declare() flushes the fold ahead of the `! DEFi` that
        reads it, and hands the scratch back. */
+    /* One extra axis of a shaped declaration. Same constant-folding and same negative check the first axis
+       gets - an axis that runs backwards is exactly as wrong as an extent that does, and catching it here
+       is what keeps the product honest. Returns the bare operand, as `$extent` holds it. */
+    $$parser.arrayAxis = function (expr, sourceCode, sourceOffset) {
+        var v = $$parser.makeConstant(expr, 'i', sourceCode, sourceOffset);
+        if ($$parser.constInt(v) < 0) {
+            $$parser.fail('Array axis is negative: ' + $$parser.dropHash(v), sourceCode, sourceOffset,
+                    'E462', 'every axis holds zero or more elements');
+        }
+        return $$parser.dropHash(v);
+    };
+
+    /* The allocation size of a shape: the product of its axes, folded at ASSEMBLY time so a host-supplied
+       axis works exactly as a literal one does. The result is a `<X>` scratch and follows the same rule the
+       single extent does - THE CONSUMER OWNS THE BORROW, released by endStruct / FuncDecl / GlobalDecl. */
+    $$parser.axesProduct = function (dims) {
+        var acc = dims[0];
+        for (var i = 1; i < dims.length; ++i) {
+            var next = $$parser.borrow('<');
+            $$parser.emit('<> *', 'i', next, '#' + acc, '#' + dims[i]);
+            if (('' + acc).charAt(0) === '<') {
+                $$parser.returnBack(acc);                     /* an intermediate product, not an axis */
+            }
+            acc = next;
+        }
+        return acc;
+    };
+
     $$parser.arrayAllocSize = function (elemDesc, count, symbol) {
         var value = count;
         if (elemDesc !== undefined && $$parser.descTail(elemDesc) === undefined
@@ -2597,8 +2642,8 @@
     /* One Horner step: `acc * stride + idx`. Assemble-time throughout when every part is - a constant
        subscript then costs nothing at run time, exactly as a constant 1-D one does. */
     $$parser.mulAddAxis = function (acc, stride, idx, sourceCode, sourceOffset) {
-        var live = ($$parser.indexKind(acc) === 'runtime' || $$parser.indexKind(idx) === 'runtime'
-                || $$parser.indexKind('#' + $$parser.dropHash(stride)) === 'runtime');
+        stride = '#' + $$parser.dropHash(stride);                 /* an axis is a CONSTANT operand, not an address */
+        var live = ($$parser.indexKind(acc) === 'runtime' || $$parser.indexKind(idx) === 'runtime');
         var dst = $$parser.borrow(live ? '%' : '<');
         $$parser.emit(live ? '*' : '<> *', 'i', dst, acc, stride);
         $$parser.emit(live ? '+' : '<> +', 'i', dst, dst, idx);
@@ -2830,6 +2875,13 @@
             x.extent = field.extent || (field.extent =             /* built once per FIELD, not per access */
                     { n: field.size, what: structName + '.' + fieldName,
                       sym: $$parser.extentSymbol(fieldName, structName), inField: true,
+                      /* A SHAPE carries its axes as SYMBOLS, innermost first: a subscript strides by one
+                         and a bounds check tests against one, and both need a name rather than a value
+                         because the host may own it. Undefined for a 1-D field, which has no shape. */
+                      dims: (field.dims === undefined ? undefined
+                              : field.dims.map(function (d, k) {
+                                  return $$parser.axisSymbol(fieldName, structName, k);
+                              })),
                       stride: $$parser.isStructAtom(field.elem) ? '.z.' + field.elem : undefined });
             return;
         }
@@ -4093,7 +4145,7 @@ StructDecl  <-  STRUCT _ { $nmAt = $$i; } id:Identifier              { $sname = 
                 ( f:(ArrayDecl / VarDecl)                            {
                                                                          $$parser.addStructField($sname,
                                                                              { name: $f.name, type: $f.type, elem: $f.elem,
-                                                                               struct: $f.struct, size: $f.size },
+                                                                               struct: $f.struct, size: $f.size, dims: $f.dims },
                                                                              $$s, $$i);
                                                                      }
                   ( ';' _ )?
@@ -4390,7 +4442,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                       ( f:(ArrayDecl / VarDecl)                       {
                                                                          $$parser.addStructField($sname,
                                                                              { name: $f.name, type: $f.type, elem: $f.elem,
-                                                                               struct: $f.struct, size: $f.size },
+                                                                               struct: $f.struct, size: $f.size, dims: $f.dims },
                                                                              $$s, $$i);
                                                                      }
                         ( ';' _ )?
@@ -4909,15 +4961,22 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                          $$.size = undefined;
                                                                      }
 
-ArrayDecl   <-                                                        { $desc = undefined; $extent = undefined; }
+ArrayDecl   <-                                                        { $desc = undefined; $extent = undefined; $dims = undefined; }
                 ( base:TypeBase                                      { $desc = $base; }
                   ( POINTER _                                         { $desc = 'p:' + $desc; }
                   )*
                 )?
                 ARRAY _ { $nameStart = $$i; } id:Identifier           { $$parser.checkReservedName($id, 'array', $$s, $nameStart); }
-                ( '[' _                                               { $extentStart = $$i; }   # `']' _` eats the trailing
+                ( '[' _                                               { $extentStart = $$i; $dims = []; }   # `']' _` eats the trailing
                                                                                                # space, so $$i would name the NEXT declaration
-                  x:Expr ']' _                                        {
+                  x:Expr
+                  ( ','_ y:Expr                                       {   /* an EXTRA axis. Held as its own constant; the axes stay separate
+                                                                              so each can be checked against its own index, and only the
+                                                                              PRODUCT becomes the allocation size. */
+                                                                          $dims.push($$parser.arrayAxis($y, $$s, $extentStart));
+                                                                      }
+                  )*
+                  ']' _                                               {
                                                                          $size = $$parser.makeConstant($x, 'i', $$s, $extentStart);
                                                                          /* A NEGATIVE extent runs the layout BACKWARDS. On a plain array the assembler
                                                                             catches it, because the count reaches it as a `GLOB *size` / `LOCA *size`
@@ -4933,6 +4992,11 @@ ArrayDecl   <-                                                        { $desc = 
                                                                                      $$s, $extentStart, 'E462',
                                                                                      'an array holds zero or more elements');
                                                                          $extent = $$parser.dropHash($size);   /* element count - may be a symbolic const */
+                                                                         if ($dims.length > 0) {              /* a SHAPE: allocate the product, keep the axes */
+                                                                             $dims.unshift($extent);          /* written order, outermost first */
+                                                                             $extent = $$parser.axesProduct($dims);
+                                                                             $dims.reverse();                 /* stride order: axis 0 is innermost */
+                                                                         }
                                                                          /* THE CONSUMER OWNS THE BORROW. A folded extent lives in a `<X>` scratch, and
                                                                             a scratch is recycled on the next borrow - so whoever still has to READ this
                                                                             one decides when it goes back: endStruct after the layout block, FuncDecl
@@ -4965,6 +5029,9 @@ ArrayDecl   <-                                                        { $desc = 
                                                                          $$.size = $extent;
                                                                          $$.words = $extent;                   /* an array's words ARE its count; a struct element
                                                                                                                     scales symbolically, in arrayAllocSize */
+                                                                         $$.dims = (($dims !== undefined && $dims.length > 1) ? $dims : undefined);
+                                                                                                               /* only a SHAPE carries axes; a 1-D array has none,
+                                                                                                                  which is what keeps its every path unchanged */
                                                                      }
 
 # ------------------------------------------------------------------
