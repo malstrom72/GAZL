@@ -1333,7 +1333,7 @@ expectSingleLegacyWarning("global int break\nfunction main() { }\n",
 expectSingleLegacyWarning("function break() { }\nfunction main() { }\n",
 	"'break' is a reserved word", "a reserved-word function");
 
-// A struct value is initialized BY FIELD NAME. The 1.x positional list silently changed meaning the moment
+// A struct value is initialized BY FIELD NAME. A positional list silently changed meaning the moment
 // a field was inserted, removed or reordered - nothing in the source had to change for it to start filling
 // different fields - so it is E455 by default and only --legacy still maps by position. Array levels stay
 // positional in both forms (a struct's array field, and an array OF structs): there the index does the
@@ -1371,7 +1371,8 @@ const outOfOrder = compileWithJsImpala(
 assert(/DATA #1 #2 #3 #4 #5/.test(inOrder), `a named initializer must emit in field order\n${inOrder}`);
 assert(inOrder === outOfOrder, "entry order must not change the emitted layout");
 
-// --legacy keeps the 1.x positional form compiling, so old sources still build.
+// --legacy keeps the positional form compiling. NOT for 1.x compatibility - 1.0 has no structs, so no 1.x
+// source can contain one - but for sources written against early 2.0, when positional was the only form.
 expectSingleLegacyWarning(NAMED + "global P p = { 1, 2 }\nfunction main(){ }\n",
 	"must name its fields", "a positional struct initializer");
 console.log("impala.jspeg compiler initializes struct values by field name");

@@ -2230,10 +2230,14 @@
         return entry;
     };
 
-    /* Map a struct's brace entries onto its fields BY NAME, or undefined when the list is the 1.x
-       positional form, which only --legacy still maps by position. Naming is the default because a
-       positional list silently changes meaning the moment a field is inserted, removed or reordered
-       - nothing in the source has to change for it to start initializing different fields. */
+    /* Map a struct's brace entries onto its fields BY NAME, or undefined for a positional list, which only
+       --legacy still maps by position. Naming is the default because a positional list silently changes
+       meaning the moment a field is inserted, removed or reordered - nothing in the source has to change
+       for it to start initializing different fields.
+          NOT a 1.x compatibility path, whatever `--legacy` suggests: Impala 1.0 has no structs at all
+       (`docs/Impala.md` hands `struct` to `docs/Impala2.md` entirely), so no 1.x source can contain a
+       struct initializer and there is nothing here to stay compatible WITH. What it tolerates is sources
+       written against early 2.0 development, when positional was the only form. */
     $$parser.fieldEntries = function (structName, fields, items, sourceCode, sourceOffset) {
         if (items.length === 0) {
             return undefined;                                 /* `{}` - every field zero-fills */

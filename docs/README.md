@@ -1,6 +1,6 @@
 # Documentation index
 
-27 documents accumulated here (28 with this index) with only a handful reachable from the top-level `README.md`, which is how
+28 documents accumulated here (29 with this index) with only a handful reachable from the top-level `README.md`, which is how
 the same finding ended up recorded in three places and one blocker list went stale for a week. This index
 is the fix: every doc, what it is for, and how much to trust it.
 
@@ -12,6 +12,7 @@ written. PLAN / BACKLOG = not done.
 
 | Doc | Kind | What it is |
 |---|---|---|
+| [WhatsNewInImpala2](WhatsNewInImpala2.md) | REFERENCE | **What changed from 1.0, in one page.** Every sample on it is compiled by `impala/docSamples.js` on each build, so it cannot drift |
 | [Overview](Overview.md) | REFERENCE | Architecture and goals; how to embed the VM |
 | [Impala](Impala.md) | REFERENCE | The Impala language and toolchain |
 | [InstructionSet](InstructionSet.md) | REFERENCE | Extracted opcode descriptions |
@@ -32,7 +33,7 @@ written. PLAN / BACKLOG = not done.
 
 | Doc | Kind | What it is |
 |---|---|---|
-| [Impala2](Impala2.md) | SPEC (implemented) | The Impala 2.0 design - typed pointers/arrays, structs, typed function pointers, import. Steps 1/2/3/5 shipped; Step 4 parked. 1200 lines, the deepest reference on why 2.0 is shaped as it is. |
+| [Impala2](Impala2.md) | SPEC (implemented) | The Impala 2.0 design - typed pointers/arrays, structs, typed function pointers, import. Steps 1/2/3/5 shipped; Step 4 parked. 1600 lines, the deepest reference on **why** 2.0 is shaped as it is. For **what** it gained, read [WhatsNewInImpala2](WhatsNewInImpala2.md) first - this one opens with three paragraphs on what is parked. |
 
 ## Known problems and backlog
 

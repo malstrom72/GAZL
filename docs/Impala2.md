@@ -701,9 +701,10 @@ each source. **A struct is defined exactly once in a linked set** *(decided)* - 
 build (Step 5) that is the closure; under manual concatenation it is the set of units you assemble
 together. Every other unit declares it `extern`.
 
-This is no longer just a rule, it is the only thing that links. The **1.0 copy-paste model - textually
+This is no longer just a rule, it is the only thing that links. The **copy-paste model - textually
 re-declaring the same `struct` in each unit - is dead**, because since Phase 2a every non-extern
-`struct` emits `! DEFi` layout rows:
+`struct` emits `! DEFi` layout rows. (Copy-paste is what early 2.0 work did before Step 5, not a 1.0
+practice: 1.0 has no structs, so there was never anything to copy.)
 
 ```gazl
                     ! MOVi <a> #0            ; layout of struct Filter

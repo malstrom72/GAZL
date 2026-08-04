@@ -114,9 +114,10 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 ## Documentation
 
-**[docs/README.md](docs/README.md) indexes all 27 documents** with what each is for and how much to trust
+**[docs/README.md](docs/README.md) indexes all 28 documents** with what each is for and how much to trust
 it. The most-linked few:
 
+- [What's new in Impala 2.0](docs/WhatsNewInImpala2.md) - **start here if you know Impala 1.0**: what the language gained, what it now refuses, and the four things that can break on upgrade
 - [Overview](docs/Overview.md) - general architecture and goals
 - [Impala Language Reference](docs/Impala.md) - the language and toolchain
 - [The `impala/` directory](impala/README.md) - what each compiler file is, and the common commands

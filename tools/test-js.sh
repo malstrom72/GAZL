@@ -18,6 +18,7 @@ node impala/updateJSPEG.js --check
 
 cd impala
 node jspegCompilerTests.js
+node docSamples.js
 node runJspegTests.js
 node importBuildTests.js
 node fuzzImpala.js 3000 1
