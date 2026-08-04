@@ -1324,6 +1324,14 @@ expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break:
 // building under --legacy rather than becoming unbuildable on upgrade.
 expectSingleLegacyWarning("function f() locals int break { break = 5; }\n",
 	"'break' is a reserved word", "a reserved-word local");
+// SINGLE is the load-bearing word for a TOP-LEVEL name, which two doors check: the declarator sees every
+// variable including locals, `claimTopName` sees every top-level name including functions and structs, and
+// a global passes through both. It reported itself twice, and the two disagreed about what it was
+// ("not a variable name" / "not a global name"). Both doors still ask; only the raise is deduped.
+expectSingleLegacyWarning("global int break\nfunction main() { }\n",
+	"'break' is a reserved word", "a reserved-word global");
+expectSingleLegacyWarning("function break() { }\nfunction main() { }\n",
+	"'break' is a reserved word", "a reserved-word function");
 
 // A struct value is initialized BY FIELD NAME. The 1.x positional list silently changed meaning the moment
 // a field was inserted, removed or reordered - nothing in the source had to change for it to start filling
@@ -2063,6 +2071,14 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	const chr = compileWithJsImpala("global int array g[4]\nfunction main() { global g['a'] = 1; }\n",
 		{ randomId: 42 });
 	assert(/POKE &g:'a'/.test(chr), "integer literal spellings: a char literal was decoded, not deferred\n" + chr);
+	// ...and the same spelling has to survive every OTHER site that folds a constant, not just the bounds
+	// gates. Two hand-rolled decoders outlived the funnel: `dereference` used `parseFloat`, which reads
+	// '0x10' as 0, so a hex offset silently emitted `#0` where the decimal spelling emitted `#-16`; and
+	// `subConstInt` spanned decimal digits only, so a hex subtraction fell through to a runtime temp.
+	const off = compileWithJsImpala("global int array g[64]\nexport function main() locals int x, int y "
+		+ "{ x = *(&global g[32] - 0x10); y = *(&global g[32] - 16); }\n", { randomId: 42 });
+	assert((off.match(/PEEK \$\w &g:32 #-16/g) || []).length === 2,
+		"literal spellings: a hex offset folded differently from its decimal twin\n" + off);
 	console.log("impala.jspeg compiler decides every integer literal spelling, and defers only chars");
 }
 
@@ -2130,6 +2146,29 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		"global int pointer p = 1\nfunction main() { }\n", "E407");
 	expectCompileOutcome("initializer element type", "...and in an array, too",
 		"readonly int pointer array A[2] = { 1, 2 }\nfunction main() { }\n", "E407");
+	// THE FIFTH DOOR. The four above are the flat ones; a struct FIELD reaches the row through
+	// `pushInitScalar`, which asked only the coarse type. So a typed-pointer field took an address off an
+	// array of the wrong element, and a funcptr field took a mismatched function, both silently - while
+	// assigning the same value to the same field in a function is E201/E441. Struct fields are where
+	// typed pointers and funcptrs actually live, so this was the door that mattered most.
+	{
+		const decls = "global float array gf[4]\nglobal int array gi[4]\nfunctype TickFn(int phase)\n"
+			+ "function wrong(float x, int y) returns int r { r = y; }\nfunction right(int phase) { }\n";
+		expectCompileOutcome("struct field initializer", "a pointer element mismatch in a field",
+			decls + "struct P { int pointer p }\nreadonly P s = { p: &global gf[0] }\nfunction main() { }\n",
+			"E201");
+		expectCompileOutcome("struct field initializer", "a funcptr signature mismatch in a field",
+			decls + "struct S { TickFn cb }\nreadonly S s = { cb: wrong }\nfunction main() { }\n", "E441");
+		expectCompileOutcome("struct field initializer", "the matching values still pass",
+			decls + "struct S { TickFn cb; int pointer p; int n }\n"
+			+ "readonly S s = { cb: right, p: &global gi[0], n: 7 }\nfunction main() { }\n", null);
+		// A hole must stay a hole: `null`/`nullfunc` suit any pointer type, and an omitted field zero-fills.
+		// The braced entry is already reduced to its operand, so the check has to see `&NULL` as such.
+		expectCompileOutcome("struct field initializer", "null holes and omitted fields are not mismatches",
+			decls + "struct S { TickFn cb; int pointer p; int n }\n"
+			+ "readonly S a = { cb: nullfunc, p: null, n: 0 }\nreadonly S b = { n: 1 }\nfunction main() { }\n",
+			null);
+	}
 	console.log("impala.jspeg compiler runs the full assignment check at every initializer");
 }
 

@@ -160,9 +160,8 @@
     var $$parser.topNames = {};                                   /// name -> kind ('global'/'function'/'const'/'struct'/'functype'), one flat namespace
     var $$parser.guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
     var $$parser.emittedGuards = {};                              /// (array, index) pairs already asserted in this function - the same assertion twice says nothing new
-    var $$parser.initElemType = undefined;                        /// declared element type an `InitList` must match ('i'/'f'/'p'); undefined = untyped array, accept what comes
-    var $$parser.initTargetType = undefined;                      /// declared element TYPE an `InitList`'s entries answer to, whole ('p'/'F'/...)
-    var $$parser.initTargetElem = undefined;                      /// ...and its element chain - the pair initElemType drops, because makeConstant cannot take it
+    var $$parser.initTarget = undefined;                          /// element DESCRIPTOR an `InitList`'s entries answer to; undefined = untyped array, accept what comes
+    var $$parser.reservedAt = undefined;                          /// offset of the last name reported as reserved - two doors check one name, one reports it
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
     var $$parser.exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
@@ -926,7 +925,7 @@
                 run.push(rec);
                 continue;
             }
-            for (var r = 1; r < run.length; ++r) {                /* a lone label has nothing to merge */
+            if (run.length > 1) {                                 /* a lone label has nothing to merge */
                 var keep = run[0];
                 for (var u = 0; u < run.length; ++u) {            /* prefer a name the user wrote */
                     if (run[u].operands[0].charAt(1) !== '.') { keep = run[u]; break; }
@@ -938,17 +937,14 @@
                     keep.mayRide = (keep.mayRide === true && run[u].mayRide === true);
                     run[u].operator = null;
                 }
-                break;
             }
             run.length = 0;
         }
-        if (alias !== undefined) {
-            for (i = 0; i < $$parser.metacode.length; ++i) {
-                rec = $$parser.metacode[i];
-                if (rec.operator == null || rec.operator === ';') continue;
-                for (var a = 0; a < 3; ++a) {
-                    if (alias[rec.operands[a]] !== undefined) rec.operands[a] = alias[rec.operands[a]];
-                }
+        for (i = 0; i < $$parser.metacode.length; ++i) {
+            rec = $$parser.metacode[i];
+            if (rec.operator == null || rec.operator === ';') continue;
+            for (var a = 0; a < 3; ++a) {
+                if (alias[rec.operands[a]] !== undefined) rec.operands[a] = alias[rec.operands[a]];
             }
         }
 
@@ -979,15 +975,13 @@
             for (var n = i + 1; n <= $$parser.metacode.length; ++n) {
                 var nx = (n < $$parser.metacode.length ? $$parser.metacode[n] : { operator: '--^' });
                 if (nx.operator == null || nx.operator === ';' || nx.operator === '<--') continue;
-                leadsTo[$$parser.metacode[i].operands[0]] = nx;
+                leadsTo[$$parser.metacode[i].operands[0]] = (nx.operator === '--^');
                 break;
             }
         }
         for (i = 0; i < $$parser.metacode.length; ++i) {
             rec = $$parser.metacode[i];
-            if (rec.operator == null || rec.operator === ';' || rec.operator === '<--') continue;
-            if (rec.operator === '-->' && leadsTo[rec.operands[0]] !== undefined
-                    && leadsTo[rec.operands[0]].operator === '--^') {
+            if (rec.operator === '-->' && leadsTo[rec.operands[0]] === true) {
                 rec.operator = '--^';                             /* the GOTO IS the return */
                 rec.operands[0] = undefined;
             }
@@ -1638,10 +1632,17 @@
        from every door that takes a name. Still a --legacy warning: in 1.x these WERE ordinary
        identifiers, so old code that used one has to keep building. */
     $$parser.RESERVED_NAMES = { 'return': true, 'break': true, 'continue': true };
+    /* ONE occurrence of a name, one diagnostic. Two doors legitimately ask about the same name - the
+       declarator sees every variable INCLUDING locals, `claimTopName` sees every top-level name INCLUDING
+       functions and structs - and only their overlap is wrong. Deduping where the diagnostic is RAISED
+       keeps both doors honest; deleting either one would silently drop a whole class of name. (Visible
+       only under `--legacy`, where this is a warning: `global int break` reported itself twice, once as a
+       "variable" and once as a "global". Strict mode throws on the first.) */
     $$parser.checkReservedName = function (name, what, sourceCode, sourceOffset) {
-        if ($$parser.RESERVED_NAMES[name] !== true) {
+        if ($$parser.RESERVED_NAMES[name] !== true || $$parser.reservedAt === sourceOffset) {
             return;
         }
+        $$parser.reservedAt = sourceOffset;
         $$parser.strictError("'" + name + "' is a reserved word, not a"
                         + ('aeiou'.indexOf(what.charAt(0)) < 0 ? ' ' : 'n ') + what + " name",
                 sourceCode, sourceOffset, 'E449',
@@ -1746,6 +1747,16 @@
         if (desc === undefined) return undefined;
         var colon = desc.indexOf(':');
         return (colon === -1 ? undefined : desc.substr(colon + 1));
+    };
+
+    /* Split an element descriptor into the (type, elem) pair the rest of the compiler carries. The one
+       wrinkle is the reason this is a function and not two calls: a TAILLESS functype atom is not a type
+       named `TickFn`, it is a FUNCPTR whose element is that name - so head and elem are the same string.
+       Four sites decoded this by hand before, two of them with these variable names. */
+    $$parser.descTypeElem = function (desc) {                     /// 'p:i' -> {p,i}; 'TickFn' -> {F,TickFn}
+        var head = $$parser.descHead(desc), tail = $$parser.descTail(desc);
+        return (tail === undefined && $$parser.isFuncTypeAtom(head)
+                ? { type: 'F', elem: head } : { type: head, elem: tail });
     };
 
     $$parser.isStructAtom = function (atom) {                     /// is `atom` a defined struct name?
@@ -2314,7 +2325,8 @@
                     if (structEl) {
                         $$parser.buildStructInit(f.elem, (ev && ev.braced) || [], out, sourceCode, sourceOffset);
                     } else {
-                        $$parser.pushInitScalar(out, ev, f.elem, f.name, sourceCode, sourceOffset);
+                        var et = $$parser.descTypeElem(f.elem);   /* `p:i` is a pointer TO int, not a type */
+                        $$parser.pushInitScalar(out, ev, et.type, et.elem, f.name, sourceCode, sourceOffset);
                     }
                 }
                 if (symbolic && out.blocked === undefined) {
@@ -2334,12 +2346,12 @@
                                     + 'planned for Impala 3.0');
                 }
             } else {
-                $$parser.pushInitScalar(out, item, f.type, f.name, sourceCode, sourceOffset);
+                $$parser.pushInitScalar(out, item, f.type, f.elem, f.name, sourceCode, sourceOffset);
             }
         }
     };
 
-    $$parser.pushInitScalar = function (out, item, type, fieldName, sourceCode, sourceOffset) {
+    $$parser.pushInitScalar = function (out, item, type, elem, fieldName, sourceCode, sourceOffset) {
         if (item === undefined) {
             out.push($$parser.ZEROES[type]);                      /* omitted -> zero */
             return;
@@ -2352,6 +2364,15 @@
             $$parser.typeError('Initializer type mismatch for field ' + fieldName + ' ({$type1} vs {$type2})',
                     sourceCode, sourceOffset, item.type, type, 'E422');
         }
+        /* THE FIFTH DOOR. The other four initializer doors run the full assignment check; a struct FIELD
+           reached the row through here and was only asked its coarse type, so `struct P { int pointer p }`
+           took `&global floatArray[0]` and a funcptr field took a mismatched function, both silently -
+           while the in-function assignment to the same field is E201/E441. A braced entry is already
+           reduced to its operand, so rebuild the one-operand meta shape those checks read: `&NULL` and a
+           direct `&f` must both stay recognisable. */
+        $$parser.checkInitTarget(type, elem,
+                { type: item.type, elem: item.elem, operands: [ undefined, item.op ] },
+                sourceCode, (item.at !== undefined ? item.at : sourceOffset));
         /* This is the ONLY place a word enters the row, so it is where "no word past here is placeable"
            belongs: here the entry still knows its own field name and source position, whereas by
            emitInitData it is a bare operand string in a flat array. Zero is exempt - the region fills
@@ -2418,8 +2439,29 @@
        `DATA` stays for an UNTYPED array, which states no element type to check against. Struct
        initializers keep it too, and must: one row spans fields of different types (`DATA #1 #2.5 &s`),
        which is exactly the mixed case `DATA` exists for - see `consts.mixed` in src/UnitTest.gazl. */
+    /* The COARSE type an entry answers to. `makeConstant` knows the three scalar heads and nothing else -
+       a funcptr element head is a TYPE NAME it would not recognise - so the funcptr and pointer-element
+       questions belong to `checkInitTarget`, which reads the same descriptor whole. Derived, not stored:
+       one `initTarget` cannot disagree with itself, where three parallel slots could. */
+    $$parser.initCoarseType = function () {
+        var t = $$parser.descTypeElem($$parser.initTarget).type;
+        return (t === 'i' || t === 'f' || t === 'p' ? t : undefined);
+    };
+
     $$parser.initElemRow = function () {
-        return ($$parser.initElemType !== undefined ? 'DAT?' : 'DATA');
+        return ($$parser.initCoarseType() !== undefined ? 'DAT?' : 'DATA');
+    };
+
+    /* One entry of a flat initializer list: the full assignment check, then the rendered constant. Both
+       list doors call this, so a rule added here cannot be live at the first entry and missing at the rest. */
+    $$parser.initEntry = function (x, sourceCode, sourceOffset) {
+        var t = $$parser.descTypeElem($$parser.initTarget);
+        $$parser.checkInitTarget(t.type, t.elem, x, sourceCode, sourceOffset);
+        var coarse = $$parser.initCoarseType();
+        if (coarse === undefined) {
+            coarse = metaSlot(x).type;                            /* untyped array: accept what comes */
+        }
+        return { op: $$parser.makeConstant(x, coarse, sourceCode, sourceOffset), type: coarse };
     };
 
     $$parser.blockInitFrom = function (out, why, code, hint) {
@@ -2953,15 +2995,9 @@
 
         /* element-type propagation (Impala 2) */
         if (operator === '=[]' && lelem !== undefined) {
-            var _eh = $$parser.descHead(lelem);                   /* typed element read: no cast needed */
-            var _et = $$parser.descTail(lelem);
-            if (_et === undefined && $$parser.isFuncTypeAtom(_eh)) {
-                leftx.type = 'F';                                 /* funcptr-array element carries its funcptr type */
-                leftx.elem = _eh;
-            } else {
-                leftx.type = _eh;
-                leftx.elem = _et;
-            }
+            var el = $$parser.descTypeElem(lelem);                /* typed element read: no cast needed */
+            leftx.type = el.type;                                 /* a funcptr-array element carries its funcptr type */
+            leftx.elem = el.elem;
         } else if ((operator === '+' || operator === '-') && leftx.type === 'p') {
             leftx.elem = lelem;                                   /* pointer arithmetic preserves element type */
         } else {
@@ -3199,15 +3235,17 @@
     /* *expr  or  [] dereference handling */
     $$parser.dereference = function (operator, expr, sourceCode, sourceOffset) {
         expr = metaSlot(expr);
+        /* `constInt` is THE decoder: `parseFloat('0x10')` is 0, so a hex offset silently became `#0`
+           here while the decimal spelling of the same number emitted `#-16`. */
+        var negOff = (expr.operator === '-' && expr.operands[2] !== undefined
+                ? $$parser.constInt(expr.operands[2]) : undefined);
         if (expr.operator === '+') {
             /*  &a + i   ->   PEEK (&a , i)  */
             expr.operator = '=[]';
-        } else if (expr.operator === '-' && expr.operands[2] &&
-                   expr.operands[2][0] === '#') {
+        } else if (negOff !== undefined) {
             /*  &a - #n  where n is const -> adjust to negative literal */
             expr.operator = '=[]';
-            var num = parseFloat(expr.operands[2].substr(1));   // strip leading '#'
-            expr.operands[2] = '#'+(-num);
+            expr.operands[2] = '#' + (-negOff);
         } else {
             /* generic “*expr” */
             $$parser.makeMeta(
@@ -3751,15 +3789,12 @@
         assert(span(opR[0], '#<') === 1,
                "rhs must be const");
 
-        /* trivial cases */
-        if (opR === '#0') return opL;
-
-        if (opL[0] === '#' && opR[0] === '#' &&
-            span(opL.substr(1), '0123456789') === opL.length - 1 &&
-            span(opR.substr(1), '0123456789') === opR.length - 1) {
-
-            return '#' + ( parseInt(opL.substr(1), 10) -
-                           parseInt(opR.substr(1), 10) );
+        /* `constInt` is THE decoder - asking the spelling here is how `0x10` stopped folding while
+           `16` folded (it read as decimal-only and fell through to a runtime temp). */
+        var subL = $$parser.constInt(opL), subR = $$parser.constInt(opR);
+        if (subR === 0) return opL;                               /* trivial case, in any spelling */
+        if (subL !== undefined && subR !== undefined) {
+            return '#' + (subL - subR);
         }
 
         /* need run-time temp */
@@ -4052,15 +4087,13 @@ TypeDeclr   <-  base:TypeBase                                        { $desc = $
                 )*
                 ( id:Identifier                                      { $$.name = $id; }
                 )?                                                   {
-                                                                         var head = $$parser.descHead($desc);
-                                                                         var tail = $$parser.descTail($desc);
-                                                                         if (tail === undefined && $$parser.isStructAtom(head)) {
-                                                                             $$.type = 'S'; $$.struct = head; $$.elem = undefined;
-                                                                             $$.words = $$parser.structWords(head);
-                                                                         } else if (tail === undefined && $$parser.isFuncTypeAtom(head)) {
-                                                                             $$.type = 'F'; $$.elem = head; $$.struct = undefined; $$.words = 1;
+                                                                         var td = $$parser.descTypeElem($desc);
+                                                                         if (td.elem === undefined && $$parser.isStructAtom(td.type)) {
+                                                                             $$.type = 'S'; $$.struct = td.type; $$.elem = undefined;
+                                                                             $$.words = $$parser.structWords(td.type);
                                                                          } else {
-                                                                             $$.type = head; $$.elem = tail; $$.struct = undefined; $$.words = undefined;
+                                                                             $$.type = td.type; $$.elem = td.elem; $$.struct = undefined;
+                                                                             $$.words = (td.type === 'F' ? 1 : undefined);   /* scalar funcptr: one word */
                                                                          }
                                                                      }
 
@@ -4485,16 +4518,12 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                  ( POINTER _                                          { $desc = 'p:' + $desc; }
                  )*
                                                                       {
-                                                                         var chead = $$parser.descHead($desc);
-                                                                         var ctail = $$parser.descTail($desc);
-                                                                         if (ctail === undefined && $$parser.isStructAtom(chead)) {
+                                                                         var cd = $$parser.descTypeElem($desc);
+                                                                         if (cd.elem === undefined && $$parser.isStructAtom(cd.type)) {
                                                                              $$parser.fail('A const cannot be a struct value - use a struct pointer ('
-                                                                                     + 'const ' + chead + ' pointer)', $$s, $$i, 'E447');
-                                                                         } else if (ctail === undefined && $$parser.isFuncTypeAtom(chead)) {
-                                                                             $t = 'F'; $telem = chead;      /* named funcptr type constant */
-                                                                         } else {
-                                                                             $t = chead; $telem = ctail;
+                                                                                     + 'const ' + cd.type + ' pointer)', $$s, $$i, 'E447');
                                                                          }
+                                                                         $t = cd.type; $telem = cd.elem;    /* 'F' + name for a funcptr constant */
                                                                          $cStart = $$i;   /* `Identifier` eats trailing space, so $$i
                                                                                              would name the NEXT declaration (E453) */
                                                                       }
@@ -4669,20 +4698,9 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                `float array F[2] = { 1, 2 }` stored the INTEGER bit pattern and read
                                                                                back 1.4013e-45. The scalar paths have always been this strict
                                                                                (`global float f = 1` is E407); only the array path was not.
-                                                                               Restricted to the scalar heads on purpose: a struct-element array
-                                                                               must keep reporting the friendlier E422 below, and a funcptr element
-                                                                               head is a TYPE NAME that makeConstant would not recognise - so the
-                                                                               funcptr head travels beside it instead, and checkInitFuncPtr asks
-                                                                               the question makeConstant cannot. */
-                                                                            var _eh = ($a.elem !== undefined
-                                                                                    ? $$parser.descHead($a.elem) : undefined);
-                                                                            $$parser.initElemType = (!$aStructEl
-                                                                                    && (_eh === 'i' || _eh === 'f' || _eh === 'p')) ? _eh : undefined;
-                                                                            var _et = ($a.elem !== undefined
-                                                                                    ? $$parser.descTail($a.elem) : undefined);
-                                                                            var _ef = (_et === undefined && $$parser.isFuncTypeAtom(_eh));
-                                                                            $$parser.initTargetType = ($aStructEl ? undefined : (_ef ? 'F' : _eh));
-                                                                            $$parser.initTargetElem = ($aStructEl ? undefined : (_ef ? _eh : _et));
+                                                                               A struct-element array keeps reporting the friendlier E422 below, so
+                                                                               it states no target at all. */
+                                                                            $$parser.initTarget = ($aStructEl ? undefined : $a.elem);
                                                                          }
                            ( d:InitList                                {   /* flat list -> scalar-element arrays only */
                                                                             if ($aStructEl)
@@ -4743,7 +4761,7 @@ BracedItem  <-  b:Braced                                             { $$ = { br
                                                                         var op = $$parser.makeRValue(m, '#<&');
                                                                         if (span(op[0] || '', '#<&') !== 1)
                                                                             $$parser.fail('Initializer must be a constant', $$s, $$i, 'E407');
-                                                                        $$ = { op: op, type: m.type };
+                                                                        $$ = { op: op, type: m.type, elem: m.elem };
                                                                     }
 
 InitList    <-  '{' _                                                 { $d = ' '; $type = undefined; }
@@ -4752,19 +4770,14 @@ InitList    <-  '{' _                                                 { $d = ' '
                 ( !(Identifier ':')                                  { $entryAt = $$i; }   # `Expr` eats the trailing
                                                                                           # space, so $$i would name the NEXT entry
                   x:Expr                                             {
-                                                                            var xMeta = metaSlot($x);
-                                                                            $$parser.checkInitTarget($$parser.initTargetType, $$parser.initTargetElem, xMeta, $$s, $entryAt);
-                                                                            $type = ($$parser.initElemType !== undefined
-                                                                                    ? $$parser.initElemType : xMeta.type);
-                                                                            $d += $$parser.makeConstant(xMeta, $type, $$s, $entryAt);
+                                                                            var first = $$parser.initEntry(metaSlot($x), $$s, $entryAt);
+                                                                            $type = first.type;
+                                                                            $d += first.op;
                                                                         }
                   ( ',' _ !(Identifier ':')                          { $entryAt = $$i; }
                     x:Expr                                           {
-                                                                            var xMeta = metaSlot($x);
-                                                                            $$parser.checkInitTarget($$parser.initTargetType, $$parser.initTargetElem, xMeta, $$s, $entryAt);
-                                                                            var xType = ($$parser.initElemType !== undefined
-                                                                                    ? $$parser.initElemType : xMeta.type);
-                                                                            var constant = $$parser.makeConstant(xMeta, xType, $$s, $entryAt);
+                                                                            var next = $$parser.initEntry(metaSlot($x), $$s, $entryAt);
+                                                                            var xType = next.type, constant = next.op;
 
                                                                             /* decide if we need to flush DATA */
                                                                             if (  constant[0] === '<'
@@ -4832,23 +4845,17 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                 { $nameStart = $$i; }
                 id:Identifier                                         {
                                                                          $$parser.checkReservedName($id, 'variable', $$s, $nameStart);
-                                                                         var head = $$parser.descHead($desc);
-                                                                         var tail = $$parser.descTail($desc);
-                                                                         if (tail === undefined && $$parser.isStructAtom(head)) {
+                                                                         var vd = $$parser.descTypeElem($desc);
+                                                                         if (vd.elem === undefined && $$parser.isStructAtom(vd.type)) {
                                                                              $$.type = 'S';
-                                                                             $$.struct = head;
+                                                                             $$.struct = vd.type;
                                                                              $$.elem = undefined;
-                                                                             $$.words = $$parser.structWords(head);
-                                                                         } else if (tail === undefined && $$parser.isFuncTypeAtom(head)) {
-                                                                             $$.type = 'F';           /* named funcptr type -> a funcptr carrying its type tag */
-                                                                             $$.elem = head;
-                                                                             $$.struct = undefined;
-                                                                             $$.words = undefined;    /* scalar funcptr: a single word, no size operand */
+                                                                             $$.words = $$parser.structWords(vd.type);
                                                                          } else {
-                                                                             $$.type = head;
-                                                                             $$.elem = tail;
+                                                                             $$.type = vd.type;       /* 'F' + the name for a named funcptr type */
+                                                                             $$.elem = vd.elem;
                                                                              $$.struct = undefined;
-                                                                             $$.words = undefined;
+                                                                             $$.words = undefined;    /* scalar: a single word, no size operand */
                                                                          }
                                                                          $$.name = $id;
                                                                          $$.at   = $nameStart;   /* the NAME - `Identifier` ate the trailing
