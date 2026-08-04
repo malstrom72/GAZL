@@ -658,8 +658,22 @@
        compare EQUAL. Render those as the empty extent instead, the same wildcard a sizeless `extern
        array` already uses, which the validator skips rather than trusting. A row may state a fact or
        state "unknown"; it must never state something that merely looks like a fact. */
-    function extentText(size) {
+    /* A SHAPE states every axis, in WRITTEN order (outermost first, the reverse of the stride order `dims`
+       holds), joined by `x`: `int array cells[3, 4]` advertises `int[3x4]`. Deliberately not a comma - a
+       `; signature struct` row is a comma-separated field list, and gazl-validate splits it on commas
+       before it ever looks at a type. `x` keeps a shape one `\S+` token, so the validator compares it as
+       the opaque string it already compares a 1-D extent as, and needs no change at all.
+       All-or-nothing, exactly as a single extent is: ONE unstatable axis and the whole shape reads `[]`,
+       because a partial shape rendered as a whole one is a claim that is simply false. */
+    function extentText(size, dims) {
         var text = (size === undefined ? '' : '' + size);
+        if (dims !== undefined) {
+            text = '';
+            for (var i = dims.length - 1; i >= 0; --i) {
+                if (('' + dims[i]).charAt(0) === '<') return '[]';
+                text += (i < dims.length - 1 ? 'x' : '') + dims[i];
+            }
+        }
         return '[' + (text.charAt(0) === '<' ? '' : text) + ']';
     }
 
@@ -673,7 +687,7 @@
             var f = s.fields[i];
             var cat;
             if (f.type === 'A') {                                 /* an array field advertises its extent + element */
-                cat = signatureCategoryForDesc(f.elem) + extentText(f.size);
+                cat = signatureCategoryForDesc(f.elem) + extentText(f.size, f.dims);
             } else if (f.type === 'S') {
                 cat = f.struct;                                   /* a nested by-value struct field */
             } else {

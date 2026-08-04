@@ -31,7 +31,7 @@ W:	! DEFi #2	; signature const W : int @ 34:1
 .o.Grid.tag:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Grid:	! DEFi #<a>
-; signature struct Grid { cells : int[], cube : int[], flat : int[5], tag : int } @ 39:1
+; signature struct Grid { cells : int[3x4], cube : int[2x3x4], flat : int[5], tag : int } @ 39:1
 	! MULi <C> #W #2
 	! MULi <A> #H #<C>
 	! MOVi <a> #0	; layout of struct Shaped

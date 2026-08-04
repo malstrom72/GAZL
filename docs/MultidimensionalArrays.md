@@ -151,8 +151,17 @@ correctly refuses.
 deferred `! FAIL` is not an error line. A check that lives in the emitted GAZL is invisible to that test.
 Read the output, not the exit status.
 
-**3. Axes are separated by `x` in metadata, never by a comma.** `cells : int[4x5]`.
+**3. Axes are separated by `x` in metadata, never by a comma.** `cells : int[4x5]`. IMPLEMENTED.
 `tools/gazl-validate.nuxjs.js:299` splits struct fields on `,`, so `cells : int[4, 5]` would parse as two
-bogus fields and report a spurious cross-unit conflict. The park branch used `4x5` for this reason. Its
-`arraySignaturesCompatible` also compares extents as raw strings, which is worth fixing on its own merits
-and independently of this feature.
+bogus fields and report a spurious cross-unit conflict. The park branch used `4x5` for this reason.
+
+`x` also keeps a shape one `\S+` token, which is what let the validator take it **with no change at all**:
+`arraySignaturesCompatible` compares extents as RAW STRINGS, so `int[3x4]` matches `int[3x4]` and conflicts
+with both `int[2x6]` and `int[12]` - the last being exactly right, since two shapes over the same 12 words
+are not interchangeable. An earlier draft of this file called that raw-string comparison "worth fixing on
+its own merits"; it is the opposite. Normalizing extents numerically would have to teach the validator what
+a shape is, and would silently equate `[3x4]` with `[12]`. Verified against both spellings.
+
+A shape is stated ALL-OR-NOTHING, as a single extent already is: one axis Impala cannot name as a constant
+and the whole field renders `int[]`, "cannot state this". Half a shape read as a whole one is a false
+claim, and `[]` is the one the validator already skips rather than assumes equal.
