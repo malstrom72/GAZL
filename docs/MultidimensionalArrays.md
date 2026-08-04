@@ -121,9 +121,20 @@ the flat deferred `! LSSi` / `! FAIL` triple and the `! MOVi` guard copy that fe
 GAZL per shaped access, restating a settled question. This was sound only once every axis had to be
 stated; before the rank fix, `cells[11]` cleared no axis at all.
 
-**Slice 3 - shape identity across standalone arrays.** The deferred `! EQUi` compare. Needs a position
-where two shapes meet, which needs shape-carrying pointer types or a named shape - the largest step, and
-the only one that touches the descriptor grammar.
+**Slice 3 - shape identity across standalone arrays. DEFERRED TO 3.0, and it is not a gap.** The deferred
+`! EQUi` compare in [`deferredShapeCheck.gazl`](deferredShapeCheck.gazl) works exactly as documented -
+re-run all three ways on 2026-08-04: `[4][3]` against `[N][W-1]` passes with `N 4 W 4`, and each mismatch
+names its own axis, at zero runtime cost. **What it has no caller.** Its scenario is "`f` takes an
+`int[4][3]`, the call passes `b`", and Impala cannot express that: an array parameter does not exist
+(`int array a[4]` as a parameter is `E001`, with or without an extent), a pointer parameter carries no
+extent, and arrays by value are on the not-in-scope list below.
+
+So there is **no position in 2.0 where two standalone shapes meet.** The one position where two shapes do
+meet - a shape reached through a `Grid pointer` - is answered for free by being type-keyed: both sides
+name `Grid`, so there is nothing to compare. Slice 3 is a sound mechanism waiting on a prerequisite that
+is a language change rather than a slice: shape-carrying pointer TYPES (`int array[W] pointer m`, which
+the park branch built as slice 2c/2d, `3781f8c`). Treat this section as a conditional design - *if* 3.0
+adds those types, this is the sound way to check them, with a running proof - and not as pending work.
 
 **Not in scope at all:** arrays by value, array parameters, `:` open axes and slices, `&a` as an lvalue,
 nested-brace initializers, C-style `a[y][x]` chains.
