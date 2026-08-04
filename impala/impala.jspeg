@@ -3421,7 +3421,11 @@
                 expr.elem = prevElem;                             /* &funcptr -> element is the named funcptr type
                                                                      (its name already identifies it, like a struct) */
             } else {
-                expr.elem = (prevType === undefined ? undefined   /* &x yields a pointer to x's type */
+                /* &x yields a pointer to x's type - but `?` (an element of an Impala 1 untyped
+                   `array`) says exactly what `undefined` says, and UNKNOWN MUST HAVE ONE SPELLING:
+                   with two, a comparison of the same non-knowledge reports itself as
+                   "expected untyped elements, got untyped elements". */
+                expr.elem = (prevType === undefined || prevType === '?' ? undefined
                         : prevType + (prevElem !== undefined ? ':' + prevElem : ''));
             }
         } else {
@@ -5556,6 +5560,20 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                                 'Invalid types ({$type1} and {$type2})',
                                                                 $$s, $$i, fromMeta.type, toMeta.type
                                                             , 'E301');
+                                                        }
+
+                                                        /* Both are pointers; ask what they point AT - but
+                                                           only when BOTH sides know, because `copy` flags a
+                                                           CONTRADICTION, not a broken promise. An assignment
+                                                           rejects untyped -> typed (E201): the variable must
+                                                           keep that promise for every later deref. A copy
+                                                           consumes both addresses on the spot, so an untyped
+                                                           source claims nothing to break - and reading an
+                                                           Impala 1 `array` blob into typed storage is the
+                                                           1.0 idiom, not a defect. The LENGTH stays unchecked
+                                                           on purpose: a pointer has no extent. */
+                                                        if (toMeta.elem !== undefined && fromMeta.elem !== undefined) {
+                                                            $$parser.checkPtrAssign(toMeta, fromMeta, $$s, $$i);
                                                         }
 
                                                         var copyMeta = metaSlot($l);

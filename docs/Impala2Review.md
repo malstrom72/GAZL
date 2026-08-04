@@ -203,10 +203,20 @@ only ever the message that pointed the wrong way.
   type and is still unchecked, deliberately.
 - **A declared return value never assigned returns stale frame garbage.** No definite-assignment analysis;
   decidable single-pass for the trivial case. **[V] still open 2026-08-04.**
-- **`copy` bypasses the pointer ELEMENT type.** `copy(8 from &intSrc[0] to &floatDst[0])` compiles silently:
-  the rule checks that both operands are pointers (`E301`) and never asks what they point AT, so it is the
-  one door left that reads a typed pointer and enforces nothing — every other door runs `checkPtrAssign`
-  since `ed1b879`. **[V] still open 2026-08-04.**
+- ~~**`copy` bypasses the pointer ELEMENT type.**~~ FIXED 2026-08-04. `copy(8 from &intSrc[0] to
+  &floatDst[0])` compiled silently: the rule checked that both operands are pointers (`E301`) and never
+  asked what they point AT, leaving it the one door that reads a typed pointer and enforces nothing. It now
+  runs `checkPtrAssign` — with one deliberate difference from an assignment: **only on a contradiction**,
+  when both sides know their element and disagree. An assignment rejects untyped → typed because the
+  VARIABLE must keep that promise for every later deref; a copy consumes both addresses on the spot, so an
+  untyped source claims nothing to break, and reading an Impala 1 `array` blob into typed storage is the
+  1.0 idiom (one corpus fixture, `patch.impala:234`, does exactly that). The cast is the escape hatch.
+  The check exposed a second bug underneath it: `&x` on an element of an untyped `array` stamped
+  `elem = '?'` while a bare untyped array stamped `undefined` — two spellings of the same non-knowledge,
+  which made comparing them say "expected untyped elements, got untyped elements". Fixed at the source
+  (`&x` now normalizes `'?'` to `undefined`), which also collapsed the emitted `unknown-ptr` metadata token
+  onto `ptr`, the spelling the code already documented as canonical — the only corpus effect, 7 comment
+  lines across 3 goldens, no instruction changed.
   *The length half of this finding was withdrawn 2026-08-04: it originally also called a 4-word overrun of
   the destination a defect. A pointer has no extent, so past `&a[0]` there is nothing to check against, and
   extents are not tracked through pointer values by design. Only the literal `&arr[const]` spelling could

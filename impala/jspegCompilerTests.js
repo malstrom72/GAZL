@@ -2133,6 +2133,41 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler runs the full assignment check at every initializer");
 }
 
+// `copy` was the last door that read two typed pointers and asked them nothing - it checked that both
+// operands ARE pointers (E301) and never what they point at, so an int block written over float storage
+// compiled clean. It now asks, with one deliberate difference from an assignment: it flags only a
+// CONTRADICTION (both sides know their element and disagree), never an unknown. An assignment rejects
+// untyped -> typed because the VARIABLE must keep that promise for every later deref; `copy` consumes both
+// addresses on the spot, and reading an Impala 1 untyped `array` blob into typed storage is the 1.0 idiom.
+// The LENGTH is never checked and never will be: a pointer has no extent.
+{
+	const decls = "global int array gi[8]\nglobal float array gf[8]\nglobal array gu[8]\n";
+	for (const [label, body] of [
+		["int source into float destination", "copy (4 from &global gi[0] to &global gf[0]);"],
+		["float source into int destination", "copy (4 from &global gf[0] to &global gi[0]);"],
+	]) {
+		expectCompileOutcome("copy element type", label,
+			decls + "function main() { " + body + " }\n", "E201");
+	}
+	for (const [label, body] of [
+		["matching elements", "copy (4 from &global gi[0] to &global gi[4]);"],
+		["an untyped source promises nothing to break", "copy (4 from &global gu[0] to &global gf[0]);"],
+		["an untyped destination, likewise", "copy (4 from &global gf[0] to &global gu[0]);"],
+		["a cast is the escape hatch", "copy (4 from (pointer) &global gi[0] to &global gf[0]);"],
+		["a length past the destination extent is the programmer's, as with memcpy",
+			"copy (64 from &global gi[0] to &global gi[4]);"],
+	]) {
+		expectCompileOutcome("copy element type", label,
+			decls + "function main() { " + body + " }\n", null);
+	}
+	// The bug this check exposed: `&x` on an element of an untyped `array` stamped elem `'?'`, while an
+	// untyped array named bare stamped `undefined` - two spellings of the same non-knowledge, which made
+	// comparing them report "expected untyped elements, got untyped elements". Unknown has ONE spelling now.
+	expectCompileOutcome("copy element type", "two untyped spellings do not contradict each other",
+		"global array gu[8]\nfunction main() locals array a[4] { copy (4 from a to &global gu[0]); }\n", null);
+	console.log("impala.jspeg compiler checks copy's element types, and only on a contradiction");
+}
+
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
 const caretNonCases = [
 	["if/else with a semicolon-terminated then-branch",
