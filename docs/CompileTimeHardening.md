@@ -299,12 +299,20 @@ both the defect and the fix. Reproduced here at the site.)*
 `global S s = { v: {1,2}, tag: 7 }` reports `E454` (a field BEHIND a symbolic extent has no position
 Impala can know) and the positional spelling reports `E455`.
 
-**S3. `parseFloat` on an emitted operand string mis-folds a pointer offset.** *(ALREADY RECORDED,
-`docs/TwoStageConstants.md`, which names `parseFloat("0x10")` being `0` exactly. Reproduced here.)*
-The `p - const` fold tests `operands[2][0] === '#'`, which establishes CONSTANT, not DECIMAL, then runs
-`parseFloat` on it. `*(p - 0x2)` emits `PEEK $x $p #0` instead of `#-2` - completely silent. `*(p - K)`
-for any named const emits `#NaN`. The non-folded path is already correct, and GAZL can negate at assembly
-(`! SUBi <A> #0 #K`).
+**S3. `parseFloat` on an emitted operand string mis-folds a pointer offset - CLOSED 2026-08-04.**
+*(ALREADY RECORDED, `docs/TwoStageConstants.md`, which names `parseFloat("0x10")` being `0` exactly.
+Reproduced here.)* The `p - const` fold tested `operands[2][0] === '#'`, which establishes CONSTANT, not
+DECIMAL, then ran `parseFloat` on it. `*(p - 0x2)` emitted `PEEK $x $p #0` instead of `#-2` - completely
+silent - and `*(p - K)` for any named const emitted `#NaN`.
+
+Both sites now ask `constInt`, the one decoder, and branch on `undefined`: `*(&g[32] - 0x10)` folds to
+`#-16` exactly as the decimal spelling does, and `*(p - K)` stops trying to fold at all, emitting
+`SUBp %0 $p #K` for GAZL to resolve. `subConstInt` had the same shape one function away - it spanned
+decimal digits only, so a hex subtraction fell through to a runtime temp instead of folding - and was
+fixed with it. Worth recording how long this survived: it was written down twice, here and in
+`TwoStageConstants.md`, and still shipped, because the entry that retired the OTHER `parseInt`/`parseFloat`
+sites (S4) closed the two it happened to be looking at. A decoder is not retired until its siblings are
+gone; a cleanup review found these by asking who else answers this question, not by re-reading the notes.
 
 **S4. `parseInt('0x2', 10) === 0` slipped past E414 and dropped a whole initializer - CLOSED 2026-08-04.**
 *(Same anti-pattern as S3, ALREADY RECORDED. NEW: that it defeated E414's `isNaN` guard specifically, `0`

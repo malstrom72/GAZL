@@ -246,10 +246,20 @@ only ever the message that pointed the wrong way.
   The element-type half (`global int array T[4] = { 1, 2.0, 3, 4 }`) closed first, as `E407`. The funcptr
   half (`global Fn bp = g` with a mismatched signature) closed next as `E441` (`0682046`) — but through a
   wrapper calling *half* of `checkPtrAssign`, so `global int pointer p = &global f[0]` off a
-  `float array f[4]` still compiled clean. `ed1b879` deleted the wrapper: every initializer door now runs
+  `float array f[4]` still compiled clean. `ed1b879` deleted the wrapper: every FLAT initializer door runs
   `checkPtrAssign` whole, so a check added there cannot be right for an assignment and missing at a
   declaration. Ordering was the subtlety — `global int pointer p = 1` is not an element mismatch but a
   non-pointer, and stays `E407`, exactly as its assignment twin stays `E303`.
+  **Step four, 2026-08-04 (`63bd4ff`): there was a FIFTH door, and it was the one that mattered.** A struct
+  FIELD does not reach the row through those four — it goes through `pushInitScalar`, which was handed the
+  field's `type` and not its `elem`, and asked only the coarse question. So `struct P { int pointer p }`
+  took `{ p: &global floatArr[0] }` and a funcptr field took a mismatched function, both silently, while
+  assigning either to the same field inside a function is `E201`/`E441`. Struct fields are where typed
+  pointers and funcptrs actually live in this codebase, so the four doors closed first were the *less*
+  important ones. `BracedItem` now carries the value's `elem`, and `pushInitScalar` runs the same check —
+  a braced entry is already reduced to its operand, so it rebuilds the one-operand shape the check reads,
+  which is what keeps `null`/`nullfunc` holes legal. Found by a cleanup review, not by the fix that
+  claimed to have closed this; the earlier wording above ("every initializer door") was itself the tell.
 - ~~**A brace initializer over a symbolically-sized struct field emits a short, misaligned DATA row.**~~
   FIXED (`E454`). `struct S { int a; int array v[N]; int z }` with `N` a const gave `DATA #1 #2` where the
   literal `[3]` gave `DATA #1 #7 #8 #9 #2` — the `2` meant for `z` landed in `v[0]`, with the `GLOB` still
