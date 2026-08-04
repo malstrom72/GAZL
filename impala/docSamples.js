@@ -24,7 +24,14 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const DOC = path.join(__dirname, "..", "docs", "WhatsNewInImpala2.md");
+/* Every doc whose samples are held to the compiler. `Impala.md` is the language reference - the one source
+   of truth - so it is the LAST document that should be allowed to drift, and it carries the most examples.
+   The sample pool below is shared: a diagnostic code counts as covered when ANY sample provokes it, since
+   the point is that the code exists and fires, not which page happens to cite it. */
+const DOCS = [
+	{ file: "Impala.md" },
+	{ file: "WhatsNewInImpala2.md", upgradeTables: true },
+];
 const { compileProgram } = require("./impala.node.js");
 
 /* Whole programs. `expect` is the diagnostic code the compiler must report, or null for a clean compile -
@@ -125,7 +132,7 @@ const SAMPLES = [
 	},
 	{
 		name: "a struct initializer names its fields",
-		expect: "E455", legacy: true,
+		expect: "E455",
 		src: "struct Point { int x; int y }\nglobal Point origin = { 1, 2 }\nexport function main() { }\n",
 	},
 	{
@@ -165,6 +172,18 @@ const SAMPLES = [
 		src: "function f() returns int r { return 5; }\nexport function main() { }\n" },
 	{ name: "an extern struct field states no size", expect: "E430",
 		src: "extern struct H { int a; int array b[4] }\nexport function main() { }\n" },
+	/* Cited by the language reference. Each was named in prose with no sample behind it until the gate
+	   started covering `Impala.md` and said so. */
+	{ name: "an undeclared name", expect: "E403",
+		src: "export function main() locals int x { x = zzz; }\n" },
+	{ name: "a unary operator on a type that has none", expect: "E302",
+		src: "export function main() locals int pointer p, int r { r = -p; }\n" },
+	{ name: "the value of a call that returns nothing", expect: "E406",
+		src: "extern native printInt\nfunction noret(int x) { }\n"
+				+ "export function main() { printInt(noret(1)); }\n" },
+	{ name: "a comparison is not a value, so it cannot be an argument", expect: "E442",
+		src: "extern native printInt\n"
+				+ "export function main() locals int a, int b { printInt(a == b); }\n" },
 	{ name: "an extern prototype must match its definition", expect: "E437",
 		src: "extern function helper(int a) returns int r\n"
 				+ "function helper(float a) returns float r { r = a; }\nexport function main() { }\n" },
@@ -270,67 +289,11 @@ for (const sample of SAMPLES) {
 /* Side two: the page cannot show what the samples do not cover. Compared with tabs and CRLF normalised,
    because the doc and this file are edited by different hands and a whitespace difference is not drift. */
 const norm = (s) => s.replace(/\r\n?/g, "\n").replace(/\t/g, "    ").trim();
-const doc = fs.readFileSync(DOC, "utf8");
 const covered = SAMPLES.map((s) => norm(s.src));
-/* Anchored at line starts and capturing the info string, so the two kinds of block are told apart in one
-   pass. A fence-to-fence regex without that matched the gap BETWEEN two blocks and read a markdown table
-   rule as a command-line flag. */
-const blocks = [...doc.matchAll(/^```([a-z]*)\n([\s\S]*?)^```/gm)];
-for (const [, lang, body] of blocks) {
-	if (lang !== "impala") {
-		continue;
-	}
-	const block = norm(body);
-	if (!covered.some((src) => src.indexOf(block) >= 0)) {
-		fail("a doc block is not covered by any compiled sample",
-				block.split("\n")[0] + (block.includes("\n") ? " ..." : ""));
-	}
-}
-
-/* Side three, and the one that catches PROSE. Every diagnostic code the page names has to be one a sample
-   here actually provoked - so a page cannot cite `E456` where the compiler says `E455`, and cannot keep
-   citing a code after its fail site is deleted. That exact defect (E-codes documented with no fail site
-   anywhere in the compiler) is what the release audit found in three separate docs. */
 const raised = new Set(SAMPLES.map((s) => s.expect).filter(Boolean));
-for (const code of new Set(doc.match(/\bE[0-9]{3}\b/g) || [])) {
-	if (!raised.has(code)) {
-		fail("the page names a diagnostic no sample here provokes", code
-				+ " - add a sample that triggers it, or stop citing it");
-	}
-}
 
-/* Side four. The upgrade section sorts breakage into "--legacy downgrades these" and "--legacy does not
-   help", and a reader acts on WHICH TABLE a row is in. Side three only proves the facts are right; this
-   proves the page files them in the right place. Codes are read per-section from the two headings. */
-const section = (heading) => {
-	const at = doc.indexOf(heading);
-	if (at < 0) {
-		fail("the upgrade section lost a heading", heading);
-		return new Set();
-	}
-	const next = doc.indexOf("\n### ", at + 1);
-	return new Set(doc.slice(at, next < 0 ? undefined : next).match(/\bE[0-9]{3}\b/g) || []);
-};
-const saysRescued = section("### `--legacy` downgrades these to warnings");
-const saysNot = section("### `--legacy` does not help with these");
-for (const sample of SAMPLES) {
-	if (sample.legacy === undefined) {
-		continue;
-	}
-	const listedRescued = saysRescued.has(sample.expect);
-	const listedNot = saysNot.has(sample.expect);
-	if (sample.legacy === true && listedNot && !listedRescued) {
-		fail("a rescuable case is filed under \"--legacy does not help\"", sample.expect);
-	} else if (sample.legacy === false && listedRescued && !listedNot) {
-		fail("an unrescuable case is filed under \"--legacy downgrades these\"", sample.expect);
-	} else if (!listedRescued && !listedNot) {
-		fail("a verified breakage case is in neither upgrade table", sample.expect + " (" + sample.name + ")");
-	}
-}
-
-/* And the shell blocks: every `--flag` they name must be one the CLI actually documents. */
-/* Invoked with no arguments the CLI prints its usage and exits NON-ZERO, so the text arrives on the
-   error rather than the return value. */
+/* Invoked with no arguments the CLI prints its usage and exits NON-ZERO, so the text arrives on the error
+   rather than the return value. */
 let usage = "";
 try {
 	usage = require("child_process").execFileSync(process.execPath,
@@ -338,24 +301,103 @@ try {
 } catch (err) {
 	usage = ((err && err.stdout) || "") + ((err && err.stderr) || "");
 }
-for (const [, lang, body] of blocks) {
-	if (lang !== "") {
-		continue;
-	}
-	for (const flag of (body.match(/--[a-z-]+/g) || [])) {
-		if (usage.indexOf(flag) < 0) {
-			fail("a doc command names a flag the CLI does not have", flag);
+
+for (const entry of DOCS) {
+	const name = entry.file;
+	const doc = fs.readFileSync(path.join(__dirname, "..", "docs", name), "utf8");
+	/* Anchored at line starts and capturing the info string, so the two kinds of block are told apart in
+	   one pass. A fence-to-fence regex without that matched the gap BETWEEN two blocks and read a markdown
+	   table rule as a command-line flag. */
+	const blocks = [...doc.matchAll(/^```([a-z]*)\n([\s\S]*?)^```/gm)];
+
+	for (const [, lang, body] of blocks) {
+		if (lang !== "impala") {
+			continue;
+		}
+		const block = norm(body);
+		if (!covered.some((src) => src.indexOf(block) >= 0)) {
+			fail(name + ": a code block is not covered by any compiled sample",
+					block.split("\n")[0] + (block.includes("\n") ? " ..." : ""));
 		}
 	}
-	const sub = /impala\.node\.js\s+([a-z]+)/.exec(body);
-	if (sub !== null && usage.indexOf("impala.node.js " + sub[1]) < 0) {
-		fail("a doc command names a subcommand the CLI does not have", sub[1]);
+
+	/* The side that catches PROSE. Every diagnostic code the page names has to be one a sample actually
+	   provoked - so a page cannot cite `E456` where the compiler says `E455`, and cannot keep citing a code
+	   after its fail site is deleted. That exact defect (E-codes documented with no fail site anywhere in
+	   the compiler) is what the release audit found in three separate docs. */
+	for (const code of new Set(doc.match(/\bE[0-9]{3}\b/g) || [])) {
+		if (!raised.has(code)) {
+			fail(name + ": names a diagnostic no sample provokes", code
+					+ " - add a sample that triggers it, or stop citing it");
+		}
+	}
+
+	/* Shell blocks: every `--flag` and subcommand they name must be one the CLI actually documents. */
+	for (const [, lang, body] of blocks) {
+		if (lang !== "") {
+			continue;
+		}
+		for (const flag of (body.match(/--[a-z-]+/g) || [])) {
+			if (usage.indexOf(flag) < 0) {
+				fail(name + ": a command names a flag the CLI does not have", flag);
+			}
+		}
+		const sub = /impala\.node\.js\s+([a-z]+)/.exec(body);
+		if (sub !== null && usage.indexOf("impala.node.js " + sub[1]) < 0) {
+			fail(name + ": a command names a subcommand the CLI does not have", sub[1]);
+		}
+	}
+
+	/* Only the upgrade page sorts breakage into "--legacy downgrades these" and "--legacy does not help",
+	   and a reader acts on WHICH TABLE a row is in. The code check above proves the facts are right; this
+	   proves the page files them in the right place. */
+	if (entry.upgradeTables !== true) {
+		continue;
+	}
+	const section = (heading) => {
+		const at = doc.indexOf(heading);
+		if (at < 0) {
+			fail(name + ": the upgrade section lost a heading", heading);
+			return new Set();
+		}
+		const next = doc.indexOf("\n### ", at + 1);
+		return new Set(doc.slice(at, next < 0 ? undefined : next).match(/\bE[0-9]{3}\b/g) || []);
+	};
+	const saysRescued = section("### `--legacy` downgrades these to warnings");
+	const saysNot = section("### `--legacy` does not help with these");
+	for (const sample of SAMPLES) {
+		if (sample.legacy === undefined) {
+			continue;
+		}
+		/* An upgrade-breakage row claims "1.0 accepted this, 2.0 does not". A sample that DECLARES a
+		   struct or a functype, or imports a unit, cannot be 1.0 source at all - 1.0 has none of those
+		   constructs - so the row is impossible by construction and belongs somewhere else on the page.
+		   This exists because `E455` (a positional struct initializer) was filed as upgrade breakage
+		   twice, the second time in the same edit that measured the 1.0 corpus and found no E455 in it.
+		   Note the test is on DECLARING: using `struct` or `sizeof` as an identifier is exactly what a
+		   1.0 program did, and is what several of these rows are about. */
+		const impossible = /\bstruct\s+\w+\s*\{|\bfunctype\s+\w+\s*\(|\bimport\s+"/.exec(sample.src);
+		if (impossible !== null) {
+			fail(name + ": an upgrade-breakage row cannot happen in 1.0 source",
+					sample.expect + " (" + sample.name + ") - its sample uses `"
+							+ impossible[0].trim() + "`, which 1.0 cannot express");
+		}
+		const listedRescued = saysRescued.has(sample.expect);
+		const listedNot = saysNot.has(sample.expect);
+		if (sample.legacy === true && listedNot && !listedRescued) {
+			fail(name + ": a rescuable case is filed under \"--legacy does not help\"", sample.expect);
+		} else if (sample.legacy === false && listedRescued && !listedNot) {
+			fail(name + ": an unrescuable case is filed under \"--legacy downgrades these\"", sample.expect);
+		} else if (!listedRescued && !listedNot) {
+			fail(name + ": a verified breakage case is in neither upgrade table",
+					sample.expect + " (" + sample.name + ")");
+		}
 	}
 }
 
 if (failures > 0) {
-	console.error("doc samples: " + failures + " problem(s) in " + path.basename(DOC));
+	console.error("doc samples: " + failures + " problem(s)");
 	process.exit(1);
 }
-console.log("docs/WhatsNewInImpala2.md: " + SAMPLES.length
-		+ " samples compile as documented, and every code block is covered");
+console.log(DOCS.map((d) => d.file).join(" + ") + ": " + SAMPLES.length
+		+ " samples compile as documented, every code block is covered");

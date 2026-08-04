@@ -1,8 +1,7 @@
 # What's new in Impala 2.0
 
-For someone who knows Impala 1.0. Every sample below is compiled by `impala/docSamples.js` on each build,
-and every diagnostic code named here is one a sample actually provokes - so nothing on this page can drift
-away from the compiler.
+This page covers only what changed between Impala 1.0 and 2.0. It assumes you know 1.0 already; if you do
+not, read [`Impala.md`](Impala.md) for the language and come back.
 
 Impala 1.0 is a minimal "high-level assembler": four word-sized types (`int`, `float`, `pointer`,
 `funcptr`), one composite (`array`), and a near 1:1 mapping to GAZL instructions. 2.0 keeps that mapping -
@@ -14,6 +13,9 @@ Three of those are not features: `break` and `continue` are `E450` and `inline` 
 reserved so the compiler can refuse them with an explanation instead of a syntax error.
 
 For *why* 2.0 is shaped this way, see [`Impala2.md`](Impala2.md). This page is only the what.
+
+Every code sample here is compiled by `impala/docSamples.js` on each build, and every diagnostic code named
+is one a sample actually provokes, so this page cannot drift away from the compiler.
 
 ## Structs
 
@@ -43,8 +45,11 @@ or reordered, so it is `E455`:
 global Point origin = { x: 1, y: 2 }
 ```
 
-Using `.` through a pointer or `->` on a value is `E416`, in both directions. A `const` struct must be a
-pointer (`E447`).
+Using `.` through a pointer or `->` on a value is `E416`, in both directions.
+
+A `const` is still a single assemble-time word - it becomes one `! DEFi` - so it cannot name a struct
+*value* (`E447`) any more than it can name an array (`E001`). It can name a struct **pointer**, because a
+pointer is one word: `const Point pointer ORIGIN = &global origin` is fine.
 
 ## One subscript, which strides by the element
 
@@ -180,8 +185,19 @@ Reserved so they can be refused clearly, not because they are coming soon in 2.0
 | `inline function` | `E439` - lives on the GAZL 2 line |
 | `break` / `continue` | `E450` - leave a loop with `goto`; a switch arm already does not fall through |
 
-Multidimensional arrays leave no trace at all and are a plain `E001`.
-[`ParkedFeatures.md`](ParkedFeatures.md) says where each one's branch is and why.
+Multidimensional arrays are the exception to that. Every row above has a reserved word or a dedicated
+diagnostic, so the compiler can say the feature was considered and parked - but nothing in the grammar
+mentions multidimensional arrays at all, so `int array a[2][3]` is an ordinary syntax error (`E001`) with
+no hint that it was ever designed.
+
+It was, and the reason it is not here is worth knowing, because it is not "we ran out of time". An array's
+dimensions want to be part of its **type**, so that calls can be checked - but a dimension may be any
+expression, resolved by the assembler rather than by Impala. That leaves only bad options: identity by the
+*form* of the expression (incomplete), or dimensions restricted to numeric literals. A milder revival that
+avoids the question entirely - multidimensional only as a struct field, reached through a struct pointer -
+was designed and rejected on cost: what it adds over writing `y * W + x` is subscript sugar plus shape
+typing, the sugar already works today, and the shape typing *is* the unsolved question.
+[`ParkedFeatures.md`](ParkedFeatures.md) has the full argument and the branch, for this and every row above.
 
 ## Upgrading a 1.0 program
 
@@ -206,7 +222,6 @@ node impala/impala.node.js compile --legacy old.impala old.gazl
 | `if (a & 1 == b)` - a bitwise expression as a comparison operand | `E102` | `(a & 1) == b` |
 | `if (!a == 0)` - `!` on an unparenthesised operand | `E103` | `!(a == 0)`, which is what it already meant |
 | `global K` where `K` is a `const`, or `global f()` | `E452` | Drop the `global` |
-| A positional struct initializer | `E455` | Name the fields |
 
 ### `--legacy` does not help with these
 
