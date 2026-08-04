@@ -121,12 +121,15 @@ function applyImpalaHardening(source, grammar) {
 		const words = keywordWordsFrom(grammar);
 		const rows = [];
 		for (let i = 0; i < words.length; i += 11) {
-			const row = words.slice(i, i + 11).map((w) => `'${w}'`).join(", ");
-			rows.push("\t" + row + (i + 11 < words.length ? "," : ""));
+			rows.push("\t" + words.slice(i, i + 11).map((w) => `'${w}'`).join(", "));
 		}
+		// Join the rows with the separator rather than computing a last-row test per row: the boundary
+		// condition has to be right for the GENERATED file to parse, in a script whose whole job is to
+		// produce a file nobody hand-edits.
 		patched = patched.replace(
 			"var _hostOptions = _options || {};",
-			["var _hostOptions = _options || {};", "var KEYWORD_WORDS = ["].concat(rows, "];").join("\n"),
+			["var _hostOptions = _options || {};", "var KEYWORD_WORDS = [",
+					rows.join(",\n"), "];"].join("\n"),
 		);
 		patched = patched.replace(keywordFunctionRegex, keywordFunctionReplacement);
 	}
