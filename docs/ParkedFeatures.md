@@ -27,8 +27,8 @@ Do not delete these branches. They are the only copy.
     removed:  dda4129  "Roll back multidim arrays (slices 1-2) to pre-multidim compiler"
     target:   Impala 3.0
 
-**Multidimensional arrays themselves are NOT parked any more - they SHIPPED in 2.0** (2026-08-04), by a
-different design from this branch's: one subscript with a comma list, striding by the declared element,
+**Multidimensional arrays themselves are NOT parked any more - they are IMPLEMENTED on `Impala2`**
+(2026-08-04), by a different design from this branch's: one subscript with a comma list, striding by the declared element,
 lowered through the place model, with per-axis `.d.` constants the assembler resolves. Struct fields and
 standalone `global`/local arrays both, across all three bounds tiers plus cross-unit metadata. See
 [`MultidimensionalArrays.md`](MultidimensionalArrays.md), which supersedes the objection below.
@@ -87,10 +87,10 @@ that are NOT the type-identity trap:
 Same call as by-value: the reach does not justify the surface. Do not treat multi-dim arrays as
 "nearly done" because the milder design looked clean on paper.
 
-**SUPERSEDED 2026-08-04 - the feature shipped.** Kept as the record of a decision that was reversed, and
+**SUPERSEDED 2026-08-04 - the feature is IMPLEMENTED.** Kept as the record of a decision that was reversed, and
 the reversal is worth reading. Point 3 is where it went wrong: it valued multidim as "subscript sugar plus
 shape typing", and shape TYPING (identity between two declared shapes) is indeed still unsolved and still
-3.0. But the shipped feature's payoff is neither of those - it is per-axis BOUNDS CHECKING, which
+3.0. But the implemented feature's payoff is neither of those - it is per-axis BOUNDS CHECKING, which
 hand-striding cannot have at any price. `cells[y * W + x]` with `x >= W` is a legal word offset that
 silently lands in the next row; `cells[y, x]` is `E461`, or a deferred `! FAIL`, or a `--range-checks`
 trap. The 2026-07-26 argument compared syntax against syntax and never priced the check. Nothing about
@@ -248,7 +248,7 @@ reported to the host that caused it. Verified to work.
    array parameters, no ABI change. What the payoff really needs is shape-carrying pointer TYPES, which is
    a type-system change and nothing more. ~~The one piece worth doing independently is still fixing
    `arraySignaturesCompatible`'s form-dependence.~~ **Also wrong, and the same mistake twice (corrected
-   2026-08-04.)** That raw-string extent compare is exactly what let 2.0's `int[3x4]` metadata ship with
+   2026-08-04.)** That raw-string extent compare is exactly what let 2.0's `int[3x4]` metadata land with
    NO validator change, verified both ways. Normalizing extents numerically would have to teach the
    validator what a shape is, and would silently equate `[3x4]` with `[12]` - two layouts over the same 12
    words that are not interchangeable. There is nothing to fix here.
@@ -312,7 +312,7 @@ CORRECT, not a stopgap - see that document before "fixing" any by-value size to 
 
 ### Shape-carrying pointer types
 
-**Multidimensional arrays shipped in 2.0 and are off this list** - the cost/benefit objection that used to
+**Multidimensional arrays are implemented and off this list** - the cost/benefit objection that used to
 sit here ("multidim SYNTAX cannot state an inner extent for a host-owned struct") was answered by decision
 2 in [`MultidimensionalArrays.md`](MultidimensionalArrays.md): an `extern struct` field states its RANK and
 the host supplies every axis, exactly as it already supplies `.o.` and `.z.`.

@@ -1,6 +1,6 @@
 # Multidimensional arrays (Impala 2.0 design)
 
-Status: **DESIGN, targeting 2.0.** Supersedes the 2026-07-26 "still OUT of 2.0" re-evaluation in
+Status: **IMPLEMENTED on `Impala2`, for the 2.0 release that is still being built.** Supersedes the 2026-07-26 "still OUT of 2.0" re-evaluation in
 [`ParkedFeatures.md`](ParkedFeatures.md), whose central objection - that array-dimension type identity is
 unsolved - does not apply to the design below. A same-named document existed on the park branch
 `Impala2-multidim-arrays` for the 3.0 design; that one required numeric literal dimensions and predates
@@ -8,7 +8,7 @@ the current place model, so it is history, not a plan. Read it with `git show
 Impala2-multidim-arrays:docs/MultidimensionalArrays.md` for the questions it already answered (slice
 semantics, shape-pointer typing, `:` open axes) - none of which are in scope here.
 
-Every GAZL fragment quoted below was produced by the shipping compiler, not written by hand.
+Every GAZL fragment quoted below was produced by the compiler in this tree, not written by hand.
 
 ## The rule
 
@@ -73,7 +73,7 @@ comparing values at assembly time (`! EQUi` / `! FAIL`, see
 slice and is not needed for anything below.
 
 **The consequence that orders the work: an extent already survives a call boundary when, and only when, it
-is type-keyed.** Verified against the shipping compiler:
+is type-keyed.** Verified against the compiler in this tree:
 
 ```
 struct Grid { int array cells[12]; int tag }
@@ -93,7 +93,7 @@ not. Multi-dim as a struct field is not a compromise shape - it is the shape wit
 
 ## Slices
 
-**Slice 1 - struct fields.** `int array cells[H, W]` as a struct field; `g->cells[y, x]` and
+**Slice 1 - struct fields.** IMPLEMENTED. `int array cells[H, W]` as a struct field; `g->cells[y, x]` and
 `s.cells[y, x]`; `.d.<Struct>.<field>.<k>` minted in the layout block; per-axis `E461`, per-axis deferred
 `! FAIL`, per-axis `--range-checks`. Self-contained: it lowers through `subscriptStruct`, which already has
 the `offParts`/`dynIndex` machinery a Horner fold needs, and it needs no type-system change whatsoever.
@@ -117,7 +117,7 @@ is rank 1, so ordinary arrays and bare pointers are untouched.
 Making that mandatory is also what retired two *duplicate* checks a shape was carrying. The per-axis
 checks strictly imply the flat one - `.z.` is the product of the axes, so no index that cleared every axis
 can fail against `.z.` - so a shaped subscript no longer emits the flat `--range-checks` compare pair, nor
-the flat deferred `! LSSi` / `! FAIL` triple and the `! MOVi` guard copy that fed it. Four lines of shipped
+the flat deferred `! LSSi` / `! FAIL` triple and the `! MOVi` guard copy that fed it. Four lines of emitted
 GAZL per shaped access, restating a settled question. This was sound only once every axis had to be
 stated; before the rank fix, `cells[11]` cleared no axis at all.
 

@@ -29,7 +29,7 @@ However, those `ArgsDecl` entries were discarded once `declare` ran, so `FuncCal
 
 ## Pain points as of 2025 - the intra-unit ones are now closed
 
-The two call-site gaps below (arity and argument types) SHIPPED and fire today, for an in-unit callee
+The two call-site gaps below (arity and argument types) are IMPLEMENTED and fire today, for an in-unit callee
 and for a prototyped `extern` alike: **E405** *Invalid argument count when calling f (expected 2, got
 1)* and **E406** *Argument type mismatch for argument 1 when calling f (float vs expected int)*. A
 name-only extern still asserts nothing and so is still unchecked (see
