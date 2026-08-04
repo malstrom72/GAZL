@@ -220,8 +220,15 @@ reported to the host that caused it. Verified to work.
 3. `CONST_INT_P` is not forward-referencable, so both sides must be defined before the check - the same
    ordering discipline the layout blocks already follow.
 4. The diagnostic is free text with no caret, though it can carry an Impala source location.
-5. It only pays off WITH arrays-as-values, since Impala has no array parameters today. The one piece
-   worth doing independently is fixing `arraySignaturesCompatible`'s form-dependence.
+5. ~~It only pays off WITH arrays-as-values, since Impala has no array parameters today.~~ **WRONG, and it
+   contradicts the design it is summarizing (corrected 2026-08-04).** A shape check needs a position where
+   a DECLARED shape meets another, and `docs/MultidimensionalArrays.md` §8 - "Function parameters -
+   dissolved into an ordinary pointer parameter" - is explicit that this is never an array-by-value:
+   `function sum(int array[W] pointer m)` is an ordinary pointer parameter whose ELEMENT carries the inner
+   shape, and the park branch implemented exactly that (slice 2c/2d, `3781f8c`). No arrays-as-values, no
+   array parameters, no ABI change. What the payoff really needs is shape-carrying pointer TYPES, which is
+   a type-system change and nothing more. The one piece worth doing independently is still fixing
+   `arraySignaturesCompatible`'s form-dependence.
 6. It does nothing for by-value structs, whose blocker is the allocator, not identity.
 
 **The generalization worth remembering:** *if the compiler cannot decide it, name both sides and let the
