@@ -13,12 +13,12 @@
 .z.S:	! DEFi #<a>
 ; signature struct S { a : int, b : int, c : int } @ 12:1
 	! MULi <A> #4 #.z.S
-.x.bank:	! DEFi #<A>
-bank:	GLOB *.x.bank	; signature array bank[4] : unknown @ 14:1
+.z.bank:	! DEFi #<A>
+bank:	GLOB *.z.bank	; signature array bank[4] : S @ 14:1
 	DATA #10 #0 #0 #20 #0 #0 #30 #0 #0 #40 #0 #0
-.x.words:	! DEFi #6
-words:	GLOB *.x.words	; signature array words[6] : int @ 15:1
-	DATA #1 #2 #3 #4 #4 #4
+.z.words:	! DEFi #6
+words:	GLOB *.z.words	; signature array words[6] : int @ 15:1
+	DATi #1 #2 #3 #4 #4 #4
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature export func main() -> void @ 17:1

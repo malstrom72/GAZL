@@ -46,7 +46,7 @@ function main() {
 
 		const success = runValidator([exportFile, importFile]);
 		assertCondition(success.status === 0, "validator should exit cleanly for matching fixtures");
-		assertCondition(success.stdout.trim().length === 0, "validator reported diagnostics for matching fixtures");
+		assertCondition(success.stderr.trim().length === 0, "validator reported diagnostics for matching fixtures");
 
 		const typedExportFile = writeFixture(tempDir, "typedExport.gazl", [
 			"; signatures version=1",
@@ -60,7 +60,7 @@ function main() {
 
 		const typedSuccess = runValidator([typedExportFile, typedImportFile]);
 		assertCondition(typedSuccess.status === 0, "validator should accept matching call parameter and return types");
-		assertCondition(typedSuccess.stdout.trim().length === 0, "validator reported diagnostics for matching call types");
+		assertCondition(typedSuccess.stderr.trim().length === 0, "validator reported diagnostics for matching call types");
 
 		const externOnly = writeFixture(tempDir, "externStub.gazl", ["; signatures version=1", "; signature extern func add() -> unknown"]);
 		const externDefinition = writeFixture(tempDir, "externDef.gazl", [
@@ -71,7 +71,7 @@ function main() {
 		const externCall = writeFixture(tempDir, "externCall.gazl", ["; signatures version=1", "CALL add\t; expects add(int, int) -> int"]);
 		const externResult = runValidator([externOnly, externDefinition, externCall]);
 		assertCondition(externResult.status === 0, "bare extern metadata should merge with later definitions");
-		assertCondition(externResult.stdout.trim().length === 0, "validator should remain silent when extern placeholders match definitions");
+		assertCondition(externResult.stderr.trim().length === 0, "validator should remain silent when extern placeholders match definitions");
 
 		const warningFile = writeFixture(tempDir, "moduleWarning.gazl", [
 			"; signatures version=1",
@@ -79,7 +79,7 @@ function main() {
 		]);
 		const warning = runValidator([warningFile]);
 		assertCondition(warning.status === 0, "validator warnings should not trigger non-zero exit");
-		assertCondition(/WARNING:/.test(warning.stdout), "validator did not emit expected warning for missing metadata");
+		assertCondition(/WARNING:/.test(warning.stderr), "validator did not emit expected warning for missing metadata");
 
 		const mismatchFile = writeFixture(tempDir, "moduleMismatch.gazl", [
 			"; signatures version=1",
@@ -87,7 +87,7 @@ function main() {
 		]);
 		const failure = runValidator([exportFile, mismatchFile]);
 		assertCondition(failure.status === 1, "validator should exit with failure for mismatched fixtures");
-		assertCondition(/Signature mismatch for "foo"/.test(failure.stdout), "validator did not report expected mismatch error");
+		assertCondition(/Signature mismatch for "foo"/.test(failure.stderr), "validator did not report expected mismatch error");
 
 		const arityMismatchFile = writeFixture(tempDir, "arityMismatch.gazl", [
 			"; signatures version=1",
@@ -95,7 +95,7 @@ function main() {
 		]);
 		const arityFailure = runValidator([exportFile, arityMismatchFile]);
 		assertCondition(arityFailure.status === 1, "validator should reject calls with the wrong parameter count");
-		assertCondition(/Signature mismatch for "foo"/.test(arityFailure.stdout), "validator did not report expected arity mismatch error");
+		assertCondition(/Signature mismatch for "foo"/.test(arityFailure.stderr), "validator did not report expected arity mismatch error");
 
 		const returnMismatchFile = writeFixture(tempDir, "returnMismatch.gazl", [
 			"; signatures version=1",
@@ -104,7 +104,7 @@ function main() {
 		const returnFailure = runValidator([typedExportFile, returnMismatchFile]);
 		assertCondition(returnFailure.status === 1, "validator should reject calls with the wrong return type");
 		assertCondition(
-			/Signature mismatch for "typedFoo"/.test(returnFailure.stdout),
+			/Signature mismatch for "typedFoo"/.test(returnFailure.stderr),
 			"validator did not report expected return mismatch error"
 		);
 
@@ -114,7 +114,7 @@ function main() {
 		]);
 		const nativeSuccess = runValidator([nativeValidFile]);
 		assertCondition(nativeSuccess.status === 0, "validator should accept native calls matching the manifest");
-		assertCondition(nativeSuccess.stdout.trim().length === 0, "validator reported diagnostics for matching native call");
+		assertCondition(nativeSuccess.stderr.trim().length === 0, "validator reported diagnostics for matching native call");
 
 		const nativeArityMismatchFile = writeFixture(tempDir, "nativeArityMismatch.gazl", [
 			"; signatures version=1",
@@ -123,7 +123,7 @@ function main() {
 		const nativeArityFailure = runValidator([nativeArityMismatchFile]);
 		assertCondition(nativeArityFailure.status === 1, "validator should reject native calls with the wrong parameter count");
 		assertCondition(
-			/Signature mismatch for "printInt"/.test(nativeArityFailure.stdout),
+			/Signature mismatch for "printInt"/.test(nativeArityFailure.stderr),
 			"validator did not report expected native arity mismatch error"
 		);
 
@@ -138,7 +138,7 @@ function main() {
 			"validator should not let bare native extern placeholders mask manifest arity"
 		);
 		assertCondition(
-			/Signature mismatch for "printInt"/.test(nativeExternPlaceholderFailure.stdout),
+			/Signature mismatch for "printInt"/.test(nativeExternPlaceholderFailure.stderr),
 			"validator did not report expected native placeholder arity mismatch error"
 		);
 
@@ -155,7 +155,7 @@ function main() {
 		]);
 		const chainBridge = runValidator([chainExportFile, chainBridgeFile]);
 		assertCondition(chainBridge.status === 0, "bare ptr categories should bridge to element chains");
-		assertCondition(chainBridge.stdout.trim().length === 0, "validator reported diagnostics for bridged pointer chains");
+		assertCondition(chainBridge.stderr.trim().length === 0, "validator reported diagnostics for bridged pointer chains");
 
 		const chainMismatchFile = writeFixture(tempDir, "chainMismatch.gazl", [
 			"; signatures version=1",
@@ -164,7 +164,7 @@ function main() {
 		const chainFailure = runValidator([chainExportFile, chainMismatchFile]);
 		assertCondition(chainFailure.status === 1, "validator should reject mismatched pointer element chains");
 		assertCondition(
-			/Global cursor does not match its definition/.test(chainFailure.stdout),
+			/Global cursor does not match its definition/.test(chainFailure.stderr),
 			"validator did not report expected pointer chain mismatch error"
 		);
 

@@ -24,8 +24,20 @@ results come back through pointer out-parameters. The remaining motivation - arg
 extern calls - is what got implemented.
 
 Related: an `extern struct` now emits `; signature extern struct Name { field : type, ... }` and
-gazl-validate checks it against the layout constants a host supplies (`.o.Name.field` / `.z.Name`), so a
-drifted or conflicting host layout is a build failure.
+gazl-validate checks it against the layout constants a host supplies (`.o.Name.field` / `.z.Name`).
+
+Be precise about what that check is, because the name invites over-trust. The scanner records **field
+names only** - it reads the `.o.Name.field:` labels and checks that `.z.Name` exists. It never reads the
+`! DEFi` values and stores no types. So it fails the build on a **renamed or dropped field**, a **missing
+`.z.` size**, two `extern struct` declarations that **disagree with each other**, or a declaration that
+disagrees with a real `struct` definition in the scanned set. It does **not** catch a host layout that
+reorders fields, moves them to overlapping offsets, retypes them, or adds fields the interface never
+declared - all of those pass clean. And in this repo's actual host workflow the constants arrive as
+GAZLCmd command-line arguments at load, which gazl-validate never sees at all.
+
+Layout drift is caught by the fact that offsets are symbolic, not by this linter. The full cross-check of
+host layout against declared interface is still deferred - see
+[`StructLayoutConstants.md`](StructLayoutConstants.md).
 
 ## One rule for every kind of extern
 
@@ -51,8 +63,10 @@ Notes on the corners:
   disagree"* rather than blaming a definition that does not exist.
 - Where a definition IS present it is authoritative: it wins, it keeps ownership of the emitted struct
   layout, and a re-declaration publishes no second `; signature` row.
-- An `extern array` states no extent by design (`E430`), so extents are never compared - the same
-  wildcard model as a name-only prototype. An untyped `array` element type is likewise opaque.
+- An extern array field states no extent by design, so extents are never compared - the same wildcard
+  model as a name-only prototype. An untyped `array` element type is likewise opaque. (`E430` is
+  specifically the `extern struct` array *field* case; a standalone `extern int array aa[4]` is a plain
+  `E001` syntax error, not E430.)
 - Globals have no opaque form because `extern g` cannot be written without a type; that is a gap only
   in the sense that there is nothing to be opaque *about*.
 - `functype` has no extern form, and needs none. A functype **emits nothing** - no symbol, no layout,
@@ -78,16 +92,24 @@ The original note follows, as the design record.
 
 ## The trigger
 
-There is no way today to call an extern that returns multiple values. Externs are declared name-only:
+There is no way today to call an extern that returns multiple values - but not for the reason this
+section used to give. Re-verified 2026-08-01:
 
-    extern native foo                              // OK
-    extern native foo(int n) returns int q, int r  // error[E001]: syntax error
+    extern native foo                              // OK - name-only, asserts nothing
+    extern native foo(int n) returns int q         // OK - a prototype, and it IS checked
+    extern native foo(int n) returns int q, int r  // error[E428]: multiple return values
 
-So the compiler never learns an extern's arity. `a, b = foo(x)` fails with E432 ("the right side is
-not a multi-value function call") because a name-only extern is assumed single-word (or void).
-Multi-return destructuring only works for Impala-defined functions, whose `returns int q, int r`
-signature tells the compiler how many output words to set up. There is also no argument type-checking
-for extern calls - an extern accepts anything.
+So a prototype is accepted (that is what the rest of this document is about); it is the SECOND return
+value that is refused, by the same `E428` an Impala-defined function gets. And on the call side,
+`a, b = foo(x)` fails with **`E429`** ("Destructuring assignment is not supported in Impala 2.0") for
+every callee, extern or not - multi-return and destructuring are both parked for 3.0.
+
+(Corrected: this paragraph claimed a prototype was `E001`, that destructuring worked for
+Impala-defined functions, and that the call failed with `E432` "the right side is not a multi-value
+function call". `E432` was retired with `inline function` and that message no longer exists.)
+
+A **name-only** extern still asserts nothing, so it gets no argument type-checking - that is the
+wildcard case the validator skips, and it is why a prototype is worth writing.
 
 The working pattern today is out-parameters (pointers the native writes through), which needs no
 special support:

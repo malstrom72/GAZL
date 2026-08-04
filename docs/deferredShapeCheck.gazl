@@ -1,0 +1,43 @@
+; Deferred SHAPE checking: give every array DIMENSION its own named constant, then let the
+; ASSEMBLER compare them. Demo for the "always define a constant" note in docs/ParkedFeatures.md.
+;
+; The parked multidim thread concluded there is no way to have both "write any calculation as a
+; dimension" and "sound, complete shape equivalence" - because comparing unknown values forces
+; SYNTACTIC comparison, which is the polynomial-identity problem. That is true at COMPILE time.
+; At ASSEMBLY time the values are not unknown, so the comparison is a plain integer compare:
+; sound, complete, and any expression allowed.
+;
+;   output/GAZLCmd docs/deferredShapeCheck.gazl main N 4 W 4   -> passes ([4][3] vs [N][W-1])
+;   output/GAZLCmd docs/deferredShapeCheck.gazl main N 5 W 4   -> FAIL, names axis 0
+;   output/GAZLCmd docs/deferredShapeCheck.gazl main N 4 W 9   -> FAIL, names axis 1
+;
+; Note the first case: neither Impala (it does not know N) nor today's signature-row validator
+; (tools/gazl-validate.nuxjs.js `arraySignaturesCompatible`, a raw `a.size !== b.size` string
+; compare) can accept [4][3] against [N][W-1]. The assembler can, because it has the numbers.
+;
+; Costs nothing at run time - every line here is a `!` directive. Code size is 2.
+
+; Every DIMENSION gets its own named constant, so a shape is a tuple of symbols.
+; N is host-supplied at assembly time - Impala never sees its value.
+
+; --- array `a`, declared int a[4][3] ---
+.d.a.0:			! DEFi #4
+.d.a.1:			! DEFi #3
+
+; --- array `b`, declared int b[N][W - 1] where N and W come from the host ---
+.d.b.0:			! DEFi #N
+			! SUBi <A> #W #1
+.d.b.1:			! DEFi #<A>
+
+; --- `f` takes an int[4][3]; the call passes `b`. Impala CANNOT decide this:
+;     it does not know N, and `W - 1` vs `3` is a polynomial-identity question.
+;     So it does not decide it - it emits the question for the assembler. ---
+			! EQUi #.d.a.0 #.d.b.0 @.dim0ok
+			! FAIL f(b): axis 0 is b[N] but f expects [4]
+.dim0ok:		! EQUi #.d.a.1 #.d.b.1 @.dim1ok
+			! FAIL f(b): axis 1 is b[W - 1] but f expects [3]
+.dim1ok:		!
+
+main:			FUNC
+					PARA *1
+				RETU

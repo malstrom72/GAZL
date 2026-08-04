@@ -4,8 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 9:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 10:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 11:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 13:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 13:1
 	DATA &.s__4d2 &.s__4d2 &.s_CRUSH_4d3 &.s_BLOCKR_4d4
 	DATA &.s__4d2 &.s__4d2 &.s__4d5 &.s_BLOCKS_4d6
 ; signature extern native abort() -> unknown @ 24:1
@@ -30,14 +30,14 @@ panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unkno
 ; signature extern const PARAM_COUNT : int @ 46:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 48:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 49:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 50:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 49:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 50:1
 	CNST *1
 clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 51:1
-.x.signal:	! DEFi #2
-signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 52:1
+.z.signal:	! DEFi #2
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 52:1
 	CNST *1
 	! SHLi <A> #1 #SWITCHES_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -100,18 +100,17 @@ log:	FUNC	; signature func log(float x) -> float @ 147:1
 		LSSf $x #1.0e38 @.f1
 	.t0:	MOVp %1 &.s_Domain_4d7 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 155:52
-		GOTO @.e2  
+		RETU   
 	.f1:	MOVf $b #0.0 	; b = 0.0
 		MOVf $m $x 	; m = x
 	.l3:	GEQf $m #0.5 @.e4	; while (m < 0.5) 
 		MULf $m $m #2.0	; m = m * 2.0
 		SUBf $b $b #LOG2	; b = b - LOG2
 		GOTO @.l3  	; }
-	.e4:	NOOP
-	.l5:	LEQf $m #1.5 @.e6	; while (m > 1.5) 
+	.e4:	LEQf $m #1.5 @.e6	; while (m > 1.5) 
 		MULf $m $m #0.5	; m = m * 0.5
 		ADDf $b $b #LOG2	; b = b + LOG2
-		GOTO @.l5  	; }
+		GOTO @.e4  	; }
 	.e6:	SUBf $m #1.0 $m	; m = 1.0 - m
 		MOVf $a #-1.0 	; a = -1.0
 		MOVf $n #1.0 	; n = 1.0
@@ -145,13 +144,12 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ 175:1
 		MULf %1 %1 $y
 		CALL &exp %0 *2	; expects exp(float) -> float @ 182:50
 		MOVf $z %0 
-		GOTO @.e3  
+		GOTO @.f5  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
 	.t4:	MOVp %1 &.s_Domain_4d7 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 183:53
-	.f5:	NOOP
-	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
+	.f5:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
 		MULf %0 $y #0.5
 		MULf %1 $y #0.5
 		FLOf %0 %0 
@@ -194,14 +192,14 @@ HP_K:	! DEFf #0.0056828256022101	; signature const HP_K : float @ 202:1
 wantsReset:	DATi #FALSE	; signature global wantsReset : int @ 206:1
 	GLOB *1
 breakLoop:	DATi #FALSE	; signature global breakLoop : int @ 207:1
-.x.readRates:	! DEFi #256
-readRates:	GLOB *.x.readRates	; signature array readRates[256] : unknown @ 208:1
-.x.blockLens:	! DEFi #256
-blockLens:	GLOB *.x.blockLens	; signature array blockLens[256] : unknown @ 209:1
-.x.minCycles:	! DEFi #256
-minCycles:	GLOB *.x.minCycles	; signature array minCycles[256] : unknown @ 210:1
-.x.thresDKs:	! DEFi #256
-thresDKs:	GLOB *.x.thresDKs	; signature array thresDKs[256] : unknown @ 211:1
+.z.readRates:	! DEFi #256
+readRates:	GLOB *.z.readRates	; signature array readRates[256] : unknown @ 208:1
+.z.blockLens:	! DEFi #256
+blockLens:	GLOB *.z.blockLens	; signature array blockLens[256] : unknown @ 209:1
+.z.minCycles:	! DEFi #256
+minCycles:	GLOB *.z.minCycles	; signature array minCycles[256] : unknown @ 210:1
+.z.thresDKs:	! DEFi #256
+thresDKs:	GLOB *.z.thresDKs	; signature array thresDKs[256] : unknown @ 211:1
 
 ;-----------------------------------------------------------------------------
 init:	FUNC	; signature func init() -> void @ 218:1
@@ -262,8 +260,8 @@ process:	FUNC	; signature func process() -> void @ 244:1
 	$inR:	LOCf
 	$yL:	LOCf
 	$yR:	LOCf
-.x.process.y2:	! DEFi #2
-	$y2:	LOCA *.x.process.y2
+.z.process.y2:	! DEFi #2
+	$y2:	LOCA *.z.process.y2
 	$clock:	LOCi
 	$wcLenL:	LOCi
 	$wcLenR:	LOCi

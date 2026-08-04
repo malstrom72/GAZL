@@ -43,6 +43,7 @@
 		<label>seed <input id="seed" type="text" value="0x4d2" spellcheck="false" /></label>
 		<label><input id="retab" type="checkbox" checked /> align</label>
 		<label><input id="legacy" type="checkbox" /> --legacy</label>
+		<label><input id="ranges" type="checkbox" /> --range-checks</label>
 	</div>
 	<div id="status">&nbsp;</div>
 </header>
@@ -107,7 +108,8 @@
 		statusEl = document.getElementById("status"),
 		seedEl = document.getElementById("seed"),
 		retabEl = document.getElementById("retab"),
-		legacyEl = document.getElementById("legacy");
+		legacyEl = document.getElementById("legacy"),
+		rangesEl = document.getElementById("ranges");
 
 	function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
 
@@ -123,6 +125,7 @@
 			randomId: seed,
 			sourceName: "input.impala",
 			legacy: legacyEl.checked,
+			rangeChecks: rangesEl.checked,   // the emitted guards are `DEBUG`-gated, so they need `const int DEBUG`
 			warn: function (message, offset, code, hint) {
 				var c = caretLine(source, offset);
 				var pos = "input.impala:" + c.lc.line + ":" + c.lc.col;
@@ -182,12 +185,26 @@
 	});
 
 	var STORAGE_KEY = "impala.playground.src";
+	// The toggles are remembered too, keyed by element id so adding a fourth needs no code here. The
+	// SEED deliberately is not: it is per-experiment, and a stale one silently changes every label.
+	var flagEls = [retabEl, legacyEl, rangesEl];
+	function flagKey(el) { return "impala.playground." + el.id; }
 	function persist() { try { localStorage.setItem(STORAGE_KEY, srcEl.value); } catch (e) {} }
+	function persistFlags() {
+		try {
+			flagEls.forEach(function (el) { localStorage.setItem(flagKey(el), el.checked ? "1" : "0"); });
+		} catch (e) {}
+	}
 
 	var timer = null;
 	function schedule() { clearTimeout(timer); timer = setTimeout(compile, 120); }
 	srcEl.addEventListener("input", function () { persist(); schedule(); });
-	[seedEl, retabEl, legacyEl].forEach(function (el) { el.addEventListener("input", compile); el.addEventListener("change", compile); });
+	// A checkbox fires BOTH `input` and `change` on one click, so binding it to both compiled twice per
+	// tick. The seed is a text field and needs `input` to feel live; the toggles only need `change`.
+	seedEl.addEventListener("input", compile);
+	flagEls.forEach(function (el) {
+		el.addEventListener("change", function () { persistFlags(); compile(); });
+	});
 
 	var DEMO = [
 		"// Impala 2 — edit me; GAZL updates live.",
@@ -218,10 +235,17 @@
 		""
 	].join("\n");
 
-	// Remember the editor text across visits; show the demo only when nothing is saved yet.
+	// Remember the editor text across visits; show the demo only when nothing is saved yet. Same for the
+	// toggles - a MISSING key leaves the checkbox at its markup default, which is how `align` stays on
+	// and the two flags stay off until you touch them.
 	var saved = null;
 	try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
 	srcEl.value = (saved !== null) ? saved : DEMO;
+	flagEls.forEach(function (el) {
+		var v = null;
+		try { v = localStorage.getItem(flagKey(el)); } catch (e) {}
+		if (v !== null) el.checked = (v === "1");
+	});
 
 	compile();
 })();

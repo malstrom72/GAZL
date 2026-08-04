@@ -2,8 +2,8 @@
 
 ; signatures version=1
 ; signature extern const SOME_CONST : int @ 1:1
-.x.ga:	! DEFi #100
-ga:	GLOB *.x.ga	; signature array ga[100] : unknown @ 3:1
+.z.ga:	! DEFi #100
+ga:	GLOB *.z.ga	; signature array ga[100] : unknown @ 3:1
 
 ;-----------------------------------------------------------------------------
 test:	FUNC	; signature func test() -> void @ 5:1
@@ -11,8 +11,8 @@ test:	FUNC	; signature func test() -> void @ 5:1
 	$i:	LOCi
 	$f:	LOCf
 	$p:	LOCp
-.x.test.a:	! DEFi #100
-	$a:	LOCA *.x.test.a
+.z.test.a:	! DEFi #100
+	$a:	LOCA *.z.test.a
 	$fp:	LOCp
 ;-----------------------------------------------------------------------------
 		ADRL $p $i *0	; p = &i

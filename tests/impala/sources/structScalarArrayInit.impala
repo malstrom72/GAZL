@@ -6,7 +6,7 @@
 */
 const int DEBUG = 1
 struct Buf { float array s[4]; int len }
-global Buf preset = { { 1.0, 2.0, 3.0, 4.0 }, 4 }
+global Buf preset = { s: { 1.0, 2.0, 3.0, 4.0 }, len: 4 }
 extern native printFloat
 extern native printLF
 function sink(float pointer fp) { *fp = 9.0; }

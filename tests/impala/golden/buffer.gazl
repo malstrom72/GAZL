@@ -3,8 +3,8 @@
 ; signatures version=1
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 7:1
 ; signature extern const DEBUG : int @ 8:1
-.x.PANEL_TEXT_ROWS:	! DEFi #8
-PANEL_TEXT_ROWS:	CNST *.x.PANEL_TEXT_ROWS	; signature array PANEL_TEXT_ROWS[8] : unknown @ 16:1
+.z.PANEL_TEXT_ROWS:	! DEFi #8
+PANEL_TEXT_ROWS:	CNST *.z.PANEL_TEXT_ROWS	; signature array PANEL_TEXT_ROWS[8] : unknown @ 16:1
 	DATA &.s_ABC888_4d2 &.s_ABC888_4d2 &.s_RM_4d3
 	DATA &.s_AMRATE_4d4 &.s_notuse_4d5 &.s_toollo_4d6
 	DATA &.s_7_4d7 &.s_ILOVEP_4d8
@@ -33,8 +33,8 @@ left:	DATf #0.0	; signature global left : float @ 49:1
 right:	DATf #0.0	; signature global right : float @ 50:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 51:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 52:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 52:1
 	GLOB *1
 instance:	DATi #0	; signature global instance : int @ 53:1
 LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 57:1
@@ -72,7 +72,7 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 78:1
 		SUBf %0 #0.0 $x	; y = -floor(-x)
 		FLOf %0 %0 
 		SUBf $y #0.0 %0
-		GOTO @.e1  
+		RETU   
 	.f0:	FLOf $y $x 	; y = floor(x)
 	.e1:	RETU   	; }
 
@@ -86,7 +86,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 85:1
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4d9 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 88:41
-		GOTO @.e1  
+		RETU   
 	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
 		CALL &trunc %0 *2	; expects trunc(float) -> float @ 89:36
 		MULf %0 %0 $y
@@ -211,10 +211,10 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.a0:	ABSf $y $f 	; y = abs(f)
 		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
 		MOVp $p &.s_0_4db 	; p = "0"
-		GOTO @.e3  
+		RETU   
 	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
 		MOVp $p &.s_HUGE_4dc 	; p = "HUGE"
-		GOTO @.e5  
+		RETU   
 	.f4:	MOVi $e #0 	; e = 0
 		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
 		ADDp $ep %0 $precision
@@ -225,22 +225,21 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		ADDp $pp $pp #1	; pp = pp + 1
 		MULf $x $x #0.1	; x = x * 0.1
 		GOTO @.l7  	; }
-	.e9:	GEQp $pp $ep @.f11	; if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break
+	.e9:	GEQp $pp $ep @.f11	; if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto broke
 		LEQf $y #SMALL_FLOAT @.f11
 		GEQf $y #LARGE_FLOAT @.f11
-		GOTO @break  	; goto break
+		GOTO @broke  	; goto broke
 	.f11:	MOVf $g $y 	; g = y
 	.l12:	GEQf $y #1.0 @.e13	; while (y < 1.0) 
 		SUBi $e $e #1	; e = e - 1
 		MULf $y $y #10.0	; y = y * 10.0
 		GOTO @.l12  	; }
-	.e13:	NOOP
-	.l14:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
+	.e13:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
 		ADDi $e $e #1	; e = e + 1
 		MULf $y $y #0.1	; y = y * 0.1
-		GOTO @.l14  	; }
+		GOTO @.e13  	; }
 		GOTO @.l6  	; }
-	break:	ADDp $dp $buffer #2	; break:
+	broke:	ADDp $dp $buffer #2	; broke:
 	.l16:	GEQf $x #1.0 @.e18	; while (x < 1.0 && dp < buffer + 32) 
 		ADDp %0 $buffer #32
 		GEQp $dp %0 @.e18
@@ -252,8 +251,7 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.f19:	ADDp $ep $ep #1	; ep = ep + 1
 		MULf $x $x #10.0	; x = x * 10.0
 		GOTO @.l16  	; }
-	.e18:	NOOP
-	.l20:	GEQp $dp $ep @.e21	; while (dp < ep) 
+	.e18:	GEQp $dp $ep @.e21	; while (dp < ep) 
 		fTOi $i $x #1.0	; i = ftoi(x)
 		ADDi %0 $i #'0'	; *dp = i + '0'
 		POKE $dp %0 
@@ -264,7 +262,7 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.f22:	iTOf %0 $i #1.0	; x = (x - itof(i)) * 10.0
 		SUBf %0 $x %0
 		MULf $x %0 #10.0
-		GOTO @.l20  	; }
+		GOTO @.e18  	; }
 	.e21:	ADDp $p $buffer #2	; p = buffer + 2
 		LSSf $x #5.0 @.f23	; if (x >= 5.0) 
 	.l24:	PEEK %0 $dp #-1	; while ((int)dp[-1] == '9') *(dp = dp - 1) = '0'
@@ -320,9 +318,7 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		GEQf $f #0.0 @.f37	; if (f < 0.0) *(p = p - 1) = '-'
 		SUBp $p $p #1	; *(p = p - 1) = '-'
 		POKE $p #'-' 
-	.f37:	NOOP
-	.e5:	NOOP
-	.e3:	RETU   	; }
+	.f37:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
@@ -331,8 +327,8 @@ traceInt:	FUNC	; signature func traceInt(int i) -> void @ 259:1
 	$i:	INPi
 	! MULi <A> #8 #GAZL_WORD_SIZE
 	! ADDi <A> <A> #2
-.x.traceInt.buffer:	! DEFi #<A>
-	$buffer:	LOCA *.x.traceInt.buffer
+.z.traceInt.buffer:	! DEFi #<A>
+	$buffer:	LOCA *.z.traceInt.buffer
 ;-----------------------------------------------------------------------------
 		MOVi %2 $i 	; trace(intToString(i, 10, 1, buffer))
 		MOVi %3 #10 
@@ -347,8 +343,8 @@ traceInt:	FUNC	; signature func traceInt(int i) -> void @ 259:1
 traceFloat:	FUNC	; signature func traceFloat(float f) -> void @ 265:1
 		PARA *1
 	$f:	INPf
-.x.traceFloat.buffer:	! DEFi #32
-	$buffer:	LOCA *.x.traceFloat.buffer
+.z.traceFloat.buffer:	! DEFi #32
+	$buffer:	LOCA *.z.traceFloat.buffer
 ;-----------------------------------------------------------------------------
 		MOVf %2 $f 	; trace(floatToString(f, 6, buffer))
 		MOVi %3 #6 
@@ -375,8 +371,8 @@ rrx:	DATf #0.0	; signature global rrx : float @ 280:1
 	GLOB *1
 rry:	DATf #0.0	; signature global rry : float @ 281:1
 	! MULi <A> #2 #BUFFER_SIZE
-.x.buffer:	! DEFi #<A>
-buffer:	GLOB *.x.buffer	; signature array buffer[] : unknown @ 282:1
+.z.buffer:	! DEFi #<A>
+buffer:	GLOB *.z.buffer	; signature array buffer[] : unknown @ 282:1
 	GLOB *1
 bufferPointer:	DATp &buffer	; signature global bufferPointer : ptr @ 283:1
 

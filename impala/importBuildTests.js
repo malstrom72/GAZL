@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { compileProgram, resolveImportClosure, deadStrip } = require('./impala.node.js');
-const { haveGazlCmd, runExpected } = require('./gazlAssembleCheck');
+const { haveGazlCmd, runExpected, parseExpectedRun } = require('./gazlAssembleCheck');
 
 const repoRoot = path.resolve(__dirname, '..');
 const rootUnit = path.join(repoRoot, 'tests', 'impala', 'sources', 'import', 'main.impala');
@@ -73,7 +73,13 @@ if (canonicalizeNewlines(strippedGold) !== canonicalizeNewlines(stripped)) {
    continuation rows behind, where the PRECEDING block silently adopted them - so the golden would just
    record the corruption. Stripping must not change what the program prints, so run both. */
 if (haveGazlCmd()) {
-	const want = { args: ['main'], want: '42 9 9 0 0 0 7'.split(' ') };
+	// The expected output lives in the fixture, via the same `Expected (GAZLCmd ...)` row the other two
+	// harnesses read. It was a literal here until 2026-08-02, and extending stripmain.impala silently
+	// left it stale - the run then fails as a behaviour change, blaming --dead-strip for the fixture.
+	const want = parseExpectedRun(fs.readFileSync(stripRoot, 'latin1'));
+	if (!want) {
+		fail('stripmain.impala must carry an `Expected (GAZLCmd ...)` row for the dead-strip run check');
+	}
 	for (const [label, gazl] of [['unstripped', unstripped], ['stripped', stripped]]) {
 		const gazlPath = path.join(repoRoot, 'output', `deadstrip-${label}.gazl`);
 		fs.writeFileSync(gazlPath, gazl, 'latin1');

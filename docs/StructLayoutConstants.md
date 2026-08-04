@@ -42,7 +42,13 @@ It also makes the layout inspectable and greppable, and it composes with imports
 
 ## Naming (DECIDED): reserved leading tag, `.`-separated, hex-free
 
-Scheme: `.o.<Struct>.<field>` for a field offset, `.z.<Struct>` for a struct size.
+Scheme: `.o.<Struct>.<field>` for a field offset and `.z.<Struct>` for a struct size.
+
+`.z.` extends to `.z.<Struct>.<field>` for an ARRAY field's own extent in words. That is the same tag
+because it is the same quantity - `.z.<path>` is the words occupied by `<path>` - and it is what every
+OTHER array extent uses too (`.z.grid` for a global, `.z.main.buf` for a local); see
+[`SymbolNamespace.md`](SymbolNamespace.md). Array fields only: a scalar is 1 word and a by-value field
+is `.z.Inner`, so those need no name minted.
 
 Rationale (this is the whole subtlety):
 - The leading tag is MANDATORY and the struct name can NEVER be the first segment. Struct names are
@@ -133,11 +139,27 @@ fields, snapshotting the running offset into each `.o.*` and advancing by each f
 `<A>` across sections the same way). Scalar advances can be literals (`#1`) or symbolic (`#.z.int`);
 nested-struct and array advances MUST be symbolic so they track the referenced definition.
 
+**Why the accumulator is lowercase.** Compile-time scratches come from two places, and the case is what
+tells them apart. `borrow('<')` mints the POOL names, always uppercase `<A>`..`<Z>`, recycled as
+expressions finish with them. `<a>` (this accumulator) and `<t>` (its element-size temp) are hand-picked,
+live across the whole layout block, and sit outside that accounting - so they must not be names the
+allocator can hand out. A layout routinely has both live at once:
+
+    ! MULi <A> #23 #5                          ; a POOL scratch folding an extent
+    ! MOVi <a> #0                              ; the accumulator, untouched by it
+
+A new fixed scratch must therefore be lowercase, and must not collide with `<a>` or `<t>`.
+
 Field kinds and their advance line:
 - scalar (int/float/ptr): `! ADDi <a> #<a> #1` (the VM word-count of the scalar).
 - nested struct by value: `! ADDi <a> #<a> #.z.Inner`.
-- scalar array `int d[128]`: `! ADDi <a> #<a> #128` (count * 1).
-- struct array `Voice bank[8]`: `! MULi <t> #8 #.z.Voice` then `! ADDi <a> #<a> #<t>`.
+- scalar array `int d[128]`: `.z.S.d: ! DEFi #128` (count * 1) then `! ADDi <a> #<a> #.z.S.d`.
+- struct array `Voice bank[8]`: `! MULi <t> #8 #.z.Voice`, `.z.S.bank: ! DEFi #<t>`, then
+  `! ADDi <a> #<a> #.z.S.bank`.
+
+Both array forms name the extent BEFORE advancing by it, so an extent that folded into a `<X>` scratch
+outlives the scratch. That is what the deferred value-count assertion behind `E454` needs a handle on
+(see [`ParkedFeatures.md`](ParkedFeatures.md)).
 
 ### The payoff: conditional fields adapt for free
 
@@ -229,9 +251,11 @@ Verified: the playground demo (`Voice`/`Biquad`, nested access, whole-struct cop
 accumulator and runs; the dedicated fixture tests/impala/sources/structLayout.impala prints `4 2 0.75
 0.5`; all 10 struct fixtures + funcType + regTransientWindow produce byte-identical RUNTIME output to the
 pre-change baseline (old committed goldens run and matched), and their compiled goldens were regenerated
-to the symbolic form. Cost: nested/array access adds an `ADDp` (or `ADRL`+`ADDp`) per level vs the old
-single folded offset - a small runtime cost traded for symbolic, host-adaptable offsets; can be
-optimized later. Extern structs (below) reference the same symbols but emit no accumulator (host owns it).
+to the symbolic form. Cost: **none**. `d.outer.mid.inner.q`, four levels deep, emits three `! ADDi`
+assemble-time folds and one `MOVi` - the same single instruction a flat field costs. A dynamic index adds
+one `MULi` for the stride, which is what `a[i]` always paid. Symbolic, host-adaptable offsets turned out
+to be free rather than a trade. Extern structs (below) reference the same symbols but emit no accumulator
+(host owns it).
 
 ## IMPLEMENTED (extern struct v1)
 
@@ -248,12 +272,19 @@ more** (verified 2026-07-31; only stale comment references survive near lines 19
 three restrictions have been lifted: an extern struct with a nested array field compiles, and a
 by-value extern local emits `LOCA *.z.E` / `COPY *.z.E`.
 
-Still genuinely outstanding: the gazl-validator cross-check of host layout vs declared interface. And
-one thing this expansion opened up that is NOT sound yet - brace-initializing an extern struct emits
-positional `DATA` in declaration order while every read goes through `.o.*`, so the values land wrong
-under any host layout that is not Impala's guess. See the audit note in
-[`docs/TwoStageConstants.md`](TwoStageConstants.md) ("Emitting positional `DATA` for a type whose
-layout the host owns").
+Still genuinely outstanding: the gazl-validator cross-check of host layout vs declared interface.
+
+One thing this expansion opened up was NOT sound and is now **closed by refusing it** (`E459`,
+2026-08-01). Brace-initializing an extern struct emitted positional `DATA` in declaration order while
+every read goes through `.o.*`, so the values landed wrong under any host layout that was not Impala's
+guess - guessing field order, `.z.`, and whether the host had fields Impala never saw. A non-zero
+initializer for an extern struct is now an error; zero is the only word Impala can place without knowing
+the layout, so `{ }`, an omitted field and an explicit `0` still compile and emit nothing. If the host
+owns the layout it owns the initial contents too. Note that naming initializer fields (`E455`) did NOT
+fix this: it changed how the source reads, not where the words land. Restoring the capability needs
+GAZL 2; the evidence for that, the requirements and the alternatives that do not work are all in
+[`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic offset"), which is the
+canonical home - the audit note is in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
 (Superseded: this paragraph used to say Phase 2a was "still open". It landed - see the Phase 2a section
 above, which this sentence predates.)
 

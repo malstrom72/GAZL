@@ -70,9 +70,11 @@ today" except that one.
    the stride.
 4. **The diagnostics backlog** (`docs/CompileTimeHardening.md`) — five shapes the compiler accepts that the
    assembler then rejects, naming a compiler-minted GAZL symbol instead of the `.impala` line.
-5. **Implicit array→pointer decay is still live and it is decided to go.** Write `&a` today; it is correct
-   under both rules and costs nothing now. See section C for why this is the only forward-compat item.
-6. Numeric-only by-value call windows (E425 — currently a dead diagnostic), the mandatory reserved return
+5. **Implicit array→pointer decay is still live and it is decided to go.** Write `&a[0]` today — it is
+   correct under both rules and costs nothing now. (An earlier draft of this line said `&a`; that is wrong,
+   `&a` is `E404 Invalid lvalue` today, which also means blocking decay is not a pure removal. Recorded in
+   `docs/ParkedFeatures.md`.) See section C for why this is the only forward-compat item.
+6. Numeric-only by-value call windows (E425 — not a dead diagnostic but a never-written one), the mandatory reserved return
    transient (an ABI change), and dead-arm elimination after a compile-time branch. None reachable today.
 
 ### Undocumented 3.0 direction
@@ -166,6 +168,14 @@ code-generating agent hits and the message points the wrong way. The symbol tabl
 
 ### C6. Other silent-wrong shapes **[V]**
 
+- ~~**A flat array initializer ignored the declared element type.**~~ FIXED 2026-08-02. `InitList`
+  checked each entry against its OWN type — a comparison no value can fail — so nothing enforced the
+  array's element type. `int array A[2] = { 1, "s" }` stored a POINTER in an int slot, and
+  `float array F[2] = { 1, 2 }` stored the INTEGER bit pattern, so `F[0]` read back as `1.4013e-45`
+  (verified by running it). The assembler cannot catch either: `DATA` is untyped words. The scalar
+  paths were always this strict — `global float f = 1` is E407 — so this was the array path missing a
+  check the rest of the language had, not a new rule. Untyped `array A[2]` (Impala 1) states no element
+  type and is still unchecked, deliberately.
 - **A declared return value never assigned returns stale frame garbage.** No definite-assignment analysis;
   decidable single-pass for the trivial case.
 - **`copy` bypasses the pointer type system entirely.** `copy(8 from &intSrc[0] to &floatDst[0])` and a
@@ -186,8 +196,38 @@ code-generating agent hits and the message points the wrong way. The symbol tabl
   item's own type and never consults `$a.elem`. Global initializers likewise bypass the pointer-element,
   funcptr-signature and inline-address checks that the same statement gets inside a function — and
   `global funcptr fp = inlineFn` emits `DATp &f` for a symbol that is never emitted.
-- **Duplicate `case` labels** and **out-of-range `case` labels** are both accepted silently; a case *below*
-  the low bound emits `.s0.-6` and the module will not load at all.
+- ~~**A brace initializer over a symbolically-sized struct field emits a short, misaligned DATA row.**~~
+  FIXED (`E454`). `struct S { int a; int array v[N]; int z }` with `N` a const gave `DATA #1 #2` where the
+  literal `[3]` gave `DATA #1 #7 #8 #9 #2` — the `2` meant for `z` landed in `v[0]`, with the `GLOB` still
+  correctly sized `*.z.S`. Root cause: `fieldWords` multiplied the extent OPERAND (`'N'`) by a number and
+  returned NaN, which flowed unchecked into `s.words`; `buildStructInit`'s `e < f.size` then compared
+  against NaN and ran zero times. Note the *layout* was never wrong — `emitStructLayout` emits
+  `! ADDi <a> #<a> #N` and the assembler resolves it, so allocation, nesting, struct arrays, locals, field
+  access, `COPY` and `sizeof` were all correct throughout. `fieldWords` returns `undefined` rather than
+  NaN, and the two checks that read `structWords(...) === undefined` as "incomplete" now ask
+  `structDefined` instead — otherwise a symbolically-sized struct could not be nested by value or passed
+  to `sizeof`.
+  **A symbolic extent can still be initialized**, and the first fix wrongly rejected that. `DATA` may
+  define FEWER words than its region holds, with the remainder zeroed (`docs/InstructionSet.md:96-99`), so
+  the values given simply land at the front: `struct S { int a; int array v[N] }` with
+  `{ a: 1, v: {7,8,9} }` emits `DATA #1 #7 #8 #9` and assembles. What has no answer at Impala compile
+  time is the offset of a field placed *after* the symbolic one. Verified against the assembler, three ways: there is no fill or repeat
+  directive in `docs/InstructionSet.md`; a FORWARD `! GOTO` assembles and can even skip a `DATA` line; a
+  BACKWARD one does not assemble at all (`Compile time label not found`), so no assemble-time loop can
+  emit a symbolic number of words. Hence `E454` — but only when a later field is given a NON-ZERO value.
+  Zero costs no words, so `{ a: 1, v: {7,8,9}, z: 0 }` is accepted and simply stops the row early, landing
+  exactly where the zero-fill would; omitted fields were always fine. The hint leads with omitting those
+  fields or moving the symbolic array last, NOT with "give it a literal size" — per
+  `docs/TwoStageConstants.md`, steering a user toward pinning an extent numerically is the anti-pattern,
+  not the fix. Over-filling is left to the assembler, per rule 2 there — Impala does not know `N`, so it
+  must not guess. Note the assembler does NOT catch it on its own: over-running the whole section is
+  named (`Not enough space in data section: s`), but over-running one field INTO the next is a legal,
+  in-bounds write it has no notion of. So Impala emits the comparison for it (`! LEQi` + `! FAIL` above
+  the rows, 2026-08-02), which is the only thing standing between that shape and a silent spill.
+- ~~**Duplicate `case` labels** and **out-of-range `case` labels** are both accepted silently; a case
+  *below* the low bound emits `.s0.-6` and the module will not load at all.~~ FIXED: `E443` (duplicate,
+  every range as of 2026-08-02) and `E444` (outside a numeric range). A symbolic range leaves the window
+  check off deliberately - see S5/S6 in `CompileTimeHardening.md`.
 - **`switch (x == lo to hi)`: `hi` is exclusive**, and `docs/Impala.md:328` says inclusive.
 
 ### C7. C reflexes that are rejected with a bare `E001: syntax error`
@@ -202,7 +242,7 @@ largest DX defect: an agent iterating against diagnostics gets a caret and nothi
 | `return r;` / `break;` / `continue;` | not keywords → `E403 Undeclared identifier: return` |
 | `int i;` inside a body | no declaration statement; all locals in the `locals` clause |
 | `copy(dst, src, n)` | `copy(N from SRC to DST)` — count first, and src/dst reversed vs `memcpy` |
-| `abs(x)` used as a function | `abs`/`floor`/`itof`/`ftoi` are prefix operators; `y = abs x` |
+| `abs x - 1` read as `abs(x - 1)` | `abs`/`floor`/`itof`/`ftoi` are prefix operators, so this is `(abs x) - 1`. (`abs(x)` does compile — the parens are just a parenthesized expression — but `abs()` and `abs(x, 2)` do not.) |
 | `function f(int array a)` | array parameters do not exist (but `locals` accepts arrays — the two lists differ) |
 | `1e6` | `FloatLiteral` requires `DIGIT+ "." DIGIT+` first |
 | `&arrayName`, `&funcName` | `E404 Invalid lvalue`; write `a` / `&a[0]` and `fp = g` |
@@ -224,10 +264,14 @@ and conditions need a `COMP_OP`.
   `function inline g()`, `export struct S` are all `E001`.
 - **`assert` defers its own prerequisites to the assembler** — with no `const int DEBUG` and no `assertFail`
   in the link set the Impala compile succeeds and the failure surfaces at load.
-- **Initializer errors are anchored on the *next* declaration** **[V]** — `$$i` has already skipped
+- ~~**Initializer errors are anchored on the *next* declaration** **[V]** — `$$i` has already skipped
   whitespace. When the bad declaration is last in the file the caret lands past EOF and no source line
-  prints at all. The grammar already has the fix for the metadata path (`$$parser.declOffset`, described
-  verbatim at `:3349-3352`); it was not applied to the error path.
+  prints at all.~~ FIXED 2026-08-02. Four scalar paths kept `$$i` while the brace path beside them had
+  already moved to a saved start offset: the global initializer (E407/E421), the const initializer
+  (E407) and the array extent (E407). Each now saves `$$i` straight after the `'='` or `'['`, before
+  `Expr` (or `']' _`) eats the trailing space — the same one-line pattern `$initStart` and `$cStart`
+  already used. Carets are column-accurate, not merely on the right line, and pinned in `caretCases`
+  including a deliberately last-in-file case for the past-EOF shape.
 - **`docs/Impala.md:261` says forward references work.** They do not — but the E403 note is excellent, and
   even finds the later definition.
 - **`docs/Impala.md:316-324`'s documented `goto`-out-of-loop idiom does not compile** — a trailing label
@@ -402,9 +446,26 @@ Deliberately **not** in this batch: definite-assignment on named returns, and `c
 checking. Both are real silent-garbage classes and both are decidable, but each is its own analysis rather
 than a symbol-table lookup. They deserve their own batch.
 
-### Batch 5 - docs
+### Batch 5 - docs (DONE)
 Everything in section C9 and D, plus the "which tool does what" box promoted out of
 `impala/gazlAssembleCheck.js:1-10`, the reworded cost principle, and a new `impala/README.md`.
+
+Re-verifying the C9/D claims against the tree as it stood AFTER batches 1-4 changed four of them:
+
+- **`abs(x)` is legal** (C7 above, corrected). The operator-vs-function distinction is real but the
+  paren spelling the docs use is not an error.
+- **`docs/Impala.md`'s `p[i]` text was already correct** - there is no stale "not equivalent" note to
+  remove; Batch 2a made the existing sentence true.
+- **`&a` does not compile** (`E404`), so B5's "write `&a` today" was wrong advice - `&a[0]` is the
+  forward-proof spelling, and blocking decay is not a pure removal. Recorded in `ParkedFeatures.md`.
+- **The hardening E-codes map differently than assumed**: item 3 is E444 and item 5 is E443, not the
+  other way round. Item 1 is still open, and `&a[k]` out of bounds is unchecked by compiler *and*
+  assembler - a sharper edge than the doc's original claim about locals vs globals, which was false.
+
+Also found while checking: a named `const` upper bound defeats the E444 range check, E445's caret
+pointed one statement late (since fixed, along with E403/E305/E422 - see `docs/SyntaxConsistency.md`
+§5), and `docs/StructLayoutConstants.md` understated its own design so badly that it claimed a
+per-level `ADDp` cost for what is actually assemble-time folding.
 
 
 # Follow-up (2026-07-30)
@@ -488,12 +549,22 @@ Correct scope, which neither write-up states:
 
 - **Dereference with a known out-of-range constant index** (`a[7]`, `a[7] = 1`, `p[9].a` as a value) -
   compile error. It is a guaranteed trap, so catching it early loses nothing.
-- **Address formation** (`&a[7]`, `&a[N]`, `&p[[i]]`) - always legal, never checked.
+- **Address formation PAST THE END** (`&a[7]`, `&a[N]`, `&p[[i]]`) - always legal, never checked.
 
 `CompileTimeHardening.md`'s motivating example is `a[7] = 1`, a store, so the check as *motivated* is
 already correctly scoped; only the wording generalises past it. Note this leaves Impala **simpler** than
 C, not looser: C needs an explicit carve-out making one-past-the-end valid and two-past undefined, while
 Impala needs no carve-out at all.
+
+> **AMENDED 2026-08-03, when this shipped as `E461`.** A NEGATIVE constant index is rejected in every
+> context, address included - the one exception to the second bullet, and the paragraph above overstates
+> "no carve-out at all". It is not a distance rule: a negative offset is not an address the target machine
+> will take either. `MOVp $p &g:-1` and `ADRL $p $a:-1` are both rejected at assembly ("Negative value not
+> accepted"), and on a struct field `.o.S.pad + (-1)` folds to a perfectly good POSITIVE offset naming the
+> previous field, so `&s.pad[-1]` assembles, runs and silently aliases a neighbour - the very bug the check
+> exists for. So the reasoning above still holds ("do not invent a restriction the target does not have");
+> it is just that for a negative index the target does have one. See `docs/Impala2.md` "Array bounds" for
+> the shipped rule, including the `--range-checks` runtime tier for indices no constant check can see.
 
 
 # Decision: the scaled subscript is spelled `[[ ]]` (2026-07-30)

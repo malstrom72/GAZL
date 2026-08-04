@@ -6,6 +6,11 @@ This document records the design and implementation plan. For current user-facin
 syntax and validator usage, see the "Signature metadata and validation" section
 in `docs/Impala.md`.
 
+**Status: parts of this plan did not ship as written.** In particular the compiler flags it proposes -
+`--emit-metadata` and `--no-metadata` - do **not** exist; metadata is always emitted, and the complete
+flag set is `--legacy` and `--dead-strip`. Read the flag passages below as design intent, not as
+documentation of a shipped option.
+
 ## Background
 
 The shipping Impala compiler is generated from `impala/impala.jspeg` and mirrors the original PPEG grammar in JavaScript. During a compile it builds meta-instructions, tracks transient pools, and flushes them to GAZL text via helpers such as `$$parser.emitMeta` and `$$parser.flushMetaCode`. Types are already tracked per expression and declaration using single-character codes (`i`, `f`, `p`, `F`, `N`, `A`, `?`) that drive code generation and validation.

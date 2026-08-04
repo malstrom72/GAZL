@@ -45,8 +45,8 @@ main:	FUNC	; signature func main() -> void @ 32:1
 		PARA *1
 	$v:	LOCA *.z.Voice
 	$p:	LOCp
-.x.main.pool:	! DEFi #8
-	$pool:	LOCA *.x.main.pool
+.z.main.pool:	! DEFi #8
+	$pool:	LOCA *.z.main.pool
 ;-----------------------------------------------------------------------------
 		MOVi %1 #.z.Voice 	; printInt(sizeof(Voice))
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:25

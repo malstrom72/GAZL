@@ -81,6 +81,7 @@ const impalaExpected = applyImpalaHardening(
 		prelude: "var $$parser = {};",
 		exposeSourceNameOption: true,
 	}),
+	impalaGrammar,
 ).trim();
 if (canonicalizeTrimmed(impalaExpected) !== canonicalizeTrimmed(impalaExisting)) {
 	console.error("Generated compiler differs from impalaCompiler.js");
@@ -106,6 +107,7 @@ const impalaSelfExpected = applyImpalaHardening(
 		prelude: "var $$parser = {};",
 		exposeSourceNameOption: true,
 	}),
+	impalaGrammar,
 ).trim();
 if (canonicalizeTrimmed(impalaSelfExpected) !== canonicalizeTrimmed(impalaExisting)) {
 	console.error("Self-hosted impalaCompiler.js differs from recorded output after hardening");
@@ -226,7 +228,48 @@ function expectCompileOutcome(group, label, source, expectError) {
 	} else {
 		assert(observed !== null && observed.includes(expectError),
 			`${group}: ${label} did not raise "${expectError}"${observed === null ? "" : "\n" + observed}`);
+		// The message alone is not the diagnostic. Three doors carried the right text while passing a
+		// bogus source position, so they rendered with no code, no line and no caret - and every test
+		// here still passed. Require the rendered shape, not just the wording.
+		assert(/^[^\n]*:\d+:\d+: error\[E\d+\]: /m.test(observed),
+			`${group}: ${label} raised an unrendered diagnostic (no file:line:col or error code)\n${observed}`);
 	}
+}
+
+// `expectCompileOutcome` only proves SOME position rendered, which is what let a whole class of carets drift
+// onto the next line or the next declaration unnoticed. Pin the exact `line:col: error[code]` instead.
+function expectDiagnosticAt(label, source, expected) {
+	let observed = null;
+	try {
+		compileWithJsImpala(source, { randomId: 42 });
+	} catch (err) {
+		observed = err && err.message ? err.message : String(err);
+	}
+	assert(observed !== null, `caret: ${label} unexpectedly compiled`);
+	assert(observed.includes(expected),
+		`caret: ${label} did not report at ${expected}\n${observed}`);
+}
+
+// A strict-expression error must downgrade to exactly one warning under --legacy, carrying the same wording.
+// Three checks (mixed bitwise, comparison mix, `!` precedence) verify this identically; share the shape.
+function expectSingleLegacyWarning(source, fragment, description) {
+	const warnings = [];
+	try {
+		compileWithJsImpala(source, {
+			randomId: 42,
+			legacy: true,
+			onWarning: (formatted, message) => warnings.push(message),
+		});
+	} catch (err) {
+		console.error(`impala.jspeg compiler rejected ${description} under --legacy`);
+		console.error(err && err.message ? err.message : String(err));
+		process.exit(1);
+	}
+	if (warnings.length !== 1 || !warnings[0].includes(fragment)) {
+		console.error(`impala.jspeg compiler did not emit exactly one ${description} warning under --legacy`);
+		process.exit(1);
+	}
+	console.log(`impala.jspeg compiler downgrades ${description} to a warning under --legacy`);
 }
 
 function runParserCase(label, parser, input) {
@@ -695,6 +738,24 @@ function assembleFixture(name, gazlPath) {
 	}
 }
 
+/* A source that must COMPILE clean and then be refused by the assembler. That is a real outcome for
+   anything Impala defers rather than decides (docs/TwoStageConstants.md), and nothing else here can see
+   it: the parity fixtures require assembly to SUCCEED, and a diagnostic table only ever runs the
+   compiler. Skipped without GAZLCmd, like every other assembler-backed check. */
+function assertLoadFails(label, source, expectedInMessage) {
+	if (!haveGazlCmd()) {
+		return;
+	}
+	const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "loadFail.gazl");
+	fs.mkdirSync(path.dirname(gazlPath), { recursive: true });
+	fs.writeFileSync(gazlPath, compileWithJsImpala(source, { randomId: 42 }), IMPALA_ENCODING);
+	const verdict = assembleOnly(gazlPath);
+	assert(verdict !== undefined && verdict !== NEEDS_HOST && verdict.indexOf(expectedInMessage) >= 0,
+		`${label} should have been refused at assembly time with "${expectedInMessage}"\n`
+			+ `  got: ${verdict === undefined ? "assembled clean" : verdict}`);
+	console.log(`${label} is refused at assembly time`);
+}
+
 function resolveValidatorFixture(name) {
 	return path.join(validatorFixturesDir, name);
 }
@@ -724,7 +785,7 @@ function runValidatorCase(label, fixtureNames, expectedExitCode, expectedMessage
 		process.exit(1);
 	}
 
-	const validatorOutput = result.stdout || "";
+	const validatorOutput = result.stderr || "";
 	if (expectedMessageSubstring) {
 		if (!validatorOutput.includes(expectedMessageSubstring)) {
 			console.error(`gazl-validate output for ${label} did not include expected message: ${expectedMessageSubstring}`);
@@ -959,23 +1020,7 @@ if (!observedMixedBitwiseError) {
 }
 console.log("impala.jspeg compiler rejects unparenthesized mixed bitwise operators");
 
-const legacyWarnings = [];
-try {
-	compileWithJsImpala(mixedBitwiseSource, {
-		randomId: 42,
-		legacy: true,
-		onWarning: (formatted, message) => legacyWarnings.push(message),
-	});
-} catch (err) {
-	console.error("impala.jspeg compiler rejected mixed bitwise operators under --legacy");
-	console.error(err && err.message ? err.message : String(err));
-	process.exit(1);
-}
-if (legacyWarnings.length !== 1 || !legacyWarnings[0].includes("Mixed bitwise operators")) {
-	console.error("impala.jspeg compiler did not emit exactly one mixed-bitwise warning under --legacy");
-	process.exit(1);
-}
-console.log("impala.jspeg compiler downgrades mixed bitwise operators to a warning under --legacy");
+expectSingleLegacyWarning(mixedBitwiseSource, "Mixed bitwise operators", "mixed bitwise operators");
 
 const strictParenthesized = compileWithJsImpala(parenthesizedBitwiseSource, { randomId: 42 });
 const legacyParenthesized = compileWithJsImpala(parenthesizedBitwiseSource, { randomId: 42, legacy: true });
@@ -1118,6 +1163,7 @@ console.log("impala.jspeg compiler requires an array extent everywhere except an
 // here whenever the values are numeric; a SYMBOLIC range or extent stays unchecked on purpose, because
 // not knowing is not the same as being fine. See docs/CompileTimeHardening.md.
 const SW = (range, body) => `function f() locals int i { i = 1; switch (i == ${range}) { ${body} } }`;
+const SYM_RANGE = "const int LO = 5\nconst int HI = 9\n";   // named consts: constInt never folds these
 const acceptedThenRejected = [
 	["duplicate case value", SW("0 to 3", "case 0: { i=1; } case 0: { i=2; }"), "Duplicate case value 0"],
 	["duplicate inside one list", SW("0 to 3", "case 1, 1: { i=1; }"), "Duplicate case value 1"],
@@ -1129,15 +1175,57 @@ const acceptedThenRejected = [
 	["case below the range", SW("5 to 9", "case -1: { i=1; }"), "outside the switch range 5 to 9"],
 	["case just below from", SW("5 to 9", "case 4: { i=1; }"), "outside the switch range 5 to 9"],
 	["in-range cases", SW("5 to 9", "case 5, 8: { i=1; } default: { i=2; }"), null],
+	// A SYMBOLIC range disables the window check - `constInt` never folds a named const, by design - but
+	// it must NOT disable the duplicate check, which never needed the range base. It did until
+	// 2026-08-02, sharing one early return: both arms minted `.s0#K` and the build died at assembly on
+	// `Symbol already defined: .s0.0`. Non-zero base included, since that is where the offset the old
+	// code keyed on stops being the value.
+	[
+		"duplicate case under a symbolic range",
+		SYM_RANGE + SW("LO to HI", "case 0: { i=1; } case 0: { i=2; }"), "Duplicate case value 0"],
+	[
+		"duplicate case under a symbolic range with a non-zero base",
+		SYM_RANGE + SW("LO to HI", "case 6: { i=1; } case 6: { i=2; }"), "Duplicate case value 6"],
+	[
+		"distinct cases under a symbolic range still compile",
+		SYM_RANGE + SW("LO to HI", "case 0: { i=1; } case 1: { i=2; }"), null],
+	// ...and the window check stays OFF there: a configuration may legitimately narrow the range, so
+	// erroring on a now-surplus arm would make that configuration unbuildable (docs/TwoStageConstants.md).
+	[
+		"a case outside a symbolic range is left to the configuration",
+		SYM_RANGE + SW("LO to HI", "case 99: { i=1; }"), null],
 	["goto an undefined label", "function f() { goto nowhere; }", "goto to undefined label nowhere"],
 	["goto a defined label", "function f() locals int i { i = 0; if (i < 3) goto top; top: ; }", null],
+	// A label written twice mints two identical GAZL labels; the assembler rejected "Symbol already
+	// defined" against a name and line the user never wrote. The label map in processBranches decides it.
+	["a label defined twice in one function", "function f() locals int i { i = 0; lbl: ; lbl: ; }",
+		"Duplicate label lbl"],
+	["the same label name in two functions", "function f() locals int i { i=0; lbl: ; }\nfunction g() locals int i { i=0; lbl: ; }", null],
 	["write to a readonly array element",
 		"readonly int array T[4] = { 1,2,3,4 }\nfunction f() { global T[0] = 9; }",
-		"Cannot assign to an element of a readonly array"],
+		"Cannot assign to a readonly value"],
 	["read a readonly array element",
 		"readonly int array T[4] = { 1,2,3,4 }\nfunction f() locals int x { x = global T[2]; }", null],
 	["write to a writable array element",
 		"global int array W[4]\nfunction f() { global W[0] = 9; }", null],
+	// A string literal lives in a readonly section; the store used to compile and fail at GAZL load
+	// naming `.s_abc_...`. Marked readonly so the same E404 element-write check catches it here.
+	["write to a string literal element", `function f() { "abc"[0] = 1; }`,
+		"Cannot assign to a readonly value"],
+	["read a string literal element", `function f() locals int c { c = "abc"[0]; }`, null],
+	// A pointer difference counts elements (DIFp, then a divide by the stride), so it only means anything
+	// when both sides walk the same element type. `ip - fp` used to slip through and divide by the wrong size.
+	["difference across element types",
+		"function f() locals int pointer ip, float pointer fp, int n { n = ip - fp; }",
+		"matching element types"],
+	["difference within one element type",
+		"function f() locals int pointer p, int pointer q, int n { n = p - q; }", null],
+	// `copy` used not to consume its terminator, so `copy(...) i = 1;` was two statements with nothing between.
+	["copy without its terminator",
+		"function f() locals int array a[4], int array b[4], int i { copy (4 from &a[0] to &b[0]) i = 1; }",
+		"syntax error"],
+	["copy with its terminator",
+		"function f() locals int array a[4], int array b[4], int i { copy (4 from &a[0] to &b[0]); i = 1; }", null],
 ];
 for (const [label, source, expected] of acceptedThenRejected) {
 	expectCompileOutcome("accepted-then-rejected", label, source, expected);
@@ -1197,26 +1285,818 @@ if (!observedComparisonMixError) {
 }
 console.log("impala.jspeg compiler rejects unparenthesized bitwise operators against comparisons");
 
-const comparisonWarnings = [];
-try {
-	compileWithJsImpala(comparisonMixSource, {
-		randomId: 42,
-		legacy: true,
-		onWarning: (formatted, message) => comparisonWarnings.push(message),
-	});
-} catch (err) {
-	console.error("impala.jspeg compiler rejected bitwise-vs-comparison mix under --legacy");
-	console.error(err && err.message ? err.message : String(err));
-	process.exit(1);
-}
-if (comparisonWarnings.length !== 1 || !comparisonWarnings[0].includes("Comparison mixed with bitwise")) {
-	console.error("impala.jspeg compiler did not emit exactly one comparison-mix warning under --legacy");
-	process.exit(1);
-}
-console.log("impala.jspeg compiler downgrades comparison mixes to a warning under --legacy");
+expectSingleLegacyWarning(comparisonMixSource, "Comparison mixed with bitwise", "comparison mixes");
 
 compileWithJsImpala(comparisonParenthesizedSource, { randomId: 42 });
 console.log("impala.jspeg compiler accepts parenthesized bitwise-vs-comparison conditions");
+
+// `!` sits BELOW comparison, so `!x == 2` means `!(x == 2)` - the opposite of the C reading. It must be
+// rejected unless its operand is parenthesised; like the bitwise mixes, --legacy keeps the old meaning
+// with a warning. `--x` is not a decrement (it folds to `-(-x)`, a silent no-op) and must be rejected too.
+const notPrecedenceCases = [
+	["! on a bare comparison", "function f() locals int x { x = 1; if (!x == 2) { x = 3; } }",
+		"'!' binds below comparison"],
+	["! on a parenthesised comparison", "function f() locals int x { x = 1; if (!(x == 2)) { x = 3; } }", null],
+	["nested ! on a group", "function f() locals int x { x = 1; if (!!(x == 2)) { x = 3; } }", null],
+	["-- is not a decrement", "function f() locals int x, int y { x = 1; y = --x; }", "syntax error"],
+	["- -x double negation is fine", "function f() locals int x, int y { x = 1; y = - -x; }", null],
+];
+for (const [label, source, expected] of notPrecedenceCases) {
+	expectCompileOutcome("! precedence", label, source, expected);
+}
+console.log("impala.jspeg compiler rejects an unparenthesized `!` operand and the unspaced `--`");
+
+// A const is an assembler-level constant, so it reads the same type grammar (TypeBase) as every other
+// declarator: struct pointers and named functypes are addresses and so are constable. A struct VALUE is
+// the one shape with no scalar/address form.
+const CONST_HDR = "struct S { int a; int b }\nfunctype Fn(int a) returns int r\n";
+const constTypeCases = [
+	["a struct pointer const", "const S pointer SP;", null],
+	["a named functype const", "const Fn CB;", null],
+	["a plain int pointer const", "const int pointer CP;", null],
+	["an untyped funcptr const", "const funcptr FC;", null],
+	["a struct value const", "const S SV;", "A const cannot be a struct value"],
+];
+for (const [label, decl, expected] of constTypeCases) {
+	expectCompileOutcome("const type", label, `${CONST_HDR}${decl}\nfunction main() { }`, expected);
+}
+console.log("impala.jspeg compiler accepts const struct pointers and named functypes");
+
+// `return`/`break`/`continue` are reserved words. Bare `return;` is an early exit (RETU); `return expr;` is
+// E448 (assign to the named return slot). `break;`/`continue;` are E450 - unsupported, with the `goto` idiom
+// in the note. Naming a label with any of the three is E449 under strict, a warning under --legacy (below).
+const reservedWordCases = [
+	["bare return is an early exit", "function f() locals int x { x = 1; return; x = 2; }", null],
+	["return in a returns function", "function g() returns int r { r = 1; return; }", null],
+	["return with a value is rejected", "function g() returns int r { return 1; }", "assign to the return variable"],
+	["return with an expression is rejected", "function g() returns int r locals int x { x = 1; return x + 1; }",
+		"return does not take a value"],
+	["break statement is unsupported", "function f() locals int x { x = 1; break; }", "'break' is not supported"],
+	["continue statement is unsupported", "function f() locals int x { x = 1; continue; }", "'continue' is not supported"],
+	["breakage stays an ordinary identifier", "function f() locals int breakage { breakage = 1; }", null],
+	["return as a label is reserved", "function f() locals int x { x = 1; goto return; return: ; }",
+		"'return' is a reserved word"],
+	["break as a label is reserved", "function f() locals int x { x = 1; goto break; break: ; }",
+		"'break' is a reserved word"],
+	// ...and reserved at every door that takes a NAME, not just at a label. These used to be accepted,
+	// and the complaint then landed at the USE naming the wrong thing: `locals int return` compiled and
+	// `return = 5;` reported E448 "return does not take a value", while break/continue reached E403
+	// "Undeclared identifier" for a name the user had just declared.
+	["return as a local is reserved", "function f() locals int return { return = 5; }",
+		"'return' is a reserved word, not a variable name"],
+	["break as a local is reserved", "function f() locals int break { break = 5; }",
+		"'break' is a reserved word, not a variable name"],
+	["continue as a local is reserved", "function f() locals int continue { continue = 5; }",
+		"'continue' is a reserved word, not a variable name"],
+	["return as a global is reserved", "global int return\nfunction f() { }",
+		"'return' is a reserved word, not a variable name"],
+	["break as an array is reserved", "function f() locals int array break[2] { break[0] = 1; }",
+		"'break' is a reserved word, not an array name"],
+	["continue as a function is reserved", "function continue() { }",
+		"'continue' is a reserved word, not a function name"],
+	["break as a struct field is reserved", "struct S { int break }\nfunction f() { }",
+		"'break' is a reserved word, not a variable name"],
+	["a name merely CONTAINING a reserved word is fine",
+		"function f() locals int returned, int breaking { returned = 1; breaking = 2; }", null],
+	// A duplicate declaration must name what the USER wrote. An ARRAY mints `.z.<name>` as an argument to
+	// the very `declare` that would report the clash, so JS evaluated it first and the derived symbol
+	// collided first: `Identifier already declared: .z.g0`, thrown with no code, position or caret,
+	// against a name that appears nowhere in the source. A scalar was always fine, which is what made it
+	// invisible. Found by mutation fuzzing (duplicate a line), not by anything hand-written.
+	["a duplicate global array", "global int array g0[2]\nglobal int array g0[2]\nfunction f() { }",
+		"error[E401]: Identifier already declared: g0"],
+	["a duplicate global scalar", "global int g1\nglobal int g1\nfunction f() { }",
+		"error[E401]: Identifier already declared: g1"],
+	// ...and a LOCAL is tabled as `$b`, so the message used to hand back the compiler's spelling.
+	["a duplicate local array", "function f() locals int array b[2], int array b[2] { }",
+		"error[E401]: Identifier already declared: b"],
+	["a duplicate local scalar", "function f() locals int b, int b { }",
+		"error[E401]: Identifier already declared: b"],
+];
+for (const [label, source, expected] of reservedWordCases) {
+	expectCompileOutcome("reserved words", label, source, expected);
+}
+console.log("impala.jspeg compiler reserves return/break/continue with dedicated diagnostics");
+
+// The reserved-word LABEL rejection is the strict default; --legacy keeps the 1.x `goto break;` early-exit
+// idiom, downgrading the E449 to a single warning so old code still compiles.
+expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break: ; }\n",
+	"'break' is a reserved word", "a reserved-word label");
+// Same for a DECLARED name: in 1.x these were ordinary identifiers, so code that used one has to keep
+// building under --legacy rather than becoming unbuildable on upgrade.
+expectSingleLegacyWarning("function f() locals int break { break = 5; }\n",
+	"'break' is a reserved word", "a reserved-word local");
+
+// A struct value is initialized BY FIELD NAME. The 1.x positional list silently changed meaning the moment
+// a field was inserted, removed or reordered - nothing in the source had to change for it to start filling
+// different fields - so it is E455 by default and only --legacy still maps by position. Array levels stay
+// positional in both forms (a struct's array field, and an array OF structs): there the index does the
+// naming, so a `field:` in one of those slots is E458.
+const NAMED = "struct P { int x; int y }\nstruct Q { int n; P mid; int array v[2] }\n";
+const namedInitCases = [
+	["named fields in declaration order",
+		NAMED + "global Q q = { n: 1, mid: { x: 2, y: 3 }, v: { 4, 5 } }\nfunction main(){ }", null],
+	["named fields OUT of order",
+		NAMED + "global Q q = { v: { 4, 5 }, n: 1, mid: { y: 3, x: 2 } }\nfunction main(){ }", null],
+	["omitted fields zero-fill", NAMED + "global Q q = { n: 1 }\nfunction main(){ }", null],
+	["an empty initializer is fine", NAMED + "global Q q = { }\nfunction main(){ }", null],
+	["positional is rejected", NAMED + "global P p = { 1, 2 }\nfunction main(){ }", "must name its fields"],
+	["mixing named and positional is rejected",
+		NAMED + "global P p = { x: 1, 2 }\nfunction main(){ }", "mixes named and positional"],
+	["an unknown field is rejected", NAMED + "global P p = { x: 1, q: 2 }\nfunction main(){ }", "has no field q"],
+	["a repeated field is rejected", NAMED + "global P p = { x: 1, x: 2 }\nfunction main(){ }", "initialized twice"],
+	["a name where an array INDEX belongs is rejected",
+		NAMED + "global Q q = { v: { x: 4, y: 5 } }\nfunction main(){ }", "an array element is positional"],
+	["a name on an array-of-structs SLOT is rejected",
+		NAMED + "global P array bank[2] = { first: { x: 1, y: 2 }, { x: 3, y: 4 } }\nfunction main(){ }",
+		"an array element is positional"],
+	["array-of-structs slots stay positional, their fields named",
+		NAMED + "global P array bank[2] = { { x: 1, y: 2 }, { x: 3, y: 4 } }\nfunction main(){ }", null],
+];
+for (const [label, source, expected] of namedInitCases) {
+	expectCompileOutcome("named initializer", label, source, expected);
+}
+
+// Entry order must not affect layout: words come out in FIELD order however they were written.
+const inOrder = compileWithJsImpala(
+	NAMED + "global Q q = { n: 1, mid: { x: 2, y: 3 }, v: { 4, 5 } }\nfunction main(){ }\n", { randomId: 42 });
+const outOfOrder = compileWithJsImpala(
+	NAMED + "global Q q = { v: { 4, 5 }, mid: { y: 3, x: 2 }, n: 1 }\nfunction main(){ }\n", { randomId: 42 });
+assert(/DATA #1 #2 #3 #4 #5/.test(inOrder), `a named initializer must emit in field order\n${inOrder}`);
+assert(inOrder === outOfOrder, "entry order must not change the emitted layout");
+
+// --legacy keeps the 1.x positional form compiling, so old sources still build.
+expectSingleLegacyWarning(NAMED + "global P p = { 1, 2 }\nfunction main(){ }\n",
+	"must name its fields", "a positional struct initializer");
+console.log("impala.jspeg compiler initializes struct values by field name");
+
+// A struct's real size is emitted as assemble-time arithmetic (`! ADDi <a> #<a> #N`), so a symbolic array
+// extent lays out fine and every consumer below must keep working. What cannot be done is placing DATA at
+// or after such a field - see the case table for why. `fieldWords` used to multiply the extent OPERAND by a
+// number, hand back NaN, and let the initializer loop run zero times, so `{ 1, { 7, 8, 9 }, 2 }` emitted
+// `DATA #1 #2` - z's 2 landing in v[0].
+const SYM_STRUCT = "const int N = 3\nstruct S { int a; int array v[N]; int z }\n";
+const SYM_TAIL = "const int N = 3\nstruct S { int a; int array v[N] }\n";
+const SYM_ZERO_SRC = SYM_STRUCT + "global S s = { a: 1, v: { 0, 0 }, z: 0 }\nfunction main() { }\n";
+const SYM_FILL_SRC = SYM_STRUCT + "global S s = { a: 1, v: { 7, 8, 9 } }\nfunction main() { }\n";
+const symbolicExtentCases = [
+	// The array ITSELF is fillable: its words start at a known position, so only the ones it did not fill
+	// are unplaceable. What Impala cannot do is check the count against a symbolic extent - an over-filled
+	// array spills into whatever follows and the assembler cannot see it either, because `v[N]` with N=2
+	// given three values, plus a `z`, emits four words that fit `1+N+1` EXACTLY. So the count check is
+	// DEFERRED to the assembler as `! LEQi`/`! FAIL` (assertFitsExtent), which by then knows the extent, and
+	// it is the field AFTER the array that stays blocked.
+	["a symbolic array may be given values", SYM_FILL_SRC, null],
+	["also when it is the last field",
+		SYM_TAIL + "global S s = { a: 1, v: { 7 } }\nfunction main() { }", null],
+	["but a field after it is blocked",
+		SYM_STRUCT + "global S s = { a: 1, z: 2 }\nfunction main() { }", "Cannot initialize"],
+	["blocked even when the array itself was filled",
+		SYM_STRUCT + "global S s = { a: 1, v: { 7 }, z: 2 }\nfunction main() { }", "Cannot initialize"],
+	["zeros are fine - they are what the region fills anyway", SYM_ZERO_SRC, null],
+	// Zero-ness is a VALUE, not a spelling. Comparing operands against the canonical `#0`/`#0.0`/`&NULL`
+	// strings rejected these, which is erroring on safe code. A SYMBOL stays rejected - Impala does not
+	// know its value and must not guess one (docs/TwoStageConstants.md rule 2).
+	["hex zero is zero", SYM_STRUCT + "global S s = { a: 1, z: 0x0 }\nfunction main() { }", null],
+	["negative zero is zero", SYM_STRUCT + "global S s = { a: 1, z: -0 }\nfunction main() { }", null],
+	["float zero with an exponent is zero",
+		"const int N = 3\nstruct F { int a; float array v[N]; float z }\n"
+			+ "global F f = { a: 1, z: 0.0e0 }\nfunction main() { }", null],
+	["a const that happens to be zero is NOT assumed zero",
+		"const int Z = 0\n" + SYM_STRUCT + "global S s = { a: 1, z: Z }\nfunction main() { }",
+		"Cannot initialize"],
+	["omitting the symbolic field and everything after it is fine",
+		SYM_STRUCT + "global S s = { a: 1 }\nfunction main() { }", null],
+	["the block reaches out through a nested struct",
+		"const int N = 3\nstruct Inner { int array v[N] }\nstruct Outer { Inner i; int z }\n"
+			+ "global Outer o = { i: { v: { 7, 8 } }, z: 2 }\nfunction main() { }", "Cannot initialize"],
+	["the same struct with no initializer is fine", SYM_STRUCT + "global S s\nfunction main() { }", null],
+	["sizeof of a symbolically sized struct is fine",
+		SYM_STRUCT + "function main() locals int q { q = sizeof(S); }", null],
+	["nesting one by value is fine (not 'incomplete')",
+		SYM_STRUCT + "struct Outer { S inner; int t }\nglobal Outer o\nfunction main() { }", null],
+	["an array of them is fine", SYM_STRUCT + "global S array bank[2]\nfunction main() { }", null],
+	["a local of that type is fine", SYM_STRUCT + "function main() locals S s { s.a = 1; }", null],
+	["a genuinely undefined struct type is still E412",
+		"struct Outer { Missing inner }\nfunction main() { }", "Unknown type Missing"],
+];
+for (const [label, source, expected] of symbolicExtentCases) {
+	expectCompileOutcome("symbolic extent", label, source, expected);
+}
+
+// The corruption signature was a SHORT data row, so pin the exact words rather than just pass/fail.
+const litInit = compileWithJsImpala(
+	"struct S { int a; int array v[3]; int z }\nglobal S s = { a: 1, v: { 7, 8, 9 }, z: 2 }\nfunction main() { }\n",
+	{ randomId: 42 });
+assert(/DATA #1 #7 #8 #9 #2/.test(litInit),
+	`a literal-extent struct initializer must emit all five words\n${litInit}`);
+// A symbolic field emits exactly the words it was GIVEN and the row stops there - the ones it did not
+// fill are a symbolic count DATA cannot skip, and `z` lies past them.
+const symInit = compileWithJsImpala(SYM_ZERO_SRC, { randomId: 42 });
+assert(/DATA #1 #0 #0(\s|$)/.test(symInit),
+	`a symbolic initializer must stop at the last placeable word\n${symInit}`);
+console.log("impala.jspeg compiler lays out symbolic struct extents and refuses to guess the rest");
+
+// The count check Impala cannot make is handed to the assembler, which by then knows the extent. Pin the
+// OPERANDS, not just that a line appeared: reversed operands, or elements counted where words are meant,
+// would still emit a plausible `! LEQi` and silently stop catching the spill it exists for. The guard must
+// also sit ABOVE the DATA rows - below them GAZL's own whole-allocation check reports the coarser
+// `Not enough space in data section` first, and for a field spill that fits the total it says nothing.
+const symAssert = compileWithJsImpala(SYM_FILL_SRC, { randomId: 42 });
+assert(/! LEQi #3 #\.z\.S\.v @\.g\d+\n\s*! FAIL too many initializer values for S\.v: 3 given, room for \.z\.S\.v\n\s*\.g\d+:\s*!\n\s*DATA /.test(symAssert),
+	`a symbolic array fill must defer its count check to the assembler, above its DATA rows\n${symAssert}`);
+// WORDS, not elements: a struct-element array contributes .z.Elem each, and the extent symbol is in words.
+const symElemAssert = compileWithJsImpala(
+	"const int N = 3\nstruct P { int lo; int hi }\nstruct S { P array p[N] }\n"
+		+ "global S s = { p: { { lo: 1, hi: 2 }, { lo: 3, hi: 4 } } }\nfunction main() { }\n", { randomId: 42 });
+assert(/! LEQi #4 #\.z\.S\.p @/.test(symElemAssert),
+	`a struct-element fill must count WORDS against the extent, not elements\n${symElemAssert}`);
+// The compile-time half above only proves the LINE is there; this proves it BITES, at assembly time, where
+// nothing else in this suite would notice it going quiet. The shape is the original defect: `v[N]` with N=2
+// given three values plus a `z` emits four words that fit `1+N+1` EXACTLY, so the allocation never
+// overflows and GAZL's own check stays silent - only this assertion can tell.
+assertLoadFails("an over-filled symbolic array field",
+	"const int N = 2\nstruct S { int head; int array v[N]; int z }\n"
+		+ "global S s = { head: 1, v: { 1, 2, 3 } }\nfunction main() { }\n",
+	"too many initializer values for S.v: 3 given, room for .z.S.v");
+console.log("impala.jspeg compiler defers the symbolic value-count check to GAZL assembly time");
+
+// Surplus initializer values used to be read by nobody and vanish: the fill loops stop at the extent, so
+// nothing was emitted for them and the assembler had nothing wrong to see. (A surplus FIELD is already
+// E456 - naming the fields closed that one for free.) A flat `int array a[2] = { 7, 8, 9 }` is a different
+// shape: it over-runs the section, and the ASSEMBLER reports it, so Impala does not duplicate that check.
+const surplusCases = [
+	["too many values for a struct array field",
+		"struct S { int array v[2]; int z }\nglobal S s = { v: { 7, 8, 9 }, z: 5 }\nfunction main(){ }",
+		"3 given, but it holds 2"],
+	["too many elements for an array of structs",
+		"struct S { int a }\nglobal S array k[1] = { { a: 1 }, { a: 2 } }\nfunction main(){ }",
+		"2 given, but it holds 1"],
+	["an exact fit is fine",
+		"struct S { int array v[2]; int z }\nglobal S s = { v: { 7, 8 }, z: 5 }\nfunction main(){ }", null],
+	["under-filling is fine (the rest zero-fills)",
+		"struct S { int array v[2]; int z }\nglobal S s = { v: { 7 }, z: 5 }\nfunction main(){ }", null],
+];
+for (const [label, source, expected] of surplusCases) {
+	expectCompileOutcome("surplus initializer", label, source, expected);
+}
+// The NAMED form reports a surplus as E456 (a name no field has). The POSITIONAL form has no name to
+// report, so it needs the count rule - and it is reachable ONLY under --legacy, which is why it was
+// missed at first: the strict dialect raises E455 and stops before ever mapping by index. So this one
+// cannot go in the table above; it has to compile in legacy mode to get past E455.
+{
+	let observed = null;
+	try {
+		compileWithJsImpala("struct S { int a; int b }\nglobal S s = { 1, 2, 3 }\nfunction main(){ }\n",
+			{ randomId: 42, legacy: true, onWarning: () => {} });
+	} catch (err) {
+		observed = err && err.message ? err.message : String(err);
+	}
+	assert(observed !== null && observed.includes("3 given, but it holds 2"),
+		`a legacy positional list must not silently drop a surplus value\n${observed}`);
+}
+// The caret belongs on the surplus entry, matching the E454/E459 rule.
+expectDiagnosticAt("E460 names the surplus entry, not the initializer",
+	"struct S { int array v[2]; int z }\nglobal S s = { v: { 7, 8, 9 }, z: 5 }\nfunction main(){ }\n",
+	"2:27: error[E460]");
+console.log("impala.jspeg compiler rejects initializer values that do not fit");
+
+// A flat array initializer checked each entry against ITS OWN type, which no value can fail, so the
+// declared element type went unenforced. The scalar paths were always strict (`global float f = 1` is
+// E407); only the array path was not. Two shapes it silently mis-compiled, neither of which the
+// assembler can see - a word is a word: `{ 1, "s" }` on an int array stored a POINTER in an int slot,
+// and `{ 1, 2 }` on a float array stored the INTEGER bit pattern, so F[0] read back as 1.4013e-45.
+const arrayElemTypeCases = [
+	["ints in an int array", "readonly int array A[2] = { 1, 2 }", null],
+	["a named const in an int array", "const int N = 7\nreadonly int array A[2] = { N, 2 }", null],
+	["a string in an int array", "readonly int array A[2] = { 1, \"nope\" }", "Expected constant int"],
+	["a float literal in an int array", "readonly int array A[2] = { 1, 2.5 }", "Expected constant int"],
+	["floats in a float array", "readonly float array A[2] = { 1.0, 2.5 }", null],
+	["int literals in a float array", "readonly float array A[2] = { 1, 2 }", "Expected constant float"],
+	["strings in a pointer array", "readonly int pointer array A[2] = { \"a\", \"b\" }", null],
+	["ints in a pointer array", "readonly int pointer array A[2] = { 1, 2 }", "Expected constant pointer"],
+	// An UNTYPED array states no element type, so there is nothing to check it against - Impala 1 wrote
+	// these and they must keep compiling. Not knowing is not the same as being fine.
+	["an untyped array takes anything", "readonly array A[2] = { 1, \"x\" }", null],
+	// A struct-element array must keep its own friendlier message rather than falling out as a type
+	// mismatch against the struct name, which is why the element check skips a struct head.
+	["a struct-element array still asks for nested braces", "struct S { int a }\nglobal S array B[1] = { 1 }",
+		"needs nested braces"],
+];
+for (const [label, source, expected] of arrayElemTypeCases) {
+	expectCompileOutcome("array element type", label, `${source}\nfunction main() { }\n`, expected);
+}
+// ...and the caret names the offending ENTRY, not the `{` and not the next declaration.
+expectDiagnosticAt("E407 names the array entry whose type is wrong",
+	"readonly int array A[2] = { 1, \"nope\" }\nfunction main() { }\n", "1:32: error[E407]");
+console.log("impala.jspeg compiler checks array initializer entries against the declared element type");
+
+// ...and the ROW carries the type, so the assembler re-checks every operand independently of Impala.
+// `DATi`/`DATf`/`DATp` apply their type to all operands on the line (src/GAZL.cpp:996-1019 - one loop
+// for all four mnemonics), where `DATA` takes KONST and checks nothing. That matters most for what
+// Impala cannot fold: `DATi #N` verifies N is `! DEFi`, not `! DEFf`. Verified against GAZLCmd by
+// READBACK, not by acceptance - a short row just zero-fills its section and assembles clean either way.
+const initRowCases = [
+	["int rows are DATi", "readonly int array A[2] = { 1, 2 }", /\bDATi #1 #2\b/],
+	["float rows are DATf", "readonly float array A[2] = { 1.0, 2.5 }", /\bDATf #1\.0 #2\.5\b/],
+	["pointer rows are DATp", "readonly int pointer array A[2] = { \"a\", \"b\" }", /\bDATp &\S+ &\S+/],
+	// The whole point: a symbolic const gets its type checked at assembly time, which Impala cannot do.
+	["a symbolic const still rides a typed row", "const int N = 7\nreadonly int array A[2] = { N, 2 }",
+		/\bDATi #N #2\b/],
+	// An untyped array has no element type to check against, so its row must stay the permissive form.
+	["an untyped array keeps DATA", "readonly array A[2] = { 1, \"x\" }", /\bDATA #1 &/],
+	// A struct row spans fields of DIFFERENT types, which is the mixed case DATA exists for - typing it
+	// is not merely unnecessary, it is impossible (see `consts.mixed` in src/UnitTest.gazl).
+	["a struct initializer keeps DATA", "struct S { int a; float b }\nglobal S s = { a: 1, b: 2.5 }",
+		/\bDATA #1 #2\.5\b/],
+];
+for (const [label, source, wanted] of initRowCases) {
+	const out = compileWithJsImpala(`${source}\nfunction main() { }\n`, { randomId: 42 });
+	assert(wanted.test(out), `${label}: expected ${wanted} in the emitted rows\n${out}`);
+}
+console.log("impala.jspeg compiler types its array initializer rows so the assembler rechecks them");
+
+// `readonly` reaches an assignment as a `:=` operator, which no lvalue branch accepts - so a readonly
+// SCALAR and a readonly STRUCT FIELD both fell out as the bare "Invalid lvalue" that a genuine mistake
+// like `1 = q` gets. Only the array-element case had a real message. A struct field additionally reached
+// the assignment as a writable `=*`, so its POKE was emitted and only the CNST region caught it, at load.
+const readonlyWriteCases = [
+	["a readonly scalar", "readonly int r\nfunction main(){ global r = 1; }", "readonly value"],
+	["a readonly array element", "readonly int array t[2]\nfunction main(){ global t[0] = 1; }",
+		"readonly value"],
+	["a readonly struct field", "struct S { int a }\nreadonly S s\nfunction main(){ global s.a = 1; }",
+		"readonly value"],
+	// The test is the readonly FLAG, never the operator/operand spelling. Keying on `:=` plus an
+	// `&`/`$` operand looked equivalent and was not: it also matched a function name, a whole global
+	// array, `nullfunc`, `null`, `&f` and a parameter - none of them readonly - and told each of them
+	// to "declare it `global` instead of `readonly`".
+	["a function name is not readonly",
+		"function foo(){}\nfunction bar(){}\nfunction main(){ foo = bar; }", "Invalid lvalue"],
+	["a whole global array is not readonly",
+		"global int array t[2]\nglobal int array u[2]\nfunction main(){ global t = global u; }",
+		"Invalid lvalue"],
+	["nullfunc is not readonly", "function f(){}\nfunction main(){ nullfunc = f; }", "Invalid lvalue"],
+	["a parameter is not readonly",
+		"function f(int a) returns int r { a = 1; r = a; }\nfunction main() locals int q { q = f(2); }",
+		"Invalid lvalue"],
+	// Whole-struct assignment returns before the scalar readonly check, so it emitted its COPY straight
+	// into the const region - the field-level hole was closed while this one stayed open.
+	["a whole readonly struct",
+		"struct S { int a }\nreadonly S s\nglobal S t\nfunction main(){ global s = global t; }",
+		"readonly value"],
+	["a whole WRITABLE struct is fine",
+		"struct S { int a }\nglobal S s\nglobal S t\nfunction main(){ global s = global t; }", null],
+	["reading a readonly struct field is fine",
+		"struct S { int a }\nreadonly S s\nfunction main() locals int q { q = global s.a; }", null],
+	["writing a NON-readonly struct field is fine",
+		"struct S { int a }\nglobal S s\nfunction main(){ global s.a = 1; }", null],
+	// A literal carries `:=` too, so the readonly wording must not swallow a real syntax mistake.
+	["a genuine non-lvalue stays 'Invalid lvalue'", "function main() locals int q { 1 = q; }",
+		"Invalid lvalue"],
+];
+for (const [label, source, expected] of readonlyWriteCases) {
+	expectCompileOutcome("readonly write", label, source, expected);
+}
+console.log("impala.jspeg compiler names what is readonly instead of saying `Invalid lvalue`");
+
+// The HOST owns an extern struct's field offsets AND its size, so a positional DATA row guesses at field
+// order, `.z.`, and whether there are fields Impala never saw. Reads already adapt (`POKE &g:.o.E.f`);
+// static data was the only early-bound part, and therefore the only part that could be wrong - silently.
+// Only an all-zero initializer is layout-independent, and that is what the region fills anyway.
+const EXT = "extern struct E { int a; int b }\n";
+const EXT_ZERO_SRC = EXT + "global E e = { a: 0, b: 0 }\nfunction main(){ }\n";
+const externInitCases = [
+	["a non-zero extern initializer is rejected", EXT + "global E e = { a: 1, b: 2 }\nfunction main(){ }",
+		"the host owns the layout"],
+	["an all-zero extern initializer is fine", EXT_ZERO_SRC, null],
+	["empty braces are fine", EXT + "global E e = { }\nfunction main(){ }", null],
+	["no initializer at all is fine", EXT + "global E e\nfunction main(){ }", null],
+	["an array of extern structs is rejected too",
+		EXT + "global E array k[2] = { { a: 1 }, { a: 2 } }\nfunction main(){ }", "the host owns the layout"],
+	["readonly does not exempt it", EXT + "readonly E e = { a: 1 }\nfunction main(){ }",
+		"the host owns the layout"],
+];
+for (const [label, source, expected] of externInitCases) {
+	expectCompileOutcome("extern initializer", label, source, expected);
+}
+const externZero = compileWithJsImpala(EXT_ZERO_SRC, { randomId: 42 });
+assert(!/DATA/.test(externZero), `an all-zero extern initializer must emit no DATA row\n${externZero}`);
+console.log("impala.jspeg compiler refuses to guess a host-owned struct layout");
+
+// GAZL has ONE flat symbol space; Impala's tables did not. `global int S` beside `function S()` cleared
+// every per-table check and then would not assemble ("Symbol already defined: S"), and `struct S` +
+// `functype S` was caught in one ORDER only - the same clash, legal written the other way round. One claim
+// per top-level name replaces the piecemeal checks, so every pair rejects, symmetrically, naming whichever
+// kind got there first. Both orders are listed on purpose: the asymmetry is what made this a bug rather
+// than a policy.
+const nameClashCases = [
+	["struct then functype", "struct S { int a }\nfunctype S(int x) returns int", "already used by a struct"],
+	["functype then struct", "functype S(int x) returns int\nstruct S { int a }", "already used by a functype"],
+	["struct then function", "struct S { int a }\nfunction S() { }", "already used by a struct"],
+	["struct then global", "struct S { int a }\nglobal int array S[2]", "already used by a struct"],
+	["struct then const", "struct S { int a }\nconst int S = 3", "already used by a struct"],
+	["functype then function", "functype S(int x) returns int\nfunction S() { }", "already used by a functype"],
+	// The one that used to assemble-fail rather than compile-fail, in both directions.
+	["global then function", "global int S\nfunction S() { }", "already used by a global"],
+	["function then global", "function S() { }\nglobal int S", "already used by a function"],
+	["const then function", "const int S = 1\nfunction S() { }", "already used by a const"],
+	["readonly then struct", "readonly int array S[2] = { 1, 2 }\nstruct S { int a }", "already used by a global"],
+	// Re-claiming the SAME kind is a declaration meeting its definition, or an import closure seeing one
+	// unit twice. Those must stay legal or every `extern` pairing breaks.
+	["extern function, name-only, then defined",
+		"extern function f;\nfunction f(int a) returns int r { r = a; }", null],
+	["extern function, prototyped, then defined",
+		"extern function f(int a) returns int r;\nfunction f(int a) returns int r { r = a; }", null],
+	["extern struct then defined", "extern struct E { int a }\nstruct E { int a }", null],
+	["bodyless extern struct twice", "extern struct E\nextern struct E\nfunction main() { }", null],
+	["valueless const then defined", "const int K;\nconst int K = 3", null],
+	["one functype declared twice", "functype F(int x) returns int\nfunctype F(int x) returns int", null],
+	// Only TOP-LEVEL names share the space. A local is `$name` in GAZL and a field is `.o.S.f`, so neither
+	// can collide with anything here - rejecting those would be a new restriction nobody asked for.
+	["a local may shadow a global", "global int v\nfunction main() locals int v { v = 1; }", null],
+	["a field may share a struct's name",
+		"struct P { int a }\nstruct Q { int P }\nfunction main() locals Q q { q.P = 1; }", null],
+];
+for (const [label, source, expected] of nameClashCases) {
+	expectCompileOutcome("name clash", label, source, expected);
+}
+console.log("impala.jspeg compiler keeps one flat namespace for every top-level name");
+
+// `global` names a storage table. A function and a const are in neither, so the prefix used to be accepted
+// and silently discarded there - a third, undiagnosed state next to "required" (globals) and E403 (locals).
+const globalPrefixCases = [
+	["global on a const is rejected", "const int C = 1\nfunction f() locals int x { x = global C; }",
+		"C is a constant"],
+	["global on a function is rejected", "function g() { }\nfunctype Fn()\n"
+		+ "function f() locals Fn c { c = global g; }", "g is a function"],
+	["global on a global variable stays required", "global int v\nfunction f() locals int x { x = global v; }", null],
+	["a const without the prefix is fine", "const int C = 1\nfunction f() locals int x { x = C; }", null],
+];
+for (const [label, source, expected] of globalPrefixCases) {
+	expectCompileOutcome("global prefix", label, source, expected);
+}
+console.log("impala.jspeg compiler rejects a `global` prefix on a function or a const");
+
+// Old sources carry the no-op prefix, so --legacy keeps compiling them with a warning.
+expectSingleLegacyWarning("const int C = 1\nfunction f() locals int x { x = global C; }\n",
+	"C is a constant", "a `global` prefix on a const");
+
+// `export` claims "this unit provides it"; a valueless `const` says "someone else does". The pair used to
+// compile to output byte-identical to the un-exported form, silently dropping the keyword. A VALUED
+// `export const` is meaningful - the signature row carries it for --dead-strip - so it stays legal.
+const exportConstCases = [
+	["export on a valueless const is rejected", "export const int C\nfunction main() { }",
+		"contradicts a valueless `const`"],
+	["export on a valued const is fine", "export const int C = 1\nfunction main() { }", null],
+	["a valueless const without export is fine", "const int C\nfunction main() { }", null],
+];
+for (const [label, source, expected] of exportConstCases) {
+	expectCompileOutcome("export const", label, source, expected);
+}
+console.log("impala.jspeg compiler rejects `export` on a valueless const");
+
+// Caret placement, pinned per code. Each of these used to point at the token AFTER the mistake - the next
+// line for E445, the next declaration for E422 - which is worse than useless when the construct spans lines.
+const caretCases = [
+	["E445 names the label, not the following line",
+		"function f() locals int x {\n\tx = 1;\n\tgoto nowhere;\n\tx = 2;\n}\n", "3:10: error[E445]"],
+	["E403 names the identifier, not the next token",
+		"function f() locals int x {\n\tx = undeclaredName + 1;\n}\n", "2:9: error[E403]"],
+	["E305 names the loop variable",
+		"function f(int p) locals int x {\n\tfor (p = 0 to 3) { x = 1; }\n}\n", "2:10: error[E305]"],
+	["E422 names the initializer, not the next declaration",
+		"struct S { int a; int b }\nglobal S array bank[1] = { 1, 2 }\nglobal int later = 3\n",
+		"2:26: error[E422]"],
+	["E428 names the signature it belongs to",
+		"function g() returns int a, int b {\n\ta = 1;\n}\nglobal int later = 3\n", "1:35: error[E428]"],
+	["E451 names the stray `;`, not the `else` after it",
+		"function f() locals int x {\n\tif (x == 1) { x = 2; };\n\telse { x = 3; }\n}\n", "2:27: error[E451]"],
+	["E453 names the const, not the next declaration",
+		"export const int C\nglobal int later = 3\nfunction main() { }\n", "1:18: error[E453]"],
+	// E454/E459 point at the OFFENDING ENTRY, not at the `{` and not at the next declaration. The entry
+	// position comes from `BracedEntry`'s `.at`, which is only reachable while the item is still an
+	// object - hence the check living in pushInitScalar rather than in emitInitData.
+	["E454 names the entry that cannot be placed",
+		"const int N = 3\nstruct S { int a; int array v[N]; int z }\nglobal S s = { a: 1, z: 2 }\n"
+			+ "function main() { }\n", "3:22: error[E454]"],
+	["E459 names the entry, not the struct",
+		"extern struct E { int a; int b }\nstruct O { int p; E e; int q }\nglobal O o = { p: 1, q: 7 }\n"
+			+ "function main() { }\n", "3:22: error[E459]"],
+	// The SCALAR initializer paths kept `$$i` while the brace path beside them moved to a saved start,
+	// so `Expr` (and `']' _`) ate the trailing space and the caret landed on the NEXT declaration. When
+	// the bad declaration was last in the file it landed past EOF and no source line printed at all -
+	// which is why the last case here deliberately has nothing after it.
+	["E407 names the global's initializer, not the next declaration",
+		"global int x = \"nope\"\nfunction main() { }\n", "1:16: error[E407]"],
+	["E407 names the const's initializer, not the next declaration",
+		"const int X = \"nope\"\nfunction main() { }\n", "1:15: error[E407]"],
+	["E407 names the array extent, not the next declaration",
+		"global int array A[\"nope\"]\nfunction main() { }\n", "1:20: error[E407]"],
+	["E421 names the initializer, not the next declaration",
+		"struct S { int a }\nglobal S s = 5\nfunction main() { }\n", "2:14: error[E421]"],
+	["a trailing bad initializer still renders a caret, not a position past EOF",
+		"function main() { }\nglobal int x = \"nope\"\n", "2:16: error[E407]"],
+	// E461: an array FIELD overrun stays inside the struct's allocation, so GAZL cannot see it -
+	// `s.v[5]` on `int array v[2]` silently landed in `pad`. A PLAIN array is checked by the same rule,
+	// on a different path (it decayed to a pointer at lookup), because `g[9]` and `s.v[9]` are the same
+	// mistake and reporting one at Impala compile time and the other as a GAZL symbol would be arbitrary.
+	// The negative case matters separately: it takes the DYNAMIC path (the folding branch's regex has no
+	// minus sign) and writes BACKWARDS. The read and the bare argument are listed because neither goes
+	// through makeRValue - they reuse the operand directly, so a check placed only there passes them.
+	["E461 names the offending index on a struct array field",
+		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() { global s.v[5] = 1; }\n", "3:30: error[E461]"],
+	["E461 catches a negative index, which takes the dynamic path",
+		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() { global s.pad[-1] = 1; }\n", "3:32: error[E461]"],
+	["E461 reports a READ, which never reaches makeRValue",
+		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() locals int x { x = global s.v[2]; }\n", "3:47: error[E461]"],
+	["E461 reports a bare ARGUMENT",
+		"extern native printInt\nstruct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() { printInt(global s.v[2]); }\n", "4:39: error[E461]"],
+	["E461 reports a `.field` reached through an element that is not there",
+		"struct E { int a }\nstruct O { E array e[2]; int t }\nglobal O o\n"
+			+ "function main() { global o.e[[2]].a = 1; }\n", "4:31: error[E461]"],
+	["E461 covers a plain GLOBAL array, not just a struct field",
+		"global int array g[4]\nfunction main() { global g[9] = 1; }\n", "2:28: error[E461]"],
+	["E461 covers a plain LOCAL array",
+		"function main() locals int array a[5] { a[9] = 1; }\n", "1:43: error[E461]"],
+	// A NEGATIVE index fails even when only an address is formed - the one exception to "addresses are
+	// never checked", because it is not an address GAZL will take: `&g:-1` and `$a:-1` are both rejected
+	// at assembly, and on a struct field `.o.S.pad + (-1)` folds to a valid offset naming the PREVIOUS
+	// field, so it assembles, runs, and aliases. Three outcomes for one mistake before this.
+	["E461 rejects a negative index used only as an address, on a plain array",
+		"global int array g[4]\nfunction main() locals int pointer p { p = &global g[-1]; }\n",
+		"2:54: error[E461]"],
+	["E461 rejects a negative index used only as an address, on a struct field",
+		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() locals int pointer p { p = &global s.pad[-1]; }\n", "3:58: error[E461]"],
+	// `declare()` REBUILDS the symbol record rather than updating it, so an array's extent has to be on
+	// its carry-over list or the second declaration drops it - and `extern array g` beside the definition
+	// is the ordinary import-closure shape, not a corner case. Both orders, because only one of them
+	// re-runs the declaration site that records the extent.
+	["E461 survives a re-declaration that follows the definition",
+		"global int array g[4]\nextern array g\nfunction main() { global g[9] = 1; }\n",
+		"3:28: error[E461]"],
+	["E461 survives a re-declaration that precedes it",
+		"extern array g\nglobal int array g[4]\nfunction main() { global g[9] = 1; }\n",
+		"3:28: error[E461]"],
+	// The function door recorded its position AFTER `'('_` had been consumed, so every diagnostic that
+	// names a function pointed at the parenthesis (or the space past it) instead of the name.
+	["a function-name clash points at the name",
+		"global int dup\nfunction dup() { }\n", "2:10: error[E401]"],
+	["a reserved function name points at the name",
+		"function continue() { }\n", "1:10: error[E449]"],
+];
+for (const [label, source, expected] of caretCases) {
+	expectDiagnosticAt(label, source, expected);
+}
+console.log("impala.jspeg compiler points its carets at the offending token");
+
+// ADDRESS FORMATION IS NEVER BOUNDS-CHECKED, at any index - the rule from docs/Impala2Review.md, and the
+// reason E461 cannot fire at the subscript itself: whether an out-of-range constant is an error depends
+// on what is done with it, and at the subscript the `&` has not been seen yet. It is also why Impala
+// needs no one-past-the-end carve-out where C does; the end pointer is just an address like the rest.
+// Without these cases a stricter rule looks green forever.
+const addressCases = [
+	["&field[extent] is a legal end pointer",
+		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() locals int pointer p { p = &global s.v[2]; }"],
+	["&field[extent] on the LAST field, one past the struct itself",
+		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() locals int pointer p { p = &global s.pad[8]; }"],
+	["&structField[[extent]] is a legal end pointer too",
+		"struct E { int a }\nstruct O { E array e[2]; int t }\nglobal O o\n"
+			+ "function main() locals E pointer p { p = &global o.e[[2]]; }"],
+	["an address WELL past the end is legal too - the rule has no distance limit",
+		"global int array g[4]\nfunction main() locals int pointer p { p = &global g[9]; }"],
+	["...and the same on a plain local array",
+		"function main() locals int array a[5], int pointer p { p = &a[40]; }"],
+	["in-range reads and writes are untouched",
+		"extern native printInt\nstruct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+			+ "function main() locals int x { global s.v[1] = 3; x = global s.v[1]; printInt(x); }"],
+];
+for (const [label, source] of addressCases) {
+	expectCompileOutcome("address formation", label, source, null);
+}
+console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
+
+// `--range-checks` is the third tier: a DYNAMIC index into a struct array field, which neither static
+// tier nor GAZL can decide. Both halves are asserted, because a flag that silently does nothing and a
+// flag that silently does it always look identical from one side. The OFF case is the load-bearing one:
+// the guard lines stay in the .gazl text whatever `DEBUG` says, and that text is the shipped artifact.
+{
+	const src = "const int DEBUG = 1\nstruct S { int array v[2]; int array pad[8] }\nglobal S s\n"
+		+ "export function main() locals int i { i = 5; global s.v[i] = 99; }\n";
+	const off = compileWithJsImpala(src, { randomId: 42 });
+	const on = compileWithJsImpala(src, { randomId: 42, rangeChecks: true });
+	assert(!/index out of range/.test(off) && !/@\.r\d/.test(off),
+		"range checks: emitted with the flag OFF\n" + off);
+	assert(/! EQUi #DEBUG #0 @\.r\d/.test(on), "range checks: no DEBUG gate on the guard\n" + on);
+	// Two compares and no arithmetic: the extent is an assemble-time symbol, so it is quoted straight
+	// into the compare rather than computed. An ALU op appearing here means the check regressed to
+	// deriving something the assembler already knows.
+	assert(/LSSi \S+ #0 @/.test(on) && /LSSi \S+ #\.z\.S\.v @/.test(on),
+		"range checks: not two compares against the .z. extent symbol\n" + on);
+	assert(!/SUBi|IORi/.test(on), "range checks: computing a bound the assembler already knows\n" + on);
+	assert(/index out of range: S\.v/.test(on), "range checks: no message naming the field\n" + on);
+	assert(/CALL \^assertFail/.test(on), "range checks: does not reuse the assertFail native\n" + on);
+	console.log("impala.jspeg compiler emits DEBUG-gated range checks only under --range-checks");
+}
+
+// EVERY array shape, because a flag that covers one of them is worse than no flag - it reads as
+// protection. A plain array decays to a pointer at lookup and so takes a different subscript path from
+// a struct field; a local's extent lives under `.z.<func>.<name>`, a global's under `.z.<name>`. The
+// last two entries are the boundary: a CONSTANT index is left to GAZL ("Offset out of bounds", a better
+// diagnostic than a trap), and a bare pointer has no extent to check at all.
+{
+	const decls = "const int DEBUG = 1\nstruct E { int a }\nstruct S { int array v[3] }\nglobal S s\n"
+		+ "global int array g[4]\nglobal E array ge[3]\nglobal int array g2[4]\nextern array g2\n";
+	const shapes = [
+		["global scalar array", "global g[i] = 1;", "#.z.g "],
+		["local scalar array", "a[i] = 1;", "#.z.main.a "],
+		["struct array field", "global s.v[i] = 1;", "#.z.S.v "],
+		["global array of structs", "global ge[[i]].a = 1;", "#.z.ge "],
+		["local array of structs", "le[[i]].a = 1;", "#.z.main.le "],
+		["a re-declared array keeps its extent", "global g2[i] = 1;", "#.z.g2 "],
+		["a constant index (GAZL rejects it outright)", "global g[2] = 1;", null],
+		["a bare pointer (no extent exists)", "p = &a[0]; p[i] = 1;", null],
+	];
+	for (const [label, stmt, bound] of shapes) {
+		const on = compileWithJsImpala(decls
+			+ "export function main() locals int i, int array a[5], E array le[2], int pointer p { i = 1; "
+			+ stmt + " }\n", { randomId: 42, rangeChecks: true });
+		if (bound === null) {
+			assert(!/index out of range/.test(on), `range checks: fired on ${label}\n` + on);
+		} else {
+			// The bound is quoted STRAIGHT into the compare as an assemble-time immediate - no
+			// instruction computes it, which is the whole reason the check is two compares and no ALU.
+			assert(on.includes(bound + "@") && /LSSi \S+ #0 @/.test(on),
+				`range checks: ${label} is not two compares bounded by ${bound.trim()}\n` + on);
+		}
+	}
+	console.log("impala.jspeg compiler range-checks every array shape, and only those");
+}
+
+// TIER 2 - a constant index whose extent is a SYMBOL. Undecidable at Impala compile time, so it becomes a
+// deferred `! LSSi` / `! FAIL` assertion the assembler resolves, at zero runtime cost. Scoped to a struct
+// array FIELD on purpose: that is the only place nothing else looks, because the overrun stays inside the
+// struct's allocation. A plain `a[7]` on `a[SN]` is already caught natively ("Offset out of bounds: a"),
+// and re-checking it would put three lines into the shipped text of the commonest idiom in the corpus -
+// measured, 15 of 87 goldens grew when this was not scoped, versus 1 when it was.
+{
+	const sym = "const int SN = 2\nstruct T { int array v[SN]; int array pad[8] }\nglobal T t\n";
+	const deferred = compileWithJsImpala(sym
+		+ "export function main() { global t.v[5] = 99; }\n", { randomId: 42 });
+	assert(/! LSSi #5 #\.z\.T\.v @\.g\d/.test(deferred) && /! FAIL index 5 outside T\.v/.test(deferred),
+		"tier 2: no deferred guard for a constant index into a symbolic extent\n" + deferred);
+	const addr = compileWithJsImpala(sym
+		+ "export function main() locals int pointer p { p = &global t.v[9]; }\n", { randomId: 42 });
+	assert(!/! FAIL index/.test(addr), "tier 2: guarded an ADDRESS, which is always legal\n" + addr);
+	const plain = compileWithJsImpala("const int SN = 4\nglobal int array a[SN]\n"
+		+ "export function main() { global a[7] = 1; }\n", { randomId: 42 });
+	assert(!/! FAIL index/.test(plain),
+		"tier 2: duplicated the assembler's own check on a plain array\n" + plain);
+	// A struct-ELEMENT array field: `.z.` counts WORDS and the index counts ELEMENTS, so the guard has to
+	// scale before comparing. `o.e[[3]]` on `e[SN]` is the case that matters - it lands in the NEXT FIELD,
+	// still inside the allocation, so the assembler sees a legal offset and only this guard catches it.
+	const scaled = compileWithJsImpala("const int SN = 3\nstruct E { int a; int b }\n"
+		+ "struct O { E array e[SN]; int t }\nglobal O o\n"
+		+ "export function main() { global o.e[[3]].a = 1; }\n", { randomId: 42 });
+	assert(/! MULi <\w> #3 #\.z\.E/.test(scaled) && /! LSSi #<\w> #\.z\.O\.e/.test(scaled),
+		"tier 2: a struct-element index is not scaled by the element size\n" + scaled);
+	// The scaling scratch must NOT come from the runtime pool: guards flush after the function's scratch
+	// window has closed, so a borrow there tripped `compile-time scratch leak before <fn>` in every
+	// function but the last - and a `<`-leading value handed to declare() gets pushed into the stock by
+	// returnBack. Both only show up when the guarded access is NOT in the final function.
+	const notLast = compileWithJsImpala("const int SN = 3\nstruct E { int a; int b }\n"
+		+ "struct O { E array e[SN]; int t }\nglobal O o\n"
+		+ "function f() { global o.e[[3]].a = 1; }\nexport function main() { f(); }\n", { randomId: 42 });
+	assert(/! FAIL index 3 outside O\.e/.test(notLast),
+		"tier 2: no guard for a function that is not the last one\n" + notLast);
+	// The SAME assertion is asked once per function. `t.v[3]` written and then read is one question, not
+	// two - which is the whole of the deduplication that ever fired on the corpus. Two DIFFERENT indices
+	// stay two questions: the guard sits next to the access it belongs to now, so collapsing them onto
+	// the larger would put an assertion beside code it does not describe.
+	const dup = compileWithJsImpala("const int SN = 2\nstruct T { int array v[SN]; int t }\nglobal T t\n"
+		+ "export function main() locals int j { global t.v[3] = 1; j = global t.v[3]; global t.v[5] = 3; }\n",
+		{ randomId: 42 });
+	assert((dup.match(/! FAIL index/g) || []).length === 2
+			&& /! FAIL index 3 /.test(dup) && /! FAIL index 5 /.test(dup),
+		"tier 2: the same assertion is not asked exactly once\n" + dup);
+	// A SYMBOLIC constant index (`b[KONST]`) used to fall between every tier: `constInt` declines it here
+	// because Impala cannot evaluate it, and the runtime check skips anything `#`-prefixed on the grounds
+	// that a constant belongs to the static tier. It is decidable, just not by Impala - so BOTH ends go to
+	// the assembler, since neither is knowable at compile time. A plain array needs none of this: the
+	// assembler resolves `&g:KONST` against the symbol size itself.
+	const konst = "const int KONST = 9\nstruct Test { int a; int array b[4]; int array pad[9] }\n"
+		+ "global Test xxx\n";
+	const symIdx = compileWithJsImpala(konst
+		+ "export function main() locals int j { j = global xxx.b[KONST]; }\n", { randomId: 42 });
+	// Two plain comparisons, and the low one falls through into the FAIL that the second label RIDES.
+	// This was briefly `(extent - 1 - k) | k >= 0`, three extra ALU ops bought only to avoid that second
+	// label, back when flushMetaCode spent every label landing on a `!` line as a runtime NOOP.
+	assert(/! LSSi #KONST #0 @\.\w+/.test(symIdx) && /! LSSi #KONST #\.z\.Test\.b @\.\w+/.test(symIdx)
+			&& /\.\w+:\s+! FAIL index KONST/.test(symIdx)
+			&& !/NOOP/.test(symIdx)
+			&& (symIdx.match(/! FAIL index/g) || []).length === 1,
+		"symbolic index: not two comparisons with the FAIL carrying the label\n" + symIdx);
+	// The index itself must FOLD into the compile-time offset. GETL/SETL take a variable index, so a
+	// named const (and a folded `<X>` expression, and a negative literal) emitted an immediate operand
+	// that has no encoding: the compiler accepted a module the assembler then refused outright.
+	assert(/! ADDi <\w> #\.o\.Test\.b #KONST/.test(symIdx) && !/GETL|SETL/.test(symIdx),
+		"symbolic index: did not fold into the offset\n" + symIdx);
+	// A folded `<X>` cannot key a deferred assertion - the name is recycled - so the guard takes its OWN
+	// copy while the value is still live, and compares that. Without the copy there is nothing left to
+	// check by the time the USE decides whether this is a dereference at all: the pushed value is folded
+	// into the offset and freed inside the subscript.
+	const exprIdx = compileWithJsImpala(konst
+		+ "export function main() locals int j { j = global xxx.b[KONST - 8]; }\n", { randomId: 42 });
+	assert(/! SUBi <\w> #KONST #8/.test(exprIdx) && !/GETL|SETL/.test(exprIdx)
+			&& /! MOVi <\w> #<\w>/.test(exprIdx)
+			&& /! LSSi #<\w> #\.z\.Test\.b @/.test(exprIdx)
+			&& /! FAIL a computed index outside Test\.b/.test(exprIdx),
+		"expression index: no assertion on a folded scratch\n" + exprIdx);
+	// ...and an ADDRESS retracts the copy it never needed. The `! MOVi` is emitted at the subscript, before
+	// anything knows whether this is a dereference, so `reference` nulls the record rather than ship a line
+	// nothing reads - `flushMetaCode` already skips a null operator.
+	const exprAddr = compileWithJsImpala(konst
+		+ "export function main() locals int pointer p { p = &global xxx.b[KONST - 8]; }\n", { randomId: 42 });
+	assert(!/! FAIL/.test(exprAddr) && !/! MOVi <\w> #<\w>/.test(exprAddr),
+		"expression index: an ADDRESS kept the guard or its copy\n" + exprAddr);
+
+	// COINCIDENT LABELS collapse. Nested `if`s end at the same address, and only one line can carry a
+	// name, so every label but one used to be spent on a `NOOP` that existed for no other reason
+	// (adventCode had seven in a row). processBranches folds the run onto one survivor and rewrites the
+	// references, which is only safe after every alias and deletion it makes has settled.
+	const coincident = compileWithJsImpala(
+		"function main() locals int x, int y { if (x == 1) { if (y == 2) { x = 3; } } x = 4; }\n",
+		{ randomId: 42 });
+	assert(!/NOOP/.test(coincident) && (coincident.match(/@\.f\d/g) || []).length === 2
+			&& new Set(coincident.match(/@\.f\d/g)).size === 1,
+		"coincident labels: not collapsed onto one survivor\n" + coincident);
+	// A user label survives in preference to a minted one, so a `goto` target never leaves the listing.
+	const userLabel = compileWithJsImpala(
+		"function main() locals int x { if (x == 1) { x = 2; } top: ; x = 3; goto top; }\n", { randomId: 42 });
+	assert(!/NOOP/.test(userLabel) && /GOTO @top/.test(userLabel) && /^\s*top:/m.test(userLabel)
+			&& /NEQi \$x #1 @top/.test(userLabel),
+		"coincident labels: the user's name did not survive\n" + userLabel);
+	// ...but a switch table entry must NOT merge: the case VALUE is part of the name, so `.s0#3` and
+	// `.s0#7` are different addresses that merely render alike before the assembler resolves them.
+	const caseLabels = compileWithJsImpala(
+		"function main() locals int x, int y { switch (x == 0 to 8) { case 3, 7: { y = 1; } } }\n",
+		{ randomId: 42 });
+	assert(/\.s0#3:/.test(caseLabels) && /\.s0#7:/.test(caseLabels),
+		"switch: a case label was merged away\n" + caseLabels);
+	const symAddr = compileWithJsImpala(konst
+		+ "export function main() locals int pointer p { p = &global xxx.b[KONST]; }\n", { randomId: 42 });
+	assert(!/! FAIL index/.test(symAddr),
+		"symbolic index: guarded an ADDRESS, which is always legal\n" + symAddr);
+	const symPlain = compileWithJsImpala("const int KONST = 9\nglobal int array g[4]\n"
+		+ "export function main() locals int j { j = global g[KONST]; }\n", { randomId: 42 });
+	assert(!/! FAIL index/.test(symPlain),
+		"symbolic index: duplicated the assembler's own check on a plain array\n" + symPlain);
+	// A NEGATIVE EXTENT runs the layout backwards, and a struct field's extent is only ever ADDED to the
+	// offset accumulator - so `struct T { int a; int array b[-1]; int c }` used to compile, assemble, run,
+	// and put `a` and `c` in the SAME WORD. A plain array is caught by the assembler ("Incompatible
+	// types"), a field by nothing. Rejected at the declaration when Impala can see the number, deferred
+	// when it cannot (`const int K = -1`, or a host `! DEFi`).
+	for (const [label, src] of [
+		["a struct field", "struct T { int a; int array b[-1]; int c }\nfunction main() { }\n"],
+		["a global array", "global int array g[-1]\nfunction main() { }\n"],
+		["a local array", "function main() locals int array a[-1] { }\n"],
+	]) {
+		expectCompileOutcome("negative extent", label, src, "E462");
+	}
+	const negSym = compileWithJsImpala("const int K = -1\nstruct T { int a; int array b[K]; int c }\n"
+		+ "global T t\nexport function main() { global t.c = 1; }\n", { randomId: 42 });
+	assert(/! GEQi #\.z\.T\.b #0 @/.test(negSym) && /! FAIL extent of T\.b is negative/.test(negSym),
+		"negative extent: a symbolic one is not deferred to the assembler\n" + negSym);
+	const posSym = compileWithJsImpala("const int K = 3\nstruct T { int a; int array b[K]; int c }\n"
+		+ "global T t\nexport function main() { global t.c = 1; }\n", { randomId: 42 });
+	assert(/! GEQi #\.z\.T\.b #0 @/.test(posSym),
+		"negative extent: the guard is not emitted for every symbolic extent\n" + posSym);
+	console.log("impala.jspeg compiler refuses an array extent that would run a layout backwards");
+	console.log("impala.jspeg compiler defers a symbolic-extent field index to GAZL assembly time");
+}
+
+// The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
+const caretNonCases = [
+	["if/else with a semicolon-terminated then-branch",
+		"function f() locals int x { if (x == 1) x = 2; else x = 3; }"],
+	["if with no else, followed by an empty statement",
+		"function f() locals int x { if (x == 1) { x = 2; }; x = 4; }"],
+	["a local named elsewhere is not the `else` keyword",
+		"function f() locals int elsewhere { if (elsewhere == 1) { elsewhere = 2; }; elsewhere = 3; }"],
+];
+for (const [label, source] of caretNonCases) {
+	expectCompileOutcome("caret non-case", label, source, null);
+}
+console.log("impala.jspeg compiler does not mistake a legitimate `;` for a dangling else");
+
+expectSingleLegacyWarning("function f() locals int x { x = 1; if (!x == 2) { x = 3; } }\n",
+	"'!' binds below comparison", "the `!`-precedence error");
 
 // --- Impala 2 Step 1: typed pointers and arrays -----------------------------
 
@@ -1503,8 +2383,8 @@ const typedPointerCases = [
 		source: [
 			"struct Inner { float a; float b }",
 			"struct Outer { int n; Inner mid; float g }",
-			"global Outer g = { 1, { 0.5, 0.7 }, 2.0 }",
-			"readonly Outer preset = { 3, { 0.1, 0.2 }, 0.9 }",
+			"global Outer g = { n: 1, mid: { a: 0.5, b: 0.7 }, g: 2.0 }",
+			"readonly Outer preset = { n: 3, mid: { a: 0.1, b: 0.2 }, g: 0.9 }",
 			"function main() { }",
 		].join("\n"),
 		expectError: null,
@@ -1516,7 +2396,7 @@ const typedPointerCases = [
 	},
 	{
 		label: "struct initializer field type is checked",
-		source: ["struct S { int a; float b }", "global S g = { 1.0, 2.0 }"].join("\n"),
+		source: ["struct S { int a; float b }", "global S g = { a: 1.0, b: 2.0 }"].join("\n"),
 		expectError: "Initializer type mismatch",
 	},
 	{
@@ -1549,7 +2429,7 @@ const typedPointerCases = [
 	},
 	{
 		label: "an initialized struct-element array still needs a literal size",
-		source: ["struct V { int n }", "const int N = 2", "global V array bank[N] = { { 1 }, { 2 } }"].join("\n"),
+		source: ["struct V { int n }", "const int N = 2", "global V array bank[N] = { { n: 1 }, { n: 2 } }"].join("\n"),
 		expectError: "literal size",
 	},
 	{

@@ -14,11 +14,11 @@ x:	FUNC	; signature func x() -> void @ 6:1
 	.s0#1:	NOOP
 	.s0#2:	NOOP
 	.s0#3:	MOVi $j $i 	; j = i
-		GOTO @.e1  
+		RETU   
 	.s0#5:	CALL &x %0 *1	; expects x() -> void @ 9:13
-		GOTO @.e1  
+		RETU   
 	.s0:	MOVi $i $j 	; i = j
-		GOTO @.e1  
+		RETU   
 	.s0#6:	NOOP
 	.s0#8:	MOVi $k $j 	; k = j
 	.e1:	RETU   	; }
@@ -29,20 +29,18 @@ CONSTANT:	! DEFi #29	; signature const CONSTANT : int @ 15:1
 y:	FUNC	; signature func y() -> void @ 16:1
 		PARA *1
 	$i:	LOCi
-.x.y.a:	! DEFi #5
-	$a:	LOCA *.x.y.a
+.z.y.a:	! DEFi #5
+	$a:	LOCA *.z.y.a
 ;-----------------------------------------------------------------------------
 		GETL %0 $a $i	; switch ((int) a[i] == 0 to 'a') 
 		SWCH %0 *'a' @.s0
 	.s0:	NOOP
-	.e1:	NOOP
 		! ADDi <A> #23 #5	; switch (i == 23+5 to 234 * 2) 
 		! MULi <B> #234 #2
 		! SUBi <B> <B> <A>
 		SUBi %0 $i <A>
 		SWCH %0 *<B> @.s2
 	.s2:	NOOP
-	.e3:	NOOP
 		! ADDi <A> #4 #1	; switch (i == 4+1 to 130) 
 		! SUBi <B> #130 <A>
 		SUBi %0 $i <A>
@@ -54,20 +52,19 @@ y:	FUNC	; signature func y() -> void @ 16:1
 	.s4#<B>:	NOOP
 		! SUBi <B> #CONSTANT <A>
 	.s4#<B>:	ADDi $i $i #1234	; i=i+1234
-		GOTO @.e5  
+		GOTO @.s4  
 		! SUBi <B> #'y' <A>	; case 'y'
-	.s4#<B>:	GOTO @.e5  	; 
+	.s4#<B>:	GOTO @.s4  	; 
 		! MULi <B> #4 #CONSTANT	; case 4*CONSTANT
 		! SUBi <B> <B> <A>
 	.s4#<B>:	MULi $i $i #100	; i = i * 100
-	.s4:	NOOP
-	.e5:	SUBi %0 $i #10	; switch (i == 10 to 100) 
+	.s4:	SUBi %0 $i #10	; switch (i == 10 to 100) 
 		SWCH %0 *90 @.s6
 	.s6#89:	CALL &x %0 *1	; expects x() -> void @ 20:40
-		GOTO @.e7  
-	.s6:	GOTO @.e7  	; 
+		RETU   
+	.s6:	RETU   	; 
 	.s6#10:	ADDi $i $i #1	; i = i + 1
-		GOTO @.e7  
+		RETU   
 		! SUBi <A> #'a' #10	; case 'a'
 	.s6#<A>:	GETL $i $a $i	; i = (int) a[i]
 	.e7:	RETU   	; }
@@ -75,8 +72,8 @@ y:	FUNC	; signature func y() -> void @ 16:1
 ; signature extern native printInt() -> unknown @ 23:1
 ; signature extern native printLF() -> unknown @ 24:1
 MINUS_FIVE:	! DEFi #-5	; signature const MINUS_FIVE : int @ 25:1
-.x.gx:	! DEFi #10
-gx:	GLOB *.x.gx	; signature array gx[10] : unknown @ 26:1
+.z.gx:	! DEFi #10
+gx:	GLOB *.z.gx	; signature array gx[10] : unknown @ 26:1
 
 ;-----------------------------------------------------------------------------
 test:	FUNC	; signature func test(int a, int b) -> int @ 28:1

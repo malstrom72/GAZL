@@ -1,0 +1,92 @@
+; A fully symbolic by-value call window, hand-written. This is the runnable proof for
+; docs/GAZLSymbolicWindows.md: GAZL already supports everything by-value structs would need -
+; symbolically indexed transients and symbolic CALL / PARA / COPY / ADRL extents. What is missing
+; is only in Impala, whose transient allocator keys its slots by integer index.
+;
+; It models      R fRS(W w)
+;                int someFunction(int i, V s, R t, int j)
+;                someFunction(someInt, structOne, fRS(structTwo), anotherInt)
+; and prints 55. The nested call's output window is placed exactly on argument t, so the inner
+; return is written straight into the outer argument with no copy-out.
+;
+; symbolicWindowsRepacked.gazl is this file with ONLY the layout header changed - V gains a leading
+; pad, W grows, R's two fields swap. Every instruction below the header is byte-identical and it
+; still prints 55, which is the whole claim: a host re-packing a struct re-ASSEMBLES, it does not
+; recompile.
+;
+;     output/GAZLCmd docs/symbolicWindows.gazl main
+;     diff <(tail -n +29 docs/symbolicWindows.gazl) <(tail -n +29 docs/symbolicWindowsRepacked.gazl)
+;
+; ---- layout header: the ONLY thing a re-pack touches ----
+.o.V.a:			! DEFi #0
+.o.V.b:			! DEFi #1
+.z.V:			! DEFi #2
+.o.R.x:			! DEFi #0
+.o.R.y:			! DEFi #1
+.z.R:			! DEFi #2
+.o.W.w:			! DEFi #0
+.z.W:			! DEFi #1
+
+structOne:		GLOB *.z.V
+structTwo:		GLOB *.z.W
+someInt:		GLOB *1
+anotherInt:		GLOB *1
+result:			GLOB *1
+
+; R fRS(W w) -> { x = w.w * 10, y = 5 }
+fRS:			FUNC
+				$res:	PARA *.z.R
+				$w:		PARA *.z.W
+				MULi $res:.o.R.x $w:.o.W.w #10
+				MOVi $res:.o.R.y #5
+				RETU
+
+; int someFunction(int i, V s, R t, int j) -> i + s.a + s.b + t.x + t.y + j
+someFunction:	FUNC
+				$res:	OUTi
+				$i:		INPi
+				$s:		PARA *.z.V
+				$t:		PARA *.z.R
+				$j:		INPi
+				ADDi $res $i $s:.o.V.a
+				ADDi $res $res $s:.o.V.b
+				ADDi $res $res $t:.o.R.x
+				ADDi $res $res $t:.o.R.y
+				ADDi $res $res $j
+				RETU
+
+main:			FUNC
+						PARA *1
+				;   %0     out (int)
+				;   %1     arg i
+				;   %2     arg s (V)   .z.V words
+				;   %<A>   arg t (R)   .z.R words   <- nested call writes its result straight here
+				;   %<B>   arg j
+				! ADDi <A> #2 #.z.V
+				! ADDi <B> #<A> #.z.R
+				! ADDi <C> #<B> #1			; outer frame extent (the CALL size)
+				! ADDi <F> #<B> #.z.W		; top of the nested window
+				! ADDi <G> #<F> #1			; scratch, clear of BOTH windows
+
+				POKE &someInt #1
+				POKE &anotherInt #2
+				POKE &structOne:.o.V.a #3
+				POKE &structOne:.o.V.b #4
+				POKE &structTwo:.o.W.w #4
+
+				PEEK %1 &someInt			; arg i
+
+				ADRL %<F> %2 *.z.V			; arg s: window region
+				COPY %<F> &structOne *.z.V	;        symbolic copy from the global
+
+				! ADDi <E> #.z.R #.z.W		; nested frame extent
+				ADRL %<F> %<B> *.z.W		; nested arg w: window region
+				COPY %<F> &structTwo *.z.W
+				CALL &fRS %<A> *<E>			; result lands ON arg t - no copy-out
+
+				PEEK %<B> &anotherInt		; arg j - AFTER the nested window died
+				CALL &someFunction %0 *<C>
+				POKE &result %0
+				PEEK %1 &result				; %0 is the print window's OUT slot
+				CALL ^printInt %0 *2
+				RETU

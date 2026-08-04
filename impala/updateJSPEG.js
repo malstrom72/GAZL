@@ -8,7 +8,21 @@ const child_process = require("child_process");
 
 const root = __dirname;
 
-function applyImpalaHardening(source) {
+// The word list KEYWORD becomes, read OUT OF THE GRAMMAR rather than restated here. A hardcoded copy
+// drifts the first time someone adds a keyword to impala.jspeg alone, and it drifts SILENTLY: the new
+// word simply never matches, so it parses as an identifier and the failure surfaces far from the cause.
+// Order does not matter - the loop retries on a SYMBOL_CHAR mismatch, so `for` cannot shadow `from`.
+function keywordWordsFrom(grammar) {
+	const rule = grammar.match(/^KEYWORD[ \t]*<-([\s\S]*?)\n[ \t\r]*\n/m);
+	if (!rule) throw new Error("KEYWORD rule not found in impala.jspeg");
+	return (rule[1].match(/[A-Z][A-Z0-9_]*/g) || []).map((name) => {
+		const literal = grammar.match(new RegExp("\\b" + name + "\\s*<-\\s*'([^']*)'"));
+		if (!literal) throw new Error(`KEYWORD alternative ${name} has no literal in impala.jspeg`);
+		return literal[1];
+	});
+}
+
+function applyImpalaHardening(source, grammar) {
 	let patched = source;
 	const metaSectionHeader =
 		"\t/* --------------------------------------------------------- *\n" +
@@ -104,17 +118,15 @@ function applyImpalaHardening(source) {
 		"_i=_b;" +
 		"}}_im=(_i>_im?_i:_im);_i=_b;return false}\n";
 	if (keywordFunctionRegex.test(patched) && !patched.includes("KEYWORD_WORDS")) {
+		const words = keywordWordsFrom(grammar);
+		const rows = [];
+		for (let i = 0; i < words.length; i += 11) {
+			const row = words.slice(i, i + 11).map((w) => `'${w}'`).join(", ");
+			rows.push("\t" + row + (i + 11 < words.length ? "," : ""));
+		}
 		patched = patched.replace(
 			"var _hostOptions = _options || {};",
-			[
-				"var _hostOptions = _options || {};",
-				"var KEYWORD_WORDS = [",
-				"\t'abs', 'array', 'assert', 'case', 'const', 'copy', 'default', 'do', 'else', 'export', 'extern',",
-				"\t'float', 'floor', 'for', 'from', 'ftoi', 'funcptr', 'functype', 'function', 'global', 'goto', 'if',",
-				"\t'import', 'inline', 'int', 'itof', 'locals', 'loop', 'native', 'null', 'nullfunc', 'pointer', 'readonly',",
-				"\t'returns', 'sizeof', 'struct', 'switch', 'temporary', 'to', 'while'",
-				"];",
-			].join("\n"),
+			["var _hostOptions = _options || {};", "var KEYWORD_WORDS = ["].concat(rows, "];").join("\n"),
 		);
 		patched = patched.replace(keywordFunctionRegex, keywordFunctionReplacement);
 	}
@@ -330,6 +342,7 @@ function regenerate() {
 				prelude: "var $$parser = {};",
 				exposeSourceNameOption: true,
 			}),
+			impalaGrammar,
 		),
 	};
 }

@@ -4,8 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 9:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 10:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 11:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 13:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 13:1
 	DATA &.s_BITSCL_4d2 &.s_SINSAM_4d3 &.s_ROTSRA_4d4
 	DATA &.s_DLYLEF_4d5 &.s_SHARPS_4d6 &.s_SHARPF_4d7
 	DATA &.s_SMOOTH_4d8 &.s_SMOOTH_4d9
@@ -31,14 +31,14 @@ panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unkno
 ; signature extern const PARAM_COUNT : int @ 46:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 48:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 49:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 50:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 49:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 50:1
 	CNST *1
 clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 51:1
-.x.signal:	! DEFi #2
-signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 52:1
+.z.signal:	! DEFi #2
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 52:1
 LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 58:1
 LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 59:1
 LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 60:1
@@ -69,7 +69,7 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 73:1
 		SUBf %0 #0.0 $x	; y = -floor(-x)
 		FLOf %0 %0 
 		SUBf $y #0.0 %0
-		GOTO @.e1  
+		RETU   
 	.f0:	FLOf $y $x 	; y = floor(x)
 	.e1:	RETU   	; }
 
@@ -83,7 +83,7 @@ fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 80:1
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4da 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 83:41
-		GOTO @.e1  
+		RETU   
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
 		CALL &trunc %0 *2	; expects trunc(float) -> float @ 84:35
 		MULf %0 %0 $y
@@ -151,10 +151,10 @@ update:	FUNC	; signature func update() -> void @ 138:1
 ;-----------------------------------------------------------------------------
 process:	FUNC	; signature func process() -> void @ 142:1
 		PARA *1
-.x.process.tapped:	! DEFi #2
-	$tapped:	LOCA *.x.process.tapped
-.x.process.mix:	! DEFi #2
-	$mix:	LOCA *.x.process.mix
+.z.process.tapped:	! DEFi #2
+	$tapped:	LOCA *.z.process.tapped
+.z.process.mix:	! DEFi #2
+	$mix:	LOCA *.z.process.mix
 	$localClock:	LOCi
 	$leftTapBits:	LOCi
 	$rightTapBits:	LOCi

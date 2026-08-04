@@ -4,8 +4,8 @@
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 10:1
 FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
 TRUE:	! DEFi #1	; signature const TRUE : int @ 12:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 22:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 22:1
 	DATA &.s_sillyr_4d2 &.s_sillyr_4d2:51 &.s_sillyr_4d2:51
 	DATA &.s_ROOMSI_4d3 &.s_ROOMSI_4d3:53 &.s_ROOMSI_4d3:53
 	DATA &.s_ROOMSI_4d3:53 &.s_FEEDBA_4d4
@@ -45,10 +45,10 @@ left:	DATi #0	; signature global left : int @ 69:1
 right:	DATi #0	; signature global right : int @ 70:1
 	GLOB *1
 clock:	DATi #0	; signature global clock : int @ 71:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 72:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 73:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 72:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 73:1
 	GLOB *1
 instance:	DATi #0	; signature global instance : int @ 74:1
 AND:	! DEFi #32767	; signature const AND : int @ 84:1
@@ -64,11 +64,11 @@ TFB:	! DEFi #6	; signature const TFB : int @ 94:1
 TL1:	! DEFi #7	; signature const TL1 : int @ 95:1
 TL2:	! DEFi #8	; signature const TL2 : int @ 96:1
 TR:	! DEFi #9	; signature const TR : int @ 97:1
-.x.ALLPASS_PAIRS_A:	! DEFi #ALLPASS_COUNT
-ALLPASS_PAIRS_A:	CNST *.x.ALLPASS_PAIRS_A	; signature array ALLPASS_PAIRS_A[ALLPASS_COUNT] : unknown @ 99:1
+.z.ALLPASS_PAIRS_A:	! DEFi #ALLPASS_COUNT
+ALLPASS_PAIRS_A:	CNST *.z.ALLPASS_PAIRS_A	; signature array ALLPASS_PAIRS_A[ALLPASS_COUNT] : unknown @ 99:1
 	DATA #T0 #T0 #T3 #T3 #T5
-.x.ALLPASS_PAIRS_B:	! DEFi #ALLPASS_COUNT
-ALLPASS_PAIRS_B:	CNST *.x.ALLPASS_PAIRS_B	; signature array ALLPASS_PAIRS_B[ALLPASS_COUNT] : unknown @ 100:1
+.z.ALLPASS_PAIRS_B:	! DEFi #ALLPASS_COUNT
+ALLPASS_PAIRS_B:	CNST *.z.ALLPASS_PAIRS_B	; signature array ALLPASS_PAIRS_B[ALLPASS_COUNT] : unknown @ 100:1
 	DATA #T3 #T13 #T5 #T11 #T7
 	GLOB *1
 roomSize:	DATi #11579	; signature global roomSize : int @ 102:1
@@ -78,8 +78,8 @@ preDelay:	DATi #0	; signature global preDelay : int @ 103:1
 feedback:	DATf #0.5	; signature global feedback : float @ 104:1
 	GLOB *1
 damping:	DATf #1.0	; signature global damping : float @ 105:1
-.x.taps:	! DEFi #TAPS_COUNT
-taps:	GLOB *.x.taps	; signature array taps[TAPS_COUNT] : unknown @ 107:1
+.z.taps:	! DEFi #TAPS_COUNT
+taps:	GLOB *.z.taps	; signature array taps[TAPS_COUNT] : unknown @ 107:1
 
 ;-----------------------------------------------------------------------------
 init:	FUNC	; signature func init() -> void @ 112:1
@@ -98,8 +98,8 @@ reset:	FUNC	; signature func reset() -> void @ 120:1
 ;-----------------------------------------------------------------------------
 update:	FUNC	; signature func update() -> void @ 128:1
 		PARA *1
-.x.update.taps:	! DEFi #TAPS_COUNT
-	$taps:	LOCA *.x.update.taps
+.z.update.taps:	! DEFi #TAPS_COUNT
+	$taps:	LOCA *.z.update.taps
 	$size:	LOCi
 	$predelay:	LOCi
 ;-----------------------------------------------------------------------------
@@ -145,12 +145,12 @@ process:	FUNC	; signature func process() -> void @ 169:1
 	$spinner:	LOCi
 	$in:	LOCf
 	$dI:	LOCf
-.x.process.t:	! DEFi #TAPS_COUNT
-	$t:	LOCA *.x.process.t
-.x.process.o:	! DEFi #TAPS_COUNT
-	$o:	LOCA *.x.process.o
-.x.process.taps:	! DEFi #TAPS_COUNT
-	$taps:	LOCA *.x.process.taps
+.z.process.t:	! DEFi #TAPS_COUNT
+	$t:	LOCA *.z.process.t
+.z.process.o:	! DEFi #TAPS_COUNT
+	$o:	LOCA *.z.process.o
+.z.process.taps:	! DEFi #TAPS_COUNT
+	$taps:	LOCA *.z.process.taps
 	$index:	LOCi
 	$i:	LOCi
 	$tA:	LOCi

@@ -299,11 +299,24 @@ Concrete shapes that violate the model. If you are about to write one of these, 
 - **Comparing or iterating a declared extent as if it were a number** (`for (e = 0; e < field.size; ++e)`,
   `field.size * per`). When the extent is symbolic, `field.size` is the string `'N'`: the loop runs zero
   times and the multiply is `NaN`, so initializer words are silently dropped and every later field
-  shifts. Test the extent for numeric-ness first and take a deliberate branch.
+  shifts. Test the extent for numeric-ness first and take a deliberate branch. (FIXED 2026-07-31:
+  `fieldWords` returns `undefined` rather than `NaN`, and the two checks that read
+  `structWords(...) === undefined` as "incomplete" now ask `structDefined` - otherwise a symbolically
+  sized struct could not be nested by value or passed to `sizeof`. The field itself IS initializable -
+  its words start at a position Impala knows - and the count check Impala cannot make is emitted for the
+  assembler instead (`! LEQi` + `! FAIL` above the rows, rule 4 below); that is what now stops an over-filled
+  array from spilling into the next field while still FITTING the region, which nothing could catch
+  before. `E454` covers only the fields BEHIND it, whose positions are genuinely unknown, and zeros stay
+  legal there, being what the region fills with regardless.)
 - **Emitting positional `DATA` for a type whose layout the host owns.** If field offsets come from
   `.o.*`, an initializer written in declaration order is a guess. There is no seek/`.org` directive to
   fix it up, so the only sound options are to reject the initializer or to require a host-independent
   form. Half-deferring (symbolic reads, positional writes) is worse than either consistent choice.
+  Confirmed 2026-08-01, and it WAS a live wrong-output defect - now closed by refusing it (`E459`),
+  which is the "reject the initializer" branch above, narrowed so an all-zero one still compiles (zero
+  is the same word under any layout). GAZL 1 cannot express the fix at all; the evidence, the GAZL 2
+  requirements and the alternatives that do not work are in
+  [`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic offset").
 
 
 ## See also

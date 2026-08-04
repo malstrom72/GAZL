@@ -165,13 +165,29 @@ function locateInUnit(spans, source, index) {
 var TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // a named top-level definition line
 var ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
 var DATA_ROW_RE = /^\s*(?:DAT[ifps]?|DATA)\s/;        // an unlabeled initializer continuation row
-// A compile-time line that computes or names a data definition's extent: the `.x.name: ! DEFi` itself,
-// or an unlabeled `!` fold feeding it. Anything LABELED with an ordinary identifier is a definition in
-// its own right (isDataDef sees it) and ends the run, which is what keeps a neighbouring const or
-// struct-layout block from being swallowed. That a bare `!` line is never something else immediately
-// above a data definition is a property of the emitter, not of this pattern - the assert guard
-// `! EQUi #DEBUG #0 @.noAssertStrings` is always followed by a DOT-labeled block, never an ASCII one.
-var EXTENT_LINE_RE = /^\s*(?:\.x\.[\w.]+:\s+)?!\s*\w+/;
+// A compile-time line that computes or names a data definition's extent: an unlabeled `!` fold, or the
+// `.z.<name>: ! DEFi` naming THIS definition's size. The name must match, because `.z.` also labels a
+// struct's own size (`.z.Voice`) and a struct layout block sits immediately above the arrays that use
+// it - matching the tag alone would swallow the layout into the first array and strip `.z.Voice` out
+// from under every other user. (Extents used to carry a distinct `.x.` tag, which made the tag alone
+// sufficient; `.z.` absorbed it on 2026-08-02, so the name is now what separates them.) Note the tag
+// alone does NOT reproduce that today, because the `; signature struct ...` row a layout emits sits
+// between it and the next array's fold and stops the walk anyway - so this is defence against an
+// emitter change, not a live bug, and no fixture can witness it while that row is there.
+// Anything LABELED with an ordinary identifier is a definition in its own right (isDataDef sees it) and
+// ends the run. That a bare `!` line is never something else immediately above a data definition is a
+// property of the emitter, not of this pattern - the assert guard `! EQUi #DEBUG #0 @.noAssertStrings`
+// is always followed by a DOT-labeled block, never an ASCII one.
+var CT_FOLD_RE = /^\s*!\s*\w+/;
+var EXTENT_LABEL_RE = /^\s*\.z\.([\w.]+):\s+!\s*\w+/;
+// Any compile-time line, with or without a compiler-minted dot label, INCLUDING a bare `!` no-op
+// carrying nothing but a label (`.g0:  !`). Only used inside a data block's own initializer run,
+// where the DATA row that must follow is what keeps it from over-reaching.
+var CT_LINE_RE = /^\s*(?:\.[\w.]+:)?\s*!/;
+function isExtentLineFor(line, name) {
+	var m = EXTENT_LABEL_RE.exec(line);
+	return CT_FOLD_RE.test(line) || (m !== null && m[1] === name);
+}
 
 function stripComment(line) {
 	var at = line.indexOf(";");
@@ -199,10 +215,18 @@ function isBoundary(line) {
 }
 
 function collectRefs(text, into) {
-	// &func/&global, ^native, #const, *size - names only (numbers skip). `*` is load-bearing: a const
-	// used ONLY as an array extent (`GLOB *BUF_SIZE`) has no other reference shape, and dropping its
-	// `! DEFi` row is how `global int array buf[N]` - the canonical firmware idiom - stopped assembling.
-	var re = /[&^#*]([A-Za-z_]\w*)/g;
+	// &func/&global, ^native, #const, *size, :offset - names only (numbers skip). `*` is load-bearing: a
+	// const used ONLY as an array extent (`GLOB *BUF_SIZE`) has no other reference shape, and dropping
+	// its `! DEFi` row is how `global int array buf[N]` - the canonical firmware idiom - stopped
+	// assembling. `:` is load-bearing one step further in: an index that only the assembler can resolve
+	// rides the BASE operand (`ADRL %1 $arr:KZ *0`, `MOVi $j $x:.o.S.f`), and that is the sole place the
+	// name appears.
+	// The leading `[.]` matters just as much. Every compiler-minted symbol starts with one - `.z.E`,
+	// `.o.S.f`, an assert's `.a_...` message block - so `[A-Za-z_]` made a reference to ANY of them
+	// invisible, and the definition strippable out from under it.
+	// Over-matching is SAFE here and under-matching is not: an extra name keeps a block that could have
+	// gone, a missing one deletes a definition something still needs.
+	var re = /[&^#*:]([.A-Za-z_][\w.]*)/g;
 	var m;
 	while ((m = re.exec(text)) !== null) {
 		into[into.length] = m[1];
@@ -234,7 +258,7 @@ function deadStrip(gazl) {
 				dataStart = prev.start;
 			}
 			// ...and so does the run of compile-time lines that COMPUTES this block's extent: the
-			// `.x.name: ! DEFi` naming it, and the unlabeled `! MULi`/`! ADDi` folding that feeds it.
+			// `.z.name: ! DEFi` naming it, and the unlabeled `! MULi`/`! ADDi` folding that feeds it.
 			// They belong to the definition twice over. Left loose they are kept unconditionally, so
 			// a dropped array leaves its extent behind - and, worse, the only reference to a const
 			// used purely as an extent (`buf[BUF_SIZE]`, `grid[H * W]`) lives on those lines, so the
@@ -243,7 +267,8 @@ function deadStrip(gazl) {
 			// is never swallowed.
 			while (blocks.length > 0) {
 				prev = blocks[blocks.length - 1];
-				if (prev.kind !== "loose" || prev.end !== dataStart || !EXTENT_LINE_RE.test(lines[prev.start])) {
+				if (prev.kind !== "loose" || prev.end !== dataStart
+						|| !isExtentLineFor(lines[prev.start], dname)) {
 					break;
 				}
 				blocks.length = blocks.length - 1;
@@ -252,9 +277,26 @@ function deadStrip(gazl) {
 			// ...and trailing unlabeled `DATA` rows are this block's initializer, not free-standing
 			// lines. Left loose they were kept unconditionally, so stripping the header handed the
 			// values to whichever block came before - silently, whenever they fit its zero-fill slack.
+			// A run of compile-time lines counts as part of the initializer when the rows CONTINUE
+			// after it: that is the `! LEQi`/`! FAIL`/skip-label guard assertFitsExtent emits between
+			// the header and the rows it guards, which otherwise cut the block in two and left the
+			// rows orphaned (a hard throw below). Requiring a DATA row to follow is what stops this
+			// from swallowing the NEXT definition's extent fold, which looks identical from here but
+			// is never followed by rows belonging to THIS block.
 			i++;
-			while (i < lines.length && DATA_ROW_RE.test(lines[i])) {
-				i++;
+			while (i < lines.length) {
+				if (DATA_ROW_RE.test(lines[i])) {
+					i++;
+					continue;
+				}
+				var j = i;
+				while (j < lines.length && CT_LINE_RE.test(lines[j])) {
+					j++;
+				}
+				if (j === i || j >= lines.length || !DATA_ROW_RE.test(lines[j])) {
+					break;
+				}
+				i = j;
 			}
 			blocks[blocks.length] = { kind: "data", name: dname, start: dataStart, end: i };
 			continue;
@@ -272,7 +314,7 @@ function deadStrip(gazl) {
 		if (blocks[i].kind === "loose") {
 			/* A loose line is KEPT unconditionally, so whatever it names has to survive too - otherwise
 			   the strip leaves a reference with nothing behind it. That is the general form of the bug
-			   the `.x.` absorption above fixes specifically: `! DEFi #BUF_SIZE` outliving BUF_SIZE. It
+			   the extent absorption above fixes specifically: `! DEFi #BUF_SIZE` outliving BUF_SIZE. It
 			   also covers every other compiler-minted dotted line, which `TOP_LABEL_RE` cannot match
 			   and which therefore all land here. Roots only ever ADD reachability, never remove it. */
 			collectRefs(stripComment(lines[blocks[i].start]), work);

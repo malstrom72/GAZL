@@ -21,8 +21,8 @@ setup:	FUNC	; signature func setup(AudioBuffer-ptr b, int n, int c) -> void @ 23
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 29:1
 		PARA *1
-.x.main.raw:	! DEFi #8
-	$raw:	LOCA *.x.main.raw
+.z.main.raw:	! DEFi #8
+	$raw:	LOCA *.z.main.raw
 	$b:	LOCp
 	$x:	LOCi
 ;-----------------------------------------------------------------------------

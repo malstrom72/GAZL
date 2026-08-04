@@ -26,6 +26,12 @@ Minted by `newLabel(tag)` as `.<tag><n>`, with `labelCounter` reset per function
 | `.l` | loop head | `.l3` |
 | `.s` | `switch` table base | `.s0` |
 | `.t` | temporary branch target | `.t0` |
+| `.g` | deferred-assertion skip target | `.g0` |
+
+`.g` is the one that does NOT use `labelCounter`. It is minted at global-declaration time by
+`assertFitsExtent`, and `labelCounter` resets per function - two globals either side of a function would
+both be handed `.g0` and the module would not assemble. It carries its own `guardCounter`, reset once per
+compilation.
 
 A `switch` arm appends `#<k>` to the table base (`.s0#0`), because `SWCH` finds its arms by appending
 `#k` to its own target. That `#` is part of the label, not a separator the compiler is free to move.
@@ -42,27 +48,51 @@ collide:
 
 These are internal and never referenced by a predictable name, which is why they lean on the random id.
 
-### Struct layout constants: `.o.` and `.z.`
+### Layout and size constants: `.o.` and `.z.`
 
-`.o.<Struct>.<field>` (field offset) and `.z.<Struct>` (struct size), emitted as `! DEFi` and referenced
-at every access site. **These are implemented and shipping** - see
+Just two tags, and one sentence covers both: **`.o.<path>` is the offset of `<path>` in words, `.z.<path>`
+is the size of `<path>` in words.** Emitted as `! DEFi` and referenced at every access and allocation
+site. **These are implemented and shipping** - see
 [`docs/StructLayoutConstants.md`](StructLayoutConstants.md). Unlike everything above they are STABLE and
 deliberately predictable, because hand-written or host-supplied GAZL must be able to name them.
 
-### Array extent constants: `.x.`
+| symbol | `<path>` is | example |
+|---|---|---|
+| `.o.<Struct>.<field>` | a struct field | `.o.Voice.gain` |
+| `.z.<Struct>` | a struct | `.z.Voice` |
+| `.z.<Struct>.<field>` | a struct ARRAY field | `.z.S.v` |
+| `.z.<global>` | a global array | `.z.grid` |
+| `.z.<function>.<local>` | a local array | `.z.main.buf` |
 
-`.x.<global>` and `.x.<function>.<local>`, emitted as `! DEFi` immediately above the array's own
-allocation line, which then reads `*.x.name` instead of a number or a scratch:
+An array VARIABLE's size is emitted immediately above its own allocation line, which then reads
+`*.z.name` instead of a number or a scratch:
 
     					! MULi <A> #H #W
-    .x.grid:			! DEFi #<A>
-    grid:				GLOB *.x.grid
+    .z.grid:			! DEFi #<A>
+    grid:				GLOB *.z.grid
 
-The value is the allocation size **in words** - the `*size` operand, not the element count (for a
-struct-element array those differ by `.z.Elem`). Every array gets one: global, `readonly`, `temporary`
-and non-inline local alike.
+An array FIELD's is emitted inside the layout block, while the extent is still live, and the accumulator
+then advances by the SYMBOL - so it outlives the `<X>` scratch it folded into:
 
-The point is that an extent is usually NOT a number Impala knows. It can be a host-supplied
+    .o.S.a:				! DEFi #<a>
+    .z.S.a:				! DEFi #<A>
+    					! ADDi <a> #<a> #.z.S.a
+
+**Always WORDS, never an element count.** It is the `*size` allocation operand, so a struct-element array
+`Voice bank[3]` gives `.z.bank` = `3 * .z.Voice`, not `3`. A name like `.n.` or "length" would therefore
+be actively misleading, and a genuine per-axis element count would be a NEW symbol, not a rename of this
+one. Every array gets one - global, `readonly`, `temporary`, local and struct field alike; scalar and
+by-value fields do not, since one word and `.z.Inner` already name themselves. Extern structs mint
+nothing at all: the host owns their layout, sizes included.
+
+**One tag can span types AND variables only because a top-level name has exactly one kind.** Otherwise
+`.z.S` would be both `struct S`'s size and a global array `S`'s extent, and `.z.S.a` both a field of
+`struct S` and a local of `function S`. Both shapes were legal until 2026-08-02, and the second produced
+a real `Symbol already defined` from the assembler. `claimTopName` now rejects every top-level name clash
+(`E401`), which is what let the separate `.x.` extent tag this file used to document collapse into `.z.`.
+**If that rule is ever relaxed, `.z.` has to split again** - see "Adding a new one" below.
+
+The point is that a size is usually NOT a number Impala knows. It can be a host-supplied
 `! DEFi` count, or `count * .z.Elem` that only resolves once the host's struct layout is in. Folding it
 into a `<X>` compile-time scratch made the allocation line the one and only place that could read it,
 because the next `borrow('<')` recycles the register. A named constant is permanent, so the extent can
@@ -84,6 +114,16 @@ it does mean a new tag must stay unambiguous when `_i<N>` is appended.
 
 ## Why single letters are safe
 
+Before minting a tag, check whether an EXISTING family can take the name instead - `.z.` absorbed every
+array extent that way, retiring the whole `.x.` tag rather than keeping two for one idea.
+Two things make that sound, and BOTH must hold: the concept has to genuinely be the same (an array's
+extent and a struct's size are both "words occupied", so one tag is honest - whereas "length" would not
+have been, since the value is words and not a count), and the OWNER names have to be unambiguous. The
+second is not a property of the tag at all; it is `claimTopName`'s one-kind-per-top-level-name rule, so a
+change THERE can retroactively break a symbol family here. That is the direction this file's inventory is
+most likely to go stale in.
+
+
 A layout constant is ALWAYS dot-followed (`.o.` / `.z.`) while a label is letter-then-digits with no dot
 (`.s0`, `.e24`). So `.o.Voice` cannot be confused with a hypothetical `.oN` label even if `o` were later
 reused as a label tag. The two shapes are distinguishable by the character after the tag.
@@ -94,8 +134,9 @@ between struct `A_B` field `c` and struct `A` field `B_c`.
 
 ## Adding a new one
 
-1. **Take a free tag letter.** In use: `a e f l s t` (labels), `a s` (data), `o z x` (constants). Free
-   today: `b c d g h i j k m n p q r u v w y`.
+1. **Take a free tag letter.** In use: `a e f g l s t` (labels), `a s` (data), `o z` (constants). Free
+   today: `b c d h i j k m n p q r u v w x y`. (`x` was the array-extent tag until 2026-08-02, when
+   `.z.` absorbed it - do not resurrect it for a second size-like idea without re-reading the note above.)
 2. **Decide which shape it is.** Dot-followed (`.k.Thing.part`) for a stable, nameable constant that
    host or hand-written GAZL may reference; letter+digits (`.kN`) for an internal, throwaway label.
 3. **Stable names get NO random-id suffix**; internal content-derived ones get one.

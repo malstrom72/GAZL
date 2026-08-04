@@ -72,7 +72,18 @@ function runExpected(gazlPath, expectedRun) {
    Known blind spot: GAZLCmd stops at the FIRST unresolved symbol, so a host name near the top of a
    module waves the REST of it through unchecked - hence the separate summary count. Supplying the
    missing names as `<define> <value>` pairs does not fix it: about as many fixtures define
-   `DEBUG`/`PARAM_COUNT` themselves and would then collide (measured: 22 linked -> 8). */
+   `DEBUG`/`PARAM_COUNT` themselves and would then collide (measured: 22 linked -> 8).
+
+   Measured AGAIN 2026-08-03, this time feeding back whatever symbol the assembler stops at, in a loop,
+   so a collision cannot happen by construction. It still does not pay, and the reason is not fixable
+   from here. Of the 50 modules that do not assemble today, the loop gains 6; the rest divide into
+   21 `Offset out of bounds`, 14 `Exception` and 9 `Symbol already defined`. The first group is the
+   point: these constants are host-owned SIZES and INDICES (`PARAM_COUNT`, `OPERATOR_1_PARAM_INDEX`,
+   ...), declared valueless in the sources on purpose, and no manifest in this repo carries the real
+   numbers - so any value invented here is wrong often enough to turn a blind spot into a FALSE red,
+   which is strictly worse than an honest "not checked". Do not measure this a third time without the
+   actual Permut8 constants in hand; with them it is worth revisiting, because assembly is the gate
+   that catches what byte-comparison cannot. */
 const NEEDS_HOST = {};
 const HOST_SYMBOL = /Symbol (?:not found|not previously defined|already defined)[^:]*:\s*(\S+)$/;
 

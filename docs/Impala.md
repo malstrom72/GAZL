@@ -30,9 +30,10 @@ Identifiers start with a letter, `_`, or `$` and continue with letters, digits, 
 or `$`. The following words are reserved and cannot be used as identifiers:
 
 ```
-abs array assert case const copy default do else extern float floor for from
-ftoi funcptr function global goto if int itof locals loop native null nullfunc
-pointer readonly returns switch temporary to while
+abs array assert case const copy default do else export extern float floor for
+from ftoi funcptr function functype global goto if import inline int itof locals
+loop native null nullfunc pointer readonly returns sizeof struct switch temporary
+to while
 ```
 
 ### Integer literals
@@ -276,8 +277,10 @@ contract shapes in comments without changing the generated instructions, so lega
 assemblers continue to accept the files. Casting does not convert between ints and
 floats; use `itof()` or `ftoi()` for that.
 
-Functions cannot be nested. There are no prototypes; a function may call another defined
-later in the same source or in another linked source.
+Functions cannot be nested. **A name must be declared before it is used** — the compiler is
+single-pass, so calling a function defined later in the same source is `E403 Undeclared
+identifier` (the diagnostic finds the later definition and says so). To call across sources,
+or to break a cycle within one, declare a forward `extern function` above the use.
 
 ## Statements
 
@@ -335,17 +338,26 @@ Use `goto` and labels to break out of loops manually:
 
 ```impala
 loop {
-        if (done) goto finished;
+        if (done != 0) goto finished;
         step();
 }
-finished:
+finished: ;
 ```
+
+A label must be followed by a statement, so a label at the end of a block needs the empty
+statement `;`. Writing a bare `finished:` there reports `E001: syntax error` on the closing
+brace.
 
 ### `switch`
 
-`switch` tests an integer expression against an inclusive range written as
-`== low to high`. If the value falls outside the range, the `default` case runs. Cases do
-**not** fall through, so there is no `break`. A case can list several values.
+`switch` tests an integer expression against a range written as `== low to high`. The upper
+bound is **exclusive**, exactly as in `for (i = 0 to N)` — `switch (i == 0 to 10)` covers 0
+through 9, and `case 10:` is `E444`. If the value falls outside the range, the `default` case
+runs. Cases do **not** fall through, so there is no `break`. A case can list several values.
+
+A case value outside the range is rejected only when the compiler can see both numbers. If
+`high` is a named `const` or a host-supplied constant, the range is symbolic and an
+out-of-range case compiles into silently unreachable code.
 
 ```impala
 switch (i == 0 to 10) {
@@ -443,17 +455,23 @@ y = (int) lfoVal(...) + 1     // a bare untyped value + int needs the cast
 z = lfoVal(...)               // a plain assignment is fine without it
 ```
 
-### Built-in functions
+### Built-in operators
 
-Impala has exactly four built-in functions; everything else is either a statement
-keyword (`copy`, `assert`) or a host-supplied `extern native` function.
+Impala has exactly four built-ins; everything else is either a statement keyword (`copy`, `assert`)
+or a host-supplied `extern native` function.
+
+They are **prefix operators, not functions** — `abs x` is the primitive form, and they join `-`, `~`,
+`&` and `*` in the prefix table. `abs(x)` also works, but only because the parentheses are an ordinary
+parenthesized expression, so it is worth knowing what you are actually writing: `abs()` is a syntax
+error, `abs(x, 2)` is `E442 Malformed argument list`, and precedence is unary-tight, so `abs x - 1`
+means `(abs x) - 1`.
 
 | Built-in | Description |
 |---|---|
-| `abs(x)` | absolute value; works on `int` and `float` |
-| `floor(x)` | floor; works on `float` |
-| `itof(n)` | convert `int` to `float` |
-| `ftoi(f)` | convert `float` to `int` |
+| `abs x` | absolute value; works on `int` and `float` |
+| `floor x` | floor; works on `float` |
+| `itof n` | convert `int` to `float` |
+| `ftoi f` | convert `float` to `int` |
 
 ### Pointers and arrays
 
@@ -491,6 +509,17 @@ and places it in `output/`. The `BuildImpala` scripts then copy
 so Impala sources can be compiled without Node.js.
 
 ### Signature metadata and validation
+
+> **gazl-validate is not the assembler.** It is a `; signature` metadata linter: it compares
+> declared contracts across units, and it is built to run on modules whose externs are
+> deliberately unresolved — which is exactly what the assembler refuses to load. A file it
+> passes may still fail to assemble.
+>
+> The assembler (and the VM) is `output/GAZLCmd`. It has no assemble-only mode; it enters `main`
+> by default, so checking "does this assemble" by running it can launch a whole program. Name an
+> entry point that cannot exist instead — `./output/GAZLCmd f.gazl .no-entry-point` — and read the
+> `Code size:` banner, which is the proof it assembled. It then exits 1 on the missing entry
+> point, so do not read the exit code. See the README's "Which tool does what".
 
 The compiler emits human-readable signature comments alongside the
 `.gazl` instructions it produces. Each definition, global, and call site

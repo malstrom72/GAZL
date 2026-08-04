@@ -9,6 +9,20 @@ checking can close, because Impala has nowhere to encode the distinction.
 GAZL has three storage types - `i`, `f`, `p` - and **`p` is doing double duty**: it is both "data
 pointer" and "function pointer", which are not the same thing and are not interchangeable.
 
+## This is not a new rule - the ISA already states it
+
+`docs/InstructionSet.md`, under `CALL`, has said so all along:
+
+> A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function
+> declaration order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defined operations
+> on a function pointer; ordering (`LSSp`, `GEQp` etc.) and arithmetic (`ADDp`, `SUBp`, `DIFp`) applied to
+> a function pointer yield an unspecified (but memory-safe) result.
+
+The defined operation set is therefore already **equality and calling** - exactly the set proposed below.
+This document is not asking for a new rule; it is asking the assembler to ENFORCE the one already written
+down, which a shared `p` type makes impossible. Note too that "unspecified (but memory-safe)" is accurate
+but undersells `ADDp`: the result is not garbage, it is a *different function*, called silently.
+
 ## They are already different things at run time
 
 This is not a type-system nicety layered over one representation. The two live in different numeric
@@ -127,12 +141,9 @@ back here, so the work is discovered by editing the code rather than by remember
 | `src/GAZL.cpp`, `ANY_FREE` | SPLIT THIS - the union of `FUNC` and `FREE_ADDRESS` is the root cause |
 | `src/GAZL.cpp`, `CALL_v__` / `CALL_vvs` | indirect call takes generic `VAR_PTR_R`; retype to `t` |
 | `src/GAZL.cpp`, `DATp_c__` | one row can mix function and data addresses; needs a `DATt` sibling |
+| `impala/impala.jspeg`, `TYPE_SUFFIXES` | `'F','p'` is where Impala discards the distinction; becomes `'F','t'` |
 | `docs/InstructionSet.md`, `CALL` | the contract paragraph, plus a note that GAZL 1 cannot enforce it |
-
-One anchor is deliberately NOT on this branch: `impala/impala.jspeg`'s `TYPE_SUFFIXES` (`'F','p'` is where
-Impala discards the distinction, and becomes `'F','t'`). Adding it here would require regenerating
-`impalaCompiler.js` on the GAZL 2 line, which would collide with the next `Impala2` merge for no gain. That
-comment lives on `Impala2` and arrives with the merge. The Impala side is one map entry either way.
+| `docs/InstructionSet.md`, `DATp` | records that `p` covers both, and why that is a problem |
 
 **The Impala side is one map entry.** Impala already tracks funcptr as its own type `'F'` and collapses it
 only at emission, so `'F','p'` -> `'F','t'` is the whole change there. Nothing else in the compiler needs

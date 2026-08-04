@@ -67,7 +67,11 @@ Every one of these was checked against `src/GAZL.cpp` and by running GAZLCmd:
 
 ## Runnable proof
 
-`output/symwin.gazl` is a complete hand-written program in the fully symbolic style. It models
+[`docs/symbolicWindows.gazl`](symbolicWindows.gazl) is a complete hand-written program in the fully
+symbolic style, with [`docs/symbolicWindowsRepacked.gazl`](symbolicWindowsRepacked.gazl) as its re-pack
+twin. (It lived in `output/` until 2026-08-01, which is gitignored, so this note cited a proof that was
+not in the repository. Re-derived from the listing below and re-verified against today's assembler.) It
+models
 
     R funcReturningStruct(W w)
     int someFunction(int i, V s, R t, int j)
@@ -114,8 +118,12 @@ It assembles to 32 instructions and prints `56`. Three things to note:
 
 **Re-pack test.** Patching only the layout header - a leading pad field added to `V` (`.z.V` 2 -> 3), `W`
 grown (1 -> 2), and `R`'s two fields swapped - with every instruction left byte-identical, the program
-still prints `56`. `diff` shows only `! DEFi` header lines changed. Argument `t` moved from `%4` to `%5`
-and `j` from `%6` to `%7`, all re-derived by the assembler.
+still prints the same answer, and `diff` shows only `! DEFi` header lines changed. Argument `t` and `j`
+both move, all re-derived by the assembler. Reproduce:
+
+    output/GAZLCmd docs/symbolicWindows.gazl main            # 55
+    output/GAZLCmd docs/symbolicWindowsRepacked.gazl main    # 55, globals 6 -> 8 words
+    diff <(tail -n +29 docs/symbolicWindows.gazl) <(tail -n +29 docs/symbolicWindowsRepacked.gazl)
 
 
 ## What actually blocks it: Impala's allocator
@@ -211,8 +219,10 @@ without also doing the allocator.
 
 ## What implementing it would buy
 
-- `E425` lifts: an extern struct (host-owned size) could be passed and returned by value, because nothing
-  would need its size at Impala-compile time.
+- The last extern-struct restriction lifts: an extern struct (host-owned size) could be passed and
+  returned by value, because nothing would need its size at Impala-compile time. (This was once written
+  as "E425 lifts". There is no E425 - by-value params/returns are blocked for every struct by E426/E427,
+  so what lifts is that generic block, once by-value returns from `Impala3-byvalue-multireturn`.)
 - A host re-packing a struct would only need to RE-ASSEMBLE, not recompile Impala - by-value calls
   included. The modifiable-layout promise would hold end to end instead of stopping at the call boundary.
 - Runtime predictability is unaffected: the assembler still resolves every size to a fixed number, so

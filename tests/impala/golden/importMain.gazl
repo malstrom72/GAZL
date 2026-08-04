@@ -10,6 +10,23 @@
  ; signature struct Vec2 { x : int, y : int } @ mathlib.impala:11:1
 
  ;-----------------------------------------------------------------------------
+ clampi:			FUNC		; signature func clampi(int v, int lo, int hi) -> int @ mathlib.impala:16:1
+ 					$r:			OUTi
+ 					$v:			INPi
+ 					$lo:		INPi
+ 					$hi:		INPi
+ 					$t:			LOCi
+ ;-----------------------------------------------------------------------------
+ 								MOVi $t $v 						; t = v
+ 								GEQi $t $lo @.f0				; if (t < lo) 
+ 								MOVi $t $lo 					; t = lo
+ 					.f0:		LEQi $t $hi @.f1				; if (t > hi) 
+ 								MOVi $t $hi 					; t = hi
+ 					.f1:		MOVi $r $t 						; r = t
+ 								RETU   							; }
+
+
+ ;-----------------------------------------------------------------------------
  makeVec:			FUNC		; signature func makeVec(Vec2-ptr v, int x, int y) -> void @ mathlib.impala:25:1
  								PARA *1
  					$v:			INPp
@@ -65,15 +82,6 @@
  					$s:			LOCA *.z.Vec2
  					$qt:		LOCi
  					$rm:		LOCi
- 								SCOP
- 					$t_i0:		LOCi
- 								ENDS
- 								SCOP
- 					$t_i1:		LOCi
- 								ENDS
- 								SCOP
- 					$t_i2:		LOCi
- 								ENDS
  ;-----------------------------------------------------------------------------
  								ADRL %1 $p *.z.Vec2				; makeVec(&p, 3, 4)
  								MOVi %2 #3 
@@ -104,28 +112,22 @@
  								MOVi %1 $rm 					; printInt(rm)
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:26:14
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:26:25
- 								MOVi $t_i0 #-5 					; t = v
- 								GEQi $t_i0 #0 @.f0_i0			; if (t < lo) 
- 								MOVi $t_i0 #0 					; t = lo
- 					.f0_i0:		LEQi $t_i0 #9 @.f1_i0			; if (t > hi) 
- 								MOVi $t_i0 #9 					; t = hi
- 					.f1_i0:		MOVi %1 $t_i0 					; r = t
+ 								MOVi %2 #-5 					; printInt(clampi(-5, 0, 9))
+ 								MOVi %3 #0 
+ 								MOVi %4 #9 
+ 								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:28:27
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:28:28
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:28:39
- 								MOVi $t_i1 #20 					; t = v
- 								GEQi $t_i1 #0 @.f0_i1			; if (t < lo) 
- 								MOVi $t_i1 #0 					; t = lo
- 					.f0_i1:		LEQi $t_i1 #9 @.f1_i1			; if (t > hi) 
- 								MOVi $t_i1 #9 					; t = hi
- 					.f1_i1:		MOVi %1 $t_i1 					; r = t
+ 								MOVi %2 #20 					; printInt(clampi(20, 0, 9))
+ 								MOVi %3 #0 
+ 								MOVi %4 #9 
+ 								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:29:27
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:29:28
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:29:39
- 								MOVi $t_i2 #5 					; t = v
- 								GEQi $t_i2 #0 @.f0_i2			; if (t < lo) 
- 								MOVi $t_i2 #0 					; t = lo
- 					.f0_i2:		LEQi $t_i2 #9 @.f1_i2			; if (t > hi) 
- 								MOVi $t_i2 #9 					; t = hi
- 					.f1_i2:		MOVi %1 $t_i2 					; r = t
+ 								MOVi %2 #5 						; printInt(clampi(5, 0, 9))
+ 								MOVi %3 #0 
+ 								MOVi %4 #9 
+ 								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:30:26
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:30:27
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:30:38
  								RETU   							; }

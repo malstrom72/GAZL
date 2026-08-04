@@ -36,7 +36,29 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 - `src/` - C++ VM implementation
 - `impala/` - Impala compiler and demo sources
 - `tools/` - build/maintenance scripts
-- `externals/` - third-party code such as `NuXJS`
+- `externals/` - vendored code from separate repositories, currently just `NuXJS` (also BSD 2-Clause, also
+  Magnus Lidström - see [`externals/NuXJS/VENDOR.md`](externals/NuXJS/VENDOR.md) for the upstream pin)
+
+### Which tool does what
+
+Three tools take a `.gazl` and it is easy to assume the wrong one is checking your work:
+
+| Tool | What it is |
+|---|---|
+| `output/GAZLCmd` | **The assembler and the VM.** The only thing that can tell you a module assembles and loads. |
+| `tools/gazl-validate.sh` / `.cmd` | A `; signature` **metadata linter**, not an assembler. It compares declared contracts across units and is built to run on modules whose externs are deliberately unresolved — exactly what the assembler refuses to load. A file it passes may still fail to assemble. |
+| `impala/gazlAssembleCheck.js` | The test gates' helper that feeds a `.gazl` to `GAZLCmd`. Not something you run directly. |
+
+`GAZLCmd` has **no assemble-only mode** — it enters `main`, which for a fixture that has one means
+running a whole program you did not ask for (one of them is an interactive chess game). To assemble
+without running, name an entry point that cannot exist: it assembles, prints its banner, and stops.
+
+```
+./output/GAZLCmd yourfile.gazl .no-entry-point
+```
+
+It prints the `Code size:` banner — that line is the proof it assembled — then
+`Could not locate function: .no-entry-point` and exits 1. So read the banner, not the exit code.
 
 ### Getting Started
 
@@ -91,8 +113,12 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 ## Documentation
 
+**[docs/README.md](docs/README.md) indexes all 24 documents** with what each is for and how much to trust
+it. The most-linked few:
+
 - [Overview](docs/Overview.md) - general architecture and goals
 - [Impala Language Reference](docs/Impala.md) - the language and toolchain
+- [The `impala/` directory](impala/README.md) - what each compiler file is, and the common commands
 - [Two-Stage Constants](docs/TwoStageConstants.md) - why GAZL ships as text, and why a constant is not always a number the compiler knows
 - [Instruction Set](docs/InstructionSet.md) - extracted opcode descriptions
 - [Memory Safety Model](docs/MemorySafetyModel.md) - stack frames, what is bounds-checked and when, what `*size` is for

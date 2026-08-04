@@ -74,8 +74,8 @@ main:	FUNC	; signature func main() -> void @ 47:1
 	$d3zR:	LOCf
 	$left:	LOCf
 	$right:	LOCf
-.x.main.params:	! DEFi #PARAM_COUNT
-	$params:	LOCA *.x.main.params
+.z.main.params:	! DEFi #PARAM_COUNT
+	$params:	LOCA *.z.main.params
 ;-----------------------------------------------------------------------------
 		MOVf $d3zL #0.0 	; dxzL = d0zL = d1zL = d2zL = d3zL = 0.0
 		MOVf $d2zL #0.0 

@@ -69,8 +69,8 @@ sum3:	FUNC	; signature func sum3(int a, int b, int c) -> int @ 51:1
 	$a:	INPi
 	$b:	INPi
 	$c:	INPi
-.x.sum3.buf:	! DEFi #3
-	$buf:	LOCA *.x.sum3.buf
+.z.sum3.buf:	! DEFi #3
+	$buf:	LOCA *.z.sum3.buf
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $buf:0 $a 	; buf[0] = a
@@ -132,9 +132,9 @@ pick:	FUNC	; signature func pick(int i) -> int @ 71:1
 ;-----------------------------------------------------------------------------
 		SWCH $i *3 @.s0	; switch (i == 0 to 3) 
 	.s0#0:	MOVi $r #10 	; r = 10
-		GOTO @.e1  
+		RETU   
 	.s0#1:	MOVi $r #20 	; r = 20
-		GOTO @.e1  
+		RETU   
 	.s0:	MOVi $r #99 	; r = 99
 	.e1:	RETU   	; }
 
@@ -173,8 +173,8 @@ sumTo:	FUNC	; signature func sumTo(int n) -> int @ 76:1
 main:	FUNC	; signature func main() -> void @ 80:1
 		PARA *1
 	$t:	LOCi
-.x.main.cell:	! DEFi #1
-	$cell:	LOCA *.x.main.cell
+.z.main.cell:	! DEFi #1
+	$cell:	LOCA *.z.main.cell
 ;-----------------------------------------------------------------------------
 		MOVi $t #10 	; t = 10
 		MOVi %2 $t 	; printInt(pure(t, 1))
