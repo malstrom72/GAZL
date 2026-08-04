@@ -2587,6 +2587,47 @@
 
     /* structPtr[k] or arrayField[k] -> the element place. A constant index adds a symbolic stride to the
        offset parts (folds into the following .field, no runtime cost); a dynamic index materializes. */
+    /* A bare operand dressed as a meta, so a folded index can be handed to `subscriptStruct` /
+       `binaryOp` exactly where an Expr node goes. `makeRValue` reads `operands[1]` for a `:=` and hands
+       it straight back, which is the whole trick. */
+    $$parser.wrapOperand = function (op, type) {
+        return { operator: ':=', type: (type || 'i'), operands: [ undefined, op, undefined ] };
+    };
+
+    /* One Horner step: `acc * stride + idx`. Assemble-time throughout when every part is - a constant
+       subscript then costs nothing at run time, exactly as a constant 1-D one does. */
+    $$parser.mulAddAxis = function (acc, stride, idx, sourceCode, sourceOffset) {
+        var live = ($$parser.indexKind(acc) === 'runtime' || $$parser.indexKind(idx) === 'runtime'
+                || $$parser.indexKind('#' + $$parser.dropHash(stride)) === 'runtime');
+        var dst = $$parser.borrow(live ? '%' : '<');
+        $$parser.emit(live ? '*' : '<> *', 'i', dst, acc, stride);
+        $$parser.emit(live ? '+' : '<> +', 'i', dst, dst, idx);
+        $$parser.returnBack(acc);
+        $$parser.returnBack(idx);
+        return (live ? dst : '#' + dst);
+    };
+
+    /* Reduce a multidimensional subscript to the ONE linear index every path below already takes. Axes are
+       numbered by STRIDE, innermost first, so `a[y, x]` on `[H, W]` is `y * W + x` - Horner from the
+       outermost axis inwards, which is one MUL+ADD per extra axis and folds entirely at assembly time when
+       the indices are constant. The per-axis extents come from the place's `dims`, which only a struct
+       ARRAY FIELD carries today (slice 1); anything else has no shape to stride by and says so. */
+    $$parser.foldAxes = function (slot, first, extra, sourceCode, sourceOffset) {
+        var dims = slot.extent && slot.extent.dims;
+        if (dims === undefined || dims.length !== extra.length + 1) {
+            $$parser.fail('This array has ' + (dims === undefined ? 'one axis' : dims.length + ' axes')
+                    + ', but the subscript names ' + (extra.length + 1),
+                    sourceCode, sourceOffset, 'E206',
+                    'a subscript states every axis of the array it indexes');
+        }
+        var acc = $$parser.makeRValue(metaSlot(first));
+        for (var a = 0; a < extra.length; ++a) {
+            /* stride of the axis we are LEAVING = the extent of the next axis inwards */
+            acc = $$parser.mulAddAxis(acc, dims[dims.length - 2 - a], extra[a]);
+        }
+        return $$parser.wrapOperand(acc);
+    };
+
     $$parser.subscriptStruct = function (x, idx, sourceCode, sourceOffset) {
         x = metaSlot(x);
         var extent = x.extent;
@@ -5043,13 +5084,24 @@ PrePost     <-  (op:PREFIX_OP _
 # Pointer arithmetic already scales silently by element size; subscripting now agrees with it.
 # `$idxAt` is captured after the bracket: the closing `] _` eats the trailing space, so the action's own
 # `$$i` names whatever follows the subscript (an `=`, or the next declaration).
-Subscript   <-  '['_                               { $idxAt = $$i; }
-                s:Expr ']'_                        { if (!$$parser.dry) {
+# A comma list is a MULTIDIMENSIONAL subscript: `a[y, x]` strides axis 1 by axis 0's extent, so it means
+# `a[y * .d....0 + x]` and reduces to the single linear index every path below already takes. Each index is
+# r-valued as it is parsed, while its meta is still fresh - the discipline call arguments use. One index
+# takes exactly the path it took before this rule learned to count, so a 1-D subscript is byte-identical.
+Subscript   <-  '['_                               { $idxAt = $$i; $subExtra = []; }
+                s:Expr
+                ( ','_ x:Expr                      { if (!$$parser.dry) $subExtra.push($$parser.makeRValue(metaSlot($x))); }
+                )*
+                ']'_                               { if (!$$parser.dry) {
                                                        var sb = metaSlot($$);
+                                                       /* ONE index takes the path it took before this rule learned to count -
+                                                          `$s` is handed on untouched, so a 1-D subscript is byte-identical. */
+                                                       var sIdx = ($subExtra.length === 0 ? $s
+                                                               : $$parser.foldAxes(sb, $s, $subExtra, $$s, $idxAt));
                                                        if ((sb.place && sb.arrayOf) || (sb.type === 'p' && $$parser.isStructAtom(sb.elem)))
-                                                           $$parser.subscriptStruct($$, $s, $$s, $idxAt);
+                                                           $$parser.subscriptStruct($$, sIdx, $$s, $idxAt);
                                                        else
-                                                           $$parser.binaryOp('=[]', $$, $s, $$s, $idxAt);
+                                                           $$parser.binaryOp('=[]', $$, sIdx, $$s, $idxAt);
                                                      } }
 
 FieldAccess <-  '->'_ f:Identifier                 { if (!$$parser.dry)
