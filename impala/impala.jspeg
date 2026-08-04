@@ -1313,7 +1313,7 @@
     $$parser.indexKind = function (op) {
         if (/^#?<[A-Za-z]>$/.test(op)) return 'scratch';          /* an assemble-time fold under a recycled name */
         if (op.charAt(0) !== '#') return 'runtime';               /* $local, %transient */
-        if (/^#-?[0-9]+$/.test(op)) return 'now';                 /* a literal - Impala decides it */
+        if ($$parser.constInt(op) !== undefined) return 'now';    /* a literal - Impala decides it */
         return /^#[A-Za-z_]/.test(op) ? 'assembly' : 'runtime';   /* #NAME is the assembler's */
     };
 
@@ -1645,10 +1645,19 @@
     /* The integer behind a folded operand, or undefined when it is symbolic (`<A>`, a host `! DEFi`, an
        `extern struct` size). EVERY compile-time check gates on this: Impala may only reject a value it
        genuinely knows, and not knowing is not the same as being fine - so a symbolic operand is passed
-       over in silence rather than guessed at. See docs/CompileTimeHardening.md. */
+       over in silence rather than guessed at. See docs/CompileTimeHardening.md.
+
+       It must decode every spelling `IntegerLiteral` accepts, or a literal Impala plainly knows reads as
+       symbolic and every gate downstream stands down: `global int array g[0x4]` disarmed E461, and
+       `[-0x1]` walked past E462 and shipped `! DEFi #-0x1`, which lays a struct out BACKWARDS. Decimal
+       alone also missed the legal leading `+`. A CHARACTER literal is deliberately still unknown - only
+       GAZL decides what `'ab'` is worth, and agreeing with it by guess is how the two stages drift. */
     $$parser.constInt = function (operand) {
-        return (typeof operand === 'string' && /^#-?[0-9]+$/.test(operand))
-                ? parseInt(operand.substr(1), 10) : undefined;
+        var m = (typeof operand === 'string'
+                ? /^#([-+]?)(?:0[xX]([0-9A-Fa-f]+)|([0-9]+))$/.exec(operand) : null);
+        if (m === null) return undefined;
+        var n = (m[2] !== undefined ? parseInt(m[2], 16) : parseInt(m[3], 10));
+        return (m[1] === '-' ? -n : n);
     };
 
     /* `SWCH` resolves table entries 0..size-1 only, so a case outside that window is unreachable - and a
@@ -4605,7 +4614,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     && $$parser.descTail($a.elem) === undefined
                                                                                     && $$parser.isStructAtom($$parser.descHead($a.elem)));
                                                                             $aStruct = $a.elem;
-                                                                            $aCount = parseInt('' + $a.size, 10);
+                                                                            $aCount = $$parser.constInt('#' + $a.size);
                                                                          }
                          ( '=' _                                       {   /* the list is fully consumed before these
                                                                               checks run, so $$i would land on the NEXT

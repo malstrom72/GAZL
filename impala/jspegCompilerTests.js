@@ -2040,6 +2040,32 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler defers a symbolic-extent field index to GAZL assembly time");
 }
 
+// EVERY GATE ABOVE reads `constInt`, which decoded decimal ONLY - so the other two spellings
+// `IntegerLiteral` accepts read as symbolic, and a number Impala plainly knows stood every check down.
+// `[0x4]` disarmed E461, `[-0x1]` walked past E462 and shipped `! DEFi #-0x1` (the aliasing layout the
+// case above exists to stop), and `[0x2]` on a STRUCT array reached E460 through `parseInt('0x2', 10)`
+// -> 0 and rejected a correct initializer as "2 given, but it holds 0". One decoder, so a spelling
+// cannot be right for the extent and wrong for the index again.
+{
+	for (const [label, src] of [
+		["a hex extent still arms E461", "global int array g[0x4]\nfunction main() { global g[9] = 1; }\n"],
+		["a hex INDEX is decided too", "global int array g[4]\nfunction main() { global g[0x9] = 1; }\n"],
+		["...and so is a `+`-signed one", "global int array g[4]\nfunction main() { global g[+9] = 1; }\n"],
+	]) {
+		expectCompileOutcome("integer literal spellings", label, src, "E461");
+	}
+	expectCompileOutcome("integer literal spellings", "a negative hex extent still reaches E462",
+		"global int array g[-0x1]\nfunction main() { }\n", "E462");
+	expectCompileOutcome("integer literal spellings", "a hex extent no longer counts as zero",
+		"struct S { int a }\nreadonly S array t[0x2] = { { a: 1 }, { a: 2 } }\nfunction main() { }\n", null);
+	// A CHARACTER literal stays unknown on purpose: only GAZL decides what `'ab'` is worth, so Impala
+	// passes it through rather than agreeing with the other stage by guess.
+	const chr = compileWithJsImpala("global int array g[4]\nfunction main() { global g['a'] = 1; }\n",
+		{ randomId: 42 });
+	assert(/POKE &g:'a'/.test(chr), "integer literal spellings: a char literal was decoded, not deferred\n" + chr);
+	console.log("impala.jspeg compiler decides every integer literal spelling, and defers only chars");
+}
+
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
 const caretNonCases = [
 	["if/else with a semicolon-terminated then-branch",
