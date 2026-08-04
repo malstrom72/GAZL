@@ -138,6 +138,26 @@ and accumulates `#.z.S.b` into the layout, all resolved by the host at load. So 
 layout AND the shape, consistently, and the per-axis bounds checks defer to assembly (`! LSSi #k #W` /
 `! FAIL`) on the tier that already exists.
 
+**The rule applies at EVERY rank, and rank 1 is where it pays most.** If rank 2 required named axes while
+rank 1 forbade them, adding an axis would change whether you may name the first - incoherent. So: no
+literal extent at any rank; symbolic optional at rank 1, required at rank 2 and above; sizeless stays legal
+so nothing existing breaks.
+
+Rank 1 gains the most because an `extern struct` array field is currently **the one array shape in the
+language with no bounds checking at any tier** - `h->b[9999]` on a sizeless field compiles clean, defers
+nothing, and traps nothing at run time. Naming its extent with a host-supplied const hands it the deferred
+check verbatim, as a normal struct field already gets:
+
+```
+! LSSi #9999 #.z.S.b @.g0
+! FAIL index 9999 outside S.b (resolved only at assembly)
+```
+
+**This part is separable and worth doing on its own.** Relaxing `E430` from "no size" to "no LITERAL size"
+closes that blind spot with one loosened condition and no new machinery, and it stands whether or not
+multidimensional arrays are ever built. Its diagnostic needs rewording either way: "must not state a size"
+stops being true.
+
 **3. Axes are separated by `x` in metadata, never by a comma.** `cells : int[4x5]`.
 `tools/gazl-validate.nuxjs.js:299` splits struct fields on `,`, so `cells : int[4, 5]` would parse as two
 bogus fields and report a spurious cross-unit conflict. The park branch used `4x5` for this reason. Its
