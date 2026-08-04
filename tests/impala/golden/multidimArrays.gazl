@@ -63,28 +63,47 @@ main:	FUNC	; signature export func main() -> void @ 36:1
 	.e4:	MOVi %1 $total 	; printInt(total)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:17
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 54:11
+		MOVi $total #0 	; total = 0
+		MOVi $x #0 	; for (x = 0 to 4) total = total + global grid[0, x]
+		GEQi #0 #4 @.e8
+	.l9:	PEEK %0 &grid $x	; total = total + global grid[0, x]
+		ADDi $total $total %0
+		FORi $x #4 @.l9
+	.e8:	MOVi %1 $total 	; printInt(total)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 62:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 63:11
+		MOVi $total #0 	; total = 0
+		MOVi $y #0 	; for (y = 0 to 3) total = total + global grid[y, 0]
+		GEQi #0 #3 @.e10
+	.l11:	MULi %0 $y #.d.grid.0	; total = total + global grid[y, 0]
+		PEEK %0 &grid %0
+		ADDi $total $total %0
+		FORi $y #3 @.l11
+	.e10:	MOVi %1 $total 	; printInt(total)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 66:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 67:11
 		! MULi <A> #1 #.d.main.b.0	; b[1, 2] = 7
 		! ADDi <A> <A> #2
 		MOVi $b:<A> #7 
 		! MULi <A> #1 #.d.main.b.0	; printInt(b[1, 2])
 		! ADDi <A> <A> #2
 		MOVi %1 $b:<A> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 57:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 58:11
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 70:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 71:11
 		! MULi <A> #2 #.d.sym.0	; global sym[2, 3] = 99
 		! ADDi <A> <A> #3
-		! LSSi #2 #.d.sym.1 @.g8
+		! LSSi #2 #.d.sym.1 @.g12
 		! FAIL index 2 outside sym axis 1 (resolved only at assembly)  
-	.g8:	! LSSi #3 #.d.sym.0 @.g9
+	.g12:	! LSSi #3 #.d.sym.0 @.g13
 		! FAIL index 3 outside sym axis 0 (resolved only at assembly)  
-	.g9:	POKE &sym:<A> #99 
+	.g13:	POKE &sym:<A> #99 
 		! MULi <A> #2 #.d.sym.0	; printInt(global sym[2, 3])
 		! ADDi <A> <A> #3
 		PEEK %1 &sym:<A> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 61:28
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 62:11
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 74:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 75:11
 		POKE &flat:4 #210 	; global flat[4] = 210
 		PEEK %1 &flat:4 	; printInt(global flat[4])
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 65:26
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 66:11
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 78:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 79:11
 		RETU   	; }

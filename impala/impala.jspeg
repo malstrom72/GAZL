@@ -163,7 +163,6 @@
     var $$parser.emittedGuards = {};                              /// (array, index) pairs already asserted in this function - the same assertion twice says nothing new
     var $$parser.initTarget = undefined;                          /// element DESCRIPTOR an `InitList`'s entries answer to; undefined = untyped array, accept what comes
     var $$parser.reservedAt = undefined;                          /// offset of the last name reported as reserved - two doors check one name, one reports it
-    var $$parser.axisOob = [];                                    /// per-axis bounds findings, handed from foldAxes to subscriptStruct
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
     var $$parser.exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
@@ -1400,15 +1399,6 @@
             return;                                               /* a constant, in any of its spellings,
                                                                      belongs to an earlier tier */
         }
-        if (extent.dims !== undefined) {
-            return;                                               /* a SHAPE: every axis was just checked
-                                                                     against its own extent, and `.z.` is
-                                                                     their product - so `i < .z.` cannot
-                                                                     fail where all the axes passed. Sound
-                                                                     only because checkRank makes stating
-                                                                     every axis mandatory. checkAxis's own
-                                                                     per-axis record carries no `dims`. */
-        }
         var ok  = $$parser.beginDebugGuard('r');
         var bad = $$parser.newLabel('r');
         $$parser.emit('<', 'i', undefined, idxOp, '#0');           /* below the start -> fail */
@@ -2235,22 +2225,6 @@
        allocation tracks the element size exactly like the subscript stride does; scalar elements are
        one word each, so the count IS the size. declare() flushes the fold ahead of the `! DEFi` that
        reads it, and hands the scratch back. */
-    function repeatChar(c, n) {
-        var s = '';
-        while (--n > 0) s += c;
-        return s;
-    }
-
-    /* Is the array being declared HOST-OWNED - an `extern struct` FIELD, or a top-level `extern array`?
-       Both say exactly the same thing about layout, which is nothing: the host supplies `.o.`, `.z.` and
-       every `.d.`, and this side states rank alone. One predicate because they are one rule; they were
-       two separate tests in two grammar branches, and only one of them had ever been given a rank. */
-    $$parser.hostOwnedArray = function () {
-        return $$parser.externArray
-                || ($$parser.openStruct !== undefined
-                        && $$parser.isExternStruct($$parser.openStruct));
-    };
-
     /* One extra axis of a shaped declaration. Same constant-folding and same negative check the first axis
        gets - an axis that runs backwards is exactly as wrong as an extent that does, and catching it here
        is what keeps the product honest. Returns the bare operand, as `$extent` holds it. */
@@ -2307,6 +2281,16 @@
             }
         }
         return '*' + symbol;
+    };
+
+    /* Is the array being declared HOST-OWNED - an `extern struct` FIELD, or a top-level `extern array`?
+       Both say exactly the same thing about layout, which is nothing: the host supplies `.o.`, `.z.` and
+       every `.d.`, and this side states rank alone. One predicate because they are one rule; they were
+       two separate tests in two grammar branches, and only one of them had ever been given a rank. */
+    $$parser.hostOwnedArray = function () {
+        return $$parser.externArray
+                || ($$parser.openStruct !== undefined
+                        && $$parser.isExternStruct($$parser.openStruct));
     };
 
     /* The struct atom a pointer/array element descriptor points at, or undefined for anything whose
@@ -2743,13 +2727,27 @@
     };
 
     /* One Horner step: `acc * stride + idx`. Assemble-time throughout when every part is - a constant
-       subscript then costs nothing at run time, exactly as a constant 1-D one does. */
+       subscript then costs nothing at run time, exactly as a constant 1-D one does.
+       The two DEGENERATE steps are skipped, and both identities hold whatever the stride turns out to be -
+       so a host-owned axis folds exactly as a literal one does and nothing is baked. `0 * W + idx` is
+       `idx`, which is the whole of `grid[0, x]`, the row-0 idiom; `acc * W + 0` is the multiply alone.
+       Emitting them cost two and one RUNTIME instructions per access, inside whatever loop the subscript
+       sat in. `subscriptStruct` has always skipped the flat `+ 0` (its `k !== '0'` test); this is the
+       same rule reaching the axes. */
     $$parser.mulAddAxis = function (acc, stride, idx, sourceCode, sourceOffset) {
         stride = '#' + $$parser.dropHash(stride);                 /* an axis is a CONSTANT operand, not an address */
-        var live = ($$parser.indexKind(acc) === 'runtime' || $$parser.indexKind(idx) === 'runtime');
+        if ($$parser.indexKind(acc) === 'now' && $$parser.constInt(acc) === 0) {
+            $$parser.returnBack(acc);
+            return idx;                                           /* the caller owns it now, so it is NOT returned */
+        }
+        var zero = ($$parser.indexKind(idx) === 'now' && $$parser.constInt(idx) === 0);
+        var live = ($$parser.indexKind(acc) === 'runtime'
+                || (!zero && $$parser.indexKind(idx) === 'runtime'));
         var dst = $$parser.borrow(live ? '%' : '<');
         $$parser.emit(live ? '*' : '<> *', 'i', dst, acc, stride);
-        $$parser.emit(live ? '+' : '<> +', 'i', dst, dst, idx);
+        if (!zero) {
+            $$parser.emit(live ? '+' : '<> +', 'i', dst, dst, idx);
+        }
         $$parser.returnBack(acc);
         $$parser.returnBack(idx);
         return (live ? dst : '#' + dst);
@@ -2760,47 +2758,33 @@
        outermost axis inwards, which is one MUL+ADD per extra axis and folds entirely at assembly time when
        the indices are constant. The per-axis extents come from the place's `dims`, which only a struct
        ARRAY FIELD carries today (slice 1); anything else has no shape to stride by and says so. */
-    /* One axis of a shaped subscript, checked against that axis's own extent. The synthesized record is
-       what `checkConstIndex` already understands, so the compile-time refusal and the assembly-time
-       deferral both arrive without a second implementation - only the NAME differs, so the message says
-       which axis rather than just naming the field. */
-    $$parser.checkAxis = function (slot, axis, idxRV, sourceCode, sourceOffset) {
+    /* ONE AXIS dressed as an ordinary extent, which is what lets every tier check it VERBATIM instead of
+       growing a second, divergent set of rules - only the NAME differs, so the message says which axis
+       rather than just naming the array. An unresolvable `n` (a HOST-OWNED axis: `.d.H.cells.0` names it
+       and only the assembler can read it) is already what `checkConstIndex` treats as tier 2, so the
+       deferral decision 2 promises arrives with no branch of its own.
+       It deliberately carries NO `dims` of its own: `dims` is the flag that means "a shape, whose flat
+       product is implied by its axes", and an axis record wearing one would have its own checks skipped.
+       Named rather than written inline because that contract is otherwise invisible - and because it was
+       written inline TWICE, once per tier, which is how the two came to be edited separately. */
+    $$parser.axisExtent = function (ext, axis) {
+        return { n: ext.dimN[axis], what: ext.what + ' axis ' + axis,
+                 sym: ext.dims[axis], inField: true };
+    };
+
+    /* One axis of a shaped subscript, checked against that axis's own extent - both static tiers and the
+       runtime one, in the order they must run, which is exactly what `checkSubscript` already is. */
+    $$parser.checkAxis = function (slot, axis, idxRV, oobs, sourceCode, sourceOffset) {
         var ext = slot.extent;
         if (ext === undefined || ext.dims === undefined) {
             return;                                               /* no shape - nothing to check per axis */
         }
-        /* An UNDEFINED extent is not "no axis", it is a HOST-OWNED one: `.d.H.cells.0` names it and only
-           the assembler can read it. Guarding on `dimN[axis]` instead sent exactly that case home
-           unchecked, which is the one decision 2 promises deferral for. `checkConstIndex` already treats
-           an unresolvable `n` as tier 2, so the deferral arrives with no branch of its own. */
-        var oob = $$parser.checkConstIndex({ n: ext.dimN && ext.dimN[axis],
-                what: ext.what + ' axis ' + axis,
-                sym: ext.dims[axis], inField: true }, idxRV, sourceCode, sourceOffset);
-        /* Held on the parser because `foldAxes` runs before `subscriptStruct`, which assigns `oobIndex`
-           last. Every axis keeps its own finding - see checkIndexUse for why they are not arbitrated. */
+        var oob = $$parser.checkSubscript($$parser.axisExtent(ext, axis), idxRV,
+                sourceCode, sourceOffset);
         if (oob !== undefined) {
-            $$parser.axisOob.push(oob);
+            oobs.push(oob[0]);                                    /* every axis keeps its own finding - see
+                                                                     checkIndexUse for why not arbitrated */
         }
-        /* Tier 3 for this axis. `emitRangeCheck` self-selects - it returns at once unless `--range-checks`
-           is on AND this index is a runtime value - so the constant axes of a mixed subscript cost nothing.
-           The bound is the axis SYMBOL, an assemble-time immediate, so this is two compares and no setup,
-           exactly as the 1-D tier is. */
-        $$parser.emitRangeCheck(idxRV, { n: ext.dimN && ext.dimN[axis],
-                what: ext.what + ' axis ' + axis,
-                sym: ext.dims[axis], inField: true }, sourceCode, sourceOffset);
-    };
-
-    /* Drain the per-axis findings `foldAxes` left on the parser and append this subscript's own flat one.
-       BOTH lowerings call it, because both can now be handed a shape: a struct field reaches
-       `subscriptStruct`, a standalone `global`/local array reaches `binaryOp('=[]')`. An undrained
-       accumulator would hand one subscript's axes to the next subscript in the same function. `concat`
-       takes the flat finding in either spelling - one record from subscriptStruct, a list from
-       checkSubscript. */
-    $$parser.takeAxisOob = function (own) {
-        var found = $$parser.axisOob;
-        $$parser.axisOob = [];
-        if (own !== undefined) found = found.concat(own);
-        return (found.length === 0 ? undefined : found);
     };
 
     /* A subscript states EVERY axis of the array it indexes - asked of every subscript, including the
@@ -2808,7 +2792,7 @@
        door back into exactly what a shape exists to reject: `cells[11]` on a `[3, 4]` is a legal WORD
        offset and an illegal coordinate, and it compiled silently. An array with no `dims` is rank 1, so
        an ordinary array - and a bare pointer, which has no extent at all - still takes one index and is
-       unaffected. Returns the axes, which foldAxes then knows are the right count. */
+       unaffected. */
     $$parser.checkRank = function (slot, count, sourceCode, sourceOffset) {
         var dims = slot.extent && slot.extent.dims;
         var rank = (dims === undefined ? 1 : dims.length);
@@ -2818,10 +2802,13 @@
                     sourceCode, sourceOffset, 'E206',
                     'a subscript states every axis of the array it indexes');
         }
-        return dims;
     };
 
-    $$parser.foldAxes = function (slot, first, extra, extraAt, sourceCode, sourceOffset) {
+    /* `oobs` collects the per-axis findings for the ONE caller that then hands them to the lowering. It is
+       a parameter and not parser state: producer and consumer are three lines apart in the `Subscript`
+       rule, and a parser field had to be drained by every lowering or it leaked one subscript's axes into
+       the next - a hazard a local array cannot have. */
+    $$parser.foldAxes = function (slot, first, extra, extraAt, oobs, sourceCode, sourceOffset) {
         var dims = slot.extent.dims;                              /* checkRank already agreed on the count */
         var acc = $$parser.makeRValue(metaSlot(first));
         /* EVERY axis is checked against ITS OWN extent, which is the entire safety argument for shapes:
@@ -2830,12 +2817,20 @@
            `rank-1-j`. Reuses the ordinary index check with a per-axis extent record, so a shape inherits
            `E461` and the deferred tier verbatim rather than growing a second, divergent set of rules. */
         var rank = dims.length;
-        $$parser.checkAxis(slot, rank - 1, acc, sourceCode, sourceOffset);
+        $$parser.checkAxis(slot, rank - 1, acc, oobs, sourceCode, sourceOffset);
         for (var a = 0; a < extra.length; ++a) {
-            $$parser.checkAxis(slot, rank - 2 - a, extra[a], sourceCode, extraAt[a]);
+            $$parser.checkAxis(slot, rank - 2 - a, extra[a], oobs, sourceCode, extraAt[a]);
             /* stride of the axis we are LEAVING = the extent of the next axis inwards */
             acc = $$parser.mulAddAxis(acc, dims[rank - 2 - a], extra[a]);
         }
+        /* The flat `.z.` extent is now SUPERSEDED, and saying so once here is the whole of it: every tier
+           below reads `extent === undefined` as "nothing to check", so none of them needs to know what a
+           shape is. Sound because every axis was just checked and `.z.` is their product, and honest
+           because it is stated where that becomes true. Two inline `dims === undefined` opt-outs used to
+           say it in two tiers, while the third only ever skipped by accident - the folded index happens to
+           be a scratch, which `checkConstIndex` returns early on. Clearing the SLOT's reference; the
+           cached per-field record it points at is untouched. */
+        slot.extent = undefined;
         return $$parser.wrapOperand(acc);
     };
 
@@ -2874,11 +2869,9 @@
                 /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
                    value is still live - the pushed one is freed by foldOffset long before the use decides
                    whether this is a dereference at all. One assemble-time MOVi, no runtime cost, and the
-                   copy is returned by whichever side consumes the finding.
-                   Skipped for a SHAPE, whose per-axis deferred guards already say strictly more: `.z.` is
-                   the product of the axes, so no index that cleared every axis can fail against it. Three
-                   lines of shipped GAZL text, not runtime cost - but they restated a settled question. */
-                if (scratch && extent !== undefined && extent.inField && extent.dims === undefined) {
+                   copy is returned by whichever side consumes the finding. A SHAPE never reaches here with
+                   an extent at all - foldAxes cleared it, having checked strictly more per axis. */
+                if (scratch && extent !== undefined && extent.inField) {
                     var g = $$parser.borrow('<');
                     $$parser.emit('<> =', 'i', g, '#' + part, undefined);
                     oobIndex = { k: g, own: true, ext: extent, copyAt: $$parser.metacode.length - 1,
@@ -2921,8 +2914,10 @@
                 $$parser.emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
             }
         }
-        x.oobIndex = $$parser.takeAxisOob(oobIndex);              /* AFTER the terminal call on every path -
-                                                                     setPlace and emitPlaceValue both clear it */
+        x.oobIndex = (oobIndex === undefined ? undefined : [ oobIndex ]);
+                                                                  /* AFTER the terminal call on every path -
+                                                                     setPlace and emitPlaceValue both clear
+                                                                     it. A LIST - see checkIndexUse */
     };
 
     /* a place's address: fold its offset parts into the base - ADRL for a local, ADDp for a pointer. */
@@ -3213,7 +3208,7 @@
                                   $$parser.makeRValue(leftx),
                                   $$parser.makeRValue(rightx));
             }
-            leftx.oobIndex = $$parser.takeAxisOob(xOob);   /* after the makeMeta above, which clears it */
+            leftx.oobIndex = xOob;                    /* after the makeMeta above, which clears it */
 
         } else {
 
@@ -5215,7 +5210,8 @@ ArrayDecl   <-                                                        { $desc = 
                                                                              $$parser.fail('A host-owned array must not state a size',
                                                                                      $$s, $extentStart, 'E430',
                                                                                      'the host owns this layout - state only the rank, `array '
-                                                                                             + $id + '[' + repeatChar(',', $dims.length) + ']`');
+                                                                                             + $id + '[' + new Array($dims.length).join(',')
+                                                                                             + ']`');   /* rank N reads as N-1 commas */
                                                                          }
                                                                          if (hostOwned && $dims === undefined) {
                                                                              $$parser.fail('Host-owned array ' + $id + ' must state its rank',
@@ -5373,15 +5369,23 @@ Subscript   <-  '['_                               { $idxAt = $$i; $subExtra = [
                 )*
                 ']'_                               { if (!$$parser.dry) {
                                                        var sb = metaSlot($$);
+                                                       var axisOob = [];
                                                        $$parser.checkRank(sb, $subExtra.length + 1, $$s, $idxAt);
                                                        /* ONE index takes the path it took before this rule learned to count -
                                                           `$s` is handed on untouched, so a 1-D subscript is byte-identical. */
                                                        var sIdx = ($subExtra.length === 0 ? $s
-                                                               : $$parser.foldAxes(sb, $s, $subExtra, $subAt, $$s, $idxAt));
+                                                               : $$parser.foldAxes(sb, $s, $subExtra, $subAt, axisOob, $$s, $idxAt));
                                                        if ((sb.place && sb.arrayOf) || (sb.type === 'p' && $$parser.isStructAtom(sb.elem)))
                                                            $$parser.subscriptStruct($$, sIdx, $$s, $idxAt);
                                                        else
                                                            $$parser.binaryOp('=[]', $$, sIdx, $$s, $idxAt);
+                                                       /* AFTER the lowering, which is the terminal call that assigns `oobIndex`.
+                                                          Axis findings go FIRST: an E461 that can name the axis is the one that
+                                                          should fire, the flat check having nothing to say about `cells[0, 5]`. */
+                                                       if (axisOob.length > 0) {
+                                                           var sx = metaSlot($$);
+                                                           sx.oobIndex = axisOob.concat(sx.oobIndex === undefined ? [] : sx.oobIndex);
+                                                       }
                                                      } }
 
 FieldAccess <-  '->'_ f:Identifier                 { if (!$$parser.dry)
