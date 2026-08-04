@@ -321,8 +321,11 @@ and conditions need a `COMP_OP`.
   `docs/Impala.md:378-385` now writes `finished: ;` and explains that a bare `finished:` is `E001`.
 - ~~**`docs/Impala.md`'s reserved-word list is missing all six new keywords.**~~ DOC FIXED 2026-08-04 —
   the list at `docs/Impala.md:32-36` carries all six, plus a note on `return`/`break`/`continue`.
-- **Every `.gazl` still says `; Compiled with Impala version 1.0`** (`impala/impala.jspeg:3945`).
-  **[V] still open 2026-08-04.**
+- ~~**Every `.gazl` still says `; Compiled with Impala version 1.0`**~~ FIXED 2026-08-04 (`3d1975e`).
+  `IMPALA_VERSION` is `'2.0'`; all 93 recorded artifacts were regolded, and the whole regold diff is that
+  one banner line — `tests/impala/golden/*.gazl` via `runJspegTests --makegold`, `impala/testdata/*.expected.gazl`
+  by replaying the harness's own options, and `importMain.gazl`/`stripped.gazl` via `importBuildTests makegold`
+  (a third set `--makegold` does not reach).
 
 ### C9. Documented-but-absent, and absent-but-shipped — CLOSED by Batch 5, re-checked 2026-08-04
 
