@@ -116,47 +116,40 @@ with no aliasing optimisation. Bounds checking rejects it instead: the check is 
 the flat total. Checking only the total would let `x >= W` through, which is exactly the row-overflow bug
 the feature exists to catch - a shape that cannot catch it buys syntax and nothing else.
 
-**2. An `extern struct` matrix field names its axes with host-supplied consts.**
+**2. An `extern struct` matrix field states its RANK; the host supplies every axis. `E430` stays.**
+
+An earlier draft of this section had it backwards and proposed relaxing `E430` so the field could name its
+axes with host-supplied consts. That was built, tested, and **reverted the same hour**, because the premise
+was false. Recording why, since it is the whole answer:
+
+A sizeless `extern struct` array field is **already bounds-checked**. Impala emits the deferred guard and
+references a `.z.<Struct>.<field>` that the HOST supplies, exactly as it supplies `.o.` and `.z.`:
+
+```
+! LSSi #9999 #.z.H.b @.g0
+! FAIL index 9999 outside H.b (resolved only at assembly)
+```
+
+Verified end to end - with `.z.H.b 4` the assembler rejects `h->b[9999]`; with `.z.H.b 20000` the same
+module assembles and runs. So the extent is not missing, it is host-owned and already published, and
+`E430`'s "the host owns this layout" is exactly right. Letting Impala also define `.z.H.b` produces
+`Symbol already defined: .z.H.b` - measured, not predicted.
+
+The multidimensional form therefore follows the contract that already exists. The declaration states how
+many axes there are and nothing else; the host publishes `.d.H.cells.0`, `.d.H.cells.1` and `.z.H.cells`
+together, and the per-axis checks defer against those symbols:
 
 ```impala
-const int W;
-const int H;
-extern struct Grid { int array cells[H, W]; int tag }
+extern struct Grid { int array cells[,]; int tag }     /* spelling TBD - two axes, host-supplied */
 ```
 
-`E430` relaxes from a blanket ban to "no LITERAL extent". Its own rationale is what licenses this - the
-rule reads *"a number here would be an unverifiable claim Impala never reads (offsets are host-supplied
-`.o.` symbols, 1-D stride is 1)"*, and both clauses are conditional. A host-supplied `const int W;` is not
-a number Impala knows, it is a reference to the host's own symbol exactly like `.o.` and `.z.`, so no claim
-is made and nothing is unverifiable. And "1-D stride is 1" is precisely *why* the extent was never needed;
-at rank 2 the stride IS the inner extent, so the premise expires. For a multi-dim extern field, naming the
-axes is therefore not merely permitted but **required** - without the inner extent the stride cannot be
-formed at all.
+Open sub-question: the spelling for "rank 2, extents host-supplied". `[,]` reads as an empty comma list and
+needs no new token, but it is easy to misread. It must not state numbers, since that is the claim `E430`
+correctly refuses.
 
-The machinery is already in place: a normal struct field with a symbolic extent emits `.z.S.b: ! DEFi #W`
-and accumulates `#.z.S.b` into the layout, all resolved by the host at load. So the host ends up owning the
-layout AND the shape, consistently, and the per-axis bounds checks defer to assembly (`! LSSi #k #W` /
-`! FAIL`) on the tier that already exists.
-
-**The rule applies at EVERY rank, and rank 1 is where it pays most.** If rank 2 required named axes while
-rank 1 forbade them, adding an axis would change whether you may name the first - incoherent. So: no
-literal extent at any rank; symbolic optional at rank 1, required at rank 2 and above; sizeless stays legal
-so nothing existing breaks.
-
-Rank 1 gains the most because an `extern struct` array field is currently **the one array shape in the
-language with no bounds checking at any tier** - `h->b[9999]` on a sizeless field compiles clean, defers
-nothing, and traps nothing at run time. Naming its extent with a host-supplied const hands it the deferred
-check verbatim, as a normal struct field already gets:
-
-```
-! LSSi #9999 #.z.S.b @.g0
-! FAIL index 9999 outside S.b (resolved only at assembly)
-```
-
-**This part is separable and worth doing on its own.** Relaxing `E430` from "no size" to "no LITERAL size"
-closes that blind spot with one loosened condition and no new machinery, and it stands whether or not
-multidimensional arrays are ever built. Its diagnostic needs rewording either way: "must not state a size"
-stops being true.
+**The lesson, worth more than the feature:** "compiles clean" was measured by counting `error` lines, and a
+deferred `! FAIL` is not an error line. A check that lives in the emitted GAZL is invisible to that test.
+Read the output, not the exit status.
 
 **3. Axes are separated by `x` in metadata, never by a comma.** `cells : int[4x5]`.
 `tools/gazl-validate.nuxjs.js:299` splits struct fields on `,`, so `cells : int[4, 5]` would parse as two
