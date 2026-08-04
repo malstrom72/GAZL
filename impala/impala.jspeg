@@ -161,6 +161,7 @@
     var $$parser.guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
     var $$parser.emittedGuards = {};                              /// (array, index) pairs already asserted in this function - the same assertion twice says nothing new
     var $$parser.initElemType = undefined;                        /// declared element type an `InitList` must match ('i'/'f'/'p'); undefined = untyped array, accept what comes
+    var $$parser.initElemFunc = undefined;                        /// declared funcptr TYPE an `InitList`'s entries must match; the head makeConstant cannot take
     var $$parser.switchStack = [];
     var $$parser.noForward = false;
     var $$parser.exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
@@ -2805,6 +2806,19 @@
         }
     };
 
+    /* An INITIALIZER states exactly what an assignment states, so it answers to the same check - but it
+       reached the data rows through makeConstant, which knows a type and not a funcptr TYPE, and so
+       `global TickFn onTick = wrong` stored a function of any shape under a name that promises one
+       shape. Silent: no diagnostic, and the signature row published `: TickFn` regardless. Four doors
+       share this because a fix at one of them is the shape of bug that comes back at the next. */
+    $$parser.checkInitFuncPtr = function (elem, x, sourceCode, sourceOffset) {
+        if (elem === undefined || !$$parser.isFuncTypeAtom(elem)) {
+            return;
+        }
+        var m = metaSlot(x);
+        $$parser.checkFuncPtrTarget(elem, bareOperand(m), m.type, m.elem, '', sourceCode, sourceOffset);
+    };
+
     /* --------------------------------------------------------- *
      *  Binary operations ( + - * / [] etc. )                    *
      * --------------------------------------------------------- */
@@ -4474,6 +4488,7 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                  (   '=' _                                            { $cInitStart = $$i; }   # `Expr` eats trailing space,
                                                                                                # so $$i would name the NEXT declaration
                      x:Expr                                           {
+                                                                            $$parser.checkInitFuncPtr($telem, $x, $$s, $cInitStart);
                                                                             $$parser.declare(
                                                                                 '! DEF?', 'defines',
                                                                                 $id, $t, true,
@@ -4569,6 +4584,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                                                  ate the trailing space too */
                                                                                  $$parser.fail('A struct value needs a brace initializer',
                                                                                          $$s, $initStart, 'E421');
+                                                                             $$parser.checkInitFuncPtr($v.elem, $x, $$s, $initStart);
                                                                              $init = $$parser.makeConstant($x, $v.type, $$s, $initStart);
                                                                          }
                            ) )?
@@ -4641,11 +4657,15 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                (`global float f = 1` is E407); only the array path was not.
                                                                                Restricted to the scalar heads on purpose: a struct-element array
                                                                                must keep reporting the friendlier E422 below, and a funcptr element
-                                                                               head is a TYPE NAME that makeConstant would not recognise. */
+                                                                               head is a TYPE NAME that makeConstant would not recognise - so the
+                                                                               funcptr head travels beside it instead, and checkInitFuncPtr asks
+                                                                               the question makeConstant cannot. */
                                                                             var _eh = ($a.elem !== undefined
                                                                                     ? $$parser.descHead($a.elem) : undefined);
                                                                             $$parser.initElemType = (!$aStructEl
                                                                                     && (_eh === 'i' || _eh === 'f' || _eh === 'p')) ? _eh : undefined;
+                                                                            $$parser.initElemFunc = ($$parser.descTail($a.elem) === undefined
+                                                                                    ? _eh : undefined);
                                                                          }
                            ( d:InitList                                {   /* flat list -> scalar-element arrays only */
                                                                             if ($aStructEl)
@@ -4716,6 +4736,7 @@ InitList    <-  '{' _                                                 { $d = ' '
                                                                                           # space, so $$i would name the NEXT entry
                   x:Expr                                             {
                                                                             var xMeta = metaSlot($x);
+                                                                            $$parser.checkInitFuncPtr($$parser.initElemFunc, xMeta, $$s, $entryAt);
                                                                             $type = ($$parser.initElemType !== undefined
                                                                                     ? $$parser.initElemType : xMeta.type);
                                                                             $d += $$parser.makeConstant(xMeta, $type, $$s, $entryAt);
@@ -4723,6 +4744,7 @@ InitList    <-  '{' _                                                 { $d = ' '
                   ( ',' _ !(Identifier ':')                          { $entryAt = $$i; }
                     x:Expr                                           {
                                                                             var xMeta = metaSlot($x);
+                                                                            $$parser.checkInitFuncPtr($$parser.initElemFunc, xMeta, $$s, $entryAt);
                                                                             var xType = ($$parser.initElemType !== undefined
                                                                                     ? $$parser.initElemType : xMeta.type);
                                                                             var constant = $$parser.makeConstant(xMeta, xType, $$s, $entryAt);

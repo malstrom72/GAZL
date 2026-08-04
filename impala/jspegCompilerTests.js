@@ -2090,6 +2090,34 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler decays a struct array field passed as an argument");
 }
 
+// E441 asked its question at an assignment and at an argument, but an INITIALIZER reaches the data rows
+// through makeConstant, which knows a type and not a funcptr TYPE - so every declaration door stored a
+// function of any shape under a name promising one shape, and published `: TickFn` in the signature row
+// while doing it. Nothing downstream can catch this: `&wrong` is a perfectly good address, so the call
+// through it just runs with the wrong frame. All four doors, and the matching cases beside them, because
+// a check that rejects everything looks identical to a correct one from the failing side.
+{
+	const decls = "functype TickFn(int phase)\nfunction wrong(float x, int y) returns int r { r = y; }\n"
+		+ "function right(int phase) { }\n";
+	for (const [label, decl] of [
+		["a scalar global", "global TickFn onTick = wrong\n"],
+		["an array element", "global TickFn array table[2] = { wrong, right }\n"],
+		["a later array element", "global TickFn array table[2] = { right, wrong }\n"],
+		["a const", "const TickFn cb = wrong\n"],
+	]) {
+		expectCompileOutcome("funcptr initializer", label, decls + decl + "function main() { }\n", "E441");
+	}
+	for (const [label, decl] of [
+		["a matching scalar global", "global TickFn onTick = right\n"],
+		["a matching array, with a null hole", "global TickFn array table[2] = { right, nullfunc }\n"],
+		["a matching const", "const TickFn cb = right\n"],
+		["an ordinary typed array is untouched", "global int array n[2] = { 1, 2 }\n"],
+	]) {
+		expectCompileOutcome("funcptr initializer", label, decls + decl + "function main() { }\n", null);
+	}
+	console.log("impala.jspeg compiler checks a funcptr type at every initializer, not just at assignment");
+}
+
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
 const caretNonCases = [
 	["if/else with a semicolon-terminated then-branch",
