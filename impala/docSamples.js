@@ -137,7 +137,7 @@ const SAMPLES = [
 		src: "functype Step(int frame)\nfunction wrong(float x) { }\nglobal Step cb = wrong\n"
 				+ "export function main() { }\n" },
 	{
-		name: "the two subscripts are not interchangeable",
+		name: "one subscript, striding by the element",
 		expect: null,
 		src: [
 			"struct Cell { int v; int w }",
@@ -146,19 +146,16 @@ const SAMPLES = [
 			"",
 			"function read(int i) returns int r",
 			"{",
-			"\tr = global grid[[i]].v + global flat[i];",
+			"\tr = global grid[i].v + global flat[i];",
 			"}",
 			"",
 			"export function main() { }",
 			"",
 		].join("\n"),
 	},
-	{ name: "a plain subscript on a struct element", expect: "E204",
+	{ name: "arithmetic on a struct pointer, which subscripting replaces", expect: "E307",
 		src: "struct Cell { int v }\nglobal Cell array grid[4]\n"
-				+ "export function main() locals int r, int i { r = global grid[i].v; }\n" },
-	{ name: "a scaled subscript on a one-word element", expect: "E205",
-		src: "global int array flat[4]\n"
-				+ "export function main() locals int r, int i { r = global flat[[i]]; }\n" },
+				+ "export function main() locals Cell pointer p { p = &global grid[0]; p = p + 1; }\n" },
 	{ name: "`.` through a pointer", expect: "E416",
 		src: "struct S { int a }\nglobal S s\n"
 				+ "export function main() locals S pointer p, int r { p = &global s; r = p.a; }\n" },

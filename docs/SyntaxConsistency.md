@@ -27,8 +27,8 @@ and `jspegCompilerTests.js` pins 1.2-1.4). The descriptions below are kept as th
 > the wrong half of the fork: the elements rule it rests on turned out to be unreachable (it leaks into
 > pointer comparison, where there is no unit at all), and `ADDp` + compare is three instructions where
 > the language promises one. `for` over a struct pointer is now **rejected** (`E309`) with a fix-it to
-> the `while (p < end) { ...; p = &p[[1]]; }` walk, and struct pointers move only by the scaled
-> subscript `[[i]]`. See "the scaled subscript is spelled `[[ ]]`" in `docs/Impala2Review.md`.
+> the `while (p < end) { ...; p = &p[1]; }` walk, and struct pointers move only by the scaled
+> subscript `[i]`. See "the scaled subscript is spelled `[ ]`" in `docs/Impala2Review.md`.
 > The bug below was real; only the prescription was wrong.
 
 ```impala

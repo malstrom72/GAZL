@@ -1764,7 +1764,7 @@ const caretCases = [
 			+ "function main() { printInt(global s.v[2]); }\n", "4:39: error[E461]"],
 	["E461 reports a `.field` reached through an element that is not there",
 		"struct E { int a }\nstruct O { E array e[2]; int t }\nglobal O o\n"
-			+ "function main() { global o.e[[2]].a = 1; }\n", "4:31: error[E461]"],
+			+ "function main() { global o.e[2].a = 1; }\n", "4:30: error[E461]"],
 	["E461 covers a plain GLOBAL array, not just a struct field",
 		"global int array g[4]\nfunction main() { global g[9] = 1; }\n", "2:28: error[E461]"],
 	["E461 covers a plain LOCAL array",
@@ -1834,9 +1834,9 @@ const addressCases = [
 	["&field[extent] on the LAST field, one past the struct itself",
 		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
 			+ "function main() locals int pointer p { p = &global s.pad[8]; }"],
-	["&structField[[extent]] is a legal end pointer too",
+	["&structField[extent] is a legal end pointer too",
 		"struct E { int a }\nstruct O { E array e[2]; int t }\nglobal O o\n"
-			+ "function main() locals E pointer p { p = &global o.e[[2]]; }"],
+			+ "function main() locals E pointer p { p = &global o.e[2]; }"],
 	["an address WELL past the end is legal too - the rule has no distance limit",
 		"global int array g[4]\nfunction main() locals int pointer p { p = &global g[9]; }"],
 	["...and the same on a plain local array",
@@ -1885,8 +1885,8 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		["global scalar array", "global g[i] = 1;", "#.z.g "],
 		["local scalar array", "a[i] = 1;", "#.z.main.a "],
 		["struct array field", "global s.v[i] = 1;", "#.z.S.v "],
-		["global array of structs", "global ge[[i]].a = 1;", "#.z.ge "],
-		["local array of structs", "le[[i]].a = 1;", "#.z.main.le "],
+		["global array of structs", "global ge[i].a = 1;", "#.z.ge "],
+		["local array of structs", "le[i].a = 1;", "#.z.main.le "],
 		["a re-declared array keeps its extent", "global g2[i] = 1;", "#.z.g2 "],
 		["a constant index (GAZL rejects it outright)", "global g[2] = 1;", null],
 		["a bare pointer (no extent exists)", "p = &a[0]; p[i] = 1;", null],
@@ -1927,11 +1927,11 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	assert(!/! FAIL index/.test(plain),
 		"tier 2: duplicated the assembler's own check on a plain array\n" + plain);
 	// A struct-ELEMENT array field: `.z.` counts WORDS and the index counts ELEMENTS, so the guard has to
-	// scale before comparing. `o.e[[3]]` on `e[SN]` is the case that matters - it lands in the NEXT FIELD,
+	// scale before comparing. `o.e[3]` on `e[SN]` is the case that matters - it lands in the NEXT FIELD,
 	// still inside the allocation, so the assembler sees a legal offset and only this guard catches it.
 	const scaled = compileWithJsImpala("const int SN = 3\nstruct E { int a; int b }\n"
 		+ "struct O { E array e[SN]; int t }\nglobal O o\n"
-		+ "export function main() { global o.e[[3]].a = 1; }\n", { randomId: 42 });
+		+ "export function main() { global o.e[3].a = 1; }\n", { randomId: 42 });
 	assert(/! MULi <\w> #3 #\.z\.E/.test(scaled) && /! LSSi #<\w> #\.z\.O\.e/.test(scaled),
 		"tier 2: a struct-element index is not scaled by the element size\n" + scaled);
 	// The scaling scratch must NOT come from the runtime pool: guards flush after the function's scratch
@@ -1940,7 +1940,7 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	// returnBack. Both only show up when the guarded access is NOT in the final function.
 	const notLast = compileWithJsImpala("const int SN = 3\nstruct E { int a; int b }\n"
 		+ "struct O { E array e[SN]; int t }\nglobal O o\n"
-		+ "function f() { global o.e[[3]].a = 1; }\nexport function main() { f(); }\n", { randomId: 42 });
+		+ "function f() { global o.e[3].a = 1; }\nexport function main() { f(); }\n", { randomId: 42 });
 	assert(/! FAIL index 3 outside O\.e/.test(notLast),
 		"tier 2: no guard for a function that is not the last one\n" + notLast);
 	// The SAME assertion is asked once per function. `t.v[3]` written and then read is one question, not
@@ -2532,9 +2532,9 @@ const typedPointerCases = [
 			"struct V { int n; float g }",
 			"global V array bank[4]",
 			"function main() locals V array loc[2], int i, float f {",
-			"\tglobal bank[[0]].n = 1; f = global bank[[2]].g;",
-			"\tfor (i = 0 to 4) global bank[[i]].n = i;",
-			"\tloc[[1]].g = 0.5;",
+			"\tglobal bank[0].n = 1; f = global bank[2].g;",
+			"\tfor (i = 0 to 4) global bank[i].n = i;",
+			"\tloc[1].g = 0.5;",
 			"}",
 		].join("\n"),
 		expectError: null,
@@ -2545,7 +2545,7 @@ const typedPointerCases = [
 			"struct V { int n }",
 			"global V array bank[3]",
 			"function use(V pointer p) { p->n = 9; }",
-			"function main() { use(&global bank[[1]]); }",
+			"function main() { use(&global bank[1]); }",
 		].join("\n"),
 		expectError: null,
 	},
@@ -2577,31 +2577,37 @@ const typedPointerCases = [
 		source: [
 			"struct Inner { float a }",
 			"struct Outer { Inner array items[3] }",
-			"function main() locals Outer o { o.items[[1]].a = 0.5; }",
+			"function main() locals Outer o { o.items[1].a = 0.5; }",
 		].join("\n"),
 		expectError: null,
 	},
-	/* The `[[ ]]` rule: the spelling states the stride, so each bracket form is an error where the other
-	   is correct, and a struct pointer moves by scaled subscript only. See docs/Impala2Review.md. */
+	/* ONE subscript, striding by the DECLARED ELEMENT SIZE. `[[ ]]` used to be required on a struct
+	   element and rejected everywhere else (E204/E205); removed 2026-08-04, because the marker claimed a
+	   runtime multiply that a constant index does not carry - 35 of the corpus's 49 uses were constant,
+	   where the stride is an assemble-time `!` line - and because `a[3, 5, 6]` would have to scale with no
+	   marker available to say so. Pointer arithmetic already scaled silently; subscripting now agrees.
+	   All four spellings below were diagnostics and are now the ordinary way to write it. What must NOT
+	   change is the emitted code - the `#.z.` stride assertions in the struct-array codegen block above
+	   are what hold that, and the whole corpus regolded with identical instruction streams. */
 	{
-		label: "a plain subscript on a struct element is rejected",
+		label: "a subscript on a struct element scales, and is spelled like any other",
 		source: ["struct V { int n; int m }", "global V array bank[4]", "function main() locals int i { i = global bank[1].n; }"].join("\n"),
-		expectError: "Plain subscript on a struct element",
+		expectError: null,
 	},
 	{
-		label: "a plain subscript through a struct pointer is rejected",
+		label: "...through a struct pointer too",
 		source: ["struct V { int n; int m }", "function main() locals V pointer p, int i { i = p[1].n; }"].join("\n"),
-		expectError: "Plain subscript on a struct element",
+		expectError: null,
 	},
 	{
-		label: "a scaled subscript on a one-word element is rejected",
-		source: ["global int array w[4]", "function main() locals int i { i = global w[[1]]; }"].join("\n"),
-		expectError: "Scaled subscript on a one-word element",
+		label: "...and a one-word element strides one word, same spelling",
+		source: ["global int array w[4]", "function main() locals int i { i = global w[1]; }"].join("\n"),
+		expectError: null,
 	},
 	{
-		label: "a scaled subscript on a scalar array field is rejected",
-		source: ["struct F { float array state[4] }", "function main() locals F f, float x { x = f.state[[1]]; }"].join("\n"),
-		expectError: "Scaled subscript on a one-word element",
+		label: "...including a scalar array field inside a struct",
+		source: ["struct F { float array state[4] }", "function main() locals F f, float x { x = f.state[1]; }"].join("\n"),
+		expectError: null,
 	},
 	{
 		label: "arithmetic on a struct pointer is rejected",
@@ -2623,7 +2629,7 @@ const typedPointerCases = [
 		source: [
 			"struct V { int n; int m }",
 			"global V array bank[4]",
-			"function main() locals V pointer p, int i { for (p = &global bank[[0]] to &global bank[[3]]) i = p->n; }",
+			"function main() locals V pointer p, int i { for (p = &global bank[0] to &global bank[3]) i = p->n; }",
 		].join("\n"),
 		expectError: "For variable must not be a struct pointer",
 	},
@@ -2633,15 +2639,15 @@ const typedPointerCases = [
 			"struct V { int n; int m }",
 			"global V array bank[4]",
 			"function main() locals V pointer p, V pointer e, int i {",
-			"\tp = &global bank[[0]]; e = &global bank[[4]];",
-			"\twhile (p < e) { i = p->n; p = &p[[1]]; }",
+			"\tp = &global bank[0]; e = &global bank[4];",
+			"\twhile (p < e) { i = p->n; p = &p[1]; }",
 			"}",
 		].join("\n"),
 		expectError: null,
 	},
 	{
 		label: "an out-of-range constant index is legal when only an address is formed",
-		source: ["struct V { int n }", "global V array bank[4]", "function main() locals V pointer e { e = &global bank[[9]]; }"].join("\n"),
+		source: ["struct V { int n }", "global V array bank[4]", "function main() locals V pointer e { e = &global bank[9]; }"].join("\n"),
 		expectError: null,
 	},
 	{

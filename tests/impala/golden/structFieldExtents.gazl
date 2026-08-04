@@ -68,7 +68,7 @@ main:	FUNC	; signature func main() -> void @ 39:1
 		! LSSi #3 #.z.S.b @.g1
 		! FAIL index 3 outside S.b (resolved only at assembly)  
 	.g1:	MOVi $s:<C> #33 
-		! MULi <C> #1 #.z.Pair	; s.p[[1]].hi = 5
+		! MULi <C> #1 #.z.Pair	; s.p[1].hi = 5
 		! MULi <B> #1 #.z.Pair
 		! LSSi #<B> #.z.S.p @.g2
 		! FAIL index 1 outside S.p (resolved only at assembly)  
@@ -86,12 +86,12 @@ main:	FUNC	; signature func main() -> void @ 39:1
 		MOVi %1 $s:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 53:29
-		! MULi <B> #1 #.z.Pair	; printInt(s.p[[1]].hi)
+		! MULi <B> #1 #.z.Pair	; printInt(s.p[1].hi)
 		! ADDi <C> #.o.S.p #<B>
 		! ADDi <C> #<C> #.o.Pair.hi
 		MOVi %1 $s:<C> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 54:23
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 54:34
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 54:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 54:32
 		! ADDi <C> #.o.S.a #N	; s.a[N] = 44
 		! LSSi #N #0 @.g4
 		! LSSi #N #.z.S.a @.g3
@@ -104,7 +104,7 @@ main:	FUNC	; signature func main() -> void @ 39:1
 		! LSSi #<B> #.z.S.b @.g5
 	.g6:	! FAIL a computed index outside S.b (resolved only at assembly)  
 	.g5:	MOVi $s:<A> #22 
-		! SUBi <A> #N #3	; s.p[[N - 3]].lo = 6
+		! SUBi <A> #N #3	; s.p[N - 3].lo = 6
 		! MULi <B> #<A> #.z.Pair
 		! MOVi <A> #<B> 
 		! LSSi #<A> #0 @.g8
@@ -126,7 +126,7 @@ main:	FUNC	; signature func main() -> void @ 39:1
 	.g9:	MOVi %1 $s:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 60:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 60:33
-		! SUBi <C> #N #3	; printInt(s.p[[N - 3]].lo)
+		! SUBi <C> #N #3	; printInt(s.p[N - 3].lo)
 		! MULi <B> #<C> #.z.Pair
 		! MOVi <C> #<B> 
 		! LSSi #<C> #0 @.g12
@@ -135,6 +135,6 @@ main:	FUNC	; signature func main() -> void @ 39:1
 	.g11:	! ADDi <C> #.o.S.p #<B>
 		! ADDi <C> #<C> #.o.Pair.lo
 		MOVi %1 $s:<C> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 61:27
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 61:38
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 61:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 61:36
 		RETU   	; }

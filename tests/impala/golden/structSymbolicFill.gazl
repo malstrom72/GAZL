@@ -55,17 +55,17 @@ main:	FUNC	; signature func main() -> void @ 39:1
 		FORi $i #N @.l1	; }
 	.e0:	MOVi $i #0 	; for (i = 0 to M) 
 		GEQi #0 #M @.e2
-	.l3:	ADDp %1 &e #.o.Elems.p	; printInt(global e.p[[i]].lo)
+	.l3:	ADDp %1 &e #.o.Elems.p	; printInt(global e.p[i].lo)
 		MULi %3 $i #.z.P
 		ADDp %2 %1 %3
 		PEEK %1 %2 #.o.P.lo
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 46:31
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 46:42
-		ADDp %1 &e #.o.Elems.p	; printInt(global e.p[[i]].hi)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 46:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 46:40
+		ADDp %1 &e #.o.Elems.p	; printInt(global e.p[i].hi)
 		MULi %3 $i #.z.P
 		ADDp %2 %1 %3
 		PEEK %1 %2 #.o.P.hi
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:31
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:42
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 47:40
 		FORi $i #M @.l3	; }
 	.e2:	RETU   	; }

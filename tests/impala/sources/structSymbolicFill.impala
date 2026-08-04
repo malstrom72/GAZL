@@ -43,7 +43,7 @@ locals int i
 		printInt(global s.v[i]); printLF();		// 7 8 9 0 0 - the tail zero-fills
 	}
 	for (i = 0 to M) {
-		printInt(global e.p[[i]].lo); printLF();	// 1 3 0
-		printInt(global e.p[[i]].hi); printLF();	// 2 4 0
+		printInt(global e.p[i].lo); printLF();	// 1 3 0
+		printInt(global e.p[i].hi); printLF();	// 2 4 0
 	}
 }

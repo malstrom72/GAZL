@@ -359,12 +359,12 @@ function genProgram() {
 	chkDecl.push('global ' + chkStruct + ' cS' + (anyWord(sVals) ? ' = ' + structInit(sVals) : ''));
 	readStruct('global cS', sVals);
 
-	// (3) array OF structs -> the struct-array path, `[[ ]]` to index it
+	// (3) array OF structs -> the struct-array path; the subscript strides by .z.<Struct>
 	const kLen = 1 + ri(3);
 	const kVals = Array.from({ length: kLen }, structWords);
 	chkDecl.push('global ' + chkStruct + ' array cK[' + kLen + ']'
 			+ (kVals.some(anyWord) ? ' = { ' + kVals.map(structInit).join(', ') + ' }' : ''));
-	kVals.forEach((vals, k) => readStruct('global cK[[' + k + ']]', vals));
+	kVals.forEach((vals, k) => readStruct('global cK[' + k + ']', vals));
 
 	// (4) SYMBOLIC extent. `SN` is a const, so Impala never learns the number - every offset past `sv`
 	// is assemble-time arithmetic (`! ADDi <A> #.o.CS.sv #k`, `.o.CS.tail` = `.o.CS.sv + SN`). The

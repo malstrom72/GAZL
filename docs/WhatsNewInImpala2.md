@@ -46,9 +46,10 @@ global Point origin = { x: 1, y: 2 }
 Using `.` through a pointer or `->` on a value is `E416`, in both directions. A `const` struct must be a
 pointer (`E447`).
 
-## Two subscripts, and they are not interchangeable
+## One subscript, which strides by the element
 
-This is the main new thing to *learn*. `[i]` strides one word; `[[i]]` strides one element.
+`a[i]` strides by whatever `a`'s element is - one word for a scalar, `sizeof` the struct for a struct - so
+the same spelling works everywhere:
 
 ```impala
 struct Cell { int v; int w }
@@ -57,13 +58,16 @@ global int array flat[4]
 
 function read(int i) returns int r
 {
-	r = global grid[[i]].v + global flat[i];
+	r = global grid[i].v + global flat[i];
 }
 ```
 
-Getting it wrong is an error either way - `grid[i]` is `E204`, `flat[[i]]` is `E205` - so the spelling
-always states the cost at the point of use. Neither is checked against the extent at run time unless you
-ask; see bounds checking below.
+The stride folds at GAZL assembly time whenever the index is constant, so `grid[2]` costs exactly what
+`flat[2]` costs. A runtime index into a struct array pays one `MULi`, which you can see in the emitted
+`.gazl`: an assemble-time line is prefixed `!` and a runtime one is not.
+
+Arithmetic on a struct pointer is `E307` - move one with `&p[i]` instead. Comparison is untouched, so the
+`while (p < end)` walk is the idiom.
 
 ## Types say what they point at
 

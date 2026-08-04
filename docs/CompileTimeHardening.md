@@ -173,7 +173,7 @@ down a tier, and which tier it lands in depends on the shape, not on which end i
 the whole of what is left. Do not let its position at the top of this list imply otherwise.
 
 **Scope: dereference only, never address formation.** The example above is a store, and the check applies
-to that shape - `a[7]`, `a[7] = 1`, `p[9].a` as a value. It must NOT reject `&a[7]`, `&a[N]` or `&p[[i]]`.
+to that shape - `a[7]`, `a[7] = 1`, `p[9].a` as a value. It must NOT reject `&a[7]`, `&a[N]` or `&p[i]`.
 An out-of-range address is a value like any other, and GAZL itself accepts it: `MOVp $e &a:9` on a 4-word
 `a` assembles and runs, because the `Offset out of bounds` check fires on constant-offset *access*
 operands only. Containment is guaranteed by every dereference being bounds-checked at run time (see

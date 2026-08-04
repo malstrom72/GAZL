@@ -47,16 +47,16 @@ locals S s, int i
 	s.n = 77;
 	s.a[11] = 11;							// last element of the H*N field
 	s.b[3] = 33;							// last element of the H+1 field
-	s.p[[1]].hi = 5;							// last element of the struct-element field
+	s.p[1].hi = 5;							// last element of the struct-element field
 	printInt(s.n); printLF();				// 77
 	printInt(s.a[11]); printLF();			// 11
 	printInt(s.b[3]); printLF();			// 33
-	printInt(s.p[[1]].hi); printLF();			// 5
+	printInt(s.p[1].hi); printLF();			// 5
 
 	s.a[N] = 44;							// named-const index -> folds, and the extent is checked at assembly
 	s.b[H - 1] = 22;						// expression index -> folds to a `<X>` scratch
-	s.p[[N - 3]].lo = 6;					// ...and the same through a struct-element field
+	s.p[N - 3].lo = 6;					// ...and the same through a struct-element field
 	printInt(s.a[N]); printLF();			// 44
 	printInt(s.b[H - 1]); printLF();		// 22
-	printInt(s.p[[N - 3]].lo); printLF();	// 6
+	printInt(s.p[N - 3].lo); printLF();	// 6
 }

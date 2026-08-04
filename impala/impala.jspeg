@@ -1283,7 +1283,7 @@
 
        PAST THE END IS NOT REPORTED HERE, because whether it is an error depends on what happens next,
        and the rule is `docs/Impala2Review.md`'s: a DEREFERENCE with an out-of-range constant index is a
-       guaranteed trap, so it is a compile error, while ADDRESS FORMATION (`&a[7]`, `&p[[i]]`) is always
+       guaranteed trap, so it is a compile error, while ADDRESS FORMATION (`&a[7]`, `&p[i]`) is always
        legal and never checked - an out-of-range address is a value like any other, and GAZL's own check
        fires on access operands, not on address-taking. So the finding is returned as a flag; reference()
        clears it and checkIndexUse reports on every use that actually reads or writes the element. That
@@ -2177,7 +2177,7 @@
     };
 
     /* Does a subscript on this slot stride by a struct size rather than by one word? That is exactly the
-       question `[i]` vs `[[i]]` asks, so both the Subscript rule and the pointer-arithmetic diagnostics
+       question a struct-element subscript asks, so both the Subscript rule and the pointer-arithmetic diagnostics
        ask it here. Note a SCALAR array field inside a struct (`s.v[k]`) reaches subscriptStruct too but
        strides one word, so the predicate is the element type, never which code path handles it. */
     $$parser.subscriptScales = function (slot) {
@@ -2765,7 +2765,7 @@
                     sourceCode, sourceOffset, 'E415');
         }
 
-        $$parser.checkIndexUse(x);                                 /* `e[[9]].a` reaches INTO an element that is not there */
+        $$parser.checkIndexUse(x);                                 /* `e[9].a` reaches INTO an element that is not there */
 
         var field = $$parser.findField(structName, fieldName);
         if (!field) {
@@ -2975,16 +2975,16 @@
                 }
             }
 
-            /* Arithmetic on a struct pointer is REJECTED, because `+` and `-` carry no marker for the
-               multiply they would need, and the scaled subscript already spells it: `&p[[i]]`. Scaling
-               them instead was tried and reverted - it leaked into comparison (no unit there at all) and
-               `for` could not honour it, `FORp` having no room for a stride. See docs/Impala2Review.md,
-               "the scaled subscript is spelled `[[ ]]`". Comparisons fall through untouched: they are
-               unit-free and are what the `while` walk is built on. */
+            /* Arithmetic on a struct pointer is REJECTED, and subscripting is how you move one: `&p[i]`.
+               Scaling `+`/`-` instead was tried and reverted - it leaked into comparison (no unit there at
+               all) and `for` could not honour it, `FORp` having no room for a stride. That reasoning is
+               untouched by the removal of `[[ ]]` (2026-08-04): the subscript still spells the move, it
+               just spells it the same way every other subscript does. Comparisons fall through untouched:
+               they are unit-free and are what the `while` walk is built on. */
             var stride = (leftx.type === 'p' ? $$parser.strideStruct(lelem) : undefined);
             if (stride !== undefined && (operator === '+' || operator === '-')) {
                 $$parser.fail('Arithmetic on a ' + stride + ' pointer', sourceCode, sourceOffset,
-                        'E307', 'a struct pointer moves by scaled subscript only - write `&p[[i]]`');
+                        'E307', 'a struct pointer moves by scaled subscript only - write `&p[i]`');
             }
             if (stride !== undefined && diff) {
                 $$parser.fail('Difference between ' + stride + ' pointers', sourceCode, sourceOffset,
@@ -5032,28 +5032,20 @@ PrePost     <-  (op:PREFIX_OP _
                                                      } }
                 / Value (FuncCall / Subscript / FieldAccess)*
 
-# Two subscripts, never interchangeable: `[i]` strides one word and costs one instruction, `[[i]]`
-# strides sizeof(element) and costs one more. Each is an error where the other is correct, so the
-# spelling states the cost at the use site - the same job `->` does for a load. `[[` is tried first;
-# there is no ambiguity with a nested `a[b[i]]` because no Expr can begin with `[`.
-# `$idxAt` is captured after the bracket: the closing `]] _` / `] _` eats the trailing space, so the
-# action's own `$$i` names whatever follows the subscript (an `=`, or the next declaration).
-Subscript   <-  '[['_                              { $idxAt = $$i; }
-                s:Expr ']]'_                       { if (!$$parser.dry) {
-                                                       var sbs = metaSlot($$);
-                                                       if (!$$parser.subscriptScales(sbs))
-                                                           $$parser.fail('Scaled subscript on a one-word element',
-                                                                   $$s, $$i, 'E205',
-                                                                   '`[[ ]]` scales by the element size - this element is one word, so write `[ ]`');
-                                                       $$parser.subscriptStruct($$, $s, $$s, $idxAt);
-                                                     } }
-                / '['_                             { $idxAt = $$i; }
-                  s:Expr ']'_                      { if (!$$parser.dry) {
+# ONE subscript. `a[i]` strides by the declared element size, whatever that is - one word for a scalar
+# element, `.z.Struct` for a struct one - and the stride folds at GAZL assembly time whenever the index is
+# constant. There used to be a second spelling, `[[i]]`, reserved for struct elements so that the multiply
+# had a marker at the use site (E204/E205 made each an error where the other was correct). Removed
+# 2026-08-04: the marker claimed a cost it usually did not carry - 35 of the corpus's 49 uses were constant
+# indices, where the multiply is an assemble-time `!` line and free at run time - and the compiler always
+# knew which spelling was meant, so the diagnostic's fix was purely mechanical. It also would not have
+# survived multidimensional arrays, where `a[3, 5, 6]` must scale by construction and no marker can say so.
+# Pointer arithmetic already scales silently by element size; subscripting now agrees with it.
+# `$idxAt` is captured after the bracket: the closing `] _` eats the trailing space, so the action's own
+# `$$i` names whatever follows the subscript (an `=`, or the next declaration).
+Subscript   <-  '['_                               { $idxAt = $$i; }
+                s:Expr ']'_                        { if (!$$parser.dry) {
                                                        var sb = metaSlot($$);
-                                                       if ($$parser.subscriptScales(sb))
-                                                           $$parser.fail('Plain subscript on a struct element',
-                                                                   $$s, $$i, 'E204',
-                                                                   'this element is a struct, so the index scales - write `[[ ]]`');
                                                        if ((sb.place && sb.arrayOf) || (sb.type === 'p' && $$parser.isStructAtom(sb.elem)))
                                                            $$parser.subscriptStruct($$, $s, $$s, $idxAt);
                                                        else
@@ -5492,7 +5484,7 @@ For         <-  FOR _ '('_                          { $varStart = $$i; }   # nam
                                                             $$parser.fail(
                                                                 'For variable must not be a struct pointer',
                                                                 $$s, $$i, 'E309',
-                                                                'FORp cannot stride by a struct - use `while (p < end) { ...; p = &p[[1]]; }`');
+                                                                'FORp cannot stride by a struct - use `while (p < end) { ...; p = &p[1]; }`');
                                                         }
                                                         $gotInit = false;            /* flag to detect an explicit start value */
                                                     }

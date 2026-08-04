@@ -202,7 +202,7 @@ fold at the site into a scratch slot (`! ADDi <t> #.o.Voice.lo #.o.Biquad.b0` th
 If a using unit's interface (field names + types) lives separately from the definition, they can
 disagree. The gazl-validator can cross-check the interface's field types against the definition's
 emitted layout, so a mismatch is a build error, not a silent lie - the same "verifiable contract" theme
-as extern prototypes (see [[docs/ExternPrototypes.md]]).
+as extern prototypes (see [docs/ExternPrototypes.md]).
 
 ### Array extents in a signature row (DECIDED, IMPLEMENTED)
 

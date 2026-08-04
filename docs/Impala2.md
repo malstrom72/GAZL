@@ -185,7 +185,7 @@ function findSmallest(int n, int pointer vector) returns int j locals int i { /*
   `pointer int`, `pointer float`, and `pointer pointer` all have **stride 1 word**. Typed pointers
   therefore change pointer arithmetic **not at all** - `p + 3` is still three words. (Stride only
   stops being 1 when elements become multi-word, i.e. structs - which is precisely why structs come
-  later. A struct pointer does not do arithmetic at all: it moves by scaled subscript, `&p[[3]]`.
+  later. A struct pointer does not do arithmetic at all: it moves by subscript, `&p[3]`.
   See the cost model below.)
 - **The compiler selects the typed instruction from the element type.** Reading `a[i]` where `a` is
   `int array` yields an `int` and emits the int-typed peek; where `a` is `float array` it yields a
@@ -558,8 +558,11 @@ it is a cost annotation with exact GAZL meaning):
 
 Combined with the existing markers, every memory access in an expression is visible in the source:
 
-> **Instruction count = marker count.** Each `global`, `*`, `->`, and `[]`-on-a-pointer costs one
-> load. Each `[[ ]]` costs one load plus one `MULi`. Dots are free.
+> **Instruction count = marker count**, with one exception, stated rather than hidden. Each `global`,
+> `*`, `->`, and `[]`-on-a-pointer costs one load, and dots are free. A subscript on a STRUCT element
+> also pays one `MULi` - but only when the index is not constant, since a constant one folds at
+> assembly time. That exception is what sank `[ ]`, the marker this section used to require for it:
+> a marker that is wrong in the common case teaches the wrong cost. See "One subscript" below.
 
 ```impala
 f.cutoff                    // 0 loads - direct operand
@@ -580,24 +583,38 @@ true and was reworded for that reason. Two exceptions:
   substitution deletes marshalling moves a normal call would emit. That is why the rule below is worded
   as *predictable* rather than *countable*. See "Inline functions" below.
 
-Structs are what makes a subscript able to cost more than one instruction, and that is exactly why
-they get their own bracket. `[i]` strides one word; `[[i]]` strides `sizeof(element)` and pays one
-`MULi` for it. Each is an error where the other is correct, so there is one legal spelling per access
-and the stride is never something you have to look up:
+### One subscript
+
+`a[i]` strides by `a`'s declared element size - one word for a scalar element, `.z.Struct` for a struct
+one. There is one spelling and it works everywhere:
 
 ```impala
 words[i]                    // 1 instruction  - stride 1
-voices[[i]]                 // 2 instructions - stride sizeof(Voice)
-&voices[[i]]                // the only way to move a Voice pointer
+voices[i]                   // 2 instructions - stride sizeof(Voice)
+&voices[i]                  // the only way to move a Voice pointer
 ```
 
 The residual multiply is the **floor**, not overhead: the address of element `i` of a 3-word struct
 genuinely is `base + i*3`, and no language or ISA can form it without a multiply. **Any** constant
-index folds at GAZL assembly time, so it costs nothing at run time: `bank[[2]]`, `bank[[K]]` for a
-named `const`, `bank[[HOST_I]]` for a host-supplied one, `bank[[K + 1]]` and `p[[-1]]` all emit
-`! MULi` + `! ADDi` and no runtime instruction beyond the access itself. See `docs/Impala2Review.md`,
-"the scaled subscript is spelled `[[ ]]`", for why arithmetic on a struct pointer is rejected rather
-than scaled.
+index folds at GAZL assembly time, so it costs nothing at run time: `bank[2]`, `bank[K]` for a
+named `const`, `bank[HOST_I]` for a host-supplied one, `bank[K + 1]` and `p[-1]` all emit
+`! MULi` + `! ADDi` and no runtime instruction beyond the access itself.
+
+**A second spelling `[ ]` was required here until 2026-08-04**, reserved for struct elements so the
+multiply had a marker at the use site, with `E204`/`E205` making each bracket an error where the other
+was correct. It was removed for three reasons, in increasing order of weight. It carried no information:
+because each form was an error where the other belonged, the compiler always knew which was meant, and
+the fix-it was purely mechanical. It was usually *wrong*: the paragraph above is the reason - 35 of the
+49 uses in this repo's corpus were constant indices, where the multiply is an assemble-time `!` line and
+free at run time, so the marker announced a cost that was not there. And it would not have survived
+multidimensional arrays, where `a[3, 5, 6]` must scale by construction with no marker available to say
+so - a notation that the next feature has to break is already wrong. Pointer arithmetic had meanwhile
+settled on scaling by element size silently; subscripting now agrees with it instead of contradicting it.
+
+Removing it changed no emitted code. The corpus regolded with byte-identical instruction streams -
+only the echoed source text in trailing comments and the column numbers moved. See
+`docs/Impala2Review.md` for why arithmetic on a struct pointer is rejected rather than scaled; that
+reasoning is unaffected, and `&p[i]` is still how you move one.
 
 ### Verified lowering
 
@@ -618,8 +635,8 @@ MOVf $x $f:.o.Filter.resonance      ; x = f.resonance
               ! MULi <A> #8 #.z.Filter
 .z.b.voices:  ! DEFi #<A>
 $voices: LOCA *.z.b.voices
-MULi %0 $i #.z.Filter               ; the stride multiply, marked by [[ ]]
-GETL $x $voices:.o.Filter.mode %0   ; x = voices[[i]].mode  (the field offset rides the operand)
+MULi %0 $i #.z.Filter               ; the stride multiply
+GETL $x $voices:.o.Filter.mode %0   ; x = voices[i].mode  (the field offset rides the operand)
 
 ; C) through a pointer - one real load, constant offset immediate
 PEEK $x $fp #.o.Filter.mode         ; x = fp->mode
@@ -627,7 +644,7 @@ POKE $fp #.o.Filter.mode $val       ; fp->mode = val
 
 ; D) dynamic index through a pointer - the stride multiply plus one ADDp to move the
 ;    pointer; the field offset still rides PEEK's immediate
-MULi %1 $i #.z.Filter               ; x = fp[[i]].mode
+MULi %1 $i #.z.Filter               ; x = fp[i].mode
 ADDp %0 $fp %1
 PEEK $x %0 #.o.Filter.mode
 ```
@@ -1390,9 +1407,9 @@ while the index counts elements:
 .g0:  ! ADDi <B> #.o.O.e #<A>
 ```
 
-`o.e[[3]]` on `E array e[SN]` is the case that earns it: it lands in the field AFTER `e`, still inside
+`o.e[3]` on `E array e[SN]` is the case that earns it: it lands in the field AFTER `e`, still inside
 the struct's allocation, so the assembler sees a legal offset and nothing else looks. (Index far enough
-past the end to leave the allocation - `o.e[[7]]` - is caught by the assembler first, as `Offset out of
+past the end to leave the allocation - `o.e[7]` - is caught by the assembler first, as `Offset out of
 bounds`; the guard is for the near miss.)
 
 The guard sits IMMEDIATELY BEFORE the access it guards, and its skip label rides the guarded instruction.
@@ -1519,15 +1536,13 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E201 | pointer element type mismatch in assignment |
 | E202 | pointer element type mismatch in call argument |
 | E203 | element type mismatch with previous declaration |
-| E204 | plain `[]` on a struct element - write `[[ ]]` |
-| E205 | scaled `[[ ]]` on a one-word element - write `[]` |
 | E301 | invalid operand types for operator |
 | E302 | invalid operand type for unary operator |
 | E303 | incompatible types for assignment |
 | E304 | return type disagreement (mismatch / conflicting expectations / previous uses) |
 | E305 | `for` variable must be a local modifiable int or pointer |
 | E306 | `switch` expression must be int |
-| E307 | arithmetic on a struct pointer - move it with `&p[[i]]` |
+| E307 | arithmetic on a struct pointer - move it with `&p[i]` |
 | E308 | difference between struct pointers - divide by `sizeof` yourself |
 | E309 | `for` variable is a struct pointer - `FORp` cannot stride |
 | E401 | a name is already used by another top-level declaration - one flat namespace covers globals, functions, consts, structs and functypes |

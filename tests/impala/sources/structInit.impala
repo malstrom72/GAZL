@@ -26,6 +26,6 @@ function main()
 	printFloat(global voice.gain); printLF();		// 2.0
 	printInt((int) global preset.note); printLF();	// 7
 	printFloat(global preset.lo.b0); printLF();		// 1.5
-	printInt((int) global bank[[1]].note); printLF();	// 2
-	printFloat(global bank[[0]].gain); printLF();		// 0.9
+	printInt((int) global bank[1].note); printLF();	// 2
+	printFloat(global bank[0].gain); printLF();		// 0.9
 }
