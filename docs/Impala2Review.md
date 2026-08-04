@@ -140,7 +140,7 @@ document, and it shipped. Re-checked on 2026-08-04:
 
 | expression | today |
 |---|---|
-| `bank[0]` on a struct array | `E204`, fix-it "this element is a struct, so the index scales - write `[[ ]]`" |
+| `bank[0]` on a struct array | scales by `.z.` - no diagnostic (`E204` was retired 2026-08-04) |
 | `p = p + 1` on a struct pointer | `E307`, fix-it to `&p[[i]]` |
 | `q - p` on two struct pointers | `E308`, fix-it to `((pointer)q - (pointer)p) / sizeof(S)` |
 | `for (p = ... to ...)` on a struct pointer | `E309` — see F2 |
@@ -651,7 +651,28 @@ Impala needs no carve-out at all.
 > the shipped rule, including the `--range-checks` runtime tier for indices no constant check can see.
 
 
-# Decision: the scaled subscript is spelled `[[ ]]` (2026-07-30)
+# ~~Decision: the scaled subscript is spelled `[[ ]]`~~ — REVERSED 2026-08-04
+
+> **REVERSED. `[[ ]]` no longer exists; `a[i]` strides by the declared element size, whatever it is, and
+> `E204`/`E205` are gone.** The section below is kept as the record of why it was adopted and is accurate
+> about the 2026-07-30 reasoning - do not read it as current syntax. `docs/Impala2.md`, "One subscript",
+> is normative.
+>
+> Three things decided it. (1) The marker carried **no information**: because each bracket form was an
+> error where the other belonged, the compiler always knew which was meant and the fix-it was purely
+> mechanical - the "not interchangeable, so nothing to dilute" defence below argues for removal as easily
+> as against it. (2) The marker was **usually wrong**: 35 of the 49 uses in this repo's corpus were
+> constant indices, where the stride folds to an assemble-time `!` line and costs nothing at run time, so
+> `bank[[2]]` announced a multiply that was not there. "What it buys" below rests on `[[ ]]` meaning one
+> `MULi`, and for constant indices it does not. (3) **"When to revisit" called it**: that clause, at the
+> foot of this section, names the multidim-array case as a trigger - `a[3, 5, 6]` has to scale on every
+> axis with no marker available to say so, so the notation was one feature away from breaking regardless.
+> Pointer arithmetic had meanwhile settled on silent element-size scaling, which this decision
+> contradicted.
+>
+> Removing it changed no emitted code: the corpus regolded with byte-identical instruction streams, only
+> the echoed source in trailing comments and the column numbers moving. Arithmetic on a struct pointer is
+> still `E307` - the reasoning for that is independent, and `&p[i]` still spells the move.
 
 Supersedes the 2026-07-29 decision. **A subscript that scales by the element size is written `[[i]]`, and
 it is the only construct that moves a struct pointer.** Arithmetic on struct pointers is rejected.
