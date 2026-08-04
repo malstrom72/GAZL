@@ -19,7 +19,8 @@
 > covers the function and global cases and adding the pre-pass later only removes the need for it, so
 > this is a relaxation waiting to happen, not a compatibility question. See [Cycles](#cycles) for the
 > rule and [Deferred to 3.0: collect mode](#deferred-to-30-collect-mode-the-declaration-pre-pass) for the
-> design. Smaller items left: `.gazl` blob imports, richer parse errors.
+> design. `.gazl` blob imports were deferred to 3.0 the same way (2026-08-04). Smaller item left: richer
+> parse errors.
 
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),
@@ -925,8 +926,8 @@ resolve with no header drift (visited-set dedups diamonds and breaks cycles). `e
 host-visible symbols in the `; signature` metadata, and `--dead-strip` drops any FUNC/data block not
 reachable from an export. VM-verified in `tests/impala/sources/import/` and `tests/impala/sources/deadstrip/`.
 The one deviation from the design below: the builder concatenates and compiles the sources rather than
-emitting each unit separately. Two consequences - `.gazl` (precompiled-blob) imports are not yet
-supported, and import cycles only half-resolve; see [Cycles](#cycles) and
+emitting each unit separately. Two consequences - `.gazl` (precompiled-blob) imports are deferred to 3.0,
+and import cycles only half-resolve; see [Cycles](#cycles) and
 [Deferred to 3.0: collect mode](#deferred-to-30-collect-mode-the-declaration-pre-pass).)*
 
 ### The problem
@@ -964,7 +965,7 @@ list is redundancy with failure modes: a forgotten unit, a stale artifact, a wro
 the build is driven from a root unit:
 
 ```
-impala compile main.impala → main.gazl      (the complete, linked program)
+node impala/impala.node.js compile main.impala main.gazl      (the complete, linked program)
 ```
 
 The toolchain walks the import closure (visited-set, cycles legal), compiles each unit exactly
@@ -973,10 +974,13 @@ it.** The GAZL assembler and loader are untouched; the transliterator property i
 Consequences:
 
 - **Staleness vanishes** for source imports: everything is compiled from source, together.
-- `import "x.gazl"` drops a precompiled or hand-written unit into the closure as-is - its
+- ~~`import "x.gazl"` drops a precompiled or hand-written unit into the closure as-is - its
   interface read from the `; signature` rows (and structural facts: `! DEF` values, `GLOB`
-  sizes), its text emitted verbatim into the linked output. This is how third-party blobs,
-  hand-written GAZL, and a precompiled stdlib participate.
+  sizes), its text emitted verbatim into the linked output.~~ **DEFERRED TO IMPALA 3.0**
+  (2026-08-04). The builder concatenates its units and compiles them in one pass, so a
+  pre-assembled blob has no seam to enter through; `import "x.gazl"` is parsed as Impala source
+  and fails there. Nothing needs it - source imports plus `export`/`--dead-strip` cover sharing,
+  linking and hiding. See [`ParkedFeatures.md`](ParkedFeatures.md#precompiled-gazl-blob-imports).
 - **The validator becomes internal to the build** - the link set *is* the closure, checked during
   compilation. The standalone `gazl-validate` remains for the legacy workflow only.
 - **Single definition, enforced**: any symbol - and in particular any struct - defined more than

@@ -203,9 +203,15 @@ only ever the message that pointed the wrong way.
   type and is still unchecked, deliberately.
 - **A declared return value never assigned returns stale frame garbage.** No definite-assignment analysis;
   decidable single-pass for the trivial case. **[V] still open 2026-08-04.**
-- **`copy` bypasses the pointer type system entirely.** `copy(8 from &intSrc[0] to &floatDst[0])` and a
-  4-word overrun of the destination both compile silently, even with both extents known at Impala compile
-  time. **[V] still open 2026-08-04.**
+- **`copy` bypasses the pointer ELEMENT type.** `copy(8 from &intSrc[0] to &floatDst[0])` compiles silently:
+  the rule checks that both operands are pointers (`E301`) and never asks what they point AT, so it is the
+  one door left that reads a typed pointer and enforces nothing — every other door runs `checkPtrAssign`
+  since `ed1b879`. **[V] still open 2026-08-04.**
+  *The length half of this finding was withdrawn 2026-08-04: it originally also called a 4-word overrun of
+  the destination a defect. A pointer has no extent, so past `&a[0]` there is nothing to check against, and
+  extents are not tracked through pointer values by design. Only the literal `&arr[const]` spelling could
+  ever be caught, which would make the diagnostic a property of how the address was WRITTEN rather than of
+  the program — worse than uniform silence. Length is the programmer's, exactly as with `memcpy`.*
 - **Locals are not zero-filled** **[V] 2026-08-04** — still worth stating, because globals are, so the two
   storage classes differ. The doc half of this finding is FIXED: `docs/Impala2.md:522` now reads
   "Uninitialized **global** struct storage is zero-filled", qualified exactly as the finding asked.
@@ -339,14 +345,20 @@ the two entries still marked open.
 - ~~`(funcptr array) table` casts do not parse — the cast grammar has no `array`.~~ DOC FIXED.
   `docs/Impala2.md:248` now states it: "**`array` is not a cast modifier.** `pointer` is the only one, so
   `(funcptr array) table` is `E001`."
-- **STILL OPEN 2026-08-04**: `impala build` does not exist; the subcommands are `compile` and `run`, and
-  there is no `impala` binary at all — every doc example that writes `impala compile ...` is aspirational.
+- ~~`impala build` does not exist; the subcommands are `compile` and `run`, and there is no `impala` binary
+  at all — every doc example that writes `impala compile ...` is aspirational.~~ DOC FIXED 2026-08-04. The
+  last such example (`docs/Impala2.md:967`) now spells the real invocation, `node impala/impala.node.js
+  compile`. Packaging a launcher is a separate wish, not a doc defect: no doc promises one now.
 - ~~`--json`, `--emit-metadata`, `--no-metadata` do not exist. The complete flag set is `--legacy` and
   `--dead-strip`.~~ The three phantom flags are still absent, but the flag set is **three**, not two:
   `--legacy`, `--dead-strip` and `--range-checks` (corrected 2026-08-04; `--range-checks` shipped with
   E461).
-- **STILL OPEN 2026-08-04**: `import "x.gazl"` blob imports do not work — the closure walker parses every
-  import as Impala source. `docs/Impala2.md:971` describes them as part of the Step 5 design.
+- ~~`import "x.gazl"` blob imports do not work — the closure walker parses every import as Impala source.~~
+  RESOLVED 2026-08-04 by **deferring the feature to Impala 3.0**, not by building it: nothing needs it, and
+  the builder's concatenate-then-compile shape leaves a blob no seam to enter through. The Step 5 bullet in
+  `docs/Impala2.md` is struck through and points at
+  [`ParkedFeatures.md`](ParkedFeatures.md#precompiled-gazl-blob-imports), which records why and what it
+  would cost. Like collect mode it is a pure relaxation — source imports written today keep compiling.
 - ~~**The legacy manual-concatenation struct model no longer links**~~ DOC FIXED. `docs/Impala2.md:696`
   now opens "the 1.0 copy-paste model ... is dead", shows the collision, and documents the working pattern
   (one unit `struct`, the rest a body-carrying `extern struct`).

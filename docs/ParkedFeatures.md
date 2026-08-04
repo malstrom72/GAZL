@@ -466,3 +466,16 @@ Its precondition is worth doing regardless: finishing the thinning of fat inline
 methods (`impala/RefactorPlan.md` is the adjacent cleanup on the same surface) also shrinks the migration
 that "JSPEG 2" would face (`docs/JSPEGFuture.md` Problem 2). Do not treat collect mode as gated on JSPEG 2
 or on the body-level AST rework - it is gated on neither.
+
+### Precompiled `.gazl` blob imports
+
+**No park branch - never built.** `import "lib.gazl"` parses as Impala source and fails there, because the
+closure walker has exactly one way to consume a unit. Deferred to 3.0 on 2026-08-04: nothing needs it. The
+import builder concatenates its units and compiles them in one pass, so an already-assembled blob has no
+seam to enter through, and every use a blob would serve - sharing declarations, linking units, hiding
+internals - is already served by source imports plus `export` and `--dead-strip`.
+
+It is a relaxation, like collect mode: `import "lib.impala"` written today keeps compiling unchanged if
+blob imports arrive later. The real precondition is the same architectural one - emitting units separately
+instead of concatenating - so if collect mode is ever built, this becomes small. On its own it is not
+worth that rework.
