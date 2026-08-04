@@ -1786,6 +1786,27 @@ const caretCases = [
 		"global int dup\nfunction dup() { }\n", "2:10: error[E401]"],
 	["a reserved function name points at the name",
 		"function continue() { }\n", "1:10: error[E449]"],
+	// EVERY OTHER DOOR had the same defect, and worse: `declare()` was handed the end-of-rule `$$i`,
+	// which `Identifier` had already walked past the trailing whitespace of - so a duplicate global or
+	// const was reported at the START OF THE NEXT DECLARATION, usually a different line entirely.
+	// One case per declaration form, because each names its own position and only a test notices when
+	// one of them drifts back.
+	["a global-name clash points at the name",
+		"struct Glob { int a }\nglobal int Glob\n", "2:12: error[E401]"],
+	["a duplicate global points at the second one, not at what follows it",
+		"global int dup\nglobal int dup\nfunction main() { }\n", "2:12: error[E401]"],
+	["a global ARRAY names its own name, past the element type and `array`",
+		"struct Arr { int a }\nglobal int array Arr[4]\n", "2:18: error[E401]"],
+	["a const points at the name, not at the declaration after it",
+		"struct Kon { int a }\nconst int Kon = 1\n", "2:11: error[E401]"],
+	["an extern points at the name",
+		"struct Ex { int a }\nextern int Ex\n", "2:12: error[E401]"],
+	["a struct points at the name, not at its `{`",
+		"const int Thing = 1\nstruct Thing { int a }\n", "2:8: error[E401]"],
+	["a functype points at the name",
+		"struct Cb { int a }\nfunctype Cb() returns int\n", "2:10: error[E401]"],
+	["a duplicate LOCAL points at the redeclaration",
+		"function main() locals int q, int q { }\n", "1:35: error[E401]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);

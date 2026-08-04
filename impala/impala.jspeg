@@ -2160,8 +2160,8 @@
     /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
        is required, not tidiness: the declarator node is pooled and recycled by the parser, so anything
        holding a reference would later see whichever declarator came last. */
-    $$parser.declEntry = function (type, elem, struct, words, name, size) {
-        return { type: type, elem: elem, struct: struct, words: words, name: name, size: size };
+    $$parser.declEntry = function (type, elem, struct, words, name, size, at) {
+        return { type: type, elem: elem, struct: struct, words: words, name: name, size: size, at: at };
     };
 
     $$parser.addStructField = function (name, field, sourceCode, sourceOffset) {
@@ -3958,7 +3958,7 @@ ExportDecl  <-  EXPORT _                                              { $$parser
 # ------------------------------------------------------------------
 #  struct definition
 # ------------------------------------------------------------------
-StructDecl  <-  STRUCT _ id:Identifier                               { $sname = $id; $$parser.beginStruct($id, $$s, $$i); }
+StructDecl  <-  STRUCT _ { $nmAt = $$i; } id:Identifier              { $sname = $id; $$parser.beginStruct($id, $$s, $nmAt); }
                 '{' _
                 ( f:(ArrayDecl / VarDecl)                            {
                                                                          $$parser.addStructField($sname,
@@ -3980,7 +3980,7 @@ StructDecl  <-  STRUCT _ id:Identifier                               { $sname = 
 #    functype Name(params) [returns t1, t2, ...]
 #  Emits nothing - it only registers a signature usable as a base type.
 # ------------------------------------------------------------------
-FuncTypeDecl <- FUNCTYPE _ id:Identifier                             { $ftname = $id; $$parser.beginFuncType($id, $$s, $$i); }
+FuncTypeDecl <- FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname = $id; $$parser.beginFuncType($id, $$s, $nmAt); }
                 '(' _
                 ( p:TypeDeclr                                        { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, $$s, $$i); }
                   ( ',' _ p:TypeDeclr                                { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, $$s, $$i); }
@@ -4172,7 +4172,7 @@ inp:ArgsDecl ')'_
                                                                         }
                                                                 }
                                                                          iterate($inp, function (p) {
-                                                                             $$parser.rejectByValueStruct(p.type, p.struct, p.name, false, $$s, $$i);
+                                                                             $$parser.rejectByValueStruct(p.type, p.struct, p.name, false, $$s, p.at);
                                                                              {
                                                                                  $$parser.declare(
                                                                                      'INP?', 'locals',
@@ -4180,7 +4180,7 @@ inp:ArgsDecl ')'_
                                                                                      p.type,
                                                                                      true,
                                                                                      (p.size !== undefined ? '*' + p.size : undefined),
-                                                                                     $$s, $$i,
+                                                                                     $$s, p.at,
                                                                                      undefined,
                                                                                      p.elem
                                                                                  );
@@ -4197,7 +4197,7 @@ inp:ArgsDecl ')'_
                                                                                      'S',
                                                                                      false,
                                                                                      $$parser.structAllocSize(v.struct),
-                                                                                     $$s, $$i,
+                                                                                     $$s, v.at,
                                                                                      undefined,
                                                                                      v.struct
                                                                                  );
@@ -4211,7 +4211,7 @@ inp:ArgsDecl ')'_
                                                                                          ? $$parser.arrayAllocSize(v.elem, v.size,
                                                                                                  $$parser.extentSymbol(v.name, $id))
                                                                                          : (v.words !== undefined ? '*' + v.words : undefined)),
-                                                                                     $$s, $$i,
+                                                                                     $$s, v.at,
                                                                                      undefined,
                                                                                      v.elem
                                                                                  );
@@ -4281,7 +4281,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                     )?
                 /   (   FUNCTION                                      { $$.type  = 'U';  $$.scope = 'functions'; }
                     /   NATIVE                                        { $$.type  = 'N';  $$.scope = 'functions'; }
-                    ) _ id:Identifier                                 { $$.name  = $id; }
+                    ) _ { $nmAt = $$i; } id:Identifier                { $$.name  = $id; $$.at = $nmAt; }
                     ( '(' _ inp:ArgsDecl ')' _                        {   /* Optional PROTOTYPE. Name-only stays valid and
                                                                              asserts nothing (a wildcard the validator skips);
                                                                              a prototype is a checkable assertion, so calls get
@@ -4309,9 +4309,10 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                       ( POINTER _                                     { $desc = 'p:' + $desc; }
                       )*
                     )?
-                    ARRAY _ id:Identifier                             {
+                    ARRAY _ { $nmAt = $$i; } id:Identifier            {
                                                                          $$.type = 'A';
                                                                          $$.name = $id;
+                                                                         $$.at   = $nmAt;
                                                                          $$.elem = $desc;
                                                                      }
                 /   VarDecl
@@ -4327,7 +4328,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              $$.type,
                                                                              false,                     // not readonly
                                                                              '?',
-                                                                             $$s, $$i,
+                                                                             $$s, $$.at,
                                                                              undefined,
                                                                              $$.elem
                                                                          );
@@ -4366,12 +4367,12 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                             var _pp = [];
                                                                             for (var _pi = 0; _pi < _proto.args.length; ++_pi) {
                                                                                 var _p = _proto.args[_pi];
-                                                                                $$parser.rejectByValueStruct(_p.type, _p.struct, _p.name, false, $$s, $$i);
+                                                                                $$parser.rejectByValueStruct(_p.type, _p.struct, _p.name, false, $$s, $at);
                                                                                 _pp.push({ type: _p.type, elem: _p.elem, name: _p.name,
                                                                                            size: _p.size, struct: _p.struct, words: _p.words });
                                                                             }
                                                                             var _pr = _proto.ret;
-                                                                            if (_pr !== undefined) $$parser.rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, $$s, $$i);
+                                                                            if (_pr !== undefined) $$parser.rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, $$s, $at);
                                                                             placeholderSignature.params      = _pp;
                                                                             placeholderSignature.returns     = (_pr !== undefined ? _pr.type : 'V');
                                                                             placeholderSignature.returnElem  = (_pr !== undefined ? _pr.elem : undefined);
@@ -4455,7 +4456,7 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                                                                                 '! DEF?', 'defines',
                                                                                 $id, $t, true,
                                                                                 $$parser.makeConstant($x, $t, $$s, $cInitStart),
-                                                                                $$s, $$i,
+                                                                                $$s, $cStart,
                                                                                 $$parser.formatConstSignatureComment(
                                                                                     $id,
                                                                                     $t,
@@ -4481,7 +4482,7 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                                                                                  undefined, 'defines',
                                                                                  $id, $t, true,
                                                                                  undefined,
-                                                                                 $$s, $$i,
+                                                                                 $$s, $cStart,
                                                                                  undefined,
                                                                                  $telem
                                                                              );
@@ -4513,7 +4514,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                      $v.name, 'S',
                                                                                      ($section === 'CNST'),
                                                                                      $$parser.structAllocSize($v.struct),
-                                                                                     $$s, $$i,
+                                                                                     $$s, $v.at,
                                                                                      $$parser.formatGlobalSignatureComment(
                                                                                          $section, $v.name, 'S', undefined, undefined,
                                                                                          $$parser.sourceName, $$s, $$parser.declOffset, $v.struct),
@@ -4526,7 +4527,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                      $v.type,
                                                                                      ($section === 'CNST'),
                                                                                      '*1',
-                                                                                     $$s, $$i
+                                                                                     $$s, $v.at
                                                                                  );
                                                                                  $init = $$parser.ZEROES[$v.type];
                                                                              }
@@ -4557,7 +4558,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 $v.type,
                                                                                 ($section === 'CNST'),
                                                                                 $init,
-                                                                                $$s, $$i,
+                                                                                $$s, $v.at,
                                                                                 $$parser.formatGlobalSignatureComment(
                                                                                     $section,
                                                                                     $v.name,
@@ -4582,7 +4583,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 ($section === 'CNST'),
                                                                                 $$parser.arrayAllocSize($a.elem, $a.size,
                                                                                         $$parser.extentSymbol($a.name)),
-                                                                                $$s, $$i,
+                                                                                $$s, $a.at,
                                                                                 $$parser.formatGlobalSignatureComment(
                                                                                     $section,
                                                                                     $a.name,
@@ -4739,8 +4740,8 @@ ArgsDecl    <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
-                 ( v:VarDecl                                          { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
-                   ( ',' _ v:VarDecl                                  { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
+                 ( v:VarDecl                                          { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); }
+                   ( ',' _ v:VarDecl                                  { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); }
                    )*
                  )?
 
@@ -4748,8 +4749,8 @@ LocalsDecl  <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
-                 ( v:(VarDecl / ArrayDecl)                            { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
-                   ( ',' _ v:(VarDecl / ArrayDecl)                    { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size); }
+                 ( v:(VarDecl / ArrayDecl)                            { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); }
+                   ( ',' _ v:(VarDecl / ArrayDecl)                    { $$[$$.n++] = $$parser.declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.at); }
                    )*
                  )?
 
@@ -4789,6 +4790,9 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                              $$.words = undefined;
                                                                          }
                                                                          $$.name = $id;
+                                                                         $$.at   = $nameStart;   /* the NAME - `Identifier` ate the trailing
+                                                                                                    space, so an end-of-rule $$i would name
+                                                                                                    the NEXT declaration */
                                                                          $$.size = undefined;
                                                                      }
 
@@ -4844,6 +4848,7 @@ ArrayDecl   <-                                                        { $desc = 
                                                                          $$.type = 'A';
                                                                          $$.elem = $desc;
                                                                          $$.name = $id;
+                                                                         $$.at   = $nameStart;                 /* see VarDecl */
                                                                          $$.size = $extent;
                                                                          $$.words = $extent;                   /* an array's words ARE its count; a struct element
                                                                                                                     scales symbolically, in arrayAllocSize */
