@@ -1,4 +1,4 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1

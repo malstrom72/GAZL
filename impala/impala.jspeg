@@ -129,7 +129,7 @@
      * -------------------------------- */
 
     /* 1  constants & simple flags */
-    var $$parser.IMPALA_VERSION = '1.0';
+    var $$parser.IMPALA_VERSION = '2.0';
     var $$parser.dry            = false;
     var $$parser.legacyMode     = (typeof _hostOptions !== 'undefined' && _hostOptions != null
             && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings

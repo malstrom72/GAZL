@@ -142,7 +142,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
      * -------------------------------- */
 
     /* 1  constants & simple flags */
-    var IMPALA_VERSION = '1.0';
+    var IMPALA_VERSION = '2.0';
     var dry            = false;
     var legacyMode     = (typeof _hostOptions !== 'undefined' && _hostOptions != null
             && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings
