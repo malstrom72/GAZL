@@ -151,7 +151,7 @@ Rejecting `cells[0, W]` is only half of it, and the half that was easy to see. `
 ADDRESS written without a comma, and it compiled silently until the rank check was made unconditional (see
 slice 2 above). A per-axis rule that any subscript can opt out of by dropping a comma is not a rule.
 
-**2. An `extern struct` matrix field states its RANK; the host supplies every axis. `E430` stays.**
+**2. A host-owned array states its RANK; the host supplies every axis. `E430` stays. IMPLEMENTED.**
 
 An earlier draft of this section had it backwards and proposed relaxing `E430` so the field could name its
 axes with host-supplied consts. That was built, tested, and **reverted the same hour**, because the premise
@@ -175,12 +175,32 @@ many axes there are and nothing else; the host publishes `.d.H.cells.0`, `.d.H.c
 together, and the per-axis checks defer against those symbols:
 
 ```impala
-extern struct Grid { int array cells[,]; int tag }     /* spelling TBD - two axes, host-supplied */
+extern struct Grid { int array cells[,]; int tag }     /* two axes, both host-supplied */
+extern int array frame[,]                              /* the same rule, one declaration form out */
 ```
 
-Open sub-question: the spelling for "rank 2, extents host-supplied". `[,]` reads as an empty comma list and
-needs no new token, but it is easy to misread. It must not state numbers, since that is the claim `E430`
-correctly refuses.
+**The spelling is `[]`, `[,]`, `[,,]` - one comma per axis after the first - and it is MANDATORY (`E432`),
+for rank 1 as much as for rank 2.** That last part is the decision, and it is the mirror of decision 1: a
+subscript states every axis even when there is one, so a declaration states its rank even when it is one.
+Leaving rank 1 implicit would have given it two spellings, and `array cells` would have gone on quietly
+meaning rank 1 even where the host's field is a matrix - a wrong stride at every use, reported nowhere.
+Rank is also the one thing about a host-owned layout this side genuinely knows; extents are the host's, and
+`E430` still refuses them.
+
+Verified end to end. The same module, unrecompiled, is accepted or rejected purely by what the host
+publishes: with `.d.Grid.m.0` at 3, `g->m[1, 2]` assembles and runs; at 2, the assembler stops with
+`index 2 outside Grid.m axis 0`. Impala defines none of those symbols and emits
+`MULi %0 $y #.d.Grid.m.0` for the stride. See `tests/impala/sources/externStructArrayField.impala`.
+
+This applies to a standalone `extern array` too, not just a struct field - the two are one rule
+(`hostOwnedArray`), and the top-level form was the one that had never been able to state a rank at all,
+because it parsed through a near-copy of the array declarator that had no bracket clause. It shares the
+real one now.
+
+The metadata row deliberately does **not** carry the rank: a host-owned field still renders `int[]`, the
+extent-unknown wildcard the validator skips. Rendering `int[,]` would make it conflict with a definition's
+`int[3x4]` under the raw-string compare and report a cross-unit clash that is not one. Rank is checked on
+the Impala side (`E206`), where the declaration and the subscript are both in view.
 
 **The lesson, worth more than the feature:** "compiles clean" was measured by counting `error` lines, and a
 deferred `! FAIL` is not an error line. A check that lives in the emitted GAZL is invisible to that test.

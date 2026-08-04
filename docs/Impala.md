@@ -238,7 +238,7 @@ Introduces a symbol defined elsewhere. Native functions supplied by the host use
 
 ```impala
 extern int defineMeLaterPlease
-extern array futureArray
+extern array futureArray[]
 extern function thisFunctionInAnotherSource
 extern native abort
 ```

@@ -74,7 +74,7 @@ that are NOT the type-identity trap:
    assembly like any other extent. Verified:
 
         const int W;
-        extern struct Grid { int array cells; int tag }
+        extern struct Grid { int array cells[]; int tag }   /* `[]` mandatory since 2026-08-04 */
         function get(Grid pointer g, int x, int y) returns int v { v = g->cells[y * W + x]; }
         -> MULi %0 $y #W / ADDi %0 %0 $x / ADDp %1 $g #.o.Grid.cells / PEEK $v %1 %0
 

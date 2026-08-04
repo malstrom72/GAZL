@@ -124,23 +124,23 @@ const int TRNVLS = 4;
 const int TABNDX = 326;
 const int HNTMAX = 10;
 
-extern array PTEXT;
-extern array RTEXT;
-extern array CTEXT;
-extern array STEXT;
-extern array LTEXT;
-extern array KEY;
-extern array LOCSND;
-extern array LINES;
-extern array CVAL;
-extern array TTEXT;
-extern array TRNVAL;
-extern array TRAVEL;
-extern array KTAB;
-extern array PLAC;
-extern array FIXD;
-extern array ACTSPK;
-extern array HINTS;
+extern array PTEXT[];
+extern array RTEXT[];
+extern array CTEXT[];
+extern array STEXT[];
+extern array LTEXT[];
+extern array KEY[];
+extern array LOCSND[];
+extern array LINES[];
+extern array CVAL[];
+extern array TTEXT[];
+extern array TRNVAL[];
+extern array TRAVEL[];
+extern array KTAB[];
+extern array PLAC[];
+extern array FIXD[];
+extern array ACTSPK[];
+extern array HINTS[];
 
 global array ATAB[331] = {
 	0, 576501649, 407342340, 358494005, 627590956, 342272582, 375946497, 376088268, 325880787, 527121725, 305669668, 575365029, 575505951, 641674312, 596419488, 529790769,

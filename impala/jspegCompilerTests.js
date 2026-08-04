@@ -1058,13 +1058,31 @@ for (const [label, source, expected] of byValueDoors) {
 }
 console.log("impala.jspeg compiler rejects by-value structs at every declaration door");
 
-// An array extent belongs exactly where it is verifiable: an `extern struct` field must omit it (the
-// host owns that layout, as with a standalone `extern array`), and every other array must state it.
+// An array extent belongs exactly where it is verifiable: a HOST-OWNED array - an `extern struct` field
+// or a standalone `extern array` - must omit it, and every other array must state it. Rank is the other
+// half of that rule and runs the other way: a host-owned array must STATE its rank (E432), because rank
+// is the one thing about the host's layout this side knows, and leaving it implicit meant a host-owned
+// matrix could not be declared at all while `array a` quietly claimed rank 1.
 const arrayExtentCases = [
 	[
 		"extern struct array field stating a size",
 		"extern struct G { int array a[4] }\nfunction f(G pointer p) returns int r { r = p->a[0]; }\n",
-		"extern struct array field must not state a size",
+		"host-owned array must not state a size",
+	],
+	[
+		"extern struct array field omitting its rank",
+		"extern struct G { int array a }\nfunction f(G pointer p) returns int r { r = p->a[0]; }\n",
+		"Host-owned array a must state its rank",
+	],
+	[
+		"standalone extern array omitting its rank",
+		"extern array g\nfunction f() returns int r { r = global g[0]; }\n",
+		"Host-owned array g must state its rank",
+	],
+	[
+		"standalone extern array stating a size",
+		"extern int array g[4]\nfunction f() returns int r { r = global g[0]; }\n",
+		"host-owned array must not state a size",
 	],
 	[
 		"struct array field omitting its size",
@@ -1085,9 +1103,16 @@ const arrayExtentCases = [
 // The legal counterparts live in the same table (expectError null), so the rule cannot be satisfied by
 // rejecting everything.
 arrayExtentCases.push(
-	["sizeless extern struct field",
-		"extern struct G { int n; int array a; float f }\n"
+	["rank-1 extern struct field",
+		"extern struct G { int n; int array a[]; float f }\n"
 			+ "function f(G pointer p) returns int r { r = p->a[2] + p->n; }\n", null],
+	["rank-2 extern struct field, subscripted on both axes",
+		"extern struct G { int n; int array cells[,]; float f }\n"
+			+ "function f(G pointer p) returns int r { r = p->cells[1, 2]; }\n", null],
+	["rank-1 standalone extern array",
+		"extern array g[]\nfunction f() returns int r { r = global g[0]; }\n", null],
+	["rank-2 standalone extern array, subscripted on both axes",
+		"extern int array g[,]\nfunction f() returns int r { r = global g[1, 2]; }\n", null],
 	["sized struct field",
 		"struct S { int array a[4] }\nfunction f(S pointer p) returns int r { r = p->a[0]; }\n", null],
 );
@@ -1806,10 +1831,10 @@ const caretCases = [
 	// is the ordinary import-closure shape, not a corner case. Both orders, because only one of them
 	// re-runs the declaration site that records the extent.
 	["E461 survives a re-declaration that follows the definition",
-		"global int array g[4]\nextern array g\nfunction main() { global g[9] = 1; }\n",
+		"global int array g[4]\nextern array g[]\nfunction main() { global g[9] = 1; }\n",
 		"3:28: error[E461]"],
 	["E461 survives a re-declaration that precedes it",
-		"extern array g\nglobal int array g[4]\nfunction main() { global g[9] = 1; }\n",
+		"extern array g[]\nglobal int array g[4]\nfunction main() { global g[9] = 1; }\n",
 		"3:28: error[E461]"],
 	// The function door recorded its position AFTER `'('_` had been consumed, so every diagnostic that
 	// names a function pointed at the parenthesis (or the space past it) instead of the name.
@@ -1902,7 +1927,7 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 // diagnostic than a trap), and a bare pointer has no extent to check at all.
 {
 	const decls = "const int DEBUG = 1\nstruct E { int a }\nstruct S { int array v[3] }\nglobal S s\n"
-		+ "global int array g[4]\nglobal E array ge[3]\nglobal int array g2[4]\nextern array g2\n";
+		+ "global int array g[4]\nglobal E array ge[3]\nglobal int array g2[4]\nextern array g2[]\n";
 	const shapes = [
 		["global scalar array", "global g[i] = 1;", "#.z.g "],
 		["local scalar array", "a[i] = 1;", "#.z.main.a "],
@@ -2318,7 +2343,7 @@ const typedPointerCases = [
 	},
 	{
 		label: "element type must match across declarations",
-		source: ["extern int array shared", "global float array shared[4]"].join("\n"),
+		source: ["extern int array shared[]", "global float array shared[4]"].join("\n"),
 		expectError: "Element type mismatch with previous declaration",
 	},
 	{

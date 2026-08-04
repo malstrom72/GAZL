@@ -156,6 +156,7 @@
     var $$parser.symbols = { 'locals': {}, 'globals': {}, 'functions': {}, 'defines': {} };
     var $$parser.structs = {};                                    /// name -> { fields:[{name,type,elem,offset,words}], words, complete }
     var $$parser.openStruct = undefined;                          /// struct whose field list is being parsed (its fields own their extent scratches)
+    var $$parser.externArray = false;                             /// a top-level `extern array` is being declared - host-owned, like an extern struct field
     var $$parser.functypes = {};                                  /// name -> signature { params, returnList, returnCount, returns, returnWords, complete }
     var $$parser.topNames = {};                                   /// name -> kind ('global'/'function'/'const'/'struct'/'functype'), one flat namespace
     var $$parser.guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
@@ -670,7 +671,11 @@
         if (dims !== undefined) {
             text = '';
             for (var i = dims.length - 1; i >= 0; --i) {
-                if (('' + dims[i]).charAt(0) === '<') return '[]';
+                /* A host-owned axis (undefined - the host knows it, we do not) renders `[]` for the same
+                   reason a folded `<X>` does, and DELIBERATELY not `[,]`: the validator compares extents
+                   as raw strings and skips an empty one, so a rank claim would make a definition's
+                   `int[3x4]` conflict with an extern's rank-2 row. Rank is checked on the Impala side. */
+                if (dims[i] === undefined || ('' + dims[i]).charAt(0) === '<') return '[]';
                 text += (i < dims.length - 1 ? 'x' : '') + dims[i];
             }
         }
@@ -2230,6 +2235,22 @@
        allocation tracks the element size exactly like the subscript stride does; scalar elements are
        one word each, so the count IS the size. declare() flushes the fold ahead of the `! DEFi` that
        reads it, and hands the scratch back. */
+    function repeatChar(c, n) {
+        var s = '';
+        while (--n > 0) s += c;
+        return s;
+    }
+
+    /* Is the array being declared HOST-OWNED - an `extern struct` FIELD, or a top-level `extern array`?
+       Both say exactly the same thing about layout, which is nothing: the host supplies `.o.`, `.z.` and
+       every `.d.`, and this side states rank alone. One predicate because they are one rule; they were
+       two separate tests in two grammar branches, and only one of them had ever been given a rank. */
+    $$parser.hostOwnedArray = function () {
+        return $$parser.externArray
+                || ($$parser.openStruct !== undefined
+                        && $$parser.isExternStruct($$parser.openStruct));
+    };
+
     /* One extra axis of a shaped declaration. Same constant-folding and same negative check the first axis
        gets - an axis that runs backwards is exactly as wrong as an extent that does, and catching it here
        is what keeps the product honest. Returns the bare operand, as `$extent` holds it. */
@@ -2745,10 +2766,15 @@
        which axis rather than just naming the field. */
     $$parser.checkAxis = function (slot, axis, idxRV, sourceCode, sourceOffset) {
         var ext = slot.extent;
-        if (ext === undefined || ext.dimN === undefined || ext.dimN[axis] === undefined) {
-            return;
+        if (ext === undefined || ext.dims === undefined) {
+            return;                                               /* no shape - nothing to check per axis */
         }
-        var oob = $$parser.checkConstIndex({ n: ext.dimN[axis], what: ext.what + ' axis ' + axis,
+        /* An UNDEFINED extent is not "no axis", it is a HOST-OWNED one: `.d.H.cells.0` names it and only
+           the assembler can read it. Guarding on `dimN[axis]` instead sent exactly that case home
+           unchecked, which is the one decision 2 promises deferral for. `checkConstIndex` already treats
+           an unresolvable `n` as tier 2, so the deferral arrives with no branch of its own. */
+        var oob = $$parser.checkConstIndex({ n: ext.dimN && ext.dimN[axis],
+                what: ext.what + ' axis ' + axis,
                 sym: ext.dims[axis], inField: true }, idxRV, sourceCode, sourceOffset);
         /* Held on the parser because `foldAxes` runs before `subscriptStruct`, which assigns `oobIndex`
            last. Every axis keeps its own finding - see checkIndexUse for why they are not arbitrated. */
@@ -2759,7 +2785,8 @@
            is on AND this index is a runtime value - so the constant axes of a mixed subscript cost nothing.
            The bound is the axis SYMBOL, an assemble-time immediate, so this is two compares and no setup,
            exactly as the 1-D tier is. */
-        $$parser.emitRangeCheck(idxRV, { n: ext.dimN[axis], what: ext.what + ' axis ' + axis,
+        $$parser.emitRangeCheck(idxRV, { n: ext.dimN && ext.dimN[axis],
+                what: ext.what + ' axis ' + axis,
                 sym: ext.dims[axis], inField: true }, sourceCode, sourceOffset);
     };
 
@@ -4623,18 +4650,23 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                         )*
                       )?
                     )?
-                /                                                     { $desc = undefined; }
-                    ( type:BASE_TYPE _                                { $desc = $$parser.CASTS_TO_TYPES[$type]; }
-                      ( POINTER _                                     { $desc = 'p:' + $desc; }
-                      )*
-                    )?
-                    ARRAY _ { $nmAt = $$i; } id:Identifier            {
+                #  A top-level `extern array` is host-owned exactly as an `extern struct` field is, so it takes
+                #  the SAME declarator rather than a near-copy of it: this branch used to parse `ARRAY _ id` and
+                #  nothing else, which is why it was the one host-owned form that could not state a rank.
+                /                                                     { $$parser.externArray = true; }
+                    a:ArrayDecl                                       {
+                                                                         $$parser.externArray = false;
                                                                          $$.type = 'A';
-                                                                         $$.name = $id;
-                                                                         $$.at   = $nmAt;
-                                                                         $$.elem = $desc;
+                                                                         $$.name = $a.name;
+                                                                         $$.at   = $a.at;
+                                                                         $$.elem = $a.elem;
+                                                                         $$.dims = $a.dims;
                                                                      }
-                /   VarDecl
+                #  Clears the flag the branch above sets: that action runs unconditionally, so `extern int x`
+                #  turns it on, fails ArrayDecl, and would otherwise leave it set for the next ordinary
+                #  declaration - which would then be told the host owns it.
+                /                                                     { $$parser.externArray = false; }
+                    VarDecl
                 )                                                     {
                                                                         if ($$.structFwd) {
                                                                             $$parser.cancelStructRedeclaration($sname);
@@ -4651,6 +4683,18 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              undefined,
                                                                              $$.elem
                                                                          );
+                                                                         /* A host-owned SHAPE needs an extent record even though every value in
+                                                                            it belongs to the host: `dims` names the axes so a subscript can
+                                                                            stride by `.d.g.0` and defer its bounds against it, and its LENGTH
+                                                                            is the rank a subscript is checked against. Only for a shape - a
+                                                                            rank-1 `extern array` keeps carrying no extent, exactly as before,
+                                                                            so its every path is unchanged. `declare` rebuilds the record, so
+                                                                            this has to land after it. */
+                                                                         if ($$.type === 'A' && $$.dims !== undefined) {
+                                                                             $$parser.symbols.globals[$$.name].extent =
+                                                                                     $$parser.arrayExtent($$.name, undefined, $$.name,
+                                                                                             undefined, $$.dims);
+                                                                         }
                                                                          if ($$.scope === 'functions') {
                                                                              var entry = $$parser.symbols.functions[$$.name];
                                                                              var signature = entry && entry.signature;
@@ -5114,7 +5158,12 @@ ArrayDecl   <-                                                        { $desc = 
                 ARRAY _ { $nameStart = $$i; } id:Identifier           { $$parser.checkReservedName($id, 'array', $$s, $nameStart); }
                 ( '[' _                                               { $extentStart = $$i; $dims = []; }   # `']' _` eats the trailing
                                                                                                # space, so $$i would name the NEXT declaration
-                  x:Expr
+                # A RANK-ONLY list - `[]`, `[,]`, `[,,]` - states how many axes there are and no extent for any of
+                # them, which is the only thing a HOST-OWNED array may say: the host supplies `.o.`, `.z.` and every
+                # `.d.`, so a number here would be an unverifiable claim (E430). Rank still has to be stated,
+                # because it is what a subscript is checked against and what a stride is read from. Tried second,
+                # so a real extent list is unaffected: `Expr` simply cannot match `]` or `,`.
+                ( x:Expr
                   ( ','_ y:Expr                                       {   /* an EXTRA axis. Held as its own constant; the axes stay separate
                                                                               so each can be checked against its own index, and only the
                                                                               PRODUCT becomes the allocation size. */
@@ -5150,22 +5199,35 @@ ArrayDecl   <-                                                        { $desc = 
                                                                             scratch and overwrite the extent, which is how two array locals in one
                                                                             clause silently got whichever count was folded last. */
                                                                      }
+                / ( ','_                                              { $dims.push(undefined); }
+                  )*
+                  ']' _                                               { $dims.push(undefined);   /* rank = commas + 1, so `[]` is rank 1 */ }
+                )
                 )?                                                    {
-                                                                         /* An `extern struct` field states NO extent, matching the
-                                                                            `extern array` rule: the host owns that layout, so a number
-                                                                            here would be an unverifiable claim Impala never reads
-                                                                            (offsets are host-supplied `.o.` symbols, 1-D stride is 1). */
-                                                                         var externField = ($$parser.openStruct !== undefined
-                                                                                 && $$parser.isExternStruct($$parser.openStruct));
-                                                                         if (externField && $extent !== undefined) {
-                                                                             $$parser.fail('An extern struct array field must not state a size',
-                                                                                     $$s, $$i, 'E430',
-                                                                                     'the host owns this layout - write `array ' + $id + '` without a size');
+                                                                         /* A HOST-OWNED array states its RANK and no extent: the host supplies
+                                                                            `.o.`, `.z.` and every `.d.`, so a number here would be an
+                                                                            unverifiable claim Impala never reads. Rank is not optional with it,
+                                                                            because rank is what a subscript is checked against and what a
+                                                                            stride is read from - and it is the ONLY thing about the layout
+                                                                            this side genuinely knows. */
+                                                                         var hostOwned = $$parser.hostOwnedArray();
+                                                                         if (hostOwned && $extent !== undefined) {
+                                                                             $$parser.fail('A host-owned array must not state a size',
+                                                                                     $$s, $extentStart, 'E430',
+                                                                                     'the host owns this layout - state only the rank, `array '
+                                                                                             + $id + '[' + repeatChar(',', $dims.length) + ']`');
                                                                          }
-                                                                         if (!externField && $extent === undefined) {
+                                                                         if (hostOwned && $dims === undefined) {
+                                                                             $$parser.fail('Host-owned array ' + $id + ' must state its rank',
+                                                                                     $$s, $nameStart, 'E432',
+                                                                                     'write `array ' + $id + '[]` for one axis, `[,]` for two - '
+                                                                                             + 'one comma per axis after the first');
+                                                                         }
+                                                                         if (!hostOwned && $extent === undefined) {
                                                                              $$parser.fail('Array ' + $id + ' needs a size',
-                                                                                     $$s, $$i, 'E431',
-                                                                                     'only a sizeless `extern array` or `extern struct` field may omit it');
+                                                                                     $$s, $nameStart, 'E431',
+                                                                                     'only a host-owned array - an `extern array` or an `extern '
+                                                                                             + 'struct` field - states rank without extents');
                                                                          }
                                                                          $$.type = 'A';
                                                                          $$.elem = $desc;

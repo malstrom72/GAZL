@@ -98,7 +98,7 @@ readonly array SOME_CONSTS[SOME_COUNT] = {		// `readonly` declares a run-time re
 extern int defineMeLaterPlease;					// `extern` can be used to declare a variable, array or function before
 												// it is defined (or if it is defined in another source file).
 												
-extern array futureArray;						// `extern array` declaration should not include array size.
+extern array futureArray[];						// `extern array` declaration should not include array size.
 
 extern function thisFunctionInAnotherSource;	// In version 1.0 of Impala there is no type-checking of function
 												// arguments and returns so this construct is sufficient for declaring
