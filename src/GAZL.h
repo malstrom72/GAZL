@@ -233,6 +233,7 @@ class Assembler {
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin
 						, const Char* op2End);
 	protected:	void finalizeFunction();
+	protected:	void threadBranches();		// Collapse GOTO chains and turn a GOTO onto a RETU into the RETU. In place: no address moves.
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;
 	protected:	const UInt maxFunctionCount;
