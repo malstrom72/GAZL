@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -e -o pipefail -u
 
-# Every gate that needs nothing but node. Under 15 seconds, no C++ toolchain, so this is what you run
-# before committing a compiler-only change. build.sh and build.cmd both call it, which is the only reason
-# they cannot drift apart again - they used to run different subsets of this list.
+# Every gate that needs nothing but node. Around a minute and a half, most of it the 3000-program fuzz
+# run at the end; no C++ toolchain, so this is what you run before committing a compiler-only change.
+# build.sh and build.cmd both call it, which is the only reason they cannot drift apart again - they
+# used to run different subsets of this list.
 #
 # These degrade rather than fail when output/GAZLCmd is absent: runJspegTests and jspegCompilerTests skip
 # their assemble+run checks and say so. Metadata validation is NOT here, because gazl-validate runs under

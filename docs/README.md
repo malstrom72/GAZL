@@ -1,6 +1,6 @@
 # Documentation index
 
-24 documents accumulated here (25 with this index) with only a handful reachable from the top-level `README.md`, which is how
+27 documents accumulated here (28 with this index) with only a handful reachable from the top-level `README.md`, which is how
 the same finding ended up recorded in three places and one blocker list went stale for a week. This index
 is the fix: every doc, what it is for, and how much to trust it.
 
@@ -40,6 +40,7 @@ written. PLAN / BACKLOG = not done.
 |---|---|---|
 | [Impala2Review](Impala2Review.md) | NOTE (2026-07-29) | **The home for "silent-wrong shapes" and toolchain gripes.** Section C6 is the canonical list; check it before reporting a compiler bug as new. |
 | [CompileTimeHardening](CompileTimeHardening.md) | DESIGN NOTE | "The compiler should have caught that" items, plus the 2026-08-01 scan for guess/refuse/skip sites. Overlaps C6 above - attributions mark which copy is authoritative. |
+| [SyntaxConsistency](SyntaxConsistency.md) | AUDIT (2026-07-29) | Every place Impala's C-looking surface does not behave like C, each reproduced against this tree and graded FORCED / ARBITRARY / BUG. The bugs section is FIXED and kept as the record. |
 | [PortabilityAudit](PortabilityAudit.md) | NOTE | C++ portability findings |
 
 ## Parked and future
@@ -52,6 +53,11 @@ written. PLAN / BACKLOG = not done.
 | [GAZLSymbolicWindows](GAZLSymbolicWindows.md) | FINDING | GAZL already supports symbolic by-value call windows; Impala's transient allocator is the blocker. Proof: [`symbolicWindows.gazl`](symbolicWindows.gazl) + its re-packed twin |
 | [FutureOptimizations](FutureOptimizations.md) | CANDIDATES | Compiler optimisation ideas, not committed to |
 | [GAZLAssemblerOptimizations](GAZLAssemblerOptimizations.md) | DESIGN NOTE | Assembler-side optimisation, starting with identity folding |
+| [GAZL2FunctionPointers](GAZL2FunctionPointers.md) | PROPOSAL (2026-08-02) | A distinct function-pointer storage type `t`, because `p` doing double duty is a silent-wrong shape Impala cannot close from its side. Nothing implemented. |
+| [TailCalls](TailCalls.md) | DESIGN NOTE | Tail-call elimination. Nothing implemented; needs a GAZL instruction *and* Impala syntax, so neither side can do it alone. |
+
+The last two belong to the **GAZL 2** line, which ships after Impala 2.0 and is independent of it -
+nothing in Impala 2.0 waits on either.
 
 ## Toolchain internals
 

@@ -73,8 +73,9 @@ It prints the `Code size:` banner — that line is the proof it assembled — th
    ./output/GAZLCmd output/demo.gazl main
    ```
    The output path is the *second* argument. Passing the random id there instead writes the
-   GAZL to a file named `0x4d2` and leaves `demo.gazl` empty, which `GAZLCmd` then reports as
-   `Code size: 0 ... Could not locate function: main`.
+   GAZL to a file literally named `0x4d2` and never creates `demo.gazl` at all — so `GAZLCmd`
+   either reports `Could not open input file`, or, worse, silently runs whatever stale
+   `demo.gazl` an earlier build left behind.
 3. To compile and run one of your own sources without staging anything, use the Node front end:
    ```
    node impala/impala.node.js run myprogram.impala
@@ -84,7 +85,7 @@ It prints the `Code size:` banner — that line is the proof it assembled — th
 ## Helper Scripts
 
 - `build.sh` / `build.cmd` - build all tools and run the full test + demo sequence
-- `tools/test-js.sh` / `.cmd` - every gate that needs only node (~15s, no C++ toolchain); run this before committing a compiler-only change
+- `tools/test-js.sh` / `.cmd` - every gate that needs only node (~1-1.5 min, most of it a 3000-program fuzz run; no C++ toolchain); run this before committing a compiler-only change
 - `tools/buildGAZLCmd.sh` / `.cmd` - build just `GAZLCmd` (VM executable)
 - `tools/BuildNuXJS.sh` / `.cmd` - build the NuXJS command-line JavaScript runtime
 - `tools/BuildImpala.sh` / `.cmd` - build NuXJS and stage the JSPEG Impala compiler into `output/`
@@ -113,7 +114,7 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 ## Documentation
 
-**[docs/README.md](docs/README.md) indexes all 24 documents** with what each is for and how much to trust
+**[docs/README.md](docs/README.md) indexes all 27 documents** with what each is for and how much to trust
 it. The most-linked few:
 
 - [Overview](docs/Overview.md) - general architecture and goals

@@ -1,6 +1,6 @@
 # The generated-symbol namespace (reference)
 
-Status: REFERENCE, verified against `impala/impala.jspeg` on 2026-08-01. This is the inventory of every
+Status: REFERENCE, verified against `impala/impala.jspeg` on 2026-08-04. This is the inventory of every
 symbol the Impala compiler mints for itself, and the rules for adding a new one. Check here before
 choosing a prefix; a collision with a user identifier or with another generated name is silent until the
 assembler rejects a symbol nobody wrote.
@@ -16,7 +16,7 @@ reach. Globals, constants and functions the user declares are emitted as BARE na
 
 ### Compiler labels: `.<tag><counter>`
 
-Minted by `newLabel(tag)` as `.<tag><n>`, with `labelCounter` reset per function. Six tags are in use:
+Minted by `newLabel(tag)` as `.<tag><n>`, with `labelCounter` reset per function. Eight tags are in use:
 
 | tag | used for | example |
 |---|---|---|
@@ -24,14 +24,29 @@ Minted by `newLabel(tag)` as `.<tag><n>`, with `labelCounter` reset per function
 | `.e` | exit / join point | `.e24` |
 | `.f` | `if` false branch | `.f8` |
 | `.l` | loop head | `.l3` |
+| `.r` | `--range-checks` bounds test (skip + fail targets) | `.r2` |
 | `.s` | `switch` table base | `.s0` |
 | `.t` | temporary branch target | `.t0` |
 | `.g` | deferred-assertion skip target | `.g0` |
 
-`.g` is the one that does NOT use `labelCounter`. It is minted at global-declaration time by
-`assertFitsExtent`, and `labelCounter` resets per function - two globals either side of a function would
-both be handed `.g0` and the module would not assemble. It carries its own `guardCounter`, reset once per
-compilation.
+`.a` and `.r` are minted INDIRECTLY as well as directly: `beginDebugGuard(tag)` calls `newLabel(tag)`
+with a variable, so a grep for `newLabel('` alone misses `.a` entirely (`assert`'s only minter) and half
+of `.r` (`emitRangeCheck` takes `beginDebugGuard('r')` for the skip and `newLabel('r')` for the fail).
+
+`.g` has TWO independent minters, and they are the exception to the `labelCounter` rule above:
+
+- `guardCounter`, at global scope, spelled `'.g' + guardCounter++` directly rather than through
+  `newLabel`. `assembleAssert` (the deferred-assertion form behind `assertFitsExtent`) and
+  `emitStructLayout`'s negative-extent guard both use it. `labelCounter` resets per function, so two
+  globals either side of a function would both be handed `.g0`; `guardCounter` is reset once per
+  compilation instead.
+- `labelCounter`, inside a function, via the ordinary `newLabel('g')` - `checkIndexUse`'s deferred
+  index assertion.
+
+One program emits both and both land on `.g0` (a struct with a symbolic array extent, indexed by a
+constant, does it). That assembles and runs anyway, because GAZL scopes function-local labels: the
+global `.g0` and the one inside `main` are different symbols. So the two counters do not have to agree -
+but neither may a THIRD minter assume `.g<N>` is unique across the file.
 
 A `switch` arm appends `#<k>` to the table base (`.s0#0`), because `SWCH` finds its arms by appending
 `#k` to its own target. That `#` is part of the label, not a separator the compiler is free to move.
@@ -103,6 +118,13 @@ refer to it. Like `.o.` / `.z.` these are STABLE and predictable, and carry no r
 
 `.noAssertStrings` - guards the assert-message block so it vanishes when `DEBUG` is 0.
 
+## PARKED - restored with `inline` on GAZL2
+
+Nothing below is emitted by this branch's compiler. `inline` is rejected with `E439` here and the
+expansion lives on the `GAZL2` branch, a separate line shipping AFTER Impala 2; `grep -c "_i"` over
+`impala/impala.jspeg` returns 0. Kept because the tag rules above have to stay compatible with it, and
+because the suffix comes back when `inline` does. Same caveat as [`docs/Inlining.md`](Inlining.md).
+
 ### Inline expansion suffixes
 
 An expansion appends `_i<N>` to every label and local it replays, so repeated expansions of one body do
@@ -111,6 +133,11 @@ tag goes BEFORE the `#`: `.s0#0` becomes `.s0_i12#0`, never `.s0#0_i12`.
 
 Note this is a SUFFIX namespace on names that already exist, so it does not consume a tag letter - but
 it does mean a new tag must stay unambiguous when `_i<N>` is appended.
+
+### Adding a tag while that is parked
+
+**Check it survives the `_i<N>` suffix** if an inline body could ever contain it. This was step 5 of the
+"Adding a new one" checklist below, and returns there when `inline` does.
 
 ## Why single letters are safe
 
@@ -134,18 +161,25 @@ between struct `A_B` field `c` and struct `A` field `B_c`.
 
 ## Adding a new one
 
-1. **Take a free tag letter.** In use: `a e f g l s t` (labels), `a s` (data), `o z` (constants). Free
-   today: `b c d h i j k m n p q r u v w x y`. (`x` was the array-extent tag until 2026-08-02, when
+1. **Take a free tag letter.** In use: `a e f g l r s t` (labels), `a s` (data), `o z` (constants). Free
+   today: `b c d h i j k m n p q u v w x y`. (`x` was the array-extent tag until 2026-08-02, when
    `.z.` absorbed it - do not resurrect it for a second size-like idea without re-reading the note above.)
 2. **Decide which shape it is.** Dot-followed (`.k.Thing.part`) for a stable, nameable constant that
    host or hand-written GAZL may reference; letter+digits (`.kN`) for an internal, throwaway label.
 3. **Stable names get NO random-id suffix**; internal content-derived ones get one.
-4. **Re-verify the inventory above** rather than trusting it - it is a snapshot. The tags are all minted
-   through `newLabel` / `makeString` and the layout emitters, so:
+4. **Re-verify the label inventory above** rather than trusting it - it is a snapshot. A label tag
+   reaches `newLabel` through one of three doors, and all three have to be swept: directly, indirectly
+   via `beginDebugGuard(tag)`, and the `'.g' + guardCounter` sites that bypass `newLabel` altogether.
 
-        grep -oP "newLabel\('\K[a-zA-Z_]+" impala/impala.jspeg | sort -u
+        grep -oE "(newLabel|beginDebugGuard)[(]'[a-z]+'|'[.][a-z]+' [+] [(][$][$]parser[.]guardCounter" impala/impala.jspeg | sort -u
 
-5. **Check it survives the `_i<N>` suffix** if an inline body can contain it.
+   Bracket classes rather than backslashes, and ERE rather than PCRE: `grep -oP` fails outright in this
+   repo's Git-Bash (`-P supports only unibyte and UTF-8 locales`). Run as of 2026-08-04 this yields the
+   eight tags in the table - `a e f g l r s t` - one line per minter. The data (`makeString`) and layout
+   (`.o.` / `.z.`) tags are not covered; those are short enough lists to read off their emitters.
+
+There used to be a step 5, the `_i<N>` survival check. It moved to "Adding a tag while that is parked"
+above and comes back here with `inline`.
 
 ## See also
 

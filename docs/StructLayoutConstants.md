@@ -33,7 +33,8 @@ would emit:
     .o.Voice.gain   ! DEFi #6
     .z.Voice        ! DEFi #8
 
-and then a field read `v->gain` lowers to `PEEK $x $v .o.Voice.gain` rather than `PEEK $x $v #6`.
+and then a field read `v->gain` lowers to `PEEK $x $v #.o.Voice.gain` rather than `PEEK $x $v #6`. The
+`#` is not optional: the operand is a CONSTANT, not an address.
 
 Why: it turns the struct layout into first-class assembler data with one source of truth. You can then
 conditionally add / remove / reorder fields directly in GAZL (driven by an assembly-time constant) and
@@ -237,7 +238,9 @@ field's extent borrow until `endStruct`, so two expression extents cannot fold i
 Every non-extern struct now emits its layout as GAZL compile-time constants: a rolling `<a>`
 accumulator (`! MOVi <a> #0`; `.o.Struct.field: ! DEFi #<a>`; `! ADDi <a> #<a> #<size>`; `.z.Struct:
 ! DEFi #<a>`), emitted at struct-definition time in dependency order (inner-before-outer, guaranteed by
-E412). Field access references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested struct and
+**E413** where the inner name is not declared yet - the ordinary "defined later in the same file" case -
+and by **E412** where it is declared but incomplete, as a bodyless `extern struct`). Field access
+references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested struct and
 array fields MATERIALIZE the sub-object address into a pointer place at offset 0 (via `ADDp`/`ADRL`), so
 every access uses a SINGLE symbol - no runtime offset accumulation and no compile-time folding through
 the lazy-meta model.
@@ -268,9 +271,10 @@ recompile. Normal structs are unchanged (byte-identical goldens); only the exter
 Superseded scope note: this section used to list guards **E418** (fields must be scalar/pointer),
 **E425** (no by-value extern instances) and **E424** (no nested extern field access), and to defer
 by-value/nested/array extern fields to "v1.1". **None of those three codes exist in `impala.jspeg` any
-more** (verified 2026-07-31; only stale comment references survive near lines 1951 and 2245), and all
-three restrictions have been lifted: an extern struct with a nested array field compiles, and a
-by-value extern local emits `LOCA *.z.E` / `COPY *.z.E`.
+more** (re-verified 2026-08-04: E418 and E424 have zero occurrences of any kind; only E425 survives, in
+a comment on `structAllocSize` explaining that by-value params/returns are parked wholesale as E426/E427
+so the extern-specific code no longer fires). All three restrictions have been lifted: an extern struct
+with a nested array field compiles, and a by-value extern local emits `LOCA *.z.E` / `COPY *.z.E`.
 
 Still genuinely outstanding: the gazl-validator cross-check of host layout vs declared interface.
 

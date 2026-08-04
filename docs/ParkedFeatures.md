@@ -296,8 +296,9 @@ through a host-supplied `const int W;` already covers that case without the feat
 **No park branch - this one was never built.** It is a decided *restriction*, not a parked feature, and it
 is the only item on this page a 2.0 user should act on today.
 
-    decided:  2026-07 (re-verified 2026-07-29, still unimplemented)
-    status:   decay is LIVE (`impala/impala.jspeg:1183`); `docs/Impala2.md:168` correctly says so
+    decided:  2026-07 (re-verified 2026-08-04, still unimplemented)
+    status:   decay is LIVE - `makeRValue` (`impala/impala.jspeg:1532`) turns an array place used
+              without a subscript into a pointer; `docs/Impala2.md:193` correctly says so
     target:   Impala 3.0
 
 The rule when it lands: an aggregate never implicitly becomes a pointer. You take the address of an array

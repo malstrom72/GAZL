@@ -24,7 +24,9 @@ must keep the compiler runnable in NuXJS.
 - Keep each milestone small enough to review as one behavior-preserving change.
 - Regenerate generated files with `node impala/updateJSPEG.js` after grammar
   edits.
-- Run `timeout 180 ./build.sh` before considering a milestone complete.
+- Run `bash tools/test-js.sh` before considering a milestone complete - it is the
+  fast gate (~15s, no C++ toolchain) and covers every JS-side test. `./build.sh`
+  additionally builds the C++ tools; run it when you have a toolchain.
 - Keep NuXJS compatibility explicit. Avoid new JavaScript features unless NuXJS
   is known to support them.
 - Do not remove existing mutating helpers until all call sites are migrated and

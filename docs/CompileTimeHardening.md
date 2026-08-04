@@ -40,7 +40,7 @@ One thing the pass did NOT reach, verified 2026-07-29 and **since FIXED**:
 **A symbolic switch range is not on this list, by design.** `const int N = 3; switch (i == 0 to N) {
 case 8: }` compiles and assembles clean, with the arm unreachable. That is correct: a build configuration
 may legitimately narrow the range, and the surplus arms are then dead code in the same way an arm behind a
-compile-time-false branch is dead (see [`FutureOptimizations.md`](FutureOptimizations.md)). Rejecting it
+branch Impala folds to false is dead (see [`FutureOptimizations.md`](FutureOptimizations.md)). Rejecting it
 would make a valid configuration unbuildable. Unreachable is not wrong.
 
 **`&a[k]` PAST THE END is not on this list, by design.** `p = &a[7]` compiles, assembles and runs, and
@@ -57,7 +57,7 @@ one naming the previous field, so it would assemble and alias silently.)
 > Summarized here because it governs every item below. The canonical, normative statement is
 > [`docs/TwoStageConstants.md`](TwoStageConstants.md) - read that first if any of this is new to you.
 
-This is the trap. In Impala 2.0 a constant can be resolved at ASSEMBLY time, not compile time:
+This is the trap. In Impala 2.0 a constant can be resolved at GAZL ASSEMBLY time, not at Impala compile time:
 
 - `.z.Struct` / `.o.Struct.field` for an `extern struct` are supplied by the HOST at load.
 - A macro-assembler or host header can define any `! DEFi` constant the Impala source references.
@@ -91,10 +91,10 @@ configuration-dependent and therefore not an error at all (item 3). Before reach
 above - the bar is "wrong in every configuration", and almost nothing clears it.
 
 > **Superseded mechanism, 2026-07-31.** Everything below works, but it is the wrong tool. GAZL has a
-> purpose-built `! FAIL <free text>` directive (`src/GAZL.cpp:1027`) that aborts assembly with your own
-> message, and `src/UnitTest.gazl:30-40` already uses `! IFDF`/`! EQUi` + `! FAIL` as the canonical
-> idiom for exactly this. Use that instead of the undefined-label trick: it takes a real sentence
-> rather than encoding the message in a label name. See
+> purpose-built `! FAIL <free text>` directive (`Assembler::feed`, its `FAIL_DIRECTIVE` throw) that
+> aborts assembly with your own message, and `src/UnitTest.gazl:30-40` already uses `! IFDF`/`! EQUi` +
+> `! FAIL` as the canonical idiom for exactly this. Use that instead of the undefined-label trick: it
+> takes a real sentence rather than encoding the message in a label name. See
 > [`docs/TwoStageConstants.md`](TwoStageConstants.md), "The deferred assertion". The section below is
 > kept because the branch-condition half (which comparison to emit, and when) still applies verbatim.
 
@@ -124,10 +124,10 @@ Notes for using it:
 - The label must sit on the same line as an instruction (`.inRange:  MOVi ...`); a label alone on a line
   is `Missing instruction`.
 - Cost is zero at run time (all `!` directives), but it adds emitted lines, so it should be opt-in or
-  reserved for cases that cannot be decided at compile time.
+  reserved for cases that cannot be decided at Impala compile time.
 
 Open question before adopting it widely: whether these assertions should be emitted always, only under a
-flag, or only when the operand is symbolic (compile-time-known cases being rejected outright instead).
+flag, or only when the operand is symbolic (cases known at Impala compile time being rejected outright).
 
 
 ## The items
@@ -138,30 +138,39 @@ flag, or only when the operand is symbolic (compile-time-known cases being rejec
     a[7] = 1;              // accepted today
 
 Today this compiles. Correction to an earlier claim here: the assembler catches BOTH storage classes, not
-just globals - `Symbols::resolve` rejects `offset >= symbol.size` (`src/GAZL.cpp:619`) and a local's size
-comes from its `LOCA *size`, so `MOVi $buf:9 #1` under `LOCA *4` fails with `Offset out of bounds: $buf`.
-Verified 2026-08-01 for both - and `docs/Impala2Review.md` C6 had already flagged this section as
-"backwards on which case is uncovered", so this correction was overdue rather than new. So this is not a
-missing check; it is a check that fires at the WRONG TIME -
-at assembly, on the end user's machine, when Impala had the number all along. `ADDp` is deliberately
-`UNCHECKED_ADDRESS` (`src/GAZL.cpp:285`), so dynamic indices correctly fall through to the runtime
-`PEEK`/`POKE` region check instead.
+just globals - `Symbols::resolve` rejects `offset >= symbol.size`, and a local's size comes from its
+`LOCA *size`, so `MOVi $buf:9 #1` under `LOCA *4` fails with `Offset out of bounds: $buf`. Verified
+2026-08-01 for both - and `docs/Impala2Review.md` C6 had already flagged this section as "backwards on
+which case is uncovered", so this correction was overdue rather than new. So this is not a missing check;
+it is a check that fires at the WRONG TIME - at assembly, on the end user's machine, when Impala had the
+number all along. `ADDp` is deliberately `UNCHECKED_ADDRESS` (`src/GAZL.cpp:285`), so dynamic indices
+correctly fall through to the runtime `PEEK`/`POKE` region check instead.
 
-- Numeric index and numeric extent -> plain compile-time error, with the extent in the message.
-- **Symbolic extent on a PLAIN array -> do nothing.** Not a deferred assertion: the assembler resolves the
-  symbol before it checks the offset, so it catches this case natively. Verified with `const int N = 4;
-  int array a[N]; a[7] = 1;` -> `Offset out of bounds: $a`. Emitting `! LSSi`/`! GOTO` scaffolding to
-  re-check what the assembler checks for free would be strictly worse than silence - measured when E461
-  shipped, doing so grew 15 of 87 goldens, versus 1 when scoped.
-- **Symbolic extent on a struct array FIELD -> deferred assertion after all.** The paragraph above is
-  right about plain arrays and wrong about this one: a field overrun stays INSIDE the struct's allocation,
-  so `Symbols::resolve` sees a legal offset and nothing catches it at any stage. This is the one shape
-  that earns the `! LSSi`/`! FAIL` scaffolding, and it gets it (`docs/Impala2.md`, "Array bounds",
-  tier 2).
+The gate is whether Impala knows BOTH ends, index and extent; either one turning symbolic moves the access
+down a tier, and which tier it lands in depends on the shape, not on which end it was:
+
+- Numeric index and numeric extent -> tier 1, an Impala-compile-time `E461` naming the extent.
+- **Either end symbolic on a PLAIN array -> do nothing.** Not a deferred assertion: the assembler resolves
+  the symbol before it checks the offset, so it catches this case natively. Verified with `const int N = 4;
+  int array a[N]; a[7] = 1;` -> `Offset out of bounds: $a`, and a symbolic INDEX is the same shape -
+  `global g[K] = 1` emits a bare `POKE &g:K #1`, checked once `K` has a value. Emitting `! LSSi`/`! GOTO`
+  scaffolding to re-check what the assembler checks for free would be strictly worse than silence -
+  measured when E461 shipped, doing so grew 15 of 87 goldens, versus 1 when scoped.
+- **Either end symbolic on a struct array FIELD -> tier 2, the deferred assertion after all.** The
+  paragraph above is right about plain arrays and wrong about this one: a field overrun stays INSIDE the
+  struct's allocation, so `Symbols::resolve` sees a legal offset and nothing catches it at any stage. So a
+  symbolic index earns the `! LSSi`/`! FAIL` scaffolding here even against a numeric extent -
+  `global s.v[K] = 1` on a `v[4]` emits `! LSSi #K #.z.S.v @.g0` / `! FAIL index K outside S.v`
+  (`docs/Impala2.md`, "Array bounds", tier 2).
+- **Runtime index -> tier 3, `--range-checks`, opt-in and off by default.** Two `DEBUG`-gated compares per
+  subscript against the array's `.z.` extent symbol, calling the host's `assertFail`. Off by default
+  because those are not the same switch: `DEBUG 0` stops the assembler EMITTING the guards, but the guard
+  LINES stay in the shipped `.gazl` text whatever `DEBUG` says (~95 bytes of compacted source each,
+  measured) and that text is the artifact. A bare pointer `p[i]` has no extent, and is unchecked in every
+  tier.
 
 **Priority: low.** This is caret placement on an error that already names the source expression, and it is
 the whole of what is left. Do not let its position at the top of this list imply otherwise.
-- Runtime index -> out of scope; that is a bounds-check-at-runtime question, deliberately not Impala's model.
 
 **Scope: dereference only, never address formation.** The example above is a store, and the check applies
 to that shape - `a[7]`, `a[7] = 1`, `p[9].a` as a value. It must NOT reject `&a[7]`, `&a[N]` or `&p[[i]]`.
@@ -178,8 +187,8 @@ it transliterates to, and would outlaw the one-past-the-end pointer that every w
     table[0] = 9;          // not caught by Impala; GAZL says `Incompatible types: table`
 
 `readonly` is tracked on the symbol (`declare(..., readonly, ...)`) and is honoured for scalars, but an
-indexed write did not consult it. Purely a compile-time check on the symbol; no assembly-time subtlety -
-the readonly array lands in the const region, so the `POKE` is rejected there as a backstop.
+indexed write did not consult it. Purely an Impala-compile-time check on the symbol; no assembly-time
+subtlety - the readonly array lands in the const region, so the `POKE` is rejected there as a backstop.
 
 **Structs had the same hole in two places, found and closed 2026-08-01.** `readonly S s; global s.a = 1;`
 emitted its `POKE`, and `global s = global t;` emitted its whole-struct `COPY`, both with no diagnostic:
@@ -215,7 +224,7 @@ out-of-range case a compile error and `KNOWN_UNLOADABLE` is empty. Verified 2026
 
 CLOSED by `E444`, on the terms below:
 
-- Numeric `from`/`to` -> compile-time error naming the range. Implemented.
+- Numeric `from`/`to` -> Impala-compile-time error naming the range. Implemented.
 - **Symbolic range** (`switch (x == 0 to sizeof(V))`, or a plain `const int N`) -> **left unchecked, and
   that is the right answer, not a shortfall.** A configuration may narrow the range legitimately, leaving
   surplus arms dead; erroring would make that configuration unbuildable. Below `from` the negative offset
@@ -231,8 +240,8 @@ symbolic escape hatch and so no need for a deferred assertion: a label is always
 in the same function body, and the compiler holds the complete set by the time that body is parsed.
 `processBranches` already builds exactly that map for its own post-condition, which checks only
 compiler-minted `@.` labels and deliberately leaves user labels alone precisely because an undefined one
-is a user error that deserves a real diagnostic, not an internal assertion. A plain compile-time error
-naming the label is all this needs.
+is a user error that deserves a real diagnostic, not an internal assertion. A plain Impala-compile-time
+error naming the label is all this needs.
 
 ### 5. Duplicate `case` labels (fuzzer-found)
 
@@ -240,9 +249,9 @@ naming the label is all this needs.
 
 Both arms are emitted, each under its own `.s0#0:`, and the assembler rejects the second with
 `Symbol already defined: .s0.0`. So the build does fail - but on a compiler-minted label the user never
-wrote, which is the worst possible way to report "you listed case 0 twice". Fully decidable at compile
-time whenever the case values are numeric, exactly like item 3, and it wants the same pass: collect the
-arm values for a switch, then reject a repeat naming the value and both source positions.
+wrote, which is the worst possible way to report "you listed case 0 twice". Fully decidable at
+Impala compile time whenever the case values are numeric, exactly like item 3, and it wants the same
+pass: collect the arm values for a switch, then reject a repeat naming the value and both source positions.
 
 **DONE as E443, for EVERY range.** It first shipped inheriting item 3's gate, so a symbolic range
 disabled it until 2026-08-02 - and unlike item 3, duplicate detection never needed the range base at all.
@@ -281,15 +290,14 @@ error at best, and `claimSlot`'s `k < NaN` loop never runs so the `ADRL` self-al
 Fix: call `rejectByValueStruct` from the ARGUMENT site, not just declarators. Do NOT emit `*.z.Name` here
 - see `docs/GAZLSymbolicWindows.md`, the numeric window ABI is correct.
 
-**S2. `buildStructInit` iterates a symbolic field extent, silently dropping initializer words.**
-*(ALREADY RECORDED, `docs/TwoStageConstants.md`: "the loop runs zero times ... initializer words are
-silently dropped and every later field shifts". Reproduced here at the site.)*
-`for (var e = 0; e < f.size; ++e)` where `f.size` is the extent string. This is verbatim the anti-pattern
-`docs/TwoStageConstants.md` names. With `struct S { int array v[N]; int tag }` and `global S s = {{1,2},7}`
-the emitted data is `DATA #7` - the `1, 2` vanish and the `7` lands at `.o.S.v`, not `.o.S.tag`. The same
-source with `v[2]` emits the correct `DATA #1 #2 #7`. No diagnostic.
-Fix: extend E414's "needs a literal size" to every field width preceding the last initialized field.
-Positional `DATA` has no seek directive, so rejecting is the only sound answer.
+**S2. `buildStructInit` iterated a symbolic field extent, silently dropping initializer words - CLOSED
+2026-07-31.** *(ALREADY RECORDED, `docs/TwoStageConstants.md`, which carries the authoritative account of
+both the defect and the fix. Reproduced here at the site.)*
+`for (var e = 0; e < f.size; ++e)` where `f.size` is the extent string. With
+`struct S { int array v[N]; int tag }` and a `{{1,2},7}` initializer the emitted data was `DATA #7` - the
+`1, 2` vanished and the `7` landed at `.o.S.v`, not `.o.S.tag`, with no diagnostic. Now
+`global S s = { v: {1,2}, tag: 7 }` reports `E454` (a field BEHIND a symbolic extent has no position
+Impala can know) and the positional spelling reports `E455`.
 
 **S3. `parseFloat` on an emitted operand string mis-folds a pointer offset.** *(ALREADY RECORDED,
 `docs/TwoStageConstants.md`, which names `parseFloat("0x10")` being `0` exactly. Reproduced here.)*
@@ -298,10 +306,11 @@ The `p - const` fold tests `operands[2][0] === '#'`, which establishes CONSTANT,
 for any named const emits `#NaN`. The non-folded path is already correct, and GAZL can negate at assembly
 (`! SUBi <A> #0 #K`).
 
-**S4. `parseInt('0x2', 10) === 0` slips past E414 and drops a whole initializer.** *(Same anti-pattern
-as S3, ALREADY RECORDED. NEW: that it defeats E414's `isNaN` guard specifically.)*
-`readonly S array t[0x2] = { {1}, {2} }` emits the allocation but no `DATA` row at all, because the guard
-tests `isNaN` and `0` is not NaN. Stage-1 only (a host constant yields NaN and is correctly rejected).
+**S4. `parseInt('0x2', 10) === 0` slipped past E414 and dropped a whole initializer - CLOSED 2026-08-04.**
+*(Same anti-pattern as S3, ALREADY RECORDED. NEW: that it defeated E414's `isNaN` guard specifically, `0`
+not being NaN.)* `constInt` now decodes hex and `+`-signed literals, so
+`readonly S array t[0x2] = { { a: 1 }, { a: 2 } }` emits its `DATA #1 #2`, `global int array g[0x4]` arms
+`E461`, and a `[-0x1]` extent reaches `E462` instead of shipping a backwards layout.
 
 ### Confirmed silent acceptances that become gibberish at assembly
 
@@ -368,7 +377,8 @@ Only category 3 wants `! FAIL`. Reaching for it first would be a mistake - most 
 
 ## Not in this list
 
-- Runtime bounds checking. Impala is a transliterator; per-access runtime checks would break the 1:1
-  model and the cost predictability. The assembler's own region checks remain the backstop.
+- UNCONDITIONAL runtime bounds checking. Impala is a transliterator; a check on every access, always,
+  would break the 1:1 model and the cost predictability. What ships instead is the opt-in `--range-checks`
+  tier under item 1, off by default. The assembler's own region checks remain the backstop.
 - Anything requiring Impala to evaluate host-supplied constants. It cannot, by design - that is the point
   of the layout-as-constants scheme (see `docs/StructLayoutConstants.md`).
