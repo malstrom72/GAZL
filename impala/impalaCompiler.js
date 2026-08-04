@@ -174,7 +174,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     var guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
     var emittedGuards = {};                              /// (array, index) pairs already asserted in this function - the same assertion twice says nothing new
     var initTarget = undefined;                          /// element DESCRIPTOR an `InitList`'s entries answer to; undefined = untyped array, accept what comes
-    var reservedAt = undefined;                          /// offset of the last name reported as reserved - two doors check one name, one reports it
+    var reservedAt = undefined;
+    var pendingAxisOob = undefined;                      /// a per-axis bounds finding, handed from foldAxes to subscriptStruct                          /// offset of the last name reported as reserved - two doors check one name, one reports it
     var switchStack = [];
     var noForward = false;
     var exportNext = false;                              /// set while parsing an `export`-prefixed declaration (Step 5)
@@ -2670,6 +2671,25 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        outermost axis inwards, which is one MUL+ADD per extra axis and folds entirely at assembly time when
        the indices are constant. The per-axis extents come from the place's `dims`, which only a struct
        ARRAY FIELD carries today (slice 1); anything else has no shape to stride by and says so. */
+    /* One axis of a shaped subscript, checked against that axis's own extent. The synthesized record is
+       what `checkConstIndex` already understands, so the compile-time refusal and the assembly-time
+       deferral both arrive without a second implementation - only the NAME differs, so the message says
+       which axis rather than just naming the field. */
+    checkAxis = function (slot, axis, idxRV, sourceCode, sourceOffset) {
+        var ext = slot.extent;
+        if (ext === undefined || ext.dimN === undefined || ext.dimN[axis] === undefined) {
+            return;
+        }
+        var oob = checkConstIndex({ n: ext.dimN[axis], what: ext.what + ' axis ' + axis,
+                sym: ext.dims[axis], inField: true }, idxRV, sourceCode, sourceOffset);
+        /* An AXIS violation outranks the flat one the subscript will find: `cells[0, 5]` is a legal word
+           offset and an illegal coordinate, so the flat check has nothing to say about it. Held on the
+           parser because `subscriptStruct` runs after the fold and assigns `oobIndex` last. */
+        if (oob !== undefined && pendingAxisOob === undefined) {
+            pendingAxisOob = oob;
+        }
+    };
+
     foldAxes = function (slot, first, extra, sourceCode, sourceOffset) {
         var dims = slot.extent && slot.extent.dims;
         if (dims === undefined || dims.length !== extra.length + 1) {
@@ -2679,9 +2699,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                     'a subscript states every axis of the array it indexes');
         }
         var acc = makeRValue(metaSlot(first));
+        /* EVERY axis is checked against ITS OWN extent, which is the entire safety argument for shapes:
+           the flat product cannot catch `cells[0, W]`, an index that stays inside the allocation while
+           walking off the end of its row. Written order is outermost-first, so written index j is axis
+           `rank-1-j`. Reuses the ordinary index check with a per-axis extent record, so a shape inherits
+           `E461` and the deferred tier verbatim rather than growing a second, divergent set of rules. */
+        var rank = dims.length;
+        checkAxis(slot, rank - 1, acc, sourceCode, sourceOffset);
         for (var a = 0; a < extra.length; ++a) {
+            checkAxis(slot, rank - 2 - a, extra[a], sourceCode, sourceOffset);
             /* stride of the axis we are LEAVING = the extent of the next axis inwards */
-            acc = mulAddAxis(acc, dims[dims.length - 2 - a], extra[a]);
+            acc = mulAddAxis(acc, dims[rank - 2 - a], extra[a]);
         }
         return wrapOperand(acc);
     };
@@ -2764,6 +2792,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
                 emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
             }
+        }
+        if (pendingAxisOob !== undefined) {               /* a per-axis finding wins - see checkAxis */
+            oobIndex = pendingAxisOob;
+            pendingAxisOob = undefined;
         }
         x.oobIndex = oobIndex;                                    /* AFTER the terminal call on every path -
                                                                      setPlace and emitPlaceValue both clear it */
@@ -2895,6 +2927,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                               : field.dims.map(function (d, k) {
                                   return axisSymbol(fieldName, structName, k);
                               })),
+                      dimN: field.dims,                           /* the axis COUNTS as written, for checking */
                       stride: isStructAtom(field.elem) ? '.z.' + field.elem : undefined });
             return;
         }
