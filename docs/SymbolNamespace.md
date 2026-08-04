@@ -78,6 +78,14 @@ deliberately predictable, because hand-written or host-supplied GAZL must be abl
 | `.z.<Struct>.<field>` | a struct ARRAY field | `.z.S.v` |
 | `.z.<global>` | a global array | `.z.grid` |
 | `.z.<function>.<local>` | a local array | `.z.main.buf` |
+| `.d.<Struct>.<field>.<axis>` | ONE AXIS of a shaped struct array field | `.d.Grid.cells.0` |
+
+`.d.` exists because `.z.` cannot serve: there is exactly one `.z.` per array and it counts WORDS, so a
+rank-2 shape has nothing to stride by and nothing to bounds-check a single coordinate against. Axes are
+numbered by STRIDE, innermost first - axis *k*'s stride is the product of axes `0..k-1` - and `.z.` stays
+the product of them all. Only a field stating more than one axis mints them; a 1-D field is unchanged. The
+suffix is a NUMBER where a field name would be an identifier, so `.d.S.v.0` cannot collide with a field
+called `0`. See [`MultidimensionalArrays.md`](MultidimensionalArrays.md).
 
 An array VARIABLE's size is emitted immediately above its own allocation line, which then reads
 `*.z.name` instead of a number or a scratch:
