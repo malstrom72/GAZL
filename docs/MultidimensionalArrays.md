@@ -108,16 +108,38 @@ the only one that touches the descriptor grammar.
 **Not in scope at all:** arrays by value, array parameters, `:` open axes and slices, `&a` as an lvalue,
 nested-brace initializers, C-style `a[y][x]` chains.
 
-## Open decisions
+## Decisions (2026-08-04)
 
-1. **Row-crossing.** A matrix is one flat object, so `cells[0, W]` addresses `cells[1, 0]`. The park
-   design chose to DEFINE that rather than call it undefined, on the grounds that GAZL is a flat machine
-   with no aliasing optimisation. Per-axis bounds checks would reject it. Decide which wins - defining it
-   and only checking the flat total, or checking per axis and forbidding it.
-2. **Whether `E430` relaxes.** An `extern struct` array field states no extent today because "a number
-   here would be an unverifiable claim Impala never reads". If a host publishes `.d.Frame.cells.*` the way
-   it already publishes `.o.` and `.z.`, the claim becomes checkable and the rule could relax.
-3. **Metadata spelling.** `; signature` rows must not separate axes with a comma:
-   `tools/gazl-validate.nuxjs.js:299` splits struct fields on `,`, so `cells : int[3, 4]` would parse as
-   two bogus fields. The park branch used `4x5`. Its `arraySignaturesCompatible` also compares extents as
-   raw strings, which is worth fixing on its own merits.
+**1. Row-crossing is REJECTED, not defined.** A matrix is one flat object, so `cells[0, W]` addresses
+`cells[1, 0]`, and the park design chose to define that as legal on the grounds that GAZL is a flat machine
+with no aliasing optimisation. Bounds checking rejects it instead: the check is **per axis**, not against
+the flat total. Checking only the total would let `x >= W` through, which is exactly the row-overflow bug
+the feature exists to catch - a shape that cannot catch it buys syntax and nothing else.
+
+**2. An `extern struct` matrix field names its axes with host-supplied consts.**
+
+```impala
+const int W;
+const int H;
+extern struct Grid { int array cells[H, W]; int tag }
+```
+
+`E430` relaxes from a blanket ban to "no LITERAL extent". Its own rationale is what licenses this - the
+rule reads *"a number here would be an unverifiable claim Impala never reads (offsets are host-supplied
+`.o.` symbols, 1-D stride is 1)"*, and both clauses are conditional. A host-supplied `const int W;` is not
+a number Impala knows, it is a reference to the host's own symbol exactly like `.o.` and `.z.`, so no claim
+is made and nothing is unverifiable. And "1-D stride is 1" is precisely *why* the extent was never needed;
+at rank 2 the stride IS the inner extent, so the premise expires. For a multi-dim extern field, naming the
+axes is therefore not merely permitted but **required** - without the inner extent the stride cannot be
+formed at all.
+
+The machinery is already in place: a normal struct field with a symbolic extent emits `.z.S.b: ! DEFi #W`
+and accumulates `#.z.S.b` into the layout, all resolved by the host at load. So the host ends up owning the
+layout AND the shape, consistently, and the per-axis bounds checks defer to assembly (`! LSSi #k #W` /
+`! FAIL`) on the tier that already exists.
+
+**3. Axes are separated by `x` in metadata, never by a comma.** `cells : int[4x5]`.
+`tools/gazl-validate.nuxjs.js:299` splits struct fields on `,`, so `cells : int[4, 5]` would parse as two
+bogus fields and report a spurious cross-unit conflict. The park branch used `4x5` for this reason. Its
+`arraySignaturesCompatible` also compares extents as raw strings, which is worth fixing on its own merits
+and independently of this feature.
