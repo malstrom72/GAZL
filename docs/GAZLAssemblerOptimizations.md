@@ -214,24 +214,6 @@ fixture: Impala's backward walk already collapses every chain running in the dir
 already been consumed and every remaining target is an instruction index. That is a second, better reason
 to do item 4 here rather than in the compiler.
 
-### Items 4 and 5: IMPLEMENTED (2026-08-04)
-
-`Assembler::threadBranches()`, called from `finalize` once every symbol is resolved. Both transforms
-rewrite an opcode or a displacement IN PLACE, so no address moves and nothing needs re-patching - which
-is what makes them cheap, and what still rules out the removal variants (dropping the dead `GOTO`, or a
-label left unreferenced), since those shift every later address.
-
-The branch operand is read from the same `OPERATORS` table the assembler parses with, so a future
-branching opcode is covered by declaring its operand `BRANCH` and nothing else; all 35 carry it in one
-consistent slot. `SWCH` is excluded by name - its third operand looks the same to the table but is a jump
-TABLE base in memory (`ip += mb[C2.p + index].i`), not a displacement. Verified live: 34 branch opcodes
-recognised (35 less `SWCH`), and a hand-written 3-hop chain collapses to 2 threads plus one `GOTO`->`RETU`.
-
-**Corpus effect is small and that is expected**: 2 files, 6 `GOTO`->`RETU`, 1 thread. Impala now performs
-the return duplication itself, and only ~42 of 89 fixtures assemble far enough to reach `finalize` at all
-(the rest stop at a host symbol). The population this recovers is hand-written GAZL, other producers, and
-the chains Impala's one-directional walk cannot see - none of which the golden corpus contains.
-
 ## 6. Not candidates
 
 - **Anything requiring the assembler to know Impala's type model.** It sees words.

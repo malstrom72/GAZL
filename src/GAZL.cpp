@@ -884,67 +884,8 @@ void Assembler::finalizeFunction() {
 	locals.clear();
 }
 
-/* Which operand of an instruction is a RELATIVE branch displacement, or -1 for none. Derived from the
-   same OPERATORS table the assembler parses with, so a future branching opcode is covered by declaring
-   its operand `BRANCH` and doing nothing else. All 35 branching opcodes carry it in one consistent slot.
-   SWCH is deliberately excluded: its third operand looks like the others to the table but is a jump
-   TABLE base in memory (`ip += mb[C2.p + index].i`), not a displacement, so threading it would rewrite
-   a data pointer. The assemble-time directives (`! GOTO`, `! IFDF`, `! IFND`) need no exclusion - they
-   are consumed while assembling and never reach the code array, which is precisely why this pass is
-   safe here and was not inside the compiler. */
-static const int OPCODE_SPAN = DEFI____ - FIRST_OPCODE_VALUE + 1;
-
-static int branchSlotOf(Int opcode) {
-	static int slots[OPCODE_SPAN];
-	static bool built = false;
-	if (!built) {
-		for (int i = 0; i < OPCODE_SPAN; ++i) {
-			slots[i] = -1;
-		}
-		for (int i = 0; i < OPERATOR_COUNT; ++i) {
-			if (OPERATORS[i].opcode == SWCH_VCC) continue;
-			for (int k = 0; k < 3; ++k) {
-				if ((OPERATORS[i].accepts[k] & BRANCH) != 0) {
-					slots[OPERATORS[i].opcode - FIRST_OPCODE_VALUE] = k;
-				}
-			}
-		}
-		built = true;
-	}
-	const Int index = opcode - FIRST_OPCODE_VALUE;
-	return (index >= 0 && index < OPCODE_SPAN) ? slots[index] : -1;
-}
-
-/* Branch threading and return duplication (docs/GAZLAssemblerOptimizations.md items 4 and 5), run once
-   every symbol is resolved. Both are IN-PLACE rewrites of an opcode or a displacement, so nothing moves,
-   no address shifts and nothing needs re-patching - which is what makes them cheap, and what makes the
-   removal variants (dropping the dead GOTO, dropping a now-unreferenced label) expensive enough to skip.
-   Impala collapses the chains its own walk can see, but that walk resolves aliases in one direction, so
-   a chain written the other way survives; hand-written GAZL gets no such pass at all. Every surviving
-   hop is paid on every execution - measured 1.97x for a 3-hop chain against an instruction ratio of
-   exactly 2, so nothing short-circuits it at run time. */
-void Assembler::threadBranches() {
-	for (Instruction* p = codeBase; p < ip; ++p) {
-		const int slot = branchSlotOf(p->opcode);
-		if (slot < 0) continue;
-		Value* const disp = (slot == 0 ? &p->p0 : (slot == 1 ? &p->p1 : &p->p2));
-		Instruction* target = p + disp->i;
-		for (int hops = 0; hops < 64; ++hops) {              // `a: GOTO @a` must not spin
-			if (target < codeBase || target >= ip || target->opcode != GOTO_B__) break;
-			target += target->p0.i;
-		}
-		if (target < codeBase || target >= ip) continue;     // anything odd is left exactly as it was
-		if (p->opcode == GOTO_B__ && target->opcode == RETU_C__) {
-			p->opcode = RETU_C__;                            // RETU reads no operands and is frame-agnostic
-		} else {
-			disp->i = static_cast<Int>(target - p);
-		}
-	}
-}
-
 void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount) {
 	newUnit(0);
-	threadBranches();
 	if (dataPointer != 0) memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 	globals.resolveForwardRefs();
 	codeSize = (UInt)(ip - codeBase);
