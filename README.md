@@ -72,6 +72,10 @@ It prints the `Code size:` banner — that line is the proof it assembled — th
    	impala/ImpalaDemo.impala output/demo.gazl 0x4d2 impala/ImpalaDemo.impala
    ./output/GAZLCmd output/demo.gazl main
    ```
+   Step 1 is not optional: `output/` holds a *staged copy* of the compiler, and a stale one fails
+   here as `error[E001]: syntax error` inside `ImpalaDemo.impala` — a diagnosis that points at the
+   demo source when the real cause is the compiler sitting beside it.
+
    The output path is the *second* argument. Passing the random id there instead writes the
    GAZL to a file literally named `0x4d2` and never creates `demo.gazl` at all — so `GAZLCmd`
    either reports `Could not open input file`, or, worse, silently runs whatever stale
