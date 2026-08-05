@@ -75,7 +75,7 @@ typedef Int Status;																										// Run-time status code
 const int VERSION = 1;
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
-const Pointer IP_OFFSET = 0x56789ABC;																					// All instruction / function pointers in GAZL are offsetted by this amount (thus the address of the first instruction is not zero). This makes it easier to detect invalid function calls (such as performing a function call on a null-pointer).
+const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). This makes it easier to detect an invalid indirect call - through a null pointer, or through a small integer that was never a function pointer at all. A function pointer is an ORDINAL indexing `functionTable`, NOT a code address, which is why this is not an instruction-pointer offset; it was named IP_OFFSET until 2026-08-05.
 const Pointer NULL_POINTER = 0;
 
 union Value {
@@ -352,7 +352,7 @@ class Processor {
 	protected:	UInt codeSize;
 	protected:	const Instruction* codeBase;
 	protected:	UInt functionCount;
-	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `IP_OFFSET + ordinal`.
+	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `FUNCTION_OFFSET + ordinal`.
 	protected:	UInt memorySize;
 	protected:	Value* memoryBase;
 	protected:	UInt rwMemorySize;

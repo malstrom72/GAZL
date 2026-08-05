@@ -1127,7 +1127,7 @@ const Char* Assembler::feed(const Char* line) {
 							break;
 					
 			case FUNC_CC_:	if (functionCount >= maxFunctionCount) throw Exception(NOT_ENOUGH_FUNCTION_SPACE);			// FUNC
-							v.p = (Int)(IP_OFFSET + functionCount);		// A function pointer is its stable declaration-order ordinal (not a code offset), resolved through `functionTable` at call time.
+							v.p = (Int)(FUNCTION_OFFSET + functionCount);		// A function pointer is its stable declaration-order ordinal (not a code offset), resolved through `functionTable` at call time.
 							functionTable[functionCount] = (UInt)(ip - codeBase);
 							++functionCount;
 							declare(globals, labelBegin, labelEnd, op->declareTypes, v);
@@ -1281,12 +1281,12 @@ Int Processor::run() {
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
 			case FUNC_CC_:	if ((dsp += (UInt)(C0.i)) + C1.i > dataStackEnd) { err = DATA_STACK_OVERFLOW; goto ret; } break;
-			case CALL_VVC:	ui = V0.p - IP_OFFSET;						// ui = function ordinal
+			case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;						// ui = function ordinal
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
 							ui = functionTable[ui];						// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
-			case CALL_CVC:	ui = C0.p - IP_OFFSET;						// ui = function ordinal (constant, validated at assembly)
+			case CALL_CVC:	ui = C0.p - FUNCTION_OFFSET;						// ui = function ordinal (constant, validated at assembly)
 							assert(ui < functionCount);
 							ui = functionTable[ui];						// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
@@ -1431,7 +1431,7 @@ ret:
 
 Status Processor::enterCall(Pointer functionPointer) {
 	assert(codeBase != 0);
-	UInt ui = functionPointer - IP_OFFSET;						// ui = function ordinal
+	UInt ui = functionPointer - FUNCTION_OFFSET;						// ui = function ordinal
 	if (ui >= functionCount) return BAD_CALL;
 	ui = functionTable[ui];										// ui = code offset
 	assert((codeBase + ui)->opcode == FUNC_CC_);
