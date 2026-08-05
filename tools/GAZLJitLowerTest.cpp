@@ -746,7 +746,7 @@ static void runLivenessTest() {
 	std::printf("\nLiveness (buildLiveIn) sanity:\n");
 	Symbols globals;
 	if (!assemble(K_TWOLOOP, globals)) { ++failures; return; }
-	const UInt ord = static_cast<UInt>(globals.findFunction("main") - IP_OFFSET);
+	const UInt ord = static_cast<UInt>(globals.findFunction("main") - FUNCTION_OFFSET);
 	const UInt start = gFunctionTable[ord];
 	UInt end = start;
 	while (gCode[end].opcode != OP_RETU) { ++end; }

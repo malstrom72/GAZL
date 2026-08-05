@@ -27,7 +27,7 @@
 	not touch the interpreter. Verified against a clang-assembled oracle. The arch-neutral JIT API (JitModule /
 	JitProcessor / JitCompiler) lives in GAZLJit.h; the arm64 lowering pass + native dispatcher that drive this emitter,
 	plus JitCompilerArm64 (declared below), live in GAZLJitArm64.cpp. The diff test still links GAZL.cpp - the backend TU's
-	lowering throws GAZL::JitException, whose base vtable is anchored there. See docs/JitEmitterHandoff.md.
+	lowering throws GAZL::JitException, whose base vtable is anchored there. See design/jit/JitEmitterHandoff.md.
 */
 
 #ifndef GAZLJitArm64_h
@@ -45,7 +45,7 @@ namespace GAZL {
 	AArch64 register operand. The integer file (`Wn`/`Xn`) and the FP/SIMD scalar file (`Sn`) share the same 5-bit
 	encoding slot, so `X<n>` and `S<n>` are just readable aliases for the same number as `W<n>`; the emitter method
 	picks the width. Number 31 means `WZR`/`XZR` in data-processing slots and `SP` in a base-register slot (never used
-	here). See docs/JitEmitterHandoff.md.
+	here). See design/jit/JitEmitterHandoff.md.
 */
 enum Reg {
 	W0 = 0, W1, W2, W3, W4, W5, W6, W7, W8, W9, W10, W11, W12, W13, W14, W15,

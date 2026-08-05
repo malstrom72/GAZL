@@ -3,7 +3,7 @@ set -e -o pipefail -u
 
 # Builds and runs the GAZLJit arm64 Emitter execution test (tools/GAZLJitExecTest.cpp): emits kernels through the
 # Emitter, runs them from W^X executable memory, and checks their return values against C references. AArch64 only.
-# Reuses the allocation/flush strategy proven GO by JIT spike A1 (spike/jit-probe/). See docs/JitEmitterHandoff.md.
+# Reuses the allocation/flush strategy proven GO by JIT spike A1 (spike/jit-probe/). See design/jit/JitEmitterHandoff.md.
 #
 # Standalone by design (not wired into build.sh). clang++ direct, like the benchmarks/jit/ scripts. Override the
 # compiler with CPP_COMPILER.

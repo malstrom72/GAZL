@@ -2,7 +2,7 @@
 set -e -o pipefail -u
 
 # Builds and runs the GAZLJit arm64 Emitter assemble-diff test (tools/GAZLJitTest.cpp). AArch64 only; the Emitter and
-# its clang-assembled reference (tools/GAZLJitTestRef.arm64.S) both target AArch64. See docs/JitEmitterHandoff.md.
+# its clang-assembled reference (tools/GAZLJitTestRef.arm64.S) both target AArch64. See design/jit/JitEmitterHandoff.md.
 #
 # Standalone by design: not wired into build.sh (that suite is hardcoded). Compiles with clang++ directly, like the
 # benchmarks/jit/ scripts. Override the compiler with CPP_COMPILER.

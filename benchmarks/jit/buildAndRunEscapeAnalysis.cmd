@@ -1,7 +1,7 @@
 @ECHO OFF
 SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 REM Builds and runs JitEscapeAnalysis over the golden Impala corpus. Measures how much the
-REM "escape floor" register-allocation design (docs/JitCompilerResearch.md 1.1/5.7) pessimizes
+REM "escape floor" register-allocation design (design/jit/JitCompilerResearch.md 1.1/5.7) pessimizes
 REM hot scalar accesses, to decide escape-floor vs barrier caching. See benchmarks/jit/README.md.
 CD /D "%~dp0\..\.."
 IF NOT EXIST output MKDIR output

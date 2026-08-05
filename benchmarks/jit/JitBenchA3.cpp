@@ -11,7 +11,7 @@
 	produce bit-identical results (printed as MATCH), which validates both the hand-
 	written code and that every variant does the same work.
 
-	See docs/JitCompilerResearch.md (section 11.0 spike A3, worked example in 5.8).
+	See design/jit/JitCompilerResearch.md (section 11.0 spike A3, worked example in 5.8).
 	Currently AArch64 only; x64 / Windows lowerings are future work (they are, in effect,
 	what the real JIT will emit).
 */

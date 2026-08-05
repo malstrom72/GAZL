@@ -28,7 +28,7 @@
 
 	It emits real kernels through the Arm64Emitter, copies the bytes into W^X executable memory, invalidates the icache, and
 	*calls* them - reusing the allocation + flush strategy proven GO by JIT spike A1 (see spike/jit-probe/,
-	docs/JitSpikeA1-Results.md): on Apple Silicon, `mmap(MAP_JIT)` + a per-thread `pthread_jit_write_protect_np` toggle
+	design/jit/JitSpikeA1-Results.md): on Apple Silicon, `mmap(MAP_JIT)` + a per-thread `pthread_jit_write_protect_np` toggle
 	+ `sys_icache_invalidate`; on Linux arm64, `mmap(RW)` → `mprotect(RX)` → `__builtin___clear_cache`. The emitted
 	results are compared against independent C reference implementations. Exits non-zero on any mismatch.
 */
@@ -89,7 +89,7 @@ static void unmapExec(void* p, size_t wordCount) {
 	}
 }
 
-// --- kernel 1: int sumTo(int n) = 0 + 1 + ... + (n-1), all in registers (docs/JitCompilerResearch.md §5.8) ---
+// --- kernel 1: int sumTo(int n) = 0 + 1 + ... + (n-1), all in registers (design/jit/JitCompilerResearch.md §5.8) ---
 
 static void emitSumTo(Arm64Emitter& e) {
 	e.movz(W9, 0);							// result = 0

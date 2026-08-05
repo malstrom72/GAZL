@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 All code style and design principles (RAII / design-by-contract, naming, class layout, comments, formatting) are in
-[docs/CodingStyle.md](docs/CodingStyle.md), the canonical cross-project style doc. This file covers this repository's
+[design/CodingStyle.md](design/CodingStyle.md), the canonical cross-project style doc. This file covers this repository's
 operations (layout, build/test, scripts) and the commit conventions.
 
 ## Read this before touching Impala or GAZL
@@ -12,7 +12,7 @@ changes that look reasonable and are wrong at the level of the whole system.
 **1. Impala is a transliterator, not a compiler.** The ~1:1 mapping between Impala constructs and GAZL
 instructions is sacred. No hidden optimization passes, no runtime machinery the programmer cannot
 predict from the source, and never stricter than the machine it targets. Optimization belongs in the
-assembler, where more is known. See the design principles in [`docs/Impala2.md`](docs/Impala2.md).
+assembler, where more is known. See the design principles in [`docs/impala/Impala2.md`](docs/impala/Impala2.md).
 
 **2. The build has TWO stages, and a constant is not always a number Impala knows.** GAZL programs are
 distributed as assembly TEXT, and that text is assembled on the END USER's machine immediately before
@@ -22,7 +22,7 @@ conditions. Impala therefore emits references to constants whose values it never
 correct and intended, not a gap to close. Do not make Impala demand a numeric value where a symbol
 would do; do not fold a named constant away; do not treat "not known at Impala compile time" as an
 error. The full rules, with verified examples, are in
-[`docs/TwoStageConstants.md`](docs/TwoStageConstants.md) - **read it before changing any constant
+[`design/impala/TwoStageConstants.md`](design/impala/TwoStageConstants.md) - **read it before changing any constant
 handling, folding, bounds check or diagnostic.**
 
 Say "Impala compile time" or "GAZL assembly time" explicitly. Bare "compile time" is ambiguous here
@@ -43,7 +43,8 @@ The project uses a consistent folder structure. Build output is written to `outp
 
 - `tools/` - scripts for building and maintaining the code and documentation.
 - `projects/` - Xcode and Visual Studio project files.
-- `docs/` - documentation.
+- `docs/` - end-user documentation for GAZL, Impala and the C++ embedding API.
+- `design/` - design notes, audits, proposals and internals, for working ON the toolchain. Start at `design/README.md`.
 - `externals/` - projects and source code from other repositories (only touch this content when explicitly asked to).
 - `src/` - C++ source code for the library. The library is distributed as source rather than prebuilt binaries.
 - `tests/` - regression tests.
@@ -56,7 +57,7 @@ BuildCpp.sh and BuildCpp.cmd are copied from another repository. Only make chang
 ## Code style
 
 Code style (indentation, braces, line width, comments, naming) is defined in
-[`docs/CodingStyle.md`](docs/CodingStyle.md). Only the operational hygiene note below is repo-specific.
+[`design/CodingStyle.md`](design/CodingStyle.md). Only the operational hygiene note below is repo-specific.
 
 When handling files with command-line tools (which may break tab characters):
 - Always run `expand -t 4` on the file before processing.

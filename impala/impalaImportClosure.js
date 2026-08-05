@@ -63,7 +63,7 @@ function joinPath(dir, rel) {
 /* Walk the closure of `rootPath`, post-order so a dependency always precedes its dependent. The
    visited set keyed on the canonical path dedups diamonds and makes cycles harmless (each file is
    read and emitted exactly once); resolution across a cycle is a separate matter - see
-   docs/Impala2.md "Cycles". */
+   docs/impala/Impala2.md "Cycles". */
 function resolveImportClosure(rootPath, io) {
 	var visitedKeys = [];
 	var order = [];

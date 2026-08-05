@@ -23,14 +23,14 @@
 
 /*
 	C3-full + C4 prototype - the JIT as a `Processor` SUBCLASS sharing one machine state with the interpreter, exactly
-	the engine factoring decided in docs/JitCompilerResearch.md §5.1. This settles the question raised during C3-minimal:
+	the engine factoring decided in design/jit/JitCompilerResearch.md §5.1. This settles the question raised during C3-minimal:
 	`Processor`'s runtime state is `protected`, so a subclass reaches `dsp`/`ip`/`ipsp`/`clockCyclesLeft`/`memoryBase`
 	directly - NO edit to src/GAZL.* is needed to build a dispatcher or write resume state. (src/GAZL.* is still compiled
 	read-only here; the only VM edits the real design wants are making `run()`/`enterCall()` virtual + a `RESUME` field,
 	so the *host* can pick an engine through a `Processor*` - orthogonal to this prototype.)
 
 	`ProtoEngine` drives Arm64Emitter-produced native code over the *same* `Processor` state the interpreter uses, and this test
-	demonstrates the three claims C3/C4 exist to prove (docs/JitCompilerResearch.md §5.2, §5.4, §5.5, §5.7.5):
+	demonstrates the three claims C3/C4 exist to prove (design/jit/JitCompilerResearch.md §5.2, §5.4, §5.5, §5.7.5):
 
 	  1. C3 - run a whole GAZL function through the dispatcher; the final observable memory image is BYTE-IDENTICAL to a
 	     pure interpreter run.
@@ -215,7 +215,7 @@ static bool assembleKernel(Symbols& globals, KernelLayout& layout, Pointer& gInP
 	}
 
 	// Recover the frame/global byte offsets from the finalized instructions (see the [k] markers in KERNEL_SOURCE).
-	const UInt f = gFunctionTable[mainPtr - IP_OFFSET];
+	const UInt f = gFunctionTable[mainPtr - FUNCTION_OFFSET];
 	const Instruction* in = gCode + f;
 	if (in[0].opcode != OP_FUNC || in[1].opcode != OP_PEEK_VC || in[2].opcode != OP_MOVE_VC
 			|| in[3].opcode != OP_MOVE_VC || in[4].opcode != OP_ADDI_VVV || in[5].opcode != OP_FORi_VVB

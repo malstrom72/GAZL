@@ -1,6 +1,6 @@
 /*
 	JitEscapeAnalysis - corpus measurement for the v2 register-allocation design decision in
-	docs/JitCompilerResearch.md (section 1.1 / 5.7): "escape floor" (ADRL is the thief) vs.
+	design/jit/JitCompilerResearch.md (section 1.1 / 5.7): "escape floor" (ADRL is the thief) vs.
 	"barrier" (the pointer *use* is the thief) register caching.
 
 	For every FUNC in every .gazl file given (or found in given directories), this tool:

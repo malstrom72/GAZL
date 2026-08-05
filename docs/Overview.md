@@ -96,7 +96,7 @@ For a smaller example, inspect the comments around the `Assembler` and `Processo
 
 GAZL source is plain text so version control systems can store programs directly. The assembler supports compile‑time instructions introduced by `!`. These operate on special compile‑time variables written as `<A>` through `<Z>`. Instructions such as `! ADDi`, `! MULf` or `! IFDF` are executed when the file is assembled and can define constants, evaluate conditions or skip blocks of code. Changing a compile‑time definition (for example `! DEFi DEBUG #0` versus `! DEFi DEBUG #1`) changes the generated code without altering the original source.
 
-Note that "compile time" in this section means **assembly time**, which happens on the end user's machine at load. The Impala documentation uses "compile time" for the earlier `.impala` → `.gazl` stage. The two stages, and the rules the split imposes on the Impala compiler, are specified in [Two-Stage Constants](TwoStageConstants.md).
+Note that "compile time" in this section means **assembly time**, which happens on the end user's machine at load. The Impala documentation uses "compile time" for the earlier `.impala` → `.gazl` stage. The two stages, and the rules the split imposes on the Impala compiler, are specified in [Two-Stage Constants](../design/impala/TwoStageConstants.md).
 
 A complete list of compile‑time opcodes is found in [`src/UnitTest.gazl`](../src/UnitTest.gazl) and reproduced below for convenience:
 
@@ -151,4 +151,4 @@ A complete list of compile‑time opcodes is found in [`src/UnitTest.gazl`](../s
 ## Further Reference
 
 The file `src/UnitTest.gazl` acts as a living specification of the instruction set. It contains comments for nearly every operation and illustrates how globals, constants and memory operations work. Consult it when implementing new code or interfacing with the VM.
-For a condensed view, see the [Instruction Set](InstructionSet.md) reference which extracts these comment blocks into a single document.
+For a condensed view, see the [Instruction Set](gazl/InstructionSet.md) reference which extracts these comment blocks into a single document.

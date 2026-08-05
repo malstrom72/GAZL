@@ -2,7 +2,7 @@
 
 **Status: COMPLETE (2026-07-11) — verdict GO.** Ran in Logic (AU), Ableton (VST3), Pro Tools (AAX) and
 loads as VST2 in Live; all pass (rungs 1+2 work, rung 3 denied). Full results:
-[docs/JitSpikeA1-Results.md](../../docs/JitSpikeA1-Results.md). This tree is throwaway — `rm -rf spike/`
+[design/jit/JitSpikeA1-Results.md](../../design/jit/JitSpikeA1-Results.md). This tree is throwaway — `rm -rf spike/`
 when you're done with it.
 
 A minimal audio plug-in that, when a host instantiates it and sets up audio, runs the GAZL JIT
@@ -10,8 +10,8 @@ executable-memory **probe ladder** once, records the result to a per-process log
 as a silent stereo pass-through. It answers one empirical question per host: *which strategy for
 allocating and executing machine code actually works inside this DAW's process?*
 
-See [docs/JitSpikeA1-Results.md](../../docs/JitSpikeA1-Results.md) for the measured results, and
-[docs/JitCompilerResearch.md](../../docs/JitCompilerResearch.md) for the wider JIT research effort.
+See [design/jit/JitSpikeA1-Results.md](../../design/jit/JitSpikeA1-Results.md) for the measured results, and
+[design/jit/JitCompilerResearch.md](../../design/jit/JitCompilerResearch.md) for the wider JIT research effort.
 
 > **This whole directory is a throwaway spike.** It vendors a minimal copy of Sonic Charge's Symbiosis
 > adapter framework purely to get a loadable plug-in in every format without pulling in JUCE. Delete
@@ -82,7 +82,7 @@ cat ~/Library/Logs/GazlJitProbe/auvaltool-*.log
 2. In the DAW, add **GAZL: JIT Probe** to a track and start audio (the probe fires on audio setup).
 3. Read the newest file in `~/Library/Logs/GazlJitProbe/`. The filename's `<procname>` tells you whether
    it ran in the main app or an out-of-process scanner/helper.
-4. Record the per-host outcome in `docs/JitSpikeA1-Results.md`.
+4. Record the per-host outcome in `design/jit/JitSpikeA1-Results.md`.
 
 ## Plug-in identity
 

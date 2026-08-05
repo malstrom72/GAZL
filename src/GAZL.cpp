@@ -93,7 +93,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 // run-time and constant-folded paths can never diverge. These are the chosen normative results
 // (two's-complement wrap / count-mod-32 shifts / saturating FTOI -- the AArch64 & WebAssembly
 // choices), identical on every target. add/sub/mul and the shifts lower to a single native
-// instruction; idiv/imod/ftoi keep a real edge-case branch on purpose (see docs/PortabilityAudit.md).
+// instruction; idiv/imod/ftoi keep a real edge-case branch on purpose (see design/gazl/PortabilityAudit.md).
 inline int absolute(int i) { Int x = i >> (Int)(sizeof (Int) * 8 - 1); return (Int)(((UInt)i ^ (UInt)x) - (UInt)x); } // INT_MIN -> INT_MIN
 inline float absolute(float f) { return fabsf(f); }
 inline double absolute(double f) { return fabs(f); }
@@ -1170,7 +1170,7 @@ const Char* Assembler::feed(const Char* line) {
 							break;
 					
 			case FUNC_CC_:	if (functionCount >= maxFunctionCount) throw Exception(NOT_ENOUGH_FUNCTION_SPACE);			// FUNC
-							v.p = (Int)(IP_OFFSET + functionCount);		// A function pointer is its stable declaration-order ordinal (not a code offset), resolved through `functionTable` at call time.
+							v.p = (Int)(FUNCTION_OFFSET + functionCount);		// A function pointer is its stable declaration-order ordinal (not a code offset), resolved through `functionTable` at call time.
 							functionTable[functionCount] = (UInt)(ip - codeBase);
 							++functionCount;
 							declare(globals, labelBegin, labelEnd, op->declareTypes, v);
@@ -1381,12 +1381,12 @@ Int Processor::run() {
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
 			case FUNC_CC_:	if ((dsp += (UInt)(C0.i)) + C1.i > dataStackEnd) { err = DATA_STACK_OVERFLOW; goto ret; } break;
-			case CALL_VVC:	ui = V0.p - IP_OFFSET;						// ui = function ordinal
+			case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;						// ui = function ordinal
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
 							ui = functionTable[ui];						// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
-			case CALL_CVC:	ui = C0.p - IP_OFFSET;						// ui = function ordinal (constant, validated at assembly)
+			case CALL_CVC:	ui = C0.p - FUNCTION_OFFSET;						// ui = function ordinal (constant, validated at assembly)
 							assert(ui < functionCount);
 							ui = functionTable[ui];						// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
@@ -1545,7 +1545,7 @@ ret:
 
 Status Processor::enterCall(Pointer functionPointer) {
 	assert(codeBase != 0);
-	UInt ui = functionPointer - IP_OFFSET;						// ui = function ordinal
+	UInt ui = functionPointer - FUNCTION_OFFSET;						// ui = function ordinal
 	if (ui >= functionCount) return BAD_CALL;
 	ui = functionTable[ui];										// ui = code offset
 	assert((codeBase + ui)->opcode == FUNC_CC_);
@@ -1567,7 +1567,7 @@ Status Processor::enterCall(Pointer functionPointer) {
 */
 Value* Processor::pushCall(Pointer functionPointer) {
 	assert(codeBase != 0);
-	UInt ui = functionPointer - IP_OFFSET;
+	UInt ui = functionPointer - FUNCTION_OFFSET;
 	if (ui >= functionCount) return 0;
 	const Instruction* func = codeBase + functionTable[ui];
 	assert(func->opcode == FUNC_CC_);

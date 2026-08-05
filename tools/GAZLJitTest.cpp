@@ -26,7 +26,7 @@
 	it emits one word and compares it to the matching clang-assembled reference in tools/GAZLJitTestRef.arm64.S; then it
 	rebuilds the whole `bench_v2` kernel through the Arm64Emitter (Label + branch fixups) and compares it word-for-word to the
 	reference copy of that function; finally it runs a deliberately-corrupted encoding to prove the harness catches a bad
-	byte. Exits non-zero on any failure. See docs/JitEmitterHandoff.md.
+	byte. Exits non-zero on any failure. See design/jit/JitEmitterHandoff.md.
 */
 
 #include "GAZLJitArm64.h"

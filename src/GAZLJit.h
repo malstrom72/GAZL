@@ -23,7 +23,7 @@
 
 /*
 	GAZLJit is the native baseline JIT for the GAZL VM. This header holds only the arch-neutral public API
-	(docs/JitEmitterHandoff.md):
+	(design/jit/JitEmitterHandoff.md):
 
 	  - the finalized-opcode enum + `Offsets`, and `JitModule` / `JitProcessor` / `JitCompiler`: the compiled artifact,
 	    the engine, and the compiler driver. `JitProcessor` is a `Processor` subclass (§5.1) that overrides the virtual
@@ -282,7 +282,7 @@ class NativeJitCompiler : public JitCompiler {
 };
 
 /*
-	v2 register allocator - internal to the JIT backends (docs/JitCompilerResearch.md §5.7), implemented in GAZLJit.cpp.
+	v2 register allocator - internal to the JIT backends (design/jit/JitCompilerResearch.md §5.7), implemented in GAZLJit.cpp.
 	At namespace scope, not nested in JitCompiler, so non-subclass code (each backend's fill/spill helper, the
 	GAZLJitLowerTest mock) can implement RegisterCacheBackend.
 */

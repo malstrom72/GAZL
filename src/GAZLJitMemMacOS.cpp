@@ -24,7 +24,7 @@
 /*
 	Apple (macOS / iOS) executable-memory backend. Apple Silicon enforces hardened runtime W^X, so the page is mapped
 	MAP_JIT and writes are wrapped in the per-thread write-protect toggle (pthread_jit_write_protect_np); afterwards the
-	i-cache is flushed with sys_icache_invalidate. See docs/JitSpikeA1-Results.md (spike A1 rung-1). The toggle is a
+	i-cache is flushed with sys_icache_invalidate. See design/jit/JitSpikeA1-Results.md (spike A1 rung-1). The toggle is a
 	no-op / unsupported on older/Intel Macs, so it is applied only when advertised.
 */
 

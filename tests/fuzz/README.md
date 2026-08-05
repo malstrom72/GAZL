@@ -2,7 +2,7 @@
 
 `tools/GAZLCmd.cpp` (under `-DJITDIFF`) assembles a generated GAZL program, runs the interpreter and the JIT from an
 identical memory image at full AND tiny fuel, and requires byte-identical final memory + status. Any divergence is a
-miscompile: it dumps the program and aborts. See [docs/JitFuzzPlan.md](../../docs/JitFuzzPlan.md) for the design and the
+miscompile: it dumps the program and aborts. See [design/jit/JitFuzzPlan.md](../../design/jit/JitFuzzPlan.md) for the design and the
 G1-G4 generator stages.
 
 The generated program is a pure function of a **choice stream** (`generateProgram`): every input decodes to a valid

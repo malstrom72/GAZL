@@ -26,7 +26,7 @@
 	`Instruction[]` in, a standalone, self-contained, runnable C++ program out. Tier 0 (faithful): the frame
 	is `dsp[slot]` and memory is one `Value[]`, exactly as the interpreter - no local lifting yet, so clang
 	does the register allocation on the array accesses. It exists to be the optimizer-ceiling benchmark
-	baseline (compare vs the interpreter and the arm64 JIT, at -O0 and -O2). See docs/CppBackendSpec.md.
+	baseline (compare vs the interpreter and the arm64 JIT, at -O0 and -O2). See design/jit/CppBackendSpec.md.
 
 	Run-to-completion only: GAZL calls become ordinary C++ calls (the C stack is the ipStack), so there is
 	no fuel/suspend machinery. Returns an empty string if an opcode outside the supported subset is hit.

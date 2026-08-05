@@ -735,7 +735,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			}
 
 			case OP_CALL_CVC: {																							// direct GAZL call: push {after, dsp}, tail-branch into the callee entry
-				const UInt callee = in.p0.p - IP_OFFSET;
+				const UInt callee = in.p0.p - FUNCTION_OFFSET;
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = emitter.newLabel(), ipOk = emitter.newLabel();
 				emitter.loadQ(RAX, CONTEXT, offsets.ipsend); emitter.cmpQ(IP_STACK_PTR, RAX); emitter.jcc(CC_B, ipOk);
@@ -751,7 +751,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				Label after = emitter.newLabel(), ipOk = emitter.newLabel(), trap = emitter.newLabel();
 				emitter.loadQ(RAX, CONTEXT, offsets.ipsend); emitter.cmpQ(IP_STACK_PTR, RAX); emitter.jcc(CC_B, ipOk);
 				emitter.movImm(RAX, static_cast<uint32_t>(IP_STACK_OVERFLOW)); emitter.jmp(epilogue); emitter.bind(ipOk);
-				emitter.load(RCX, DSP, in.p0.i * 4); emitter.subImm(RCX, IP_OFFSET);									// ordinal
+				emitter.load(RCX, DSP, in.p0.i * 4); emitter.subImm(RCX, FUNCTION_OFFSET);									// ordinal
 				emitter.cmpImm(RCX, functionCount); emitter.jcc(CC_AE, trap);											// >= functionCount -> BAD_CALL
 				emitter.loadQ(RAX, CONTEXT, offsets.funcentries); emitter.shlImm(RCX, 3); emitter.addQ(RAX, RCX); emitter.loadQ(RDX, RAX, 0); // rdx = funcEntries[ordinal]
 				emitter.leaRip(RAX, after); emitter.storeQ(IP_STACK_PTR, 0, RAX); emitter.storeQ(IP_STACK_PTR, 8, DSP); emitter.addImmQ(IP_STACK_PTR, 16);

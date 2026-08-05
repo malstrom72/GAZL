@@ -37,7 +37,7 @@ namespace GAZL {
 /*
 	Each method ORs operand fields into the canonical base opcode for its instruction form. All data-processing forms
 	here are 32-bit (`Wn`); loads/stores address through a 64-bit base (`Xn`). Field positions follow the Arm ARM
-	(AArch64 instruction set encoding). See docs/JitEmitterHandoff.md for the covered subset.
+	(AArch64 instruction set encoding). See design/jit/JitEmitterHandoff.md for the covered subset.
 */
 
 // --- moves / constant materialization ---
@@ -830,7 +830,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				break;
 			}
 			case OP_CALL_CVC: {
-				const UInt callee = in.p0.p - IP_OFFSET;																// ordinal known at compile time → direct tail-branch
+				const UInt callee = in.p0.p - FUNCTION_OFFSET;																// ordinal known at compile time → direct tail-branch
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = e.newLabel(), iok = e.newLabel();
 				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);												// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
@@ -846,8 +846,8 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				Label after = e.newLabel(), trap = e.newLabel(), iok = e.newLabel();
 				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);												// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
 				e.movn(W0, 5); e.b(exitLabel); e.bind(iok);
-				loadSlot(e, W9, in.p0.i);																				// fn pointer = IP_OFFSET + ordinal
-				matConst(e, W10, static_cast<Int>(IP_OFFSET)); e.sub(W9, W9, W10);										// ordinal
+				loadSlot(e, W9, in.p0.i);																				// fn pointer = FUNCTION_OFFSET + ordinal
+				matConst(e, W10, static_cast<Int>(FUNCTION_OFFSET)); e.sub(W9, W9, W10);										// ordinal
 				matConst(e, W10, static_cast<Int>(functionCount));
 				e.cmp(W9, W10); e.bcond(HS, trap);																		// ordinal >= functionCount → BAD_CALL
 				e.ldrX(X10, X0, o.funcentries); e.ldrXr(X9, X10, W9);													// entry = funcEntries[ordinal] (hot)

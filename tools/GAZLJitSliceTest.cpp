@@ -24,9 +24,9 @@
 /*
 	C3 vertical slice (minimal) - proves that a function hand-lowered through the GAZLJit `Arm64Emitter` reproduces the GAZL
 	*interpreter's* observable result, running under a JIT calling convention with a per-basic-block fuel check and a
-	trap-free status-returning safepoint. This is roadmap spike C3 (docs/JitCompilerResearch.md §11.0).
+	trap-free status-returning safepoint. This is roadmap spike C3 (design/jit/JitCompilerResearch.md §11.0).
 
-	Scope of THIS pass (see docs/JitEmitterHandoff.md and the read-only-VM constraint below):
+	Scope of THIS pass (see design/jit/JitEmitterHandoff.md and the read-only-VM constraint below):
 	  - src/GAZL.h is included READ-ONLY; src/GAZL.* are not modified. The interpreter side uses only the public API
 	    (Assembler / Processor / Symbols).
 	  - `Processor`'s runtime state (dsp / memoryBase / ip / clockCyclesLeft) is all `protected`, so this slice cannot

@@ -29,7 +29,7 @@ function dirname(path) {
 	var index = Math.max(slash, backslash);
 	return index >= 0 ? path.substr(0, index + 1) : "";
 }
-var DEFAULT_NATIVE_MANIFEST = dirname(hostScriptPath) + "../docs/nativeCallbackSignatures.gazl";
+var DEFAULT_NATIVE_MANIFEST = dirname(hostScriptPath) + "../design/proofs/nativeCallbackSignatures.gazl";
 
 function startsWith(text, prefix) {
 	return text.substr(0, prefix.length) === prefix;

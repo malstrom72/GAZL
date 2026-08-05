@@ -1116,7 +1116,7 @@ console.log("impala.jspeg compiler requires an array extent everywhere except an
 // Shapes the compiler used to accept and hand to the assembler, which then failed the build naming a
 // compiler-minted symbol (`.s0.0`, `.s0.-6`, `nowhere`) instead of the source line. Each is decidable
 // here whenever the values are numeric; a SYMBOLIC range or extent stays unchecked on purpose, because
-// not knowing is not the same as being fine. See docs/CompileTimeHardening.md.
+// not knowing is not the same as being fine. See design/impala/CompileTimeHardening.md.
 const SW = (range, body) => `function f() locals int i { i = 1; switch (i == ${range}) { ${body} } }`;
 const acceptedThenRejected = [
 	["duplicate case value", SW("0 to 3", "case 0: { i=1; } case 0: { i=2; }"), "Duplicate case value 0"],
@@ -1575,7 +1575,7 @@ const typedPointerCases = [
 		expectError: null,
 	},
 	/* The `[[ ]]` rule: the spelling states the stride, so each bracket form is an error where the other
-	   is correct, and a struct pointer moves by scaled subscript only. See docs/Impala2Review.md. */
+	   is correct, and a struct pointer moves by scaled subscript only. See design/impala/Impala2Review.md. */
 	{
 		label: "a plain subscript on a struct element is rejected",
 		source: ["struct V { int n; int m }", "global V array bank[4]", "function main() locals int i { i = global bank[1].n; }"].join("\n"),

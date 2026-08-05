@@ -1,7 +1,7 @@
 # JIT spike A3 — interpreter vs. hand-written baseline JIT
 
 This is **Phase −1 de-risking spike A3** from the native-compiler research
-([docs/JitCompilerResearch.md](../../docs/JitCompilerResearch.md), section 11.0). It answers the go/no-go question:
+([design/jit/JitCompilerResearch.md](../../design/jit/JitCompilerResearch.md), section 11.0). It answers the go/no-go question:
 *does a load-time baseline JIT actually beat the interpreter by enough to be worth building?*
 
 It does **not** contain a JIT. It hand-writes the machine code a baseline JIT *would* emit for a few small kernels, runs

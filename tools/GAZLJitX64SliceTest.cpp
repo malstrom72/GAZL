@@ -452,7 +452,7 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 				e.movImm(RAX, 0); e.jmp(epilogue);	// Status OK -> shared epilogue
 				break;
 			case OP_CALL_CVC: {						// direct GAZL call: callee runs with dsp += window, returns Status in eax
-				const UInt callee = in.p0.p - IP_OFFSET;
+				const UInt callee = in.p0.p - FUNCTION_OFFSET;
 				e.movQ(RDI, DSP);
 				if (in.p1.i != 0) { e.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }	// rdi = dsp + window
 				e.movQ(RSI, MEM);
@@ -461,8 +461,8 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 				break;
 			}
 			case OP_CALL_VVC: {						// indirect call: fn pointer in a slot -> ordinal -> gEntryAddr[ordinal]
-				e.load(RCX, DSP, in.p0.i * 4);		// fn pointer = IP_OFFSET + ordinal
-				e.subImm(RCX, IP_OFFSET); e.shlImm(RCX, 3);		// ordinal * 8 (byte index into the entry table)
+				e.load(RCX, DSP, in.p0.i * 4);		// fn pointer = FUNCTION_OFFSET + ordinal
+				e.subImm(RCX, FUNCTION_OFFSET); e.shlImm(RCX, 3);		// ordinal * 8 (byte index into the entry table)
 				e.movImm64(RAX, static_cast<uint64_t>(reinterpret_cast<uintptr_t>(gEntryAddr)));
 				e.addQ(RAX, RCX); e.loadQ(RAX, RAX, 0);			// RAX = gEntryAddr[ordinal]
 				e.movQ(RDI, DSP);
@@ -692,7 +692,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	if (!assembleKernel(globals, source, gInPtr, gOutPtr)) { std::printf("  %s: assemble failed\n", name); ++failures; return; }
 	X64Emitter e;
 	static size_t entryOffsets[FUNCTION_TABLE_SIZE];
-	if (!compileProgram(e, gCode, gFunctionTable, gFunctionCount, globals.findFunction("main") - IP_OFFSET, gNatJit, entryOffsets)) {
+	if (!compileProgram(e, gCode, gFunctionTable, gFunctionCount, globals.findFunction("main") - FUNCTION_OFFSET, gNatJit, entryOffsets)) {
 		std::printf("  %s: unsupported opcode\n", name); ++failures; return;
 	}
 	void* code = mapExecutable(e.code(), e.size());

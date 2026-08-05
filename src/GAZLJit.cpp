@@ -871,7 +871,7 @@ Status JitProcessor::enterCall(Pointer functionPointer) {
 	if (s != OK) {
 		return s;
 	}
-	resume = funcEntries[functionPointer - IP_OFFSET];
+	resume = funcEntries[functionPointer - FUNCTION_OFFSET];
 	return OK;
 }
 
@@ -885,7 +885,7 @@ Status JitProcessor::enterCall(Pointer functionPointer) {
 	zeroes ctx.nativeAfter, restoring the "only inside a native call" guard.
 */
 Value* JitProcessor::pushCall(Pointer functionPointer) {
-	UInt ui = functionPointer - IP_OFFSET;
+	UInt ui = functionPointer - FUNCTION_OFFSET;
 	if (ui >= functionCount) return 0;
 	if (nativeAfter == 0) return 0;										// only valid from inside a native callback
 	if (ipsp >= ipStackEnd) return 0;

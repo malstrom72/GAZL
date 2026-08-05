@@ -303,7 +303,7 @@ int testCallback(Processor* p) {
 #include <cstdio>
 
 /*
-	JIT-vs-interpreter differential fuzzer (docs/JitFuzzPlan.md). Assemble the input, run the interpreter and the JIT
+	JIT-vs-interpreter differential fuzzer (design/jit/JitFuzzPlan.md). Assemble the input, run the interpreter and the JIT
 	from an identical initial image, and require byte-identical final memory + status at full AND tiny fuel. A mismatch
 	is a miscompile: dump the program and abort so libFuzzer captures and minimizes it.
 
@@ -344,7 +344,7 @@ static void requireMatch(const char* which, const uint8_t* data, size_t size, St
 }
 
 /*
-	Program generator (docs/JitFuzzPlan.md): decode a choice stream into an always-valid GAZL program. We generate TEXT
+	Program generator (design/jit/JitFuzzPlan.md): decode a choice stream into an always-valid GAZL program. We generate TEXT
 	and let the assembler be the gatekeeper (validate + finalize); the computed locals + globals stay in the region the
 	diff compares, so a miscompiled value is caught without an explicit store. G1 = straight-line int/float value ops (VVV
 	and VVC). G2 adds memory ops interleaved so the pointer coherence gets stressed: const-address globals, a LOCA array
@@ -607,7 +607,7 @@ static void runDiff(const std::string& programText) {
 #ifdef FUZZ_TEXT_INPUT
 		// TEXT LANE = crash / assert coverage ONLY, no differential comparison. Arbitrary / mutated source can legally
 		// break the aliasing (realm) contract - e.g. a global-provenance POKE whose out-of-array index reaches a frame
-		// slot the JIT holds in a register. Under the rules (docs/JitAliasingRegAlloc.md) the JIT is *permitted* to
+		// slot the JIT holds in a register. Under the rules (design/jit/JitAliasingRegAlloc.md) the JIT is *permitted* to
 		// resolve that differently from the interpreter, so a memory / status diff here is a rule violation, not a
 		// miscompile, and a cheap address filter can't separate the two (cross-realm UB is a provenance/extent question,
 		// not an address range). So we exercise the assembler + the JIT compiler + BOTH engines to surface crashes,
@@ -979,7 +979,7 @@ int main(int argc, const char* argv[]) {
 			const char* mfn = (pos.size() > 2) ? pos[2] : "main";
 			Pointer mainPtr = globals.findFunction(mfn);
 			if (mainPtr == NULL_POINTER) throw CmdException(std::string("emit-cpp: no function '") + mfn + "'");
-			std::string src = translateToCpp(program, static_cast<UInt>(mainPtr - IP_OFFSET), promoteLocals);
+			std::string src = translateToCpp(program, static_cast<UInt>(mainPtr - FUNCTION_OFFSET), promoteLocals);
 			if (src.empty()) { std::cerr << "emit-cpp: program uses an opcode outside the Tier-0 subset" << std::endl; return -1; }
 			std::ofstream out(emitCpp, std::ofstream::binary);
 			if (!out.good()) throw CmdException(std::string("emit-cpp: cannot write '") + emitCpp + "'");
