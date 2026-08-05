@@ -1,0 +1,10 @@
+/* The remedy E464 names: the OPAQUE form carries no layout, so nothing is referenced too early. */
+const int DEBUG = 0
+import "opaqueOwner.impala"
+
+extern struct AA
+
+function readIt(AA pointer p) returns int r
+{
+	r = 0;
+}

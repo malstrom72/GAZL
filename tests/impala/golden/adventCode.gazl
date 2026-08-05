@@ -4939,40 +4939,64 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		SUBi %0 $gotoChoice #GOTO2
 		SWCH %0 *<A> @.s190
 		! SUBi <A> #GOTO2 #GOTO2	; case GOTO2
-	.s190#<A>:	GOTO @L2  	; goto L2
+		! LSSi <A> #0 @.g192
+	.s190#<A>:	NOOP
+	.g192:	GOTO @L2  	; goto L2
 		GOTO @.e191  
 		! SUBi <A> #GOTO8 #GOTO2	; case GOTO8
-	.s190#<A>:	GOTO @L8  	; goto L8
+		! LSSi <A> #0 @.g193
+	.s190#<A>:	NOOP
+	.g193:	GOTO @L8  	; goto L8
 		GOTO @.e191  
 		! SUBi <A> #GOTO2000 #GOTO2	; case GOTO2000
-	.s190#<A>:	GOTO @L2000  	; goto L2000
+		! LSSi <A> #0 @.g194
+	.s190#<A>:	NOOP
+	.g194:	GOTO @L2000  	; goto L2000
 		GOTO @.e191  
 		! SUBi <A> #GOTO2009 #GOTO2	; case GOTO2009
-	.s190#<A>:	GOTO @L2009  	; goto L2009
+		! LSSi <A> #0 @.g195
+	.s190#<A>:	NOOP
+	.g195:	GOTO @L2009  	; goto L2009
 		GOTO @.e191  
 		! SUBi <A> #GOTO2010 #GOTO2	; case GOTO2010
-	.s190#<A>:	GOTO @L2010  	; goto L2010
+		! LSSi <A> #0 @.g196
+	.s190#<A>:	NOOP
+	.g196:	GOTO @L2010  	; goto L2010
 		GOTO @.e191  
 		! SUBi <A> #GOTO2011 #GOTO2	; case GOTO2011
-	.s190#<A>:	GOTO @L2011  	; goto L2011
+		! LSSi <A> #0 @.g197
+	.s190#<A>:	NOOP
+	.g197:	GOTO @L2011  	; goto L2011
 		GOTO @.e191  
 		! SUBi <A> #GOTO2012 #GOTO2	; case GOTO2012
-	.s190#<A>:	GOTO @L2012  	; goto L2012
+		! LSSi <A> #0 @.g198
+	.s190#<A>:	NOOP
+	.g198:	GOTO @L2012  	; goto L2012
 		GOTO @.e191  
 		! SUBi <A> #GOTO2600 #GOTO2	; case GOTO2600
-	.s190#<A>:	GOTO @L2600  	; goto L2600
+		! LSSi <A> #0 @.g199
+	.s190#<A>:	NOOP
+	.g199:	GOTO @L2600  	; goto L2600
 		GOTO @.e191  
 		! SUBi <A> #GOTO2607 #GOTO2	; case GOTO2607
-	.s190#<A>:	GOTO @L2607  	; goto L2607
+		! LSSi <A> #0 @.g200
+	.s190#<A>:	NOOP
+	.g200:	GOTO @L2607  	; goto L2607
 		GOTO @.e191  
 		! SUBi <A> #GOTO2630 #GOTO2	; case GOTO2630
-	.s190#<A>:	GOTO @L2630  	; goto L2630
+		! LSSi <A> #0 @.g201
+	.s190#<A>:	NOOP
+	.g201:	GOTO @L2630  	; goto L2630
 		GOTO @.e191  
 		! SUBi <A> #GOTO2800 #GOTO2	; case GOTO2800
-	.s190#<A>:	GOTO @L2800  	; goto L2800
+		! LSSi <A> #0 @.g202
+	.s190#<A>:	NOOP
+	.g202:	GOTO @L2800  	; goto L2800
 		GOTO @.e191  
 		! SUBi <A> #GOTO8000 #GOTO2	; case GOTO8000
-	.s190#<A>:	MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
+		! LSSi <A> #0 @.g203
+	.s190#<A>:	NOOP
+	.g203:	MOVi %1 #1 	; fSETPRM(1,global WD1,global WD1X)
 		PEEK %2 &WD1 
 		PEEK %3 &WD1X 
 		CALL &fSETPRM %0 *4	; expects fSETPRM(int, int, int) -> void @ 2807:38
@@ -4982,7 +5006,9 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		GOTO @L2600  	; goto L2600
 		GOTO @.e191  	; }
 		! SUBi <A> #GOTO18999 #GOTO2	; case GOTO18999
-	.s190#<A>:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
+		! LSSi <A> #0 @.g204
+	.s190#<A>:	NOOP
+	.g204:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2816:24
 		MOVi %1 #136 	; fRSPEAK(136)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2817:17
@@ -4990,7 +5016,9 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		CALL &score %0 *2	; expects score(int) -> void @ 2818:13
 		GOTO @.e191  	; }
 		! SUBi <A> #GOTO19000 #GOTO2	; case GOTO19000
-	.s190#<A>:	MOVi %1 #136 	; fRSPEAK(136)
+		! LSSi <A> #0 @.g205
+	.s190#<A>:	NOOP
+	.g205:	MOVi %1 #136 	; fRSPEAK(136)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2822:17
 		MOVi %1 #0 	; score(0)
 		CALL &score %0 *2	; expects score(int) -> void @ 2823:13
@@ -5001,129 +5029,129 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2828:10
 	L8:	PEEK $KK &KEY $lLOC	; L8:
 		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
-		NEQi $KK #0 @.f192	; if(KK == 0)fBUG(26)
+		NEQi $KK #0 @.f206	; if(KK == 0)fBUG(26)
 		MOVi %1 #26 	; fBUG(26)
 		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2841:21
-	.f192:	NEQi $lK #NUL @.f193	; if(lK == NUL) goto L2
+	.f206:	NEQi $lK #NUL @.f207	; if(lK == NUL) goto L2
 		GOTO @L2  	; goto L2
-	.f193:	NEQi $lK #BACK @.f194	; if(lK == BACK) 
+	.f207:	NEQi $lK #BACK @.f208	; if(lK == BACK) 
 		PEEK $lK &OLDLOC 	; lK=global OLDLOC
 		PEEK %0 &COND $lK	; if(((int)global COND[lK] == 2))lK=global OLDLC2
-		NEQi %0 #2 @.f195
+		NEQi %0 #2 @.f209
 		PEEK $lK &OLDLC2 	; lK=global OLDLC2
-	.f195:	PEEK %0 &OLDLOC 	; global OLDLC2=global OLDLOC
+	.f209:	PEEK %0 &OLDLOC 	; global OLDLC2=global OLDLOC
 		POKE &OLDLC2 %0 
 		POKE &OLDLOC $lLOC 	; global OLDLOC=lLOC
 		MOVi $K2 #0 	; K2=0
-		NEQi $lK $lLOC @.f196	; if(lK == lLOC)K2=91
+		NEQi $lK $lLOC @.f210	; if(lK == lLOC)K2=91
 		MOVi $K2 #91 	; K2=91
-	.f196:	MOVi %1 $lLOC 	; if((int)CNDBIT(lLOC,4) != FALSE)K2=274
+	.f210:	MOVi %1 $lLOC 	; if((int)CNDBIT(lLOC,4) != FALSE)K2=274
 		MOVi %2 #4 
 		CALL &CNDBIT %0 *3	; expects CNDBIT(int, int) -> int @ 2854:26
-		EQUi %0 #FALSE @.f197
+		EQUi %0 #FALSE @.f211
 		MOVi $K2 #274 	; K2=274
-	.f197:	NEQi $K2 #0 @.f198	; if(K2 == 0) 
+	.f211:	NEQi $K2 #0 @.f212	; if(K2 == 0) 
 	L21:	PEEK %0 &TRAVEL $KK	; L21:
 		ABSi %0 %0 
 		DIVi %0 %0 #1000
 		MODi $LL %0 #1000
-		NEQi $LL $lK @.f199	; if(LL == lK) 
+		NEQi $LL $lK @.f213	; if(LL == lK) 
 	L25:	PEEK %0 &TRAVEL $KK	; L25:
 		ABSi %0 %0 
 		MODi $lK %0 #1000
 		PEEK $KK &KEY $lLOC	; KK=(int)global KEY[lLOC]
 		GOTO @L9  	; goto L9
-	.f199:	GRTi $LL #300 @.f200	; if(LL <= 300) 
+	.f213:	GRTi $LL #300 @.f214	; if(LL <= 300) 
 		PEEK $J &KEY $LL	; J=(int)global KEY[LL]
 		PEEK %0 &COND $LL	; if(((int)global COND[LL] == 2) && (((abs((int)global TRAVEL[J])/1000))%1000) == lK)K2=KK
-		NEQi %0 #2 @.f200
+		NEQi %0 #2 @.f214
 		PEEK %0 &TRAVEL $J
 		ABSi %0 %0 
 		DIVi %0 %0 #1000
 		MODi %0 %0 #1000
-		NEQi %0 $lK @.f200
+		NEQi %0 $lK @.f214
 		MOVi $K2 $KK 	; K2=KK
-	.f200:	PEEK %0 &TRAVEL $KK	; if((int)global TRAVEL[KK] < 0) 
-		GEQi %0 #0 @.f203
+	.f214:	PEEK %0 &TRAVEL $KK	; if((int)global TRAVEL[KK] < 0) 
+		GEQi %0 #0 @.f217
 		MOVi $KK $K2 	; KK=K2
-		EQUi $KK #0 @.f204	; if(KK != 0) goto L25
+		EQUi $KK #0 @.f218	; if(KK != 0) goto L25
 		GOTO @L25  	; goto L25
-	.f204:	MOVi %1 #140 	; fRSPEAK(140)
+	.f218:	MOVi %1 #140 	; fRSPEAK(140)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2871:17
 		GOTO @L2  	; goto L2
-	.f203:	ADDi $KK $KK #1	; KK=KK+1
+	.f217:	ADDi $KK $KK #1	; KK=KK+1
 		GOTO @L21  	; goto L21
-	.f198:	MOVi %1 $K2 	; fRSPEAK(K2)
+	.f212:	MOVi %1 $K2 	; fRSPEAK(K2)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2877:14
 		GOTO @L2  	; goto L2
-	.f194:	NEQi $lK #LOOK @.f205	; if(lK == LOOK) 
+	.f208:	NEQi $lK #LOOK @.f219	; if(lK == LOOK) 
 		PEEK %0 &DETAIL 	; if(global DETAIL < 3)fRSPEAK(15)
-		GEQi %0 #3 @.f206
+		GEQi %0 #3 @.f220
 		MOVi %1 #15 	; fRSPEAK(15)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2884:35
-	.f206:	PEEK %0 &DETAIL 	; global DETAIL=global DETAIL+1
+	.f220:	PEEK %0 &DETAIL 	; global DETAIL=global DETAIL+1
 		ADDi %0 %0 #1
 		POKE &DETAIL %0 
 		POKE &WZDARK #FALSE 	; global WZDARK=FALSE
 		POKE &ABB $lLOC #0	; global ABB[lLOC]=0
 		GOTO @L2  	; goto L2
-	.f205:	NEQi $lK #CAVE @.f207	; if(lK == CAVE) 
+	.f219:	NEQi $lK #CAVE @.f221	; if(lK == CAVE) 
 		MOVi $lK #58 	; lK=58
 		MOVi %1 $lLOC 	; if((int)OUTSID(lLOC) != FALSE && lLOC != 8)lK=57
 		CALL &OUTSID %0 *2	; expects OUTSID(int) -> int @ 2894:24
-		EQUi %0 #FALSE @.f209
-		EQUi $lLOC #8 @.f209
+		EQUi %0 #FALSE @.f223
+		EQUi $lLOC #8 @.f223
 		MOVi $lK #57 	; lK=57
-	.f209:	MOVi %1 $lK 	; fRSPEAK(lK)
+	.f223:	MOVi %1 $lK 	; fRSPEAK(lK)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2895:14
 		GOTO @L2  	; goto L2
-	.f207:	PEEK %0 &OLDLOC 	; global OLDLC2=global OLDLOC
+	.f221:	PEEK %0 &OLDLOC 	; global OLDLC2=global OLDLOC
 		POKE &OLDLC2 %0 
 		POKE &OLDLOC $lLOC 	; global OLDLOC=lLOC
 	L9:	PEEK %0 &TRAVEL $KK	; L9:
 		ABSi $LL %0 
 		MODi %0 $LL #1000	; if(!(((LL)%1000) == 1 || ((LL)%1000) == lK)) 
-		EQUi %0 #1 @.f211
+		EQUi %0 #1 @.f225
 		MODi %0 $LL #1000
-		EQUi %0 $lK @.f211
+		EQUi %0 $lK @.f225
 		PEEK %0 &TRAVEL $KK	; if((int)global TRAVEL[KK] < 0) 
-		GEQi %0 #0 @.f212
+		GEQi %0 #0 @.f226
 		POKE &SPK #12 	; global SPK=12
-		LSSi $lK #43 @.f214	; if(lK >= 43 && lK <= 50)global SPK=52
-		GRTi $lK #50 @.f214
+		LSSi $lK #43 @.f228	; if(lK >= 43 && lK <= 50)global SPK=52
+		GRTi $lK #50 @.f228
 		POKE &SPK #52 	; global SPK=52
-	.f214:	EQUi $lK #29 @.t215	; if(lK == 29 || lK == 30)global SPK=52
-		NEQi $lK #30 @.f216
-	.t215:	POKE &SPK #52 	; global SPK=52
-	.f216:	EQUi $lK #7 @.t217	; if(lK == 7 || lK == 36 || lK == 37)global SPK=10
-		EQUi $lK #36 @.t217
-		NEQi $lK #37 @.f218
-	.t217:	POKE &SPK #10 	; global SPK=10
-	.f218:	EQUi $lK #11 @.t219	; if(lK == 11 || lK == 19)global SPK=11
-		NEQi $lK #19 @.f220
-	.t219:	POKE &SPK #11 	; global SPK=11
-	.f220:	PEEK %0 &VERB 	; if(global VERB == FIND || global VERB == INVENT)global SPK=59
-		EQUi %0 #FIND @.t221
+	.f228:	EQUi $lK #29 @.t229	; if(lK == 29 || lK == 30)global SPK=52
+		NEQi $lK #30 @.f230
+	.t229:	POKE &SPK #52 	; global SPK=52
+	.f230:	EQUi $lK #7 @.t231	; if(lK == 7 || lK == 36 || lK == 37)global SPK=10
+		EQUi $lK #36 @.t231
+		NEQi $lK #37 @.f232
+	.t231:	POKE &SPK #10 	; global SPK=10
+	.f232:	EQUi $lK #11 @.t233	; if(lK == 11 || lK == 19)global SPK=11
+		NEQi $lK #19 @.f234
+	.t233:	POKE &SPK #11 	; global SPK=11
+	.f234:	PEEK %0 &VERB 	; if(global VERB == FIND || global VERB == INVENT)global SPK=59
+		EQUi %0 #FIND @.t235
 		PEEK %0 &VERB 
-		NEQi %0 #INVENT @.f222
-	.t221:	POKE &SPK #59 	; global SPK=59
-	.f222:	EQUi $lK #62 @.t223	; if(lK == 62 || lK == 65)global SPK=42
-		NEQi $lK #65 @.f224
-	.t223:	POKE &SPK #42 	; global SPK=42
-	.f224:	NEQi $lK #17 @.f225	; if(lK == 17)global SPK=80
+		NEQi %0 #INVENT @.f236
+	.t235:	POKE &SPK #59 	; global SPK=59
+	.f236:	EQUi $lK #62 @.t237	; if(lK == 62 || lK == 65)global SPK=42
+		NEQi $lK #65 @.f238
+	.t237:	POKE &SPK #42 	; global SPK=42
+	.f238:	NEQi $lK #17 @.f239	; if(lK == 17)global SPK=80
 		POKE &SPK #80 	; global SPK=80
-	.f225:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
+	.f239:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2916:23
 		GOTO @L2  	; goto L2
-	.f212:	ADDi $KK $KK #1	; KK=KK+1
+	.f226:	ADDi $KK $KK #1	; KK=KK+1
 		GOTO @L9  	; goto L9
-	.f211:	DIVi $LL $LL #1000	; LL=LL/1000
+	.f225:	DIVi $LL $LL #1000	; LL=LL/1000
 	L11:	DIVi %0 $LL #1000	; L11:
 		POKE &NEWLOC %0 
 		PEEK %0 &NEWLOC 	; lK=((global NEWLOC)%100)
 		MODi $lK %0 #100
 		PEEK %0 &NEWLOC 	; if(global NEWLOC > 300) 
-		LEQi %0 #300 @.f226
+		LEQi %0 #300 @.f240
 		PEEK %0 &NEWLOC 	; if((int)global PROP[lK] != global NEWLOC/100-3) goto L16
 		DIVi %0 %0 #100
 		PEEK %1 &PROP $lK
@@ -5131,10 +5159,10 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		EQUi %1 %0 @L12
 		GOTO @L16  	; goto L16
 	L12:	PEEK %1 &TRAVEL $KK	; if((int)global TRAVEL[KK] < 0)fBUG(25)
-		GEQi %1 #0 @.f229
+		GEQi %1 #0 @.f243
 		MOVi %1 #25 	; fBUG(25)
 		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 2930:42
-	.f229:	ADDi $KK $KK #1	; KK=KK+1
+	.f243:	ADDi $KK $KK #1	; KK=KK+1
 		PEEK %0 &TRAVEL $KK	; global NEWLOC=abs((int)global TRAVEL[KK])/1000
 		ABSi %0 %0 
 		DIVi %0 %0 #1000
@@ -5143,8 +5171,8 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		EQUi %0 $LL @L12
 		PEEK $LL &NEWLOC 	; LL=global NEWLOC
 		GOTO @L11  	; goto L11
-	.f226:	PEEK %0 &NEWLOC 	; if(global NEWLOC > 100) 
-		LEQi %0 #100 @.f230
+	.f240:	PEEK %0 &NEWLOC 	; if(global NEWLOC > 100) 
+		LEQi %0 #100 @.f244
 		MOVi %1 $lK 	; if((int)TOTING(lK) != FALSE || (global NEWLOC > 200 && (int)AT(lK, lLOC) != FALSE)) goto L16
 		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2939:22
 		NEQi %0 #FALSE @L16
@@ -5156,7 +5184,7 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		EQUi %0 #FALSE @L12
 		GOTO @L16  	; goto L16
 		GOTO @L12  	; goto L12
-	.f230:	PEEK %0 &NEWLOC 	; if(global NEWLOC != 0 && !((int)fRAN(100) < (global NEWLOC))) goto L12
+	.f244:	PEEK %0 &NEWLOC 	; if(global NEWLOC != 0 && !((int)fRAN(100) < (global NEWLOC))) goto L12
 		EQUi %0 #0 @L16
 		MOVi %1 #100 
 		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ 2943:44
@@ -5166,58 +5194,58 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 	L16:	MODi %0 $LL #1000	; L16:
 		POKE &NEWLOC %0 
 		PEEK %0 &NEWLOC 	; if(global NEWLOC <= 300) goto L2
-		GRTi %0 #300 @.f236
+		GRTi %0 #300 @.f250
 		GOTO @L2  	; goto L2
-	.f236:	PEEK %0 &NEWLOC 	; if(global NEWLOC > 500) 
-		LEQi %0 #500 @.f237
+	.f250:	PEEK %0 &NEWLOC 	; if(global NEWLOC > 500) 
+		LEQi %0 #500 @.f251
 		PEEK %1 &NEWLOC 	; fRSPEAK(global NEWLOC-500)
 		SUBi %1 %1 #500
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2948:29
 		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
 		GOTO @L2  	; goto L2
-	.f237:	PEEK %0 &NEWLOC 	; global NEWLOC=global NEWLOC-300
+	.f251:	PEEK %0 &NEWLOC 	; global NEWLOC=global NEWLOC-300
 		SUBi %0 %0 #300
 		POKE &NEWLOC %0 
 		PEEK %0 &NEWLOC 	; switch (global NEWLOC == 1 to 4) 
 		SUBi %0 %0 #1
-		SWCH %0 *3 @.s238
-	.s238#0:	NOOP
+		SWCH %0 *3 @.s252
+	.s252#0:	NOOP
 		! ADDi <A> #99 #100	; global NEWLOC=99+100-lLOC
 		SUBi %0 <A> $lLOC
 		POKE &NEWLOC %0 
 		PEEK %0 &HOLDNG 	; if(global HOLDNG == 0 || (global HOLDNG == 1 && (int)TOTING(EMRALD) != FALSE)) goto L2
 		EQUi %0 #0 @L2
 		PEEK %0 &HOLDNG 
-		NEQi %0 #1 @.f242
+		NEQi %0 #1 @.f256
 		MOVi %1 #EMRALD 
 		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2964:72
-		EQUi %0 #FALSE @.f242
+		EQUi %0 #FALSE @.f256
 		GOTO @L2  	; goto L2
-	.f242:	POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
+	.f256:	POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
 		MOVi %1 #117 	; fRSPEAK(117)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2966:16
 		GOTO @L2  	; goto L2
-		GOTO @.s238  	; }
-	.s238#1:	MOVi %1 #EMRALD 	; fDROP(EMRALD,lLOC)
+		GOTO @.s252  	; }
+	.s252#1:	MOVi %1 #EMRALD 	; fDROP(EMRALD,lLOC)
 		MOVi %2 $lLOC 
 		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 2975:22
 		GOTO @L12  	; goto L12
-		GOTO @.s238  	; }
-	.s238#2:	PEEK %0 &PROP:TROLL 	; if((int)global PROP[TROLL] != 1) 
-		EQUi %0 #1 @.f243
+		GOTO @.s252  	; }
+	.s252#2:	PEEK %0 &PROP:TROLL 	; if((int)global PROP[TROLL] != 1) 
+		EQUi %0 #1 @.f257
 		PEEK %0 &PLAC:TROLL 	; global NEWLOC=(int)global PLAC[TROLL]+(int)global FIXD[TROLL]-lLOC
 		PEEK %1 &FIXD:TROLL 
 		ADDi %0 %0 %1
 		SUBi %0 %0 $lLOC
 		POKE &NEWLOC %0 
 		PEEK %0 &PROP:TROLL 	; if((int)global PROP[TROLL] == 0)global PROP[TROLL]=1
-		NEQi %0 #0 @.f244
+		NEQi %0 #0 @.f258
 		POKE &PROP:TROLL #1 	; global PROP[TROLL]=1
-	.f244:	MOVi %1 #BEAR 	; if((int)TOTING(BEAR) == FALSE) goto L2
+	.f258:	MOVi %1 #BEAR 	; if((int)TOTING(BEAR) == FALSE) goto L2
 		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 2989:26
-		NEQi %0 #FALSE @.f245
+		NEQi %0 #FALSE @.f259
 		GOTO @L2  	; goto L2
-	.f245:	MOVi %1 #162 	; fRSPEAK(162)
+	.f259:	MOVi %1 #162 	; fRSPEAK(162)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 2990:17
 		POKE &PROP:CHASM #1 	; global PROP[CHASM]=1
 		POKE &PROP:TROLL #2 	; global PROP[TROLL]=2
@@ -5229,7 +5257,7 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		PEEK %0 &NEWLOC 	; global OLDLC2=global NEWLOC
 		POKE &OLDLC2 %0 
 		GOTO @L99  	; goto L99
-	.f243:	MOVi %1 #TROLL 	; fPSPEAK(TROLL,1)
+	.f257:	MOVi %1 #TROLL 	; fPSPEAK(TROLL,1)
 		MOVi %2 #1 
 		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ 3000:20
 		POKE &PROP:TROLL #0 	; global PROP[TROLL]=0
@@ -5249,13 +5277,13 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		CALL &fJUGGLE %0 *2	; expects fJUGGLE(int) -> void @ 3006:18
 		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
 		GOTO @L2  	; goto L2
-	.s238:	MOVi %1 #20 	; fBUG(20)
+	.s252:	MOVi %1 #20 	; fBUG(20)
 		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ 3011:10
 	L90:	MOVi %1 #23 	; L90:
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 3035:13
 		POKE &OLDLC2 $lLOC 	; global OLDLC2=lLOC
 	L99:	PEEK %0 &CLOSNG 	; L99:
-		EQUi %0 #FALSE @.f246
+		EQUi %0 #FALSE @.f260
 		MOVi %1 #131 	; fRSPEAK(131)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ 3043:15
 		PEEK %0 &NUMDIE 	; global NUMDIE=global NUMDIE+1
@@ -5263,7 +5291,7 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		POKE &NUMDIE %0 
 		MOVi %1 #0 	; score(0)
 		CALL &score %0 *2	; expects score(int) -> void @ 3045:11
-	.f246:	PEEK %0 &NUMDIE 	; global NUMDIE=global NUMDIE+1
+	.f260:	PEEK %0 &NUMDIE 	; global NUMDIE=global NUMDIE+1
 		ADDi %0 %0 #1
 		POKE &NUMDIE %0 
 		PEEK %1 &NUMDIE 	; if((int)fYES(79+global NUMDIE*2,80+global NUMDIE*2,54) == FALSE) score(0)
@@ -5274,35 +5302,35 @@ main:	FUNC	; signature func main() -> void @ 2189:1
 		ADDi %2 #80 %2
 		MOVi %3 #54 
 		CALL &fYES %0 *4	; expects fYES(int, int, int) -> int @ 3048:57
-		NEQi %0 #FALSE @.f247
+		NEQi %0 #FALSE @.f261
 		MOVi %1 #0 	; score(0)
 		CALL &score %0 *2	; expects score(int) -> void @ 3048:75
-	.f247:	PEEK %0 &NUMDIE 	; if(global NUMDIE == global MAXDIE) score(0)
+	.f261:	PEEK %0 &NUMDIE 	; if(global NUMDIE == global MAXDIE) score(0)
 		PEEK %1 &MAXDIE 
-		NEQi %0 %1 @.f248
+		NEQi %0 %1 @.f262
 		MOVi %1 #0 	; score(0)
 		CALL &score %0 *2	; expects score(int) -> void @ 3049:45
-	.f248:	POKE &PLACE:WATER #0 	; global PLACE[WATER]=0
+	.f262:	POKE &PLACE:WATER #0 	; global PLACE[WATER]=0
 		POKE &PLACE:OIL #0 	; global PLACE[OIL]=0
 		MOVi %1 #LAMP 	; if((int)TOTING(LAMP) != FALSE)global PROP[LAMP]=0
 		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 3052:23
-		EQUi %0 #FALSE @.f249
+		EQUi %0 #FALSE @.f263
 		POKE &PROP:LAMP #0 	; global PROP[LAMP]=0
-	.f249:	MOVi $J #1 	; for (J=1 to 100+1) 
+	.f263:	MOVi $J #1 	; for (J=1 to 100+1) 
 		! ADDi <A> #100 #1
-		GEQi #1 <A> @.e250
-	.l251:	SUBi $I #101 $J	; I=101-J
+		GEQi #1 <A> @.e264
+	.l265:	SUBi $I #101 $J	; I=101-J
 		MOVi %1 $I 	; if((int)TOTING(I) != FALSE) 
 		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ 3055:21
-		EQUi %0 #FALSE @.f252
+		EQUi %0 #FALSE @.f266
 		PEEK $lK &OLDLC2 	; lK=global OLDLC2
-		NEQi $I #LAMP @.f253	; if(I == LAMP)lK=1
+		NEQi $I #LAMP @.f267	; if(I == LAMP)lK=1
 		MOVi $lK #1 	; lK=1
-	.f253:	MOVi %1 $I 	; fDROP(I,lK)
+	.f267:	MOVi %1 $I 	; fDROP(I,lK)
 		MOVi %2 $lK 
 		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ 3058:15
-	.f252:	FORi $J <A> @.l251	; } /* end loop */
-	.e250:	MOVi $lLOC #3 	; lLOC=3
+	.f266:	FORi $J <A> @.l265	; } /* end loop */
+	.e264:	MOVi $lLOC #3 	; lLOC=3
 		POKE &OLDLOC $lLOC 	; global OLDLOC=lLOC
 		GOTO @L2000  	; goto L2000
 		RETU   	; }

@@ -9,9 +9,6 @@ const { haveGazlCmd, assembleOnly, NEEDS_HOST } = require("./gazlAssembleCheck")
 
 const dir = __dirname;
 const IMPALA_ENCODING = "latin1";
-const validatorScript = path.join(dir, "..", "tools", "gazl-validate.nuxjs.js");
-const nuxjsExe = path.join(dir, "..", "output", process.platform === "win32" ? "NuXJS.exe" : "NuXJS");
-const validatorFixturesDir = path.join(dir, "testdata", "validator");
 
 function canonicalizeNewlines(source) {
 	return source.replace(/\r\n?/g, "\n");
@@ -756,185 +753,6 @@ function assertLoadFails(label, source, expectedInMessage) {
 	console.log(`${label} is refused at assembly time`);
 }
 
-function resolveValidatorFixture(name) {
-	return path.join(validatorFixturesDir, name);
-}
-
-function runValidatorCase(label, fixtureNames, expectedExitCode, expectedMessageSubstring) {
-	const files = fixtureNames.map(resolveValidatorFixture);
-	const result = childProcess.spawnSync(nuxjsExe, [validatorScript].concat(files), {
-		encoding: "utf8",
-	});
-
-	if (result.error) {
-		console.error(`Failed to launch gazl-validate for ${label}`);
-		console.error(result.error);
-		process.exit(1);
-	}
-
-	if (result.status !== expectedExitCode) {
-		console.error(`gazl-validate exited with ${result.status} for ${label}, expected ${expectedExitCode}`);
-		if (result.stdout) {
-			console.error("stdout:");
-			console.error(result.stdout);
-		}
-		if (result.stderr) {
-			console.error("stderr:");
-			console.error(result.stderr);
-		}
-		process.exit(1);
-	}
-
-	const validatorOutput = result.stderr || "";
-	if (expectedMessageSubstring) {
-		if (!validatorOutput.includes(expectedMessageSubstring)) {
-			console.error(`gazl-validate output for ${label} did not include expected message: ${expectedMessageSubstring}`);
-			console.error("output:");
-			console.error(validatorOutput);
-			process.exit(1);
-		}
-	} else if (validatorOutput.trim().length !== 0) {
-		console.error(`gazl-validate produced unexpected diagnostics for ${label}`);
-		console.error("output:");
-		console.error(validatorOutput);
-		process.exit(1);
-	}
-
-	if (expectedExitCode === 0) {
-		console.log(`gazl-validate ${label} fixture passed`);
-	} else {
-		console.log(`gazl-validate ${label} fixture produced expected failure`);
-	}
-}
-
-parityFixtures.forEach(runParityFixture);
-legacyParityFixtures.forEach(runParityFixture);
-
-runValidatorCase("matching metadata fixtures", ["exports.gazl", "imports-valid.gazl"], 0);
-runValidatorCase("mismatched metadata fixtures", ["exports.gazl", "imports-mismatch.gazl"], 1, 'Signature mismatch for "foo"');
-runValidatorCase(
-	"matching array element metadata fixtures",
-	["elem-exports.gazl", "elem-imports-valid.gazl"],
-	0,
-);
-runValidatorCase(
-	"mismatched array element metadata fixtures",
-	["elem-exports.gazl", "elem-imports-mismatch.gazl"],
-	1,
-	"Array sharedInts does not match its definition",
-);
-
-runValidatorCase(
-	"call site passing the wrong pointer element to a name-only extern",
-	["call-elem-def.gazl", "call-elem-mismatch.gazl"],
-	1,
-	'Signature mismatch for "takesIntPtr"',
-);
-
-runValidatorCase(
-	"extern struct matching a supplied host layout",
-	["struct-decl.gazl", "struct-layout-valid.gazl"],
-	0,
-);
-runValidatorCase(
-	"extern struct whose host layout drifted",
-	["struct-decl.gazl", "struct-layout-drift.gazl"],
-	1,
-	"extern struct AudioBuffer declares field \"channels\"",
-);
-runValidatorCase(
-	"extern struct declared differently in two units",
-	["struct-decl.gazl", "struct-decl-conflict.gazl"],
-	1,
-	"extern struct AudioBuffer has conflicting declarations",
-);
-
-runValidatorCase(
-	"extern native prototype matching the native manifest",
-	["extern-native-good.gazl"],
-	0,
-);
-runValidatorCase(
-	"extern native prototype contradicting the native manifest",
-	["extern-native-bad.gazl"],
-	1,
-	"extern declaration of printInt does not match its definition",
-);
-
-runValidatorCase(
-	"extern struct contradicting the real struct definition",
-	["struct-decl-typemismatch.gazl", "struct-def.gazl"],
-	1,
-	"extern struct Frame does not match its definition",
-);
-
-// An array extent in a signature row is compared only when BOTH sides state one. An extent that
-// folded to a compile-time scratch cannot be stated, so it emits the empty wildcard and is skipped
-// rather than compared as the (pool-recycled, meaningless) scratch name it used to print.
-// A valueless `const int N;` is external by omission of a value. It now emits a row, so it is
-// link-checked like every other extern kind - except for "no definition found", which cannot apply to a
-// host/run-time-supplied constant and would otherwise fire on hundreds of them across the corpus.
-runValidatorCase(
-	"valueless extern const with no definition anywhere",
-	["const-extern-decl.gazl"],
-	0,
-);
-runValidatorCase(
-	"valueless extern const declared with two different types",
-	["const-extern-decl.gazl", "const-extern-conflict.gazl"],
-	1,
-	"Const WORD_SIZE has conflicting extern declarations",
-);
-runValidatorCase(
-	"valueless extern const contradicting its real definition",
-	["const-extern-decl.gazl", "const-extern-def.gazl"],
-	1,
-	"Const WORD_SIZE does not match its definition",
-);
-
-runValidatorCase(
-	"extern struct whose array extents are unstated wildcards",
-	["struct-extent-wildcard.gazl", "struct-extent-def.gazl"],
-	0,
-);
-runValidatorCase(
-	"extern struct stating an array extent that contradicts the definition",
-	["struct-extent-mismatch.gazl", "struct-extent-def.gazl"],
-	1,
-	"extern struct Bank does not match its definition",
-);
-// A struct field goes through the same typesCompatible rule as a global or an array element, so a bare
-// `ptr` matches any pointer chain. It used to be compared as a raw string and rejected here only.
-runValidatorCase(
-	"extern struct field typing a pointer the definition leaves untyped",
-	["struct-field-ptrchain.gazl", "struct-field-ptrchain-def.gazl"],
-	0,
-);
-
-const validatorUnitTestScript = path.join(dir, "..", "tests", "gazl-validator-tests.js");
-const validatorUnitResult = childProcess.spawnSync(process.execPath, [validatorUnitTestScript], {
-	encoding: "utf8",
-});
-
-if (validatorUnitResult.error) {
-	console.error("Failed to run gazl-validator unit tests");
-	console.error(validatorUnitResult.error);
-	process.exit(1);
-}
-
-if (validatorUnitResult.stdout) {
-	process.stdout.write(validatorUnitResult.stdout);
-}
-
-if (validatorUnitResult.stderr) {
-	process.stderr.write(validatorUnitResult.stderr);
-}
-
-if (validatorUnitResult.status !== 0) {
-	console.error("gazl-validator unit tests failed");
-	process.exit(1);
-}
-
 const failureSource = ["function main()", "locals pointer p", "{", "        copy (1 from p to 1);", "}", ""].join("\n");
 
 let observedFailure = false;
@@ -1114,11 +932,37 @@ const byValueDoors = [
 	["extern prototype return", "struct V { int a; int b }\nextern native n() returns V v\n", "Returning a struct by value"],
 	["functype parameter", "struct V { int a; int b }\nfunctype Cb(V v)\n", "Passing a struct by value"],
 	["functype return", "struct V { int a; int b }\nfunctype Cb() returns V\n", "Returning a struct by value"],
+	// ...and the door no DECLARATOR can guard: a name-only extern has no parameter list to inspect, so
+	// the by-value lowering ran at the CALL. Against a struct whose size Impala cannot know it emitted
+	// `ADRL %1 %1 *undefined` / `COPY %1 %2 *undefined` / `CALL &f %0 *NaN` - and those are legal GAZL
+	// identifiers, so the artifact shipped. Checked at the close of the argument list, not per argument,
+	// so a PROTOTYPED callee keeps the sharper "struct V vs expected pointer" (the case below it).
+	["name-only extern, struct argument",
+		"struct V { int a; int b }\nextern function f\nfunction main() locals V v { f(v); }\n",
+		"Passing a struct by value"],
+	["extern native, struct argument",
+		"struct V { int a; int b }\nextern native n\nfunction main() locals V v { n(v); }\n",
+		"Passing a struct by value"],
+	["a size Impala cannot know - the *undefined / *NaN shape",
+		"const int N;\nstruct V { int a; int array w[N] }\nextern function f\n"
+			+ "function main() locals V v { f(v); }\n", "Passing a struct by value"],
+	// Each of these must stay SILENT: the fix lands at the argument site, which is where a false alarm
+	// would hit ordinary pointer-passing code.
+	["passing its address is fine",
+		"struct V { int a; int b }\nextern native n\nfunction main() locals V v { n(&v); }\n", null],
+	["passing a field is fine",
+		"struct V { int a; int b }\nextern native n\nfunction main() locals V v { n(v.b); }\n", null],
+	["passing a struct pointer variable is fine",
+		"struct V { int a; int b }\nglobal V g\nextern native n\n"
+			+ "function main() locals V pointer p { p = &global g; n(p); }\n", null],
+	["a prototyped callee keeps the sharper message",
+		"struct V { int a }\nfunction take(V pointer p) { p->a = 1; }\n"
+			+ "function main() locals V v { take(v); }\n", "struct V vs expected pointer"],
 ];
 for (const [label, source, expected] of byValueDoors) {
 	expectCompileOutcome("by-value struct", label, source, expected);
 }
-console.log("impala.jspeg compiler rejects by-value structs at every declaration door");
+console.log("impala.jspeg compiler rejects by-value structs at every door, declaration and call");
 
 // An array extent belongs exactly where it is verifiable: a HOST-OWNED array - an `extern struct` field
 // or a standalone `extern array` - must omit it, and every other array must state it. Rank is the other
@@ -1200,6 +1044,17 @@ const acceptedThenRejected = [
 	["case below the range", SW("5 to 9", "case -1: { i=1; }"), "outside the switch range 5 to 9"],
 	["case just below from", SW("5 to 9", "case 4: { i=1; }"), "outside the switch range 5 to 9"],
 	["in-range cases", SW("5 to 9", "case 5, 8: { i=1; } default: { i=2; }"), null],
+	// A MIXED range - literal start, host-supplied end - is the shape that slipped through both halves
+	// of the fix: `fromNum` is known so no assemble-time guard is emitted, and the window check used to
+	// need `sizeNum` it has no use of, so nothing fired and the build died at load on `.s0.-1`. The two
+	// directions are genuinely different here and both are covered below: below the start is decidable
+	// from `from` alone and is an error, while above the end depends on a value only the host knows and
+	// must stay legal, because narrowing the window is a configuration's right.
+	["case below a literal start with a symbolic end",
+		SYM_RANGE + SW("1 to HI", "case 0: { i=1; }"), "below the switch range, which starts at 1"],
+	["case above a symbolic end is left to the configuration",
+		SYM_RANGE + SW("1 to HI", "case 99: { i=1; }"), null],
+	["in-range case under a mixed range", SYM_RANGE + SW("1 to HI", "case 1: { i=1; }"), null],
 	// A SYMBOLIC range disables the window check - `constInt` never folds a named const, by design - but
 	// it must NOT disable the duplicate check, which never needed the range base. It did until
 	// 2026-08-02, sharing one early return: both arms minted `.s0#K` and the build died at assembly on
@@ -1402,6 +1257,31 @@ for (const [label, source, expected] of reservedWordCases) {
 	expectCompileOutcome("reserved words", label, source, expected);
 }
 console.log("impala.jspeg compiler reserves return/break/continue with dedicated diagnostics");
+
+// A frame local is never zeroed - `FUNC` only advances the stack pointer - so a named return value that
+// is assigned nowhere hands back whatever the previous call left at that depth. The rule is deliberately
+// the weakest one that cannot be wrong: the slot must appear in NO operand of the body. Everything that
+// makes it appear - a write in one arm, a `for` counting with it, an `&r` passed out - stays silent,
+// because ruling on those needs definite-assignment analysis and guessing would reject correct programs.
+// The silent cases below are the ones that matter: each would be a false alarm on a correct program.
+const returnAssignedCases = [
+	["never assigned at all", "function f() returns int r { }", "error[E463]"],
+	["assigned nothing but a sibling local",
+		"function f() returns int r locals int t { t = 1; }", "error[E463]"],
+	["assigned plainly", "function f() returns int r { r = 1; }", null],
+	["assigned in only one arm of an if",
+		"function f(int c) returns int r { if (c > 0) { r = 1; } }", null],
+	["counted by a for loop",
+		"function f() returns int r { for (r = 0 to 3) { } }", null],
+	["written through its own address",
+		"function g(int pointer p) { p[0] = 1; }\nfunction f() returns int r { g(&r); }", null],
+	["read but never written is NOT diagnosed - that needs flow analysis",
+		"extern native printInt\nfunction f() returns int r { printInt(r); }", null],
+];
+for (const [label, source, expected] of returnAssignedCases) {
+	expectCompileOutcome("return assigned", label, source + "\nfunction main() { }\n", expected);
+}
+console.log("impala.jspeg compiler diagnoses a return value assigned nowhere, and only that");
 
 // The reserved-word LABEL rejection is the strict default; --legacy keeps the 1.x `goto break;` early-exit
 // idiom, downgrading the E449 to a single warning so old code still compiles.

@@ -1,2 +1,0 @@
-; signatures version=1
-; signature extern struct AudioBuffer { frames : int, channels : int } @ struct-decl-conflict.gazl:2:1

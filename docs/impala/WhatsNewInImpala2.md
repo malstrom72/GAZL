@@ -239,11 +239,19 @@ node impala/impala.node.js compile --legacy old.impala old.gazl
 | `goto` to a label that does not exist | `E445` | 1.0 emitted a dangling branch |
 | A constant index past a known extent | `E461` | Fix the index |
 | A negative array extent | `E462` | An array holds zero or more elements |
+| A named return value assigned nowhere in the body | `E463` | Assign it somewhere |
 | Writing through a `readonly` global, or into a string literal | `E404` | Use `global`; string data is now genuinely readonly |
 | Two definitions of one function, or a global and a function sharing a name | `E401` | Top-level names are one flat namespace now |
 
-The last six are cases where 1.0 emitted something that failed later - at GAZL load, or not at all. They
+The last seven are cases where 1.0 emitted something that failed later - at GAZL load, or not at all. They
 are new diagnostics rather than new restrictions.
+
+`E463` is the exception in that list: nothing failed later, it just returned the wrong number. A frame
+local is not zeroed - `FUNC` only advances the stack pointer - so an unassigned return value is whatever
+the previous call left at that depth. That is reproducible rather than random, and it changes when
+UNRELATED code alters the call graph above it. Only the decidable case is diagnosed: assigned nowhere at
+all. Assigned on some paths and not others needs definite-assignment analysis and is not attempted, since
+guessing would reject correct programs. See [`MemorySafetyModel.md`](MemorySafetyModel.md).
 
 ### Things that did not change
 

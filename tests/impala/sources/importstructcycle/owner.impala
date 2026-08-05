@@ -1,0 +1,9 @@
+import "user.impala"
+
+struct AA { int x }
+
+function main() returns int m locals AA v
+{
+	v.x = 7;
+	m = readIt(&v);
+}

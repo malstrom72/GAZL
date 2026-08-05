@@ -76,10 +76,10 @@ then nothing ran them and a proof nobody runs is a claim that rots silently:
 
 - [`symbolicWindows.gazl`](proofs/symbolicWindows.gazl) / [`symbolicWindowsRepacked.gazl`](proofs/symbolicWindowsRepacked.gazl) - a fully symbolic by-value call window; re-packing the layout header changes no instruction
 - [`deferredShapeCheck.gazl`](proofs/deferredShapeCheck.gazl) - array shape identity decided at assembly with `! EQUi` / `! FAIL`
-- [`nativeCallbackSignatures.gazl`](proofs/nativeCallbackSignatures.gazl) - native callback signature shapes. A
-  MANIFEST, not a program: it has no `main`, is cited as a reference by three docs, is `gazl-validate`'s
-  default native manifest, and is the one file here `checkDocProofs` does not run, because there is
-  nothing to run
+
+The host's native table used to live here as `nativeCallbackSignatures.gazl`, a `; signature`-only
+manifest that existed for `gazl-validate` to compare against. Both retired 2026-08-05: it is
+`impala/natives.impala` now, so every call is checked by the compiler at the call site.
 
 ## The rule that keeps this from rotting
 

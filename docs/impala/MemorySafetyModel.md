@@ -180,7 +180,41 @@ pointer has no extent and is checked by none of them. See `design/impala/Compile
 `docs/impala/Impala2.md`, "Array bounds".
 
 
-## 8. The short version
+## 8. What a variable holds before you assign it
+
+The two regions answer this differently, and the difference is not a detail - it decides whether a missing
+assignment is a stable bug or a moving one.
+
+**A global is zero.** The assembler zeroes each data block's unfilled tail when the next block starts, and
+`finalize` zeroes the last one (`memset(dataPointer, 0, ...)`, `GAZL.cpp`). So every global word not given
+an explicit `DATA` value reads 0. This is a GAZL guarantee, not a courtesy of the embedder: `global int n`
+with no initializer is 0 on every host.
+
+**A frame local is not.** `FUNC` only advances the stack pointer -
+
+    case FUNC_CC_: if ((dsp += (UInt)(C0.i)) + C1.i > dataStackEnd) { err = DATA_STACK_OVERFLOW; ... }
+
+- with no clearing on entry or exit. A local, a parameter slot beyond those the caller filled, and a NAMED
+RETURN VALUE all start out holding whatever was last written at that stack depth. This is C's rule for
+automatic storage, and it is deliberate: zeroing a frame per call would be a hidden cost the programmer
+cannot see in the source, which is exactly what Impala is not.
+
+**It is not random, which is the trap.** The value is the previous call's leftovers *at the same depth*, so
+an unassigned read is perfectly reproducible for a given call history and changes when UNRELATED code
+changes the call graph above it. A function that returns a plausible number in a small test can start
+returning another function's local once something else runs first.
+
+**Do not lean on the first call reading zero.** Whether never-yet-touched stack space is zero is the
+EMBEDDER's business, not GAZL's: `GAZLCmd` declares `static Value memory[DATA_MEMORY_SIZE]`, which C++
+zero-initializes, so a fresh depth reads 0 there - a host that `malloc`s its memory block reads heap
+garbage instead. Code that works under `GAZLCmd` and fails in a plugin usually fails here.
+
+Impala closes the one case it can decide without flow analysis: a named return value that is assigned
+NOWHERE in the body is `E463`. A value assigned on only some paths is not diagnosed - that needs
+definite-assignment analysis, and guessing would reject correct programs.
+
+
+## 9. The short version
 
 1. `localsSize` allocates; `paramsSize` does not - it feeds one entry-time comparison.
 2. Fixed offsets are proven safe once, at entry, so they cost nothing afterwards.
@@ -188,3 +222,5 @@ pointer has no extent and is checked by none of them. See `design/impala/Compile
 4. `*size` is a declaration channel for frame regions the text does not name. Nothing depends on it for
    containment, but it is what turns a stack overflow into an entry-time, path-independent error rather
    than a late `BAD_POKE`. Omitting it is safe; supplying it is better.
+5. Globals start at zero and frame locals start at whatever the last call left there. Reading one before
+   writing it is reproducible, not random, and changes when unrelated code does.

@@ -41,12 +41,11 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 
 ### Which tool does what
 
-Three tools take a `.gazl` and it is easy to assume the wrong one is checking your work:
+Two tools take a `.gazl` and it is easy to assume the wrong one is checking your work:
 
 | Tool | What it is |
 |---|---|
 | `output/GAZLCmd` | **The assembler and the VM.** The only thing that can tell you a module assembles and loads. |
-| `tools/gazl-validate.sh` / `.cmd` | A `; signature` **metadata linter**, not an assembler. It compares declared contracts across units and is built to run on modules whose externs are deliberately unresolved — exactly what the assembler refuses to load. A file it passes may still fail to assemble. |
 | `impala/gazlAssembleCheck.js` | The test gates' helper that feeds a `.gazl` to `GAZLCmd`. Not something you run directly. |
 
 `GAZLCmd` has **no assemble-only mode** — it enters `main`, which for a fixture that has one means

@@ -1,3 +1,0 @@
-; signatures version=1
-; a prototype that LIES about the native: the manifest says printInt(int value) -> void
-; signature extern native printInt(float x) -> void @ extern-native-bad.gazl:3:1

@@ -1,0 +1,26 @@
+/*
+	The native table `GAZLCmd` registers, as Impala prototypes. `import "natives.impala"` and every call
+	is checked at Impala compile time, with a caret on the offending argument:
+
+	    error[E406]: Argument type mismatch for argument 1 when calling printInt (float vs expected int)
+
+	This replaces `nativeCallbackSignatures.gazl`, a `; signature`-only file that existed solely so
+	`gazl-validate` could cross-check it after the fact. Retired 2026-08-05 with the validator: a
+	prototype the compiler reads beats a manifest a separate tool compares against, and this one cannot
+	drift out of the language it describes. Unused entries cost nothing - `--dead-strip` drops them, and
+	an `extern native` emits no code or data of its own either way.
+
+	Keep entries in the same order as the host registration tables (`tools/GAZLCmd.cpp`, `src/GAZL.cpp`)
+	so additions are easy to diff. A host with a different table wants its own file like this one.
+*/
+
+extern native abort()
+extern native assertFail(pointer message)
+extern native printInt(int value)
+extern native printFloat(float value)
+extern native print(pointer text)
+extern native printLF()
+extern native input(int maxCount, pointer buffer) returns int got
+extern native atan2(float y, float x) returns float r
+extern native sqrt(float x) returns float r
+extern native log(float x) returns float r

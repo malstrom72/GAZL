@@ -222,10 +222,11 @@ deferred `! FAIL` is not an error line. A check that lives in the emitted GAZL i
 Read the output, not the exit status.
 
 **3. Axes are separated by `x` in metadata, never by a comma.** `cells : int[4x5]`. IMPLEMENTED.
-`tools/gazl-validate.nuxjs.js:299` splits struct fields on `,`, so `cells : int[4, 5]` would parse as two
-bogus fields and report a spurious cross-unit conflict. The park branch used `4x5` for this reason.
+A `; signature struct` row is a comma-separated field list, so `cells : int[4, 5]` would read as two
+bogus fields for anything parsing it. The park branch used `4x5` for this reason, and the reason
+outlives `gazl-validate` (retired 2026-08-05): the row format is still comma-separated.
 
-`x` also keeps a shape one `\S+` token, which is what let the validator take it **with no change at all**:
+`x` also keeps a shape one `\S+` token, so a row states a shape without needing re-parsing:
 `arraySignaturesCompatible` compares extents as RAW STRINGS, so `int[3x4]` matches `int[3x4]` and conflicts
 with both `int[2x6]` and `int[12]` - the last being exactly right, since two shapes over the same 12 words
 are not interchangeable. An earlier draft of this file called that raw-string comparison "worth fixing on

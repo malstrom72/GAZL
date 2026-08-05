@@ -10,8 +10,6 @@ REM drifted anyway (2026-08-05 - docSamples.js ran only on the .sh side, so the 
 REM run on Windows), which is the one thing the sentence above cannot protect against.
 REM
 REM These degrade rather than fail when output\GAZLCmd is absent: runJspegTests, jspegCompilerTests and
-REM checkDocProofs skip their assemble+run checks and say so. Metadata validation is NOT here, because
-REM gazl-validate runs under NuXJS and so needs the build.
 
 REM The checked-in compiler must match the grammar it is generated from, or the playground goes stale
 REM (impala\playground.html loads impala\impalaCompiler.js directly).

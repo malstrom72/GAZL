@@ -304,8 +304,17 @@ is still `*NaN`:
         CALL ^sink %0 *NaN
 
 Both spellings are legal GAZL identifiers, so it is an undefined-symbol error at best, and `claimSlot`'s
-loop still never runs - which is why the `ADRL` still self-aliases (`ADRL %1 %1`). The defect is
-unchanged; only the operand text moved.
+loop still never runs - which is why the `ADRL` still self-aliases (`ADRL %1 %1`).
+
+**FIXED 2026-08-05.** `rejectByValueStruct` now also runs at the CALL, over the by-value struct arguments
+collected during the argument list. It fires at the CLOSE of the list rather than per argument, which
+matters: a callee WITH a prototype is checked against its signature first and keeps the sharper
+`struct V vs expected pointer` (`E406`), so this only speaks for the door nothing else guards. The note
+is call-shaped too - *"pass its address instead: `&v`, and take a `V` pointer"* - since the fix here is at
+the call, not in a signature. Tests cover both open doors, the `*undefined`/`*NaN` shape, the prototyped
+case that must keep its own message, and four legitimate shapes that must stay silent (`&v`, a field, a
+struct-pointer variable, whole-struct assignment) - a false alarm at the argument site would land on
+ordinary pointer-passing code.
 Fix: call `rejectByValueStruct` from the ARGUMENT site, not just declarators. Do NOT emit `*.z.Name` here
 - see `design/gazl/GAZLSymbolicWindows.md`, the numeric window ABI is correct.
 
@@ -341,12 +350,33 @@ not being NaN.)* `constInt` now decodes hex and `+`-signed literals, so
 
 ### Confirmed silent acceptances that become gibberish at assembly
 
-**S5. A symbolic switch range disables E444.** *(Item 3 above predicted this; `Impala2Review.md` C6
-recorded the pre-E444 version. NEW: reproduced as the residual AFTER E444 shipped.)* `checkCaseValue` returns early when `constInt` cannot read
-the range, so `switch (x == LO to HI)` with host-supplied bounds is unchecked. With `LO=5`, a `case 0`
-folds to a negative offset and the module fails to load with `Invalid identifier: .s0.-5` - a
-compiler-minted label the user never wrote. This is the deferred-assertion case: emit
-`! GEQi #<off> #0 @ok / ! FAIL <source>: case 0 is below the switch range`.
+**S5. A symbolic switch range disables E444 - DIAGNOSED WRONG HERE, FIXED 2026-08-05 the other way.**
+*(Item 3 above predicted this; `Impala2Review.md` C6 recorded the pre-E444 version.)* The symptom was
+real: `checkCaseValue` returns early when `constInt` cannot read the range, and with `LO=5` a `case 0`
+folded to a negative offset and the module failed to load with `Invalid identifier: .s0.-5`, a
+compiler-minted label the user never wrote.
+
+**The prescription was wrong, and following it would have broken working programs.** This entry used to
+say "emit `! GEQi #<off> #0 @ok / ! FAIL ...: case 0 is below the switch range`" - i.e. make it an error.
+But a host-supplied range is a WINDOW this build happens to select, and an arm outside it is
+UNREACHABLE, not wrong. That is a decided question with a passing test:
+`jspegCompilerTests.js`, "a case outside a symbolic range is left to the configuration" - *"a
+configuration may legitimately narrow the range, so erroring on a now-surplus arm would make that
+configuration unbuildable"* (`design/impala/TwoStageConstants.md`). A `! FAIL` here would have made
+exactly those programs unbuildable.
+
+The real defect was an ASYMMETRY, not a missing check. Above the window the arm already fell dead
+harmlessly, because the offset is only a table index `SWCH` never looks up. Below it, the offset is
+pasted into the LABEL TEXT, and a negative one is not an index at all. So one direction fell dead and
+the other refused to build, for the same situation.
+
+Fixed by making both fall dead: each case under a symbolic range emits
+`! LSSi <off> #0 @.gN` before its label, skipping just that one line. A skipped line is abandoned
+BEFORE its label is interpreted (`skipUntilLabel`, `GAZL.cpp`), so `.s0.-5` is never constructed rather
+than constructed and rejected. Guards are per case VALUE, so `case 0, 5` drops only the half that falls
+outside; the skip region is one line, so nested switches never overlap. A LITERAL range emits no guard
+and keeps the compile-time `E444`, which is strictly better - it fails at your desk, not at load.
+Fixture: `tests/impala/sources/switchWindow.impala`.
 
 **S6. The same gate disabled E443 (duplicate case) - FIXED 2026-08-02.** *(Item 5 above;
 `Impala2Review.md` C6.)* `caseSeen` was indexed by `value - fromNum`, inheriting a dependency on the
@@ -361,7 +391,19 @@ Impala compile time whatever the range does. The window check stays off under a 
 purpose - a configuration may legitimately narrow it, and erroring on a now-surplus arm would make that
 configuration unbuildable. Both halves are pinned in `jspegCompilerTests.js`, non-zero base included.
 
-### Link-checking holes (see also `tools/gazl-validate.nuxjs.js`)
+### Link-checking holes (in the retired `gazl-validate`)
+
+> **S7-S12 are MOOT: `gazl-validate` was retired on 2026-08-05.** They are holes in a tool that no
+> longer exists, and they were already redundant before it went: `import` compiles the closure in one
+> pass, so the compiler catches the same disagreements at the source. S7's exact case - one unit
+> calling a field an array, another a scalar - is `E438` with a caret, verified. Do NOT re-cost these
+> from the triage below, which predates asking whether the checks were still needed.
+>
+> S12 is the one with a live successor, and not in a linter: host offsets arrive at LOAD, so the tier
+> that can check ordering, overlap and the `.z.` bound is GAZL assembly - `! EQUi` / `! LSSi` / `! FAIL`,
+> the same deferred-assertion idiom used for array extents and the switch window. Re-filed as compiler
+> work, not validator work.
+
 
 **S7.** `fieldListsMatch`'s array-vs-scalar guard is an `&&` whose first clause is false in exactly the
 case it was written for, because `fieldParts` returns `size: undefined` for both `int[]` and `int`. Since
@@ -392,7 +434,7 @@ overlap and the `.z.` bound are all decidable with `! EQUi` / `! LSSi` chains.
 
 These split three ways, and the split is the useful part:
 
-1. **Never needed the number** (S6, S7, S9, S11) - the check was accidentally made to depend on a value it
+1. **Never needed the number** (S6; S7, S9, S11 are moot - see the banner above) - the check was accidentally made to depend on a value it
    does not need. Ordinary bug fixes, cheapest and highest value.
 2. **Had the number and threw it away** (S3, S4, and item 1 above) - `parseInt`/`parseFloat` on an emitted
    OPERAND STRING, which rule 5 guarantees will not look like a number. Fix by reading the value before it

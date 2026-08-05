@@ -347,7 +347,7 @@
     }
 
     /* Types only, no names: what a signature CLAIM actually asserts, and the only part two claims
-       about one name have to agree on. Element chains stay in - gazl-validate treats a bare `ptr` as
+       about one name have to agree on. Element chains stay in - a signature-row consumer treats a bare `ptr` as
        element-UNKNOWN and lets it match any chain, so flattening `V-ptr` to `ptr` would silently
        disarm the cross-unit check. That is the only type record a name-only `extern function f` has. */
     function renderParamTypes(params) {
@@ -659,10 +659,10 @@
     /* One name may have at most one DEFINITION but any number of `extern` declarations, so long as
        every claim agrees: with the definition if the closure has one, and otherwise with each other.
        This does NOT police linkage - a prototype for a name nothing defines is a promise only
-       gazl-validate can settle, and a name-only extern records no prototype and so asserts nothing.
+       a signature-row consumer can settle, and a name-only extern records no prototype and so asserts nothing.
        It fires exactly when the compiler is holding two claims itself, which an import closure makes
        routine since the builder compiles the whole closure as one unit. Names are not compared, only
-       types, matching functionSignaturesCompatible() in tools/gazl-validate.nuxjs.js. */
+       types, so a consumer of the rows can compare two declarations of one name. */
     $$parser.checkExternAgreement = function (name, claim, prior, priorIsDefinition, sourceCode, sourceOffset) {
         if (!claim || !prior) {
             return;
@@ -682,20 +682,26 @@
         }
     }
 
-    /* Declare an `extern struct` interface for gazl-validate: the field names and types Impala
-       compiled against, so the host-supplied layout (.o.Name.field / .z.Name) can be checked
-       instead of silently trusted. Rendered as:
+    /* `; signature` rows describe what Impala compiled against, in the emitted `.gazl` itself. They were
+       written for `gazl-validate`, a separate cross-unit checker RETIRED 2026-08-05: `import` compiles the
+       whole closure in one pass, so the compiler now catches cross-unit disagreement itself (`E438`, at
+       the source, with a caret) and a host's native table is better written as Impala prototypes than as
+       metadata a second tool compares - see `impala/natives.impala`. The rows stay because they document
+       the module for a reader, and the format notes below still hold for anything that parses them.
+
+       Declare an `extern struct` interface: the field names and types Impala compiled against, so the
+       host-supplied layout (.o.Name.field / .z.Name) is stated rather than silently assumed. Rendered as:
            ; signature extern struct Name { field : int, other : float-ptr } @ 12:1        */
-    /* An array extent in a signature row is a CLAIM the validator compares against the other side. A
+    /* An array extent in a signature row is a CLAIM a consumer compares against the other side. A
        literal or a single named const is a real claim; an extent that folded to a `<X>` compile-time
        scratch is not - the name is pool-recycled, so two unrelated extents both render `<A>` and
        compare EQUAL. Render those as the empty extent instead, the same wildcard a sizeless `extern
-       array` already uses, which the validator skips rather than trusting. A row may state a fact or
+       array` already uses, which a consumer skips rather than trusting. A row may state a fact or
        state "unknown"; it must never state something that merely looks like a fact. */
     /* A SHAPE states every axis, in WRITTEN order (outermost first, the reverse of the stride order `dims`
        holds), joined by `x`: `int array cells[3, 4]` advertises `int[3x4]`. Deliberately not a comma - a
-       `; signature struct` row is a comma-separated field list, and gazl-validate splits it on commas
-       before it ever looks at a type. `x` keeps a shape one `\S+` token, so the validator compares it as
+       `; signature struct` row is a comma-separated field list, and a signature-row consumer splits it on commas
+       before it ever looks at a type. `x` keeps a shape one `\S+` token, so a consumer compares it as
        the opaque string it already compares a 1-D extent as, and needs no change at all.
        All-or-nothing, exactly as a single extent is: ONE unstatable axis and the whole shape reads `[]`,
        because a partial shape rendered as a whole one is a claim that is simply false. */
@@ -705,7 +711,7 @@
             text = '';
             for (var i = dims.length - 1; i >= 0; --i) {
                 /* A host-owned axis (undefined - the host knows it, we do not) renders `[]` for the same
-                   reason a folded `<X>` does, and DELIBERATELY not `[,]`: the validator compares extents
+                   reason a folded `<X>` does, and DELIBERATELY not `[,]`: a consumer compares extents
                    as raw strings and skips an empty one, so a rank claim would make a definition's
                    `int[3x4]` conflict with an extern's rank-2 row. Rank is checked on the Impala side. */
                 if (dims[i] === undefined || ('' + dims[i]).charAt(0) === '<') return '[]';
@@ -772,7 +778,7 @@
 
     /* `isExtern` marks a VALUELESS `const int N;` - external by omission of a value ("defined later by
        the GAZL run-time"). It spells no `extern` keyword, so it used to emit no row at all and was the
-       one extern kind gazl-validate could not link-check (its compareExternSets("Const", ...) pass had
+       one extern kind the rows could not describe (nothing emitted a row for it, so a consumer had
        nothing to compare). Emitting the row turns that pass on without touching the spelling. */
     $$parser.formatConstSignatureComment = function (name, type, sourceName, sourceCode, sourceOffset, elem,
                                                      isExtern) {
@@ -1788,11 +1794,24 @@
            `! SUBi <A>` whenever `from` is non-zero, so the offset operand is symbolic in exactly the
            `switch (i == 5 to 9)` shape that produces the unloadable `.sN.-6`. */
         var off = value - ctx.fromNum;
-        if (ctx.sizeNum !== undefined && (off < 0 || off >= ctx.sizeNum)) {
-            $$parser.fail('Case value ' + value + ' is outside the switch range '
-                    + ctx.fromNum + ' to ' + (ctx.fromNum + ctx.sizeNum), source, offset, 'E444',
-                    'the upper bound is exclusive, so the last reachable case is '
-                            + (ctx.fromNum + ctx.sizeNum - 1));
+        /* The two halves are INDEPENDENT, and tying them together was the same mistake S6 fixed for the
+           duplicate check: this one borrowed `sizeNum` it has no need of. Below the start is decidable
+           from `from` ALONE - `switch (op == 1 to LAST_OP)` with a `case 0` is out of the window for
+           EVERY value `LAST_OP` can take - and it is the half that breaks the build, because a negative
+           offset is pasted into the label text (`.s0.-1`). Above the end is the opposite: it needs
+           `sizeNum`, and when the end is host-supplied it must stay legal, because a configuration may
+           narrow the window and an unreachable arm is not an error (design/impala/TwoStageConstants.md).
+           So: always test the low end when `from` is known, test the high end only when the size is. */
+        var whole = (ctx.sizeNum !== undefined);           /* both ends known -> name the whole window */
+        if (off < 0 || (whole && off >= ctx.sizeNum)) {
+            $$parser.fail('Case value ' + value + (whole
+                            ? ' is outside the switch range ' + ctx.fromNum
+                                    + ' to ' + (ctx.fromNum + ctx.sizeNum)
+                            : ' is below the switch range, which starts at ' + ctx.fromNum),
+                    source, offset, 'E444',
+                    whole ? 'the upper bound is exclusive, so the last reachable case is '
+                                    + (ctx.fromNum + ctx.sizeNum - 1)
+                          : 'a case below the start can never be reached, whatever the end of the range is');
         }
     };
 
@@ -1862,7 +1881,7 @@
        label) there is no artifact for a second declaration to collide with. Re-declaring one is
        therefore free PROVIDED the two agree, which is what lets a unit declare the functypes it uses
        and still be imported alongside another unit that declares the same ones. Set the earlier one
-       aside and let endFuncType compare; emitting nothing also means gazl-validate never sees a
+       aside and let endFuncType compare; emitting nothing also means a signature-row consumer never sees a
        functype, so this is the only place the disagreement can be caught at all. */
     $$parser.beginFuncType = function (name, sourceCode, sourceOffset) {
         $$parser.claimTopName(name, 'functype', sourceCode, sourceOffset);
@@ -1877,17 +1896,56 @@
        can introduce one rejects it HERE, so there is one owner instead of a copy per door - a `functype`
        declarator was previously unguarded, which let the whole parked by-value path run and, for an
        `extern struct`, baked a numeric COPY size against a host-owned layout. */
-    $$parser.rejectByValueStruct = function (type, struct, pname, isReturn, sourceCode, sourceOffset) {
+    $$parser.rejectByValueStruct = function (type, struct, pname, isReturn, sourceCode, sourceOffset,
+            atCall) {
         if (type !== 'S') return;
         if (isReturn) {
             $$parser.fail('Returning a struct by value is not supported in Impala 2.0',
                     sourceCode, sourceOffset, 'E427',
                     'return it through a ' + struct + ' pointer out-parameter');
         }
+        /* `atCall` is the ARGUMENT site, where the fix is at the call rather than in a signature. It is
+           the door a declarator cannot guard: a name-only `extern function f` / `extern native f` has no
+           parameter list to inspect, so the parked by-value path ran unopposed and baked a COPY size for
+           a struct whose size Impala may not know - `*undefined` operands and a `*NaN` call window. */
         $$parser.fail('Passing a struct by value is not supported in Impala 2.0',
                 sourceCode, sourceOffset, 'E426',
-                'take it by pointer: ' + struct + ' pointer '
-                        + (pname !== undefined ? pname : struct.charAt(0).toLowerCase()));
+                atCall ? 'pass its address instead: '
+                                + (pname !== undefined ? '&' + pname : '&' + struct.charAt(0).toLowerCase())
+                                + ', and take a ' + struct + ' pointer'
+                       : 'take it by pointer: ' + struct + ' pointer '
+                                + (pname !== undefined ? pname : struct.charAt(0).toLowerCase()));
+    };
+
+    /* A declared return value that is never written returns whatever the PREVIOUS call left in that frame
+       slot - a silent wrong value, with nothing at any tier to catch it. Impala has no flow analysis and
+       must not grow one here, so the test is deliberately the weakest one that cannot be wrong: the slot
+       appears NOWHERE in the body, in any operand. A write in one arm of an `if`, a `for` counting with
+       it, an `&r` handed to a callee - each makes it appear, and each stays silent. Only "never mentioned
+       at all" is diagnosed, which is exactly the case a reader would call a typo. Runs before
+       processBranches, which rewrites operands. */
+    $$parser.checkReturnAssigned = function (entry) {
+        /* `pendingReturns` is cleared once the outputs are declared, which is before the body; the same
+           row objects live on in the signature. */
+        var list = (entry !== undefined && entry.signature !== undefined
+                ? entry.signature.returnList : undefined);
+        if (list === undefined) return;
+        for (var i = 0; i < list.length; ++i) {
+            var ret = list[i], seen = false;
+            for (var j = 0; j < $$parser.metacode.length && !seen; ++j) {
+                var m = $$parser.metacode[j];
+                if (m.operator === ';') continue;         /* prose: the source line, not operands */
+                for (var k = 0; k < m.operands.length; ++k) {
+                    if (m.operands[k] === ret.name) { seen = true; break; }
+                }
+            }
+            if (!seen) {
+                $$parser.fail('The return value ' + ret.rawName + ' is never assigned',
+                        ret.sourceCode, ret.sourceOffset, 'E463',
+                        'assign it somewhere in the body; an unassigned return value is whatever the '
+                                + 'previous call left in that frame slot');
+            }
+        }
     };
 
     $$parser.addFuncTypeParam = function (name, type, elem, struct, words, pname, sourceCode, sourceOffset) {
@@ -2401,6 +2459,12 @@
                     'struct', 'layouts', parsed.sourceCode, parsed.sourceOffset);
         }
         if (!parsed.extern) {
+            /* Carry across any field references already made through the DECLARATION - the definition is
+               about to emit the layout those references need to have seen. Without this the replacement
+               below drops them and the use-before-define goes unreported (see emitStructLayout). */
+            if (held.pendingRefs !== undefined) {
+                parsed.pendingRefs = held.pendingRefs;
+            }
             $$parser.structs[name] = parsed;                      /* a definition outranks the declaration it fulfils */
         }
         return !!parsed.extern;
@@ -2433,6 +2497,24 @@
         if (typeof output !== 'function') return;
         var s = $$parser.structs[name];
         if (!s || s.extern) return;                               /* extern: host provides all base offsets + .z */
+        /* `! DEFi` constants resolve strictly top-down - unlike code labels, they get no forward-reference
+           pass - so a `.o.` reference emitted ABOVE this block cannot see it. That is reachable in exactly
+           one shape: a body-carrying `extern struct` in a unit the import closure emits EARLIER than the
+           unit holding the real definition, which happens across a cycle, where no order satisfies both
+           directions. It compiled clean and died at GAZL assembly with `Symbol not previously defined (in
+           expected scope): .o.<name>.<field>`, naming a symbol the user never wrote. A genuinely
+           host-owned `extern struct` never reaches here (returned above), so its references stay legal. */
+        if (s.pendingRefs !== undefined && s.pendingRefs.length > 0) {
+            var _r = s.pendingRefs[0];
+            $$parser.fail('The layout of struct ' + name + ' is used before it is defined',
+                    _r.source, _r.offset, 'E464',
+                    'this unit declares `extern struct ' + name + '` with a body and needs its layout '
+                            + 'here - a value of that type, or one of its fields - but the real '
+                            + 'definition is emitted later in the import closure; use the opaque form '
+                            + '`extern struct ' + name + '` and reach it through a pointer, or break '
+                            + 'the import cycle');
+        }
+        s.layoutEmitted = true;
         var T = (typeof TAB !== 'undefined') ? TAB : '\t';
         $$parser.flushMetaCode('');                                   /* a field extent that folded to a `<X>` scratch was
                                                                          queued through emit(); drain it BEFORE the block so
@@ -2539,7 +2621,20 @@
        compile-time-known number of transient VM slots, which a host-owned size cannot provide. By-value
        params/returns are parked wholesale today (E426/E427), so the extern-specific E425 that used to
        state this no longer fires; design/gazl/GAZLSymbolicWindows.md is where the reasoning lives.) */
-    $$parser.structAllocSize = function (structName) {
+    /* Note a use of a struct whose layout block has not been emitted yet. Legal on its own - a host-owned
+       `extern struct` never emits one and the host defines the symbols - but if a REAL definition turns up
+       later in the import closure, `emitStructLayout` reports these as use-before-define (E464). Callers
+       without a source position simply do not record: every such site needs a local, global or field of
+       the type, and those ARE recorded, so the struct is caught anyway. */
+    $$parser.noteStructUse = function (structName, sourceCode, sourceOffset) {
+        var st = $$parser.structs[structName];
+        if (st === undefined || st.layoutEmitted === true || sourceCode === undefined) return;
+        if (st.pendingRefs === undefined) st.pendingRefs = [];
+        st.pendingRefs.push({ source: sourceCode, offset: sourceOffset });
+    };
+
+    $$parser.structAllocSize = function (structName, sourceCode, sourceOffset) {
+        $$parser.noteStructUse(structName, sourceCode, sourceOffset);
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
 
@@ -3417,6 +3512,7 @@
            instructions; the parts are folded (inline `! ADDi`, assemble-time) into one operand only at
            a terminal access. Only accessed paths cost anything, and never at run time. */
         var fieldSym = '.o.' + structName + '.' + fieldName;
+        $$parser.noteStructUse(structName, sourceCode, sourceOffset);
         var newParts = offParts.concat([fieldSym]);
 
         if (field.type === 'S') {                                 /* nested struct -> accumulate the part, same base, NO instruction */
@@ -4717,7 +4813,7 @@ StructDecl  <-  STRUCT _ { $nmAt = $$i; } id:Identifier              { $sname = 
                   ( ';' _ )?
                 )*
                 '}' _                                                {   $$parser.endStruct($sname);
-                                                                         /* Publish the real layout with TYPES so gazl-validate can check an `extern struct`
+                                                                         /* Publish the real layout with TYPES so a signature-row consumer can check an `extern struct`
                                                                             declaration of the same name against it - the .o./.z. constants alone carry no types. */
                                                                          emitStandaloneSignatureComment(
                                                                              $$parser.structSignatureRow($sname, false, $$parser.sourceName, $$s, $$parser.declOffset));
@@ -4832,7 +4928,9 @@ inp:ArgsDecl ')'_
                                                                          var entry = $$parser.symbols.functions[$id];
                                                                          if (entry) {
                                                                              entry.pendingReturns = undefined;
-                                                                             $$parser.addReturn(entry, $out.name, $out.type, $out.elem, $out.size, $$s, $$i, $out.struct, $out.words);
+                                                                             /* `$out.at` is the NAME; `$$i` here has already skipped past the whole
+                                                                            declarator onto the next clause, which put E463's caret on `locals`. */
+                                                                         $$parser.addReturn(entry, $out.name, $out.type, $out.elem, $out.size, $$s, $out.at, $out.struct, $out.words);
                                                                          }
                                                                      }
                     ( ',' _ v:VarDecl                                 {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */
@@ -4961,7 +5059,7 @@ inp:ArgsDecl ')'_
                                                                              var type = (isStruct ? 'S' : v.type);
                                                                              var elem = (isStruct ? v.struct : v.elem);
                                                                              var size = (isStruct
-                                                                                     ? $$parser.structAllocSize(v.struct)
+                                                                                     ? $$parser.structAllocSize(v.struct, $$s, v.at)
                                                                                      : (v.type === 'A'
                                                                                          ? $$parser.arrayAllocSize(v.elem, v.size,
                                                                                                  v.name, $id, v.dims)
@@ -4998,6 +5096,7 @@ inp:ArgsDecl ')'_
                                                                          if (!$$parser.inlineMode) {
                                                                              $$parser.emit('--^', undefined, undefined, undefined, undefined);
                                                                          }
+                                                                         $$parser.checkReturnAssigned($$parser.symbols.functions[$id]);
                                                                          $$parser.processBranches();
                                                                          /* The body (and every inline expansion in it) is now known, so the head is
                                                                             final: replay it, then let flushMetaCode write the body straight out. */
@@ -5043,7 +5142,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                      }
                         ( ';' _ )?
                       )*
-                      '}' _                                           {   /* Declare the host-owned interface so gazl-validate can check the layout
+                      '}' _                                           {   /* Declare the host-owned interface so a signature-row consumer can check the layout
                                                                              the host supplies (.o.Name.field / .z.Name) against what Impala assumed,
                                                                              the way extern globals and function signatures are already checked. A
                                                                              re-declaration of a struct DEFINED here describes no host layout, so it
@@ -5059,7 +5158,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                     /   NATIVE                                        { $$.type  = 'N';  $$.scope = 'functions'; }
                     ) _ { $nmAt = $$i; } id:Identifier                { $$.name  = $id; $$.at = $nmAt; }
                     ( '(' _ inp:ArgsDecl ')' _                        {   /* Optional PROTOTYPE. Name-only stays valid and
-                                                                             asserts nothing (a wildcard the validator skips);
+                                                                             asserts nothing (a wildcard a consumer skips);
                                                                              a prototype is a checkable assertion, so calls get
                                                                              argument type-checking and the emitted signature
                                                                              row carries real types. */
@@ -5303,7 +5402,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                      $section, 'globals',
                                                                                      $v.name, 'S',
                                                                                      ($section === 'CNST'),
-                                                                                     $$parser.structAllocSize($v.struct),
+                                                                                     $$parser.structAllocSize($v.struct, $$s, $v.at),
                                                                                      $$s, $v.at,
                                                                                      $$parser.formatGlobalSignatureComment(
                                                                                          $section, $v.name, 'S', undefined, undefined,
@@ -5852,6 +5951,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.types = [];
                                                        $$.elems = [];
                                                        $$.opnds = [];
+                                                       $$.svals = [];       /* by-value struct args, checked at the close */
                                                     } }
                 (Argument (','_ Argument)*)?
                 (   ')'_
@@ -5974,6 +6074,18 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            }
                                                        }
 
+                                                       /* THE LAST DOOR for a by-value struct. Every declarator is guarded, but a
+                                                          name-only `extern function f` / `extern native f` has no parameter list
+                                                          to guard, so the parked by-value path ran unopposed at the call and baked
+                                                          a COPY size for a struct whose size Impala may not know - `*undefined`
+                                                          operands and a `*NaN` call window reached the artifact. Deliberately runs
+                                                          AFTER the signature loop above: a PROTOTYPED callee wanting a pointer
+                                                          gets the sharper "struct V vs expected pointer" instead of this. */
+                                                       for (var _sv = 0; _sv < $$.svals.length; ++_sv) {
+                                                           $$parser.rejectByValueStruct('S', $$.svals[_sv].struct,
+                                                                   $$.svals[_sv].name, false, $$s, $$.svals[_sv].at, true);
+                                                       }
+
                                                        var callComment = $$parser.formatCallExpectationComment(
                                                            calleeName,
                                                            signature,
@@ -6051,7 +6163,8 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        }
                                                     } }
 
-Argument    <-  a:Expr                             { if (!$$parser.dry) {
+Argument    <-  { $argAt = $$i;   /* the argument itself; end-of-rule has skipped past it */ }
+                a:Expr                             { if (!$$parser.dry) {
                                                        ++$$.count;
                                                        var meta = metaSlot($a);
                                                        $$parser.checkIndexUse(meta);   /* a bare arg is placed without makeRValue */
@@ -6071,6 +6184,15 @@ Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        }
                                                        var winSlot = $$.base + $$.retSlots + $$.words;
                                                        if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */
+                                                           /* Remember it for the LAST-door check at the close of
+                                                              the call. Not rejected here: a PROTOTYPED callee has
+                                                              a sharper message ("struct V vs expected pointer"),
+                                                              and its signature is only resolved once the argument
+                                                              list is complete. */
+                                                           $$.svals.push({ at: $argAt, struct: meta.struct,
+                                                                   name: (typeof meta.base === 'string'
+                                                                                   && meta.base.charAt(0) === '$'
+                                                                               ? meta.base.substr(1) : undefined) });
                                                            var w = $$parser.structWords(meta.struct);
                                                            $$parser.copyStructArg($a, winSlot, w);
                                                            $$.words += w;
@@ -6515,6 +6637,25 @@ CaseExpr    <-  Expr                                {
 
                                                         $n = $$parser.subConstInt(caseConst, baseFrom);
 
+                                                        /* A host may narrow the window from BELOW, which makes this arm
+                                                           UNREACHABLE, not wrong - the same situation as a case above the
+                                                           window, which `SWCH` already ignores harmlessly because the
+                                                           offset is only a table index it never looks up. Here the offset
+                                                           is pasted into the LABEL TEXT, so a negative one rendered
+                                                           `.s0.-4` and killed the whole module at load: one direction fell
+                                                           dead, the other refused to build. Guard the label with an
+                                                           assemble-time skip so both drop out of the configuration alike.
+                                                           A skipped line is abandoned BEFORE the label is interpreted
+                                                           (`skipUntilLabel`, GAZL.cpp), so `.s0.-4` is never constructed
+                                                           rather than constructed and rejected. Symbolic ranges only: with
+                                                           a literal range Impala knows the answer and E444 says so at
+                                                           Impala compile time, which is strictly better. */
+                                                        var caseGuard;
+                                                        if (ctx !== undefined && ctx.fromNum === undefined) {
+                                                            caseGuard = $$parser.newLabel('g');
+                                                            $$parser.emit('<> <', 'i', $n, '#0', caseGuard);
+                                                        }
+
                                                         /* create label for this case                                     */
                                                         $$parser.emit(
                                                             '<--',
@@ -6522,6 +6663,11 @@ CaseExpr    <-  Expr                                {
                                                             baseLabel + '#' + $$parser.dropHash($n),
                                                             undefined, undefined
                                                         );
+
+                                                        if (caseGuard !== undefined) {
+                                                            $$parser.emit('<-?', true, caseGuard, undefined, undefined);
+                                                            $$parser.metacode[$$parser.metacode.length - 1].mayRide = true;
+                                                        }
 
                                                         $$parser.returnBack($n);
                                                     }

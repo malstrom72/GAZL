@@ -1000,7 +1000,8 @@ Consequences:
   and fails there. Nothing needs it - source imports plus `export`/`--dead-strip` cover sharing,
   linking and hiding. See [`ParkedFeatures.md`](../../design/ParkedFeatures.md#precompiled-gazl-blob-imports).
 - **The validator becomes internal to the build** - the link set *is* the closure, checked during
-  compilation. The standalone `gazl-validate` remains for the legacy workflow only.
+  compilation. The standalone `gazl-validate` was retired once that was true (2026-08-05); a host's
+  native table is Impala prototypes now (`impala/natives.impala`), checked at the call site.
 - **Single definition, enforced**: any symbol - and in particular any struct - defined more than
   once in the closure is an error. The copy-paste model and its layout-agreement machinery apply
   only to the legacy manual workflow.
@@ -1073,10 +1074,15 @@ exactly once; an `import` naming an already-visited file is skipped. The self-im
 > (`design/impala/ExternPrototypes.md`). For a *struct type* the workaround is the **opaque** form
 > (`extern struct AA`, pointers only): it compiles, assembles and runs across the cycle.
 >
-> **Known gap:** the BODY-CARRYING form (`extern struct AA { int x }`) across a cycle is worse than
-> no workaround. It compiles clean and produces a module that dies at GAZL assembly with `Symbol not
-> previously defined (in expected scope): .o.AA.x`, because the earlier unit's field access precedes
-> the layout rows the later unit emits. It deserves its own diagnostic and does not have one.
+> The BODY-CARRYING form (`extern struct AA { int x }`) across a cycle is **`E464`**, reported at the
+> use, in the unit that made it. It used to be the one cycle shape that failed silently: it compiled
+> clean and produced a module that died at GAZL assembly with `Symbol not previously defined (in
+> expected scope): .o.AA.x`, a symbol the user never wrote. The cause is emission order, not semantics -
+> a struct definition emits its layout as `! DEFi` constants at the point of definition, those resolve
+> strictly top-down (unlike code labels, they get no forward-reference pass), and in a cycle the unit
+> needing the layout can be emitted first. The check covers both ways a unit can need it: a field
+> (`.o.AA.x`) and a value of the type (`.z.AA`, from a local or global). A genuinely host-owned
+> `extern struct` is untouched - it emits no layout block at all, so nothing can precede it.
 >
 > **Where this is heading: collect mode, in 3.0.** See "Deferred to 3.0: collect mode" below. An
 > `extern` written today stays valid and keeps compiling once it lands - the pre-pass makes it
