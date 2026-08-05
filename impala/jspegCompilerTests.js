@@ -1052,11 +1052,37 @@ const byValueDoors = [
 	["extern prototype return", "struct V { int a; int b }\nextern native n() returns V v\n", "Returning a struct by value"],
 	["functype parameter", "struct V { int a; int b }\nfunctype Cb(V v)\n", "Passing a struct by value"],
 	["functype return", "struct V { int a; int b }\nfunctype Cb() returns V\n", "Returning a struct by value"],
+	// ...and the door no DECLARATOR can guard: a name-only extern has no parameter list to inspect, so
+	// the by-value lowering ran at the CALL. Against a struct whose size Impala cannot know it emitted
+	// `ADRL %1 %1 *undefined` / `COPY %1 %2 *undefined` / `CALL &f %0 *NaN` - and those are legal GAZL
+	// identifiers, so the artifact shipped. Checked at the close of the argument list, not per argument,
+	// so a PROTOTYPED callee keeps the sharper "struct V vs expected pointer" (the case below it).
+	["name-only extern, struct argument",
+		"struct V { int a; int b }\nextern function f\nfunction main() locals V v { f(v); }\n",
+		"Passing a struct by value"],
+	["extern native, struct argument",
+		"struct V { int a; int b }\nextern native n\nfunction main() locals V v { n(v); }\n",
+		"Passing a struct by value"],
+	["a size Impala cannot know - the *undefined / *NaN shape",
+		"const int N;\nstruct V { int a; int array w[N] }\nextern function f\n"
+			+ "function main() locals V v { f(v); }\n", "Passing a struct by value"],
+	// Each of these must stay SILENT: the fix lands at the argument site, which is where a false alarm
+	// would hit ordinary pointer-passing code.
+	["passing its address is fine",
+		"struct V { int a; int b }\nextern native n\nfunction main() locals V v { n(&v); }\n", null],
+	["passing a field is fine",
+		"struct V { int a; int b }\nextern native n\nfunction main() locals V v { n(v.b); }\n", null],
+	["passing a struct pointer variable is fine",
+		"struct V { int a; int b }\nglobal V g\nextern native n\n"
+			+ "function main() locals V pointer p { p = &global g; n(p); }\n", null],
+	["a prototyped callee keeps the sharper message",
+		"struct V { int a }\nfunction take(V pointer p) { p->a = 1; }\n"
+			+ "function main() locals V v { take(v); }\n", "struct V vs expected pointer"],
 ];
 for (const [label, source, expected] of byValueDoors) {
 	expectCompileOutcome("by-value struct", label, source, expected);
 }
-console.log("impala.jspeg compiler rejects by-value structs at every declaration door");
+console.log("impala.jspeg compiler rejects by-value structs at every door, declaration and call");
 
 // An array extent belongs exactly where it is verifiable: a HOST-OWNED array - an `extern struct` field
 // or a standalone `extern array` - must omit it, and every other array must state it. Rank is the other

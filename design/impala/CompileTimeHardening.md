@@ -304,8 +304,17 @@ is still `*NaN`:
         CALL ^sink %0 *NaN
 
 Both spellings are legal GAZL identifiers, so it is an undefined-symbol error at best, and `claimSlot`'s
-loop still never runs - which is why the `ADRL` still self-aliases (`ADRL %1 %1`). The defect is
-unchanged; only the operand text moved.
+loop still never runs - which is why the `ADRL` still self-aliases (`ADRL %1 %1`).
+
+**FIXED 2026-08-05.** `rejectByValueStruct` now also runs at the CALL, over the by-value struct arguments
+collected during the argument list. It fires at the CLOSE of the list rather than per argument, which
+matters: a callee WITH a prototype is checked against its signature first and keeps the sharper
+`struct V vs expected pointer` (`E406`), so this only speaks for the door nothing else guards. The note
+is call-shaped too - *"pass its address instead: `&v`, and take a `V` pointer"* - since the fix here is at
+the call, not in a signature. Tests cover both open doors, the `*undefined`/`*NaN` shape, the prototyped
+case that must keep its own message, and four legitimate shapes that must stay silent (`&v`, a field, a
+struct-pointer variable, whole-struct assignment) - a false alarm at the argument site would land on
+ordinary pointer-passing code.
 Fix: call `rejectByValueStruct` from the ARGUMENT site, not just declarators. Do NOT emit `*.z.Name` here
 - see `design/gazl/GAZLSymbolicWindows.md`, the numeric window ABI is correct.
 

@@ -1837,17 +1837,25 @@
        can introduce one rejects it HERE, so there is one owner instead of a copy per door - a `functype`
        declarator was previously unguarded, which let the whole parked by-value path run and, for an
        `extern struct`, baked a numeric COPY size against a host-owned layout. */
-    $$parser.rejectByValueStruct = function (type, struct, pname, isReturn, sourceCode, sourceOffset) {
+    $$parser.rejectByValueStruct = function (type, struct, pname, isReturn, sourceCode, sourceOffset,
+            atCall) {
         if (type !== 'S') return;
         if (isReturn) {
             $$parser.fail('Returning a struct by value is not supported in Impala 2.0',
                     sourceCode, sourceOffset, 'E427',
                     'return it through a ' + struct + ' pointer out-parameter');
         }
+        /* `atCall` is the ARGUMENT site, where the fix is at the call rather than in a signature. It is
+           the door a declarator cannot guard: a name-only `extern function f` / `extern native f` has no
+           parameter list to inspect, so the parked by-value path ran unopposed and baked a COPY size for
+           a struct whose size Impala may not know - `*undefined` operands and a `*NaN` call window. */
         $$parser.fail('Passing a struct by value is not supported in Impala 2.0',
                 sourceCode, sourceOffset, 'E426',
-                'take it by pointer: ' + struct + ' pointer '
-                        + (pname !== undefined ? pname : struct.charAt(0).toLowerCase()));
+                atCall ? 'pass its address instead: '
+                                + (pname !== undefined ? '&' + pname : '&' + struct.charAt(0).toLowerCase())
+                                + ', and take a ' + struct + ' pointer'
+                       : 'take it by pointer: ' + struct + ' pointer '
+                                + (pname !== undefined ? pname : struct.charAt(0).toLowerCase()));
     };
 
     /* A declared return value that is never written returns whatever the PREVIOUS call left in that frame
@@ -5463,6 +5471,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.types = [];
                                                        $$.elems = [];
                                                        $$.opnds = [];
+                                                       $$.svals = [];       /* by-value struct args, checked at the close */
                                                     } }
                 (Argument (','_ Argument)*)?
                 (   ')'_
@@ -5585,6 +5594,18 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            }
                                                        }
 
+                                                       /* THE LAST DOOR for a by-value struct. Every declarator is guarded, but a
+                                                          name-only `extern function f` / `extern native f` has no parameter list
+                                                          to guard, so the parked by-value path ran unopposed at the call and baked
+                                                          a COPY size for a struct whose size Impala may not know - `*undefined`
+                                                          operands and a `*NaN` call window reached the artifact. Deliberately runs
+                                                          AFTER the signature loop above: a PROTOTYPED callee wanting a pointer
+                                                          gets the sharper "struct V vs expected pointer" instead of this. */
+                                                       for (var _sv = 0; _sv < $$.svals.length; ++_sv) {
+                                                           $$parser.rejectByValueStruct('S', $$.svals[_sv].struct,
+                                                                   $$.svals[_sv].name, false, $$s, $$.svals[_sv].at, true);
+                                                       }
+
                                                        var callComment = $$parser.formatCallExpectationComment(
                                                            calleeName,
                                                            signature,
@@ -5652,7 +5673,8 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        }
                                                     } }
 
-Argument    <-  a:Expr                             { if (!$$parser.dry) {
+Argument    <-  { $argAt = $$i;   /* the argument itself; end-of-rule has skipped past it */ }
+                a:Expr                             { if (!$$parser.dry) {
                                                        ++$$.count;
                                                        var meta = metaSlot($a);
                                                        $$parser.checkIndexUse(meta);   /* a bare arg is placed without makeRValue */
@@ -5672,6 +5694,15 @@ Argument    <-  a:Expr                             { if (!$$parser.dry) {
                                                        }
                                                        var winSlot = $$.base + $$.retSlots + $$.words;
                                                        if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */
+                                                           /* Remember it for the LAST-door check at the close of
+                                                              the call. Not rejected here: a PROTOTYPED callee has
+                                                              a sharper message ("struct V vs expected pointer"),
+                                                              and its signature is only resolved once the argument
+                                                              list is complete. */
+                                                           $$.svals.push({ at: $argAt, struct: meta.struct,
+                                                                   name: (typeof meta.base === 'string'
+                                                                                   && meta.base.charAt(0) === '$'
+                                                                               ? meta.base.substr(1) : undefined) });
                                                            var w = $$parser.structWords(meta.struct);
                                                            $$parser.copyStructArg($a, winSlot, w);
                                                            $$.words += w;
