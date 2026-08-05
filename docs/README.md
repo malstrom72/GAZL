@@ -70,11 +70,17 @@ nothing in Impala 2.0 waits on either.
 
 ## Runnable proofs
 
-Hand-written GAZL kept beside the doc it proves, so a claim in prose can always be executed:
+Hand-written GAZL kept beside the doc it proves, so a claim in prose can always be executed. They are
+hand-written because they demonstrate things the compiler cannot emit yet, which is also why they are the
+claims a reader is least likely to re-derive. **`tools/checkDocProofs.js` runs them on every build**
+(`tools/test-js.sh`), asserting the outputs their own headers document - added 2026-08-05, because until
+then nothing ran them and a proof nobody runs is a claim that rots silently:
 
 - [`symbolicWindows.gazl`](symbolicWindows.gazl) / [`symbolicWindowsRepacked.gazl`](symbolicWindowsRepacked.gazl) - a fully symbolic by-value call window; re-packing the layout header changes no instruction
 - [`deferredShapeCheck.gazl`](deferredShapeCheck.gazl) - array shape identity decided at assembly with `! EQUi` / `! FAIL`
-- [`nativeCallbackSignatures.gazl`](nativeCallbackSignatures.gazl) - native callback signature shapes
+- [`nativeCallbackSignatures.gazl`](nativeCallbackSignatures.gazl) - native callback signature shapes. A
+  MANIFEST, not a program: it has no `main`, is cited as a reference by three docs, and is the one file
+  here `checkDocProofs` does not run, because there is nothing to run
 
 ## The rule that keeps this from rotting
 

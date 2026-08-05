@@ -6,15 +6,19 @@ set -e -o pipefail -u
 # build.sh and build.cmd both call it, which is the only reason they cannot drift apart again - they
 # used to run different subsets of this list.
 #
-# These degrade rather than fail when output/GAZLCmd is absent: runJspegTests and jspegCompilerTests skip
-# their assemble+run checks and say so. Metadata validation is NOT here, because gazl-validate runs under
-# NuXJS and so needs the build.
+# These degrade rather than fail when output/GAZLCmd is absent: runJspegTests, jspegCompilerTests and
+# checkDocProofs skip their assemble+run checks and say so. Metadata validation is NOT here, because
+# gazl-validate runs under NuXJS and so needs the build.
 
 cd "$(dirname "$0")"/..
 
 # The checked-in compiler must match the grammar it is generated from, or the playground goes stale
 # (impala/playground.html loads impala/impalaCompiler.js directly).
 node impala/updateJSPEG.js --check
+
+# The hand-written .gazl proofs under docs/ still prove what their docs claim. Cheap, and it is the only
+# thing that runs them - docSamples covers the .impala samples, nothing covered these.
+node tools/checkDocProofs.js
 
 cd impala
 node jspegCompilerTests.js
