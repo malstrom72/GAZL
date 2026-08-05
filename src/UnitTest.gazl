@@ -29,8 +29,13 @@
 
             ! IFDF #GAZL_VERSION @gotVersion
             ! FAIL GAZL_VERSION not defined!
-gotVersion: ! EQUi #GAZL_VERSION #2 @versionOK
-            ! FAIL This code is for version 2 of GAZL only.
+; Two versions, because one tree builds either engine: GAZL_LOCAL_SCOPES=0 compiles a 1.0 engine that
+; does not know SCOP / ENDS. Everything else here is common to both, so this pins the RANGE it supports
+; and the SCOP block below skips itself on 1.
+gotVersion: ! GEQi #GAZL_VERSION #1 @notTooOld
+            ! FAIL This code is for version 1 or 2 of GAZL only.
+notTooOld:  ! LEQi #GAZL_VERSION #2 @versionOK
+            ! FAIL This code is for version 1 or 2 of GAZL only.
 versionOK:  !
 
             ! IFDF #GAZL_WORD_SIZE @gotBits
@@ -104,6 +109,9 @@ test:                   FUNC
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; SCOP / ENDS: sA and sB are SIBLINGS, so they share offsets; sInner NESTS inside
 ; sA's scope, so it must not collide with sA. Everything above stays untouched.
+; The declarations AND the assertions that read them are one skip region - nothing but comments sits
+; between them - so a 1.0 engine never sees the mnemonics it does not know.
+            ! LSSi #GAZL_VERSION #2 @noLocalScopes
                         SCOP
     sA:                 LOCi
                         SCOP
@@ -131,6 +139,7 @@ test:                   FUNC
  MOVi       sB2             #555
  NEQi       sInner          #555            @fail            ; sB2 overlays sInner likewise
  NEQi       i0              #111            @fail            ; anything declared before the first SCOP is untouched
+noLocalScopes: !
 
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int

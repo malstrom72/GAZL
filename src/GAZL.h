@@ -82,12 +82,16 @@ typedef Int Status;																										// Run-time status code
 	them, so compiling them out would renumber every one of those and silently change the instruction
 	encoding. The gate is on ACCEPTANCE - the mnemonic table - which is where a 1.0 engine differs
 	anyway: a 1.0 engine never knew the words at all, rather than knowing them and refusing.
+
+	The JIT needs nothing here. SCOP / ENDS are resolved entirely by the assembler - they never reach the
+	code stream, they only decide what `FUNC`'s frame size ends up being - so both backends lower the same
+	instructions either way, and the built-in unit test runs on both.
 */
 #ifndef GAZL_LOCAL_SCOPES
 	#define GAZL_LOCAL_SCOPES 1
 #endif
 
-const int VERSION = GAZL_LOCAL_SCOPES ? 2 : 1;				// 2 adds SCOP / ENDS local scopes. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
+const int VERSION = GAZL_LOCAL_SCOPES ? 2 : 1;				// 2 adds SCOP / ENDS local scopes. Pin an exact version with `! EQUi`; require a minimum with `! GEQi #GAZL_VERSION #2 @label`; skip a version-specific REGION by branching over it, as UnitTest.gazl does for its SCOP block - a taken compile-time branch skips the lines it jumps over without parsing them, so they need not be mnemonics the engine reading them knows.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
 const Pointer IP_OFFSET = 0x56789ABC;																					// All instruction / function pointers in GAZL are offsetted by this amount (thus the address of the first instruction is not zero). This makes it easier to detect invalid function calls (such as performing a function call on a null-pointer).
