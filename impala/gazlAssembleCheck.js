@@ -5,9 +5,8 @@
 
    This exists because compiling clean does NOT mean the GAZL assembles: a struct field's folded extent
    used to be emitted after the layout block that read it, which every golden and a million fuzzed
-   programs missed because nothing ever fed a golden to the assembler. `tools/gazl-validate.sh` does not
-   cover this - it compares `; signature` metadata across units and is built to run on modules whose
-   externs are deliberately unresolved, which is exactly what the assembler refuses to load. */
+   programs missed because nothing ever fed a golden to the assembler. Nothing else covers it: the
+   compiler checks what it KNOWS, and a `.gazl` only proves it assembles by being assembled. */
 
 const fs = require('fs');
 const path = require('path');
