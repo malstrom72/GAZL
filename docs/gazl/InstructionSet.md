@@ -1,6 +1,6 @@
 # Instruction Set
 
-Descriptions extracted from [`src/UnitTest.gazl`](../src/UnitTest.gazl).
+Descriptions extracted from [`src/UnitTest.gazl`](../../src/UnitTest.gazl).
 
 **Floating-point environment.** Integer and `FTOi` results are identical on every target (two's-complement wrap,
 count-mod-32 shifts, saturating `FTOi`; see the individual opcodes). Float arithmetic (`ADDf`, `SUBf`, `MULf`, `DIVf`,

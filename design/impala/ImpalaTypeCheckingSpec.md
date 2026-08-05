@@ -4,7 +4,7 @@ Impala developers enjoy being able to compile individual sources to textual `.ga
 
 This document records the design and implementation plan. For current user-facing
 syntax and validator usage, see the "Signature metadata and validation" section
-in `docs/Impala.md`.
+in `docs/impala/Impala.md`.
 
 **Status: parts of this plan did not ship as written.** In particular the compiler flags it proposes -
 `--emit-metadata` and `--no-metadata` - do **not** exist; metadata is always emitted, and the complete
@@ -56,7 +56,7 @@ name-only extern still asserts nothing and so is still unchecked (see
 generated `.gazl` metadata. Any additional validation step must fit into that
 ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
 * Native entry points declared with `extern native` have type `N` and typically follow VM-defined signatures. The validator loads
-  `docs/nativeCallbackSignatures.gazl` and checks native calls against that manifest, while still verifying that native and non-native
+  `design/proofs/nativeCallbackSignatures.gazl` and checks native calls against that manifest, while still verifying that native and non-native
   calling conventions are not mixed.【F:impala/impala.jspeg†L1554-L1563】【F:impala/impala.jspeg†L1128-L1157】
 
 ## Proposed Approach
@@ -138,7 +138,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
     reserved for future metadata. The validator does not compare constant values or treat `readonly`/`temporary` roles as separate
     compatibility dimensions.
   * Function pointers (`F`) can bind to `extern function` exports by erasing the pointer level, mirroring how `lookup` rewrites function declarations into address expressions today.【F:impala/impala.jspeg†L1128-L1157】
-  * Native (`N`) exports are matched against `docs/nativeCallbackSignatures.gazl`. Bare `extern native` placeholders such as
+  * Native (`N`) exports are matched against `design/proofs/nativeCallbackSignatures.gazl`. Bare `extern native` placeholders such as
     `name() -> unknown` do not mask manifest arity or type mismatches, and calls must agree with the native/non-native calling
     convention recorded by the metadata.
 * When mismatches are found, emit actionable diagnostics that cite both the importer and exporter source locations. The validator should parse the optional `@ <origin>` suffix on each comment and, when absent, fall back to the legacy `$$s`/`$$i` offsets that are already threaded through declarations for this purpose.【F:impala/impala.jspeg†L1466-L1546】
@@ -147,7 +147,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
 
 ### 3. Surface Metadata to Developers
 
-* Update Impala documentation (`docs/Impala.md` and related guides) with a brief explanation of signature comments, how void returns are represented, and how to run the validator.
+* Update Impala documentation (`docs/impala/Impala.md` and related guides) with a brief explanation of signature comments, how void returns are represented, and how to run the validator.
 * Teach the existing regression harness to run `gazl-validate` after it regenerates fixtures (`tools/regen-jspeg-fixtures.{sh,cmd}`) so we maintain parity between the PPEG and JSPEG toolchains.
 * Offer a compiler flag (for example `--no-metadata`) for scenarios where the output must be byte-for-byte identical to the legacy build, keeping it off by default once the feature stabilises.
 
@@ -178,7 +178,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
   - [x] Run `tools/gazl-validate.sh` from the default build on explicit JSPEG fixture file sets, while keeping arbitrary linked-unit validation as a direct command.
   - [x] Parse optional `@ <origin>` markers so mismatch diagnostics can cite both the importer and exporter spans when metadata is available.
 - [x] **Documentation & onboarding**
-  - [x] Update `docs/Impala.md` and add a quickstart snippet showing how to run the validator on two sample units.
+  - [x] Update `docs/impala/Impala.md` and add a quickstart snippet showing how to run the validator on two sample units.
   - [x] Document how implicit void returns (`?`) in the compiler map to the signature comment’s `void` category so users understand the translation.【F:impala/impala.jspeg†L1489-L1524】
 - [x] **Testing**
   - [x] Extend the JSPEG regression suite to regenerate `.gazl` fixtures with signature comments in `impala/testdata/` and assert that the validator reports expected errors when fixtures are intentionally mis-typed.

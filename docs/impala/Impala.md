@@ -629,7 +629,7 @@ caller. Any metadata line may end with `@ <origin>`, where the origin is either
 `path:line:column` or just `line:column` when no source filename was supplied.
 
 Native callbacks are checked against the manifest in
-`docs/nativeCallbackSignatures.gazl`. Keep that manifest in sync with the host
+`design/proofs/nativeCallbackSignatures.gazl`. Keep that manifest in sync with the host
 registration tables in `tools/GAZLCmd.cpp` and `src/GAZL.cpp` whenever adding or
 changing a native callback. Bare native extern placeholders such as
 `; signature extern native printInt() -> unknown` do not override the manifest;
@@ -674,7 +674,7 @@ with explicit file sets. For other programs, run `tools/gazl-validate.sh` or
 `tools\gazl-validate.cmd` directly on the exact `.gazl` units that will be
 linked together.
 
-See [Impala JSPEG](../impala/ImpalaJS.md) for the CLI, regeneration flow, and
+See [Impala JSPEG](../../design/jspeg/ImpalaJS.md) for the CLI, regeneration flow, and
 parity test commands.
 
 ## Compiling and running
