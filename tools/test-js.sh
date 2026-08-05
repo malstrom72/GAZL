@@ -7,8 +7,6 @@ set -e -o pipefail -u
 # used to run different subsets of this list.
 #
 # These degrade rather than fail when output/GAZLCmd is absent: runJspegTests, jspegCompilerTests and
-# checkDocProofs skip their assemble+run checks and say so. Metadata validation is NOT here, because
-# gazl-validate runs under NuXJS and so needs the build.
 
 cd "$(dirname "$0")"/..
 

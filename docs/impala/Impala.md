@@ -570,44 +570,18 @@ and places it in `output/`. The `BuildImpala` scripts then copy
 `impala.nuxjs.js`, `impalaImportClosure.js` and `impalaCompiler.js` to `output/`
 so Impala sources can be compiled without Node.js.
 
-### Signature metadata and validation
-
-> **gazl-validate is not the assembler.** It is a `; signature` metadata linter: it compares
-> declared contracts across units, and it is built to run on modules whose externs are
-> deliberately unresolved — which is exactly what the assembler refuses to load. A file it
-> passes may still fail to assemble.
->
-> The assembler (and the VM) is `output/GAZLCmd`. It has no assemble-only mode; it enters `main`
-> by default, so checking "does this assemble" by running it can launch a whole program. Name an
-> entry point that cannot exist instead — `./output/GAZLCmd f.gazl .no-entry-point` — and read the
-> `Code size:` banner, which is the proof it assembled. It then exits 1 on the missing entry
-> point, so do not read the exit code. See the README's "Which tool does what".
+### Signature metadata
 
 The compiler emits human-readable signature comments alongside the
 `.gazl` instructions it produces. Each definition, global, and call site
 is annotated with its expected `{int, float, ptr, funcptr, void}`
-categories so mismatches can be caught after compiling one or more units.
-This matters both for separately compiled modules and for calls made
-before a later definition has supplied its real signature. When the
+categories, so a reader of the emitted module can see the contract each
+symbol was compiled against without reading the Impala source. When the
 compiler knows the original source location it appends
-`@ path:line:column` to the end of each comment, allowing the validator
-to cite precise spans in diagnostics. Functions that omit an explicit
-`returns` clause map the compiler's implicit `?` type to `void` in the
-comment stream, keeping the metadata aligned with the language's
+`@ path:line:column` to the end of each comment. Functions that omit an
+explicit `returns` clause map the compiler's implicit `?` type to `void`
+in the comment stream, keeping the metadata aligned with the language's
 behaviour.
-
-The validator merges those comments into a single contract per symbol. An
-`extern function add;` declaration contains no argument or return
-information, so the metadata line emitted for it becomes `; signature
-extern func add() -> unknown`. Rather than locking that in as a concrete
-signature, `gazl-validate` treats the zero-argument/`unknown` pair as a
-placeholder and waits for a definition to provide the real types. When
-another unit defines `function add(int x, int y) returns int z`, its
-comment advertises `; signature func add(int arg0, int arg1) -> int`, and
-the validator reconciles the two entries before comparing them with the
-call sites. This keeps the Impala surface unchanged - bare extern
-declarations remain valid while still enabling cross-unit type checking
-through the assembler comments.
 
 ```gazl
 ; signatures version=1
@@ -632,54 +606,42 @@ Function parameter entries may include names (`int value`) or only types
 caller. Any metadata line may end with `@ <origin>`, where the origin is either
 `path:line:column` or just `line:column` when no source filename was supplied.
 
-Native callbacks are checked against the manifest in
-`design/proofs/nativeCallbackSignatures.gazl`. Keep that manifest in sync with the host
-registration tables in `tools/GAZLCmd.cpp` and `src/GAZL.cpp` whenever adding or
-changing a native callback. Bare native extern placeholders such as
-`; signature extern native printInt() -> unknown` do not override the manifest;
-native calls must still match the manifest's arity, argument types, return type,
-and native calling convention.
+An untyped array (`global array nums[4]`) has no element type, so its row is
+`: unknown`; a typed one (`global int array nums[4]`) carries it, as
+`; signature array nums[4] : int`. Either way the row states the type of the
+whole array's elements, not a per-slot promise.
 
-For non-function symbols, the validator checks the metadata contract rather than
-the runtime contents. Extern globals and constants must agree with their
-definitions on primitive category, duplicate definitions of the same value name
-must agree on primitive category, and arrays must agree on category and on size
-when both sides provide a size. `unknown` remains a wildcard. The validator does
-not compare constant values, distinguish `readonly` from writable storage during
-matching, or assign per-slot types to arrays. An untyped array (`global array nums[4]`)
-has no element type, so its row is `: unknown`; a typed one (`global int array nums[4]`)
-now carries it, as `; signature array nums[4] : int`. Either way the row states the type
-of the whole array's elements, not a per-slot promise.
+An `extern function add` declaration contains no argument or return information,
+so its row is `; signature extern func add() -> unknown`. That is a placeholder,
+not a claim: a name-only extern asserts nothing, which is exactly why giving it a
+real prototype is worth doing.
 
-Run the validator on every `.gazl` unit that will be concatenated or
-loaded together. It compares the expectations recorded by callers with
-the definitions supplied by the same file or by other units. After
-building the toolchain (`bash build.sh`), compile two sample sources and
-validate them from the repository root:
+#### Checking happens in the compiler
 
-```bash
-./output/NuXJS output/impala.nuxjs.js tests/impala/sources/calc.impala output/calc.gazl 0x4d2 calc.impala
-./output/NuXJS output/impala.nuxjs.js tests/impala/sources/multitap_code.impala output/multitap.gazl 0x4d2 multitap_code.impala
-bash tools/gazl-validate.sh output/calc.gazl output/multitap.gazl
+There was once a separate `gazl-validate` tool that re-read these rows and
+compared them across units. It was **retired in Impala 2.0**, because `import`
+compiles the whole closure in one pass and the compiler catches the same
+disagreements at the source, with a caret:
+
+```
+error[E438]: extern declarations of struct Shared disagree:
+  "struct Shared ( a : int, b : int[] )" vs "struct Shared ( a : int, b : int )"
 ```
 
-`gazl-validate.sh` starts with `cd "$(dirname "$0")"/..`, so it always resolves its
-arguments against the repository root. Running it from inside `output/` with bare file
-names therefore fails with `Could not open input file` — pass root-relative paths, or run
-it from the root as above.
+Host natives are the one contract the compiler cannot infer, and the answer there
+is a prototype, not metadata: declare them in Impala and `import` the file.
+`impala/natives.impala` is the table `GAZLCmd` registers, and any host with a
+different table wants its own. Every call is then checked where you wrote it:
 
-The validator reports mismatched signatures as errors by default. Pass
-`--warn-only` to downgrade them while you migrate existing modules, or
-`--force` to turn missing-definition warnings into errors. Missing metadata and
-missing definitions remain warnings by default and do not make the validator exit
-with failure unless `--force` is used. The normal `build.sh` path runs the
-validator's regression tests and validates the generated JSPEG fixture metadata
-with explicit file sets. For other programs, run `tools/gazl-validate.sh` or
-`tools\gazl-validate.cmd` directly on the exact `.gazl` units that will be
-linked together.
+```
+error[E406]: Argument type mismatch for argument 1 when calling printInt (float vs expected int)
+```
+
+Keep that file in sync with the host registration tables in `tools/GAZLCmd.cpp`
+and `src/GAZL.cpp` whenever a native is added or changed.
+
 
 See [Impala JSPEG](../../design/jspeg/ImpalaJS.md) for the CLI, regeneration flow, and
-parity test commands.
 
 ## Compiling and running
 

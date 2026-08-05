@@ -1000,7 +1000,8 @@ Consequences:
   and fails there. Nothing needs it - source imports plus `export`/`--dead-strip` cover sharing,
   linking and hiding. See [`ParkedFeatures.md`](../../design/ParkedFeatures.md#precompiled-gazl-blob-imports).
 - **The validator becomes internal to the build** - the link set *is* the closure, checked during
-  compilation. The standalone `gazl-validate` remains for the legacy workflow only.
+  compilation. The standalone `gazl-validate` was retired once that was true (2026-08-05); a host's
+  native table is Impala prototypes now (`impala/natives.impala`), checked at the call site.
 - **Single definition, enforced**: any symbol - and in particular any struct - defined more than
   once in the closure is an error. The copy-paste model and its layout-agreement machinery apply
   only to the legacy manual workflow.

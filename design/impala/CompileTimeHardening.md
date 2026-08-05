@@ -391,7 +391,19 @@ Impala compile time whatever the range does. The window check stays off under a 
 purpose - a configuration may legitimately narrow it, and erroring on a now-surplus arm would make that
 configuration unbuildable. Both halves are pinned in `jspegCompilerTests.js`, non-zero base included.
 
-### Link-checking holes (see also `tools/gazl-validate.nuxjs.js`)
+### Link-checking holes (in the retired `gazl-validate`)
+
+> **S7-S12 are MOOT: `gazl-validate` was retired on 2026-08-05.** They are holes in a tool that no
+> longer exists, and they were already redundant before it went: `import` compiles the closure in one
+> pass, so the compiler catches the same disagreements at the source. S7's exact case - one unit
+> calling a field an array, another a scalar - is `E438` with a caret, verified. Do NOT re-cost these
+> from the triage below, which predates asking whether the checks were still needed.
+>
+> S12 is the one with a live successor, and not in a linter: host offsets arrive at LOAD, so the tier
+> that can check ordering, overlap and the `.z.` bound is GAZL assembly - `! EQUi` / `! LSSi` / `! FAIL`,
+> the same deferred-assertion idiom used for array extents and the switch window. Re-filed as compiler
+> work, not validator work.
+
 
 **S7.** `fieldListsMatch`'s array-vs-scalar guard is an `&&` whose first clause is false in exactly the
 case it was written for, because `fieldParts` returns `size: undefined` for both `int[]` and `int`. Since
@@ -422,7 +434,7 @@ overlap and the `.z.` bound are all decidable with `! EQUi` / `! LSSi` chains.
 
 These split three ways, and the split is the useful part:
 
-1. **Never needed the number** (S6, S7, S9, S11) - the check was accidentally made to depend on a value it
+1. **Never needed the number** (S6; S7, S9, S11 are moot - see the banner above) - the check was accidentally made to depend on a value it
    does not need. Ordinary bug fixes, cheapest and highest value.
 2. **Had the number and threw it away** (S3, S4, and item 1 above) - `parseInt`/`parseFloat` on an emitted
    OPERAND STRING, which rule 5 guarantees will not look like a number. Fix by reading the value before it

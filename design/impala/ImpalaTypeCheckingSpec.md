@@ -130,6 +130,13 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
 
 ### 2. Provide a `gazl-validate` Utility
 
+> **`gazl-validate` was RETIRED on 2026-08-05.** `import` compiles the whole closure in one pass, so
+> the compiler catches cross-unit disagreement itself - `E438`, at the source, with a caret - and a
+> host's native table is better written as Impala prototypes (`impala/natives.impala`) than as
+> metadata a second tool compares after the fact. What follows is the record of the tool that was,
+> kept for its reasoning about the `; signature` row format, which the emitted rows still follow.
+
+
 * Build a small Node or C++ tool that accepts a list of `.gazl` files, scans for the signature comments, and resolves imports against exports.
 * Matching rules:
   * Functions must agree on argument count and return type. All arguments must match within the `{int, float, ptr, funcptr, void}` set (mapped back to the compiler’s `i/f/p/F/?` codes). Caller annotations that mention symbols lacking a matching callee annotation in the concatenated stream produce warnings (upgradeable to errors).

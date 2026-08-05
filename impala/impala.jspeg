@@ -322,7 +322,7 @@
     }
 
     /* Types only, no names: what a signature CLAIM actually asserts, and the only part two claims
-       about one name have to agree on. Element chains stay in - gazl-validate treats a bare `ptr` as
+       about one name have to agree on. Element chains stay in - a signature-row consumer treats a bare `ptr` as
        element-UNKNOWN and lets it match any chain, so flattening `V-ptr` to `ptr` would silently
        disarm the cross-unit check. That is the only type record a name-only `extern function f` has. */
     function renderParamTypes(params) {
@@ -625,10 +625,10 @@
     /* One name may have at most one DEFINITION but any number of `extern` declarations, so long as
        every claim agrees: with the definition if the closure has one, and otherwise with each other.
        This does NOT police linkage - a prototype for a name nothing defines is a promise only
-       gazl-validate can settle, and a name-only extern records no prototype and so asserts nothing.
+       a signature-row consumer can settle, and a name-only extern records no prototype and so asserts nothing.
        It fires exactly when the compiler is holding two claims itself, which an import closure makes
        routine since the builder compiles the whole closure as one unit. Names are not compared, only
-       types, matching functionSignaturesCompatible() in tools/gazl-validate.nuxjs.js. */
+       types, so a consumer of the rows can compare two declarations of one name. */
     $$parser.checkExternAgreement = function (name, claim, prior, priorIsDefinition, sourceCode, sourceOffset) {
         if (!claim || !prior) {
             return;
@@ -648,20 +648,26 @@
         }
     }
 
-    /* Declare an `extern struct` interface for gazl-validate: the field names and types Impala
-       compiled against, so the host-supplied layout (.o.Name.field / .z.Name) can be checked
-       instead of silently trusted. Rendered as:
+    /* `; signature` rows describe what Impala compiled against, in the emitted `.gazl` itself. They were
+       written for `gazl-validate`, a separate cross-unit checker RETIRED 2026-08-05: `import` compiles the
+       whole closure in one pass, so the compiler now catches cross-unit disagreement itself (`E438`, at
+       the source, with a caret) and a host's native table is better written as Impala prototypes than as
+       metadata a second tool compares - see `impala/natives.impala`. The rows stay because they document
+       the module for a reader, and the format notes below still hold for anything that parses them.
+
+       Declare an `extern struct` interface: the field names and types Impala compiled against, so the
+       host-supplied layout (.o.Name.field / .z.Name) is stated rather than silently assumed. Rendered as:
            ; signature extern struct Name { field : int, other : float-ptr } @ 12:1        */
-    /* An array extent in a signature row is a CLAIM the validator compares against the other side. A
+    /* An array extent in a signature row is a CLAIM a consumer compares against the other side. A
        literal or a single named const is a real claim; an extent that folded to a `<X>` compile-time
        scratch is not - the name is pool-recycled, so two unrelated extents both render `<A>` and
        compare EQUAL. Render those as the empty extent instead, the same wildcard a sizeless `extern
-       array` already uses, which the validator skips rather than trusting. A row may state a fact or
+       array` already uses, which a consumer skips rather than trusting. A row may state a fact or
        state "unknown"; it must never state something that merely looks like a fact. */
     /* A SHAPE states every axis, in WRITTEN order (outermost first, the reverse of the stride order `dims`
        holds), joined by `x`: `int array cells[3, 4]` advertises `int[3x4]`. Deliberately not a comma - a
-       `; signature struct` row is a comma-separated field list, and gazl-validate splits it on commas
-       before it ever looks at a type. `x` keeps a shape one `\S+` token, so the validator compares it as
+       `; signature struct` row is a comma-separated field list, and a signature-row consumer splits it on commas
+       before it ever looks at a type. `x` keeps a shape one `\S+` token, so a consumer compares it as
        the opaque string it already compares a 1-D extent as, and needs no change at all.
        All-or-nothing, exactly as a single extent is: ONE unstatable axis and the whole shape reads `[]`,
        because a partial shape rendered as a whole one is a claim that is simply false. */
@@ -671,7 +677,7 @@
             text = '';
             for (var i = dims.length - 1; i >= 0; --i) {
                 /* A host-owned axis (undefined - the host knows it, we do not) renders `[]` for the same
-                   reason a folded `<X>` does, and DELIBERATELY not `[,]`: the validator compares extents
+                   reason a folded `<X>` does, and DELIBERATELY not `[,]`: a consumer compares extents
                    as raw strings and skips an empty one, so a rank claim would make a definition's
                    `int[3x4]` conflict with an extern's rank-2 row. Rank is checked on the Impala side. */
                 if (dims[i] === undefined || ('' + dims[i]).charAt(0) === '<') return '[]';
@@ -738,7 +744,7 @@
 
     /* `isExtern` marks a VALUELESS `const int N;` - external by omission of a value ("defined later by
        the GAZL run-time"). It spells no `extern` keyword, so it used to emit no row at all and was the
-       one extern kind gazl-validate could not link-check (its compareExternSets("Const", ...) pass had
+       one extern kind the rows could not describe (nothing emitted a row for it, so a consumer had
        nothing to compare). Emitting the row turns that pass on without touching the spelling. */
     $$parser.formatConstSignatureComment = function (name, type, sourceName, sourceCode, sourceOffset, elem,
                                                      isExtern) {
@@ -1822,7 +1828,7 @@
        label) there is no artifact for a second declaration to collide with. Re-declaring one is
        therefore free PROVIDED the two agree, which is what lets a unit declare the functypes it uses
        and still be imported alongside another unit that declares the same ones. Set the earlier one
-       aside and let endFuncType compare; emitting nothing also means gazl-validate never sees a
+       aside and let endFuncType compare; emitting nothing also means a signature-row consumer never sees a
        functype, so this is the only place the disagreement can be caught at all. */
     $$parser.beginFuncType = function (name, sourceCode, sourceOffset) {
         $$parser.claimTopName(name, 'functype', sourceCode, sourceOffset);
@@ -4404,7 +4410,7 @@ StructDecl  <-  STRUCT _ { $nmAt = $$i; } id:Identifier              { $sname = 
                   ( ';' _ )?
                 )*
                 '}' _                                                {   $$parser.endStruct($sname);
-                                                                         /* Publish the real layout with TYPES so gazl-validate can check an `extern struct`
+                                                                         /* Publish the real layout with TYPES so a signature-row consumer can check an `extern struct`
                                                                             declaration of the same name against it - the .o./.z. constants alone carry no types. */
                                                                          emitStandaloneSignatureComment(
                                                                              $$parser.structSignatureRow($sname, false, $$parser.sourceName, $$s, $$parser.declOffset));
@@ -4701,7 +4707,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                      }
                         ( ';' _ )?
                       )*
-                      '}' _                                           {   /* Declare the host-owned interface so gazl-validate can check the layout
+                      '}' _                                           {   /* Declare the host-owned interface so a signature-row consumer can check the layout
                                                                              the host supplies (.o.Name.field / .z.Name) against what Impala assumed,
                                                                              the way extern globals and function signatures are already checked. A
                                                                              re-declaration of a struct DEFINED here describes no host layout, so it
@@ -4717,7 +4723,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                     /   NATIVE                                        { $$.type  = 'N';  $$.scope = 'functions'; }
                     ) _ { $nmAt = $$i; } id:Identifier                { $$.name  = $id; $$.at = $nmAt; }
                     ( '(' _ inp:ArgsDecl ')' _                        {   /* Optional PROTOTYPE. Name-only stays valid and
-                                                                             asserts nothing (a wildcard the validator skips);
+                                                                             asserts nothing (a wildcard a consumer skips);
                                                                              a prototype is a checkable assertion, so calls get
                                                                              argument type-checking and the emitted signature
                                                                              row carries real types. */

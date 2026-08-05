@@ -211,6 +211,12 @@ const SAMPLES = [
 		src: "global int array a[-1]\nexport function main() { }\n" },
 	{ name: "a return value that is never assigned", expect: "E463", legacy: false,
 		src: "function f() returns int r { }\nexport function main() { }\n" },
+	/* The check that retired `gazl-validate`: two units in one closure disagreeing about a layout is
+	   caught by the COMPILER, at the source, rather than by a separate pass over emitted metadata. */
+	{ name: "two units disagree about a struct layout", expect: "E438",
+		files: { "other.impala": "extern struct Shared { int a; int b }\n" },
+		src: "import \"other.impala\"\nextern struct Shared { int a; int array b[] }\n"
+				+ "export function main() { }\n" },
 	{ name: "writing through a readonly global", expect: "E404", legacy: false,
 		src: "readonly int array a[2] = { 1, 2 }\nexport function main() { global a[0] = 5; }\n" },
 	{ name: "one name used twice at top level", expect: "E401", legacy: false,

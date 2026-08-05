@@ -1,4 +1,0 @@
-; A unit that could not state either extent as a comparable constant. Both wildcards are SKIPPED
-; against the definition's `int[4]` / `float[]` - unknown is never assumed equal, and never faked.
-; signatures version=1
-; signature extern struct Bank { taps : int[], raw : float[], n : int } @ struct-extent-wildcard.gazl:4:1
