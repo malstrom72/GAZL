@@ -106,7 +106,8 @@ every callee, extern or not - multi-return and destructuring are both parked for
 
 (Corrected: this paragraph claimed a prototype was `E001`, that destructuring worked for
 Impala-defined functions, and that the call failed with `E432` "the right side is not a multi-value
-function call". `E432` was retired with `inline function` and that message no longer exists.)
+function call". `E432` was retired with `inline function`, so that message no longer exists; the CODE was
+re-allocated on 2026-08-05 to the host-owned-array rank rule.)
 
 A **name-only** extern still asserts nothing, so it gets no argument type-checking - that is the
 wildcard case the validator skips, and it is why a prototype is worth writing.

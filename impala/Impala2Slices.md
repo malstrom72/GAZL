@@ -1,5 +1,15 @@
 # Impala 2 Implementation Plan: the Remaining Slices
 
+Status: **COMPLETE for 2.0 - design record, not a plan** (checked 2026-08-05). Every item on the
+"Order of work" list at the foot of this file is resolved, and each is already annotated inline with a
+date: the place architecture and struct arrays are IMPLEMENTED; multi-return and by-value params were
+implemented, VM-verified, then PARKED to 3.0 on `Impala3-byvalue-multireturn` (`E426`-`E429`); `functype`
+and `import`/`export`/`--dead-strip` are IMPLEMENTED, the last with an honest carve-out; collect mode is
+DEFERRED to 3.0 and struck through in place. Nothing here is open work.
+
+Read it for **why** those mechanisms were chosen - every one was settled by experiment on the built VM,
+and the experiment sources are reproduced inline so they can be re-run.
+
 Investigation notes and the settled approach for the work that was flagged high-risk: struct
 values (2.2-2.4), by-value passing/returns (2.5 + Step 4), and import-as-linking with
 `--dead-strip` (Step 5). Every load-bearing mechanism below was **verified by experiment on the

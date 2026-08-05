@@ -61,8 +61,9 @@ appended depends on how the name was introduced (tag vs capture) - i.e. **the me
 text depends on distant grammar context**.
 
 The cost is documented by the repository itself: `JSPEG.md` needs a dedicated semantics section,
-`docs/jspeg-dollar-report.md` is an architecture review of one sigil, and `impala/RefactorPlan.md`
-exists to migrate helpers because "holder/value mistakes" happen in practice. `impala.jspeg`
+one sigil earned a whole architecture review of its own (`docs/jspeg-dollar-report.md`, retired
+2026-08-05 once this section chose a direction none of its six options proposed), and
+`impala/RefactorPlan.md` exists to migrate helpers because "holder/value mistakes" happen in practice. `impala.jspeg`
 currently has ~126 `$$.` holder-escape sites.
 
 ### What it would take
@@ -77,7 +78,7 @@ currently has ~126 `$$.` holder-escape sites.
   mutation (`$$.count = 0` works on a plain object), so the container-style rules (`FuncCall`)
   migrate by initializing `$$ = {...}` instead of relying on a pre-existing holder.
   *Impact on `impala.jspeg`: mechanical migration of the ~126 `$$.` sites plus an audit of tag
-  rebinding; retire the dollar-report and most of the `$$` documentation. Pairs naturally with the
+  rebinding; retire most of the `$$` documentation. Pairs naturally with the
   AST move in Problem 1 - in two-phase style, `$$` is just the node under construction and the
   holder question evaporates - so doing both in one breaking step is convenient, not required.*
 

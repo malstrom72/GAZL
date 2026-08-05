@@ -1,6 +1,6 @@
 # Documentation index
 
-29 documents accumulated here (30 with this index) with only a handful reachable from the top-level `README.md`, which is how
+27 documents accumulated here (28 with this index) with only a handful reachable from the top-level `README.md`, which is how
 the same finding ended up recorded in three places and one blocker list went stale for a week. This index
 is the fix: every doc, what it is for, and how much to trust it.
 
@@ -66,9 +66,7 @@ nothing in Impala 2.0 waits on either.
 | Doc | Kind | What it is |
 |---|---|---|
 | [JSPEGFuture](JSPEGFuture.md) | PLAN | Where the JSPEG compiler-compiler goes next |
-| [NodeRemovalPlan](NodeRemovalPlan.md) | PLAN | Dropping the Node dependency |
 | [CodingStyle](CodingStyle.md) | NORMATIVE | House style for this repo |
-| [jspeg-dollar-report](jspeg-dollar-report.md) | NOTE | `$`-handling investigation in JSPEG |
 
 ## Runnable proofs
 

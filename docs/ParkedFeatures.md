@@ -157,7 +157,8 @@ The park branch is not an ancestor: `GAZL2` forked from the last Impala 2 commit
 feature and carried it forward rather than freezing it. It is a working line, not an archive.
 
 Rejected now with `E439`, whose hint points at GAZL 2 and at dropping the keyword. The feature's own
-codes are retired with it and must not be reused: `E432` recursive expansion, `E433` non-literal local
+codes are retired with it and must not be reused - except `E432`, RE-ALLOCATED 2026-08-05 to the
+host-owned-array rank rule. It was `E432` recursive expansion; still burned are `E433` non-literal local
 extent (which the extent-naming rework deleted outright), `E434` exported inline, `E435` address of an inline
 function, `E436` redeclared inline.
 

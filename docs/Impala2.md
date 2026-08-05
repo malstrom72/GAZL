@@ -1223,8 +1223,8 @@ ever needs to exist in the legacy validator path.
 > out; it now lives on the `GAZL2` branch. Writing `inline` is **`E439`**. An expansion has to place its
 > locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 must keep running on GAZL 1.0 engines, which reject
 > `SCOP` with `Unknown mnemonic`. See [`ParkedFeatures.md`](ParkedFeatures.md) and
-> [`Inlining.md`](Inlining.md). **The codes below (`E432`-`E436`) are retired with the feature and must
-> not be reused**, and its fixtures (`inlineEquivalence*`, `inlineFunctions`, `inlineReview*`) were
+> [`Inlining.md`](Inlining.md). **The codes below are retired with the feature and must not be
+> reused - except `E432`, RE-ALLOCATED 2026-08-05 to the host-owned-array rank rule**, and its fixtures (`inlineEquivalence*`, `inlineFunctions`, `inlineReview*`) were
 > removed. What follows is the design record for the parked feature, not 2.0 behaviour.
 
 `inline` before `function` makes a function expand at each call site instead of being emitted once and
@@ -1573,7 +1573,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E429 | destructuring assignment is not supported in Impala 2.0 |
 | E430 | an `extern struct` array field must not state a size |
 | E431 | array needs a size |
-| E432 | *retired with `inline function`* - do not reuse |
+| E432 | a host-owned array must state its rank - `[]` for one axis, `[,]` for two (re-allocated 2026-08-05; was inline recursive expansion) |
 | E433 | *retired with `inline function`* - do not reuse |
 | E434 | *retired with `inline function`* - do not reuse |
 | E435 | *retired with `inline function`* - do not reuse |
@@ -1609,8 +1609,10 @@ E418, E424 and E425 are **not allocated to anything that fires**. They were rese
 guards that were never needed once the features shipped (`docs/StructLayoutConstants.md` records the
 correction); they stay burned rather than reused, per "stable error codes, never reused".
 
-E432-E436 are a different case: they DID fire, and were retired when `inline function` was parked. They
-are burned too. (This paragraph used to list **E439** as unallocated - that is now wrong: E439 is the
+E433-E436 are a different case: they DID fire, and were retired when `inline function` was parked. They
+are burned. **E432 was in that set and has been RE-ALLOCATED** (2026-08-05) to the host-owned-array rank
+rule - `inline` never reached a release, so no artifact carries the old meaning, and burning codes from an
+unreleased feature costs more than it protects. (This paragraph used to list **E439** as unallocated - that is now wrong: E439 is the
 live diagnostic that rejects `inline`.)
 
 ---
