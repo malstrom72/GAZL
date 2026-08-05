@@ -1,7 +1,7 @@
 /* The scaled subscript `[i]` is the only thing that moves a struct pointer, so `&p[n]` and `p[n]`
    must land on the same struct. Arithmetic on a struct pointer is rejected outright (E307/E308): `+` and
    `-` carry no marker for the multiply they would need, and scaling them silently instead broke pointer
-   comparison and `for`. See docs/Impala2Review.md, "the scaled subscript is spelled `[ ]`". Every pair
+   comparison and `for`. See docs/Impala2.md, "One subscript". Every pair
    below is two spellings of one address and must print the same value.
 
    Expected (GAZLCmd pointerStride.gazl main): 20 20 30 30 3 3 4 4 10 20 30 40

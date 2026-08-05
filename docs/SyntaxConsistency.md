@@ -28,7 +28,8 @@ and `jspegCompilerTests.js` pins 1.2-1.4). The descriptions below are kept as th
 > pointer comparison, where there is no unit at all), and `ADDp` + compare is three instructions where
 > the language promises one. `for` over a struct pointer is now **rejected** (`E309`) with a fix-it to
 > the `while (p < end) { ...; p = &p[1]; }` walk, and struct pointers move only by the scaled
-> subscript `[i]`. See "the scaled subscript is spelled `[ ]`" in `docs/Impala2Review.md`.
+> subscript `[i]`. The normative statement is `docs/Impala2.md`, "One subscript"; `docs/Impala2Review.md` section F records
+> why the `[[ ]]` spelling it once proposed was reversed.
 > The bug below was real; only the prescription was wrong.
 
 ```impala
@@ -125,7 +126,8 @@ declaration lists over the same declarator grammar with two mutually exclusive c
 rejecting the other's with a bare `E001`.
 
 **Two initializer grammars.** `InitList` (flat, scalar arrays) and `Braced` (recursive, structs) have
-identical punctuation and are mutually exclusive - flat-for-struct and nested-for-scalar are both `E422`.
+identical punctuation and are mutually exclusive, but they report DIFFERENTLY: flat-for-struct is `E455`
+("Initializer for struct S must name its fields"), nested-for-scalar is `E422`.
 One recursive rule could serve both; the split is an implementation artifact.
 
 **Parameter and return names.** `functype` allows types-only; `function` and `extern function` require a

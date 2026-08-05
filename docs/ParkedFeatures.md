@@ -41,10 +41,11 @@ Contains slices 1-2 of multidimensional array support: shape types, multidim sub
 walking by pointee size rather than stride-1), untyped multidim element typing, and a long design thread on
 array-dimension TYPE IDENTITY.
 
-Two documents live only on this branch and are deleted from `Impala2`: `docs/MultidimensionalArrays.md`
-(the design, including the array->pointer decay decision now restated below) and `docs/Impala2OpenItems.md`
-(a whole backlog). Read them there - `git show Impala2-multidim-arrays:docs/Impala2OpenItems.md` - rather
-than assuming those items were dropped.
+ONE document lives only on this branch: `docs/Impala2OpenItems.md` (a whole backlog). Read it there -
+`git show Impala2-multidim-arrays:docs/Impala2OpenItems.md` - rather than assuming those items were
+dropped. This used to name `docs/MultidimensionalArrays.md` as branch-only too, which sent readers to a
+superseded 3.0 design requiring numeric literal dimensions: that filename is a LIVE doc on `Impala2`
+describing the design that was actually built, and the park branch's copy is history.
 
 Parked because the type-identity question has no clean answer. An array's dimensions want to be part of its
 type so calls can be checked, but dimensions can be arbitrary expressions resolved by the assembler. That
@@ -276,8 +277,9 @@ runtime demonstration, the ~14 table entries it needs, and the suffix letters ru
 ## Impala 3.0 wishlist
 
 The first three belong together, because they are all changes to the same calling convention. Doing them in
-one pass is much cheaper than three separate ABI migrations. Multidimensional arrays and collect mode are
-independent of the ABI work and of each other, and can land on their own.
+one pass is much cheaper than three separate ABI migrations. Collect mode is independent of the ABI work
+and can land on its own. (Multidimensional arrays were the other independent item on this list and
+LANDED IN 2.0 on 2026-08-04, which is exactly the independence this paragraph predicted.)
 
 ### Restore by-value structs, multi-return and destructuring
 

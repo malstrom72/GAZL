@@ -1,6 +1,6 @@
 # Documentation index
 
-28 documents accumulated here (29 with this index) with only a handful reachable from the top-level `README.md`, which is how
+29 documents accumulated here (30 with this index) with only a handful reachable from the top-level `README.md`, which is how
 the same finding ended up recorded in three places and one blocker list went stale for a week. This index
 is the fix: every doc, what it is for, and how much to trust it.
 
@@ -26,6 +26,7 @@ written. PLAN / BACKLOG = not done.
 |---|---|---|
 | [SymbolNamespace](SymbolNamespace.md) | REFERENCE | Every symbol the compiler mints for itself (`.o. .z. .s_ ...`) and how to add one without colliding |
 | [StructLayoutConstants](StructLayoutConstants.md) | SPEC | The `.o.` / `.z.` scheme and why layout is a named constant |
+| [MultidimensionalArrays](MultidimensionalArrays.md) | SPEC (implemented) | Array SHAPES - `int array cells[H, W]`, `a[y, x]`, the per-axis `.d.` constants, and per-axis bounds checking in all three tiers. Slices 1-2 implemented; slice 3 (shape identity) is 3.0 |
 | [ExternPrototypes](ExternPrototypes.md) | REFERENCE | Extern declarations and what is checkable about them |
 | [ImpalaTypeCheckingSpec](ImpalaTypeCheckingSpec.md) | SPEC | The type rules |
 
@@ -33,7 +34,7 @@ written. PLAN / BACKLOG = not done.
 
 | Doc | Kind | What it is |
 |---|---|---|
-| [Impala2](Impala2.md) | SPEC (implemented) | The Impala 2.0 design - typed pointers/arrays, structs, typed function pointers, import. Steps 1/2/3/5 shipped; Step 4 parked. 1600 lines, the deepest reference on **why** 2.0 is shaped as it is. For **what** it gained, read [WhatsNewInImpala2](WhatsNewInImpala2.md) first - this one opens with three paragraphs on what is parked. |
+| [Impala2](Impala2.md) | SPEC (implemented) | The Impala 2.0 design - typed pointers/arrays, structs, typed function pointers, import. Steps 1/2/3/5 implemented; Step 4 parked. 1600 lines, the deepest reference on **why** 2.0 is shaped as it is. For **what** it gained, read [WhatsNewInImpala2](WhatsNewInImpala2.md) first - this one opens with three paragraphs on what is parked. |
 
 ## Known problems and backlog
 

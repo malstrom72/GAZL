@@ -12,7 +12,7 @@ move the stamp. Full re-audit of every open item: **2026-08-04**.
 
 ## A. What changed from Impala 1.0 (raw material for a What's New)
 
-Baseline for the diff is `main:impala/impala.jspeg` (2938 lines) vs HEAD (5844, measured 2026-08-04).
+Baseline for the diff is `main:impala/impala.jspeg` (2938 lines) vs HEAD (6214, measured 2026-08-05).
 
 ### New features
 
@@ -49,7 +49,8 @@ call-site count.
 ### Deliberately NOT changed
 
 No compound assignment or `++`. Comparisons are still not values. Bitwise/shift still share one precedence
-level looser than `+`/`-`. Arrays still one-dimensional. `for (v = a to b)` and `switch (e == lo to hi)`
+level looser than `+`/`-`. Arrays were one-dimensional when this was written and became multidimensional
+on 2026-08-04 (`docs/MultidimensionalArrays.md`). `for (v = a to b)` and `switch (e == lo to hi)`
 unchanged. Four built-ins only (`abs`, `floor`, `itof`, `ftoi`). Casts still reinterpret, never convert.
 `global` prefix still mandatory at every global access.
 
@@ -69,17 +70,18 @@ the assembler then rejected, naming a compiler-minted GAZL symbol instead of the
    golden diff in `e6ad36d` shows `addVec` going from 2 instructions to 8, because by-value fields are free
    window operands and by-pointer fields are a `PEEK`/`POKE` each. Implemented and VM-verified on
    `Impala3-byvalue-multireturn` (an ancestor of this branch), then parked by `e6ad36d`; `Impala2` has since
-   drifted **205 commits / +1993 -482** lines in the grammar (measured 2026-08-04; it was 96 / +1031 -360
+   drifted **236 commits / +2425 -544** lines in the grammar (measured 2026-08-05; it was 96 / +1031 -360
    when this was first written), so restoring it is a re-implementation against a working reference, not a
    cherry-pick. The figure only grows, and with it the argument.
 2. **Import cycles only half-resolve.** A backwards cross-cycle reference needs a forward `extern`, and the
    *same two files* build or fail depending only on which is the root. A cross-cycle **struct type** has no
    workaround at all — there is no forward-`extern` form for a type. Collect mode (the fix) is designed but
    never built; done-when is pinned (`importcycle/odd.impala` builds as root with its `extern` deleted).
-3. **No multidimensional arrays.** You hand-stride flat arrays (`grid[y * W + x]`), and the stride becomes a
-   duplicated, unchecked invariant. The obvious escape — put the matrix in a struct — does not reach
-   `extern struct`, because a host-owned array field must state no extent (E430) and the inner extent *is*
-   the stride.
+3. ~~**No multidimensional arrays.**~~ **RESOLVED 2026-08-04.** Implemented in all three positions this
+   entry called impossible - `global` arrays, locals and struct fields - with per-axis bounds checking in
+   all three tiers. The escape-hatch argument fell with it: an `extern struct` field states its RANK
+   (`int array cells[,]`), the host supplies each axis as `.d.Grid.cells.<k>`, and `E430` still refuses an
+   extent, so nothing had to be relaxed. See `docs/MultidimensionalArrays.md`.
 4. **Implicit array→pointer decay is still live and it is decided to go.** Write `&a[0]` today — it is
    correct under both rules and costs nothing now. (An earlier draft of this line said `&a`; that is wrong,
    `&a` is `E404 Invalid lvalue` today, which also means blocking decay is not a pure removal. Recorded in
@@ -92,8 +94,11 @@ the assembler then rejected, naming a compiler-minted GAZL symbol instead of the
 *(Was true on 2026-07-29.)* `docs/ParkedFeatures.md:294` now carries the decay decision under its own
 heading, "Block implicit array->pointer decay", marked as a decided restriction rather than a parked
 feature — the one item a 2.0 user should act on today, and now reachable from the index.
-`docs/ParkedFeatures.md:34` also names the two documents that survive only on the park branch
-(`docs/MultidimensionalArrays.md` and `docs/Impala2OpenItems.md`), which is what this entry asked for.
+`docs/ParkedFeatures.md` also names the document that survives only on the park branch
+(`docs/Impala2OpenItems.md`), which is what this entry asked for. It used to name
+`docs/MultidimensionalArrays.md` alongside it; that one is a live doc on THIS branch describing the design
+that was actually built, so pointing a reader at the park branch's copy sent them to a superseded 3.0
+design for an implemented feature.
 
 
 ## C. Things that will trip humans and AI agents
@@ -135,13 +140,14 @@ global int array buf[N]      // used to be: --dead-strip: Symbol not previously 
 ### C3. ~~`p + 1` does not stride but `p[1]` does~~ — RESOLVED 2026-07-30, re-verified 2026-08-04
 
 *(Was **[V]** CRITICAL on 2026-07-29.)* Resolved not by making the table's rows correct but by making
-every one of them **unwritable**. The rule is "the scaled subscript is spelled `[[ ]]`" at the end of this
-document, and it shipped. Re-checked on 2026-08-04:
+every one of them **unwritable**. The rule is that scaling is confined to the SUBSCRIPT - `[[ ]]`, the
+spelling the end of this document proposed for it, was reversed on 2026-08-04 and the ordinary `[ ]`
+carries it. Re-checked on 2026-08-05:
 
 | expression | today |
 |---|---|
 | `bank[0]` on a struct array | scales by `.z.` - no diagnostic (`E204` was retired 2026-08-04) |
-| `p = p + 1` on a struct pointer | `E307`, fix-it to `&p[[i]]` |
+| `p = p + 1` on a struct pointer | `E307`, fix-it "a struct pointer moves by scaled subscript only - write `&p[i]`" |
 | `q - p` on two struct pointers | `E308`, fix-it to `((pointer)q - (pointer)p) / sizeof(S)` |
 | `for (p = ... to ...)` on a struct pointer | `E309` — see F2 |
 
@@ -412,7 +418,7 @@ discipline, which was Batch 4's stated goal.
 ### D4. ~~There is no way to run only the JS gates~~ — FIXED 2026-08-04
 
 `tools/test-js.sh` / `tools/test-js.cmd` exist and are listed in the README's Helper Scripts section:
-"every gate that needs only node (~15s, no C++ toolchain); run this before committing a compiler-only
+"every gate that needs only node (~1-1.5 min, most of it a 3000-program fuzz run; no C++ toolchain); run this before committing a compiler-only
 change".
 
 ### D5. Smaller — re-checked 2026-08-04
@@ -557,19 +563,22 @@ carries its own amendment.
 
 ## F1. ~~Every comparison between two struct pointers emits invalid GAZL~~ - FIXED 2026-08-04
 
-*(Was **[V]** CRITICAL REGRESSION on 2026-07-30.)* Fixed by the `[[ ]]` decision below, whose last table
-row is "`p < q` and the other five: bare comparison". This entry's own program, respelled with `[[ ]]` and
-named-field initializers, **compiles, loads and runs**, printing `1 / 2 / 20`:
+*(Was **[V]** CRITICAL REGRESSION on 2026-07-30.)* Fixed by confining scaling to the subscript, whose last
+table row is "`p < q` and the other five: bare comparison". This entry's own program, with named-field
+initializers, **compiles, loads and runs**, printing `1 / 2 / 20` (re-verified 2026-08-05):
 
 ```impala
 struct S { int a; int b; int c }
 global S array bank[3] = { { a: 1, b: 0, c: 0 }, { a: 2, b: 0, c: 0 }, { a: 20, b: 0, c: 0 } }
 export function main() locals S pointer p, S pointer q, int n {
-	p = &global bank[[0]]; q = &global bank[[2]];
+	p = &global bank[0]; q = &global bank[2];
 	if (p < q) { n = 1; }
-	printInt(p->a); printLF(); printInt(global bank[[1]].a); printLF(); printInt(q->a); printLF();
+	printInt(p->a); printLF(); printInt(global bank[1].a); printLF(); printInt(q->a); printLF();
 }
 ```
+
+The code block above was written with `[[ ]]`, which was REVERSED on 2026-08-04 and is now `E404 Invalid
+lvalue` - so the evidence for a "FIXED" entry did not compile. Respelled and re-run.
 
 Description kept as the record: the scaling branch keyed on "the left operand is a struct pointer" and
 fired for **every** operator, not just `+` and `-`. A comparison has no unit, so scaling either side was
@@ -581,7 +590,7 @@ two struct pointers.
 
 *(Was **[V]** CRITICAL on 2026-07-30.)* No longer silent and no longer wrong: the construct is now
 `E309 For variable must not be a struct pointer`, with the note "FORp cannot stride by a struct - use
-`while (p < end) { ...; p = &p[[1]]; }`". `docs/SyntaxConsistency.md:24-31` already records this
+`while (p < end) { ...; p = &p[1]; }`". `docs/SyntaxConsistency.md:24-31` already records this
 correctly, including that the earlier stride-by-hand fix was implemented and then reverted.
 
 Description kept as the record:
@@ -633,7 +642,7 @@ Correct scope, which neither write-up states:
 
 - **Dereference with a known out-of-range constant index** (`a[7]`, `a[7] = 1`, `p[9].a` as a value) -
   compile error. It is a guaranteed trap, so catching it early loses nothing.
-- **Address formation PAST THE END** (`&a[7]`, `&a[N]`, `&p[[i]]`) - always legal, never checked.
+- **Address formation PAST THE END** (`&a[7]`, `&a[N]`, `&p[i]`) - always legal, never checked.
 
 `CompileTimeHardening.md`'s motivating example is `a[7] = 1`, a store, so the check as *motivated* is
 already correctly scoped; only the wording generalises past it. Note this leaves Impala **simpler** than
@@ -681,7 +690,7 @@ it is the only construct that moves a struct pointer.** Arithmetic on struct poi
 |---|---|---|
 | `a[i]` | one instruction, stride 1 | **error**, fix-it to `a[[i]]` |
 | `a[[i]]` | error, fix-it to `a[i]` | one instruction + one `MULi`, stride `sizeof(elem)` |
-| `p + i`, `p += i`, `p - i` | unchanged, stride 1 | **error**, fix-it to `&p[[i]]` |
+| `p + i`, `p += i`, `p - i` | unchanged, stride 1 | **error**, fix-it to `&p[i]` |
 | `q - p` | unchanged, bare `DIFp` | **error**, fix-it to `((pointer)q - (pointer)p) / sizeof(S)` |
 | `for (p = a to b)` | unchanged, `FORp` | **error**, fix-it to the `while` form |
 | `p < q` and the other five | bare comparison | bare comparison (F1 fix) |
@@ -755,5 +764,8 @@ Two footnotes shrink the residual further: a constant index folds at assembly ti
 ## When to revisit
 
 If Impala ever gains a non-word-sized **scalar** element type, scaling stops being struct-only and becomes
-pervasive, and the balance between `[]` and `[[ ]]` should be re-argued from scratch. Same if the parked
-multidim-array work (`docs/ParkedFeatures.md`) lands, since a 2-D subscript scales on both axes.
+pervasive, and the balance between `[]` and `[[ ]]` should be re-argued from scratch.
+
+The other trigger this clause named - multidimensional arrays - **fired on 2026-08-04**, and it is why
+`[[ ]]` was reversed rather than revisited: `a[3, 5, 6]` scales on every axis with no marker available to
+say so. The reversal preamble in section F records it. Nothing is pending here.
