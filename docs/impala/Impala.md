@@ -46,7 +46,7 @@ first), and `break;` / `continue;` are `E450 not supported`, with the note point
 
 Three forms are accepted:
 
-```impala
+```text
 123          // decimal
 0x1F         // hexadecimal
 'A'          // character literal - the word value of the character(s)
@@ -59,7 +59,7 @@ A float **must** have at least one digit on both sides of the decimal point, wit
 optional exponent. There is no float suffix; the decimal point is what distinguishes a
 float from an integer.
 
-```impala
+```text
 1.0          // valid
 3.14159
 6.022e23
@@ -96,7 +96,7 @@ There are four primitive types, all one VM word wide (standard configuration 32-
 Since Impala 2, pointers and arrays may carry a **compile-time element type**, written
 type-first with stackable trailing keyword modifiers:
 
-```impala
+```text
 int pointer p                    // pointer to int
 int array a[10]                  // array of 10 ints
 float array buf[64]              // array of 64 floats
@@ -476,7 +476,11 @@ around:
 
 ```impala
 if (0 <= x && x < limit) { /* ok */ }
+```
 
+...but not as a value:
+
+```text
 flag = (a < b);       // INVALID - comparisons are not values
 ```
 

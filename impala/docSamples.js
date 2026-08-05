@@ -229,6 +229,224 @@ const SAMPLES = [
 		src: "export function main() locals int x { while (x < 4) { x = x + 1; break; } }\n" },
 	{ name: "...and continue likewise", expect: "E450",
 		src: "export function main() locals int x { while (x < 4) { x = x + 1; continue; } }\n" },
+
+	/* ---- Impala.md, the language reference -------------------------------------------------------
+	   Its blocks went unchecked until 2026-08-05 (the extractor could not see a CRLF fence), and they
+	   are FRAGMENTS - a declaration group, a loop, one statement - so each gets the smallest program
+	   that makes it legal, with the block text embedded VERBATIM. One block per sample on purpose: the
+	   page uses `x` as a variable in one place and a function in another, and a flat namespace cannot
+	   hold both. Indentation is 8 spaces because that is what the page uses; `norm` compares after
+	   tabs expand, so it has to match. */
+	{ name: "ref: comments", expect: null, src: [
+		"const int DEBUG = 0", "function commented()", "{",
+		"// Line comment, C++ style.",
+		"/* Block comment. Does not nest. */",
+		"}", "export function main() { }", ""].join("\n") },
+	{ name: "ref: a string literal names a const pointer", expect: null, src: [
+		"const int DEBUG = 0",
+		"const pointer WELCOME = \"Welcome to Impala!\\n\"",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: findSmallest", expect: null, src: [
+		"const int DEBUG = 0",
+		"function findSmallest(int n, int pointer vector)",
+		"returns int j",
+		"locals int i",
+		"{",
+		"        j = 0;",
+		"        for (i = 1 to n)",
+		"                if (vector[i] < vector[j])      // no (int) casts needed",
+		"                        j = i;",
+		"}",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: the global forms", expect: null, src: [
+		"const int DEBUG = 0",
+		"global int uninited",
+		"global int inited = 23",
+		"global float aFloat",
+		"global pointer aPointer = &global aFloat",
+		"global funcptr aFuncPointer",
+		"global array defaultArray[100]",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: a valued const", expect: null, src: [
+		"const int DEBUG = 0",
+		"const int SOME_COUNT = 4",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: valueless consts the host supplies", expect: null, src: [
+		"const int GAZL_WORD_SIZE",
+		"const int DEBUG",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: readonly data", expect: null, src: [
+		"const int DEBUG = 0",
+		"const int SOME_COUNT = 4",
+		"readonly int IMMUTABLE = 42",
+		"readonly array SOME_CONSTS[SOME_COUNT] = { 100, 200, 300, 400 }",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: reading a readonly array element", expect: null, src: [
+		"const int DEBUG = 0",
+		"const int SOME_COUNT = 4",
+		"readonly array SOME_CONSTS[SOME_COUNT] = { 100, 200, 300, 400 }",
+		"export function main() locals int x, int i {",
+		"x = (int) global SOME_CONSTS[i];",
+		"}", ""].join("\n") },
+	{ name: "ref: a temporary global", expect: null, src: [
+		"const int DEBUG = 0",
+		"temporary int forgetMe",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: the extern forms", expect: null, src: [
+		"const int DEBUG = 0",
+		"extern int defineMeLaterPlease",
+		"extern array futureArray[]",
+		"extern function thisFunctionInAnotherSource",
+		"extern native abort",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: an initialized global array", expect: null, src: [
+		"const int DEBUG = 0",
+		"global array defaultArray[100]",
+		"global array initedArray[10] = {",
+		"        1, 2.0, &global defaultArray[0], 4",
+		"}",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: calling through a funcptr", expect: null, src: [
+		"const int DEBUG = 0",
+		"global funcptr aFuncPointer",
+		"function showoff() { }",
+		"export function main() {",
+		"global aFuncPointer = showoff;",
+		"if (global aFuncPointer != nullfunc)",
+		"        global aFuncPointer();",
+		"}", ""].join("\n") },
+	{ name: "ref: fetchSomeConst", expect: null, src: [
+		"const int DEBUG = 0",
+		"const int SOME_COUNT = 4",
+		"readonly array SOME_CONSTS[SOME_COUNT] = { 100, 200, 300, 400 }",
+		"function fetchSomeConst(int index)",
+		"returns int fetched",
+		"{",
+		"        fetched = (int) global SOME_CONSTS[index];",
+		"}",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: a local array sized by a const", expect: null, src: [
+		"const int DEBUG = 0",
+		"const int TEST_SIZE = 8",
+		"extern native myrand",
+		"function test()",
+		"locals int i, array mydata[TEST_SIZE]",
+		"{",
+		"        for (i = 0 to TEST_SIZE)",
+		"                mydata[i] = myrand();",
+		"}",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: chained assignment and assignment in a condition", expect: null, src: [
+		"const int DEBUG = 0",
+		"extern native nextValue",
+		"export function main() locals int a, int b, int c {",
+		"a = b = 0;",
+		"while ((c = nextValue()) != 0) { /* ... */ }",
+		"}", ""].join("\n") },
+	{ name: "ref: the if/else chain", expect: null, src: [
+		"const int DEBUG = 0",
+		"function positive() { }",
+		"function negative() { }",
+		"function zero() { }",
+		"export function main() locals int x {",
+		"if (x > 0)",
+		"        positive();",
+		"else if (x < 0)",
+		"        negative();",
+		"else",
+		"        zero();",
+		"}", ""].join("\n") },
+	{ name: "ref: both for forms", expect: null, src: [
+		"const int DEBUG = 0",
+		"const int TEST_SIZE = 8",
+		"extern native myrand",
+		"function consume(int v) { }",
+		"export function main() locals int i, array mydata[TEST_SIZE] {",
+		"for (i = 0 to TEST_SIZE)        // i runs 0,1,...,TEST_SIZE-1",
+		"        mydata[i] = myrand();",
+		"",
+		"for (i to TEST_SIZE)            // reuses i's current value as the start",
+		"        consume(i);",
+		"}", ""].join("\n") },
+	{ name: "ref: the three loop forms", expect: null, src: [
+		"const int DEBUG = 0",
+		"export function main() locals int cond {",
+		"while (cond != 0) { /* ... */ }",
+		"do { /* ... */ } while (cond != 0)",
+		"loop { /* runs forever; exit with goto or return */ }",
+		"}", ""].join("\n") },
+	{ name: "ref: leaving a loop with goto", expect: null, src: [
+		"const int DEBUG = 0",
+		"function step() { }",
+		"export function main() locals int done {",
+		"loop {",
+		"        if (done != 0) goto finished;",
+		"        step();",
+		"}",
+		"finished: ;",
+		"}", ""].join("\n") },
+	{ name: "ref: switch", expect: null, src: [
+		"const int DEBUG = 0",
+		"function x() { }",
+		"export function main() locals int i, int j {",
+		"switch (i == 0 to 10) {",
+		"        case 0,1,2: {",
+		"                j = i;",
+		"        }",
+		"        case 5: x();",
+		"        default: j = -1;",
+		"}",
+		"}", ""].join("\n") },
+	{ name: "ref: copy between arrays", expect: null, src: [
+		"const int DEBUG = 0",
+		"global array defaultArray[100]",
+		"global array initedArray[10] = { 1, 2.0, &global defaultArray[0], 4 }",
+		"extern array futureArray[]",
+		"export function main() {",
+		"copy(3 from &global initedArray[1] to &global futureArray[0]);",
+		"}", ""].join("\n") },
+	{ name: "ref: assert under DEBUG", expect: null, src: [
+		"const int DEBUG = 0",
+		"",
+		"function check(int i)",
+		"{",
+		"        assert(i != 0);",
+		"}",
+		"export function main() { }", ""].join("\n") },
+	{ name: "ref: a comparison inside a condition", expect: null, src: [
+		"const int DEBUG = 0",
+		"export function main() locals int x, int limit {",
+		"if (0 <= x && x < limit) { /* ok */ }",
+		"}", ""].join("\n") },
+	{ name: "ref: conversions and retyping", expect: null, src: [
+		"const int DEBUG = 0",
+		"extern native alloc",
+		"export function main() locals float f, int n, pointer p {",
+		"f = itof(n);                  // int -> float (value conversion)",
+		"n = ftoi(f);                  // float -> int (value conversion)",
+		"p = (pointer) alloc(16);      // retype only, no conversion",
+		"}", ""].join("\n") },
+	{ name: "ref: casting an untyped value", expect: null, src: [
+		"const int DEBUG = 0",
+		"extern native lfoVal",
+		"export function main() locals int y, int z, int pointer p2, pointer raw {",
+		"y = (int) lfoVal(1) + 1;      // a bare untyped value + int needs the cast",
+		"z = lfoVal(1);                // a plain assignment is fine without it",
+		"p2 = (int pointer) raw;       // untyped -> typed: assuming is loud",
+		"}", ""].join("\n") },
+	{ name: "ref: dereferencing a computed pointer", expect: null, src: [
+		"const int DEBUG = 0",
+		"global pointer p",
+		"export function main() locals int x {",
+		"x = *(global p + 3);",
+		"}", ""].join("\n") },
+	{ name: "ref: negative index and an indexed string literal", expect: null, src: [
+		"const int DEBUG = 0",
+		"global pointer p",
+		"export function main() locals int last, int hexDigit, int value {",
+		"last = (int) global p[-1];",
+		"hexDigit = (\"0123456789abcdef\")[value & 0xf];",
+		"}", ""].join("\n") },
 ];
 
 let failures = 0;
@@ -309,8 +527,14 @@ for (const entry of DOCS) {
 	const doc = fs.readFileSync(path.join(__dirname, "..", "docs", name), "utf8");
 	/* Anchored at line starts and capturing the info string, so the two kinds of block are told apart in
 	   one pass. A fence-to-fence regex without that matched the gap BETWEEN two blocks and read a markdown
-	   table rule as a command-line flag. */
-	const blocks = [...doc.matchAll(/^```([a-z]*)\n([\s\S]*?)^```/gm)];
+	   table rule as a command-line flag.
+
+	   `\r?\n` is load-bearing, not tidiness. Git stores LF and `autocrlf` materialises CRLF, so on a
+	   normal checkout every fence line ends `...impala\r\n` - a bare `\n` matched NOTHING and this loop
+	   ran zero times. "every code block is covered" was vacuously true on every machine since the check
+	   was written; it only ever appeared to work on a tree something else had rewritten to LF. A gate
+	   that passes is not evidence it measured anything. */
+	const blocks = [...doc.matchAll(/^```([a-z]*)\r?\n([\s\S]*?)^```/gm)];
 
 	for (const [, lang, body] of blocks) {
 		if (lang !== "impala") {
