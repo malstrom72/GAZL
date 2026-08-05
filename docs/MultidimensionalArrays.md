@@ -33,9 +33,21 @@ existing subscript machinery takes one linear index and always has.
 An array's extents become named assemble-time constants, one per axis, beside the `.z.` that already names
 its total size in words:
 
-    .d.Grid.cells.0     ! DEFi #W       axis 0 - stride 1, the fastest-varying
-    .d.Grid.cells.1     ! DEFi #H       axis 1 - stride .d.Grid.cells.0
-    .z.Grid.cells       ! DEFi #<a>     total words, as today = product of all axes
+    						! MULi <A> #H #W
+    						! MOVi <a> #0 ; layout of struct Grid
+    .o.Grid.cells:			! DEFi #<a>
+    .z.Grid.cells:			! DEFi #<A>          total words = the product of all axes
+    .d.Grid.cells.0:		! DEFi #W            axis 0 - stride 1, the fastest-varying
+    .d.Grid.cells.1:		! DEFi #H            axis 1 - stride .d.Grid.cells.0
+    						! GEQi #.z.Grid.cells #0 @.g0
+    						! FAIL extent of Grid.cells is negative, which would run the struct layout backwards
+    .g0:					! ADDi <a> #<a> #.z.Grid.cells
+
+`<A>` and `<a>` are different registers and the difference matters: `<a>` is the layout block's rolling
+OFFSET accumulator, hand-picked and live across the whole block (see
+[`StructLayoutConstants.md`](StructLayoutConstants.md)), while `<A>` is a pool scratch holding the folded
+extent. An earlier draft of this fragment was hand-written and said `.z.Grid.cells: ! DEFi #<a>`, which
+would snapshot the running offset rather than the size - a different and wrong quantity.
 
 **Axes are numbered by stride, innermost first.** Axis *k*'s stride is the product of axes `0..k-1`, so
 the numbering is independent of how the dimension list is written and the stride formula is uniform. For
@@ -44,8 +56,11 @@ the numbering is independent of how the dimension list is written and the stride
 This is the same move `.o.` and `.z.` already make for struct layout: *if the compiler cannot decide it,
 name it and let the assembler decide it.* A dimension may be a literal, a named `const`, a host-supplied
 valueless `const int W;`, or any expression - the constant is what makes it referenceable more than once.
-Where an axis is already a single referenceable operand (a literal, or a named const) there is nothing to
-mint and the extent is referenced directly.
+**Every axis mints a `.d.` whatever its spelling**, and every stride and every bound quotes the symbol
+rather than the value: `grid[3, 4]` still gets `.d.grid.0: ! DEFi #4` and strides by
+`MULi %0 $y #.d.grid.0`. Only the value side varies - a literal or a named const is `! DEFi #4` /
+`! DEFi #W`, an expression folds into a `<X>` scratch first and is named from that. Uniform on purpose:
+one rule for reading a stride, and no spelling of an axis that a later host override cannot reach.
 
 `.d` is registered in [`SymbolNamespace.md`](SymbolNamespace.md), in all three of its path shapes
 (`.d.<Struct>.<field>.<k>`, `.d.<global>.<k>`, `.d.<function>.<local>.<k>` - the same three `.z.` has).

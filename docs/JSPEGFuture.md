@@ -63,7 +63,7 @@ text depends on distant grammar context**.
 The cost is documented by the repository itself: `JSPEG.md` needs a dedicated semantics section,
 `docs/jspeg-dollar-report.md` is an architecture review of one sigil, and `impala/RefactorPlan.md`
 exists to migrate helpers because "holder/value mistakes" happen in practice. `impala.jspeg`
-currently has ~50 `$$.` holder-escape sites.
+currently has ~126 `$$.` holder-escape sites.
 
 ### What it would take
 
@@ -76,7 +76,7 @@ currently has ~50 `$$.` holder-escape sites.
   heuristics and the `._` convention are deleted outright. Object-valued `$$` still supports field
   mutation (`$$.count = 0` works on a plain object), so the container-style rules (`FuncCall`)
   migrate by initializing `$$ = {...}` instead of relying on a pre-existing holder.
-  *Impact on `impala.jspeg`: mechanical migration of the ~50 `$$.` sites plus an audit of tag
+  *Impact on `impala.jspeg`: mechanical migration of the ~126 `$$.` sites plus an audit of tag
   rebinding; retire the dollar-report and most of the `$$` documentation. Pairs naturally with the
   AST move in Problem 1 - in two-phase style, `$$` is just the node under construction and the
   holder question evaporates - so doing both in one breaking step is convenient, not required.*
@@ -160,7 +160,7 @@ fixtures.
 |---|---|---|---|
 | Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers; retire the PikaScript emulation layer (`bake` first) | none / mechanical helper migration | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); none blocks Step 1 |
 | Before Steps 4/5, *if adopted* | Automatic `dry` for predicates in JSPEG; de-IIFE + char-class codegen | delete the dry toggles and ~16 guards; otherwise none | destructuring lookahead and import interface mode are the two features that lean on the side-effect weakness - the only real ordering edge in this document |
-| After 2.0 stabilizes, if ever ("JSPEG 2") | Value-returning rules - the `$$`/holder change, and the only breaking change to JSPEG itself | mechanical migration of the ~50 `$$.` sites; holders and the `._` convention retired | none - optional end-state |
+| After 2.0 stabilizes, if ever ("JSPEG 2") | Value-returning rules - the `$$`/holder change, and the only breaking change to JSPEG itself | mechanical migration of the ~126 `$$.` sites; holders and the `._` convention retired | none - optional end-state |
 | Independent of JSPEG entirely | Two-phase AST in `impala.jspeg` (actions build nodes, a walk emits) | rules unchanged; every action rewritten as a node constructor | not a JSPEG change at all - possible today; convenient to do alongside JSPEG 2, not gated on it |
 
 The closing point from the Impala 2.0 review bears repeating: JSPEG's parity discipline is its best

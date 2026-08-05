@@ -105,7 +105,7 @@ currently emits, so it turns a bug into an expected value just as happily as a f
 
 Their names are similar and putting a fixture in the wrong one silently buys you no coverage.
 
-- **`../tests/impala/sources/*.impala` + `../tests/impala/golden/*.gazl`** — the main corpus, 94 files.
+- **`../tests/impala/sources/*.impala` + `../tests/impala/golden/*.gazl`** — the main corpus, 89 files.
   **This is where a new fixture goes** unless you have a specific reason otherwise. Owned by
   `runJspegTests.js`, which also assembles each golden, and *runs* it when the source header carries an
   `Expected (GAZLCmd <name>.gazl <entry>): <output>` line.
@@ -133,7 +133,7 @@ diff that means nothing.
   as UTF-8 will corrupt high bytes.
 - **A failed `compile` overwrites the output file** with `Error: <message>` rather than leaving the
   previous good `.gazl` in place.
-- **`OK (compile-only)` in the gate output means not link-checked**, not passed — 45 of the 94 goldens
+- **`OK (compile-only)` in the gate output means not link-checked**, not passed — 45 of the 89 goldens
   need a host to link. And `GAZLCmd` stops at the first unresolved symbol, so a host name near the top
   of a module waves the rest of it through.
 - A failing `runJspegTests.js` writes what it actually got to `../tests/impala/erroneous/<name>.gazl`.

@@ -1,7 +1,7 @@
 # Struct layout as GAZL constants (design note)
 
-Status: **IMPLEMENTED** (verified 2026-07-31 against the shipped compiler). This file began as a design
-note and the historical sections below are kept as the design record, but the scheme itself now ships:
+Status: **IMPLEMENTED** (verified 2026-07-31 against the compiler in this tree). This file began as a design
+note and the historical sections below are kept as the design record, but the scheme itself is now implemented:
 normal structs, extern structs, `sizeof`, field access AND allocation sizes are all symbolic. See
 [IMPLEMENTED (Phase 2a)](#implemented-phase-2a---normal-structs) and
 [IMPLEMENTED (extern struct v1)](#implemented-extern-struct-v1) for the details, and treat any
@@ -11,10 +11,16 @@ Observed today from `struct Local { int a  float b }` with a `Local` local:
 
     ! MOVi <a> #0 ; layout of struct Local
     .o.Local.a:  ! DEFi #<a>
+                 ! ADDi <a> #<a> #1
     .o.Local.b:  ! DEFi #<a>
+                 ! ADDi <a> #<a> #1
     .z.Local:    ! DEFi #<a>
     $v:          LOCA *.z.Local
                  MOVi $v:.o.Local.a #1
+
+The `! ADDi` lines are the whole point, and an earlier copy of this fragment elided them - which made `a`
+and `b` read as sharing an offset. Every `.o.` is a SNAPSHOT of the same rolling `<a>`; what separates two
+fields is the advance between the snapshots.
 
 Background: this note applies the two-stage constant model to struct layout. The model itself is
 specified in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
@@ -73,7 +79,7 @@ are safe here despite the crowded label namespace because a layout tag is ALWAYS
 `.s_...`). So `.o.Voice` cannot be confused with any `.oN` / `.o_...` label even if that letter were
 later reused.
 
-`.z` was chosen over the `.w` ("words") alternative and both `.o.*` and `.z.*` now SHIP - the paragraph
+`.z` was chosen over the `.w` ("words") alternative and both `.o.*` and `.z.*` are now IMPLEMENTED - the paragraph
 here used to record them as unused and the choice as open, which is no longer true. The full inventory
 of generated symbols, which letters remain free, and the rules for adding one live in
 [`docs/SymbolNamespace.md`](SymbolNamespace.md); consult that rather than this section, which only

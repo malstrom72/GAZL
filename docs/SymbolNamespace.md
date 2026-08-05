@@ -36,12 +36,12 @@ of `.r` (`emitRangeCheck` takes `beginDebugGuard('r')` for the skip and `newLabe
 `.g` has TWO independent minters, and they are the exception to the `labelCounter` rule above:
 
 - `guardCounter`, at global scope, spelled `'.g' + guardCounter++` directly rather than through
-  `newLabel`. `assembleAssert` (the deferred-assertion form behind `assertFitsExtent`) and
-  `emitStructLayout`'s negative-extent guard both use it. `labelCounter` resets per function, so two
-  globals either side of a function would both be handed `.g0`; `guardCounter` is reset once per
-  compilation instead.
-- `labelCounter`, inside a function, via the ordinary `newLabel('g')` - `checkIndexUse`'s deferred
-  index assertion.
+  `newLabel`. THREE sites: `assembleAssert` (the deferred-assertion form behind `assertFitsExtent`)
+  mints two, a skip and a fail, and `emitStructLayout`'s negative-extent guard mints one.
+  `labelCounter` resets per function, so two globals either side of a function would both be handed
+  `.g0`; `guardCounter` is reset once per compilation instead.
+- `labelCounter`, inside a function, via the ordinary `newLabel('g')` - TWO sites, both in
+  `indexGuard` (the deferred index assertion): the skip, and the low bound a non-literal index needs.
 
 One program emits both and both land on `.g0` (a struct with a symbolic array extent, indexed by a
 constant, does it). That assembles and runs anyway, because GAZL scopes function-local labels: the
@@ -53,8 +53,9 @@ A `switch` arm appends `#<k>` to the table base (`.s0#0`), because `SWCH` finds 
 
 ### Content-derived data symbols: `.<tag>_<derived>_<hex>`
 
-Minted by `makeString`, using a slug of the content plus the unit's random id, so two units cannot
-collide:
+Minted by `makeString`, using a slug of the content plus the unit's random id FOLDED WITH the string
+table's current length, so two units cannot collide and two same-slug strings in ONE unit cannot either
+(`.a_indexo_62a7acfd` and `.a_indexo_62a7acfe` are two range-check messages from one compile):
 
 | tag | used for | example |
 |---|---|---|
@@ -67,7 +68,7 @@ These are internal and never referenced by a predictable name, which is why they
 
 Just two tags, and one sentence covers both: **`.o.<path>` is the offset of `<path>` in words, `.z.<path>`
 is the size of `<path>` in words.** Emitted as `! DEFi` and referenced at every access and allocation
-site. **These are implemented and shipping** - see
+site. **These are IMPLEMENTED** - see
 [`docs/StructLayoutConstants.md`](StructLayoutConstants.md). Unlike everything above they are STABLE and
 deliberately predictable, because hand-written or host-supplied GAZL must be able to name them.
 
@@ -173,8 +174,8 @@ between struct `A_B` field `c` and struct `A` field `B_c`.
 
 ## Adding a new one
 
-1. **Take a free tag letter.** In use: `a e f g l r s t` (labels), `a s` (data), `o z` (constants). Free
-   today: `b c d h i j k m n p q u v w x y`. (`x` was the array-extent tag until 2026-08-02, when
+1. **Take a free tag letter.** In use: `a e f g l r s t` (labels), `a s` (data), `d o z` (constants). Free
+   today: `b c h i j k m n p q u v w x y`. (`x` was the array-extent tag until 2026-08-02, when
    `.z.` absorbed it - do not resurrect it for a second size-like idea without re-reading the note above.)
 2. **Decide which shape it is.** Dot-followed (`.k.Thing.part`) for a stable, nameable constant that
    host or hand-written GAZL may reference; letter+digits (`.kN`) for an internal, throwaway label.

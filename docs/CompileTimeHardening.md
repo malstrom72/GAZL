@@ -159,11 +159,21 @@ down a tier, and which tier it lands in depends on the shape, not on which end i
 - **Either end symbolic on a struct array FIELD -> tier 2, the deferred assertion after all.** The
   paragraph above is right about plain arrays and wrong about this one: a field overrun stays INSIDE the
   struct's allocation, so `Symbols::resolve` sees a legal offset and nothing catches it at any stage. So a
-  symbolic index earns the `! LSSi`/`! FAIL` scaffolding here even against a numeric extent -
-  `global s.v[K] = 1` on a `v[4]` emits `! LSSi #K #.z.S.v @.g0` / `! FAIL index K outside S.v`
-  (`docs/Impala2.md`, "Array bounds", tier 2).
+  symbolic index earns the `! LSSi`/`! FAIL` scaffolding here even against a numeric extent. `global
+  s.v[K] = 1` on a `v[4]`, with a valueless `const int K;`, emits BOTH bounds - a non-literal index may
+  be negative, so the low compare is not optional - and every `! FAIL` carries the `(resolved only at
+  assembly)` tail:
+
+        ! ADDi <A> #.o.S.v #K			; global s.v[K] = 1
+        ! LSSi #K #0 @.g1
+        ! LSSi #K #.z.S.v @.g0
+        .g1:	! FAIL index K outside S.v (resolved only at assembly)
+        .g0:	POKE &s:<A> #1
+
+  (`docs/Impala2.md`, "Array bounds", tier 2.)
 - **Runtime index -> tier 3, `--range-checks`, opt-in and off by default.** Two `DEBUG`-gated compares per
-  subscript against the array's `.z.` extent symbol, calling the host's `assertFail`. Off by default
+  subscript - **per AXIS** for a shaped array, against that axis's own `.d.` symbol rather than the flat
+  `.z.` - calling the host's `assertFail`. Off by default
   because those are not the same switch: `DEBUG 0` stops the assembler EMITTING the guards, but the guard
   LINES stay in the shipped `.gazl` text whatever `DEBUG` says (~95 bytes of compacted source each,
   measured) and that text is the artifact. A bare pointer `p[i]` has no extent, and is unchecked in every
@@ -283,10 +293,19 @@ contradictory statements about one quantity:
             COPY %3 &b *2
             CALL ^sink %0 *3
 
-A host defining `.z.AB` as 3 gets a silently truncated `COPY`. Worse sub-case: `fieldWords` does
-`field.size * per` on the extent STRING, so an extern-struct array field (E430 forces it sizeless) or
-`array v[N]` with a host `const int N;` yields `*NaN` - a legal GAZL identifier, so an undefined-symbol
-error at best, and `claimSlot`'s `k < NaN` loop never runs so the `ADRL` self-aliases.
+A host defining `.z.AB` as 3 gets a silently truncated `COPY`. Worse sub-case, **still live but no longer
+`NaN`**: `fieldWords` used to multiply the extent OPERAND by a number, so `array v[N]` with a valueless
+`const int N;` produced `*NaN`. It now asks `constInt` and returns `undefined` instead (fixed 2026-07-31,
+`docs/TwoStageConstants.md`), so the operands read `*undefined` on the `ADRL`/`COPY` and the CALL window
+is still `*NaN`:
+
+        ADRL %1 %1 *undefined			; sink(global s)
+        COPY %1 &s *undefined
+        CALL ^sink %0 *NaN
+
+Both spellings are legal GAZL identifiers, so it is an undefined-symbol error at best, and `claimSlot`'s
+loop still never runs - which is why the `ADRL` still self-aliases (`ADRL %1 %1`). The defect is
+unchanged; only the operand text moved.
 Fix: call `rejectByValueStruct` from the ARGUMENT site, not just declarators. Do NOT emit `*.z.Name` here
 - see `docs/GAZLSymbolicWindows.md`, the numeric window ABI is correct.
 
