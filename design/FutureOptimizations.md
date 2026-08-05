@@ -58,7 +58,7 @@ the outcome, which is a constant-folding pass over conditions plus a reachabilit
 labels and instructions survive. That is a real pass, not a peephole.
 
 Note the interaction with inline constant folding: `expandInline` only folds bodies that are
-STRAIGHT LINE, precisely to avoid reasoning about branches (see `docs/Inlining.md` section 5). A
+STRAIGHT LINE, precisely to avoid reasoning about branches (see `design/impala/Inlining.md` section 5). A
 condition-folding pass would lift that restriction, and the two should be designed together rather than
 bolted on separately - otherwise there will be two different notions of "this value is known".
 

@@ -202,7 +202,7 @@
     /* GAZL 2: `'F','p'` is where Impala THROWS AWAY the funcptr/data-pointer distinction it already has -
        GAZL 1 offers only `p` for both, so a funcptr array and a pointer array emit identical `DATp` rows.
        When GAZL 2 lands the `t` (target) type this becomes `'F','t'` and Impala needs nothing else; the
-       type is already tracked. See docs/GAZL2FunctionPointers.md. */
+       type is already tracked. See design/gazl/GAZL2FunctionPointers.md. */
     map($$parser.TYPE_SUFFIXES,  'void','', 'i','i','f','f','p','p','F','p','U','',
                                  'N','',   'A','A','?','E', 'V','');
     map($$parser.VERBOSE_TYPES,  'i','int','f','float','p','pointer','F','funcptr',
@@ -967,7 +967,7 @@
             }
         }
 
-        /* BRANCH THREADING and RETURN DUPLICATION (docs/GAZLAssemblerOptimizations.md items 4 and 5).
+        /* BRANCH THREADING and RETURN DUPLICATION (design/gazl/GAZLAssemblerOptimizations.md items 4 and 5).
            The walk above resolves an alias AT VISIT TIME, so it is not transitive: a chain it meets in
            the wrong order survives. Here everything has settled, so following one is just a lookup.
               `GOTO @a` where `a:` leads to the function's RETU BECOMES that RETU - `RETU` takes no
@@ -1301,7 +1301,7 @@
        struct and writes BACKWARDS into whatever field precedes the array.
 
        PAST THE END IS NOT REPORTED HERE, because whether it is an error depends on what happens next,
-       and the rule is `docs/Impala2Review.md`'s: a DEREFERENCE with an out-of-range constant index is a
+       and the rule is `design/impala/Impala2Review.md`'s: a DEREFERENCE with an out-of-range constant index is a
        guaranteed trap, so it is a compile error, while ADDRESS FORMATION (`&a[7]`, `&p[i]`) is always
        legal and never checked - an out-of-range address is a value like any other, and GAZL's own check
        fires on access operands, not on address-taking. So the finding is returned as a flag; reference()
@@ -1448,7 +1448,7 @@
     /* A constant index that tier 1 could not clear survived the subscript as a flag, because only its USE
        decides whether it is an error. Anything that reads or writes the element lands here; `&` cleared
        it. A numeric extent is decided now; a symbolic one becomes a DEFERRED assertion, asked of the
-       assembler in the canonical `! LSSi` / `! FAIL` / skip-label form (docs/TwoStageConstants.md rule 4,
+       assembler in the canonical `! LSSi` / `! FAIL` / skip-label form (design/impala/TwoStageConstants.md rule 4,
        the same shape assertFitsExtent uses for an over-filled initializer). It costs no runtime
        instruction and is emitted only at a real dereference, so `&s.v[9]` stays legal here too. */
     /* A SHAPED subscript leaves one finding PER AXIS, each naming a different bound, so a subscript carries
@@ -1530,7 +1530,7 @@
     };
 
     /* ONE deferred assertion, in the canonical `! <CMP>` / `! FAIL <text>` / skip-label form
-       (docs/TwoStageConstants.md rule 4): the assembler decides what Impala could not, aborts with a real
+       (design/impala/TwoStageConstants.md rule 4): the assembler decides what Impala could not, aborts with a real
        sentence, and the whole thing costs no runtime instruction. Every caller goes through here so the
        shape has one home - it had two before, drifting apart by a `declare` argument at a time. `.g<N>`
        uses guardCounter, NOT labelCounter, which resets per function. */
@@ -1692,7 +1692,7 @@
     /* The integer behind a folded operand, or undefined when it is symbolic (`<A>`, a host `! DEFi`, an
        `extern struct` size). EVERY compile-time check gates on this: Impala may only reject a value it
        genuinely knows, and not knowing is not the same as being fine - so a symbolic operand is passed
-       over in silence rather than guessed at. See docs/CompileTimeHardening.md.
+       over in silence rather than guessed at. See design/impala/CompileTimeHardening.md.
 
        It must decode every spelling `IntegerLiteral` accepts, or a literal Impala plainly knows reads as
        symbolic and every gate downstream stands down: `global int array g[0x4]` disarmed E461, and
@@ -1820,7 +1820,7 @@
                 sourceName: $$parser.sourceName };
     };
 
-    /* By-value struct params/returns are PARKED for Impala 3.0 (docs/ParkedFeatures.md). Every door that
+    /* By-value struct params/returns are PARKED for Impala 3.0 (design/ParkedFeatures.md). Every door that
        can introduce one rejects it HERE, so there is one owner instead of a copy per door - a `functype`
        declarator was previously unguarded, which let the whole parked by-value path run and, for an
        `extern struct`, baked a numeric COPY size against a host-owned layout. */
@@ -2038,7 +2038,7 @@
        access then references these symbols instead of baked numbers. Structs are defined in
        dependency order (a by-value field's struct must be complete first, E412), so `#.z.Inner`
        is always defined before an outer struct advances past it. Extern structs emit nothing
-       (the host owns their layout). See docs/StructLayoutConstants.md. */
+       (the host owns their layout). See design/impala/StructLayoutConstants.md. */
     $$parser.emitStructLayout = function (name) {
         if ($$parser.dry) return;
         if (typeof output !== 'function') return;
@@ -2112,7 +2112,7 @@
 
     /* `extern struct Name { fields }`: host-owned layout. Impala knows the interface (field
        names + types) and emits symbolic `.o.Name.field` / `.z.Name` references, but does NOT
-       emit the layout - the host supplies those constants at load. See docs/StructLayoutConstants.md. */
+       emit the layout - the host supplies those constants at load. See design/impala/StructLayoutConstants.md. */
     /* Never rejects: the body has not been parsed yet, so it is not yet known whether this
        declaration asserts anything at all. A BODYLESS `extern struct N` is the struct analogue of a
        name-only `extern function f` - an opaque handle making no layout claim - so it must not
@@ -2149,7 +2149,7 @@
        locals/globals work. (Passing/returning a struct BY VALUE is different - it reserves a
        compile-time-known number of transient VM slots, which a host-owned size cannot provide. By-value
        params/returns are parked wholesale today (E426/E427), so the extern-specific E425 that used to
-       state this no longer fires; docs/GAZLSymbolicWindows.md is where the reasoning lives.) */
+       state this no longer fires; design/gazl/GAZLSymbolicWindows.md is where the reasoning lives.) */
     $$parser.structAllocSize = function (structName) {
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
@@ -2161,7 +2161,7 @@
        is only sound because a top-level name has exactly one kind (claimTopName) - otherwise `.z.S`
        would mean both `struct S` and a global array `S`. Struct array fields only: a scalar field is
        one word and a by-value field is `.z.Inner`, so those are already nameable.
-       See docs/SymbolNamespace.md. */
+       See design/gazl/SymbolNamespace.md. */
     $$parser.extentSymbol = function (name, owner) {
         return '.z.' + (owner !== undefined ? owner + '.' : '') + name;
     };
@@ -2171,7 +2171,7 @@
        stride by and nothing to compare pairwise. Same path scheme, so the same soundness argument applies -
        a top-level name has exactly one kind (claimTopName), and the axis suffix is a NUMBER where a field
        name would be an identifier, so `.d.S.v.0` can never collide with a field called `0`.
-       See docs/SymbolNamespace.md and docs/MultidimensionalArrays.md. */
+       See design/gazl/SymbolNamespace.md and docs/impala/MultidimensionalArrays.md. */
     $$parser.axisSymbol = function (name, owner, axis) {
         return '.d.' + (owner !== undefined ? owner + '.' : '') + name + '.' + axis;
     };
@@ -2367,7 +2367,7 @@
        meaning the moment a field is inserted, removed or reordered - nothing in the source has to change
        for it to start initializing different fields.
           NOT a 1.x compatibility path, whatever `--legacy` suggests: Impala 1.0 has no structs at all
-       (`docs/Impala.md` hands `struct` to `docs/Impala2.md` entirely), so no 1.x source can contain a
+       (`docs/impala/Impala.md` hands `struct` to `docs/impala/Impala2.md` entirely), so no 1.x source can contain a
        struct initializer and there is nothing here to stay compatible WITH. What it tolerates is sources
        written against early 2.0 development, when positional was the only form. */
     $$parser.fieldEntries = function (structName, fields, items, sourceCode, sourceOffset) {
@@ -2418,14 +2418,14 @@
            guess at all three: field order, `.z.`, and whether there are fields Impala never saw. Reads
            already adapt (`POKE &g:.o.E.f`); only static data is early-bound, which is exactly why it is
            the only part that can be wrong. Emitting it anyway is the "half-deferred" shape
-           docs/TwoStageConstants.md calls worse than either consistent choice. */
+           design/impala/TwoStageConstants.md calls worse than either consistent choice. */
         if ($$parser.isExternStruct(structName)) {
             $$parser.blockInitFrom(out,
                     'the host owns the layout of struct ' + structName
                             + ', so Impala does not know which word it would land in', 'E459',
                     'a host-owned struct is initialized by the host - leave it zero-filled here; '
                             + 'static initialization of a host-owned layout needs GAZL 2 and is planned '
-                            + 'for Impala 3.0 (docs/ParkedFeatures.md)');
+                            + 'for Impala 3.0 (design/ParkedFeatures.md)');
         }
         var byName = $$parser.fieldEntries(structName, fields, items, sourceCode, sourceOffset);
         for (var fi = 0; fi < fields.length; ++fi) {
@@ -2540,11 +2540,11 @@
     };
 
     /* Hand a comparison Impala cannot make to the stage that can: `words <= .z.Struct.field`, deferred
-       to GAZL assembly time, where the extent finally has a value. Rule 4 of docs/TwoStageConstants.md,
+       to GAZL assembly time, where the extent finally has a value. Rule 4 of design/impala/TwoStageConstants.md,
        and it costs nothing at run time - every line is an `!` directive, so no word is emitted either
        way.
 
-       `! LEQi` + `! FAIL` + a skip label is the CANONICAL idiom - docs/TwoStageConstants.md prescribes
+       `! LEQi` + `! FAIL` + a skip label is the CANONICAL idiom - design/impala/TwoStageConstants.md prescribes
        it and src/UnitTest.gazl:30-40 guards GAZL_VERSION exactly this way. An earlier version of this
        branched to a deliberately UNDEFINED label so the label name doubled as the message; that is the
        trick TwoStageConstants.md and CompileTimeHardening.md both explicitly ban, because an identifier
@@ -2610,7 +2610,7 @@
        so test the VALUE, not the spelling. `0x0`, `-0`, `0.0e0` and `&NULL` are all zero; comparing
        against the canonical ZEROES strings rejected safe code that merely wrote one of them differently.
        A symbol (`#N`) is NOT zero as far as Impala is concerned - it does not know the value, and per
-       docs/TwoStageConstants.md it must not guess one. */
+       design/impala/TwoStageConstants.md it must not guess one. */
     $$parser.isZeroWord = function (operand) {
         if (typeof operand !== 'string') {
             return false;
@@ -2963,7 +2963,7 @@
            block baked by the register allocator, and these must match it exactly - a symbolic size that
            later resolved differently would overrun the window. By-value locks the size; an extern struct,
            whose size is host-owned, could not supply one - which is why by-value and extern were mutually
-           exclusive before by-value was parked entirely. See docs/GAZLSymbolicWindows.md. */
+           exclusive before by-value was parked entirely. See design/gazl/GAZLSymbolicWindows.md. */
         var dst = $$parser.borrow('%');
         $$parser.emit('=&', 'p', dst, '%' + winSlot, '*' + words);   /* ADRL address of the window region */
         var src = $$parser.placeAddress(argMeta);                    /* address of the source struct */
@@ -4333,7 +4333,7 @@ FuncTypeDecl <- FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname =
                 )?
                 ')' _
                 ( RETURNS _ r:TypeDeclr                              { $$parser.addFuncTypeReturn($ftname, $r.type, $r.elem, $r.struct, $r.words, $$s, $$i); }
-                  ( ',' _ r:TypeDeclr                                {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+                  ( ',' _ r:TypeDeclr                                {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */
                                                                        $$parser.fail('Multiple return values are not supported in Impala 2.0',
                                                                                $$s, $$i, 'E428',
                                                                                'declare a single return type for this funcptr type');
@@ -4365,7 +4365,7 @@ FuncDecl    <-                                                        { $inl = f
                   _
                 )?
                 FUNCTION _ { $fnAt = $$i; } id:Identifier '('_        {
-                                                                         if ($inl) {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+                                                                         if ($inl) {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */
                                                                              $$parser.fail('Inline functions are not supported in Impala 2.0',
                                                                                      $$s, $inlAt, 'E439',
                                                                                      'an expansion needs GAZL 2 `SCOP` / `ENDS` to place its locals; '
@@ -4418,7 +4418,7 @@ inp:ArgsDecl ')'_
                                                                              $$parser.addReturn(entry, $out.name, $out.type, $out.elem, $out.size, $$s, $$i, $out.struct, $out.words);
                                                                          }
                                                                      }
-                    ( ',' _ v:VarDecl                                 {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+                    ( ',' _ v:VarDecl                                 {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */
                                                                          $$parser.fail('Multiple return values are not supported in Impala 2.0',
                                                                                  $$s, $$i, 'E428',
                                                                                  'return one value, or pass extra results back through pointer out-parameters');
@@ -4637,7 +4637,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                         $$parser.pendingProto = { args: _pa, ret: undefined };
                                                                       }
                       ( RETURNS _ out:VarDecl                         { if ($$parser.pendingProto) $$parser.pendingProto.ret = { type: $out.type, elem: $out.elem, struct: $out.struct, name: $out.name }; }
-                        ( ',' _ VarDecl                               {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md */
+                        ( ',' _ VarDecl                               {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */
                                                                           $$parser.fail('Multiple return values are not supported in Impala 2.0',
                                                                                   $$s, $$i, 'E428',
                                                                                   'declare a single return value for this extern');
@@ -5815,7 +5815,7 @@ For         <-  FOR _ '('_                          { $varStart = $$i; }   # nam
                                                         }
                                                         /* `FORp` steps exactly one WORD and is already a 3-operand form, so a
                                                            struct pointer has nowhere to put its stride. Scaling only the bound
-                                                           silently ran sizeof(S) times too many (F2 in docs/Impala2Review.md). */
+                                                           silently ran sizeof(S) times too many (F2 in design/impala/Impala2Review.md). */
                                                         if ($$parser.strideStruct(varMeta.elem) !== undefined) {
                                                             $$parser.fail(
                                                                 'For variable must not be a struct pointer',
@@ -5868,7 +5868,7 @@ For         <-  FOR _ '('_                          { $varStart = $$i; }   # nam
 
                                                         /* increment + jump back. A struct pointer never reaches here - E309
                                                            above rejects it, because `FORp` is already a 3-operand form with
-                                                           nowhere to put a stride (F2 in docs/Impala2Review.md). */
+                                                           nowhere to put a stride (F2 in design/impala/Impala2Review.md). */
                                                         $$parser.emit(
                                                             '...',
                                                             varMeta.type,
@@ -5937,7 +5937,7 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
 #   Destructuring assignment for multi-value calls:  a, b = f(...)
 #   (needs >= 2 targets before '='; single `a = ...` falls through to Expr)
 # ---------------------------------------------------------------------------
-Destructure <-  DestTarget (','_ DestTarget)+ '='_  {   /* PARKED for Impala 3.0 - see docs/ParkedFeatures.md.
+Destructure <-  DestTarget (','_ DestTarget)+ '='_  {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md.
                                                          Kept only to recognise the shape and reject it well;
                                                          the targets themselves are never needed. */
                                                       $$parser.fail('Destructuring assignment is not supported in Impala 2.0',

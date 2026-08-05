@@ -15,7 +15,7 @@ which is a JS-side metadata linter that passes every item here.
 **Status 2026-08-03: every item on this list is CLOSED.** Items 2-5 went in one diagnostics pass on
 2026-07-29; item 1 shipped on 2026-08-03 as `E461`, scoped to dereference (plus any negative index) and
 backed by a `--range-checks` runtime tier for the dynamic indices no constant check can see. The rule as
-shipped is in `docs/Impala2.md` under "Array bounds"; this section records how it was reasoned about.
+shipped is in `docs/impala/Impala2.md` under "Array bounds"; this section records how it was reasoned about.
 
 | Item | Status | Code |
 |---|---|---|
@@ -40,14 +40,14 @@ One thing the pass did NOT reach, verified 2026-07-29 and **since FIXED**:
 **A symbolic switch range is not on this list, by design.** `const int N = 3; switch (i == 0 to N) {
 case 8: }` compiles and assembles clean, with the arm unreachable. That is correct: a build configuration
 may legitimately narrow the range, and the surplus arms are then dead code in the same way an arm behind a
-branch Impala folds to false is dead (see [`FutureOptimizations.md`](FutureOptimizations.md)). Rejecting it
+branch Impala folds to false is dead (see [`FutureOptimizations.md`](../FutureOptimizations.md)). Rejecting it
 would make a valid configuration unbuildable. Unreachable is not wrong.
 
 **`&a[k]` PAST THE END is not on this list, by design.** `p = &a[7]` compiles, assembles and runs, and
 should: forming a pointer is not a memory access, and one-past-the-end is a standard idiom -
 `e = &a[4]` on a 4-element array is how you write a loop bound, and it works today. A bounds check on
 address-of would reject the idiom while catching nothing real. Only the dereference matters.
-(A NEGATIVE `k` is the exception and IS rejected, address or not - see `docs/Impala2.md` "Array bounds".
+(A NEGATIVE `k` is the exception and IS rejected, address or not - see `docs/impala/Impala2.md` "Array bounds".
 `&g:-1` and `$a:-1` are rejected by the assembler, and on a struct field the offset folds to a positive
 one naming the previous field, so it would assemble and alias silently.)
 
@@ -55,7 +55,7 @@ one naming the previous field, so it would assemble and alias silently.)
 ## The constraint: a constant is not always a number Impala knows
 
 > Summarized here because it governs every item below. The canonical, normative statement is
-> [`docs/TwoStageConstants.md`](TwoStageConstants.md) - read that first if any of this is new to you.
+> [`design/impala/TwoStageConstants.md`](TwoStageConstants.md) - read that first if any of this is new to you.
 
 This is the trap. In Impala 2.0 a constant can be resolved at GAZL ASSEMBLY time, not at Impala compile time:
 
@@ -95,7 +95,7 @@ above - the bar is "wrong in every configuration", and almost nothing clears it.
 > aborts assembly with your own message, and `src/UnitTest.gazl:30-40` already uses `! IFDF`/`! EQUi` +
 > `! FAIL` as the canonical idiom for exactly this. Use that instead of the undefined-label trick: it
 > takes a real sentence rather than encoding the message in a label name. See
-> [`docs/TwoStageConstants.md`](TwoStageConstants.md), "The deferred assertion". The section below is
+> [`design/impala/TwoStageConstants.md`](TwoStageConstants.md), "The deferred assertion". The section below is
 > kept because the branch-condition half (which comparison to emit, and when) still applies verbatim.
 
 GAZL has compile-time comparisons that branch (`! LSSi`, `! GEQi`, `! EQUi`, `! NEQi`, ... `_ccb`) and
@@ -140,7 +140,7 @@ flag, or only when the operand is symbolic (cases known at Impala compile time b
 Today this compiles. Correction to an earlier claim here: the assembler catches BOTH storage classes, not
 just globals - `Symbols::resolve` rejects `offset >= symbol.size`, and a local's size comes from its
 `LOCA *size`, so `MOVi $buf:9 #1` under `LOCA *4` fails with `Offset out of bounds: $buf`. Verified
-2026-08-01 for both - and `docs/Impala2Review.md` C6 had already flagged this section as "backwards on
+2026-08-01 for both - and `design/impala/Impala2Review.md` C6 had already flagged this section as "backwards on
 which case is uncovered", so this correction was overdue rather than new. So this is not a missing check;
 it is a check that fires at the WRONG TIME - at assembly, on the end user's machine, when Impala had the
 number all along. `ADDp` is deliberately `UNCHECKED_ADDRESS` (`src/GAZL.cpp:285`), so dynamic indices
@@ -170,7 +170,7 @@ down a tier, and which tier it lands in depends on the shape, not on which end i
         .g1:	! FAIL index K outside S.v (resolved only at assembly)
         .g0:	POKE &s:<A> #1
 
-  (`docs/Impala2.md`, "Array bounds", tier 2.)
+  (`docs/impala/Impala2.md`, "Array bounds", tier 2.)
 - **Runtime index -> tier 3, `--range-checks`, opt-in and off by default.** Two `DEBUG`-gated compares per
   subscript - **per AXIS** for a shaped array, against that axis's own `.d.` symbol rather than the flat
   `.z.` - calling the host's `assertFail`. Off by default
@@ -187,9 +187,9 @@ to that shape - `a[7]`, `a[7] = 1`, `p[9].a` as a value. It must NOT reject `&a[
 An out-of-range address is a value like any other, and GAZL itself accepts it: `MOVp $e &a:9` on a 4-word
 `a` assembles and runs, because the `Offset out of bounds` check fires on constant-offset *access*
 operands only. Containment is guaranteed by every dereference being bounds-checked at run time (see
-`docs/MemorySafetyModel.md`), so rejecting address arithmetic would make Impala stricter than the machine
+`docs/impala/MemorySafetyModel.md`), so rejecting address arithmetic would make Impala stricter than the machine
 it transliterates to, and would outlaw the one-past-the-end pointer that every walk loop needs. See F3 in
-`docs/Impala2Review.md`.
+`design/impala/Impala2Review.md`.
 
 ### 2. Writes to a readonly array element (task #21)
 
@@ -282,7 +282,7 @@ let the two copies drift.
 ### Confirmed miscompiles (a wrong number reaches the artifact)
 
 **S1. A by-value struct argument to an UNPROTOTYPED callee bakes a host-owned size.** *(The `*NaN`
-mechanism is ALREADY RECORDED as an anti-pattern in `docs/TwoStageConstants.md` - `field.size * per`.
+mechanism is ALREADY RECORDED as an anti-pattern in `design/impala/TwoStageConstants.md` - `field.size * per`.
 NEW here: the reachability, i.e. that `rejectByValueStruct` guards declarators only.)*
 `rejectByValueStruct` guards declarators only, so `extern native sink` / bodiless `extern function sink`
 have nothing to reject and the parked by-value path runs at the call site. One artifact then makes two
@@ -296,7 +296,7 @@ contradictory statements about one quantity:
 A host defining `.z.AB` as 3 gets a silently truncated `COPY`. Worse sub-case, **still live but no longer
 `NaN`**: `fieldWords` used to multiply the extent OPERAND by a number, so `array v[N]` with a valueless
 `const int N;` produced `*NaN`. It now asks `constInt` and returns `undefined` instead (fixed 2026-07-31,
-`docs/TwoStageConstants.md`), so the operands read `*undefined` on the `ADRL`/`COPY` and the CALL window
+`design/impala/TwoStageConstants.md`), so the operands read `*undefined` on the `ADRL`/`COPY` and the CALL window
 is still `*NaN`:
 
         ADRL %1 %1 *undefined			; sink(global s)
@@ -307,10 +307,10 @@ Both spellings are legal GAZL identifiers, so it is an undefined-symbol error at
 loop still never runs - which is why the `ADRL` still self-aliases (`ADRL %1 %1`). The defect is
 unchanged; only the operand text moved.
 Fix: call `rejectByValueStruct` from the ARGUMENT site, not just declarators. Do NOT emit `*.z.Name` here
-- see `docs/GAZLSymbolicWindows.md`, the numeric window ABI is correct.
+- see `design/gazl/GAZLSymbolicWindows.md`, the numeric window ABI is correct.
 
 **S2. `buildStructInit` iterated a symbolic field extent, silently dropping initializer words - CLOSED
-2026-07-31.** *(ALREADY RECORDED, `docs/TwoStageConstants.md`, which carries the authoritative account of
+2026-07-31.** *(ALREADY RECORDED, `design/impala/TwoStageConstants.md`, which carries the authoritative account of
 both the defect and the fix. Reproduced here at the site.)*
 `for (var e = 0; e < f.size; ++e)` where `f.size` is the extent string. With
 `struct S { int array v[N]; int tag }` and a `{{1,2},7}` initializer the emitted data was `DATA #7` - the
@@ -319,7 +319,7 @@ both the defect and the fix. Reproduced here at the site.)*
 Impala can know) and the positional spelling reports `E455`.
 
 **S3. `parseFloat` on an emitted operand string mis-folds a pointer offset - CLOSED 2026-08-04.**
-*(ALREADY RECORDED, `docs/TwoStageConstants.md`, which names `parseFloat("0x10")` being `0` exactly.
+*(ALREADY RECORDED, `design/impala/TwoStageConstants.md`, which names `parseFloat("0x10")` being `0` exactly.
 Reproduced here.)* The `p - const` fold tested `operands[2][0] === '#'`, which establishes CONSTANT, not
 DECIMAL, then ran `parseFloat` on it. `*(p - 0x2)` emitted `PEEK $x $p #0` instead of `#-2` - completely
 silent - and `*(p - K)` for any named const emitted `#NaN`.
@@ -376,7 +376,7 @@ compiler output. Its only regression test uses a row the compiler cannot emit.
 iterates only the extern map. Every other symbol kind has a definition-vs-definition path.
 
 **S10.** `arraySignaturesCompatible` compares extents as raw strings, so `[4]` vs `[N]` with host `N=4` is
-a false conflict and `[4]` vs `[]` is a false pass. This is the case `docs/deferredShapeCheck.gazl` exists
+a false conflict and `[4]` vs `[]` is a false pass. This is the case `design/proofs/deferredShapeCheck.gazl` exists
 to demonstrate.
 
 **S11.** Struct field types are lower-cased wholesale, so `int[N]` matches `int[n]` and `Filter` matches
@@ -408,4 +408,4 @@ Only category 3 wants `! FAIL`. Reaching for it first would be a mistake - most 
   would break the 1:1 model and the cost predictability. What ships instead is the opt-in `--range-checks`
   tier under item 1, off by default. The assembler's own region checks remain the backstop.
 - Anything requiring Impala to evaluate host-supplied constants. It cannot, by design - that is the point
-  of the layout-as-constants scheme (see `docs/StructLayoutConstants.md`).
+  of the layout-as-constants scheme (see `design/impala/StructLayoutConstants.md`).

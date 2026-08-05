@@ -34,7 +34,7 @@ development, and a branch sitting in the list only invites the question of wheth
 (2026-08-04), by a different design from that one's: one subscript with a comma list, striding by the declared element,
 lowered through the place model, with per-axis `.d.` constants the assembler resolves. Struct fields and
 standalone `global`/local arrays both, across all three bounds tiers plus cross-unit metadata. See
-[`MultidimensionalArrays.md`](MultidimensionalArrays.md), which supersedes the objection below.
+[`MultidimensionalArrays.md`](../docs/impala/MultidimensionalArrays.md), which supersedes the objection below.
 
 What stays parked is the rest of that work: arrays as VALUES, and shape-carrying pointer types
 (`int array[W] pointer m`, slice 2c/2d, `3781f8c`). The latter is the real prerequisite for shape
@@ -46,7 +46,7 @@ array-dimension TYPE IDENTITY.
 
 ONE document lives only at that tag: `docs/Impala2OpenItems.md` (a whole backlog). Read it there -
 `git show Impala2-multidim-arrays-park:docs/Impala2OpenItems.md` - rather than assuming those items were
-dropped. This used to name `docs/MultidimensionalArrays.md` as park-only too, which sent readers to a
+dropped. This used to name `docs/impala/MultidimensionalArrays.md` as park-only too, which sent readers to a
 superseded 3.0 design requiring numeric literal dimensions: that filename is a LIVE doc on `Impala2`
 describing the design that was actually built, and the parked copy is history.
 
@@ -153,7 +153,7 @@ Parked because **an expansion needs GAZL 2 and Impala 2 must stay usable on GAZL
 assembler rejects `SCOP` with `Unknown mnemonic`. The transient-based lowering that did work on 1.0 was
 the wrong design and is not what is parked: it re-implemented allocation numerically, so an inline local
 whose extent is not a number Impala knows - an `extern struct` array, `t[H * N]` - either got a wrong
-frame or hit `E433`. See [`docs/TwoStageConstants.md`](TwoStageConstants.md) for why that class of
+frame or hit `E433`. See [`design/impala/TwoStageConstants.md`](impala/TwoStageConstants.md) for why that class of
 assumption keeps failing.
 
 The park branch is not an ancestor: `GAZL2` forked from the last Impala 2 commit that still had the
@@ -172,14 +172,14 @@ Retired with it: fixtures `inlineEquivalence`, `inlineEquivalenceCall`, `inlineF
 (same program, keyword stripped, must print the same thing). Three silent miscompiles were caught by it.
 `tests/impala/sources/import/mathlib.impala` kept its cross-unit helper as an ordinary function.
 
-What did NOT go with it: extent constants (`docs/SymbolNamespace.md`) and `SCOP` / `ENDS` are
+What did NOT go with it: extent constants (`design/gazl/SymbolNamespace.md`) and `SCOP` / `ENDS` are
 worth having on their own, and the call-window-in-a-hole guard in `borrowForCall` is an Impala 1.0 bug
 fix that stays.
 
 
 ## Does anything here get easier now that extents are named constants?
 
-Asked 2026-08-01, after `.z.<name>` array extents landed (`docs/SymbolNamespace.md`). Two different
+Asked 2026-08-01, after `.z.<name>` array extents landed (`design/gazl/SymbolNamespace.md`). Two different
 questions, with two different answers. Recorded so neither is re-derived.
 
 ### Does the EXISTING `.z.` symbol help? No.
@@ -195,7 +195,7 @@ compares `maxFree` against `counters-1`, `copyStructArg` iterates `words` slots 
 `.z.V` slots. The `SCOP`/`ENDS` remedy that fixed inline locals does NOT transfer: it places NAMED FRAME
 LOCALS, and there is no assembler-side allocator for transients to delegate to at all (`%N` is an index
 the emitter computes; the assembler only takes a `max`). So the fix is REWRITING Impala's allocator into
-the symbolic position algebra of [`docs/GAZLSymbolicWindows.md`](GAZLSymbolicWindows.md) - strictly more
+the symbolic position algebra of [`design/gazl/GAZLSymbolicWindows.md`](gazl/GAZLSymbolicWindows.md) - strictly more
 machinery than today, and it trades `claimSlot`'s loud per-slot overlap assert for a discipline whose
 failures are silent. The parking rationale gets stronger, not weaker.
 
@@ -221,7 +221,7 @@ The mechanism already exists and is already used this way in `src/UnitTest.gazl:
     ! FAIL f(b): axis 0 is b[N] but f expects [4]
     .dim0ok:
 
-[`docs/deferredShapeCheck.gazl`](deferredShapeCheck.gazl) is a runnable demo. `[4][3]` checked against
+[`design/proofs/deferredShapeCheck.gazl`](proofs/deferredShapeCheck.gazl) is a runnable demo. `[4][3]` checked against
 `[N][W-1]` PASSES when the host supplies `N=4, W=4`, and names the offending axis when it does not.
 Neither Impala (it does not know `N`) nor `gazl-validate` (`arraySignaturesCompatible` is a raw
 `a.size !== b.size` string compare, so `[4]` vs `[N]` is a false conflict and a folded extent publishes
@@ -240,13 +240,13 @@ reported to the host that caused it. Verified to work.
    the rest; and where a shape genuinely depends on host constants, deferring is CORRECT, not a
    compromise - the answer differs per host.
 2. It needs a new per-axis symbol namespace (one per axis per array), not `.z.`, which is one-per-array
-   and in words. See `docs/SymbolNamespace.md` before minting a tag.
+   and in words. See `design/gazl/SymbolNamespace.md` before minting a tag.
 3. `CONST_INT_P` is not forward-referencable, so both sides must be defined before the check - the same
    ordering discipline the layout blocks already follow.
 4. The diagnostic is free text with no caret, though it can carry an Impala source location.
 5. ~~It only pays off WITH arrays-as-values, since Impala has no array parameters today.~~ **WRONG, and it
    contradicts the design it is summarizing (corrected 2026-08-04).** A shape check needs a position where
-   a DECLARED shape meets another, and `docs/MultidimensionalArrays.md` §8 - "Function parameters -
+   a DECLARED shape meets another, and `docs/impala/MultidimensionalArrays.md` §8 - "Function parameters -
    dissolved into an ordinary pointer parameter" - is explicit that this is never an array-by-value:
    `function sum(int array[W] pointer m)` is an ordinary pointer parameter whose ELEMENT carries the inner
    shape, and the park branch implemented exactly that (slice 2c/2d, `3781f8c`). No arrays-as-values, no
@@ -274,7 +274,7 @@ a memory address, a function pointer is a declaration-order ordinal into `functi
 a valid ordinal, so it silently calls a different function. A separate type makes that unrepresentable
 rather than merely detectable, because there would be no `ADDt`/`SUBt`/`LSSt` at all.
 
-Researched and written up in [`docs/GAZL2FunctionPointers.md`](GAZL2FunctionPointers.md), including the
+Researched and written up in [`design/gazl/GAZL2FunctionPointers.md`](gazl/GAZL2FunctionPointers.md), including the
 runtime demonstration, the ~14 table entries it needs, and the suffix letters ruled out (`F` collides with
 `DATf` on case alone; `a` and `e` collide with `LOCA`/`DATA` and `MOVE`).
 
@@ -306,7 +306,7 @@ This touches every call site, so it wants to land with the other ABI work, not b
 
 ### Symbolic call windows
 
-See `docs/GAZLSymbolicWindows.md`. GAZL already supports everything needed (symbolically-indexed transients
+See `design/gazl/GAZLSymbolicWindows.md`. GAZL already supports everything needed (symbolically-indexed transients
 `%<A>`, symbolic `PARA`/`CALL` extents); the blocker is that Impala's transient allocator keys slots by
 integer index. Making it symbolic would let by-value structs adapt to a re-packed layout, let extern
 (host-owned) structs be passed and returned by value, and make the modifiable-layout promise hold end to
@@ -320,13 +320,13 @@ CORRECT, not a stopgap - see that document before "fixing" any by-value size to 
 
 **Multidimensional arrays are implemented and off this list** - the cost/benefit objection that used to
 sit here ("multidim SYNTAX cannot state an inner extent for a host-owned struct") was answered by decision
-2 in [`MultidimensionalArrays.md`](MultidimensionalArrays.md): an `extern struct` field states its RANK and
+2 in [`MultidimensionalArrays.md`](../docs/impala/MultidimensionalArrays.md): an `extern struct` field states its RANK and
 the host supplies every axis, exactly as it already supplies `.o.` and `.z.`.
 
 What 3.0 would add is `int array[W] pointer m` - a pointer whose ELEMENT carries a shape. Independent of
 the ABI work above; it needs no calling-convention change and no arrays-as-values. It is the only thing
 that creates a position where two DECLARED shapes meet, and so the only thing that makes the deferred
-`! EQUi` + `! FAIL` identity check (proven in [`deferredShapeCheck.gazl`](deferredShapeCheck.gazl)) have a
+`! EQUi` + `! FAIL` identity check (proven in [`deferredShapeCheck.gazl`](proofs/deferredShapeCheck.gazl)) have a
 caller. Without it that check is a mechanism with nothing to check.
 
 ### Block implicit array->pointer decay
@@ -336,7 +336,7 @@ is the only item on this page a 2.0 user should act on today.
 
     decided:  2026-07 (re-verified 2026-08-04, still unimplemented)
     status:   decay is LIVE - `makeRValue` (`impala/impala.jspeg:1532`) turns an array place used
-              without a subscript into a pointer; `docs/Impala2.md:193` correctly says so
+              without a subscript into a pointer; `docs/impala/Impala2.md:193` correctly says so
     target:   Impala 3.0
 
 The rule when it lands: an aggregate never implicitly becomes a pointer. You take the address of an array
@@ -358,7 +358,7 @@ lvalue` today (verified 2026-07-29), because taking the address of a whole array
 form. That is the sting in this item: blocking decay is not a pure removal. `&a` has to become legal in the
 same change, or the rule would leave no way to spell what `foo(a)` spells now.
 
-`docs/ExternPrototypes.md` notes the interaction with extern prototypes that take arrays or pointers.
+`design/impala/ExternPrototypes.md` notes the interaction with extern prototypes that take arrays or pointers.
 
 ### Placing static data at a symbolic offset - REQUIRES GAZL 2
 
@@ -391,7 +391,7 @@ So `E454` no longer covers the array, only what is behind it.
 
 Verified 2026-08-01 that GAZL 1 has no way to express it:
 
-- no fill, repeat or origin directive exists (`docs/InstructionSet.md`);
+- no fill, repeat or origin directive exists (`docs/gazl/InstructionSet.md`);
 - a FORWARD `! GOTO` assembles, and can even skip a `DATA` line;
 - a BACKWARD one does not assemble at all (`Compile time label not found`), so there are no
   assemble-time loops.
@@ -422,7 +422,7 @@ this form; this section is the compiler-side half of the same item.
 **One part did NOT need GAZL 2 and is DONE as of 2026-08-01**: the value-count check behind `E454`.
 Impala cannot compare a literal count against a symbolic extent, but it EMITS the comparison instead, for
 the assembler to make once the extent has a value. Rule 4 of
-[`TwoStageConstants.md`](TwoStageConstants.md), and it costs nothing at run time. A symbolic array can be
+[`TwoStageConstants.md`](impala/TwoStageConstants.md), and it costs nothing at run time. A symbolic array can be
 filled again on GAZL 1 whenever the count provably fits; only fields AFTER it still need the region.
 
 It shipped as the canonical `! FAIL` idiom, emitted ABOVE the rows it guards:
@@ -434,8 +434,8 @@ It shipped as the canonical `! FAIL` idiom, emitted ABOVE the rows it guards:
             DATA #1 #7 #8 #9
 
 It briefly shipped (2026-08-01) as one line branching to a deliberately UNDEFINED label, so the label
-name doubled as the message. That is the trick [`TwoStageConstants.md`](TwoStageConstants.md) and
-[`CompileTimeHardening.md`](CompileTimeHardening.md) both explicitly ban, and it was corrected on
+name doubled as the message. That is the trick [`TwoStageConstants.md`](impala/TwoStageConstants.md) and
+[`CompileTimeHardening.md`](impala/CompileTimeHardening.md) both explicitly ban, and it was corrected on
 2026-08-02: an identifier cannot carry spaces, so it could not state the two counts that make the message
 actionable, and it read like an internal error. The `.g<N>` skip label needs a counter that does NOT
 reset per function, which is the only cost the one-line form was avoiding.
@@ -454,7 +454,7 @@ layout block now mints `.z.<Struct>.<field>` for every array field while the scr
 advances by the SYMBOL, so the extent outlives the borrow. It briefly carried its own `.x.` tag, because
 `.z.<owner>.<name>` was also a local array's extent and a struct could then share a function's name. That
 clash is gone: `claimTopName` now rejects every top-level name collision (`E401`), so one owner name has
-exactly one kind and a single `.z.` covers both - see [`SymbolNamespace.md`](SymbolNamespace.md), and
+exactly one kind and a single `.z.` covers both - see [`SymbolNamespace.md`](gazl/SymbolNamespace.md), and
 `tests/impala/sources/structFieldExtents.impala` for the pinned layout.
 
 **Still open, and now cheap**, because they want the same symbol: `sizeof` of an array field, and
@@ -483,14 +483,14 @@ position Impala assumed.
 **No park branch - never built.** Recursion works but is never eliminated, so a tail-recursive
 accumulator traps on frame depth. It needs a new GAZL instruction (no existing form enters a function
 without pushing a frame) *and* Impala syntax, which is why it is neither a peephole nor a grammar tweak.
-Designed in [`TailCalls.md`](TailCalls.md), including a cheaper self-recursion-only first increment that
+Designed in [`TailCalls.md`](gazl/TailCalls.md), including a cheaper self-recursion-only first increment that
 needs no ISA change.
 
 ### Full import-cycle resolution (collect mode)
 
 **No park branch - this one was never built.** Unlike everything above, collect mode is a design that was
 written and deferred, not code that was removed, so there is nothing to check out. The architecture is
-`impala/Impala2Slices.md` Step 5 (still the plan of record) and `docs/Impala2.md` "Deferred to 3.0: collect
+`design/impala/Impala2Slices.md` Step 5 (still the plan of record) and `docs/impala/Impala2.md` "Deferred to 3.0: collect
 mode"; both are complete enough to implement from.
 
 Deferred 2026-07-29 rather than held up 2.0. Impala 2.0's answer to a backwards cross-cycle reference is a
@@ -501,8 +501,8 @@ them - an existing `extern` stays correct and keeps compiling - so this is a pur
 breaking change, and nothing written against 2.0 has to be revisited.
 
 Its precondition is worth doing regardless: finishing the thinning of fat inline actions into `$$parser`
-methods (`impala/RefactorPlan.md` is the adjacent cleanup on the same surface) also shrinks the migration
-that "JSPEG 2" would face (`docs/JSPEGFuture.md` Problem 2). Do not treat collect mode as gated on JSPEG 2
+methods (`design/jspeg/RefactorPlan.md` is the adjacent cleanup on the same surface) also shrinks the migration
+that "JSPEG 2" would face (`design/jspeg/JSPEGFuture.md` Problem 2). Do not treat collect mode as gated on JSPEG 2
 or on the body-level AST rework - it is gated on neither.
 
 ### Precompiled `.gazl` blob imports

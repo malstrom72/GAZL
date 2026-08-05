@@ -7,8 +7,8 @@ it was written swapped a single guardrail bullet. M1's sub-item about the runner
 (`impalaJsCompilerRunner.js` patches no globals), but M1's own exit criterion - a checked-in audit note -
 is not.
 
-Kept because it is wanted, not merely unfinished: [`docs/JSPEGFuture.md`](../docs/JSPEGFuture.md) names it
-the near-term step, and [`Impala2Slices.md`](Impala2Slices.md) makes it a precondition for collect mode.
+Kept because it is wanted, not merely unfinished: [`design/jspeg/JSPEGFuture.md`](JSPEGFuture.md) names it
+the near-term step, and [`Impala2Slices.md`](../impala/Impala2Slices.md) makes it a precondition for collect mode.
 One correction to fold in when it starts - the motivation is sized off "~50 `$$.` sites", which is really
 **126**.
 
@@ -167,11 +167,11 @@ compiler is still current.
 
 Goal: make the final holder/value model clear to future grammar authors.
 
-- Update `impala/JSPEG.md` with:
+- Update `design/jspeg/JSPEG.md` with:
   - when `$$` means the value
   - when `$$.` reaches the holder
   - when helpers should return values versus mutate holders
-- Update `impala/ImpalaJS.md` only if user-facing compiler behavior changed.
+- Update `design/jspeg/ImpalaJS.md` only if user-facing compiler behavior changed.
 
 Exit criteria: docs describe the final action style without mentioning obsolete
 compiler files or the removed `impala/jspeg/` layout.

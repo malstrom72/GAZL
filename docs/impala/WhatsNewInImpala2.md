@@ -197,7 +197,7 @@ expression, resolved by the assembler rather than by Impala. That leaves only ba
 avoids the question entirely - multidimensional only as a struct field, reached through a struct pointer -
 was designed and rejected on cost: what it adds over writing `y * W + x` is subscript sugar plus shape
 typing, the sugar already works today, and the shape typing *is* the unsolved question.
-[`ParkedFeatures.md`](ParkedFeatures.md) has the full argument and the branch, for this and every row above.
+[`ParkedFeatures.md`](../../design/ParkedFeatures.md) has the full argument and the branch, for this and every row above.
 
 ## Upgrading a 1.0 program
 

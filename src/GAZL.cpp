@@ -294,7 +294,7 @@ const int FWD_FREE_R		= ADDRESS_R | UNCHECKED_ADDRESS | FORWARD;
 // interchangeable everywhere except a direct CALL, so `p` means both "data pointer" and "any pointer".
 // Consequence: ADDp on a function pointer assembles AND does not trap - `&one + 1` is a valid ordinal, so
 // it silently calls a different function. The fix is a fourth storage type, suffix `t` (target), which
-// simply has no ADDt/SUBt/DIFt/LSSt forms. See docs/GAZL2FunctionPointers.md.
+// simply has no ADDt/SUBt/DIFt/LSSt forms. See design/gazl/GAZL2FunctionPointers.md.
 const int ANY_FREE			= NULL_PTR | FREE_ADDRESS | FUNC;
 const int ANY_FWD_FREE		= ANY_FREE | FORWARD;
 const int ANY_VAR_FREE_W	= ANY_VAR_W | UNCHECKED_ADDRESS;
@@ -344,7 +344,7 @@ static const Operator OPERATORS[] = {
 	, { " CALL_n__", CALL_NVC,	{ NATIVE|FORWARD, 0			, 0				}		, 0				, 0				}
 	, { " CALL_nvs", CALL_NVC,	{ NATIVE|FORWARD, TRANSIENT	, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	// GAZL 2: these take the generic VAR_PTR_R, so an INDIRECT call cannot demand a function pointer - only
-	// CALL_c__ above (FUNC | FORWARD) discriminates. Retype to `t`. See docs/GAZL2FunctionPointers.md.
+	// CALL_c__ above (FUNC | FORWARD) discriminates. Retype to `t`. See design/gazl/GAZL2FunctionPointers.md.
 	, { " CALL_v__", CALL_VVC,	{ VAR_PTR_R		, 0				, 0				}		, 0				, 0				}
 	, { " CALL_vvs", CALL_VVC,	{ VAR_PTR_R		, TRANSIENT		, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	, { " CNST_s__", CNST____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ADDRESS_R		}
@@ -356,7 +356,7 @@ static const Operator OPERATORS[] = {
 	, { " DATf_c__", DATA____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, 0				}
 	, { " DATi_c__", DATA____,	{ CONST_INT		, 0				, 0				}		, 0				, 0				}
 	// GAZL 2: ANY_FWD_FREE lets one DATp row mix function and data addresses indistinguishably
-	// (`DATp &func &data` assembles). Needs a sibling DATt. See docs/GAZL2FunctionPointers.md.
+	// (`DATp &func &data` assembles). Needs a sibling DATt. See design/gazl/GAZL2FunctionPointers.md.
 	, { " DATp_c__", DATA____,	{ ANY_FWD_FREE	, 0				, 0				}		, 0				, 0				}
 	, { " DATs____", DATA____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " DIFp_vcc", SUBI_CCC,	{ VAR_INT_W		, FREE_ADDRESS		, FREE_ADDRESS		}		, YIELDS_CONST	, CONST_INT		}

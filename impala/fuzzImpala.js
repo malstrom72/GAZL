@@ -5,7 +5,7 @@
 // It emits random, mostly type-valid Impala programs that lean on the intricate paths
 // (nested calls, struct locals/fields/copies, arrays, pointers, funcptr dispatch) and compiles
 // each one. By-value struct params, struct returns, multi-value returns and destructuring are
-// parked for Impala 3.0 (see docs/ParkedFeatures.md) so they are no longer generated.
+// parked for Impala 3.0 (see design/ParkedFeatures.md) so they are no longer generated.
 // The oracle is robustness:
 //   - a clean coded diagnostic (`error[Exxx]`) is an ACCEPTABLE outcome (invalid program),
 //   - a raw JS exception or an internal `Assertion failed` (e.g. the transient-register
@@ -196,7 +196,7 @@ function checkExpected(res, expect) {
 // and require identical output) lived here. It was the only check in this fuzzer with a real
 // reference oracle, and the three inline miscompiles found by hand - call-window adjacency, switch
 // case labels, double processBranches - would each have failed it. Restore it from history alongside
-// `inline` itself; see docs/ParkedFeatures.md.
+// `inline` itself; see design/ParkedFeatures.md.
 //
 // `checkExpected` below is now a second reference oracle, over static initializers rather than over
 // code. It was added because that path had NO fuzz coverage at all - the generator emitted only bare
@@ -478,7 +478,7 @@ function genProgram() {
 	for (let i = 0; i < nFuncs; ++i) {
 		const params = [];
 		// by-value struct params, struct returns and multi-value returns are parked for Impala 3.0
-		// (see docs/ParkedFeatures.md), so params stay scalar/pointer and there is at most one
+		// (see design/ParkedFeatures.md), so params stay scalar/pointer and there is at most one
 		// scalar return.
 		for (let k = ri(4); k > 0; --k) params.push({ name: id('p'), t: someType(false, true) });
 		const rets = rnd() < 0.35 ? [] : [pick(scalarTypes)];
@@ -590,7 +590,7 @@ function genProgram() {
 	// a bare local and whose later argument writes that same local through a pointer. It is kept while
 	// `inline` is parked because it is what the differential oracle was built around: an expansion may
 	// substitute the bare local, which DEFERS its read past the write, so the two builds only agree if
-	// the marshalling scan stops at the write (docs/Inlining.md 5). Assembled at random this needs
+	// the marshalling scan stops at the write (design/impala/Inlining.md 5). Assembled at random this needs
 	// about seven flips to line up - measured, only 1.3% of arguments are even a bare local - and it
 	// turned up in roughly one program in two hundred, which is why a real miscompile of exactly this
 	// shape survived a 1000-program sweep.
@@ -892,7 +892,7 @@ function genProgram() {
 			const g = pick(scope.gscalars);
 			return '\tglobal ' + g.name + ' = ' + genExpr(g.elem, 3, scope) + ';';
 		}
-		// (destructuring of a multi-return call is parked for Impala 3.0 - see docs/ParkedFeatures.md)
+		// (destructuring of a multi-return call is parked for Impala 3.0 - see design/ParkedFeatures.md)
 		// funcptr: assign a matching function to a funcptr local, then call through it
 		if (roll < 0.35) {
 			const cbLocals = scope.locals.filter((l) => isFuncType(l.t));

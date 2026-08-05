@@ -19,7 +19,7 @@ Core JSPEG files live in `impala/`:
 - `jspegCompilerTests.js` - self-hosting and grammar equivalence tests for JSPEG.
 - `updateJSPEG.js` - regenerates or verifies compiler outputs; runs the JSPEG regression suite.
 
-Impala-on-JS (the compiler generated from `impala.jspeg`) has its own usage and tooling. See `impala/ImpalaJS.md` for those details (CLI, programmatic API, and parity tests).
+Impala-on-JS (the compiler generated from `impala.jspeg`) has its own usage and tooling. See `design/jspeg/ImpalaJS.md` for those details (CLI, programmatic API, and parity tests).
 
 ## Quickstart (JSPEG)
 
@@ -112,7 +112,7 @@ timeout 180 ./build.sh
 
 ## Using the Impala Compiler (JS)
 
-For using the JavaScript Impala compiler (CLI, API, and tests), see `impala/ImpalaJS.md`.
+For using the JavaScript Impala compiler (CLI, API, and tests), see `design/jspeg/ImpalaJS.md`.
 
 ## Running the JSPEG Tests
 

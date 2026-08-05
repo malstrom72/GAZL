@@ -739,7 +739,7 @@ function assembleFixture(name, gazlPath) {
 }
 
 /* A source that must COMPILE clean and then be refused by the assembler. That is a real outcome for
-   anything Impala defers rather than decides (docs/TwoStageConstants.md), and nothing else here can see
+   anything Impala defers rather than decides (design/impala/TwoStageConstants.md), and nothing else here can see
    it: the parity fixtures require assembly to SUCCEED, and a diagnostic table only ever runs the
    compiler. Skipped without GAZLCmd, like every other assembler-backed check. */
 function assertLoadFails(label, source, expectedInMessage) {
@@ -1033,7 +1033,7 @@ console.log("impala.jspeg compiler accepts parenthesized bitwise mixes identical
 compileWithJsImpala(sameOpChainSource, { randomId: 42 });
 console.log("impala.jspeg compiler accepts same-operator bitwise chains without parentheses");
 
-// `inline` is PARKED for Impala 3.0 (docs/ParkedFeatures.md): an expansion needs GAZL 2 `SCOP` / `ENDS`
+// `inline` is PARKED for Impala 3.0 (design/ParkedFeatures.md): an expansion needs GAZL 2 `SCOP` / `ENDS`
 // to place its locals, and Impala 2 has to stay usable on GAZL 1.0 engines. The keyword stays reserved
 // so the door says why rather than reading as an unknown identifier. One case is the whole surface: the
 // rejection is the first action of FuncDecl, before anything else about the function is looked at.
@@ -1124,7 +1124,7 @@ console.log("impala.jspeg compiler requires an array extent everywhere except an
 // Shapes the compiler used to accept and hand to the assembler, which then failed the build naming a
 // compiler-minted symbol (`.s0.0`, `.s0.-6`, `nowhere`) instead of the source line. Each is decidable
 // here whenever the values are numeric; a SYMBOLIC range or extent stays unchecked on purpose, because
-// not knowing is not the same as being fine. See docs/CompileTimeHardening.md.
+// not knowing is not the same as being fine. See design/impala/CompileTimeHardening.md.
 const SW = (range, body) => `function f() locals int i { i = 1; switch (i == ${range}) { ${body} } }`;
 const SYM_RANGE = "const int LO = 5\nconst int HI = 9\n";   // named consts: constInt never folds these
 const acceptedThenRejected = [
@@ -1153,7 +1153,7 @@ const acceptedThenRejected = [
 		"distinct cases under a symbolic range still compile",
 		SYM_RANGE + SW("LO to HI", "case 0: { i=1; } case 1: { i=2; }"), null],
 	// ...and the window check stays OFF there: a configuration may legitimately narrow the range, so
-	// erroring on a now-surplus arm would make that configuration unbuildable (docs/TwoStageConstants.md).
+	// erroring on a now-surplus arm would make that configuration unbuildable (design/impala/TwoStageConstants.md).
 	[
 		"a case outside a symbolic range is left to the configuration",
 		SYM_RANGE + SW("LO to HI", "case 99: { i=1; }"), null],
@@ -1428,7 +1428,7 @@ const symbolicExtentCases = [
 	["zeros are fine - they are what the region fills anyway", SYM_ZERO_SRC, null],
 	// Zero-ness is a VALUE, not a spelling. Comparing operands against the canonical `#0`/`#0.0`/`&NULL`
 	// strings rejected these, which is erroring on safe code. A SYMBOL stays rejected - Impala does not
-	// know its value and must not guess one (docs/TwoStageConstants.md rule 2).
+	// know its value and must not guess one (design/impala/TwoStageConstants.md rule 2).
 	["hex zero is zero", SYM_STRUCT + "global S s = { a: 1, z: 0x0 }\nfunction main() { }", null],
 	["negative zero is zero", SYM_STRUCT + "global S s = { a: 1, z: -0 }\nfunction main() { }", null],
 	["float zero with an exponent is zero",
@@ -1869,7 +1869,7 @@ for (const [label, source, expected] of caretCases) {
 }
 console.log("impala.jspeg compiler points its carets at the offending token");
 
-// ADDRESS FORMATION IS NEVER BOUNDS-CHECKED, at any index - the rule from docs/Impala2Review.md, and the
+// ADDRESS FORMATION IS NEVER BOUNDS-CHECKED, at any index - the rule from design/impala/Impala2Review.md, and the
 // reason E461 cannot fire at the subscript itself: whether an out-of-range constant is an error depends
 // on what is done with it, and at the subscript the `&` has not been seen yet. It is also why Impala
 // needs no one-past-the-end carve-out where C does; the end pointer is just an address like the rest.
@@ -2130,7 +2130,7 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler decides every integer literal spelling, and defers only chars");
 }
 
-// A struct ARRAY FIELD decays to a pointer in every reading context - docs/Impala2.md says so - but the
+// A struct ARRAY FIELD decays to a pointer in every reading context - docs/impala/Impala2.md says so - but the
 // argument path skips makeRValue by design (it emits into the call window instead of a temp), so the one
 // door that never decayed handed the writer a raw `@place` record. Its operator is in no opcode table,
 // and the compiler died on `Cannot read properties of undefined (reading 'split')`: no code, no position,

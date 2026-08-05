@@ -1,6 +1,6 @@
 # Symbolic call windows in GAZL (finding)
 
-Status: FINDING, not implemented. Parked for Impala 3.0. See `docs/ParkedFeatures.md`.
+Status: FINDING, not implemented. Parked for Impala 3.0. See `design/ParkedFeatures.md`.
 
 Short version: **GAZL already supports fully symbolic by-value call windows. Nothing is missing from the
 VM or the assembler.** The only thing standing in the way is that Impala's transient allocator keys its
@@ -11,7 +11,7 @@ allocator would need, and why the current numeric by-value ABI is nevertheless t
 ## The question
 
 Impala emits struct layouts as compile-time constants (`.o.Name.field`, `.z.Name`; see
-`docs/StructLayoutConstants.md`), so a struct in MEMORY adapts if the layout is re-packed: `LOCA *.z.V`,
+`design/impala/StructLayoutConstants.md`), so a struct in MEMORY adapts if the layout is re-packed: `LOCA *.z.V`,
 `$v:.o.V.a`, strides `k*.z.Elem` and whole-struct `COPY *.z.V` all read the same symbols and scale
 together.
 
@@ -67,8 +67,8 @@ Every one of these was checked against `src/GAZL.cpp` and by running GAZLCmd:
 
 ## Runnable proof
 
-[`docs/symbolicWindows.gazl`](symbolicWindows.gazl) is a complete hand-written program in the fully
-symbolic style, with [`docs/symbolicWindowsRepacked.gazl`](symbolicWindowsRepacked.gazl) as its re-pack
+[`design/proofs/symbolicWindows.gazl`](../proofs/symbolicWindows.gazl) is a complete hand-written program in the fully
+symbolic style, with [`design/proofs/symbolicWindowsRepacked.gazl`](../proofs/symbolicWindowsRepacked.gazl) as its re-pack
 twin. (It lived in `output/` until 2026-08-01, which is gitignored, so this note cited a proof that was
 not in the repository. Re-derived from the listing below and re-verified against today's assembler.) It
 models
@@ -121,9 +121,9 @@ grown (1 -> 2), and `R`'s two fields swapped - with every instruction left byte-
 still prints the same answer, and `diff` shows only `! DEFi` header lines changed. Argument `t` and `j`
 both move, all re-derived by the assembler. Reproduce:
 
-    output/GAZLCmd docs/symbolicWindows.gazl main            # 55
-    output/GAZLCmd docs/symbolicWindowsRepacked.gazl main    # 55, globals 6 -> 8 words
-    diff <(tail -n +29 docs/symbolicWindows.gazl) <(tail -n +29 docs/symbolicWindowsRepacked.gazl)
+    output/GAZLCmd design/proofs/symbolicWindows.gazl main            # 55
+    output/GAZLCmd design/proofs/symbolicWindowsRepacked.gazl main    # 55, globals 6 -> 8 words
+    diff <(tail -n +29 design/proofs/symbolicWindows.gazl) <(tail -n +29 design/proofs/symbolicWindowsRepacked.gazl)
 
 
 ## What actually blocks it: Impala's allocator

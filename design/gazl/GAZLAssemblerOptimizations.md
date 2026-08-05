@@ -5,12 +5,12 @@ here is implemented. Sized for its own branch.
 
 The dividing line is what each layer knows. Impala must keep struct sizes and offsets SYMBOLIC
 (`.z.Name`, `.o.Name.field`) because an `extern struct` layout is host-owned and supplied at load - see
-[`docs/StructLayoutConstants.md`](StructLayoutConstants.md). The assembler is the first layer that holds
+[`design/impala/StructLayoutConstants.md`](../impala/StructLayoutConstants.md). The assembler is the first layer that holds
 the resolved value, so any transform keyed on it can only happen here. That single fact drives the list.
 
-Related but separate: [`docs/FutureOptimizations.md`](FutureOptimizations.md) covers Impala-side
+Related but separate: [`design/FutureOptimizations.md`](../FutureOptimizations.md) covers Impala-side
 candidates (dead-arm elimination after a compile-time branch, and the `expandInline` folding restriction).
-[`docs/TailCalls.md`](TailCalls.md) covers the one case that needs a NEW instruction rather than a
+[`design/gazl/TailCalls.md`](TailCalls.md) covers the one case that needs a NEW instruction rather than a
 peephole - `CALL f; RETU` cannot be collapsed here, because no GAZL form can enter a function without
 pushing a frame.
 
@@ -76,7 +76,7 @@ helps hand-written GAZL as much as compiler output.
 `! MULi <A> #1 #.z.S` at assembly time, so no multiply survives. Only a **runtime** index into a
 **one-word** struct array pays, which is the degenerate-struct case. It is pre-existing rather than new -
 `subscriptStruct` has always emitted the same multiply for `a[i]` - and Impala reaches it from `p + i` too
-since pointer arithmetic started scaling (see [`docs/Impala2Review.md`](Impala2Review.md)).
+since pointer arithmetic started scaling (see [`design/impala/Impala2Review.md`](../impala/Impala2Review.md)).
 
 Do not "fix" this in Impala. The compiler must not bake `.z.S`; a normal struct's word count is known at
 compile time, but an `extern struct`'s is not, and special-casing one would put a size in the output that
@@ -157,7 +157,7 @@ so duplicating it changes nothing but the dispatch count. After the rewrite the 
 unreferenced, which is a separate (and optional) cleanup.
 
 Note this one has a competing fix at the other end: a bare `return;` statement in Impala would lower
-straight to `RETU` and never emit the `GOTO` (see [`ParkedFeatures.md`](ParkedFeatures.md)). The two are
+straight to `RETU` and never emit the `GOTO` (see [`ParkedFeatures.md`](../ParkedFeatures.md)). The two are
 complementary rather than alternatives - the peephole also improves every program already written, and
 every hand-written GAZL module.
 

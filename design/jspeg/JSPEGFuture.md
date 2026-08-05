@@ -1,6 +1,6 @@
 # JSPEG Future
 
-> Status: analysis and direction, written alongside the Impala 2.0 design (`docs/Impala2.md`).
+> Status: analysis and direction, written alongside the Impala 2.0 design (`docs/impala/Impala2.md`).
 > JSPEG is good enough to build Impala 2.0 on as-is; this document records its three structural
 > problems, what fixing each would take, and what each fix changes in `impala/impala.jspeg`.
 > Everything here is verifiable against the existing parity harness - that harness is what makes
@@ -42,7 +42,7 @@ dry, once wet).
   diagnostics, free lookahead for new syntax (destructuring `x, y = f()` vs expression statement),
   and Impala 2.0's `import` interface mode (parse, take declarations, emit nothing) as a trivial
   variant instead of a special mode. *That last one is a convenience, **not** a dependency: import
-  cycles need only declaration-level two-phase, which `impala/Impala2Slices.md:155-163` scopes as a
+  cycles need only declaration-level two-phase, which `design/impala/Impala2Slices.md:155-163` scopes as a
   mode on `$$parser` and explicitly separates from this rework. Do not wait for it to fix cycles.*
   *Impact on `impala.jspeg`: rule structure unchanged; every action rewritten from emit-now to
   build-node. Note this is **not** a change to JSPEG - nothing in the code generator stops a grammar
@@ -63,7 +63,7 @@ text depends on distant grammar context**.
 The cost is documented by the repository itself: `JSPEG.md` needs a dedicated semantics section,
 one sigil earned a whole architecture review of its own (`docs/jspeg-dollar-report.md`, retired
 2026-08-05 once this section chose a direction none of its six options proposed), and
-`impala/RefactorPlan.md` exists to migrate helpers because "holder/value mistakes" happen in practice. `impala.jspeg`
+`design/jspeg/RefactorPlan.md` exists to migrate helpers because "holder/value mistakes" happen in practice. `impala.jspeg`
 currently has ~126 `$$.` holder-escape sites.
 
 ### What it would take
@@ -119,7 +119,7 @@ taxes both paths.
 
 ## Adjacent gap: syntax-error quality
 
-Not one of the three, but the Impala 2.0 diagnostics contract (`docs/Impala2.md`, "Diagnostics")
+Not one of the three, but the Impala 2.0 diagnostics contract (`docs/impala/Impala2.md`, "Diagnostics")
 depends on it. Today a failed parse returns only the farthest-failure offset (`_im`) - no expected
 tokens, no rule context. Semantic errors via `$$parser.fail` are fine; *parse* errors are not, and
 agents writing new 2.0 syntax will hit parse errors constantly.

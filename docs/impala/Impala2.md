@@ -11,7 +11,7 @@
 > `Impala3-byvalue-multireturn-park` tag. Impala 2.0 rejects them (`E426`-`E429`); results come back
 > through pointer out-parameters instead. Struct locals/globals, struct pointers, field access,
 > `sizeof`, whole-struct assignment and single named returns are all unaffected. See
-> [`docs/ParkedFeatures.md`](ParkedFeatures.md) for what is parked, where, and why.
+> [`design/ParkedFeatures.md`](../../design/ParkedFeatures.md) for what is parked, where, and why.
 >
 > The per-step sections below are the design records. **Import cycles resolve in one direction only**: a
 > backwards cross-cycle reference needs a forward `extern`, because the declaration pre-pass ("collect
@@ -25,7 +25,7 @@
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),
 and a near 1:1 mapping from language constructs to GAZL instructions. See
-[`docs/Impala.md`](Impala.md) for the 1.0 reference.
+[`docs/impala/Impala.md`](Impala.md) for the 1.0 reference.
 
 2.0 grows the language beyond that minimum **without giving up what makes Impala Impala.**
 
@@ -47,7 +47,7 @@ These are the constraints every 2.0 feature is measured against.
    hardening: 2.0 never demands a numeric value where a symbol would do, never folds a named constant
    away, and never treats "unknown at Impala compile time" as an error. Checks that cannot be decided
    at compile time get DEFERRED to assembly time, not abandoned and not guessed at. Specified in
-   [`docs/TwoStageConstants.md`](TwoStageConstants.md), which is normative for every feature below.
+   [`design/impala/TwoStageConstants.md`](../../design/impala/TwoStageConstants.md), which is normative for every feature below.
 
 2. **Types are a zero-cost compile-time overlay.** This is the spine of the whole release. Every
    type in 2.0 **erases to exactly the GAZL that 1.0 would emit.** Types exist so the *compiler*
@@ -86,7 +86,7 @@ These are the constraints every 2.0 feature is measured against.
    per-table check and then fail to assemble with `Symbol already defined: S`, and `struct S` beside
    `functype S` was rejected in one declaration order and accepted in the other. It also keeps the
    compiler's own minted symbols unambiguous, since every family is keyed on a user name
-   (`.z.S`, `.z.S.a`, `.z.S`) - see [`SymbolNamespace.md`](SymbolNamespace.md).
+   (`.z.S`, `.z.S.a`, `.z.S`) - see [`SymbolNamespace.md`](../../design/gazl/SymbolNamespace.md).
 
    The rule covers TOP-LEVEL names only. A local may shadow a global, and a struct field may share a
    struct's name, because neither is emitted under a bare name (`$v`, `.o.S.f`). Re-declaring the SAME
@@ -108,7 +108,7 @@ The features are ordered by dependency, not ambition:
    [Step 3: Typed function pointers](#step-3-typed-function-pointers-implemented).
 4. **Multiple return values** - closing a known 1:1 gap: GAZL has supported multiple `OUT` words
    per function since 1.0, and Impala never exposed it. Implemented, then PARKED for Impala 3.0
-   (see [`docs/ParkedFeatures.md`](ParkedFeatures.md)); design record in
+   (see [`design/ParkedFeatures.md`](../../design/ParkedFeatures.md)); design record in
    [Step 4: Multiple return values](#step-4-multiple-return-values-parked).
 5. **Import** - sharing typed interfaces between units without textual copying. Implemented; full cycle
    resolution deferred to 3.0. Design in [Step 5: Import](#step-5-import-implemented-except-cycles), rule
@@ -488,7 +488,7 @@ time, so an initializer is only emitted where Impala knows which word each value
 
 In both cases **zero is still fine**, because zero is what the region fills with under any layout - so
 `{ }`, an omitted field, and an explicit `0` all compile and simply emit nothing. Both are planned for
-Impala 3.0 on GAZL 2; see [`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic
+Impala 3.0 on GAZL 2; see [`ParkedFeatures.md`](../../design/ParkedFeatures.md) ("Placing static data at a symbolic
 offset"). For an extern struct the host owns the layout, so the host is also the right place for the
 initial contents.
 
@@ -514,8 +514,8 @@ time:
 It fits, nothing happens. It does not, and the assembler stops with that `! FAIL` text. The guard sits
 ABOVE the rows deliberately: GAZL checks only the whole allocation, so below them a field spill that
 still fits the struct total would go unreported. That is
-rule 4 of [`TwoStageConstants.md`](TwoStageConstants.md), and `.z.S.v` is the field-extent constant
-described in [`StructLayoutConstants.md`](StructLayoutConstants.md). The cost is honest and worth
+rule 4 of [`TwoStageConstants.md`](../../design/impala/TwoStageConstants.md), and `.z.S.v` is the field-extent constant
+described in [`StructLayoutConstants.md`](../../design/impala/StructLayoutConstants.md). The cost is honest and worth
 stating: the error surfaces at GAZL assembly time, which in a shipped module means the end user's
 machine, with no caret. That is the correct place for it, because with a host-supplied `N` the answer
 genuinely differs per host.
@@ -613,7 +613,7 @@ settled on scaling by element size silently; subscripting now agrees with it ins
 
 Removing it changed no emitted code. The corpus regolded with byte-identical instruction streams -
 only the echoed source text in trailing comments and the column numbers moved. See
-`docs/Impala2Review.md` for why arithmetic on a struct pointer is rejected rather than scaled; that
+`design/impala/Impala2Review.md` for why arithmetic on a struct pointer is rejected rather than scaled; that
 reasoning is unaffected, and `&p[i]` is still how you move one.
 
 ### Verified lowering
@@ -622,7 +622,7 @@ Checked against the GAZL operand grammar and live usage in `src/UnitTest.gazl`. 
 the `local:const` operand form (a local plus compile-time offset is a *direct operand* - no address
 materialization), `GETL`/`SETL` (local access with runtime offset, no pointer involved), and
 `PEEK`/`POKE` with a constant-offset immediate. Every size and offset below is a **symbolic**
-`.z.`/`.o.` operand, never a baked decimal (`docs/StructLayoutConstants.md`):
+`.z.`/`.o.` operand, never a baked decimal (`design/impala/StructLayoutConstants.md`):
 
 ```gazl
 ; A) local value, constant field - direct operand, zero extra instructions
@@ -669,7 +669,7 @@ codegen never depends on how the struct is used elsewhere in the function.
 > **Passing and returning a struct BY VALUE is PARKED for Impala 3.0** (`E426`, `E427`); preserved at
 > the `Impala3-byvalue-multireturn-park` tag. Whole-struct assignment (`a = b`, `*p = v`), struct
 > locals/globals, struct pointers, field access and `sizeof` are all still supported. Pass and return
-> structs through pointers. See [`docs/ParkedFeatures.md`](ParkedFeatures.md).
+> structs through pointers. See [`design/ParkedFeatures.md`](../../design/ParkedFeatures.md).
 
 **Both by-value and by-pointer are legal, chosen by the parameter/return declaration** *(decided
 2026-07-20)*. An earlier draft deferred by-value out of a vague "one convention beats two" instinct;
@@ -750,7 +750,7 @@ extern struct Filter { float cutoff; int mode }
 The `extern` form emits no layout rows - only a `; signature extern struct Filter { cutoff : float,
 mode : int }` row plus symbolic references to `.o.Filter.*` and `.z.Filter` - so it cannot collide, and
 it adapts if the definition's layout changes. It is the same mechanism as a host-owned layout
-(`docs/StructLayoutConstants.md`), pointed at another Impala unit instead of at a host.
+(`design/impala/StructLayoutConstants.md`), pointed at another Impala unit instead of at a host.
 
 **Identity is nominal, layout-verified.** The struct *name* is the identity. GAZL's namespace is
 already flat (function and global names collide across concatenated units today; struct names join
@@ -843,7 +843,7 @@ global TickFn onTick = tickHandler  // checked: tickHandler must match TickFn's 
 > **PARKED for Impala 3.0.** Implemented and then removed; the work is preserved at the
 > `Impala3-byvalue-multireturn-park` tag. Impala 2.0 rejects a second return value (`E428`) and
 > destructuring assignment (`E429`). Return extra results through pointer out-parameters instead.
-> This section is kept as the design record. See [`docs/ParkedFeatures.md`](ParkedFeatures.md).
+> This section is kept as the design record. See [`design/ParkedFeatures.md`](../../design/ParkedFeatures.md).
 
 Impala 1.0 supports a single return value while GAZL supports many - the demo has apologized for
 this since 2012 ("GAZL supports multiple 'OUT' variables per function and the intention is to
@@ -851,7 +851,7 @@ eventually support this in Impala too"). This step closes the gap. **The VM need
 
 ### The calling convention (verified)
 
-From `docs/InstructionSet.md` and the compiler's own output (`impala/testdata/perfTest2.expected.gazl`,
+From `docs/gazl/InstructionSet.md` and the compiler's own output (`impala/testdata/perfTest2.expected.gazl`,
 `src/UnitTest.gazl`):
 
 - **Callee:** `OUT` declarations first, then `INP` declarations, in order
@@ -918,7 +918,7 @@ skipped position.
 | Single-return functions | completely unchanged - expressions, chaining, byte-identical output (N=1 *is* today's layout). |
 | Named funcptr types | signatures extend naturally: `functype SplitFn(float in) returns float lo, float hi` (if Step 3 is adopted). |
 | Metadata | the `->` row grows a tuple form: `; signature func polarToRect(float, float) -> (float, float)`; the validator checks return arity and types cross-unit; `unknown` stays the legacy wildcard. |
-| Natives | host natives already write the window via `accessParams`, so multi-out natives are expressible; extend `docs/nativeCallbackSignatures.gazl` when a host wants one. |
+| Natives | host natives already write the window via `accessParams`, so multi-out natives are expressible; extend `design/proofs/nativeCallbackSignatures.gazl` when a host wants one. |
 
 ### Compatibility
 
@@ -998,7 +998,7 @@ Consequences:
   (2026-08-04). The builder concatenates its units and compiles them in one pass, so a
   pre-assembled blob has no seam to enter through; `import "x.gazl"` is parsed as Impala source
   and fails there. Nothing needs it - source imports plus `export`/`--dead-strip` cover sharing,
-  linking and hiding. See [`ParkedFeatures.md`](ParkedFeatures.md#precompiled-gazl-blob-imports).
+  linking and hiding. See [`ParkedFeatures.md`](../../design/ParkedFeatures.md#precompiled-gazl-blob-imports).
 - **The validator becomes internal to the build** - the link set *is* the closure, checked during
   compilation. The standalone `gazl-validate` remains for the legacy workflow only.
 - **Single definition, enforced**: any symbol - and in particular any struct - defined more than
@@ -1070,7 +1070,7 @@ exactly once; an `import` naming an already-visited file is skipped. The self-im
 > **The 2.0 answer is a hand-written forward `extern`** in whichever unit is emitted first. It is
 > the one place this feature does not remove boilerplate, but it is boilerplate 1.0 users already
 > write, and since E437 it is checked against the real definition rather than silently trusted
-> (`docs/ExternPrototypes.md`). For a *struct type* the workaround is the **opaque** form
+> (`design/impala/ExternPrototypes.md`). For a *struct type* the workaround is the **opaque** form
 > (`extern struct AA`, pointers only): it compiles, assembles and runs across the cycle.
 >
 > **Known gap:** the BODY-CARRYING form (`extern struct AA { int x }`) across a cycle is worse than
@@ -1097,17 +1097,17 @@ imports merely let them span files:
 ### Deferred to 3.0: collect mode (the declaration pre-pass)
 
 This is the one piece of Step 5 that was designed and not built, and it is what would let a cycle
-resolve in both directions. **Deferred to Impala 3.0 on 2026-07-29** (`docs/ParkedFeatures.md`):
+resolve in both directions. **Deferred to Impala 3.0 on 2026-07-29** (`design/ParkedFeatures.md`):
 `extern` covers the function and global cases, and landing the pre-pass later only *removes* the
 need for those externs, so waiting costs nothing a 2.0 program has to unlearn. The design stands as
-written - the full plan is `impala/Impala2Slices.md:143-190`; the essentials:
+written - the full plan is `design/impala/Impala2Slices.md:143-190`; the essentials:
 
 **It is NOT gated on the JSPEG rework.** `Impala2Slices.md:155-163` splits two-phase compilation in
 two, and only the cheap half is needed here:
 
 - *Declaration-level two-phase* - gather declarations across the closure, then resolve names.
   Bounded, and it is all cycles need.
-- *Body-level two-phase* - the AST rework of `docs/JSPEGFuture.md` Problem 1. Cycles do **not**
+- *Body-level two-phase* - the AST rework of `design/jspeg/JSPEGFuture.md` Problem 1. Cycles do **not**
   need it; still deferred. `JSPEGFuture.md:39-46` mentions interface mode as something that rework
   would unlock "as a trivial variant", which is easy to misread as a dependency. It is not one.
 
@@ -1123,7 +1123,7 @@ is a mode on it rather than a second implementation of anything
 
 1. *Precondition, partly done* - finish thinning the remaining fat inline actions into `$$parser`
    methods, so the mode switch covers all the semantics. Roughly a quarter of the rule region
-   dispatches to `$$parser.` today; the rest is still inline JS. `impala/RefactorPlan.md` is the
+   dispatches to `$$parser.` today; the rest is still inline JS. `design/jspeg/RefactorPlan.md` is the
    adjacent (return-style helper) cleanup on the same surface.
 2. *Suppress emission in collect mode* - the small half. Emission is already funnelled through a
    handful of chokepoints (`output`, `declare`, `makeMeta`, `emit`).
@@ -1222,8 +1222,8 @@ ever needs to exist in the legacy validator path.
 > **Status: parked, not available.** `inline function` was implemented, reviewed, and then taken back
 > out; it now lives on the `GAZL2` branch. Writing `inline` is **`E439`**. An expansion has to place its
 > locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 must keep running on GAZL 1.0 engines, which reject
-> `SCOP` with `Unknown mnemonic`. See [`ParkedFeatures.md`](ParkedFeatures.md) and
-> [`Inlining.md`](Inlining.md). **The codes below are retired with the feature and must not be
+> `SCOP` with `Unknown mnemonic`. See [`ParkedFeatures.md`](../../design/ParkedFeatures.md) and
+> [`Inlining.md`](../../design/impala/Inlining.md). **The codes below are retired with the feature and must not be
 > reused - except `E432`, RE-ALLOCATED 2026-08-05 to the host-owned-array rank rule**, and its fixtures (`inlineEquivalence*`, `inlineFunctions`, `inlineReview*`) were
 > removed. What follows is the design record for the parked feature, not 2.0 behaviour.
 
@@ -1266,7 +1266,7 @@ What is rejected:
 | A call placed **before** the definition | `E403` undeclared identifier - there is no forward form to add |
 
 Struct locals and array locals are fine; only a *non-literal* extent is not. The design spec is
-[`docs/Inlining.md`](Inlining.md); the behavioural oracle was the fixture pair
+[`design/impala/Inlining.md`](../../design/impala/Inlining.md); the behavioural oracle was the fixture pair
 `tests/impala/sources/inlineEquivalence.impala` and `inlineEquivalenceCall.impala`, which had to produce
 identical output inlined and not. Both were removed when the feature was parked - restoring that oracle
 (and the fuzzer's inline differential, which went with it) is part of unparking.
@@ -1376,7 +1376,7 @@ runtime value: it goes to tier 2, at both ends, since neither bound is knowable 
 
 **Tier 2 - constant index, symbolic extent (`v[SN]`): a DEFERRED assertion, at GAZL assembly time.** The
 question is real but not answerable at Impala compile time, so it is asked of the assembler in the
-canonical `! LSSi` / `! FAIL` / skip-label form (`docs/TwoStageConstants.md` rule 4, the same shape
+canonical `! LSSi` / `! FAIL` / skip-label form (`design/impala/TwoStageConstants.md` rule 4, the same shape
 `assertFitsExtent` uses for an over-filled initializer):
 
 ```gazl
@@ -1606,7 +1606,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E462 | an array extent is negative - a struct field with one runs the layout backwards and aliases its neighbours |
 
 E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct
-guards that were never needed once the features shipped (`docs/StructLayoutConstants.md` records the
+guards that were never needed once the features shipped (`design/impala/StructLayoutConstants.md` records the
 correction); they stay burned rather than reused, per "stable error codes, never reused".
 
 E433-E436 are a different case: they DID fire, and were retired when `inline function` was parked. They

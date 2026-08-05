@@ -11,7 +11,7 @@ pointer" and "function pointer", which are not the same thing and are not interc
 
 ## This is not a new rule - the ISA already states it
 
-`docs/InstructionSet.md`, under `CALL`, has said so all along:
+`docs/gazl/InstructionSet.md`, under `CALL`, has said so all along:
 
 > A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function
 > declaration order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defined operations
@@ -142,8 +142,8 @@ back here, so the work is discovered by editing the code rather than by remember
 | `src/GAZL.cpp`, `CALL_v__` / `CALL_vvs` | indirect call takes generic `VAR_PTR_R`; retype to `t` |
 | `src/GAZL.cpp`, `DATp_c__` | one row can mix function and data addresses; needs a `DATt` sibling |
 | `impala/impala.jspeg`, `TYPE_SUFFIXES` | `'F','p'` is where Impala discards the distinction; becomes `'F','t'` |
-| `docs/InstructionSet.md`, `CALL` | the contract paragraph, plus a note that GAZL 1 cannot enforce it |
-| `docs/InstructionSet.md`, `DATp` | records that `p` covers both, and why that is a problem |
+| `docs/gazl/InstructionSet.md`, `CALL` | the contract paragraph, plus a note that GAZL 1 cannot enforce it |
+| `docs/gazl/InstructionSet.md`, `DATp` | records that `p` covers both, and why that is a problem |
 
 **The Impala side is one map entry.** Impala already tracks funcptr as its own type `'F'` and collapses it
 only at emission, so `'F','p'` -> `'F','t'` is the whole change there. Nothing else in the compiler needs
@@ -165,6 +165,6 @@ looks like the expensive half and is.
 
 ## See also
 
-- [`docs/InstructionSet.md`](InstructionSet.md) - the `DAT*` family and the operand forms.
-- [`docs/MemorySafetyModel.md`](MemorySafetyModel.md) - why dereferences are bounds-checked at run time.
-- [`docs/ParkedFeatures.md`](ParkedFeatures.md) - the `GAZL2` branch and what else waits on it.
+- [`docs/gazl/InstructionSet.md`](../../docs/gazl/InstructionSet.md) - the `DAT*` family and the operand forms.
+- [`docs/impala/MemorySafetyModel.md`](../../docs/impala/MemorySafetyModel.md) - why dereferences are bounds-checked at run time.
+- [`design/ParkedFeatures.md`](../ParkedFeatures.md) - the `GAZL2` branch and what else waits on it.

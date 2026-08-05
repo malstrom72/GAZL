@@ -8,7 +8,7 @@ instructions. Think of it as a high-level assembler.
 Because GAZL programs are distributed as assembly *text* and assembled on the end user's
 machine at load, Impala compiles into a two-stage build: values the host supplies at load
 are legal constants that Impala never sees a number for. This shapes the whole language
-and is specified in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
+and is specified in [`design/impala/TwoStageConstants.md`](../../design/impala/TwoStageConstants.md).
 
 This document is the language reference. For a feature-rich program with extensive
 inline commentary, see `impala/ImpalaDemo.impala`.
@@ -144,7 +144,7 @@ genuinely crosses between the typed and untyped worlds (see [Casting](#casting))
 
 `struct` types (with `.` on a value and `->` through a pointer), named function-pointer
 types declared with `functype`, and `sizeof` are shipped and working. They are owned by
-[`docs/Impala2.md`](Impala2.md) rather than repeated here — see
+[`docs/impala/Impala2.md`](Impala2.md) rather than repeated here — see
 [Step 2: Structs](Impala2.md#step-2-structs-implemented) and
 [Step 3: Typed function pointers](Impala2.md#step-3-typed-function-pointers-implemented).
 
@@ -202,7 +202,7 @@ Nowhere does a `4` appear, which is what keeps the value overridable at load.
 
 This two-stage model is the reason GAZL ships as text, and it shapes what the compiler is
 allowed to check and fold. It is specified in
-[`docs/TwoStageConstants.md`](TwoStageConstants.md); read that before relying on, or
+[`design/impala/TwoStageConstants.md`](../../design/impala/TwoStageConstants.md); read that before relying on, or
 changing, any constant handling.
 
 ### `readonly`
@@ -245,7 +245,7 @@ extern native abort
 
 `import` and `export` — the source-level way to pull another unit in rather than declare
 its symbols one at a time — are shipped and documented in
-[`docs/Impala2.md`](Impala2.md#step-5-import-implemented-except-cycles).
+[`docs/impala/Impala2.md`](Impala2.md#step-5-import-implemented-except-cycles).
 
 ### Arrays
 
@@ -331,7 +331,7 @@ There are no compound assignment operators (`+=`, `&=`, …) and no `++`/`--`.
 
 The assignable forms (lvalues) are a variable, a pointer dereference `*p`, a subscript
 `a[i]`, and a struct field reached either directly (`s.a`) or through a pointer
-(`p->a`) — see [`docs/Impala2.md`](Impala2.md#step-2-structs-implemented).
+(`p->a`) — see [`docs/impala/Impala2.md`](Impala2.md#step-2-structs-implemented).
 
 ### Conditionals
 

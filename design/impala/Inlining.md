@@ -3,13 +3,13 @@
 > **PARKED for Impala 3.0 on this branch.** `inline` is rejected with `E439`; the implementation lives on
 > the `GAZL2` branch. An expansion places its locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 has to stay
 > usable on GAZL 1.0 engines, which reject `SCOP` outright. See
-> [`docs/ParkedFeatures.md`](ParkedFeatures.md). Everything below describes the design as built and is
+> [`design/ParkedFeatures.md`](../ParkedFeatures.md). Everything below describes the design as built and is
 > kept as the spec to restore from - it is not what this branch's compiler does.
 
 Status: SPEC. Explicit `inline` keyword, no heuristics. Targets FUTURE firmware - see the coverage note at
 the end for what this deliberately does not reach.
 
-Background measurements and the Impala-vs-assembler placement argument live in `docs/InliningInvestigation.md`
+Background measurements and the Impala-vs-assembler placement argument live in `design/impala/InliningInvestigation.md`
 (brought onto this branch, with a status header recording what this work corrected).
 
 
@@ -299,7 +299,7 @@ Sibling expansions overlay, so a function's frame cost is its LARGEST expansion,
 sound because an expansion's locals are dead once its body ends: the result leaves through the call
 window, never through a local.
 
-Two things had to exist first. **`SCOP` / `ENDS`** (GAZL 2, `docs/InstructionSet.md`) so the frame is a
+Two things had to exist first. **`SCOP` / `ENDS`** (GAZL 2, `docs/gazl/InstructionSet.md`) so the frame is a
 max over nesting chains rather than a sum. And a **buffered function head**, because GAZL wants every
 declaration before the first instruction while an expansion happens mid-body - so head lines accumulate
 in `headSink` and are replayed once the body, and therefore every expansion in it, is known.
@@ -317,7 +317,7 @@ Nothing but a declaration line repeating the size operand verbatim:
     ENDS
 
 Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.z.f.name` for an array local
-(see `docs/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
+(see `design/gazl/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
 by folding (`t[H * N]`, or `count * .z.Ext` for an extern struct) lives in a recycled `<X>` scratch that
 belongs to wherever it was folded, so it can NOT be repeated at an expansion site - naming it once, at
 the callee's declaration, is what lets every site refer to it.
@@ -353,7 +353,7 @@ does, so the 84-file byte-diff gate is unaffected and there is nothing to gate.
 Only code that goes through Impala benefits. `vortex` (100 call sites), `reciter` (46) and `js80rmx`
 (22) have no Impala source on this branch, and the firmware host wrapper is generated GAZL text
 (`permut8Host.js`), so its per-frame `driver->process()` calls are invisible here. Those need the
-assembler-level pass described in `docs/InliningInvestigation.md`; the two compose rather than compete.
+assembler-level pass described in `design/impala/InliningInvestigation.md`; the two compose rather than compete.
 
 
 ## 10. Testing

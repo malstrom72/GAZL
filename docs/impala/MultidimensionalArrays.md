@@ -1,11 +1,11 @@
 # Multidimensional arrays (Impala 2.0 design)
 
 Status: **IMPLEMENTED on `Impala2`, for the 2.0 release that is still being built.** Supersedes the 2026-07-26 "still OUT of 2.0" re-evaluation in
-[`ParkedFeatures.md`](ParkedFeatures.md), whose central objection - that array-dimension type identity is
+[`ParkedFeatures.md`](../../design/ParkedFeatures.md), whose central objection - that array-dimension type identity is
 unsolved - does not apply to the design below. A same-named document existed at the park tag
 `Impala2-multidim-arrays-park` for the 3.0 design; that one required numeric literal dimensions and predates
 the current place model, so it is history, not a plan. Read it with `git show
-Impala2-multidim-arrays-park:docs/MultidimensionalArrays.md` for the questions it already answered (slice
+Impala2-multidim-arrays-park:docs/impala/MultidimensionalArrays.md` for the questions it already answered (slice
 semantics, shape-pointer typing, `:` open axes) - none of which are in scope here.
 
 Every GAZL fragment quoted below was produced by the compiler in this tree, not written by hand.
@@ -45,7 +45,7 @@ its total size in words:
 
 `<A>` and `<a>` are different registers and the difference matters: `<a>` is the layout block's rolling
 OFFSET accumulator, hand-picked and live across the whole block (see
-[`StructLayoutConstants.md`](StructLayoutConstants.md)), while `<A>` is a pool scratch holding the folded
+[`StructLayoutConstants.md`](../../design/impala/StructLayoutConstants.md)), while `<A>` is a pool scratch holding the folded
 extent. An earlier draft of this fragment was hand-written and said `.z.Grid.cells: ! DEFi #<a>`, which
 would snapshot the running offset rather than the size - a different and wrong quantity.
 
@@ -62,7 +62,7 @@ rather than the value: `grid[3, 4]` still gets `.d.grid.0: ! DEFi #4` and stride
 `! DEFi #W`, an expression folds into a `<X>` scratch first and is named from that. Uniform on purpose:
 one rule for reading a stride, and no spelling of an axis that a later host override cannot reach.
 
-`.d` is registered in [`SymbolNamespace.md`](SymbolNamespace.md), in all three of its path shapes
+`.d` is registered in [`SymbolNamespace.md`](../../design/gazl/SymbolNamespace.md), in all three of its path shapes
 (`.d.<Struct>.<field>.<k>`, `.d.<global>.<k>`, `.d.<function>.<local>.<k>` - the same three `.z.` has).
 It inherits `.z.`'s soundness condition, which is enforced and now has tests: a top-level name has exactly
 one kind, so `.d.S.*` can never mean two things. Verified - `struct S` + `global int array S[4]`,
@@ -84,7 +84,7 @@ any particular `Grid`. Two `Grid pointer`s trivially agree on the shape at compi
 comparison to make. For a **standalone array**, they are object-keyed: `.d.a.0` and `.d.b.0` are different
 symbols even when both are 4, so shape *identity* between two standalone arrays can only be decided by
 comparing values at assembly time (`! EQUi` / `! FAIL`, see
-[`deferredShapeCheck.gazl`](deferredShapeCheck.gazl)) - which is sound, complete and free, but is a later
+[`deferredShapeCheck.gazl`](../../design/proofs/deferredShapeCheck.gazl)) - which is sound, complete and free, but is a later
 slice and is not needed for anything below.
 
 **The consequence that orders the work: an extent already survives a call boundary when, and only when, it
@@ -137,7 +137,7 @@ GAZL per shaped access, restating a settled question. This was sound only once e
 stated; before the rank fix, `cells[11]` cleared no axis at all.
 
 **Slice 3 - shape identity across standalone arrays. DEFERRED TO 3.0, and it is not a gap.** The deferred
-`! EQUi` compare in [`deferredShapeCheck.gazl`](deferredShapeCheck.gazl) works exactly as documented -
+`! EQUi` compare in [`deferredShapeCheck.gazl`](../../design/proofs/deferredShapeCheck.gazl) works exactly as documented -
 re-run all three ways on 2026-08-04: `[4][3]` against `[N][W-1]` passes with `N 4 W 4`, and each mismatch
 names its own axis, at zero runtime cost. **What it has no caller.** Its scenario is "`f` takes an
 `int[4][3]`, the call passes `b`", and Impala cannot express that: an array parameter does not exist

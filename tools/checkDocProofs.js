@@ -27,21 +27,21 @@ const gazlCmd = ['output/GAZLCmd.exe', 'output/GAZLCmd']
    which cases are SUPPOSED to - a proof that only ever passes proves nothing. */
 const PROOFS = [
 	{
-		file: 'docs/symbolicWindows.gazl',
-		doc: 'docs/GAZLSymbolicWindows.md',
+		file: 'design/proofs/symbolicWindows.gazl',
+		doc: 'design/gazl/GAZLSymbolicWindows.md',
 		args: ['main'],
 		expect: ['55', 'globals size: 6'],
 	},
 	{
-		file: 'docs/symbolicWindowsRepacked.gazl',
-		doc: 'docs/GAZLSymbolicWindows.md',
+		file: 'design/proofs/symbolicWindowsRepacked.gazl',
+		doc: 'design/gazl/GAZLSymbolicWindows.md',
 		args: ['main'],
 		/* Same answer from a re-packed layout - 6 words become 8 and no instruction changed. */
 		expect: ['55', 'globals size: 8'],
 	},
 	{
-		file: 'docs/deferredShapeCheck.gazl',
-		doc: 'docs/MultidimensionalArrays.md',
+		file: 'design/proofs/deferredShapeCheck.gazl',
+		doc: 'docs/impala/MultidimensionalArrays.md',
 		args: ['main', 'N', '4', 'W', '4'],
 		/* [4][3] against [N][W-1]: neither Impala nor the signature validator can accept this, the
 		   assembler can, because by then it has the numbers. */
@@ -49,15 +49,15 @@ const PROOFS = [
 		reject: ['FAIL'],
 	},
 	{
-		file: 'docs/deferredShapeCheck.gazl',
-		doc: 'docs/MultidimensionalArrays.md',
+		file: 'design/proofs/deferredShapeCheck.gazl',
+		doc: 'docs/impala/MultidimensionalArrays.md',
 		args: ['main', 'N', '5', 'W', '4'],
 		fails: true,
 		expect: ['axis 0 is b[N] but f expects [4]'],
 	},
 	{
-		file: 'docs/deferredShapeCheck.gazl',
-		doc: 'docs/MultidimensionalArrays.md',
+		file: 'design/proofs/deferredShapeCheck.gazl',
+		doc: 'docs/impala/MultidimensionalArrays.md',
 		args: ['main', 'N', '4', 'W', '9'],
 		fails: true,
 		expect: ['axis 1 is b[W - 1] but f expects [3]'],
@@ -107,11 +107,11 @@ if (!gazlCmd) {
 	}
 }
 
-const a = tail('docs/symbolicWindows.gazl', HEADER_LINES);
-const b = tail('docs/symbolicWindowsRepacked.gazl', HEADER_LINES);
+const a = tail('design/proofs/symbolicWindows.gazl', HEADER_LINES);
+const b = tail('design/proofs/symbolicWindowsRepacked.gazl', HEADER_LINES);
 if (a !== b) {
 	fail('symbolicWindows re-pack', 'instructions below the layout header are NOT identical, so the '
-			+ '"re-packing re-assembles, it does not recompile" claim in docs/GAZLSymbolicWindows.md '
+			+ '"re-packing re-assembles, it does not recompile" claim in design/gazl/GAZLSymbolicWindows.md '
 			+ 'no longer holds');
 } else {
 	console.log('  ok   symbolicWindows vs Repacked: every instruction below the header is identical');

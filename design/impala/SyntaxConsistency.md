@@ -18,7 +18,7 @@ Three verdicts are used:
 
 ## 1. Bugs
 
-**1.1-1.4 are FIXED** (see the diagnostics table in `docs/Impala2.md`; `pointerStride.impala` pins 1.1,
+**1.1-1.4 are FIXED** (see the diagnostics table in `docs/impala/Impala2.md`; `pointerStride.impala` pins 1.1,
 and `jspegCompilerTests.js` pins 1.2-1.4). The descriptions below are kept as the record of what was wrong.
 
 ### 1.1 `for` over a pointer does not stride - FIXED, but NOT as described below
@@ -28,7 +28,7 @@ and `jspegCompilerTests.js` pins 1.2-1.4). The descriptions below are kept as th
 > pointer comparison, where there is no unit at all), and `ADDp` + compare is three instructions where
 > the language promises one. `for` over a struct pointer is now **rejected** (`E309`) with a fix-it to
 > the `while (p < end) { ...; p = &p[1]; }` walk, and struct pointers move only by the scaled
-> subscript `[i]`. The normative statement is `docs/Impala2.md`, "One subscript"; `docs/Impala2Review.md` section F records
+> subscript `[i]`. The normative statement is `docs/impala/Impala2.md`, "One subscript"; `design/impala/Impala2Review.md` section F records
 > why the `[[ ]]` spelling it once proposed was reversed.
 > The bug below was real; only the prescription was wrong.
 
@@ -46,7 +46,7 @@ for (p = &global bank[0] to &global bank[3]) { printInt(p->a); }   // 10 0 0 20 
 
 This is the exact invariant Phase 2a established ("pointer arithmetic is in elements") and
 `tests/impala/sources/pointerStride.impala` pins - the fixture proves the rule while the loop that most
-naturally expresses the same walk breaks it. `FORp` (`docs/InstructionSet.md:225`) has no stride operand,
+naturally expresses the same walk breaks it. `FORp` (`docs/gazl/InstructionSet.md:225`) has no stride operand,
 so the fix is to stop emitting `FORp` for a typed pointer with a multi-word element and emit
 `ADDp $p $p #.z.S` plus a compare-branch instead. One extra instruction per iteration, only for the
 element sizes that are broken today. A one-word element (`int pointer`) and an untyped `pointer` are
@@ -70,7 +70,7 @@ with no diagnostic. `x++`, `++x` and `x += 1` are all bare `E001`. Rejecting the
 ### 1.4 Duplicate label in one function - FIXED
 
 Accepted by the compiler; the assembler then fails at load with `Symbol already defined: x` and a GAZL
-line number. Same class as the diagnostics closed in `docs/CompileTimeHardening.md`, and fully decidable -
+line number. Same class as the diagnostics closed in `design/impala/CompileTimeHardening.md`, and fully decidable -
 the label map already exists in `processBranches`.
 
 ### 1.5 Element types unchecked in pointer difference - FIXED (difference only)
@@ -210,13 +210,13 @@ The three tokens a newcomer or a code generator is most likely to emit all land 
 | `continue;` | FIXED: `E450` "'continue' is not supported: jump to a label ... with `goto`" |
 | `int i;` in a body | bare `E001`, caret on the space after `int`, no mention of `locals` |
 | `if (x)` | bare `E001`, caret on `)` |
-| `x += 1` / `x++` | bare `E001` - the rejection is deliberate and reasoned in `docs/Impala2.md`, and none of that reaches the user |
+| `x += 1` / `x++` | bare `E001` - the rejection is deliberate and reasoned in `docs/impala/Impala2.md`, and none of that reaches the user |
 | `1e6` | `E303 cannot assign int to float` - a *type* error for a *lexical* mistake |
 
 Making these reserved words with dedicated messages is the single highest-value change available, and it
 is independent of every other item here.
 
-**`return`, `break` and `continue` are now reserved words** (see the diagnostics table in `docs/Impala2.md`;
+**`return`, `break` and `continue` are now reserved words** (see the diagnostics table in `docs/impala/Impala2.md`;
 `jspegCompilerTests.js` pins them). Bare `return;` is an early exit that emits `RETU`; `return expr;` is
 `E448` (assign to the named return slot). `break;`/`continue;` are unsupported and get `E450` with the
 `goto` idiom in the note - the same message in a loop and in a `case` arm, closing the `E403`-vs-`E001`
@@ -263,7 +263,7 @@ plain trailing empty statement still compile.
 1. ~~**1.1 `for` stride**~~ - DONE. ~~**1.2 `!` precedence**~~, ~~**1.3 `--`**~~ and ~~**1.4 duplicate
    label**~~ - DONE in the same pass.
 2. ~~**`return` / `break` / `continue` as reserved words**~~ - DONE (`E448`/`E449`/`E450`; bare `return;`
-   only, because 3.0 restores multi-return - see `docs/ParkedFeatures.md`). Reserved semantically with a
+   only, because 3.0 restores multi-return - see `design/ParkedFeatures.md`). Reserved semantically with a
    `--legacy` label hatch; the corpus was migrated off the `goto return;`/`goto break;` idiom.
 3. ~~**1.5** (difference)~~ and ~~**1.7**~~ - DONE. 1.6 is WON'T FIX (needs a `const` modifier). The
    `const` type grammar and `copy` terminator (section 3) were done in the same pass.

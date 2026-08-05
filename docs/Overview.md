@@ -102,7 +102,7 @@ The full version, with the error handling and stream checks left out above, is i
 
 GAZL source is plain text so version control systems can store programs directly. The assembler supports compile‑time instructions introduced by `!`. These operate on special compile‑time variables written as `<A>` through `<Z>`. Instructions such as `! ADDi`, `! MULf` or `! IFDF` are executed when the file is assembled and can define constants, evaluate conditions or skip blocks of code. Changing a compile‑time definition (for example `! DEFi DEBUG #0` versus `! DEFi DEBUG #1`) changes the generated code without altering the original source.
 
-Note that "compile time" in this section means **assembly time**, which happens on the end user's machine at load. The Impala documentation uses "compile time" for the earlier `.impala` → `.gazl` stage. The two stages, and the rules the split imposes on the Impala compiler, are specified in [Two-Stage Constants](TwoStageConstants.md).
+Note that "compile time" in this section means **assembly time**, which happens on the end user's machine at load. The Impala documentation uses "compile time" for the earlier `.impala` → `.gazl` stage. The two stages, and the rules the split imposes on the Impala compiler, are specified in [Two-Stage Constants](../design/impala/TwoStageConstants.md).
 
 A complete list of compile‑time opcodes is found in [`src/UnitTest.gazl`](../src/UnitTest.gazl) and reproduced below for convenience:
 

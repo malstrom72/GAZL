@@ -23,7 +23,7 @@ and `b` read as sharing an offset. Every `.o.` is a SNAPSHOT of the same rolling
 fields is the advance between the snapshots.
 
 Background: this note applies the two-stage constant model to struct layout. The model itself is
-specified in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
+specified in [`design/impala/TwoStageConstants.md`](TwoStageConstants.md).
 
 ## The idea (GAZL as a macro-assembler)
 
@@ -54,7 +54,7 @@ Scheme: `.o.<Struct>.<field>` for a field offset and `.z.<Struct>` for a struct 
 `.z.` extends to `.z.<Struct>.<field>` for an ARRAY field's own extent in words. That is the same tag
 because it is the same quantity - `.z.<path>` is the words occupied by `<path>` - and it is what every
 OTHER array extent uses too (`.z.grid` for a global, `.z.main.buf` for a local); see
-[`SymbolNamespace.md`](SymbolNamespace.md). Array fields only: a scalar is 1 word and a by-value field
+[`SymbolNamespace.md`](../gazl/SymbolNamespace.md). Array fields only: a scalar is 1 word and a by-value field
 is `.z.Inner`, so those need no name minted.
 
 Rationale (this is the whole subtlety):
@@ -82,7 +82,7 @@ later reused.
 `.z` was chosen over the `.w` ("words") alternative and both `.o.*` and `.z.*` are now IMPLEMENTED - the paragraph
 here used to record them as unused and the choice as open, which is no longer true. The full inventory
 of generated symbols, which letters remain free, and the rules for adding one live in
-[`docs/SymbolNamespace.md`](SymbolNamespace.md); consult that rather than this section, which only
+[`design/gazl/SymbolNamespace.md`](../gazl/SymbolNamespace.md); consult that rather than this section, which only
 explains the two layout tags.
 
 Compiler reserves the `.o.*` and `.z.*` prefixes; nothing in Impala emits a leading-dot symbol
@@ -166,7 +166,7 @@ Field kinds and their advance line:
 
 Both array forms name the extent BEFORE advancing by it, so an extent that folded into a `<X>` scratch
 outlives the scratch. That is what the deferred value-count assertion behind `E454` needs a handle on
-(see [`ParkedFeatures.md`](ParkedFeatures.md)).
+(see [`ParkedFeatures.md`](../ParkedFeatures.md)).
 
 ### The payoff: conditional fields adapt for free
 
@@ -208,7 +208,7 @@ fold at the site into a scratch slot (`! ADDi <t> #.o.Voice.lo #.o.Biquad.b0` th
 If a using unit's interface (field names + types) lives separately from the definition, they can
 disagree. The gazl-validator can cross-check the interface's field types against the definition's
 emitted layout, so a mismatch is a build error, not a silent lie - the same "verifiable contract" theme
-as extern prototypes (see [docs/ExternPrototypes.md]).
+as extern prototypes (see [design/impala/ExternPrototypes.md]).
 
 ### Array extents in a signature row (DECIDED, IMPLEMENTED)
 
@@ -293,8 +293,8 @@ the layout, so `{ }`, an omitted field and an explicit `0` still compile and emi
 owns the layout it owns the initial contents too. Note that naming initializer fields (`E455`) did NOT
 fix this: it changed how the source reads, not where the words land. Restoring the capability needs
 GAZL 2; the evidence for that, the requirements and the alternatives that do not work are all in
-[`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic offset"), which is the
-canonical home - the audit note is in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
+[`ParkedFeatures.md`](../ParkedFeatures.md) ("Placing static data at a symbolic offset"), which is the
+canonical home - the audit note is in [`design/impala/TwoStageConstants.md`](TwoStageConstants.md).
 (Superseded: this paragraph used to say Phase 2a was "still open". It landed - see the Phase 2a section
 above, which this sentence predates.)
 

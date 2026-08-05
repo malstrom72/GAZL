@@ -188,7 +188,7 @@ intended, and it is the shape to imitate.
 
 **Struct layout is headed the same way.** `.z.Struct` (size) and `.o.Struct.field` (field offset) as
 named GAZL constants, so an `extern struct` can have its layout supplied by the host at load. See
-`docs/StructLayoutConstants.md`.
+`design/impala/StructLayoutConstants.md`.
 
 
 ## The rules
@@ -211,7 +211,7 @@ Every check, fold, diagnostic and optimization in the Impala compiler must obey 
 5. **Prefer emitting the symbol over the folded number**, even when the value IS known. When Impala can
    emit either `*SOME_COUNT` or `*4`, emit the symbol; when it can emit `! SHLi <B> #1 #anInt` or the
    folded result, emit the directive. This is what the compiler already does (see the evidence above).
-   Folding is the assembler's job (`docs/GAZLAssemblerOptimizations.md`), and a folded literal has
+   Folding is the assembler's job (`design/gazl/GAZLAssemblerOptimizations.md`), and a folded literal has
    thrown away the name, the visible arithmetic, and the single-line edit point in the shipped text.
 
    **Corollary, and it has bitten this compiler: a check must never decide "do I know this value?" by
@@ -223,7 +223,7 @@ Every check, fold, diagnostic and optimization in the Impala compiler must obey 
 
 6. **Never be stricter than the machine you transliterate to.** If GAZL accepts a construct, Impala
    rejecting it needs a much stronger justification than "it looks wrong". See the `&a[7]` case in
-   `docs/CompileTimeHardening.md`.
+   `design/impala/CompileTimeHardening.md`.
 
 
 ## The deferred assertion
@@ -256,7 +256,7 @@ It works even when the operand is a host-supplied symbol Impala never knew, and 
 time because every line is an `!` directive.
 
 > **Do not use the undefined-label trick.** An earlier version of this section (and of
-> `docs/CompileTimeHardening.md`) described branching to a deliberately undefined label so that
+> `design/impala/CompileTimeHardening.md`) described branching to a deliberately undefined label so that
 > `Compile time label not found: .INDEX_OUT_OF_BOUNDS` becomes the diagnostic. That works, but it
 > abuses the label name as the error text, so the message cannot contain spaces or punctuation and
 > reads like an internal error. `! FAIL` takes free text. Prefer it.
@@ -265,7 +265,7 @@ time because every line is an `!` directive.
 ## Why this follows from "stay a transliterator"
 
 This is not a separate principle bolted on. It is a direct consequence of Impala's first design
-principle (`docs/Impala2.md`, "Stay a transliterator"): the ~1:1 mapping between Impala constructs and
+principle (`docs/impala/Impala2.md`, "Stay a transliterator"): the ~1:1 mapping between Impala constructs and
 GAZL instructions is sacred, and a feature that cannot be expressed as thin sugar over the GAZL a
 programmer would write by hand does not belong in the language.
 
@@ -326,14 +326,14 @@ Concrete shapes that violate the model. If you are about to write one of these, 
   which is the "reject the initializer" branch above, narrowed so an all-zero one still compiles (zero
   is the same word under any layout). GAZL 1 cannot express the fix at all; the evidence, the GAZL 2
   requirements and the alternatives that do not work are in
-  [`ParkedFeatures.md`](ParkedFeatures.md) ("Placing static data at a symbolic offset").
+  [`ParkedFeatures.md`](../ParkedFeatures.md) ("Placing static data at a symbolic offset").
 
 
 ## See also
 
 - `docs/Overview.md` - the GAZL side: the `!` opcode list, `<A>`-`<Z>`, the portable text format.
-- `docs/Impala.md` - the `const` section of the language reference.
-- `docs/Impala2.md` - the design principles this follows from.
-- `docs/CompileTimeHardening.md` - the diagnostics backlog, all of it constrained by these rules.
-- `docs/StructLayoutConstants.md` - layout as named GAZL constants (`.o.*` / `.z.*`).
-- `docs/GAZLAssemblerOptimizations.md` - what the assembler folds, and why folding belongs there.
+- `docs/impala/Impala.md` - the `const` section of the language reference.
+- `docs/impala/Impala2.md` - the design principles this follows from.
+- `design/impala/CompileTimeHardening.md` - the diagnostics backlog, all of it constrained by these rules.
+- `design/impala/StructLayoutConstants.md` - layout as named GAZL constants (`.o.*` / `.z.*`).
+- `design/gazl/GAZLAssemblerOptimizations.md` - what the assembler folds, and why folding belongs there.

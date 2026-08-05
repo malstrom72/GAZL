@@ -50,7 +50,7 @@ a missing optimization.
 ## Proposed instruction
 
 A `TAIL` family mirroring `CALL` exactly, which keeps the 3-operand budget (GAZL is a 3-operand ISA -
-see [`Impala2Review.md`](Impala2Review.md) on pointer arithmetic for why that matters):
+see [`Impala2Review.md`](../impala/Impala2Review.md) on pointer arithmetic for why that matters):
 
 | Form | Operands |
 |---|---|
@@ -110,7 +110,7 @@ This is the important design point, and it follows the language's own thesis.
 Silent tail-call elimination is the canonical example of an optimization whose *presence* decides whether
 a program works at all: with it, `count(100000, 0)` runs; without it, byte-identical source traps. That is
 the exact opposite of "cost is predictable from the declared types"
-([`Impala2.md`](Impala2.md), "The cost model: dots are free"), and it is why C never guaranteed it.
+([`Impala2.md`](../../docs/impala/Impala2.md), "The cost model: dots are free"), and it is why C never guaranteed it.
 
 For a language whose users write firmware against a real stack budget, recursion depth belongs in the
 source. An explicit keyword also converts every one of the rules above from "we quietly did not optimize

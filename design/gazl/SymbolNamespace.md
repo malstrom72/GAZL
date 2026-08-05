@@ -8,7 +8,7 @@ assembler rejects a symbol nobody wrote.
 ## The one invariant
 
 **Every compiler-minted symbol starts with `.`, and no Impala identifier can.** An Impala identifier
-starts with a letter, `_` or `$` (`docs/Impala.md`), so a leading dot is a namespace the user cannot
+starts with a letter, `_` or `$` (`docs/impala/Impala.md`), so a leading dot is a namespace the user cannot
 reach. Globals, constants and functions the user declares are emitted as BARE names; locals are
 `$name`. So the leading dot is the whole separation, and it must be preserved by anything new.
 
@@ -69,7 +69,7 @@ These are internal and never referenced by a predictable name, which is why they
 Just two tags, and one sentence covers both: **`.o.<path>` is the offset of `<path>` in words, `.z.<path>`
 is the size of `<path>` in words.** Emitted as `! DEFi` and referenced at every access and allocation
 site. **These are IMPLEMENTED** - see
-[`docs/StructLayoutConstants.md`](StructLayoutConstants.md). Unlike everything above they are STABLE and
+[`design/impala/StructLayoutConstants.md`](../impala/StructLayoutConstants.md). Unlike everything above they are STABLE and
 deliberately predictable, because hand-written or host-supplied GAZL must be able to name them.
 
 | symbol | `<path>` is | example |
@@ -90,7 +90,7 @@ the product of them all. Only an array stating more than one axis mints them; a 
 suffix is a NUMBER where a field name would be an identifier, so `.d.S.v.0` cannot collide with a field
 called `0`. It follows `.z.`'s path scheme exactly, and for the same reason: a struct field's axes are
 keyed on the TYPE and so survive a call boundary, while a `global` or local array's are keyed on the
-OBJECT. See [`MultidimensionalArrays.md`](MultidimensionalArrays.md).
+OBJECT. See [`MultidimensionalArrays.md`](../../docs/impala/MultidimensionalArrays.md).
 
 An array VARIABLE's size is emitted immediately above its own allocation line, which then reads
 `*.z.name` instead of a number or a scratch:
@@ -136,7 +136,7 @@ refer to it. Like `.o.` / `.z.` these are STABLE and predictable, and carry no r
 Nothing below is emitted by this branch's compiler. `inline` is rejected with `E439` here and the
 expansion lives on the `GAZL2` branch, a separate line shipping AFTER Impala 2; `grep -c "_i"` over
 `impala/impala.jspeg` returns 0. Kept because the tag rules above have to stay compatible with it, and
-because the suffix comes back when `inline` does. Same caveat as [`docs/Inlining.md`](Inlining.md).
+because the suffix comes back when `inline` does. Same caveat as [`design/impala/Inlining.md`](../impala/Inlining.md).
 
 ### Inline expansion suffixes
 
@@ -196,8 +196,8 @@ above and comes back here with `inline`.
 
 ## See also
 
-- [`docs/StructLayoutConstants.md`](StructLayoutConstants.md) - the `.o.` / `.z.` scheme and why layout
+- [`design/impala/StructLayoutConstants.md`](../impala/StructLayoutConstants.md) - the `.o.` / `.z.` scheme and why layout
   is a named constant rather than a baked number.
-- [`docs/TwoStageConstants.md`](TwoStageConstants.md) - why these are constants resolved at assembly
+- [`design/impala/TwoStageConstants.md`](../impala/TwoStageConstants.md) - why these are constants resolved at assembly
   time rather than values Impala folds away.
-- [`docs/Inlining.md`](Inlining.md) - the `_i<N>` expansion suffix and the switch-label ordering trap.
+- [`design/impala/Inlining.md`](../impala/Inlining.md) - the `_i<N>` expansion suffix and the switch-label ordering trap.

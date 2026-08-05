@@ -139,7 +139,7 @@ function forwardReferenceHint(source, options, index, message) {
 		: `add a forward \`extern\` for ${name} above this point`);
 	return `${name} is defined later, at ${site} - this compiler is single-pass, so a name must be`
 		+ ` declared before it is used; ${remedy}`
-		+ (options && options.units ? ' (import cycles: see docs/Impala2.md "Cycles")' : "");
+		+ (options && options.units ? ' (import cycles: see docs/impala/Impala2.md "Cycles")' : "");
 }
 
 function formatDiagnostic(source, options, rawIndex, severity, code, message, hint) {

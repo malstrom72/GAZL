@@ -19,7 +19,7 @@ native manifest authoritative and complete (step 2 of the sequencing below) - so
 host native is still a trusted claim rather than a checked one.
 
 Superseded: the multi-return trigger below. Multi-value returns are PARKED for Impala 3.0
-(see `docs/ParkedFeatures.md`), so a prototype declares at most one return (`E428` otherwise) and extra
+(see `design/ParkedFeatures.md`), so a prototype declares at most one return (`E428` otherwise) and extra
 results come back through pointer out-parameters. The remaining motivation - argument type-checking for
 extern calls - is what got implemented.
 
@@ -133,7 +133,7 @@ Two mechanisms added in Impala 2.0 change the calculus:
   signature - nothing to re-declare, nothing to drift. The cross-unit signature check already fires on
   disagreement (E203 "element type mismatch with previous declaration").
 - The gazl-validator pass over `.gazl` signature metadata, plus an authoritative place for native
-  signatures (see `docs/nativeCallbackSignatures.gazl`).
+  signatures (see `design/proofs/nativeCallbackSignatures.gazl`).
 
 A prototype stops being a lie exactly when the toolchain has an authoritative signature to check it
 against. If the validator cross-checks a declared extern prototype against the linked GAZL definition

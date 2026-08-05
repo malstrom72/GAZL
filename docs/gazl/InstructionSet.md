@@ -57,7 +57,7 @@ sizes, for bounds checking etc. It is always legal to specify a size of zero if 
 > is bounds-checked on every `PEEK`/`POKE`. Supply it anyway. It is added to the function's frame requirement, so a
 > declared span turns a stack exhaustion into a `DATA_STACK_OVERFLOW` at function entry - deterministic, and pointing at
 > the culprit - instead of a late `BAD_POKE` on whichever path happens to run. It is also what tells a compiling backend
-> that these slots are address-exposed and must live in real memory. See `docs/MemorySafetyModel.md`.
+> that these slots are address-exposed and must live in real memory. See `docs/impala/MemorySafetyModel.md`.
 
 ## ANDi
 - `int(d)          #int            #int`
@@ -83,7 +83,7 @@ stack frame sizes or for bounds checking etc.
 > Nothing depends on `*size` for MEMORY SAFETY here either: a GAZL callee re-checks its own frame in its `FUNC`
 > prologue, and a native callee declares the word count it wants when it reads the parameters, which is where that
 > bound is enforced. Supply it anyway, for the same reason as `ADRL`: it makes the caller's frame requirement cover the
-> call window, so an exhausted stack is reported at entry rather than deeper in. See `docs/MemorySafetyModel.md`.
+> call window, so an exhausted stack is reported at entry rather than deeper in. See `docs/impala/MemorySafetyModel.md`.
 
 A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function declaration
 order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defined operations on a function pointer;
@@ -95,7 +95,7 @@ unspecified (but memory-safe) result.
 > ordinal, so it does not trap - it silently calls a different function. "Memory-safe" is accurate and
 > still understates it. The fix is a distinct `t` (target) type with no arithmetic or ordering forms at
 > all, making the undefined operations unrepresentable rather than merely undefined. See
-> [`docs/GAZL2FunctionPointers.md`](GAZL2FunctionPointers.md).
+> [`design/gazl/GAZL2FunctionPointers.md`](../../design/gazl/GAZL2FunctionPointers.md).
 
 ## CNST
 - `*size`
@@ -132,7 +132,7 @@ Pointer constant data items. Every operand on the line must be an address (see `
 Note `p` covers BOTH data pointers and function pointers, which are different things - a data pointer is a
 memory address, a function pointer is a declaration-order ordinal. So `DATp &func &data` assembles, and
 `ADDp` on a function pointer assembles without trapping. GAZL 2 is expected to split this into a `t`
-(target) type; see [`docs/GAZL2FunctionPointers.md`](GAZL2FunctionPointers.md).
+(target) type; see [`design/gazl/GAZL2FunctionPointers.md`](../../design/gazl/GAZL2FunctionPointers.md).
 
 ## DATs
 - `string`
@@ -252,7 +252,7 @@ Declares the beginning of a new function. Any previous function must have ended 
 
 The assembler attaches two computed constants to `FUNC`: the size of the declared frame (which advances the stack
 pointer) and the highest fixed offset the body reaches (which allocates nothing). Together they form a single entry-time
-stack check, which is why accesses at fixed offsets need no check of their own. See `docs/MemorySafetyModel.md`.
+stack check, which is why accesses at fixed offsets need no check of their own. See `docs/impala/MemorySafetyModel.md`.
 
 ## GEQf
 - `#float          #float          @label`
@@ -284,7 +284,7 @@ Branch on greater or equal pointer
 Get local variable `var` (any type) with offset `int`
 
 The offset is dynamic, so it is bounds-checked on every access, against the end of the data stack rather than the extent
-of `var`. See `SETL` and `docs/MemorySafetyModel.md`.
+of `var`. See `SETL` and `docs/impala/MemorySafetyModel.md`.
 
 ## GLOB
 - `*size`
@@ -558,7 +558,7 @@ Set local variable `var` (any type) with offset `int`
 
 The offset is dynamic, so it is bounds-checked on every access - but against the end of the data stack, not against the
 extent of `var`. An overrun stays inside the sandbox and typically corrupts the writing function's own frame first. See
-`docs/MemorySafetyModel.md`.
+`docs/impala/MemorySafetyModel.md`.
 
 ## SHLi
 - `int(d)          #int            #int`

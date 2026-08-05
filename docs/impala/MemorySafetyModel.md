@@ -176,8 +176,8 @@ tiers: at **Impala compile time** when index and extent are both numbers Impala 
 assembly time** when either end is a symbol, as an emitted `! FAIL` or the assembler's own
 `Offset out of bounds`; and at **run time**, for an index no static tier can see, as the `--range-checks`
 guards Impala can emit into the GAZL - two compares per subscript, `DEBUG`-gated, off by default. A bare
-pointer has no extent and is checked by none of them. See `docs/CompileTimeHardening.md` and
-`docs/Impala2.md`, "Array bounds".
+pointer has no extent and is checked by none of them. See `design/impala/CompileTimeHardening.md` and
+`docs/impala/Impala2.md`, "Array bounds".
 
 
 ## 8. The short version
