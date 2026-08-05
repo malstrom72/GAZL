@@ -222,7 +222,7 @@ without also doing the allocator.
 - The last extern-struct restriction lifts: an extern struct (host-owned size) could be passed and
   returned by value, because nothing would need its size at Impala-compile time. (This was once written
   as "E425 lifts". There is no E425 - by-value params/returns are blocked for every struct by E426/E427,
-  so what lifts is that generic block, once by-value returns from `Impala3-byvalue-multireturn`.)
+  so what lifts is that generic block, once by-value returns from `Impala3-byvalue-multireturn-park`.)
 - A host re-packing a struct would only need to RE-ASSEMBLE, not recompile Impala - by-value calls
   included. The modifiable-layout promise would hold end to end instead of stopping at the call boundary.
 - Runtime predictability is unaffected: the assembler still resolves every size to a fixed number, so

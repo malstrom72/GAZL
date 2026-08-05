@@ -69,7 +69,7 @@ the assembler then rejected, naming a compiler-minted GAZL symbol instead of the
    out-parameters: `addVec(&s, &p, &q)` instead of `s = addVec(p, q)`. Cost is inside the callee — the
    golden diff in `e6ad36d` shows `addVec` going from 2 instructions to 8, because by-value fields are free
    window operands and by-pointer fields are a `PEEK`/`POKE` each. Implemented and VM-verified on
-   `Impala3-byvalue-multireturn` (an ancestor of this branch), then parked by `e6ad36d`; `Impala2` has since
+   `Impala3-byvalue-multireturn-park` (an ancestor of this branch), then parked by `e6ad36d`; `Impala2` has since
    drifted **236 commits / +2425 -544** lines in the grammar (measured 2026-08-05; it was 96 / +1031 -360
    when this was first written), so restoring it is a re-implementation against a working reference, not a
    cherry-pick. The figure only grows, and with it the argument.

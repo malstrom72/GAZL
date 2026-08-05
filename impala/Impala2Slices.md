@@ -3,7 +3,7 @@
 Status: **COMPLETE for 2.0 - design record, not a plan** (checked 2026-08-05). Every item on the
 "Order of work" list at the foot of this file is resolved, and each is already annotated inline with a
 date: the place architecture and struct arrays are IMPLEMENTED; multi-return and by-value params were
-implemented, VM-verified, then PARKED to 3.0 on `Impala3-byvalue-multireturn` (`E426`-`E429`); `functype`
+implemented, VM-verified, then PARKED to 3.0 at `Impala3-byvalue-multireturn-park` (`E426`-`E429`); `functype`
 and `import`/`export`/`--dead-strip` are IMPLEMENTED, the last with an honest carve-out; collect mode is
 DEFERRED to 3.0 and struck through in place. Nothing here is open work.
 
@@ -114,8 +114,8 @@ all base-kind combinations, and read-back verification after every write.
 
 ## Step 4 + slice 2.5: returns and by-value - one window convention
 
-> **PARKED for Impala 3.0.** This slice shipped and was then removed; the work is preserved on the
-> `Impala3-byvalue-multireturn` branch. Impala 2.0 rejects multi-value returns (`E428`),
+> **PARKED for Impala 3.0.** This slice shipped and was then removed; the work is preserved at the
+> `Impala3-byvalue-multireturn-park` tag. Impala 2.0 rejects multi-value returns (`E428`),
 > destructuring (`E429`) and by-value struct params/returns (`E426`, `E427`). Kept as the design and
 > experiment record. See `docs/ParkedFeatures.md`.
 

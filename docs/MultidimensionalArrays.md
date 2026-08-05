@@ -2,10 +2,10 @@
 
 Status: **IMPLEMENTED on `Impala2`, for the 2.0 release that is still being built.** Supersedes the 2026-07-26 "still OUT of 2.0" re-evaluation in
 [`ParkedFeatures.md`](ParkedFeatures.md), whose central objection - that array-dimension type identity is
-unsolved - does not apply to the design below. A same-named document existed on the park branch
-`Impala2-multidim-arrays` for the 3.0 design; that one required numeric literal dimensions and predates
+unsolved - does not apply to the design below. A same-named document existed at the park tag
+`Impala2-multidim-arrays-park` for the 3.0 design; that one required numeric literal dimensions and predates
 the current place model, so it is history, not a plan. Read it with `git show
-Impala2-multidim-arrays:docs/MultidimensionalArrays.md` for the questions it already answered (slice
+Impala2-multidim-arrays-park:docs/MultidimensionalArrays.md` for the questions it already answered (slice
 semantics, shape-pointer typing, `:` open axes) - none of which are in scope here.
 
 Every GAZL fragment quoted below was produced by the compiler in this tree, not written by hand.

@@ -7,8 +7,8 @@
 > `impala compile` drives import-as-linking with `export` and `--dead-strip`.
 >
 > **Step 4 (multiple return values), destructuring, and passing/returning STRUCTS BY VALUE were
-> implemented and then deliberately parked for Impala 3.0** - the work is preserved on the
-> `Impala3-byvalue-multireturn` branch. Impala 2.0 rejects them (`E426`-`E429`); results come back
+> implemented and then deliberately parked for Impala 3.0** - the work is preserved at the
+> `Impala3-byvalue-multireturn-park` tag. Impala 2.0 rejects them (`E426`-`E429`); results come back
 > through pointer out-parameters instead. Struct locals/globals, struct pointers, field access,
 > `sizeof`, whole-struct assignment and single named returns are all unaffected. See
 > [`docs/ParkedFeatures.md`](ParkedFeatures.md) for what is parked, where, and why.
@@ -666,8 +666,8 @@ codegen never depends on how the struct is used elsewhere in the function.
 
 ### Passing, returning, copying
 
-> **Passing and returning a struct BY VALUE is PARKED for Impala 3.0** (`E426`, `E427`); preserved on
-> the `Impala3-byvalue-multireturn` branch. Whole-struct assignment (`a = b`, `*p = v`), struct
+> **Passing and returning a struct BY VALUE is PARKED for Impala 3.0** (`E426`, `E427`); preserved at
+> the `Impala3-byvalue-multireturn-park` tag. Whole-struct assignment (`a = b`, `*p = v`), struct
 > locals/globals, struct pointers, field access and `sizeof` are all still supported. Pass and return
 > structs through pointers. See [`docs/ParkedFeatures.md`](ParkedFeatures.md).
 
@@ -840,8 +840,8 @@ global TickFn onTick = tickHandler  // checked: tickHandler must match TickFn's 
 
 ## Step 4: Multiple return values (parked)
 
-> **PARKED for Impala 3.0.** Implemented and then removed; the work is preserved on the
-> `Impala3-byvalue-multireturn` branch. Impala 2.0 rejects a second return value (`E428`) and
+> **PARKED for Impala 3.0.** Implemented and then removed; the work is preserved at the
+> `Impala3-byvalue-multireturn-park` tag. Impala 2.0 rejects a second return value (`E428`) and
 > destructuring assignment (`E429`). Return extra results through pointer out-parameters instead.
 > This section is kept as the design record. See [`docs/ParkedFeatures.md`](ParkedFeatures.md).
 

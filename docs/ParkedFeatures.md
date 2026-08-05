@@ -3,37 +3,40 @@
 Status: INDEX. Start here when you wonder "didn't we already build that?"
 
 Some Impala 2.0 features were designed, implemented, reviewed, and then deliberately taken back out. The
-work is not lost - each one is preserved on its own branch. This file says what is parked, where it lives,
+work is not lost - each one is preserved under its own tag. This file says what is parked, where it lives,
 and why it was parked.
 
 
 ## The parking convention
 
-1. Create a branch at the LAST commit that still contains the feature:
+1. Tag the LAST commit that still contains the feature:
 
-        git branch <park-branch> <commit>
+        git tag -a <feature>-park <commit> -m "Parked: <what it is>"
 
-2. Land a rollback commit on the working branch whose message names the branch.
+2. Land a rollback commit on the working branch whose message names the tag.
 
-So a park branch is normally an ancestor of the working branch (the removal happened afterwards on the same
-line). To see the feature, check the branch out; to see how it was removed, read the rollback commit.
+So a park point is normally an ancestor of the working branch (the removal happened afterwards on the same
+line). To see the feature, check the tag out; to see how it was removed, read the rollback commit.
 
-Do not delete these branches. They are the only copy.
+These were branches until 2026-08-05, and this file used to say they were the only copy of the work. That
+was wrong: being ancestors, the commits are reachable from the working branch whether or not any ref points
+at them. What a ref buys is a NAME, and a tag is the honest one - a park point is not a line of
+development, and a branch sitting in the list only invites the question of whether it still needs merging.
 
 
 ## Parked: arrays as values / shape-carrying pointer types
 
-    branch:   Impala2-multidim-arrays        (tip 4cd52f2)
+    tag:      Impala2-multidim-arrays-park   (4cd52f2)
     removed:  dda4129  "Roll back multidim arrays (slices 1-2) to pre-multidim compiler"
     target:   Impala 3.0
 
 **Multidimensional arrays themselves are NOT parked any more - they are IMPLEMENTED on `Impala2`**
-(2026-08-04), by a different design from this branch's: one subscript with a comma list, striding by the declared element,
+(2026-08-04), by a different design from that one's: one subscript with a comma list, striding by the declared element,
 lowered through the place model, with per-axis `.d.` constants the assembler resolves. Struct fields and
 standalone `global`/local arrays both, across all three bounds tiers plus cross-unit metadata. See
 [`MultidimensionalArrays.md`](MultidimensionalArrays.md), which supersedes the objection below.
 
-What stays parked is the rest of this branch: arrays as VALUES, and shape-carrying pointer types
+What stays parked is the rest of that work: arrays as VALUES, and shape-carrying pointer types
 (`int array[W] pointer m`, slice 2c/2d, `3781f8c`). The latter is the real prerequisite for shape
 identity - see slice 3 there, and the "Does the CONCEPT help?" note below.
 
@@ -41,11 +44,11 @@ Contains slices 1-2 of multidimensional array support: shape types, multidim sub
 walking by pointee size rather than stride-1), untyped multidim element typing, and a long design thread on
 array-dimension TYPE IDENTITY.
 
-ONE document lives only on this branch: `docs/Impala2OpenItems.md` (a whole backlog). Read it there -
-`git show Impala2-multidim-arrays:docs/Impala2OpenItems.md` - rather than assuming those items were
-dropped. This used to name `docs/MultidimensionalArrays.md` as branch-only too, which sent readers to a
+ONE document lives only at that tag: `docs/Impala2OpenItems.md` (a whole backlog). Read it there -
+`git show Impala2-multidim-arrays-park:docs/Impala2OpenItems.md` - rather than assuming those items were
+dropped. This used to name `docs/MultidimensionalArrays.md` as park-only too, which sent readers to a
 superseded 3.0 design requiring numeric literal dimensions: that filename is a LIVE doc on `Impala2`
-describing the design that was actually built, and the park branch's copy is history.
+describing the design that was actually built, and the parked copy is history.
 
 Parked because the type-identity question has no clean answer. An array's dimensions want to be part of its
 type so calls can be checked, but dimensions can be arbitrary expressions resolved by the assembler. That
@@ -100,11 +103,11 @@ type identity had to be solved to get it, which is exactly what point 3 assumed.
 
 ## Parked: by-value struct params/returns, multi-return, destructuring
 
-    branch:   Impala3-byvalue-multireturn    (tip 985bdcc)
+    tag:      Impala3-byvalue-multireturn-park  (985bdcc)
     removed:  e6ad36d  "Park by-value struct params/returns, multi-return and destructuring"
     target:   Impala 3.0
 
-Contains three entangled features, which is why they share one branch:
+Contains three entangled features, which is why they share one park point:
 
 - **By-value struct parameters and returns.** `function bump(V x) returns V y`. Implemented as a transient
   CALL window: the struct's words ARE frame slots, so fields are reached frame-relative (`$x:.o.V.a`) with
@@ -284,7 +287,7 @@ LANDED IN 2.0 on 2026-08-04, which is exactly the independence this paragraph pr
 
 ### Restore by-value structs, multi-return and destructuring
 
-Restore from `Impala3-byvalue-multireturn`. The implementation there worked and was well tested; it is the
+Restore from `Impala3-byvalue-multireturn-park`. The implementation there worked and was well tested; it is the
 surrounding complexity that motivated parking, not a defect.
 
 ### Remove the mandatory reserved return transient
