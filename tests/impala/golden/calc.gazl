@@ -777,9 +777,11 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		! SUBi <A> <A> #'%'
 		PEEK %0 $p 
 		SUBi %0 %0 #'%'
-		SWCH %0 *<A> @.f41
+		SWCH %0 *<A> @.f51
 		! SUBi <A> #'|' #'%'	; case '|'
-	.s23#<A>:	GEQi $precedence #BITWISE_PRECEDENCE @.f41	; if (precedence < BITWISE_PRECEDENCE) 
+		! LSSi <A> #0 @.g25
+	.s23#<A>:	NOOP
+	.g25:	GEQi $precedence #BITWISE_PRECEDENCE @.f51	; if (precedence < BITWISE_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
@@ -794,7 +796,9 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		GOTO @wasFunction  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'&' #'%'	; case '&'
-	.s23#<A>:	GEQi $precedence #BITWISE_PRECEDENCE @.f41	; if (precedence < BITWISE_PRECEDENCE) 
+		! LSSi <A> #0 @.g27
+	.s23#<A>:	NOOP
+	.g27:	GEQi $precedence #BITWISE_PRECEDENCE @.f51	; if (precedence < BITWISE_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
@@ -809,7 +813,9 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		GOTO @wasFunction  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'^' #'%'	; case '^'
-	.s23#<A>:	GEQi $precedence #BITWISE_PRECEDENCE @.f41	; if (precedence < BITWISE_PRECEDENCE) 
+		! LSSi <A> #0 @.g29
+	.s23#<A>:	NOOP
+	.g29:	GEQi $precedence #BITWISE_PRECEDENCE @.f51	; if (precedence < BITWISE_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
@@ -824,9 +830,11 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		GOTO @wasFunction  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'<' #'%'	; case '<'
-	.s23#<A>:	PEEK %0 $p #1	; if ((int) p[1] == '<' && precedence < BITWISE_PRECEDENCE) 
-		NEQi %0 #'<' @.f41
-		GEQi $precedence #BITWISE_PRECEDENCE @.f41
+		! LSSi <A> #0 @.g31
+	.s23#<A>:	NOOP
+	.g31:	PEEK %0 $p #1	; if ((int) p[1] == '<' && precedence < BITWISE_PRECEDENCE) 
+		NEQi %0 #'<' @.f51
+		GEQi $precedence #BITWISE_PRECEDENCE @.f51
 		ADDp %1 $p #2	; p = (pointer) evaluate(p + 2, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
@@ -841,9 +849,11 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		GOTO @wasFunction  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'>' #'%'	; case '>'
-	.s23#<A>:	PEEK %0 $p #1	; if ((int) p[1] == '>' && precedence < BITWISE_PRECEDENCE) 
-		NEQi %0 #'>' @.f41
-		GEQi $precedence #BITWISE_PRECEDENCE @.f41
+		! LSSi <A> #0 @.g34
+	.s23#<A>:	NOOP
+	.g34:	PEEK %0 $p #1	; if ((int) p[1] == '>' && precedence < BITWISE_PRECEDENCE) 
+		NEQi %0 #'>' @.f51
+		GEQi $precedence #BITWISE_PRECEDENCE @.f51
 		ADDp %1 $p #2	; p = (pointer) evaluate(p + 2, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
@@ -858,7 +868,9 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		GOTO @wasFunction  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'+' #'%'	; case '+'
-	.s23#<A>:	GEQi $precedence #ADD_SUB_PRECEDENCE @.f41	; if (precedence < ADD_SUB_PRECEDENCE) 
+		! LSSi <A> #0 @.g37
+	.s23#<A>:	NOOP
+	.g37:	GEQi $precedence #ADD_SUB_PRECEDENCE @.f51	; if (precedence < ADD_SUB_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #ADD_SUB_PRECEDENCE 
@@ -870,7 +882,9 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		GOTO @wasFunction  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'-' #'%'	; case '-'
-	.s23#<A>:	GEQi $precedence #ADD_SUB_PRECEDENCE @.f41	; if (precedence < ADD_SUB_PRECEDENCE) 
+		! LSSi <A> #0 @.g39
+	.s23#<A>:	NOOP
+	.g39:	GEQi $precedence #ADD_SUB_PRECEDENCE @.f51	; if (precedence < ADD_SUB_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #ADD_SUB_PRECEDENCE 
@@ -882,9 +896,11 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		GOTO @wasFunction  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'*' #'%'	; case '*'
-	.s23#<A>:	PEEK %0 $p #1	; if ((int) p[1] == '*') 
-		NEQi %0 #'*' @.f34
-		GRTi $precedence #POW_PRECEDENCE @.f41	; if (precedence <= POW_PRECEDENCE) 
+		! LSSi <A> #0 @.g41
+	.s23#<A>:	NOOP
+	.g41:	PEEK %0 $p #1	; if ((int) p[1] == '*') 
+		NEQi %0 #'*' @.f42
+		GRTi $precedence #POW_PRECEDENCE @.f51	; if (precedence <= POW_PRECEDENCE) 
 		ADDp %1 $p #2	; p = (pointer) evaluate(p + 2, &f, POW_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #POW_PRECEDENCE 
@@ -896,7 +912,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
 		RETU   	; } else 
-	.f34:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f41	; if (precedence < MUL_DIV_PRECEDENCE) 
+	.f42:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f51	; if (precedence < MUL_DIV_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #MUL_DIV_PRECEDENCE 
@@ -906,25 +922,29 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		MULf %0 %0 $f
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-	.e36:	RETU   	; }
+	.e44:	RETU   	; }
 		! SUBi <A> #'/' #'%'	; case '/'
-	.s23#<A>:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f41	; if (precedence < MUL_DIV_PRECEDENCE) 
+		! LSSi <A> #0 @.g46
+	.s23#<A>:	NOOP
+	.g46:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f51	; if (precedence < MUL_DIV_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #MUL_DIV_PRECEDENCE 
 		CALL &evaluate %0 *4	; expects evaluate(ptr, ptr, int) -> ptr @ 603:59
 		MOVp $p %0 
-		NEQf $f #0.0 @.f39	; if (f == 0.0) error("Division by zero")
+		NEQf $f #0.0 @.f48	; if (f == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4d3 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(ptr) -> void @ 604:45
 		GOTO @wasFunction  
-	.f39:	PEEK %0 $v 	; *v = (float) *v / f
+	.f48:	PEEK %0 $v 	; *v = (float) *v / f
 		DIVf %0 %0 $f
 		POKE $v %0 
-	.e40:	GOTO @wasFunction  	; goto repeat
+	.e49:	GOTO @wasFunction  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'%' #'%'	; case '%'
-	.s23#<A>:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f41	; if (precedence < MUL_DIV_PRECEDENCE) 
+		! LSSi <A> #0 @.g50
+	.s23#<A>:	NOOP
+	.g50:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f51	; if (precedence < MUL_DIV_PRECEDENCE) 
 		ADDp %1 $p #1	; p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #MUL_DIV_PRECEDENCE 
@@ -935,7 +955,7 @@ evaluate:	FUNC	; signature func evaluate(ptr b, ptr v, int precedence) -> ptr @ 
 		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 612:22
 		POKE $v %0 
 		GOTO @wasFunction  	; goto repeat
-	.f41:	RETU   	; }
+	.f51:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------

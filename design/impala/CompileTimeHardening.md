@@ -341,12 +341,33 @@ not being NaN.)* `constInt` now decodes hex and `+`-signed literals, so
 
 ### Confirmed silent acceptances that become gibberish at assembly
 
-**S5. A symbolic switch range disables E444.** *(Item 3 above predicted this; `Impala2Review.md` C6
-recorded the pre-E444 version. NEW: reproduced as the residual AFTER E444 shipped.)* `checkCaseValue` returns early when `constInt` cannot read
-the range, so `switch (x == LO to HI)` with host-supplied bounds is unchecked. With `LO=5`, a `case 0`
-folds to a negative offset and the module fails to load with `Invalid identifier: .s0.-5` - a
-compiler-minted label the user never wrote. This is the deferred-assertion case: emit
-`! GEQi #<off> #0 @ok / ! FAIL <source>: case 0 is below the switch range`.
+**S5. A symbolic switch range disables E444 - DIAGNOSED WRONG HERE, FIXED 2026-08-05 the other way.**
+*(Item 3 above predicted this; `Impala2Review.md` C6 recorded the pre-E444 version.)* The symptom was
+real: `checkCaseValue` returns early when `constInt` cannot read the range, and with `LO=5` a `case 0`
+folded to a negative offset and the module failed to load with `Invalid identifier: .s0.-5`, a
+compiler-minted label the user never wrote.
+
+**The prescription was wrong, and following it would have broken working programs.** This entry used to
+say "emit `! GEQi #<off> #0 @ok / ! FAIL ...: case 0 is below the switch range`" - i.e. make it an error.
+But a host-supplied range is a WINDOW this build happens to select, and an arm outside it is
+UNREACHABLE, not wrong. That is a decided question with a passing test:
+`jspegCompilerTests.js`, "a case outside a symbolic range is left to the configuration" - *"a
+configuration may legitimately narrow the range, so erroring on a now-surplus arm would make that
+configuration unbuildable"* (`design/impala/TwoStageConstants.md`). A `! FAIL` here would have made
+exactly those programs unbuildable.
+
+The real defect was an ASYMMETRY, not a missing check. Above the window the arm already fell dead
+harmlessly, because the offset is only a table index `SWCH` never looks up. Below it, the offset is
+pasted into the LABEL TEXT, and a negative one is not an index at all. So one direction fell dead and
+the other refused to build, for the same situation.
+
+Fixed by making both fall dead: each case under a symbolic range emits
+`! LSSi <off> #0 @.gN` before its label, skipping just that one line. A skipped line is abandoned
+BEFORE its label is interpreted (`skipUntilLabel`, `GAZL.cpp`), so `.s0.-5` is never constructed rather
+than constructed and rejected. Guards are per case VALUE, so `case 0, 5` drops only the half that falls
+outside; the skip region is one line, so nested switches never overlap. A LITERAL range emits no guard
+and keeps the compile-time `E444`, which is strictly better - it fails at your desk, not at load.
+Fixture: `tests/impala/sources/switchWindow.impala`.
 
 **S6. The same gate disabled E443 (duplicate case) - FIXED 2026-08-02.** *(Item 5 above;
 `Impala2Review.md` C6.)* `caseSeen` was indexed by `value - fromNum`, inheriting a dependency on the

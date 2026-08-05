@@ -915,7 +915,9 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		SWCH %0 *<A> @.s9
 		! ADDi <A> #RANK_1 #3	; case RANK_1 + 3
 		! SUBi <A> <A> <B>
-	.s9#<A>:	ADDi %1 #RANK_1 #1	; movePiece(RANK_1 + 1, RANK_1 + 4, ROOK | WHITE | MOVED_MASK)
+		! LSSi <A> #0 @.g11
+	.s9#<A>:	NOOP
+	.g11:	ADDi %1 #RANK_1 #1	; movePiece(RANK_1 + 1, RANK_1 + 4, ROOK | WHITE | MOVED_MASK)
 		ADDi %2 #RANK_1 #4
 		! IORi <A> #ROOK #WHITE
 		IORi %3 <A> #MOVED_MASK
@@ -927,7 +929,9 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		GOTO @.e8  	; }
 		! ADDi <A> #RANK_1 #7	; case RANK_1 + 7
 		! SUBi <A> <A> <B>
-	.s9#<A>:	ADDi %1 #RANK_1 #8	; movePiece(RANK_1 + 8, RANK_1 + 6, ROOK | WHITE | MOVED_MASK)
+		! LSSi <A> #0 @.g12
+	.s9#<A>:	NOOP
+	.g12:	ADDi %1 #RANK_1 #8	; movePiece(RANK_1 + 8, RANK_1 + 6, ROOK | WHITE | MOVED_MASK)
 		ADDi %2 #RANK_1 #6
 		! IORi <A> #ROOK #WHITE
 		IORi %3 <A> #MOVED_MASK
@@ -951,10 +955,12 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		! ADDi <B> <B> #1
 		! SUBi <B> <B> <A>
 		SUBi %0 $t <A>
-		SWCH %0 *<B> @.s11
+		SWCH %0 *<B> @.s13
 		! ADDi <B> #RANK_8 #3	; case RANK_8 + 3
 		! SUBi <B> <B> <A>
-	.s11#<B>:	ADDi %1 #RANK_8 #1	; movePiece(RANK_8 + 1, RANK_8 + 4, ROOK | BLACK | MOVED_MASK)
+		! LSSi <B> #0 @.g15
+	.s13#<B>:	NOOP
+	.g15:	ADDi %1 #RANK_8 #1	; movePiece(RANK_8 + 1, RANK_8 + 4, ROOK | BLACK | MOVED_MASK)
 		ADDi %2 #RANK_8 #4
 		! IORi <B> #ROOK #BLACK
 		IORi %3 <B> #MOVED_MASK
@@ -966,7 +972,9 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		GOTO @.e8  	; }
 		! ADDi <B> #RANK_8 #7	; case RANK_8 + 7
 		! SUBi <B> <B> <A>
-	.s11#<B>:	ADDi %1 #RANK_8 #8	; movePiece(RANK_8 + 8, RANK_8 + 6, ROOK | BLACK | MOVED_MASK)
+		! LSSi <B> #0 @.g16
+	.s13#<B>:	NOOP
+	.g16:	ADDi %1 #RANK_8 #8	; movePiece(RANK_8 + 8, RANK_8 + 6, ROOK | BLACK | MOVED_MASK)
 		ADDi %2 #RANK_8 #6
 		! IORi <B> #ROOK #BLACK
 		IORi %3 <B> #MOVED_MASK
@@ -976,74 +984,74 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		POKE &xCapture <B> 
 		ADDi $score $score #CASTLING_SCORE	; score = score + CASTLING_SCORE
 		GOTO @.e8  	; }
-	.s11:	DIVi %0 $t #STRIDE	; score = score + (int) global RANK_VALUES[t / STRIDE] - (int) global RANK_VALUES[frm / STRIDE]
+	.s13:	DIVi %0 $t #STRIDE	; score = score + (int) global RANK_VALUES[t / STRIDE] - (int) global RANK_VALUES[frm / STRIDE]
 		PEEK %0 &RANK_VALUES %0
 		DIVi %1 $frm #STRIDE
 		ADDi %0 $score %0
 		PEEK %1 &RANK_VALUES %1
 		SUBi $score %0 %1
-	.e12:	GOTO @.e8  	; }
+	.e14:	GOTO @.e8  	; }
 		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE | MOVED_MASK
 		! IORi <A> <A> #MOVED_MASK
-	.s7#<A>:	NEQi $t $oldXCapture @.f13	; if (t == oldXCapture) 
-		! EQUi #DEBUG #0 @.a14	; assert((int) global board[t - STRIDE] == (PAWN | BLACK | MOVED_MASK))
+	.s7#<A>:	NEQi $t $oldXCapture @.f17	; if (t == oldXCapture) 
+		! EQUi #DEBUG #0 @.a18	; assert((int) global board[t - STRIDE] == (PAWN | BLACK | MOVED_MASK))
 		SUBi %0 $t #STRIDE
 		! IORi <A> #PAWN #BLACK
 		PEEK %0 &board %0
 		! IORi <A> <A> #MOVED_MASK
-		EQUi %0 <A> @.a14
+		EQUi %0 <A> @.a18
 		MOVp %1 &.a_intglo_4ed 
 		CALL ^assertFail %0 *1
-	.a14:	SUBi %1 $t #STRIDE	; liftPiece(t - STRIDE)
+	.a18:	SUBi %1 $t #STRIDE	; liftPiece(t - STRIDE)
 		CALL &liftPiece %0 *2	; expects liftPiece(int) -> void @ 470:26
 		ADDi %0 $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE + PAWN_VALUE
 		ADDi $score %0 #PAWN_VALUE
 		GOTO @.e8  	; } else if (t >= RANK_8) 
-	.f13:	LSSi $t #RANK_8 @.f16	; if (t >= RANK_8) 
+	.f17:	LSSi $t #RANK_8 @.f20	; if (t >= RANK_8) 
 		! IORi <A> #QUEEN #WHITE	; newPiece = QUEEN | WHITE | MOVED_MASK
 		! IORi <A> <A> #MOVED_MASK
 		MOVi $newPiece <A> 
 		ADDi $score $score #PROMOTION_SCORE	; score = score + PROMOTION_SCORE
 		GOTO @.e8  	; } else 
-	.f16:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
-	.e17:	GOTO @.e8  	; }
+	.f20:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
+	.e21:	GOTO @.e8  	; }
 		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK | MOVED_MASK
 		! IORi <A> <A> #MOVED_MASK
-	.s7#<A>:	NEQi $t $oldXCapture @.f18	; if (t == oldXCapture) 
-		! EQUi #DEBUG #0 @.a19	; assert((int) global board[t + STRIDE] == (PAWN | WHITE | MOVED_MASK))
+	.s7#<A>:	NEQi $t $oldXCapture @.f22	; if (t == oldXCapture) 
+		! EQUi #DEBUG #0 @.a23	; assert((int) global board[t + STRIDE] == (PAWN | WHITE | MOVED_MASK))
 		ADDi %0 $t #STRIDE
 		! IORi <A> #PAWN #WHITE
 		PEEK %0 &board %0
 		! IORi <A> <A> #MOVED_MASK
-		EQUi %0 <A> @.a19
+		EQUi %0 <A> @.a23
 		MOVp %1 &.a_intglo_4ee 
 		CALL ^assertFail %0 *1
-	.a19:	ADDi %1 $t #STRIDE	; liftPiece(t + STRIDE)
+	.a23:	ADDi %1 $t #STRIDE	; liftPiece(t + STRIDE)
 		CALL &liftPiece %0 *2	; expects liftPiece(int) -> void @ 491:26
 		ADDi %0 $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE + PAWN_VALUE
 		ADDi $score %0 #PAWN_VALUE
 		GOTO @.e8  	; } else if (t < RANK_2) 
-	.f18:	GEQi $t #RANK_2 @.f21	; if (t < RANK_2) 
+	.f22:	GEQi $t #RANK_2 @.f25	; if (t < RANK_2) 
 		! IORi <A> #QUEEN #BLACK	; newPiece = QUEEN | BLACK | MOVED_MASK
 		! IORi <A> <A> #MOVED_MASK
 		MOVi $newPiece <A> 
 		ADDi $score $score #PROMOTION_SCORE	; score = score + PROMOTION_SCORE
 		GOTO @.e8  	; } else 
-	.f21:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
-	.e22:	GOTO @.e8  	; }
+	.f25:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
+	.e26:	GOTO @.e8  	; }
 		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE
-	.s7#<A>:	LSSi $t #RANK_4 @.f23	; if (t >= RANK_4) 
+	.s7#<A>:	LSSi $t #RANK_4 @.f27	; if (t >= RANK_4) 
 		SUBi %0 $t #STRIDE	; global xCapture = t - STRIDE
 		POKE &xCapture %0 
 		ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
-	.f23:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
+	.f27:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
 		GOTO @.e8  	; }
 		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK
-	.s7#<A>:	GEQi $t #RANK_6 @.f24	; if (t < RANK_6) 
+	.s7#<A>:	GEQi $t #RANK_6 @.f28	; if (t < RANK_6) 
 		ADDi %0 $t #STRIDE	; global xCapture = t + STRIDE
 		POKE &xCapture %0 
 		ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
-	.f24:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
+	.f28:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
 		GOTO @.e8  	; }
 	.s7:	DIVi %0 $t #STRIDE	; score = score + (int) global RANK_VALUES[t / STRIDE] - (int) global RANK_VALUES[frm / STRIDE]
 		PEEK %0 &RANK_VALUES %0
@@ -1051,46 +1059,46 @@ doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured,
 		ADDi %0 $score %0
 		PEEK %1 &RANK_VALUES %1
 		SUBi $score %0 %1
-	.e8:	LEQi $captured #EMPTY @.f25	; if (captured > EMPTY) 
+	.e8:	LEQi $captured #EMPTY @.f29	; if (captured > EMPTY) 
 		MOVi %1 $t 	; liftPiece(t)
 		CALL &liftPiece %0 *2	; expects liftPiece(int) -> void @ 533:15
-	.f25:	MOVi %1 $frm 	; movePiece(frm, t, newPiece | MOVED_MASK)
+	.f29:	MOVi %1 $frm 	; movePiece(frm, t, newPiece | MOVED_MASK)
 		MOVi %2 $t 
 		IORi %3 $newPiece #MOVED_MASK
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 535:42
 		! IORi <A> #PIECE_MASK #COLOR_MASK	; switch ((captured & (PIECE_MASK | COLOR_MASK)) == 0 to MAX_PIECE_AND_MOVED_VALUE) 
 		ANDi %0 $captured <A>
-		SWCH %0 *MAX_PIECE_AND_MOVED_VALUE @.s26
-	.s26#EMPTY:	GOTO @.e27  	; 
+		SWCH %0 *MAX_PIECE_AND_MOVED_VALUE @.s30
+	.s30#EMPTY:	GOTO @.e31  	; 
 		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE
-	.s26#<A>:	DIVi %0 $t #STRIDE	; score = score + PAWN_VALUE + (t / STRIDE - 3) * PAWN_ADVANCE_SCORE
+	.s30#<A>:	DIVi %0 $t #STRIDE	; score = score + PAWN_VALUE + (t / STRIDE - 3) * PAWN_ADVANCE_SCORE
 		SUBi %0 %0 #3
 		ADDi %1 $score #PAWN_VALUE
 		MULi %0 %0 #PAWN_ADVANCE_SCORE
 		ADDi $score %1 %0
-		GOTO @.e27  	; }
+		GOTO @.e31  	; }
 		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK
-	.s26#<A>:	DIVi %1 $t #STRIDE	; score = score + PAWN_VALUE + (8 - t / STRIDE) * PAWN_ADVANCE_SCORE
+	.s30#<A>:	DIVi %1 $t #STRIDE	; score = score + PAWN_VALUE + (8 - t / STRIDE) * PAWN_ADVANCE_SCORE
 		SUBi %1 #8 %1
 		ADDi %0 $score #PAWN_VALUE
 		MULi %1 %1 #PAWN_ADVANCE_SCORE
 		ADDi $score %0 %1
-		GOTO @.e27  	; }
-	.s26:	ANDi %0 $captured #PIECE_MASK	; score = score + (int) global PIECE_VALUES[captured & PIECE_MASK] + (int) global RANK_VALUES[t / STRIDE]
+		GOTO @.e31  	; }
+	.s30:	ANDi %0 $captured #PIECE_MASK	; score = score + (int) global PIECE_VALUES[captured & PIECE_MASK] + (int) global RANK_VALUES[t / STRIDE]
 		PEEK %0 &PIECE_VALUES %0
 		DIVi %1 $t #STRIDE
 		ADDi %0 $score %0
 		PEEK %1 &RANK_VALUES %1
 		ADDi $score %0 %1
-	.e27:	PEEK %1 &turnColor 	; global turnColor = (int) switchColor(global turnColor)
+	.e31:	PEEK %1 &turnColor 	; global turnColor = (int) switchColor(global turnColor)
 		CALL &switchColor %0 *2	; expects switchColor(int) -> int @ 558:56
 		POKE &turnColor %0 
-		! EQUi #DEBUG #0 @.a28	; assert((int) checkInvariant() != FALSE)
+		! EQUi #DEBUG #0 @.a32	; assert((int) checkInvariant() != FALSE)
 		CALL &checkInvariant %0 *1	; expects checkInvariant() -> int @ 560:32
-		NEQi %0 #FALSE @.a28
+		NEQi %0 #FALSE @.a32
 		MOVp %1 &.a_intche_4eb 
 		CALL ^assertFail %0 *1
-	.a28:	RETU   	; }
+	.a32:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
@@ -1151,7 +1159,7 @@ undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captu
 		MOVi %1 $t 	; putPiece(t, captured)
 		MOVi %2 $captured 
 		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ 579:24
-	.f7:	SWCH $oldPiece *MAX_PIECE_AND_MOVED_VALUE @.f15	; switch (oldPiece == 0 to MAX_PIECE_AND_MOVED_VALUE) 
+	.f7:	SWCH $oldPiece *MAX_PIECE_AND_MOVED_VALUE @.f19	; switch (oldPiece == 0 to MAX_PIECE_AND_MOVED_VALUE) 
 		! IORi <A> #KING #WHITE	; case KING | WHITE
 	.s8#<A>:	NOOP
 		! ADDi <A> #RANK_1 #7	; switch (t == RANK_1 + 3 to RANK_1 + 7 + 1) 
@@ -1162,18 +1170,22 @@ undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captu
 		SWCH %0 *<A> @.s10
 		! ADDi <A> #RANK_1 #3	; case RANK_1 + 3
 		! SUBi <A> <A> <B>
-	.s10#<A>:	ADDi %1 #RANK_1 #4	; movePiece(RANK_1 + 4, RANK_1 + 1, ROOK | WHITE)
+		! LSSi <A> #0 @.g12
+	.s10#<A>:	NOOP
+	.g12:	ADDi %1 #RANK_1 #4	; movePiece(RANK_1 + 4, RANK_1 + 1, ROOK | WHITE)
 		ADDi %2 #RANK_1 #1
 		IORi %3 #ROOK #WHITE
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 589:53
-		GOTO @.f15  	; }
+		GOTO @.f19  	; }
 		! ADDi <A> #RANK_1 #7	; case RANK_1 + 7
 		! SUBi <A> <A> <B>
-	.s10#<A>:	ADDi %1 #RANK_1 #6	; movePiece(RANK_1 + 6, RANK_1 + 8, ROOK | WHITE)
+		! LSSi <A> #0 @.g13
+	.s10#<A>:	NOOP
+	.g13:	ADDi %1 #RANK_1 #6	; movePiece(RANK_1 + 6, RANK_1 + 8, ROOK | WHITE)
 		ADDi %2 #RANK_1 #8
 		IORi %3 #ROOK #WHITE
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 596:53
-	.s10:	GOTO @.f15  	; }
+	.s10:	GOTO @.f19  	; }
 		! IORi <B> #KING #BLACK	; case KING | BLACK
 	.s8#<B>:	NOOP
 		! ADDi <B> #RANK_8 #7	; switch (t == RANK_8 + 3 to RANK_8 + 7 + 1) 
@@ -1181,45 +1193,49 @@ undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captu
 		! ADDi <B> <B> #1
 		! SUBi <B> <B> <A>
 		SUBi %0 $t <A>
-		SWCH %0 *<B> @.s12
+		SWCH %0 *<B> @.s14
 		! ADDi <B> #RANK_8 #3	; case RANK_8 + 3
 		! SUBi <B> <B> <A>
-	.s12#<B>:	ADDi %1 #RANK_8 #4	; movePiece(RANK_8 + 4, RANK_8 + 1, ROOK | BLACK)
+		! LSSi <B> #0 @.g16
+	.s14#<B>:	NOOP
+	.g16:	ADDi %1 #RANK_8 #4	; movePiece(RANK_8 + 4, RANK_8 + 1, ROOK | BLACK)
 		ADDi %2 #RANK_8 #1
 		IORi %3 #ROOK #BLACK
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 607:53
-		GOTO @.f15  	; }
+		GOTO @.f19  	; }
 		! ADDi <B> #RANK_8 #7	; case RANK_8 + 7
 		! SUBi <B> <B> <A>
-	.s12#<B>:	ADDi %1 #RANK_8 #6	; movePiece(RANK_8 + 6, RANK_8 + 8, ROOK | BLACK)
+		! LSSi <B> #0 @.g17
+	.s14#<B>:	NOOP
+	.g17:	ADDi %1 #RANK_8 #6	; movePiece(RANK_8 + 6, RANK_8 + 8, ROOK | BLACK)
 		ADDi %2 #RANK_8 #8
 		IORi %3 #ROOK #BLACK
 		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ 614:53
-	.s12:	GOTO @.f15  	; }
+	.s14:	GOTO @.f19  	; }
 		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE | MOVED_MASK
 		! IORi <A> <A> #MOVED_MASK
-	.s8#<A>:	NEQi $t $oldXCapture @.f15	; if (t == oldXCapture) 
+	.s8#<A>:	NEQi $t $oldXCapture @.f19	; if (t == oldXCapture) 
 		SUBi %1 $t #STRIDE	; putPiece(t - STRIDE, PAWN | BLACK | MOVED_MASK)
 		! IORi <A> #PAWN #BLACK
 		IORi %2 <A> #MOVED_MASK
 		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ 624:52
-		GOTO @.f15  	; }
+		GOTO @.f19  	; }
 		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK | MOVED_MASK
 		! IORi <A> <A> #MOVED_MASK
-	.s8#<A>:	NEQi $t $oldXCapture @.f15	; if (t == oldXCapture) 
+	.s8#<A>:	NEQi $t $oldXCapture @.f19	; if (t == oldXCapture) 
 		ADDi %1 $t #STRIDE	; putPiece(t + STRIDE, PAWN | WHITE | MOVED_MASK)
 		! IORi <A> #PAWN #WHITE
 		IORi %2 <A> #MOVED_MASK
 		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ 633:52
-	.f15:	PEEK %1 &turnColor 	; global turnColor = (int) switchColor(global turnColor)
+	.f19:	PEEK %1 &turnColor 	; global turnColor = (int) switchColor(global turnColor)
 		CALL &switchColor %0 *2	; expects switchColor(int) -> int @ 638:56
 		POKE &turnColor %0 
-		! EQUi #DEBUG #0 @.a16	; assert((int) checkInvariant() != FALSE)
+		! EQUi #DEBUG #0 @.a20	; assert((int) checkInvariant() != FALSE)
 		CALL &checkInvariant %0 *1	; expects checkInvariant() -> int @ 640:32
-		NEQi %0 #FALSE @.a16
+		NEQi %0 #FALSE @.a20
 		MOVp %1 &.a_intche_4eb 
 		CALL ^assertFail %0 *1
-	.a16:	RETU   	; }
+	.a20:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
@@ -1920,15 +1936,21 @@ executeMove:	FUNC	; signature func executeMove(int move) -> int @ 1015:1
 		RETU   	; goto returnNow
 		GOTO @.e10  	; }
 		! SUBi <A> #CHECKMATE #IN_CHECK	; case CHECKMATE
-	.s9#<A>:	MOVi $status #CHECKMATE 	; status = CHECKMATE
+		! LSSi <A> #0 @.g11
+	.s9#<A>:	NOOP
+	.g11:	MOVi $status #CHECKMATE 	; status = CHECKMATE
 		RETU   	; goto returnNow
 		GOTO @.e10  	; }
 		! SUBi <A> #STALEMATE #IN_CHECK	; case STALEMATE
-	.s9#<A>:	MOVi $status #STALEMATE 	; status = STALEMATE
+		! LSSi <A> #0 @.g12
+	.s9#<A>:	NOOP
+	.g12:	MOVi $status #STALEMATE 	; status = STALEMATE
 		RETU   	; goto returnNow
 		GOTO @.e10  	; }
 		! SUBi <A> #IN_CHECK #IN_CHECK	; case IN_CHECK
-	.s9#<A>:	MOVi %1 $frm 	; undoMove(frm, t, oldPiece, captured, oldXCapture)
+		! LSSi <A> #0 @.g13
+	.s9#<A>:	NOOP
+	.g13:	MOVi %1 $frm 	; undoMove(frm, t, oldPiece, captured, oldXCapture)
 		MOVi %2 $t 
 		MOVi %3 $oldPiece 
 		MOVi %4 $captured 
@@ -2379,12 +2401,16 @@ main:	FUNC	; signature func main() -> void @ 1256:1
 		SUBi %0 $lastMove #NEW_GAME
 		SWCH %0 *<A> @.s4
 		! SUBi <A> #LET_COMPUTER_PLAY #NEW_GAME	; case LET_COMPUTER_PLAY
-	.s4#<A>:	MOVi $isComputersTurn #TRUE 	; isComputersTurn = TRUE
+		! LSSi <A> #0 @.g6
+	.s4#<A>:	NOOP
+	.g6:	MOVi $isComputersTurn #TRUE 	; isComputersTurn = TRUE
 		GOTO @.e5  	; }
 		! SUBi <A> #TAKE_BACK #NEW_GAME	; case TAKE_BACK
-	.s4#<A>:	CALL &takeBackMove %0 *1	; expects takeBackMove() -> int @ 1285:38
+		! LSSi <A> #0 @.g7
+	.s4#<A>:	NOOP
+	.g7:	CALL &takeBackMove %0 *1	; expects takeBackMove() -> int @ 1285:38
 		MOVi $lastMove %0 
-		LEQi $lastMove #0 @.f6	; if (lastMove > 0) 
+		LEQi $lastMove #0 @.f8	; if (lastMove > 0) 
 		MOVi %1 $lastMove 	; lastFrom = (int) moveFrom(lastMove)
 		CALL &moveFrom %0 *2	; expects moveFrom(int) -> int @ 1287:43
 		MOVi $lastFrom %0 
@@ -2394,12 +2420,14 @@ main:	FUNC	; signature func main() -> void @ 1256:1
 		MOVi $lastMove #0 	; lastMove = 0
 		MOVp $action &.s_Tookba_4e8 	; action = "Took back move:"
 		GOTO @.e5  	; } else 
-	.f6:	MOVp %1 &.s_Nomove_4e9 	; print("No move to take back.\n")
+	.f8:	MOVp %1 &.s_Nomove_4e9 	; print("No move to take back.\n")
 		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 1292:40
 		MOVi $lastMove #-1 	; lastMove = -1
-	.e7:	GOTO @.e5  	; }
+	.e9:	GOTO @.e5  	; }
 		! SUBi <A> #NEW_GAME #NEW_GAME	; case NEW_GAME
-	.s4#<A>:	CALL &restart %0 *1	; expects restart() -> void @ 1298:16
+		! LSSi <A> #0 @.g10
+	.s4#<A>:	NOOP
+	.g10:	CALL &restart %0 *1	; expects restart() -> void @ 1298:16
 		MOVi $lastMove #0 	; lastMove = 0
 		MOVi $lastFrom #0 	; lastFrom = 0
 		MOVi $lastTo #0 	; lastTo = 0
@@ -2416,16 +2444,16 @@ main:	FUNC	; signature func main() -> void @ 1256:1
 		MOVp %1 &.s_Nomove_4e9:20 	; print(".\n")
 		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 1310:20
 		MOVi $lastMove #-1 	; lastMove = -1
-	.e5:	EQUi $isComputersTurn #FALSE @.f10	; if (isComputersTurn != FALSE) 
+	.e5:	EQUi $isComputersTurn #FALSE @.f13	; if (isComputersTurn != FALSE) 
 		CALL &getComputerMove %0 *1	; expects getComputerMove() -> int @ 1317:39
 		MOVi $lastMove %0 
-	.f10:	MOVi $moveResult #0 	; moveResult = 0
-		EQUi $lastMove #CHECKMATE @.t11	; if (lastMove == CHECKMATE || lastMove == STALEMATE) 
-		NEQi $lastMove #STALEMATE @.f12
-	.t11:	MOVi $moveResult $lastMove 	; moveResult = lastMove
+	.f13:	MOVi $moveResult #0 	; moveResult = 0
+		EQUi $lastMove #CHECKMATE @.t14	; if (lastMove == CHECKMATE || lastMove == STALEMATE) 
+		NEQi $lastMove #STALEMATE @.f15
+	.t14:	MOVi $moveResult $lastMove 	; moveResult = lastMove
 		MOVi $isComputersTurn #FALSE 	; isComputersTurn = FALSE
 		MOVi $lastMove #-1 	; lastMove = -1
-	.f12:	LEQi $lastMove #0 @.e15	; if (lastMove > 0) 
+	.f15:	LEQi $lastMove #0 @.e18	; if (lastMove > 0) 
 		MOVi %1 $lastMove 	; lastFrom = (int) moveFrom(lastMove)
 		CALL &moveFrom %0 *2	; expects moveFrom(int) -> int @ 1327:40
 		MOVi $lastFrom %0 
@@ -2441,38 +2469,44 @@ main:	FUNC	; signature func main() -> void @ 1256:1
 		! ADDi <A> #CHECKMATE #1	; switch (moveResult == VALID_MOVE to CHECKMATE + 1) 
 		! SUBi <A> <A> #VALID_MOVE
 		SUBi %0 $moveResult #VALID_MOVE
-		SWCH %0 *<A> @.s14
+		SWCH %0 *<A> @.s17
 		! SUBi <A> #VALID_MOVE #VALID_MOVE	; case VALID_MOVE, CHECKMATE, STALEMATE
-	.s14#<A>:	NOOP
-		! SUBi <A> #CHECKMATE #VALID_MOVE
-	.s14#<A>:	NOOP
-		! SUBi <A> #STALEMATE #VALID_MOVE
-	.s14#<A>:	MOVi %1 $lastMove 	; registerMove(lastMove, lastPiece, lastCaptured, lastXCapture)
+		! LSSi <A> #0 @.g19
+	.s17#<A>:	NOOP
+	.g19:	! SUBi <A> #CHECKMATE #VALID_MOVE
+		! LSSi <A> #0 @.g20
+	.s17#<A>:	NOOP
+	.g20:	! SUBi <A> #STALEMATE #VALID_MOVE
+		! LSSi <A> #0 @.g21
+	.s17#<A>:	NOOP
+	.g21:	MOVi %1 $lastMove 	; registerMove(lastMove, lastPiece, lastCaptured, lastXCapture)
 		MOVi %2 $lastPiece 
 		MOVi %3 $lastCaptured 
 		MOVi %4 $lastXCapture 
 		CALL &registerMove %0 *5	; expects registerMove(int, int, int, int) -> void @ 1336:68
-		NEQi $moveResult #VALID_MOVE @.f16	; if (moveResult == VALID_MOVE) 
+		NEQi $moveResult #VALID_MOVE @.f22	; if (moveResult == VALID_MOVE) 
 		SUBi $isComputersTurn #TRUE $isComputersTurn	; isComputersTurn = TRUE - isComputersTurn
-		GOTO @.e15  	; } else 
-	.f16:	MOVi $isComputersTurn #FALSE 	; isComputersTurn = FALSE
-	.e17:	GOTO @.e15  	; }
+		GOTO @.e18  	; } else 
+	.f22:	MOVi $isComputersTurn #FALSE 	; isComputersTurn = FALSE
+	.e23:	GOTO @.e18  	; }
 		! SUBi <A> #IN_CHECK #VALID_MOVE	; case IN_CHECK
-	.s14#<A>:	MOVp %1 &.s_Kingin_4eb 	; print("King in check.\n")
+		! LSSi <A> #0 @.g24
+	.s17#<A>:	NOOP
+	.g24:	MOVp %1 &.s_Kingin_4eb 	; print("King in check.\n")
 		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 1345:32
 		MOVi $lastMove #-1 	; lastMove = -1
-		GOTO @.e15  	; }
-	.s14:	NEQi $moveResult #INVALID_MOVE @.e15	; if (moveResult == INVALID_MOVE) 
+		GOTO @.e18  	; }
+	.s17:	NEQi $moveResult #INVALID_MOVE @.e18	; if (moveResult == INVALID_MOVE) 
 		MOVp %1 &.s_Invali_4ec 	; print("Invalid move.\n")
 		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 1351:32
 		MOVi $lastMove #-1 	; lastMove = -1
-	.e15:	LSSi $lastMove #0 @.f19	; if (lastMove >= 0) 
+	.e18:	LSSi $lastMove #0 @.f26	; if (lastMove >= 0) 
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 1359:14
 		MOVi %1 $lastFrom 	; printBoard(lastFrom, lastTo)
 		MOVi %2 $lastTo 
 		CALL &printBoard %0 *3	; expects printBoard(int, int) -> void @ 1360:33
-		EQUi $lastFrom #0 @.f19	; if (lastFrom != 0 && lastTo != 0) 
-		EQUi $lastTo #0 @.f19
+		EQUi $lastFrom #0 @.f26	; if (lastFrom != 0 && lastTo != 0) 
+		EQUi $lastTo #0 @.f26
 		MOVp %1 $action 	; print(action)
 		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 1362:19
 		MOVp %1 &.s_Setcom_4ea:21 	; print(" ")
@@ -2503,20 +2537,20 @@ main:	FUNC	; signature func main() -> void @ 1256:1
 		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 1373:19
 		MOVp %1 &.s__4ed 	; print(".\n\n")
 		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 1374:20
-	.f19:	NEQi $moveResult #CHECKMATE @.f22	; if (moveResult == CHECKMATE) 
+	.f26:	NEQi $moveResult #CHECKMATE @.f29	; if (moveResult == CHECKMATE) 
 		MOVp $p &.s_Checkm_4ee 	; p = "Checkmate! White wins.\n"
 		PEEK %0 &turnColor 	; if (global turnColor == WHITE) p = "Checkmate! Black wins.\n"
-		NEQi %0 #WHITE @.f23
+		NEQi %0 #WHITE @.f30
 		MOVp $p &.s_Checkm_4ef 	; p = "Checkmate! Black wins.\n"
-	.f23:	MOVp %1 $p 	; print(p)
+	.f30:	MOVp %1 $p 	; print(p)
 		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 1381:13
 		MOVi $lastMove #MATE 	; lastMove = MATE
-		GOTO @.f25  	; } else if (moveResult == STALEMATE) 
-	.f22:	NEQi $moveResult #STALEMATE @.f25	; if (moveResult == STALEMATE) 
+		GOTO @.f32  	; } else if (moveResult == STALEMATE) 
+	.f29:	NEQi $moveResult #STALEMATE @.f32	; if (moveResult == STALEMATE) 
 		MOVp %1 &.s_Stalem_4f0 	; print("Stalemate!\n")
 		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 1384:26
 		MOVi $lastMove #MATE 	; lastMove = MATE
-	.f25:	NEQi $lastMove #QUIT @.l0	; } while (lastMove != QUIT)
+	.f32:	NEQi $lastMove #QUIT @.l0	; } while (lastMove != QUIT)
 		RETU   	; }
 
 .s_pawn_4d2:	CNST *5
