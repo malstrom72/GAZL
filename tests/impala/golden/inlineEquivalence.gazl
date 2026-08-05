@@ -200,33 +200,33 @@ main:	FUNC	; signature func main() -> void @ 80:1
 		MOVi %2 #0 	; printInt(pick(0))
 		SWCH %2 *3 @.s0_i12	; switch (i == 0 to 3) 
 	.s0_i12#0:	MOVi %1 #10 	; r = 10
-		RETU   
+		GOTO @.e1_i12  
 	.s0_i12#1:	MOVi %1 #20 	; r = 20
-		RETU   
+		GOTO @.e1_i12  
 	.s0_i12:	MOVi %1 #99 	; r = 99
 	.e1_i12:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 106:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 106:30
 		MOVi %2 #1 	; printInt(pick(1))
 		SWCH %2 *3 @.s0_i13	; switch (i == 0 to 3) 
 	.s0_i13#0:	MOVi %1 #10 	; r = 10
-		RETU   
+		GOTO @.e1_i13  
 	.s0_i13#1:	MOVi %1 #20 	; r = 20
-		RETU   
+		GOTO @.e1_i13  
 	.s0_i13:	MOVi %1 #99 	; r = 99
 	.e1_i13:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 107:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 107:30
 		MOVi %2 #2 	; printInt(pick(2))
 		SWCH %2 *3 @.s0_i14	; switch (i == 0 to 3) 
 	.s0_i14#0:	MOVi %1 #10 	; r = 10
-		RETU   
+		GOTO @.e1_i14  
 	.s0_i14#1:	MOVi %1 #20 	; r = 20
-		RETU   
+		GOTO @.e1_i14  
 	.s0_i14:	MOVi %1 #99 	; r = 99
 	.e1_i14:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 108:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 108:30
 		MOVi %2 #5 	; printInt(chk(5))
 		! EQUi #DEBUG #0 @.a0_i15	; assert(a > 0)
-		GRTi #0 @.a0_i15 
+		GRTi %2 #0 @.a0_i15
 		MOVp %4 &.a_a0_4d2 
 		CALL ^assertFail %3 *1
 	.a0_i15:	MOVi %1 %2 	; r = a
@@ -234,7 +234,7 @@ main:	FUNC	; signature func main() -> void @ 80:1
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 110:29
 		MOVi %2 #3 	; printInt(chk(3))
 		! EQUi #DEBUG #0 @.a0_i16	; assert(a > 0)
-		GRTi #0 @.a0_i16 
+		GRTi %2 #0 @.a0_i16
 		MOVp %4 &.a_a0_4d2 
 		CALL ^assertFail %3 *1
 	.a0_i16:	MOVi %1 %2 	; r = a

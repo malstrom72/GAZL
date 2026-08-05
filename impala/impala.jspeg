@@ -864,6 +864,17 @@
         for (var i = $$parser.metacode.length - 1; i >= 0; --i) {
             var inst = $$parser.metacode[i];
 
+            /* An inline expansion pastes records this pass ALREADY ran over, in the callee. Running it
+               again shifts a comparison's operands left a second time, dropping operand 0 and writing a
+               null target - `GRTi %1 #0 @ok` became `GRTi #0 @ok`. It bit only the comparisons that
+               survive the first pass unrenamed: one targeting FALSE is rewritten to `!<` and no longer
+               matches the case below, which is why `while` looked fine and `assert` did not. A pasted
+               record also breaks any branch chain being threaded across it, so reset the state too. */
+            if (inst.settled) {                 /* already resolved when its inline body was captured */
+                target.false = target.true = currentGoto = null;
+                continue;
+            }
+
             switch (inst.operator) {
 
                 /* ---  branch on TRUE / FALSE  --- */
@@ -1026,7 +1037,15 @@
         for (i = 0; i < $$parser.metacode.length; ++i) {
             if ($$parser.metacode[i].operator !== '<--') continue;
             for (var n = i + 1; n <= $$parser.metacode.length; ++n) {
-                var nx = (n < $$parser.metacode.length ? $$parser.metacode[n] : { operator: '--^' });
+                if (n === $$parser.metacode.length) {
+                    /* Off the end. A function RETURNS here, so a goto landing on this label is a
+                       return - but an `inline` body does NOT: it is pasted mid-caller and control
+                       runs on into it. Rewriting the goto there returned from the CALLER, which
+                       silently truncated the caller at the first expansion that took such an arm. */
+                    leadsTo[$$parser.metacode[i].operands[0]] = !$$parser.inlineMode;
+                    break;
+                }
+                var nx = $$parser.metacode[n];
                 if (nx.operator == null || nx.operator === ';' || nx.operator === '<--') continue;
                 leadsTo[$$parser.metacode[i].operands[0]] = (nx.operator === '--^');
                 break;

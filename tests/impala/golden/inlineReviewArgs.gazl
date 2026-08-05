@@ -43,9 +43,9 @@ main:	FUNC	; signature func main() -> void @ 50:1
 		MOVi %2 #1 	; printInt(pick(1))
 		SWCH %2 *3 @.s0_i5	; switch (i == 0 to 3) 
 	.s0_i5#0:	MOVi %1 #10 	; r = 10
-		RETU   
+		GOTO @.e1_i5  
 	.s0_i5#1:	MOVi %1 #20 	; r = 20
-		RETU   
+		GOTO @.e1_i5  
 	.s0_i5:	MOVi %1 #99 	; r = 99
 	.e1_i5:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 64:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 64:30
