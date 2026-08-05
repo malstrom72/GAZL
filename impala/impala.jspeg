@@ -1735,11 +1735,24 @@
            `! SUBi <A>` whenever `from` is non-zero, so the offset operand is symbolic in exactly the
            `switch (i == 5 to 9)` shape that produces the unloadable `.sN.-6`. */
         var off = value - ctx.fromNum;
-        if (ctx.sizeNum !== undefined && (off < 0 || off >= ctx.sizeNum)) {
-            $$parser.fail('Case value ' + value + ' is outside the switch range '
-                    + ctx.fromNum + ' to ' + (ctx.fromNum + ctx.sizeNum), source, offset, 'E444',
-                    'the upper bound is exclusive, so the last reachable case is '
-                            + (ctx.fromNum + ctx.sizeNum - 1));
+        /* The two halves are INDEPENDENT, and tying them together was the same mistake S6 fixed for the
+           duplicate check: this one borrowed `sizeNum` it has no need of. Below the start is decidable
+           from `from` ALONE - `switch (op == 1 to LAST_OP)` with a `case 0` is out of the window for
+           EVERY value `LAST_OP` can take - and it is the half that breaks the build, because a negative
+           offset is pasted into the label text (`.s0.-1`). Above the end is the opposite: it needs
+           `sizeNum`, and when the end is host-supplied it must stay legal, because a configuration may
+           narrow the window and an unreachable arm is not an error (design/impala/TwoStageConstants.md).
+           So: always test the low end when `from` is known, test the high end only when the size is. */
+        var whole = (ctx.sizeNum !== undefined);           /* both ends known -> name the whole window */
+        if (off < 0 || (whole && off >= ctx.sizeNum)) {
+            $$parser.fail('Case value ' + value + (whole
+                            ? ' is outside the switch range ' + ctx.fromNum
+                                    + ' to ' + (ctx.fromNum + ctx.sizeNum)
+                            : ' is below the switch range, which starts at ' + ctx.fromNum),
+                    source, offset, 'E444',
+                    whole ? 'the upper bound is exclusive, so the last reachable case is '
+                                    + (ctx.fromNum + ctx.sizeNum - 1)
+                          : 'a case below the start can never be reached, whatever the end of the range is');
         }
     };
 

@@ -1138,6 +1138,17 @@ const acceptedThenRejected = [
 	["case below the range", SW("5 to 9", "case -1: { i=1; }"), "outside the switch range 5 to 9"],
 	["case just below from", SW("5 to 9", "case 4: { i=1; }"), "outside the switch range 5 to 9"],
 	["in-range cases", SW("5 to 9", "case 5, 8: { i=1; } default: { i=2; }"), null],
+	// A MIXED range - literal start, host-supplied end - is the shape that slipped through both halves
+	// of the fix: `fromNum` is known so no assemble-time guard is emitted, and the window check used to
+	// need `sizeNum` it has no use of, so nothing fired and the build died at load on `.s0.-1`. The two
+	// directions are genuinely different here and both are covered below: below the start is decidable
+	// from `from` alone and is an error, while above the end depends on a value only the host knows and
+	// must stay legal, because narrowing the window is a configuration's right.
+	["case below a literal start with a symbolic end",
+		SYM_RANGE + SW("1 to HI", "case 0: { i=1; }"), "below the switch range, which starts at 1"],
+	["case above a symbolic end is left to the configuration",
+		SYM_RANGE + SW("1 to HI", "case 99: { i=1; }"), null],
+	["in-range case under a mixed range", SYM_RANGE + SW("1 to HI", "case 1: { i=1; }"), null],
 	// A SYMBOLIC range disables the window check - `constInt` never folds a named const, by design - but
 	// it must NOT disable the duplicate check, which never needed the range base. It did until
 	// 2026-08-02, sharing one early return: both arms minted `.s0#K` and the build died at assembly on
