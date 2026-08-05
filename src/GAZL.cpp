@@ -93,7 +93,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 // run-time and constant-folded paths can never diverge. These are the chosen normative results
 // (two's-complement wrap / count-mod-32 shifts / saturating FTOI -- the AArch64 & WebAssembly
 // choices), identical on every target. add/sub/mul and the shifts lower to a single native
-// instruction; idiv/imod/ftoi keep a real edge-case branch on purpose (see docs/PortabilityAudit.md).
+// instruction; idiv/imod/ftoi keep a real edge-case branch on purpose (see design/gazl/PortabilityAudit.md).
 inline int absolute(int i) { Int x = i >> (Int)(sizeof (Int) * 8 - 1); return (Int)(((UInt)i ^ (UInt)x) - (UInt)x); } // INT_MIN -> INT_MIN
 inline float absolute(float f) { return fabsf(f); }
 inline double absolute(double f) { return fabs(f); }
@@ -293,11 +293,11 @@ const int FWD_FREE_W		= ADDRESS_W | UNCHECKED_ADDRESS | FORWARD;
 const int FWD_FREE_R		= ADDRESS_R | UNCHECKED_ADDRESS | FORWARD;
 // GAZL 2: SPLIT THIS. Unioning FUNC with FREE_ADDRESS makes a function pointer and a data pointer
 // interchangeable everywhere except a DIRECT call, so `p` means both "data pointer" and "any pointer".
-// docs/InstructionSet.md (CALL) already states that ONLY equality and calling are defined on a function
+// docs/gazl/InstructionSet.md (CALL) already states that ONLY equality and calling are defined on a function
 // pointer - this union is precisely why the assembler cannot enforce its own documented contract. ADDp on
 // a function pointer assembles and does NOT trap: `&one + 1` is a valid ordinal, so it silently calls a
 // different function. Fix is a fourth storage type, suffix `t` (target), which simply has no
-// ADDt/SUBt/DIFt/LSSt forms. See docs/GAZL2FunctionPointers.md.
+// ADDt/SUBt/DIFt/LSSt forms. See design/gazl/GAZL2FunctionPointers.md.
 const int ANY_FREE			= NULL_PTR | FREE_ADDRESS | FUNC;
 const int ANY_FWD_FREE		= ANY_FREE | FORWARD;
 const int ANY_VAR_FREE_W	= ANY_VAR_W | UNCHECKED_ADDRESS;
@@ -347,7 +347,7 @@ static const Operator OPERATORS[] = {
 	, { " CALL_n__", CALL_NVC,	{ NATIVE|FORWARD, 0			, 0				}		, 0				, 0				}
 	, { " CALL_nvs", CALL_NVC,	{ NATIVE|FORWARD, TRANSIENT	, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	// GAZL 2: these take the generic VAR_PTR_R, so an INDIRECT call cannot demand a function pointer - only
-	// CALL_c__ above (FUNC | FORWARD) discriminates. Retype to `t`. See docs/GAZL2FunctionPointers.md.
+	// CALL_c__ above (FUNC | FORWARD) discriminates. Retype to `t`. See design/gazl/GAZL2FunctionPointers.md.
 	, { " CALL_v__", CALL_VVC,	{ VAR_PTR_R		, 0				, 0				}		, 0				, 0				}
 	, { " CALL_vvs", CALL_VVC,	{ VAR_PTR_R		, TRANSIENT		, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	, { " CNST_s__", CNST____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ADDRESS_R		}
@@ -359,7 +359,7 @@ static const Operator OPERATORS[] = {
 	, { " DATf_c__", DATA____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, 0				}
 	, { " DATi_c__", DATA____,	{ CONST_INT		, 0				, 0				}		, 0				, 0				}
 	// GAZL 2: ANY_FWD_FREE lets one DATp row mix function and data addresses indistinguishably
-	// (`DATp &func &data` assembles). Needs a sibling DATt. See docs/GAZL2FunctionPointers.md.
+	// (`DATp &func &data` assembles). Needs a sibling DATt. See design/gazl/GAZL2FunctionPointers.md.
 	, { " DATp_c__", DATA____,	{ ANY_FWD_FREE	, 0				, 0				}		, 0				, 0				}
 	, { " DATs____", DATA____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " DIFp_vcc", SUBI_CCC,	{ VAR_INT_W		, FREE_ADDRESS		, FREE_ADDRESS		}		, YIELDS_CONST	, CONST_INT		}
@@ -922,7 +922,7 @@ static int branchSlotOf(Int opcode) {
 	return (index >= 0 && index < OPCODE_SPAN) ? slots[index] : -1;
 }
 
-/* Branch threading and return duplication (docs/GAZLAssemblerOptimizations.md items 4 and 5), run once
+/* Branch threading and return duplication (design/gazl/GAZLAssemblerOptimizations.md items 4 and 5), run once
    every symbol is resolved. Both are IN-PLACE rewrites of an opcode or a displacement, so nothing moves,
    no address shifts and nothing needs re-patching - which is what makes them cheap, and what makes the
    removal variants (dropping the dead GOTO, dropping a now-unreferenced label) expensive enough to skip.

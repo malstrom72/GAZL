@@ -1,6 +1,6 @@
 "use strict";
 
-/* Compile every code sample in docs/WhatsNewInImpala2.md, so that page cannot drift away from the
+/* Compile every code sample in docs/impala/WhatsNewInImpala2.md, so that page cannot drift away from the
    compiler it describes.
 
    This exists because the failure it prevents has happened repeatedly here: a doc stated a rule, the rule
@@ -29,8 +29,8 @@ const path = require("path");
    The sample pool below is shared: a diagnostic code counts as covered when ANY sample provokes it, since
    the point is that the code exists and fires, not which page happens to cite it. */
 const DOCS = [
-	{ file: "Impala.md" },
-	{ file: "WhatsNewInImpala2.md", upgradeTables: true },
+	{ file: "impala/Impala.md" },
+	{ file: "impala/WhatsNewInImpala2.md", upgradeTables: true },
 ];
 const { compileProgram } = require("./impala.node.js");
 

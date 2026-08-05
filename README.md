@@ -118,19 +118,21 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 ## Documentation
 
-**[docs/README.md](docs/README.md) indexes every document** with what each is for and how much to trust
-it. The most-linked few:
+Documentation is split by audience. **[docs/README.md](docs/README.md) indexes the end-user
+documentation** for GAZL, Impala and the C++ embedding API; **[design/README.md](design/README.md)
+indexes the design notes, audits and internals** for working ON the toolchain rather than with it. Both
+say what each document is for and how much to trust it. The most-linked few:
 
-- [What's new in Impala 2.0](docs/WhatsNewInImpala2.md) - **start here if you know Impala 1.0**: what the language gained, what it now refuses, and the four things that can break on upgrade
+- [What's new in Impala 2.0](docs/impala/WhatsNewInImpala2.md) - **start here if you know Impala 1.0**: what the language gained, what it now refuses, and the four things that can break on upgrade
 - [Overview](docs/Overview.md) - general architecture and goals
-- [Impala Language Reference](docs/Impala.md) - the language and toolchain
+- [Impala Language Reference](docs/impala/Impala.md) - the language and toolchain
 - [The `impala/` directory](impala/README.md) - what each compiler file is, and the common commands
-- [Two-Stage Constants](docs/TwoStageConstants.md) - why GAZL ships as text, and why a constant is not always a number the compiler knows
-- [Instruction Set](docs/InstructionSet.md) - extracted opcode descriptions
-- [Memory Safety Model](docs/MemorySafetyModel.md) - stack frames, what is bounds-checked and when, what `*size` is for
-- [Symbol Namespace](docs/SymbolNamespace.md) - every symbol the compiler mints for itself, and how to add one without colliding
-- [Usage Example](docs/UsageExample.md) - compile and run a simple program
-- [JSPEG Port](impala/JSPEG.md) - status and usage of the JavaScript PEG compiler
+- [Two-Stage Constants](design/impala/TwoStageConstants.md) - why GAZL ships as text, and why a constant is not always a number the compiler knows
+- [Instruction Set](docs/gazl/InstructionSet.md) - extracted opcode descriptions
+- [Memory Safety Model](docs/impala/MemorySafetyModel.md) - stack frames, what is bounds-checked and when, what `*size` is for
+- [Symbol Namespace](design/gazl/SymbolNamespace.md) - every symbol the compiler mints for itself, and how to add one without colliding
+- [Usage Example](docs/impala/UsageExample.md) - compile and run a simple program
+- [JSPEG Port](design/jspeg/JSPEG.md) - status and usage of the JavaScript PEG compiler
 
 More technical notes are embedded in the Impala source files.
 

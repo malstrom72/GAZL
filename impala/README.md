@@ -3,9 +3,9 @@
 The Impala compiler: a JSPEG grammar with embedded JavaScript actions, plus the front ends, test
 harnesses and fixtures around it. Start here to find out which file you want.
 
-Language reference: [`../docs/Impala.md`](../docs/Impala.md) for 1.0, [`../docs/Impala2.md`](../docs/Impala2.md)
-for what 2.0 adds. CLI and programmatic API detail: [`ImpalaJS.md`](ImpalaJS.md). JSPEG itself:
-[`JSPEG.md`](JSPEG.md).
+Language reference: [`../docs/impala/Impala.md`](../docs/impala/Impala.md) for 1.0, [`../docs/impala/Impala2.md`](../docs/impala/Impala2.md)
+for what 2.0 adds. CLI and programmatic API detail: [`ImpalaJS.md`](../design/jspeg/ImpalaJS.md). JSPEG itself:
+[`JSPEG.md`](../design/jspeg/JSPEG.md).
 
 
 ## What is in here

@@ -99,7 +99,7 @@ if (haveGazlCmd()) {
 // which unit is named as root.
 //
 // This is the 2.0 RULE, not a known gap: collect mode is deferred to Impala 3.0
-// (docs/ParkedFeatures.md). If it ever lands the LAST assertion is the one that flips - `odd.impala`
+// (design/ParkedFeatures.md). If it ever lands the LAST assertion is the one that flips - `odd.impala`
 // as root must build too, and odd.impala's `extern function isEven` becomes redundant rather than
 // required. Turn it into a positive build-and-compare then, and delete this note.
 const cycleDir = path.join(repoRoot, 'tests', 'impala', 'sources', 'importcycle');
