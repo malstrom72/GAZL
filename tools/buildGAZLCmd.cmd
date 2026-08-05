@@ -8,6 +8,9 @@ IF "%~1"=="" (
 )
 IF NOT EXIST ..\output MKDIR ..\output
 CALL UpdateUnitTest.cmd
+REM Same lesson as below, one line earlier: UpdateUnitTest.cmd deliberately `EXIT /B 1`s on failure, and
+REM nothing was reading it - so a failed unit-test regeneration let the build carry on and report green.
+IF ERRORLEVEL 1 EXIT /B 1
 IF "%mode%"=="beta" (
     SET out=..\output\GAZLCmdBeta.exe
 ) ELSE (

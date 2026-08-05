@@ -1,7 +1,7 @@
 # GAZL Correctness, Portability & Undefined-Behavior Audit
 
 **Scope:** issues in the **current** GAZL source (`src/GAZL.cpp` @ `a29bd02`), independent of any future JIT. They were
-found while researching a native compiler (see [JitCompilerResearch.md](JitCompilerResearch.md)), but every one of them
+found while researching a native compiler (branch `jit-compiler`), but every one of them
 already affects the interpreter today. They matter because GAZL's stated goals include *"run-time should be sandboxed,
 100 % safe"*, *"portable and CPU-agnostic"*, and *"possible to suspend and resume full machine state"* (`src/GAZL.h`) -
 and several of the items below break one of those promises on some input or some platform.

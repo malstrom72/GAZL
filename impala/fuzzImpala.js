@@ -49,10 +49,13 @@ const path = require('path');
 const cp = require('child_process');
 
 const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32' ? 'GAZLCmd.exe' : 'GAZLCmd');
+// Both variants DERIVE from COMPILE_OPTS. The legacy oracle asserts byte equality between a COMPILE_OPTS
+// build and a LEGACY_OPTS one, so a formatting field added to the first alone would leave it comparing two
+// differently formatted modules and reporting a formatting flag as "--legacy changed codegen".
 const COMPILE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true };
-const RANGE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true, rangeChecks: true };
+const RANGE_OPTS = { ...COMPILE_OPTS, rangeChecks: true };
+const LEGACY_OPTS = { ...COMPILE_OPTS, legacy: true };
 const MUTANTS_PER_SEED = 3;
-const LEGACY_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true, legacy: true };
 
 // Run a compiled program on the VM. Returns null when there is no compiler fault, or a message when
 // the loader/assembler REJECTS the emitted GAZL - that means the compiler produced structurally
@@ -95,9 +98,12 @@ function runOnVm(res) {
 // Report the FIRST DIFFERING LINE, not the first 120 characters of each. Truncating the head made two
 // outputs that diverge further down print IDENTICALLY, so the report read like a false positive and a
 // real fault sat unlooked-at.
-function firstDiff(what, ref, res, otherName) {
-	if (res.stdout === ref.stdout) return null;
-	const a = (ref.stdout || '').split(/\r?\n/), b = (res.stdout || '').split(/\r?\n/);
+// Takes the two TEXTS, not the two run results: the `--legacy` oracle compares emitted modules rather than
+// program output, and had grown its own copy of this scan that reported `<end>` for a legitimately empty
+// line. One scan, so a report cannot be right for one oracle and misleading for another.
+function firstDiff(what, refText, resText, otherName) {
+	if (resText === refText) return null;
+	const a = (refText || '').split(/\r?\n/), b = (resText || '').split(/\r?\n/);
 	let i = 0;
 	while (i < a.length && i < b.length && a[i] === b[i]) ++i;
 	return what + ' changed output at line ' + (i + 1) + ' of ' + a.length + ': plain '
@@ -105,10 +111,13 @@ function firstDiff(what, ref, res, otherName) {
 			+ JSON.stringify(b[i] === undefined ? '<end>' : b[i]);
 }
 
-function checkStripped(res, ref) {
+// Every variant oracle ends the same way and only its middle differs: however the module was produced, it
+// must LOAD and then print exactly what the reference printed. One tail, so a future oracle cannot inherit
+// the comparison and forget the load check - which is also how one of these came to label its two failures
+// with two different names.
+function sameAsReference(what, res, ref, otherName) {
 	const load = runOnVm(res);
-	if (load) return 'stripped: ' + load;
-	return firstDiff('dead-strip', ref, res, 'stripped');
+	return (load ? what + ': ' + load : firstDiff(what, ref.stdout, res.stdout, otherName));
 }
 
 // `import` is LINKING BY CONCATENATION: the closure inlines each unit dependency-first, so cutting a
@@ -136,10 +145,7 @@ function checkImportSplit(p, ref) {
 		} catch (err) {
 			return 'import split: compile threw: ' + ((err && err.message) || err);
 		}
-		const res = runGazl(out, p.defines);
-		const load = runOnVm(res);
-		if (load) return 'import split: ' + load;
-		return firstDiff('import split', ref, res, 'linked');
+		return sameAsReference('import split', runGazl(out, p.defines), ref, 'linked');
 	} finally {
 		try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
 	}
@@ -156,10 +162,7 @@ function checkRangeChecked(src, ref, defines) {
 	} catch (err) {
 		return 'range-checks: compile threw: ' + ((err && err.message) || err);
 	}
-	const res = runGazl(gazl, defines);
-	const load = runOnVm(res);
-	if (load) return 'range-checks: ' + load;
-	return firstDiff('range-checks', ref, res, 'checked');
+	return sameAsReference('range-checks', runGazl(gazl, defines), ref, 'checked');
 }
 
 // The INVERTED oracle for a deliberate over-fill (see section (4)): Impala cannot count the words of a
@@ -356,12 +359,12 @@ function genProgram() {
 	chkDecl.push('global ' + chkStruct + ' cS' + (anyWord(sVals) ? ' = ' + structInit(sVals) : ''));
 	readStruct('global cS', sVals);
 
-	// (3) array OF structs -> the struct-array path, `[[ ]]` to index it
+	// (3) array OF structs -> the struct-array path; the subscript strides by .z.<Struct>
 	const kLen = 1 + ri(3);
 	const kVals = Array.from({ length: kLen }, structWords);
 	chkDecl.push('global ' + chkStruct + ' array cK[' + kLen + ']'
 			+ (kVals.some(anyWord) ? ' = { ' + kVals.map(structInit).join(', ') + ' }' : ''));
-	kVals.forEach((vals, k) => readStruct('global cK[[' + k + ']]', vals));
+	kVals.forEach((vals, k) => readStruct('global cK[' + k + ']', vals));
 
 	// (4) SYMBOLIC extent. `SN` is a const, so Impala never learns the number - every offset past `sv`
 	// is assemble-time arithmetic (`! ADDi <A> #.o.CS.sv #k`, `.o.CS.tail` = `.o.CS.sv + SN`). The
@@ -1039,6 +1042,12 @@ function main() {
 	let vmRun = 0;
 	let mutants = 0;
 	const codeTally = {};
+	// One statement of what a clean rejection looks like, for both the program and the mutant loop.
+	const tally = (err) => {
+		const code = ((err && err.message) || '').match(/error\[(E\d+)\]/);
+		const k = code ? code[1] : 'other';
+		codeTally[k] = (codeTally[k] || 0) + 1;
+	};
 	for (let i = 0; i < iterations; ++i) {
 		const seed = startSeed + i;
 		rnd = mulberry32(seed);
@@ -1055,14 +1064,9 @@ function main() {
 			// `--legacy` only ever DOWNGRADES a strict refusal to a warning, so for a program the strict
 			// compiler already accepted it must be byte-for-byte the same module. Anything else means a
 			// legacy branch is changing CODEGEN rather than just tolerance.
-			const legacyGazl = compileWithJsImpala(p.src + '\n', LEGACY_OPTS);
-			if (legacyGazl !== gazl) {
-				const a = gazl.split('\n'), b = legacyGazl.split('\n');
-				let d = 0;
-				while (d < a.length && d < b.length && a[d] === b[d]) ++d;
-				throw new Error('--legacy changed codegen at line ' + (d + 1) + ': strict '
-						+ JSON.stringify(a[d] || '<end>') + ' vs legacy ' + JSON.stringify(b[d] || '<end>'));
-			}
+			const legacyDiff = firstDiff('--legacy', gazl,
+					compileWithJsImpala(p.src + '\n', LEGACY_OPTS), 'legacy');
+			if (legacyDiff) throw new Error(legacyDiff);
 			// A throw here is a compiler bug and lands in the catch below with every other one: `classify`
 			// keeps only what is not a coded diagnostic, and `deadStrip` has no diagnostics to emit.
 			// `cD` is the one definition nothing references, so it is also the one the strip must drop -
@@ -1073,7 +1077,7 @@ function main() {
 				const res = runGazl(gazl, p.defines);
 				const vmFault = p.mustFail ? checkMustFail(res)
 						: (runOnVm(res) || checkExpected(res, p.expect)
-								|| checkStripped(runGazl(stripped, p.defines), res)
+								|| sameAsReference('dead-strip', runGazl(stripped, p.defines), res, 'stripped')
 								|| checkRangeChecked(p.src + '\n', res, p.defines)
 								|| checkImportSplit(p, res));
 				vmRun++;
@@ -1095,9 +1099,7 @@ function main() {
 				if (bugs >= 5) { console.error('stopping after 5 crashes'); break; }
 			} else {
 				rejected++;   // clean diagnostic
-				const code = ((err && err.message) || '').match(/error\[(E\d+)\]/);
-				const k = code ? code[1] : 'other';
-				codeTally[k] = (codeTally[k] || 0) + 1;
+				tally(err);
 			}
 		}
 		for (let m = 0; m < MUTANTS_PER_SEED; ++m) {
@@ -1108,8 +1110,7 @@ function main() {
 			} catch (err) {
 				const crash = classify(err);
 				if (!crash) {
-					const code = ((err && err.message) || '').match(/error\[(E\d+)\]/);
-					codeTally[code ? code[1] : 'other'] = (codeTally[code ? code[1] : 'other'] || 0) + 1;
+					tally(err);
 					continue;
 				}
 				bugs++;

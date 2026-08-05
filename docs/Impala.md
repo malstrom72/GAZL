@@ -30,11 +30,17 @@ Identifiers start with a letter, `_`, or `$` and continue with letters, digits, 
 or `$`. The following words are reserved and cannot be used as identifiers:
 
 ```
-abs array assert case const copy default do else export extern float floor for
-from ftoi funcptr function functype global goto if import inline int itof locals
-loop native null nullfunc pointer readonly returns sizeof struct switch temporary
-to while
+abs array assert break case const continue copy default do else export extern
+float floor for from ftoi funcptr function functype global goto if import inline
+int itof locals loop native null nullfunc pointer readonly return returns sizeof
+struct switch temporary to while
 ```
+
+Using any of them as an identifier is `E449 … is a reserved word, not a variable name`.
+Three of them are reserved without being usable everywhere the word suggests: `return;`
+is a bare early exit only (`return expr;` is `E448` — assign to the return variable
+first), and `break;` / `continue;` are `E450 not supported`, with the note pointing at
+`goto` and a label.
 
 ### Integer literals
 
@@ -64,7 +70,8 @@ float from an integer.
 ### String literals
 
 A string literal yields a pointer to a zero-terminated array of word-sized characters
-(words are typically 32-bit). Its type is the generic `pointer`.
+(words are typically 32-bit). Its type is `int pointer` — assigning one to a
+`float pointer` is `E201`.
 
 ```impala
 const pointer WELCOME = "Welcome to Impala!\n"
@@ -133,6 +140,14 @@ External functions need no prototypes, and multiple Impala sources can still be 
 simply by concatenating their assembled `.gazl` output; casts are only needed where code
 genuinely crosses between the typed and untyped worlds (see [Casting](#casting)).
 
+### `struct` and `functype`
+
+`struct` types (with `.` on a value and `->` through a pointer), named function-pointer
+types declared with `functype`, and `sizeof` are shipped and working. They are owned by
+[`docs/Impala2.md`](Impala2.md) rather than repeated here — see
+[Step 2: Structs](Impala2.md#step-2-structs-implemented) and
+[Step 3: Typed function pointers](Impala2.md#step-3-typed-function-pointers-implemented).
+
 ## Declarations
 
 ### Globals
@@ -174,9 +189,16 @@ const int DEBUG
 Such a constant is legal everywhere a literal is: as an array size, a `switch` range, a
 `sizeof` result, an operand. Impala emits a symbolic reference and the assembler resolves
 it. Even a constant Impala *does* know is passed through by name rather than folded, so
-`const int SOME_COUNT = 4` emits `SOME_COUNT: ! DEFi #4` and an array declared
-`[SOME_COUNT]` emits `CNST *SOME_COUNT`, not `CNST *4`. That keeps the value overridable
-at load.
+`const int SOME_COUNT = 4` emits `SOME_COUNT: ! DEFi #4`, and an array declared
+`[SOME_COUNT]` reaches that name through the array's own size symbol rather than a folded
+number:
+
+```gazl
+.z.SOME_CONSTS:	! DEFi #SOME_COUNT
+SOME_CONSTS:	CNST *.z.SOME_CONSTS
+```
+
+Nowhere does a `4` appear, which is what keeps the value overridable at load.
 
 This two-stage model is the reason GAZL ships as text, and it shapes what the compiler is
 allowed to check and fold. It is specified in
@@ -198,7 +220,7 @@ Read a readonly array with the `global` prefix even though the declaration begin
 `readonly`:
 
 ```impala
-x = (int) global SOME_CONSTS[i]
+x = (int) global SOME_CONSTS[i];
 ```
 
 ### `temporary`
@@ -216,10 +238,14 @@ Introduces a symbol defined elsewhere. Native functions supplied by the host use
 
 ```impala
 extern int defineMeLaterPlease
-extern array futureArray
+extern array futureArray[]
 extern function thisFunctionInAnotherSource
 extern native abort
 ```
+
+`import` and `export` — the source-level way to pull another unit in rather than declare
+its symbols one at a time — are shipped and documented in
+[`docs/Impala2.md`](Impala2.md#step-5-import-implemented-except-cycles).
 
 ### Arrays
 
@@ -238,24 +264,24 @@ Function pointers use the `funcptr` type, are assigned and called like any other
 pointer, and can be tested against `nullfunc`:
 
 ```impala
-global aFuncPointer = showoff
+global aFuncPointer = showoff;
 if (global aFuncPointer != nullfunc)
-        global aFuncPointer()
+        global aFuncPointer();
 ```
 
 `null` is the corresponding null value for ordinary `pointer`s.
 
 ## Functions
 
-A function declares arguments, optional return value, and optional locals. Arguments and
-the return value are untyped storage; their `int`/`float`/etc. declarations only name the
-slot.
+A function declares arguments, optional return value, and optional locals. Every slot is
+one VM word, but the declared type is checked at Impala compile time: passing a `float`
+where the definition says `int` is `E406`.
 
 ```impala
 function fetchSomeConst(int index)
 returns int fetched
 {
-        fetched = (int) global SOME_CONSTS[index]
+        fetched = (int) global SOME_CONSTS[index];
 }
 ```
 
@@ -266,16 +292,15 @@ function test()
 locals int i, array mydata[TEST_SIZE]
 {
         for (i = 0 to TEST_SIZE)
-                mydata[i] = myrand()
+                mydata[i] = myrand();
 }
 ```
-Function arguments and return values are untyped. Pointers and arrays carry no
-compile-time type either, so casts are common. A side effect of this simplicity is
-that external functions require no prototypes and multiple Impala sources can be linked
-just by concatenating their assembled `.gazl` output. Signature metadata records those
-contract shapes in comments without changing the generated instructions, so legacy
-assemblers continue to accept the files. Casting does not convert between ints and
-floats; use `itof()` or `ftoi()` for that.
+
+External functions require no prototypes and multiple Impala sources can be linked just
+by concatenating their assembled `.gazl` output. Signature metadata records the contract
+shapes in comments without changing the generated instructions, so legacy assemblers
+continue to accept the files. Casting does not convert between ints and floats; use
+`itof()` or `ftoi()` for that.
 
 Functions cannot be nested. **A name must be declared before it is used** — the compiler is
 single-pass, so calling a function defined later in the same source is `E403 Undeclared
@@ -284,30 +309,39 @@ or to break a cycle within one, declare a forward `extern function` above the us
 
 ## Statements
 
+Every simple statement ends with a mandatory `;` — an assignment, a call, `goto`,
+`copy`, `assert`, and the empty statement. Omitting it is `E001 syntax error`, usually
+reported on the *next* line, since the parser only gives up once it sees something that
+cannot continue the expression. The compound statements — `if`, `for`, `while`,
+`do…while`, `loop`, `switch`, and a `{ … }` block — carry no terminator of their own;
+the statements inside them do. Declarations (`global`, `const`, `readonly`, `extern`)
+accept a trailing `;` but do not require one.
+
 ### Assignment
 
 Assignment uses `=` and is itself an expression that yields the assigned value, so it may
 appear inside a larger expression:
 
 ```impala
-a = b = 0
+a = b = 0;
 while ((c = nextValue()) != 0) { /* ... */ }
 ```
 
 There are no compound assignment operators (`+=`, `&=`, …) and no `++`/`--`.
 
-The assignable forms (lvalues) are a variable, a pointer dereference `*p`, and a
-subscript `a[i]`.
+The assignable forms (lvalues) are a variable, a pointer dereference `*p`, a subscript
+`a[i]`, and a struct field reached either directly (`s.a`) or through a pointer
+(`p->a`) — see [`docs/Impala2.md`](Impala2.md#step-2-structs-implemented).
 
 ### Conditionals
 
 ```impala
 if (x > 0)
-        positive()
+        positive();
 else if (x < 0)
-        negative()
+        negative();
 else
-        zero()
+        zero();
 ```
 
 The condition is a parenthesized boolean expression (see
@@ -320,19 +354,22 @@ initializer is optional, and the loop variable must be a local `int` or `pointer
 
 ```impala
 for (i = 0 to TEST_SIZE)        // i runs 0,1,...,TEST_SIZE-1
-        mydata[i] = myrand()
+        mydata[i] = myrand();
 
 for (i to TEST_SIZE)            // reuses i's current value as the start
-        consume(i)
+        consume(i);
 ```
 
 Other loops:
 
 ```impala
-while (cond) { /* ... */ }
-do { /* ... */ } while (cond)
+while (cond != 0) { /* ... */ }
+do { /* ... */ } while (cond != 0)
 loop { /* runs forever; exit with goto or return */ }
 ```
+
+A condition must be a comparison; a bare value is not one, so `while (cond)` is
+`E001 syntax error`. Write the `!= 0` out.
 
 Use `goto` and labels to break out of loops manually:
 
@@ -362,10 +399,10 @@ out-of-range case compiles into silently unreachable code.
 ```impala
 switch (i == 0 to 10) {
         case 0,1,2: {
-                j = i
+                j = i;
         }
-        case 5: x()
-        default: j = -1
+        case 5: x();
+        default: j = -1;
 }
 ```
 
@@ -375,7 +412,7 @@ Copies a fixed number of words from one pointer to another. The count must be a
 compile-time constant.
 
 ```impala
-copy(3 from &global initedArray[1] to &global futureArray[0])
+copy(3 from &global initedArray[1] to &global futureArray[0]);
 ```
 
 ### `assert`
@@ -383,8 +420,19 @@ copy(3 from &global initedArray[1] to &global futureArray[0])
 Performs a runtime check, but only when the `DEBUG` constant is non-zero. When `DEBUG`
 is zero the check (and its message) are compiled out.
 
+The emitted guard is `! EQUi #DEBUG #0`, so `DEBUG` must exist by GAZL assembly time even
+in a release build. A program that uses `assert` without one compiles happily and then
+fails to load with `Symbol not previously defined (in expected scope): DEBUG`. Declare it
+in the source, or leave it valueless (`const int DEBUG`) and have the host supply it at
+load.
+
 ```impala
-assert(i != 0);
+const int DEBUG = 0
+
+function check(int i)
+{
+        assert(i != 0);
+}
 ```
 
 ## Expressions
@@ -429,7 +477,7 @@ around:
 ```impala
 if (0 <= x && x < limit) { /* ok */ }
 
-flag = (a < b)        // INVALID - comparisons are not values
+flag = (a < b);       // INVALID - comparisons are not values
 ```
 
 `&&` and `||` short-circuit. To capture a comparison result, branch on it and assign
@@ -442,17 +490,24 @@ representation. To convert between integers and floats use the built-ins `itof()
 `ftoi()`.
 
 ```impala
-f = itof(n)           // int -> float (value conversion)
-n = ftoi(f)           // float -> int (value conversion)
-p = (pointer) x       // retype only, no conversion
+f = itof(n);                  // int -> float (value conversion)
+n = ftoi(f);                  // float -> int (value conversion)
+p = (pointer) alloc(16);      // retype only, no conversion
 ```
 
-Because function return values and pointer/array elements are untyped, they usually need
-a cast before use in a typed context:
+A cast only applies to a value the compiler has **not** already typed. Casting a typed
+operand to an incompatible type is `E302 Invalid type` — `(pointer) x` where `x` is a
+declared `int` is rejected, not reinterpreted. The values worth casting are the untyped
+ones: a call result from a name-only `extern`, an element of a bare `array`, and a bare
+`pointer` being narrowed to a typed one.
+
+Because those return values and untyped elements carry no type, they usually need a cast
+before use in a typed context:
 
 ```impala
-y = (int) lfoVal(...) + 1     // a bare untyped value + int needs the cast
-z = lfoVal(...)               // a plain assignment is fine without it
+y = (int) lfoVal(1) + 1;      // a bare untyped value + int needs the cast
+z = lfoVal(1);                // a plain assignment is fine without it
+p2 = (int pointer) raw;       // untyped -> typed: assuming is loud
 ```
 
 ### Built-in operators
@@ -462,9 +517,10 @@ or a host-supplied `extern native` function.
 
 They are **prefix operators, not functions** — `abs x` is the primitive form, and they join `-`, `~`,
 `&` and `*` in the prefix table. `abs(x)` also works, but only because the parentheses are an ordinary
-parenthesized expression, so it is worth knowing what you are actually writing: `abs()` is a syntax
-error, `abs(x, 2)` is `E442 Malformed argument list`, and precedence is unary-tight, so `abs x - 1`
-means `(abs x) - 1`.
+parenthesized expression, so it is worth knowing what you are actually writing: both `abs()` and
+`abs(x, 2)` are `E001 syntax error` — with the caret on the `,`, because there is no argument list
+here to be malformed (`E442` is reserved for a real call's). Precedence is unary-tight, so
+`abs x - 1` means `(abs x) - 1`.
 
 | Built-in | Description |
 |---|---|
@@ -479,17 +535,19 @@ means `(abs x) - 1`.
 and `pointer - int` yield a pointer, and `pointer - pointer` yields the `int` element
 distance.
 
+Given the declaration `global pointer p = &global defaultArray[0]`, the `global` prefix is
+required at every use of `p` too — `*(p + 3)` on its own is `E403`:
+
 ```impala
-global pointer p = &global defaultArray[0]
-x = *(p + 3)
+x = *(global p + 3);
 ```
 
 The subscript `[]` works on any pointer, not just declared arrays: `p[i]` is equivalent to
 `*(p + i)`. The index may be negative, and the pointer may even be a string literal:
 
 ```impala
-last = (int) p[-1]
-hexDigit = ("0123456789abcdef")[value & 0xf]
+last = (int) global p[-1];
+hexDigit = ("0123456789abcdef")[value & 0xf];
 ```
 
 ## The Impala tools
@@ -584,29 +642,27 @@ definitions on primitive category, duplicate definitions of the same value name
 must agree on primitive category, and arrays must agree on category and on size
 when both sides provide a size. `unknown` remains a wildcard. The validator does
 not compare constant values, distinguish `readonly` from writable storage during
-matching, or assign per-slot types to arrays. Impala arrays do not currently
-have element types, so array rows normally use `: unknown`; that field is
-reserved for future metadata rather than a promise about the array contents.
+matching, or assign per-slot types to arrays. An untyped array (`global array nums[4]`)
+has no element type, so its row is `: unknown`; a typed one (`global int array nums[4]`)
+now carries it, as `; signature array nums[4] : int`. Either way the row states the type
+of the whole array's elements, not a per-slot promise.
 
 Run the validator on every `.gazl` unit that will be concatenated or
 loaded together. It compares the expectations recorded by callers with
 the definitions supplied by the same file or by other units. After
-building the toolchain (`bash build.sh`) you can compile two sample
-sources and validate them without leaving the `output/` directory:
+building the toolchain (`bash build.sh`), compile two sample sources and
+validate them from the repository root:
 
 ```bash
-cd output
-./NuXJS impala.nuxjs.js ../tests/impala/sources/calc.impala calc.gazl 0x4d2 calc.impala
-./NuXJS impala.nuxjs.js ../tests/impala/sources/multitap_code.impala multitap.gazl 0x4d2 multitap_code.impala
-bash ../tools/gazl-validate.sh calc.gazl multitap.gazl
-```
-
-From the repository root, run the validator directly on any already
-compiled files:
-
-```bash
+./output/NuXJS output/impala.nuxjs.js tests/impala/sources/calc.impala output/calc.gazl 0x4d2 calc.impala
+./output/NuXJS output/impala.nuxjs.js tests/impala/sources/multitap_code.impala output/multitap.gazl 0x4d2 multitap_code.impala
 bash tools/gazl-validate.sh output/calc.gazl output/multitap.gazl
 ```
+
+`gazl-validate.sh` starts with `cd "$(dirname "$0")"/..`, so it always resolves its
+arguments against the repository root. Running it from inside `output/` with bare file
+names therefore fails with `Could not open input file` — pass root-relative paths, or run
+it from the root as above.
 
 The validator reports mismatched signatures as errors by default. Pass
 `--warn-only` to downgrade them while you migrate existing modules, or

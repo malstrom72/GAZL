@@ -1,7 +1,7 @@
 # Struct layout as GAZL constants (design note)
 
-Status: **IMPLEMENTED** (verified 2026-07-31 against the shipped compiler). This file began as a design
-note and the historical sections below are kept as the design record, but the scheme itself now ships:
+Status: **IMPLEMENTED** (verified 2026-07-31 against the compiler in this tree). This file began as a design
+note and the historical sections below are kept as the design record, but the scheme itself is now implemented:
 normal structs, extern structs, `sizeof`, field access AND allocation sizes are all symbolic. See
 [IMPLEMENTED (Phase 2a)](#implemented-phase-2a---normal-structs) and
 [IMPLEMENTED (extern struct v1)](#implemented-extern-struct-v1) for the details, and treat any
@@ -11,10 +11,16 @@ Observed today from `struct Local { int a  float b }` with a `Local` local:
 
     ! MOVi <a> #0 ; layout of struct Local
     .o.Local.a:  ! DEFi #<a>
+                 ! ADDi <a> #<a> #1
     .o.Local.b:  ! DEFi #<a>
+                 ! ADDi <a> #<a> #1
     .z.Local:    ! DEFi #<a>
     $v:          LOCA *.z.Local
                  MOVi $v:.o.Local.a #1
+
+The `! ADDi` lines are the whole point, and an earlier copy of this fragment elided them - which made `a`
+and `b` read as sharing an offset. Every `.o.` is a SNAPSHOT of the same rolling `<a>`; what separates two
+fields is the advance between the snapshots.
 
 Background: this note applies the two-stage constant model to struct layout. The model itself is
 specified in [`docs/TwoStageConstants.md`](TwoStageConstants.md).
@@ -33,7 +39,8 @@ would emit:
     .o.Voice.gain   ! DEFi #6
     .z.Voice        ! DEFi #8
 
-and then a field read `v->gain` lowers to `PEEK $x $v .o.Voice.gain` rather than `PEEK $x $v #6`.
+and then a field read `v->gain` lowers to `PEEK $x $v #.o.Voice.gain` rather than `PEEK $x $v #6`. The
+`#` is not optional: the operand is a CONSTANT, not an address.
 
 Why: it turns the struct layout into first-class assembler data with one source of truth. You can then
 conditionally add / remove / reorder fields directly in GAZL (driven by an assembly-time constant) and
@@ -72,7 +79,7 @@ are safe here despite the crowded label namespace because a layout tag is ALWAYS
 `.s_...`). So `.o.Voice` cannot be confused with any `.oN` / `.o_...` label even if that letter were
 later reused.
 
-`.z` was chosen over the `.w` ("words") alternative and both `.o.*` and `.z.*` now SHIP - the paragraph
+`.z` was chosen over the `.w` ("words") alternative and both `.o.*` and `.z.*` are now IMPLEMENTED - the paragraph
 here used to record them as unused and the choice as open, which is no longer true. The full inventory
 of generated symbols, which letters remain free, and the rules for adding one live in
 [`docs/SymbolNamespace.md`](SymbolNamespace.md); consult that rather than this section, which only
@@ -201,7 +208,7 @@ fold at the site into a scratch slot (`! ADDi <t> #.o.Voice.lo #.o.Biquad.b0` th
 If a using unit's interface (field names + types) lives separately from the definition, they can
 disagree. The gazl-validator can cross-check the interface's field types against the definition's
 emitted layout, so a mismatch is a build error, not a silent lie - the same "verifiable contract" theme
-as extern prototypes (see [[docs/ExternPrototypes.md]]).
+as extern prototypes (see [docs/ExternPrototypes.md]).
 
 ### Array extents in a signature row (DECIDED, IMPLEMENTED)
 
@@ -237,7 +244,9 @@ field's extent borrow until `endStruct`, so two expression extents cannot fold i
 Every non-extern struct now emits its layout as GAZL compile-time constants: a rolling `<a>`
 accumulator (`! MOVi <a> #0`; `.o.Struct.field: ! DEFi #<a>`; `! ADDi <a> #<a> #<size>`; `.z.Struct:
 ! DEFi #<a>`), emitted at struct-definition time in dependency order (inner-before-outer, guaranteed by
-E412). Field access references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested struct and
+**E413** where the inner name is not declared yet - the ordinary "defined later in the same file" case -
+and by **E412** where it is declared but incomplete, as a bodyless `extern struct`). Field access
+references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested struct and
 array fields MATERIALIZE the sub-object address into a pointer place at offset 0 (via `ADDp`/`ADRL`), so
 every access uses a SINGLE symbol - no runtime offset accumulation and no compile-time folding through
 the lazy-meta model.
@@ -268,9 +277,10 @@ recompile. Normal structs are unchanged (byte-identical goldens); only the exter
 Superseded scope note: this section used to list guards **E418** (fields must be scalar/pointer),
 **E425** (no by-value extern instances) and **E424** (no nested extern field access), and to defer
 by-value/nested/array extern fields to "v1.1". **None of those three codes exist in `impala.jspeg` any
-more** (verified 2026-07-31; only stale comment references survive near lines 1951 and 2245), and all
-three restrictions have been lifted: an extern struct with a nested array field compiles, and a
-by-value extern local emits `LOCA *.z.E` / `COPY *.z.E`.
+more** (re-verified 2026-08-04: E418 and E424 have zero occurrences of any kind; only E425 survives, in
+a comment on `structAllocSize` explaining that by-value params/returns are parked wholesale as E426/E427
+so the extern-specific code no longer fires). All three restrictions have been lifted: an extern struct
+with a nested array field compiles, and a by-value extern local emits `LOCA *.z.E` / `COPY *.z.E`.
 
 Still genuinely outstanding: the gazl-validator cross-check of host layout vs declared interface.
 

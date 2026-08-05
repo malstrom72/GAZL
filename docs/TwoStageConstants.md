@@ -78,16 +78,18 @@ const int SOME_COUNT = 4
 readonly array SOME_CONSTS[SOME_COUNT] = { 100, 200, 300, 400 }
 ```
 
-becomes (`tests/impala/golden/ImpalaDemo.gazl:20,22`):
+becomes (`tests/impala/golden/ImpalaDemo.gazl:22,24-25`):
 
 ```
-SOME_COUNT:     ! DEFi #4               ; signature const SOME_COUNT : int @ 87:1
-SOME_CONSTS:    CNST *SOME_COUNT        ; signature array SOME_CONSTS[SOME_COUNT] : unknown @ 94:1
+SOME_COUNT:         ! DEFi #4               ; signature const SOME_COUNT : int @ 87:1
+.z.SOME_CONSTS:     ! DEFi #SOME_COUNT
+SOME_CONSTS:        CNST *.z.SOME_CONSTS    ; signature array SOME_CONSTS[SOME_COUNT] : unknown @ 94:1
 ```
 
-Note the array size is emitted as `*SOME_COUNT`, **not** `*4`, even though Impala knows it is 4. The
-symbol survives into the artifact, so the size stays inspectable, greppable, and editable as a single
-line of the shipped text, and the arithmetic around it stays visible.
+Note the array size reaches `CNST` as `*.z.SOME_CONSTS`, itself defined as `#SOME_COUNT` - two named
+symbols deep and **not** `*4`, even though Impala knows it is 4. The symbols survive into the artifact,
+so the size stays inspectable, greppable, and editable as a single line of the shipped text, and the
+arithmetic around it stays visible.
 
 **But be precise about what a valued `const` is NOT.** It emits `! DEFi #4`, so it is already defined
 by the time the host sees the file and the host CANNOT override it:
@@ -111,7 +113,7 @@ host-overridable. When you want the host to decide, do not give the constant a d
 const int GAZL_WORD_SIZE;
 ```
 
-produces only a signature comment (`tests/impala/golden/ImpalaDemo.gazl:21`):
+produces only a signature comment (`tests/impala/golden/ImpalaDemo.gazl:23`):
 
 ```
 ; signature extern const GAZL_WORD_SIZE : int @ 91:1
@@ -120,7 +122,7 @@ produces only a signature comment (`tests/impala/golden/ImpalaDemo.gazl:21`):
 Every use of `GAZL_WORD_SIZE` in the generated GAZL is a bare symbolic reference that resolves at
 assembly time, or fails to assemble if the host never defined it:
 `LEQi $minLength #GAZL_WORD_SIZE @.a2`, `ADDp %0 $buffer #GAZL_WORD_SIZE`
-(`tests/impala/golden/FFTTest_code.gazl:133,136`).
+(`tests/impala/golden/FFTTest_code.gazl:138,141`).
 
 **Arithmetic on an unknown constant is deferred, not refused.** This is the example to keep in mind.
 `tests/impala/sources/FFTTest_code.impala:172` declares a local array whose size is an expression over
@@ -133,32 +135,33 @@ locals array buffer[GAZL_WORD_SIZE + 2]
 ```
 
 Impala cannot evaluate `GAZL_WORD_SIZE + 2`. It does not need to, and it does not complain. It emits
-the addition as an assembly-time computation into `<A>` and sizes the local from it
-(`tests/impala/golden/FFTTest_code.gazl:168-169`):
+the addition as an assembly-time computation into `<A>`, names the result, and sizes the local from that
+name (`tests/impala/golden/FFTTest_code.gazl:173-175`):
 
 ```
-    ! ADDi <A> #GAZL_WORD_SIZE #2
-$buffer:    LOCA *<A>
+                        ! ADDi <A> #GAZL_WORD_SIZE #2
+.z.traceInts.buffer:    ! DEFi #<A>
+$buffer:                LOCA *.z.traceInts.buffer
 ```
 
 The stack frame layout is therefore decided at stage 2, by the host. A compiler that insisted on
 knowing array sizes numerically could not compile this function at all.
 
 **`assert` is compiled as an assembly-time conditional.** From
-`tests/impala/golden/ImpalaDemo.gazl:192-196`:
+`tests/impala/golden/ImpalaDemo.gazl:198-202`:
 
 ```
         ! EQUi #DEBUG #0 @.a11          ; assert(0 == 1)
         EQUi #0 #1 @.a11
         MOVp %1 &.a_01_4d3
         CALL ^assertFail %0 *1
-.a11:   NOOP
+.a11:   POKE &aFuncPointer &showoff     ; global aFuncPointer = showoff
 ```
 
-When the host defines `DEBUG` as 0 the assembler jumps straight to `.a11` and the check never enters
-the code image. The assert-message string constants are guarded the same way, by a single
-`! EQUi #DEBUG #0 @.noAssertStrings` before the whole block
-(`tests/impala/golden/ImpalaDemo.gazl:257`). Impala emits both the check and the strings
+When the host defines `DEBUG` as 0 the assembler jumps straight to `.a11` - which carries the next real
+instruction - and the check never enters the code image. The assert-message string constants are guarded
+the same way, by a single `! EQUi #DEBUG #0 @.noAssertStrings` before the whole block
+(`tests/impala/golden/ImpalaDemo.gazl:263`). Impala emits both the check and the strings
 unconditionally and lets stage 2 decide. It has no idea what `DEBUG` is.
 
 **Even a constant expression over a KNOWN constant is deferred, not folded.** `const int anInt = 4` is
@@ -169,7 +172,7 @@ printInt(ftoi(myFloat * (1.0 / itof(1 << anInt))))
 ```
 
 emits the entire constant sub-expression as assembly-time directives into `<B>`, shift, int-to-float
-conversion and float divide alike (`tests/impala/golden/ImpalaDemo.gazl:235-238`):
+conversion and float divide alike (`tests/impala/golden/ImpalaDemo.gazl:241-244`):
 
 ```
         ! SHLi <B> #1 #anInt
@@ -227,7 +230,8 @@ Every check, fold, diagnostic and optimization in the Impala compiler must obey 
 
 When Impala wants to check something it cannot evaluate, it emits the check as GAZL directives and lets
 the assembler decide. GAZL has a purpose-built directive for this: **`! FAIL <message>`** aborts
-assembly with your text (`src/GAZL.cpp:1027`). Pair it with a compile-time comparison:
+assembly with your text (`Assembler::feed`, the `FAIL_DIRECTIVE` throw). Pair it with an assembly-time
+comparison:
 
 ```
 SIZE:       ! DEFi #4
@@ -296,6 +300,12 @@ Concrete shapes that violate the model. If you are about to write one of these, 
   GAZL identifier; `parseFloat("0x10")` is `0`, so a plain hand-written hex offset silently becomes
   zero. If you must have a number, get it from the parsed constant expression and handle "I don't have
   one" explicitly. Guarding on `operand[0] === '#'` does not establish that the rest is a decimal.
+  (FIXED 2026-08-04: `$parser.constInt` is that decoder — it returns `undefined` for everything it cannot
+  read, which is the "I don't have one" branch, and it is now the only thing any site asks. The last two
+  hand-rolled holdouts were `dereference`, which guarded on `'#'` and then ran `parseFloat` — the exact
+  pair this bullet warns about, still shipping four days after the warning was written — and
+  `subConstInt`, which spanned decimal digits. If you add a literal spelling, `constInt` is the one place
+  that has to learn it.)
 - **Comparing or iterating a declared extent as if it were a number** (`for (e = 0; e < field.size; ++e)`,
   `field.size * per`). When the extent is symbolic, `field.size` is the string `'N'`: the loop runs zero
   times and the multiply is `NaN`, so initializer words are silently dropped and every later field

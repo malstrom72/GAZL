@@ -31,12 +31,12 @@ spaces, deliberately:
 ```c
 // src/GAZL.h:77-78
 const Pointer MEMORY_OFFSET = 0x12345678;   // data pointers: memory offset + this
-const Pointer IP_OFFSET     = 0x56789ABC;   // function pointers: FUNCTION ORDINAL + this
+const Pointer FUNCTION_OFFSET = 0x56789ABC; // function pointers: FUNCTION ORDINAL + this
 ```
 
 ```c
 // src/GAZL.cpp:1130
-v.p = (Int)(IP_OFFSET + functionCount);
+v.p = (Int)(FUNCTION_OFFSET + functionCount);
 // "A function pointer is its stable declaration-order ordinal (not a code offset),
 //  resolved through `functionTable` at call time."
 ```

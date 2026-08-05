@@ -8,8 +8,13 @@ in `docs/Impala.md`.
 
 **Status: parts of this plan did not ship as written.** In particular the compiler flags it proposes -
 `--emit-metadata` and `--no-metadata` - do **not** exist; metadata is always emitted, and the complete
-flag set is `--legacy` and `--dead-strip`. Read the flag passages below as design intent, not as
-documentation of a shipped option.
+flag set is `--legacy`, `--dead-strip` and `--range-checks`. Read the flag passages below as design
+intent, not as documentation of a shipped option.
+
+The status disclaimer covers the flags only. It does NOT warrant the rest of the document as current:
+"Pain points as of 2025" below describes call-site checking that has since shipped, and the
+`sourceName` bullets under "Source span capture and formatting" describe an option that does not
+actually reach the emitter. Both are flagged in place.
 
 ## Background
 
@@ -17,16 +22,22 @@ The shipping Impala compiler is generated from `impala/impala.jspeg` and mirrors
 
 * `$$parser.SUPPORTED_OPS` enumerates the legal operand combinations for each arithmetic and comparison operator. Attempting `+` on incompatible types raises a diagnostic before code is emitted.【F:impala/impala.jspeg†L96-L152】【F:impala/impala.jspeg†L562-L600】
 * `$$parser.declare` records every symbol in scoped tables (`locals`, `globals`, `functions`, `defines`). It reuses `TYPE_SUFFIXES` to stamp assembly directives such as `INPi`, `LOCp`, or `FUNC` while enforcing that redeclarations match the previous type.【F:impala/impala.jspeg†L1006-L1070】
-* Lookups convert declarations into meta-code with the correct operator: locals produce `=` or `:=`, globals emit `=*/:=*`, functions collapse to `&name` with type `F`, and natives map to `^name` with type `N`. Function calls only verify that the callee itself has type `F` or `N`; they do **not** check the number or types of arguments being supplied.【F:impala/impala.jspeg†L1128-L1198】【F:impala/impala.jspeg†L1789-L1831】
+* Lookups convert declarations into meta-code with the correct operator: locals produce `=` or `:=`, globals emit `=*/:=*`, functions collapse to `&name` with type `F`, and natives map to `^name` with type `N`. *(As written in 2025: function calls only verified that the callee itself had type `F` or `N` and checked neither the number nor the types of the arguments. That is no longer true - `FuncCall` now compares both against the stored signature and raises **E405** / **E406**. See "Pain points as of 2025" below.)*【F:impala/impala.jspeg†L1128-L1198】【F:impala/impala.jspeg†L1789-L1831】
 * Argument and local lists preserve declaration order and store per-slot type codes via `ArgsDecl` and `LocalsDecl`, ensuring helpers like `makeArgValue` can generate correct temporaries; array initialisers enforce element constants through `makeConstant` before `DATA` directives are emitted.【F:impala/impala.jspeg†L1680-L1718】【F:impala/impala.jspeg†L1699-L1774】
 
-However, those `ArgsDecl` entries are discarded once `declare` runs, so `FuncCall` only checks that the callee resolves to `F` or `N` and emits code without verifying argument lists.【F:impala/impala.jspeg†L1006-L1049】【F:impala/impala.jspeg†L1800-L1823】 Inside a single translation unit, type enforcement covers operator compatibility and redeclarations, but it stops short of validating call sites. Developers can invoke any function with any argument list and the compiler still emits code. The generated `.gazl` text only contains the final instructions, globals, and section headers. Once the files are concatenated the assembler has no notion of argument counts or the type codes that guarded the source, so mismatches across units (wrong extern prototypes, globals with different categories, accidental reuse of function names) become runtime problems. Capturing the recorded parameter arrays in the function symbol table gives us enough information to abort mismatched calls during the same compile before relying on post-hoc validation.【F:impala/impala.jspeg†L1680-L1718】【F:impala/impala.jspeg†L1800-L1823】
+However, those `ArgsDecl` entries were discarded once `declare` ran, so `FuncCall` only checked that the callee resolved to `F` or `N` and emitted code without verifying argument lists.【F:impala/impala.jspeg†L1006-L1049】【F:impala/impala.jspeg†L1800-L1823】 Inside a single translation unit, type enforcement covered operator compatibility and redeclarations, but it stopped short of validating call sites. Developers could invoke any function with any argument list and the compiler still emitted code. (Closed - the parameter list is now persisted on the function symbol and compared at the call site.) The generated `.gazl` text only contains the final instructions, globals, and section headers. Once the files are concatenated the assembler has no notion of argument counts or the type codes that guarded the source, so mismatches across units (wrong extern prototypes, globals with different categories, accidental reuse of function names) become runtime problems. Capturing the recorded parameter arrays in the function symbol table gives us enough information to abort mismatched calls during the same compile before relying on post-hoc validation.【F:impala/impala.jspeg†L1680-L1718】【F:impala/impala.jspeg†L1800-L1823】
 
-## Pain Points Today
+## Pain points as of 2025 - the intra-unit ones are now closed
+
+The two call-site gaps below (arity and argument types) are IMPLEMENTED and fire today, for an in-unit callee
+and for a prototyped `extern` alike: **E405** *Invalid argument count when calling f (expected 2, got
+1)* and **E406** *Argument type mismatch for argument 1 when calling f (float vs expected int)*. A
+name-only extern still asserts nothing and so is still unchecked (see
+[`ExternPrototypes.md`](ExternPrototypes.md)). The cross-unit items remain the validator's job.
 
 1. **Extern drift.** Two units can declare the same `extern function` with incompatible signatures. Each unit type-checks internally, but the assembler concatenation never catches the disagreement and whichever definition is loaded first wins at runtime.
 2. **Global shape mismatches.** Nothing prevents a unit from exporting a pointer but another importing it as a float. The compiler enforces the type consistently inside each unit, yet the `.gazl` blobs have no metadata to cross-check the expectations.
-3. **Argument arity.** Calls into other units or native shims rely on the callee obeying an implied argument window. The compiler never verifies arity, so even inside a single unit a function can be invoked with any number of arguments and code still emits; when a callee changes from two parameters to three, existing call sites continue to emit two words and the VM happily consumes garbage.
+3. **Argument arity.** *(CLOSED - `E405`.)* Calls into other units or native shims rely on the callee obeying an implied argument window. The compiler did not verify arity, so even inside a single unit a function could be invoked with any number of arguments and code still emitted; when a callee changed from two parameters to three, existing call sites continued to emit two words and the VM happily consumed garbage. Argument categories were likewise unchecked; that is `E406`.
 4. **Void versus valued functions.** Functions without an explicit `returns` clause are implemented by declaring an implicit one-word slot with type `?`. Callers expect to read from that slot. A callee switching from void to returning an int (or vice versa) should be flagged, but the current pipeline cannot compare them after concatenation.【F:impala/impala.jspeg†L1489-L1524】
 
 ## Goals
@@ -62,11 +73,19 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
   ; signatures version=1
   FUNC foo    ; signature func foo(int a, ptr b) -> int @ foo.impala:5:1
   ...
-  LOC sharedBuffer    ; signature global sharedBuffer : ptr @ foo.impala:2:1
+              GLOB *1
+  sharedBuffer:   DATp &NULL   ; signature global sharedBuffer : ptr @ foo.impala:2:1
   ...
   CALL foo    ; expects foo(int, ptr) -> int @ foo.impala:12:9
   ; signature extern func bar() -> unknown @ foo.impala:1:1
   ```
+
+  Two corrections to that sketch, both verified 2026-08-04. There is no `LOC` mnemonic: a scalar
+  global emits a `GLOB *1` reservation line and the signature comment rides on the `DATp`/`DATi`/`DATf`
+  initializer line that names the symbol. An ARRAY global reserves `GLOB *.z.name` and the comment
+  rides on THAT line, with the `DATf`/`DATi` row following - not on a `DATA` line. And the
+  `@ foo.impala:` filename appears only in a MULTI-unit compile; a single unit emits a bare
+  `@ 5:1`. See the `sourceName` note below.
 
   Signature annotations follow a compact grammar so tooling can parse them deterministically:
 
@@ -85,13 +104,28 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
   #### Source span capture and formatting
 
   * **Record filenames.** Compiler runners already know which file they are compiling. Thread a `sourceName` (or equivalent) option into `impalaCompiler`, cache it on `$$parser`, and copy it into each symbol’s signature record alongside the existing `sourceCode` and `sourceOffset` data.
+
+    **This one is DEAD, not shipped** (verified 2026-08-04). The host does pass `sourceName` and the
+    generated compiler does assign it to a `$$parser` property, but the grammar's own
+    `var $$parser.sourceName` compiles to a closure-local `var sourceName = undefined` that shadows it,
+    so every read inside the emitter sees `undefined`. Do not "fix" it by reading the property: the
+    filename that actually reaches `@ origin` comes from the separate units/spans mechanism, and that
+    returns nothing for a lone unit BY DESIGN - `originUnit`'s comment says so ("A lone unit is left
+    exactly as it was: no name, no shift, so a source that imports nothing keeps emitting the bytes it
+    always did"), and the committed goldens carry bare `@ 16:1` on that promise.
   * **Retain offsets.** `FuncDecl`, `ArgsDecl`, `ExternDecl`, `GlobalDecl`, `ConstDecl`, and `FuncCall` all receive `$$s`/`$$i` pairs today. Persist those offsets on the metadata objects we already store so the emitter can recover precise origin information.
   * **Normalise coordinates.** Introduce a helper such as `formatSignatureSourceOrigin(sourceCode, offset, filename)` that converts offsets to 1-based `line:column` coordinates, collapses Windows-style newlines, and falls back to just `line:column` when no filename is provided. The helper returns strings like `voice.impala:42:9` or `42:9`.
+
+    As shipped, the `voice.impala:42:9` form is reached ONLY in a multi-unit compile - an `import`
+    closure, which the builder concatenates and compiles as one source, so the spans are what tell one
+    file's offsets from another's. Compiling `import/main.impala` (2 units) emits
+    `@ mathlib.impala:16:1` and `@ main.impala:8:1`; compiling either file alone emits `@ 16:1`. The
+    fallback is the normal case, not the degraded one.
   * **Emit `@ origin` markers.** Extend `formatFunctionSignatureComment`, `formatGlobalSignatureComment`, `formatConstSignatureComment`, and `formatCallExpectationComment` to append `@ <origin>` whenever metadata includes a computed span. Standalone extern annotations use the same helper so imports carry comparable location data.
 
 * Extend `FuncCall` so that when the callee resolves to a definition or prototype inside the current unit it consults the stored signature, compares the number of arguments and each `{int, float, ptr, funcptr, void}` category (derived from the internal `i/f/p/F/?` codes), and calls `typeError` if they disagree. Extern-only calls continue to defer to metadata validation, preserving today’s lax behaviour for units that lack full signatures.【F:impala/impala.jspeg†L1006-L1049】【F:impala/impala.jspeg†L1680-L1718】【F:impala/impala.jspeg†L1800-L1823】
 * Each call site (`makeCall`/`callExpr`) should stamp the expected signature for the callee based on the parser’s current knowledge. Placing the comment after the emitted instruction (`CALL foo; expects foo(int, ptr) -> int`) keeps the metadata adjacent to the code that depends on it while still being trivial to strip. This captures the caller’s view even when the callee lives in another unit, letting a validator spot mismatched assumptions once files are combined.【F:impala/impala.jspeg†L1789-L1831】
-* Globals, constants, and arrays get analogous annotations (`LOC sharedBuffer; signature global sharedBuffer : ptr`, `DATA sineTable; signature array sineTable[8] : float`). Because the comments live inside the `.gazl`, legacy assemblers continue to run unmodified while newer tooling can parse the extra metadata.【F:impala/impala.jspeg†L1086-L1114】
+* Globals, constants, and arrays get analogous annotations. As shipped the comment rides on the line that NAMES the symbol, and there is no `LOC` mnemonic: a scalar global is `GLOB *1` followed by `sharedBuffer: DATp &NULL ; signature global sharedBuffer : ptr`, and an array is `sineTable: GLOB *.z.sineTable ; signature array sineTable[8] : float` with its `DATf` row underneath. Because the comments live inside the `.gazl`, legacy assemblers continue to run unmodified while newer tooling can parse the extra metadata.【F:impala/impala.jspeg†L1086-L1114】
 * Use the `; signature` / `; expects` tokens to keep the format machine-readable without forcing every line to carry a redundant schema or version tag.
 
 ### 2. Provide a `gazl-validate` Utility
@@ -133,7 +167,7 @@ ecosystem without making the pipeline brittle.【F:build.sh†L18-L21】
   - [x] Teach the emitter to format argument lists and return categories using the `{int, float, ptr, funcptr, void}` vocabulary (while preserving the internal `i/f/p/F/?` mapping) and to include positional source spans where available for better diagnostics.
     - [x] Format function signatures, call expectations, and global annotations using the shared vocabulary helpers and stable parameter ordering.
     - [x] Thread explicit source-span markers through the emitted comments so downstream tooling can cite the original Impala locations when reporting validation errors.
-      - [x] Expose a stable `sourceName` option on the compiler entry points and store it alongside the existing `sourceCode`/`sourceOffset` metadata for declarations and call sites.
+      - [ ] Expose a stable `sourceName` option on the compiler entry points and store it alongside the existing `sourceCode`/`sourceOffset` metadata for declarations and call sites. **Not shipped** - the option is accepted and then shadowed, so it never reaches the emitter; filenames in `@ origin` come from the import-closure spans instead, and only in a multi-unit compile. See "Record filenames" above before reopening this.
       - [x] Derive 1-based line/column coordinates from the stored offsets and stash a formatted origin string on each signature or call expectation.
       - [x] Extend the signature-formatting helpers to append `@ <origin>` tokens to inline and standalone comments when origin data exists.
 - [x] **Comment schema**

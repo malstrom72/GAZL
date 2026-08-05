@@ -1,4 +1,4 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 19:1
@@ -13,33 +13,7 @@ shared:	DATi #0	; signature global shared : int @ 24:1
 	! ADDi <a> #<a> #1
 .z.P:	! DEFi #<a>
 ; signature struct P { x : int, y : int } @ 26:1
-	$r:	OUTi
-	$a:	INPi
-	$b:	INPi
-	$r:	OUTi
-	$a:	INPi
-	$r:	OUTi
-	$v:	INPi
-	$lo:	INPi
-	$hi:	INPi
-	$t:	LOCi
-	$r:	OUTi
-	$p:	INPp
-	$a:	INPi
-	$r:	OUTi
-	$a:	INPi
-	$b:	INPi
-	$c:	INPi
 .z.sum3.buf:	! DEFi #3
-	$buf:	LOCA *.z.sum3.buf
-	$i:	LOCi
-	$r:	OUTi
-	$ax:	INPi
-	$ay:	INPi
-	$bx:	INPi
-	$by:	INPi
-	$a:	LOCA *.z.P
-	$b:	LOCA *.z.P
 
 ;-----------------------------------------------------------------------------
 helper:	FUNC	; signature func helper(int a) -> int @ 67:1
@@ -49,15 +23,6 @@ helper:	FUNC	; signature func helper(int a) -> int @ 67:1
 		MULi $r $a #2	; r = a * 2
 		RETU   	; }  // NOT inline: the body below calls it
 
-	$r:	OUTi
-	$a:	INPi
-	$r:	OUTi
-	$i:	INPi
-	$r:	OUTi
-	$a:	INPi
-	$r:	OUTi
-	$n:	INPi
-	$i:	LOCi
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 80:1

@@ -1,4 +1,4 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 28:1
@@ -6,18 +6,6 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 28:1
 ; signature extern native printLF() -> unknown @ 31:1
 	GLOB *1
 g:	DATi #0	; signature global g : int @ 33:1
-	$r:	OUTi
-	$a:	INPi
-	$r:	OUTi
-	$i:	INPi
-	$z:	OUTi
-	$p:	INPp
-	$r:	OUTi
-	$a:	INPi
-	$b:	INPi
-	$r:	OUTi
-	$p:	INPp
-	$a:	INPi
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 50:1

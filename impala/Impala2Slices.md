@@ -1,5 +1,15 @@
 # Impala 2 Implementation Plan: the Remaining Slices
 
+Status: **COMPLETE for 2.0 - design record, not a plan** (checked 2026-08-05). Every item on the
+"Order of work" list at the foot of this file is resolved, and each is already annotated inline with a
+date: the place architecture and struct arrays are IMPLEMENTED; multi-return and by-value params were
+implemented, VM-verified, then PARKED to 3.0 on `Impala3-byvalue-multireturn` (`E426`-`E429`); `functype`
+and `import`/`export`/`--dead-strip` are IMPLEMENTED, the last with an honest carve-out; collect mode is
+DEFERRED to 3.0 and struck through in place. Nothing here is open work.
+
+Read it for **why** those mechanisms were chosen - every one was settled by experiment on the built VM,
+and the experiment sources are reproduced inline so they can be re-run.
+
 Investigation notes and the settled approach for the work that was flagged high-risk: struct
 values (2.2-2.4), by-value passing/returns (2.5 + Step 4), and import-as-linking with
 `--dead-strip` (Step 5). Every load-bearing mechanism below was **verified by experiment on the
@@ -31,7 +41,9 @@ compare) were protecting. The one-word temporary invariant is never touched. Ris
 > `GLOB/LOCA *(count*sizeof)`; a struct array decays to a struct pointer, and subscripting a struct
 > pointer (`structSubscript`) yields a place - constant index folds `C*sizeof` into the offset,
 > dynamic index emits one `MULi` stride; global bases use `&name:off`, runtime pointers use
-> PEEK/POKE; struct-array size must be a numeric literal for now, E414). Slice 7: **array fields**
+> PEEK/POKE; an INITIALIZED struct-element array needs a numeric literal size, E414 - an uninitialized
+> one takes a named `const` extent, so `const int N = 4; global S array bank[N]` compiles clean
+> (narrowed 2026-08-04)). Slice 7: **array fields**
 > inside a struct (`struct Filter { float array state[4] }` → `f.state[i]`) - the array field
 > decays to a typed pointer at base+offset (global `&v:off`, local ADRL+add, pointer base+add),
 > subscript handles the rest incl. arrays-of-structs inside a struct. Slice 8: **brace

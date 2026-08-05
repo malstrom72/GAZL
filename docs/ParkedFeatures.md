@@ -21,20 +21,31 @@ line). To see the feature, check the branch out; to see how it was removed, read
 Do not delete these branches. They are the only copy.
 
 
-## Parked: multidimensional arrays / arrays as values
+## Parked: arrays as values / shape-carrying pointer types
 
     branch:   Impala2-multidim-arrays        (tip 4cd52f2)
     removed:  dda4129  "Roll back multidim arrays (slices 1-2) to pre-multidim compiler"
     target:   Impala 3.0
 
+**Multidimensional arrays themselves are NOT parked any more - they are IMPLEMENTED on `Impala2`**
+(2026-08-04), by a different design from this branch's: one subscript with a comma list, striding by the declared element,
+lowered through the place model, with per-axis `.d.` constants the assembler resolves. Struct fields and
+standalone `global`/local arrays both, across all three bounds tiers plus cross-unit metadata. See
+[`MultidimensionalArrays.md`](MultidimensionalArrays.md), which supersedes the objection below.
+
+What stays parked is the rest of this branch: arrays as VALUES, and shape-carrying pointer types
+(`int array[W] pointer m`, slice 2c/2d, `3781f8c`). The latter is the real prerequisite for shape
+identity - see slice 3 there, and the "Does the CONCEPT help?" note below.
+
 Contains slices 1-2 of multidimensional array support: shape types, multidim subscript lowering (each index
 walking by pointee size rather than stride-1), untyped multidim element typing, and a long design thread on
 array-dimension TYPE IDENTITY.
 
-Two documents live only on this branch and are deleted from `Impala2`: `docs/MultidimensionalArrays.md`
-(the design, including the array->pointer decay decision now restated below) and `docs/Impala2OpenItems.md`
-(a whole backlog). Read them there - `git show Impala2-multidim-arrays:docs/Impala2OpenItems.md` - rather
-than assuming those items were dropped.
+ONE document lives only on this branch: `docs/Impala2OpenItems.md` (a whole backlog). Read it there -
+`git show Impala2-multidim-arrays:docs/Impala2OpenItems.md` - rather than assuming those items were
+dropped. This used to name `docs/MultidimensionalArrays.md` as branch-only too, which sent readers to a
+superseded 3.0 design requiring numeric literal dimensions: that filename is a LIVE doc on `Impala2`
+describing the design that was actually built, and the park branch's copy is history.
 
 Parked because the type-identity question has no clean answer. An array's dimensions want to be part of its
 type so calls can be checked, but dimensions can be arbitrary expressions resolved by the assembler. That
@@ -64,7 +75,7 @@ that are NOT the type-identity trap:
    assembly like any other extent. Verified:
 
         const int W;
-        extern struct Grid { int array cells; int tag }
+        extern struct Grid { int array cells[]; int tag }   /* `[]` mandatory since 2026-08-04 */
         function get(Grid pointer g, int x, int y) returns int v { v = g->cells[y * W + x]; }
         -> MULi %0 $y #W / ADDi %0 %0 $x / ADDp %1 $g #.o.Grid.cells / PEEK $v %1 %0
 
@@ -76,6 +87,15 @@ that are NOT the type-identity trap:
 
 Same call as by-value: the reach does not justify the surface. Do not treat multi-dim arrays as
 "nearly done" because the milder design looked clean on paper.
+
+**SUPERSEDED 2026-08-04 - the feature is IMPLEMENTED.** Kept as the record of a decision that was reversed, and
+the reversal is worth reading. Point 3 is where it went wrong: it valued multidim as "subscript sugar plus
+shape typing", and shape TYPING (identity between two declared shapes) is indeed still unsolved and still
+3.0. But the implemented feature's payoff is neither of those - it is per-axis BOUNDS CHECKING, which
+hand-striding cannot have at any price. `cells[y * W + x]` with `x >= W` is a legal word offset that
+silently lands in the next row; `cells[y, x]` is `E461`, or a deferred `! FAIL`, or a `--range-checks`
+trap. The 2026-07-26 argument compared syntax against syntax and never priced the check. Nothing about
+type identity had to be solved to get it, which is exactly what point 3 assumed.
 
 
 ## Parked: by-value struct params/returns, multi-return, destructuring
@@ -137,7 +157,8 @@ The park branch is not an ancestor: `GAZL2` forked from the last Impala 2 commit
 feature and carried it forward rather than freezing it. It is a working line, not an archive.
 
 Rejected now with `E439`, whose hint points at GAZL 2 and at dropping the keyword. The feature's own
-codes are retired with it and must not be reused: `E432` recursive expansion, `E433` non-literal local
+codes are retired with it and must not be reused - except `E432`, RE-ALLOCATED 2026-08-05 to the
+host-owned-array rank rule. It was `E432` recursive expansion; still burned are `E433` non-literal local
 extent (which the extent-naming rework deleted outright), `E434` exported inline, `E435` address of an inline
 function, `E436` redeclared inline.
 
@@ -220,8 +241,19 @@ reported to the host that caused it. Verified to work.
 3. `CONST_INT_P` is not forward-referencable, so both sides must be defined before the check - the same
    ordering discipline the layout blocks already follow.
 4. The diagnostic is free text with no caret, though it can carry an Impala source location.
-5. It only pays off WITH arrays-as-values, since Impala has no array parameters today. The one piece
-   worth doing independently is fixing `arraySignaturesCompatible`'s form-dependence.
+5. ~~It only pays off WITH arrays-as-values, since Impala has no array parameters today.~~ **WRONG, and it
+   contradicts the design it is summarizing (corrected 2026-08-04).** A shape check needs a position where
+   a DECLARED shape meets another, and `docs/MultidimensionalArrays.md` §8 - "Function parameters -
+   dissolved into an ordinary pointer parameter" - is explicit that this is never an array-by-value:
+   `function sum(int array[W] pointer m)` is an ordinary pointer parameter whose ELEMENT carries the inner
+   shape, and the park branch implemented exactly that (slice 2c/2d, `3781f8c`). No arrays-as-values, no
+   array parameters, no ABI change. What the payoff really needs is shape-carrying pointer TYPES, which is
+   a type-system change and nothing more. ~~The one piece worth doing independently is still fixing
+   `arraySignaturesCompatible`'s form-dependence.~~ **Also wrong, and the same mistake twice (corrected
+   2026-08-04.)** That raw-string extent compare is exactly what let 2.0's `int[3x4]` metadata land with
+   NO validator change, verified both ways. Normalizing extents numerically would have to teach the
+   validator what a shape is, and would silently equate `[3x4]` with `[12]` - two layouts over the same 12
+   words that are not interchangeable. There is nothing to fix here.
 6. It does nothing for by-value structs, whose blocker is the allocator, not identity.
 
 **The generalization worth remembering:** *if the compiler cannot decide it, name both sides and let the
@@ -246,8 +278,9 @@ runtime demonstration, the ~14 table entries it needs, and the suffix letters ru
 ## Impala 3.0 wishlist
 
 The first three belong together, because they are all changes to the same calling convention. Doing them in
-one pass is much cheaper than three separate ABI migrations. Multidimensional arrays and collect mode are
-independent of the ABI work and of each other, and can land on their own.
+one pass is much cheaper than three separate ABI migrations. Collect mode is independent of the ABI work
+and can land on its own. (Multidimensional arrays were the other independent item on this list and
+LANDED IN 2.0 on 2026-08-04, which is exactly the independence this paragraph predicted.)
 
 ### Restore by-value structs, multi-return and destructuring
 
@@ -280,24 +313,27 @@ returns are blocked for every struct alike by E426/E427.)
 Note the dependency: this only matters once by-value structs are back. And the current numeric ABI is
 CORRECT, not a stopgap - see that document before "fixing" any by-value size to `*.z.V`.
 
-### Multidimensional arrays
+### Shape-carrying pointer types
 
-Restore from `Impala2-multidim-arrays`. Independent of the ABI work above - it needs no calling-convention
-change. One thing must be settled FIRST and it is not part of the feature: array-dimension type identity.
-The "constant evaluator is load-bearing" reading of that is superseded - see the deferred-shape-check note
-above, which decides identity at ASSEMBLY time with `! EQUi` + `! FAIL` and needs no evaluator, because
-the values are known by then. The other former prerequisite, the expression-extent ordering
-trap in struct array fields, was fixed in `260b57c`. The 2026-07-26 re-evaluation above still stands on
-cost/benefit: multidim SYNTAX cannot state an inner extent for a host-owned struct, and hand-striding
-through a host-supplied `const int W;` already covers that case without the feature.
+**Multidimensional arrays are implemented and off this list** - the cost/benefit objection that used to
+sit here ("multidim SYNTAX cannot state an inner extent for a host-owned struct") was answered by decision
+2 in [`MultidimensionalArrays.md`](MultidimensionalArrays.md): an `extern struct` field states its RANK and
+the host supplies every axis, exactly as it already supplies `.o.` and `.z.`.
+
+What 3.0 would add is `int array[W] pointer m` - a pointer whose ELEMENT carries a shape. Independent of
+the ABI work above; it needs no calling-convention change and no arrays-as-values. It is the only thing
+that creates a position where two DECLARED shapes meet, and so the only thing that makes the deferred
+`! EQUi` + `! FAIL` identity check (proven in [`deferredShapeCheck.gazl`](deferredShapeCheck.gazl)) have a
+caller. Without it that check is a mechanism with nothing to check.
 
 ### Block implicit array->pointer decay
 
 **No park branch - this one was never built.** It is a decided *restriction*, not a parked feature, and it
 is the only item on this page a 2.0 user should act on today.
 
-    decided:  2026-07 (re-verified 2026-07-29, still unimplemented)
-    status:   decay is LIVE (`impala/impala.jspeg:1183`); `docs/Impala2.md:168` correctly says so
+    decided:  2026-07 (re-verified 2026-08-04, still unimplemented)
+    status:   decay is LIVE - `makeRValue` (`impala/impala.jspeg:1532`) turns an array place used
+              without a subscript into a pointer; `docs/Impala2.md:193` correctly says so
     target:   Impala 3.0
 
 The rule when it lands: an aggregate never implicitly becomes a pointer. You take the address of an array
@@ -465,3 +501,16 @@ Its precondition is worth doing regardless: finishing the thinning of fat inline
 methods (`impala/RefactorPlan.md` is the adjacent cleanup on the same surface) also shrinks the migration
 that "JSPEG 2" would face (`docs/JSPEGFuture.md` Problem 2). Do not treat collect mode as gated on JSPEG 2
 or on the body-level AST rework - it is gated on neither.
+
+### Precompiled `.gazl` blob imports
+
+**No park branch - never built.** `import "lib.gazl"` parses as Impala source and fails there, because the
+closure walker has exactly one way to consume a unit. Deferred to 3.0 on 2026-08-04: nothing needs it. The
+import builder concatenates its units and compiles them in one pass, so an already-assembled blob has no
+seam to enter through, and every use a blob would serve - sharing declarations, linking units, hiding
+internals - is already served by source imports plus `export` and `--dead-strip`.
+
+It is a relaxation, like collect mode: `import "lib.impala"` written today keeps compiling unchanged if
+blob imports arrive later. The real precondition is the same architectural one - emitting units separately
+instead of concatenating - so if collect mode is ever built, this becomes small. On its own it is not
+worth that rework.

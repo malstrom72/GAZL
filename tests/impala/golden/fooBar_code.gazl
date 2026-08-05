@@ -1,4 +1,4 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
 PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
@@ -486,7 +486,7 @@ process:	FUNC	; signature func process() -> void @ 311:1
 	.f23:	MOVi %1 $pos 	; read(pos, 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects read(int, int, unknown-ptr) -> unknown @ 441:30
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 441:30
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_10])
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_10
@@ -505,7 +505,7 @@ process:	FUNC	; signature func process() -> void @ 311:1
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_9	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_9], 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects read(int, int, unknown-ptr) -> unknown @ 451:68
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 451:68
 		ANDi $x $clock $fxParams:FX_PARAM_MASK_10	; x = clock & (int) fxParams[FX_PARAM_MASK_10]
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_10])
 		MULi %0 %0 $x
@@ -533,7 +533,7 @@ process:	FUNC	; signature func process() -> void @ 311:1
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_10	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_10], 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects read(int, int, unknown-ptr) -> unknown @ 465:69
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 465:69
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_9])
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_9

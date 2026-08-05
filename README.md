@@ -72,9 +72,14 @@ It prints the `Code size:` banner — that line is the proof it assembled — th
    	impala/ImpalaDemo.impala output/demo.gazl 0x4d2 impala/ImpalaDemo.impala
    ./output/GAZLCmd output/demo.gazl main
    ```
+   Step 1 is not optional: `output/` holds a *staged copy* of the compiler, and a stale one fails
+   here as `error[E001]: syntax error` inside `ImpalaDemo.impala` — a diagnosis that points at the
+   demo source when the real cause is the compiler sitting beside it.
+
    The output path is the *second* argument. Passing the random id there instead writes the
-   GAZL to a file named `0x4d2` and leaves `demo.gazl` empty, which `GAZLCmd` then reports as
-   `Code size: 0 ... Could not locate function: main`.
+   GAZL to a file literally named `0x4d2` and never creates `demo.gazl` at all — so `GAZLCmd`
+   either reports `Could not open input file`, or, worse, silently runs whatever stale
+   `demo.gazl` an earlier build left behind.
 3. To compile and run one of your own sources without staging anything, use the Node front end:
    ```
    node impala/impala.node.js run myprogram.impala
@@ -84,7 +89,7 @@ It prints the `Code size:` banner — that line is the proof it assembled — th
 ## Helper Scripts
 
 - `build.sh` / `build.cmd` - build all tools and run the full test + demo sequence
-- `tools/test-js.sh` / `.cmd` - every gate that needs only node (~15s, no C++ toolchain); run this before committing a compiler-only change
+- `tools/test-js.sh` / `.cmd` - every gate that needs only node (~1-1.5 min, most of it a 3000-program fuzz run; no C++ toolchain); run this before committing a compiler-only change
 - `tools/buildGAZLCmd.sh` / `.cmd` - build just `GAZLCmd` (VM executable)
 - `tools/BuildNuXJS.sh` / `.cmd` - build the NuXJS command-line JavaScript runtime
 - `tools/BuildImpala.sh` / `.cmd` - build NuXJS and stage the JSPEG Impala compiler into `output/`
@@ -113,9 +118,10 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 ## Documentation
 
-**[docs/README.md](docs/README.md) indexes all 24 documents** with what each is for and how much to trust
+**[docs/README.md](docs/README.md) indexes every document** with what each is for and how much to trust
 it. The most-linked few:
 
+- [What's new in Impala 2.0](docs/WhatsNewInImpala2.md) - **start here if you know Impala 1.0**: what the language gained, what it now refuses, and the four things that can break on upgrade
 - [Overview](docs/Overview.md) - general architecture and goals
 - [Impala Language Reference](docs/Impala.md) - the language and toolchain
 - [The `impala/` directory](impala/README.md) - what each compiler file is, and the common commands

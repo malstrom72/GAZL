@@ -1,4 +1,4 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
 ; signature extern native output() -> unknown @ 7:1
@@ -211,7 +211,7 @@ list:	FUNC	; signature func list() -> void @ 118:1
 		! ADDi <B> #MAX_PATCH_NAME_LENGTH #1	; output(&global patchNames[i * (MAX_PATCH_NAME_LENGTH + 1)])
 		MULi %2 $i <B>
 		ADDp %2 &patchNames %2
-		CALL ^output %1 *2	; expects output(unknown-ptr) -> unknown @ 124:62
+		CALL ^output %1 *2	; expects output(ptr) -> unknown @ 124:62
 		MOVp %2 &.s_Availa_4d8:20 	; output(" ")
 		CALL ^output %1 *2	; expects output(int-ptr) -> unknown @ 125:14
 		FORi $i %0 @.l1	; }

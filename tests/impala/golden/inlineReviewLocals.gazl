@@ -1,4 +1,4 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
@@ -11,27 +11,8 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
 	! ADDi <a> #<a> #1
 .z.P:	! DEFi #<a>
 ; signature struct P { x : int, y : int } @ 25:1
-	$r:	OUTi
-	$a:	INPi
-	$b:	INPi
-	$c:	INPi
 .z.sum3.buf:	! DEFi #3
-	$buf:	LOCA *.z.sum3.buf
-	$i:	LOCi
-	$v:	OUTi
-	$k:	INPi
 .z.pickOf.t:	! DEFi #4
-	$t:	LOCA *.z.pickOf.t
-	$r:	OUTi
-	$ax:	INPi
-	$ay:	INPi
-	$bx:	INPi
-	$by:	INPi
-	$a:	LOCA *.z.P
-	$b:	LOCA *.z.P
-	$c:	OUTi
-	$n:	INPi
-	$i:	LOCi
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 57:1

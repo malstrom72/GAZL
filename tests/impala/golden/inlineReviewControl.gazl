@@ -1,28 +1,9 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 25:1
 ; signature extern native printInt() -> unknown @ 27:1
 ; signature extern native printLF() -> unknown @ 28:1
-	$r:	OUTi
-	$v:	INPi
-	$lo:	INPi
-	$hi:	INPi
-	$t:	LOCi
-	$r:	OUTi
-	$v:	INPi
-	$lo:	INPi
-	$hi:	INPi
-	$r:	OUTi
-	$i:	INPi
-	$r:	OUTi
-	$a:	INPi
-	$r:	OUTi
-	$n:	INPi
-	$i:	LOCi
-	$r:	OUTi
-	$n:	INPi
-	$i:	LOCi
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ 59:1

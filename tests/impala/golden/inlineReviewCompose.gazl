@@ -1,4 +1,4 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 18:1
@@ -13,12 +13,6 @@ helper:	FUNC	; signature func helper(int a) -> int @ 23:1
 		MULi $r $a #2	; r = a * 2
 		RETU   	; }  /* NOT inline: called for real */
 
-	$r:	OUTi
-	$a:	INPi
-	$r:	OUTi
-	$a:	INPi
-	$r:	OUTi
-	$a:	INPi
 
 ;-----------------------------------------------------------------------------
 takesTwo:	FUNC	; signature func takesTwo(int a, int b) -> int @ 31:1

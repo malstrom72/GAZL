@@ -1081,7 +1081,7 @@ const inlineCases = [
 			+ "function main() locals int q { q = f(1) + f(2); }\n", null],
 	["an inline function declaring an array of structs",
 		"struct P { int x }\ninline function f(int v) returns int r\nlocals P array a[2]\n"
-			+ "{ a[[0]].x = v; a[[1]].x = v; r = a[[0]].x + a[[1]].x; }\n"
+			+ "{ a[0].x = v; a[1].x = v; r = a[0].x + a[1].x; }\n"
 			+ "function main() locals int q { q = f(1); }\n", null],
 	["an inline function declaring a scalar local",
 		"inline function f(int a) returns int r\nlocals int t\n{ t = a * 2; r = t + 1; }\n"
@@ -1120,13 +1120,31 @@ for (const [label, source, expected] of byValueDoors) {
 }
 console.log("impala.jspeg compiler rejects by-value structs at every declaration door");
 
-// An array extent belongs exactly where it is verifiable: an `extern struct` field must omit it (the
-// host owns that layout, as with a standalone `extern array`), and every other array must state it.
+// An array extent belongs exactly where it is verifiable: a HOST-OWNED array - an `extern struct` field
+// or a standalone `extern array` - must omit it, and every other array must state it. Rank is the other
+// half of that rule and runs the other way: a host-owned array must STATE its rank (E432), because rank
+// is the one thing about the host's layout this side knows, and leaving it implicit meant a host-owned
+// matrix could not be declared at all while `array a` quietly claimed rank 1.
 const arrayExtentCases = [
 	[
 		"extern struct array field stating a size",
 		"extern struct G { int array a[4] }\nfunction f(G pointer p) returns int r { r = p->a[0]; }\n",
-		"extern struct array field must not state a size",
+		"host-owned array must not state a size",
+	],
+	[
+		"extern struct array field omitting its rank",
+		"extern struct G { int array a }\nfunction f(G pointer p) returns int r { r = p->a[0]; }\n",
+		"Host-owned array a must state its rank",
+	],
+	[
+		"standalone extern array omitting its rank",
+		"extern array g\nfunction f() returns int r { r = global g[0]; }\n",
+		"Host-owned array g must state its rank",
+	],
+	[
+		"standalone extern array stating a size",
+		"extern int array g[4]\nfunction f() returns int r { r = global g[0]; }\n",
+		"host-owned array must not state a size",
 	],
 	[
 		"struct array field omitting its size",
@@ -1147,9 +1165,16 @@ const arrayExtentCases = [
 // The legal counterparts live in the same table (expectError null), so the rule cannot be satisfied by
 // rejecting everything.
 arrayExtentCases.push(
-	["sizeless extern struct field",
-		"extern struct G { int n; int array a; float f }\n"
+	["rank-1 extern struct field",
+		"extern struct G { int n; int array a[]; float f }\n"
 			+ "function f(G pointer p) returns int r { r = p->a[2] + p->n; }\n", null],
+	["rank-2 extern struct field, subscripted on both axes",
+		"extern struct G { int n; int array cells[,]; float f }\n"
+			+ "function f(G pointer p) returns int r { r = p->cells[1, 2]; }\n", null],
+	["rank-1 standalone extern array",
+		"extern array g[]\nfunction f() returns int r { r = global g[0]; }\n", null],
+	["rank-2 standalone extern array, subscripted on both axes",
+		"extern int array g[,]\nfunction f() returns int r { r = global g[1, 2]; }\n", null],
 	["sized struct field",
 		"struct S { int array a[4] }\nfunction f(S pointer p) returns int r { r = p->a[0]; }\n", null],
 );
@@ -1386,8 +1411,16 @@ expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break:
 // building under --legacy rather than becoming unbuildable on upgrade.
 expectSingleLegacyWarning("function f() locals int break { break = 5; }\n",
 	"'break' is a reserved word", "a reserved-word local");
+// SINGLE is the load-bearing word for a TOP-LEVEL name, which two doors check: the declarator sees every
+// variable including locals, `claimTopName` sees every top-level name including functions and structs, and
+// a global passes through both. It reported itself twice, and the two disagreed about what it was
+// ("not a variable name" / "not a global name"). Both doors still ask; only the raise is deduped.
+expectSingleLegacyWarning("global int break\nfunction main() { }\n",
+	"'break' is a reserved word", "a reserved-word global");
+expectSingleLegacyWarning("function break() { }\nfunction main() { }\n",
+	"'break' is a reserved word", "a reserved-word function");
 
-// A struct value is initialized BY FIELD NAME. The 1.x positional list silently changed meaning the moment
+// A struct value is initialized BY FIELD NAME. A positional list silently changed meaning the moment
 // a field was inserted, removed or reordered - nothing in the source had to change for it to start filling
 // different fields - so it is E455 by default and only --legacy still maps by position. Array levels stay
 // positional in both forms (a struct's array field, and an array OF structs): there the index does the
@@ -1425,7 +1458,8 @@ const outOfOrder = compileWithJsImpala(
 assert(/DATA #1 #2 #3 #4 #5/.test(inOrder), `a named initializer must emit in field order\n${inOrder}`);
 assert(inOrder === outOfOrder, "entry order must not change the emitted layout");
 
-// --legacy keeps the 1.x positional form compiling, so old sources still build.
+// --legacy keeps the positional form compiling. NOT for 1.x compatibility - 1.0 has no structs, so no 1.x
+// source can contain one - but for sources written against early 2.0, when positional was the only form.
 expectSingleLegacyWarning(NAMED + "global P p = { 1, 2 }\nfunction main(){ }\n",
 	"must name its fields", "a positional struct initializer");
 console.log("impala.jspeg compiler initializes struct values by field name");
@@ -1817,11 +1851,33 @@ const caretCases = [
 			+ "function main() { printInt(global s.v[2]); }\n", "4:39: error[E461]"],
 	["E461 reports a `.field` reached through an element that is not there",
 		"struct E { int a }\nstruct O { E array e[2]; int t }\nglobal O o\n"
-			+ "function main() { global o.e[[2]].a = 1; }\n", "4:31: error[E461]"],
+			+ "function main() { global o.e[2].a = 1; }\n", "4:30: error[E461]"],
 	["E461 covers a plain GLOBAL array, not just a struct field",
 		"global int array g[4]\nfunction main() { global g[9] = 1; }\n", "2:28: error[E461]"],
 	["E461 covers a plain LOCAL array",
 		"function main() locals int array a[5] { a[9] = 1; }\n", "1:43: error[E461]"],
+	// A SHAPE is checked PER AXIS, on the standalone path as much as on the struct-field one: the flat
+	// product cannot catch `[0, 5]` on a `[3, 4]`, a legal word offset and an illegal coordinate, which
+	// is the whole reason a shape exists. The outer axis is listed too - a shape must not be checked
+	// only where the stride is 1.
+	["E461 checks the INNER axis of a standalone shape",
+		"global int array g[3, 4]\nfunction main() { global g[0, 5] = 1; }\n", "2:31: error[E461]"],
+	["E461 checks the OUTER axis of a standalone shape",
+		"global int array g[3, 4]\nfunction main() { global g[3, 0] = 1; }\n", "2:28: error[E461]"],
+	["E461 checks the axes of a LOCAL shape",
+		"function main() locals int array b[2, 3] { b[2, 0] = 1; }\n", "1:46: error[E461]"],
+	// A subscript states EVERY axis, and that is asked of a ONE-index subscript as well - which is the
+	// spelling row-crossing came back in through. `cells[11]` on a `[3, 4]` was a legal word offset and
+	// a meaningless coordinate, and it compiled silently on both paths.
+	["E206 rejects a flat subscript on a shaped standalone array",
+		"global int array g[3, 4]\nfunction main() { global g[11] = 1; }\n", "2:28: error[E206]"],
+	["E206 rejects a flat subscript on a shaped struct field",
+		"struct S { int array v[3, 4]; int t }\nglobal S s\n"
+			+ "function main() { global s.v[11] = 1; }\n", "3:30: error[E206]"],
+	["E206 rejects too many axes on a 1-D array",
+		"global int array g[12]\nfunction main() { global g[1, 2] = 1; }\n", "2:28: error[E206]"],
+	["E206 rejects a comma subscript on a bare pointer, which has no shape at all",
+		"function main() locals int pointer p { p[1, 2] = 1; }\n", "1:42: error[E206]"],
 	// A NEGATIVE index fails even when only an address is formed - the one exception to "addresses are
 	// never checked", because it is not an address GAZL will take: `&g:-1` and `$a:-1` are both rejected
 	// at assembly, and on a struct field `.o.S.pad + (-1)` folds to a valid offset naming the PREVIOUS
@@ -1837,10 +1893,10 @@ const caretCases = [
 	// is the ordinary import-closure shape, not a corner case. Both orders, because only one of them
 	// re-runs the declaration site that records the extent.
 	["E461 survives a re-declaration that follows the definition",
-		"global int array g[4]\nextern array g\nfunction main() { global g[9] = 1; }\n",
+		"global int array g[4]\nextern array g[]\nfunction main() { global g[9] = 1; }\n",
 		"3:28: error[E461]"],
 	["E461 survives a re-declaration that precedes it",
-		"extern array g\nglobal int array g[4]\nfunction main() { global g[9] = 1; }\n",
+		"extern array g[]\nglobal int array g[4]\nfunction main() { global g[9] = 1; }\n",
 		"3:28: error[E461]"],
 	// The function door recorded its position AFTER `'('_` had been consumed, so every diagnostic that
 	// names a function pointed at the parenthesis (or the space past it) instead of the name.
@@ -1848,6 +1904,27 @@ const caretCases = [
 		"global int dup\nfunction dup() { }\n", "2:10: error[E401]"],
 	["a reserved function name points at the name",
 		"function continue() { }\n", "1:10: error[E449]"],
+	// EVERY OTHER DOOR had the same defect, and worse: `declare()` was handed the end-of-rule `$$i`,
+	// which `Identifier` had already walked past the trailing whitespace of - so a duplicate global or
+	// const was reported at the START OF THE NEXT DECLARATION, usually a different line entirely.
+	// One case per declaration form, because each names its own position and only a test notices when
+	// one of them drifts back.
+	["a global-name clash points at the name",
+		"struct Glob { int a }\nglobal int Glob\n", "2:12: error[E401]"],
+	["a duplicate global points at the second one, not at what follows it",
+		"global int dup\nglobal int dup\nfunction main() { }\n", "2:12: error[E401]"],
+	["a global ARRAY names its own name, past the element type and `array`",
+		"struct Arr { int a }\nglobal int array Arr[4]\n", "2:18: error[E401]"],
+	["a const points at the name, not at the declaration after it",
+		"struct Kon { int a }\nconst int Kon = 1\n", "2:11: error[E401]"],
+	["an extern points at the name",
+		"struct Ex { int a }\nextern int Ex\n", "2:12: error[E401]"],
+	["a struct points at the name, not at its `{`",
+		"const int Thing = 1\nstruct Thing { int a }\n", "2:8: error[E401]"],
+	["a functype points at the name",
+		"struct Cb { int a }\nfunctype Cb() returns int\n", "2:10: error[E401]"],
+	["a duplicate LOCAL points at the redeclaration",
+		"function main() locals int q, int q { }\n", "1:35: error[E401]"],
 ];
 for (const [label, source, expected] of caretCases) {
 	expectDiagnosticAt(label, source, expected);
@@ -1866,9 +1943,9 @@ const addressCases = [
 	["&field[extent] on the LAST field, one past the struct itself",
 		"struct S { int array v[2]; int array pad[8] }\nglobal S s\n"
 			+ "function main() locals int pointer p { p = &global s.pad[8]; }"],
-	["&structField[[extent]] is a legal end pointer too",
+	["&structField[extent] is a legal end pointer too",
 		"struct E { int a }\nstruct O { E array e[2]; int t }\nglobal O o\n"
-			+ "function main() locals E pointer p { p = &global o.e[[2]]; }"],
+			+ "function main() locals E pointer p { p = &global o.e[2]; }"],
 	["an address WELL past the end is legal too - the rule has no distance limit",
 		"global int array g[4]\nfunction main() locals int pointer p { p = &global g[9]; }"],
 	["...and the same on a plain local array",
@@ -1912,13 +1989,13 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 // diagnostic than a trap), and a bare pointer has no extent to check at all.
 {
 	const decls = "const int DEBUG = 1\nstruct E { int a }\nstruct S { int array v[3] }\nglobal S s\n"
-		+ "global int array g[4]\nglobal E array ge[3]\nglobal int array g2[4]\nextern array g2\n";
+		+ "global int array g[4]\nglobal E array ge[3]\nglobal int array g2[4]\nextern array g2[]\n";
 	const shapes = [
 		["global scalar array", "global g[i] = 1;", "#.z.g "],
 		["local scalar array", "a[i] = 1;", "#.z.main.a "],
 		["struct array field", "global s.v[i] = 1;", "#.z.S.v "],
-		["global array of structs", "global ge[[i]].a = 1;", "#.z.ge "],
-		["local array of structs", "le[[i]].a = 1;", "#.z.main.le "],
+		["global array of structs", "global ge[i].a = 1;", "#.z.ge "],
+		["local array of structs", "le[i].a = 1;", "#.z.main.le "],
 		["a re-declared array keeps its extent", "global g2[i] = 1;", "#.z.g2 "],
 		["a constant index (GAZL rejects it outright)", "global g[2] = 1;", null],
 		["a bare pointer (no extent exists)", "p = &a[0]; p[i] = 1;", null],
@@ -1959,11 +2036,11 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	assert(!/! FAIL index/.test(plain),
 		"tier 2: duplicated the assembler's own check on a plain array\n" + plain);
 	// A struct-ELEMENT array field: `.z.` counts WORDS and the index counts ELEMENTS, so the guard has to
-	// scale before comparing. `o.e[[3]]` on `e[SN]` is the case that matters - it lands in the NEXT FIELD,
+	// scale before comparing. `o.e[3]` on `e[SN]` is the case that matters - it lands in the NEXT FIELD,
 	// still inside the allocation, so the assembler sees a legal offset and only this guard catches it.
 	const scaled = compileWithJsImpala("const int SN = 3\nstruct E { int a; int b }\n"
 		+ "struct O { E array e[SN]; int t }\nglobal O o\n"
-		+ "export function main() { global o.e[[3]].a = 1; }\n", { randomId: 42 });
+		+ "export function main() { global o.e[3].a = 1; }\n", { randomId: 42 });
 	assert(/! MULi <\w> #3 #\.z\.E/.test(scaled) && /! LSSi #<\w> #\.z\.O\.e/.test(scaled),
 		"tier 2: a struct-element index is not scaled by the element size\n" + scaled);
 	// The scaling scratch must NOT come from the runtime pool: guards flush after the function's scratch
@@ -1972,7 +2049,7 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	// returnBack. Both only show up when the guarded access is NOT in the final function.
 	const notLast = compileWithJsImpala("const int SN = 3\nstruct E { int a; int b }\n"
 		+ "struct O { E array e[SN]; int t }\nglobal O o\n"
-		+ "function f() { global o.e[[3]].a = 1; }\nexport function main() { f(); }\n", { randomId: 42 });
+		+ "function f() { global o.e[3].a = 1; }\nexport function main() { f(); }\n", { randomId: 42 });
 	assert(/! FAIL index 3 outside O\.e/.test(notLast),
 		"tier 2: no guard for a function that is not the last one\n" + notLast);
 	// The SAME assertion is asked once per function. `t.v[3]` written and then read is one question, not
@@ -2081,6 +2158,165 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler defers a symbolic-extent field index to GAZL assembly time");
 }
 
+// EVERY GATE ABOVE reads `constInt`, which decoded decimal ONLY - so the other two spellings
+// `IntegerLiteral` accepts read as symbolic, and a number Impala plainly knows stood every check down.
+// `[0x4]` disarmed E461, `[-0x1]` walked past E462 and shipped `! DEFi #-0x1` (the aliasing layout the
+// case above exists to stop), and `[0x2]` on a STRUCT array reached E460 through `parseInt('0x2', 10)`
+// -> 0 and rejected a correct initializer as "2 given, but it holds 0". One decoder, so a spelling
+// cannot be right for the extent and wrong for the index again.
+{
+	for (const [label, src] of [
+		["a hex extent still arms E461", "global int array g[0x4]\nfunction main() { global g[9] = 1; }\n"],
+		["a hex INDEX is decided too", "global int array g[4]\nfunction main() { global g[0x9] = 1; }\n"],
+		["...and so is a `+`-signed one", "global int array g[4]\nfunction main() { global g[+9] = 1; }\n"],
+	]) {
+		expectCompileOutcome("integer literal spellings", label, src, "E461");
+	}
+	expectCompileOutcome("integer literal spellings", "a negative hex extent still reaches E462",
+		"global int array g[-0x1]\nfunction main() { }\n", "E462");
+	expectCompileOutcome("integer literal spellings", "a hex extent no longer counts as zero",
+		"struct S { int a }\nreadonly S array t[0x2] = { { a: 1 }, { a: 2 } }\nfunction main() { }\n", null);
+	// A CHARACTER literal stays unknown on purpose: only GAZL decides what `'ab'` is worth, so Impala
+	// passes it through rather than agreeing with the other stage by guess.
+	const chr = compileWithJsImpala("global int array g[4]\nfunction main() { global g['a'] = 1; }\n",
+		{ randomId: 42 });
+	assert(/POKE &g:'a'/.test(chr), "integer literal spellings: a char literal was decoded, not deferred\n" + chr);
+	// ...and the same spelling has to survive every OTHER site that folds a constant, not just the bounds
+	// gates. Two hand-rolled decoders outlived the funnel: `dereference` used `parseFloat`, which reads
+	// '0x10' as 0, so a hex offset silently emitted `#0` where the decimal spelling emitted `#-16`; and
+	// `subConstInt` spanned decimal digits only, so a hex subtraction fell through to a runtime temp.
+	const off = compileWithJsImpala("global int array g[64]\nexport function main() locals int x, int y "
+		+ "{ x = *(&global g[32] - 0x10); y = *(&global g[32] - 16); }\n", { randomId: 42 });
+	assert((off.match(/PEEK \$\w &g:32 #-16/g) || []).length === 2,
+		"literal spellings: a hex offset folded differently from its decimal twin\n" + off);
+	console.log("impala.jspeg compiler decides every integer literal spelling, and defers only chars");
+}
+
+// A struct ARRAY FIELD decays to a pointer in every reading context - docs/Impala2.md says so - but the
+// argument path skips makeRValue by design (it emits into the call window instead of a temp), so the one
+// door that never decayed handed the writer a raw `@place` record. Its operator is in no opcode table,
+// and the compiler died on `Cannot read properties of undefined (reading 'split')`: no code, no position,
+// no caret. All four base kinds, because the place carries the base and each reaches the window
+// differently - and the emitted operand is asserted, since decaying through a temp would compile just as
+// green while costing an instruction per argument.
+{
+	const decls = "extern native printInt\nstruct F { int array state[4]; int tag }\nstruct Outer { F inner }\n"
+		+ "global F gf\nfunction sum(int pointer p) returns int r { r = p[0]; }\n";
+	for (const [label, body, expected] of [
+		["a LOCAL struct's array field", "locals F f { printInt(sum(f.state)); }", /ADRL %\d \$f:\.o\.F\.state \*0/],
+		["a GLOBAL struct's", "{ printInt(sum(global gf.state)); }", /ADDp %\d &gf #\.o\.F\.state/],
+		["a NESTED field's", "locals Outer o { printInt(sum(o.inner.state)); }", /ADRL %\d \$o:<[A-Za-z]> \*0/],
+		["one reached through a pointer", "locals F pointer fp { printInt(sum(fp->state)); }", /ADDp %\d \$fp #\.o\.F\.state/],
+	]) {
+		const out = compileWithJsImpala(decls + "export function main() " + body + "\n", { randomId: 42 });
+		assert(!/@place/.test(out), "struct array field argument: a raw place reached the output\n" + out);
+		assert(expected.test(out),
+			"struct array field argument (" + label + "): not decayed straight into the call window\n" + out);
+	}
+	console.log("impala.jspeg compiler decays a struct array field passed as an argument");
+}
+
+// E441 asked its question at an assignment and at an argument, but an INITIALIZER reaches the data rows
+// through makeConstant, which knows a type and not a funcptr TYPE - so every declaration door stored a
+// function of any shape under a name promising one shape, and published `: TickFn` in the signature row
+// while doing it. Nothing downstream can catch this: `&wrong` is a perfectly good address, so the call
+// through it just runs with the wrong frame. All four doors, and the matching cases beside them, because
+// a check that rejects everything looks identical to a correct one from the failing side.
+{
+	const decls = "functype TickFn(int phase)\nfunction wrong(float x, int y) returns int r { r = y; }\n"
+		+ "function right(int phase) { }\n";
+	for (const [label, decl] of [
+		["a scalar global", "global TickFn onTick = wrong\n"],
+		["an array element", "global TickFn array table[2] = { wrong, right }\n"],
+		["a later array element", "global TickFn array table[2] = { right, wrong }\n"],
+		["a const", "const TickFn cb = wrong\n"],
+	]) {
+		expectCompileOutcome("funcptr initializer", label, decls + decl + "function main() { }\n", "E441");
+	}
+	for (const [label, decl] of [
+		["a matching scalar global", "global TickFn onTick = right\n"],
+		["a matching array, with a null hole", "global TickFn array table[2] = { right, nullfunc }\n"],
+		["a matching const", "const TickFn cb = right\n"],
+		["an ordinary typed array is untouched", "global int array n[2] = { 1, 2 }\n"],
+	]) {
+		expectCompileOutcome("funcptr initializer", label, decls + decl + "function main() { }\n", null);
+	}
+	// The POINTER-ELEMENT half of the same check, which the same doors were missing: an initializer runs
+	// checkPtrAssign now, not a wrapper around half of it, so a third check added there cannot be right
+	// for assignments and absent at declarations.
+	expectCompileOutcome("initializer element type", "a pointer element mismatch at a global",
+		"global float array f[4]\nglobal int pointer p = &global f[0]\nfunction main() { }\n", "E201");
+	expectCompileOutcome("initializer element type", "...and the matching one still passes",
+		"global int array g[4]\nglobal int pointer p = &global g[0]\nfunction main() { }\n", null);
+	// Ordering matters as much as the check: an `int pointer` initialized with `1` is not an ELEMENT
+	// mismatch, it is not a pointer at all, and "got untyped elements" would be a worse answer than the
+	// true one. The assignment path never has to say this because E303 stops a non-pointer earlier; at a
+	// declaration the coarse question belongs to makeConstant, which answers E407.
+	expectCompileOutcome("initializer element type", "a non-pointer value stays E407, not E201",
+		"global int pointer p = 1\nfunction main() { }\n", "E407");
+	expectCompileOutcome("initializer element type", "...and in an array, too",
+		"readonly int pointer array A[2] = { 1, 2 }\nfunction main() { }\n", "E407");
+	// THE FIFTH DOOR. The four above are the flat ones; a struct FIELD reaches the row through
+	// `pushInitScalar`, which asked only the coarse type. So a typed-pointer field took an address off an
+	// array of the wrong element, and a funcptr field took a mismatched function, both silently - while
+	// assigning the same value to the same field in a function is E201/E441. Struct fields are where
+	// typed pointers and funcptrs actually live, so this was the door that mattered most.
+	{
+		const decls = "global float array gf[4]\nglobal int array gi[4]\nfunctype TickFn(int phase)\n"
+			+ "function wrong(float x, int y) returns int r { r = y; }\nfunction right(int phase) { }\n";
+		expectCompileOutcome("struct field initializer", "a pointer element mismatch in a field",
+			decls + "struct P { int pointer p }\nreadonly P s = { p: &global gf[0] }\nfunction main() { }\n",
+			"E201");
+		expectCompileOutcome("struct field initializer", "a funcptr signature mismatch in a field",
+			decls + "struct S { TickFn cb }\nreadonly S s = { cb: wrong }\nfunction main() { }\n", "E441");
+		expectCompileOutcome("struct field initializer", "the matching values still pass",
+			decls + "struct S { TickFn cb; int pointer p; int n }\n"
+			+ "readonly S s = { cb: right, p: &global gi[0], n: 7 }\nfunction main() { }\n", null);
+		// A hole must stay a hole: `null`/`nullfunc` suit any pointer type, and an omitted field zero-fills.
+		// The braced entry is already reduced to its operand, so the check has to see `&NULL` as such.
+		expectCompileOutcome("struct field initializer", "null holes and omitted fields are not mismatches",
+			decls + "struct S { TickFn cb; int pointer p; int n }\n"
+			+ "readonly S a = { cb: nullfunc, p: null, n: 0 }\nreadonly S b = { n: 1 }\nfunction main() { }\n",
+			null);
+	}
+	console.log("impala.jspeg compiler runs the full assignment check at every initializer");
+}
+
+// `copy` was the last door that read two typed pointers and asked them nothing - it checked that both
+// operands ARE pointers (E301) and never what they point at, so an int block written over float storage
+// compiled clean. It now asks, with one deliberate difference from an assignment: it flags only a
+// CONTRADICTION (both sides know their element and disagree), never an unknown. An assignment rejects
+// untyped -> typed because the VARIABLE must keep that promise for every later deref; `copy` consumes both
+// addresses on the spot, and reading an Impala 1 untyped `array` blob into typed storage is the 1.0 idiom.
+// The LENGTH is never checked and never will be: a pointer has no extent.
+{
+	const decls = "global int array gi[8]\nglobal float array gf[8]\nglobal array gu[8]\n";
+	for (const [label, body] of [
+		["int source into float destination", "copy (4 from &global gi[0] to &global gf[0]);"],
+		["float source into int destination", "copy (4 from &global gf[0] to &global gi[0]);"],
+	]) {
+		expectCompileOutcome("copy element type", label,
+			decls + "function main() { " + body + " }\n", "E201");
+	}
+	for (const [label, body] of [
+		["matching elements", "copy (4 from &global gi[0] to &global gi[4]);"],
+		["an untyped source promises nothing to break", "copy (4 from &global gu[0] to &global gf[0]);"],
+		["an untyped destination, likewise", "copy (4 from &global gf[0] to &global gu[0]);"],
+		["a cast is the escape hatch", "copy (4 from (pointer) &global gi[0] to &global gf[0]);"],
+		["a length past the destination extent is the programmer's, as with memcpy",
+			"copy (64 from &global gi[0] to &global gi[4]);"],
+	]) {
+		expectCompileOutcome("copy element type", label,
+			decls + "function main() { " + body + " }\n", null);
+	}
+	// The bug this check exposed: `&x` on an element of an untyped `array` stamped elem `'?'`, while an
+	// untyped array named bare stamped `undefined` - two spellings of the same non-knowledge, which made
+	// comparing them report "expected untyped elements, got untyped elements". Unknown has ONE spelling now.
+	expectCompileOutcome("copy element type", "two untyped spellings do not contradict each other",
+		"global array gu[8]\nfunction main() locals array a[4] { copy (4 from a to &global gu[0]); }\n", null);
+	console.log("impala.jspeg compiler checks copy's element types, and only on a contradiction");
+}
+
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
 const caretNonCases = [
 	["if/else with a semicolon-terminated then-branch",
@@ -2169,7 +2405,7 @@ const typedPointerCases = [
 	},
 	{
 		label: "element type must match across declarations",
-		source: ["extern int array shared", "global float array shared[4]"].join("\n"),
+		source: ["extern int array shared[]", "global float array shared[4]"].join("\n"),
 		expectError: "Element type mismatch with previous declaration",
 	},
 	{
@@ -2405,9 +2641,9 @@ const typedPointerCases = [
 			"struct V { int n; float g }",
 			"global V array bank[4]",
 			"function main() locals V array loc[2], int i, float f {",
-			"\tglobal bank[[0]].n = 1; f = global bank[[2]].g;",
-			"\tfor (i = 0 to 4) global bank[[i]].n = i;",
-			"\tloc[[1]].g = 0.5;",
+			"\tglobal bank[0].n = 1; f = global bank[2].g;",
+			"\tfor (i = 0 to 4) global bank[i].n = i;",
+			"\tloc[1].g = 0.5;",
 			"}",
 		].join("\n"),
 		expectError: null,
@@ -2418,7 +2654,7 @@ const typedPointerCases = [
 			"struct V { int n }",
 			"global V array bank[3]",
 			"function use(V pointer p) { p->n = 9; }",
-			"function main() { use(&global bank[[1]]); }",
+			"function main() { use(&global bank[1]); }",
 		].join("\n"),
 		expectError: null,
 	},
@@ -2450,31 +2686,37 @@ const typedPointerCases = [
 		source: [
 			"struct Inner { float a }",
 			"struct Outer { Inner array items[3] }",
-			"function main() locals Outer o { o.items[[1]].a = 0.5; }",
+			"function main() locals Outer o { o.items[1].a = 0.5; }",
 		].join("\n"),
 		expectError: null,
 	},
-	/* The `[[ ]]` rule: the spelling states the stride, so each bracket form is an error where the other
-	   is correct, and a struct pointer moves by scaled subscript only. See docs/Impala2Review.md. */
+	/* ONE subscript, striding by the DECLARED ELEMENT SIZE. `[[ ]]` used to be required on a struct
+	   element and rejected everywhere else (E204/E205); removed 2026-08-04, because the marker claimed a
+	   runtime multiply that a constant index does not carry - 35 of the corpus's 49 uses were constant,
+	   where the stride is an assemble-time `!` line - and because `a[3, 5, 6]` would have to scale with no
+	   marker available to say so. Pointer arithmetic already scaled silently; subscripting now agrees.
+	   All four spellings below were diagnostics and are now the ordinary way to write it. What must NOT
+	   change is the emitted code - the `#.z.` stride assertions in the struct-array codegen block above
+	   are what hold that, and the whole corpus regolded with identical instruction streams. */
 	{
-		label: "a plain subscript on a struct element is rejected",
+		label: "a subscript on a struct element scales, and is spelled like any other",
 		source: ["struct V { int n; int m }", "global V array bank[4]", "function main() locals int i { i = global bank[1].n; }"].join("\n"),
-		expectError: "Plain subscript on a struct element",
+		expectError: null,
 	},
 	{
-		label: "a plain subscript through a struct pointer is rejected",
+		label: "...through a struct pointer too",
 		source: ["struct V { int n; int m }", "function main() locals V pointer p, int i { i = p[1].n; }"].join("\n"),
-		expectError: "Plain subscript on a struct element",
+		expectError: null,
 	},
 	{
-		label: "a scaled subscript on a one-word element is rejected",
-		source: ["global int array w[4]", "function main() locals int i { i = global w[[1]]; }"].join("\n"),
-		expectError: "Scaled subscript on a one-word element",
+		label: "...and a one-word element strides one word, same spelling",
+		source: ["global int array w[4]", "function main() locals int i { i = global w[1]; }"].join("\n"),
+		expectError: null,
 	},
 	{
-		label: "a scaled subscript on a scalar array field is rejected",
-		source: ["struct F { float array state[4] }", "function main() locals F f, float x { x = f.state[[1]]; }"].join("\n"),
-		expectError: "Scaled subscript on a one-word element",
+		label: "...including a scalar array field inside a struct",
+		source: ["struct F { float array state[4] }", "function main() locals F f, float x { x = f.state[1]; }"].join("\n"),
+		expectError: null,
 	},
 	{
 		label: "arithmetic on a struct pointer is rejected",
@@ -2496,7 +2738,7 @@ const typedPointerCases = [
 		source: [
 			"struct V { int n; int m }",
 			"global V array bank[4]",
-			"function main() locals V pointer p, int i { for (p = &global bank[[0]] to &global bank[[3]]) i = p->n; }",
+			"function main() locals V pointer p, int i { for (p = &global bank[0] to &global bank[3]) i = p->n; }",
 		].join("\n"),
 		expectError: "For variable must not be a struct pointer",
 	},
@@ -2506,15 +2748,15 @@ const typedPointerCases = [
 			"struct V { int n; int m }",
 			"global V array bank[4]",
 			"function main() locals V pointer p, V pointer e, int i {",
-			"\tp = &global bank[[0]]; e = &global bank[[4]];",
-			"\twhile (p < e) { i = p->n; p = &p[[1]]; }",
+			"\tp = &global bank[0]; e = &global bank[4];",
+			"\twhile (p < e) { i = p->n; p = &p[1]; }",
 			"}",
 		].join("\n"),
 		expectError: null,
 	},
 	{
 		label: "an out-of-range constant index is legal when only an address is formed",
-		source: ["struct V { int n }", "global V array bank[4]", "function main() locals V pointer e { e = &global bank[[9]]; }"].join("\n"),
+		source: ["struct V { int n }", "global V array bank[4]", "function main() locals V pointer e { e = &global bank[9]; }"].join("\n"),
 		expectError: null,
 	},
 	{

@@ -1,4 +1,4 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
 DEBUG:	! DEFi #1	; signature const DEBUG : int @ 22:1
@@ -10,21 +10,6 @@ K:	! DEFi #24	; signature const K : int @ 24:1
 g:	DATi #0	; signature global g : int @ 30:1
 	GLOB *1
 touched:	DATi #0	; signature global touched : int @ 31:1
-	$y:	OUTf
-	$x:	INPf
-	$z:	OUTf
-	$x:	INPf
-	$y:	INPf
-		PARA *1
-	$d:	INPi
-		PARA *1
-	$p:	INPp
-	$v:	INPi
-	$r:	OUTi
-	$a:	INPi
-	$r:	OUTi
-	$f:	INPp
-	$a:	INPi
 
 ;-----------------------------------------------------------------------------
 timesThree:	FUNC	; signature func timesThree(int a) -> int @ 60:1

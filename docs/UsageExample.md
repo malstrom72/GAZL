@@ -25,11 +25,18 @@ Use the staged NuXJS executable to compile the file, then run it via `GAZLCmd`:
 ./output/GAZLCmd hello.gazl main
 ```
 
-The command prints:
+`GAZLCmd` frames the program's own output with its assembly banner and exit line, so the
+whole thing reads:
 
 ```text
+Code size: 4, globals size: 0, consts size: 16, functions: 1
+--------------------------------------------------------------------------------
 Hello, world!
+--------------------------------------------------------------------------------
+Status: 0, time: 0s
 ```
+
+The banner and the two rules go to stderr; only `Hello, world!` is on stdout.
 
 ## 3. Re-run without recompiling (optional)
 
