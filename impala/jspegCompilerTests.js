@@ -1341,6 +1341,31 @@ for (const [label, source, expected] of reservedWordCases) {
 }
 console.log("impala.jspeg compiler reserves return/break/continue with dedicated diagnostics");
 
+// A frame local is never zeroed - `FUNC` only advances the stack pointer - so a named return value that
+// is assigned nowhere hands back whatever the previous call left at that depth. The rule is deliberately
+// the weakest one that cannot be wrong: the slot must appear in NO operand of the body. Everything that
+// makes it appear - a write in one arm, a `for` counting with it, an `&r` passed out - stays silent,
+// because ruling on those needs definite-assignment analysis and guessing would reject correct programs.
+// The silent cases below are the ones that matter: each would be a false alarm on a correct program.
+const returnAssignedCases = [
+	["never assigned at all", "function f() returns int r { }", "error[E463]"],
+	["assigned nothing but a sibling local",
+		"function f() returns int r locals int t { t = 1; }", "error[E463]"],
+	["assigned plainly", "function f() returns int r { r = 1; }", null],
+	["assigned in only one arm of an if",
+		"function f(int c) returns int r { if (c > 0) { r = 1; } }", null],
+	["counted by a for loop",
+		"function f() returns int r { for (r = 0 to 3) { } }", null],
+	["written through its own address",
+		"function g(int pointer p) { p[0] = 1; }\nfunction f() returns int r { g(&r); }", null],
+	["read but never written is NOT diagnosed - that needs flow analysis",
+		"extern native printInt\nfunction f() returns int r { printInt(r); }", null],
+];
+for (const [label, source, expected] of returnAssignedCases) {
+	expectCompileOutcome("return assigned", label, source + "\nfunction main() { }\n", expected);
+}
+console.log("impala.jspeg compiler diagnoses a return value assigned nowhere, and only that");
+
 // The reserved-word LABEL rejection is the strict default; --legacy keeps the 1.x `goto break;` early-exit
 // idiom, downgrading the E449 to a single warning so old code still compiles.
 expectSingleLegacyWarning("function f() locals int x { x = 1; goto break; break: ; }\n",

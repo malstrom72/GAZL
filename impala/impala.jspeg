@@ -1837,6 +1837,37 @@
                         + (pname !== undefined ? pname : struct.charAt(0).toLowerCase()));
     };
 
+    /* A declared return value that is never written returns whatever the PREVIOUS call left in that frame
+       slot - a silent wrong value, with nothing at any tier to catch it. Impala has no flow analysis and
+       must not grow one here, so the test is deliberately the weakest one that cannot be wrong: the slot
+       appears NOWHERE in the body, in any operand. A write in one arm of an `if`, a `for` counting with
+       it, an `&r` handed to a callee - each makes it appear, and each stays silent. Only "never mentioned
+       at all" is diagnosed, which is exactly the case a reader would call a typo. Runs before
+       processBranches, which rewrites operands. */
+    $$parser.checkReturnAssigned = function (entry) {
+        /* `pendingReturns` is cleared once the outputs are declared, which is before the body; the same
+           row objects live on in the signature. */
+        var list = (entry !== undefined && entry.signature !== undefined
+                ? entry.signature.returnList : undefined);
+        if (list === undefined) return;
+        for (var i = 0; i < list.length; ++i) {
+            var ret = list[i], seen = false;
+            for (var j = 0; j < $$parser.metacode.length && !seen; ++j) {
+                var m = $$parser.metacode[j];
+                if (m.operator === ';') continue;         /* prose: the source line, not operands */
+                for (var k = 0; k < m.operands.length; ++k) {
+                    if (m.operands[k] === ret.name) { seen = true; break; }
+                }
+            }
+            if (!seen) {
+                $$parser.fail('The return value ' + ret.rawName + ' is never assigned',
+                        ret.sourceCode, ret.sourceOffset, 'E463',
+                        'assign it somewhere in the body; an unassigned return value is whatever the '
+                                + 'previous call left in that frame slot');
+            }
+        }
+    };
+
     $$parser.addFuncTypeParam = function (name, type, elem, struct, words, pname, sourceCode, sourceOffset) {
         $$parser.rejectByValueStruct(type, struct, pname, false, sourceCode, sourceOffset);
         $$parser.functypes[name].params.push({ type: type, elem: elem,
@@ -4415,7 +4446,9 @@ inp:ArgsDecl ')'_
                                                                          var entry = $$parser.symbols.functions[$id];
                                                                          if (entry) {
                                                                              entry.pendingReturns = undefined;
-                                                                             $$parser.addReturn(entry, $out.name, $out.type, $out.elem, $out.size, $$s, $$i, $out.struct, $out.words);
+                                                                             /* `$out.at` is the NAME; `$$i` here has already skipped past the whole
+                                                                            declarator onto the next clause, which put E463's caret on `locals`. */
+                                                                         $$parser.addReturn(entry, $out.name, $out.type, $out.elem, $out.size, $$s, $out.at, $out.struct, $out.words);
                                                                          }
                                                                      }
                     ( ',' _ v:VarDecl                                 {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */
@@ -4579,6 +4612,7 @@ inp:ArgsDecl ')'_
                                                                             see it: `goto out;` where `out:` is the end-of-body label is
                                                                             Impala's only early-exit idiom, and it lands exactly here. */
                                                                          $$parser.emit('--^', undefined, undefined, undefined, undefined);
+                                                                         $$parser.checkReturnAssigned($$parser.symbols.functions[$id]);
                                                                          $$parser.processBranches();
                                                                          $$parser.flushMetaCode('\t');
                                                                          $$parser.emittedGuards = {};   /* per function: labels are too */

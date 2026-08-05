@@ -209,6 +209,8 @@ const SAMPLES = [
 		src: "export function main() { goto nowhere; }\n" },
 	{ name: "a negative array extent", expect: "E462", legacy: false,
 		src: "global int array a[-1]\nexport function main() { }\n" },
+	{ name: "a return value that is never assigned", expect: "E463", legacy: false,
+		src: "function f() returns int r { }\nexport function main() { }\n" },
 	{ name: "writing through a readonly global", expect: "E404", legacy: false,
 		src: "readonly int array a[2] = { 1, 2 }\nexport function main() { global a[0] = 5; }\n" },
 	{ name: "one name used twice at top level", expect: "E401", legacy: false,
