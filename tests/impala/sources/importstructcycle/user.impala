@@ -1,0 +1,15 @@
+/*
+	The failing half: this unit declares `extern struct AA` WITH A BODY and needs its layout, but the
+	real definition lives in the unit the closure emits after it. `! DEFi` constants resolve top-down,
+	so the reference cannot see the block. Used to compile clean and die at GAZL assembly on
+	`Symbol not previously defined (in expected scope): .o.AA.x`. Now E464, at the use.
+*/
+const int DEBUG = 0
+import "owner.impala"
+
+extern struct AA { int x }
+
+function readIt(AA pointer p) returns int r
+{
+	r = p->x;
+}

@@ -2064,6 +2064,12 @@
                     'struct', 'layouts', parsed.sourceCode, parsed.sourceOffset);
         }
         if (!parsed.extern) {
+            /* Carry across any field references already made through the DECLARATION - the definition is
+               about to emit the layout those references need to have seen. Without this the replacement
+               below drops them and the use-before-define goes unreported (see emitStructLayout). */
+            if (held.pendingRefs !== undefined) {
+                parsed.pendingRefs = held.pendingRefs;
+            }
             $$parser.structs[name] = parsed;                      /* a definition outranks the declaration it fulfils */
         }
         return !!parsed.extern;
@@ -2096,6 +2102,24 @@
         if (typeof output !== 'function') return;
         var s = $$parser.structs[name];
         if (!s || s.extern) return;                               /* extern: host provides all base offsets + .z */
+        /* `! DEFi` constants resolve strictly top-down - unlike code labels, they get no forward-reference
+           pass - so a `.o.` reference emitted ABOVE this block cannot see it. That is reachable in exactly
+           one shape: a body-carrying `extern struct` in a unit the import closure emits EARLIER than the
+           unit holding the real definition, which happens across a cycle, where no order satisfies both
+           directions. It compiled clean and died at GAZL assembly with `Symbol not previously defined (in
+           expected scope): .o.<name>.<field>`, naming a symbol the user never wrote. A genuinely
+           host-owned `extern struct` never reaches here (returned above), so its references stay legal. */
+        if (s.pendingRefs !== undefined && s.pendingRefs.length > 0) {
+            var _r = s.pendingRefs[0];
+            $$parser.fail('The layout of struct ' + name + ' is used before it is defined',
+                    _r.source, _r.offset, 'E464',
+                    'this unit declares `extern struct ' + name + '` with a body and needs its layout '
+                            + 'here - a value of that type, or one of its fields - but the real '
+                            + 'definition is emitted later in the import closure; use the opaque form '
+                            + '`extern struct ' + name + '` and reach it through a pointer, or break '
+                            + 'the import cycle');
+        }
+        s.layoutEmitted = true;
         var T = (typeof TAB !== 'undefined') ? TAB : '\t';
         $$parser.flushMetaCode('');                                   /* a field extent that folded to a `<X>` scratch was
                                                                          queued through emit(); drain it BEFORE the block so
@@ -2202,7 +2226,20 @@
        compile-time-known number of transient VM slots, which a host-owned size cannot provide. By-value
        params/returns are parked wholesale today (E426/E427), so the extern-specific E425 that used to
        state this no longer fires; design/gazl/GAZLSymbolicWindows.md is where the reasoning lives.) */
-    $$parser.structAllocSize = function (structName) {
+    /* Note a use of a struct whose layout block has not been emitted yet. Legal on its own - a host-owned
+       `extern struct` never emits one and the host defines the symbols - but if a REAL definition turns up
+       later in the import closure, `emitStructLayout` reports these as use-before-define (E464). Callers
+       without a source position simply do not record: every such site needs a local, global or field of
+       the type, and those ARE recorded, so the struct is caught anyway. */
+    $$parser.noteStructUse = function (structName, sourceCode, sourceOffset) {
+        var st = $$parser.structs[structName];
+        if (st === undefined || st.layoutEmitted === true || sourceCode === undefined) return;
+        if (st.pendingRefs === undefined) st.pendingRefs = [];
+        st.pendingRefs.push({ source: sourceCode, offset: sourceOffset });
+    };
+
+    $$parser.structAllocSize = function (structName, sourceCode, sourceOffset) {
+        $$parser.noteStructUse(structName, sourceCode, sourceOffset);
         return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
 
@@ -3079,6 +3116,7 @@
            instructions; the parts are folded (inline `! ADDi`, assemble-time) into one operand only at
            a terminal access. Only accessed paths cost anything, and never at run time. */
         var fieldSym = '.o.' + structName + '.' + fieldName;
+        $$parser.noteStructUse(structName, sourceCode, sourceOffset);
         var newParts = offParts.concat([fieldSym]);
 
         if (field.type === 'S') {                                 /* nested struct -> accumulate the part, same base, NO instruction */
@@ -4593,7 +4631,7 @@ inp:ArgsDecl ')'_
                                                                                      '$' + v.name,
                                                                                      'S',
                                                                                      false,
-                                                                                     $$parser.structAllocSize(v.struct),
+                                                                                     $$parser.structAllocSize(v.struct, $$s, v.at),
                                                                                      $$s, v.at,
                                                                                      undefined,
                                                                                      v.struct
@@ -4923,7 +4961,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                      $section, 'globals',
                                                                                      $v.name, 'S',
                                                                                      ($section === 'CNST'),
-                                                                                     $$parser.structAllocSize($v.struct),
+                                                                                     $$parser.structAllocSize($v.struct, $$s, $v.at),
                                                                                      $$s, $v.at,
                                                                                      $$parser.formatGlobalSignatureComment(
                                                                                          $section, $v.name, 'S', undefined, undefined,

@@ -134,4 +134,30 @@ if (otherRootError.indexOf('isOdd is defined later, at odd.impala:') < 0) {
 	fail('cycle error should point at the definition it cannot see yet: ' + otherRootError);
 }
 
+// --- body-carrying `extern struct` across a cycle -----------------------------
+// The one cycle shape that used to fail SILENTLY. Rows 1-3 of the cycle story (a call backwards, a type
+// backwards, the opaque `extern struct`) all fail at Impala compile time with a diagnostic naming the
+// unit and a remedy. This one compiled clean and died at GAZL assembly on `Symbol not previously
+// defined (in expected scope): .o.AA.x` - a symbol the user never wrote - because `! DEFi` constants
+// resolve strictly top-down and the layout block sat in the unit emitted LATER. Now E464.
+const structCycle = path.join(repoRoot, 'tests', 'impala', 'sources', 'importstructcycle');
+let cycErr = null;
+try {
+	compileProgram(path.join(structCycle, 'owner.impala'), { randomId: RANDOM_ID });
+} catch (err) {
+	cycErr = (err && err.message) || String(err);
+}
+if (cycErr === null || cycErr.indexOf('E464') < 0) {
+	fail('a body-carrying extern struct used before its real definition must be E464 - got: ' + cycErr);
+}
+// It must point at the USE, in the unit that made it, not at the definition that arrived too late.
+if (cycErr.indexOf('user.impala:') !== 0) {
+	fail('E464 must name the unit holding the use, not the root: ' + cycErr);
+}
+if (cycErr.indexOf('opaque form') < 0) {
+	fail('E464 should name the opaque `extern struct` remedy: ' + cycErr);
+}
+// ...and the OPAQUE form across the same cycle still builds, which is what the remedy tells them to do.
+compileProgram(path.join(structCycle, 'opaqueOwner.impala'), { randomId: RANDOM_ID });
+
 console.log('import build + dead-strip + cycle tests passed.');
