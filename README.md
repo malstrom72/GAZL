@@ -84,10 +84,13 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 ## Documentation
 
 - [Overview](docs/Overview.md) – general architecture and goals
-- [Impala Language Reference](docs/Impala.md) – the language and toolchain
-- [Instruction Set](docs/InstructionSet.md) – extracted opcode descriptions
-- [Usage Example](docs/UsageExample.md) – compile and run a simple program
-- [JSPEG Port](impala/JSPEG.md) – status and usage of the JavaScript PEG compiler
+- [Impala Language Reference](docs/impala/Impala.md) – the language and toolchain
+- [Instruction Set](docs/gazl/InstructionSet.md) – extracted opcode descriptions
+- [Usage Example](docs/impala/UsageExample.md) – compile and run a simple program
+
+End-user documentation lives in [`docs/`](docs). Design notes, audits and internals - for anyone working
+ON GAZL or Impala rather than with them - live in [`design/`](design/README.md), including the
+[JSPEG Port](design/jspeg/JSPEG.md) notes on the JavaScript PEG compiler.
 
 More technical notes are embedded in the Impala source files.
 

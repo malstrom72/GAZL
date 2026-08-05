@@ -252,7 +252,7 @@ truncates toward zero and `a%b` has the sign of `a` (`[expr.mul]`). GAZL already
 change. Bundle this with the item 1 div/mod fixes since they touch the same opcodes.
 
 **✅ Done.** Caveat removed from both `UnitTest.gazl` (truncation test kept; `INT_MIN/-1` and `INT_MIN%-1` cases added)
-and `docs/InstructionSet.md` (`DIVi`/`MODi` entries now state the C++11-guaranteed truncation and the defined
+and `docs/gazl/InstructionSet.md` (`DIVi`/`MODi` entries now state the C++11-guaranteed truncation and the defined
 `INT_MIN/-1 = INT_MIN` / `INT_MIN%-1 = 0`).
 
 ---

@@ -92,7 +92,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 // run-time and constant-folded paths can never diverge. These are the chosen normative results
 // (two's-complement wrap / count-mod-32 shifts / saturating FTOI -- the AArch64 & WebAssembly
 // choices), identical on every target. add/sub/mul and the shifts lower to a single native
-// instruction; idiv/imod/ftoi keep a real edge-case branch on purpose (see docs/PortabilityAudit.md).
+// instruction; idiv/imod/ftoi keep a real edge-case branch on purpose (see design/gazl/PortabilityAudit.md).
 inline int absolute(int i) { Int x = i >> (Int)(sizeof (Int) * 8 - 1); return (Int)(((UInt)i ^ (UInt)x) - (UInt)x); } // INT_MIN -> INT_MIN
 inline float absolute(float f) { return fabsf(f); }
 inline double absolute(double f) { return fabs(f); }

@@ -22,7 +22,7 @@ function isInstructionName(text) {
 
 var docs = {};
 var source = {};
-var docsLines = splitLines(read("docs/InstructionSet.md"));
+var docsLines = splitLines(read("docs/gazl/InstructionSet.md"));
 var sourceLines = splitLines(read("src/UnitTest.gazl"));
 var i;
 var line;
