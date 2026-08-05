@@ -217,6 +217,15 @@ const SAMPLES = [
 		files: { "other.impala": "extern struct Shared { int a; int b }\n" },
 		src: "import \"other.impala\"\nextern struct Shared { int a; int array b[] }\n"
 				+ "export function main() { }\n" },
+	/* The two directions a cycle fails in. Both depend on EMISSION ORDER: the closure is concatenated
+	   dependency-first, so the imported unit is compiled before the root that imports it. */
+	{ name: "a struct type used backwards across a cycle", expect: "E413",
+		files: { "user.impala": "function useIt() locals S s { s.x = 1; }\n" },
+		src: "import \"user.impala\"\nstruct S { int x }\nexport function main() { }\n" },
+	{ name: "a body-carrying extern struct needs a layout that arrives later", expect: "E464",
+		files: { "user.impala": "extern struct AA { int x }\n"
+				+ "function readIt(AA pointer p) returns int r { r = p->x; }\n" },
+		src: "import \"user.impala\"\nstruct AA { int x }\nexport function main() { }\n" },
 	{ name: "writing through a readonly global", expect: "E404", legacy: false,
 		src: "readonly int array a[2] = { 1, 2 }\nexport function main() { global a[0] = 5; }\n" },
 	{ name: "one name used twice at top level", expect: "E401", legacy: false,
