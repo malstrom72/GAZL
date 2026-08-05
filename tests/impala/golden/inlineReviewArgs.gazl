@@ -15,12 +15,10 @@ main:	FUNC	; signature func main() -> void @ 50:1
 	$cell:	LOCA *.z.main.cell
 ;-----------------------------------------------------------------------------
 		MOVi $w #10 	; w = 10
-		MOVi %2 $w 	; printInt(triple(w))
-		MULi %1 %2 #3	; r = a * 3
+		MULi %1 $w #3	; r = a * 3
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 54:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 54:32
-		MOVi %2 #20 	; printInt(triple(20))
-		MULi %1 %2 #3	; r = a * 3
+		MULi %1 #20 #3	; r = a * 3
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 55:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 55:33
 		POKE &g #30 	; global g = 30
@@ -53,8 +51,7 @@ main:	FUNC	; signature func main() -> void @ 50:1
 		MOVi %2 $w 	; printInt(add(w, poke(&w)))
 		ADRL %4 $w *0
 		POKE %4 #99 	; *p = 99
-		MOVi %3 #0 	; z = 0
-		ADDi %1 %2 %3	; r = a + b
+		ADDi %1 %2 #0	; r = a + b
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 67:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 67:39
 		RETU   	; }

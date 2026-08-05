@@ -5846,6 +5846,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.retSlots = _rs;
                                                        $$.words = 0;                            /* input words placed so far (struct args span >1) */
                                                        $$.base  = $$parser.borrowForCall();
+                                                       $$.mark  = $$parser.metacode.length;     /* first meta of THIS call's arguments */
                                                        for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */
                                                            $$parser.claimSlot($$.base + _os);
                                                        $$.types = [];

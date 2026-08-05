@@ -17,10 +17,8 @@ main:	FUNC	; signature func main() -> void @ 40:1
 		MOVi $acc #0 	; acc = 0
 		MOVi $i #0 	; for (i = 0 to 4) acc = acc + mix(i, 7)
 		GEQi #0 #4 @.e0
-	.l1:	MOVi %1 $i 	; acc = acc + mix(i, 7)
-		MOVi %2 #7 
-		MULi %3 %1 #3	; r = a * 3 + b
-		ADDi %0 %3 %2
+	.l1:	MULi %3 $i #3	; r = a * 3 + b
+		ADDi %0 %3 #7
 		ADDi $acc $acc %0	; }
 		FORi $i #4 @.l1
 	.e0:	MOVi %1 $acc 	; printInt(acc)
@@ -37,16 +35,13 @@ main:	FUNC	; signature func main() -> void @ 40:1
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 49:31
 		MOVi $t #5 	; t = 5
 		MULi %2 $t #2	; printInt(mix(t * 2, 1))
-		MOVi %3 #1 
 		MULi %4 %2 #3	; r = a * 3 + b
-		ADDi %1 %4 %3
+		ADDi %1 %4 #1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 52:25
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 52:36
-		MOVi %2 #2 	; printInt(bump(2))
-		MOVi %4 %2 	; r = mix(a, 1)
-		MULi %6 %4 #3	; r = a * 3 + b
-		ADDi %3 %6 #1
-		MOVi %1 %3 	; }
+		! MULi <A> #2 #3	; r = a * 3 + b
+		! ADDi <B> <A> #1
+		MOVi %1 <B> 	; }
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 53:30
 		RETU   	; }

@@ -47,12 +47,9 @@ main:	FUNC	; signature func main() -> void @ 57:1
 	$i_i7:	LOCi
 		ENDS
 ;-----------------------------------------------------------------------------
-		MOVi %2 #10 	; printInt(sum3(10, 20, 30))
-		MOVi %3 #20 
-		MOVi %4 #30 
-		MOVi $buf_i0:0 %2 	; buf[0] = a
-		MOVi $buf_i0:1 %3 	; buf[1] = b
-		MOVi $buf_i0:2 %4 	; buf[2] = c
+		MOVi $buf_i0:0 #10 	; buf[0] = a
+		MOVi $buf_i0:1 #20 	; buf[1] = b
+		MOVi $buf_i0:2 #30 	; buf[2] = c
 		MOVi %1 #0 	; r = 0
 		MOVi $i_i0 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i0
@@ -61,23 +58,18 @@ main:	FUNC	; signature func main() -> void @ 57:1
 		FORi $i_i0 #3 @.l1_i0	; } /* variable index -> GETL off the run base */
 	.e0_i0:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 60:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 60:39
-		MOVi %3 #1 	; printInt(sum3(sum3(1, 2, 3), 4, 5))
-		MOVi %4 #2 
-		MOVi %5 #3 
-		MOVi $buf_i1:0 %3 	; buf[0] = a
-		MOVi $buf_i1:1 %4 	; buf[1] = b
-		MOVi $buf_i1:2 %5 	; buf[2] = c
+		MOVi $buf_i1:0 #1 	; buf[0] = a
+		MOVi $buf_i1:1 #2 	; buf[1] = b
+		MOVi $buf_i1:2 #3 	; buf[2] = c
 		MOVi %2 #0 	; r = 0
 		MOVi $i_i1 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i1
 	.l1_i1:	GETL %6 $buf_i1 $i_i1	; r = r + buf[i]
 		ADDi %2 %2 %6
 		FORi $i_i1 #3 @.l1_i1	; } /* variable index -> GETL off the run base */
-	.e0_i1:	MOVi %3 #4 	; }
-		MOVi %4 #5 
-		MOVi $buf_i2:0 %2 	; buf[0] = a
-		MOVi $buf_i2:1 %3 	; buf[1] = b
-		MOVi $buf_i2:2 %4 	; buf[2] = c
+	.e0_i1:	MOVi $buf_i2:0 %2 	; buf[0] = a
+		MOVi $buf_i2:1 #4 	; buf[1] = b
+		MOVi $buf_i2:2 #5 	; buf[2] = c
 		MOVi %1 #0 	; r = 0
 		MOVi $i_i2 #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0_i2
@@ -87,12 +79,11 @@ main:	FUNC	; signature func main() -> void @ 57:1
 	.e0_i2:	CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 61:37
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 61:48
 		MOVi $q #1 	; q = 1
-		MOVi %2 $q 	; printInt(pickOf(q))
 		MOVi $t_i3:0 #5 	; t[0] = 5
 		MOVi $t_i3:1 #7 	; t[1] = 7
 		MOVi $t_i3:2 #9 	; t[2] = 9
 		MOVi $t_i3:3 #11 	; t[3] = 11
-		GETL %1 $t_i3 %2	; v = t[k]
+		GETL %1 $t_i3 $q	; v = t[k]
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 64:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 64:32
 		MOVi %2 #2 	; printInt(pickOf(2))
@@ -111,14 +102,10 @@ main:	FUNC	; signature func main() -> void @ 57:1
 		GETL %1 $t_i5 %2	; v = t[k]
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 66:21
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 66:32
-		MOVi %2 #1 	; printInt(dot(1, 2, 3, 4))
-		MOVi %3 #2 
-		MOVi %4 #3 
-		MOVi %5 #4 
-		MOVi $a_i6:.o.P.x %2 	; a.x = ax
-		MOVi $a_i6:.o.P.y %3 	; a.y = ay
-		MOVi $b_i6:.o.P.x %4 	; b.x = bx
-		MOVi $b_i6:.o.P.y %5 	; b.y = by
+		MOVi $a_i6:.o.P.x #1 	; a.x = ax
+		MOVi $a_i6:.o.P.y #2 	; a.y = ay
+		MOVi $b_i6:.o.P.x #3 	; b.x = bx
+		MOVi $b_i6:.o.P.y #4 	; b.y = by
 		MULi %6 $a_i6:.o.P.x $b_i6:.o.P.x	; r = a.x * b.x + a.y * b.y
 		MULi %7 $a_i6:.o.P.y $b_i6:.o.P.y
 		ADDi %1 %6 %7
