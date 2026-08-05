@@ -372,7 +372,9 @@ static const Operator OPERATORS[] = {
 	, { " DIVi_vcv", DIVI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " DIVi_vvc", DIVI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, CHECK_DIV_BY_0, 0				}
 	, { " DIVi_vvv", DIVI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
+#if GAZL_LOCAL_SCOPES
 	, { " ENDS____", ENDS____,	{ 0				, 0				, 0				}		, 0				, 0				}
+#endif
 	, { " EQUf_ccb", EQUF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
 	, { " EQUf_cvb", EQUF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " EQUf_vcb", EQUF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
@@ -506,7 +508,9 @@ static const Operator OPERATORS[] = {
 	, { " POKE_vvc", POKE_VVC,	{ VAR_PTR_R		, VAR_INT_R		, KONST			}		, 0				, 0				}
 	, { " POKE_vvv", POKE_VVV,	{ VAR_PTR_R		, VAR_INT_R		, ANY_VAR_R		}		, 0				, 0				}
 	, { " RETU____", RETU_C__,	{ 0				, 0				, 0				}		, 0				, 0				}
+#if GAZL_LOCAL_SCOPES
 	, { " SCOP____", SCOP____,	{ 0				, 0				, 0				}		, 0				, 0				}
+#endif
 	, { " SETL_vvc", SETL_VVC,	{ ANY_VAR_FREE_W, VAR_INT_R		, KONST			}		, 0				, 0				}
 	, { " SETL_vvv", SETL_VVV,	{ ANY_VAR_FREE_W, VAR_INT_R		, ANY_VAR_R		}		, 0				, 0				}
 	, { " SHLi_vcc", SHLI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT_P	}		, YIELDS_CONST	, CONST_INT		}

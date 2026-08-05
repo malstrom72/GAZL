@@ -72,7 +72,22 @@ typedef unsigned int Pointer;																							// Pointer must be unsigned 
 typedef float Float;
 typedef Int Status;																										// Run-time status code
 
-const int VERSION = 2;						// 2 adds SCOP / ENDS local scopes. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
+/*
+	SCOP / ENDS local scopes - the GAZL 2 facility Impala's `inline function` expansion is built on.
+	Gated so one source tree can produce either engine, because which of GAZL 2 and the JIT ships first
+	is not decided: define GAZL_LOCAL_SCOPES=0 for a GAZL 1.0-compatible engine, which rejects `SCOP`
+	with `Unknown mnemonic` exactly as a real 1.0 engine does.
+
+	The OPCODE ENUM is deliberately NOT gated. SCOP____ / ENDS____ sit mid-enum with ~100 opcodes after
+	them, so compiling them out would renumber every one of those and silently change the instruction
+	encoding. The gate is on ACCEPTANCE - the mnemonic table - which is where a 1.0 engine differs
+	anyway: a 1.0 engine never knew the words at all, rather than knowing them and refusing.
+*/
+#ifndef GAZL_LOCAL_SCOPES
+	#define GAZL_LOCAL_SCOPES 1
+#endif
+
+const int VERSION = GAZL_LOCAL_SCOPES ? 2 : 1;				// 2 adds SCOP / ENDS local scopes. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
 const Pointer IP_OFFSET = 0x56789ABC;																					// All instruction / function pointers in GAZL are offsetted by this amount (thus the address of the first instruction is not zero). This makes it easier to detect invalid function calls (such as performing a function call on a null-pointer).
