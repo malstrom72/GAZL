@@ -1196,6 +1196,39 @@ for (const [label, source, expected] of reservedWordCases) {
 }
 console.log("impala.jspeg compiler reserves return/break/continue with dedicated diagnostics");
 
+// A TYPE shares a namespace with the compiler's own type codes, because a descriptor is `head[:tail]`
+// and a struct/functype is spelled as a BARE head - so `descTypeElem('p')` cannot tell the untyped
+// pointer code from a struct named `p`, and asks `isStructAtom`, which says yes. Before E465 the damage
+// landed on UNRELATED declarations and never named the real cause: `struct p` made a `pointer` parameter
+// "passing a struct by value", `struct i` made its OWN `int` field "incomplete struct type i", and a
+// functype was worse - SILENT, with `functype i` rendering every `int` in the module as the functype.
+// Only i/f/p/F are descriptor heads (V/S/A/U/N were checked by diffing emitted signature rows against a
+// non-colliding control and are identical), so only those four are refused, and only for TYPES. The
+// legal cases below are the point of the test: this must not creep into a ban on short names.
+const typeCodeNameCases = [
+	["struct named i", "struct i { int a }", "error[E465]"],
+	["struct named f", "struct f { int a }", "error[E465]"],
+	["struct named p", "struct p { int a }", "error[E465]"],
+	["struct named F", "struct F { int a }", "error[E465]"],
+	["functype named i", "functype i(int n)", "error[E465]"],
+	["functype named p", "functype p(int n)", "error[E465]"],
+	["extern struct named p", "extern struct p { int a }", "error[E465]"],
+	// ...and everything that is NOT ambiguous stays legal.
+	["a FUNCTION named p", "function p() { }\nfunction main() { p(); }", null],
+	["a GLOBAL named p", "global int p\nfunction main() { global p = 1; }", null],
+	["a LOCAL named p", "function main() locals int p { p = 1; }", null],
+	["a const named f", "const int f = 2\nfunction main() locals int x { x = f; }", null],
+	["struct named V", "struct V { int a }\nfunction main() locals V v { v.a = 1; }", null],
+	["struct named S", "struct S { int a }\nfunction main() locals S s { s.a = 1; }", null],
+	["struct named A", "struct A { int a }\nfunction main() locals A q { q.a = 1; }", null],
+	["a longer name that STARTS with a code",
+		"struct Filter { int a }\nfunction main() locals Filter fl { fl.a = 1; }", null],
+];
+for (const [label, source, expected] of typeCodeNameCases) {
+	expectCompileOutcome("type-code names", label, source + "\n", expected);
+}
+console.log("impala.jspeg compiler refuses a type named after its own type codes, and only those");
+
 // A frame local is never zeroed - `FUNC` only advances the stack pointer - so a named return value that
 // is assigned nowhere hands back whatever the previous call left at that depth. The rule is deliberately
 // the weakest one that cannot be wrong: the slot must appear in NO operand of the body. Everything that
@@ -1312,8 +1345,8 @@ const symbolicExtentCases = [
 	["hex zero is zero", SYM_STRUCT + "global S s = { a: 1, z: 0x0 }\nfunction main() { }", null],
 	["negative zero is zero", SYM_STRUCT + "global S s = { a: 1, z: -0 }\nfunction main() { }", null],
 	["float zero with an exponent is zero",
-		"const int N = 3\nstruct F { int a; float array v[N]; float z }\n"
-			+ "global F f = { a: 1, z: 0.0e0 }\nfunction main() { }", null],
+		"const int N = 3\nstruct Filt { int a; float array v[N]; float z }\n"
+			+ "global Filt f = { a: 1, z: 0.0e0 }\nfunction main() { }", null],
 	["a const that happens to be zero is NOT assumed zero",
 		"const int Z = 0\n" + SYM_STRUCT + "global S s = { a: 1, z: Z }\nfunction main() { }",
 		"Cannot initialize"],
@@ -1562,7 +1595,7 @@ const nameClashCases = [
 	["extern struct then defined", "extern struct E { int a }\nstruct E { int a }", null],
 	["bodyless extern struct twice", "extern struct E\nextern struct E\nfunction main() { }", null],
 	["valueless const then defined", "const int K;\nconst int K = 3", null],
-	["one functype declared twice", "functype F(int x) returns int\nfunctype F(int x) returns int", null],
+	["one functype declared twice", "functype Ft(int x) returns int\nfunctype Ft(int x) returns int", null],
 	// Only TOP-LEVEL names share the space. A local is `$name` in GAZL and a field is `.o.S.f`, so neither
 	// can collide with anything here - rejecting those would be a new restriction nobody asked for.
 	["a local may shadow a global", "global int v\nfunction main() locals int v { v = 1; }", null],
@@ -2018,13 +2051,13 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 // differently - and the emitted operand is asserted, since decaying through a temp would compile just as
 // green while costing an instruction per argument.
 {
-	const decls = "extern native printInt\nstruct F { int array state[4]; int tag }\nstruct Outer { F inner }\n"
-		+ "global F gf\nfunction sum(int pointer p) returns int r { r = p[0]; }\n";
+	const decls = "extern native printInt\nstruct Filt { int array state[4]; int tag }\nstruct Outer { Filt inner }\n"
+		+ "global Filt gf\nfunction sum(int pointer p) returns int r { r = p[0]; }\n";
 	for (const [label, body, expected] of [
-		["a LOCAL struct's array field", "locals F f { printInt(sum(f.state)); }", /ADRL %\d \$f:\.o\.F\.state \*0/],
-		["a GLOBAL struct's", "{ printInt(sum(global gf.state)); }", /ADDp %\d &gf #\.o\.F\.state/],
+		["a LOCAL struct's array field", "locals Filt f { printInt(sum(f.state)); }", /ADRL %\d \$f:\.o\.Filt\.state \*0/],
+		["a GLOBAL struct's", "{ printInt(sum(global gf.state)); }", /ADDp %\d &gf #\.o\.Filt\.state/],
 		["a NESTED field's", "locals Outer o { printInt(sum(o.inner.state)); }", /ADRL %\d \$o:<[A-Za-z]> \*0/],
-		["one reached through a pointer", "locals F pointer fp { printInt(sum(fp->state)); }", /ADDp %\d \$fp #\.o\.F\.state/],
+		["one reached through a pointer", "locals Filt pointer fp { printInt(sum(fp->state)); }", /ADDp %\d \$fp #\.o\.Filt\.state/],
 	]) {
 		const out = compileWithJsImpala(decls + "export function main() " + body + "\n", { randomId: 42 });
 		assert(!/@place/.test(out), "struct array field argument: a raw place reached the output\n" + out);
@@ -2489,10 +2522,10 @@ const typedPointerCases = [
 	{
 		label: "array fields inside a struct index correctly",
 		source: [
-			"struct F { float array state[4]; int taps }",
-			"global F gf",
-			"function p(F pointer f, int i, float x) { f->state[i] = x; }",
-			"function main() locals F lf, int i, float y {",
+			"struct Filt { float array state[4]; int taps }",
+			"global Filt gf",
+			"function p(Filt pointer f, int i, float x) { f->state[i] = x; }",
+			"function main() locals Filt lf, int i, float y {",
 			"\tlf.state[0] = 1.0; y = lf.state[2];",
 			"\tglobal gf.state[1] = 2.0;",
 			"}",
@@ -2533,7 +2566,7 @@ const typedPointerCases = [
 	},
 	{
 		label: "...including a scalar array field inside a struct",
-		source: ["struct F { float array state[4] }", "function main() locals F f, float x { x = f.state[1]; }"].join("\n"),
+		source: ["struct Filt { float array state[4] }", "function main() locals Filt f, float x { x = f.state[1]; }"].join("\n"),
 		expectError: null,
 	},
 	{
