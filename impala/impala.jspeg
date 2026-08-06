@@ -2018,29 +2018,12 @@
        sees one unit twice; the per-kind agreement checks (E401 / E410 / E437 / E438 / E440) own that
        case, so only a DIFFERENT kind is a clash here. */
     var TOP_KINDS = { globals: 'global', functions: 'function', defines: 'const' };
-    var TYPE_CODE_NAMES = { i: true, f: true, p: true, F: true };   /* see claimTopName */
     $$parser.claimTopName = function (name, kind, sourceCode, sourceOffset) {
         if (kind === undefined || name === undefined || name === null
                 || ('' + name).charAt(0) === '.') {
             return;                                           /* compiler-minted: no Impala identifier starts with `.` */
         }
         $$parser.checkReservedName(name, kind, sourceCode, sourceOffset);
-        /* A TYPE name additionally shares a namespace with the compiler's own type codes, because a
-           descriptor is `head[:tail]` and a struct or functype is spelled as a BARE head - so
-           `descTypeElem('p')` cannot tell the untyped-pointer code from a struct named `p`, and asks
-           `isStructAtom`/`isFuncTypeAtom`, which say yes. The damage is not a rendering nit: `struct p`
-           made an unrelated `pointer` parameter E426 "passing a struct by value", `struct i` made its
-           OWN `int` field E412 "incomplete struct type i", and a functype was worse - silent, with
-           `functype i` rendering every `int` in the module as the functype. Only these four collide
-           (`V`/`S`/`A`/`U`/`N` are not descriptor heads a user type can be confused with - verified by
-           diffing emitted signature rows against a non-colliding control), so only these four are
-           refused, and only for types: a FUNCTION or global named `p` is unambiguous and stays legal. */
-        if ((kind === 'struct' || kind === 'functype') && TYPE_CODE_NAMES[name] === true) {
-            $$parser.fail('A ' + kind + ' cannot be named ' + name,
-                    sourceCode, sourceOffset, 'E465',
-                    '`i`, `f`, `p` and `F` are the compiler\'s own type codes, and a type is spelled as '
-                            + 'a bare code in a descriptor - pick a longer name');
-        }
         var prev = $$parser.topNames[name];
         if (prev !== undefined && prev !== kind) {
             $$parser.fail('Name already used by a ' + prev + ': ' + name,
