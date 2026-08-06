@@ -28,13 +28,13 @@ extracting it to `gazl/Embedding.md` is planned.
 
 | Doc | Kind | What it is |
 |---|---|---|
-| [Impala](impala/Impala.md) | REFERENCE | The Impala language and toolchain |
-| [Impala2](impala/Impala2.md) | SPEC (implemented) | The Impala 2.0 design - typed pointers/arrays, structs, typed function pointers, import. Steps 1/2/3/5 implemented; Step 4 parked. 1600 lines, the deepest reference on **why** 2.0 is shaped as it is. For **what** it gained, read [WhatsNewInImpala2](impala/WhatsNewInImpala2.md) first - this one opens with three paragraphs on what is parked |
-| [MultidimensionalArrays](impala/MultidimensionalArrays.md) | SPEC (implemented) | Array SHAPES - `int array cells[H, W]`, `a[y, x]`, the per-axis `.d.` constants, and per-axis bounds checking in all three tiers. Slices 1-2 implemented; slice 3 (shape identity) is 3.0 |
-| [MemorySafetyModel](impala/MemorySafetyModel.md) | REFERENCE | Frames, what is bounds-checked and when, what `*size` is for |
+| [Impala](impala/Impala.md) | **REFERENCE** | **The language.** One page, and the only one you need to write Impala: lexis, types, `struct` and `functype`, declarations, statements, expressions, `import`/`export`, and the signature metadata the compiler emits |
+| [Impala2](impala/Impala2.md) | SPEC | **Why** 2.0 is shaped as it is - the design record behind the reference, including what was considered and rejected. Not needed to use the language |
+| [MultidimensionalArrays](impala/MultidimensionalArrays.md) | SPEC (implemented) | Array SHAPES - `int array cells[H, W]`, `a[y, x]`, the per-axis `.d.` constants, and per-axis bounds checking in all three tiers |
+| [MemorySafetyModel](impala/MemorySafetyModel.md) | REFERENCE | Frames, what is bounds-checked and when, what `*size` is for, and what a variable holds before you assign it |
 
-`Impala2.md` and `MultidimensionalArrays.md` are still separate pages; folding them into `Impala.md` so
-there is one language reference is outstanding work.
+`Impala.md` no longer hands `struct`, `functype`, `sizeof` or `import` off to `Impala2.md` - the reference
+documents the language it describes. `MultidimensionalArrays.md` is still a separate page.
 
 ## The rule that keeps this from rotting
 

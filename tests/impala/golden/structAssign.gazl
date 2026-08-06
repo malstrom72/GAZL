@@ -38,8 +38,8 @@ main:	FUNC	; signature func main() -> void @ 19:1
 		! ADDi <A> #.o.Voice.lo #.o.Biquad.z1	; a.lo.z1 = 2.5
 		MOVf $a:<A> #2.5 
 		MOVf $a:.o.Voice.gain #9.0 	; a.gain = 9.0
-		ADRL %0 $b *.z.Voice	; b = a
-		ADRL %1 $a *.z.Voice
+		ADRL %0 $b *0	; b = a
+		ADRL %1 $a *0
 		COPY %0 %1 *.z.Voice
 		MOVi %1 $b:.o.Voice.note 	; printInt(b.note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 28:18
@@ -52,14 +52,14 @@ main:	FUNC	; signature func main() -> void @ 19:1
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:20
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:31
 		MOVp $p &store:0 	; p = (Voice pointer) &global store[0]
-		ADRL %0 $a *.z.Voice	; *p = a
+		ADRL %0 $a *0	; *p = a
 		COPY $p %0 *.z.Voice
 		! ADDi <A> #.o.Voice.lo #.o.Biquad.z1	; printFloat(p->lo.z1)
 		PEEK %1 $p #<A>
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 34:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:33
-		ADRL %0 $bq *.z.Biquad	; bq = a.lo
-		ADRL %1 $a:.o.Voice.lo *.z.Biquad
+		ADRL %0 $bq *0	; bq = a.lo
+		ADRL %1 $a:.o.Voice.lo *0
 		COPY %0 %1 *.z.Biquad
 		MOVf %1 $bq:.o.Biquad.b0 	; printFloat(bq.b0)
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 37:19

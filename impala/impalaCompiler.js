@@ -3424,7 +3424,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var off = foldOffset(place.offParts);
         var a;
         if (place.baseKind === 'local') {                         /* size hint = the pointed-at sub-object, not the enclosing frame */
-            var sz = (place.struct && isStructAtom(place.struct)) ? structAllocSize(place.struct) : '*0';
+            var sz = '*0';                                        /* ALWAYS `*0` - see the note on ADRL spans above. */
             a = borrow('%');
             emit('=&', 'p', a, place.base + (off ? ':' + off : ''), sz);
             if (place.dynIndex !== undefined) {                   /* fold the frame place's runtime index in (GETL/SETL fallback) */
@@ -3441,7 +3441,27 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return a;
     };
 
-    /* by-value struct argument: reserve `words` window slots at %winSlot and COPY the
+    /* ADRL SPANS: `*0` unless the compiler owns every access through the pointer.
+       ------------------------------------------------------------------------------------------
+       `ADRL base *N` is defined by the JIT's aliasing rule (design/jit/JitAliasingRegAlloc.md on the
+       jit-compiler branch) as "this pointer accesses exactly [base, base+N)" - a REACH BOUND, trusted
+       by the optimizer. `*0` means "assume nothing, anything here can alias", which is what every
+       program emits today and what the JIT will keep treating conservatively.
+
+       Impala can only honour a reach bound where the pointer cannot be moved. It usually can be: a
+       struct pointer is moved with `&p[k]` (plain `p + 1` is E307), which lowers to `ADDp`, and
+       pointer indexing is unchecked BY DESIGN. So `p = &grid[0]` followed by the documented
+       `while (p < end) { p = &p[1]; }` walk provably leaves any object-sized span - and this used to
+       emit `*.z.Cell`, a bound the program breaks two lines later. Harmless while nothing reads the
+       operand; a JIT-only miscompile the moment one does, in an artifact that may already have
+       shipped, since a `.gazl` is text that outlives the compiler that wrote it.
+
+       So user-visible address-of (`&s`, `&arr[i]`, `&x`) emits `*0`, always. The two sites below are
+       the exception and the reason the rule is phrased around OWNERSHIP rather than around types: the
+       compiler emits the ADRL, emits the single COPY that is its only use, and releases the temp -
+       nothing else can reach it, so the bound is true by construction.
+
+       by-value struct argument: reserve `words` window slots at %winSlot and COPY the
        struct value in (experiment-verified: ADRL the window region, ADRL the source, COPY). */
     copyStructArg = function (argMeta, winSlot, words) {
         argMeta = metaSlot(argMeta);
@@ -4175,7 +4195,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 /* a whole local's address is a single ADRL with no offset scratch - leave it DEFERRED as
                    '=&' so an assignment emits ADRL straight into its target ($p) instead of a temp + MOVp,
                    exactly like &scalar / &array[i] defer in reference() */
-                var sz = isStructAtom(structName) ? structAllocSize(structName) : '*0';
+                var sz = '*0';                                /* ALWAYS `*0` - see the note on ADRL spans above. */
                 makeMeta(expr, '=&', 'p', undefined, expr.base, sz);
             } else {                                          /* offset fold or global/pointer base: materialize now */
                 makeMeta(expr, ':=', 'p', undefined, placeAddress(expr), undefined);

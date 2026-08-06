@@ -140,13 +140,100 @@ External functions need no prototypes, and multiple Impala sources can still be 
 simply by concatenating their assembled `.gazl` output; casts are only needed where code
 genuinely crosses between the typed and untyped worlds (see [Casting](#casting)).
 
-### `struct` and `functype`
+### `struct`
 
-`struct` types (with `.` on a value and `->` through a pointer), named function-pointer
-types declared with `functype`, and `sizeof` are shipped and working. They are owned by
-[`docs/impala/Impala2.md`](Impala2.md) rather than repeated here — see
-[Step 2: Structs](Impala2.md#step-2-structs-implemented) and
-[Step 3: Typed function pointers](Impala2.md#step-3-typed-function-pointers-implemented).
+A `struct` groups named fields into one value. Fields nest by value, arrays of structs and
+array fields both work, and whole-struct assignment copies:
+
+```impala
+struct Point { int x; int y }
+struct Body { Point pos; float mass; int array tags[4] }
+
+global Body b
+
+function move(Body pointer bp, int dx)
+{
+	bp->pos.x = bp->pos.x + dx;
+}
+```
+
+Use `.` on a value and `->` through a pointer. Getting it the wrong way round is `E416`, in
+both directions — the compiler knows which you have.
+
+**Dots are free.** Every field offset folds into the addressing at GAZL assembly time, so
+`bp->pos.x` is a single instruction, not a chain of adds. Offsets and sizes are emitted as
+*symbolic* constants (`.o.Body.pos`, `.z.Body`), never baked numbers, which is what lets a
+host own a layout (see `extern struct` below).
+
+Initializers name their fields. A positional list silently changes meaning the moment a
+field is inserted or reordered, so it is `E455`:
+
+```impala
+global Point origin = { x: 1, y: 2 }
+```
+
+`sizeof(T)` takes a bare type name. `sizeof(int pointer)` and `sizeof(someExpression)` are
+both `E001`.
+
+A `const` is a single assemble-time word, so it cannot name a struct *value* (`E447`) any
+more than it can name an array (`E001`). It can name a struct **pointer**, because a pointer
+is one word.
+
+Passing or returning a struct **by value** is `E426` / `E427` — parked for Impala 3.0. Pass a
+pointer. That is refused wherever it can appear, including at a call to a callee with no
+prototype, where nothing else would catch it.
+
+#### One subscript, which strides by the element
+
+`a[i]` strides by whatever `a`'s element is — one word for a scalar, `sizeof` the struct for
+a struct — so the same spelling works everywhere:
+
+```impala
+struct Cell { int v; int w }
+global Cell array grid[4]
+global int array flat[4]
+
+function read(int i) returns int r
+{
+	r = global grid[i].v + global flat[i];
+}
+```
+
+The stride folds at GAZL assembly time whenever the index is constant, so `grid[2]` costs
+exactly what `flat[2]` costs. A runtime index into a struct array pays one `MULi`.
+
+Arithmetic on a struct pointer is `E307` — move one with `&p[i]` instead. Comparison is
+untouched, so the `while (p < end)` walk is the idiom.
+
+#### `extern struct`: the host owns the layout
+
+```impala
+extern struct HostFrame { int width; int height }
+```
+
+Impala emits `#.z.HostFrame` and `#.o.HostFrame.width` and the host supplies the values at
+load, so the same `.gazl` runs against any layout with no recompile. An array field in an
+`extern struct` must not state a size (`E430`) — the host decides it.
+
+The body is a *claim* about someone else's layout, so it is checked against a real definition
+if the build has one (`E438`), and using it before that definition is emitted is `E464`.
+
+### `functype`
+
+A `functype` names a function-pointer signature, so assignment can be checked:
+
+```impala
+functype Step(int frame)
+
+function tick(int frame) { }
+
+global Step cb = tick
+```
+
+Assigning a function whose signature does not match is `E441`, at a declaration or an
+assignment. A bare 1.0 `funcptr` is still unchecked — declaring the type is what buys the
+check. `nullfunc` suits any of them, and you assign the bare name (`cb = tick`), never
+`&tick`.
 
 ## Declarations
 
@@ -243,9 +330,42 @@ extern function thisFunctionInAnotherSource
 extern native abort
 ```
 
-`import` and `export` — the source-level way to pull another unit in rather than declare
-its symbols one at a time — are shipped and documented in
-[`docs/impala/Impala2.md`](Impala2.md#step-5-import-implemented-except-cycles).
+### `import` and `export`
+
+`import` pulls in another unit by source, instead of declaring its symbols one at a time:
+
+```impala
+import "lib.impala"
+```
+
+The compiler walks the import closure, compiles every unit once, and emits the whole linked
+program. There is no header file and no second artifact to drift out of step. A file already
+in the closure is imported once however many units name it, and diamonds dedupe the same way.
+
+`export` marks what the host can see, and `--dead-strip` drops every function and data block
+unreachable from an `export`:
+
+```
+node impala/impala.node.js compile --dead-strip main.impala main.gazl
+```
+
+**Careful:** with no `export` anywhere it has no root and empties the module — you get
+`Code size: 0` and a loader that cannot find `main`.
+
+#### Cycles resolve in one direction
+
+Import cycles are legal to write. The builder concatenates the closure dependency-first and
+compiles it in one pass, so a unit can only reference names that appear *earlier* in that
+order — and in a cycle no order satisfies both directions. One of them fails:
+
+- a function called backwards across the cycle is `E403`
+- a struct type used backwards across the cycle is `E413`
+
+The diagnostic names the unit the text came from and points at the definition it cannot see
+yet. The answer is a hand-written forward `extern` in whichever unit is emitted first — the
+one place this feature does not remove boilerplate. For a *struct type* use the **opaque**
+form `extern struct Name` and reach it through a pointer; a body-carrying `extern struct`
+needs its layout, which is not there yet, and that is `E464`.
 
 ### Arrays
 
@@ -331,7 +451,7 @@ There are no compound assignment operators (`+=`, `&=`, …) and no `++`/`--`.
 
 The assignable forms (lvalues) are a variable, a pointer dereference `*p`, a subscript
 `a[i]`, and a struct field reached either directly (`s.a`) or through a pointer
-(`p->a`) — see [`docs/impala/Impala2.md`](Impala2.md#step-2-structs-implemented).
+(`p->a`) — see [`struct`](#struct).
 
 ### Conditionals
 

@@ -31,7 +31,7 @@ main:	FUNC	; signature func main() -> void @ 18:1
 ;-----------------------------------------------------------------------------
 		MOVi $v:.o.Voice.note #5 	; v.note = 5
 		ADRL $p $raw:0 *0	; p = (Voice pointer) &raw[0]
-		ADRL %0 $v *.z.Voice	; *p = v
+		ADRL %0 $v *0	; *p = v
 		COPY $p %0 *.z.Voice
 		PEEK %1 $p #.o.Voice.note	; printInt(p->note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 24:19

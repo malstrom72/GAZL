@@ -51,7 +51,7 @@ main:	FUNC	; signature func main() -> void @ 25:1
 		PEEK %1 &gf:.o.Filter.state 	; printFloat(global gf.state[0])
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 34:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:43
-		ADRL %1 $lf *.z.Filter	; process(&lf, 1, 9.0)
+		ADRL %1 $lf *0	; process(&lf, 1, 9.0)
 		MOVi %2 #1 
 		MOVf %3 #9.0 
 		CALL &process %0 *4	; expects process(Filter-ptr, int, float) -> void @ 36:22

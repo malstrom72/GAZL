@@ -43,12 +43,12 @@ main:	FUNC	; signature func main() -> void @ 25:1
 ;-----------------------------------------------------------------------------
 		MOVi $src:.o.V.a #5 	; src.a = 5
 		MOVf $src:.o.V.b #1.5 	; src.b = 1.5
-		ADRL %1 $src *.z.V	; dst = *bump(&src)
+		ADRL %1 $src *0	; dst = *bump(&src)
 		CALL &bump %0 *2	; expects bump(V-ptr) -> V-ptr @ 29:19
-		ADRL %1 $dst *.z.V
+		ADRL %1 $dst *0
 		COPY %1 %0 *.z.V
 		ADRL $p $raw:0 *0	; p = (V pointer)&raw[0]
-		ADRL %1 $dst *.z.V	; *p = dst
+		ADRL %1 $dst *0	; *p = dst
 		COPY $p %1 *.z.V
 		PEEK %1 $p #.o.V.a	; p->a = p->a + 100
 		ADDi %1 %1 #100

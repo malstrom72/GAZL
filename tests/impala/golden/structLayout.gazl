@@ -59,7 +59,7 @@ main:	FUNC	; signature func main() -> void @ 32:1
 		MOVf $v:<A> #0.5 
 		MOVf $v:.o.Voice.gain #0.25 	; v.gain = 0.25
 		ADRL $p $pool:0 *0	; p = (Voice pointer) &pool[0]
-		ADRL %0 $v *.z.Voice	; *p = v
+		ADRL %0 $v *0	; *p = v
 		COPY $p %0 *.z.Voice
 		MOVp %2 $p 	; printFloat(tick(p, 1.0))
 		MOVf %3 #1.0 
