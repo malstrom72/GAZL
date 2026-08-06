@@ -40,7 +40,7 @@ main:	FUNC	; signature func main() -> void @ 27:1
 	$v:	LOCA *.z.Filter
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
-		ADRL %1 $v *.z.Filter	; configure(&v, 3, 0.75)
+		ADRL %1 $v *0	; configure(&v, 3, 0.75)
 		MOVi %2 #3 
 		MOVf %3 #0.75 
 		CALL &configure %0 *4	; expects configure(Filter-ptr, int, float) -> void @ 30:24
@@ -50,7 +50,7 @@ main:	FUNC	; signature func main() -> void @ 27:1
 		MOVf %1 $v:.o.Filter.cutoff 	; printFloat(v.cutoff)
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 32:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:33
-		ADRL $p $v *.z.Filter	; p = &v
+		ADRL $p $v *0	; p = &v
 		PEEK %1 $p #.o.Filter.mode	; printInt(p->mode)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:30

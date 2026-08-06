@@ -22,7 +22,7 @@ main:	FUNC	; signature func main() -> void @ 13:1
 ;-----------------------------------------------------------------------------
 		MOVi $v:.o.P.x #1 	; v.x = 1
 		MOVf $v:.o.P.y #2.5 	; v.y = 2.5
-		ADRL $p $v *.z.P	; p = &v
+		ADRL $p $v *0	; p = &v
 		PEEK %0 $p #.o.P.x	; p->x = p->x + 9
 		ADDi %0 %0 #9
 		POKE $p #.o.P.x %0

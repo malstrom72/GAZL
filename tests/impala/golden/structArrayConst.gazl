@@ -76,7 +76,7 @@ main:	FUNC	; signature func main() -> void @ 21:1
 		MOVf %1 $v:<B> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:40
-		ADRL %2 $v *.z.Voice	; printFloat(sumB0(&v))
+		ADRL %2 $v *0	; printFloat(sumB0(&v))
 		CALL &sumB0 %1 *2	; expects sumB0(Voice-ptr) -> float @ 31:22
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 31:23
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 31:34
