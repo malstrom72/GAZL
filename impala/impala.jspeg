@@ -227,25 +227,15 @@
         }
         var head = $$parser.descHead(desc);
         var tail = $$parser.descTail(desc);
-        if (head === 'S' && tail !== undefined) {                 /* struct-value marker (`S:name`) - the name is the tail.
-                                                                     The marker ALWAYS carries a tail, so a bare `S` here is a
-                                                                     struct NAMED "S", not a marker - fall through to resolve it
-                                                                     as a name, else it (and `S pointer`) render "unknown". */
-            return signatureCategoryForDesc(tail);
-        }
-        if (head === 'F') {                                       /* funcptr: the named type, or bare "funcptr" */
-            return (tail !== undefined ? tail : 'funcptr');
-        }
-        if (tail === undefined) {
-            return (($$parser.isStructAtom(head) || $$parser.isFuncTypeAtom(head))
-                    ? head : signatureParamCategory(head));
-        }
-        return signatureCategoryForDesc(tail) + '-ptr';           /* head is a pointer level */
+        if (head === 'S') return tail;                            /* struct / funcptr: the tail IS the name */
+        if (head === 'F') return (tail !== undefined ? tail : 'funcptr');
+        if (head === 'p' && tail !== undefined) return signatureCategoryForDesc(tail) + '-ptr';
+        return signatureParamCategory(head);
     }
 
     /* full descriptor of a declared symbol: type char + optional element chain */
     function fullDescFor(type, elem) {
-        return (elem !== undefined ? type + ':' + elem : type);
+        return (elem !== undefined ? type + elem : type);
     }
 
     function signatureReturnCategory(type, known) {
@@ -1782,41 +1772,63 @@
 
     /* --------------------------------------------------------- *
      *  Element-type descriptors (Impala 2 typed pointers/arrays) *
-     *  A descriptor is a ':'-separated chain of atoms: 'i', 'f', *
-     *  'p:i', 'p:p:i'. A terminal atom may be a struct NAME      *
-     *  ('Filter', 'p:Filter') for typed struct pointers/arrays.  *
+     *  A descriptor is a chain of one-letter KIND CODES read     *
+     *  left to right, with no separator:                         *
+     *      i f          a scalar, ends the chain                 *
+     *      p<rest>      pointer to <rest>:  pi, ppi, pSFilter    *
+     *      S<name>      struct, <name> ends the chain: SFilter   *
+     *      F<name>      funcptr type, ends the chain:  FTickFn   *
+     *  A tail after `p` is therefore always another DESCRIPTOR,  *
+     *  and a tail after `S`/`F` is always a NAME. That is the    *
+     *  whole rule, and it is what keeps a struct called `p` or a *
+     *  functype called `i` from reading as a built-in code -     *
+     *  a bare head is ALWAYS built-in.                           *
      * --------------------------------------------------------- */
 
-    $$parser.descHead = function (desc) {                         /// 'p:i' -> 'p'; 'Filter' -> 'Filter'
-        if (desc === undefined) return undefined;
-        var colon = desc.indexOf(':');
-        return (colon === -1 ? desc : desc.substr(0, colon));
+    $$parser.descHead = function (desc) {                         /// 'pi' -> 'p'; 'SFilter' -> 'S'
+        return (desc === undefined ? undefined : desc.charAt(0));
     };
 
-    $$parser.descTail = function (desc) {                         /// 'p:i' -> 'i'; 'i' -> undefined
-        if (desc === undefined) return undefined;
-        var colon = desc.indexOf(':');
-        return (colon === -1 ? undefined : desc.substr(colon + 1));
+    $$parser.descTail = function (desc) {                         /// 'pi' -> 'i'; 'i' -> undefined
+        return (desc === undefined || desc.length < 2 ? undefined : desc.substr(1));
     };
 
-    /* Split an element descriptor into the (type, elem) pair the rest of the compiler carries. The one
-       wrinkle is the reason this is a function and not two calls: a TAILLESS functype atom is not a type
-       named `TickFn`, it is a FUNCPTR whose element is that name - so head and elem are the same string.
-       Four sites decoded this by hand before, two of them with these variable names. */
-    $$parser.descTypeElem = function (desc) {                     /// 'p:i' -> {p,i}; 'TickFn' -> {F,TickFn}
-        var head = $$parser.descHead(desc), tail = $$parser.descTail(desc);
-        return (tail === undefined && $$parser.isFuncTypeAtom(head)
-                ? { type: 'F', elem: head } : { type: head, elem: tail });
+    /* Split a descriptor into the (type, elem) pair the rest of the compiler carries. Whether `elem` is
+       a descriptor or a name follows from `type`, per the rule above. */
+    $$parser.descTypeElem = function (desc) {                     /// 'pi' -> {p,i}; 'FTickFn' -> {F,TickFn}
+        return { type: $$parser.descHead(desc), elem: $$parser.descTail(desc) };
     };
 
-    $$parser.isStructAtom = function (atom) {                     /// is `atom` a defined struct name?
-        return atom !== undefined && $$parser.structs
-                && Object.prototype.hasOwnProperty.call($$parser.structs, atom);
+    $$parser.structDesc = function (name) { return 'S' + name; };
+    $$parser.funcTypeDesc = function (name) { return 'F' + name; };
+    $$parser.pointerDesc = function (desc) { return 'p' + (desc === undefined ? '' : desc); };
+
+    /* NAME predicates take a raw identifier and ask the tables; ATOM predicates take a DESCRIPTOR and
+       read its kind code. Both are needed: the parser has a raw name in hand at `TypeBase`, everything
+       downstream has a descriptor. Never cross them - `isStructAtom('Filter')` is false by design. */
+    $$parser.isStructName = function (name) {                     /// is the identifier `name` a defined struct?
+        return name !== undefined && $$parser.structs
+                && Object.prototype.hasOwnProperty.call($$parser.structs, name);
     };
 
-    $$parser.isFuncTypeAtom = function (atom) {                   /// is `atom` a named funcptr type (Step 3)?
-        return atom !== undefined && $$parser.functypes
-                && Object.prototype.hasOwnProperty.call($$parser.functypes, atom);
+    $$parser.isFuncTypeName = function (name) {                   /// is the identifier `name` a named funcptr type?
+        return name !== undefined && $$parser.functypes
+                && Object.prototype.hasOwnProperty.call($$parser.functypes, name);
+    };
+
+    $$parser.isStructAtom = function (desc) {                     /// does descriptor `desc` denote a struct?
+        return desc !== undefined && desc.charAt(0) === 'S' && desc.length > 1;
+    };
+
+    $$parser.isFuncTypeAtom = function (desc) {                   /// does descriptor `desc` denote a funcptr type?
+        return desc !== undefined && desc.charAt(0) === 'F' && desc.length > 1;
+    };
+
+    /* The NAME inside an `S`/`F` descriptor. Takes a descriptor strictly - it is NOT identity on a bare
+       name, because a struct genuinely called `Fn` would strip to `n`. */
+    $$parser.descName = function (desc) {
+        assert($$parser.isStructAtom(desc) || $$parser.isFuncTypeAtom(desc), 'descName needs an S/F descriptor');
+        return desc.substr(1);
     };
 
     /* --------------------------------------------------------- *
@@ -1832,7 +1844,7 @@
        functype, so this is the only place the disagreement can be caught at all. */
     $$parser.beginFuncType = function (name, sourceCode, sourceOffset) {
         $$parser.claimTopName(name, 'functype', sourceCode, sourceOffset);
-        var shadowed = ($$parser.isFuncTypeAtom(name) ? $$parser.functypes[name] : undefined);
+        var shadowed = ($$parser.isFuncTypeName(name) ? $$parser.functypes[name] : undefined);
         $$parser.functypes[name] = { shadowed: shadowed, params: [], returnList: [], returnCount: 0,
                 returns: 'V', returnElem: undefined, returnStruct: undefined, returnWords: 0,
                 complete: false, sourceCode: sourceCode, sourceOffset: sourceOffset,
@@ -1959,14 +1971,10 @@
         if (desc === undefined) return 'untyped';
         var head = $$parser.descHead(desc);
         var tail = $$parser.descTail(desc);
-        if (head === 'F') {                                       /* funcptr: named type or bare "funcptr" */
-            return (tail !== undefined ? tail : 'funcptr');
-        }
-        if (tail === undefined) {
-            return (($$parser.isStructAtom(head) || $$parser.isFuncTypeAtom(head))
-                    ? head : $$parser.VERBOSE_TYPES[head]);
-        }
-        return $$parser.elemVerbose(tail) + ' pointer';           /* head is a 'p' level */
+        if (head === 'S') return tail;                            /* struct / funcptr: the tail IS the name */
+        if (head === 'F') return (tail !== undefined ? tail : 'funcptr');
+        if (head === 'p' && tail !== undefined) return $$parser.elemVerbose(tail) + ' pointer';
+        return $$parser.VERBOSE_TYPES[head];
     };
 
     $$parser.setElem = function (rec, elem) {                     /// stamp element type on a meta record
@@ -1999,7 +2007,7 @@
         if (field.type === 'A') {
             var count = $$parser.constInt('#' + field.size);
             var per = ($$parser.isStructAtom(field.elem)
-                    ? $$parser.structWords(field.elem) : 1);
+                    ? $$parser.structWords($$parser.descName(field.elem)) : 1);
             return (count === undefined || per === undefined) ? undefined : count * per;
         }
         return 1;                                                 /* scalar i/f/p/F */
@@ -2141,7 +2149,7 @@
                 var x = $$parser.extentSymbol(f.name, name);
                 var words = f.size;
                 if ($$parser.isStructAtom(f.elem)) {              /* count * element size, folded now */
-                    output(T + '! MULi <t> #' + f.size + ' #.z.' + f.elem);
+                    output(T + '! MULi <t> #' + f.size + ' #.z.' + $$parser.descName(f.elem));
                     words = '<t>';
                 }
                 output(x + ':' + T + '! DEFi #' + words);
@@ -2352,10 +2360,9 @@
     $$parser.arrayAllocSize = function (elemDesc, count, name, owner, dims) {
         var symbol = $$parser.extentSymbol(name, owner);
         var value = count;
-        if (elemDesc !== undefined && $$parser.descTail(elemDesc) === undefined
-                && $$parser.isStructAtom($$parser.descHead(elemDesc))) {
+        if ($$parser.isStructAtom(elemDesc)) {
             value = $$parser.borrow('<');
-            $$parser.emit('<> *', 'i', value, '#' + count, '#.z.' + $$parser.descHead(elemDesc));
+            $$parser.emit('<> *', 'i', value, '#' + count, '#.z.' + $$parser.descName(elemDesc));
         }
         /* A DERIVED name must never be the one that reports a user's mistake. This runs as an ARGUMENT to
            the `declare` that registers the array itself, so JS evaluates it FIRST - and on a duplicate
@@ -2392,11 +2399,7 @@
        stride is one word. `int pointer` and untyped `pointer` both land in the undefined case, which is
        why scaling changes nothing for them. */
     $$parser.strideStruct = function (elemDesc) {
-        if (elemDesc === undefined || $$parser.descTail(elemDesc) !== undefined) {
-            return undefined;
-        }
-        var head = $$parser.descHead(elemDesc);
-        return $$parser.isStructAtom(head) ? head : undefined;
+        return ($$parser.isStructAtom(elemDesc) ? $$parser.descName(elemDesc) : undefined);
     };
 
     /* Does a subscript on this slot stride by a struct size rather than by one word? That is exactly the
@@ -2554,7 +2557,7 @@
                     var ev = (e < arr.length)
                             ? $$parser.indexedEntry(arr[e], sourceCode, sourceOffset) : undefined;
                     if (structEl) {
-                        $$parser.buildStructInit(f.elem, (ev && ev.braced) || [], out, sourceCode, sourceOffset);
+                        $$parser.buildStructInit($$parser.descName(f.elem), (ev && ev.braced) || [], out, sourceCode, sourceOffset);
                     } else {
                         var et = $$parser.descTypeElem(f.elem);   /* `p:i` is a pointer TO int, not a type */
                         $$parser.pushInitScalar(out, ev, et.type, et.elem, f.name, sourceCode, sourceOffset);
@@ -2779,7 +2782,7 @@
         slot.struct   = arrayOf ? undefined : structName;
         slot.type     = arrayOf ? 'p' : 'S';
         slot.root     = root || structName || arrayOf;
-        slot.elem     = arrayOf || structName;
+        slot.elem     = arrayOf || (structName !== undefined ? $$parser.structDesc(structName) : undefined);
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
         slot.extent   = undefined;                                /* pooled slot: never inherit another array's extent or
                                                                      another subscript's finding. The two callers that DO
@@ -2940,6 +2943,7 @@
         var elemStruct = $$parser.isStructAtom(elem);            /* struct element -> stride .z.elem, a place for the next .field;
                                                                     scalar element -> stride 1 word, this [k] IS the terminal value */
         var eType = $$parser.descHead(elem), eTail = $$parser.descTail(elem);
+        var elemName = (elemStruct ? $$parser.descName(elem) : undefined);   /* `.z.`/place slots want the NAME */
         var idxRV = $$parser.makeRValue(metaSlot(idx));
 
         var oobIndex = $$parser.checkConstIndex(extent, idxRV, sourceCode, sourceOffset);
@@ -2958,7 +2962,7 @@
                 var part = k;                                    /* scalar stride is 1 word -> the offset is just k */
                 if (elemStruct) {
                     part = $$parser.borrow('<');
-                    $$parser.emit('<> *', 'i', part, '#' + k, '#.z.' + elem);
+                    $$parser.emit('<> *', 'i', part, '#' + k, '#.z.' + elemName);
                     if (scratch) { $$parser.returnBack(k); }
                 }
                 /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
@@ -2974,7 +2978,7 @@
                 }
                 x.offParts.push(part);
             }
-            if (elemStruct) $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elem, x.root, undefined, x.dynIndex);
+            if (elemStruct) $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elemName, x.root, undefined, x.dynIndex);
             else            $$parser.emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
 
         } else if (x.baseKind === 'local' && x.dynIndex === undefined) {
@@ -2984,10 +2988,10 @@
                or negative, folded above, because GETL/SETL have no immediate-index form. */
             if (elemStruct) {
                 var frameIdx = $$parser.borrow('%');
-                $$parser.emit('*', 'i', frameIdx, idxRV, '#.z.' + elem);
+                $$parser.emit('*', 'i', frameIdx, idxRV, '#.z.' + elemName);
                 $$parser.emitRangeCheck(frameIdx, extent, sourceCode, sourceOffset);   /* scaled: `.z.` counts words */
                 $$parser.returnBack(idxRV);
-                $$parser.setPlace(x, 'local', x.base, x.offParts, elem, x.root, undefined, frameIdx);
+                $$parser.setPlace(x, 'local', x.base, x.offParts, elemName, x.root, undefined, frameIdx);
             } else {
                 $$parser.emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
                 $$parser.emitPlaceValue(x, 'local', x.base, x.offParts, idxRV, eType, eTail);
@@ -2997,13 +3001,13 @@
             var arrPtr = $$parser.placeAddress(x);                /* pointer base or a second runtime index: materialize */
             if (elemStruct) {
                 var elemPtr = $$parser.borrow('%'), scaled = $$parser.borrow('%');
-                $$parser.emit('*', 'i', scaled, idxRV, '#.z.' + elem);
+                $$parser.emit('*', 'i', scaled, idxRV, '#.z.' + elemName);
                 $$parser.emitRangeCheck(scaled, extent, sourceCode, sourceOffset);
                 $$parser.emit('+', 'p', elemPtr, arrPtr, scaled);
                 $$parser.returnBack(scaled);
                 $$parser.returnBack(idxRV);
                 $$parser.returnBack(arrPtr);
-                $$parser.setPlace(x, 'pointer', elemPtr, [], elem, elem);
+                $$parser.setPlace(x, 'pointer', elemPtr, [], elemName, elem);
             } else {                                              /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
                 $$parser.emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
                 $$parser.emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
@@ -3124,7 +3128,7 @@
                 $$parser.fail("Use '->' to access a field through a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as ->' + fieldName);
             }
-            bk = 'pointer'; base = $$parser.makeRValue(x); offParts = []; structName = x.elem; root = x.elem;
+            bk = 'pointer'; base = $$parser.makeRValue(x); offParts = []; structName = $$parser.descName(x.elem); root = x.elem;
         } else {
             $$parser.fail("Field access requires a struct" + (arrow ? ' pointer' : ''),
                     sourceCode, sourceOffset, 'E415');
@@ -3157,7 +3161,7 @@
                         structName + '.' + fieldName, field.size, field.dims);
                 field.extent.inField = true;                      /* an overrun stays inside the struct's own
                                                                      allocation, so nothing else looks */
-                field.extent.stride = ($$parser.isStructAtom(field.elem) ? '.z.' + field.elem : undefined);
+                field.extent.stride = ($$parser.isStructAtom(field.elem) ? '.z.' + $$parser.descName(field.elem) : undefined);
             }
             x.extent = field.extent;
             return;
@@ -3181,7 +3185,7 @@
                         'use a cast: (' + $$parser.elemVerbose(leftx.elem) + ' pointer)');
             }
         }
-        if (leftx.type === 'F' && $$parser.isFuncTypeAtom(leftx.elem)) {   /* named funcptr type target */
+        if (leftx.type === 'F' && $$parser.isFuncTypeName(leftx.elem)) {   /* named funcptr type target */
             $$parser.checkFuncPtrTarget(leftx.elem, bareOperand(rightx), rightx.type, rightx.elem,
                     '', sourceCode, sourceOffset);
         }
@@ -3217,7 +3221,7 @@
             }
         } else if (actualType === 'F' && actualElem !== expected) {
             $$parser.fail('Funcptr type mismatch' + at + " (expected '" + expected + "', got "
-                    + (actualElem !== undefined && $$parser.isFuncTypeAtom(actualElem)
+                    + (actualElem !== undefined && $$parser.isFuncTypeName(actualElem)
                             ? "'" + actualElem + "'" : 'an untyped funcptr') + ')',
                     sourceCode, sourceOffset, 'E441', 'use a cast: (' + expected + ')');
         }
@@ -3781,7 +3785,7 @@
 
         /* *structPointer -> a struct place (through-pointer field access / whole-struct assign) */
         if (operator === '*' && expr.type === 'p' && $$parser.isStructAtom(expr.elem)) {
-            $$parser.setPlace(expr, 'pointer', $$parser.makeRValue(expr), [], expr.elem, expr.elem);
+            $$parser.setPlace(expr, 'pointer', $$parser.makeRValue(expr), [], $$parser.descName(expr.elem), expr.elem);
             return;
         }
 
@@ -3797,7 +3801,7 @@
             } else {                                          /* offset fold or global/pointer base: materialize now */
                 $$parser.makeMeta(expr, ':=', 'p', undefined, $$parser.placeAddress(expr), undefined);
             }
-            $$parser.setElem(expr, structName);
+            $$parser.setElem(expr, $$parser.structDesc(structName));
             return;
         }
 
@@ -3831,17 +3835,13 @@
                 expr.elem = undefined;
             }
         } else if (key === '=&') {
-            if (prevType === 'F' && $$parser.isFuncTypeAtom(prevElem)) {
-                expr.elem = prevElem;                             /* &funcptr -> element is the named funcptr type
-                                                                     (its name already identifies it, like a struct) */
-            } else {
-                /* &x yields a pointer to x's type - but `?` (an element of an Impala 1 untyped
-                   `array`) says exactly what `undefined` says, and UNKNOWN MUST HAVE ONE SPELLING:
-                   with two, a comparison of the same non-knowledge reports itself as
-                   "expected untyped elements, got untyped elements". */
-                expr.elem = (prevType === undefined || prevType === '?' ? undefined
-                        : prevType + (prevElem !== undefined ? ':' + prevElem : ''));
-            }
+            /* &x yields a pointer to x's type - but `?` (an element of an Impala 1 untyped
+               `array`) says exactly what `undefined` says, and UNKNOWN MUST HAVE ONE SPELLING:
+               with two, a comparison of the same non-knowledge reports itself as
+               "expected untyped elements, got untyped elements". A named funcptr needs no case of
+               its own: `F` + its name IS the descriptor. */
+            expr.elem = (prevType === undefined || prevType === '?' ? undefined
+                    : prevType + (prevElem !== undefined ? prevElem : ''));
         } else {
             expr.elem = undefined;                                /* casts and numeric ops erase */
         }
@@ -4038,7 +4038,7 @@
         if (!isGlobal && (p = sym.locals['$' + name])) {
 
             if (p.type === 'S') {                                 /* struct value local -> a place */
-                $$parser.setPlace(x, 'local', '$' + name, [], p.elem, p.elem);
+                $$parser.setPlace(x, 'local', '$' + name, [], $$parser.descName(p.elem), p.elem);
                 return;
             }
             if (p.type === 'A' && $$parser.isStructAtom(p.elem)) {   /* struct-element array -> a foldable local array place (base:offset, no ADRL) */
@@ -4066,7 +4066,7 @@
         if (isGlobal && (p = sym.globals[name])) {
 
             if (p.type === 'S') {                                 /* struct value global -> a place in global memory */
-                $$parser.setPlace(x, 'globalAddr', '&' + name, [], p.elem, p.elem);
+                $$parser.setPlace(x, 'globalAddr', '&' + name, [], $$parser.descName(p.elem), p.elem);
                 metaSlot(x).readonly = (p.readonly === true);      /* a field write must see it too - CNST
                                                                      rejects the POKE only at load, if at all */
                 return;
@@ -4459,14 +4459,14 @@ FuncTypeDecl <- FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname =
 
 # A type with optional variable name (funcptr-type params & returns allow types-only).
 TypeDeclr   <-  base:TypeBase                                        { $desc = $base; }
-                ( POINTER _                                          { $desc = 'p:' + $desc; }
+                ( POINTER _                                          { $desc = 'p' + $desc; }
                 )*
                 ( id:Identifier                                      { $$.name = $id; }
                 )?                                                   {
                                                                          var td = $$parser.descTypeElem($desc);
-                                                                         if (td.elem === undefined && $$parser.isStructAtom(td.type)) {
-                                                                             $$.type = 'S'; $$.struct = td.type; $$.elem = undefined;
-                                                                             $$.words = $$parser.structWords(td.type);
+                                                                         if (td.type === 'S') {
+                                                                             $$.type = 'S'; $$.struct = td.elem; $$.elem = undefined;
+                                                                             $$.words = $$parser.structWords(td.elem);
                                                                          } else {
                                                                              $$.type = td.type; $$.elem = td.elem; $$.struct = undefined;
                                                                              $$.words = (td.type === 'F' ? 1 : undefined);   /* scalar funcptr: one word */
@@ -4660,7 +4660,7 @@ inp:ArgsDecl ')'_
                                                                                      $$parser.structAllocSize(v.struct, $$s, v.at),
                                                                                      $$s, v.at,
                                                                                      undefined,
-                                                                                     v.struct
+                                                                                     $$parser.structDesc(v.struct)
                                                                                  );
                                                                              } else {
                                                                                  $$parser.declare(
@@ -4909,13 +4909,13 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                                                                          $nf = $$parser.noForward;
                                                                          $$parser.noForward = true;
                                                                      }
-                 ( POINTER _                                          { $desc = 'p:' + $desc; }
+                 ( POINTER _                                          { $desc = 'p' + $desc; }
                  )*
                                                                       {
                                                                          var cd = $$parser.descTypeElem($desc);
-                                                                         if (cd.elem === undefined && $$parser.isStructAtom(cd.type)) {
+                                                                         if (cd.type === 'S') {
                                                                              $$parser.fail('A const cannot be a struct value - use a struct pointer ('
-                                                                                     + 'const ' + cd.type + ' pointer)', $$s, $$i, 'E447');
+                                                                                     + 'const ' + cd.elem + ' pointer)', $$s, $$i, 'E447');
                                                                          }
                                                                          $t = cd.type; $telem = cd.elem;    /* 'F' + name for a funcptr constant */
                                                                          $cStart = $$i;   /* `Identifier` eats trailing space, so $$i
@@ -4992,7 +4992,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                      $$parser.formatGlobalSignatureComment(
                                                                                          $section, $v.name, 'S', undefined, undefined,
                                                                                          $$parser.sourceName, $$s, $$parser.declOffset, $v.struct),
-                                                                                     $v.struct
+                                                                                     $$parser.structDesc($v.struct)
                                                                                  );
                                                                              } else {
                                                                                  $$parser.declare(
@@ -5080,10 +5080,8 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     consumer is done. Fields spelled out because bare `$a` is
                                                                                     the rule's return value, not its context - see declEntry */
                                                                                     [ { size: $a.size, dims: $a.dims } ]);
-                                                                            $aStructEl = ($a.elem !== undefined
-                                                                                    && $$parser.descTail($a.elem) === undefined
-                                                                                    && $$parser.isStructAtom($$parser.descHead($a.elem)));
-                                                                            $aStruct = $a.elem;
+                                                                            $aStructEl = $$parser.isStructAtom($a.elem);
+                                                                            $aStruct = ($aStructEl ? $$parser.descName($a.elem) : $a.elem);
                                                                             $aCount = $$parser.constInt('#' + $a.size);
                                                                          }
                          ( '=' _                                       {   /* the list is fully consumed before these
@@ -5232,23 +5230,24 @@ LocalsDecl  <-                                                        {
 # A leading type atom: a primitive keyword, or the name of a defined struct.
 TypeBase    <-  t:BASE_TYPE _                                         { $$ = $$parser.CASTS_TO_TYPES[$t]; }
               / id:Identifier                                        {
-                                                                         if (!$$parser.isStructAtom($id) && !$$parser.isFuncTypeAtom($id))
-                                                                             $$parser.fail('Unknown type ' + $id, $$s, $$i, 'E413');
-                                                                         $$ = $id;
+                                                                         /* the ONE place a raw type name becomes a descriptor */
+                                                                         if ($$parser.isStructName($id)) $$ = $$parser.structDesc($id);
+                                                                         else if ($$parser.isFuncTypeName($id)) $$ = $$parser.funcTypeDesc($id);
+                                                                         else $$parser.fail('Unknown type ' + $id, $$s, $$i, 'E413');
                                                                      }
 
 VarDecl     <-  base:TypeBase                                        { $desc = $base; }
-                ( POINTER _                                           { $desc = 'p:' + $desc; }
+                ( POINTER _                                           { $desc = 'p' + $desc; }
                 )*
                 { $nameStart = $$i; }
                 id:Identifier                                         {
                                                                          $$parser.checkReservedName($id, 'variable', $$s, $nameStart);
                                                                          var vd = $$parser.descTypeElem($desc);
-                                                                         if (vd.elem === undefined && $$parser.isStructAtom(vd.type)) {
+                                                                         if (vd.type === 'S') {
                                                                              $$.type = 'S';
-                                                                             $$.struct = vd.type;
+                                                                             $$.struct = vd.elem;
                                                                              $$.elem = undefined;
-                                                                             $$.words = $$parser.structWords(vd.type);
+                                                                             $$.words = $$parser.structWords(vd.elem);
                                                                          } else {
                                                                              $$.type = vd.type;       /* 'F' + the name for a named funcptr type */
                                                                              $$.elem = vd.elem;
@@ -5266,7 +5265,7 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
 
 ArrayDecl   <-                                                        { $desc = undefined; $extent = undefined; $dims = undefined; }
                 ( base:TypeBase                                      { $desc = $base; }
-                  ( POINTER _                                         { $desc = 'p:' + $desc; }
+                  ( POINTER _                                         { $desc = 'p' + $desc; }
                   )*
                 )?
                 ARRAY _ { $nameStart = $$i; } id:Identifier           { $$parser.checkReservedName($id, 'array', $$s, $nameStart); }
@@ -5429,7 +5428,7 @@ MulDiv      <-  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
 
 PrePost     <-  (op:PREFIX_OP _
                 / '('_ op:BASE_TYPE _               { $cdesc = $$parser.CASTS_TO_TYPES[$op]; }
-                  ( POINTER _                       { $cdesc = 'p:' + $cdesc; $ccast = 'pointer'; }
+                  ( POINTER _                       { $cdesc = 'p' + $cdesc; $ccast = 'pointer'; }
                   )* ')'_
                 / '('_ sid:Identifier               { $pdepth = 0; }   # named-type cast: (Name pointer ...) / (Fn)
                   ( POINTER _                       { $pdepth = $pdepth + 1; }
@@ -5441,14 +5440,15 @@ PrePost     <-  (op:PREFIX_OP _
                                                          than failing) lets Value parse `(x) + 1`; the test above is
                                                          a pure lookup, so there is no side effect to undo. */
                                                       if ($pdepth === 0) {
-                                                          if (!$$parser.isFuncTypeAtom($sid)) return false;
-                                                          $cdesc = 'F:' + $sid;
+                                                          if (!$$parser.isFuncTypeName($sid)) return false;
+                                                          $cdesc = $$parser.funcTypeDesc($sid);
                                                           $ccast = 'funcptr';
                                                       } else {
-                                                          if (!$$parser.isStructAtom($sid) && !$$parser.isFuncTypeAtom($sid))
+                                                          if (!$$parser.isStructName($sid) && !$$parser.isFuncTypeName($sid))
                                                               $$parser.fail('Unknown type ' + $sid, $$s, $$i, 'E413');
-                                                          $cdesc = $sid;
-                                                          for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p:' + $cdesc;
+                                                          $cdesc = ($$parser.isStructName($sid) ? $$parser.structDesc($sid)
+                                                                  : $$parser.funcTypeDesc($sid));
+                                                          for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p' + $cdesc;
                                                           $ccast = 'pointer';
                                                       }
                                                     }
@@ -5523,7 +5523,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            if (_e && _e.signature && _e.signature.returnWords !== undefined
                                                                    && _e.signature.returnWords > 1)
                                                                _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */
-                                                       } else if (_c.type === 'F' && $$parser.isFuncTypeAtom(_c.elem)) {
+                                                       } else if (_c.type === 'F' && $$parser.isFuncTypeName(_c.elem)) {
                                                            var _ft = $$parser.functypes[_c.elem];   /* indirect call through a named funcptr type */
                                                            if (_ft.returnWords > 1) _rs = _ft.returnWords;
                                                        }
@@ -5573,7 +5573,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                    && (entry.kind === 'FUNC' || entry.signature.params)) {
                                                                signature = entry.signature;
                                                            }
-                                                       } else if (callee.type === 'F' && $$parser.isFuncTypeAtom(callee.elem)) {
+                                                       } else if (callee.type === 'F' && $$parser.isFuncTypeName(callee.elem)) {
                                                            signature = $$parser.functypes[callee.elem];   /* indirect call: check against the funcptr type */
                                                        }
 
@@ -5604,8 +5604,8 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                    /* Name the struct when the actual is a struct VALUE, and point at `&`:
                                                                       passing `v` where `V pointer` is wanted is the common slip now that
                                                                       by-value struct params are parked for Impala 3.0. */
-                                                                   var _actualText = ((actual === 'S' && $$.elems && $$.elems[argIdx])
-                                                                           ? 'struct ' + $$.elems[argIdx] : '{$type1}');
+                                                                   var _actualText = ($$parser.isStructAtom($$.elems && $$.elems[argIdx])
+                                                                           ? 'struct ' + $$parser.descName($$.elems[argIdx]) : '{$type1}');
                                                                    $$parser.typeError(
                                                                        'Argument type mismatch for argument ' + (argIdx + 1)
                                                                            + ' when calling ' + label +
@@ -5640,7 +5640,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                /* Same rule for a named funcptr param as for assignment, so the same check:
                                                                   `expected` is already 'F' here, which is what the assign path derives from
                                                                   the r-value's own type. */
-                                                               if (expected === 'F' && $$parser.isFuncTypeAtom(expectedElem)) {
+                                                               if (expected === 'F' && $$parser.isFuncTypeName(expectedElem)) {
                                                                    $$parser.checkFuncPtrTarget(expectedElem, $$.opnds[argIdx], 'F',
                                                                            $$.elems[argIdx],
                                                                            ' for argument ' + (argIdx + 1) + ' when calling ' + label,
@@ -6267,8 +6267,8 @@ While       <-  WHILE _                             {
 # ---------------------------------------------------------------------------
 Value       <-  Group
                 / SIZEOF _ '('_ base:TypeBase        { if (!$$parser.dry) {
-                                                        var head = $$parser.descHead($base);
-                                                        if ($$parser.isStructAtom(head)) {   /* struct size -> symbolic .z.Name */
+                                                        var head = ($$parser.isStructAtom($base) ? $$parser.descName($base) : undefined);
+                                                        if (head !== undefined) {            /* struct size -> symbolic .z.Name */
                                                             if (!$$parser.isExternStruct(head)
                                                                     && !$$parser.structDefined(head))
                                                                 $$parser.fail('sizeof of incomplete struct ' + head,
