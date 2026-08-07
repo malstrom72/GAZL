@@ -2198,12 +2198,12 @@
             var f = s.fields[i];
             output($$parser.fieldSymbol(name, f.name) + ':' + T + '! DEFi #<a>');
             if (f.type === 'S') {                                 /* nested by-value struct */
-                output(T + '! ADDi <a> #<a> #.z.' + f.struct);
+                output(T + '! ADDi <a> #<a> #' + $$parser.extentSymbol(f.struct));
             } else if (f.type === 'A') {                          /* array: name the extent, THEN advance by it */
                 var x = $$parser.extentSymbol(f.name, name);
                 var words = f.size;
                 if ($$parser.isStructAtom(f.elem)) {              /* count * element size, folded now */
-                    output(T + '! MULi <t> #' + f.size + ' #.z.' + $$parser.descName(f.elem));
+                    output(T + '! MULi <t> #' + f.size + ' #' + $$parser.extentSymbol($$parser.descName(f.elem)));
                     words = '<t>';
                 }
                 output(x + ':' + T + '! DEFi #' + words);
@@ -2308,7 +2308,7 @@
 
     $$parser.structAllocSize = function (structName, sourceCode, sourceOffset) {
         $$parser.noteStructUse(structName, sourceCode, sourceOffset);
-        return '*.z.' + structName;                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
+        return '*' + $$parser.extentSymbol(structName);                           /* always symbolic - adapts to the (possibly host/assembler-set) size */
     };
 
     /* The symbol naming an array's extent in WORDS - the `*size` operand, not the element count (a
@@ -2424,7 +2424,7 @@
         var value = count;
         if ($$parser.isStructAtom(elemDesc)) {
             value = $$parser.borrow('<');
-            $$parser.emit('<> *', 'i', value, '#' + count, '#.z.' + $$parser.descName(elemDesc));
+            $$parser.emit('<> *', 'i', value, '#' + count, '#' + $$parser.extentSymbol($$parser.descName(elemDesc)));
         }
         /* A DERIVED name must never be the one that reports a user's mistake. This runs as an ARGUMENT to
            the `declare` that registers the array itself, so JS evaluates it FIRST - and on a duplicate
@@ -2462,22 +2462,6 @@
        why scaling changes nothing for them. */
     $$parser.strideStruct = function (elemDesc) {
         return ($$parser.isStructAtom(elemDesc) ? $$parser.descName(elemDesc) : undefined);
-    };
-
-    /* Does a subscript on this slot stride by a struct size rather than by one word? That is exactly the
-       question a struct-element subscript asks, so both the Subscript rule and the pointer-arithmetic diagnostics
-       ask it here. Note a SCALAR array field inside a struct (`s.v[k]`) reaches subscriptStruct too but
-       strides one word, so the predicate is the element type, never which code path handles it. */
-    $$parser.subscriptScales = function (slot) {
-        var elem;
-        if (slot.place && slot.arrayOf) {
-            elem = slot.arrayOf;
-        } else if (slot.type === 'p') {
-            elem = slot.elem;
-        } else {
-            return false;
-        }
-        return $$parser.strideStruct(elem) !== undefined;
     };
 
     /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
@@ -3024,7 +3008,7 @@
                 var part = k;                                    /* scalar stride is 1 word -> the offset is just k */
                 if (elemStruct) {
                     part = $$parser.borrow('<');
-                    $$parser.emit('<> *', 'i', part, '#' + k, '#.z.' + elemName);
+                    $$parser.emit('<> *', 'i', part, '#' + k, '#' + $$parser.extentSymbol(elemName));
                     if (scratch) { $$parser.returnBack(k); }
                 }
                 /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
@@ -3050,7 +3034,7 @@
                or negative, folded above, because GETL/SETL have no immediate-index form. */
             if (elemStruct) {
                 var frameIdx = $$parser.borrow('%');
-                $$parser.emit('*', 'i', frameIdx, idxRV, '#.z.' + elemName);
+                $$parser.emit('*', 'i', frameIdx, idxRV, '#' + $$parser.extentSymbol(elemName));
                 $$parser.emitRangeCheck(frameIdx, extent, sourceCode, sourceOffset);   /* scaled: `.z.` counts words */
                 $$parser.returnBack(idxRV);
                 $$parser.setPlace(x, 'local', x.base, x.offParts, elemName, x.root, undefined, frameIdx);
@@ -3063,7 +3047,7 @@
             var arrPtr = $$parser.placeAddress(x);                /* pointer base or a second runtime index: materialize */
             if (elemStruct) {
                 var elemPtr = $$parser.borrow('%'), scaled = $$parser.borrow('%');
-                $$parser.emit('*', 'i', scaled, idxRV, '#.z.' + elemName);
+                $$parser.emit('*', 'i', scaled, idxRV, '#' + $$parser.extentSymbol(elemName));
                 $$parser.emitRangeCheck(scaled, extent, sourceCode, sourceOffset);
                 $$parser.emit('+', 'p', elemPtr, arrPtr, scaled);
                 $$parser.returnBack(scaled);
@@ -3223,7 +3207,8 @@
                         structName + '.' + fieldName, field.size, field.dims);
                 field.extent.inField = true;                      /* an overrun stays inside the struct's own
                                                                      allocation, so nothing else looks */
-                field.extent.stride = ($$parser.isStructAtom(field.elem) ? '.z.' + $$parser.descName(field.elem) : undefined);
+var _sn = $$parser.strideStruct(field.elem);
+                field.extent.stride = (_sn !== undefined ? $$parser.extentSymbol(_sn) : undefined);
             }
             x.extent = field.extent;
             return;
@@ -6362,13 +6347,13 @@ While       <-  WHILE _                             {
 # ---------------------------------------------------------------------------
 Value       <-  Group
                 / SIZEOF _ '('_ base:TypeBase        { if (!$$parser.dry) {
-                                                        var head = ($$parser.isStructAtom($base) ? $$parser.descName($base) : undefined);
+                                                        var head = $$parser.strideStruct($base);
                                                         if (head !== undefined) {            /* struct size -> symbolic .z.Name */
                                                             if (!$$parser.isExternStruct(head)
                                                                     && !$$parser.structDefined(head))
                                                                 $$parser.fail('sizeof of incomplete struct ' + head,
                                                                         $$s, $$i, 'E419');
-                                                            $$parser.makeMeta($$, ':=', 'i', undefined, '#.z.' + head, undefined);
+                                                            $$parser.makeMeta($$, ':=', 'i', undefined, '#' + $$parser.extentSymbol(head), undefined);
                                                             $$parser.setElem($$, undefined);
                                                         } else {
                                                             $$parser.makeMeta($$, ':=', 'i', undefined, '#1', undefined);
