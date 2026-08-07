@@ -2826,6 +2826,66 @@ const typedPointerCases = [
 		source: ["struct S { int a; float b }", "extern struct S { int a; int b }"].join("\n"),
 		expectError: "does not match its definition",
 	},
+	/* E438 asks whether two claims describe the same LAYOUT, and decides it field by field - not by
+	   string-comparing two rendered `; signature` rows, which is how it used to work. That proxy had a
+	   reachable false positive: E430 FORBIDS a host-owned array field from stating a size, so an extern
+	   body could only ever say `int[]` while the definition said `int[3]`, the rows differed, and E438's
+	   advice to "correct the declaration" ran straight into E430. No legal spelling existed between the
+	   two diagnostics. An extent is now compared only where BOTH sides state one; rank always is. */
+	{
+		label: "a host-owned array field meets a sized definition",
+		source: ["extern struct S { int array v[] }", "struct S { int array v[3] }",
+			"function main() { }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "...at rank 2 as well",
+		source: ["extern struct S { int array v[,] }", "struct S { int array v[3, 4] }",
+			"function main() { }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "but a RANK disagreement is still caught",
+		source: ["extern struct S { int array v[,] }", "struct S { int array v[3] }",
+			"function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "field ORDER is part of the layout, since it decides the offsets",
+		source: ["extern struct S { int a; float b }", "struct S { float b; int a }",
+			"function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "a differing field COUNT is caught",
+		source: ["extern struct S { int a }", "struct S { int a; int b }",
+			"function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "a differing field NAME is caught",
+		source: ["extern struct S { int a }", "struct S { int b }", "function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "a differing POINTER ELEMENT is caught",
+		source: ["extern struct S { int pointer p }", "struct S { float pointer p }",
+			"function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "a differing NESTED struct field is caught",
+		source: ["struct A { int x }", "struct B { int y }", "extern struct S { A n }",
+			"struct S { B n }", "function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		/* no definition to arbitrate, so failDisagreement uses its OTHER message */
+		label: "two extern bodies that disagree are caught with no definition present",
+		source: ["extern struct S { int a }", "extern struct S { float a }",
+			"function main() { }"].join("\n"),
+		expectError: "extern declarations of struct S disagree",
+	},
 	{
 		label: "an extern struct body contradicting a LATER definition is the same error",
 		source: ["extern struct S { int a; int b }", "struct S { int a; float b }"].join("\n"),

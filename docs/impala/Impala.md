@@ -218,6 +218,11 @@ load, so the same `.gazl` runs against any layout with no recompile. An array fi
 The body is a *claim* about someone else's layout, so it is checked against a real definition
 if the build has one (`E438`), and using it before that definition is emitted is `E464`.
 
+That check compares the two layouts field by field: names, types, pointer elements and the
+order they are declared in, since the order is what fixes the offsets. An array field's
+**rank** must agree, but its **extent** is compared only where both sides state one — which
+is what lets the host-owned `int array v[]` above meet a definition's `int array v[3]`.
+
 ### `functype`
 
 A `functype` names a function-pointer signature, so assignment can be checked:

@@ -2067,15 +2067,58 @@
        layout, and must agree - the E437 rule, for types. Whichever arrived second was parsed into a
        fresh entry so the first stayed intact; the DEFINITION is authoritative in either order.
        Returns true when the entry just parsed was the DECLARATION, i.e. it owns no layout to emit. */
+    /* Do two claims about one struct describe the SAME layout? Compared field by field, because the
+       field ORDER decides the offsets. `words` is derived and not compared.
+
+       This used to string-compare two rendered `; signature` rows, which made the format of an
+       INFORMATIONAL COMMENT decide which programs compile - and it was wrong in a reachable way.
+       `extentText` renders an axis nobody can state as `[]`, on the documented understanding that a
+       consumer "skips an empty one"; the consumer that did the skipping was gazl-validate, deleted
+       2026-08-05, and the raw `!==` that inherited the job skips nothing. So `extern struct S { int
+       array v[] }` never agreed with `struct S { int array v[3] }` - and E438's advice to correct the
+       declaration ran straight into E430, "a host-owned array must not state a size". Two diagnostics,
+       no legal spelling between them. */
+    function statedAxis(v) {                                      /* a `<X>` fold is no more statable than undefined */
+        return (v !== undefined && ('' + v).charAt(0) !== '<');
+    }
+
+    function axisOf(field, k) {                                   /* a 1-D array carries its extent in `size`, not `dims` */
+        return (field.dims !== undefined ? field.dims[k] : (k === 0 ? field.size : undefined));
+    }
+
+    function sameLayout(a, b) {
+        if (!a || !b || !a.fields || !b.fields) return true;      /* nothing to judge */
+        if (a.fields.length !== b.fields.length) return false;
+        for (var i = 0; i < a.fields.length; ++i) {
+            var f = a.fields[i], g = b.fields[i];
+            if (f.name !== g.name || f.type !== g.type) return false;
+            if (f.elem !== g.elem || f.struct !== g.struct) return false;
+            if (f.type !== 'A') continue;
+            /* RANK is Impala's to check and both sides always state it; an EXTENT is compared only
+               where both sides state one, which is what lets a host-owned `[]` meet a sized `[3]`. */
+            var ra = (f.dims !== undefined ? f.dims.length : 1);
+            var rb = (g.dims !== undefined ? g.dims.length : 1);
+            if (ra !== rb) return false;
+            for (var k = 0; k < ra; ++k) {
+                var x = axisOf(f, k), y = axisOf(g, k);
+                if (statedAxis(x) && statedAxis(y) && '' + x !== '' + y) return false;
+            }
+        }
+        return true;
+    }
+
     $$parser.checkStructAgreement = function (name) {
         var parsed = $$parser.structs[name], held = parsed.shadowed;
         if (!held) {
             return false;
         }
-        var parsedRow = $$parser.structSignatureRow(name, false);
-        $$parser.structs[name] = held;
-        var heldRow = $$parser.structSignatureRow(name, false);
-        if (parsedRow !== heldRow) {
+        if (!sameLayout(parsed, held)) {
+            /* The rows are built for the MESSAGE only - the decision above never reads them. Rendering
+               swaps the table entry, so put it back before failing rather than leaving `held` installed. */
+            var parsedRow = $$parser.structSignatureRow(name, false);
+            $$parser.structs[name] = held;
+            var heldRow = $$parser.structSignatureRow(name, false);
+            $$parser.structs[name] = parsed;
             /* fail() bakes its message, and bake() EVALS anything between braces (that is how
                `{$type1}` interpolation works), so a struct row's `{ a : int }` must not go in raw. */
             function shown(row) { return replace(replace(replace(row, 'signature ', ''), '{', '('), '}', ')'); }
@@ -2092,6 +2135,10 @@
                 parsed.pendingRefs = held.pendingRefs;
             }
             $$parser.structs[name] = parsed;                      /* a definition outranks the declaration it fulfils */
+        } else {
+            $$parser.structs[name] = held;                        /* a declaration does not displace what is held.
+                                                                     Stated outright: it used to fall out of the
+                                                                     swap the row rendering happened to leave behind. */
         }
         return !!parsed.extern;
     };
