@@ -27,6 +27,12 @@ node docSamples.js
 IF ERRORLEVEL 1 EXIT /B 1
 node runJspegTests.js
 IF ERRORLEVEL 1 EXIT /B 1
+REM The compiler must run under NuXJS too, and everything above this line only ever exercised node. A
+REM shaped-array bug (dims.map, which NuXJS has no method for) survived from 1aae39a to 2026-08-07
+REM because the only NuXJS gate was a four-program smoke test that declares no shapes. SKIPS LOUDLY when
+REM no NuXJS binary is present, so it does not fail a node-only checkout.
+node nuxjsParityTests.js
+IF ERRORLEVEL 1 EXIT /B 1
 node importBuildTests.js
 IF ERRORLEVEL 1 EXIT /B 1
 node fuzzImpala.js 3000 1

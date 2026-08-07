@@ -22,5 +22,10 @@ cd impala
 node jspegCompilerTests.js
 node docSamples.js
 node runJspegTests.js
+# The compiler must run under NuXJS too, and everything above this line only ever exercised node. A
+# shaped-array bug (dims.map, which NuXJS has no method for) survived from 1aae39a to 2026-08-07 because
+# the only NuXJS gate was a four-program smoke test that declares no shapes. SKIPS LOUDLY when no NuXJS
+# binary is present, so it does not fail a node-only checkout.
+node nuxjsParityTests.js
 node importBuildTests.js
 node fuzzImpala.js 3000 1
