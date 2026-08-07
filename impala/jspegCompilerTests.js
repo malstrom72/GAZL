@@ -2888,6 +2888,31 @@ const typedPointerCases = [
 			"function main() locals funcptr f { g(f); }"].join("\n"),
 		expectError: "Funcptr type mismatch for argument 1",
 	},
+	/* A cast BETWEEN named functypes is shape-checked: same args and returns convert freely, a
+	   different shape is a wrong call the moment it is made (E465). Untyped `funcptr` is the escape
+	   hatch - `(funcptr)x` erases the name, a named cast re-stamps it - so the deliberate conversion
+	   is spelled `(To)(funcptr)x` and is greppable. */
+	{
+		label: "a cast between same-shape functypes is allowed",
+		source: ["functype Cb(int a) returns int r", "functype Dup(int a) returns int r",
+			"function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, Dup d { c = dbl; d = (Dup)c; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a cast between different-shape functypes is E465",
+		source: ["functype Cb(int a) returns int r", "functype Wrong(float x, float y) returns float z",
+			"function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, Wrong w { c = dbl; w = (Wrong)c; }"].join("\n"),
+		expectError: "Cast between funcptr types of different shape",
+	},
+	{
+		label: "untyped funcptr is the escape hatch between shapes",
+		source: ["functype Cb(int a) returns int r", "functype Wrong(float x, float y) returns float z",
+			"function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, Wrong w { c = dbl; w = (Wrong)(funcptr)c; }"].join("\n"),
+		expectError: null,
+	},
 	/* A GLOBAL read spells itself `&name`, exactly like a function reference, so testing the sigil
 	   instead of the lookup sent globals down the function-reference branch to find no function and
 	   fall out silently - past the very check that applied to them. */

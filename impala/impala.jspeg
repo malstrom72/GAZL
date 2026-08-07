@@ -3227,6 +3227,27 @@
         }
     };
 
+    /* A cast BETWEEN named funcptr types is only honest when the shapes agree - unlike a data pointer,
+       the shape decides how a call through the result reads its frame, so a mismatched retype is a
+       wrong call from the moment it is made. Untyped `funcptr` stays the escape hatch: `(funcptr)x`
+       erases the name (a base-type cast erases the element) and a named cast re-stamps it, so the
+       deliberate conversion is spelled `(To)(funcptr)x` - visible, and greppable. */
+    $$parser.checkFuncTypeCast = function (x, toName, sourceCode, sourceOffset) {
+        var m = metaSlot(x);
+        var fromName = (m.type === 'F' ? m.elem : undefined);
+        if (fromName === undefined || fromName === toName || !$$parser.isFuncTypeName(fromName)) {
+            return;                                               /* untyped, same, or not a funcptr: no claim to check */
+        }
+        var got = signatureShape(fromName, $$parser.functypes[fromName]);
+        var want = signatureShape(toName, $$parser.functypes[toName]);
+        if (got.substr(fromName.length) !== want.substr(toName.length)) {
+            $$parser.fail('Cast between funcptr types of different shape ("' + got + '" vs "'
+                    + want + '")', sourceCode, sourceOffset, 'E465',
+                    'a call through the result would read the wrong frame - if you mean it, go through '
+                            + 'untyped funcptr: (' + toName + ')(funcptr)...');
+        }
+    };
+
     /* An INITIALIZER states exactly what an assignment states, so it answers to the SAME function - it
        just reached the data rows through makeConstant, which knows a type and neither a funcptr type nor
        a pointer element. Both halves were silent at every declaration door: `global TickFn onTick = wrong`
@@ -5454,6 +5475,9 @@ PrePost     <-  (op:PREFIX_OP _
                                                     }
                 ) PrePost                           { if (!$$parser.dry) {
                                                        if ($ccast) {          /* a named/pointer cast; a bare BASE_TYPE cast has no $ccast */
+                                                           if ($ccast === 'funcptr') {
+                                                               $$parser.checkFuncTypeCast($$, $$parser.descTail($cdesc), $$s, $$i);
+                                                           }
                                                            $$parser.unaryOp($ccast, $$, $$s, $$i);
                                                            $$parser.setElem($$, $$parser.descTail($cdesc));
                                                        } else {

@@ -143,6 +143,10 @@ const SAMPLES = [
 	{ name: "a funcptr type refuses the wrong signature", expect: "E441",
 		src: "functype Step(int frame)\nfunction wrong(float x) { }\nglobal Step cb = wrong\n"
 				+ "export function main() { }\n" },
+	{ name: "a cast between different-shape funcptr types", expect: "E465",
+		src: "functype Cb(int a) returns int r\nfunctype Wrong(float x, float y) returns float z\n"
+				+ "function dbl(int a) returns int r { r = a * 2; }\n"
+				+ "export function main() locals Cb c, Wrong w { c = dbl; w = (Wrong)c; }\n" },
 	{
 		name: "one subscript, striding by the element",
 		expect: null,
