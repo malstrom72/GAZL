@@ -2925,6 +2925,180 @@ const typedPointerCases = [
 			"function main() locals int pointer p, Cb c { p = &global g; c = (Cb)p; }"].join("\n"),
 		expectError: "Only a funcptr can take a funcptr type",
 	},
+	{
+		label: "...a float neither",
+		source: ["functype Cb(int a) returns int r",
+			"function main() locals float x, Cb c { x = 1.0; c = (Cb)x; }"].join("\n"),
+		expectError: "Only a funcptr can take a funcptr type - this is float",
+	},
+	{
+		label: "...a struct pointer neither",
+		source: ["struct S { int a }", "functype Cb(int a) returns int r",
+			"function main() locals S v, S pointer sp, Cb c { sp = &v; c = (Cb)sp; }"].join("\n"),
+		expectError: "Only a funcptr can take a funcptr type - this is pointer",
+	},
+	{
+		label: "...nor a native, which is not a value at all",
+		source: ["functype P(int v)", "extern native printInt",
+			"function main() locals P cb { cb = (P)printInt; }"].join("\n"),
+		expectError: "a native can only be called directly, by name",
+	},
+	{
+		label: "a native does not assign into a funcptr either",
+		source: ["functype P(int v)", "extern native printInt",
+			"function main() locals P cb { cb = printInt; }"].join("\n"),
+		expectError: "cannot assign native to funcptr",
+	},
+	/* The funcptr world is sealed at the BASE cast too - E302 in both directions - so a funcptr value
+	   only ever comes from a function name, nullfunc, or another funcptr. These pin the boundary. */
+	{
+		label: "(funcptr) does not take an int",
+		source: ["function main() locals int x, funcptr f { x = 3; f = (funcptr)x; }"].join("\n"),
+		expectError: "Invalid type (int)",
+	},
+	{
+		label: "(funcptr) does not take a data pointer",
+		source: ["global int g",
+			"function main() locals int pointer p, funcptr f { p = &global g; f = (funcptr)p; }"].join("\n"),
+		expectError: "Invalid type (pointer)",
+	},
+	{
+		label: "(pointer) does not take a funcptr",
+		source: ["function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals funcptr f, pointer p { f = dbl; p = (pointer)f; }"].join("\n"),
+		expectError: "Invalid type (funcptr)",
+	},
+	/* Shape equality is structural: parameter TYPES (with pointer elements) and the return, never the
+	   parameter names. Each dimension of difference gets its own witness. */
+	{
+		label: "shape match ignores parameter names",
+		source: ["functype A(int pointer p)", "functype B(int pointer q)", "function f(int pointer p) { }",
+			"function main() locals A a, B b { a = f; b = (B)a; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "pointer elements are part of the shape",
+		source: ["functype A(int pointer p)", "functype B(float pointer q)", "function f(int pointer p) { }",
+			"function main() locals A a, B b { a = f; b = (B)a; }"].join("\n"),
+		expectError: "Cast between funcptr types of different shape",
+	},
+	{
+		label: "the return is part of the shape",
+		source: ["functype Cb(int a) returns int r", "functype NoRet(int a)",
+			"function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, NoRet n { c = dbl; n = (NoRet)c; }"].join("\n"),
+		expectError: "Cast between funcptr types of different shape",
+	},
+	{
+		label: "arity is part of the shape",
+		source: ["functype One(int a)", "functype Two(int a, int b)", "function f(int a) { }",
+			"function main() locals One o, Two t { o = f; t = (Two)o; }"].join("\n"),
+		expectError: "Cast between funcptr types of different shape",
+	},
+	{
+		label: "a same-name cast is a no-op",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, Cb d { c = dbl; d = (Cb)c; }"].join("\n"),
+		expectError: null,
+	},
+	/* A DIRECT function reference keeps its `&name` operand through a cast, so the reference check
+	   (funcTypeMatches, E441) still fires - the cast cannot launder a wrong function into a named type. */
+	{
+		label: "a cast does not launder a wrong direct function reference",
+		source: ["functype Cb(int a) returns int r", "function wrong(float x) returns float y { y = x; }",
+			"function main() locals Cb c { c = (Cb)wrong; }"].join("\n"),
+		expectError: "Function wrong does not match funcptr type 'Cb'",
+	},
+	{
+		label: "a cast on a matching direct function reference is fine",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c { c = (Cb)dbl; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "an untyped funcptr enters a named type via the cast",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals funcptr f, Cb c, int y { f = dbl; c = (Cb)f; y = c(21); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a named funcptr decays to untyped without a cast",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, funcptr f { c = dbl; f = c; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "nullfunc suits a named type, cast or not",
+		source: ["functype Cb(int a) returns int r",
+			"function main() locals Cb c, Cb d { c = nullfunc; d = (Cb)nullfunc; }"].join("\n"),
+		expectError: null,
+	},
+	/* Calling THROUGH a named funcptr is checked like a call to its shape; through an untyped one it
+	   is the unchecked 1.0 world. */
+	{
+		label: "a call through a named funcptr checks argument types",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, int y { c = dbl; y = c(1.5); }"].join("\n"),
+		expectError: "Argument type mismatch for argument 1",
+	},
+	{
+		label: "...and arity",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, int y { c = dbl; y = c(1, 2); }"].join("\n"),
+		expectError: "Invalid argument count",
+	},
+	{
+		label: "a call through an untyped funcptr stays unchecked",
+		source: ["function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals funcptr f, int y { f = dbl; y = f(1, 2, 3); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a functype states one return at most",
+		source: ["functype Bad(int a) returns int r, int s"].join("\n"),
+		expectError: "Multiple return values are not supported",
+	},
+	/* The kind-prefixed descriptor encoding: a struct or functype may take any identifier, including
+	   the compiler's own type codes (i f p F) and code-lookalikes (V, Fn) - each was once a live
+	   collision that corrupted UNRELATED declarations, silently for functypes. */
+	{
+		label: "a struct named p, with pointers of it",
+		source: ["struct p { int a; int b }", "global p array g[3]",
+			"function take(p pointer q) { q->a = 1; }",
+			"function main() locals p v, int y { take(&v); global g[1].b = 5; y = global g[1].b; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a functype named i, next to int everywhere",
+		source: ["functype i(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals i cb, int y { cb = dbl; y = cb(21); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "sizeof of a struct named i",
+		source: ["struct i { int a; int b }",
+			"function main() locals int y { y = sizeof(i); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct named V, the void code",
+		source: ["struct V { int a }",
+			"function main() locals V v, V pointer q { q = &v; q->a = 2; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct named Fn does not strip to n",
+		source: ["struct Fn { int a }",
+			"function main() locals Fn v, Fn pointer q { q = &v; q->a = 1; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct named F and a functype named p, together",
+		source: ["struct F { int a }", "functype p(int a) returns int r",
+			"function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals F v, p cb, int y { v.a = 1; cb = dbl; y = cb(v.a); }"].join("\n"),
+		expectError: null,
+	},
 	/* A GLOBAL read spells itself `&name`, exactly like a function reference, so testing the sigil
 	   instead of the lookup sent globals down the function-reference branch to find no function and
 	   fall out silently - past the very check that applied to them. */

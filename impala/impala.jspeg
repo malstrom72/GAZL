@@ -3240,7 +3240,7 @@
             $$parser.fail('Only a funcptr can take a funcptr type - this is '
                     + ($$parser.VERBOSE_TYPES[m.type] || 'not one'), sourceCode, sourceOffset, 'E465',
                     (m.type === 'N' ? 'a native can only be called directly, by name'
-                            : 'if the value really holds a function, say so first: (' + toName + ')(funcptr)...'));
+                            : 'a funcptr value only comes from a function name, nullfunc, or another funcptr'));
         }
         var fromName = (m.type === 'F' ? m.elem : undefined);
         if (fromName === undefined || fromName === toName || !$$parser.isFuncTypeName(fromName)) {

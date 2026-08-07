@@ -1,0 +1,102 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
+; signature extern native printInt() -> unknown @ 22:1
+; signature extern native printLF() -> unknown @ 23:1
+	! MOVi <a> #0	; layout of struct p
+.o.p.lo:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.p.hi:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.p:	! DEFi #<a>
+; signature struct p { lo : int, hi : int } @ 29:1
+
+;-----------------------------------------------------------------------------
+dbl:	FUNC	; signature func dbl(int a) -> int @ 33:1
+	$r:	OUTi
+	$a:	INPi
+;-----------------------------------------------------------------------------
+		MULi $r $a #2	; r = a * 2
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+trpl:	FUNC	; signature func trpl(int a) -> int @ 34:1
+	$r:	OUTi
+	$a:	INPi
+;-----------------------------------------------------------------------------
+		MULi $r $a #3	; r = a * 3
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+five:	FUNC	; signature func five() -> float @ 35:1
+	$f:	OUTf
+;-----------------------------------------------------------------------------
+		MOVf $f #5.0 	; f = 5.0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ 37:1
+		PARA *1
+	$c:	LOCp
+	$d:	LOCp
+	$u:	LOCp
+	$fm:	LOCp
+	$cb:	LOCp
+	$v:	LOCA *.z.p
+	$y:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $c &dbl 	; c = dbl
+		MOVp $d $c 	; d = (Dup)c
+		MOVi %1 #21 	; y = d(21)
+		CALL $d %0 *2	; expects function(int) -> int @ 41:11
+		MOVi $y %0 
+		MOVi %1 $y 	; printInt(y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:35
+		MOVp $d $d 	; d = (Dup)(Cb)d
+		MOVp $c &trpl 	; c = (Cb)trpl
+		MOVi %1 #21 	; y = c(21)
+		CALL $c %0 *2	; expects function(int) -> int @ 45:11
+		MOVi $y %0 
+		MOVi %1 $y 	; printInt(y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 45:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 45:35
+		MOVp $u $c 	; u = c
+		MOVp $d $u 	; d = (Dup)(funcptr)u
+		MOVi %1 #5 	; y = d(5)
+		CALL $d %0 *2	; expects function(int) -> int @ 49:10
+		MOVi $y %0 
+		MOVi %1 $y 	; printInt(y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 49:34
+		MOVp $fm &five 	; fm = five
+		CALL $fm %0 *1	; expects function() -> float @ 52:15
+		fTOi $y %0 #1.0
+		MOVi %1 $y 	; printInt(y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 53:24
+		MOVp $cb &NULL 	; cb = nullfunc
+		NEQp $cb &NULL @.f0	; if (cb == nullfunc) 
+		MOVi $y #7 	; y = 7
+	.f0:	MOVi %1 $y 	; printInt(y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 57:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 57:24
+		MOVi $v:.o.p.lo #3 	; v.lo = 3
+		MOVi $v:.o.p.hi #8 	; v.hi = 8
+		ADDi $y $v:.o.p.lo $v:.o.p.hi	; y = v.lo + v.hi
+		MOVi %1 $y 	; printInt(y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 61:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 61:24
+		MOVp $cb &dbl 	; cb = dbl
+		MOVi %2 #2 	; y = cb(cb(2))
+		CALL $cb %1 *2	; expects function(int) -> int @ 64:14
+		CALL $cb %0 *2	; expects function(int) -> int @ 64:15
+		MOVi $y %0 
+		MOVi %1 $y 	; printInt(y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 65:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 65:24
+		RETU   	; }
