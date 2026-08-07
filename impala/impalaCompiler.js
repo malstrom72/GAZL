@@ -232,18 +232,22 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
     }
 
-    /* render a full element descriptor as a single metadata token: 'p:i' -> "int-ptr",
-       'p:p:i' -> "int-ptr-ptr", 'i' -> "int", 'p' -> "ptr" (element-unknown pointer) */
-    function signatureCategoryForDesc(desc) {                     /// 'p:i'->"int-ptr", 'p:Filter'->"Filter-ptr"
-        if (desc === undefined) {
-            return 'unknown';
-        }
-        var head = descHead(desc);
-        var tail = descTail(desc);
-        if (head === 'S') return tail;                            /* struct / funcptr: the tail IS the name */
-        if (head === 't') return (tail !== undefined ? tail : 'funcptr');
-        if (head === 'p' && tail !== undefined) return signatureCategoryForDesc(tail) + '-ptr';
-        return signatureParamCategory(head);
+    /* ONE walk over a descriptor, in two vocabularies: the `; signature` metadata token
+       ("int-ptr") and the prose a diagnostic reads ("int pointer"). They differ only in what joins a
+       pointer level, which table names a scalar, and what an absent descriptor is called - so they
+       share the recursion and a change to the descriptor grammar cannot update one and forget the
+       other. */
+    function renderDesc(desc, absent, ptrJoin, leaf) {
+        if (desc === undefined) return absent;
+        var head = descHead(desc), tail = descTail(desc);
+        if (head === 'S') return tail;                            /* struct: the tail IS its name */
+        if (head === 't') return (tail !== undefined ? tail : 'funcptr');   /* named type, or a bare funcptr */
+        if (head === 'p' && tail !== undefined) return renderDesc(tail, absent, ptrJoin, leaf) + ptrJoin;
+        return leaf(head);
+    }
+
+    function signatureCategoryForDesc(desc) {                     /// 'pi'->"int-ptr", 'pSFilter'->"Filter-ptr"
+        return renderDesc(desc, 'unknown', '-ptr', signatureParamCategory);
     }
 
     /* full descriptor of a declared symbol: type char + optional element chain */
@@ -251,16 +255,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return (elem !== undefined ? type + elem : type);
     }
 
-    function signatureReturnCategory(type, known) {
-        switch (type) {
-            case 'i': return 'int';
-            case 'f': return 'float';
-            case 'p': return 'ptr';
-            case 't': return 'funcptr';
-            case 'V': return 'void';
-            case '?': return (known ? 'void' : 'unknown');
-            default:  return 'unknown';
-        }
+    function signatureReturnCategory(type, known) {               /* the param table, plus what only a RETURN can be */
+        if (type === 'V') return 'void';
+        if (type === '?') return (known ? 'void' : 'unknown');
+        return signatureParamCategory(type);
     }
 
     function ensureFunctionSignature(name) {
@@ -1980,14 +1978,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return true;
     };
 
-    elemVerbose = function (desc) {                      /// 'p:i' -> "int pointer"; 'p:Filter' -> "Filter pointer"
-        if (desc === undefined) return 'untyped';
-        var head = descHead(desc);
-        var tail = descTail(desc);
-        if (head === 'S') return tail;                            /* struct / funcptr: the tail IS the name */
-        if (head === 't') return (tail !== undefined ? tail : 'funcptr');
-        if (head === 'p' && tail !== undefined) return elemVerbose(tail) + ' pointer';
-        return VERBOSE_TYPES[head];
+    elemVerbose = function (desc) {                      /// 'pi' -> "int pointer"; 'pSFilter' -> "Filter pointer"
+        return renderDesc(desc, 'untyped', ' pointer',
+                function (head) { return VERBOSE_TYPES[head]; });
     };
 
     setElem = function (rec, elem) {                     /// stamp element type on a meta record
