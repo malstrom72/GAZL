@@ -3247,9 +3247,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        deliberate conversion is spelled `(To)(funcptr)x` - visible, and greppable. */
     checkFuncTypeCast = function (x, toName, sourceCode, sourceOffset) {
         var m = metaSlot(x);
+        if (m.type !== 'F' && m.type !== 'N' && m.type !== '?') { /* a native reference IS a funcptr; unknown is not over-reported */
+            fail('Only a funcptr can take a funcptr type - this is '
+                    + (VERBOSE_TYPES[m.type] || 'not one'), sourceCode, sourceOffset, 'E465',
+                    'if the value really holds a function, say so first: (' + toName + ')(funcptr)...');
+        }
         var fromName = (m.type === 'F' ? m.elem : undefined);
         if (fromName === undefined || fromName === toName || !isFuncTypeName(fromName)) {
-            return;                                               /* untyped, same, or not a funcptr: no claim to check */
+            return;                                               /* untyped or same: no shape claim to compare */
         }
         var got = signatureShape(fromName, functypes[fromName]);
         var want = signatureShape(toName, functypes[toName]);

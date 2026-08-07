@@ -2913,6 +2913,18 @@ const typedPointerCases = [
 			"function main() locals Cb c, Wrong w { c = dbl; w = (Wrong)(funcptr)c; }"].join("\n"),
 		expectError: null,
 	},
+	{
+		label: "a non-funcptr does not take a funcptr type",
+		source: ["functype Cb(int a) returns int r",
+			"function main() locals int x, Cb c { x = 3; c = (Cb)x; }"].join("\n"),
+		expectError: "Only a funcptr can take a funcptr type",
+	},
+	{
+		label: "...a data pointer neither",
+		source: ["functype Cb(int a) returns int r", "global int g",
+			"function main() locals int pointer p, Cb c { p = &global g; c = (Cb)p; }"].join("\n"),
+		expectError: "Only a funcptr can take a funcptr type",
+	},
 	/* A GLOBAL read spells itself `&name`, exactly like a function reference, so testing the sigil
 	   instead of the lookup sent globals down the function-reference branch to find no function and
 	   fall out silently - past the very check that applied to them. */

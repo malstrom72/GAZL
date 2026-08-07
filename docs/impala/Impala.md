@@ -238,9 +238,10 @@ check. `nullfunc` suits any of them, and you assign the bare name (`cb = tick`),
 Assignment between two *named* types is nominal — same shape is not enough (`E441`), a
 cast is how you say you checked. The cast is itself shape-checked: `(Other)cb` converts
 freely when `Other` takes the same arguments and returns the same values, and is `E465`
-when it does not — a call through the result would read the wrong frame. Untyped
-`funcptr` is the escape hatch: `(funcptr)cb` erases the name and a named cast re-stamps
-it, so a deliberate shape change is spelled `(Other)(funcptr)cb`.
+when it does not — a call through the result would read the wrong frame. Only a funcptr
+can take a funcptr type at all: `(Other)someInt` is `E465` too. Untyped `funcptr` is the
+escape hatch: `(funcptr)cb` erases the name and a named cast re-stamps it, so a
+deliberate conversion is spelled `(Other)(funcptr)cb`.
 
 ## Declarations
 
