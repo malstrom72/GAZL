@@ -181,31 +181,31 @@
     );
 
     map($$parser.SUPPORTED_OPS,
-        '=*p','?', '=&f','p', '=&F','p', '=&i','p', '=&p','p', '=&?','p',
+        '=*p','?', '=&f','p', '=&t','p', '=&i','p', '=&p','p', '=&?','p',
         '=-i','i', '=-f','f', '=~i','i',
-        '=floatf','f', '=float?','f', '=funcptrF','F', '=funcptr?','F',
+        '=floatf','f', '=float?','f', '=funcptrt','t', '=funcptr?','t',
         '=inti','i', '=int?','i', '=pointerp','p', '=pointer?','p',
         '=absi','i', '=absf','f', '=itofi','f', '=ftoif','i', '=floorf','f',
         '|ii','i', '&ii','i', '^ii','i', '<<ii','i', '>>>ii','i', '>>ii','i',
         '+ii','i', '-ii','i', '*ii','i', '/ii','i', '%ii','i',
         '+ff','f', '-ff','f', '*ff','f', '/ff','f',
-        '+pi','p', '-pi','p', '-pp','i', '-FF','i',   /* funcptr difference: ordinal distance, DIFp (DIFt in GAZL 2) */
+        '+pi','p', '-pi','p', '-pp','i', '-tt','i',   /* funcptr difference: ordinal distance, DIFp (DIFt in GAZL 2) */
         '=[]pi','?',
         '<=ii','i', '<ii','i', '>=ii','i', '>ii','i', '!=ii','i', '==ii','i',
         '<=ff','f', '<ff','f', '>=ff','f', '>ff','f', '!=ff','f', '==ff','f',
         '<=pp','p', '<pp','p', '>=pp','p', '>pp','p', '!=pp','p', '==pp','p',
-        '<=FF','F', '<FF','F', '>=FF','F', '>FF','F', '!=FF','F', '==FF','F'
+        '<=tt','t', '<tt','t', '>=tt','t', '>tt','t', '!=tt','t', '==tt','t'
     );
 
-    map($$parser.CASTS_TO_TYPES, 'float','f','funcptr','F','int','i','pointer','p');
-    map($$parser.ZEROES,         'f','#0.0','i','#0','p','&NULL','F','&NULL');
-    /* GAZL 2: `'F','p'` is where Impala THROWS AWAY the funcptr/data-pointer distinction it already has -
+    map($$parser.CASTS_TO_TYPES, 'float','f','funcptr','t','int','i','pointer','p');
+    map($$parser.ZEROES,         'f','#0.0','i','#0','p','&NULL','t','&NULL');
+    /* GAZL 2: `'t','p'` is where Impala THROWS AWAY the funcptr/data-pointer distinction it already has -
        GAZL 1 offers only `p` for both, so a funcptr array and a pointer array emit identical `DATp` rows.
-       When GAZL 2 lands the `t` (target) type this becomes `'F','t'` and Impala needs nothing else; the
+       When GAZL 2 lands the `t` (target) type this becomes `'t','t'` and Impala needs nothing else; the
        type is already tracked. See design/gazl/GAZL2FunctionPointers.md. */
-    map($$parser.TYPE_SUFFIXES,  'void','', 'i','i','f','f','p','p','F','p','U','',
+    map($$parser.TYPE_SUFFIXES,  'void','', 'i','i','f','f','p','p','t','p','U','',
                                  'N','',   'A','A','?','E', 'V','');
-    map($$parser.VERBOSE_TYPES,  'i','int','f','float','p','pointer','F','funcptr',
+    map($$parser.VERBOSE_TYPES,  'i','int','f','float','p','pointer','t','funcptr',
                                  'U','function','N','native','A','array','S','struct','?','untyped',
                                  'V','void');
 
@@ -214,7 +214,7 @@
             case 'i': return 'int';
             case 'f': return 'float';
             case 'p': return 'ptr';
-            case 'F': return 'funcptr';
+            case 't': return 'funcptr';
             default:  return 'unknown';
         }
     }
@@ -228,7 +228,7 @@
         var head = $$parser.descHead(desc);
         var tail = $$parser.descTail(desc);
         if (head === 'S') return tail;                            /* struct / funcptr: the tail IS the name */
-        if (head === 'F') return (tail !== undefined ? tail : 'funcptr');
+        if (head === 't') return (tail !== undefined ? tail : 'funcptr');
         if (head === 'p' && tail !== undefined) return signatureCategoryForDesc(tail) + '-ptr';
         return signatureParamCategory(head);
     }
@@ -243,7 +243,7 @@
             case 'i': return 'int';
             case 'f': return 'float';
             case 'p': return 'ptr';
-            case 'F': return 'funcptr';
+            case 't': return 'funcptr';
             case 'V': return 'void';
             case '?': return (known ? 'void' : 'unknown');
             default:  return 'unknown';
@@ -1777,9 +1777,9 @@
      *      i f          a scalar, ends the chain                 *
      *      p<rest>      pointer to <rest>:  pi, ppi, pSFilter    *
      *      S<name>      struct, <name> ends the chain: SFilter   *
-     *      F<name>      funcptr type, ends the chain:  FTickFn   *
+     *      t<name>      funcptr type, ends the chain:  tTickFn   *
      *  A tail after `p` is therefore always another DESCRIPTOR,  *
-     *  and a tail after `S`/`F` is always a NAME. That is the    *
+     *  and a tail after `S`/`t` is always a NAME. That is the    *
      *  whole rule, and it is what keeps a struct called `p` or a *
      *  functype called `i` from reading as a built-in code -     *
      *  a bare head is ALWAYS built-in.                           *
@@ -1795,12 +1795,12 @@
 
     /* Split a descriptor into the (type, elem) pair the rest of the compiler carries. Whether `elem` is
        a descriptor or a name follows from `type`, per the rule above. */
-    $$parser.descTypeElem = function (desc) {                     /// 'pi' -> {p,i}; 'FTickFn' -> {F,TickFn}
+    $$parser.descTypeElem = function (desc) {                     /// 'pi' -> {p,i}; 'tTickFn' -> {t,TickFn}
         return { type: $$parser.descHead(desc), elem: $$parser.descTail(desc) };
     };
 
     $$parser.structDesc = function (name) { return 'S' + name; };
-    $$parser.funcTypeDesc = function (name) { return 'F' + name; };
+    $$parser.funcTypeDesc = function (name) { return 't' + name; };
     $$parser.pointerDesc = function (desc) { return 'p' + (desc === undefined ? '' : desc); };
 
     /* NAME predicates take a raw identifier and ask the tables; ATOM predicates take a DESCRIPTOR and
@@ -1821,13 +1821,13 @@
     };
 
     $$parser.isFuncTypeAtom = function (desc) {                   /// does descriptor `desc` denote a funcptr type?
-        return desc !== undefined && desc.charAt(0) === 'F' && desc.length > 1;
+        return desc !== undefined && desc.charAt(0) === 't' && desc.length > 1;
     };
 
-    /* The NAME inside an `S`/`F` descriptor. Takes a descriptor strictly - it is NOT identity on a bare
+    /* The NAME inside an `S`/`t` descriptor. Takes a descriptor strictly - it is NOT identity on a bare
        name, because a struct genuinely called `Fn` would strip to `n`. */
     $$parser.descName = function (desc) {
-        assert($$parser.isStructAtom(desc) || $$parser.isFuncTypeAtom(desc), 'descName needs an S/F descriptor');
+        assert($$parser.isStructAtom(desc) || $$parser.isFuncTypeAtom(desc), 'descName needs an S/t descriptor');
         return desc.substr(1);
     };
 
@@ -1972,7 +1972,7 @@
         var head = $$parser.descHead(desc);
         var tail = $$parser.descTail(desc);
         if (head === 'S') return tail;                            /* struct / funcptr: the tail IS the name */
-        if (head === 'F') return (tail !== undefined ? tail : 'funcptr');
+        if (head === 't') return (tail !== undefined ? tail : 'funcptr');
         if (head === 'p' && tail !== undefined) return $$parser.elemVerbose(tail) + ' pointer';
         return $$parser.VERBOSE_TYPES[head];
     };
@@ -3185,7 +3185,7 @@
                         'use a cast: (' + $$parser.elemVerbose(leftx.elem) + ' pointer)');
             }
         }
-        if (leftx.type === 'F' && $$parser.isFuncTypeName(leftx.elem)) {   /* named funcptr type target */
+        if (leftx.type === 't' && $$parser.isFuncTypeName(leftx.elem)) {   /* named funcptr type target */
             $$parser.checkFuncPtrTarget(leftx.elem, bareOperand(rightx), rightx.type, rightx.elem,
                     '', sourceCode, sourceOffset);
         }
@@ -3219,7 +3219,7 @@
                         + expected + "'" + at, sourceCode, sourceOffset, 'E441',
                         'check the parameter and return types against ' + expected);
             }
-        } else if (actualType === 'F' && actualElem !== expected) {
+        } else if (actualType === 't' && actualElem !== expected) {
             $$parser.fail('Funcptr type mismatch' + at + " (expected '" + expected + "', got "
                     + (actualElem !== undefined && $$parser.isFuncTypeName(actualElem)
                             ? "'" + actualElem + "'" : 'an untyped funcptr') + ')',
@@ -3234,7 +3234,7 @@
        deliberate conversion is spelled `(To)(funcptr)x` - visible, and greppable. */
     $$parser.checkFuncTypeCast = function (x, toName, sourceCode, sourceOffset) {
         var m = metaSlot(x);
-        if (m.type !== 'F' && m.type !== '?') {                   /* unknown is not over-reported. A NATIVE is not a
+        if (m.type !== 't' && m.type !== '?') {                   /* unknown is not over-reported. A NATIVE is not a
                                                                      funcptr either: `MOVp` has no `^native` form, so the
                                                                      value cannot even be stored - only called by name */
             $$parser.fail('Only a funcptr can take a funcptr type - this is '
@@ -3242,7 +3242,7 @@
                     (m.type === 'N' ? 'a native can only be called directly, by name'
                             : 'a funcptr value only comes from a function name, nullfunc, or another funcptr'));
         }
-        var fromName = (m.type === 'F' ? m.elem : undefined);
+        var fromName = (m.type === 't' ? m.elem : undefined);
         if (fromName === undefined || fromName === toName || !$$parser.isFuncTypeName(fromName)) {
             return;                                               /* untyped or same: no shape claim to compare */
         }
@@ -3362,9 +3362,9 @@
         } else {
 
             /* pointer-difference special-case “d” */
-            var diff = (operator === '-' && (rightx.type === 'p' || rightx.type === 'F'));
+            var diff = (operator === '-' && (rightx.type === 'p' || rightx.type === 't'));
             if (diff) {
-                var funcDiff = (rightx.type === 'F');             /* ordinals, not addresses: no stride, nothing to match */
+                var funcDiff = (rightx.type === 't');             /* ordinals, not addresses: no stride, nothing to match */
                 operator = 'd';
                 /* The difference counts ELEMENTS (DIFp, then DIVi by the stride), so it only means
                    anything when both pointers walk the same element type - `ip - fp` would divide a
@@ -3869,7 +3869,7 @@
                `array`) says exactly what `undefined` says, and UNKNOWN MUST HAVE ONE SPELLING:
                with two, a comparison of the same non-knowledge reports itself as
                "expected untyped elements, got untyped elements". A named funcptr needs no case of
-               its own: `F` + its name IS the descriptor. */
+               its own: `t` + its name IS the descriptor. */
             expr.elem = (prevType === undefined || prevType === '?' ? undefined
                     : prevType + (prevElem !== undefined ? prevElem : ''));
         } else {
@@ -4138,7 +4138,7 @@
                                   '^' + name, undefined);
             } else {
                 assert(p.type === 'U', 'function entry must be U');
-                $$parser.makeMeta(x, ':=', 'F', undefined,
+                $$parser.makeMeta(x, ':=', 't', undefined,
                                   '&' + name, undefined);
             }
             $$parser.setElem(x, undefined);
@@ -4499,7 +4499,7 @@ TypeDeclr   <-  base:TypeBase                                        { $desc = $
                                                                              $$.words = $$parser.structWords(td.elem);
                                                                          } else {
                                                                              $$.type = td.type; $$.elem = td.elem; $$.struct = undefined;
-                                                                             $$.words = (td.type === 'F' ? 1 : undefined);   /* scalar funcptr: one word */
+                                                                             $$.words = (td.type === 't' ? 1 : undefined);   /* scalar funcptr: one word */
                                                                          }
                                                                      }
 
@@ -4947,7 +4947,7 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                                                                              $$parser.fail('A const cannot be a struct value - use a struct pointer ('
                                                                                      + 'const ' + cd.elem + ' pointer)', $$s, $$i, 'E447');
                                                                          }
-                                                                         $t = cd.type; $telem = cd.elem;    /* 'F' + name for a funcptr constant */
+                                                                         $t = cd.type; $telem = cd.elem;    /* 't' + name for a funcptr constant */
                                                                          $cStart = $$i;   /* `Identifier` eats trailing space, so $$i
                                                                                              would name the NEXT declaration (E453) */
                                                                       }
@@ -5279,7 +5279,7 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                              $$.elem = undefined;
                                                                              $$.words = $$parser.structWords(vd.elem);
                                                                          } else {
-                                                                             $$.type = vd.type;       /* 'F' + the name for a named funcptr type */
+                                                                             $$.type = vd.type;       /* 't' + the name for a named funcptr type */
                                                                              $$.elem = vd.elem;
                                                                              $$.struct = undefined;
                                                                              $$.words = undefined;    /* scalar: a single word, no size operand */
@@ -5556,7 +5556,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            if (_e && _e.signature && _e.signature.returnWords !== undefined
                                                                    && _e.signature.returnWords > 1)
                                                                _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */
-                                                       } else if (_c.type === 'F' && $$parser.isFuncTypeName(_c.elem)) {
+                                                       } else if (_c.type === 't' && $$parser.isFuncTypeName(_c.elem)) {
                                                            var _ft = $$parser.functypes[_c.elem];   /* indirect call through a named funcptr type */
                                                            if (_ft.returnWords > 1) _rs = _ft.returnWords;
                                                        }
@@ -5587,7 +5587,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        var signature = null;
                                                        var calleeName = null;
 
-                                                       if (span(callee.type, 'FN') !== 1) {
+                                                       if (span(callee.type, 'tN') !== 1) {
                                                            $$parser.typeError(
                                                                'Invalid type for function call ({$type1})',
                                                                $$s, $$i, callee.type
@@ -5606,7 +5606,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                    && (entry.kind === 'FUNC' || entry.signature.params)) {
                                                                signature = entry.signature;
                                                            }
-                                                       } else if (callee.type === 'F' && $$parser.isFuncTypeName(callee.elem)) {
+                                                       } else if (callee.type === 't' && $$parser.isFuncTypeName(callee.elem)) {
                                                            signature = $$parser.functypes[callee.elem];   /* indirect call: check against the funcptr type */
                                                        }
 
@@ -5671,10 +5671,10 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                            'use a cast: (' + $$parser.elemVerbose(expectedElem) + ' pointer)');
                                                                }
                                                                /* Same rule for a named funcptr param as for assignment, so the same check:
-                                                                  `expected` is already 'F' here, which is what the assign path derives from
+                                                                  `expected` is already 't' here, which is what the assign path derives from
                                                                   the r-value's own type. */
-                                                               if (expected === 'F' && $$parser.isFuncTypeName(expectedElem)) {
-                                                                   $$parser.checkFuncPtrTarget(expectedElem, $$.opnds[argIdx], 'F',
+                                                               if (expected === 't' && $$parser.isFuncTypeName(expectedElem)) {
+                                                                   $$parser.checkFuncPtrTarget(expectedElem, $$.opnds[argIdx], 't',
                                                                            $$.elems[argIdx],
                                                                            ' for argument ' + (argIdx + 1) + ' when calling ' + label,
                                                                            $$s, $$i);
@@ -6334,7 +6334,7 @@ Value       <-  Group
                                                         $$parser.setElem($$, undefined);
                                                       } }
                 / NULLFUNC _                        { if (!$$parser.dry) {
-                                                        $$parser.makeMeta($$, ':=', 'F', undefined, '&NULL', undefined);
+                                                        $$parser.makeMeta($$, ':=', 't', undefined, '&NULL', undefined);
                                                         $$parser.setElem($$, undefined);
                                                       } }
                 / Variable
