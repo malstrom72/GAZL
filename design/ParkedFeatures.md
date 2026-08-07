@@ -114,6 +114,11 @@ Contains three entangled features, which is why they share one park point:
   no indirection. Includes `copyStructArg`, `freeStructWindow`, struct-sized `PARA *N`, the return-window
   `ADRL`, `winBase`/`winWords` place state, and the nested-call window adoption trick (an inner call's
   output window is placed exactly where the outer argument belongs, so the return needs no copy-out).
+  *(`e6ad36d` parked the feature by making E426/E427 reject it at the DECLARATOR, but left the lowering
+  scaffolding in the tree, unreachable. That remainder - `freeStructWindow`, `winBase`/`winWords`, the
+  return-window `ADRL`, the multi-return window, and the `E423` diagnostic, which no longer exists - was
+  deleted 2026-08-07. `copyStructArg` stays: it still runs before the argument list closes on E426. The
+  park TAG is the source of truth for a revival, not the working tree.)*
 - **Multi-return.** `function split(int n) returns int lo, int hi`, multiple `OUT` slots, and multi-return
   function types (`functype SplitFn(int n) returns int, int`).
 - **Destructuring assignment.** `lo, hi = split(n)`, including the `_` placeholder for discarded outputs.

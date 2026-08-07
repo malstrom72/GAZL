@@ -1284,8 +1284,6 @@
         rec.oobIndex  = undefined;
         rec.struct    = undefined;
         rec.dynIndex  = undefined;
-        rec.winBase   = undefined;
-        rec.winWords  = undefined;
         rec.readonly  = false;        /* pooled slots: never inherit a previous symbol's writability */
         return rec;
     };
@@ -3127,15 +3125,6 @@
        struct value in (experiment-verified: ADRL the window region, ADRL the source, COPY). */
     $$parser.copyStructArg = function (argMeta, winSlot, words) {
         argMeta = metaSlot(argMeta);
-        /* A struct-return result already sits in transient window slots. Nested calls slide
-           their windows so the inner result lands exactly where this argument belongs - then
-           there is nothing to copy (and self-copy would be undefined behaviour): adopt it. */
-        if (argMeta.winBase === winSlot && argMeta.winWords === words) {
-            $$parser.returnBack(argMeta.base);                    /* free the window-address pointer temp */
-            argMeta.winBase = undefined;                          /* slots are now the argument window (freed by the call) */
-            argMeta.winWords = undefined;
-            return;
-        }
         for (var k = 0; k < words; ++k) {                         /* reserve the window slots */
             $$parser.claimSlot(winSlot + k);
         }
@@ -3150,34 +3139,13 @@
         $$parser.emit('copy', '?', dst, src, '*' + words);           /* COPY dst src *words (matches the window) */
         $$parser.returnBack(src);
         $$parser.returnBack(dst);
-        $$parser.freeStructWindow(argMeta);                          /* if the source was a struct-return window, release it */
     };
 
-    /* A struct-return call result lives in transient output-window slots that must be freed
-       once the value has been consumed (copied out / read). Named-place operands (locals,
-       globals, pointers) carry no window and are ignored. */
-    $$parser.freeStructWindow = function (place) {
-        place = metaSlot(place);
-        if (place.winBase !== undefined) {
-            for (var i = place.winWords - 1; i >= 0; --i) {
-                $$parser.returnBack('%' + (place.winBase + i));
-            }
-            place.winBase = undefined;
-            place.winWords = undefined;
-        }
-    };
-
-    /* fp->field, place.field, nested chains - Step 2 slices 1-2 */
     $$parser.fieldAccess = function (x, fieldName, arrow, sourceCode, sourceOffset) {
         x = metaSlot(x);
 
         var bk, base, offParts, structName, root, dynIndex;
         if (x.place) {
-            if (x.winBase !== undefined) {
-                $$parser.fail("Cannot access a field directly on a returned struct value",
-                        sourceCode, sourceOffset, 'E423',
-                        'assign the call result to a local first, then read its fields');
-            }
             if (arrow) {
                 $$parser.fail("Use '.' - this is a struct value, not a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as .' + fieldName);
@@ -3579,7 +3547,6 @@ var _sn = $$parser.strideStruct(field.elem);
             $$parser.emitMeta(x);
             $$parser.returnBack(src);
             $$parser.returnBack(dst);
-            $$parser.freeStructWindow(rightx);                    /* release a struct-return window once copied out */
             $$parser.setPlace(x, savedBK, savedBase, savedParts, savedStruct, savedRoot);
             return;
         }
@@ -5498,10 +5465,6 @@ Statement   <-                                                        {
                 /   While
                 /   Destructure
                 /   Expr ';' _                                        {
-                                                                         if (metaSlot($$).winBase !== undefined) {     /* discarded struct-return value: free its window + base */
-                                                                             $$parser.returnBack(metaSlot($$).base);
-                                                                             $$parser.freeStructWindow($$);
-                                                                         }
                                                                          $$parser.releaseMeta($$);
                                                                      }
                 )
@@ -5811,17 +5774,13 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                           bare one, or `*f()` cannot be recognised as a struct and typed-pointer assignment
                                                           checks go blind. A funcptr type carries returnElem too, so indirect calls work. */
                                                        $$parser.setElem(callee, signature ? signature.returnElem : undefined);
-                                                       if (signature && signature.returns === 'S') {   /* by-value struct return -> a place over the output window */
-                                                           var _wp = $$parser.borrow('%');
-                                                           $$parser.emit('=&', 'p', _wp, '%' + $$.base, '*' + $$.retSlots);   /* numeric: fixed output window (see copyStructArg) */
-                                                           $$parser.setPlace(callee, 'pointer', _wp, [], signature.returnStruct, signature.returnStruct);
-                                                           callee.winBase  = $$.base;       /* output window slots to free once the value is consumed */
-                                                           callee.winWords = $$.retSlots;
-                                                       } else if ($$.retSlots > 1) {        /* multi-return: expose window for destructuring */
-                                                           callee.multiBase = $$.base;
-                                                           callee.multiCount = $$.retSlots;
-                                                           callee.multiReturnList = signature.returnList;
-                                                       }
+                                                       /* A by-value struct return placed over the output window, and the
+                                                          multi-return window for destructuring, both lived here. Neither
+                                                          guard can be true in 2.0 - E427 rejects a struct return and E428
+                                                          a second return value, both at the DECLARATOR - so no call ever
+                                                          reached them. Removed 2026-08-07, which is what
+                                                          design/ParkedFeatures.md had already claimed. `retSlots` itself
+                                                          stays: it is live, sizing the frame and the argument window. */
 
                                                        if (calleeName) {
                                                            callee.callInfo = {

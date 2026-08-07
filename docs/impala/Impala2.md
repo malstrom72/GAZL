@@ -1572,7 +1572,6 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E420 | whole-struct assignment needs a struct on both sides / struct type mismatch |
 | E421 | a struct value needs a brace initializer / struct type mismatch in a call argument |
 | E422 | malformed brace initializer (too many braces, type mismatch, or missing nesting) |
-| E423 | cannot access a field directly on a returned struct value |
 | E426 | passing a struct by value is not supported in Impala 2.0 |
 | E427 | returning a struct by value is not supported in Impala 2.0 |
 | E428 | multiple return values are not supported in Impala 2.0 |
