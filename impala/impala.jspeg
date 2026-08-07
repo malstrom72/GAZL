@@ -61,8 +61,8 @@
     function replace(str, sub, by) {
         return str.split(sub).join(by);
     }
-    function find(str, chars) {
-        var i = 0;
+    function find(str, chars, from) {                             /// index of the first `chars` at or after `from`
+        var i = from || 0;
         while (i < str.length && chars.indexOf(str[i]) < 0) {
             i++;
         }
@@ -3866,9 +3866,15 @@ var _sn = $$parser.strideStruct(field.elem);
             return;
         }
 
-        /* &structValue -> a typed struct pointer (the place's address) */
+        /* &structValue -> a typed struct pointer (the place's address); &arrayPlace -> a pointer to its
+           ELEMENT. setPlace leaves `struct` undefined for an array place (it fills `arrayOf` instead), so
+           taking the struct branch unconditionally minted the descriptor `Sundefined` - which
+           `isStructAtom` accepts and renderDesc unwraps to the word "undefined", so `p = &global b.tags`
+           on `struct Body { int array tags[4] }` failed with "expected int elements, got undefined
+           elements". `arrayOf` is already the element descriptor, which is what makeRValue uses for the
+           same decay. */
         if (operator === '&' && expr.place) {
-            var structName = expr.struct;
+            var structName = expr.struct, arrayElem = expr.arrayOf;   /* both read BEFORE makeMeta clears the place */
             if (expr.baseKind === 'local' && (!expr.offParts || expr.offParts.length === 0) && expr.dynIndex === undefined) {
                 /* a whole local's address is a single ADRL with no offset scratch - leave it DEFERRED as
                    '=&' so an assignment emits ADRL straight into its target ($p) instead of a temp + MOVp,
@@ -3878,7 +3884,8 @@ var _sn = $$parser.strideStruct(field.elem);
             } else {                                          /* offset fold or global/pointer base: materialize now */
                 $$parser.makeMeta(expr, ':=', 'p', undefined, $$parser.placeAddress(expr), undefined);
             }
-            $$parser.setElem(expr, $$parser.structDesc(structName));
+            $$parser.setElem(expr, (arrayElem !== undefined ? arrayElem
+                    : (structName !== undefined ? $$parser.structDesc(structName) : undefined)));
             return;
         }
 
@@ -5436,10 +5443,13 @@ ArrayDecl   <-                                                        { $desc = 
 #  Statement rule dispatch                                      
 # ------------------------------------------------------------------
 Statement   <-                                                        {
-                                                                         var snippet = $$s.substr($$i);
-                                                                         var cut     = find(snippet, "{;\r\n");
-                                                                         var txt     = (cut >= 0 ? snippet.substr(0, cut)
-                                                                                              : snippet);
+                                                                         /* Scanned IN PLACE rather than copying the rest of the unit
+                                                                            first. `cut >= 0` was dead: find returns 0..length and
+                                                                            never negative. (Measured: the copy cost nothing - V8
+                                                                            slices rather than copies - so this is a dead-branch
+                                                                            removal, NOT the perf fix it looks like.) */
+                                                                         var cut = find($$s, "{;\r\n", $$i);
+                                                                         var txt = $$s.substring($$i, cut);
                                                                          $$parser.emitMeta({ operator:';', type:undefined,
                                                                                             operands:[ txt, undefined, undefined ] });
                                                                      }
@@ -6234,11 +6244,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
                                                             }
 
                                                             /* dump the literal “case ...” comment */
-                                                            var snippet = $$s.substr($$i);
-                                                            var pos     = find(snippet, ":\r\n");
-                                                            if (pos >= 0) {
-                                                                snippet = snippet.substr(0, pos);
-                                                            }
+                                                            var snippet = $$s.substring($$i, find($$s, ":\r\n", $$i));
                                                             $$parser.emit(
                                                                 ';', undefined,
                                                                 'case ' + snippet,

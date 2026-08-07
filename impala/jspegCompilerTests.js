@@ -2832,6 +2832,33 @@ const typedPointerCases = [
 	   body could only ever say `int[]` while the definition said `int[3]`, the rows differed, and E438's
 	   advice to "correct the declaration" ran straight into E430. No legal spelling existed between the
 	   two diagnostics. An extent is now compared only where BOTH sides state one; rank always is. */
+	/* `&` on an ARRAY place yields a pointer to its ELEMENT. setPlace leaves `struct` undefined for an
+	   array place (it fills `arrayOf` instead), so the struct branch used to mint the descriptor
+	   `Sundefined` - which isStructAtom accepts and renderDesc unwraps to the word "undefined". */
+	{
+		label: "address of a struct's array field is a pointer to its element",
+		source: ["struct Body { int array tags[4] }", "global Body b",
+			"function main() returns int r locals int pointer p { p = &global b.tags; r = 0; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "...and its element type is still checked",
+		source: ["struct Body { int array tags[4] }", "global Body b",
+			"function main() returns int r locals float pointer p { p = &global b.tags; r = 0; }"].join("\n"),
+		expectError: "Pointer element type mismatch",
+	},
+	{
+		label: "address of a struct VALUE is still a struct pointer",
+		source: ["struct P { int a }", "global P g",
+			"function main() locals P pointer q { q = &global g; q->a = 1; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct-element array field gives a struct pointer",
+		source: ["struct Cell { int v }", "struct Grid { Cell array cells[4] }", "global Grid g",
+			"function main() locals Cell pointer c { c = &global g.cells; c->v = 1; }"].join("\n"),
+		expectError: null,
+	},
 	{
 		label: "a host-owned array field meets a sized definition",
 		source: ["extern struct S { int array v[] }", "struct S { int array v[3] }",
