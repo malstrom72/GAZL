@@ -9,19 +9,41 @@ checking can close, because Impala has nowhere to encode the distinction.
 GAZL has three storage types - `i`, `f`, `p` - and **`p` is doing double duty**: it is both "data
 pointer" and "function pointer", which are not the same thing and are not interchangeable.
 
-## This is not a new rule - the ISA already states it
+## The rule the ISA states, and one correction to it
 
-`docs/gazl/InstructionSet.md`, under `CALL`, has said so all along:
+`docs/gazl/InstructionSet.md`, under `CALL`, says (as corrected 2026-08-07):
 
 > A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function
-> declaration order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defined operations
-> on a function pointer; ordering (`LSSp`, `GEQp` etc.) and arithmetic (`ADDp`, `SUBp`, `DIFp`) applied to
-> a function pointer yield an unspecified (but memory-safe) result.
+> declaration order, not a code address. Equality (`EQUp` / `NEQp`), ordering (`LSSp`, `GEQp` etc.) and
+> calling are defined operations on a function pointer. [...] Arithmetic (`ADDp`, `SUBp`, `DIFp`) applied
+> to a function pointer yields an unspecified (but memory-safe) result.
 
-The defined operation set is therefore already **equality and calling** - exactly the set proposed below.
-This document is not asking for a new rule; it is asking the assembler to ENFORCE the one already written
-down, which a shared `p` type makes impossible. Note too that "unspecified (but memory-safe)" is accurate
-but undersells `ADDp`: the result is not garbage, it is a *different function*, called silently.
+(That paragraph originally put ordering on the undefined side with arithmetic. It was corrected on
+2026-08-07, for the reason set out just below; the quote above is the corrected text.)
+
+This document is asking the assembler to ENFORCE what is written down, which a shared `p` type makes
+impossible. Note too that "unspecified (but memory-safe)" is accurate but undersells `ADDp`: the result is
+not garbage, it is a *different function*, called silently.
+
+**Why ordering stays, and why this note originally got it wrong.** The ISA text used to lump ordering in
+with arithmetic; they do not belong together.
+
+- **Arithmetic MANUFACTURES a target.** `&one + 1` produces a *value of type `t`* naming a different
+  function. That is the entire defect this document exists to remove.
+- **Ordering CONSUMES two targets and yields a bool.** It cannot produce an invalid callable at all, so
+  none of the safety argument for dropping arithmetic reaches it.
+
+And ordering is *useful*, because a sorted container does not need a MEANINGFUL order - only a TOTAL and
+RUN-STABLE one. Sort a funcptr table at init and binary-search it for membership: the search never depends
+on which order declaration order happens to hand you, only that it stays consistent within the run. This
+is precisely why C++ guarantees `std::less<T*>` is a strict total order where `<` on unrelated pointers is
+not. "Meaningless by construction" is true of a declaration-order ordinal SEMANTICALLY, and irrelevant to
+whether it sorts.
+
+Impala already draws the line in the right place, and always has: `f + 1` and `f - g` are `E301`, while
+`f < g` and `f == g` compile. The compiler is the evidence; this paragraph was the thing that was wrong.
+
+So the defined operation set is **equality, ordering, and calling**, and `t` offers all three.
 
 ## They are already different things at run time
 
@@ -56,7 +78,7 @@ Verified with GAZLCmd on 2026-08-02:
 | `DATp &target &gdata` (both kinds, one row) | accepted, unchecked |
 | `ADDp $p $p #1` on a function pointer | **accepted - and does NOT trap** |
 | `DIFp $i $funcPtr $dataPtr` | accepted, meaningless result |
-| `LSSp` / `GRTp` ordering two function pointers | accepted, meaningless |
+| `LSSp` / `GRTp` ordering two function pointers | accepted - and CORRECTLY so, see the correction above |
 
 The direct call is caught because `CALL_c__` demands the `FUNC` bit (`src/GAZL.cpp:337`). Everything else
 accepts `ANY_FREE = NULL_PTR | FREE_ADDRESS | FUNC` (`:293`), the union - so the kind survives only while
@@ -99,7 +121,7 @@ discarded at the boundary.
 
 `t` for "target" - the call target, which is what the ordinal actually names.
 
-Needed (~14 table entries):
+Needed:
 
 | mnemonic | why |
 |---|---|
@@ -107,14 +129,19 @@ Needed (~14 table entries):
 | `MOVt` (2 forms) | assignment |
 | `DATt` | initializer rows for funcptr arrays and struct fields |
 | `EQUt` / `NEQt` (8 forms) | equality is meaningful - "is this the same function?" |
+| `LSSt` / `GRTt` / `LEQt` / `GEQt` | a TOTAL, run-stable order - sort a target table, binary-search it |
 | `INPt` / `OUTt` | if call targets cross the host boundary |
 
 plus `CALL_v__` accepting `t` rather than the generic `VAR_PTR_R`.
 
-**The omissions are the feature.** There would be no `ADDt`, `SUBt`, `DIFt`, `FORt`, `LSSt`, `GRTt`,
-`LEQt`, `GEQt` - roughly 30 of the 44 `p`-suffixed entries. Arithmetic and ordering on a
-declaration-order ordinal are meaningless by construction, so `&one + 1` stops being a wrong answer and
-becomes a line that will not assemble. That is the whole return on the change.
+**The omissions are the feature - but the omission is ARITHMETIC, not ordering.** There would be no
+`ADDt`, `SUBt`, `DIFt`, `FORt`. Those are the forms that manufacture a target out of a target, so
+`&one + 1` stops being a wrong answer and becomes a line that will not assemble. That is the whole return
+on the change. Ordering is kept (see the correction at the top of this note): it yields a bool,
+never a callable, so it cannot express the defect - and a sorted target table needs it.
+
+`FORt` is worth naming explicitly as a drop even though it looks like iteration rather than arithmetic:
+stepping a loop variable through targets IS `ADDt` wearing a different hat.
 
 ## Suffix letters ruled out, and why
 
