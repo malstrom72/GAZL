@@ -1,7 +1,7 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ structArrayFields.impala:8:1
 	! MOVi <a> #0	; layout of struct Filter
 .o.Filter.state:	! DEFi #<a>
 .z.Filter.state:	! DEFi #4
@@ -9,13 +9,13 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 .o.Filter.taps:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Filter:	! DEFi #<a>
-; signature struct Filter { state : float[4], taps : int } @ 10:1
-; signature extern native printFloat() -> unknown @ 15:1
-; signature extern native printLF() -> unknown @ 16:1
-gf:	GLOB *.z.Filter	; signature global gf : Filter @ 18:1
+; signature struct Filter { state : float[4], taps : int } @ structArrayFields.impala:10:1
+; signature extern native printFloat() -> unknown @ structArrayFields.impala:15:1
+; signature extern native printLF() -> unknown @ structArrayFields.impala:16:1
+gf:	GLOB *.z.Filter	; signature global gf : Filter @ structArrayFields.impala:18:1
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process(Filter-ptr f, int i, float x) -> void @ 20:1
+process:	FUNC	; signature func process(Filter-ptr f, int i, float x) -> void @ structArrayFields.impala:20:1
 		PARA *1
 	$f:	INPp
 	$i:	INPi
@@ -27,7 +27,7 @@ process:	FUNC	; signature func process(Filter-ptr f, int i, float x) -> void @ 2
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 25:1
+main:	FUNC	; signature func main() -> void @ structArrayFields.impala:25:1
 		PARA *1
 	$lf:	LOCA *.z.Filter
 	$i:	LOCi
@@ -41,22 +41,22 @@ main:	FUNC	; signature func main() -> void @ 25:1
 	.e0:	NOOP
 		! ADDi <A> #.o.Filter.state #2	; printFloat(lf.state[2])
 		MOVf %1 $lf:<A> 
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:25
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:36
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structArrayFields.impala:30:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayFields.impala:30:36
 		! ADDi <A> #.o.Filter.state #3	; printFloat(lf.state[3])
 		MOVf %1 $lf:<A> 
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 31:25
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 31:36
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structArrayFields.impala:31:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayFields.impala:31:36
 		POKE &gf:.o.Filter.state #7.0 	; global gf.state[0] = 7.0
 		PEEK %1 &gf:.o.Filter.state 	; printFloat(global gf.state[0])
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 34:32
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:43
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structArrayFields.impala:34:32
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayFields.impala:34:43
 		ADRL %1 $lf *0	; process(&lf, 1, 9.0)
 		MOVi %2 #1 
 		MOVf %3 #9.0 
-		CALL &process %0 *4	; expects process(Filter-ptr, int, float) -> void @ 36:22
+		CALL &process %0 *4	; expects process(Filter-ptr, int, float) -> void @ structArrayFields.impala:36:22
 		! ADDi <A> #.o.Filter.state #1	; printFloat(lf.state[1])
 		MOVf %1 $lf:<A> 
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 37:25
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:36
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structArrayFields.impala:37:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayFields.impala:37:36
 		RETU   	; }

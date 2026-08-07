@@ -1,20 +1,20 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ externStructReview.impala:8:1
 	! MOVi <a> #0	; layout of struct Point
 .o.Point.x:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Point.y:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Point:	! DEFi #<a>
-; signature struct Point { x : int, y : int } @ 9:1
-; signature extern struct Frame { origin : Point, w : int } @ 10:1
-; signature extern native printInt() -> unknown @ 11:1
-; signature extern native printLF() -> unknown @ 12:1
+; signature struct Point { x : int, y : int } @ externStructReview.impala:9:1
+; signature extern struct Frame { origin : Point, w : int } @ externStructReview.impala:10:1
+; signature extern native printInt() -> unknown @ externStructReview.impala:11:1
+; signature extern native printLF() -> unknown @ externStructReview.impala:12:1
 
 ;-----------------------------------------------------------------------------
-setup:	FUNC	; signature func setup(Frame-ptr f) -> void @ 13:1
+setup:	FUNC	; signature func setup(Frame-ptr f) -> void @ externStructReview.impala:13:1
 		PARA *1
 	$f:	INPp
 ;-----------------------------------------------------------------------------
@@ -25,7 +25,7 @@ setup:	FUNC	; signature func setup(Frame-ptr f) -> void @ 13:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 14:1
+main:	FUNC	; signature func main() -> void @ externStructReview.impala:14:1
 		PARA *1
 .z.main.raw:	! DEFi #8
 	$raw:	LOCA *.z.main.raw
@@ -33,15 +33,15 @@ main:	FUNC	; signature func main() -> void @ 14:1
 ;-----------------------------------------------------------------------------
 		ADRL $f $raw:0 *0	; f = (Frame pointer)&raw[0]
 		MOVp %1 $f 	; setup(f)
-		CALL &setup %0 *2	; expects setup(Frame-ptr) -> void @ 17:38
+		CALL &setup %0 *2	; expects setup(Frame-ptr) -> void @ externStructReview.impala:17:38
 		! ADDi <A> #.o.Frame.origin #.o.Point.x	; printInt(f->origin.x)
 		PEEK %1 $f #<A>
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 18:23
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 18:34
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ externStructReview.impala:18:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructReview.impala:18:34
 		PEEK %1 $f #.o.Frame.w	; printInt(f->w)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 19:16
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 19:27
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ externStructReview.impala:19:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructReview.impala:19:27
 		MOVi %1 #.z.Frame 	; printInt(sizeof(Frame))
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 20:25
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 20:36
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ externStructReview.impala:20:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructReview.impala:20:36
 		RETU   	; }

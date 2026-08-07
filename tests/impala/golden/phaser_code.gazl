@@ -1,61 +1,61 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ phaser_code.impala:17:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ phaser_code.impala:18:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ phaser_code.impala:19:1
 .z.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ phaser_code.impala:27:1
 	DATA &.s__4d2 &.s__4d2 &.s__4d2 &.s_LEFTDE_4d3 &.s__4d2
 	DATA &.s__4d2 &.s__4d2 &.s_RINGMO_4d4
-; signature extern native abort() -> unknown @ 38:1
-; signature extern native trace() -> unknown @ 39:1
-; signature extern native yield() -> unknown @ 40:1
-; signature extern native write() -> unknown @ 41:1
-; signature extern native read() -> unknown @ 42:1
-; signature extern const DEBUG : int @ 44:1
-; signature extern const OPERATOR_1_NOP : int @ 46:1
-; signature extern const OPERATOR_1_AND : int @ 47:1
-; signature extern const OPERATOR_1_MUL : int @ 48:1
-; signature extern const OPERATOR_1_OSC : int @ 49:1
-; signature extern const OPERATOR_1_RND : int @ 50:1
-; signature extern const OPERATOR_1_COUNT : int @ 51:1
-; signature extern const OPERATOR_2_NOP : int @ 53:1
-; signature extern const OPERATOR_2_OR : int @ 54:1
-; signature extern const OPERATOR_2_XOR : int @ 55:1
-; signature extern const OPERATOR_2_MSK : int @ 56:1
-; signature extern const OPERATOR_2_SUB : int @ 57:1
-; signature extern const OPERATOR_2_COUNT : int @ 58:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 60:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 61:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 62:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 63:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 64:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 66:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 67:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 68:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 69:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 70:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 71:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 72:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 73:1
-; signature extern const PARAM_COUNT : int @ 74:1
-; signature extern const POSITION_INT_BITS : int @ 76:1
-; signature extern const POSITION_FRACT_BITS : int @ 77:1
+; signature extern native abort() -> unknown @ phaser_code.impala:38:1
+; signature extern native trace() -> unknown @ phaser_code.impala:39:1
+; signature extern native yield() -> unknown @ phaser_code.impala:40:1
+; signature extern native write() -> unknown @ phaser_code.impala:41:1
+; signature extern native read() -> unknown @ phaser_code.impala:42:1
+; signature extern const DEBUG : int @ phaser_code.impala:44:1
+; signature extern const OPERATOR_1_NOP : int @ phaser_code.impala:46:1
+; signature extern const OPERATOR_1_AND : int @ phaser_code.impala:47:1
+; signature extern const OPERATOR_1_MUL : int @ phaser_code.impala:48:1
+; signature extern const OPERATOR_1_OSC : int @ phaser_code.impala:49:1
+; signature extern const OPERATOR_1_RND : int @ phaser_code.impala:50:1
+; signature extern const OPERATOR_1_COUNT : int @ phaser_code.impala:51:1
+; signature extern const OPERATOR_2_NOP : int @ phaser_code.impala:53:1
+; signature extern const OPERATOR_2_OR : int @ phaser_code.impala:54:1
+; signature extern const OPERATOR_2_XOR : int @ phaser_code.impala:55:1
+; signature extern const OPERATOR_2_MSK : int @ phaser_code.impala:56:1
+; signature extern const OPERATOR_2_SUB : int @ phaser_code.impala:57:1
+; signature extern const OPERATOR_2_COUNT : int @ phaser_code.impala:58:1
+; signature extern const SWITCHES_SYNC_MASK : int @ phaser_code.impala:60:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ phaser_code.impala:61:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ phaser_code.impala:62:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ phaser_code.impala:63:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ phaser_code.impala:64:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ phaser_code.impala:66:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ phaser_code.impala:67:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ phaser_code.impala:68:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ phaser_code.impala:69:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ phaser_code.impala:70:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ phaser_code.impala:71:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ phaser_code.impala:72:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ phaser_code.impala:73:1
+; signature extern const PARAM_COUNT : int @ phaser_code.impala:74:1
+; signature extern const POSITION_INT_BITS : int @ phaser_code.impala:76:1
+; signature extern const POSITION_FRACT_BITS : int @ phaser_code.impala:77:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 79:1
+clock:	DATi #0	; signature global clock : int @ phaser_code.impala:79:1
 .z.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ phaser_code.impala:80:1
 .z.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ phaser_code.impala:81:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int @ 82:1
+instance:	DATi #0	; signature global instance : int @ phaser_code.impala:82:1
 	CNST *1
-clockFreqLimit:	DATi #44100	; signature readonly clockFreqLimit : int @ 83:1
+clockFreqLimit:	DATi #44100	; signature readonly clockFreqLimit : int @ phaser_code.impala:83:1
 .z.signal:	! DEFi #2
-signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 86:1
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ phaser_code.impala:86:1
 .z.EIGHT_BIT_EXP_TABLE:	! DEFi #256
-EIGHT_BIT_EXP_TABLE:	CNST *.z.EIGHT_BIT_EXP_TABLE	; signature array EIGHT_BIT_EXP_TABLE[256] : unknown @ 95:1
+EIGHT_BIT_EXP_TABLE:	CNST *.z.EIGHT_BIT_EXP_TABLE	; signature array EIGHT_BIT_EXP_TABLE[256] : unknown @ phaser_code.impala:95:1
 	DATA #0x0 #0x1 #0x2 #0x3 #0x4 #0x5 #0x6 #0x7 #0x8 #0x9
 	DATA #0xa #0xb #0xc #0xd #0xe #0xf #0x10 #0x11 #0x12 #0x13
 	DATA #0x14 #0x15 #0x16 #0x17 #0x18 #0x19 #0x1a #0x1b #0x1c
@@ -90,22 +90,22 @@ EIGHT_BIT_EXP_TABLE:	CNST *.z.EIGHT_BIT_EXP_TABLE	; signature array EIGHT_BIT_EX
 	DATA #0x7c00 #0x8000 #0x8800 #0x9000 #0x9800 #0xa000
 	DATA #0xa800 #0xb000 #0xb800 #0xc000 #0xc800 #0xd000
 	DATA #0xd800 #0xe000 #0xe800 #0xf000 #0xffff
-LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 129:1
-LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 130:1
-LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 131:1
-E:	! DEFf #2.71828182845904523536	; signature const E : float @ 132:1
-HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 133:1
-PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 134:1
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ phaser_code.impala:129:1
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ phaser_code.impala:130:1
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ phaser_code.impala:131:1
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ phaser_code.impala:132:1
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ phaser_code.impala:133:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ phaser_code.impala:134:1
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 135:1
-COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 136:1
-EPSILON_FLOAT:	! DEFf #1.0e-45	; signature const EPSILON_FLOAT : float @ 137:1
-SMALL_FLOAT:	! DEFf #1.0e-5	; signature const SMALL_FLOAT : float @ 138:1
-LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ 139:1
-HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ 140:1
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ phaser_code.impala:135:1
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ phaser_code.impala:136:1
+EPSILON_FLOAT:	! DEFf #1.0e-45	; signature const EPSILON_FLOAT : float @ phaser_code.impala:137:1
+SMALL_FLOAT:	! DEFf #1.0e-5	; signature const SMALL_FLOAT : float @ phaser_code.impala:138:1
+LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ phaser_code.impala:139:1
+HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ phaser_code.impala:140:1
 
 ;-----------------------------------------------------------------------------
-stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 142:1
+stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ phaser_code.impala:142:1
 	$a:	OUTp
 	$d:	INPp
 	$s:	INPp
@@ -121,10 +121,10 @@ stpcpy:	FUNC	; signature func stpcpy(ptr d, ptr s) -> ptr @ 142:1
 		GOTO @.l0  	; }
 	.e1:	RETU   	; }
 
-; signature extern const GAZL_WORD_SIZE : int @ 160:1
+; signature extern const GAZL_WORD_SIZE : int @ phaser_code.impala:160:1
 
 ;-----------------------------------------------------------------------------
-intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 161:1
+intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ phaser_code.impala:161:1
 	$p:	OUTp
 	$i:	INPi
 	$radix:	INPi
@@ -171,7 +171,7 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 
 
 ;-----------------------------------------------------------------------------
-floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ 181:1
+floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ phaser_code.impala:181:1
 	$p:	OUTp
 	$f:	INPf
 	$precision:	INPi
@@ -301,7 +301,7 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 
 
 ;-----------------------------------------------------------------------------
-traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 286:1
+traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ phaser_code.impala:286:1
 		PARA *1
 	$text:	INPp
 	$n:	INPi
@@ -318,7 +318,7 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 		EQUp $text &NULL @.f0	; if (text != null) p = (pointer) stpcpy(p, text)
 		MOVp %1 $p 	; p = (pointer) stpcpy(p, text)
 		MOVp %2 $text 
-		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 293:49
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ phaser_code.impala:293:49
 		MOVp $p %0 
 	.f0:	POKE $p #0 	; *p = 0
 		MOVi $i #0 	; for (i = 0 to n) 
@@ -331,17 +331,17 @@ traceInts:	FUNC	; signature func traceInts(ptr text, int n, ptr ints) -> void @ 
 		MOVi %4 #10 
 		MOVi %5 #1 
 		ADRL %6 $buffer *0
-		CALL &intToString %2 *5	; expects intToString(int, int, int, ptr) -> ptr @ 297:62
-		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 297:63
+		CALL &intToString %2 *5	; expects intToString(int, int, int, ptr) -> ptr @ phaser_code.impala:297:62
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ phaser_code.impala:297:63
 		MOVp $p %0 
 		FORi $i $n @.l2	; }
 	.e1:	ADRL %1 $line *0	; trace(line)
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 299:13
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ phaser_code.impala:299:13
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 302:1
+traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ phaser_code.impala:302:1
 		PARA *1
 	$text:	INPp
 	$i:	INPi
@@ -352,12 +352,12 @@ traceInt:	FUNC	; signature func traceInt(ptr text, int i) -> void @ 302:1
 		MOVp %1 $text 	; traceInts(text, 1, ints)
 		MOVi %2 #1 
 		ADRL %3 $ints *0
-		CALL &traceInts %0 *4	; expects traceInts(ptr, int, ptr) -> void @ 306:26
+		CALL &traceInts %0 *4	; expects traceInts(ptr, int, ptr) -> void @ phaser_code.impala:306:26
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats) -> void @ 309:1
+traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats) -> void @ phaser_code.impala:309:1
 		PARA *1
 	$text:	INPp
 	$n:	INPi
@@ -373,7 +373,7 @@ traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats) -> v
 		EQUp $text &NULL @.f0	; if (text != null) p = (pointer) stpcpy(p, text)
 		MOVp %1 $p 	; p = (pointer) stpcpy(p, text)
 		MOVp %2 $text 
-		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 316:49
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ phaser_code.impala:316:49
 		MOVp $p %0 
 	.f0:	POKE $p #0 	; *p = 0
 		MOVi $i #0 	; for (i = 0 to n) 
@@ -385,17 +385,17 @@ traceFloats:	FUNC	; signature func traceFloats(ptr text, int n, ptr floats) -> v
 		PEEK %3 $floats $i
 		MOVi %4 #8 
 		ADRL %5 $buffer *0
-		CALL &floatToString %2 *4	; expects floatToString(float, int, ptr) -> ptr @ 320:62
-		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ 320:63
+		CALL &floatToString %2 *4	; expects floatToString(float, int, ptr) -> ptr @ phaser_code.impala:320:62
+		CALL &stpcpy %0 *3	; expects stpcpy(ptr, ptr) -> ptr @ phaser_code.impala:320:63
 		MOVp $p %0 
 		FORi $i $n @.l2	; }
 	.e1:	ADRL %1 $line *0	; trace(line)
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 322:13
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ phaser_code.impala:322:13
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-traceFloat:	FUNC	; signature func traceFloat(ptr text, float f) -> void @ 325:1
+traceFloat:	FUNC	; signature func traceFloat(ptr text, float f) -> void @ phaser_code.impala:325:1
 		PARA *1
 	$text:	INPp
 	$f:	INPf
@@ -406,23 +406,23 @@ traceFloat:	FUNC	; signature func traceFloat(ptr text, float f) -> void @ 325:1
 		MOVp %1 $text 	; traceFloats(text, 1, floats)
 		MOVi %2 #1 
 		ADRL %3 $floats *0
-		CALL &traceFloats %0 *4	; expects traceFloats(ptr, int, ptr) -> void @ 329:30
+		CALL &traceFloats %0 *4	; expects traceFloats(ptr, int, ptr) -> void @ phaser_code.impala:329:30
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-error:	FUNC	; signature func error(ptr s) -> void @ 332:1
+error:	FUNC	; signature func error(ptr s) -> void @ phaser_code.impala:332:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 334:10
-		CALL ^abort %0 *1	; expects abort() -> unknown @ 335:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ phaser_code.impala:334:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ phaser_code.impala:335:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC	; signature func trunc(float x) -> float @ 338:1
+trunc:	FUNC	; signature func trunc(float x) -> float @ phaser_code.impala:338:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
@@ -436,24 +436,24 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 338:1
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 345:1
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ phaser_code.impala:345:1
 	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4d8 	; error("Division by zero")
-		CALL &error %0 *2	; expects error(ptr) -> void @ 348:41
+		CALL &error %0 *2	; expects error(ptr) -> void @ phaser_code.impala:348:41
 		RETU   
 	.f0:	DIVf %1 $x $y	; z = x - (float)trunc(x / y) * y
-		CALL &trunc %0 *2	; expects trunc(float) -> float @ 349:35
+		CALL &trunc %0 *2	; expects trunc(float) -> float @ phaser_code.impala:349:35
 		MULf %0 %0 $y
 		SUBf $z $x %0
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-exp:	FUNC	; signature func exp(float x) -> float @ 377:1
+exp:	FUNC	; signature func exp(float x) -> float @ phaser_code.impala:377:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -477,7 +477,7 @@ exp:	FUNC	; signature func exp(float x) -> float @ 377:1
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC	; signature func cos(float x) -> float @ 408:1
+cos:	FUNC	; signature func cos(float x) -> float @ phaser_code.impala:408:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -487,7 +487,7 @@ cos:	FUNC	; signature func cos(float x) -> float @ 408:1
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
 		MOVf %2 #TWICE_PI 
-		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 412:31
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ phaser_code.impala:412:31
 		MOVf $m %0 
 		SUBf %0 #0.0 $m	; m = -m * m
 		MULf $m %0 $m
@@ -509,38 +509,38 @@ cos:	FUNC	; signature func cos(float x) -> float @ 408:1
 
 
 ;-----------------------------------------------------------------------------
-sin:	FUNC	; signature func sin(float x) -> float @ 424:1
+sin:	FUNC	; signature func sin(float x) -> float @ phaser_code.impala:424:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
-		CALL &cos %0 *2	; expects cos(float) -> float @ 427:30
+		CALL &cos %0 *2	; expects cos(float) -> float @ phaser_code.impala:427:30
 		MOVf $y %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-tan:	FUNC	; signature func tan(float x) -> float @ 430:1
+tan:	FUNC	; signature func tan(float x) -> float @ phaser_code.impala:430:1
 	$y:	OUTf
 	$x:	INPf
 	$c:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVf $y #0.0 	; y = 0.0
 		MOVf %1 $x 	; c = (float) cos(x)
-		CALL &cos %0 *2	; expects cos(float) -> float @ 435:20
+		CALL &cos %0 *2	; expects cos(float) -> float @ phaser_code.impala:435:20
 		MOVf $c %0 
 		NEQf $c #0.0 @.f0	; if (c == 0.0) error("Domain error")
 		MOVp %1 &.s_Domain_4d9 	; error("Domain error")
-		CALL &error %0 *2	; expects error(ptr) -> void @ 436:37
+		CALL &error %0 *2	; expects error(ptr) -> void @ phaser_code.impala:436:37
 		RETU   
 	.f0:	MOVf %1 $x 	; y = (float) sin(x) / c
-		CALL &sin %0 *2	; expects sin(float) -> float @ 437:26
+		CALL &sin %0 *2	; expects sin(float) -> float @ phaser_code.impala:437:26
 		DIVf $y %0 $c
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-lerp:	FUNC	; signature func lerp(float a, float b, float x) -> float @ 440:1
+lerp:	FUNC	; signature func lerp(float a, float b, float x) -> float @ phaser_code.impala:440:1
 	$y:	OUTf
 	$a:	INPf
 	$b:	INPf
@@ -551,24 +551,24 @@ lerp:	FUNC	; signature func lerp(float a, float b, float x) -> float @ 440:1
 		ADDf $y $a %0
 		RETU   	; }
 
-BATCH_SIZE:	! DEFi #256	; signature const BATCH_SIZE : int @ 448:1
-K_TABLE_SIZE:	! DEFi #64	; signature const K_TABLE_SIZE : int @ 449:1
-LOG1000:	! DEFf #6.9077552789821	; signature const LOG1000 : float @ 450:1
-STANDARD_SAMPLE_RATE:	! DEFf #44100.0	; signature const STANDARD_SAMPLE_RATE : float @ 451:1
+BATCH_SIZE:	! DEFi #256	; signature const BATCH_SIZE : int @ phaser_code.impala:448:1
+K_TABLE_SIZE:	! DEFi #64	; signature const K_TABLE_SIZE : int @ phaser_code.impala:449:1
+LOG1000:	! DEFf #6.9077552789821	; signature const LOG1000 : float @ phaser_code.impala:450:1
+STANDARD_SAMPLE_RATE:	! DEFf #44100.0	; signature const STANDARD_SAMPLE_RATE : float @ phaser_code.impala:451:1
 	GLOB *1
-doReset:	DATi #FALSE	; signature global doReset : int @ 455:1
+doReset:	DATi #FALSE	; signature global doReset : int @ phaser_code.impala:455:1
 .z.kTable:	! DEFi #K_TABLE_SIZE
-kTable:	GLOB *.z.kTable	; signature array kTable[K_TABLE_SIZE] : unknown @ 456:1
+kTable:	GLOB *.z.kTable	; signature array kTable[K_TABLE_SIZE] : unknown @ phaser_code.impala:456:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 465:1
+init:	FUNC	; signature func init() -> void @ phaser_code.impala:465:1
 		PARA *1
 	$f:	LOCf
 	$k:	LOCf
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4da 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 468:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ phaser_code.impala:468:15
 		MOVi $i #0 	; for (i = 0 to K_TABLE_SIZE) 
 		GEQi #0 #K_TABLE_SIZE @.e0
 	.l1:	NOOP
@@ -576,48 +576,48 @@ init:	FUNC	; signature func init() -> void @ 465:1
 		! iTOf <B> #K_TABLE_SIZE #1.0
 		! DIVf <B> #LOG1000 <B>
 		iTOf %1 $i <B>
-		CALL &exp %0 *2	; expects exp(float) -> float @ 470:97
+		CALL &exp %0 *2	; expects exp(float) -> float @ phaser_code.impala:470:97
 		! DIVf <A> <A> #STANDARD_SAMPLE_RATE
 		MULf $f <A> %0
 		MOVf %1 $f 	; global kTable[i] = (float) tan(f)
-		CALL &tan %0 *2	; expects tan(float) -> float @ 471:36
+		CALL &tan %0 *2	; expects tan(float) -> float @ phaser_code.impala:471:36
 		POKE &kTable $i %0
 		FORi $i #K_TABLE_SIZE @.l1	; }
 	.e0:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 481:1
+reset:	FUNC	; signature func reset() -> void @ phaser_code.impala:481:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4db 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 483:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ phaser_code.impala:483:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 495:1
+update:	FUNC	; signature func update() -> void @ phaser_code.impala:495:1
 		PARA *1
 .z.update.params:	! DEFi #PARAM_COUNT
 	$params:	LOCA *.z.update.params
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update_4dc 	; trace("update")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 498:17
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ phaser_code.impala:498:17
 		RETU   	; }
 
-MAX_STAGE_COUNT:	! DEFi #8	; signature const MAX_STAGE_COUNT : int @ 502:1
-AP12_K:	! DEFi #0	; signature const AP12_K : int @ 503:1
-AP12_R:	! DEFi #1	; signature const AP12_R : int @ 504:1
-AP12_M0:	! DEFi #2	; signature const AP12_M0 : int @ 505:1
-AP12_M1:	! DEFi #3	; signature const AP12_M1 : int @ 506:1
-AP12_M2:	! DEFi #4	; signature const AP12_M2 : int @ 507:1
-AP12_PARAM_COUNT:	! DEFi #5	; signature const AP12_PARAM_COUNT : int @ 508:1
+MAX_STAGE_COUNT:	! DEFi #8	; signature const MAX_STAGE_COUNT : int @ phaser_code.impala:502:1
+AP12_K:	! DEFi #0	; signature const AP12_K : int @ phaser_code.impala:503:1
+AP12_R:	! DEFi #1	; signature const AP12_R : int @ phaser_code.impala:504:1
+AP12_M0:	! DEFi #2	; signature const AP12_M0 : int @ phaser_code.impala:505:1
+AP12_M1:	! DEFi #3	; signature const AP12_M1 : int @ phaser_code.impala:506:1
+AP12_M2:	! DEFi #4	; signature const AP12_M2 : int @ phaser_code.impala:507:1
+AP12_PARAM_COUNT:	! DEFi #5	; signature const AP12_PARAM_COUNT : int @ phaser_code.impala:508:1
 	! MULi <A> #MAX_STAGE_COUNT #4
-AP12_STATE_SIZE:	! DEFi <A>	; signature const AP12_STATE_SIZE : int @ 509:1
+AP12_STATE_SIZE:	! DEFi <A>	; signature const AP12_STATE_SIZE : int @ phaser_code.impala:509:1
 
 ;-----------------------------------------------------------------------------
-setupAP12Params:	FUNC	; signature func setupAP12Params(float pitch, float rq, ptr params) -> void @ 511:1
+setupAP12Params:	FUNC	; signature func setupAP12Params(float pitch, float rq, ptr params) -> void @ phaser_code.impala:511:1
 		PARA *1
 	$pitch:	INPf
 	$rq:	INPf
@@ -641,7 +641,7 @@ setupAP12Params:	FUNC	; signature func setupAP12Params(float pitch, float rq, pt
 		PEEK %2 &kTable %2
 		FLOf %3 $fidx 
 		SUBf %3 $fidx %3
-		CALL &lerp %0 *4	; expects lerp(float, float, float) -> float @ 517:98
+		CALL &lerp %0 *4	; expects lerp(float, float, float) -> float @ phaser_code.impala:517:98
 		MOVf $k %0 
 		POKE $params #AP12_K $k	; params[AP12_K] = k
 		POKE $params #AP12_R $rq	; params[AP12_R] = rq
@@ -659,7 +659,7 @@ setupAP12Params:	FUNC	; signature func setupAP12Params(float pitch, float rq, pt
 
 
 ;-----------------------------------------------------------------------------
-ap12StereoChain:	FUNC	; signature func ap12StereoChain(ptr state, int stageCount, float inLeft, float inRight, ptr paramsLeft, ptr paramsRight, ptr outLeft, ptr outRight) -> void @ 526:1
+ap12StereoChain:	FUNC	; signature func ap12StereoChain(ptr state, int stageCount, float inLeft, float inRight, ptr paramsLeft, ptr paramsRight, ptr outLeft, ptr outRight) -> void @ phaser_code.impala:526:1
 		PARA *1
 	$state:	INPp
 	$stageCount:	INPi
@@ -764,7 +764,7 @@ ap12StereoChain:	FUNC	; signature func ap12StereoChain(ptr state, int stageCount
 
 
 ;-----------------------------------------------------------------------------
-shaper:	FUNC	; signature func shaper(float x) -> float @ 580:1
+shaper:	FUNC	; signature func shaper(float x) -> float @ phaser_code.impala:580:1
 	$y:	OUTf
 	$x:	INPf
 	$cx:	LOCf
@@ -783,7 +783,7 @@ shaper:	FUNC	; signature func shaper(float x) -> float @ 580:1
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 605:1
+process:	FUNC	; signature func process() -> void @ phaser_code.impala:605:1
 		PARA *1
 .z.process.leftParams:	! DEFi #AP12_PARAM_COUNT
 	$leftParams:	LOCA *.z.process.leftParams
@@ -842,7 +842,7 @@ process:	FUNC	; signature func process() -> void @ 605:1
 		ADDf %1 $frequency %1
 		MOVf %2 #2.0 
 		ADRL %3 $leftParams *0
-		CALL &setupAP12Params %0 *4	; expects setupAP12Params(float, float, ptr) -> void @ 628:78
+		CALL &setupAP12Params %0 *4	; expects setupAP12Params(float, float, ptr) -> void @ phaser_code.impala:628:78
 		ADDf $ph2 $ph #0.05	; ph2 = ph + 0.05
 		LSSf $ph2 #1.0 @.f5	; if (ph2 >= 1.0) ph2 = ph2 - 2.0
 		SUBf $ph2 $ph2 #2.0	; ph2 = ph2 - 2.0
@@ -853,7 +853,7 @@ process:	FUNC	; signature func process() -> void @ 605:1
 		ADDf %1 $frequency %1
 		MOVf %2 #2.0 
 		ADRL %3 $rightParams *0
-		CALL &setupAP12Params %0 *4	; expects setupAP12Params(float, float, ptr) -> void @ 631:80
+		CALL &setupAP12Params %0 *4	; expects setupAP12Params(float, float, ptr) -> void @ phaser_code.impala:631:80
 		MOVi $i #0 	; for (i = 0 to BATCH_SIZE) 
 		GEQi #0 #BATCH_SIZE @.e0
 	.l7:	PEEK %0 &signal:0 	; inL = itof((int) global signal[0]) * (1.0 / 2048.0)
@@ -866,7 +866,7 @@ process:	FUNC	; signature func process() -> void @ 605:1
 		SUBi %1 $clock #1	; read(clock - 1, 1, input)
 		MOVi %2 #1 
 		ADRL %3 $input *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 639:28
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ phaser_code.impala:639:28
 		! DIVf <A> #1.0 #2048.0	; fbL = itof((int) input[0]) * (1.0 / 2048.0)
 		iTOf $fbL $input:0 <A>
 		! DIVf <A> #1.0 #2048.0	; fbR = itof((int) input[1]) * (1.0 / 2048.0)
@@ -874,16 +874,16 @@ process:	FUNC	; signature func process() -> void @ 605:1
 		ADRL %1 $ap12State *0	; ap12StereoChain(ap12State, stageCount, inL - (float) shaper(fbL * feedback), inR - (float) shaper(fbR * feedback), leftParams, rightParams, &l, &r)
 		MOVi %2 $stageCount 
 		MULf %4 $fbL $feedback
-		CALL &shaper %3 *2	; expects shaper(float) -> float @ 642:79
+		CALL &shaper %3 *2	; expects shaper(float) -> float @ phaser_code.impala:642:79
 		SUBf %3 $inL %3
 		MULf %5 $fbR $feedback
-		CALL &shaper %4 *2	; expects shaper(float) -> float @ 642:117
+		CALL &shaper %4 *2	; expects shaper(float) -> float @ phaser_code.impala:642:117
 		SUBf %4 $inR %4
 		ADRL %5 $leftParams *0
 		ADRL %6 $rightParams *0
 		ADRL %7 $l *0
 		ADRL %8 $r *0
-		CALL &ap12StereoChain %0 *9	; expects ap12StereoChain(ptr, int, float, float, ptr, ptr, ptr, ptr) -> void @ 642:151
+		CALL &ap12StereoChain %0 *9	; expects ap12StereoChain(ptr, int, float, float, ptr, ptr, ptr, ptr) -> void @ phaser_code.impala:642:151
 		MOVf $fbL $l 	; fbL = l
 		MOVf $fbR $r 	; fbR = r
 		fTOi $input:0 $fbL #2048.0	; input[0] = ftoi(fbL * 2048.0)
@@ -891,12 +891,12 @@ process:	FUNC	; signature func process() -> void @ 605:1
 		MOVi %1 $clock 	; write(clock, 1, input)
 		MOVi %2 #1 
 		ADRL %3 $input *0
-		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 647:26
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ phaser_code.impala:647:26
 		MOVi %1 $clock 	; read(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 648:33
-		CALL ^yield %0 *1	; expects yield() -> unknown @ 653:11
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ phaser_code.impala:648:33
+		CALL ^yield %0 *1	; expects yield() -> unknown @ phaser_code.impala:653:11
 		FORi $i #BATCH_SIZE @.l7	; }
 		GOTO @.e0  	; }
 		RETU   	; }

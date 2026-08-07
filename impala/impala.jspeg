@@ -147,7 +147,12 @@
     var $$parser.ZEROES = {};
     var $$parser.TYPE_SUFFIXES  = {};
     var $$parser.VERBOSE_TYPES  = {};
-    var $$parser.sourceName = undefined;
+    /* Read from `_hostOptions` HERE, the way `units` and `rangeChecks` above do. `var $$parser.x`
+       generates a CLOSURE LOCAL, so a plain `= undefined` here shadowed the `$$parser.sourceName` the
+       generated header assigns from the host - every read saw undefined and no single-unit row ever
+       carried its file name, while multi-unit rows got one through `units` and looked fine. */
+    var $$parser.sourceName     = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
+            && _hostOptions.sourceName) || undefined);          /// names a single unit's rows; `units` names a closure's
     var $$parser.metacode = [];
     var $$parser.strings = { s:[], a:[] };
     var $$parser.labelCounter = 0;

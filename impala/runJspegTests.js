@@ -96,7 +96,11 @@ function main() {
 
                 let output;
                 try {
-                        output = compileWithJsImpala(source, { randomId: RANDOM_ID, retabulate: false });
+                        /* `sourceName` so a golden shows what a user actually gets - the CLI passes the
+                           basename too. Without it the goldens were the one place rows carried no file
+                           name, which is part of how the option stayed provably dead unnoticed. */
+                        output = compileWithJsImpala(source, { randomId: RANDOM_ID, retabulate: false,
+                                        sourceName: file });
                 } catch (err) {
                         console.error('<<< Error compiling >>>');
                         console.error(formatError(err));

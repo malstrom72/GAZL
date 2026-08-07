@@ -1,35 +1,35 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-; signature extern native sin() -> unknown @ 1:1
-; signature extern native cos() -> unknown @ 2:1
-PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 3:1
-BATCH_SIZE:	! DEFi #64	; signature const BATCH_SIZE : int @ 4:1
-rq:	! DEFf #0.1	; signature const rq : float @ 6:1
-f:	! DEFf #0.01	; signature const f : float @ 7:1
+; signature extern native sin() -> unknown @ LadderFilter.impala:1:1
+; signature extern native cos() -> unknown @ LadderFilter.impala:2:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ LadderFilter.impala:3:1
+BATCH_SIZE:	! DEFi #64	; signature const BATCH_SIZE : int @ LadderFilter.impala:4:1
+rq:	! DEFf #0.1	; signature const rq : float @ LadderFilter.impala:6:1
+f:	! DEFf #0.01	; signature const f : float @ LadderFilter.impala:7:1
 	TEMP *1
-_ldxz:	DATf #0.0	; signature temporary _ldxz : float @ 9:1
+_ldxz:	DATf #0.0	; signature temporary _ldxz : float @ LadderFilter.impala:9:1
 	TEMP *1
-_ld0z:	DATf #0.0	; signature temporary _ld0z : float @ 10:1
+_ld0z:	DATf #0.0	; signature temporary _ld0z : float @ LadderFilter.impala:10:1
 	TEMP *1
-_ld1z:	DATf #0.0	; signature temporary _ld1z : float @ 11:1
+_ld1z:	DATf #0.0	; signature temporary _ld1z : float @ LadderFilter.impala:11:1
 	TEMP *1
-_ld2z:	DATf #0.0	; signature temporary _ld2z : float @ 12:1
+_ld2z:	DATf #0.0	; signature temporary _ld2z : float @ LadderFilter.impala:12:1
 	TEMP *1
-_ld3z:	DATf #0.0	; signature temporary _ld3z : float @ 13:1
+_ld3z:	DATf #0.0	; signature temporary _ld3z : float @ LadderFilter.impala:13:1
 	TEMP *1
-_rdxz:	DATf #0.0	; signature temporary _rdxz : float @ 14:1
+_rdxz:	DATf #0.0	; signature temporary _rdxz : float @ LadderFilter.impala:14:1
 	TEMP *1
-_rd0z:	DATf #0.0	; signature temporary _rd0z : float @ 15:1
+_rd0z:	DATf #0.0	; signature temporary _rd0z : float @ LadderFilter.impala:15:1
 	TEMP *1
-_rd1z:	DATf #0.0	; signature temporary _rd1z : float @ 16:1
+_rd1z:	DATf #0.0	; signature temporary _rd1z : float @ LadderFilter.impala:16:1
 	TEMP *1
-_rd2z:	DATf #0.0	; signature temporary _rd2z : float @ 17:1
+_rd2z:	DATf #0.0	; signature temporary _rd2z : float @ LadderFilter.impala:17:1
 	TEMP *1
-_rd3z:	DATf #0.0	; signature temporary _rd3z : float @ 18:1
+_rd3z:	DATf #0.0	; signature temporary _rd3z : float @ LadderFilter.impala:18:1
 
 ;-----------------------------------------------------------------------------
-filter:	FUNC	; signature func filter(int hasSoundIn, ptr left, ptr right) -> int @ 20:1
+filter:	FUNC	; signature func filter(int hasSoundIn, ptr left, ptr right) -> int @ LadderFilter.impala:20:1
 	$hasSoundOut:	OUTi
 	$hasSoundIn:	INPi
 	$left:	INPp
@@ -69,11 +69,11 @@ filter:	FUNC	; signature func filter(int hasSoundIn, ptr left, ptr right) -> int
 		! MULf <A> #f #PI	; fpi = f * PI
 		MOVf $fpi <A> 
 		MOVf %1 $fpi 	; k = ((float) sin(fpi)) / ((float) cos(fpi) + (float) sin(fpi))
-		CALL ^sin %0 *2	; expects sin(float) -> unknown @ 32:23
+		CALL ^sin %0 *2	; expects sin(float) -> unknown @ LadderFilter.impala:32:23
 		MOVf %2 $fpi 
-		CALL ^cos %1 *2	; expects cos(float) -> unknown @ 32:45
+		CALL ^cos %1 *2	; expects cos(float) -> unknown @ LadderFilter.impala:32:45
 		MOVf %3 $fpi 
-		CALL ^sin %2 *2	; expects sin(float) -> unknown @ 32:63
+		CALL ^sin %2 *2	; expects sin(float) -> unknown @ LadderFilter.impala:32:63
 		ADDf %1 %1 %2
 		DIVf $k %0 %1
 		MULf %0 $r $k	; g0 = r / (1.0 + r * k * k * k * k)
@@ -141,4 +141,4 @@ filter:	FUNC	; signature func filter(int hasSoundIn, ptr left, ptr right) -> int
 
 	! MULi <A> #BATCH_SIZE #2
 .z.audioBuffers:	! DEFi #<A>
-audioBuffers:	TEMP *.z.audioBuffers	; signature array audioBuffers[] : unknown @ 75:1
+audioBuffers:	TEMP *.z.audioBuffers	; signature array audioBuffers[] : unknown @ LadderFilter.impala:75:1

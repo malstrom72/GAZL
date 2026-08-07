@@ -1,26 +1,26 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 7:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ structNestedOffset.impala:7:1
 	! MOVi <a> #0	; layout of struct Inner
 .o.Inner.a:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Inner.b:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Inner:	! DEFi #<a>
-; signature struct Inner { a : int, b : int } @ 8:1
+; signature struct Inner { a : int, b : int } @ structNestedOffset.impala:8:1
 	! MOVi <a> #0	; layout of struct Outer
 .o.Outer.pad:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Outer.in:	! DEFi #<a>
 	! ADDi <a> #<a> #.z.Inner
 .z.Outer:	! DEFi #<a>
-; signature struct Outer { pad : int, in : Inner } @ 9:1
-; signature extern native printInt() -> unknown @ 10:1
-; signature extern native printLF() -> unknown @ 11:1
+; signature struct Outer { pad : int, in : Inner } @ structNestedOffset.impala:9:1
+; signature extern native printInt() -> unknown @ structNestedOffset.impala:10:1
+; signature extern native printLF() -> unknown @ structNestedOffset.impala:11:1
 
 ;-----------------------------------------------------------------------------
-bump:	FUNC	; signature func bump(Inner-ptr q) -> void @ 12:1
+bump:	FUNC	; signature func bump(Inner-ptr q) -> void @ structNestedOffset.impala:12:1
 		PARA *1
 	$q:	INPp
 ;-----------------------------------------------------------------------------
@@ -31,7 +31,7 @@ bump:	FUNC	; signature func bump(Inner-ptr q) -> void @ 12:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 13:1
+main:	FUNC	; signature func main() -> void @ structNestedOffset.impala:13:1
 		PARA *1
 	$o:	LOCA *.z.Outer
 	$p:	LOCp
@@ -42,13 +42,13 @@ main:	FUNC	; signature func main() -> void @ 13:1
 		! ADDi <A> #.o.Outer.in #.o.Inner.b	; p->in.b = 7
 		POKE $p #<A> #7
 		ADRL %1 $o:.o.Outer.in *0	; bump(&o.in)
-		CALL &bump %0 *2	; expects bump(Inner-ptr) -> void @ 16:46
+		CALL &bump %0 *2	; expects bump(Inner-ptr) -> void @ structNestedOffset.impala:16:46
 		! ADDi <A> #.o.Outer.in #.o.Inner.a	; printInt(o.in.a)
 		MOVi %1 $o:<A> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 17:18
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 17:29
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structNestedOffset.impala:17:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structNestedOffset.impala:17:29
 		! ADDi <A> #.o.Outer.in #.o.Inner.b	; printInt(p->in.b)
 		PEEK %1 $p #<A>
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 18:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 18:30
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structNestedOffset.impala:18:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structNestedOffset.impala:18:30
 		RETU   	; }

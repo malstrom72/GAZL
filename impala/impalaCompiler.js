@@ -160,7 +160,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     var ZEROES = {};
     var TYPE_SUFFIXES  = {};
     var VERBOSE_TYPES  = {};
-    var sourceName = undefined;
+    /* Read from `_hostOptions` HERE, the way `units` and `rangeChecks` above do. `var x`
+       generates a CLOSURE LOCAL, so a plain `= undefined` here shadowed the `sourceName` the
+       generated header assigns from the host - every read saw undefined and no single-unit row ever
+       carried its file name, while multi-unit rows got one through `units` and looked fine. */
+    var sourceName     = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
+            && _hostOptions.sourceName) || undefined);          /// names a single unit's rows; `units` names a closure's
     var metacode = [];
     var strings = { s:[], a:[] };
     var labelCounter = 0;

@@ -1,12 +1,12 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 11:1
-; signature extern native printInt() -> unknown @ 13:1
-; signature extern native printLF() -> unknown @ 14:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ funcTypePointer.impala:11:1
+; signature extern native printInt() -> unknown @ funcTypePointer.impala:13:1
+; signature extern native printLF() -> unknown @ funcTypePointer.impala:14:1
 
 ;-----------------------------------------------------------------------------
-dbl:	FUNC	; signature func dbl(int x) -> int @ 18:1
+dbl:	FUNC	; signature func dbl(int x) -> int @ funcTypePointer.impala:18:1
 	$r:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
@@ -15,7 +15,7 @@ dbl:	FUNC	; signature func dbl(int x) -> int @ 18:1
 
 
 ;-----------------------------------------------------------------------------
-inc10:	FUNC	; signature func inc10(int x) -> int @ 19:1
+inc10:	FUNC	; signature func inc10(int x) -> int @ funcTypePointer.impala:19:1
 	$r:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
@@ -24,20 +24,20 @@ inc10:	FUNC	; signature func inc10(int x) -> int @ 19:1
 
 
 ;-----------------------------------------------------------------------------
-callThrough:	FUNC	; signature func callThrough(Fn-ptr pf, int v) -> int @ 21:1
+callThrough:	FUNC	; signature func callThrough(Fn-ptr pf, int v) -> int @ funcTypePointer.impala:21:1
 	$r:	OUTi
 	$pf:	INPp
 	$v:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi %1 $v 	; r = pf[0](v)
-		PEEK %2 $pf #0	; expects function(int) -> int @ 23:14
+		PEEK %2 $pf #0	; expects function(int) -> int @ funcTypePointer.impala:23:14
 		CALL %2 %0 *2
 		MOVi $r %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 26:1
+main:	FUNC	; signature func main() -> void @ funcTypePointer.impala:26:1
 		PARA *1
 	$cb:	LOCp
 	$pcb:	LOCp
@@ -46,18 +46,18 @@ main:	FUNC	; signature func main() -> void @ 26:1
 		MOVp $cb &dbl 	; cb = dbl
 		ADRL $pcb $cb *0	; pcb = &cb
 		MOVi %1 #21 	; y = pcb[0](21)
-		PEEK %2 $pcb #0	; expects function(int) -> int @ 31:16
+		PEEK %2 $pcb #0	; expects function(int) -> int @ funcTypePointer.impala:31:16
 		CALL %2 %0 *2
 		MOVi $y %0 
 		MOVi %1 $y 	; printInt(y)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 32:13
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 32:24
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ funcTypePointer.impala:32:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ funcTypePointer.impala:32:24
 		MOVp $cb &inc10 	; cb = inc10
 		ADRL %1 $cb *0	; y = callThrough(&cb, 20)
 		MOVi %2 #20 
-		CALL &callThrough %0 *3	; expects callThrough(Fn-ptr, int) -> int @ 35:26
+		CALL &callThrough %0 *3	; expects callThrough(Fn-ptr, int) -> int @ funcTypePointer.impala:35:26
 		MOVi $y %0 
 		MOVi %1 $y 	; printInt(y)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 36:13
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 36:24
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ funcTypePointer.impala:36:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ funcTypePointer.impala:36:24
 		RETU   	; }

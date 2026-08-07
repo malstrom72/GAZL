@@ -2,7 +2,7 @@
 
 ; signatures version=1
 .z.PTEXT:	! DEFi #101
-PTEXT:	CNST *.z.PTEXT	; signature array PTEXT[101] : unknown @ 1:1
+PTEXT:	CNST *.z.PTEXT	; signature array PTEXT[101] : unknown @ adventData.impala:1:1
 	DATA #0 #4954 #4967 #4987 #5000 #5015 #5032 #5049 #5069
 	DATA #5253 #5282 #5295 #5320 #5342 #5382 #5412 #5480 #0 #0
 	DATA #5529 #5537 #5563 #5568 #5573 #5578 #5704 #5749 #5755
@@ -14,7 +14,7 @@ PTEXT:	CNST *.z.PTEXT	; signature array PTEXT[101] : unknown @ 1:1
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #6869
 .z.RTEXT:	! DEFi #278
-RTEXT:	CNST *.z.RTEXT	; signature array RTEXT[278] : unknown @ 10:1
+RTEXT:	CNST *.z.RTEXT	; signature array RTEXT[278] : unknown @ adventData.impala:10:1
 	DATA #0 #6898 #7057 #7068 #7094 #7108 #7121 #7130 #7137
 	DATA #7141 #7144 #7159 #7183 #7193 #7199 #7209 #7232 #7247
 	DATA #7258 #7266 #7288 #7299 #7334 #7342 #7354 #7361 #7367
@@ -51,11 +51,11 @@ RTEXT:	CNST *.z.RTEXT	; signature array RTEXT[278] : unknown @ 10:1
 	DATA #11807 #11821 #11892 #11906 #11945 #12030 #12034
 	DATA #12049 #12072 #12095 #12200 #0
 .z.CTEXT:	! DEFi #13
-CTEXT:	CNST *.z.CTEXT	; signature array CTEXT[13] : unknown @ 30:1
+CTEXT:	CNST *.z.CTEXT	; signature array CTEXT[13] : unknown @ adventData.impala:30:1
 	DATA #0 #12228 #12241 #12253 #12266 #12278 #12287 #12298
 	DATA #12309 #12320 #12334 #0 #0
 .z.STEXT:	! DEFi #186
-STEXT:	CNST *.z.STEXT	; signature array STEXT[186] : unknown @ 33:1
+STEXT:	CNST *.z.STEXT	; signature array STEXT[186] : unknown @ adventData.impala:33:1
 	DATA #0 #4446 #4453 #4459 #4465 #4470 #4476 #4481 #4488
 	DATA #4494 #4500 #4506 #0 #4512 #4518 #4525 #0 #4531 #4539
 	DATA #4546 #0 #0 #0 #4553 #4561 #4566 #0 #4571 #4579 #0
@@ -72,7 +72,7 @@ STEXT:	CNST *.z.STEXT	; signature array STEXT[186] : unknown @ 33:1
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #4923 #4928 #4935 #0 #0
 	DATA #4942 #0 #0 #0 #4948 #0 #0 #0 #0 #0 #0 #0 #0 #0
 .z.LTEXT:	! DEFi #186
-LTEXT:	CNST *.z.LTEXT	; signature array LTEXT[186] : unknown @ 47:1
+LTEXT:	CNST *.z.LTEXT	; signature array LTEXT[186] : unknown @ adventData.impala:47:1
 	DATA #0 #1 #35 #65 #78 #96 #111 #140 #167 #205 #231 #254
 	DATA #307 #318 #357 #384 #457 #481 #511 #533 #552 #564
 	DATA #569 #575 #601 #626 #653 #667 #681 #702 #710 #734
@@ -94,7 +94,7 @@ LTEXT:	CNST *.z.LTEXT	; signature array LTEXT[186] : unknown @ 47:1
 	DATA #4141 #4184 #4206 #4220 #4234 #4291 #4302 #4332 #4376
 	DATA #4401 #4408 #4422 #4426 #4430 #4434 #4438 #4442 #0
 .z.KEY:	! DEFi #186
-KEY:	CNST *.z.KEY	; signature array KEY[186] : unknown @ 61:1
+KEY:	CNST *.z.KEY	; signature array KEY[186] : unknown @ adventData.impala:61:1
 	DATA #0 #1 #16 #23 #30 #41 #49 #53 #68 #80 #89 #98 #111
 	DATA #120 #128 #139 #155 #156 #165 #168 #181 #182 #183
 	DATA #184 #191 #193 #197 #198 #207 #214 #217 #222 #224
@@ -115,7 +115,7 @@ KEY:	CNST *.z.KEY	; signature array KEY[186] : unknown @ 61:1
 	DATA #860 #863 #864 #865 #869 #872 #873 #874 #875 #876
 	DATA #877 #878 #0
 .z.LOCSND:	! DEFi #186
-LOCSND:	CNST *.z.LOCSND	; signature array LOCSND[186] : unknown @ 75:1
+LOCSND:	CNST *.z.LOCSND	; signature array LOCSND[186] : unknown @ adventData.impala:75:1
 	DATA #0 #229 #0 #229 #229 #0 #0 #229 #0 #0 #0 #0 #0 #0 #0
 	DATA #230 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #229 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
@@ -129,7 +129,7 @@ LOCSND:	CNST *.z.LOCSND	; signature array LOCSND[186] : unknown @ 75:1
 	DATA #0 #0 #0 #-237 #249 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0
 .z.LINES:	! DEFi #12501
-LINES:	CNST *.z.LINES	; signature array LINES[12501] : unknown @ 89:1
+LINES:	CNST *.z.LINES	; signature array LINES[12501] : unknown @ adventData.impala:89:1
 	DATA #0 #-16 #1003128965 #1486677452 #1371620026
 	DATA #1626797244 #2024080985 #885817003 #213802728
 	DATA #1002977874 #1257601629 #1327983606 #1692522683
@@ -3016,17 +3016,17 @@ LINES:	CNST *.z.LINES	; signature array LINES[12501] : unknown @ 89:1
 	DATA #1373674633 #1676893552 #1758580913 #-1 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 .z.CVAL:	! DEFi #13
-CVAL:	CNST *.z.CVAL	; signature array CVAL[13] : unknown @ 873:1
+CVAL:	CNST *.z.CVAL	; signature array CVAL[13] : unknown @ adventData.impala:873:1
 	DATA #0 #45 #120 #170 #250 #320 #375 #410 #426 #429 #9999
 	DATA #0 #0
 .z.TTEXT:	! DEFi #6
-TTEXT:	CNST *.z.TTEXT	; signature array TTEXT[6] : unknown @ 876:1
+TTEXT:	CNST *.z.TTEXT	; signature array TTEXT[6] : unknown @ adventData.impala:876:1
 	DATA #0 #12393 #12415 #12427 #12442 #0
 .z.TRNVAL:	! DEFi #6
-TRNVAL:	CNST *.z.TRNVAL	; signature array TRNVAL[6] : unknown @ 879:1
+TRNVAL:	CNST *.z.TRNVAL	; signature array TRNVAL[6] : unknown @ adventData.impala:879:1
 	DATA #0 #200350 #300500 #501000 #1002500 #0
 .z.TRAVEL:	! DEFi #886
-TRAVEL:	CNST *.z.TRAVEL	; signature array TRAVEL[886] : unknown @ 882:1
+TRAVEL:	CNST *.z.TRAVEL	; signature array TRAVEL[886] : unknown @ adventData.impala:882:1
 	DATA #0 #2002 #2044 #2029 #3003 #3012 #3019 #3043 #4005
 	DATA #4013 #4014 #4046 #4030 #145006 #145045 #-8063 #1012
 	DATA #1043 #5044 #164045 #157046 #157006 #-580030 #1011
@@ -3168,7 +3168,7 @@ TRAVEL:	CNST *.z.TRAVEL	; signature array TRAVEL[886] : unknown @ 882:1
 	DATA #176011 #-176017 #-1 #-11001 #-3001 #-33001 #-3001
 	DATA #-100001 #-33001 #0 #0 #0 #0 #0 #0 #0
 .z.KTAB:	! DEFi #331
-KTAB:	CNST *.z.KTAB	; signature array KTAB[331] : unknown @ 940:1
+KTAB:	CNST *.z.KTAB	; signature array KTAB[331] : unknown @ adventData.impala:940:1
 	DATA #0 #2 #2 #3 #4 #5 #6 #7 #7 #7 #8 #8 #8 #9 #10 #11 #11
 	DATA #11 #11 #12 #12 #13 #14 #15 #16 #17 #18 #19 #19 #19
 	DATA #20 #21 #21 #22 #23 #23 #24 #25 #26 #27 #28 #29 #29
@@ -3203,7 +3203,7 @@ KTAB:	CNST *.z.KTAB	; signature array KTAB[331] : unknown @ 940:1
 	DATA #3066 #3066 #3068 #3069 #3079 #3139 #3142 #3142 #3147
 	DATA #3246 #3271 #3275 #-1 #0 #0 #0 #0
 .z.PLAC:	! DEFi #101
-PLAC:	CNST *.z.PLAC	; signature array PLAC[101] : unknown @ 963:1
+PLAC:	CNST *.z.PLAC	; signature array PLAC[101] : unknown @ adventData.impala:963:1
 	DATA #0 #3 #3 #8 #10 #11 #0 #14 #13 #94 #96 #19 #17 #101
 	DATA #103 #0 #106 #0 #0 #3 #3 #0 #0 #109 #25 #23 #111 #35
 	DATA #0 #97 #0 #119 #117 #117 #0 #130 #0 #126 #140 #0 #96
@@ -3213,7 +3213,7 @@ PLAC:	CNST *.z.PLAC	; signature array PLAC[101] : unknown @ 963:1
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0
 .z.FIXD:	! DEFi #101
-FIXD:	CNST *.z.FIXD	; signature array FIXD[101] : unknown @ 972:1
+FIXD:	CNST *.z.FIXD	; signature array FIXD[101] : unknown @ adventData.impala:972:1
 	DATA #0 #0 #0 #9 #0 #0 #0 #15 #0 #-1 #0 #-1 #27 #-1 #0 #0
 	DATA #0 #-1 #0 #0 #0 #0 #0 #-1 #-1 #67 #-1 #110 #0 #-1 #-1
 	DATA #121 #122 #122 #0 #-1 #-1 #-1 #-1 #0 #-1 #-1 #-1 #-1
@@ -3222,13 +3222,13 @@ FIXD:	CNST *.z.FIXD	; signature array FIXD[101] : unknown @ 972:1
 	DATA #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0 #0
 	DATA #0 #0 #0 #0 #0 #0
 .z.ACTSPK:	! DEFi #36
-ACTSPK:	CNST *.z.ACTSPK	; signature array ACTSPK[36] : unknown @ 981:1
+ACTSPK:	CNST *.z.ACTSPK	; signature array ACTSPK[36] : unknown @ adventData.impala:981:1
 	DATA #0 #24 #29 #0 #33 #0 #33 #195 #195 #42 #14 #43 #110
 	DATA #29 #110 #73 #75 #29 #61 #59 #59 #174 #109 #67 #61
 	DATA #147 #155 #195 #146 #110 #61 #61 #14 #195 #42 #61
 	! MULi <A> #21 #5
 .z.HINTS:	! DEFi #<A>
-HINTS:	CNST *.z.HINTS	; signature array HINTS[] : unknown @ 986:1
+HINTS:	CNST *.z.HINTS	; signature array HINTS[] : unknown @ adventData.impala:986:1
 	DATA #0 #0 #0 #0 #0 #0 #4 #2 #62 #63 #0 #5 #2 #18 #19 #0
 	DATA #8 #2 #20 #21 #0 #75 #4 #176 #177 #0 #25 #5 #178 #179
 	DATA #0 #20 #3 #180 #181 #0 #8 #2 #243 #244 #0 #25 #2 #247

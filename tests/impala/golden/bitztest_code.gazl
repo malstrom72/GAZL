@@ -1,62 +1,62 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ bitztest_code.impala:17:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ bitztest_code.impala:18:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ bitztest_code.impala:19:1
 .z.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ bitztest_code.impala:27:1
 	DATA &.s_Sillyr_4d2 &.s__4d3 &.s__4d3 &.s_LEFTDE_4d4
 	DATA &.s__4d3 &.s__4d3 &.s__4d3 &.s_RINGMO_4d5
-; signature extern native abort() -> unknown @ 38:1
-; signature extern native trace() -> unknown @ 39:1
-; signature extern native yield() -> unknown @ 40:1
-; signature extern native write() -> unknown @ 41:1
-; signature extern native read() -> unknown @ 42:1
-; signature extern const DEBUG : int @ 44:1
-; signature extern const OPERATOR_1_NOP : int @ 46:1
-; signature extern const OPERATOR_1_AND : int @ 47:1
-; signature extern const OPERATOR_1_MUL : int @ 48:1
-; signature extern const OPERATOR_1_OSC : int @ 49:1
-; signature extern const OPERATOR_1_RND : int @ 50:1
-; signature extern const OPERATOR_1_COUNT : int @ 51:1
-; signature extern const OPERATOR_2_NOP : int @ 53:1
-; signature extern const OPERATOR_2_OR : int @ 54:1
-; signature extern const OPERATOR_2_XOR : int @ 55:1
-; signature extern const OPERATOR_2_MSK : int @ 56:1
-; signature extern const OPERATOR_2_SUB : int @ 57:1
-; signature extern const OPERATOR_2_COUNT : int @ 58:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 60:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 61:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 62:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 63:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 64:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 66:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 67:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 68:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 69:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 70:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 71:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 72:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 73:1
-; signature extern const PARAM_COUNT : int @ 74:1
-; signature extern const POSITION_INT_BITS : int @ 76:1
-; signature extern const POSITION_FRACT_BITS : int @ 77:1
+; signature extern native abort() -> unknown @ bitztest_code.impala:38:1
+; signature extern native trace() -> unknown @ bitztest_code.impala:39:1
+; signature extern native yield() -> unknown @ bitztest_code.impala:40:1
+; signature extern native write() -> unknown @ bitztest_code.impala:41:1
+; signature extern native read() -> unknown @ bitztest_code.impala:42:1
+; signature extern const DEBUG : int @ bitztest_code.impala:44:1
+; signature extern const OPERATOR_1_NOP : int @ bitztest_code.impala:46:1
+; signature extern const OPERATOR_1_AND : int @ bitztest_code.impala:47:1
+; signature extern const OPERATOR_1_MUL : int @ bitztest_code.impala:48:1
+; signature extern const OPERATOR_1_OSC : int @ bitztest_code.impala:49:1
+; signature extern const OPERATOR_1_RND : int @ bitztest_code.impala:50:1
+; signature extern const OPERATOR_1_COUNT : int @ bitztest_code.impala:51:1
+; signature extern const OPERATOR_2_NOP : int @ bitztest_code.impala:53:1
+; signature extern const OPERATOR_2_OR : int @ bitztest_code.impala:54:1
+; signature extern const OPERATOR_2_XOR : int @ bitztest_code.impala:55:1
+; signature extern const OPERATOR_2_MSK : int @ bitztest_code.impala:56:1
+; signature extern const OPERATOR_2_SUB : int @ bitztest_code.impala:57:1
+; signature extern const OPERATOR_2_COUNT : int @ bitztest_code.impala:58:1
+; signature extern const SWITCHES_SYNC_MASK : int @ bitztest_code.impala:60:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ bitztest_code.impala:61:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ bitztest_code.impala:62:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ bitztest_code.impala:63:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ bitztest_code.impala:64:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ bitztest_code.impala:66:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ bitztest_code.impala:67:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ bitztest_code.impala:68:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ bitztest_code.impala:69:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ bitztest_code.impala:70:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ bitztest_code.impala:71:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ bitztest_code.impala:72:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ bitztest_code.impala:73:1
+; signature extern const PARAM_COUNT : int @ bitztest_code.impala:74:1
+; signature extern const POSITION_INT_BITS : int @ bitztest_code.impala:76:1
+; signature extern const POSITION_FRACT_BITS : int @ bitztest_code.impala:77:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 79:1
+clock:	DATi #0	; signature global clock : int @ bitztest_code.impala:79:1
 .z.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ bitztest_code.impala:80:1
 .z.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ bitztest_code.impala:81:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int @ 82:1
+instance:	DATi #0	; signature global instance : int @ bitztest_code.impala:82:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 83:1
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ bitztest_code.impala:83:1
 .z.signal:	! DEFi #2
-signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 85:1
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ bitztest_code.impala:85:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 99:1
+init:	FUNC	; signature func init() -> void @ bitztest_code.impala:99:1
 		PARA *1
 	$i:	LOCi
 .z.init.buf:	! DEFi #256
@@ -66,14 +66,14 @@ init:	FUNC	; signature func init() -> void @ 99:1
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 108:1
+reset:	FUNC	; signature func reset() -> void @ bitztest_code.impala:108:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 116:1
+update:	FUNC	; signature func update() -> void @ bitztest_code.impala:116:1
 		PARA *1
 .z.update.buf:	! DEFi #256
 	$buf:	LOCA *.z.update.buf
@@ -82,10 +82,10 @@ update:	FUNC	; signature func update() -> void @ 116:1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
-f:	! DEFi #0x309977	; signature const f : int @ 121:1
+f:	! DEFi #0x309977	; signature const f : int @ bitztest_code.impala:121:1
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 138:1
+process:	FUNC	; signature func process() -> void @ bitztest_code.impala:138:1
 		PARA *1
 	$t:	LOCi
 	$u:	LOCi
@@ -122,7 +122,7 @@ process:	FUNC	; signature func process() -> void @ 138:1
 	.e1:	SHRi $y $y #20	; global signal[0] = (y = y >> 20)
 		POKE &signal:0 $y 
 		POKE &signal:1 $y 	; global signal[1] = y
-		CALL ^yield %0 *1	; expects yield() -> unknown @ 152:10
+		CALL ^yield %0 *1	; expects yield() -> unknown @ bitztest_code.impala:152:10
 		ADDi $t $t #1	; t = t + 1
 		GOTO @.l0  	; }
 		RETU   	; }

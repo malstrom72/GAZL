@@ -78,7 +78,10 @@ function compileProgram(rootPath, options = {}) {
 		randomId: options.randomId,
 		retabulate: true,
 		trailingNewline: true,
-		sourceName: rootPath,
+		// The BASENAME, matching how `units` names a closure's members (relative to the root's own
+		// directory). A full path would bake this machine's directory layout into every emitted row,
+		// and a .gazl is text that ships and is diffed.
+		sourceName: (rootPath === STDIN_PATH ? undefined : path.basename(rootPath)),
 		units: spans,
 		legacy: options.legacy,
 		rangeChecks: options.rangeChecks,

@@ -1,12 +1,12 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #0	; signature const DEBUG : int @ 14:1
-; signature extern const LO : int @ 16:1
-; signature extern const HI : int @ 17:1
+DEBUG:	! DEFi #0	; signature const DEBUG : int @ switchWindow.impala:14:1
+; signature extern const LO : int @ switchWindow.impala:16:1
+; signature extern const HI : int @ switchWindow.impala:17:1
 
 ;-----------------------------------------------------------------------------
-pick:	FUNC	; signature func pick(int x) -> int @ 20:1
+pick:	FUNC	; signature func pick(int x) -> int @ switchWindow.impala:20:1
 	$r:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
@@ -27,7 +27,7 @@ pick:	FUNC	; signature func pick(int x) -> int @ 20:1
 
 
 ;-----------------------------------------------------------------------------
-pair:	FUNC	; signature func pair(int a, int b) -> int @ 30:1
+pair:	FUNC	; signature func pair(int a, int b) -> int @ switchWindow.impala:30:1
 	$r:	OUTi
 	$a:	INPi
 	$b:	INPi
@@ -64,7 +64,7 @@ pair:	FUNC	; signature func pair(int a, int b) -> int @ 30:1
 
 
 ;-----------------------------------------------------------------------------
-fixed:	FUNC	; signature func fixed(int x) -> int @ 47:1
+fixed:	FUNC	; signature func fixed(int x) -> int @ switchWindow.impala:47:1
 	$r:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
@@ -79,16 +79,16 @@ fixed:	FUNC	; signature func fixed(int x) -> int @ 47:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> int @ 57:1
+main:	FUNC	; signature func main() -> int @ switchWindow.impala:57:1
 	$m:	OUTi
 ;-----------------------------------------------------------------------------
 		MOVi %1 #5 	; m = pick(5) + pair(0, 3) + fixed(3)
-		CALL &pick %0 *2	; expects pick(int) -> int @ 59:14
+		CALL &pick %0 *2	; expects pick(int) -> int @ switchWindow.impala:59:14
 		MOVi %2 #0 
 		MOVi %3 #3 
-		CALL &pair %1 *3	; expects pair(int, int) -> int @ 59:27
+		CALL &pair %1 *3	; expects pair(int, int) -> int @ switchWindow.impala:59:27
 		MOVi %3 #3 
-		CALL &fixed %2 *2	; expects fixed(int) -> int @ 59:37
+		CALL &fixed %2 *2	; expects fixed(int) -> int @ switchWindow.impala:59:37
 		ADDi %0 %0 %1
 		ADDi $m %0 %2
 		RETU   	; }

@@ -1,43 +1,43 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 9:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 10:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 11:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ mozaik_code.impala:9:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ mozaik_code.impala:10:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ mozaik_code.impala:11:1
 .z.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 13:1
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ mozaik_code.impala:13:1
 	DATA &.s__4d2 &.s__4d2 &.s_CRUSH_4d3 &.s_BLOCKR_4d4
 	DATA &.s__4d2 &.s__4d2 &.s__4d5 &.s_BLOCKS_4d6
-; signature extern native abort() -> unknown @ 24:1
-; signature extern native trace() -> unknown @ 25:1
-; signature extern native yield() -> unknown @ 26:1
-; signature extern native write() -> unknown @ 27:1
-; signature extern native read() -> unknown @ 28:1
-; signature extern const DEBUG : int @ 30:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 32:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 33:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 34:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 35:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 36:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 38:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 39:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 40:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 41:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 42:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 43:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 44:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 45:1
-; signature extern const PARAM_COUNT : int @ 46:1
+; signature extern native abort() -> unknown @ mozaik_code.impala:24:1
+; signature extern native trace() -> unknown @ mozaik_code.impala:25:1
+; signature extern native yield() -> unknown @ mozaik_code.impala:26:1
+; signature extern native write() -> unknown @ mozaik_code.impala:27:1
+; signature extern native read() -> unknown @ mozaik_code.impala:28:1
+; signature extern const DEBUG : int @ mozaik_code.impala:30:1
+; signature extern const SWITCHES_SYNC_MASK : int @ mozaik_code.impala:32:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ mozaik_code.impala:33:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ mozaik_code.impala:34:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ mozaik_code.impala:35:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ mozaik_code.impala:36:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ mozaik_code.impala:38:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ mozaik_code.impala:39:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ mozaik_code.impala:40:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ mozaik_code.impala:41:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ mozaik_code.impala:42:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ mozaik_code.impala:43:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ mozaik_code.impala:44:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ mozaik_code.impala:45:1
+; signature extern const PARAM_COUNT : int @ mozaik_code.impala:46:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 48:1
+clock:	DATi #0	; signature global clock : int @ mozaik_code.impala:48:1
 .z.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 49:1
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ mozaik_code.impala:49:1
 .z.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 50:1
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ mozaik_code.impala:50:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 51:1
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ mozaik_code.impala:51:1
 .z.signal:	! DEFi #2
-signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 52:1
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ mozaik_code.impala:52:1
 	CNST *1
 	! SHLi <A> #1 #SWITCHES_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -48,22 +48,22 @@ signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 52:1
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int @ 53:1
-LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 119:1
+updateMask:	DATi <A>	; signature readonly updateMask : int @ mozaik_code.impala:53:1
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ mozaik_code.impala:119:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC	; signature func error(ptr s) -> void @ 121:1
+error:	FUNC	; signature func error(ptr s) -> void @ mozaik_code.impala:121:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 123:10
-		CALL ^abort %0 *1	; expects abort() -> unknown @ 124:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ mozaik_code.impala:123:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ mozaik_code.impala:124:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-exp:	FUNC	; signature func exp(float x) -> float @ 127:1
+exp:	FUNC	; signature func exp(float x) -> float @ mozaik_code.impala:127:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -87,7 +87,7 @@ exp:	FUNC	; signature func exp(float x) -> float @ 127:1
 
 
 ;-----------------------------------------------------------------------------
-log:	FUNC	; signature func log(float x) -> float @ 147:1
+log:	FUNC	; signature func log(float x) -> float @ mozaik_code.impala:147:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -99,7 +99,7 @@ log:	FUNC	; signature func log(float x) -> float @ 147:1
 		LEQf $x #0.0 @.t0	; if (x <= 0.0 || x >= 1.0e38) error("Domain error")
 		LSSf $x #1.0e38 @.f1
 	.t0:	MOVp %1 &.s_Domain_4d7 	; error("Domain error")
-		CALL &error %0 *2	; expects error(ptr) -> void @ 155:52
+		CALL &error %0 *2	; expects error(ptr) -> void @ mozaik_code.impala:155:52
 		RETU   
 	.f1:	MOVf $b #0.0 	; b = 0.0
 		MOVf $m $x 	; m = x
@@ -126,7 +126,7 @@ log:	FUNC	; signature func log(float x) -> float @ 147:1
 
 
 ;-----------------------------------------------------------------------------
-pow:	FUNC	; signature func pow(float x, float y) -> float @ 175:1
+pow:	FUNC	; signature func pow(float x, float y) -> float @ mozaik_code.impala:175:1
 	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
@@ -140,15 +140,15 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ 175:1
 		SUBf $a #0.0 $a	; a = -a
 	.f1:	LEQf $a #0.0 @.f2	; if (a > 0.0) z = (float) exp((float) log(a) * y)
 		MOVf %2 $a 	; z = (float) exp((float) log(a) * y)
-		CALL &log %1 *2	; expects log(float) -> float @ 182:46
+		CALL &log %1 *2	; expects log(float) -> float @ mozaik_code.impala:182:46
 		MULf %1 %1 $y
-		CALL &exp %0 *2	; expects exp(float) -> float @ 182:50
+		CALL &exp %0 *2	; expects exp(float) -> float @ mozaik_code.impala:182:50
 		MOVf $z %0 
 		GOTO @.f5  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
 	.t4:	MOVp %1 &.s_Domain_4d7 	; error("Domain error")
-		CALL &error %0 *2	; expects error(ptr) -> void @ 183:53
+		CALL &error %0 *2	; expects error(ptr) -> void @ mozaik_code.impala:183:53
 	.f5:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
 		MULf %0 $y #0.5
 		MULf %1 $y #0.5
@@ -159,7 +159,7 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ 175:1
 
 
 ;-----------------------------------------------------------------------------
-logScale:	FUNC	; signature func logScale(float x, float outFrom, float outTo) -> float @ 187:1
+logScale:	FUNC	; signature func logScale(float x, float outFrom, float outTo) -> float @ mozaik_code.impala:187:1
 	$y:	OUTf
 	$x:	INPf
 	$outFrom:	INPf
@@ -167,42 +167,42 @@ logScale:	FUNC	; signature func logScale(float x, float outFrom, float outTo) ->
 ;-----------------------------------------------------------------------------
 		DIVf %1 $outTo $outFrom	; y = outFrom * (float) pow(outTo / outFrom, x)
 		MOVf %2 $x 
-		CALL &pow %0 *3	; expects pow(float, float) -> float @ 190:47
+		CALL &pow %0 *3	; expects pow(float, float) -> float @ mozaik_code.impala:190:47
 		MULf $y $outFrom %0
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-decayConstant:	FUNC	; signature func decayConstant(float time, float reach) -> float @ 193:1
+decayConstant:	FUNC	; signature func decayConstant(float time, float reach) -> float @ mozaik_code.impala:193:1
 	$factor:	OUTf
 	$time:	INPf
 	$reach:	INPf
 ;-----------------------------------------------------------------------------
 		DIVf %2 #1.0 $reach	; factor = (float) exp(-1.0 / time * (float) log(1.0 / reach))
-		CALL &log %1 *2	; expects log(float) -> float @ 196:61
+		CALL &log %1 *2	; expects log(float) -> float @ mozaik_code.impala:196:61
 		DIVf %2 #-1.0 $time
 		MULf %1 %2 %1
-		CALL &exp %0 *2	; expects exp(float) -> float @ 196:62
+		CALL &exp %0 *2	; expects exp(float) -> float @ mozaik_code.impala:196:62
 		MOVf $factor %0 
 		RETU   	; }
 
-HP_EPSILON:	! DEFf #1.0e-011	; signature const HP_EPSILON : float @ 201:1
-HP_K:	! DEFf #0.0056828256022101	; signature const HP_K : float @ 202:1
+HP_EPSILON:	! DEFf #1.0e-011	; signature const HP_EPSILON : float @ mozaik_code.impala:201:1
+HP_K:	! DEFf #0.0056828256022101	; signature const HP_K : float @ mozaik_code.impala:202:1
 	GLOB *1
-wantsReset:	DATi #FALSE	; signature global wantsReset : int @ 206:1
+wantsReset:	DATi #FALSE	; signature global wantsReset : int @ mozaik_code.impala:206:1
 	GLOB *1
-breakLoop:	DATi #FALSE	; signature global breakLoop : int @ 207:1
+breakLoop:	DATi #FALSE	; signature global breakLoop : int @ mozaik_code.impala:207:1
 .z.readRates:	! DEFi #256
-readRates:	GLOB *.z.readRates	; signature array readRates[256] : unknown @ 208:1
+readRates:	GLOB *.z.readRates	; signature array readRates[256] : unknown @ mozaik_code.impala:208:1
 .z.blockLens:	! DEFi #256
-blockLens:	GLOB *.z.blockLens	; signature array blockLens[256] : unknown @ 209:1
+blockLens:	GLOB *.z.blockLens	; signature array blockLens[256] : unknown @ mozaik_code.impala:209:1
 .z.minCycles:	! DEFi #256
-minCycles:	GLOB *.z.minCycles	; signature array minCycles[256] : unknown @ 210:1
+minCycles:	GLOB *.z.minCycles	; signature array minCycles[256] : unknown @ mozaik_code.impala:210:1
 .z.thresDKs:	! DEFi #256
-thresDKs:	GLOB *.z.thresDKs	; signature array thresDKs[256] : unknown @ 211:1
+thresDKs:	GLOB *.z.thresDKs	; signature array thresDKs[256] : unknown @ mozaik_code.impala:211:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 218:1
+init:	FUNC	; signature func init() -> void @ mozaik_code.impala:218:1
 		PARA *1
 	$i:	LOCi
 	$x:	LOCf
@@ -218,27 +218,27 @@ init:	FUNC	; signature func init() -> void @ 218:1
 		MOVf %1 $x 	; global readRates[i] = ftoi((float) logScale(x, 32768.0, 131072.0) + 0.5)
 		MOVf %2 #32768.0 
 		MOVf %3 #131072.0 
-		CALL &logScale %0 *4	; expects logScale(float, float, float) -> float @ 226:69
+		CALL &logScale %0 *4	; expects logScale(float, float, float) -> float @ mozaik_code.impala:226:69
 		ADDf %0 %0 #0.5
 		fTOi %0 %0 #1.0
 		POKE &readRates $i %0
 		MOVf %1 $x 	; global blockLens[i] = ftoi((float) logScale(x, 128.0, 32768.0) + 0.5)
 		MOVf %2 #128.0 
 		MOVf %3 #32768.0 
-		CALL &logScale %0 *4	; expects logScale(float, float, float) -> float @ 227:66
+		CALL &logScale %0 *4	; expects logScale(float, float, float) -> float @ mozaik_code.impala:227:66
 		ADDf %0 %0 #0.5
 		fTOi %0 %0 #1.0
 		POKE &blockLens $i %0
 		MOVf %1 $x 	; minCycle = ftoi((float) logScale(x, 10.0, 2000.0) + 0.5)
 		MOVf %2 #10.0 
 		MOVf %3 #2000.0 
-		CALL &logScale %0 *4	; expects logScale(float, float, float) -> float @ 228:53
+		CALL &logScale %0 *4	; expects logScale(float, float, float) -> float @ mozaik_code.impala:228:53
 		ADDf %0 %0 #0.5
 		fTOi $minCycle %0 #1.0
 		POKE &minCycles $i $minCycle	; global minCycles[i] = minCycle
 		iTOf %1 $minCycle #1.0	; global thresDKs[i] = (float) decayConstant(itof(minCycle), 0.6666666)
 		MOVf %2 #0.6666666 
-		CALL &decayConstant %0 *3	; expects decayConstant(float, float) -> float @ 230:72
+		CALL &decayConstant %0 *3	; expects decayConstant(float, float) -> float @ mozaik_code.impala:230:72
 		POKE &thresDKs $i %0
 		FORi $i #256 @.l1	; }
 	.e0:	POKE &blockLens:0 #0 	; global blockLens[0] = 0
@@ -246,7 +246,7 @@ init:	FUNC	; signature func init() -> void @ 218:1
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 239:1
+update:	FUNC	; signature func update() -> void @ mozaik_code.impala:239:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		POKE &breakLoop #TRUE 	; global breakLoop = TRUE
@@ -254,7 +254,7 @@ update:	FUNC	; signature func update() -> void @ 239:1
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 244:1
+process:	FUNC	; signature func process() -> void @ mozaik_code.impala:244:1
 		PARA *1
 	$inL:	LOCf
 	$inR:	LOCf
@@ -388,7 +388,7 @@ process:	FUNC	; signature func process() -> void @ 244:1
 		MOVi %1 $clock 	; write(clock, 1, y2)
 		MOVi %2 #1 
 		ADRL %3 $y2 *0
-		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 300:23
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ mozaik_code.impala:300:23
 		MULf $thresPosL $thresPosL $thresDK	; thresPosL = thresPosL * thresDK
 		MULf $thresNegL $thresNegL $thresDK	; thresNegL = thresNegL * thresDK
 		MULf $thresPosR $thresPosR $thresDK	; thresPosR = thresPosR * thresDK
@@ -446,7 +446,7 @@ process:	FUNC	; signature func process() -> void @ 244:1
 		ADDi %1 $rcStartL %1
 		MOVi %2 #1 
 		ADRL %3 $y2 *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 354:78
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ mozaik_code.impala:354:78
 		ANDi %0 $y2:0 $bitCrushMask	; global signal[0] = (int) y2[0] & bitCrushMask
 		POKE &signal:0 %0 
 		SHRi %1 $playPosR #16	; read(rcStartR + (((playPosR >> 16) & rateCrushMask) ^ reverseMask), 1, y2)
@@ -455,7 +455,7 @@ process:	FUNC	; signature func process() -> void @ 244:1
 		ADDi %1 $rcStartR %1
 		MOVi %2 #1 
 		ADRL %3 $y2 *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 356:78
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ mozaik_code.impala:356:78
 		ANDi %0 $y2:1 $bitCrushMask	; global signal[1] = (int) y2[1] & bitCrushMask
 		POKE &signal:1 %0 
 		ADDi $playPosL $playPosL $readRate	; playPosL = playPosL + readRate
@@ -476,7 +476,7 @@ process:	FUNC	; signature func process() -> void @ 244:1
 		SHLi $rcLenR $ccLenR #16	; rcLenR = ccLenR << 16
 		MOVi $newRCR #FALSE 	; newRCR = FALSE
 	.f31:	MOVi $playPosR #0 	; playPosR = 0
-	.f29:	CALL ^yield %0 *1	; expects yield() -> unknown @ 379:11
+	.f29:	CALL ^yield %0 *1	; expects yield() -> unknown @ mozaik_code.impala:379:11
 		GOTO @.l3  	; }
 		GOTO @.l0  	; }
 		RETU   	; }
