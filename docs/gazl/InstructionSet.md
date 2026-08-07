@@ -86,19 +86,21 @@ stack frame sizes or for bounds checking etc.
 > call window, so an exhausted stack is reported at entry rather than deeper in. See `docs/impala/MemorySafetyModel.md`.
 
 A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function declaration
-order, not a code address. Equality (`EQUp` / `NEQp`), ordering (`LSSp`, `GEQp` etc.) and calling are defined
+order, not a code address. Equality (`EQUp` / `NEQp`), ordering (`LSSp`, `GEQp` etc.), difference (`DIFp`) and calling are defined
 operations on a function pointer. Ordering is a TOTAL, run-stable order and nothing more - which ordinal a function
 receives follows declaration order, so sort a table of function pointers and binary-search it, but never read meaning
-into the order itself. Arithmetic (`ADDp`, `SUBp`, `DIFp`) applied to a function pointer yields an unspecified (but
-memory-safe) result.
+into the order itself. `DIFp` between two function pointers is likewise defined - it is their ordinal distance.
+Arithmetic that PRODUCES a function pointer (`ADDp`, `SUBp` offsetting one) yields an unspecified result: the ordinal
+it lands on is a perfectly valid one, so it names a different function rather than failing.
 
 > **GAZL 1 does not enforce that contract, and GAZL 2 should.** All of those assemble today, because `p`
 > covers both data pointers and function pointers. `ADDp` is the one that bites: `&one + 1` is a valid
 > ordinal, so it does not trap - it silently calls a different function. "Memory-safe" is accurate and
-> still understates it. The fix is a distinct `t` (target) type with no ARITHMETIC forms, making the
-> undefined operations unrepresentable rather than merely undefined. Ordering is kept: it consumes two
-> targets and yields a bool, never a callable, so it cannot express the defect - and a sorted target table
-> needs it. See [`design/gazl/GAZL2FunctionPointers.md`](../../design/gazl/GAZL2FunctionPointers.md).
+> still understates it. The fix is a distinct `t` (target) type offering no operation whose RESULT is a
+> `t` - a target may be named, copied or loaded, never computed - which makes the undefined operations
+> unrepresentable rather than merely undefined. Ordering, equality and difference are all kept: they
+> consume targets and hand back a bool or an int, so none of them can name a function. See
+> [`design/gazl/GAZL2FunctionPointers.md`](../../design/gazl/GAZL2FunctionPointers.md).
 
 ## CNST
 - `*size`

@@ -25,13 +25,22 @@ This document is asking the assembler to ENFORCE what is written down, which a s
 impossible. Note too that "unspecified (but memory-safe)" is accurate but undersells `ADDp`: the result is
 not garbage, it is a *different function*, called silently.
 
-**Why ordering stays, and why this note originally got it wrong.** The ISA text used to lump ordering in
-with arithmetic; they do not belong together.
+**The rule, stated by RESULT TYPE - which is the only thing that decides safety here:**
 
-- **Arithmetic MANUFACTURES a target.** `&one + 1` produces a *value of type `t`* naming a different
-  function. That is the entire defect this document exists to remove.
-- **Ordering CONSUMES two targets and yields a bool.** It cannot produce an invalid callable at all, so
-  none of the safety argument for dropping arithmetic reaches it.
+> An operation on targets is safe if and only if `t` does not appear in its RESULT. A target may be
+> NAMED (`&func`), COPIED (`MOVt`) or LOADED (`DATt` / `LOCt`) - never COMPUTED. Consuming targets is
+> unrestricted.
+
+That one line derives the whole set. `&one + 1` is the defect because it *produces* a `t` naming a
+different function; `f < g`, `f == g` and `f - g` all consume targets and hand back a bool or an int, so
+none of them can name anything at all. Classifying by the NAME of the operation - "arithmetic bad" - gets
+`DIFt` wrong, because `t - t -> int` is arithmetic that cannot manufacture a target.
+
+**GAZL 1 already encodes exactly this distinction in its mnemonics.** From `DIFp` in the instruction set:
+"You cannot use `SUBp` to subtract a pointer from another. `SUBp` is only used for negatively offsetting a
+pointer." `SUBp` is `ptr - int -> ptr`; `DIFp` is `ptr - ptr -> int`. They are separate instructions
+*because the result types differ*. Keeping `DIFt` and dropping `SUBt` is not a new idea - it is applying a
+split the ISA made long ago.
 
 And ordering is *useful*, because a sorted container does not need a MEANINGFUL order - only a TOTAL and
 RUN-STABLE one. Sort a funcptr table at init and binary-search it for membership: the search never depends
@@ -77,7 +86,7 @@ Verified with GAZLCmd on 2026-08-02:
 | `MOVp $p &target` then `PEEK` through it | accepted; traps on the memory region check |
 | `DATp &target &gdata` (both kinds, one row) | accepted, unchecked |
 | `ADDp $p $p #1` on a function pointer | **accepted - and does NOT trap** |
-| `DIFp $i $funcPtr $dataPtr` | accepted, meaningless result |
+| `DIFp $i $funcPtr $dataPtr` | accepted, meaningless result - MIXING the two kinds is the defect here, not the difference itself |
 | `LSSp` / `GRTp` ordering two function pointers | accepted - and CORRECTLY so, see the correction above |
 
 The direct call is caught because `CALL_c__` demands the `FUNC` bit (`src/GAZL.cpp:337`). Everything else
@@ -130,18 +139,21 @@ Needed:
 | `DATt` | initializer rows for funcptr arrays and struct fields |
 | `EQUt` / `NEQt` (8 forms) | equality is meaningful - "is this the same function?" |
 | `LSSt` / `GRTt` / `LEQt` / `GEQt` | a TOTAL, run-stable order - sort a target table, binary-search it |
+| `DIFt` | `t - t -> int`: consumes two targets, names none |
 | `INPt` / `OUTt` | if call targets cross the host boundary |
 
 plus `CALL_v__` accepting `t` rather than the generic `VAR_PTR_R`.
 
-**The omissions are the feature - but the omission is ARITHMETIC, not ordering.** There would be no
-`ADDt`, `SUBt`, `DIFt`, `FORt`. Those are the forms that manufacture a target out of a target, so
-`&one + 1` stops being a wrong answer and becomes a line that will not assemble. That is the whole return
-on the change. Ordering is kept (see the correction at the top of this note): it yields a bool,
-never a callable, so it cannot express the defect - and a sorted target table needs it.
+**The omissions are the feature, and by the result-type rule they are exactly the target-PRODUCING forms:**
+no `ADDt`, no `SUBt`, no `FORt`. Each of those hands back a `t` computed from a `t`, so `&one + 1` stops
+being a wrong answer and becomes a line that will not assemble. That is the whole return on the change.
 
-`FORt` is worth naming explicitly as a drop even though it looks like iteration rather than arithmetic:
-stepping a loop variable through targets IS `ADDt` wearing a different hat.
+Two that look like they belong on the wrong side:
+
+- `DIFt` is KEPT though it is arithmetic - it yields an `int`. `SUBt` is dropped though it is the same
+  minus sign, because `t - int` yields a `t`. This is the `SUBp`/`DIFp` split the ISA already makes.
+- `FORt` is DROPPED though it looks like iteration rather than arithmetic - stepping a loop variable
+  through targets is `ADDt` wearing a different hat, and its result is a `t`.
 
 ## Suffix letters ruled out, and why
 
