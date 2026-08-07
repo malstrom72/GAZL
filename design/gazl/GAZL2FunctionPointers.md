@@ -1,6 +1,7 @@
 # A distinct function-pointer type for GAZL 2 (`t`)
 
-Status: PROPOSAL, researched against `src/GAZL.cpp` and GAZLCmd on 2026-08-02. Nothing here is
+Status: ACCEPTED 2026-08-07 (migration decided: break GAZL 1, see below). Researched against
+`src/GAZL.cpp` and GAZLCmd on 2026-08-02, re-verified 2026-08-07. Nothing here is
 implemented. The conclusion is that GAZL 1 has a real silent-wrong shape that no amount of Impala-side
 checking can close, because Impala has nowhere to encode the distinction.
 
@@ -52,7 +53,17 @@ whether it sorts.
 Impala already draws the line in the right place, and always has: `f + 1` and `f - g` are `E301`, while
 `f < g` and `f == g` compile. The compiler is the evidence; this paragraph was the thing that was wrong.
 
-So the defined operation set is **equality, ordering, and calling**, and `t` offers all three.
+So the defined operation set is **equality, ordering, difference, and calling** - everything that consumes
+a target without naming one - and `t` offers all four.
+
+**Why a target is index-like for CONSUMPTION but never for PRODUCTION.** The ordinal representation exists
+so a funcptr survives freeze/thaw: "Function pointers stored in globals survive re-assembly because they
+are stable ordinals" (`src/GAZL.h`, memory serialization). That makes it an INDEX, not an address - no
+address space, no element size, nothing contiguous. Indexes compare and subtract, which is why ordering
+and `DIFt` need no special pleading. But you may never COMPUTE one, because **the table it indexes is not
+yours**: ordinals are handed out by the assembler in declaration order, so there is no "next function" the
+program has any claim on. An int index into your own array is computable because you know that array's
+layout; `functionTable`'s layout is not yours to know.
 
 ## They are already different things at run time
 
@@ -199,8 +210,61 @@ looks like the expensive half and is.
   hole - but it means `t` is a declaration contract, not a guarantee about memory contents.
 - **Host boundary.** Whether `INPt`/`OUTt` are needed at all depends on whether a host ever hands a call
   target across.
-- **Migration.** `p` currently means "any pointer" in practice. Tightening it to "data pointer" is the
-  breaking half; every existing funcptr use in emitted GAZL would have to move to `t`.
+## Migration: DECIDED 2026-08-07 - break GAZL 1, no compatibility mode
+
+`p` tightens to "data pointer" and stops accepting `FUNC`. A GAZL 2 assembler will NOT assemble a GAZL 1
+file that holds a function pointer in a `p` slot. No format-version directive, no dual dialect - the
+loose path is deleted, not kept behind a flag.
+
+**Measured blast radius (2026-08-07, all 133 `.gazl` in the repo):**
+
+| | files |
+|---|---|
+| unaffected | 125 |
+| need migration | 8 |
+| of those, a plain RECOMPILE | 7 |
+| of those, a HAND edit | 1 - `src/UnitTest.gazl` |
+
+Every real-world example program is untouched: `verber8_code`, `phaser_code`, `trancelvania_code`,
+`specular_code`, `sam`, `buffer`, `chess`, `Priyome`, `BitMaskMod_code`, `FFTTest_code`,
+`startupcrash_code` contain no function pointer at all. The affected set is the funcptr FIXTURES plus the
+ISA unit test.
+
+**Why the cost is this low: Impala cannot emit the hard shape.** The unmigratable case is a POLYMORPHIC
+slot - one that holds a data pointer at one point and a call target at another, so `t` would need a second
+slot and a changed frame layout. `UnitTest.gazl`'s `p0` is exactly that (walks a string, then `MOVp p0
+&StopCar; CALL p0`), and it is the only one in the repo, because it is the only hand-written file.
+Impala provably cannot produce one:
+
+- named variables - `E303` in BOTH directions ("cannot assign funcptr to pointer" / "pointer to funcptr");
+- `%N` transients - UNTYPED storage, the mnemonic suffix carries the type (`%1` in `calc.gazl` holds ints,
+  floats and pointers in one function), so there is no slot type to migrate;
+- static data - Impala emits the deliberately-untyped `DATA` row for mixed structs/arrays and single-kind
+  `DATp` for scalar funcptr globals.
+
+So every Impala-generated `.gazl` is mechanically rewritable even when it cannot be recompiled, and the
+`; signature global fp : funcptr` rows give a rewriter ground truth without dataflow analysis.
+
+**Field exposure, per Magnus:** GAZL 1 has only ever shipped inside Permut8, and the only real-world
+funcptr user he can name is the "easter egg" OS joke that hosts CALC - which is `tests/impala/sources/
+calc.impala:517`, `((funcptr)global FUNCTIONS[i * 2 + 1])(...)` over a `(name, function)` table. Its
+source is in the corpus, so even that one regenerates.
+
+**Do NOT justify this by JIT performance - verified 2026-08-07, the JIT gains NOTHING.** Type suffixes are
+an assembly-time operand check that is ERASED at finalization: `ADDi_vvv` and `ADDp_vvv` both emit
+`ADDI_VVV`, `MOVi`/`MOVp` both emit `MOVE_VC_`, `EQUi`/`EQUp` -> `EQUI_*`, `LSSi`/`LSSp` -> `LSSI_*`. The
+JIT's own plan says it: "There are no dedicated MOVp/ADDp opcodes at the finalized level." A `MOVt` mapping
+to `MOVE_VV_` hands the JIT an identical instruction stream. And it would not help anyway - the realm
+analysis asks "can this reach MY frame", not "might this be a function", and a funcptr constant already
+lands in `REALM_NONFRAME` for free because `FUNCTION_OFFSET` (0x56789ABC) > `MEMORY_OFFSET` (0x12345678),
+so `produced = (p1.p >= MEMORY_OFFSET) ? REALM_NONFRAME : REALM_UNKNOWN` classifies it correctly and
+precisely. Funcptrs are never `PEEK`/`POKE`d, so they never reach the query realms exist to answer.
+
+**The whole return on `t` is therefore assembly-time correctness**, and specifically the SPLIT rather than
+the omissions: `&one + 1` is dangerous because the writer may have believed they held a data pointer, and
+once the types are distinct that confusion is unrepresentable. Note the runtime already catches the
+out-of-table case - `if (ui >= functionCount) { err = BAD_CALL; }` (`GAZL.cpp:1385`) - so a computed target
+only misbehaves silently when it lands on ANOTHER VALID function.
 
 ## See also
 
