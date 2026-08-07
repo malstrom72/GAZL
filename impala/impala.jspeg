@@ -2348,10 +2348,20 @@
        because the assembler - or the host - may be the one who knows it. Undefined for a 1-D array,
        which has no shape, which is what keeps its every path unchanged. */
     $$parser.arrayExtent = function (name, owner, what, size, dims) {
+        var syms;
+        if (dims !== undefined) {
+            /* A PLAIN LOOP, not `dims.map`: NuXJS has no `Array.prototype.map`, and this is the only
+               path a shaped array takes - so every multidimensional program died there with
+               "TypeError: map is not a function" while compiling identically under node. The compiler
+               must run under BOTH engines (tools/run-nuxjs-impala-smoke.cmd), and the smoke test never
+               reached this because none of its four programs declares a shape. */
+            syms = [];
+            for (var k = 0; k < dims.length; ++k) {
+                syms.push($$parser.axisSymbol(name, owner, k));
+            }
+        }
         return { n: size, what: what, sym: $$parser.extentSymbol(name, owner),
-                 dims: (dims === undefined ? undefined : dims.map(function (d, k) {
-                     return $$parser.axisSymbol(name, owner, k);
-                 })),
+                 dims: syms,
                  dimN: dims };                                    /* the axis COUNTS as written, for checking */
     };
 
