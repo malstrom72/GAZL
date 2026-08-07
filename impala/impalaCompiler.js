@@ -1157,20 +1157,19 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         } else {
             assert(counters['%'] > number);
             var stk = stock['%'];
-            for (var idx = stk.length - 1; idx >= 0 && stk[idx] !== '%' + number; --idx) {}
+            var idx = stockIndexOf(stk, '%' + number);
             assert(idx >= 0, "transient %" + number + " must exist in stock");
             stk.splice(idx, 1);
         }
     };
 
-    /* put a token back into its stock bucket */
-    function stockContains(stk, op) {
+    /* where `op` sits in a stock bucket, or -1. Searched from the top, because the pool is a LIFO and
+       a token just returned is the one most likely to be asked about. */
+    function stockIndexOf(stk, op) {
         for (var i = stk.length - 1; i >= 0; --i) {
-            if (stk[i] === op) {
-                return true;
-            }
+            if (stk[i] === op) return i;
         }
-        return false;
+        return -1;
     }
 
     returnBack = function (op) {
@@ -1190,7 +1189,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         /* a bare transient / compile-time scratch */
         else if (c === '%' || c === '<') {
             var stk = stock[c];
-            if (!stockContains(stk, op)) stk.push(op);   // avoid dupes
+            if (stockIndexOf(stk, op) < 0) stk.push(op);   // avoid dupes
         }
     };
 
