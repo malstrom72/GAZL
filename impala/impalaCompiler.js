@@ -392,6 +392,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return undefined;
     }
 
+    /* Callers ask for positions in roughly SOURCE ORDER, so the walk resumes from the previous answer
+       rather than restarting at the unit. Without this it is O(offset) per call and quadratic over a
+       file - measured on adventCode.impala (102KB): 742 calls scanning 33.8M characters. A backward
+       jump, a different unit or a different source falls back to a full scan, so the result never
+       depends on call order. `idx` (not `offset`) is memoised because the CRLF arm can step one past
+       the target, and it is the position `line`/`column` actually describe. */
+    var originMemo = null;
+
     function computeOrigin(sourceName, sourceCode, sourceOffset) {
         if (!sourceCode || sourceOffset == null) {
             return undefined;
@@ -406,9 +414,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
 
         var unit = originUnit(offset);
+        var from = (unit ? unit.start : 0);
         var line = 1;
         var column = 1;
-        for (var idx = (unit ? unit.start : 0); idx < offset; ++idx) {
+        var idx = from;
+        if (originMemo !== null && originMemo.code === sourceCode && originMemo.from === from
+                && originMemo.at <= offset) {
+            idx = originMemo.at; line = originMemo.line; column = originMemo.column;
+        }
+        for (; idx < offset; ++idx) {
             var ch = sourceCode.charAt(idx);
             if (ch === '\r') {
                 if (idx + 1 < sourceCode.length && sourceCode.charAt(idx + 1) === '\n') {
@@ -425,6 +439,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             }
             column += 1;
         }
+        originMemo = { code: sourceCode, from: from, at: idx, line: line, column: column };
 
         var origin = line + ':' + column;
         var name = (unit ? unit.name : sourceName);
