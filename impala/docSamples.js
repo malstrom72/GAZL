@@ -143,6 +143,15 @@ const SAMPLES = [
 	{ name: "a funcptr type refuses the wrong signature", expect: "E441",
 		src: "functype Step(int frame)\nfunction wrong(float x) { }\nglobal Step cb = wrong\n"
 				+ "export function main() { }\n" },
+	{ name: "a funcptr cannot be offset", expect: "E301",
+		src: "function a(int x) returns int r { r = x; }\n"
+				+ "export function main() locals funcptr f, funcptr g "
+				+ "{ f = a; g = f + 1; }\n" },
+	{ name: "comparison, ordering and difference on funcptrs are fine", expect: null,
+		src: "function a(int x) returns int r { r = x; }\n"
+				+ "function b(int x) returns int r { r = x; }\n"
+				+ "export function main() locals funcptr f, funcptr g, int y "
+				+ "{ f = a; g = b; y = f - g; if (f == g) y = 1; if (f < g) y = 2; }\n" },
 	{ name: "a cast between different-shape funcptr types", expect: "E465",
 		src: "functype Cb(int a) returns int r\nfunctype Wrong(float x, float y) returns float z\n"
 				+ "function dbl(int a) returns int r { r = a * 2; }\n"

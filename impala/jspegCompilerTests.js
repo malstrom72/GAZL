@@ -3053,6 +3053,44 @@ const typedPointerCases = [
 			"function main() locals funcptr f, int y { f = dbl; y = f(1, 2, 3); }"].join("\n"),
 		expectError: null,
 	},
+	/* What a funcptr supports is decided by the shape of the RESULT: comparison and difference consume
+	   targets and yield an int, so they can never name a function; `f + 1` would produce one. Unlike a
+	   data-pointer difference this needs no matching element types - ordinals are scaled by nothing.
+	   Lowers to DIFp today, DIFt under the GAZL 2 `t` type. */
+	{
+		label: "funcptr difference is an int",
+		source: ["function a(int x) returns int r { r = x; }",
+			"function b(int x) returns int r { r = x; }",
+			"function main() locals funcptr f, funcptr g, int y { f = a; g = b; y = f - g; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "...between named functypes too, matching or not",
+		source: ["functype Cb(int x) returns int r", "functype Other(float z)",
+			"function a(int x) returns int r { r = x; }", "function c(float z) { }",
+			"function main() locals Cb f, Other g, int y { f = a; g = c; y = f - g; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a funcptr cannot be offset",
+		source: ["function a(int x) returns int r { r = x; }",
+			"function main() locals funcptr f, funcptr g { f = a; g = f + 1; }"].join("\n"),
+		expectError: "Invalid types (funcptr and int)",
+	},
+	{
+		label: "a funcptr and a data pointer do not subtract",
+		source: ["global int gg", "function a(int x) returns int r { r = x; }",
+			"function main() locals funcptr f, int pointer p, int y "
+				+ "{ f = a; p = &global gg; y = f - p; }"].join("\n"),
+		expectError: "Invalid types (funcptr and pointer)",
+	},
+	{
+		label: "funcptr equality and ordering compile",
+		source: ["function a(int x) returns int r { r = x; }",
+			"function main() locals funcptr f, funcptr g, int y { f = a; g = a; y = 0;",
+			"  if (f == g) y = 1; if (f != g) y = 2; if (f < g) y = 3; if (f >= g) y = 4; }"].join("\n"),
+		expectError: null,
+	},
 	{
 		label: "a functype states one return at most",
 		source: ["functype Bad(int a) returns int r, int s"].join("\n"),

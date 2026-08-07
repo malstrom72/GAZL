@@ -202,7 +202,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         '|ii','i', '&ii','i', '^ii','i', '<<ii','i', '>>>ii','i', '>>ii','i',
         '+ii','i', '-ii','i', '*ii','i', '/ii','i', '%ii','i',
         '+ff','f', '-ff','f', '*ff','f', '/ff','f',
-        '+pi','p', '-pi','p', '-pp','i',
+        '+pi','p', '-pi','p', '-pp','i', '-FF','i',   /* funcptr difference: ordinal distance, DIFp (DIFt in GAZL 2) */
         '=[]pi','?',
         '<=ii','i', '<ii','i', '>=ii','i', '>ii','i', '!=ii','i', '==ii','i',
         '<=ff','f', '<ff','f', '>=ff','f', '>ff','f', '!=ff','f', '==ff','f',
@@ -3375,14 +3375,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         } else {
 
             /* pointer-difference special-case “d” */
-            var diff = (operator === '-' && rightx.type === 'p');
+            var diff = (operator === '-' && (rightx.type === 'p' || rightx.type === 'F'));
             if (diff) {
+                var funcDiff = (rightx.type === 'F');             /* ordinals, not addresses: no stride, nothing to match */
                 operator = 'd';
                 /* The difference counts ELEMENTS (DIFp, then DIVi by the stride), so it only means
                    anything when both pointers walk the same element type - `ip - fp` would divide a
                    float-strided span by the int size. Same rule as assignment (E201); comparison is
                    left alone, it reads a raw address either way. */
-                if (lelem !== rightx.elem) {
+                if (!funcDiff && lelem !== rightx.elem) {
                     fail('Pointer difference needs matching element types ('
                             + elemVerbose(lelem) + ' and '
                             + elemVerbose(rightx.elem) + ')',

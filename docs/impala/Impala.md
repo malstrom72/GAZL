@@ -243,6 +243,32 @@ can take a funcptr type at all: `(Other)someInt` is `E465` too. Untyped `funcptr
 escape hatch: `(funcptr)cb` erases the name and a named cast re-stamps it, so a
 deliberate conversion is spelled `(Other)(funcptr)cb`.
 
+### What you can do with a function pointer
+
+Comparison works, arithmetic does not — for both `funcptr` and named types:
+
+| | |
+|---|---|
+| `f == g`, `f != g` | yes — do these hold the same function? |
+| `f < g`, `f > g`, `f <= g`, `f >= g` | yes — a total, run-stable order |
+| `f - g` | yes — an `int`, the distance between the two ordinals |
+| `f + 1` | **`E301`** |
+| `f(args)` | yes — that is what it is for |
+
+A function pointer is not an address. It is a stable ordinal naming an entry in the
+program's function table, which is what lets one survive being written to a global and
+restored later. So the ordering is *total and stable within a run* — enough to sort a table
+of callbacks and binary-search it — but which function sorts before which follows
+declaration order and means nothing beyond that. Do not read significance into it, and do
+not expect it to survive adding a function or reordering a file. The same goes for the
+distance `f - g`.
+
+The rule for what is allowed is the shape of the *result*, not the name of the operation:
+comparison and difference **consume** function pointers and hand back an `int`, so they can
+never name a function. `f + 1` would **produce** one, and is rejected — the function table
+is not yours to index, so there is no "the next function". Unlike a data pointer difference,
+`f - g` needs no matching element types: ordinals are not scaled by anything.
+
 ## Declarations
 
 ### Globals
