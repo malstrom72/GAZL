@@ -2162,7 +2162,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         output(T + '! MOVi <a> #0' + T + '; layout of struct ' + name);
         for (var i = 0; i < s.fields.length; ++i) {
             var f = s.fields[i];
-            output('.o.' + name + '.' + f.name + ':' + T + '! DEFi #<a>');
+            output(fieldSymbol(name, f.name) + ':' + T + '! DEFi #<a>');
             if (f.type === 'S') {                                 /* nested by-value struct */
                 output(T + '! ADDi <a> #<a> #.z.' + f.struct);
             } else if (f.type === 'A') {                          /* array: name the extent, THEN advance by it */
@@ -2199,7 +2199,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 output(T + '! ADDi <a> #<a> #1');
             }
         }
-        output('.z.' + name + ':' + T + '! DEFi #<a>');
+        output(extentSymbol(name) + ':' + T + '! DEFi #<a>');
     };
 
     /* Fold a place's compile-time offset PARTS (field-offset symbols + constant strides) into one
@@ -2287,6 +2287,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        See design/gazl/SymbolNamespace.md. */
     extentSymbol = function (name, owner) {
         return '.z.' + (owner !== undefined ? owner + '.' : '') + name;
+    };
+
+    /* The symbol naming one FIELD's offset inside its struct - the third of the three naming schemes,
+       alongside `.z.` (size) and `.d.` (axis). It was the only one built inline, in two places: the
+       layout block that DEFINES it and the field access that REFERENCES it. One helper so a change to
+       the scheme cannot reach one and miss the other. See design/gazl/SymbolNamespace.md. */
+    fieldSymbol = function (structName, fieldName) {
+        return '.o.' + structName + '.' + fieldName;
     };
 
     /* The symbol naming ONE AXIS of a shaped array, numbered by stride with axis 0 innermost. `.z.` is the
@@ -3165,7 +3173,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            appends its `.o.<struct>.<field>` part - nested structs accumulate parts with ZERO
            instructions; the parts are folded (inline `! ADDi`, assemble-time) into one operand only at
            a terminal access. Only accessed paths cost anything, and never at run time. */
-        var fieldSym = '.o.' + structName + '.' + fieldName;
+        var fieldSym = fieldSymbol(structName, fieldName);
         noteStructUse(structName, sourceCode, sourceOffset);
         var newParts = offParts.concat([fieldSym]);
 
