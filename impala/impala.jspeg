@@ -1205,55 +1205,47 @@
         }
     };
 
-    /* lazily materialise a meta-record for any parse node */
+    /* One shape for an empty slot, so the places that used to spell the literal cannot drift apart. */
+    function newMetaSlot() {
+        return { operator: undefined, type: undefined,
+                 operands: [ undefined, undefined, undefined ] };
+    }
+
     function metaSlot(node) {
         if (node == null || (typeof node !== 'object' && typeof node !== 'function')) {
-            return { operator: undefined, type: undefined,
-                     operands: [ undefined, undefined, undefined ] };
+            return newMetaSlot();
         }
-        if (node.operands !== undefined) {
-            if (!Array.isArray(node.operands)) {
-                node.operands = [ undefined, undefined, undefined ];
-            } else {
-                while (node.operands.length < 3) {
-                    node.operands.push(undefined);
-                }
+        /* A PARSE NODE carries its meta in the value slot `_`; anything else IS the record. Only a node
+           with no operands of its own can be the former, which is why the two tests belong together -
+           asking them separately put an `operands === undefined` branch inside the `else` of
+           `operands !== undefined`, where it could never be false, and duplicated the ensure block. */
+        if (node.operands === undefined && Object.prototype.hasOwnProperty.call(node, '_')) {
+            var slot = node._;
+            if (!slot || slot.operands === undefined) {
+                slot = newMetaSlot();
+                node._ = slot;
             }
-            if (!Object.prototype.hasOwnProperty.call(node, 'operator')) {
-                node.operator = undefined;
-            }
-            if (!Object.prototype.hasOwnProperty.call(node, 'type')) {
-                node.type = undefined;
-            }
-            return node;
+            return slot;
         }
-
-        if (!Object.prototype.hasOwnProperty.call(node, '_')) {
-            if (node.operands === undefined) {
-                node.operands = [ undefined, undefined, undefined ];
+        if (!Array.isArray(node.operands)) {                      /* absent or wrong type: give it three */
+            node.operands = [ undefined, undefined, undefined ];
+        } else {
+            while (node.operands.length < 3) {
+                node.operands.push(undefined);
             }
-            if (!Object.prototype.hasOwnProperty.call(node, 'operator')) {
-                node.operator = undefined;
-            }
-            if (!Object.prototype.hasOwnProperty.call(node, 'type')) {
-                node.type = undefined;
-            }
-            return node;
         }
-
-        var slot = node._;
-        if (!slot || slot.operands === undefined) {
-            slot = { operator: undefined, type: undefined,
-                     operands: [ undefined, undefined, undefined ] };
-            node._ = slot;
+        if (!Object.prototype.hasOwnProperty.call(node, 'operator')) {
+            node.operator = undefined;
         }
-        return slot;
+        if (!Object.prototype.hasOwnProperty.call(node, 'type')) {
+            node.type = undefined;
+        }
+        return node;
     }
 
     $$parser.createParserContext = function () {
         return {
-            _: { operator: undefined, type: undefined,
-                 operands: [ undefined, undefined, undefined ] }
+            _: newMetaSlot()
         };
     };
 
@@ -1278,7 +1270,6 @@
         rec.baseKind  = undefined;
         rec.base      = undefined;
         rec.offParts  = undefined;
-        rec.root      = undefined;
         rec.arrayOf   = undefined;
         rec.extent    = undefined;
         rec.oobIndex  = undefined;
@@ -2829,7 +2820,7 @@
 
     /* A place names a struct (or struct array) at base + a sum of compile-time offset parts. Only a
        terminal scalar field emits code, so struct values never enter the word temporaries. */
-    $$parser.setPlace = function (rec, baseKind, base, offParts, structName, root, arrayOf, dynIndex) {
+    $$parser.setPlace = function (rec, baseKind, base, offParts, structName, arrayOf, dynIndex) {
         var slot = metaSlot(rec);
         slot.operator = '@place';
         slot.operands = [ undefined, undefined, undefined ];
@@ -2840,7 +2831,6 @@
         slot.arrayOf  = arrayOf;                                  /* set -> an array of `arrayOf`; a later [k] indexes it */
         slot.struct   = arrayOf ? undefined : structName;
         slot.type     = arrayOf ? 'p' : 'S';
-        slot.root     = root || structName || arrayOf;
         slot.elem     = arrayOf || (structName !== undefined ? $$parser.structDesc(structName) : undefined);
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
         slot.extent   = undefined;                                /* pooled slot: never inherit another array's extent or
@@ -2996,7 +2986,7 @@
         var extent = x.extent;
         if (!x.arrayOf) {                                         /* a raw struct pointer: wrap it as an array place */
             var p = $$parser.makeRValue(x);
-            $$parser.setPlace(x, (p[0] === '&' ? 'globalAddr' : 'pointer'), p, [], undefined, x.elem, x.elem);
+            $$parser.setPlace(x, (p[0] === '&' ? 'globalAddr' : 'pointer'), p, [], undefined, x.elem);
         }
         var elem = x.arrayOf;
         var elemStruct = $$parser.isStructAtom(elem);            /* struct element -> stride .z.elem, a place for the next .field;
@@ -3037,7 +3027,7 @@
                 }
                 x.offParts.push(part);
             }
-            if (elemStruct) $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elemName, x.root, undefined, x.dynIndex);
+            if (elemStruct) $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elemName, undefined, x.dynIndex);
             else            $$parser.emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
 
         } else if (x.baseKind === 'local' && x.dynIndex === undefined) {
@@ -3050,7 +3040,7 @@
                 $$parser.emit('*', 'i', frameIdx, idxRV, '#' + $$parser.extentSymbol(elemName));
                 $$parser.emitRangeCheck(frameIdx, extent, sourceCode, sourceOffset);   /* scaled: `.z.` counts words */
                 $$parser.returnBack(idxRV);
-                $$parser.setPlace(x, 'local', x.base, x.offParts, elemName, x.root, undefined, frameIdx);
+                $$parser.setPlace(x, 'local', x.base, x.offParts, elemName, undefined, frameIdx);
             } else {
                 $$parser.emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
                 $$parser.emitPlaceValue(x, 'local', x.base, x.offParts, idxRV, eType, eTail);
@@ -3066,7 +3056,7 @@
                 $$parser.returnBack(scaled);
                 $$parser.returnBack(idxRV);
                 $$parser.returnBack(arrPtr);
-                $$parser.setPlace(x, 'pointer', elemPtr, [], elemName, elem);
+                $$parser.setPlace(x, 'pointer', elemPtr, [], elemName);
             } else {                                              /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
                 $$parser.emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
                 $$parser.emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
@@ -3144,20 +3134,20 @@
     $$parser.fieldAccess = function (x, fieldName, arrow, sourceCode, sourceOffset) {
         x = metaSlot(x);
 
-        var bk, base, offParts, structName, root, dynIndex;
+        var bk, base, offParts, structName, dynIndex;
         if (x.place) {
             if (arrow) {
                 $$parser.fail("Use '.' - this is a struct value, not a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as .' + fieldName);
             }
-            bk = x.baseKind; base = x.base; offParts = x.offParts || []; structName = x.struct; root = x.root;
+            bk = x.baseKind; base = x.base; offParts = x.offParts || []; structName = x.struct;
             dynIndex = x.dynIndex;
         } else if (x.type === 'p' && $$parser.isStructAtom(x.elem)) {
             if (!arrow) {
                 $$parser.fail("Use '->' to access a field through a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as ->' + fieldName);
             }
-            bk = 'pointer'; base = $$parser.makeRValue(x); offParts = []; structName = $$parser.descName(x.elem); root = x.elem;
+            bk = 'pointer'; base = $$parser.makeRValue(x); offParts = []; structName = $$parser.descName(x.elem);
         } else {
             $$parser.fail("Field access requires a struct" + (arrow ? ' pointer' : ''),
                     sourceCode, sourceOffset, 'E415');
@@ -3179,12 +3169,12 @@
         var newParts = offParts.concat([fieldSym]);
 
         if (field.type === 'S') {                                 /* nested struct -> accumulate the part, same base, NO instruction */
-            $$parser.setPlace(x, bk, base, newParts, field.struct, root, undefined, dynIndex);
+            $$parser.setPlace(x, bk, base, newParts, field.struct, undefined, dynIndex);
             return;
         }
         if (field.type === 'A') {                                 /* array field -> a fold-able array place for the next [k]
                                                                      (struct OR scalar element; subscriptStruct terminates it) */
-            $$parser.setPlace(x, bk, base, newParts, undefined, root, field.elem, dynIndex);
+            $$parser.setPlace(x, bk, base, newParts, undefined, field.elem, dynIndex);
             if (field.extent === undefined) {                      /* built once per FIELD, not per access */
                 field.extent = $$parser.arrayExtent(fieldName, structName,
                         structName + '.' + fieldName, field.size, field.dims);
@@ -3540,14 +3530,14 @@ var _sn = $$parser.strideStruct(field.elem);
                         'declare it `global` instead of `readonly` if it has to be written');
             }
             var savedBK = leftx.baseKind, savedBase = leftx.base,
-                savedParts = leftx.offParts, savedStruct = leftx.struct, savedRoot = leftx.root;
+                savedParts = leftx.offParts, savedStruct = leftx.struct;
             var dst = $$parser.placeAddress(leftx);
             var src = $$parser.placeAddress(rightx);
             $$parser.makeMeta(x, 'copy', '?', dst, src, $$parser.structAllocSize(leftx.struct));
             $$parser.emitMeta(x);
             $$parser.returnBack(src);
             $$parser.returnBack(dst);
-            $$parser.setPlace(x, savedBK, savedBase, savedParts, savedStruct, savedRoot);
+            $$parser.setPlace(x, savedBK, savedBase, savedParts, savedStruct);
             return;
         }
 
@@ -3844,7 +3834,7 @@ var _sn = $$parser.strideStruct(field.elem);
 
         /* *structPointer -> a struct place (through-pointer field access / whole-struct assign) */
         if (operator === '*' && expr.type === 'p' && $$parser.isStructAtom(expr.elem)) {
-            $$parser.setPlace(expr, 'pointer', $$parser.makeRValue(expr), [], $$parser.descName(expr.elem), expr.elem);
+            $$parser.setPlace(expr, 'pointer', $$parser.makeRValue(expr), [], $$parser.descName(expr.elem));
             return;
         }
 
@@ -4104,11 +4094,11 @@ var _sn = $$parser.strideStruct(field.elem);
         if (!isGlobal && (p = sym.locals['$' + name])) {
 
             if (p.type === 'S') {                                 /* struct value local -> a place */
-                $$parser.setPlace(x, 'local', '$' + name, [], $$parser.descName(p.elem), p.elem);
+                $$parser.setPlace(x, 'local', '$' + name, [], $$parser.descName(p.elem));
                 return;
             }
             if (p.type === 'A' && $$parser.isStructAtom(p.elem)) {   /* struct-element array -> a foldable local array place (base:offset, no ADRL) */
-                $$parser.setPlace(x, 'local', '$' + name, [], undefined, p.elem, p.elem);
+                $$parser.setPlace(x, 'local', '$' + name, [], undefined, p.elem);
                 x.extent = p.extent;                                  /* after setPlace, which clears it */
                 return;
             }
@@ -4132,7 +4122,7 @@ var _sn = $$parser.strideStruct(field.elem);
         if (isGlobal && (p = sym.globals[name])) {
 
             if (p.type === 'S') {                                 /* struct value global -> a place in global memory */
-                $$parser.setPlace(x, 'globalAddr', '&' + name, [], $$parser.descName(p.elem), p.elem);
+                $$parser.setPlace(x, 'globalAddr', '&' + name, [], $$parser.descName(p.elem));
                 metaSlot(x).readonly = (p.readonly === true);      /* a field write must see it too - CNST
                                                                      rejects the POKE only at load, if at all */
                 return;
@@ -4525,7 +4515,7 @@ FuncTypeDecl <- FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname =
 
 # A type with optional variable name (funcptr-type params & returns allow types-only).
 TypeDeclr   <-  base:TypeBase                                        { $desc = $base; }
-                ( POINTER _                                          { $desc = 'p' + $desc; }
+                ( POINTER _                                          { $desc = $$parser.pointerDesc($desc); }
                 )*
                 ( id:Identifier                                      { $$.name = $id; }
                 )?                                                   {
@@ -4975,7 +4965,7 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                                                                          $nf = $$parser.noForward;
                                                                          $$parser.noForward = true;
                                                                      }
-                 ( POINTER _                                          { $desc = 'p' + $desc; }
+                 ( POINTER _                                          { $desc = $$parser.pointerDesc($desc); }
                  )*
                                                                       {
                                                                          var cd = $$parser.descTypeElem($desc);
@@ -5303,7 +5293,7 @@ TypeBase    <-  t:BASE_TYPE _                                         { $$ = $$p
                                                                      }
 
 VarDecl     <-  base:TypeBase                                        { $desc = $base; }
-                ( POINTER _                                           { $desc = 'p' + $desc; }
+                ( POINTER _                                           { $desc = $$parser.pointerDesc($desc); }
                 )*
                 { $nameStart = $$i; }
                 id:Identifier                                         {
@@ -5331,7 +5321,7 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
 
 ArrayDecl   <-                                                        { $desc = undefined; $extent = undefined; $dims = undefined; }
                 ( base:TypeBase                                      { $desc = $base; }
-                  ( POINTER _                                         { $desc = 'p' + $desc; }
+                  ( POINTER _                                         { $desc = $$parser.pointerDesc($desc); }
                   )*
                 )?
                 ARRAY _ { $nameStart = $$i; } id:Identifier           { $$parser.checkReservedName($id, 'array', $$s, $nameStart); }
@@ -5493,7 +5483,7 @@ MulDiv      <-  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
 
 PrePost     <-  (op:PREFIX_OP _
                 / '('_ op:BASE_TYPE _               { $cdesc = $$parser.CASTS_TO_TYPES[$op]; }
-                  ( POINTER _                       { $cdesc = 'p' + $cdesc; $ccast = 'pointer'; }
+                  ( POINTER _                       { $cdesc = $$parser.pointerDesc($cdesc); $ccast = 'pointer'; }
                   )* ')'_
                 / '('_ sid:Identifier               { $pdepth = 0; }   # named-type cast: (Name pointer ...) / (Fn)
                   ( POINTER _                       { $pdepth = $pdepth + 1; }
@@ -5513,7 +5503,7 @@ PrePost     <-  (op:PREFIX_OP _
                                                               $$parser.fail('Unknown type ' + $sid, $$s, $$i, 'E413');
                                                           $cdesc = ($$parser.isStructName($sid) ? $$parser.structDesc($sid)
                                                                   : $$parser.funcTypeDesc($sid));
-                                                          for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = 'p' + $cdesc;
+                                                          for (var _pk = 0; _pk < $pdepth; ++_pk) $cdesc = $$parser.pointerDesc($cdesc);
                                                           $ccast = 'pointer';
                                                       }
                                                     }
