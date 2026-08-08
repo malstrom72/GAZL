@@ -3338,38 +3338,24 @@ var _sn = $$parser.strideStruct(field.elem);
             var xt = leftx.extent;
             var xOob;
 
-            if (leftx.operator === ':=' && op1[0] === '&') {
-
+            /* `&global a[i]` and `$local a[i]` differ only in which pair of operators they emit: a global
+               base is dereferenced (`=*` / PEEK), a frame base is read directly (`=` / GETL). Everything
+               else - r-valuing the index, the bounds check, and folding an assemble-time index into a
+               `base:offset` operand - is one rule, and used to be written out twice. */
+            var direct = (leftx.operator === '=&');
+            if (direct || (leftx.operator === ':=' && op1[0] === '&')) {
+                assert(!direct || op1[0] === '$', "=& expects local '$'");
+            
                 var op2 = $$parser.makeRValue(rightx);
                 xOob = $$parser.checkSubscript(xt, op2, sourceCode, sourceOffset);
-
-                if (op2[0] === '#') {
-                    $$parser.makeMeta(
-                        leftx, '=*', tp, null,
-                        op1 + ':' + op2.substr(1), null
-                    );
-                } else if (op2[0] === '<') {
-                    $$parser.makeMeta(leftx, '=*', tp, null,
-                                      op1 + ':' + op2, null);
+            
+                if (op2[0] === '#' || op2[0] === '<') {          /* assemble-time: fold into `base:offset` */
+                    $$parser.makeMeta(leftx, (direct ? '=' : '=*'), tp, null,
+                                      op1 + ':' + (op2[0] === '#' ? op2.substr(1) : op2), null);
                 } else {
-                    $$parser.makeMeta(leftx, '=[]', tp, null, op1, op2);
+                    $$parser.makeMeta(leftx, (direct ? '=[]$' : '=[]'), tp, null, op1, op2);
                 }
-
-            } else if (leftx.operator === '=&') {
-                assert(op1[0] === '$', "=& expects local '$'");
-
-                var op2b = $$parser.makeRValue(rightx);
-                xOob = $$parser.checkSubscript(xt, op2b, sourceCode, sourceOffset);
-
-                if (op2b[0] === '#') {
-                    $$parser.makeMeta(leftx, '=', tp, null,
-                                      op1 + ':' + op2b.substr(1), null);
-                } else if (op2b[0] === '<') {
-                    $$parser.makeMeta(leftx, '=', tp, null,
-                                      op1 + ':' + op2b, null);
-                } else {
-                    $$parser.makeMeta(leftx, '=[]$', tp, null, op1, op2b);
-                }
+            
 
             } else {
                 /* general indexed read */
@@ -3613,19 +3599,10 @@ var _sn = $$parser.strideStruct(field.elem);
             );
             keep = 1;
 
-        } else if (lop === '=[]') {
+        } else if (lop === '=[]' || lop === '=[]$') {   /* the store form of each: PEEK->POKE, GETL->SETL */
 
             $$parser.makeMeta(
-                x, '[]=', rightx.type,
-                leftx.operands[1],
-                leftx.operands[2],
-                $$parser.makeRValue(rightx)
-            );
-
-        } else if (lop === '=[]$') {
-
-            $$parser.makeMeta(
-                x, '[]$=', rightx.type,
+                x, (lop === '=[]' ? '[]=' : '[]$='), rightx.type,
                 leftx.operands[1],
                 leftx.operands[2],
                 $$parser.makeRValue(rightx)
