@@ -37,6 +37,8 @@ const SUBSET = [
 	"externStruct",        // host-owned layout
 	"switchtest",          // switch lowering
 	"calc",                // funcptr table + strings
+	"buffer",              // \u escapes in string data - was the one file the two engines disagreed on,
+	                       // because it spelled a display glyph as a raw 0xD0 byte instead of Ð
 	"unarytest",
 	"ImpalaDemo",          // a broad, ordinary program
 ];

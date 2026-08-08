@@ -6339,7 +6339,7 @@ Variable    <-                                      { $global = false; }
 Identifier      <-  !KEYWORD $$=([A-Za-z_$] SYMBOL_CHAR*) _
 FloatLiteral    <-  $$=([-+]? DIGIT+ "." DIGIT+ (("E" / "e") ([-+]? DIGIT+))?) _
 IntegerLiteral  <-  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
-StringLiteral   <-  $$=( '"' ( !["\\\0-\37] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
+StringLiteral   <-  $$=( '"' ( !["\\\0-\37\200-\377] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
 
 KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXPORT / EXTERN / FLOAT / FLOOR / FOR / FROM
                 / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / IMPORT / INLINE / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
@@ -6388,6 +6388,6 @@ PREFIX_OP   <-  $$=( '-' !("'" / DIGIT / '-')   # `--x` is not a decrement; reje
 SYMBOL_CHAR <-  [A-Za-z_$0-9]
 HEX         <-  [0-9A-Fa-f]
 DIGIT       <-  [0-9]
-ASCII       <-  ![\0-\37] .
+ASCII       <-  ![\0-\37\200-\377] .
 _           <-  ([ \t\r\n]+ / COMMENT)*
 COMMENT     <-  '/*' (!'*/' .)* '*/' / "//" (![\r\n] .)*

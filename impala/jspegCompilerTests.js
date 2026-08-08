@@ -2832,6 +2832,26 @@ const typedPointerCases = [
 	   body could only ever say `int[]` while the definition said `int[3]`, the rows differed, and E438's
 	   advice to "correct the declaration" ran straight into E430. No legal spelling existed between the
 	   two diagnostics. An extent is now compared only where BOTH sides state one; rank always is. */
+	/* A source byte above 127 is not a portable way to say a byte VALUE: what it becomes depends on how
+	   the HOST decodes the file. node reads latin1 and NuXJS reads UTF-8, so `"...\xD0..."` compiled to
+	   `#208` under one and `#253` under the other (0xD0 is a malformed UTF-8 lead byte -> U+FFFD, low
+	   byte 253). Two corpus sources spelled a Permut8 display glyph that way. `\uXXXX` says it exactly,
+	   from a file that is pure ASCII. Comments are unrestricted - they never reach output. */
+	{
+		label: "a raw high byte in a string literal is rejected",
+		source: ["readonly array T[1] = { \"AÐB\" }", "function main() { }"].join("\n"),
+		expectError: "syntax error",
+	},
+	{
+		label: "...and in a character literal",
+		source: ["function main() locals int c { c = 'Ð'; }"].join("\n"),
+		expectError: "syntax error",
+	},
+	{
+		label: "the \\u escape says the same byte, portably",
+		source: ["readonly array T[1] = { \"A\\u00D0B\" }", "function main() { }"].join("\n"),
+		expectError: null,
+	},
 	/* `&` on an ARRAY place yields a pointer to its ELEMENT. setPlace leaves `struct` undefined for an
 	   array place (it fills `arrayOf` instead), so the struct branch used to mint the descriptor
 	   `Sundefined` - which isStructAtom accepts and renderDesc unwraps to the word "undefined". */

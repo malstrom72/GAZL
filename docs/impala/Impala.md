@@ -80,6 +80,13 @@ const pointer WELCOME = "Welcome to Impala!\n"
 The supported escape sequences are `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`, and
 `\uXXXX` (exactly four hex digits).
 
+**Source must be ASCII.** A byte above 127 in a string or character literal is a syntax
+error — use `\uXXXX` instead. A raw high byte is not a portable way to name a byte
+*value*: what it becomes depends on how the tool reading the file decodes it, so the same
+source can compile to different data under different hosts. The escape names byte 208 and
+nothing else, from a file every tool agrees about. Comments are unrestricted — they never
+reach the output.
+
 ## Types
 
 There are four primitive types, all one VM word wide (standard configuration 32-bit):
