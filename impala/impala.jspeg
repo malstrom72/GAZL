@@ -472,14 +472,15 @@
                             originName, originCode, originOffset);
     };
 
-    $$parser.formatCallExpectationComment = function (name, signature, actualTypes, callResultType,
-                                                      sourceName, sourceCode, sourceOffset, actualElems) {
-        var label = (name || 'function');
-        var paramsText;
-        var hasSignature = !!(signature && signature.params);
-
-        paramsText = (hasSignature ? renderParamTypes(signature.params)
-                                   : renderTypeList(actualTypes, actualElems));
+    /* Takes the call's own record rather than eight positional arguments. That list used to be written
+       three times - here, at the emit site, and again as `callInfo.commentArgs`, the cache the REFRESH
+       replays it from - so adding or reordering a field meant editing three parallel lists, and
+       forgetting the cache made the refreshed `; expects` row disagree with the emitted one. */
+    $$parser.formatCallExpectationComment = function (call, callResultType) {
+        var signature = call.signature;
+        var label = (call.name || 'function');
+        var paramsText = (signature && signature.params ? renderParamTypes(signature.params)
+                                   : renderTypeList(call.actualTypes, call.actualElems));
 
         var returnCode = callResultType;
         var known = false;
@@ -501,7 +502,7 @@
                         : signatureReturnCategory(returnCode, known)));
 
         return appendOrigin('expects ' + label + '(' + paramsText + ') -> ' + returnType,
-                            sourceName, sourceCode, sourceOffset);
+                            call.sourceName, call.sourceCode, call.sourceOffset);
     };
 
     $$parser.updateCallExpectationComment = function (callInfo, callResultType) {
@@ -517,16 +518,7 @@
             return;
         }
 
-        var refreshed = $$parser.formatCallExpectationComment(
-            args.name,
-            args.signature,
-            args.actualTypes,
-            callResultType,
-            args.sourceName,
-            args.sourceCode,
-            args.sourceOffset,
-            args.actualElems
-        );
+        var refreshed = $$parser.formatCallExpectationComment(args, callResultType);
 
         if (!refreshed) {
             return;
@@ -5705,16 +5697,18 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                                    $$.svals[_sv].name, false, $$s, $$.svals[_sv].at, true);
                                                        }
 
-                                                       var callComment = $$parser.formatCallExpectationComment(
-                                                           calleeName,
-                                                           signature,
-                                                           $$.types,
-                                                           callResultType,
-                                                           $$parser.sourceName,
-                                                           $$s,
-                                                           $$i,                 /* the CALL SITE, not the enclosing declaration */
-                                                           $$.elems
-                                                       );
+                                                       /* Built once: this is both the argument to the row below and the record a later refresh
+                                                          replays it from. The slices matter - `$$.types`/`$$.elems` are pooled and get reused. */
+                                                       var callArgs = {
+                                                           name: calleeName,
+                                                           signature: signature,
+                                                           actualTypes: ($$.types ? $$.types.slice() : undefined),
+                                                           actualElems: ($$.elems ? $$.elems.slice() : undefined),
+                                                           sourceName: $$parser.sourceName,
+                                                           sourceCode: $$s,
+                                                           sourceOffset: $$i           /* the CALL SITE, not the enclosing declaration */
+                                                       };
+                                                       var callComment = $$parser.formatCallExpectationComment(callArgs, callResultType);
                                                        var commentIndex = -1;
                                                        if (callComment) {
                                                            commentIndex = $$parser.metacode.length;
@@ -5753,15 +5747,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                            callee.callInfo = {
                                                                name: calleeName,
                                                                commentIndex: commentIndex,
-                                                               commentArgs: {
-                                                                   name: calleeName,
-                                                                   signature: signature,
-                                                                   actualTypes: ($$.types ? $$.types.slice() : undefined),
-                                                                   actualElems: ($$.elems ? $$.elems.slice() : undefined),
-                                                                   sourceName: $$parser.sourceName,
-                                                                   sourceCode: $$s,
-                                                                   sourceOffset: $$i
-                                                               }
+                                                               commentArgs: callArgs
                                                            };
                                                        } else if (callee.callInfo) {
                                                            callee.callInfo = undefined;
