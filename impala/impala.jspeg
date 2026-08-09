@@ -2117,9 +2117,7 @@
             /* Carry across any field references already made through the DECLARATION - the definition is
                about to emit the layout those references need to have seen. Without this the replacement
                below drops them and the use-before-define goes unreported (see emitStructLayout). */
-            if (held.pendingRefs !== undefined) {
-                parsed.pendingRefs = held.pendingRefs;
-            }
+            if (held.pendingRef !== undefined) parsed.pendingRef = held.pendingRef;
             $$parser.structs[name] = parsed;                      /* a definition outranks the declaration it fulfils */
         } else {
             $$parser.structs[name] = held;                        /* a declaration does not displace what is held.
@@ -2163,8 +2161,8 @@
            directions. It compiled clean and died at GAZL assembly with `Symbol not previously defined (in
            expected scope): .o.<name>.<field>`, naming a symbol the user never wrote. A genuinely
            host-owned `extern struct` never reaches here (returned above), so its references stay legal. */
-        if (s.pendingRefs !== undefined && s.pendingRefs.length > 0) {
-            var _r = s.pendingRefs[0];
+        if (s.pendingRef !== undefined) {
+            var _r = s.pendingRef;
             $$parser.fail('The layout of struct ' + name + ' is used before it is defined',
                     _r.source, _r.offset, 'E464',
                     'this unit declares `extern struct ' + name + '` with a body and needs its layout '
@@ -2284,12 +2282,13 @@
        `extern struct` never emits one and the host defines the symbols - but if a REAL definition turns up
        later in the import closure, `emitStructLayout` reports these as use-before-define (E464). Callers
        without a source position simply do not record: every such site needs a local, global or field of
-       the type, and those ARE recorded, so the struct is caught anyway. */
+       the type, and those ARE recorded, so the struct is caught anyway. Only the FIRST use is kept -
+       E464 names one position - and keeping only one also bounds the record for a host-owned `extern
+       struct`, which never sets layoutEmitted and so would otherwise accumulate a note per use forever. */
     $$parser.noteStructUse = function (structName, sourceCode, sourceOffset) {
         var st = $$parser.structs[structName];
         if (st === undefined || st.layoutEmitted === true || sourceCode === undefined) return;
-        if (st.pendingRefs === undefined) st.pendingRefs = [];
-        st.pendingRefs.push({ source: sourceCode, offset: sourceOffset });
+        if (st.pendingRef === undefined) st.pendingRef = { source: sourceCode, offset: sourceOffset };
     };
 
     $$parser.structAllocSize = function (structName, sourceCode, sourceOffset) {
@@ -2469,6 +2468,20 @@
     $$parser.declEntry = function (type, elem, struct, words, name, size, dims, at) {
         return { type: type, elem: elem, struct: struct, words: words, name: name, size: size,
                  dims: dims, at: at };
+    };
+
+    /* The six fields a SIGNATURE parameter keeps, copied out of a declarator list (`$inp`, counted by
+       `.n`) or out of an already-copied prototype list (counted by `.length`) - hence the explicit
+       count. Same reason declEntry copies: a declarator is a pooled parser node. `dims`/`at` are
+       deliberately dropped, they are declaration-site detail a signature never reads. */
+    $$parser.copyParams = function (list, count) {
+        var out = [];
+        for (var i = 0; i < count; ++i) {
+            var p = list[i];
+            out.push({ type: p.type, elem: p.elem, name: p.name,
+                       size: p.size, struct: p.struct, words: p.words });
+        }
+        return out;
     };
 
     $$parser.addStructField = function (name, field, sourceCode, sourceOffset) {
@@ -4611,18 +4624,7 @@ inp:ArgsDecl ')'_
                                                                          /* declare input parameters */
                                                                          var entry = $$parser.symbols.functions[$id];
                                                                          if (entry && entry.signature) {
-                                                                             entry.signature.params = [];
-                                                                             for (var idx = 0; idx < $inp.n; ++idx) {
-                                                                                 var param = $inp[idx];
-                                                                                 entry.signature.params.push({
-                                                                                     type: param.type,
-                                                                                     elem: param.elem,
-                                                                                     name: param.name,
-                                                                                     size: param.size,
-                                                                                     struct: param.struct,
-                                                                                     words: param.words
-                                                                                 });
-                                                                             }
+                                                                             entry.signature.params = $$parser.copyParams($inp, $inp.n);
                                                                          }
                                                                 $$parser.emitFunctionSignature($id, $$s, $$i);
                                                                 if (entry) {
@@ -4772,13 +4774,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              a prototype is a checkable assertion, so calls get
                                                                              argument type-checking and the emitted signature
                                                                              row carries real types. */
-                                                                        var _pa = [];
-                                                                        for (var _pk = 0; _pk < $inp.n; ++_pk) {
-                                                                            var _pv = $inp[_pk];
-                                                                            _pa.push({ type: _pv.type, elem: _pv.elem, name: _pv.name,
-                                                                                       size: _pv.size, struct: _pv.struct, words: _pv.words });
-                                                                        }
-                                                                        $$parser.pendingProto = { args: _pa, ret: undefined };
+                                                                        $$parser.pendingProto = { args: $$parser.copyParams($inp, $inp.n), ret: undefined };
                                                                       }
                       ( RETURNS _ out:VarDecl                         { if ($$parser.pendingProto) $$parser.pendingProto.ret = { type: $out.type, elem: $out.elem, struct: $out.struct, name: $out.name }; }
                         ( ',' _ VarDecl                               {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */
@@ -4866,13 +4862,11 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                                                                                                 var _proto = $$parser.pendingProto;
                                                                         $$parser.pendingProto = undefined;
                                                                         if (_proto !== undefined) {   /* a declared prototype: real params + at most one return */
-                                                                            var _pp = [];
                                                                             for (var _pi = 0; _pi < _proto.args.length; ++_pi) {
                                                                                 var _p = _proto.args[_pi];
                                                                                 $$parser.rejectByValueStruct(_p.type, _p.struct, _p.name, false, $$s, $at);
-                                                                                _pp.push({ type: _p.type, elem: _p.elem, name: _p.name,
-                                                                                           size: _p.size, struct: _p.struct, words: _p.words });
                                                                             }
+                                                                            var _pp = $$parser.copyParams(_proto.args, _proto.args.length);
                                                                             var _pr = _proto.ret;
                                                                             if (_pr !== undefined) $$parser.rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, $$s, $at);
                                                                             placeholderSignature.params      = _pp;
