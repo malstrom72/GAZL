@@ -92,8 +92,10 @@ function main() {
 				src, outNux, RANDOM_ID, name + ".impala",
 				path.join(repoRoot, "impala", "impalaCompiler.js")]);
 
-		if (!okNode && !okNux) { continue; }             /* both reject it: agreement enough for this gate */
-		if (!okNode) { failures.push(name + ": node failed, NuXJS did not"); continue; }
+		/* There is deliberately no "both engines rejected it, call that agreement" waiver: every source
+		   here must COMPILE (runJspegTests reds first otherwise), so that arm could only ever fire to
+		   hide a regression - including one in multidimFields, this file's own witness. */
+		if (!okNode) { failures.push(name + ": node failed to compile"); continue; }
 		if (!okNux) { failures.push(name + ": NuXJS FAILED to compile (node succeeded)"); continue; }
 
 		const a = fs.readFileSync(outNode);
@@ -107,6 +109,11 @@ function main() {
 	}
 
 	fs.rmSync(tmp, { recursive: true, force: true });
+
+	/* `checked` is asserted, not just printed: without this a silently shrinking count reads as a pass. */
+	if (checked !== names.length) {
+		failures.push("only " + checked + " of " + names.length + " programs were actually compared");
+	}
 
 	if (failures.length > 0) {
 		console.log("NuXJS parity: " + failures.length + " FAILED of " + names.length);

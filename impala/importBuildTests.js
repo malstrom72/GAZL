@@ -40,16 +40,15 @@ const { output } = compileProgram(rootUnit, { randomId: RANDOM_ID });
 const unstripped = compileProgram(stripRoot, { randomId: RANDOM_ID }).output;
 const stripped = deadStrip(unstripped);
 
-if (makeGold) {
-	fs.writeFileSync(goldenPath, output, 'latin1');
-	fs.writeFileSync(strippedGolden, stripped, 'latin1');
-	console.log('Updated ' + path.relative(repoRoot, goldenPath) + ' and ' + path.relative(repoRoot, strippedGolden));
-	process.exit(0);
-}
-
-const golden = fs.readFileSync(goldenPath, 'latin1');
-if (canonicalizeNewlines(golden) !== canonicalizeNewlines(output)) {
-	fail('import build output differs from golden ' + path.relative(repoRoot, goldenPath));
+/* Only the two byte-compares are skipped when minting goldens. Everything below them - the symbol
+   needles, the dead-strip assertions and the run-both-and-compare - is exactly what catches a golden
+   that faithfully records corrupt output, so it must run while the golden is being REPLACED, which is
+   the one moment nothing else is guarding it. */
+if (!makeGold) {
+	const golden = fs.readFileSync(goldenPath, 'latin1');
+	if (canonicalizeNewlines(golden) !== canonicalizeNewlines(output)) {
+		fail('import build output differs from golden ' + path.relative(repoRoot, goldenPath));
+	}
 }
 
 // Sanity: the linked program must actually contain the cross-unit definitions.
@@ -64,9 +63,11 @@ if (unstripped.indexOf('unused:') < 0) fail('default build must keep unused (no 
 if (stripped.indexOf('unused:') >= 0) fail('--dead-strip must drop the unreachable `unused`');
 if (stripped.indexOf('used:') < 0) fail('--dead-strip must keep `used` (reached from exported main)');
 if (stripped.indexOf('main:') < 0) fail('--dead-strip must keep the exported `main`');
-const strippedGold = fs.readFileSync(strippedGolden, 'latin1');
-if (canonicalizeNewlines(strippedGold) !== canonicalizeNewlines(stripped)) {
-	fail('--dead-strip output differs from golden ' + path.relative(repoRoot, strippedGolden));
+if (!makeGold) {
+	const strippedGold = fs.readFileSync(strippedGolden, 'latin1');
+	if (canonicalizeNewlines(strippedGold) !== canonicalizeNewlines(stripped)) {
+		fail('--dead-strip output differs from golden ' + path.relative(repoRoot, strippedGolden));
+	}
 }
 
 /* A byte-compare cannot prove this one: dropping a data block used to leave its unlabelled `DATA`
@@ -89,6 +90,14 @@ if (haveGazlCmd()) {
 			fail(`--dead-strip changed program behaviour (${label}): ${failure}`);
 		}
 	}
+}
+
+/* Written only now, once everything above has vouched for what is about to be recorded. */
+if (makeGold) {
+	fs.writeFileSync(goldenPath, output, 'latin1');
+	fs.writeFileSync(strippedGolden, stripped, 'latin1');
+	console.log('Updated ' + path.relative(repoRoot, goldenPath) + ' and ' + path.relative(repoRoot, strippedGolden));
+	process.exit(0);
 }
 
 // --- import cycles: gathered, but only half-resolved --------------------------

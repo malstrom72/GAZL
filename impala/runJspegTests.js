@@ -55,13 +55,7 @@ function formatError(err) {
         return String(err);
 }
 
-/* Goldens that cannot load under GAZLCmd for reasons that are not the compiler's. Empty since E444
-   made an out-of-range `case` a compile error: switchtest was the sole entry, and it was here because
-   the compiler accepted case values that folded to labels the assembler then rejected. */
-const KNOWN_UNLOADABLE = {};
-
 function main() {
-        let totalFiles = 0;
         let errorCount = 0;
         let ranCount = 0;
         let assembledCount = 0;
@@ -90,7 +84,6 @@ function main() {
                         console.error('<<< Error reading source >>>');
                         console.error(formatError(err));
                         errorCount += 1;
-                        totalFiles += 1;
                         continue;
                 }
 
@@ -105,52 +98,49 @@ function main() {
                         console.error('<<< Error compiling >>>');
                         console.error(formatError(err));
                         errorCount += 1;
-                        totalFiles += 1;
                         continue;
                 }
 
+                /* Writing the golden REPLACES the only record of what this compiler should emit, so it is
+                   the one moment the assemble and expected-run checks below matter most - they are what
+                   catches a golden that faithfully records corrupt output. Hence write and fall through
+                   rather than `continue`. */
                 if (makeGold) {
                         writeImpalaFile(goldenPath, output);
                         console.log(`Updated ${path.relative(repoRoot, goldenPath)}`);
-                        totalFiles += 1;
-                        continue;
-                }
+                } else {
+                        let expected;
+                        try {
+                                expected = readImpalaFile(goldenPath);
+                        } catch (err) {
+                                console.error('<<< Missing golden >>>');
+                                console.error(formatError(err));
+                                errorCount += 1;
+                                continue;
+                        }
 
-                let expected;
-                try {
-                        expected = readImpalaFile(goldenPath);
-                } catch (err) {
-                        console.error('<<< Missing golden >>>');
-                        console.error(formatError(err));
-                        errorCount += 1;
-                        totalFiles += 1;
-                        continue;
-                }
-
-                if (canonicalizeNewlines(expected) !== canonicalizeNewlines(output)) {
-                        console.error('<<< Output differs! >>>');
-                        ensureErroneousDir();
-                        const erroneousPath = path.join(erroneousDir, `${name}.gazl`);
-                        writeImpalaFile(erroneousPath, output);
-                        console.error(`Wrote actual output to ${path.relative(repoRoot, erroneousPath)}`);
-                        errorCount += 1;
-                        totalFiles += 1;
-                        continue;
+                        /* `output` is the compiler's own \n-only text and `expected` was just read raw, so
+                           only the golden side can carry CRLF. */
+                        if (canonicalizeNewlines(expected) !== output) {
+                                console.error('<<< Output differs! >>>');
+                                ensureErroneousDir();
+                                const erroneousPath = path.join(erroneousDir, `${name}.gazl`);
+                                writeImpalaFile(erroneousPath, output);
+                                console.error(`Wrote actual output to ${path.relative(repoRoot, erroneousPath)}`);
+                                errorCount += 1;
+                                continue;
+                        }
                 }
 
                 const expectedRun = parseExpectedRun(source);
                 if (skipRun || !gazlCmdBuilt) {
                         console.log('OK');
-                        totalFiles += 1;
                         continue;
                 }
 
                 if (!expectedRun) {
-                        const excuse = KNOWN_UNLOADABLE[name];
-                        const verdict = (excuse ? NEEDS_HOST : assembleOnly(goldenPath));
-                        if (excuse) {
-                                console.log(`OK (not assembled - ${excuse})`);
-                        } else if (verdict === NEEDS_HOST) {
+                        const verdict = assembleOnly(goldenPath);
+                        if (verdict === NEEDS_HOST) {
                                 console.log('OK (compile-only)');
                                 compileOnlyCount += 1;
                         } else if (verdict !== undefined) {
@@ -160,7 +150,6 @@ function main() {
                                 console.log('OK (assembled)');
                                 assembledCount += 1;
                         }
-                        totalFiles += 1;
                         continue;
                 }
 
@@ -172,15 +161,13 @@ function main() {
                         console.log(`OK (ran: ${expectedRun.want.join(' ')})`);
                         ranCount += 1;
                 }
-
-                totalFiles += 1;
         }
 
         console.log('');
         console.log(`Assembled and ran: ${ranCount}`);
         console.log(`Assembled only: ${assembledCount}`);
         console.log(`Compiled but NOT link-checked (needs a host): ${compileOnlyCount}`);
-        console.log(`Total errors: ${errorCount} / ${totalFiles}`);
+        console.log(`Total errors: ${errorCount} / ${sourceFiles.length}`);
 
         if (errorCount !== 0) {
                 process.exit(1);

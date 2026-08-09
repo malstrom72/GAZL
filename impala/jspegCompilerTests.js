@@ -608,118 +608,19 @@ const tagCaptureCases = [
 
 testGrammarEquivalence("tagCaptureTest.jspeg", "tagCaptureTest.jspeg", tagCaptureCases);
 
-const parityFixtures = [
-	{
-		name: "smoke",
-		source: "smoke.impala",
-		expected: "smoke.expected.gazl",
-		options: { randomId: 42, sourceName: "smoke.impala" },
-	},
-	{
-		name: "bool",
-		source: "bool.impala",
-		expected: "bool.expected.gazl",
-		options: { randomId: 42, sourceName: "bool.impala" },
-	},
-	{
-		name: "control",
-		source: "control.impala",
-		expected: "control.expected.gazl",
-		options: { randomId: 42, sourceName: "control.impala" },
-	},
-	{
-		name: "perfTest2",
-		source: "perfTest2.impala",
-		expected: "perfTest2.expected.gazl",
-		options: { randomId: 42, sourceName: "perfTest2.impala" },
-	},
-	{
-		name: "inputTest",
-		source: "inputTest.impala",
-		expected: "inputTest.expected.gazl",
-		options: { randomId: 42, sourceName: "inputTest.impala" },
-	},
-	{
-		name: "derefCallContract",
-		source: "derefCallContract.impala",
-		expected: "derefCallContract.expected.gazl",
-		options: { randomId: 42, sourceName: "derefCallContract.impala" },
-	},
-];
+/* `impala/testdata` is the SECOND golden system: small fixtures for the cross-unit `; signature`
+   metadata the corpus does not exercise (return contracts, extern assignment). The list is DERIVED
+   from the directory, never hand-written - a hand-written one omitted externAssignment and the three
+   returnContract fixtures, nothing then compared them, and they quietly fossilised a
+   `; Compiled with Impala version 1.0` banner while 2.0 was being built.
+   Options match tools/regen-jspeg-fixtures, which is what mints these files: seed 42, retabulated
+   like the CLI, and the basename as `sourceName`. */
+const testdataDir = path.join(dir, "testdata");
 
-const legacySourceDir = path.join(dir, "..", "tests", "impala", "sources");
-const legacyExpectedDir = path.join(dir, "..", "tests", "impala", "golden");
-const LEGACY_RANDOM_ID = 0x4d2;
-const legacyParityFixtures = fs
-	.readdirSync(legacySourceDir)
-	.filter((file) => file.endsWith(".impala"))
-	.sort()
-	.map((file) => {
-		const name = path.basename(file, ".impala");
-		return {
-			name,
-			source: file,
-			expected: `${name}.gazl`,
-			sourceDir: legacySourceDir,
-			expectedDir: legacyExpectedDir,
-			options: {
-				randomId: LEGACY_RANDOM_ID,
-				retabulate: false,
-				sourceName: path.join(legacySourceDir, file),
-			},
-		};
-	});
-
-function resolveFixturePath(fixture, key, defaultDir) {
-	if (fixture[`${key}Dir`]) {
-		return path.join(fixture[`${key}Dir`], fixture[key]);
-	}
-	return path.join(defaultDir, fixture[key]);
-}
-
-function runParityFixture(fixture) {
-	const sourcePath = resolveFixturePath(fixture, "source", path.join(dir, "testdata"));
-	const expectedPath = resolveFixturePath(fixture, "expected", path.join(dir, "testdata"));
-	const source = canonicalizeNewlines(fs.readFileSync(sourcePath, IMPALA_ENCODING));
-	const expected = fs.readFileSync(expectedPath, IMPALA_ENCODING);
-	let actual;
-	try {
-		actual = compileWithJsImpala(source, Object.assign({}, fixture.options));
-	} catch (err) {
-		const message = err && err.message ? err.message : String(err);
-		if (fixture.expectFailure) {
-			console.warn(`Skipping ${fixture.name} fixture until JSPEG supports this feature: ${message}`);
-			return;
-		}
-		console.error(`impala.jspeg compiler threw on fixture ${fixture.name}`);
-		console.error(message);
-		process.exit(1);
-	}
-
-	if (fixture.expectFailure) {
-		console.error(`impala.jspeg compiler unexpectedly handled ${fixture.name}; remove expectFailure flag to enforce parity.`);
-		process.exit(1);
-	}
-
-	const normalizedActual = canonicalizeTrimEnd(actual);
-	const normalizedExpected = canonicalizeTrimEnd(expected);
-
-	if (normalizedActual !== normalizedExpected) {
-		console.error(`impala.jspeg compiler output diverges from recorded fixture: ${fixture.name}`);
-		process.exit(1);
-	}
-	console.log(`impala.jspeg compiler matches ${fixture.name} fixture output`);
-	if (!fixture.expectedDir) {
-		assembleFixture(fixture.name, expectedPath);
-	}
-}
-
-/* The `impala/testdata` fixtures used to get `; signature` validation and nothing else, so a label
-   this compiler emitted but never defined - a duplicate `.sN#K` from two identical `case` values,
-   say - would sail through on the shapes only testdata covers (return contracts, extern assignment).
-   Same gate the goldens get, same rule: a host or companion-unit symbol is out of scope here, a
-   module-local `.` name is ours. Fixtures carrying an `expectedDir` are goldens, which runJspegTests
-   already assembles - with its own exemption list - so they are skipped rather than checked twice. */
+/* Same gate the goldens get: "compiles clean" and "loads" are different claims, and only the second
+   catches a label this compiler emitted but never defined - a duplicate `.sN#K` from two identical
+   `case` values, say - on the shapes only testdata covers. A host or companion-unit symbol is out of
+   scope here, a module-local `.` name is ours. */
 function assembleFixture(name, gazlPath) {
 	if (!haveGazlCmd()) {
 		return;
@@ -734,6 +635,35 @@ function assembleFixture(name, gazlPath) {
 		console.log(`${name} fixture assembles`);
 	}
 }
+
+function compileFixture(name) {
+	const source = canonicalizeNewlines(fs.readFileSync(path.join(testdataDir, `${name}.impala`), IMPALA_ENCODING));
+	return compileWithJsImpala(source, { randomId: 42, sourceName: `${name}.impala` });
+}
+
+function runParityFixture(name) {
+	const expectedPath = path.join(testdataDir, `${name}.expected.gazl`);
+	const expected = fs.readFileSync(expectedPath, IMPALA_ENCODING);
+	let actual;
+	try {
+		actual = compileFixture(name);
+	} catch (err) {
+		console.error(`impala.jspeg compiler threw on fixture ${name}`);
+		console.error((err && err.message) ? err.message : String(err));
+		process.exit(1);
+	}
+	if (canonicalizeTrimEnd(actual) !== canonicalizeTrimEnd(expected)) {
+		console.error(`impala.jspeg compiler output diverges from recorded fixture: ${name}`);
+		process.exit(1);
+	}
+	console.log(`impala.jspeg compiler matches ${name} fixture output`);
+	assembleFixture(name, expectedPath);
+}
+
+fs.readdirSync(testdataDir)
+	.filter((file) => file.endsWith(".impala"))
+	.sort()
+	.forEach((file) => runParityFixture(path.basename(file, ".impala")));
 
 /* A source that must COMPILE clean and then be refused by the assembler. That is a real outcome for
    anything Impala defers rather than decides (design/impala/TwoStageConstants.md), and nothing else here can see
@@ -767,11 +697,10 @@ if (!observedFailure) {
 	process.exit(1);
 }
 
-const smokeSource = canonicalizeNewlines(fs.readFileSync(path.join(dir, "testdata", "smoke.impala"), IMPALA_ENCODING));
-const smokeExpected = fs.readFileSync(path.join(dir, "testdata", "smoke.expected.gazl"), IMPALA_ENCODING);
-const smokeOutputAfterFailure = compileWithJsImpala(smokeSource, {
-	randomId: 42,
-});
+/* Recompiles a testdata fixture through runParityFixture's OWN options - spelling them again here is
+   how this check silently stopped matching the fixture it compares against. */
+const smokeExpected = fs.readFileSync(path.join(testdataDir, "smoke.expected.gazl"), IMPALA_ENCODING);
+const smokeOutputAfterFailure = compileFixture("smoke");
 
 if (canonicalizeTrimEnd(smokeOutputAfterFailure) !== canonicalizeTrimEnd(smokeExpected)) {
 	console.error("impala.jspeg compiler leaked state after aborted compile");

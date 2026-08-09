@@ -33,8 +33,9 @@
 //   which no crash oracle can. --vm additionally runs the DEAD-STRIPPED module and requires byte-identical
 //   stdout - a third reference oracle, over what the strip removed rather than over what the compiler
 //   emitted. Without --vm the run is compile-only, so none of the three apply.
-// The runner reloads the compiler module per call, so keep a single process to <=~20k
-// iterations (chunk larger sweeps across processes: for s in 0 20000 40000; do ... done).
+// Long sweeps are chunked across processes (for s in 0 20000 40000; do ... done) to cap the memory a
+// single node process accumulates - NOT because the compiler is reloaded per call, which it stopped
+// being when impalaJsCompilerRunner started caching the module (it cost ~5x on fuzz runs).
 // First find (seed 10024): finishDestructure released its output window low-to-high (unlike every
 // other multi-slot window), leaving a freed hole below a live temp; a later struct-arg call's
 // window overlapped it. Fixed by releasing the window high-to-low; borrowForCall now asserts the
@@ -878,7 +879,13 @@ function genProgram() {
 		}
 		// copy(N words from &a[0] to &b[0]) between two local arrays (N within bounds - VM-safe)
 		if (roll < 0.28 && scope.localArrays.length >= 2) {
-			const a = pick(scope.localArrays), b = pick(scope.localArrays);
+			/* both ends must share an element type or `copy` is E201. localArrays ALWAYS holds an int
+			   and a float one, so picking twice at random mismatched about half the time - and since a
+			   rejected program never reaches codegen, dead-strip or any --vm oracle, that alone cost
+			   ~41% of every run (measured: 124 of 300 seeds rejected, all E201). */
+			const a = pick(scope.localArrays);
+			const sameElem = scope.localArrays.filter((x) => x.elem === a.elem);
+			const b = pick(sameElem);
 			const n = 1 + ri(Math.min(a.size, b.size));
 			return '\tcopy(' + n + ' from &' + a.name + '[0] to &' + b.name + '[0]);';
 		}
@@ -888,13 +895,15 @@ function genProgram() {
 			return '\t' + ref(a) + '[' + genIdx(scope, a.size) + '] = ' + genExpr(a.elem, 3, scope) + ';';
 		}
 		// scalar global write
-		if (roll < 0.36 && scope.gscalars.length) {
+		if (roll < 0.35 && scope.gscalars.length) {
 			const g = pick(scope.gscalars);
 			return '\tglobal ' + g.name + ' = ' + genExpr(g.elem, 3, scope) + ';';
 		}
 		// (destructuring of a multi-return call is parked for Impala 3.0 - see design/ParkedFeatures.md)
-		// funcptr: assign a matching function to a funcptr local, then call through it
-		if (roll < 0.35) {
+		// funcptr: assign a matching function to a funcptr local, then call through it. THRESHOLDS ASCEND:
+		// this window used to be 0.35 BEHIND a 0.36 global write, so with any scalar global in scope the
+		// branch was unreachable, and scope.arrays above is never empty (measured minimum 2).
+		if (roll < 0.36) {
 			const cbLocals = scope.locals.filter((l) => isFuncType(l.t));
 			if (cbLocals.length) {
 				const cb = pick(cbLocals);
@@ -1008,11 +1017,21 @@ const MUTATORS = [
 	['renumber', (L, r) => { const i = r(L.length); L[i] = L[i].replace(/\b\d+\b/, (m) => String(+m + 1)); }],
 	['rename an identifier', (L, r) => { const i = r(L.length); L[i] = L[i].replace(/\b[a-z]+\d+\b/, 'zz9'); }],
 ];
+/* Each mutator draws a random line and applies a regex that matches nothing on most of them, so a
+   third of all mutants used to come back byte-identical to their parent - and a no-op is the
+   EXPENSIVE case, because a real mutant usually aborts early on E001 while a no-op runs a full clean
+   compile. (Measured over 900: 297 no-ops, `drop a brace` and `retype a local` 86% each.) Redrawing
+   until the source actually changes is both faster and strictly more coverage. Bounded because a
+   degenerate parent - one short line, no braces - may have nothing any mutator can bite. */
 function mutate(src, r) {
-	const lines = src.split('\n');
-	const pick = MUTATORS[r(MUTATORS.length)];
-	pick[1](lines, r);
-	return { name: pick[0], src: lines.join('\n') };
+	for (let tries = 0; tries < 8; ++tries) {
+		const lines = src.split('\n');
+		const pick = MUTATORS[r(MUTATORS.length)];
+		pick[1](lines, r);
+		const mutated = lines.join('\n');
+		if (mutated !== src) { return { name: pick[0], src: mutated }; }
+	}
+	return undefined;
 }
 function classify(err) {
 	const msg = (err && err.message) ? err.message : String(err);
@@ -1064,9 +1083,15 @@ function main() {
 			// `--legacy` only ever DOWNGRADES a strict refusal to a warning, so for a program the strict
 			// compiler already accepted it must be byte-for-byte the same module. Anything else means a
 			// legacy branch is changing CODEGEN rather than just tolerance.
-			const legacyDiff = firstDiff('--legacy', gazl,
-					compileWithJsImpala(p.src + '\n', LEGACY_OPTS), 'legacy');
-			if (legacyDiff) throw new Error(legacyDiff);
+			// SAMPLED, because today it cannot fail: `legacyMode` has exactly one reader, strictError,
+			// which throws in strict mode - so anything reaching here never read the flag, and the two
+			// builds are identical by construction. It stays as a tripwire for a SECOND reader appearing,
+			// and one in ten catches that just as well as ten in ten at a tenth of the ~19% it cost.
+			if (i % 10 === 0) {
+				const legacyDiff = firstDiff('--legacy', gazl,
+						compileWithJsImpala(p.src + '\n', LEGACY_OPTS), 'legacy');
+				if (legacyDiff) throw new Error(legacyDiff);
+			}
 			// A throw here is a compiler bug and lands in the catch below with every other one: `classify`
 			// keeps only what is not a coded diagnostic, and `deadStrip` has no diagnostics to emit.
 			// `cD` is the one definition nothing references, so it is also the one the strip must drop -
@@ -1104,6 +1129,7 @@ function main() {
 		}
 		for (let m = 0; m < MUTANTS_PER_SEED; ++m) {
 			const mut = mutate(p.src + '\n', ri);
+			if (mut === undefined) { continue; }        /* nothing any mutator could bite */
 			mutants++;
 			try {
 				compileWithJsImpala(mut.src, COMPILE_OPTS);

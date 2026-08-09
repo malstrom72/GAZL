@@ -3,7 +3,7 @@
  ; signatures version=1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> int @ 1:1
+ main:				FUNC		; signature func main() -> int @ bool.impala:1:1
  					$value:		OUTi
  ;-----------------------------------------------------------------------------
  								MOVi $value #0 					; value = 0
