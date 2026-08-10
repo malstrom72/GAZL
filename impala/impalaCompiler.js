@@ -1814,17 +1814,28 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     funcTypeDesc = function (name) { return 't' + name; };
     pointerDesc = function (desc) { return 'p' + (desc === undefined ? '' : desc); };
 
+    /* A symbol table is a plain `{}`, so `table[name]` on an undeclared name reads an inherited
+       Object.prototype member (`constructor`, `valueOf`, `toString`, `hasOwnProperty`, ...) - a function,
+       not undefined. Route EVERY by-name table read through these two so a user identifier can never be
+       mistaken for one. NuXJS stores those names as plain keys once written, so guarding the read is the
+       whole fix under the target engine. */
+    hasOwn = function (table, name) {                    /// own key only - never an inherited member
+        return name !== undefined && table
+                && Object.prototype.hasOwnProperty.call(table, name);
+    };
+    ownEntry = function (table, name) {                  /// table[name], but undefined for an inherited key
+        return hasOwn(table, name) ? table[name] : undefined;
+    };
+
     /* NAME predicates take a raw identifier and ask the tables; ATOM predicates take a DESCRIPTOR and
        read its kind code. Both are needed: the parser has a raw name in hand at `TypeBase`, everything
        downstream has a descriptor. Never cross them - `isStructAtom('Filter')` is false by design. */
     isStructName = function (name) {                     /// is the identifier `name` a defined struct?
-        return name !== undefined && structs
-                && Object.prototype.hasOwnProperty.call(structs, name);
+        return hasOwn(structs, name);
     };
 
     isFuncTypeName = function (name) {                   /// is the identifier `name` a named funcptr type?
-        return name !== undefined && functypes
-                && Object.prototype.hasOwnProperty.call(functypes, name);
+        return hasOwn(functypes, name);
     };
 
     isStructAtom = function (desc) {                     /// does descriptor `desc` denote a struct?
@@ -2038,7 +2049,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return;                                           /* compiler-minted: no Impala identifier starts with `.` */
         }
         checkReservedName(name, kind, sourceCode, sourceOffset);
-        var prev = topNames[name];
+        var prev = ownEntry(topNames, name);
         if (prev !== undefined && prev !== kind) {
             fail('Name already used by a ' + prev + ': ' + name,
                     sourceCode, sourceOffset, 'E401',
@@ -3933,7 +3944,7 @@ var _sn = strideStruct(field.elem);
         if (name !== undefined) {
             claimTopName(name, TOP_KINDS[scope], sourceCode, sourceOffset);
             var table = symbols[scope];
-            var prev  = table && table[name];
+            var prev  = ownEntry(table, name);
 
             if (prev) {
                 if (kind !== undefined && prev.kind !== undefined) {
@@ -4114,7 +4125,7 @@ var _sn = strideStruct(field.elem);
         }
 
         /* global -----------------------------------------------*/
-        if (isGlobal && (p = sym.globals[name])) {
+        if (isGlobal && (p = ownEntry(sym.globals, name))) {
 
             if (p.type === 'S') {                                 /* struct value global -> a place in global memory */
                 setPlace(x, 'globalAddr', '&' + name, [], descName(p.elem));
@@ -4146,14 +4157,16 @@ var _sn = strideStruct(field.elem);
 
         /* `global` names a storage table, and neither a function nor a const is in one - so the two
            branches below used to ignore the flag entirely and the keyword was silently discarded. */
-        if (isGlobal && (sym.functions[name] || sym.defines[name])) {
+        var asFn  = ownEntry(sym.functions, name);
+        var asDef = ownEntry(sym.defines, name);
+        if (isGlobal && (asFn || asDef)) {
             strictError('`global` is only for global variables - ' + name + ' is a '
-                            + (sym.functions[name] ? 'function' : 'constant'),
+                            + (asFn ? 'function' : 'constant'),
                     sourceCode, sourceOffset, 'E452', 'drop the `global` keyword');
         }
 
         /* function ---------------------------------------------*/
-        if ((p = sym.functions[name])) {
+        if ((p = asFn)) {
             if (p.type === 'N') {
                 makeMeta(x, ':=', 'N', undefined,
                                   '^' + name, undefined);
@@ -4167,7 +4180,7 @@ var _sn = strideStruct(field.elem);
         }
 
         /* constant / #define -----------------------------------*/
-        if ((p = sym.defines[name])) {
+        if ((p = asDef)) {
             makeMeta(x, ':=', p.type, undefined,
                               '#' + name, undefined);
             setElem(x, p.elem);
@@ -4180,7 +4193,7 @@ var _sn = strideStruct(field.elem);
            newcomers and code generators hit, and a bare "Undeclared identifier" points away from the
            one-word fix. The symbol tables already hold the answer; say it. */
         var hint;
-        if (!isGlobal && sym.globals[name]) {
+        if (!isGlobal && hasOwn(sym.globals, name)) {
             hint = name + ' is a global - write `global ' + name + '`';
         } else if (isGlobal && sym.locals['$' + name]) {
             hint = name + ' is a local - drop the `global` keyword';

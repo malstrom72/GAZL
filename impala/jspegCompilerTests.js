@@ -3270,4 +3270,32 @@ if (diagnosticWarnings.length !== 1 || !/^diag\.impala:1:\d+: warning\[E101\]: /
 }
 console.log("impala.jspeg compiler renders --legacy warnings in the same diagnostic shape");
 
+// A symbol table is a plain `{}`, so it inherits `constructor`/`valueOf`/`toString`/`hasOwnProperty`/...
+// from Object.prototype. An unguarded `table[name]` read once mistook those user identifiers for
+// pre-existing entries: `function constructor()` crashed the compiler with a RAW, uncoded
+// `Unexpected identifier 'code'` - the inherited Object function stringifies with `[native code]`, which
+// bake() then evaluated. That broke the accept-or-coded-diagnostic contract this suite exists to enforce,
+// and the fuzzer never caught it because it mints names like `fnN`. Every by-name read is now guarded
+// (see $$parser.hasOwn/ownEntry), so these names are ordinary identifiers. NuXJS - the target engine -
+// stores them (including `__proto__`) as plain keys, so guarding the READ is the whole fix there; node's
+// Annex-B `__proto__` accessor means only the write-then-read-back combos differ, and only under node.
+const prototypeNames = ["constructor", "valueOf", "toString", "hasOwnProperty", "isPrototypeOf",
+	"propertyIsEnumerable", "toLocaleString", "__proto__", "__defineGetter__"];
+for (const name of prototypeNames) {
+	expectCompileOutcome("proto-name", `function ${name}`,
+		`function ${name}() returns int r { r = 7; }`, null);
+	expectCompileOutcome("proto-name", `global int ${name}`,
+		`global int ${name};`, null);
+	// an undeclared use must still resolve to a coded E403, not a raw assertion off an inherited member
+	expectCompileOutcome("proto-name", `undeclared ${name}`,
+		`function main() returns int r { r = ${name}; }`, "E403");
+	// define-then-call exercises the use-site function resolver, which asserted on the inherited entry.
+	// `__proto__` is excluded here only because node drops its write (Annex-B); NuXJS resolves the call.
+	if (name !== "__proto__") {
+		expectCompileOutcome("proto-name", `call ${name}`,
+			`function ${name}() returns int r { r = 7; } function main() returns int r { r = ${name}(); }`, null);
+	}
+}
+console.log("impala.jspeg compiler treats Object.prototype names as ordinary identifiers");
+
 console.log("JSPEG regression suite completed successfully");
